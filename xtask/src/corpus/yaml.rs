@@ -211,7 +211,7 @@ fn write_value(out: &mut String, value: &Yaml, level: usize) {
             out.push('\n');
             write_seq(out, items, level + 1);
         }
-        Yaml::Str(text) if text.contains('\n') => {
+        Yaml::Str(text) if text.contains('\n') && block_safe(text) => {
             let body = text.strip_suffix('\n').unwrap_or(text);
             let chomp = if text.ends_with('\n') { "|" } else { "|-" };
             out.push(' ');
@@ -248,12 +248,12 @@ fn scalar_inline(value: &Yaml, _level: usize) -> String {
     }
 }
 
+/// A key is written plain when it reads back as itself, or when it is all
+/// digits: an integer key on purpose (`references.public`, whose model
+/// keys are integers).
 fn key_text(key: &str) -> String {
-    let simple = !key.is_empty()
-        && key
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-');
-    if simple || is_plain_safe(key) {
+    let digits = !key.is_empty() && key.chars().all(|c| c.is_ascii_digit());
+    if digits || is_plain_safe(key) {
         key.to_string()
     } else {
         quote(key)
@@ -270,7 +270,20 @@ pub fn quote(text: &str) -> String {
             '\\' => out.push_str("\\\\"),
             '\n' => out.push_str("\\n"),
             '\t' => out.push_str("\\t"),
-            c if c.is_control() => out.push_str(&format!("\\u{:04x}", u32::from(c))),
+            // Controls, YAML's other line breaks (NEL, LS, PS), the BOM and
+            // the non-characters PyYAML's reader refuses.
+            c if c.is_control()
+                || matches!(c, '\u{85}' | '\u{2028}' | '\u{2029}' | '\u{feff}')
+                || (u32::from(c) & 0xfffe) == 0xfffe
+                || ('\u{fdd0}'..='\u{fdef}').contains(&c) =>
+            {
+                let code = u32::from(c);
+                if code > 0xffff {
+                    out.push_str(&format!("\\U{code:08x}"));
+                } else {
+                    out.push_str(&format!("\\u{code:04x}"));
+                }
+            }
             c => out.push(c),
         }
     }
@@ -284,10 +297,15 @@ pub fn is_plain_safe(text: &str) -> bool {
     let Some(first) = text.chars().next() else {
         return false;
     };
-    if text.trim() != text || text.contains('\n') || text.chars().any(char::is_control) {
+    if text.trim() != text
+        || text.contains('\n')
+        || text
+            .chars()
+            .any(|c| c.is_control() || c as u32 >= 0x80 && !c.is_alphanumeric())
+    {
         return false;
     }
-    if "-?:,[]{}#&*!|>'\"%@`~".contains(first) {
+    if "-?:,[]{}#&*!|><'\"%@`~".contains(first) {
         return false;
     }
     if text.contains(": ") || text.contains(" #") || text.ends_with(':') {
@@ -306,6 +324,23 @@ pub fn is_plain_safe(text: &str) -> bool {
         return false;
     }
     true
+}
+
+/// Whether a multi-line string can be a literal block (`|` or `|-`) that
+/// reads back as itself: no leading space on the first line (it would need
+/// an indentation indicator), no carriage return or other line break, at
+/// most one final newline (`|` clips the rest), and only characters a
+/// plain line can hold.
+fn block_safe(text: &str) -> bool {
+    let first = text.split('\n').next().unwrap_or("");
+    !first.is_empty()
+        && !first.starts_with(' ')
+        && !text.ends_with("\n\n")
+        && !text.chars().any(|c| {
+            (c.is_control() && c != '\n')
+                || matches!(c, '\u{85}' | '\u{2028}' | '\u{2029}' | '\u{feff}')
+                || (u32::from(c) & 0xfffe) == 0xfffe
+        })
 }
 
 /// Whether `text` is a UUID in its canonical 8-4-4-4-12 hexadecimal form.
@@ -383,6 +418,25 @@ flag: \"true\"
         assert!(doc.remove("a.b"));
         assert!(!doc.remove("a.b"));
         assert!(!doc.set("a.list.5", Yaml::raw(1)));
+    }
+
+    #[test]
+    fn awkward_strings_are_quoted() {
+        let render = |s: &str| Yaml::map(vec![("k", Yaml::s(s))]).render();
+        assert_eq!(render("  indented\nnext"), "k: \"  indented\\nnext\"\n");
+        assert_eq!(render("ends\n\n"), "k: \"ends\\n\\n\"\n");
+        assert_eq!(render("\n"), "k: \"\\n\"\n");
+        assert_eq!(render("a\r\nb"), "k: \"a\\u000d\\nb\"\n");
+        assert_eq!(render("a\u{2028}b"), "k: \"a\\u2028b\"\n");
+        assert_eq!(render("\u{fffe}"), "k: \"\\ufffe\"\n");
+        assert_eq!(render("<<"), "k: \"<<\"\n");
+        assert_eq!(render("one\ntwo\n"), "k: |\n  one\n  two\n");
+        let keys = Yaml::map(vec![
+            ("1", Yaml::raw(1)),
+            ("true", Yaml::raw(2)),
+            ("a b", Yaml::raw(3)),
+        ]);
+        assert_eq!(keys.render(), "1: 1\n\"true\": 2\na b: 3\n");
     }
 
     #[test]

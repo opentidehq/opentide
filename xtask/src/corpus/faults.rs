@@ -158,6 +158,14 @@ pub struct Kind {
     /// lookup fails the same way everywhere).
     #[serde(default)]
     pub env: BTreeMap<String, String>,
+    /// Codes this kind proves through the message of an expected finding:
+    /// each must appear in one (the Sysdig constraint codes, which
+    /// `validate` reports as `schema_validation` naming the code).
+    #[serde(default)]
+    pub covers: Vec<String>,
+    /// Exact numbers of findings per code (all findings, every file).
+    #[serde(default)]
+    pub counts: BTreeMap<String, usize>,
     /// The `KNOWN_GAPS.md` entry this kind documents.
     pub gap: Option<String>,
     /// Why the kind exists or what it shows.
@@ -291,6 +299,14 @@ impl Catalogue {
         let catalogue: Self = toml::from_str(text).context("faults.toml does not parse")?;
         let mut ids = BTreeSet::new();
         for kind in &catalogue.kinds {
+            let kebab = !kind.id.is_empty()
+                && kind
+                    .id
+                    .chars()
+                    .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
+            if !kebab {
+                bail!("fault kind id `{}` is not kebab-case", kind.id);
+            }
             if !ids.insert(kind.id.as_str()) {
                 bail!("fault kind `{}` is defined twice", kind.id);
             }
@@ -323,6 +339,17 @@ impl Catalogue {
                     kind.id,
                     kind.count
                 );
+            }
+            for code in kind.counts.keys() {
+                if !kind.codes.contains(code) {
+                    bail!(
+                        "fault kind `{}`: a count for `{code}`, which it does not expect",
+                        kind.id
+                    );
+                }
+            }
+            if !kind.covers.is_empty() && kind.codes.is_empty() {
+                bail!("fault kind `{}`: covers codes but expects none", kind.id);
             }
             if let Severity::PerCode(map) = &kind.severity {
                 for code in map.keys() {
@@ -411,7 +438,7 @@ pub fn to_yaml(value: &toml::Value) -> Yaml {
     match value {
         toml::Value::String(text) => Yaml::Str(text.clone()),
         toml::Value::Integer(n) => Yaml::raw(n),
-        toml::Value::Float(n) => Yaml::raw(n),
+        toml::Value::Float(n) => Yaml::Raw(yaml_float(*n)),
         toml::Value::Boolean(b) => Yaml::raw(b),
         toml::Value::Datetime(d) => Yaml::raw(d),
         toml::Value::Array(items) => Yaml::Seq(items.iter().map(to_yaml).collect()),
@@ -489,6 +516,33 @@ fn read_path(file: &File, path: &str) -> Option<Yaml> {
     }
 }
 
+/// A float as YAML 1.1 reads it back as the same float: `1.0`, not `1`;
+/// `.nan` and `.inf`, not `NaN` and `inf`.
+fn yaml_float(n: f64) -> String {
+    if n.is_nan() {
+        ".nan".to_string()
+    } else if n.is_infinite() {
+        if n > 0.0 { ".inf" } else { "-.inf" }.to_string()
+    } else if n.fract() == 0.0 && n.abs() < 1e15 {
+        format!("{n:.1}")
+    } else {
+        // YAML 1.1 needs a dot in the mantissa and a signed exponent:
+        // `1.0e+16`, not `1e16` (which reads back as a string).
+        let shortest = format!("{n:?}");
+        match shortest.split_once('e') {
+            Some((mantissa, exponent)) => {
+                let dot = if mantissa.contains('.') { "" } else { ".0" };
+                let sign = if exponent.starts_with('-') { "" } else { "+" };
+                format!("{mantissa}{dot}e{sign}{exponent}")
+            }
+            None => shortest,
+        }
+    }
+}
+
+/// A YAML node as a TOML value. A verbatim scalar becomes an integer, a
+/// float or a boolean when it reads as one, else a string (a date stays a
+/// string: TOML configuration takes none).
 fn yaml_to_toml(node: &Yaml) -> toml::Value {
     match node {
         Yaml::Str(text) => toml::Value::String(text.clone()),
@@ -496,7 +550,14 @@ fn yaml_to_toml(node: &Yaml) -> toml::Value {
             .parse::<i64>()
             .map(toml::Value::Integer)
             .or_else(|_| text.parse::<bool>().map(toml::Value::Boolean))
-            .unwrap_or_else(|_| toml::Value::String(text.clone())),
+            .or_else(|_| {
+                text.parse::<f64>()
+                    .ok()
+                    .filter(|f| f.is_finite())
+                    .map(toml::Value::Float)
+                    .ok_or(())
+            })
+            .unwrap_or_else(|()| toml::Value::String(text.clone())),
         Yaml::Seq(items) => toml::Value::Array(items.iter().map(yaml_to_toml).collect()),
         Yaml::Map(pairs) => toml::Value::Table(
             pairs
@@ -570,7 +631,9 @@ fn set_value(file: &mut File, path: &str, node: Yaml) -> Result<()> {
 }
 
 /// Applies `kind` to the files at `targets` (indexes into `workspace`).
-pub fn apply(workspace: &mut Workspace, kind: &Kind, targets: &[usize]) -> Result<()> {
+/// Returns the targets' paths after the kind (a renamed target under its
+/// new path; a deleted one left out).
+pub fn apply(workspace: &mut Workspace, kind: &Kind, targets: &[usize]) -> Result<Vec<String>> {
     // `copy_from_partner` reads the targets as they were before the kind.
     let before: Vec<File> = targets
         .iter()
@@ -691,6 +754,11 @@ pub fn apply(workspace: &mut Workspace, kind: &Kind, targets: &[usize]) -> Resul
             }
         }
     }
+    let target_paths: Vec<String> = targets
+        .iter()
+        .filter(|i| !deleted.contains(*i))
+        .map(|&i| workspace.files[i].path.clone())
+        .collect();
     let mut index = 0;
     workspace.files.retain(|_| {
         let keep = !deleted.contains(&index);
@@ -700,11 +768,29 @@ pub fn apply(workspace: &mut Workspace, kind: &Kind, targets: &[usize]) -> Resul
     workspace.files.extend(added);
     let mut paths = BTreeSet::new();
     for file in &workspace.files {
+        if !is_relative_inside(&file.path) {
+            bail!(
+                "fault kind `{}` writes {}, outside the workspace",
+                kind.id,
+                file.path
+            );
+        }
         if !paths.insert(file.path.as_str()) {
             bail!("fault kind `{}` writes {} twice", kind.id, file.path);
         }
     }
-    Ok(())
+    Ok(target_paths)
+}
+
+/// Whether `path` is relative, `/`-separated, and stays inside the root:
+/// no empty, `.` or `..` component, no drive or leading slash.
+pub fn is_relative_inside(path: &str) -> bool {
+    !path.is_empty()
+        && !path.contains('\\')
+        && !path.contains(':')
+        && path
+            .split('/')
+            .all(|part| !part.is_empty() && part != "." && part != "..")
 }
 
 /// One finding the oracle reported, reduced to what the check compares.
@@ -716,6 +802,8 @@ pub struct Finding {
     pub severity: String,
     /// The file, relative to the workspace root, when the finding names one.
     pub path: Option<String>,
+    /// The message.
+    pub message: String,
 }
 
 /// Reads the findings of `opentide --json ... validate` or `lint` output.
@@ -737,13 +825,21 @@ pub fn findings(document: &serde_json::Value, root: &str) -> Result<Vec<Finding>
             .or_else(|| item.get("file"))
             .and_then(|p| p.as_str())
             .map(|p| relative(p, root));
+        let message = item
+            .get("message")
+            .and_then(|m| m.as_str())
+            .unwrap_or("")
+            .to_string();
         out.push(Finding {
             code,
             severity,
             path,
+            message,
         });
     };
+    let mut read = false;
     if let Some(report) = document.get("report") {
+        read = true;
         for (key, default) in [("issues", "error"), ("warnings", "warning")] {
             for item in report
                 .get(key)
@@ -754,13 +850,24 @@ pub fn findings(document: &serde_json::Value, root: &str) -> Result<Vec<Finding>
                 push(item, default);
             }
         }
-    } else if let Some(items) = document.get("findings").and_then(|v| v.as_array()) {
+    }
+    if let Some(items) = document.get("findings").and_then(|v| v.as_array()) {
+        read = true;
         for item in items {
             push(item, "warning");
         }
-    } else {
+    }
+    // A run the workspace stops before validating (a retired or unreadable
+    // configuration file) fails with its findings under `diagnostics`.
+    if let Some(items) = document.get("diagnostics").and_then(|v| v.as_array()) {
+        read = true;
+        for item in items {
+            push(item, "error");
+        }
+    }
+    if !read {
         bail!(
-            "the oracle's output has neither report nor findings: {}",
+            "the oracle's output has no report, findings or diagnostics: {}",
             document
                 .get("message")
                 .and_then(|m| m.as_str())
@@ -778,6 +885,14 @@ fn relative(path: &str, root: &str) -> String {
         .unwrap_or(&path)
         .trim_start_matches("./")
         .to_string()
+}
+
+/// Whether `message` names `code` as a whole token (not as part of a
+/// longer code).
+fn names(message: &str, code: &str) -> bool {
+    message
+        .split(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+        .any(|token| token == code)
 }
 
 /// How one kind's run compares with its expectation.
@@ -819,14 +934,35 @@ pub fn judge(kind: &Kind, target_paths: &[String], found: &[Finding]) -> Verdict
             ));
         }
     }
+    for (code, count) in &kind.counts {
+        let got = reported.get(code).copied().unwrap_or(0);
+        if got != *count {
+            problems.push(format!("`{code}` reported {got}x, expected {count}x"));
+        }
+    }
+    for covered in &kind.covers {
+        if !found
+            .iter()
+            .any(|f| expected.contains(f.code.as_str()) && names(&f.message, covered))
+        {
+            problems.push(format!("no expected finding's message names `{covered}`"));
+        }
+    }
     // A known gap the oracle is silent on expects no finding at all.
     if kind.per_target && !kind.codes.is_empty() {
         for path in target_paths {
-            if !found
+            let on: BTreeSet<&str> = found
                 .iter()
-                .any(|f| f.path.as_deref() == Some(path.as_str()))
-            {
+                .filter(|f| f.path.as_deref() == Some(path.as_str()))
+                .map(|f| f.code.as_str())
+                .collect();
+            if on.is_empty() {
                 problems.push(format!("no finding on target {path}"));
+            } else if kind.class == "combination" {
+                // Two faults in one file: both codes on every target.
+                for code in expected.difference(&on) {
+                    problems.push(format!("no `{code}` on target {path}"));
+                }
             }
         }
     }
@@ -933,7 +1069,11 @@ ops = [{ op = "set", path = "platform.colour", value = "blue" }, { op = "rename"
         let mut ws = workspace();
         let kind = catalogue.kind("toml").unwrap();
         let targets = select(&ws, kind, &BTreeSet::new()).unwrap();
-        apply(&mut ws, kind, &targets).unwrap();
+        let paths = apply(&mut ws, kind, &targets).unwrap();
+        assert_eq!(
+            paths,
+            vec![".opentide/configurations/platforms/splunk.old.toml".to_string()]
+        );
         let file = &ws.files[targets[0]];
         assert_eq!(
             file.path,
@@ -945,6 +1085,64 @@ ops = [{ op = "set", path = "platform.colour", value = "blue" }, { op = "rename"
         let table: toml::Table = toml::from_str(text).unwrap();
         assert_eq!(table["platform"]["colour"].as_str(), Some("blue"));
         assert_eq!(table["tenants"][0]["name"].as_str(), Some("splunk-es"));
+    }
+
+    #[test]
+    fn paths_stay_inside_and_deleted_targets_drop_out() {
+        assert!(super::is_relative_inside("objects/rules/a.yaml"));
+        for bad in [
+            "", "../x", "a/../b", "/etc/x", "a//b", "./a", "c:/x", "a\\b",
+        ] {
+            assert!(!super::is_relative_inside(bad), "{bad}");
+        }
+        let original =
+            r#"ops = [{ op = "set", path = "metadata.uuid", value = "not-a-uuid-{n}" }]"#;
+        assert!(CATALOGUE.contains(original));
+        let escape = CATALOGUE.replace(
+            original,
+            r#"ops = [{ op = "add_file", path = "../escaped-{n}.txt", text = "x" }]"#,
+        );
+        let catalogue = Catalogue::parse(&escape).unwrap();
+        let mut ws = workspace();
+        let kind = catalogue.kind("bad-uuid").unwrap();
+        let targets = select(&ws, kind, &BTreeSet::new()).unwrap();
+        assert!(apply(&mut ws, kind, &targets).is_err());
+        let delete = CATALOGUE.replace(original, r#"ops = [{ op = "delete_file" }]"#);
+        let catalogue = Catalogue::parse(&delete).unwrap();
+        let mut ws = workspace();
+        let kind = catalogue.kind("bad-uuid").unwrap();
+        let targets = select(&ws, kind, &BTreeSet::new()).unwrap();
+        let before = ws.files.len();
+        assert!(apply(&mut ws, kind, &targets).unwrap().is_empty());
+        assert_eq!(ws.files.len(), before - targets.len());
+        let bad_id = CATALOGUE.replace("id = \"toml\"", "id = \"../toml\"");
+        assert!(Catalogue::parse(&bad_id).is_err());
+    }
+
+    #[test]
+    fn floats_round_trip() {
+        assert_eq!(super::yaml_float(1.0), "1.0");
+        assert_eq!(super::yaml_float(2.5), "2.5");
+        assert_eq!(super::yaml_float(f64::NAN), ".nan");
+        assert_eq!(super::yaml_float(f64::NEG_INFINITY), "-.inf");
+        assert_eq!(super::yaml_float(1e16), "1.0e+16");
+        assert_eq!(super::yaml_float(1e-7), "1.0e-7");
+        assert_eq!(
+            super::yaml_float(1.234_567_890_123_456_8e17),
+            "1.2345678901234568e+17"
+        );
+        assert!(super::names(
+            "failed with code(s): sysdig_rule_shape, sysdig_source",
+            "sysdig_source"
+        ));
+        assert!(!super::names(
+            "failed with code(s): sysdig_source_extra",
+            "sysdig_source"
+        ));
+        assert_eq!(
+            super::yaml_to_toml(&crate::corpus::yaml::Yaml::raw("2.5")),
+            toml::Value::Float(2.5)
+        );
     }
 
     #[test]
@@ -979,6 +1177,7 @@ ops = [{ op = "set", path = "platform.colour", value = "blue" }, { op = "rename"
             code: code.into(),
             severity: severity.into(),
             path: Some(path.into()),
+            message: format!("failed with code(s): {code}"),
         };
         let targets = vec!["a.yaml".to_string(), "b.yaml".to_string()];
         let ok = judge(
@@ -1014,6 +1213,37 @@ ops = [{ op = "set", path = "platform.colour", value = "blue" }, { op = "rename"
             judge(&silent, &targets, &[f("invalid_uuid", "error", "a.yaml")]).problems,
             vec!["unexpected `invalid_uuid` (1x)".to_string()]
         );
+        let mut counted = kind.clone();
+        counted.counts.insert("invalid_uuid".into(), 3);
+        counted.covers.push("invalid_uuid".into());
+        let two = [
+            f("invalid_uuid", "error", "a.yaml"),
+            f("invalid_uuid", "error", "b.yaml"),
+        ];
+        assert_eq!(
+            judge(&counted, &targets, &two).problems,
+            vec!["`invalid_uuid` reported 2x, expected 3x".to_string()]
+        );
+        counted.covers = vec!["sysdig_source".into()];
+        counted.counts.clear();
+        assert_eq!(
+            judge(&counted, &targets, &two).problems,
+            vec!["no expected finding's message names `sysdig_source`".to_string()]
+        );
+        let mut combo = kind.clone();
+        combo.class = "combination".into();
+        combo.codes.push("schema_validation".into());
+        let split = [
+            f("invalid_uuid", "error", "a.yaml"),
+            f("schema_validation", "error", "b.yaml"),
+        ];
+        assert_eq!(
+            judge(&combo, &targets, &split).problems,
+            vec![
+                "no `invalid_uuid` on target b.yaml".to_string(),
+                "no `schema_validation` on target a.yaml".to_string(),
+            ]
+        );
         let none = judge(kind, &targets, &[]);
         assert!(
             none.problems
@@ -1036,5 +1266,10 @@ ops = [{ op = "set", path = "platform.colour", value = "blue" }, { op = "rename"
         let lint = serde_json::json!({"findings": [{"code": "filename_mismatch", "severity": "warning", "path": "x.yaml"}]});
         assert_eq!(super::findings(&lint, "/w").unwrap().len(), 1);
         assert!(super::findings(&serde_json::json!({"message": "boom"}), "/w").is_err());
+        let failed = serde_json::json!({"failure": {"code": "retired_configuration_file"},
+            "diagnostics": [{"code": "retired_configuration_file", "severity": "error",
+                             "path": ".opentide/configurations/global.toml", "message": "m"}]});
+        let found = super::findings(&failed, "/w").unwrap();
+        assert_eq!(found[0].code, "retired_configuration_file");
     }
 }

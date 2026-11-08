@@ -172,12 +172,20 @@ pub fn write_workspace(workspace: &Workspace, root: &Path) -> Result<()> {
         }
     }
     for (path, text) in workspace.rendered() {
+        if !super::faults::is_relative_inside(&path) {
+            bail!("{path} is not a path inside the workspace");
+        }
         let target = root.join(&path);
         if let Some(parent) = target.parent() {
             std::fs::create_dir_all(parent)
                 .with_context(|| format!("cannot create {}", parent.display()))?;
         }
-        std::fs::write(&target, text)
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&target)
+            .with_context(|| format!("cannot create {}", target.display()))?;
+        std::io::Write::write_all(&mut file, text.as_bytes())
             .with_context(|| format!("cannot write {}", target.display()))?;
     }
     Ok(())
@@ -206,8 +214,19 @@ fn oracle_bin(flag: Option<&str>) -> PathBuf {
 }
 
 /// Runs the oracle without the variables that would point it elsewhere.
-fn oracle_command(bin: &Path) -> Command {
+fn oracle_command(bin: &Path, env: &BTreeMap<String, String>) -> Command {
     let mut command = Command::new(bin);
+    // A kind that sets a proxy gets only its own: Python's urllib lets an
+    // inherited lowercase variable win over an uppercase one.
+    if env
+        .keys()
+        .any(|k| k.to_ascii_lowercase().ends_with("_proxy"))
+    {
+        for var in ["http_proxy", "https_proxy", "all_proxy", "no_proxy"] {
+            command.env_remove(var);
+            command.env_remove(var.to_ascii_uppercase());
+        }
+    }
     for var in [
         "OPENTIDE_REPO_ROOT",
         "OPENTIDE_TIDE_WORKSPACE",
@@ -218,12 +237,86 @@ fn oracle_command(bin: &Path) -> Command {
         command.env_remove(var);
     }
     command.env("NO_COLOR", "1");
+    command.envs(env);
     command
+}
+
+/// How many objects (validate) or object files (lint) the run checked.
+fn checked(document: &serde_json::Value) -> Option<u64> {
+    let summary = document.get("summary")?;
+    summary
+        .get("objects")
+        .or_else(|| summary.get("files"))
+        .and_then(serde_json::Value::as_u64)
+}
+
+/// A run that checked nothing, or stopped, proves nothing: `failure` must
+/// be null and the run must have checked `expected` objects (at least one,
+/// when `None`).
+fn require_checked(
+    document: &serde_json::Value,
+    expected: Option<usize>,
+    what: &str,
+) -> Result<()> {
+    if let Some(failure) = document.get("failure").filter(|f| !f.is_null()) {
+        bail!("{what}: the oracle's run failed: {failure}");
+    }
+    let count = checked(document).unwrap_or(0);
+    let count = usize::try_from(count).unwrap_or(usize::MAX);
+    match expected {
+        Some(expected) if count != expected => {
+            bail!("{what}: the oracle checked {count} objects, not {expected}")
+        }
+        None if count == 0 => bail!("{what}: the oracle checked no object"),
+        _ => Ok(()),
+    }
+}
+
+/// `require_checked` for a run of `command`: a whole `validate` or `lint`
+/// must have checked every object; a run of one check (`--check cve`,
+/// `--check sharing-config`), which loads no object, must not have failed.
+fn require_run(
+    document: &serde_json::Value,
+    command: &[String],
+    objects: usize,
+    what: &str,
+) -> Result<()> {
+    if command.len() == 1 {
+        return require_checked(document, Some(objects), what);
+    }
+    match document.get("failure").filter(|f| !f.is_null()) {
+        Some(failure) => bail!("{what}: the oracle's run failed: {failure}"),
+        None => Ok(()),
+    }
+}
+
+/// The number of object files (threats, objectives, rules) in `workspace`.
+fn object_files(workspace: &Workspace) -> usize {
+    use super::workspace::Family;
+    workspace
+        .files
+        .iter()
+        .filter(|f| matches!(f.family, Family::Threat | Family::Objective | Family::Rule))
+        .count()
+}
+
+/// Removes the scratch directory however the run ends, unless `--keep`.
+struct Scratch {
+    path: PathBuf,
+    keep: bool,
+}
+
+impl Drop for Scratch {
+    fn drop(&mut self) {
+        if !self.keep {
+            let _ = std::fs::remove_dir_all(&self.path);
+        }
+    }
 }
 
 /// Checks that `bin` is the oracle version the catalogue names.
 fn check_oracle_version(bin: &Path, expected: &str) -> Result<()> {
-    let output = oracle_command(bin)
+    let output = oracle_command(bin, &BTreeMap::new())
         .arg("--version")
         .output()
         .with_context(|| format!("cannot run the oracle `{}`", bin.display()))?;
@@ -246,8 +339,7 @@ fn run_oracle(
     args: &[String],
     env: &BTreeMap<String, String>,
 ) -> Result<serde_json::Value> {
-    let output = oracle_command(bin)
-        .envs(env)
+    let output = oracle_command(bin, env)
         .arg("--json")
         .arg("--repo")
         .arg(root)
@@ -365,12 +457,19 @@ fn faults_command(args: &[String]) -> Result<u8> {
         Some(dir) => dir.clone(),
         None => std::env::temp_dir().join(format!("opentide-corpus-faults-{}", std::process::id())),
     };
+    // Absolute, so that XDG_STATE_HOME below is one the oracle honours.
+    let scratch = std::path::absolute(&scratch)
+        .with_context(|| format!("cannot resolve {}", scratch.display()))?;
     if scratch.exists() {
         bail!(
             "{} exists; remove it or name another --keep",
             scratch.display()
         );
     }
+    let guard = Scratch {
+        path: scratch.clone(),
+        keep: parsed.keep.is_some(),
+    };
     let started = Instant::now();
     // The clean base must be clean under every command the kinds use.
     let commands: BTreeSet<(Vec<String>, BTreeMap<String, String>)> = kinds
@@ -381,7 +480,16 @@ fn faults_command(args: &[String]) -> Result<u8> {
     let base_dir = scratch.join("_base");
     write_workspace(&base, &base_dir)?;
     for (command, env) in &commands {
-        let document = run_oracle(&bin, &base_dir, command, env)?;
+        let mut env = env.clone();
+        env.entry("XDG_STATE_HOME".to_string())
+            .or_insert_with(|| scratch.join("_state").to_string_lossy().into_owned());
+        let document = run_oracle(&bin, &base_dir, command, &env)?;
+        require_run(
+            &document,
+            command,
+            object_files(&base),
+            &format!("the clean base under {command:?}"),
+        )?;
         let found = faults::findings(&document, &base_dir.to_string_lossy())?;
         if !found.is_empty() {
             bail!(
@@ -418,9 +526,14 @@ fn faults_command(args: &[String]) -> Result<u8> {
     });
     let mut verdicts = verdicts.into_inner().unwrap_or_default();
     verdicts.sort_by(|a, b| a.0.id.cmp(&b.0.id));
-    let errors = errors.into_inner().unwrap_or_default();
-    if parsed.keep.is_none() {
-        let _ = std::fs::remove_dir_all(&scratch);
+    let mut errors = errors.into_inner().unwrap_or_default();
+    drop(guard);
+    if verdicts.len() + errors.len() != kinds.len() {
+        errors.push(format!(
+            "{} kinds ran, {} reported: a result was lost",
+            kinds.len(),
+            verdicts.len() + errors.len()
+        ));
     }
     let failed: Vec<&(Verdict, Vec<String>)> = verdicts
         .iter()
@@ -484,16 +597,30 @@ fn run_kind(
 ) -> Result<(Verdict, Vec<String>)> {
     let mut workspace = base.clone();
     let targets = faults::select(&workspace, kind, &BTreeSet::new())?;
-    faults::apply(&mut workspace, kind, &targets)?;
-    let target_paths: Vec<String> = targets
-        .iter()
-        .map(|&i| workspace.files[i].path.clone())
-        .collect();
+    let target_paths = faults::apply(&mut workspace, kind, &targets)?;
     let dir = scratch.join(&kind.id);
     write_workspace(&workspace, &dir)?;
-    let document = run_oracle(bin, &dir, &kind.command, &kind.env)?;
+    // Crash logs of a crashing run stay in the scratch directory.
+    let mut env = kind.env.clone();
+    env.entry("XDG_STATE_HOME".to_string())
+        .or_insert_with(|| scratch.join("_state").to_string_lossy().into_owned());
+    let document = run_oracle(bin, &dir, &kind.command, &env)?;
     let found = faults::findings(&document, &dir.to_string_lossy())?;
+    // A silence proves something only if the run checked every object.
+    if kind.codes.is_empty() {
+        require_run(&document, &kind.command, object_files(&workspace), &kind.id)?;
+    }
     Ok((faults::judge(kind, &target_paths, &found), target_paths))
+}
+
+/// `DIR.faults.json` beside `DIR` (also for `DIR/`), never inside it.
+fn manifest_path(out: &Path) -> Result<PathBuf> {
+    let name = out
+        .file_name()
+        .with_context(|| format!("--out {} names no directory", out.display()))?;
+    let mut manifest_name = name.to_os_string();
+    manifest_name.push(".faults.json");
+    Ok(out.with_file_name(manifest_name))
 }
 
 /// Writes the combined fault workspace and its manifest.
@@ -513,9 +640,13 @@ fn materialise(catalogue: &Catalogue, out: &Path) -> Result<u8> {
         if workspace.files.len() < before {
             bail!("fault kind `{}` deletes files; mark it isolated", kind.id);
         }
+        // The files the kind changed, and those it added (a state shard, a
+        // configuration file), where its findings are.
         let files: Vec<String> = targets
             .iter()
-            .map(|&i| workspace.files[i].path.clone())
+            .copied()
+            .chain(before..workspace.files.len())
+            .map(|i| workspace.files[i].path.clone())
             .collect();
         // Files a kind adds are its own, never another kind's target.
         taken.extend(before..workspace.files.len());
@@ -533,8 +664,14 @@ fn materialise(catalogue: &Catalogue, out: &Path) -> Result<u8> {
             "files": files,
         }));
     }
+    let manifest_path = manifest_path(out)?;
+    if manifest_path.exists() {
+        bail!(
+            "{} exists; the manifest is never overwritten",
+            manifest_path.display()
+        );
+    }
     write_workspace(&workspace, out)?;
-    let manifest_path = PathBuf::from(format!("{}.faults.json", out.display()));
     let document = serde_json::json!({
         "oracle": catalogue.oracle,
         "base": {
@@ -550,9 +687,14 @@ fn materialise(catalogue: &Catalogue, out: &Path) -> Result<u8> {
         "digest": workspace.digest(),
         "kinds": manifest,
     });
-    std::fs::write(
-        &manifest_path,
-        serde_json::to_string_pretty(&document)? + "\n",
+    let mut manifest_file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&manifest_path)
+        .with_context(|| format!("cannot create {}", manifest_path.display()))?;
+    std::io::Write::write_all(
+        &mut manifest_file,
+        (serde_json::to_string_pretty(&document)? + "\n").as_bytes(),
     )
     .with_context(|| format!("cannot write {}", manifest_path.display()))?;
     eprintln!(
@@ -709,6 +851,11 @@ fn clean_command(args: &[String]) -> Result<u8> {
         let elapsed = started.elapsed().as_secs_f64();
         let found = faults::findings(&document, &repo.to_string_lossy())?;
         let summary = document.get("summary").cloned().unwrap_or_default();
+        if let Err(error) = require_checked(&document, None, command) {
+            println!("{error:#}; summary {summary}");
+            total += 1;
+            continue;
+        }
         println!(
             "{command}: {} finding(s) in {elapsed:.1} s; summary {summary}",
             found.len()
@@ -724,4 +871,91 @@ fn clean_command(args: &[String]) -> Result<u8> {
         total += found.len();
     }
     Ok(u8::from(total > 0))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Scratch, manifest_path, oracle_command, require_checked, require_run};
+    use std::collections::BTreeMap;
+    use std::ffi::OsStr;
+    use std::path::Path;
+
+    #[test]
+    fn a_kind_that_sets_a_proxy_gets_only_its_own() {
+        let mut env = BTreeMap::new();
+        env.insert("HTTPS_PROXY".to_string(), "http://127.0.0.1:9".to_string());
+        let command = oracle_command(Path::new("opentide"), &env);
+        let envs: Vec<(&OsStr, Option<&OsStr>)> = command.get_envs().collect();
+        for var in [
+            "https_proxy",
+            "http_proxy",
+            "no_proxy",
+            "all_proxy",
+            "OPENTIDE_REPO_ROOT",
+        ] {
+            assert!(
+                envs.contains(&(OsStr::new(var), None)),
+                "{var} is not removed"
+            );
+        }
+        assert!(envs.contains(&(
+            OsStr::new("HTTPS_PROXY"),
+            Some(OsStr::new("http://127.0.0.1:9"))
+        )));
+        // Without a proxy of its own a kind keeps the inherited ones.
+        let plain = oracle_command(Path::new("opentide"), &BTreeMap::new());
+        assert!(
+            !plain
+                .get_envs()
+                .any(|(k, _)| k == OsStr::new("https_proxy"))
+        );
+    }
+
+    #[test]
+    fn scratch_is_removed_unless_kept() {
+        let base = std::env::temp_dir().join(format!("xtask-scratch-test-{}", std::process::id()));
+        for keep in [false, true] {
+            std::fs::create_dir_all(base.join("_base")).unwrap();
+            drop(Scratch {
+                path: base.clone(),
+                keep,
+            });
+            assert_eq!(base.exists(), keep);
+        }
+        std::fs::remove_dir_all(&base).unwrap();
+    }
+
+    #[test]
+    fn a_run_that_checked_nothing_is_no_pass() {
+        let validate = |objects: u64, failure: serde_json::Value| serde_json::json!({"summary": {"objects": objects, "files": 0}, "failure": failure});
+        let ok = serde_json::Value::Null;
+        assert!(require_checked(&validate(10, ok.clone()), Some(10), "x").is_ok());
+        assert!(require_checked(&validate(0, ok.clone()), None, "x").is_err());
+        assert!(require_checked(&validate(9, ok.clone()), Some(10), "x").is_err());
+        let failed = serde_json::json!({"code": "config_parse"});
+        assert!(require_checked(&validate(10, failed.clone()), Some(10), "x").is_err());
+        let lint = serde_json::json!({"summary": {"files": 0}, "failure": null});
+        assert!(require_checked(&lint, None, "lint").is_err());
+        let cve = vec![
+            "validate".to_string(),
+            "--check".to_string(),
+            "cve".to_string(),
+        ];
+        assert!(require_run(&validate(0, ok.clone()), &cve, 10, "x").is_ok());
+        assert!(require_run(&validate(0, failed), &cve, 10, "x").is_err());
+        assert!(require_run(&validate(0, ok), &["validate".to_string()], 10, "x").is_err());
+    }
+
+    #[test]
+    fn the_manifest_sits_beside_the_workspace() {
+        assert_eq!(
+            manifest_path(Path::new("/tmp/x/faults/")).unwrap(),
+            Path::new("/tmp/x/faults.faults.json")
+        );
+        assert_eq!(
+            manifest_path(Path::new("ws")).unwrap(),
+            Path::new("ws.faults.json")
+        );
+        assert!(manifest_path(Path::new("/")).is_err());
+    }
 }

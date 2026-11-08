@@ -199,3 +199,10 @@ query = [
     "threshold_lookback",
     "vocab_unknown",
 ]
+compile = [
+    "compile_empty_block",
+    "compile_failed",
+    "compile_invalid_rule",
+    "compile_invalid_value",
+    "compile_missing_field",
+]
