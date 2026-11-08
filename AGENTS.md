@@ -21,6 +21,7 @@
 | `.github/` | CI, CodeQL, release and Dependabot workflows | [`.github/AGENTS.md`](.github/AGENTS.md) |
 | `scripts/` | `ci-local.sh`, `codeql-local.sh`, `validate-docs.sh`, `ast_equivalence.py`, `build/` | this file, "Checks" |
 | `.agents/skills/` | The skills below; `.claude/skills` links to them | the table below |
+| `publishing/` | Name placeholders for crates.io and npm, rehearsed by `publish-dry-run.yml` | [`docs/internal/publishing.md`](docs/internal/publishing.md) |
 
 ## Skills — when to read which
 
