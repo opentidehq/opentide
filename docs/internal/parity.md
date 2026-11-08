@@ -16,8 +16,8 @@ The Python CLI at the frozen tag is the oracle ([plan §5](https://github.com/op
 | Commands | 59 |
 | Commands with a Rust implementation | 0 |
 | Commands flipped to Rust | 0 |
-| Recordings (command × corpus × mode) | 621 |
-| … no Rust yet | 621 (100.0%) |
+| Recordings (command × corpus × mode) | 629 |
+| … no Rust yet | 629 (100.0%) |
 | … compare passing | 0 (0.0%) |
 | … compare failing | 0 (0.0%) |
 | … compare not run | 0 (0.0%) |
@@ -305,6 +305,7 @@ The Python CLI at the frozen tag is the oracle ([plan §5](https://github.com/op
 |--------|------|------|------|------|
 | none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
 | tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| vscode | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
 
 ### `opentide rules`
 
@@ -470,6 +471,7 @@ The Python CLI at the frozen tag is the oracle ([plan §5](https://github.com/op
 | heavy-small | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
 | none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
 | tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| tide-corpus-typo | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
 | vscode | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
 
 ### `opentide validate query`
