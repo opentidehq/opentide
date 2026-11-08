@@ -205,9 +205,8 @@ impl Command {
             );
             return Ok(true);
         }
-        let spec = Spec::parse(&read(&layout.golden.join("cases.toml"))?)?;
-        let all = spec.expand()?;
         if self.verb == Verb::Coverage {
+            let all = Spec::parse(&read(&layout.golden.join("cases.toml"))?)?.expand()?;
             return write_coverage(&layout, &oracle, &all);
         }
         let engine = match self.engine.as_str() {
@@ -220,6 +219,14 @@ impl Command {
             ),
             other => bail!("unknown engine `{other}`: python, rust or compare"),
         };
+        self.run_with(&layout, &oracle, engine)
+    }
+
+    /// `record`, `check` or `diff` with `engine`, once the repository is found
+    /// and the engine installed (the tests pass a stand-in engine).
+    fn run_with(&self, layout: &Layout, oracle: &Oracle, engine: run::Engine) -> Result<bool> {
+        let spec = Spec::parse(&read(&layout.golden.join("cases.toml"))?)?;
+        let all = spec.expand()?;
         let selected = select(&all, self.filter.as_deref())?;
         // Generated fixtures are generated once per run, then copied per case.
         let (fixtures, _generated) = prepare_fixtures(&spec.fixtures, &selected, &layout.repo)?;
@@ -238,8 +245,8 @@ impl Command {
             .jobs
             .unwrap_or_else(|| std::thread::available_parallelism().map_or(2, |n| n.get()));
         match self.verb {
-            Verb::Record => self.record(&layout, &oracle, &all, &selected, &ctx, jobs),
-            _ => self.check(&layout, &oracle, &all, &selected, &ctx, jobs),
+            Verb::Record => self.record(layout, oracle, &all, &selected, &ctx, jobs),
+            _ => self.check(layout, oracle, &all, &selected, &ctx, jobs),
         }
     }
 
@@ -662,6 +669,217 @@ mod tests {
         assert!(parse(&args(&["record", "--engine", "rust"])).is_err());
         assert!(parse(&args(&["nope"])).is_err());
         assert!(parse(&args(&["check", "--filter"])).is_err());
+    }
+
+    /// A stand-in for the oracle: a shell script that prints differently on a
+    /// terminal and on a pipe, writes a file, takes a moment, and exits 3.
+    #[cfg(unix)]
+    const FAKE_ENGINE: &str = r#"#!/bin/sh
+case " $* " in
+  *" commands "*)
+    if [ "$1" = "--json" ]; then
+      printf '{"commands": [{"path": "validate"}, {"path": "commands"}], "duration_ms": 12}\n'
+    else
+      printf 'validate\ncommands\n'
+    fi
+    exit 0;;
+esac
+if [ -t 1 ]; then printf '\033[1mtty\033[0m took 1.5s\n'; else printf 'pipe took 0.4s\n'; fi
+echo "home $HOME" >&2
+echo "made in $PWD" > out.txt
+exit 3
+"#;
+
+    #[cfg(unix)]
+    const FAKE_CASES: &str = r#"
+[defaults]
+modes = ["human", "plain", "json", "agent"]
+fixtures = ["none"]
+timeout_secs = 30
+
+[fixtures.none]
+kind = "skeleton"
+
+[fixtures.empty]
+kind = "skeleton"
+dirs = [".opentide"]
+
+[[case]]
+command = "commands"
+variant = "default"
+args = ["commands"]
+
+[[case]]
+command = "validate"
+variant = "default"
+args = ["validate"]
+fixtures = ["none", "empty"]
+"#;
+
+    /// A repository with `cases.toml`, and an engine that is [`FAKE_ENGINE`].
+    #[cfg(unix)]
+    fn fake_repository() -> (tempfile::TempDir, Layout, Oracle, run::Engine) {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("repo");
+        let golden = repo.join("tests/golden");
+        std::fs::create_dir_all(&golden).unwrap();
+        std::fs::write(golden.join("cases.toml"), FAKE_CASES).unwrap();
+        let install = dir.path().join("engine");
+        let bin = install.join("bin");
+        std::fs::create_dir_all(&bin).unwrap();
+        std::fs::write(bin.join("opentide"), FAKE_ENGINE).unwrap();
+        std::fs::set_permissions(bin.join("opentide"), std::fs::Permissions::from_mode(0o755))
+            .unwrap();
+        let layout = Layout {
+            golden,
+            target: repo.join("target"),
+            repo,
+        };
+        let oracle = Oracle {
+            tag: "v0.0.0".into(),
+            commit: "0".repeat(40),
+            package: "opentide".into(),
+            version: "0.0.0".into(),
+            wheel: "opentide-0.0.0-x.whl".into(),
+            wheel_sha256: "0".repeat(64),
+            python: "3.13.14".into(),
+            platform: "linux-x86_64".into(),
+            exclude_newer: "2026-11-08T00:00:00Z".into(),
+            requirements: "oracle-requirements.txt".into(),
+        };
+        let engine = run::Engine {
+            name: "fake".into(),
+            bin_dir: bin,
+            install_dir: install,
+            host_paths: Vec::new(),
+        };
+        (dir, layout, oracle, engine)
+    }
+
+    #[cfg(unix)]
+    fn command(verb: Verb, determinism: bool) -> Command {
+        Command {
+            verb,
+            engine: "python".into(),
+            filter: None,
+            determinism,
+            jobs: Some(2),
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn records_checks_and_finds_every_kind_of_difference() {
+        let (_dir, layout, oracle, engine) = fake_repository();
+        let record = command(Verb::Record, true);
+        assert!(record.run_with(&layout, &oracle, engine.clone()).unwrap());
+
+        let cases = layout.cases();
+        let human = cases.join("validate/human/none/default");
+        let stdout = std::fs::read_to_string(human.join("stdout")).unwrap();
+        // Human mode ran on a pseudo-terminal, ANSI kept, duration normalised.
+        assert_eq!(stdout, "\x1b[1mtty\x1b[0m took <SECONDS>\n");
+        let plain = cases.join("validate/plain/empty/default");
+        assert_eq!(
+            std::fs::read_to_string(plain.join("stdout")).unwrap(),
+            "pipe took <SECONDS>\n"
+        );
+        assert_eq!(
+            std::fs::read_to_string(plain.join("stderr")).unwrap(),
+            "home <HOME>\n"
+        );
+        let outcome = std::fs::read_to_string(plain.join("outcome.toml")).unwrap();
+        assert!(
+            outcome.contains("exit_code = 3") && outcome.contains("path = \"ws/out.txt\""),
+            "{outcome}"
+        );
+        assert_eq!(
+            std::fs::read_to_string(plain.join("files/ws/out.txt")).unwrap(),
+            "made in <WS>\n"
+        );
+        let case = std::fs::read_to_string(human.join("case.toml")).unwrap();
+        assert!(
+            case.contains("kind = \"tty\"") && !case.contains("AI_AGENT"),
+            "{case}"
+        );
+        let coverage = std::fs::read_to_string(layout.golden.join("COVERAGE.md")).unwrap();
+        assert!(
+            coverage.contains("| `validate` | 2 | 2 | 2 | 2 | empty, none |"),
+            "{coverage}"
+        );
+
+        // A fresh run matches the recordings.
+        assert!(
+            command(Verb::Check, false)
+                .run_with(&layout, &oracle, engine.clone())
+                .unwrap()
+        );
+        let mut filtered = command(Verb::Check, false);
+        filtered.filter = Some("validate/plain/*/*".into());
+        assert!(filtered.run_with(&layout, &oracle, engine.clone()).unwrap());
+
+        // A changed byte, an orphaned recording, a stale coverage report: each fails.
+        std::fs::write(plain.join("stdout"), "pipe took <SECONDS>!\n").unwrap();
+        assert!(
+            !command(Verb::Check, false)
+                .run_with(&layout, &oracle, engine.clone())
+                .unwrap()
+        );
+        assert!(
+            !command(Verb::Diff, false)
+                .run_with(&layout, &oracle, engine.clone())
+                .unwrap()
+        );
+        assert!(record.run_with(&layout, &oracle, engine.clone()).unwrap());
+        let orphan = cases.join("validate/plain/none/gone");
+        Recording::read(&plain, &layout.blobs())
+            .unwrap()
+            .write(&orphan, &layout.blobs())
+            .unwrap();
+        assert!(
+            !command(Verb::Check, false)
+                .run_with(&layout, &oracle, engine.clone())
+                .unwrap()
+        );
+        // Recording again removes the orphan.
+        assert!(record.run_with(&layout, &oracle, engine.clone()).unwrap());
+        assert!(!orphan.exists());
+        std::fs::write(layout.golden.join("COVERAGE.md"), "stale\n").unwrap();
+        assert!(
+            !command(Verb::Check, false)
+                .run_with(&layout, &oracle, engine.clone())
+                .unwrap()
+        );
+        assert!(
+            write_coverage(
+                &layout,
+                &oracle,
+                &Spec::parse(FAKE_CASES).unwrap().expand().unwrap()
+            )
+            .unwrap()
+        );
+        assert!(
+            command(Verb::Check, false)
+                .run_with(&layout, &oracle, engine)
+                .unwrap()
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_case_that_times_out_fails_and_nothing_is_written() {
+        let (_dir, layout, oracle, engine) = fake_repository();
+        std::fs::write(engine.bin_dir.join("opentide"), "#!/bin/sh\nsleep 30\n").unwrap();
+        std::fs::write(
+            layout.golden.join("cases.toml"),
+            FAKE_CASES.replace("timeout_secs = 30", "timeout_secs = 1"),
+        )
+        .unwrap();
+        let mut record = command(Verb::Record, false);
+        record.filter = Some("validate/plain/none/*".into());
+        assert!(!record.run_with(&layout, &oracle, engine).unwrap());
+        assert!(!layout.cases().exists());
     }
 
     #[test]
