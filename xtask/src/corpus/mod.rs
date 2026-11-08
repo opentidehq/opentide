@@ -7,6 +7,8 @@
 //! and prints.
 
 pub mod cli;
+pub mod coverage;
+pub mod faults;
 pub mod generate;
 pub mod rng;
 pub mod vocab;

@@ -128,6 +128,7 @@ pub const TENANTS: &[(&str, &[&str])] = &[
     ("defender_for_endpoint", &["mde-production"]),
     ("splunk", &["splunk-es"]),
     ("elastic", &["elastic-staging", "elastic-production"]),
+    ("sysdig", &["sysdig-production"]),
 ];
 
 fn tenants_of(platform: &str) -> &'static [&'static str] {
@@ -163,10 +164,12 @@ pub fn generate(options: &Options) -> Workspace {
     for index in 0..options.counts.objectives {
         files.push(objective(&mut objectives, index, options.layout, &mut ids));
     }
+    mark_referenced_threats(&mut files);
     let mut rules = root.fork("rules");
     for index in 0..options.counts.rules {
         files.push(rule(&mut rules, index, options.layout, &ids));
     }
+    mark_referenced_objectives(&mut files);
     files.push(File {
         path: "README.md".to_string(),
         family: Family::Other,
@@ -184,6 +187,70 @@ pub fn generate(options: &Options) -> Workspace {
         )),
     });
     Workspace { files }
+}
+
+/// Tags every threat another object refers to (an objective's `threats`, a
+/// threat's `chaining`) as `referenced`: a fault that breaks such a
+/// threat's identity also breaks the references, which other kinds cover.
+fn mark_referenced_threats(files: &mut [File]) {
+    let mut referenced = std::collections::BTreeSet::new();
+    for file in files.iter() {
+        let Body::Yaml(doc) = &file.body else {
+            continue;
+        };
+        for list in ["objective.threats", "threat.chaining"] {
+            if let Some(Yaml::Seq(items)) = doc.at(list) {
+                for item in items {
+                    let id = item
+                        .as_str()
+                        .or_else(|| item.get("vector").and_then(Yaml::as_str));
+                    if let Some(id) = id {
+                        referenced.insert(id.to_string());
+                    }
+                }
+            }
+        }
+    }
+    for file in files.iter_mut() {
+        if file.family == Family::Threat && file.uuid().is_some_and(|u| referenced.contains(u)) {
+            file.tags.push("referenced".to_string());
+        }
+    }
+}
+
+/// Tags every objective a rule's `detection_model` names (itself or one of
+/// its signals) as `referenced`.
+fn mark_referenced_objectives(files: &mut [File]) {
+    let models: std::collections::BTreeSet<String> = files
+        .iter()
+        .filter_map(|f| match &f.body {
+            Body::Yaml(doc) if f.family == Family::Rule => doc
+                .get("detection_model")
+                .and_then(Yaml::as_str)
+                .map(str::to_string),
+            _ => None,
+        })
+        .collect();
+    for file in files.iter_mut().filter(|f| f.family == Family::Objective) {
+        let Body::Yaml(doc) = &file.body else {
+            continue;
+        };
+        let mut ids: Vec<&str> = doc
+            .at("metadata.uuid")
+            .and_then(Yaml::as_str)
+            .into_iter()
+            .collect();
+        if let Some(Yaml::Seq(signals)) = doc.at("objective.signals") {
+            ids.extend(
+                signals
+                    .iter()
+                    .filter_map(|s| s.get("uuid").and_then(Yaml::as_str)),
+            );
+        }
+        if ids.iter().any(|id| models.contains(*id)) {
+            file.tags.push("referenced".to_string());
+        }
+    }
 }
 
 /// `slugify` as opentide's lint applies it: runs of anything but ASCII
@@ -1219,6 +1286,10 @@ fn tenant_setup(platform: &str, tenant: &str) -> String {
              token = \"${var}_TOKEN\"\napp = \"SplunkEnterpriseSecuritySuite\"\n\
              correlation_searches = true\nenterprise_security = true\n"
         ),
+        "sysdig" => format!(
+            "ssl = true\nurl = \"https://{tenant}.sysdig.example\"\n\
+             api_token = \"${var}_API_TOKEN\"\n"
+        ),
         "elastic" => format!(
             "ssl = true\nurl = \"https://kibana.{tenant}.example\"\n\
              elasticsearch_url = \"https://es.{tenant}.example\"\n\
@@ -1263,6 +1334,9 @@ fn config_file(name: &str, text: String) -> File {
         .and_then(|n| n.strip_suffix(".toml"))
         .map(str::to_string);
     let mut tags = vec![format!("config:{name}")];
+    if platform.is_some() {
+        tags.push("config:platforms".to_string());
+    }
     if platform
         .as_deref()
         .is_some_and(|p| !tenants_of(p).is_empty())

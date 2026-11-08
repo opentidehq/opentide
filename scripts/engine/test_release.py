@@ -7,7 +7,6 @@ of .github/engine-workflows/release.yml (#196).
 from __future__ import annotations
 
 import hashlib
-import itertools
 import json
 import re
 import shutil
@@ -231,7 +230,31 @@ def workflow_header() -> str:
     return WORKFLOW.read_text(encoding="utf-8").split("\njobs:\n", 1)[0]
 
 
+# A target: a name, or an expression such as `${{ matrix.target }}`.
+TARGET = r"\$\{\{[^}]*\}\}|[^\s$-]\S*"
+
+
+def targets_added(body: str) -> set[str]:
+    """The targets a job's `rustup target add` lines add."""
+    return {
+        name
+        for listed in re.findall(rf"rustup target add((?: (?:{TARGET}))+)", body)
+        for name in re.findall(TARGET, listed)
+    }
+
+
 class ReleaseWorkflowTest(unittest.TestCase):
+    def test_targets_added_reads_names_and_expressions(self) -> None:
+        body = (
+            "rustup target add ${{ matrix.target }}\n"
+            "rustup target add wasm32-unknown-unknown wasm32-wasip1\n"
+            "rustup toolchain install --target thumbv6m-none-eabi\n"
+        )
+        self.assertEqual(
+            targets_added(body),
+            {"${{ matrix.target }}", "wasm32-unknown-unknown", "wasm32-wasip1"},
+        )
+
     def test_only_attest_crates_and_npm_can_mint_an_oidc_token(self) -> None:
         # crates.io and npm trust release.yml as a whole: a token from any job
         # of it publishes.
@@ -248,7 +271,10 @@ class ReleaseWorkflowTest(unittest.TestCase):
     ) -> None:
         # cargo in the checkout runs the release rust-toolchain.toml pins, whatever
         # the runner's default is: a toolchain installed by name (`stable`, with the
-        # job's targets) would leave that release without them.
+        # job's targets) would leave that release without them. rustup ignores
+        # `--target` and `--component` on an install with no name, so each target
+        # a job builds comes from `rustup target add`, which with no toolchain
+        # named adds it to the pinned release.
         install = "rustup toolchain install --profile minimal --no-self-update"
         target = r"--target (\$\{\{[^}]*\}\}|\S+)"
         jobs = workflow_jobs()
@@ -262,31 +288,26 @@ class ReleaseWorkflowTest(unittest.TestCase):
         for job, body in jobs.items():
             self.assertNotIn("dtolnay/rust-toolchain", body, job)
             self.assertNotRegex(body, r"rustup (?:default|override)|cargo \+", job)
-            installs = re.findall(rf"{re.escape(install)}(.*)", body)
+            installs = re.findall(r"rustup toolchain install(.*)", body)
             self.assertEqual(len(installs), 1 if job in rust else 0, (job, installs))
             if not installs:
                 continue
-            # No toolchain name: rustup installs the one rust-toolchain.toml pins.
-            args = re.sub(r"\$\{\{[^}]*\}\}", "EXPR", installs[0]).split()
-            valued = {"--target", "--component", "--profile", "-t", "-c"}
-            names = [
-                arg
-                for before, arg in itertools.pairwise(["--", *args])
-                if not arg.startswith("-") and before not in valued
-            ]
-            self.assertEqual(names, [], job)
-            installed = {
-                name for listed in re.findall(target, installs[0]) for name in listed.split(",")
-            }
+            # No toolchain name and nothing rustup would ignore: the bare install
+            # of the one rust-toolchain.toml pins.
+            self.assertEqual(f"rustup toolchain install{installs[0]}".strip(), install, job)
+            added = targets_added(body)
+            self.assertFalse(re.search(r"rustup target add.* (?:--toolchain|\+)", body), job)
             built[job] = {
                 name
                 for line in body.splitlines()
                 if re.search(r"\bcargo (?:build|run|clippy|test|check|package)\b", line)
                 for name in re.findall(target, line)
             }
-            self.assertLessEqual(built[job], installed, job)
+            self.assertLessEqual(built[job], added, job)
         # The matrix build cross-compiles for x86_64-apple-darwin, musl and the like.
         self.assertEqual(built["native"], {"${{ matrix.target }}"})
+        # build-wasm.sh adds its own targets, but the job states them.
+        self.assertEqual(targets_added(jobs["wasm"]), {"wasm32-unknown-unknown", "wasm32-wasip1"})
 
     def test_the_attest_job_builds_and_runs_nothing(self) -> None:
         attest = workflow_jobs()["attest"]

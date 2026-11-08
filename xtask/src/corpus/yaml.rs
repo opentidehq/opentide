@@ -296,7 +296,7 @@ pub fn is_plain_safe(text: &str) -> bool {
     let lower = text.to_ascii_lowercase();
     if matches!(
         lower.as_str(),
-        "y" | "n" | "yes" | "no" | "on" | "off" | "true" | "false" | "null" | "~"
+        "y" | "n" | "yes" | "no" | "on" | "off" | "true" | "false" | "null" | "~" | "="
     ) {
         return false;
     }

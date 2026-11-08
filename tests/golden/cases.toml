@@ -29,6 +29,11 @@ kind = "generated"
 argv = ["cargo", "xtask", "corpus", "generate", "--seed", "1", "--threats", "30", "--objectives", "30", "--rules", "50", "--out", "{out}"]
 about = "UC-0.6's heavy workspace generator, seed 1: 30 threats, 30 objectives, 50 rules; generated at record and check time, never committed"
 
+[fixtures.fault]
+kind = "generated"
+argv = ["cargo", "xtask", "corpus", "faults", "--out", "{out}"]
+about = "UC-0.6's fault workspace: seed 1, 120 threats, 60 objectives, 600 rules, every fault kind not marked isolated applied; generated at record and check time, never committed. Its outputs are recorded as they are, not asserted against the fault manifest"
+
 [fixtures.empty]
 kind = "skeleton"
 dirs = [".opentide"]
@@ -481,18 +486,19 @@ fixtures = ["none"]
 command = "validate"
 variant = "default"
 args = ["validate"]
+fixtures = ["tide-corpus", "vscode", "heavy-small", "fault", "empty", "none"]
 
 [[case]]
 command = "validate"
 variant = "strict"
 args = ["validate", "--strict"]
-fixtures = ["tide-corpus", "vscode"]
+fixtures = ["tide-corpus", "vscode", "fault"]
 
 [[case]]
 command = "validate"
 variant = "check-schema"
 args = ["validate", "--check", "schema"]
-fixtures = ["tide-corpus", "vscode"]
+fixtures = ["tide-corpus", "vscode", "fault"]
 
 [[case]]
 command = "validate"
@@ -629,7 +635,7 @@ env = { GITHUB_ACTIONS = "true" }
 command = "validate query"
 variant = "default"
 args = ["validate", "query"]
-fixtures = ["tide-corpus", "vscode"]
+fixtures = ["tide-corpus", "vscode", "fault"]
 
 [[case]]
 command = "validate query"
@@ -691,12 +697,13 @@ fixtures = ["tide-corpus"]
 command = "lint"
 variant = "default"
 args = ["lint"]
+fixtures = ["tide-corpus", "vscode", "heavy-small", "fault", "empty", "none"]
 
 [[case]]
 command = "lint"
 variant = "strict"
 args = ["lint", "--strict"]
-fixtures = ["tide-corpus", "vscode"]
+fixtures = ["tide-corpus", "vscode", "fault"]
 
 [[case]]
 command = "lint"
@@ -747,6 +754,7 @@ fixtures = ["tide-corpus"]
 command = "info"
 variant = "default"
 args = ["info"]
+fixtures = ["tide-corpus", "vscode", "heavy-small", "fault", "empty", "none"]
 
 [[case]]
 command = "info"
@@ -770,7 +778,7 @@ fixtures = ["tide-corpus"]
 command = "info"
 variant = "rules"
 args = ["info", "rules"]
-fixtures = ["tide-corpus", "vscode"]
+fixtures = ["tide-corpus", "vscode", "fault"]
 
 [[case]]
 command = "info"
@@ -974,7 +982,7 @@ fixtures = ["tide-corpus", "vscode"]
 command = "rules unreviewed"
 variant = "example"
 args = ["rules", "unreviewed", "--older-than", "90d"]
-fixtures = ["tide-corpus", "vscode"]
+fixtures = ["tide-corpus", "vscode", "fault"]
 
 [[case]]
 command = "rules unreviewed"
@@ -988,7 +996,7 @@ fixtures = ["tide-corpus"]
 command = "deploy"
 variant = "dry-run"
 args = ["deploy", "--strategy", "PREVIEW", "--all", "--dry-run"]
-fixtures = ["tide-corpus", "vscode"]
+fixtures = ["tide-corpus", "vscode", "fault"]
 
 [[case]]
 command = "deploy"
@@ -1205,6 +1213,7 @@ fixtures = ["tide-corpus"]
 command = "doctor"
 variant = "default"
 args = ["doctor"]
+fixtures = ["tide-corpus", "vscode", "heavy-small", "fault", "empty", "none"]
 
 [[case]]
 command = "doctor"
@@ -1216,7 +1225,7 @@ fixtures = ["tide-corpus", "vscode"]
 command = "migrate vocab-scope"
 variant = "default"
 args = ["migrate", "vocab-scope"]
-fixtures = ["tide-corpus", "vscode"]
+fixtures = ["tide-corpus", "vscode", "fault"]
 
 [[case]]
 command = "migrate vocab-scope"

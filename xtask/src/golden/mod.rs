@@ -443,7 +443,16 @@ fn select(all: &[Case], filter: Option<&str>) -> Result<Vec<Case>> {
     let pattern = glob::Pattern::new(filter).with_context(|| format!("--filter `{filter}`"))?;
     let selected: Vec<Case> = all
         .iter()
-        .filter(|c| pattern.matches(&c.id))
+        // `*` stays within one part of the id: `*/json/*/*` is every json case.
+        .filter(|c| {
+            pattern.matches_with(
+                &c.id,
+                glob::MatchOptions {
+                    require_literal_separator: true,
+                    ..glob::MatchOptions::new()
+                },
+            )
+        })
         .cloned()
         .collect();
     if selected.is_empty() {
@@ -646,7 +655,10 @@ mod tests {
         )
         .unwrap();
         let all = spec.expand().unwrap();
-        assert_eq!(select(&all, Some("*/json/*")).unwrap().len(), 1);
+        assert_eq!(select(&all, Some("*/json/*/*")).unwrap().len(), 1);
+        // `*` does not cross a `/`.
+        assert!(select(&all, Some("*/json/*")).is_err());
+        assert_eq!(select(&all, Some("validate/*/none/a")).unwrap().len(), 2);
         assert_eq!(select(&all, None).unwrap().len(), 2);
         assert!(select(&all, Some("lint/*")).is_err());
     }
