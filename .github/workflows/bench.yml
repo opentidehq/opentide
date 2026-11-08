@@ -84,7 +84,7 @@ jobs:
         run: cargo xtask bench --engine "$ENGINE" --scale 1 --json --out bench.json > /dev/null
 
       # The oracle's `deploy --dry-run` on the heavy workspace (which declares tenants for
-      # four platforms) under strace: it must open no network connection nor send a
+      # five platforms) under strace: it must open no network connection nor send a
       # datagram to a network address.
       - name: Prove that the dry run reaches no tenant
         if: matrix.engine == 'python'
