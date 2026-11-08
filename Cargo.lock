@@ -594,6 +594,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "opentide-compare"
+version = "0.11.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "toml",
+]
+
+[[package]]
 name = "opentide-core"
 version = "0.11.0"
 dependencies = [
@@ -730,6 +739,7 @@ name = "opentide-native"
 version = "0.0.0"
 dependencies = [
  "opentide-analysis",
+ "opentide-compare",
  "opentide-lsp",
  "pyo3",
  "pyo3-build-config",
@@ -1528,6 +1538,7 @@ name = "xtask"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "opentide-compare",
  "serde",
  "serde_json",
  "toml",

@@ -23,6 +23,7 @@ members = [
     "crates/opentide-analysis",
     "crates/opentide-lsp",
     "crates/opentide-wasm",
+    "crates/opentide-compare",
     "analysis",
     "xtask",
 ]
@@ -51,6 +52,7 @@ opentide-ecs = { path = "crates/opentide-ecs", version = "=0.11.0" }
 opentide-tide = { path = "crates/opentide-tide", version = "=0.11.0" }
 opentide-analysis = { path = "crates/opentide-analysis", version = "=0.11.0" }
 opentide-lsp = { path = "crates/opentide-lsp", version = "=0.11.0" }
+opentide-compare = { path = "crates/opentide-compare", version = "=0.11.0" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml = "0.8"

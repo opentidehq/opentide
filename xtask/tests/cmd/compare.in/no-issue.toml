@@ -1,0 +1,9 @@
+[[diff]]
+command = "validate"
+case = "*"
+target = "stdout"
+rule = "json:/summary/errors"
+oracle = "1"
+candidate = "2"
+reason = "an example"
+changelog = "**Errors counted per file**"

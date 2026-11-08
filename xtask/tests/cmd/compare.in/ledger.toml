@@ -1,0 +1,10 @@
+[[diff]]
+command = "validate"
+case = "*"
+target = "stdout"
+rule = "json:/summary/errors"
+oracle = "1"
+candidate = "2"
+reason = "an example: the candidate counts errors per file"
+issue = "https://github.com/opentidehq/opentide/issues/805"
+changelog = "**Errors counted per file**"
