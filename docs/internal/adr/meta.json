@@ -1,4 +1,14 @@
 {
   "title": "Architecture decisions",
-  "pages": ["0001-tide-model-as-rust-code"]
+  "pages": [
+    "index",
+    "0001-tide-model-as-rust-code",
+    "0002-all-logic-in-rust",
+    "0003-cli-is-opentide-cli",
+    "0004-merge-language-server",
+    "0005-opentide-facade-crate",
+    "0006-npm-packages",
+    "0007-vscode-extension-stays-separate",
+    "0008-connectors-in-rust"
+  ]
 }
