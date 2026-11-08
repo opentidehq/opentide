@@ -8,6 +8,8 @@ xtask --`): the repository's Rust tooling, as a workspace member that is never p
 | `check-layers [--metadata FILE] [--layers FILE]` | Checks that every dependency between workspace crates (normal, build and dev, on every target) points down the layer table, [`layers.toml`](layers.toml), against `cargo metadata --no-deps` |
 | `codegen` | Not implemented: UC-1.8 (#814) generates schemas, stubs, types and references with it |
 | `golden record [--check-determinism]`, `check`, `diff`, `lock`, `coverage` | Records what the frozen Python CLI (the oracle, `tests/golden/ORACLE`) does for every case of `tests/golden/cases.toml`, and checks an engine against the recordings: [`tests/golden/README.md`](../tests/golden/README.md) |
+| `golden check --engine compare [--report FILE]` | Runs every case whose command has a Rust implementation (`opentide.cli.engines.RUST_COMMANDS`) through this repository's CLI with `OPENTIDE_ENGINE=rust`, and compares it with the recording through `opentide-compare` and `tests/golden/APPROVED_DIFFS.toml`; a stale ledger entry fails it (UC-0.7, #805; CI job `Golden compare`) |
+| `compare --oracle DIR --candidate DIR --command PATH`, `compare --check-ledger` | Two runs on disk through the comparator; the ledger's schema and changelog references (`src/compare.rs`, `crates/opentide-compare/AGENTS.md`) |
 | `bench` | Not implemented: UC-0.8 (#806) runs the benchmarks against their budgets with it |
 | `help` | The usage |
 
@@ -33,7 +35,8 @@ moving a crate between layers is a design decision for the maintainer, not a fix
   prints. Tests drive the library with synthetic metadata, no workspace needed.
 - `golden` is its own module, `src/golden/`, a library the comparator (UC-0.7) reuses: the case
   model (`case.rs`), fixtures (`fixture.rs`), the oracle's install (`oracle.rs`), the runner
-  (`run.rs`, `pty.rs`), the normaliser (`normalise.rs`), recordings and their differences
+  (`run.rs`, `pty.rs`), the normaliser (in `crates/opentide-compare/src/normalise.rs`, re-exported
+  as `golden::normalise`, so the CLI's compare mode shares it), recordings and their differences
   (`recording.rs`, `snapshot.rs`, `blob.rs`) and the coverage report (`coverage.rs`). `main.rs`
   only dispatches to `golden::main`. A normalisation rule changes with its unit test and a
   re-record in the same PR.

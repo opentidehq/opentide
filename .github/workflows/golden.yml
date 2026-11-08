@@ -10,6 +10,11 @@ name: Golden
 # - determinism: `cargo xtask golden record --check-determinism` runs every
 #   case twice and fails unless both runs agree byte for byte; then the
 #   recordings it wrote must be the committed ones.
+# - compare: `cargo xtask golden check --engine compare` (UC-0.7, #805) runs
+#   every case whose command has a Rust implementation through this
+#   repository's CLI with OPENTIDE_ENGINE=rust and compares it with the
+#   recording (crates/opentide-compare, tests/golden/APPROVED_DIFFS.toml); a
+#   stale ledger entry fails it. Its report is the golden-compare artifact.
 #
 # Nothing here publishes or writes to the repository.
 
@@ -22,6 +27,8 @@ on:
       - "tests/golden/**"
       - "tests/fixtures/tide_corpus/**"
       - "xtask/**"
+      - "crates/opentide-compare/**"
+      - "src/opentide/cli/engines.py"
       - "Cargo.toml"
       - "Cargo.lock"
       - "rust-toolchain.toml"
@@ -96,3 +103,39 @@ jobs:
             echo "::error::recording again changed tests/golden: run cargo xtask golden record and review the diff"
             exit 1
           fi
+
+  compare:
+    name: Golden compare
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: tests/golden/oracle-requirements.txt
+
+      - name: Set up Rust
+        run: rustup toolchain install --profile minimal --no-self-update
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: . -> target
+
+      # The candidate is this repository's CLI, with the engine compiled in.
+      - name: Install this repository's CLI
+        run: uv sync --group dev
+
+      - name: Compare every ported command with the recordings
+        run: cargo xtask golden check --engine compare --report golden-compare.json
+
+      - name: Upload the report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: golden-compare
+          path: golden-compare.json
+          if-no-files-found: ignore

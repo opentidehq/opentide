@@ -59,7 +59,11 @@ commands:
   coverage   rewrite COVERAGE.md from cases.toml and the recordings
 
 --filter GLOB  only the cases whose id (<command>/<mode>/<fixture>/<variant>) matches
---engine       python (the oracle, the default); rust (UC-3) and compare (UC-0.7) come later
+--engine       python (the oracle, the default); compare: this repository's CLI with
+               OPENTIDE_ENGINE=rust against the recordings, through the comparator
+               and tests/golden/APPROVED_DIFFS.toml, for every case whose command
+               has a Rust implementation (UC-0.7); rust comes with UC-3
+--report FILE  with --engine compare: write the JSON report (opentide-compare's RunReport)
 
 exit status: 0 passed, 1 a difference or a failed case, 2 usage error or the run could not start
 ";
@@ -93,6 +97,7 @@ struct Command {
     filter: Option<String>,
     determinism: bool,
     jobs: Option<usize>,
+    report: Option<PathBuf>,
 }
 
 fn parse(args: &[String]) -> Result<Command> {
@@ -114,6 +119,7 @@ fn parse(args: &[String]) -> Result<Command> {
         filter: None,
         determinism: false,
         jobs: None,
+        report: None,
     };
     let mut rest = rest.iter();
     while let Some(arg) = rest.next() {
@@ -125,6 +131,9 @@ fn parse(args: &[String]) -> Result<Command> {
         match arg.as_str() {
             "--filter" => command.filter = Some(value()?),
             "--engine" => command.engine = value()?,
+            "--report" if command.verb != Verb::Record => {
+                command.report = Some(PathBuf::from(value()?));
+            }
             "--jobs" => {
                 let jobs: usize = value()?.parse().context("--jobs needs a number")?;
                 command.jobs = Some(jobs.max(1));
@@ -218,13 +227,10 @@ impl Command {
                 );
                 return Ok(false);
             }
-            "compare" => {
-                eprintln!(
-                    "xtask golden: --engine compare is not implemented yet; UC-0.7 \
-                     (https://github.com/opentidehq/opentide/issues/805) implements it"
-                );
-                return Ok(false);
+            "compare" if self.verb == Verb::Record => {
+                bail!("golden record records the oracle: --engine compare is for check and diff")
             }
+            "compare" => crate::compare::candidate(&layout.repo)?,
             other => bail!("unknown engine `{other}`: python, rust or compare"),
         };
         let selected = select(&all, self.filter.as_deref())?;
@@ -245,6 +251,23 @@ impl Command {
             .unwrap_or_else(|| std::thread::available_parallelism().map_or(2, |n| n.get()));
         match self.verb {
             Verb::Record => self.record(&layout, &oracle, &all, &selected, &ctx, jobs),
+            _ if self.engine == "compare" => {
+                // Only the commands with a Rust implementation have anything to compare.
+                let rust = crate::compare::rust_commands(&layout.repo)?;
+                let (ported, python_only): (Vec<Case>, Vec<Case>) = selected
+                    .iter()
+                    .cloned()
+                    .partition(|case| rust.contains(&case.command));
+                crate::compare::golden(
+                    &layout.repo,
+                    &layout.cases(),
+                    &layout.blobs(),
+                    &run_all(&ported, &ctx, jobs, "compare"),
+                    python_only.len(),
+                    self.report.as_deref(),
+                    self.verb == Verb::Diff,
+                )
+            }
             _ => self.check(&layout, &oracle, &all, &selected, &ctx, jobs),
         }
     }

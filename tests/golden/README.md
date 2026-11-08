@@ -29,7 +29,7 @@ cargo xtask golden lock                         # rewrite oracle-requirements.tx
    PyPI), run `cargo xtask golden lock` and `cargo xtask golden record`, and review every
    difference: each one is a behaviour change between the two releases.
 4. **Normalisation hides only what differs between two runs of the same case** (below). A rule
-   is code in `xtask/src/golden/normalise.rs` with a unit test; widening one to make a difference
+   is code in `crates/opentide-compare/src/normalise.rs` (moved there by UC-0.7 so the CLI's compare mode shares it) with a unit test; widening one to make a difference
    go away is a review failure.
 5. **Recording is deterministic**: CI records every case twice and fails on any difference, and
    on any difference from the committed recordings (`.github/workflows/golden.yml`).

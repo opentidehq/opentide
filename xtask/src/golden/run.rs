@@ -31,6 +31,9 @@ pub struct Engine {
     pub bin_dir: PathBuf,
     /// Its installation directory, normalised to `<ENGINE>` in outputs.
     pub install_dir: PathBuf,
+    /// Variables it runs with on top of the case's (`OPENTIDE_ENGINE=rust`
+    /// for the candidate of `--engine compare`, UC-0.7).
+    pub env: BTreeMap<String, String>,
 }
 
 /// What every case of a run shares.
@@ -136,7 +139,10 @@ fn environment(case: &Case, ctx: &RunContext, root: &Path) -> BTreeMap<String, S
             .replace(case::HOME, &root.join("home").to_string_lossy())
             .replace(case::TMP, &root.to_string_lossy())
     };
-    case.env.iter().map(|(k, v)| (k.clone(), fill(v))).collect()
+    let mut env: BTreeMap<String, String> =
+        case.env.iter().map(|(k, v)| (k.clone(), fill(v))).collect();
+    env.extend(ctx.engine.env.clone());
+    env
 }
 
 fn execute(case: &Case, ctx: &RunContext, root: &Path) -> Result<(Vec<u8>, Vec<u8>, i32)> {
