@@ -9,6 +9,11 @@ install`` with no name; only the fuzz jobs name one, nightly, which
 cargo-fuzz needs and selects with ``cargo +nightly`` (the nightly fuzz workflow
 and ci.yml's ``fuzz-smoke``). The engine's Release workflows are held to the
 same rule.
+
+An install with no name takes the file's components and targets, and rustup
+silently ignores ``--target`` and ``--component`` on it: a job adds a target
+with ``rustup target add``, which with no toolchain named adds it to the
+pinned release.
 """
 
 from __future__ import annotations
@@ -34,6 +39,8 @@ TOOLCHAIN_ACTIONS = (
 NAMED = {("engine-fuzz.yml", "nightly"), ("ci.yml", "nightly")}
 # The rustup options that take a value.
 VALUED = {"--target", "--component", "--profile", "-t", "-c"}
+# The options rustup ignores on a `rustup toolchain install` that names no toolchain.
+IGNORED_UNNAMED = re.compile(r"(?:--target|--component)(?:=\S*)?|-[tc]\S*")
 
 
 def _steps(path: Path) -> list[tuple[str, dict[str, Any]]]:
@@ -53,6 +60,65 @@ def _toolchain_names(command: str) -> list[str]:
         for before, arg in itertools.pairwise(["--", *args])
         if not arg.startswith("-") and before not in VALUED
     ]
+
+
+def _installs(run: str) -> list[str]:
+    """The arguments of each ``rustup toolchain install`` in a step's script."""
+    return [
+        match.group(1).replace("\\\n", " ")
+        for match in re.finditer(r"rustup toolchain install((?:[^\n\\]|\\\n)*)", run)
+    ]
+
+
+def _ignored_options(command: str) -> list[str]:
+    """The options rustup drops from an install with no toolchain name."""
+    if _toolchain_names(command):
+        return []
+    return [arg for arg in command.split() if IGNORED_UNNAMED.fullmatch(arg)]
+
+
+# A target: a name, or an expression such as ``${{ matrix.target }}``.
+TARGET = r"\$\{\{[^}]*\}\}|\w[\w.-]*"
+# The script that builds the WebAssembly engine; a job that runs it builds its targets.
+BUILD_WASM = "scripts/engine/build-wasm.sh"
+
+
+def _lines(script: str) -> list[str]:
+    """A shell script's commands, continuation lines joined and comments left out."""
+    joined = re.sub(r"\\\n", " ", script)
+    return [line for line in joined.splitlines() if not line.lstrip().startswith("#")]
+
+
+def _targets_added(script: str) -> set[str]:
+    """The targets a script's ``rustup target add`` lines add."""
+    return {
+        name
+        for line in _lines(script)
+        for listed in re.findall(rf"rustup target add((?: +(?:{TARGET}))+)", line)
+        for name in re.findall(TARGET, listed)
+    }
+
+
+def _targets_built(script: str) -> set[str]:
+    """The targets a script's cargo commands build for (``--target X``)."""
+    built = set()
+    for line in _lines(script):
+        if re.search(r"\bcargo (?:build|run|clippy|test|check|nextest|package)\b", line):
+            built |= set(re.findall(rf"--target[= ]+({TARGET})", line))
+        if BUILD_WASM in line:
+            built |= _targets_built((ROOT / BUILD_WASM).read_text(encoding="utf-8"))
+    return built
+
+
+def _job_targets(path: Path) -> dict[str, tuple[set[str], set[str]]]:
+    """Each job's (built, added) targets."""
+    jobs: dict[str, tuple[set[str], set[str]]] = {}
+    for job_id, step in _steps(path):
+        run = str(step.get("run", ""))
+        built, added = jobs.setdefault(job_id, (set(), set()))
+        built |= _targets_built(run)
+        added |= _targets_added(run)
+    return jobs
 
 
 def test_the_pin_is_one_release() -> None:
@@ -78,8 +144,8 @@ def test_every_job_installs_the_pinned_release(path: Path) -> None:
         assert not uses.startswith(TOOLCHAIN_ACTIONS), (path.name, job_id, uses)
         run = str(step.get("run", ""))
         assert not re.search(r"rustup (?:default|override)", run), (path.name, job_id)
-        for match in re.finditer(r"rustup toolchain install((?:[^\n\\]|\\\n)*)", run):
-            for name in _toolchain_names(match.group(1).replace("\\\n", " ")):
+        for command in _installs(run):
+            for name in _toolchain_names(command):
                 assert (path.name, name) in NAMED, (path.name, job_id, name)
         for name in re.findall(r"cargo \+(\S+)", run):
             assert (path.name, name) in NAMED, (path.name, job_id, name)
@@ -110,3 +176,127 @@ def test_only_the_fuzz_jobs_name_a_toolchain() -> None:
                     ("engine-fuzz.yml", "fuzz"),
                     ("ci.yml", "fuzz-smoke"),
                 }, (path.name, job_id)
+
+
+@pytest.mark.parametrize("path", WORKFLOWS, ids=lambda path: path.name)
+def test_no_install_passes_an_option_rustup_ignores(path: Path) -> None:
+    """``--target`` and ``--component`` on an install with no name install nothing.
+
+    rustup takes the toolchain file's components and targets for it and drops
+    these flags without an error, so a job that relies on them builds with no
+    std for its target; ``rustup target add`` adds one to the pinned release.
+    """
+    for job_id, step in _steps(path):
+        for command in _installs(str(step.get("run", ""))):
+            assert _ignored_options(command) == [], (path.name, job_id, command)
+
+
+@pytest.mark.parametrize(
+    ("run", "ignored"),
+    [
+        (
+            "rustup toolchain install --profile minimal --no-self-update"
+            " --target ${{ matrix.target }}",
+            ["--target"],
+        ),
+        (
+            "rustup toolchain install --no-self-update \\\n"
+            "  --component rustfmt,clippy -t wasm32-wasip1",
+            ["--component", "-t"],
+        ),
+        (
+            "rustup toolchain install --target=wasm32-wasip1 -cclippy",
+            ["--target=wasm32-wasip1", "-cclippy"],
+        ),
+        ("rustup toolchain install --profile minimal --no-self-update", []),
+        ("rustup toolchain install nightly --profile minimal --component rust-src", []),
+    ],
+)
+def test_an_ignored_option_is_seen(run: str, ignored: list[str]) -> None:
+    """The check above reads the flags on an unnamed install, and only there."""
+    assert [arg for command in _installs(run) for arg in _ignored_options(command)] == ignored
+
+
+@pytest.mark.parametrize("path", WORKFLOWS, ids=lambda path: path.name)
+def test_every_target_a_job_builds_is_added(path: Path) -> None:
+    """A job adds each target it builds with ``rustup target add`` in its own steps.
+
+    The unnamed install adds no target, and the runner's default toolchain is not
+    the one cargo runs in the checkout. ``build-wasm.sh`` adds its own targets as
+    well; the job still states them, so the step that installs Rust is complete.
+    """
+    for job_id, (built, added) in _job_targets(path).items():
+        assert built <= added, (path.name, job_id, sorted(built - added))
+
+
+def test_the_jobs_that_build_for_a_target_are_seen() -> None:
+    """The check above is not empty: it reads the cross builds and build-wasm.sh."""
+    wasm = {"wasm32-unknown-unknown", "wasm32-wasip1"}
+    found = {
+        (path.name, job_id): built
+        for path in WORKFLOWS
+        for job_id, (built, _) in _job_targets(path).items()
+        if built
+    }
+    assert found[("engine-release-build.yml", "native")] == {"${{ matrix.target }}"}
+    assert found[("engine-release-build.yml", "wasm")] == wasm
+    assert found[("ci.yml", "engine-wasm")] == wasm
+
+
+@pytest.mark.parametrize(
+    ("script", "added"),
+    [
+        ("rustup target add ${{ matrix.target }}", {"${{ matrix.target }}"}),
+        (
+            "rustup target add wasm32-unknown-unknown \\\n  wasm32-wasip1 >/dev/null",
+            {"wasm32-unknown-unknown", "wasm32-wasip1"},
+        ),
+        ("# rustup target add thumbv6m-none-eabi", set()),
+        ("rustup toolchain install --target thumbv6m-none-eabi", set()),
+    ],
+)
+def test_an_added_target_is_seen(script: str, added: set[str]) -> None:
+    assert _targets_added(script) == added
+
+
+# A rustup command that installs a toolchain or adds a target or component.
+RUSTUP_SETUP = re.compile(r"\brustup +(?:toolchain +install|target +add|component +add)\b")
+
+
+def _masked_setups(step: dict[str, Any]) -> list[str]:
+    """The rustup setup commands in a step whose failure would not fail the step."""
+    if not any(RUSTUP_SETUP.search(line) for line in _lines(str(step.get("run", "")))):
+        return []
+    if step.get("continue-on-error"):
+        return ["continue-on-error"]
+    return [
+        line.strip()
+        for line in _lines(str(step.get("run", "")))
+        if RUSTUP_SETUP.search(line) and "||" in line
+    ]
+
+
+@pytest.mark.parametrize("path", WORKFLOWS, ids=lambda path: path.name)
+def test_a_failed_rustup_setup_fails_the_step(path: Path) -> None:
+    """No ``|| true`` (or other ``||``) or ``continue-on-error`` hides a failed install or add.
+
+    A target that was not added only shows up later as a missing std, or not at
+    all if the job builds nothing for it in that run.
+    """
+    for job_id, step in _steps(path):
+        assert _masked_setups(step) == [], (path.name, job_id)
+
+
+@pytest.mark.parametrize(
+    ("step", "masked"),
+    [
+        ({"run": "rustup target add ${{ matrix.target }} || true"}, 1),
+        ({"run": "rustup toolchain install --no-self-update \\\n  || echo skipped"}, 1),
+        ({"run": "rustup component add rustfmt", "continue-on-error": True}, 1),
+        ({"run": "rustup target add wasm32-wasip1\ncargo build || exit 1"}, 0),
+        ({"run": "# rustup target add wasm32-wasip1 || true"}, 0),
+        ({"run": "cargo build || true", "continue-on-error": True}, 0),
+    ],
+)
+def test_a_masked_rustup_setup_is_seen(step: dict[str, Any], masked: int) -> None:
+    assert len(_masked_setups(step)) == masked
