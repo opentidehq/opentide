@@ -1,0 +1,5 @@
+[?25l<LIVE>[1;33mwarning: [0mDocs changed requires git · detail: changed-object discovery requires a git repository with
+at least one commit
+[?25h[1A[2K  [1;31m✗[0m  [1mdocs[0m  [2m0 files[0m [2m<SECONDS>[0m
+[1;31merror:[0m --changed requires a git repository: changed-object discovery requires a git repository with
+       at least one commit

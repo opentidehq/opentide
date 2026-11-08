@@ -1,0 +1,16 @@
+                                                                                
+ Usage: opentide generate exports [OPTIONS] COMMAND [ARGS]...                   
+                                                                                
+ Export catalogue artefacts                                                     
+                                                                                
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ navigator  Export the ATT&CK Navigator layer                                 │
+│ objects    Export every object as one JSON file                              │
+│ revisions  Export the revisions snapshot                                     │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+ Examples
+   $ opentide generate exports

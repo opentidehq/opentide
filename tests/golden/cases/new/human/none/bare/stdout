@@ -1,0 +1,20 @@
+[1m                                                                                                    [0m
+[1m [0m[1;33mUsage: [0m[1mopentide new [OPTIONS] COMMAND [ARGS]...[0m[1m                                                   [0m[1m [0m
+[1m                                                                                                    [0m
+ Scaffold a threat, objective or rule from its template                                             
+                                                                                                    
+ [2mThe new file gets a fresh UUID, today's date, your git author and the catalogue's organisation, [0m   
+ [2mand is named the way opentide lint expects. Required values nobody has chosen yet are [0m             
+ [2mplaceholders, listed in the output: replace them, then run opentide validate [0m[1;2;36m-[0m[1;2;36m-file[0m[2m on the path.[0m   
+                                                                                                    
+[2m╭─[0m[2m Options [0m[2m───────────────────────────────────────────────────────────────────────────────────────[0m[2m─╮[0m
+[2m│[0m [1;36m-[0m[1;36m-help[0m          Show this message and exit.                                                      [2m│[0m
+[2m╰──────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+[2m╭─[0m[2m Commands [0m[2m──────────────────────────────────────────────────────────────────────────────────────[0m[2m─╮[0m
+[2m│[0m [1;36mthreat   [0m[1;36m [0m Scaffold a threat                                                                     [2m│[0m
+[2m│[0m [1;36mobjective[0m[1;36m [0m Scaffold a detection objective                                                        [2m│[0m
+[2m│[0m [1;36mrule     [0m[1;36m [0m Scaffold a detection rule                                                             [2m│[0m
+[2m╰──────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+
+[2m Examples[0m
+   [1m$ opentide new threat --name "Credential Dumping"[0m

@@ -124,6 +124,6 @@ Applied to stdout, stderr, file paths and file contents (UTF-8 only), in this or
 
 ## Size
 
-`COVERAGE.md` reports the size of `cases/` and `blobs/` on disk against a budget of 40 MiB
+`COVERAGE.md` reports the size of `cases/` and `blobs/` on disk against a budget of 128 MiB
 (`BUDGET_BYTES` in `xtask/src/golden/coverage.rs`). Git stores them far smaller: the schemas of one
 fixture differ from another's in a few lines, and pack deltas keep one copy.

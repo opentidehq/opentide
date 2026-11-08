@@ -1,0 +1,6 @@
+[?25l<LIVE>[?25h[1A[2K[1A[2K  [1;32m✓[0m  [1mtemplates[0m  [2m4 files[0m [2m<SECONDS>[0m [2m.opentide/templates/[0m
+  [1;32m✓[0m  [1mschemas[0m    [2m8 files[0m [2m<SECONDS>[0m [2m.opentide/[0m
+[1;33mwarning:[0m sentinel is not enabled in this workspace, so this block will not deploy; enable it with
+         'opentide setup platforms --sentinel'
+[1;33mwarning:[0m metadata.author and metadata.organisation left out: no git user.name is set; no catalogue
+         object names one

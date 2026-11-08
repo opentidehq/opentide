@@ -1,0 +1,15 @@
+[1m                                                                                                    [0m
+[1m [0m[1;33mUsage: [0m[1mopentide generate extract elastic [OPTIONS][0m[1m                                                [0m[1m [0m
+[1m                                                                                                    [0m
+ Import Elastic Security detection rules (needs tenant credentials).                                
+                                                                                                    
+[2m╭─[0m[2m Options [0m[2m───────────────────────────────────────────────────────────────────────────────────────[0m[2m─╮[0m
+[2m│[0m [1;36m-[0m[1;36m-space[0m                                [1;2;33m<[0m[1;33mstr[0m[1;2;33m>[0m  Kibana space ID [2m[default: default][0m                 [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-include[0m[1;36m-prebuilt[0m    [1;35m-[0m[1;35m-custom[0m[1;35m-only[0m    [1;33m     [0m  Include prebuilt rules converted to custom rules   [2m│[0m
+[2m│[0m                                               with derived UUIDs                                 [2m│[0m
+[2m│[0m                                               [2m[default: custom-only]                            [0m [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-help[0m                                 [1;33m     [0m  Show this message and exit.                        [2m│[0m
+[2m╰──────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+
+[2m Examples[0m
+   [1m$ opentide generate extract elastic --space default[0m

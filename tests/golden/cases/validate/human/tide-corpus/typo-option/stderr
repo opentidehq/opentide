@@ -1,0 +1,4 @@
+[1;31merror:[0m No such option: --strictt
+  [1;36mhelp:[0m did you mean '--strict'?
+  [1musage:[0m opentide validate [OPTIONS] COMMAND [ARGS]...
+  [1;36mhelp:[0m run 'opentide validate --help'

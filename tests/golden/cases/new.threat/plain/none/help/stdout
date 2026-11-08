@@ -1,0 +1,14 @@
+                                                                                
+ Usage: opentide new threat [OPTIONS]                                           
+                                                                                
+ Scaffold a threat.                                                             
+                                                                                
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --name        <str>  Object name; the filename is its slug                   │
+│ --path        <str>  File to write, or a folder to write it in (default: the │
+│                      family's objects folder)                                │
+│ --help               Show this message and exit.                             │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+ Examples
+   $ opentide new threat --name "Credential Dumping"

@@ -1,0 +1,61 @@
+                                                                                
+ Usage: opentide [OPTIONS] COMMAND [ARGS]...                                    
+                                                                                
+ Spec-driven development for agentic detection engineering                      
+                                                                                
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --repo                        <str>  Repository root                         │
+│                                      [env var: OPENTIDE_REPO_ROOT]           │
+│ --data                        <str>  Bundled data root                       │
+│                                      [env var: OPENTIDE_DATA_ROOT]           │
+│ --debug                              Enable debug logging. Also              │
+│                                      OPENTIDE_DEBUG=1                        │
+│ --quiet                              Print only the outcome line and errors  │
+│ --no-color                           Disable colour                          │
+│ --json                               Machine-readable output: one JSON       │
+│                                      object on stdout                        │
+│ --proxy                       <str>  HTTP(S) proxy URL                       │
+│                                      (http://[user:pass@]host:port) for      │
+│                                      platform and lookup calls. Overrides    │
+│                                      HTTP_PROXY and HTTPS_PROXY; hosts in    │
+│                                      NO_PROXY are still reached directly.    │
+│                                      [env var: OPENTIDE_PROXY]               │
+│ --version             -V             Print the installed opentide version    │
+│                                      and exit                                │
+│ --install-completion                 Install completion; name a shell after  │
+│                                      it to pick one                          │
+│ --show-completion                    Print the script instead; name a shell  │
+│                                      after it to pick one                    │
+│ --help                               Show this message and exit.             │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Author ─────────────────────────────────────────────────────────────────────╮
+│ validate  Validate objects and queries                                       │
+│ query     Run a read-only query on platform tenants and show rows            │
+│ lint      Check file names and recommended metadata                          │
+│ info      Show repository and platform information                           │
+│ new       Scaffold a threat, objective or rule from its template             │
+│ generate  Generate schemas, templates, docs and exports                      │
+│ rules     Detection rule maintenance                                         │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Ship ───────────────────────────────────────────────────────────────────────╮
+│ deploy    Deploy rules to platform tenants                                   │
+│ share     Publish objects to intelligence platforms                          │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Workspace ──────────────────────────────────────────────────────────────────╮
+│ setup     Set up a detection repository and its tooling                      │
+│ doctor    Check the installation, the workspace and its integrations         │
+│ migrate   Rewrite objects for a newer opentide model                         │
+│ tui       Browse the catalogue and its diagnostics in a terminal UI          │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Agents and integrations ────────────────────────────────────────────────────╮
+│ explain   Explain a diagnostic code and how to fix it                        │
+│ commands  List every command and option, for agents                          │
+│ mcp       Run the opentide MCP server for editors and agents                 │
+│ lsp       Serve the language server for editors                              │
+│ serve     Run CLI commands in one warm process, for editors                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+ Examples
+   $ opentide setup
+   $ opentide validate
+   $ opentide --json validate

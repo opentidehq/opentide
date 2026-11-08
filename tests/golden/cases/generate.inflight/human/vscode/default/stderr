@@ -1,0 +1,4 @@
+[?25l<LIVE>[1;33mwarning: [0mInflight no git baseline · detail: changed-object discovery requires a git repository with 
+at least one commit
+[1;33mwarning: [0mInflight no local git diff found
+[?25h[1A[2K  [1;32m✓[0m  [1minflight[0m  [2m0 files[0m [2m<SECONDS>[0m

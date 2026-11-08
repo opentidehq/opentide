@@ -1,0 +1,29 @@
+[1mrepo[0m
+  create  [1m.gitignore[0m
+  create  [1m.opentide/configurations/platforms/.gitkeep[0m
+  create  [1m.opentide/configurations/platforms/sentinel.toml[0m
+  create  [1m.opentide/exports/.gitkeep[0m
+  create  [1m.opentide/inflight/.gitkeep[0m
+  create  [1m.opentide/schemas/.gitkeep[0m
+  create  [1m.opentide/templates/.gitkeep[0m
+  create  [1mREADME.md[0m
+  create  [1mdocs/objectives/.gitkeep[0m
+  create  [1mdocs/rules/.gitkeep[0m
+  create  [1mdocs/threats/.gitkeep[0m
+  create  [1mobjects/objectives/.gitkeep[0m
+  create  [1mobjects/rules/.gitkeep[0m
+  create  [1mobjects/threats/.gitkeep[0m
+[1mplatforms[0m
+  [2mskip[0m  [1m.opentide/configurations/platforms/sentinel.toml[0m
+[1mci[0m
+  create  [1m.github/workflows/opentide.yml[0m
+[1menv[0m
+  create  [1m.env.example[0m
+  merge   [1m.gitignore[0m
+[1mhooks[0m
+  create  [1m.opentide/hooks/pre-commit[0m
+  create  [1m.pre-commit-config.yaml[0m
+[1mmcp[0m
+  create  [1m.vscode/mcp.json[0m
+
+[1mPlan:[0m 20 files to write (19 new, 1 changed) · nothing written

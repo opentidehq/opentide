@@ -1,0 +1,29 @@
+repo
+  create  .gitignore
+  create  .opentide/configurations/platforms/.gitkeep
+  create  .opentide/configurations/platforms/sentinel.toml
+  create  .opentide/exports/.gitkeep
+  create  .opentide/inflight/.gitkeep
+  create  .opentide/schemas/.gitkeep
+  create  .opentide/templates/.gitkeep
+  create  README.md
+  create  docs/objectives/.gitkeep
+  create  docs/rules/.gitkeep
+  create  docs/threats/.gitkeep
+  create  objects/objectives/.gitkeep
+  create  objects/rules/.gitkeep
+  create  objects/threats/.gitkeep
+platforms
+  skip  .opentide/configurations/platforms/sentinel.toml
+ci
+  create  .github/workflows/opentide.yml
+env
+  create  .env.example
+  merge   .gitignore
+hooks
+  create  .opentide/hooks/pre-commit
+  create  .pre-commit-config.yaml
+mcp
+  create  .vscode/mcp.json
+
+Plan: 20 files to write (19 new, 1 changed) · nothing written

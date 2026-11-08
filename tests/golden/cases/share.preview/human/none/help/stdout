@@ -1,0 +1,16 @@
+[1m                                                                                                    [0m
+[1m [0m[1;33mUsage: [0m[1mopentide share preview [OPTIONS][0m[1m                                                           [0m[1m [0m
+[1m                                                                                                    [0m
+ Show what push would do. Makes no request and writes nothing.                                      
+                                                                                                    
+[2m╭─[0m[2m Options [0m[2m───────────────────────────────────────────────────────────────────────────────────────[0m[2m─╮[0m
+[2m│[0m [1;36m-[0m[1;36m-target[0m         [1;2;33m<[0m[1;33mstr[0m[1;2;33m>[0m  Destination block name. Repeatable.                                      [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-uuid[0m           [1;2;33m<[0m[1;33mstr[0m[1;2;33m>[0m  Limit to these object UUIDs.                                             [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-type[0m           [1;2;33m<[0m[1;33mstr[0m[1;2;33m>[0m  Limit to threat, objective, or rule.                                     [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-file[0m           [1;2;33m<[0m[1;33mstr[0m[1;2;33m>[0m  Limit to these object files.                                             [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-workers[0m        [1;2;33m<[0m[1;33mint[0m[1;2;33m>[0m  Parallel object workers for one destination. [2m[default: 1][0m                [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-help[0m           [1;33m     [0m  Show this message and exit.                                              [2m│[0m
+[2m╰──────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+
+[2m Examples[0m
+   [1m$ opentide share preview[0m

@@ -1,0 +1,19 @@
+                                                                                
+ Usage: opentide doctor [OPTIONS]                                               
+                                                                                
+ Check the installation, the workspace and its integrations                     
+                                                                                
+ Each check prints a status, what it found and, when something needs doing,     
+ the command that fixes it. Credentials are reported as set or unset, never     
+ printed. Exits 1 when any check fails; warnings alone exit 0.                  
+                                                                                
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --offline          Skip the network checks (PyPI release, proxy              │
+│                    reachability)                                             │
+│ --help             Show this message and exit.                               │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+ Examples
+   $ opentide doctor
+   $ opentide doctor --offline
+   $ opentide --json doctor

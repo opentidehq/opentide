@@ -1,0 +1,18 @@
+                                                                                
+ Usage: opentide mcp [OPTIONS] COMMAND [ARGS]...                                
+                                                                                
+ Run the opentide MCP server for editors and agents                             
+                                                                                
+ The server speaks on stdio. The editor owns the process: stop is the host      
+ closing stdin, and reload is the host spawning this command again. There is no 
+ reload or stop subcommand.                                                     
+                                                                                
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ start  Serve MCP on stdio until the host closes stdin                        │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+ Examples
+   $ opentide mcp start

@@ -1,0 +1,2 @@
+error: Cannot run live query validation: sentinel has no tenants configured in .opentide/configurations/platforms/sentinel.toml
+  help: add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/sentinel.toml

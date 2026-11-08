@@ -1,0 +1,72 @@
+[1;31merror[schema_validation][0m[1m: [0m[1mmissing required field 'description'[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/detections/rules/custom-folder-rule.yaml\detections/rules/custom-folder-rule.yaml:1:1]8;;\
+[34m  [0m[34m│[0m
+[34m1 [0m[34m│[0m name: Suspicious LSASS Access
+[34m  [0m[34m│[0m [1;31m━━━━[0m[1;31m add 'description' at the top level[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m the template in .opentide/templates/ shows the field and its values
+
+[1;31merror[schema_validation][0m[1m: [0m[1mmissing required field 'created' in metadata[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/detections/rules/custom-folder-rule.yaml\detections/rules/custom-folder-rule.yaml:2:1]8;;\
+[34m  [0m[34m│[0m
+[34m1 [0m[34m│[0m name: Suspicious LSASS Access
+[34m2 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m [1;31m━━━━━━━━[0m[1;31m add 'created' under this key[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m the template in .opentide/templates/ shows the field and its values
+
+[1;31merror[schema_validation][0m[1m: [0m[1mmissing required field 'modified' in metadata[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/detections/rules/custom-folder-rule.yaml\detections/rules/custom-folder-rule.yaml:2:1]8;;\
+[34m  [0m[34m│[0m
+[34m1 [0m[34m│[0m name: Suspicious LSASS Access
+[34m2 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m [1;31m━━━━━━━━[0m[1;31m add 'modified' under this key[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m the template in .opentide/templates/ shows the field and its values
+
+[1;31merror[schema_validation][0m[1m: [0m[1mmissing required field 'version' in metadata[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/detections/rules/custom-folder-rule.yaml\detections/rules/custom-folder-rule.yaml:2:1]8;;\
+[34m  [0m[34m│[0m
+[34m1 [0m[34m│[0m name: Suspicious LSASS Access
+[34m2 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m [1;31m━━━━━━━━[0m[1;31m add 'version' under this key[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m the template in .opentide/templates/ shows the field and its values
+
+[1;31merror[schema_validation][0m[1m: [0m[1mmissing required field 'alert' in configurations.sentinel[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/detections/rules/custom-folder-rule.yaml\detections/rules/custom-folder-rule.yaml:8:3]8;;\
+[34m  [0m[34m│[0m
+[34m7 [0m[34m│[0m configurations:
+[34m8 [0m[34m│[0m   sentinel:
+[34m  [0m[34m│[0m   [1;31m━━━━━━━━[0m[1;31m add 'alert' under this key[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m the template in .opentide/templates/ shows the field and its values
+
+[1;31merror[schema_validation][0m[1m: [0m[1mmissing required field 'scheduling' in configurations.sentinel[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/detections/rules/custom-folder-rule.yaml\detections/rules/custom-folder-rule.yaml:8:3]8;;\
+[34m  [0m[34m│[0m
+[34m7 [0m[34m│[0m configurations:
+[34m8 [0m[34m│[0m   sentinel:
+[34m  [0m[34m│[0m   [1;31m━━━━━━━━[0m[1;31m add 'scheduling' under this key[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m the template in .opentide/templates/ shows the field and its values
+
+[1;31merror[schema_validation][0m[1m: [0m[1mmissing required field 'status' in configurations.sentinel[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/detections/rules/custom-folder-rule.yaml\detections/rules/custom-folder-rule.yaml:8:3]8;;\
+[34m  [0m[34m│[0m
+[34m7 [0m[34m│[0m configurations:
+[34m8 [0m[34m│[0m   sentinel:
+[34m  [0m[34m│[0m   [1;31m━━━━━━━━[0m[1;31m add 'status' under this key[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m the template in .opentide/templates/ shows the field and its values
+
+[1;33mwarning[platform_not_enabled][0m[1m: [0m[1mthis block will not deploy while sentinel is disabled in this[0m
+  [1mworkspace[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/detections/rules/custom-folder-rule.yaml\detections/rules/custom-folder-rule.yaml:8:3]8;;\
+[34m  [0m[34m│[0m
+[34m7 [0m[34m│[0m configurations:
+[34m8 [0m[34m│[0m   sentinel:
+[34m  [0m[34m│[0m   [1;33m━━━━━━━━[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m enable sentinel with 'opentide setup platforms --sentinel'
+

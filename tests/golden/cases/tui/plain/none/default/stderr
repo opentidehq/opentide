@@ -1,0 +1,3 @@
+error: opentide tui needs an interactive terminal; this run is in plain mode
+→ opentide info · catalogue counts and platforms
+→ opentide validate · diagnostics for every object

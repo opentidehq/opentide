@@ -1,0 +1,25 @@
+[1m                                                                                                    [0m
+[1m [0m[1;33mUsage: [0m[1mopentide generate [OPTIONS] COMMAND [ARGS]...[0m[1m                                              [0m[1m [0m
+[1m                                                                                                    [0m
+ Generate schemas, templates, docs and exports                                                      
+                                                                                                    
+ [2mRun with no argument for the full pipeline, or name one or more phases to run only those, in the [0m  
+ [2morder given: schemas, templates, vocabs, snippets.[0m                                                 
+                                                                                                    
+ [2mRegenerate editor schemas without paying for documentation: `opentide generate schemas templates [0m  
+ [2mvocabs snippets`.[0m                                                                                  
+                                                                                                    
+[2m╭─[0m[2m Options [0m[2m───────────────────────────────────────────────────────────────────────────────────────[0m[2m─╮[0m
+[2m│[0m [1;36m-[0m[1;36m-help[0m          Show this message and exit.                                                      [2m│[0m
+[2m╰──────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+[2m╭─[0m[2m Commands [0m[2m──────────────────────────────────────────────────────────────────────────────────────[0m[2m─╮[0m
+[2m│[0m [1;36mexplorer[0m[1;36m [0m Write the explorer bundle and search index                                             [2m│[0m
+[2m│[0m [1;36mdocs    [0m[1;36m [0m Generate markdown documentation for detection objects                                  [2m│[0m
+[2m│[0m [1;36mexports [0m[1;36m [0m Export catalogue artefacts                                                             [2m│[0m
+[2m│[0m [1;36mextract [0m[1;36m [0m Import rules from external platforms                                                   [2m│[0m
+[2m│[0m [1;36minflight[0m[1;36m [0m Inflight preview shard generation and prune                                            [2m│[0m
+[2m╰──────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+
+[2m Examples[0m
+   [1m$ opentide generate[0m
+   [1m$ opentide generate schemas templates[0m

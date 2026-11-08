@@ -1,0 +1,3 @@
+error: Defender tenants not configured · detail: You must first have Defender for Endpoint tenants configured to initiate the import · advice: run 'opentide setup platforms --defender-for-endpoint'
+✗ import from defender · <SECONDS>
+error: No Defender for Endpoint tenants are configured

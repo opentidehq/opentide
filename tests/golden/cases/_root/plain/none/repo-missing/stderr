@@ -1,0 +1,2 @@
+error: --repo does-not-exist does not exist
+→ opentide --help · --repo takes the folder with .opentide/ in it

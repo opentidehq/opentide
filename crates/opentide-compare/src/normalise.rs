@@ -110,7 +110,7 @@ regex!(position_cursor, r"\r\x1b\[2K((?:\x1b\[1A\x1b\[2K)*)");
 regex!(transient_erase, r"^\r((?:\x1b\[1A\x1b\[2K)+)");
 regex!(
     log_clock,
-    r"(?m)^((?:\x1b\[[0-9;]*m)*)(\d{2}:\d{2}:\d{2}(?:[.,]\d+)?)((?:\x1b\[[0-9;]*m)* (?:\x1b\[[0-9;]*m)*(?:debug|info|warning|error|critical)\b)"
+    r"(?m)^((?:\x1b\[\?25l<LIVE>)?(?:\x1b\[[0-9;]*m)*)(\d{2}:\d{2}:\d{2}(?:[.,]\d+)?)((?:\x1b\[[0-9;]*m)* (?:\x1b\[[0-9;]*m)*(?:debug|info|warning|error|critical)\b)"
 );
 regex!(crash_log, r"crash-\d{8}T\d{6}\d*Z-\d+\.log");
 regex!(
@@ -472,6 +472,11 @@ mod tests {
         assert_eq!(
             norm("18:22:33 debug: Resolving · vocab: tlp::1.0\n\x1b[2m09:01:02.5\x1b[0m info: x\n"),
             "00:00:00 debug: Resolving · vocab: tlp::1.0\n\x1b[2m00:00:00.0\x1b[0m info: x\n"
+        );
+        // The first line printed during a live region follows its marker.
+        assert_eq!(
+            norm("\x1b[?25l<LIVE>\x1b[2m18:41:29 \x1b[0m\x1b[2;35mdebug: \x1b[0mResolving\n"),
+            "\x1b[?25l<LIVE>\x1b[2m00:00:00 \x1b[0m\x1b[2;35mdebug: \x1b[0mResolving\n"
         );
         // Only at the start of a line, and only before a log level.
         assert_eq!(norm("at 18:22:33 today"), "at 18:22:33 today");

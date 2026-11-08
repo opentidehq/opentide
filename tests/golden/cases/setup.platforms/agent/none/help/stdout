@@ -1,0 +1,27 @@
+                                                                                
+ Usage: opentide setup platforms [OPTIONS] [path]                               
+                                                                                
+ Create and enable platform configuration files in                              
+ `.opentide/configurations/platforms/`.                                         
+                                                                                
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --path                   -C      <str>  Repository path [default: .]         │
+│ --sentinel                              Enable Microsoft Sentinel            │
+│ --splunk                                Enable Splunk Enterprise Security    │
+│ --crowdstrike                           Enable CrowdStrike Falcon            │
+│ --defender-for-endpoint                 Enable Microsoft Defender for        │
+│                                         Endpoint                             │
+│ --sentinel-one                          Enable SentinelOne                   │
+│ --carbon-black-cloud                    Enable Carbon Black Cloud            │
+│ --harfanglab                            Enable HarfangLab                    │
+│ --elastic                               Enable Elastic Security              │
+│ --sysdig                                Enable Sysdig Secure (Falco)         │
+│ --plan                                  List the files each step would       │
+│                                         write, and write nothing             │
+│ --yes                    -y             Write without asking for             │
+│                                         confirmation                         │
+│ --help                                  Show this message and exit.          │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+ Examples
+   $ opentide setup platforms --sentinel --splunk --yes

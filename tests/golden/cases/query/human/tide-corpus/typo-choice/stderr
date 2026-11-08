@@ -1,0 +1,6 @@
+[1;31merror:[0m Invalid value for '--platform': 'sentinal' is not one of 'sentinel', 'splunk', 'crowdstrike',
+       'defender_for_endpoint', 'sentinel_one', 'carbon_black_cloud', 'harfanglab', 'elastic',
+       'sysdig'.
+  [1;36mhelp:[0m did you mean 'sentinel'?
+  [1musage:[0m opentide query [OPTIONS] [query]
+  [1;36mhelp:[0m run 'opentide query --help'

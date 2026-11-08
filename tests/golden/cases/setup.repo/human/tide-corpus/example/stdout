@@ -1,0 +1,9 @@
+  [1mobjects/{threats,objectives,rules}/[0m   [2myour detection catalogue[0m
+  [1mREADME.md[0m                             [2mquick start[0m
+  [1m.gitignore[0m                            [2mfiles git leaves out[0m
+
+[1;32m✓[0m Created Detections here
+
+[1;38;5;231;48;5;18m ≋ [0m [1mNext steps[0m
+[2m  1  [0m[1;2mopentide generate[0m[2m · [0m[2mschemas, templates and editor snippets[0m
+[2m  2  [0m[1;2mopentide validate[0m[2m · [0m[2mcheck every object before you commit[0m

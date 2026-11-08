@@ -1,0 +1,1 @@
+{"error":"No such option: --strictt","ok":false,"status":"failed","message":"No such option: --strictt","schema_version":1,"command":"validate","duration_ms":0,"exit_code":2,"summary":{},"next_actions":[],"failure":{"code":"usage_unknown_option","message":"No such option: --strictt","argument":"--strictt","suggestion":"--strict","crash_log":null}}

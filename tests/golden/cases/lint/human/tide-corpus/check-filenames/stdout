@@ -1,0 +1,62 @@
+[1;33mwarning[filename_mismatch][0m[1m: [0m[1mFilename 'objective-0001-credential-access.yaml' does not match[0m
+  [1mslugify(name)='credential-access-objective'[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/objectives/objective-0001-credential-access.yaml\objects/objectives/objective-0001-credential-access.yaml]8;;\
+  [34m╰─[0m [1;36mhelp:[0m rename it to objects/objectives/credential-access-objective.yaml
+
+[1;33mwarning[filename_mismatch][0m[1m: [0m[1mFilename 'rule-0001-sentinel-kql.yaml' does not match[0m
+  [1mslugify(name)='sentinel-kql-rule'[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rule-0001-sentinel-kql.yaml\objects/rules/rule-0001-sentinel-kql.yaml]8;;\
+  [34m╰─[0m [1;36mhelp:[0m rename it to objects/rules/sentinel-kql-rule.yaml
+
+[1;33mwarning[filename_mismatch][0m[1m: [0m[1mFilename 'rule-0002-defender-kql.yaml' does not match[0m
+  [1mslugify(name)='defender-kql-rule'[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rule-0002-defender-kql.yaml\objects/rules/rule-0002-defender-kql.yaml]8;;\
+  [34m╰─[0m [1;36mhelp:[0m rename it to objects/rules/defender-kql-rule.yaml
+
+[1;33mwarning[filename_mismatch][0m[1m: [0m[1mFilename 'rule-0003-splunk-spl.yaml' does not match[0m
+  [1mslugify(name)='splunk-spl-rule'[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rule-0003-splunk-spl.yaml\objects/rules/rule-0003-splunk-spl.yaml]8;;\
+  [34m╰─[0m [1;36mhelp:[0m rename it to objects/rules/splunk-spl-rule.yaml
+
+[1;33mwarning[filename_mismatch][0m[1m: [0m[1mFilename 'rule-0004-sentinel-one-s1ql.yaml' does not match[0m
+  [1mslugify(name)='sentinelone-s1ql-rule'[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rule-0004-sentinel-one-s1ql.yaml\objects/rules/rule-0004-sentinel-one-s1ql.yaml]8;;\
+  [34m╰─[0m [1;36mhelp:[0m rename it to objects/rules/sentinelone-s1ql-rule.yaml
+
+[1;33mwarning[filename_mismatch][0m[1m: [0m[1mFilename 'rule-0005-carbon-black-lucene.yaml' does not match[0m
+  [1mslugify(name)='carbon-black-lucene-rule'[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rule-0005-carbon-black-lucene.yaml\objects/rules/rule-0005-carbon-black-lucene.yaml]8;;\
+  [34m╰─[0m [1;36mhelp:[0m rename it to objects/rules/carbon-black-lucene-rule.yaml
+
+[1;33mwarning[filename_mismatch][0m[1m: [0m[1mFilename 'rule-0006-crowdstrike-deploy-only.yaml' does not match[0m
+  [1mslugify(name)='crowdstrike-deploy-rule'[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rule-0006-crowdstrike-deploy-only.yaml\objects/rules/rule-0006-crowdstrike-deploy-only.yaml]8;;\
+  [34m╰─[0m [1;36mhelp:[0m rename it to objects/rules/crowdstrike-deploy-rule.yaml
+
+[1;33mwarning[filename_mismatch][0m[1m: [0m[1mFilename 'rule-0007-harfanglab-deploy-only.yaml' does not match[0m
+  [1mslugify(name)='harfanglab-deploy-rule'[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rule-0007-harfanglab-deploy-only.yaml\objects/rules/rule-0007-harfanglab-deploy-only.yaml]8;;\
+  [34m╰─[0m [1;36mhelp:[0m rename it to objects/rules/harfanglab-deploy-rule.yaml
+
+[1;33mwarning[filename_mismatch][0m[1m: [0m[1mFilename 'rule-0008-staging-promote.yaml' does not match[0m
+  [1mslugify(name)='staging-promote-rule'[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rule-0008-staging-promote.yaml\objects/rules/rule-0008-staging-promote.yaml]8;;\
+  [34m╰─[0m [1;36mhelp:[0m rename it to objects/rules/staging-promote-rule.yaml
+
+[1;33mwarning[filename_mismatch][0m[1m: [0m[1mFilename 'rule-0009-elastic-kql.yaml' does not match[0m
+  [1mslugify(name)='elastic-kql-rule'[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rule-0009-elastic-kql.yaml\objects/rules/rule-0009-elastic-kql.yaml]8;;\
+  [34m╰─[0m [1;36mhelp:[0m rename it to objects/rules/elastic-kql-rule.yaml
+
+[1;33mwarning[filename_mismatch][0m[1m: [0m[1mFilename 'rule-0013-sysdig-falco.yaml' does not match[0m
+  [1mslugify(name)='sysdig-falco-rule'[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rule-0013-sysdig-falco.yaml\objects/rules/rule-0013-sysdig-falco.yaml]8;;\
+  [34m╰─[0m [1;36mhelp:[0m rename it to objects/rules/sysdig-falco-rule.yaml
+
+[1;33mwarning[filename_mismatch][0m[1m: [0m[1mFilename 'threat-0001-simulated-actor.yaml' does not match[0m
+  [1mslugify(name)='simulated-actor'[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/threats/threat-0001-simulated-actor.yaml\objects/threats/threat-0001-simulated-actor.yaml]8;;\
+  [34m╰─[0m [1;36mhelp:[0m rename it to objects/threats/simulated-actor.yaml
+
+[1;33m![0m 12 findings in 12 files
+[1;36m→[0m [1mopentide lint --fix[0m[2m · [0m[2mrename 12 files to match their names[0m

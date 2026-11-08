@@ -1,0 +1,19 @@
+[1m                                                                                                    [0m
+[1m [0m[1;33mUsage: [0m[1mopentide migrate vocab-scope [OPTIONS][0m[1m                                                     [0m[1m [0m
+[1m                                                                                                    [0m
+ Re-prefix stage-scoped vocabulary values (`Process` -> `Host::Process`).                           
+                                                                                                    
+ [2mApplies only mechanical outcomes: a key defined under exactly one stage,[0m                           
+ [2mand a stage whose casing drifted. A key defined under several stages is[0m                            
+ [2mreported, never guessed. Exits 2 when anything is left for a human.[0m                                
+                                                                                                    
+[2m╭─[0m[2m Options [0m[2m───────────────────────────────────────────────────────────────────────────────────────[0m[2m─╮[0m
+[2m│[0m [1;36m-[0m[1;36m-apply[0m        [1;33m     [0m  Rewrite the objects (default: dry-run report)                              [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-field[0m        [1;2;33m<[0m[1;33mstr[0m[1;2;33m>[0m  Limit to one scoped field (repeatable). Default: every scoped field.       [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-force[0m        [1;33m     [0m  Exit 0 even when values need a human decision                              [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-help[0m         [1;33m     [0m  Show this message and exit.                                                [2m│[0m
+[2m╰──────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+
+[2m Examples[0m
+   [1m$ opentide migrate vocab-scope[0m
+   [1m$ opentide migrate vocab-scope --apply[0m

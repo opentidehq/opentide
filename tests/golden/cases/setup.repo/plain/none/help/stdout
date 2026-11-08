@@ -1,0 +1,23 @@
+                                                                                
+ Usage: opentide setup repo [OPTIONS] [path]                                    
+                                                                                
+ Scaffold a detection repository.                                               
+                                                                                
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --path         -C      <str>     Repository path [default: .]                │
+│ --name                 <str>     Repository name, used in the README         │
+│ --org                  <str>     Organisation or team, used in the README    │
+│ --description          <str>     One-line description, used in the README    │
+│ --platform             PLATFORM  Enable a detection platform (repeatable):   │
+│                                  sentinel, splunk, crowdstrike,              │
+│                                  defender_for_endpoint, sentinel_one,        │
+│                                  carbon_black_cloud, harfanglab, elastic,    │
+│                                  sysdig                                      │
+│ --plan                           List the files each step would write, and   │
+│                                  write nothing                               │
+│ --yes          -y                Write without asking for confirmation       │
+│ --help                           Show this message and exit.                 │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+ Examples
+   $ opentide setup repo --yes --name "Detections" --platform sentinel

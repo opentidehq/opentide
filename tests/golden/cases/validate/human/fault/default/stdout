@@ -1,0 +1,811 @@
+[1;31merror[deployment_state_uuid_mismatch][0m[1m:[0m
+  [1m<WS>/.opentide/states/deployment/1fe3b71b-24be-4604-9b91-72cb32381bfc.json[0m
+  [1mrecords object_uuid '00000000-0000-4000-8000-000000000001', but its file name is[0m
+  [1m'1fe3b71b-24be-4604-9b91-72cb32381bfc'[0m
+  [34m╰─▶[0m ]8;id=<ID>;file://<WS>/.opentide/states/deployment/1fe3b71b-24be-4604-9b91-72cb32381bfc.json\.opentide/states/deployment/1fe3b71b-24be-4604-9b91-72cb32381bfc.json]8;;\
+
+[1;31merror[deployment_state_shape][0m[1m:[0m
+  [1m<WS>/.opentide/states/deployment/8df3e0d3-8a3f-490c-9f31-b71df88f3562.json has no[0m
+  [1mplatforms object[0m
+  [34m╰─▶[0m ]8;id=<ID>;file://<WS>/.opentide/states/deployment/8df3e0d3-8a3f-490c-9f31-b71df88f3562.json\.opentide/states/deployment/8df3e0d3-8a3f-490c-9f31-b71df88f3562.json]8;;\
+
+[1;31merror[deployment_state_platform][0m[1m:[0m
+  [1m<WS>/.opentide/states/deployment/f2f28c1d-8323-4b4e-acba-c53ed9cb5271.json names[0m
+  [1mplatform 'splunk'; only crowdstrike, defender_for_endpoint, sentinel_one, sysdig store external[0m
+  [1mids[0m
+  [34m╰─▶[0m ]8;id=<ID>;file://<WS>/.opentide/states/deployment/f2f28c1d-8323-4b4e-acba-c53ed9cb5271.json\.opentide/states/deployment/f2f28c1d-8323-4b4e-acba-c53ed9cb5271.json]8;;\
+
+[1;31merror[invalid_ref][0m[1m: [0m[1mUnknown threat reference '00000000-0000-4000-8000-00000000beef'[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/objectives/elevated-exfiltration-objective-0002.yaml\objects/objectives/elevated-exfiltration-objective-0002.yaml:54:7]8;;\
+[34m   [0m[34m│[0m
+[34m53 [0m[34m│[0m   threats:
+[34m54 [0m[34m│[0m     - 00000000-0000-4000-8000-00000000beef
+[34m   [0m[34m│[0m       [1;31m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m[1;31m no object has this id[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m opentide info threats lists the ones that exist
+
+[1;31merror[vocab_unknown][0m[1m: [0m[1m'Host::Gizmo' is not a signal entities value[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/objectives/lateral-beacon-objective-0001.yaml\objects/objectives/lateral-beacon-objective-0001.yaml:34:11]8;;\
+[34m   [0m[34m│[0m
+[34m33 [0m[34m│[0m       entities:
+[34m34 [0m[34m│[0m         - Host::Gizmo
+[34m   [0m[34m│[0m           [1;31m━━━━━━━━━━━[0m[1;31m not in signal.entities::1.0[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m did you mean 'Host::File'?
+
+[1;31merror[invalid_ref][0m[1m: [0m[1mUnknown threat reference '00000000-0000-4000-8000-00000000beef'[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/objectives/rapid-tunnel-objective-0003.yaml\objects/objectives/rapid-tunnel-objective-0003.yaml:77:7]8;;\
+[34m   [0m[34m│[0m
+[34m76 [0m[34m│[0m   threats:
+[34m77 [0m[34m│[0m     - 00000000-0000-4000-8000-00000000beef
+[34m   [0m[34m│[0m       [1;31m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m[1;31m no object has this id[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m opentide info threats lists the ones that exist
+
+[1;31merror[ecs_type_mismatch][0m[1m: [0m[1m`process.pid` is a `long` field in ECS v9.5.0: Elasticsearch rejects the[0m
+  [1mvalue `abc`, which is not a number, on it[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/covert-exfiltration-rule-0083.yaml\objects/rules/covert-exfiltration-rule-0083.yaml:71:20]8;;\
+[34m   [0m[34m│[0m
+[34m70 [0m[34m│[0m     query: |
+[34m71 [0m[34m│[0m       process.pid[35m:[0m [32mabc[0m
+[34m   [0m[34m│[0m                    [1;31m━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the ECS field reference: https://www.elastic.co/docs/reference/ecs/ecs-field-reference
+
+[1;31merror[kql_parse_error][0m[1m: [0m[1mKQL syntax error[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/covert-tunnel-rule-0088.yaml\objects/rules/covert-tunnel-rule-0088.yaml:62:7]8;;\
+[34m   [0m[34m│[0m
+[34m61 [0m[34m│[0m     query: |
+[34m62 [0m[34m│[0m       union [35m*[0m [1;35m|[0m take [33m1[0m
+[34m   [0m[34m│[0m       [1;31m━━━━━━━━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the KQL reference: https://learn.microsoft.com/kusto/query/
+
+[1;31merror[eql_unsupported][0m[1m: [0m[1mElasticsearch EQL does not support the `unique` pipe; only `head` and `tail`[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/elevated-downgrade-rule-0197.yaml\objects/rules/elevated-downgrade-rule-0197.yaml:53:28]8;;\
+[34m   [0m[34m│[0m
+[34m52 [0m[34m│[0m     query: |
+[34m53 [0m[34m│[0m       [96mprocess[0m [1;35mwhere[0m [33mtrue[0m [1;35m|[0m [1;35munique[0m process.name
+[34m   [0m[34m│[0m                            [1;31m━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql
+
+[1;31merror[spl_unknown_datamodel][0m[1m: [0m[1m`Endpointz` is not a CIM data model; did you mean `Endpoint`?[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/elevated-dropper-rule-0066.yaml\objects/rules/elevated-dropper-rule-0066.yaml:54:37]8;;\
+[34m   [0m[34m│[0m
+[34m53 [0m[34m│[0m     query: |
+[34m54 [0m[34m│[0m       [1;35m|[0m [1;35mtstats[0m [36mcount[0m [1;35mfrom[0m [1;35mdatamodel[0m[35m=[0mEndpointz
+[34m   [0m[34m│[0m                                     [1;31m━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m try: Endpoint
+
+[1;31merror[spl_unknown_datamodel_field][0m[1m: [0m[1m`process_nam` is not a field of the CIM Endpoint.Processes[0m
+  [1mdataset; did you mean `Processes.process_name`?[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/elevated-injection-rule-0075.yaml\objects/rules/elevated-injection-rule-0075.yaml:40:59]8;;\
+[34m   [0m[34m│[0m
+[34m39 [0m[34m│[0m     query: |
+[34m40 [0m[34m│[0m       [1;35m|[0m [1;35mtstats[0m [36mcount[0m [1;35mfrom[0m [1;35mdatamodel[0m[35m=[0m[96mEndpoint.Processes[0m [1;35mby[0m Processes.process_nam
+[34m   [0m[34m│[0m                                                           [1;31m━━━━━━━━━━━━━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m try: Processes.process_name
+
+[1;31merror[kql_unknown_table][0m[1m: [0m[1munknown table 'DeviceProcessEvnts'; if the workspace holds it, declare it[0m
+  [1mfor defender_for_endpoint in visibility.toml[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/elevated-pivot-rule-0038.yaml\objects/rules/elevated-pivot-rule-0038.yaml:59:7]8;;\
+[34m   [0m[34m│[0m
+[34m58 [0m[34m│[0m     query: |
+[34m59 [0m[34m│[0m       [96mDeviceProcessEvnts[0m
+[34m   [0m[34m│[0m       [1;31m━━━━━━━━━━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m did you mean 'DeviceProcessEvents'?
+
+[1;31merror[vocab_unknown][0m[1m: [0m[1m'whitish' is not a TLP value[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/elevated-relay-rule-0034.yaml\objects/rules/elevated-relay-rule-0034.yaml:9:8]8;;\
+[34m  [0m[34m│[0m
+[34m8 [0m[34m│[0m   modified: 2025-03-16
+[34m9 [0m[34m│[0m   tlp: whitish
+[34m  [0m[34m│[0m        [1;31m━━━━━━━[0m[1;31m not in tlp::1.0[0m
+
+[1;31merror[kql_parse_error][0m[1m: [0m[1mKQL syntax error[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/elevated-relay-rule-0034.yaml\objects/rules/elevated-relay-rule-0034.yaml:64:21]8;;\
+[34m   [0m[34m│[0m
+[34m63 [0m[34m│[0m     query: |
+[34m64 [0m[34m│[0m       [96mSecurityEvent[0m [1;35m|[0m where (
+[34m   [0m[34m│[0m                     [1;31m━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the KQL reference: https://learn.microsoft.com/kusto/query/
+
+[1;31merror[kql_unknown_function][0m[1m: [0m[1munknown function 'tolowr'[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/elevated-relay-rule-0055.yaml\objects/rules/elevated-relay-rule-0055.yaml:60:20]8;;\
+[34m   [0m[34m│[0m
+[34m59 [0m[34m│[0m       [96mSecurityEvent[0m
+[34m60 [0m[34m│[0m       [1;35m|[0m [1;35mextend[0m x [35m=[0m [36mtolowr[0m(Computer)
+[34m   [0m[34m│[0m                    [1;31m━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m did you mean 'tolower'?
+
+[1;31merror[eql_maxspan_unit][0m[1m: [0m[1munrecognized time unit [w] in `maxspan`; use one of ms, s, m, h, d[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/elevated-relay-rule-0107.yaml\objects/rules/elevated-relay-rule-0107.yaml:54:29]8;;\
+[34m   [0m[34m│[0m
+[34m53 [0m[34m│[0m     query: |
+[34m54 [0m[34m│[0m       [1;35msequence[0m [1;35mwith[0m [1;35mmaxspan[0m[35m=[0m[33m5[0m[33mw[0m [[96mprocess[0m [1;35mwhere[0m [33mtrue[0m] [[96mfile[0m [1;35mwhere[0m [33mtrue[0m]
+[34m   [0m[34m│[0m                             [1;31m━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql
+
+[1;31merror[kuery_parse_error][0m[1m: [0m[1mKibana ends an unquoted value at `not ` and rejects the query; quote the[0m
+  [1mvalue[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/elevated-tunnel-rule-0053.yaml\objects/rules/elevated-tunnel-rule-0053.yaml:40:19]8;;\
+[34m   [0m[34m│[0m
+[34m39 [0m[34m│[0m     query: |
+[34m40 [0m[34m│[0m       message[35m:[0m [32mcannot[0m [32mrun[0m
+[34m   [0m[34m│[0m                   [1;31m━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m try: "cannot run"
+
+[1;31merror[falco_misplaced_list][0m[1m: [0m[1m`corpus_shells_712` is a list, not a macro: use it in a value list, `in[0m
+  [1m(corpus_shells_712)`[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/encoded-beacon-rule-0124.yaml\objects/rules/encoded-beacon-rule-0124.yaml:67:16]8;;\
+[34m   [0m[34m│[0m
+[34m66 [0m[34m│[0m     status: [32mIMPROVING[0m
+[34m67 [0m[34m│[0m     condition: [36mcorpus_shells_712[0m
+[34m   [0m[34m│[0m                [1;31m━━━━━━━━━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+[1;31merror[falco_operator_type][0m[1m: [0m[1m'contains' operator not supported for numeric filters (`proc.pid` is a[0m
+  [1mnumber (INT64))[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/encoded-downgrade-rule-0063.yaml\objects/rules/encoded-downgrade-rule-0063.yaml:57:36]8;;\
+[34m   [0m[34m│[0m
+[34m56 [0m[34m│[0m     condition: |
+[34m57 [0m[34m│[0m       [36mspawned_process[0m [1;35mand[0m proc.pid [35mcontains[0m [33m5[0m
+[34m   [0m[34m│[0m                                    [1;31m━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+[1;31merror[esql_unknown_type][0m[1m: [0m[1m`foo` is not an ES|QL type Elasticsearch can cast to; use a type such as[0m
+  [1m`keyword`, `long`, `double`, `ip`, or `datetime`[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/encoded-downgrade-rule-0170.yaml\objects/rules/encoded-downgrade-rule-0170.yaml:53:56]8;;\
+[34m   [0m[34m│[0m
+[34m52 [0m[34m│[0m     query: |
+[34m53 [0m[34m│[0m       [1;35mFROM[0m [96mlogs-*[0m [1;35mMETADATA[0m [33m_id[0m [1;35m|[0m [1;35mEVAL[0m x [35m=[0m process.pid[35m::[0m[96mfoo[0m
+[34m   [0m[34m│[0m                                                        [1;31m━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m try: bool
+
+[1;31merror[spl_parse_error][0m[1m: [0m[1mSPL syntax error: unexpected 'index'[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/encoded-dropper-rule-0057.yaml\objects/rules/encoded-dropper-rule-0057.yaml:55:7]8;;\
+[34m   [0m[34m│[0m
+[34m54 [0m[34m│[0m     query: |
+[34m55 [0m[34m│[0m       index[35m=[0mmain [1;35m|[0m eval x[35m=[0m(
+[34m   [0m[34m│[0m       [1;31m━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the SPL reference: https://docs.splunk.com/Documentation/Splunk/latest/SearchReference
+
+[1;31merror[schema_validation][0m[1m: [0m[1mmissing required field 'name'[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/encoded-harvest-rule-0032.yaml\objects/rules/encoded-harvest-rule-0032.yaml:1:1]8;;\
+[34m  [0m[34m│[0m
+[34m1 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m [1;31m━━━━━━━━[0m[1;31m add 'name' at the top level[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m the template in .opentide/templates/ shows the field and its values
+
+[1;31merror[kql_parse_error][0m[1m: [0m[1mKQL syntax error[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/encoded-loader-rule-0037.yaml\objects/rules/encoded-loader-rule-0037.yaml:50:7]8;;\
+[34m   [0m[34m│[0m
+[34m49 [0m[34m│[0m       [96mSecurityEvent[0m
+[34m50 [0m[34m│[0m       [1;35m|[0m where (
+[34m   [0m[34m│[0m       [1;31m━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the KQL reference: https://learn.microsoft.com/kusto/query/
+
+[1;31merror[schema_validation][0m[1m: [0m[1mmissing required field 'description'[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/encoded-pivot-rule-0008.yaml\objects/rules/encoded-pivot-rule-0008.yaml:1:1]8;;\
+[34m  [0m[34m│[0m
+[34m1 [0m[34m│[0m name: Encoded Pivot Rule 0008
+[34m  [0m[34m│[0m [1;31m━━━━[0m[1;31m add 'description' at the top level[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m the template in .opentide/templates/ shows the field and its values
+
+[1;31merror[schema_validation][0m[1m: [0m[1mmetadata.reviewed: Extra inputs are not permitted[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/encoded-pivot-rule-0009.yaml\objects/rules/encoded-pivot-rule-0009.yaml:14:3]8;;\
+[34m   [0m[34m│[0m
+[34m13 [0m[34m│[0m     name: Example Detection Team
+[34m14 [0m[34m│[0m   reviewed: 2026-03-01
+[34m   [0m[34m│[0m   [1;31m━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the template in .opentide/templates/ shows the field and its values
+
+[1;31merror[yaml_parse][0m[1m: [0m[1mCould not parse object YAML: '2026-02-30' is not a valid date (day is out of[0m
+  [1mrange for month)[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/encoded-relay-rule-0014.yaml\objects/rules/encoded-relay-rule-0014.yaml:9:13]8;;\
+[34m  [0m[34m│[0m
+[34m8 [0m[34m│[0m   modified: 2025-10-17
+[34m9 [0m[34m│[0m   reviewed: 2026-02-30
+[34m  [0m[34m│[0m             [1;31m━━━━━━━━━━[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m write the date as YYYY-MM-DD, with a month from 01 to 12
+
+[1;31merror[kql_unknown_column][0m[1m: [0m[1m'EventIDD' is not a column of SecurityEvent[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/encoded-relay-rule-0052.yaml\objects/rules/encoded-relay-rule-0052.yaml:50:15]8;;\
+[34m   [0m[34m│[0m
+[34m49 [0m[34m│[0m       [96mSecurityEvent[0m
+[34m50 [0m[34m│[0m       [1;35m|[0m [1;35mwhere[0m EventIDD [35m==[0m [33m4688[0m
+[34m   [0m[34m│[0m               [1;31m━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m try: EventID
+
+[1;31merror[yaml_parse][0m[1m: [0m[1mCould not parse object YAML: did not find expected ',' or ']'[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/encoded-spray-rule-0023.yaml\objects/rules/encoded-spray-rule-0023.yaml:53:1]8;;\
+  [34m├─[0m [1;34mnote:[0m while parsing a flow sequence that starts at line 52, column 9
+  [34m╰─[0m [1;36mhelp:[0m look at the indentation, a missing ':' or an unclosed quote at or just before this
+  [34m [0m        position
+
+[1;31merror[vocab_unknown][0m[1m: [0m[1m'clearr' is not a TLP value[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/encoded-tunnel-rule-0011.yaml\objects/rules/encoded-tunnel-rule-0011.yaml:9:8]8;;\
+[34m  [0m[34m│[0m
+[34m8 [0m[34m│[0m   modified: 2026-02-15
+[34m9 [0m[34m│[0m   tlp: clearr
+[34m  [0m[34m│[0m        [1;31m━━━━━━[0m[1;31m not in tlp::1.0[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m did you mean 'clear'?
+
+[1;31merror[falco_transformer][0m[1m: [0m[1mcan't add field transformer: type 'INT64' is not supported by 'tolower'[0m
+  [1mtransformer applied on field 'proc.pid'[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/hidden-beacon-rule-0090.yaml\objects/rules/hidden-beacon-rule-0090.yaml:51:27]8;;\
+[34m   [0m[34m│[0m
+[34m50 [0m[34m│[0m     condition: |
+[34m51 [0m[34m│[0m       [36mspawned_process[0m [1;35mand[0m [36mtolower([0mproc.pid) [35m=[0m [33m1[0m
+[34m   [0m[34m│[0m                           [1;31m━━━━━━━━━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+[1;31merror[schema_validation][0m[1m: [0m[1mmissing required field 'description'[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/hidden-harvest-rule-0026.yaml\objects/rules/hidden-harvest-rule-0026.yaml:1:1]8;;\
+[34m  [0m[34m│[0m
+[34m1 [0m[34m│[0m name: Hidden Harvest Rule 0026
+[34m  [0m[34m│[0m [1;31m━━━━[0m[1;31m add 'description' at the top level[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m the template in .opentide/templates/ shows the field and its values
+
+[1;31merror[invalid_uuid][0m[1m: [0m[1mUUID 'bad-1' is not a valid UUIDv4[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/hidden-harvest-rule-0026.yaml\objects/rules/hidden-harvest-rule-0026.yaml:4:9]8;;\
+[34m  [0m[34m│[0m
+[34m3 [0m[34m│[0m metadata:
+[34m4 [0m[34m│[0m   uuid: bad-1
+[34m  [0m[34m│[0m         [1;31m━━━━━[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m replace it with a UUID v4: python -c "import uuid; print(uuid.uuid4())"
+
+[1;31merror[falco_invalid_regex][0m[1m: [0m[1minvalid regex pattern: error: unclosed group[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/hidden-relay-rule-0054.yaml\objects/rules/hidden-relay-rule-0054.yaml:40:43]8;;\
+[34m   [0m[34m│[0m
+[34m39 [0m[34m│[0m     condition: |
+[34m40 [0m[34m│[0m       [36mspawned_process[0m [1;35mand[0m proc.name [35mregex[0m [32m'('[0m
+[34m   [0m[34m│[0m                                           [1;31m━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+[1;31merror[kql_type_mismatch][0m[1m: [0m[1m`>` is not defined for `ResultType`, a string column; Kusto rejects the[0m
+  [1mquery[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/lateral-dropper-rule-0046.yaml\objects/rules/lateral-dropper-rule-0046.yaml:60:26]8;;\
+[34m   [0m[34m│[0m
+[34m59 [0m[34m│[0m       [96mSigninLogs[0m
+[34m60 [0m[34m│[0m       [1;35m|[0m [1;35mwhere[0m ResultType [35m>[0m [33m5[0m
+[34m   [0m[34m│[0m                          [1;31m━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the KQL reference: https://learn.microsoft.com/kusto/query/
+
+[1;31merror[falco_unknown_field][0m[1m: [0m[1m`proc.nmae` is not a Falco field of the `syscall` source[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/lateral-dropper-rule-0108.yaml\objects/rules/lateral-dropper-rule-0108.yaml:55:27]8;;\
+[34m   [0m[34m│[0m
+[34m54 [0m[34m│[0m     condition: |
+[34m55 [0m[34m│[0m       [36mspawned_process[0m [1;35mand[0m proc.nmae [35m=[0m [32mbash[0m
+[34m   [0m[34m│[0m                           [1;31m━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m try: proc.name
+
+[1;31merror[kql_control_command_unsupported][0m[1m: [0m[1mKQL control command '.show' is not valid in detections[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/lateral-harvest-rule-0043.yaml\objects/rules/lateral-harvest-rule-0043.yaml:55:7]8;;\
+[34m   [0m[34m│[0m
+[34m54 [0m[34m│[0m     query: |
+[34m55 [0m[34m│[0m       [31m.[0m[31mshow[0m [31mtables[0m
+[34m   [0m[34m│[0m       [1;31m━━━━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the KQL reference: https://learn.microsoft.com/kusto/query/
+
+[1;31merror[yaml_parse][0m[1m: [0m[1mCould not parse object YAML: found character that cannot start any token[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/lateral-injection-rule-0024.yaml\objects/rules/lateral-injection-rule-0024.yaml:68:1]8;;\
+[34m   [0m[34m│[0m
+[34m67 [0m[34m│[0m       lookback: "2h"
+[34m68 [0m[34m│[0m    indent: tab
+[34m   [0m[34m│[0m [1;31m━[0m
+[34m   [0m[34m│[0m
+   [34m├─[0m [1;34mnote:[0m while scanning for the next token
+   [34m╰─[0m [1;36mhelp:[0m look at the indentation, a missing ':' or an unclosed quote at or just before this
+   [34m [0m        position
+
+[1;31merror[eql_unknown_function][0m[1m: [0m[1munknown EQL function `startsWth`[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/lateral-loader-rule-0182.yaml\objects/rules/lateral-loader-rule-0182.yaml:78:21]8;;\
+[34m   [0m[34m│[0m
+[34m77 [0m[34m│[0m     query: |
+[34m78 [0m[34m│[0m       [96mprocess[0m [1;35mwhere[0m [36mstartsWth[0m(process.name, [32m"a"[0m)
+[34m   [0m[34m│[0m                     [1;31m━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m did you mean 'startsWith'?
+
+[1;33mwarning[nested_object_file][0m[1m: [0m[1mobjects/rules/nested/hidden-harvest-rule-0020.yaml is in a subfolder of[0m
+  [1mobjects/rules and is not an object instance: it is not indexed, validated, shared, documented or[0m
+  [1mdeployed (opentide reads only files directly in objects/rules; see[0m
+  [1mhttps://github.com/opentidehq/opentide/issues/584)[0m
+  [34m╰─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/nested/hidden-harvest-rule-0020.yaml\objects/rules/nested/hidden-harvest-rule-0020.yaml]8;;\
+
+[1;31merror[duplicate_id][0m[1m: [0m[1mUUID not-a-uuid is also used by 'Encoded Exfiltration Rule 0005'[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/persistent-beacon-rule-0004.yaml\objects/rules/persistent-beacon-rule-0004.yaml:4:9]8;;\
+[34m  [0m[34m│[0m
+[34m3 [0m[34m│[0m metadata:
+[34m4 [0m[34m│[0m   uuid: not-a-uuid
+[34m  [0m[34m│[0m         [1;31m━━━━━━━━━━[0m
+[34m  [0m[34m│[0m
+  [34m├─[0m [1malso:[0m objects/rules/encoded-exfiltration-rule-0005.yaml:4:9
+  [34m╰─[0m [1;36mhelp:[0m give one of them a fresh UUID v4; keep the UUID on the object that is deployed or
+  [34m [0m        referenced
+
+[1;31merror[invalid_uuid][0m[1m: [0m[1mUUID 'not-a-uuid' is not a valid UUIDv4[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/persistent-beacon-rule-0004.yaml\objects/rules/persistent-beacon-rule-0004.yaml:4:9]8;;\
+[34m  [0m[34m│[0m
+[34m3 [0m[34m│[0m metadata:
+[34m4 [0m[34m│[0m   uuid: not-a-uuid
+[34m  [0m[34m│[0m         [1;31m━━━━━━━━━━[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m replace it with a UUID v4: python -c "import uuid; print(uuid.uuid4())"
+
+[1;31merror[esql_unknown_function][0m[1m: [0m[1munknown ES|QL function `STARTSWITH`[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/persistent-injection-rule-0155.yaml\objects/rules/persistent-injection-rule-0155.yaml:60:43]8;;\
+[34m   [0m[34m│[0m
+[34m59 [0m[34m│[0m     query: |
+[34m60 [0m[34m│[0m       [1;35mFROM[0m [96mlogs-*[0m [1;35mMETADATA[0m [33m_id[0m [1;35m|[0m [1;35mEVAL[0m x [35m=[0m [36mSTARTSWITH[0m(process.name, [32m"b"[0m)
+[34m   [0m[34m│[0m                                           [1;31m━━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m did you mean 'STARTS_WITH'?
+
+[1;31merror[eql_function_arity][0m[1m: [0m[1m`length` takes 1 arguments, found 2[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/persistent-pivot-rule-0092.yaml\objects/rules/persistent-pivot-rule-0092.yaml:69:21]8;;\
+[34m   [0m[34m│[0m
+[34m68 [0m[34m│[0m     query: |
+[34m69 [0m[34m│[0m       [96mprocess[0m [1;35mwhere[0m [36mlength[0m(process.name, process.pid) [35m>[0m [33m1[0m
+[34m   [0m[34m│[0m                     [1;31m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql
+
+[1;31merror[invalid_ref][0m[1m: [0m[1mUnknown objective or signal reference '00000000-0000-4000-8000-0000deadbeef'[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/persistent-relay-rule-0013.yaml\objects/rules/persistent-relay-rule-0013.yaml:29:18]8;;\
+[34m   [0m[34m│[0m
+[34m28 [0m[34m│[0m     2: https://example.org/research/persistent-relay-rule-0013
+[34m29 [0m[34m│[0m detection_model: 00000000-0000-4000-8000-0000deadbeef
+[34m   [0m[34m│[0m                  [1;31m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m[1;31m no object has this id[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m opentide info objectives lists the ones that exist
+
+[1;31merror[schema_missing][0m[1m: [0m[1mmissing metadata.schema on object[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rapid-downgrade-rule-0007.yaml\objects/rules/rapid-downgrade-rule-0007.yaml:3:1]8;;\
+[34m  [0m[34m│[0m
+[34m3 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m [1;31m━━━━━━━━[0m
+
+[1;31merror[eql_not_boolean][0m[1m: [0m[1minteger `1` is not a condition: EQL needs a boolean here (a comparison, a[0m
+  [1mpredicate, `true` or `false`)[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rapid-dropper-rule-0137.yaml\objects/rules/rapid-dropper-rule-0137.yaml:82:21]8;;\
+[34m   [0m[34m│[0m
+[34m81 [0m[34m│[0m     query: |
+[34m82 [0m[34m│[0m       [96mprocess[0m [1;35mwhere[0m [33m1[0m
+[34m   [0m[34m│[0m                     [1;31m━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql
+
+[1;31merror[falco_unknown_field][0m[1m: [0m[1m`proc.name` is a field of the `syscall` source, not of `k8s_audit`[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rapid-dropper-rule-0216.yaml\objects/rules/rapid-dropper-rule-0216.yaml:56:54]8;;\
+[34m   [0m[34m│[0m
+[34m55 [0m[34m│[0m           - [32mksh[0m
+[34m56 [0m[34m│[0m     output: Shell spawned in a container (proc.name=%proc.name)
+[34m   [0m[34m│[0m                                                      [1;31m━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+[1;31merror[falco_unknown_field][0m[1m: [0m[1m`container.id` is a field of the `syscall` source, not of `k8s_audit`[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rapid-dropper-rule-0216.yaml\objects/rules/rapid-dropper-rule-0216.yaml:64:11]8;;\
+[34m   [0m[34m│[0m
+[34m63 [0m[34m│[0m         condition: |
+[34m64 [0m[34m│[0m           container.id [35m!=[0m [32mhost[0m
+[34m   [0m[34m│[0m           [1;31m━━━━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+[1;31merror[invalid_uuid][0m[1m: [0m[1mUUID 'not-a-uuid-1' is not a valid UUIDv4[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rapid-exfiltration-rule-0001.yaml\objects/rules/rapid-exfiltration-rule-0001.yaml:4:9]8;;\
+[34m  [0m[34m│[0m
+[34m3 [0m[34m│[0m metadata:
+[34m4 [0m[34m│[0m   uuid: not-a-uuid-1
+[34m  [0m[34m│[0m         [1;31m━━━━━━━━━━━━[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m replace it with a UUID v4: python -c "import uuid; print(uuid.uuid4())"
+
+[1;31merror[esql_parse_error][0m[1m: [0m[1mES|QL syntax error near `|`[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rapid-implant-rule-0080.yaml\objects/rules/rapid-implant-rule-0080.yaml:37:32]8;;\
+[34m   [0m[34m│[0m
+[34m36 [0m[34m│[0m     query: |
+[34m37 [0m[34m│[0m       [1;35mFROM[0m [96mlogs-*[0m [1;35mMETADATA[0m [33m_id[0m [1;35m|[0m [1;35mWHERE[0m (
+[34m   [0m[34m│[0m                                [1;31m━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the ES|QL reference: https://www.elastic.co/docs/reference/query-languages/esql
+
+[1;31merror[external_id_in_rule][0m[1m: [0m[1mVendor rule id key 'rule_id' is not allowed on the sentinel block;[0m
+  [1mexternal ids live in .opentide/states/deployment/<uuid>.json[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rapid-injection-rule-0028.yaml\objects/rules/rapid-injection-rule-0028.yaml:75:14]8;;\
+[34m   [0m[34m│[0m
+[34m74 [0m[34m│[0m             column: Computer
+[34m75 [0m[34m│[0m     rule_id: abc-1
+[34m   [0m[34m│[0m              [1;31m━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m Run 'opentide deploy migrate-state' and commit the rule together with
+   [34m [0m        .opentide/states/deployment/
+
+[1;31merror[lucene_fuzzy][0m[1m: [0m[1mElasticsearch allows an edit distance of 0, 1, or 2, and rejects `~3`; use `~2`[0m
+  [1mor `~AUTO`[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rapid-injection-rule-0056.yaml\objects/rules/rapid-injection-rule-0056.yaml:68:23]8;;\
+[34m   [0m[34m│[0m
+[34m67 [0m[34m│[0m     query: |
+[34m68 [0m[34m│[0m       process.name[35m:[0m[32mfoo[0m[33m~3[0m
+[34m   [0m[34m│[0m                       [1;31m━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the Lucene query string reference:
+   [34m [0m        https://www.elastic.co/docs/reference/query-languages/query-dsl/
+   [34m [0m        query-dsl-query-string-query
+
+[1;31merror[kql_parse_error][0m[1m: [0m[1mKQL syntax error[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rapid-injection-rule-0097.yaml\objects/rules/rapid-injection-rule-0097.yaml:75:31]8;;\
+[34m   [0m[34m│[0m
+[34m74 [0m[34m│[0m     query: |
+[34m75 [0m[34m│[0m       search [35min[0m (SecurityEvent, [35m*[0m) [32m"error"[0m
+[34m   [0m[34m│[0m                               [1;31m━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the KQL reference: https://learn.microsoft.com/kusto/query/
+
+[1;31merror[schema_validation][0m[1m: [0m[1mconfigurations.sysdig: Value error, SysdigConfig validation failed with[0m
+  [1mcode(s): sysdig_priority[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/remote-beacon-rule-0018.yaml\objects/rules/remote-beacon-rule-0018.yaml:52:3]8;;\
+[34m   [0m[34m│[0m
+[34m51 [0m[34m│[0m configurations:
+[34m52 [0m[34m│[0m   sysdig:
+[34m   [0m[34m│[0m   [1;31m━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the template in .opentide/templates/ shows the field and its values
+
+[1;31merror[falco_unknown_event][0m[1m: [0m[1munknown event type opne[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/remote-beacon-rule-0099.yaml\objects/rules/remote-beacon-rule-0099.yaml:37:18]8;;\
+[34m   [0m[34m│[0m
+[34m36 [0m[34m│[0m     condition: |
+[34m37 [0m[34m│[0m       evt.type [35m=[0m [32mopne[0m [1;35mand[0m proc.name [35m=[0m [32mbash[0m
+[34m   [0m[34m│[0m                  [1;31m━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m did you mean 'open'?
+
+[1;31merror[falco_parse_error][0m[1m: [0m[1mexpected a string value or a field with a valid transformer: 'val',[0m
+  [1m'tolower', 'toupper', 'b64', 'basename', 'len', 'join', 'concat', 'getopt' (libsinsp)[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/remote-dropper-rule-0072.yaml\objects/rules/remote-dropper-rule-0072.yaml:58:37]8;;\
+[34m   [0m[34m│[0m
+[34m57 [0m[34m│[0m     condition: |
+[34m58 [0m[34m│[0m       [36mspawned_process[0m [1;35mand[0m proc.name [35m=[0m
+[34m   [0m[34m│[0m                                     [1;31m━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+[1;31merror[config_enum_unknown][0m[1m: [0m[1m'Night Shift' is not a configured responder[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/remote-relay-rule-0017.yaml\objects/rules/remote-relay-rule-0017.yaml:34:15]8;;\
+[34m   [0m[34m│[0m
+[34m33 [0m[34m│[0m   alert_severity: Informational
+[34m34 [0m[34m│[0m   responders: Night Shift
+[34m   [0m[34m│[0m               [1;31m━━━━━━━━━━━[0m[1;31m not in [[responders]][0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1mexpected:[0m one of SOC Tier 1, SOC Tier 2, Incident Response
+
+[1;31merror[falco_value_type][0m[1m: [0m[1mabc is not a valid number: `proc.pid` is a number (INT64)[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/remote-spray-rule-0117.yaml\objects/rules/remote-spray-rule-0117.yaml:42:38]8;;\
+[34m   [0m[34m│[0m
+[34m41 [0m[34m│[0m     condition: |
+[34m42 [0m[34m│[0m       [36mspawned_process[0m [1;35mand[0m proc.pid [35m=[0m [32mabc[0m
+[34m   [0m[34m│[0m                                      [1;31m━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+[1;31merror[eql_parse_error][0m[1m: [0m[1muse double quotes ["] for string literals, not single quotes ['][0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rogue-dropper-rule-0152.yaml\objects/rules/rogue-dropper-rule-0152.yaml:36:37]8;;\
+[34m   [0m[34m│[0m
+[34m35 [0m[34m│[0m     query: |
+[34m36 [0m[34m│[0m       [96mprocess[0m [1;35mwhere[0m process.name [35m==[0m [32m'cmd.exe'[0m
+[34m   [0m[34m│[0m                                     [1;31m━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql
+
+[1;31merror[duplicate_id][0m[1m: [0m[1mUUID 53651415-1c05-4cfb-b1b2-39c888ab0f06 is also used by 'Lateral Pivot Rule[0m
+  [1m0002'[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rogue-harvest-rule-0003.yaml\objects/rules/rogue-harvest-rule-0003.yaml:4:9]8;;\
+[34m  [0m[34m│[0m
+[34m3 [0m[34m│[0m metadata:
+[34m4 [0m[34m│[0m   uuid: 53651415-1c05-4cfb-b1b2-39c888ab0f06
+[34m  [0m[34m│[0m         [1;31m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+[34m  [0m[34m│[0m
+  [34m├─[0m [1malso:[0m objects/rules/lateral-pivot-rule-0002.yaml:4:9
+  [34m╰─[0m [1;36mhelp:[0m give one of them a fresh UUID v4; keep the UUID on the object that is deployed or
+  [34m [0m        referenced
+
+[1;31merror[spl_empty_command][0m[1m: [0m[1m`stats` with no arguments returns no results[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rogue-harvest-rule-0048.yaml\objects/rules/rogue-harvest-rule-0048.yaml:50:17]8;;\
+[34m   [0m[34m│[0m
+[34m49 [0m[34m│[0m     query: |
+[34m50 [0m[34m│[0m       index[35m=[0ma [1;35m|[0m [1;35mstats[0m
+[34m   [0m[34m│[0m                 [1;31m━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the SPL reference: https://docs.splunk.com/Documentation/Splunk/latest/SearchReference
+
+[1;31merror[esql_pattern][0m[1m: [0m[1mLIKE escapes only `*`, `?`, and `\`; a backslash before `b` fails. Write `\\`[0m
+  [1mfor a literal backslash[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rogue-implant-rule-0110.yaml\objects/rules/rogue-implant-rule-0110.yaml:54:58]8;;\
+[34m   [0m[34m│[0m
+[34m53 [0m[34m│[0m     query: |
+[34m54 [0m[34m│[0m       [1;35mFROM[0m [96mlogs-*[0m [1;35mMETADATA[0m [33m_id[0m [1;35m|[0m [1;35mWHERE[0m process.name [1;35mLIKE[0m [32m"a\\b"[0m
+[34m   [0m[34m│[0m                                                          [1;31m━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the ES|QL reference: https://www.elastic.co/docs/reference/query-languages/esql
+
+[1;31merror[eql_field_comparison][0m[1m: [0m[1mElasticsearch EQL cannot compare a field with another field (`==`); one[0m
+  [1mside must be a constant[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rogue-injection-rule-0062.yaml\objects/rules/rogue-injection-rule-0062.yaml:43:21]8;;\
+[34m   [0m[34m│[0m
+[34m42 [0m[34m│[0m     query: |
+[34m43 [0m[34m│[0m       [96mprocess[0m [1;35mwhere[0m process.pid [35m==[0m process.parent.pid
+[34m   [0m[34m│[0m                     [1;31m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql
+
+[1;31merror[spl_command_without_pipe][0m[1m: [0m[1mthe search starts with the command name `stats` but no `|`; Splunk[0m
+  [1msearches for the word `stats` instead of running the command[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rogue-loader-rule-0040.yaml\objects/rules/rogue-loader-rule-0040.yaml:95:7]8;;\
+[34m   [0m[34m│[0m
+[34m94 [0m[34m│[0m     query: |
+[34m95 [0m[34m│[0m       [1;35mstats[0m [36mcount[0m [1;35mby[0m host
+[34m   [0m[34m│[0m       [1;31m━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m try: | stats
+
+[1;31merror[falco_output_syntax][0m[1m: [0m[1minvalid formatting syntax: formatting cannot end with a % (libsinsp)[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rogue-loader-rule-0126.yaml\objects/rules/rogue-loader-rule-0126.yaml:65:30]8;;\
+[34m   [0m[34m│[0m
+[34m64 [0m[34m│[0m           - [32mksh[0m
+[34m65 [0m[34m│[0m     output: Shell %proc.name %
+[34m   [0m[34m│[0m                              [1;31m━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+[1;31merror[yaml_parse][0m[1m: [0m[1mCould not parse object YAML: did not find expected ',' or ']'[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rogue-relay-rule-0035.yaml\objects/rules/rogue-relay-rule-0035.yaml:59:1]8;;\
+  [34m├─[0m [1;34mnote:[0m while parsing a flow sequence that starts at line 58, column 9
+  [34m╰─[0m [1;36mhelp:[0m look at the indentation, a missing ':' or an unclosed quote at or just before this
+  [34m [0m        position
+
+[1;31merror[eql_argument_type][0m[1m: [0m[1mthe first argument of `length` must be a string, found integer `1`[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/scheduled-beacon-rule-0047.yaml\objects/rules/scheduled-beacon-rule-0047.yaml:76:28]8;;\
+[34m   [0m[34m│[0m
+[34m75 [0m[34m│[0m     query: |
+[34m76 [0m[34m│[0m       [96mprocess[0m [1;35mwhere[0m [36mlength[0m([33m1[0m) [35m>[0m [33m0[0m
+[34m   [0m[34m│[0m                            [1;31m━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql
+
+[1;31merror[falco_rhs_field][0m[1m: [0m[1mfield 'proc.name' has type 'a string (CHARBUF)' while the right-hand side[0m
+  [1mfield 'proc.pid' has incompatible type 'a number (INT64)'[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/scheduled-exfiltration-rule-0081.yaml\objects/rules/scheduled-exfiltration-rule-0081.yaml:56:39]8;;\
+[34m   [0m[34m│[0m
+[34m55 [0m[34m│[0m     condition: |
+[34m56 [0m[34m│[0m       [36mspawned_process[0m [1;35mand[0m proc.name [35m=[0m [36mval([0mproc.pid)
+[34m   [0m[34m│[0m                                       [1;31m━━━━━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+[1;31merror[spl_search_operator][0m[1m: [0m[1m'==' is not a search operator: Splunk accepts it but the comparison[0m
+  [1mnever matches; use '='[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/scheduled-implant-rule-0065.yaml\objects/rules/scheduled-implant-rule-0065.yaml:85:22]8;;\
+[34m   [0m[34m│[0m
+[34m84 [0m[34m│[0m     query: |
+[34m85 [0m[34m│[0m       index[35m=[0mmain host[35m==[0mx
+[34m   [0m[34m│[0m                      [1;31m━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m try: =
+
+[1;31merror[kql_unknown_operator][0m[1m: [0m[1munknown tabular operator 'frobnicate'[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/scheduled-injection-rule-0061.yaml\objects/rules/scheduled-injection-rule-0061.yaml:58:9]8;;\
+[34m   [0m[34m│[0m
+[34m57 [0m[34m│[0m       [96mSecurityEvent[0m
+[34m58 [0m[34m│[0m       [1;35m|[0m frobnicate
+[34m   [0m[34m│[0m         [1;31m━━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the KQL reference: https://learn.microsoft.com/kusto/query/
+
+[1;31merror[esql_unknown_command][0m[1m: [0m[1munknown ES|QL command `WEHRE`; Elasticsearch rejects it, and Kibana 9.4[0m
+  [1mand 9.5 run a non-aggregating rule without it[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/scheduled-injection-rule-0125.yaml\objects/rules/scheduled-injection-rule-0125.yaml:52:34]8;;\
+[34m   [0m[34m│[0m
+[34m51 [0m[34m│[0m     query: |
+[34m52 [0m[34m│[0m       [1;35mFROM[0m [96mlogs-*[0m [1;35mMETADATA[0m [33m_id[0m [1;35m|[0m [31mWEHRE[0m [32mprocess.name[0m [32m==[0m [32m"x"[0m
+[34m   [0m[34m│[0m                                  [1;31m━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m did you mean 'WHERE'?
+
+[1;31merror[lucene_parse_error][0m[1m: [0m[1mLucene syntax error: missing `)`[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/scheduled-tunnel-rule-0071.yaml\objects/rules/scheduled-tunnel-rule-0071.yaml:48:7]8;;\
+[34m   [0m[34m│[0m
+[34m47 [0m[34m│[0m     query: |
+[34m48 [0m[34m│[0m       name[35m:[0m([32ma[0m [1;35mOR[0m [32mb[0m
+[34m   [0m[34m│[0m       [1;31m━━━━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the Lucene query string reference:
+   [34m [0m        https://www.elastic.co/docs/reference/query-languages/query-dsl/
+   [34m [0m        query-dsl-query-string-query
+
+[1;31merror[invalid_ref][0m[1m: [0m[1mUnknown objective or signal reference '00000000-0000-4000-8000-0000deadbeef'[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/silent-dropper-rule-0015.yaml\objects/rules/silent-dropper-rule-0015.yaml:22:18]8;;\
+[34m   [0m[34m│[0m
+[34m21 [0m[34m│[0m   - T1547.001
+[34m22 [0m[34m│[0m detection_model: 00000000-0000-4000-8000-0000deadbeef
+[34m   [0m[34m│[0m                  [1;31m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m[1;31m no object has this id[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m opentide info objectives lists the ones that exist
+
+[1;31merror[vocab_unknown][0m[1m: [0m[1m'ambr' is not a TLP value[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/silent-dropper-rule-0039.yaml\objects/rules/silent-dropper-rule-0039.yaml:9:8]8;;\
+[34m  [0m[34m│[0m
+[34m8 [0m[34m│[0m   modified: 2026-04-03
+[34m9 [0m[34m│[0m   tlp: ambr
+[34m  [0m[34m│[0m        [1;31m━━━━[0m[1;31m not in tlp::1.0[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m did you mean 'amber'?
+
+[1;31merror[config_enum_unknown][0m[1m: [0m[1m'LIVE' is not a configured status[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/silent-dropper-rule-0039.yaml\objects/rules/silent-dropper-rule-0039.yaml:40:13]8;;\
+[34m   [0m[34m│[0m
+[34m39 [0m[34m│[0m     schema: platform::splunk::1.0
+[34m40 [0m[34m│[0m     status: LIVE
+[34m   [0m[34m│[0m             [1;31m━━━━[0m[1;31m not in [[statuses]][0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1mexpected:[0m one of DESIGN, DEVELOPMENT, IMPROVING, STAGING, ACCEPTANCE, PRODUCTION, DISABLED,
+   [34m [0m            REMOVED
+
+[1;31merror[schema_validation][0m[1m: [0m[1mconfigurations.sysdig: Value error, SysdigConfig validation failed with[0m
+  [1mcode(s): sysdig_tuning_keys[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/silent-injection-rule-0198.yaml\objects/rules/silent-injection-rule-0198.yaml:35:3]8;;\
+[34m   [0m[34m│[0m
+[34m34 [0m[34m│[0m configurations:
+[34m35 [0m[34m│[0m   sysdig:
+[34m   [0m[34m│[0m   [1;31m━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the template in .opentide/templates/ shows the field and its values
+
+[1;31merror[falco_field_argument][0m[1m: [0m[1m`proc.name` takes no argument, but `[1]` is given[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/staged-dropper-rule-0045.yaml\objects/rules/staged-dropper-rule-0045.yaml:58:27]8;;\
+[34m   [0m[34m│[0m
+[34m57 [0m[34m│[0m     condition: |
+[34m58 [0m[34m│[0m       [36mspawned_process[0m [1;35mand[0m proc.name[[32m1[0m] [35m=[0m [32mx[0m
+[34m   [0m[34m│[0m                           [1;31m━━━━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+[1;31merror[schema_validation][0m[1m: [0m[1mmetadata.reviewed: Value error, metadata.reviewed must be an ISO 8601 date[0m
+  [1m(YYYY-MM-DD) or datetime[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/staged-harvest-rule-0010.yaml\objects/rules/staged-harvest-rule-0010.yaml:9:13]8;;\
+[34m  [0m[34m│[0m
+[34m8 [0m[34m│[0m   modified: 2025-09-08
+[34m9 [0m[34m│[0m   reviewed: yesterday
+[34m  [0m[34m│[0m             [1;31m━━━━━━━━━[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m the template in .opentide/templates/ shows the field and its values
+
+[1;31merror[missing_uuid][0m[1m: [0m[1mObject YAML has no uuid: staged-implant-rule-0006.yaml[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/staged-implant-rule-0006.yaml\objects/rules/staged-implant-rule-0006.yaml]8;;\
+  [34m╰─[0m [1;36mhelp:[0m add metadata.uuid with a fresh UUID v4
+
+[1;31merror[falco_append_condition][0m[1m: [0m[1ma condition that starts with `and` or `or` only extends another[0m
+  [1mrule's: set `append_to_rule`, or remove the leading operator[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/staged-implant-rule-0036.yaml\objects/rules/staged-implant-rule-0036.yaml:49:7]8;;\
+[34m   [0m[34m│[0m
+[34m48 [0m[34m│[0m     condition: |
+[34m49 [0m[34m│[0m       [1;35mand[0m proc.name [35m=[0m [32mx[0m
+[34m   [0m[34m│[0m       [1;31m━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+[1;31merror[config_enum_unknown][0m[1m: [0m[1m'NOPE' is not a configured status[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/staged-injection-rule-0019.yaml\objects/rules/staged-injection-rule-0019.yaml:51:13]8;;\
+[34m   [0m[34m│[0m
+[34m50 [0m[34m│[0m     schema: platform::sentinel::1.0
+[34m51 [0m[34m│[0m     status: NOPE
+[34m   [0m[34m│[0m             [1;31m━━━━[0m[1;31m not in [[statuses]][0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1mexpected:[0m one of DESIGN, DEVELOPMENT, IMPROVING, STAGING, ACCEPTANCE, PRODUCTION, DISABLED,
+   [34m [0m            REMOVED
+
+[1;31merror[kql_parse_error][0m[1m: [0m[1mKQL syntax error[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/staged-injection-rule-0106.yaml\objects/rules/staged-injection-rule-0106.yaml:58:7]8;;\
+[34m   [0m[34m│[0m
+[34m57 [0m[34m│[0m     query: |
+[34m58 [0m[34m│[0m       union [35m*[0m [1;35m|[0m take [33m1[0m
+[34m   [0m[34m│[0m       [1;31m━━━━━━━━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the KQL reference: https://learn.microsoft.com/kusto/query/
+
+[1;31merror[chaining_relation_unknown][0m[1m: [0m[1mUnknown chaining relation 'sequence::succeds'[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/threats/elevated-tunnel-threat-0003.yaml\objects/threats/elevated-tunnel-threat-0003.yaml:44:17]8;;\
+[34m   [0m[34m│[0m
+[34m43 [0m[34m│[0m     - vector: 7b8864a9-890e-4e58-8a56-ae78cd82796b
+[34m44 [0m[34m│[0m       relation: sequence::succeds
+[34m   [0m[34m│[0m                 [1;31m━━━━━━━━━━━━━━━━━[0m[1;31m not a chaining relation[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m did you mean 'sequence::succeeds'?
+
+[1;31merror[yaml_parse][0m[1m: [0m[1mCould not parse object YAML: expected a mapping at the top of the file, found an[0m
+  [1mempty file[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/threats/encoded-exfiltration-threat-0030.yaml\objects/threats/encoded-exfiltration-threat-0030.yaml]8;;\
+  [34m╰─[0m [1;36mhelp:[0m fill it in from a template with opentide new, or delete it
+
+[1;31merror[schema_validation][0m[1m: [0m[1mthreat.impact: must be a YAML list of impact vocabulary names, not a[0m
+  [1msingle string[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/threats/remote-dropper-threat-0001.yaml\objects/threats/remote-dropper-threat-0001.yaml:21:11]8;;\
+[34m   [0m[34m│[0m
+[34m20 [0m[34m│[0m   severity: Highly significant incident
+[34m21 [0m[34m│[0m   impact: Data Breach
+[34m   [0m[34m│[0m           [1;31m━━━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the template in .opentide/templates/ shows the field and its values
+
+[1;31merror[vocab_unknown][0m[1m: [0m[1m'Big incident' is not a severity value[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/threats/rogue-downgrade-threat-0002.yaml\objects/threats/rogue-downgrade-threat-0002.yaml:22:13]8;;\
+[34m   [0m[34m│[0m
+[34m21 [0m[34m│[0m     An adversary uses certutil.exe to reach its objective.
+[34m22 [0m[34m│[0m   severity: Big incident
+[34m   [0m[34m│[0m             [1;31m━━━━━━━━━━━━[0m[1;31m not in severity::1.0[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m did you mean 'Substantial incident'?
+
+[1;31merror[invalid_uuid][0m[1m: [0m[1mUUID '1-not-a-uuid' is not a valid UUIDv4[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/threats/scheduled-loader-threat-0010.yaml\objects/threats/scheduled-loader-threat-0010.yaml:5:10]8;;\
+[34m  [0m[34m│[0m
+[34m4 [0m[34m│[0m metadata:
+[34m5 [0m[34m│[0m   uuid: "1-not-a-uuid"
+[34m  [0m[34m│[0m          [1;31m━━━━━━━━━━━━[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m replace it with a UUID v4: python -c "import uuid; print(uuid.uuid4())"
+
+[1;31merror[unknown_key][0m[1m: [0m[1mdeployment.toml.colour: unknown key[0m
+
+[1;31merror[unknown_key][0m[1m: [0m[1mplatforms/sentinel.toml.platform.colour: unknown key[0m
+
+[1;31merror[schema_validation][0m[1m: [0m[1mplatform.name: platforms/splunk.toml.platform.name: Input should be a[0m
+  [1mvalid string[0m
+  [34m╰─[0m [1;36mhelp:[0m the template in .opentide/templates/ shows the field and its values
+
+[1;31merror[missing_field][0m[1m: [0m[1mplatforms/defender_for_endpoint.toml.tenants.0.name: required key is missing[0m
+
+[1;33mwarning[asset_unknown][0m[1m: [0m[1mvisibility.toml.logsources.7.assets.0: logsource 'Ghost1' names asset[0m
+  [1m'ghost-1', which [[assets]] does not declare.[0m
+
+[1;33mwarning[asset_unknown][0m[1m: [0m[1mvisibility.toml.logsources.8.assets.0: logsource 'Ghost2' names asset[0m
+  [1m'ghost-2', which [[assets]] does not declare.[0m
+
+[1;33mwarning[asset_unknown][0m[1m: [0m[1mvisibility.toml.logsources.9.assets.0: logsource 'Ghost3' names asset[0m
+  [1m'ghost-3', which [[assets]] does not declare.[0m
+
+[1;33mwarning[asset_unknown][0m[1m: [0m[1mvisibility.toml.logsources.10.assets.0: logsource 'Ghost4' names asset[0m
+  [1m'ghost-4', which [[assets]] does not declare.[0m
+
+[1;33mwarning[asset_unknown][0m[1m: [0m[1mvisibility.toml.logsources.11.assets.0: logsource 'Ghost5' names asset[0m
+  [1m'ghost-5', which [[assets]] does not declare.[0m
+

@@ -1,0 +1,13 @@
+                                                                                
+ Usage: opentide lsp start [OPTIONS]                                            
+                                                                                
+ Serve the language server protocol on stdio until the editor closes stdin.     
+                                                                                
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --stdio          Speak on stdin and stdout: the only transport, accepted for │
+│                  editors that pass it                                        │
+│ --help           Show this message and exit.                                 │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+ Examples
+   $ opentide lsp start

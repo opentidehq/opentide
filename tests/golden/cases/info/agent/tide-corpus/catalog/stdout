@@ -1,0 +1,9 @@
+    objects  12                   1 threat · 1 objective · 10 rules
+    signals  1
+      edges  22
+             1                    covers
+             10                   implements
+             11                   technique
+     att&ck  2 of 722 techniques  15 tactics
+load errors  0
+✓ 10 rules · 1 threat · 1 objective · 0 load errors

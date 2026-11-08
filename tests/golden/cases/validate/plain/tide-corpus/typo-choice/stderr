@@ -1,0 +1,2 @@
+error: Unknown object type(s): rulez. Choose rule, threat, or objective.
+  help: did you mean 'rule'?

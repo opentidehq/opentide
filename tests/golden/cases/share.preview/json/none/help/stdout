@@ -1,0 +1,17 @@
+                                                                                
+ Usage: opentide share preview [OPTIONS]                                        
+                                                                                
+ Show what push would do. Makes no request and writes nothing.                  
+                                                                                
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --target         <str>  Destination block name. Repeatable.                  │
+│ --uuid           <str>  Limit to these object UUIDs.                         │
+│ --type           <str>  Limit to threat, objective, or rule.                 │
+│ --file           <str>  Limit to these object files.                         │
+│ --workers        <int>  Parallel object workers for one destination.         │
+│                         [default: 1]                                         │
+│ --help                  Show this message and exit.                          │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+ Examples
+   $ opentide share preview

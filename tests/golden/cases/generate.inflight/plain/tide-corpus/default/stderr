@@ -1,0 +1,3 @@
+warning: Inflight no git baseline · detail: changed-object discovery requires a git repository with at least one commit
+warning: Inflight no local git diff found
+✓ inflight · 0 files · <SECONDS>

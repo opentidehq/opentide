@@ -1,0 +1,11 @@
+                                                                                
+ Usage: opentide generate extract sentinel [OPTIONS]                            
+                                                                                
+ Import Sentinel analytics rules (needs Sentinel tenant credentials).           
+                                                                                
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+ Examples
+   $ opentide generate extract sentinel

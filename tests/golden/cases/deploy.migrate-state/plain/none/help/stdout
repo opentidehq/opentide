@@ -1,0 +1,16 @@
+                                                                                
+ Usage: opentide deploy migrate-state [OPTIONS]                                 
+                                                                                
+ Move vendor rule ids off rules into .opentide/states/deployment/ (no vendor    
+ calls).                                                                        
+                                                                                
+ Refuses with deployment_state_ignored, and edits nothing, while .gitignore     
+ hides .opentide/states/deployment/. Exits 1 when any rule cannot be migrated;  
+ ids dropped from other platforms (external_id_unused) are warnings only.       
+                                                                                
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+ Examples
+   $ opentide deploy migrate-state

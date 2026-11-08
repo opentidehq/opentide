@@ -1,0 +1,4 @@
+warning: Docs changed requires git · detail: changed-object discovery requires a git repository with at least one commit
+✗ docs · 0 files · <SECONDS>
+error: --changed requires a git repository: changed-object discovery requires a git repository with at least one commit
+tip: add --json for machine-readable output

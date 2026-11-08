@@ -1,0 +1,18 @@
+                                                                                
+ Usage: opentide explain [OPTIONS] [code]                                       
+                                                                                
+ Explain a diagnostic code and how to fix it                                    
+                                                                                
+ Prints what the code means, an example, and how to fix it.                     
+                                                                                
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│   code      <str>  A diagnostic code, such as vocab_unknown. Omit it to list │
+│                    every code.                                               │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+ Examples
+   $ opentide explain vocab_unknown
+   $ opentide explain

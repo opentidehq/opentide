@@ -1,0 +1,4 @@
+error: No such option: --jsn
+  help: did you mean '--json'?
+  usage: opentide [OPTIONS] COMMAND [ARGS]...
+  help: run 'opentide --help'

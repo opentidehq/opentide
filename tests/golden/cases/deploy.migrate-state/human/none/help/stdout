@@ -1,0 +1,15 @@
+[1m                                                                                                    [0m
+[1m [0m[1;33mUsage: [0m[1mopentide deploy migrate-state [OPTIONS][0m[1m                                                    [0m[1m [0m
+[1m                                                                                                    [0m
+ Move vendor rule ids off rules into .opentide/states/deployment/ (no vendor calls).                
+                                                                                                    
+ [2mRefuses with deployment_state_ignored, and edits nothing, while .gitignore[0m                         
+ [2mhides .opentide/states/deployment/. Exits 1 when any rule cannot be migrated;[0m                      
+ [2mids dropped from other platforms (external_id_unused) are warnings only.[0m                           
+                                                                                                    
+[2m╭─[0m[2m Options [0m[2m───────────────────────────────────────────────────────────────────────────────────────[0m[2m─╮[0m
+[2m│[0m [1;36m-[0m[1;36m-help[0m          Show this message and exit.                                                      [2m│[0m
+[2m╰──────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+
+[2m Examples[0m
+   [1m$ opentide deploy migrate-state[0m

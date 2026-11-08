@@ -1,0 +1,9 @@
+Deploy plan · strategy PREVIEW · 1 platform, 0 tenants · dry run, nothing is sent
+
+sentinel · 0 tenants
+  + create or update  Sentinel KQL Rule     …000000000001  status STAGING
+  + create or update  Staging Promote Rule  …000000000008  status STAGING
+
+Plan: 0 to create, 0 to update, 2 to create or update, 0 to disable, 0 to delete
+  help: add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/sentinel.toml
+dry run, nothing sent
