@@ -240,4 +240,104 @@ ops = [{ op = "set", path = "status", value = "NOPE" }]
         assert_eq!(coverage("--check"), 1);
         assert!(Path::new(&lab.path("COVERAGE.md")).exists());
     }
+
+    #[test]
+    fn generate_writes_once_and_faults_out_writes_the_manifest() {
+        let lab = Lab::new("generate");
+        let out = lab.path("ws");
+        let args = [
+            "generate",
+            "--seed",
+            "3",
+            "--threats",
+            "4",
+            "--objectives",
+            "4",
+            "--rules",
+            "9",
+            "--out",
+            &out,
+        ];
+        assert_eq!(run(&args.map(str::to_string)).unwrap(), 0);
+        assert!(
+            Path::new(&out)
+                .join(".opentide/configurations/paths.toml")
+                .exists()
+        );
+        let again = run(&args.map(str::to_string)).unwrap_err();
+        assert!(format!("{again:#}").contains("not empty"), "{again:#}");
+        let catalogue = lab.catalogue(EXPECTS_UUID);
+        let faults = lab.path("faults");
+        let args = ["faults", "--out", &faults, "--catalogue", &catalogue];
+        assert_eq!(run(&args.map(str::to_string)).unwrap(), 0);
+        let manifest: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(lab.path("faults.faults.json")).unwrap())
+                .unwrap();
+        assert_eq!(manifest["kinds"][0]["id"], "expects-uuid");
+        assert_eq!(manifest["kinds"][0]["files"].as_array().unwrap().len(), 1);
+        assert!(
+            run(&args.map(str::to_string)).is_err(),
+            "the manifest is never overwritten"
+        );
+    }
+
+    #[test]
+    fn usage_errors() {
+        let fails = |args: &[&str]| {
+            let args: Vec<String> = args.iter().map(|a| (*a).to_string()).collect();
+            run(&args).is_err()
+        };
+        assert!(fails(&[]));
+        assert!(fails(&["nope"]));
+        assert!(fails(&["generate", "--seed", "x"]));
+        assert!(fails(&["generate", "--seed", "1", "--scale", "0"]));
+        assert!(fails(&["generate", "--seed", "1", "--rules", "-1"]));
+        assert!(
+            fails(&["generate", "--seed", "1"]),
+            "no --out and no --digest"
+        );
+        assert!(fails(&["generate", "--seed"]), "a flag without its value");
+        assert!(fails(&["faults"]), "needs --check or --out");
+        assert!(fails(&["faults", "--check", "--engine", "perl"]));
+        assert!(fails(&[
+            "faults",
+            "--check",
+            "--engine",
+            "python",
+            "--only",
+            "no-such-kind",
+            "--oracle",
+            "/nonexistent/opentide"
+        ]));
+        assert!(fails(&["clean", "--engine", "python"]), "no --repo");
+        assert!(fails(&["codes", "--bogus"]));
+        assert!(fails(&["coverage", "--bogus"]));
+        let args = ["faults", "--check", "--engine", "rust"].map(str::to_string);
+        assert_eq!(run(&args).unwrap(), 1, "rust is not implemented: it fails");
+        assert_eq!(run(&["help".to_string()]).unwrap(), 0);
+    }
+
+    #[test]
+    fn a_wrong_oracle_version_is_refused() {
+        let lab = Lab::new("version");
+        std::fs::write(
+            lab.dir.join("opentide"),
+            "#!/bin/sh\necho \"opentide 0.22.0\"\n",
+        )
+        .unwrap();
+        let args = [
+            "clean",
+            "--engine",
+            "python",
+            "--oracle",
+            &lab.oracle(),
+            "--repo",
+            &lab.path("repo"),
+        ];
+        let error = run(&args.map(str::to_string)).unwrap_err();
+        assert!(
+            format!("{error:#}").contains("not opentide 0.23.0"),
+            "{error:#}"
+        );
+    }
 }
