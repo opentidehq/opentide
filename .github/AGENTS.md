@@ -20,42 +20,34 @@ merge first; CodeQL and the oracles run there too). Jobs run in parallel; a new 
 | `engine-package` | Every engine crate packaged as crates.io builds it, and `license-scan.sh` over the packages (no oracle reference ships) |
 | `grammars`, `textmate` | Every vendored `parser.c` is what tree-sitter-cli 0.25.10 generates (`check-grammars.sh`); the TextMate grammars as VS Code reads them |
 | `elastic-sweep` | Every public Elastic detection rule (a pinned commit) passes the engine |
-| `fuzz-smoke` | Each fuzz target of `fuzz/` for 60 s from its seeds and saved regressions (nightly, three targets per runner) |
+| `fuzz-smoke` | Each fuzz target of `fuzz/` for 60 s from its seeds and saved regressions (the dated nightly `fuzz/NIGHTLY` pins, three targets per runner) |
 | `engine-release-dry-run` | The engine release's own asset jobs ([`engine-release-build.yml`](workflows/engine-release-build.yml)) for the workspace version: every asset, SHA256SUMS, and `release.py check-assets` (language-server v0.11.0's names with the version substituted). No tag, attestation, release or publish; `contents: read` |
 | `engine-release-consumers` | opentidehq/vscode-extension's own grammar and engine scripts (a pinned commit) accept the dry run's assets as this repository's release (`scripts/engine/check-vscode-extension.mjs`) |
 | `test` | The Python matrix, **3.10–3.14**, coverage gate on 3.14 |
 | `cli-e2e`, `cli-windows-smoke`, `gitlab-ci-lint` | The sharded E2E suite, a Windows smoke run, the generated GitLab pipelines; none waits for `test` |
 | `clients`, `bench` | Informational (`continue-on-error`): real LSP clients (pytest-lsp, Neovim) and `cargo bench`; never required |
 
-Every Rust job installs the one release `rust-toolchain.toml` pins (`rustup toolchain install`
-with no name), never floating `stable`: cargo in a checkout runs that release whatever else is
-installed (`tests/test_ci/test_rust_toolchain.py`). That install takes the file's components and
-drops `--target` and `--component` without an error, so a job adds the targets it builds with
-`rustup target add`, which with no toolchain named adds them to the pinned release. Only the fuzz jobs
-name a toolchain, nightly, which cargo-fuzz needs. The Rust jobs set `RUSTFLAGS=-Dwarnings`,
-`CARGO_PROFILE_DEV_DEBUG=line-tables-only` and `INSTA_UPDATE=no` (a snapshot that differs fails;
-CI never writes one). Every Python job builds the engine through `uv sync`.
+Every Rust job installs the release `rust-toolchain.toml` pins (`rustup toolchain install` with no
+name, never floating `stable`), then its targets with `rustup target add`: that install drops
+`--target` and `--component` silently (`tests/test_ci/test_rust_toolchain.py`). Only the fuzz jobs
+name a toolchain, the dated nightly `fuzz/NIGHTLY` pins. Every job that runs cargo sets
+`RUSTFLAGS=-Dwarnings` (the nightly fuzz build aside); the test jobs also set
+`CARGO_PROFILE_DEV_DEBUG=line-tables-only` and `INSTA_UPDATE=no` (CI never writes a snapshot).
 
-**Rust caches, one strategy** (`tests/test_ci/test_rust_caches.py`): every
-`Swatinem/rust-cache` step in ci.yml names its cache with `shared-key` (and `key` where one job
-builds a tree per OS or per target), and each name has exactly one job that saves it; the others
-read it with `save-if: false` and repeat its runner and `CARGO*`/`RUST*` environment, which
-rust-cache hashes into the key. `engine-dev` is `engine-test`'s debug tree per OS (`clients` and
-`elastic-sweep` read the Linux one); `python-engine` is the binding `uv sync` builds (abi3, one
-build for every Python), saved by `test`'s 3.14 cell; `engine-check`, `engine-wasm`,
-`engine-package`, `engine-bench`, `fuzz` and `python-engine-windows` belong to one job each;
-`engine-release` keys the dry run per target. A release restores no cache: the asset build
-restores one only under `inputs.dry-run`.
+**Rust caches, one strategy** (`tests/test_ci/test_rust_caches.py`): every rust-cache step in
+ci.yml names its cache (`shared-key`, plus `key` per OS or target), and each name has one job that
+saves it; readers use `save-if: false` and repeat its runner and `CARGO*`/`RUST*` environment,
+which rust-cache hashes into the key. The names are split by what is built, because a check
+build, a debug test tree, a release binary and the binding `uv sync` builds share no artifacts and
+one key would hold only one of them: `engine-dev` (`engine-test` per OS; `clients` and
+`elastic-sweep` read Linux's), `python-engine` (the abi3 binding, saved by `test`'s 3.14 cell, read
+by the other Python jobs), `engine-check`, `engine-wasm`, `engine-package`, `engine-bench`, `fuzz`,
+`python-engine-windows`, and `engine-release` per target for the dry run. A release restores none.
 
-**Coverage:** gate on Python **3.14** only (`COVERAGE_PYTHON` in ci.yml). Cobertura upload to
-GitHub Code Quality is best-effort (`fail-on-error: false` if Code Quality is disabled). HTML
-report uploaded as artifact.
-
-**Vocabulary drift gate:** when bundled vocab TOML files, schema pins
-(`src/opentide/data/pins/`), `data/specifications.lock.json` or the sync script change, CI also
-checks out `opentidehq/specifications` (`main`) and runs
-`uv run python scripts/build/sync_vocabularies.py --check` against it
-(`OPENTIDE_SPECIFICATIONS_ROOT`).
+**Coverage:** gate on Python **3.14** only (`COVERAGE_PYTHON`); the Code Quality upload is
+best-effort, the HTML report an artifact. **Vocabulary drift gate:** when vocab TOML, schema pins,
+`data/specifications.lock.json` or the sync script change, CI checks out `opentidehq/specifications`
+(`main`) and runs `scripts/build/sync_vocabularies.py --check` against it.
 
 **Bundled Tide catalog:** the engine compiles in a Tide catalog (`data/catalogs/tide/`, and the
 key lists of `highlights/queries/tide/highlights.scm`) for editors that run `opentide-lsp` on its
@@ -144,22 +136,8 @@ together.
   [`publish-pypi.yml`](workflows/publish-pypi.yml), [`stack-comment.yml`](workflows/stack-comment.yml),
   [`vocab-upstream.yml`](workflows/vocab-upstream.yml): below and in their own headers.
 
-### Where language-server's workflows went
-
-| language-server | Job | Here |
-| --- | --- | --- |
-| `ci.yml` | `test` | ci.yml `engine` (rustfmt, clippy, layers, rustdoc, invariants, schemas test), `engine-test` (tests, doctests), `engine-wasm` (npm packs, lsp-client stdio), `textmate` |
-| `ci.yml` | `windows` | ci.yml `engine-test` (windows-latest), now the whole workspace |
-| `ci.yml` | `clients`, `bench` | ci.yml `clients`, `bench`, still informational |
-| `ci.yml` | `package` | ci.yml `engine-package` (packaging and licence scan); its `release.py` tests run in `engine` |
-| `ci.yml` | `grammars` | ci.yml `grammars` |
-| `ci.yml` | `wasm` | ci.yml `engine-wasm` |
-| `ci.yml` | `elastic-sweep` | ci.yml `elastic-sweep` |
-| `fuzz.yml` | `fuzz` | `engine-fuzz.yml` (nightly, five minutes), and ci.yml `fuzz-smoke` (60 s per target, every PR) |
-| `oracle.yml` | every job | `oracle.yml`, its tag trigger `engine-v*` instead of `v*.*.*` |
-| `release.yml` | every job | `engine-release.yml` (`git mv`); `native`, `wasm`, `highlights` and the licences of `assets` moved to `engine-release-build.yml`, which ci.yml also runs as a dry run |
-| `backfill-releases.yml` | `backfill` | dropped: a one-off for language-server's tags before 0.5 |
-| `opentide-canary.yml` | `canary` | dropped: `tests/test_generation/test_bundled_tide_catalog.py` checks the bundled Tide catalog against this checkout's models |
+Where each of language-server's workflow jobs went (or why it was dropped):
+[`docs/engine/IMPORT.md`](../docs/engine/IMPORT.md#where-the-workflows-went).
 
 ## Releases
 

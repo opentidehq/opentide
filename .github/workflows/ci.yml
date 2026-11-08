@@ -4,6 +4,8 @@ on:
   push:
     # integration/unified-core: the Unified Core PRs merge there before development.
     branches: [main, development, integration/unified-core]
+  # Run workflow, as language-server's engine CI had.
+  workflow_dispatch:
   pull_request:
     # All base branches: a stacked PR targets the branch below it, not development.
 
@@ -149,7 +151,7 @@ jobs:
   #   engine-package  `engine-package`
   #   engine-bench    `bench`
   #   engine-wasm     `engine-wasm`
-  #   fuzz            `fuzz-smoke` (nightly, fuzz/target)
+  #   fuzz            `fuzz-smoke` (fuzz/NIGHTLY's nightly, fuzz/target)
   #   python-engine   the Python jobs' `uv sync` build of the binding: `test`
   #                   (3.14) saves it, the other Linux Python jobs read it
   #   engine-release  the release dry run (engine-release-build.yml), per target
@@ -366,6 +368,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    env:
+      # A compiler warning fails the build, as in engine-ci.yml (workflow-wide there).
+      RUSTFLAGS: "-Dwarnings"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -478,12 +483,15 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # scripts/engine/fuzz.sh runs `cargo +nightly fuzz`.
+      # The dated nightly fuzz/NIGHTLY pins, which scripts/engine/fuzz.sh also
+      # reads: a new nightly reaches this required check in a change of its own.
       - name: Set up Rust (nightly)
         id: nightly
         run: |
-          rustup toolchain install nightly --profile minimal --no-self-update
-          echo "version=$(rustc +nightly -V | tr -c 'A-Za-z0-9.\n' '-')" >> "$GITHUB_OUTPUT"
+          echo "FUZZ_TOOLCHAIN=$(cat fuzz/NIGHTLY)" >> "$GITHUB_ENV"
+          FUZZ_TOOLCHAIN="$(cat fuzz/NIGHTLY)"
+          rustup toolchain install "${FUZZ_TOOLCHAIN}" --profile minimal --no-self-update
+          echo "version=$(rustc +"${FUZZ_TOOLCHAIN}" -V | tr -c 'A-Za-z0-9.\n' '-')" >> "$GITHUB_OUTPUT"
       # fuzz/ is a workspace of its own; cargo-fuzz builds into fuzz/target.
       # rust-cache also keeps ~/.cargo/bin, so cargo-fuzz installs once. Its key
       # hashes the pinned stable (rust-toolchain.toml), not the nightly that
@@ -493,7 +501,7 @@ jobs:
           shared-key: fuzz
           key: ${{ steps.nightly.outputs.version }}
           workspaces: fuzz -> target
-      - run: cargo +nightly install cargo-fuzz --locked
+      - run: cargo +"${FUZZ_TOOLCHAIN}" install cargo-fuzz --locked
       - name: fuzz ${{ matrix.targets }} (60 s each)
         env:
           TARGETS: ${{ matrix.targets }}
@@ -608,6 +616,8 @@ jobs:
     continue-on-error: true
     permissions:
       contents: read
+    env:
+      RUSTFLAGS: "-Dwarnings"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

@@ -258,11 +258,54 @@ def test_the_integration_branch_gets_ci_after_each_merge(name: str) -> None:
         ("engine-package", "bash scripts/engine/license-scan.sh target/package/*.crate"),
         ("grammars", "bash scripts/engine/check-grammars.sh"),
         ("fuzz-smoke", 'bash scripts/engine/fuzz.sh "${target}" 60'),
-        ("engine-release-consumers", "node scripts/engine/check-vscode-extension.mjs"),
+        (
+            "engine-release-consumers",
+            "node scripts/engine/check-vscode-extension.mjs"
+            ' vscode-extension release-assets "$(python3 scripts/engine/release.py tag)"',
+        ),
     ],
 )
 def test_ci_runs_the_rust_gates(job: str, command: str) -> None:
-    assert command in _step_runs(_ci_jobs()[job])
+    """Each gate runs, and nothing lets it pass without running or while failing."""
+    spec = _ci_jobs()[job]
+    steps = [
+        step
+        for step in spec.get("steps") or []
+        if command in (line.strip() for line in str(step.get("run", "")).splitlines())
+    ]
+    assert len(steps) == 1, (job, command)
+    step = steps[0]
+    assert "continue-on-error" not in step, (job, command)
+    assert "continue-on-error" not in spec, job
+    assert "if" not in spec, job
+    # The doctests run once, on Linux; nothing else is conditional.
+    allowed = {("engine-test", "cargo test --workspace --locked --doc"): "runner.os == 'Linux'"}
+    assert step.get("if") == allowed.get((job, command)), (job, command, step.get("if"))
+    run = str(step["run"])
+    assert not re.search(r"\|\|\s*(?:true|:)\b", run), (job, command)
+
+
+def test_every_cargo_job_denies_warnings() -> None:
+    """A compiler warning fails every ci.yml job that builds with cargo, as in
+    language-server's CI (engine-ci.yml set it workflow-wide). The nightly fuzz
+    build is left out: its lints are a nightly's, not the pinned release's."""
+    workflow = _load(CI)
+    checked = []
+    for job_id, job in workflow["jobs"].items():
+        if "uses" in job or job_id == "fuzz-smoke":
+            continue
+        if not re.search(r"\bcargo (?!\+)", _step_runs(job)):
+            continue
+        env = {**(workflow.get("env") or {}), **(job.get("env") or {})}
+        assert env.get("RUSTFLAGS") == "-Dwarnings", job_id
+        checked.append(job_id)
+    assert {"engine", "engine-test", "engine-package", "bench", "clients"} <= set(checked)
+
+
+def test_the_oracles_are_required() -> None:
+    """A reference the oracle job cannot run is a red build, not a skip."""
+    oracle = _load(WORKFLOWS / "oracle.yml")
+    assert oracle["env"]["OPENTIDE_ORACLE_REQUIRED"] == "1"
 
 
 def test_rustdoc_denies_warnings() -> None:

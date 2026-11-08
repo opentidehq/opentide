@@ -356,6 +356,26 @@ class TagTest(unittest.TestCase):
         )
         self.assertEqual(bad.returncode, 1)
 
+    def test_the_cli_fails_on_a_missing_or_an_extra_asset(self) -> None:
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp)
+        for name in release.expected_assets("engine-v1.0.0"):
+            (tmp / name).write_bytes(b"x")
+        run = [sys.executable, str(Path(release.__file__)), "check-assets", str(tmp)]
+        ok = subprocess.run([*run, "engine-v1.0.0"], capture_output=True, text=True, check=False)
+        self.assertEqual(ok.returncode, 0, ok.stderr)
+        (tmp / "stray.txt").write_bytes(b"x")
+        extra = subprocess.run([*run, "engine-v1.0.0"], capture_output=True, text=True, check=False)
+        self.assertEqual(extra.returncode, 1)
+        self.assertIn("unexpected asset: stray.txt", extra.stderr)
+        (tmp / "stray.txt").unlink()
+        (tmp / "NOTICE").unlink()
+        missing = subprocess.run(
+            [*run, "engine-v1.0.0"], capture_output=True, text=True, check=False
+        )
+        self.assertEqual(missing.returncode, 1)
+        self.assertIn("missing asset: NOTICE", missing.stderr)
+
     def test_the_native_matrix_builds_every_target(self) -> None:
         native = workflow_jobs(BUILD)["native"]
         built = re.findall(r"^\s+target: (\S+)$", native, re.MULTILINE)
@@ -492,7 +512,16 @@ class ReleaseWorkflowTest(unittest.TestCase):
 
     def test_the_release_ships_the_set_the_asset_build_checked(self) -> None:
         assets = workflow_jobs(BUILD)["assets"]
-        self.assertIn('python3 scripts/engine/release.py check-assets dist "${TAG}"', assets)
+        lines = [line.strip() for line in assets.splitlines()]
+        # Whole lines in a `set -euo pipefail` step: nothing turns a failure into a pass.
+        for gate in [
+            'python3 scripts/engine/release.py check-assets dist "${TAG}"',
+            "python3 scripts/engine/release.py verify-sums dist",
+        ]:
+            self.assertIn(gate, lines)
+        self.assertIn("set -euo pipefail", lines)
+        for job in [assets, workflow_jobs()["verify-assets"]]:
+            self.assertNotRegex(job, r"\|\|\s*(?:true|:)\b")
         self.assertLess(assets.index("release.py sums dist"), assets.index("check-assets"))
         self.assertIn("name: release-assets", assets)
         for job in ["attest", "release"]:
@@ -515,6 +544,12 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertLess(guard, attach.index("gh release upload"))
         self.assertNotIn("--clobber", attach)
         self.assertNotIn("delete-asset", attach)
+
+    def test_run_workflow_releases_from_development_only(self) -> None:
+        verify = workflow_jobs()["verify"]
+        refuse = verify.index("Run the release from development, not")
+        self.assertLess(verify.index('"${GITHUB_REF}" != "refs/heads/development"'), refuse)
+        self.assertEqual(verify[refuse:].splitlines()[1].strip(), "exit 1")
 
     def test_run_workflow_never_releases_a_version_already_tagged(self) -> None:
         # A tag whose own run failed before its release: a dispatch would build

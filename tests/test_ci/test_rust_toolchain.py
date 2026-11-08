@@ -5,10 +5,11 @@ runner's default is. A job that installs another one by name (``stable`` from
 ``dtolnay/rust-toolchain``, say, with the job's targets) leaves the pinned
 release without those targets, and its lints differ from the ones the PR was
 checked with. The jobs install the file's toolchain, ``rustup toolchain
-install`` with no name; only the fuzz jobs name one, nightly, which
-cargo-fuzz needs and selects with ``cargo +nightly`` (the nightly fuzz workflow
-and ci.yml's ``fuzz-smoke``). The engine's Release workflows are held to the
-same rule.
+install`` with no name; only the fuzz jobs name one, the dated nightly
+``fuzz/NIGHTLY`` pins, which cargo-fuzz needs and selects with ``cargo
++"${FUZZ_TOOLCHAIN}"`` (the nightly fuzz workflow and ci.yml's ``fuzz-smoke``,
+a required check that a new nightly must not break unannounced). The engine's
+Release workflows are held to the same rule.
 
 An install with no name takes the file's components and targets, and rustup
 silently ignores ``--target`` and ``--component`` on it: a job adds a target
@@ -36,7 +37,9 @@ TOOLCHAIN_ACTIONS = (
     "actions-rs/toolchain",
     "actions-rust-lang/setup-rust-toolchain",
 )
-NAMED = {("engine-fuzz.yml", "nightly"), ("ci.yml", "nightly")}
+# The fuzz jobs name the nightly fuzz/NIGHTLY pins, read into FUZZ_TOOLCHAIN.
+FUZZ_TOOLCHAIN = '"${FUZZ_TOOLCHAIN}"'
+NAMED = {("engine-fuzz.yml", FUZZ_TOOLCHAIN), ("ci.yml", FUZZ_TOOLCHAIN)}
 # The rustup options that take a value.
 VALUED = {"--target", "--component", "--profile", "-t", "-c"}
 # The options rustup ignores on a `rustup toolchain install` that names no toolchain.
@@ -164,14 +167,28 @@ def test_a_named_toolchain_is_seen(workflow: str, job: str) -> None:
         for match in re.finditer(r"rustup toolchain install([^\n]*)", str(step.get("run", "")))
         for name in _toolchain_names(match.group(1))
     ]
-    assert found == ["nightly"]
+    assert found == [FUZZ_TOOLCHAIN]
+    run = "\n".join(str(step.get("run", "")) for job_id, step in _steps(path) if job_id == job)
+    assert "FUZZ_TOOLCHAIN=$(cat fuzz/NIGHTLY)" in run
+
+
+def test_the_fuzz_nightly_is_one_dated_release() -> None:
+    """One file pins it; the fuzz script reads the same file."""
+    pinned = (ROOT / "fuzz" / "NIGHTLY").read_text(encoding="utf-8").strip()
+    assert re.fullmatch(r"nightly-\d{4}-\d{2}-\d{2}", pinned), pinned
+    script = (ROOT / "scripts" / "engine" / "fuzz.sh").read_text(encoding="utf-8")
+    assert 'toolchain="${FUZZ_TOOLCHAIN:-$(cat "$root/fuzz/NIGHTLY")}"' in script
+    assert 'exec cargo "+${toolchain}" fuzz run' in script
+    assert "+nightly" not in script
 
 
 def test_only_the_fuzz_jobs_name_a_toolchain() -> None:
     for path in WORKFLOWS:
         for job_id, step in _steps(path):
             run = str(step.get("run", ""))
-            if re.search(r"rustup toolchain install [^\n]*nightly|cargo \+nightly", run):
+            if re.search(
+                r"rustup toolchain install [^\n]*(?:nightly|FUZZ_TOOLCHAIN)|cargo \+\S", run
+            ):
                 assert (path.name, job_id) in {
                     ("engine-fuzz.yml", "fuzz"),
                     ("ci.yml", "fuzz-smoke"),
