@@ -128,3 +128,8 @@ highlights/test/node_modules
 !/highlights/generated/
 !/crates/*/assets/data/catalogs/tide/generated/
 !/crates/*/assets/highlights/generated/
+
+# insta writes a pending snapshot next to the committed one; `cargo insta review`
+# accepts or rejects it. Never commit one.
+*.snap.new
+*.pending-snap

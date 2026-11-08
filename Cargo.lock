@@ -304,6 +304,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "getrandom"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "300e883d756b2e4ec94e02791f39b04b522276138852cfc41d9fb7e904106099"
+dependencies = [
+ "cfg-if",
+ "libc",
+ "r-efi",
+]
+
+[[package]]
 name = "glob"
 version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -452,6 +463,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "insta"
+version = "1.49.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b67d3d2e287e4b86c10b3f3b641033d1f89b74bdb39d05f34952e2b9a6fe21cd"
+dependencies = [
+ "once_cell",
+ "similar 2.7.0",
+ "tempfile",
+]
+
+[[package]]
 name = "is_terminal_polyfill"
 version = "1.70.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -552,6 +574,7 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 name = "opentide-analysis"
 version = "0.11.0"
 dependencies = [
+ "insta",
  "opentide-core",
  "opentide-ecs",
  "opentide-eql",
@@ -685,6 +708,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
+ "trycmd",
  "url",
 ]
 
@@ -882,6 +906,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "r-efi"
+version = "6.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
+
+[[package]]
 name = "rayon"
 version = "1.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1064,6 +1094,12 @@ checksum = "f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba"
 
 [[package]]
 name = "similar"
+version = "2.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbbb5d9659141646ae647b42fe094daf6c6192d1620870b449d9557f748b2daa"
+
+[[package]]
+name = "similar"
 version = "3.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d2f8bec09ae8fae0f4f265a4559a9334be3929d8504e9b536df0a41302bd1733"
@@ -1097,7 +1133,7 @@ dependencies = [
  "libc",
  "normalize-line-endings",
  "os_pipe",
- "similar",
+ "similar 3.2.1",
  "snapbox-macros",
  "tempfile",
  "wait-timeout",
@@ -1167,6 +1203,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
+ "getrandom",
  "once_cell",
  "rustix",
  "windows-sys",

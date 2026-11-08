@@ -46,3 +46,6 @@ regex.workspace = true
 lsp-server.workspace = true
 lsp-types.workspace = true
 url.workspace = true
+
+[dev-dependencies]
+trycmd.workspace = true

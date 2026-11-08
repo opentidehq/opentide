@@ -143,6 +143,9 @@ jobs:
       # As in engine-ci.yml, whose `clients` and `elastic-sweep` read this
       # job's Rust cache: rust-cache hashes CARGO_* and RUST* into its key.
       CARGO_TERM_COLOR: always
+      # insta compares snapshots and never writes one here: a missing or
+      # changed snapshot fails the test (crates/AGENTS.md, Snapshots).
+      INSTA_UPDATE: "no"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

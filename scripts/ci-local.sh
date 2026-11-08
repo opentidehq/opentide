@@ -120,7 +120,8 @@ fi
 
 # The engine's tests compare it with this checkout's models (.venv, synced above).
 echo "==> Cargo workspace: tests"
-cargo test --workspace --locked --quiet
+# As in CI: insta compares snapshots and never writes one.
+INSTA_UPDATE=no cargo test --workspace --locked --quiet
 echo "==> The engine release script's tests"
 uv run python -m unittest discover -s scripts/engine -p "test_*.py"
 
