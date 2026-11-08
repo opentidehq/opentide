@@ -10,6 +10,7 @@ from pathlib import Path
 from types import ModuleType
 
 import pytest
+import yaml
 
 from opentide.core.files import tomllib
 
@@ -176,15 +177,39 @@ def test_the_wheel_ships_every_licence_notice_cites() -> None:
     assert all((ROOT / path).is_file() for path in shipped)
 
 
+def _publish_dry_run_rules() -> ModuleType:
+    """The dry-run workflow's own tests parse publish commands (every spelling npm
+    accepts, options before the command, `npx npm@x publish`) and tell a dry run apart."""
+    spec = importlib.util.spec_from_file_location(
+        "publish_dry_run_rules", ROOT / "tests" / "test_ci" / "test_publish_dry_run_workflow.py"
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def test_only_the_engine_release_publishes_the_engine() -> None:
     """The engine's crates and npm packages publish from engine-release.yml, which
     runs on `engine-v*` tags (and Run workflow) only: `v*` tags are opentide's own
-    releases (tests/test_ci/test_one_ci.py checks every workflow's triggers)."""
-    publishing = sorted(
-        workflow.name
-        for workflow in (ROOT / ".github" / "workflows").glob("*.yml")
-        if re.search(r"cargo publish|release\.py publish|npm publish", workflow.read_text("utf-8"))
-    )
-    assert publishing == ["engine-release.yml"]
-    text = (ROOT / ".github" / "workflows" / "engine-release.yml").read_text(encoding="utf-8")
-    assert '  push:\n    tags:\n      - "engine-v*"\n  workflow_dispatch:' in text
+    releases (tests/test_ci/test_one_ci.py checks every workflow's triggers).
+
+    Any other `cargo publish` or `npm publish` (in any spelling npm accepts) in an
+    active workflow is a dry run: publish-dry-run.yml rehearses the publishes, and
+    its own tests (tests/test_ci/test_publish_dry_run_workflow.py) keep it unable to
+    publish."""
+    rules = _publish_dry_run_rules()
+    seen = 0
+    for workflow in sorted((ROOT / ".github" / "workflows").glob("*.yml")):
+        if workflow.name == "engine-release.yml":
+            continue
+        data = yaml.safe_load(workflow.read_text(encoding="utf-8")) or {}
+        for job in (data.get("jobs") or {}).values():
+            for step in job.get("steps") or []:
+                for command in rules._publishes(str(step.get("run", ""))):
+                    seen += 1
+                    assert rules._is_dry_run(command), (workflow.name, " ".join(command))
+    assert seen, "the dry-run workflow's rehearsals are found, so the check reads the commands"
+    release = (ROOT / ".github" / "workflows" / "engine-release.yml").read_text(encoding="utf-8")
+    assert re.search(r"release\.py publish|npm publish", release)
+    assert '  push:\n    tags:\n      - "engine-v*"\n  workflow_dispatch:' in release

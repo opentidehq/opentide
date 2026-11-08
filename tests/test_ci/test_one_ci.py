@@ -14,6 +14,7 @@ from ``engine-v*`` tags (engine-release.yml). No other workflow may run on a
 from __future__ import annotations
 
 import fnmatch
+import importlib.util
 import re
 from pathlib import Path
 from typing import Any
@@ -27,10 +28,13 @@ CI = WORKFLOWS / "ci.yml"
 GUIDE = ROOT / ".github" / "AGENTS.md"
 
 # What publishes a package, a release or a signed statement about one.
-PUBLISHING = re.compile(
-    r"cargo publish|release\.py publish|npm publish|gh release (?:create|upload)"
-    r"|pypa/gh-action-pypi-publish|actions/attest-build-provenance|crates-io-auth-action"
+# What publishes a package, a release or a signed statement about one: actions,
+# and commands other than `cargo publish` / `npm publish`, which _publishes() below
+# reads in every spelling (publish-dry-run.yml rehearses them as dry runs).
+PUBLISHING_ACTIONS = re.compile(
+    r"pypa/gh-action-pypi-publish|actions/attest-build-provenance|crates-io-auth-action"
 )
+PUBLISHING_COMMANDS = re.compile(r"release\.py publish|gh release (?:create|upload)")
 PUBLISHERS = {"publish-pypi.yml", "engine-release.yml"}
 # Triggers a release may start from: a tag, a GitHub Release, or a person.
 RELEASE_TRIGGERS = {"push", "release", "workflow_dispatch", "repository_dispatch"}
@@ -108,10 +112,36 @@ def test_the_engine_releases_from_engine_tags_and_run_workflow_only() -> None:
         assert _runs_on_tag(triggers, tag)
 
 
-def test_nothing_publishes_from_a_trigger_that_is_not_a_release() -> None:
-    publishing = sorted(
-        path.name for path in _workflows() if PUBLISHING.search(path.read_text(encoding="utf-8"))
+def _publish_rules() -> Any:
+    """publish-dry-run.yml's own tests parse `cargo publish` and `npm publish` in every
+    spelling and tell a dry run apart (tests/test_ci/test_publish_dry_run_workflow.py)."""
+    spec = importlib.util.spec_from_file_location(
+        "publish_dry_run_rules", ROOT / "tests" / "test_ci" / "test_publish_dry_run_workflow.py"
     )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _publishes(path: Path) -> bool:
+    """Whether a step of the workflow publishes: an action that does, or a command,
+    a `cargo publish` / `npm publish` that is not a dry run among them."""
+    rules = _publish_rules()
+    for job in _load(path)["jobs"].values():
+        for step in job.get("steps") or []:
+            run = str(step.get("run", ""))
+            if PUBLISHING_ACTIONS.search(str(step.get("uses", ""))):
+                return True
+            if PUBLISHING_COMMANDS.search(run):
+                return True
+            if any(not rules._is_dry_run(command) for command in rules._publishes(run)):
+                return True
+    return False
+
+
+def test_nothing_publishes_from_a_trigger_that_is_not_a_release() -> None:
+    publishing = sorted(path.name for path in _workflows() if _publishes(path))
     assert publishing == sorted(PUBLISHERS)
     for name in PUBLISHERS:
         triggers = _triggers(_load(WORKFLOWS / name))
@@ -128,7 +158,7 @@ def test_the_asset_build_publishes_nothing_and_writes_nothing() -> None:
     assert workflow["permissions"] == {"contents": "read"}
     for job_id, job in workflow["jobs"].items():
         assert job.get("permissions") in (None, {"contents": "read"}), job_id
-    assert not PUBLISHING.search(path.read_text(encoding="utf-8"))
+    assert not _publishes(path)
     assert "id-token" not in path.read_text(encoding="utf-8")
 
 
