@@ -188,6 +188,7 @@ tests/
 docs/             # the site's four tabs; docs/internal/, docs/engine/ for maintainers
 scripts/          # ci-local.sh, codeql-local.sh, validate-docs.sh; scripts/engine/ for the engine
 .agents/skills/
+publishing/       # name placeholders for crates.io and npm (docs/internal/publishing.md)
 ```
 
 Bundled data: `src/opentide/data/`. Logging: `opentide.core.logging` (structlog + Rich) — no operational `print()`.
