@@ -9,7 +9,7 @@ opentide 0.23.0.
 | File | What it is | Written by |
 |------|------------|------------|
 | [`faults.toml`](faults.toml) | The fault catalogue: kinds, their targets, mutations and expected codes; codes no workspace can produce, with the evidence | hand, reviewed; expectations adjusted to what the oracle reports |
-| [`codes.toml`](codes.toml) | The codes in scope: `VALIDATION_CODES`, `LINT_CODES`, the configuration check's codes, the analysis engine's codes, and the compile check's codes (its `compile_*` explain pages) | `cargo xtask corpus codes --engine python --write` |
+| [`codes.toml`](codes.toml) | The codes in scope: `VALIDATION_CODES`, `LINT_CODES`, the configuration check's codes, the analysis engine's codes, and the compile check's codes (its `compile_*` explain pages); `out_of_scope` lists the other 52 `opentide explain` codes (usage errors, failure codes, doctor checks, sharing and deploy outcomes), which no workspace finding carries | `cargo xtask corpus codes --engine python --write` |
 | [`COVERAGE.md`](COVERAGE.md) | Every code in scope mapped to its fault kinds | `cargo xtask corpus coverage --write` |
 | [`KNOWN_GAPS.md`](KNOWN_GAPS.md) | Faults the oracle misses or reports surprisingly; each has a fault kind; UC-2.2 decides each | hand |
 | [`INTAKE.md`](INTAKE.md) | How a shared real-world repository joins the corpora | hand |
@@ -80,7 +80,8 @@ cargo xtask corpus coverage --check
 
 `--check` generates the base workspace (`[base]`), checks it has no finding under every command
 the kinds use, then gives each kind its own copy: it selects the targets, applies the mutation,
-runs the oracle (reading `report`, `findings`, and a failure's `diagnostics`) and requires
+runs the oracle (reading `report`, `findings`, a failure's `diagnostics`, and `deploy
+migrate-state`'s `errors`) and requires
 **exactly** the expected codes (no other code, none missing), each
 finding with the expected severity, and (unless `per_target = false`) a finding on every target
 file. `--out` writes the combined fault workspace, a fixture for UC-0.5's goldens: the `[combined]`
@@ -91,9 +92,9 @@ check, KG-10, stays silent), so it is recorded, not checked against them. Sharin
 that change how the whole workspace loads are `isolated`.
 
 A configuration file is one file (`deployment.toml`, `visibility.toml`, `sharing.toml`): kinds
-aimed at one (`target.path`) put five faulty entries in it (the oracle reports some, such as
-`unknown_connector`, once per file), and count one file; every other kind takes at least five
-files.
+aimed at one (`target.path`) put five faulty entries in it and pin the oracle's number of
+findings with `counts` (five, or one where the oracle reports a code once per file, such as
+`unknown_connector` or `config_parse`); every other kind takes at least five files.
 
 A kind:
 
@@ -137,5 +138,7 @@ re-serialised), YAML objects as trees, text operations on the rendered file.
    it with `gap`.
 4. `cargo xtask corpus coverage --write` and commit `COVERAGE.md`.
 
-A code that no workspace can produce through `validate` or `lint` (the language server's own
-codes, a check that needs the network) gets an `[[unreachable]]` entry with the evidence instead.
+A code that no workspace mutation makes the commands the runner uses offline report (`validate`,
+`lint`, `deploy migrate-state`; the language server's own codes, a lookup that needs the network)
+gets an `[[unreachable]]` entry with the evidence instead; `COVERAGE.md` lists it as "no fault
+kind".

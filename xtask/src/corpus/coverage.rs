@@ -20,17 +20,20 @@ from opentide.cli.services.validation import (
     VALIDATION_CODES, _CHECK_ISSUE_CODES, _CHECK_WARNING_CODES,
 )
 from opentide.cli.ui.diagnostics import LINT_CODES
-from opentide.cli.services.explain import pages_root
+from opentide.cli.services.explain import diagnostic_codes, pages_root
 configuration = set(_CHECK_ISSUE_CODES["configuration"]) | set(
     _CHECK_WARNING_CODES.get("configuration", ())
 )
-print(json.dumps({
+groups = {
     "validation": sorted(VALIDATION_CODES),
     "lint": sorted(set(LINT_CODES.values())),
     "configuration": sorted(configuration),
     "query": sorted(set(engine_codes())),
     "compile": sorted(p.stem for p in pages_root().glob("compile_*.md")),
-}))
+}
+in_scope = set().union(*groups.values())
+groups["out_of_scope"] = sorted(set(diagnostic_codes()) - in_scope)
+print(json.dumps(groups))
 "#;
 
 /// The five groups of codes, as the oracle lists them.
@@ -49,6 +52,11 @@ pub struct Inventory {
     /// reports them, though `VALIDATION_CODES` does not list them (KG-10).
     #[serde(default)]
     pub compile: Vec<String>,
+    /// The other `opentide explain` codes: no workspace finding carries
+    /// them (usage errors, failure codes, doctor checks, sharing and deploy
+    /// outcomes). Listed, never in scope.
+    #[serde(default)]
+    pub out_of_scope: Vec<String>,
 }
 
 const GROUPS: [&str; 5] = ["validation", "lint", "configuration", "query", "compile"];
@@ -84,6 +92,9 @@ impl Inventory {
 pub struct Codes {
     /// The oracle it was recorded from.
     pub oracle: String,
+    /// The `explain` codes outside the scope.
+    #[serde(default)]
+    pub out_of_scope: Vec<String>,
     /// The groups.
     pub groups: Inventory,
 }
@@ -105,8 +116,16 @@ pub fn render_codes(inventory: &Inventory, oracle: &str) -> String {
         "# The diagnostic codes in scope for the fault catalogue (UC-0.6, plan §5.3),\n\
          # recorded from opentide {oracle} by\n\
          # `cargo xtask corpus codes --engine python --write`. Do not edit by hand.\n\
-         oracle = \"{oracle}\"\n\n[groups]\n"
+         oracle = \"{oracle}\"\n\n\
+         # Every other `opentide explain` code: none is a finding a workspace can\n\
+         # carry (usage errors, failure codes, doctor checks, sharing and deploy\n\
+         # outcomes), so none needs a fault kind.\n\
+         out_of_scope = [\n"
     );
+    for code in &inventory.out_of_scope {
+        let _ = writeln!(out, "    \"{code}\",");
+    }
+    out.push_str("]\n\n[groups]\n");
     for group in GROUPS {
         let _ = writeln!(out, "{group} = [");
         for code in inventory.group(group) {
@@ -144,7 +163,7 @@ impl Report {
             .collect();
         let extra = self.groups.len() - in_scope.len();
         format!(
-            "corpus coverage: {} codes in scope, {} with a fault kind, {} unreachable through the CLI, {} missing, {} problems; {extra} more codes outside the scope have kinds",
+            "corpus coverage: {} codes in scope, {} with a fault kind, {} with no fault kind (evidence in faults.toml), {} missing, {} problems; {extra} more codes outside the scope have kinds",
             in_scope.len(),
             in_scope
                 .iter()
@@ -291,7 +310,7 @@ pub fn render(report: &Report, catalogue: &Catalogue) -> String {
                 )
             }
             None => match report.unreachable.get(code) {
-                Some(reason) => (format!("unreachable: {reason}"), "-".to_string()),
+                Some(reason) => (format!("no fault kind: {reason}"), "-".to_string()),
                 None => ("**missing**".to_string(), "-".to_string()),
             },
         };
@@ -333,6 +352,7 @@ reason = "the engine is compiled in"
             configuration: vec![],
             query: vec!["invalid_uuid".to_string()],
             compile: vec![],
+            out_of_scope: vec!["usage_error".to_string()],
         };
         Codes::parse(&render_codes(&inventory, "0.23.0")).unwrap()
     }

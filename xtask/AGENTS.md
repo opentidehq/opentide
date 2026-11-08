@@ -61,6 +61,8 @@ cargo xtask check-layers
   features, layouts, slug file names, no literal secret. `src/corpus/*` unit tests: the YAML
   emitter, the PRNG's reference values, the catalogue's parser, selectors, operations and verdicts.
   The oracle runs only in `cargo xtask corpus faults --check` (the `Corpus` workflow).
+- `tests/corpus_runner.rs`: the runner's pass/fail guards (a mismatch, a dirty base, a silence
+  that checked nothing, `clean`, `coverage --check`) through a fake oracle script (Unix only).
 - `tests/lint_policy.rs`: every member inherits `[workspace.lints]`, except the crates allowed
   `unsafe` (`UNSAFE_CRATES`), whose copies must equal the workspace table with
   `unsafe_code = "deny"`.
