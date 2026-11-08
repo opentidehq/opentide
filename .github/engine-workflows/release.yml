@@ -110,8 +110,10 @@ jobs:
       # The release rust-toolchain.toml pins, which cargo runs in this checkout
       # (`rustup toolchain install` with no name), then the target the job builds:
       # rustup ignores `--target` on an install with no name, and `rustup target
-      # add` with none adds to the pinned release.
+      # add` with none adds to the pinned release. bash on every image, so that
+      # a failed install stops the step (pwsh, Windows's default, runs on).
       - name: Set up Rust
+        shell: bash
         run: |
           rustup toolchain install --profile minimal --no-self-update
           rustup target add ${{ matrix.target }}
