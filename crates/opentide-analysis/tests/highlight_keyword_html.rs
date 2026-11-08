@@ -1,3 +1,6 @@
+//! `highlight` and `tokens_to_html` on KQL, SPL and Tide documents: the
+//! captures keywords and values get, and the HTML spans they become.
+
 use opentide_analysis::highlight;
 use opentide_core::LanguageId;
 use opentide_highlight::tokens_to_html;

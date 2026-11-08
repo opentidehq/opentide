@@ -10,6 +10,9 @@ authors.workspace = true
 description = "opentide engine component: I/O-free KQL engine (parse, HIR, catalog, profiles). Depend on opentide-analysis."
 readme = "../COMPONENT.md"
 
+[lints]
+workspace = true
+
 [dependencies]
 opentide-core.workspace = true
 opentide-syntax.workspace = true

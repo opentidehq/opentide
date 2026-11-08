@@ -54,6 +54,10 @@ fn field_item(field: &opentide_ecs::EcsField) -> CompletionItem {
 /// `field:` (kuery, Lucene) or `field ==` / `field :` / `field in (` /
 /// `field like` (EQL, ES|QL) right before the cursor: the field and whether
 /// the value's opening quote is already typed.
+#[expect(
+    clippy::unwrap_used,
+    reason = "a regex literal: an invalid pattern fails every test that reaches it"
+)]
 fn value_context(language: LanguageId, before: &str) -> Option<(String, bool)> {
     static KIBANA: OnceLock<Regex> = OnceLock::new();
     static EXPR: OnceLock<Regex> = OnceLock::new();
@@ -119,7 +123,7 @@ pub(crate) fn complete(
     let prefix = prefix_at(text, offset);
     let known: BTreeSet<String> = items.iter().map(|i| i.label.clone()).collect();
     if prefix.contains('.') {
-        let parent = &prefix[..prefix.rfind('.').unwrap_or(0) + 1];
+        let parent = &prefix[..=prefix.rfind('.').unwrap_or(0)];
         for field in opentide_ecs::with_prefix(parent) {
             if !known.contains(&field.name) {
                 items.push(field_item(field));

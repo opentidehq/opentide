@@ -166,6 +166,10 @@ pub struct Catalog {
 }
 
 impl Catalog {
+    #[expect(
+        clippy::expect_used,
+        reason = "parses a catalog compiled in with include_str!: a bad catalog fails the tests, never a user's document"
+    )]
     pub fn cached() -> &'static Catalog {
         static CATALOG: OnceLock<Catalog> = OnceLock::new();
         CATALOG.get_or_init(|| {

@@ -3,6 +3,11 @@
 //! Capture rename in `highlights/spec.toml` is a **major** (breaking) change.
 //! Adding captures is a minor.
 
+#![expect(
+    missing_docs,
+    reason = "imported from language-server with public items undocumented: crates/AGENTS.md, Lints"
+)]
+
 mod markdown;
 
 use opentide_core::{ByteSpan, LanguageId, LineIndex, Range};
@@ -157,6 +162,10 @@ impl HighlightSpec {
 /// `markdown` / `hidden` come from Pydantic `json_schema_extra` flags the schema
 /// emitter drops. `capture` is a HighlightSpec presentation choice.
 #[derive(Debug, Clone, Deserialize)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "the generated catalog's columns: one flag per schema property"
+)]
 pub struct TideField {
     pub schema: String,
     pub path: String,
@@ -312,6 +321,10 @@ fn build_tide_catalog(json: &str) -> Result<TideCatalog, String> {
     })
 }
 
+#[expect(
+    clippy::expect_used,
+    reason = "parses a catalog compiled in with include_str!: a bad catalog fails the tests, never a user's document"
+)]
 fn bundled_tide_catalog() -> &'static TideCatalog {
     static CATALOG: OnceLock<TideCatalog> = OnceLock::new();
     CATALOG.get_or_init(|| build_tide_catalog(TIDE_FIELDS_JSON).expect("generated fields.json"))
@@ -541,6 +554,10 @@ pub fn tide_keys_for_capture(capture: &str) -> Vec<String> {
 }
 
 /// Extract `@capture` names from a tree-sitter highlights.scm file.
+#[expect(
+    clippy::expect_used,
+    reason = "a regex literal: an invalid pattern fails every test that reaches it"
+)]
 pub fn scm_captures(scm: &str) -> BTreeSet<String> {
     let re = Regex::new(r"@([A-Za-z][A-Za-z0-9_.]*)").expect("regex");
     re.captures_iter(scm)
@@ -775,6 +792,10 @@ pub fn tm_scope_name(language: LanguageId) -> String {
 }
 
 /// Generate TextMate / Monaco / Helix maps from the frozen spec.
+#[expect(
+    clippy::expect_used,
+    reason = "a regex literal: an invalid pattern fails every test that reaches it"
+)]
 pub fn generate_tm_language(language: LanguageId, spec: &HighlightSpec) -> serde_json::Value {
     let scm = highlights_scm(language);
     let mut patterns: Vec<serde_json::Value> = Vec::new();

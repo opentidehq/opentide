@@ -2,6 +2,12 @@
 //! schemas give hover and completion. The checker and the schemas are
 //! process-wide, so this binary has its own process and its tests take a lock.
 
+#![expect(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    reason = "test helpers outside #[test] functions: a panic fails the test"
+)]
+
 use opentide_analysis::{
     AnalyzeRequest, ConfigIssue, ConfigRequest, LanguageId, MemoryWorkspace, Severity, analyze,
     codes, configuration_completions, configuration_diagnostics, configuration_hover,

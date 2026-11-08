@@ -12,6 +12,9 @@ readme = "README.md"
 keywords = ["kql", "spl", "esql", "detection", "siem"]
 categories = ["parser-implementations", "development-tools"]
 
+[lints]
+workspace = true
+
 [dependencies]
 opentide-core.workspace = true
 opentide-highlight.workspace = true

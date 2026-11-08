@@ -20,6 +20,11 @@
 //! ECS indices gets (`ecs_diagnostics`): the probes that depend on the
 //! mapping must then agree too, except `ECS_EXCEPTIONS`.
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "test helpers outside #[test] functions: a panic fails the test"
+)]
+
 use opentide_core::{Diagnostic, LanguageId, Severity};
 use std::fs;
 use std::path::PathBuf;

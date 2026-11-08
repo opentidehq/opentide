@@ -2,6 +2,12 @@
 //! browser build drives it: no stdio, no filesystem, and the workspace
 //! supplied on `initialize`.
 
+#![expect(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    reason = "test helpers outside #[test] functions: a panic fails the test"
+)]
+
 use opentide_lsp::MessageSession;
 use serde_json::{Value, json};
 

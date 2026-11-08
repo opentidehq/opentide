@@ -1,5 +1,10 @@
 //! I/O-free KQL engine. Catalogs are compiled in; no `std::fs`.
 
+#![expect(
+    missing_docs,
+    reason = "imported from language-server with public items undocumented: crates/AGENTS.md, Lints"
+)]
+
 use opentide_core::datasets::{Declaration, DeclaredSource};
 use opentide_core::{
     ByteSpan, CompletionItem, Diagnostic, LanguageId, ParameterInformation, Range, SignatureHelp,
@@ -273,6 +278,10 @@ impl std::ops::Deref for CatalogRef {
 }
 
 impl Catalog {
+    #[expect(
+        clippy::expect_used,
+        reason = "parses a catalog compiled in with include_str!: a bad catalog fails the tests, never a user's document"
+    )]
     pub fn core() -> Self {
         let operators: OperatorsFile = toml::from_str(OPERATORS_TOML).expect("operators.toml");
         let functions: FunctionsFile = toml::from_str(FUNCTIONS_TOML).expect("functions.toml");
@@ -310,6 +319,10 @@ impl Catalog {
     ///
     /// Hand-written columns keep their docs and are added to the reference's,
     /// never removed: a column either lists is known.
+    #[expect(
+        clippy::expect_used,
+        reason = "parses a catalog compiled in with include_str!: a bad catalog fails the tests, never a user's document"
+    )]
     pub fn with_profile(mut self, profile: Profile) -> Self {
         if profile == Profile::Core {
             return self;
@@ -625,7 +638,7 @@ impl Catalog {
                     Some(i) if self.columns[i].declared => {}
                     Some(i) => {
                         let row = &mut self.columns[i];
-                        row.type_name = column.type_name.clone();
+                        row.type_name.clone_from(&column.type_name);
                         if let Some(description) = &column.description {
                             row.docs = Some(description.clone());
                             row.citation = None;
@@ -789,7 +802,7 @@ fn strsim_distance(a: &str, b: &str) -> usize {
     for (i, ca) in a_chars.iter().enumerate() {
         cur[0] = i + 1;
         for (j, cb) in b_chars.iter().enumerate() {
-            let cost = if ca == cb { 0 } else { 1 };
+            let cost = usize::from(ca != cb);
             cur[j + 1] = (prev[j + 1] + 1).min(cur[j] + 1).min(prev[j] + cost);
         }
         std::mem::swap(&mut prev, &mut cur);
@@ -894,6 +907,10 @@ enum Walk<T> {
     Stop(T),
 }
 
+#[expect(
+    clippy::used_underscore_binding,
+    reason = "`_source` only passes through the recursion (clippy::only_used_in_recursion)"
+)]
 fn walk<T>(node: &Node, _source: &str, f: &mut impl FnMut(Node) -> Walk<T>) -> Option<T> {
     match f(*node) {
         Walk::Stop(v) => return Some(v),
@@ -935,6 +952,10 @@ pub fn columns(source: &str, profile: Profile) -> schema::Analysis {
         .unwrap_or_default()
 }
 
+#[expect(
+    clippy::expect_used,
+    reason = "loads the HighlightSpec compiled in (highlights/spec.toml): a bad spec fails the tests, never a user's document"
+)]
 pub fn analyze_with_catalog(source: &str, catalog: &Catalog) -> AnalyzeResult {
     let spec = HighlightSpec::load().expect("highlight spec");
     let mut diagnostics = Vec::new();
@@ -1264,11 +1285,11 @@ fn collect_table_diagnostics(
         // `union isfuzzy=true` runs whatever legs exist.
         "union_operator" if !is_fuzzy_union(node, source) => {
             let mut cursor = node.walk();
-            let legs: Vec<Node> = node
+            let union_legs: Vec<Node> = node
                 .children_by_field_name("tables", &mut cursor)
                 .filter(|n| n.kind() == "identifier")
                 .collect();
-            for leg in legs {
+            for leg in union_legs {
                 check_table(leg, leg, source, catalog, lets, out);
             }
         }
@@ -1444,6 +1465,10 @@ fn check_table(
     out.push(d);
 }
 
+#[expect(
+    clippy::manual_assert,
+    reason = "a broken highlights.scm panics in debug builds (the tests) and falls back to the tree walk in release builds"
+)]
 fn highlight_tree(
     spec: &HighlightSpec,
     source: &str,
@@ -1507,6 +1532,10 @@ fn overlay_catalog_captures(source: &str, spans: &mut [(ByteSpan, String)], cata
     }
 }
 
+#[expect(
+    clippy::used_underscore_binding,
+    reason = "`_source` only passes through the recursion (clippy::only_used_in_recursion)"
+)]
 fn collect_highlights(node: Node, _source: &str, out: &mut Vec<(ByteSpan, &'static str)>) {
     let kind = node.kind();
     let capture = match kind {
@@ -1675,6 +1704,10 @@ const DEFENDER_TABLES_MAP: &[(&str, &str)] = &[
     ("CloudAppEvents", "xdr"),
 ];
 
+#[expect(
+    clippy::unwrap_used,
+    reason = "a regex literal: an invalid pattern fails every test that reaches it"
+)]
 fn strip_kql_literals_and_comments(query: &str) -> String {
     let re_block = regex::Regex::new(r"(?s)/\*.*?\*/").unwrap();
     let re_line = regex::Regex::new(r"//.*").unwrap();
@@ -1958,7 +1991,7 @@ fn prefix_option_items(op: &str, options: &[&OperatorOption]) -> Vec<CompletionI
                     ));
                 }
             }
-            Some("token") | Some("alongside") => {
+            Some("token" | "alongside") => {
                 items.push(complete_item(
                     opt.name.clone(),
                     "keyword",

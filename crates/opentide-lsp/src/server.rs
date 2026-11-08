@@ -12,6 +12,8 @@ use std::path::{Path, PathBuf};
 use std::sync::RwLock;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 
+/// Serves one client on stdin and stdout until it exits; [`run_stdio_status`]
+/// also says whether it shut the server down first.
 pub fn run_stdio() -> Result<()> {
     run_stdio_status().map(|_| ())
 }
@@ -32,6 +34,8 @@ pub fn run_stdio_status() -> Result<bool> {
     protocol::run(&mut source, &mut writer, &mut session)
 }
 
+/// Accepts one client on the TCP address `addr` (`127.0.0.1:2087`) and
+/// serves it until it exits.
 #[cfg(not(target_os = "wasi"))]
 pub fn run_listen(addr: &str) -> Result<()> {
     let listener = std::net::TcpListener::bind(addr)?;
@@ -44,6 +48,7 @@ pub fn run_listen(addr: &str) -> Result<()> {
     protocol::run(&mut source, &mut writer, &mut session).map(|_| ())
 }
 
+/// Fails: `--listen` needs sockets, which wasm32-wasip1 does not have.
 #[cfg(target_os = "wasi")]
 pub fn run_listen(_addr: &str) -> Result<()> {
     anyhow::bail!("--listen needs sockets, which wasip1 does not have")
@@ -105,6 +110,7 @@ pub struct MessageSession {
 }
 
 impl MessageSession {
+    /// A session before `initialize`, which is the first message it expects.
     pub fn new() -> Self {
         Self::default()
     }

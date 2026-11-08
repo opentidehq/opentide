@@ -5,6 +5,11 @@
 //! types its functions take and return are re-exported here, so a host never needs
 //! the per-language crates behind it.
 
+#![expect(
+    missing_docs,
+    reason = "imported from language-server with public items undocumented: crates/AGENTS.md, Lints"
+)]
+
 pub use opentide_core::datasets::{
     DatasetKind, Declaration, DeclaredColumn, DeclaredDatasets, DeclaredSource,
 };
@@ -473,6 +478,10 @@ pub fn catalog_is_workspace() -> bool {
     opentide_highlight::tide_catalog_is_workspace()
 }
 
+#[expect(
+    clippy::expect_used,
+    reason = "loads the HighlightSpec compiled in (highlights/spec.toml): a bad spec fails the tests, never a user's document"
+)]
 pub fn highlight(language: LanguageId, text: &str) -> HighlightResult {
     let host = MemoryWorkspace {
         files: vec![("memory".into(), text.to_string())],
@@ -554,7 +563,9 @@ fn query_hover(language: LanguageId, text: &str, offset: usize, platform: &str) 
         LanguageId::Lucene => {
             opentide_lucene::hover(text, offset).or_else(|| ecs::hover(text, offset))
         }
-        LanguageId::Falco => opentide_falco::hover(text, offset, &Default::default()),
+        LanguageId::Falco => {
+            opentide_falco::hover(text, offset, &opentide_falco::Context::default())
+        }
         // Configuration hover needs the file's path: configuration_hover.
         LanguageId::TideYaml | LanguageId::Config => None,
     }
@@ -626,7 +637,9 @@ fn query_completions(
             ecs::complete(language, text, offset, &mut items);
             items
         }
-        LanguageId::Falco => opentide_falco::completions(text, offset, &Default::default()),
+        LanguageId::Falco => {
+            opentide_falco::completions(text, offset, &opentide_falco::Context::default())
+        }
         // Configuration completion needs the file's path: configuration_completions.
         LanguageId::TideYaml | LanguageId::Config => Vec::new(),
     }

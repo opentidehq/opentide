@@ -5,6 +5,12 @@
 //! Declared datasets are process-wide, so this is its own test binary: no
 //! other test runs beside it.
 
+#![expect(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    reason = "test helpers outside #[test] functions: a panic fails the test"
+)]
+
 use opentide_lsp::MessageSession;
 use serde_json::{Value, json};
 

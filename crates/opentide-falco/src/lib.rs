@@ -19,6 +19,11 @@
 //! What depends on the agent (fields and macros the catalogue does not know)
 //! is a warning; what Falco refuses to load is an error. See `docs/engine/FALCO.md`.
 
+#![expect(
+    missing_docs,
+    reason = "imported from language-server with public items undocumented: crates/AGENTS.md, Lints"
+)]
+
 use opentide_core::{
     ByteSpan, CompletionItem, Diagnostic, LanguageId, Range, Severity, codes, span_to_range,
 };
@@ -107,6 +112,10 @@ pub fn analyze(source: &str) -> AnalyzeResult {
     analyze_with(source, &Context::default())
 }
 
+#[expect(
+    clippy::expect_used,
+    reason = "loads the HighlightSpec compiled in (highlights/spec.toml): a bad spec fails the tests, never a user's document"
+)]
 pub fn analyze_with(text: &str, ctx: &Context) -> AnalyzeResult {
     let spec = HighlightSpec::load().expect("highlight spec");
     AnalyzeResult {
@@ -865,6 +874,10 @@ const OUTPUT_PLACEHOLDERS: &[&str] = &["container.info"];
 /// (`eventformatter.cpp`) reads it: an optional leading `*`; each `%` takes an
 /// optional length, then the longest text that parses as a field or a
 /// transformer and compiles (so `%proc.namex` is `proc.name` then `x`).
+#[expect(
+    clippy::expect_used,
+    reason = "loads the HighlightSpec compiled in (highlights/spec.toml): a bad spec fails the tests, never a user's document"
+)]
 pub fn analyze_output(text: &str, ctx: &Context) -> AnalyzeResult {
     let spec = HighlightSpec::load().expect("highlight spec");
     let catalog = Catalog::cached();
@@ -968,10 +981,10 @@ pub fn analyze_output(text: &str, ctx: &Context) -> AnalyzeResult {
                         None,
                     ),
                 };
-                let mut d = if !ctx.known_source() {
-                    Diagnostic::warning(code, message, range(text, span))
-                } else {
+                let mut d = if ctx.known_source() {
                     Diagnostic::error(code, message, range(text, span))
+                } else {
+                    Diagnostic::warning(code, message, range(text, span))
                 };
                 if let Some(s) = suggestion {
                     d = d.with_suggestion(s);

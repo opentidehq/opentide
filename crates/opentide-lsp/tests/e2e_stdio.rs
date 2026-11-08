@@ -1,5 +1,11 @@
 //! Protocol tests over stdio. The CLI never speaks JSON-RPC; `--stdio` does.
 
+#![expect(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    reason = "test helpers outside #[test] functions: a panic fails the test"
+)]
+
 mod common;
 
 use common::*;
@@ -1224,6 +1230,10 @@ fn the_quick_fix_creates_visibility_toml_when_there_is_none() {
 /// visibility.toml applies as it is edited: in the editor, before it is
 /// saved, and on disk, through the file watcher.
 #[test]
+#[expect(
+    clippy::format_collect,
+    reason = "a fixture of a few lines: the plainest way to write it"
+)]
 fn editing_visibility_toml_rechecks_open_queries() {
     let scratch = Scratch::new("visibility-live");
     let root = &scratch.0;

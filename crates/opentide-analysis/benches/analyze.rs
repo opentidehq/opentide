@@ -8,6 +8,11 @@
 //! server keeps it. CI runs this without gating (ci.yml, `bench`): the numbers
 //! are for comparing runs, not limits.
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "a benchmark binary: a fixture it cannot read stops it"
+)]
+
 use opentide_analysis::{
     AnalyzeRequest, IndexedObject, LanguageId, MemoryWorkspace, WorkspaceHost, analyze, hover,
 };

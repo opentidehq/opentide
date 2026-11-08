@@ -10,6 +10,9 @@ authors.workspace = true
 description = "opentide engine component: Shared types for the opentide language server (I/O-free). Depend on opentide-analysis."
 readme = "../COMPONENT.md"
 
+[lints]
+workspace = true
+
 [dependencies]
 serde.workspace = true
 toml.workspace = true

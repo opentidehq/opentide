@@ -1,5 +1,10 @@
 //! Slow-query warnings on raw KQL/SPL files and the same text inside Tide blocks.
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "test helpers outside #[test] functions: a panic fails the test"
+)]
+
 use opentide_analysis::{AnalyzeRequest, MemoryWorkspace, analyze};
 use opentide_core::{LanguageId, Severity};
 use std::path::PathBuf;

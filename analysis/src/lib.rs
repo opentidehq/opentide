@@ -540,6 +540,11 @@ impl LineStarts {
 
 #[pymodule]
 mod _native {
+    // `allow`, not `expect`: clippy's glob-import lints never fulfil an expectation.
+    #[allow(
+        clippy::wildcard_imports,
+        reason = "the module's init function uses the PyO3 prelude and the helpers the parent imports"
+    )]
     use super::*;
 
     #[pymodule_export]

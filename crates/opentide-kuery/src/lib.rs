@@ -22,11 +22,19 @@ pub use ecs::ecs_diagnostics;
 
 const KQL_DOCS: &str = "https://www.elastic.co/docs/reference/query-languages/kql";
 
+/// What [`analyze`] finds in one query.
 pub struct AnalyzeResult {
+    /// The query's diagnostics, parse error included.
     pub diagnostics: Vec<Diagnostic>,
+    /// The query's highlight tokens (HighlightSpec captures).
     pub tokens: Vec<HighlightToken>,
 }
 
+#[expect(
+    clippy::expect_used,
+    reason = "loads the HighlightSpec compiled in (highlights/spec.toml): a bad spec fails the tests, never a user's document"
+)]
+/// Parses a Kibana KQL query as Kibana reads it, checks it, and highlights it.
 pub fn analyze(source: &str) -> AnalyzeResult {
     let spec = HighlightSpec::load().expect("highlight spec");
     // Kibana reads `or`, `and`, and `not` as keywords only with whitespace
@@ -164,7 +172,7 @@ fn mask_trailing_keywords(source: &str) -> String {
         let keyword = ["or", "and", "not"]
             .iter()
             .any(|k| word.eq_ignore_ascii_case(k));
-        if keyword && matches!(next, None | Some(')') | Some('}')) {
+        if keyword && matches!(next, None | Some(')' | '}')) {
             let m = masked.get_or_insert_with(|| bytes.to_vec());
             for b in &mut m[start + 1..i] {
                 *b = b'_';
@@ -276,6 +284,10 @@ fn unclosed_quote(source: &str) -> Option<usize> {
 /// Kibana's `UnquotedCharacter` stops at `!Keyword`, and `Keyword` includes
 /// `'not'i Space` with no space required before it. `cannot run` therefore
 /// ends the value at `can`, and the query fails.
+#[expect(
+    clippy::expect_used,
+    reason = "a regex literal: an invalid pattern fails every test that reaches it"
+)]
 fn embedded_not(node: Node, source: &str) -> Option<Diagnostic> {
     static NOT_SPACE: OnceLock<Regex> = OnceLock::new();
     let re = NOT_SPACE.get_or_init(|| Regex::new(r"(?i)not[ \t\r\n\u{00A0}]").expect("regex"));
@@ -695,6 +707,7 @@ pub fn hover(source: &str, offset: usize) -> Option<String> {
         .map(|(k, d)| format!("**`{k}`** (KQL)\n\n{d}\n\n[Elastic docs]({KQL_DOCS})"))
 }
 
+/// The completions at byte `offset` of `source`.
 pub fn completions(source: &str, offset: usize) -> Vec<CompletionItem> {
     let before = &source[..offset.min(source.len())];
     let mut items = Vec::new();

@@ -9,6 +9,11 @@
 //! `/regexp/` bodies are Lucene's own regular-expression grammar
 //! ([`regexp`]). Those are the checks this engine adds after the grammar.
 
+#![expect(
+    missing_docs,
+    reason = "imported from language-server with public items undocumented: crates/AGENTS.md, Lints"
+)]
+
 pub mod carbon_black;
 mod ecs;
 pub mod regexp;
@@ -47,6 +52,10 @@ pub fn analyze(source: &str) -> AnalyzeResult {
     analyze_dialect(source, Dialect::Elastic)
 }
 
+#[expect(
+    clippy::expect_used,
+    reason = "loads the HighlightSpec compiled in (highlights/spec.toml): a bad spec fails the tests, never a user's document"
+)]
 pub fn analyze_dialect(source: &str, dialect: Dialect) -> AnalyzeResult {
     let spec = HighlightSpec::load().expect("highlight spec");
     // Carbon Black deploy collapses newlines to spaces; same byte offsets.

@@ -1,6 +1,9 @@
 //! The test client shared by the protocol tests (#185 P2.8): the server
 //! binary over stdio, real LSP frames, and helpers to read what it sends.
-#![allow(dead_code)]
+#![allow(
+    dead_code,
+    reason = "each test binary uses a different part of the shared client"
+)]
 
 use serde_json::{Value, json};
 use std::io::{BufRead, BufReader, Read, Write};

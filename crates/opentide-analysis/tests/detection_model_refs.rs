@@ -9,6 +9,11 @@
 //! | a signal of that objective    | no finding          | no `invalid_ref` |
 //! | a UUID that exists nowhere    | `invalid_ref`       | `invalid_ref`   |
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "test helpers outside #[test] functions: a panic fails the test"
+)]
+
 use opentide_analysis::{AnalyzeRequest, MemoryWorkspace, analyze};
 use opentide_core::{LanguageId, Severity};
 use std::fs;

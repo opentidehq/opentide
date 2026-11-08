@@ -216,7 +216,10 @@ fn end_of_term(bytes: &[u8], mut i: usize, end: usize) -> usize {
 }
 
 /// The values after `index`: `=v`, `::v`, `!=v` (negated), ` IN (a, b)`.
-#[allow(clippy::type_complexity)]
+#[allow(
+    clippy::type_complexity,
+    reason = "a private parse result: the value spans and whether they are negated, then the index after them"
+)]
 fn term_values(source: &str, i: usize, end: usize) -> (Option<(Vec<(usize, usize)>, bool)>, usize) {
     let bytes = source.as_bytes();
     let mut j = i;

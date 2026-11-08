@@ -2,6 +2,11 @@
 //! (#146), through `install_catalog`. One test: the declared datasets are
 //! process-wide.
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "test helpers outside #[test] functions: a panic fails the test"
+)]
+
 use opentide_analysis::{
     AnalyzeRequest, Catalog, Diagnostic, LanguageId, MemoryWorkspace, QueryRequest, Severity,
     analyze, analyze_queries, analyze_query, codes, install_catalog,

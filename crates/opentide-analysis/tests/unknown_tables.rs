@@ -2,6 +2,11 @@
 //! engine cannot see the workspace's tables (#111). The Azure Monitor and
 //! Defender XDR tables are known (#113).
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "test helpers outside #[test] functions: a panic fails the test"
+)]
+
 use opentide_analysis::{AnalyzeRequest, MemoryWorkspace, analyze};
 use opentide_core::{Diagnostic, LanguageId, Severity, codes};
 use std::path::PathBuf;

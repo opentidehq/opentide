@@ -356,6 +356,10 @@ fn document_uuid(source: &str) -> Option<String> {
     (token.len() == 36).then(|| token.to_string())
 }
 
+#[expect(
+    clippy::expect_used,
+    reason = "a regex literal: an invalid pattern fails every test that reaches it"
+)]
 pub fn inlay_hints(source: &str, workspace: &[IndexedObject]) -> Vec<TideInlay> {
     let self_uuid = document_uuid(source);
     let re = regex::Regex::new(

@@ -3,6 +3,11 @@
 //! Pydantic remains CLI authority. The LSP emits the same `{code, field_path, severity}`
 //! with real source ranges. opentide LSP owns Tide diagnostics — disable yamlls on `objects/**`.
 
+#![expect(
+    missing_docs,
+    reason = "imported from language-server with public items undocumented: crates/AGENTS.md, Lints"
+)]
+
 mod elastic;
 mod falco;
 mod injection;
@@ -71,9 +76,7 @@ pub fn language_for_field_path(path: &[&str]) -> Option<LanguageId> {
     match path {
         ["configurations", "sentinel", "query"] => Some(LanguageId::Kql),
         ["configurations", "defender_for_endpoint", "query"] => Some(LanguageId::Kql),
-        ["configurations", "splunk", "query"] | ["configurations", "splunk", "search"] => {
-            Some(LanguageId::Spl)
-        }
+        ["configurations", "splunk", "query" | "search"] => Some(LanguageId::Spl),
         ["configurations", "carbon_black_cloud", "query"] => Some(LanguageId::Lucene),
         ["configurations", "sysdig", "condition"] => Some(LanguageId::Falco),
         ["configurations", "crowdstrike", ..] => None,
@@ -442,6 +445,10 @@ fn diagnose_filename(
 
 /// Spans and ranges are in the text after a leading byte-order mark
 /// ([`opentide_core::strip_bom`]).
+#[expect(
+    clippy::expect_used,
+    reason = "loads the HighlightSpec compiled in (highlights/spec.toml): a bad spec fails the tests, never a user's document"
+)]
 pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
     let input = AnalyzeInput {
         source: opentide_core::strip_bom(input.source),
@@ -1101,6 +1108,10 @@ fn join_field_path(parent: &str, key: &str) -> String {
     }
 }
 
+#[expect(
+    clippy::unwrap_used,
+    reason = "a regex literal: an invalid pattern fails every test that reaches it"
+)]
 fn highlight_scalar(
     spans: &mut Vec<(ByteSpan, &'static str)>,
     skip: &[ByteSpan],
@@ -1444,6 +1455,10 @@ fn object_schema_id(object: &TideObject) -> String {
         .to_string()
 }
 
+#[expect(
+    clippy::expect_used,
+    reason = "parses a catalog compiled in with include_str!: a bad catalog fails the tests, never a user's document"
+)]
 fn bundled_deprecations() -> &'static [FieldDeprecation] {
     static ROWS: OnceLock<Vec<FieldDeprecation>> = OnceLock::new();
     ROWS.get_or_init(|| parse_deprecation_overlay(DEPRECATIONS_JSON).expect("deprecations.json"))
@@ -1680,7 +1695,7 @@ impl ShapeCheck<'_> {
                         child,
                         field.closed,
                         &field.legacy,
-                    )
+                    );
                 }
                 serde_yaml::Value::Sequence(items) => {
                     for (index, item) in items.iter().enumerate() {
@@ -3189,7 +3204,7 @@ threat:
         assert!(uuid_keys.contains(&"uuid"), "{uuid_keys:?}");
         let starts: Vec<usize> = r.tokens.iter().map(|t| t.span.start).collect();
         let mut sorted = starts.clone();
-        sorted.sort();
+        sorted.sort_unstable();
         assert_eq!(starts, sorted, "semantic tokens must be in document order");
     }
 

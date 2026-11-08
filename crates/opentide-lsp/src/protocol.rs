@@ -503,7 +503,7 @@ fn respond(
 fn handle_notification(session: &mut Session, notification: Notification) {
     let method = notification.method.clone();
     let handled = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        crate::handlers::notification(session, notification)
+        crate::handlers::notification(session, notification);
     }));
     if let Err(panic) = handled {
         eprintln!(

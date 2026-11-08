@@ -1,6 +1,12 @@
 //! The column pass (#112) and the column and type checks on documented
 //! sources (#113).
 
+#![expect(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    reason = "test helpers outside #[test] functions: a panic fails the test"
+)]
+
 use opentide_core::{Position, Severity, codes};
 use opentide_kql::schema::Known;
 use opentide_kql::{Profile, analyze, columns, completions, hover, signature_help};

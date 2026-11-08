@@ -27,6 +27,10 @@ pub(crate) struct Document {
 
 /// What the client said it can do, read once at `initialize`.
 #[derive(Default, Clone)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "one flag per client capability read at initialize"
+)]
 pub(crate) struct ClientCaps {
     /// The client watches files for the server (`didChangeWatchedFiles`).
     pub watch_files: bool,
@@ -73,6 +77,10 @@ pub(crate) struct Root {
     catalog: CatalogState,
     /// The last `visibility.toml` text that parsed: a buffer that is not
     /// TOML yet (mid-edit) keeps these declarations.
+    #[expect(
+        clippy::option_option,
+        reason = "None: nothing installed yet; Some(None): no visibility.toml was found, which declares nothing; Some(Some(text)): the last text that parsed"
+    )]
     good_visibility: RefCell<Option<Option<String>>>,
     /// The last `lint.toml` text that parsed (#214), kept the same way.
     good_lint: RefCell<Option<String>>,
@@ -438,6 +446,10 @@ pub(crate) struct Session {
     /// The root whose catalogs and declared datasets the engine has
     /// installed; `None` until the first request, and again after they
     /// change.
+    #[expect(
+        clippy::option_option,
+        reason = "None: nothing installed yet, or reset; Some(root): the root installed, None for a document outside every root"
+    )]
     active: Cell<Option<Option<usize>>>,
     /// Documents whose diagnostics changed in this batch, and whether every
     /// open document's did.

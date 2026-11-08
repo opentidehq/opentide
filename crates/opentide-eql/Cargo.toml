@@ -10,6 +10,9 @@ authors.workspace = true
 description = "opentide engine component: I/O-free EQL engine (parse, builder checks, catalog) for Elastic Security eql rules. Depend on opentide-analysis."
 readme = "../COMPONENT.md"
 
+[lints]
+workspace = true
+
 [dependencies]
 opentide-core.workspace = true
 opentide-ecs.workspace = true

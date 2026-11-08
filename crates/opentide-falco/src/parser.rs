@@ -134,7 +134,7 @@ impl Expr {
             }
             Expr::Field { name, arg, .. } => {
                 out.push_str(name);
-                write_arg(out, arg);
+                write_arg(out, arg.as_deref());
             }
             Expr::Transformer {
                 name, values, arg, ..
@@ -148,7 +148,7 @@ impl Expr {
                     c.write(out);
                 }
                 out.push(')');
-                write_arg(out, arg);
+                write_arg(out, arg.as_deref());
             }
             Expr::Unary { left, op, .. } => {
                 left.write(out);
@@ -166,10 +166,10 @@ impl Expr {
     }
 }
 
-fn write_arg(out: &mut String, arg: &Option<String>) {
+fn write_arg(out: &mut String, arg: Option<&str>) {
     match arg {
         None => {}
-        Some(a) if a.is_empty() => out.push_str("[\"\"]"),
+        Some("") => out.push_str("[\"\"]"),
         Some(a) => {
             out.push('[');
             out.push_str(&escape_str(a));
@@ -500,6 +500,11 @@ impl<'a> Parser<'a> {
         t
     }
 
+    #[expect(
+        clippy::unwrap_used,
+        clippy::if_not_else,
+        reason = "`children` starts with one expression and only grows; the `if !lex_blank()` branches follow libsinsp's parser.cpp step for step"
+    )]
     fn parse_or(&mut self) -> PResult<Expr> {
         self.guarded(|p| {
             let start = p.pos;
@@ -527,6 +532,11 @@ impl<'a> Parser<'a> {
         })
     }
 
+    #[expect(
+        clippy::unwrap_used,
+        clippy::if_not_else,
+        reason = "`children` starts with one expression and only grows; the `if !lex_blank()` branches follow libsinsp's parser.cpp step for step"
+    )]
     fn parse_and(&mut self) -> PResult<Expr> {
         self.guarded(|p| {
             let start = p.pos;

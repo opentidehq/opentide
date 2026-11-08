@@ -3,6 +3,12 @@
 //! watched files, richer diagnostics, code actions, logs and the editor
 //! features built on the Tide index.
 
+#![expect(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    reason = "test helpers outside #[test] functions: a panic fails the test"
+)]
+
 mod common;
 
 use common::*;

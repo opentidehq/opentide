@@ -260,6 +260,10 @@ fn key_stages(key: &toml::Value) -> Vec<String> {
     }
 }
 
+#[expect(
+    clippy::expect_used,
+    reason = "every caller passes a vocabulary compiled in with include_str! (ALL_VOCABS): a bad one fails the tests, never a user's document"
+)]
 fn parse_vocab(toml_src: &str) -> Vocab {
     let v: toml::Value = toml::from_str(toml_src).expect("vocab toml");
     let field = v

@@ -7,6 +7,11 @@
 //! The lint settings are process-wide, as the declared datasets are, so the
 //! tests of this binary take turns.
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "test helpers outside #[test] functions: a panic fails the test"
+)]
+
 use opentide_analysis::{AnalyzeRequest, MemoryWorkspace, Severity, analyze, install_lint};
 use opentide_core::LanguageId;
 use std::collections::BTreeSet;

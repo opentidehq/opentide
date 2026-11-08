@@ -43,8 +43,10 @@
 //! (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 //! THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-// State numbers index several parallel tables, as in Lucene.
-#![allow(clippy::needless_range_loop)]
+#![allow(
+    clippy::needless_range_loop,
+    reason = "state numbers index several parallel tables, as in Lucene"
+)]
 
 /// What Elasticsearch does with one regexp body.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -80,7 +82,7 @@ pub const DETERMINIZE_WORK_LIMIT: u64 = 10_000;
 /// verdict on complexity rather than guessing.
 const MAX_STATES: usize = 200_000;
 
-const MAX_CODE_POINT: u32 = 0x10FFFF;
+const MAX_CODE_POINT: u32 = 0x0010_FFFF;
 
 /// Work (states and transitions built, state sets visited) one check may
 /// spend before it gives up on a complexity verdict. Real rules stay far
@@ -564,6 +566,10 @@ impl<'a> Parser<'a> {
     }
 
     /// Digits for `{n,m}`: `None` when there are none.
+    #[expect(
+        clippy::cast_sign_loss,
+        reason = "`digits` holds ASCII digits only, so `n` is not negative"
+    )]
     fn integer(&mut self) -> Result<Option<u32>, ParseError> {
         let start = self.pos;
         while self.peek("0123456789") {
@@ -623,7 +629,7 @@ impl<'a> Parser<'a> {
                     ranges.push((c, c));
                 }
             }
-            if !(self.more() && !self.peek("]")) {
+            if !self.more() || self.peek("]") {
                 break;
             }
         }
@@ -667,6 +673,10 @@ impl<'a> Parser<'a> {
     }
 
     /// `\\`, `\d \D \s \S \w \W`; any other letter is an error.
+    #[expect(
+        clippy::cast_lossless,
+        reason = "u32::from is not const: these ranges are promoted to 'static slices"
+    )]
     fn predefined(&mut self, ranges: &mut Vec<(u32, u32)>) -> Result<(), ParseError> {
         let c = self.s[self.pos];
         let (lo, hi) = (MIN_CODE_POINT, MAX_CODE_POINT);
@@ -1318,8 +1328,8 @@ fn determinize(a: &Automaton, limit: u64) -> Result<Automaton, Determinize> {
         let mut points: Vec<(u64, usize, i32)> = Vec::new();
         for &s in &set {
             for &(min, max, d) in &a.trans[s] {
-                points.push((min as u64, d, 1));
-                points.push((max as u64 + 1, d, -1));
+                points.push((u64::from(min), d, 1));
+                points.push((u64::from(max) + 1, d, -1));
             }
         }
         if points.is_empty() {

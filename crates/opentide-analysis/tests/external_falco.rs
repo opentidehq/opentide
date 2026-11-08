@@ -8,11 +8,20 @@
 //! clean: no error and no warning, with the default macros and lists the
 //! engine bundles. Every broken twin must report `falco_parse_error`.
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "test helpers outside #[test] functions: a panic fails the test"
+)]
+
 use opentide_analysis::{LanguageId, QueryRequest, Severity, analyze_query, codes};
 use opentide_falco::{Context, analyze_with};
 use std::fs;
 use std::path::PathBuf;
 
+#[expect(
+    clippy::case_sensitive_file_extension_comparisons,
+    reason = "scripts/engine/sync_falco_catalog.py names every corpus file `<slug>.falco`, in lower case"
+)]
 fn corpus() -> Vec<(String, String, String, String)> {
     let root =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../testdata/conformance/external/falco");

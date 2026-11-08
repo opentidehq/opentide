@@ -136,7 +136,7 @@ fn match_inline(line: &str, i: usize) -> Option<(usize, &'static str)> {
             }
         }
     }
-    if rest.starts_with("[") {
+    if rest.starts_with('[') {
         if let Some(close) = rest.find(']') {
             let after = &rest[close + 1..];
             if after.starts_with('(') {

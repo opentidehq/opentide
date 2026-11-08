@@ -1,6 +1,12 @@
 //! Production coverage gate: every required named grammar rule must appear
 //! in `crates/testdata/corpus/<language>/` tagged `prod:<rule>`.
 
+#![expect(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    reason = "test helpers outside #[test] functions: a panic fails the test"
+)]
+
 use opentide_core::LanguageId;
 use opentide_syntax::{has_error, parse};
 use std::collections::BTreeSet;

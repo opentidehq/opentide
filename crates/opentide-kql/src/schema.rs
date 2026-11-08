@@ -1282,7 +1282,7 @@ impl<'a> Pass<'a> {
                         continue;
                     };
                     if let Some(first) = columns.first_mut() {
-                        first.name = names[0].clone();
+                        first.name.clone_from(&names[0]);
                     }
                     if let Some(node) = self.assigned_names(item).first() {
                         self.define(*node, &columns[0]);

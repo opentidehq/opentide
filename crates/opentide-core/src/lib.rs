@@ -2,6 +2,11 @@
 //!
 //! Names use `opentide`, never `otide`.
 
+#![expect(
+    missing_docs,
+    reason = "imported from language-server with public items undocumented: crates/AGENTS.md, Lints"
+)]
+
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use thiserror::Error;

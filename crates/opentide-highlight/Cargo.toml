@@ -10,6 +10,9 @@ authors.workspace = true
 description = "opentide engine component: HighlightSpec loader, semantic tokens, and generated editor maps. Depend on opentide-analysis."
 readme = "../COMPONENT.md"
 
+[lints]
+workspace = true
+
 [dependencies]
 opentide-core.workspace = true
 serde.workspace = true

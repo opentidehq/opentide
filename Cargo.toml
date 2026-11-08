@@ -68,6 +68,58 @@ cc = "1"
 uuid = "1"
 wasm-bindgen = "0.2"
 js-sys = "0.3"
+# Lints for every member: each one sets `[lints] workspace = true`, except the
+# two that contain `unsafe` (crates/opentide-syntax: tree-sitter FFI;
+# crates/opentide-wasm: the wasm32 libc shims). `forbid` cannot be relaxed
+# inside a crate, so those two copy this table with `unsafe_code = "deny"` and
+# allow it at each site with a reason; xtask/tests/lint_policy.rs fails when a
+# copy differs from this table or another crate leaves it.
+#
+# CI runs clippy with `-D warnings`, so a `warn` here fails CI as `deny` does;
+# `warn` lets a local build carry on while you work. An `allow` in a crate's
+# source names its reason (`#[expect(lint, reason = "...")]` where the lint
+# fires, so a stale one fails too).
+[workspace.lints.rust]
+unsafe_code = "forbid"
+# Every public item is documented. The crates imported from language-server
+# opt out at their crate root with `#![expect(missing_docs, reason = ...)]`
+# until they are documented (crates/AGENTS.md, "Lints").
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+# Denied outside tests: clippy.toml allows unwrap, expect and dbg! in #[test]
+# functions and #[cfg(test)] modules. A panic on user input is a bug; where a
+# value cannot fail (a catalog compiled in, a regex literal), the site says why
+# with `#[expect(clippy::expect_used, reason = "...")]`.
+unwrap_used = "deny"
+expect_used = "deny"
+dbg_macro = "deny"
+todo = "deny"
+unimplemented = "deny"
+# Every `unsafe` block states why it is sound in a `// SAFETY:` comment.
+undocumented_unsafe_blocks = "deny"
+# The pedantic lints the workspace does not follow, each with its reason; the
+# rest of `pedantic` is enforced. The engine crates are published for the
+# facade's sake (plan D-5): their signatures do not change to satisfy a style
+# lint, and the facade crate (UC-5.1, #836) decides its own API conventions.
+must_use_candidate = "allow" # 284 sites: `#[must_use]` on every pure function is API noise
+return_self_not_must_use = "allow" # the builders' API, as must_use_candidate
+needless_pass_by_value = "allow" # changes public signatures (the LSP handlers take owned messages)
+unused_self = "allow" # changes signatures of methods kept on their type
+unnecessary_wraps = "allow" # LSP handlers return the Result `.on::<Request>` expects; test helpers build the Option they compare
+missing_errors_doc = "allow" # `# Errors` sections come with the missing_docs work
+missing_panics_doc = "allow" # `# Panics` sections come with the missing_docs work
+doc_markdown = "allow" # product and language names (ES|QL, CrowdStrike) are prose
+cast_possible_truncation = "allow" # LSP positions are u32; checked casts change behaviour past 4 GiB: UC-X.1 (#843)
+too_many_lines = "allow" # engine dispatchers match every node kind in one function
+match_same_arms = "allow" # one arm per language or node kind, even when two arms agree
+map_unwrap_or = "allow" # style, at 57 sites
+redundant_closure_for_method_calls = "allow" # style, at 68 sites
+format_push_string = "allow" # an allocation per diagnostic message; not a hot path
+needless_raw_string_hashes = "allow" # fixtures keep `r#"` so they can gain a quote
+items_after_statements = "allow" # a OnceLock cache sits next to its one use
+single_match_else = "allow" # style, at 10 sites
 
 [profile.release]
 lto = true

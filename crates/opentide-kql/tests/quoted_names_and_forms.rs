@@ -3,6 +3,11 @@
 //! `parse-where`, and `distinct` with named expressions. Each form is also
 //! followed by the column pass.
 
+#![expect(
+    clippy::expect_used,
+    reason = "test helpers outside #[test] functions: a panic fails the test"
+)]
+
 use opentide_core::{Diagnostic, Severity, codes};
 use opentide_kql::{Profile, analyze, columns};
 
