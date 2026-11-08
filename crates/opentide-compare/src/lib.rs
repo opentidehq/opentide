@@ -208,18 +208,18 @@ pub fn compare(
     }
 }
 
-/// One CLI run of each side compared, each normalised with its own
-/// normaliser first (each ran in its own copy of the workspace), applying
-/// `ledger` without checking it for stale entries. `OPENTIDE_ENGINE=compare`
-/// calls it through `opentide._native.compare_runs`.
+/// One CLI run of each side compared, each normalised first with its own
+/// volatile values (each ran in its own copy of the workspace), as the goldens
+/// are, applying `ledger` without checking it for stale entries.
+/// `OPENTIDE_ENGINE=compare` calls it through `opentide._native.compare_runs`.
 pub fn compare_normalised(
     case: Case,
-    (mut oracle, oracle_normaliser): (Run, &Normaliser),
-    (mut candidate, candidate_normaliser): (Run, &Normaliser),
+    (mut oracle, oracle_volatile): (Run, &normalise::Volatile),
+    (mut candidate, candidate_volatile): (Run, &normalise::Volatile),
     ledger: &Ledger,
 ) -> CaseReport {
-    oracle_normaliser.run(&mut oracle);
-    candidate_normaliser.run(&mut candidate);
+    Normaliser::new(oracle_volatile, &[], []).run(&mut oracle);
+    Normaliser::new(candidate_volatile, &[], []).run(&mut candidate);
     compare(case, &oracle, &candidate, ledger, &mut Usage::default())
 }
 

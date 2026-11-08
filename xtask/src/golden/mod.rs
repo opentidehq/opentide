@@ -18,7 +18,8 @@ pub mod blob;
 pub mod case;
 pub mod coverage;
 pub mod fixture;
-pub mod normalise;
+/// The normaliser, in `opentide-compare` so that the CLI's compare mode shares it.
+pub use opentide_compare::normalise;
 pub mod oracle;
 #[cfg(unix)]
 mod pty;

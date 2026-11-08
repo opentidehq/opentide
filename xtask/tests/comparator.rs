@@ -5,9 +5,7 @@
 
 mod comparator {
     use opentide_compare::ledger::{Ledger, Usage};
-    use opentide_compare::{
-        Case, CaseReport, FileState, Kind, Normaliser, Run, RunReport, compare,
-    };
+    use opentide_compare::{Case, CaseReport, FileState, Kind, Run, RunReport, compare};
 
     const ISSUE: &str = "https://github.com/opentidehq/opentide/issues/805";
 
@@ -405,17 +403,23 @@ mod comparator {
 
     #[test]
     fn runs_are_normalised_before_they_are_compared() {
+        use opentide_compare::normalise::Volatile;
         let oracle = run(0, "{\"repo\":\"/tmp/a/ws\",\"duration_ms\":12}\n", "");
         let candidate = run(0, "{\"repo\":\"/tmp/b/ws\",\"duration_ms\":340}\n", "");
-        let mut left = oracle.clone();
-        let mut right = candidate.clone();
-        Normaliser::new()
-            .replace("/tmp/a/ws", "<WS>")
-            .run(&mut left);
-        Normaliser::new()
-            .replace("/tmp/b/ws", "<WS>")
-            .run(&mut right);
-        let (report, _) = check(&left, &right, &Ledger::default());
+        let volatile = |path: &str| Volatile {
+            literals: vec![(path.to_owned(), "<WS>".to_owned())],
+            dates: vec!["2026-11-08".to_owned()],
+            git_version: None,
+        };
+        let report = opentide_compare::compare_normalised(
+            Case {
+                command: "info",
+                id: "",
+            },
+            (oracle.clone(), &volatile("/tmp/a/ws")),
+            (candidate.clone(), &volatile("/tmp/b/ws")),
+            &Ledger::default(),
+        );
         assert!(report.equal, "{report:?}");
         let (report, _) = check(&oracle, &candidate, &Ledger::default());
         assert!(!report.equal);

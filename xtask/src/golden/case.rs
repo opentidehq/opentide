@@ -81,14 +81,9 @@ pub struct Stdin {
     pub input: String,
 }
 
-/// An extra normalisation rule a case opts into (`normalise` in `cases.toml`).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum Rule {
-    /// UUIDs that the fixture does not contain become `<UUID-1>`, `<UUID-2>`, …
-    /// in order of first appearance: for commands that mint identifiers.
-    FreshUuids,
-}
+/// An extra normalisation rule a case opts into (`normalise` in `cases.toml`):
+/// defined beside the normaliser, in `opentide-compare`.
+pub use opentide_compare::normalise::Rule;
 
 /// One recorded invocation: the contents of its `case.toml`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

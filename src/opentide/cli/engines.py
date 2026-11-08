@@ -374,6 +374,7 @@ def _run_side(
     env["OPENTIDE_JSON_INDENT"] = "2" if json_indent() else "0"
     run_in = Path(copy.map_path(str(Path.cwd().resolve())))
     before = _snapshot(copy.root)
+    started = datetime.now(timezone.utc)
     child = subprocess.run(
         [*launch, *_map_args(args, copy)],
         cwd=run_in,
@@ -382,9 +383,10 @@ def _run_side(
         capture_output=True,
         check=False,
     )
-    placeholder = WORKSPACE_PLACEHOLDER.encode()
-    replacements = [(os.fsencode(form), placeholder) for form in _path_forms(copy.root)]
-    run = (child.returncode, child.stdout, child.stderr, _changes(copy, before), replacements)
+    finished = datetime.now(timezone.utc)
+    literals = [(form, WORKSPACE_PLACEHOLDER) for form in _path_forms(copy.root)]
+    dates = sorted({f"{started:%Y-%m-%d}", f"{finished:%Y-%m-%d}"})
+    run = (child.returncode, child.stdout, child.stderr, _changes(copy, before), literals, dates)
     return _Side(run=run, copy=copy)
 
 

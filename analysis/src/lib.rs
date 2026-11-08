@@ -438,18 +438,23 @@ fn serve_stdio(py: Python<'_>) -> PyResult<bool> {
 
 /// One side of a comparison, as `compare_runs` takes it: the exit code,
 /// stdout, stderr, the files the run left different (`(path, mode, bytes)`,
-/// `mode` and `bytes` `None` for a deleted file) and the literal replacements
-/// that normalise it (its workspace copy's path to `<WS>`).
+/// `mode` and `bytes` `None` for a deleted file), the literal texts that
+/// normalise it with their placeholders (its workspace copy's path to `<WS>`),
+/// and the dates (`YYYY-MM-DD`, UTC) it ran on.
 type RunArgs = (
     i32,
     Py<PyBytes>,
     Py<PyBytes>,
     Vec<(String, Option<u32>, Option<Py<PyBytes>>)>,
-    Vec<(Py<PyBytes>, Py<PyBytes>)>,
+    Vec<(String, String)>,
+    Vec<String>,
 );
 
-fn run_of(py: Python<'_>, args: RunArgs) -> (opentide_compare::Run, opentide_compare::Normaliser) {
-    let (exit_code, stdout, stderr, files, replacements) = args;
+fn run_of(
+    py: Python<'_>,
+    args: RunArgs,
+) -> (opentide_compare::Run, opentide_compare::normalise::Volatile) {
+    let (exit_code, stdout, stderr, files, literals, dates) = args;
     let bytes = |value: &Py<PyBytes>| value.as_bytes(py).to_vec();
     let files = files
         .iter()
@@ -464,17 +469,18 @@ fn run_of(py: Python<'_>, args: RunArgs) -> (opentide_compare::Run, opentide_com
             (path.clone(), state)
         })
         .collect();
-    let normaliser = replacements.iter().fold(
-        opentide_compare::Normaliser::new(),
-        |normaliser, (from, to)| normaliser.replace(bytes(from), bytes(to)),
-    );
     let run = opentide_compare::Run {
         exit_code,
         stdout: bytes(&stdout),
         stderr: bytes(&stderr),
         files,
     };
-    (run, normaliser)
+    let volatile = opentide_compare::normalise::Volatile {
+        literals,
+        dates,
+        git_version: None,
+    };
+    (run, volatile)
 }
 
 /// The comparison of one run of `command` by the oracle and by the

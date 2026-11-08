@@ -10,7 +10,7 @@ not approve. I/O-free: callers read runs and the ledger and write the report.
 | `lib.rs` | `Run`, `FileState`, `compare()`, `compare_normalised()`, `CaseReport`, `RunReport` (stale entries) |
 | `json.rs` | An ordered JSON tree (key order kept, duplicates kept), pointers, structural and key-order differences, the CLI's two layouts |
 | `ledger.rs` | The ledger's schema, its checks, and which entries apply where |
-| `normalise.rs` | Literal replacements (a workspace copy's path to `<WS>`) and `duration_ms` |
+| `normalise.rs` | The goldens' normaliser (UC-0.5's, moved here): paths, live regions, crash logs, timestamps on the run's dates, durations, hyperlink ids; `xtask::golden::normalise` re-exports it |
 | `glob.rs` | The ledger's case globs |
 
 ## Place
@@ -54,6 +54,6 @@ cargo xtask compare --check-ledger                        # the repository's led
 
 ## Work items that change this crate
 
-- UC-0.5 (#803): the golden normaliser; the golden runner and this crate are to share one.
+- UC-0.5 (#803): the golden normaliser, which lives here so that the goldens and the CLI share it.
 - UC-X.2 (#844): the parity dashboard reads `RunReport`.
 - UC-6.2 (#841): removes compare mode, and this crate with it.

@@ -95,13 +95,15 @@ def serve_stdio() -> bool: ...
 
 #: One side of ``compare_runs``: exit code, stdout, stderr, the files the run
 #: left different (``(path, mode, bytes)``, ``mode`` and ``bytes`` ``None`` for
-#: a deleted file) and the literal replacements that normalise it.
+#: a deleted file), the literals that normalise it with their placeholders, and
+#: the dates (``YYYY-MM-DD``, UTC) it ran on.
 CompareRun = tuple[
     int,
     bytes,
     bytes,
     Sequence[tuple[str, int | None, bytes | None]],
-    Sequence[tuple[bytes, bytes]],
+    Sequence[tuple[str, str]],
+    Sequence[str],
 ]
 
 def compare_runs(command: str, oracle: CompareRun, candidate: CompareRun) -> str: ...
