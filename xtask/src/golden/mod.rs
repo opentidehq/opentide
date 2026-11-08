@@ -264,6 +264,7 @@ impl Command {
                     &layout.blobs(),
                     &run_all(&ported, &ctx, jobs, "compare"),
                     python_only.len(),
+                    self.filter.is_none(),
                     self.report.as_deref(),
                     self.verb == Verb::Diff,
                 )

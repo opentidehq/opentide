@@ -74,6 +74,7 @@ fn run(dir: &Path, candidate: &str) -> (bool, serde_json::Value) {
         &golden.join("blobs"),
         &[Ok(recording(candidate))],
         7,
+        true,
         Some(&report),
         false,
     )

@@ -369,3 +369,45 @@ def test_a_link_never_equals_a_file(tmp_path: Path) -> None:
     (root / "file").chmod(0o777)
     changes = {name: mode for name, mode, _ in engines._changes(copy, {})}
     assert changes["link"] != changes["file"]
+
+
+def test_rust_mode_does_not_ignore_ctrl_c_for_the_child(
+    workspace: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """SIG_IGN survives exec; the parent must wait with a handler instead (review of #854)."""
+    probe = tmp_path / "probe.py"
+    probe.write_text(
+        "import signal, sys\n"
+        "sys.exit(3 if signal.getsignal(signal.SIGINT) == signal.SIG_IGN else 0)\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setitem(
+        engines.RUST_COMMANDS, ("explain",), RustCommand(launch=(sys.executable, str(probe)))
+    )
+    code, _, _ = invoke(["--repo", str(workspace), "explain", "internal"], "rust")
+    assert code == 0
+
+
+def test_the_copy_path_maps_back_in_every_form(tmp_path: Path) -> None:
+    real = tmp_path / "real"
+    (real / "ws").mkdir(parents=True)
+    linked = tmp_path / "linked"
+    linked.symlink_to(real)
+    copy = engines._Copy(original=(tmp_path / "w s").resolve(), root=linked / "ws")
+    back = engines._back_to(copy, (tmp_path / "w s").resolve())
+    workspace = str((tmp_path / "w s").resolve())
+    assert back(str(linked / "ws").encode()) == workspace.encode()
+    assert back(str(real / "ws").encode()) == workspace.encode()
+
+
+def test_compare_refuses_relative_paths_that_leave_the_workspace(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setitem(engines.RUST_COMMANDS, ("explain",), fake("same"))
+    monkeypatch.chdir(workspace)
+    code, stdout, _ = invoke(
+        ["--json", "--repo", str(workspace), "explain", "internal", "--output=../site"], "compare"
+    )
+    assert code == 2
+    assert "../site" in document(stdout)["failure"]["message"]
+    assert engines._outside(["objects/a.yaml", "./b", "x/../y"], workspace) is None

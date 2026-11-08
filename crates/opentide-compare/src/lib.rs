@@ -556,19 +556,24 @@ fn excerpt(text: &str) -> String {
 /// Whether some line N holds `oracle_text` in `oracle` and `candidate_text`
 /// in `candidate`. A text spanning lines is matched at the line it starts on.
 fn same_line(oracle: &[u8], candidate: &[u8], oracle_text: &[u8], candidate_text: &[u8]) -> bool {
-    let starts = |bytes: &[u8], text: &[u8]| -> Vec<usize> {
+    // The line each match starts on, counting newlines once, left to right.
+    let lines = |bytes: &[u8], text: &[u8]| -> std::collections::BTreeSet<usize> {
+        let mut found = std::collections::BTreeSet::new();
         if text.is_empty() || bytes.len() < text.len() {
-            return Vec::new();
+            return found;
         }
-        (0..=bytes.len() - text.len())
-            .filter(|at| bytes[*at..].starts_with(text))
-            .map(|at| bytes[..at].split(|b| *b == b'\n').count())
-            .collect()
+        let mut line = 0;
+        for at in 0..=bytes.len() - text.len() {
+            if bytes[at..].starts_with(text) {
+                found.insert(line);
+            }
+            if bytes[at] == b'\n' {
+                line += 1;
+            }
+        }
+        found
     };
-    let candidate_lines = starts(candidate, candidate_text);
-    starts(oracle, oracle_text)
-        .iter()
-        .any(|line| candidate_lines.contains(line))
+    !lines(oracle, oracle_text).is_disjoint(&lines(candidate, candidate_text))
 }
 
 /// `bytes` with every occurrence of `from` replaced by `to`, left to right.
@@ -620,6 +625,17 @@ pub struct StaleEntry {
 }
 
 impl RunReport {
+    /// The report of a partial run (a filter, or cases that failed to run):
+    /// no entry can be called stale from it.
+    pub fn partial(cases: Vec<CaseReport>) -> RunReport {
+        RunReport {
+            schema_version: 1,
+            equal: cases.iter().all(|case| case.equal),
+            cases,
+            stale: Vec::new(),
+        }
+    }
+
     /// The report of `cases`, compared with `ledger`, whose entries `usage`
     /// says applied: an entry that applied to none is stale.
     pub fn new(cases: Vec<CaseReport>, ledger: &Ledger, usage: &Usage) -> RunReport {

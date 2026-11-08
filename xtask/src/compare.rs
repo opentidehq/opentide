@@ -230,12 +230,17 @@ pub fn run_of(recording: &crate::golden::recording::Recording) -> Run {
 /// `golden check --engine compare`: every case the candidate ran (not
 /// refused) against its recording, through the comparator and the ledger;
 /// a stale ledger entry fails the run. Whether it passed.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the run's paths, results and counts, each read by `golden check` once"
+)]
 pub fn golden(
     repo: &Path,
     cases: &Path,
     blobs: &Path,
     results: &[Result<crate::golden::recording::Recording>],
     python_only: usize,
+    complete: bool,
     report_path: Option<&Path>,
     full: bool,
 ) -> Result<bool> {
@@ -303,7 +308,12 @@ pub fn golden(
         }
         reports.push(report);
     }
-    let report = opentide_compare::RunReport::new(reports, &ledger, &usage);
+    // A ledger entry is stale only when it applied nowhere in a complete run.
+    let report = if complete && failed == 0 {
+        opentide_compare::RunReport::new(reports, &ledger, &usage)
+    } else {
+        opentide_compare::RunReport::partial(reports)
+    };
     for stale in &report.stale {
         eprintln!(
             "error: {} entry {} ({} {} {} {}) applied to no case: it is stale, remove it",

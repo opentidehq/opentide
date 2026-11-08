@@ -139,7 +139,9 @@ def _run_rust(rust: RustCommand, args: Sequence[str]) -> int:
     import signal
 
     try:
-        previous = signal.signal(signal.SIGINT, signal.SIG_IGN)
+        # A handler that does nothing, not SIG_IGN: an ignored signal stays
+        # ignored across exec, and the child could not be interrupted at all.
+        previous = signal.signal(signal.SIGINT, lambda *_: None)
     except ValueError:  # not the main thread: nothing to hand Ctrl-C over
         previous = None
     try:
@@ -391,11 +393,18 @@ def _run_side(
 
 
 def _outside(args: Sequence[str], workspace: Path) -> str | None:
-    """The first absolute path in *args* outside *workspace*, which no copy isolates."""
+    """The first path in *args* outside *workspace*, which no copy isolates.
+
+    An absolute path, or a relative one that climbs with ``..``: the run's
+    working directory is inside the workspace, so only those can leave it.
+    """
     for token in args:
         name, separator, value = token.partition("=")
         candidate = value if separator and name.startswith("-") else token
-        if not candidate or not os.path.isabs(candidate):
+        if not candidate:
+            continue
+        relative = not os.path.isabs(candidate)
+        if relative and ".." not in Path(candidate).parts:
             continue
         try:
             if not Path(candidate).resolve().is_relative_to(workspace):
@@ -447,7 +456,7 @@ def _compare(cli_ctx: CliContext, path: str, args: Sequence[str], rust: RustComm
             _fail(
                 cli_ctx,
                 path,
-                f"{ENGINE_ENV}={COMPARE} could not copy the workspace: {exc}",
+                f"{ENGINE_ENV}={COMPARE} could not copy the workspace or run a side: {exc}",
                 code=COMMAND_FAILED,
                 exit_code=1,
             )
@@ -455,9 +464,21 @@ def _compare(cli_ctx: CliContext, path: str, args: Sequence[str], rust: RustComm
             report: dict[str, Any] = json.loads(compare_runs(path, oracle.run, candidate.run))
         except EngineUnavailableError as exc:
             _fail(cli_ctx, path, str(exc), code=exc.code, exit_code=1)
+        except UnicodeError as exc:
+            _fail(cli_ctx, path, f"{ENGINE_ENV}={COMPARE}: {exc}", code=COMMAND_FAILED, exit_code=1)
         if report.get("equal"):
             back = _back_to(oracle.copy, workspace)
-            _apply(oracle.run[3], workspace, back)
+            try:
+                _apply(oracle.run[3], workspace, back)
+            except OSError as exc:
+                _fail(
+                    cli_ctx,
+                    path,
+                    f"{ENGINE_ENV}={COMPARE}: both agreed, but the workspace could not "
+                    f"take the changes: {exc}",
+                    code=COMMAND_FAILED,
+                    exit_code=1,
+                )
             _replay(back(oracle.run[1]), back(oracle.run[2]))
             raise SystemExit(oracle.run[0])
     written = _write_report(cli_ctx, path, args, report)
@@ -470,9 +491,19 @@ def _compare(cli_ctx: CliContext, path: str, args: Sequence[str], rust: RustComm
 
 
 def _back_to(copy: _Copy, workspace: Path) -> Callable[[bytes], bytes]:
-    """Bytes with the copy's path, in each form, read as the workspace's."""
-    pairs = list(zip(_path_forms(copy.root), _path_forms(workspace), strict=False))
-    pairs.sort(key=lambda pair: len(pair[0]), reverse=True)
+    """Bytes with the copy's path, in each form, read as the workspace's in the same form."""
+    import json
+
+    texts = dict.fromkeys((str(copy.root), str(copy.root.resolve())))
+    pairs: list[tuple[str, str]] = []
+    for text in texts:
+        for encode in (
+            lambda value: value,
+            lambda value: json.dumps(value)[1:-1],
+            lambda value: json.dumps(value, ensure_ascii=False)[1:-1],
+        ):
+            pairs.append((encode(text), encode(str(workspace))))
+    pairs = sorted(dict(pairs).items(), key=lambda pair: len(pair[0]), reverse=True)
 
     def back(data: bytes) -> bytes:
         for copied, real in pairs:
