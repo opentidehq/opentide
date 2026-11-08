@@ -1,5 +1,11 @@
 //! Protocol tests over stdio. The CLI never speaks JSON-RPC; `--stdio` does.
 
+#![expect(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    reason = "test helpers outside #[test] functions: a panic fails the test"
+)]
+
 mod common;
 
 use common::*;
@@ -230,6 +236,10 @@ fn tide_yaml_pull_diagnostics_and_symbols() {
         "{symbols}"
     );
 
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "positions in a test document of a few lines"
+    )]
     fn pos(text: &str, needle: &str) -> (u32, u32) {
         let off = text.find(needle).expect(needle);
         let line = text[..off].bytes().filter(|b| *b == b'\n').count() as u32;
@@ -1224,6 +1234,10 @@ fn the_quick_fix_creates_visibility_toml_when_there_is_none() {
 /// visibility.toml applies as it is edited: in the editor, before it is
 /// saved, and on disk, through the file watcher.
 #[test]
+#[expect(
+    clippy::format_collect,
+    reason = "a fixture of a few lines: the plainest way to write it"
+)]
 fn editing_visibility_toml_rechecks_open_queries() {
     let scratch = Scratch::new("visibility-live");
     let root = &scratch.0;

@@ -1,11 +1,38 @@
-# cargo-nextest (https://nexte.st). CI runs `cargo nextest run --profile ci`;
-# locally `cargo test --workspace` stays the default and needs no install.
-# nextest does not run doctests: CI runs `cargo test --workspace --doc` beside it.
+# cargo-nextest (https://nexte.st) for the Cargo workspace.
+#
+#   cargo nextest run --profile fast   the agent loop: unit tests and the fast
+#                                      integration tests (under 60 s warm)
+#   cargo nextest run --profile ci     everything, as CI runs it, with JUnit
+#   cargo nextest run                  everything (the default profile)
+#
+# `cargo test --workspace` stays the plain check and needs no install. nextest
+# does not run doctests: `cargo test --workspace --doc` runs them, and so does
+# CI's `cargo test --workspace` (ci.yml, job `engine`).
 
 [profile.default]
 # A test past 60s is reported as slow. The LSP stdio tests drive a child server,
 # and one that hangs would otherwise hold the run until the job times out.
 slow-timeout = { period = "60s", terminate-after = 5 }
+
+[profile.fast]
+# Leaves out what spawns a server, runs Python or walks a long corpus: the
+# language server over stdio, the Pydantic comparison (it needs `uv sync`), the
+# deep-nesting stack test and the public detection corpora. `-p <crate>`
+# narrows it further; `--ignore-default-filter` runs everything.
+default-filter = """
+not (
+    binary_id(opentide-lsp::catalog)
+    | binary_id(opentide-lsp::e2e_stdio)
+    | binary_id(opentide-lsp::lint_toml)
+    | binary_id(opentide-lsp::protocol)
+    | binary_id(opentide-analysis::tide_corpus)
+    | binary_id(opentide-analysis::deep_queries)
+    | binary_id(/::external_/)
+    | binary_id(opentide-analysis::live_elasticsearch_probes)
+    | binary_id(opentide-analysis::elastic_detection_rules)
+    | binary_id(opentide-lucene::sigma_sweep)
+)
+"""
 
 [profile.ci]
 # Report every failing test, not just the first binary's.
@@ -13,3 +40,8 @@ fail-fast = false
 # No retries: a flaky test is a bug to fix, not to hide.
 retries = 0
 failure-output = "immediate-final"
+
+[profile.ci.junit]
+# target/nextest/ci/junit.xml, under the workspace root (nextest's store
+# directory does not follow CARGO_TARGET_DIR).
+path = "junit.xml"

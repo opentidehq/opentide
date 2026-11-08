@@ -1,6 +1,12 @@
 //! `opentide lsp start` follows a root's `.opentide/configurations/lint.toml`
 //! (#214): on disk, and as the editor's buffer while it is open.
 
+#![expect(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    reason = "test helpers outside #[test] functions: a panic fails the test"
+)]
+
 mod common;
 
 use common::{

@@ -4,6 +4,11 @@
 //! rejected one fails with libs' message where the test names one, and the
 //! AST prints as libs prints it.
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "test helpers outside #[test] functions: a panic fails the test"
+)]
+
 use opentide_falco::parser::parse;
 use serde_json::Value;
 use std::path::PathBuf;

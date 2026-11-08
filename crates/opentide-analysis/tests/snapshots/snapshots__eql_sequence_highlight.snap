@@ -1,0 +1,23 @@
+---
+source: crates/opentide-analysis/tests/snapshots.rs
+expression: out
+---
+keyword                  sequence
+keyword                  by
+property                 host
+punctuation.delimiter    .
+property                 id
+punctuation.bracket      [
+type                     process
+keyword                  where
+property                 process
+punctuation.delimiter    .
+property                 name
+operator                 ==
+string                   "cmd.exe"
+punctuation.bracket      ]
+punctuation.bracket      [
+type                     network
+keyword                  where
+boolean                  true
+punctuation.bracket      ]

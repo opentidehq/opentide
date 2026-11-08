@@ -520,6 +520,10 @@ impl LineStarts {
             .map_or(end, |(at, _)| start + at)
     }
 
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a char is one or two UTF-16 units"
+    )]
     fn position(&self, text: &str, line: u32, utf16: u32) -> (usize, usize) {
         let index = (line as usize).min(self.0.len() - 1);
         let start = self.0[index];
@@ -540,6 +544,11 @@ impl LineStarts {
 
 #[pymodule]
 mod _native {
+    // `allow`, not `expect`: clippy's glob-import lints never fulfil an expectation.
+    #[allow(
+        clippy::wildcard_imports,
+        reason = "the module's init function uses the PyO3 prelude and the helpers the parent imports"
+    )]
     use super::*;
 
     #[pymodule_export]

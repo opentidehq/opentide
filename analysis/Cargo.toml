@@ -10,6 +10,9 @@ publish = false
 description = "The analysis engine and language server, compiled into the opentide Python package"
 repository = "https://github.com/opentidehq/opentide"
 
+[lints]
+workspace = true
+
 [lib]
 name = "_native"
 crate-type = ["cdylib"]

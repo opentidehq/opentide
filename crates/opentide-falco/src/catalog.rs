@@ -56,6 +56,10 @@ pub enum ArgRule {
 /// One Falco field, with libsinsp's type name (`CHARBUF`, `UINT64`, `IPNET`)
 /// and flags.
 #[derive(Debug, Clone, Deserialize)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "the catalog's columns: one flag per libsinsp EPF_* field flag"
+)]
 pub struct Field {
     pub name: String,
     #[serde(rename = "type")]
@@ -214,6 +218,10 @@ pub enum Lookup<'c> {
 }
 
 impl Catalog {
+    #[expect(
+        clippy::expect_used,
+        reason = "parses a catalog compiled in with include_str!: a bad catalog fails the tests, never a user's document"
+    )]
     pub fn cached() -> &'static Catalog {
         static CATALOG: OnceLock<Catalog> = OnceLock::new();
         CATALOG.get_or_init(|| {

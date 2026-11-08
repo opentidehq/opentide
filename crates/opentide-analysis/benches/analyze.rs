@@ -8,6 +8,11 @@
 //! server keeps it. CI runs this without gating (ci.yml, `bench`): the numbers
 //! are for comparing runs, not limits.
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "a benchmark binary: a fixture it cannot read stops it"
+)]
+
 use opentide_analysis::{
     AnalyzeRequest, IndexedObject, LanguageId, MemoryWorkspace, WorkspaceHost, analyze, hover,
 };
@@ -57,6 +62,10 @@ impl WorkspaceHost for Indexed {
     }
 }
 
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "a handful of benchmark texts"
+)]
 fn main() {
     let host = MemoryWorkspace::default();
     println!("{:<10} {:>6} {:>14}", "language", "files", "median/file");

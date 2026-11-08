@@ -1,0 +1,11 @@
+The version (any release), and a run with nothing to do.
+
+```console
+$ opentide-lsp --version
+opentide-lsp [..]
+
+$ opentide-lsp
+? 2
+opentide-lsp: pass --stdio, --listen, or a subcommand (analyze/highlight)
+
+```

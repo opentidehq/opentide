@@ -1,0 +1,13 @@
+# clippy's configuration for the Cargo workspace. The lint levels are in the
+# root Cargo.toml, [workspace.lints]; this file only tunes lints.
+#
+# No `msrv` here: clippy reads `rust-version` (1.85, [workspace.package]) from
+# each crate's manifest, and a second copy here could only drift from it.
+
+# unwrap_used, expect_used and dbg_macro are denied outside tests. In a #[test]
+# function or a #[cfg(test)] module a panic is how a test fails. Integration
+# test files (tests/*.rs) are crates of their own: a helper outside #[test]
+# there allows the lint at the file's top with a reason.
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-dbg-in-tests = true

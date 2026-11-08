@@ -1,8 +1,19 @@
 //! Tree-sitter language bindings. Parser C is vendored; do not hand-edit `parser.c`.
+//!
+//! The crate's only `unsafe` is the FFI below, and every block says why it is
+//! sound (`// SAFETY:`). It is one of the two crates allowed `unsafe` (the
+//! root Cargo.toml, `[workspace.lints]`).
 
 use opentide_core::{ByteSpan, LanguageId};
 use tree_sitter::{Language, Node, Parser, Query, QueryCursor, StreamingIterator, Tree};
 
+// Each grammar's parser.c (and scanner.c), compiled and linked by build.rs,
+// defines one of these. It takes no argument and returns the address of the
+// grammar's `static const TSLanguage`, which lives as long as the program.
+#[expect(
+    unsafe_code,
+    reason = "the C entry points of the grammars build.rs links in"
+)]
 unsafe extern "C" {
     fn tree_sitter_opentide_kql() -> *const ();
     fn tree_sitter_opentide_spl() -> *const ();
@@ -13,33 +24,61 @@ unsafe extern "C" {
     fn tree_sitter_opentide_falco() -> *const ();
 }
 
+/// The language at `ptr`, which must be what a `tree_sitter_opentide_*()`
+/// function above returned: every caller passes one directly.
+#[expect(
+    unsafe_code,
+    reason = "tree-sitter 0.25 builds a Language from the C pointer"
+)]
 fn from_raw(ptr: *const ()) -> Language {
     // tree-sitter 0.25: Language::new(LanguageFn)
+    // SAFETY: `ptr` is the address of a grammar's static TSLanguage (see the
+    // extern block): non-null, valid for the program's life, and never written.
     unsafe { Language::from_raw(ptr as usize as *const tree_sitter::ffi::TSLanguage) }
 }
 
+/// The tree-sitter language of a query language, or `None` for Tide YAML and
+/// configuration TOML, which are not parsed by tree-sitter.
+#[expect(unsafe_code, reason = "calls the grammars' C entry points")]
 pub fn language(id: LanguageId) -> Option<Language> {
     match id {
         LanguageId::Kql => Some(kql_language()),
         LanguageId::Spl => Some(spl_language()),
+        // SAFETY: each of these functions takes no argument and returns a
+        // pointer to its grammar's static TSLanguage (the extern block).
         LanguageId::Esql => Some(unsafe { from_raw(tree_sitter_opentide_esql()) }),
+        // SAFETY: as above.
         LanguageId::Eql => Some(unsafe { from_raw(tree_sitter_opentide_eql()) }),
+        // SAFETY: as above.
         LanguageId::Kuery => Some(unsafe { from_raw(tree_sitter_opentide_kuery()) }),
+        // SAFETY: as above.
         LanguageId::Lucene => Some(unsafe { from_raw(tree_sitter_opentide_lucene()) }),
+        // SAFETY: as above.
         LanguageId::Falco => Some(unsafe { from_raw(tree_sitter_opentide_falco()) }),
         // Tide YAML has its own parser; configuration TOML is the host's.
         LanguageId::TideYaml | LanguageId::Config => None,
     }
 }
 
+/// The KQL grammar.
+#[expect(unsafe_code, reason = "calls the grammar's C entry point")]
 pub fn kql_language() -> Language {
+    // SAFETY: the function takes no argument and returns a pointer to the
+    // grammar's static TSLanguage (the extern block).
     unsafe { from_raw(tree_sitter_opentide_kql()) }
 }
 
+/// The SPL grammar.
+#[expect(unsafe_code, reason = "calls the grammar's C entry point")]
 pub fn spl_language() -> Language {
+    // SAFETY: the function takes no argument and returns a pointer to the
+    // grammar's static TSLanguage (the extern block).
     unsafe { from_raw(tree_sitter_opentide_spl()) }
 }
 
+/// Parses `source` with the grammar of `id`: `None` when `id` has no grammar
+/// (see [`language`]), when tree-sitter refuses the grammar, or when it
+/// returns no tree.
 pub fn parse(id: LanguageId, source: &str) -> Option<Tree> {
     let language = language(id)?;
     let mut parser = Parser::new();
@@ -47,6 +86,8 @@ pub fn parse(id: LanguageId, source: &str) -> Option<Tree> {
     parser.parse(source, None)
 }
 
+/// Whether the tree holds a syntax error (an `ERROR` or `MISSING` node)
+/// anywhere.
 pub fn has_error(tree: &Tree) -> bool {
     tree.root_node().has_error()
 }

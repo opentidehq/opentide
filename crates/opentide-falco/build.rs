@@ -2,6 +2,10 @@
 //! the workspace root in a checkout, or else the `assets/` copy that
 //! `scripts/engine/release.py vendor` puts inside a published crate. The checkout wins, so
 //! a copy left behind never shadows the real files.
+#[expect(
+    clippy::unwrap_used,
+    reason = "cargo sets CARGO_MANIFEST_DIR for every build script"
+)]
 fn main() {
     let manifest = std::path::PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
     let workspace = manifest.join("../..");

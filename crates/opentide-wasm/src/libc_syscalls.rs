@@ -43,6 +43,10 @@ extern "C" fn __imported_wasi_snapshot_preview1_fd_fdstat_set_flags(_: i32, _: i
 
 /// `clock_time_get(id, precision, *time)`: always 0 ns.
 #[unsafe(no_mangle)]
+#[expect(
+    clippy::cast_sign_loss,
+    reason = "the WASI ABI passes a linear-memory address as i32; on wasm32 `as usize` keeps its 32 bits"
+)]
 extern "C" fn __imported_wasi_snapshot_preview1_clock_time_get(_: i32, _: i64, time: i32) -> i32 {
     // SAFETY: libc passes the address of a u64 in linear memory.
     unsafe { (time as usize as *mut u64).write_unaligned(0) };

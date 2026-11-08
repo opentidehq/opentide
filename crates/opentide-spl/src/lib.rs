@@ -1,5 +1,10 @@
 //! I/O-free SPL engine. Catalogs compiled in; unknown commands are never silently eaten.
 
+#![expect(
+    missing_docs,
+    reason = "imported from language-server with public items undocumented: crates/AGENTS.md, Lints"
+)]
+
 use opentide_core::{
     ByteSpan, CompletionItem, Diagnostic, LanguageId, ParameterInformation, Range, SignatureHelp,
     SignatureInformation, codes, span_to_range,
@@ -182,6 +187,10 @@ pub struct Catalog {
 }
 
 impl Catalog {
+    #[expect(
+        clippy::expect_used,
+        reason = "parses a catalog compiled in with include_str!: a bad catalog fails the tests, never a user's document"
+    )]
     pub fn load() -> Self {
         let file: CommandsFile = toml::from_str(COMMANDS_TOML).expect("commands.toml");
         let fields: FieldsFile = toml::from_str(FIELDS_TOML).expect("fields.toml");
@@ -325,6 +334,10 @@ pub struct AnalyzeResult {
     pub tokens: Vec<HighlightToken>,
 }
 
+#[expect(
+    clippy::expect_used,
+    reason = "loads the HighlightSpec compiled in (highlights/spec.toml): a bad spec fails the tests, never a user's document"
+)]
 pub fn analyze(source: &str) -> AnalyzeResult {
     let catalog = Catalog::cached();
     let spec = HighlightSpec::load().expect("spec");
@@ -448,6 +461,10 @@ fn unknown_command(name: &str, range: Range, catalog: &Catalog) -> Diagnostic {
     d
 }
 
+#[expect(
+    clippy::manual_assert,
+    reason = "a broken highlights.scm panics in debug builds (the tests) and falls back to the tree walk in release builds"
+)]
 fn highlight_tree(
     spec: &HighlightSpec,
     source: &str,
@@ -460,7 +477,7 @@ fn highlight_tree(
         opentide_highlight::SPL_HIGHLIGHTS_SCM,
     ) {
         Ok(mut owned) => {
-            for (span, capture) in owned.iter_mut() {
+            for (span, capture) in &mut owned {
                 let end = span.end.min(source.len());
                 if span.start >= end {
                     continue;
@@ -513,6 +530,10 @@ fn highlight_tree(
     }
 }
 
+#[expect(
+    clippy::used_underscore_binding,
+    reason = "`_source` only passes through the recursion (clippy::only_used_in_recursion)"
+)]
 fn collect_highlights(node: Node, _source: &str, out: &mut Vec<(ByteSpan, &'static str)>) {
     let kind = node.kind();
     let capture = match kind {
@@ -1087,6 +1108,10 @@ fn function_signature(f: &FunctionRow, active: u32) -> Option<SignatureHelp> {
     Some(signature_from_label(label, f.docs.clone(), active))
 }
 
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "a signature has a handful of parameters, far below u32::MAX"
+)]
 fn signature_from_label(
     label: String,
     documentation: Option<String>,
@@ -1148,6 +1173,10 @@ fn command_signature(catalog: &Catalog, cmd: &str, before: &str) -> Option<Signa
     })
 }
 
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "an index into one command's options, a handful"
+)]
 fn active_option(before: &str, opts: &[&CommandOption]) -> u32 {
     let lower = before.to_ascii_lowercase();
     let mut best: Option<(usize, u32)> = None;
@@ -1731,6 +1760,10 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "positions in a test document of a few lines"
+    )]
     fn command_options_drive_signature_help() {
         let src = "| tstats ";
         let help = signature_help(src, src.len()).expect("tstats");

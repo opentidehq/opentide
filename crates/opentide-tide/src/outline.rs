@@ -259,11 +259,19 @@ pub struct TideLink {
     pub tooltip: String,
 }
 
+#[expect(
+    clippy::expect_used,
+    reason = "a regex literal: an invalid pattern fails every test that reaches it"
+)]
 fn attack_pattern() -> &'static Regex {
     static PATTERN: OnceLock<Regex> = OnceLock::new();
     PATTERN.get_or_init(|| Regex::new(r"\b(?:TA\d{4}|T\d{4}(?:\.\d{3})?)\b").expect("ATT&CK id"))
 }
 
+#[expect(
+    clippy::expect_used,
+    reason = "a regex literal: an invalid pattern fails every test that reaches it"
+)]
 fn uuid_pattern() -> &'static Regex {
     static PATTERN: OnceLock<Regex> = OnceLock::new();
     PATTERN.get_or_init(|| {

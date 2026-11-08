@@ -67,10 +67,18 @@ fn quote(text: &str) -> String {
     out
 }
 
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "LSP positions are u32 (lines, UTF-16 units); a document past 4 GiB is out of scope (#843)"
+)]
 fn utf16_len(text: &str) -> u32 {
     text.chars().map(|c| c.len_utf16() as u32).sum()
 }
 
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "LSP positions are u32 (lines, UTF-16 units); a document past 4 GiB is out of scope (#843)"
+)]
 fn point(line: usize, character: u32) -> Range {
     let p = Position::new(line as u32, character);
     Range { start: p, end: p }

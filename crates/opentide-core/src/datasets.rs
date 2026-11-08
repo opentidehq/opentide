@@ -111,6 +111,10 @@ pub struct DeclaredSource {
 
 impl DeclaredSource {
     /// The kind of dataset `name` is.
+    #[expect(
+        clippy::expect_used,
+        reason = "from_visibility and from_names keep only systems with a dataset kind; a source built by hand with another system is a caller's bug"
+    )]
     pub fn kind(&self) -> DatasetKind {
         DatasetKind::of_system(&self.system).expect("only systems with a dataset kind are kept")
     }

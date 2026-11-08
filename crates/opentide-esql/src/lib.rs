@@ -26,6 +26,11 @@
 //! (`logs-*`), columns read straight from them are checked against ECS
 //! ([`ecs_diagnostics`]) and the columns `visibility.toml` declares for them.
 
+#![expect(
+    missing_docs,
+    reason = "imported from language-server with public items undocumented: crates/AGENTS.md, Lints"
+)]
+
 pub mod catalog;
 mod columns;
 mod ecs;
@@ -78,6 +83,10 @@ pub fn analyze(source: &str) -> AnalyzeResult {
 /// form). With `Some(target)`, a name or form that target lacks is a warning;
 /// what other stacks lack is not reported. Snapshot-only names are an error
 /// either way.
+#[expect(
+    clippy::expect_used,
+    reason = "loads the HighlightSpec compiled in (highlights/spec.toml): a bad spec fails the tests, never a user's document"
+)]
 pub fn analyze_for(source: &str, target: Option<StackTarget>) -> AnalyzeResult {
     let spec = HighlightSpec::load().expect("highlight spec");
     let catalog = Catalog::cached();
@@ -642,7 +651,10 @@ fn gates_for_type(row: &TypeRow, span: ByteSpan) -> gates::Gate {
 /// first documented release is a warning, and with no target, first
 /// documented at 9.2 or later is information (missing on 8.19). Preview
 /// names may change.
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "a private helper, called with each fact of one name"
+)]
 fn availability(
     target: Option<StackTarget>,
     name: &str,
@@ -773,7 +785,7 @@ fn highlight(spec: &HighlightSpec, source: &str, catalog: &Catalog) -> Vec<Highl
     ) else {
         return Vec::new();
     };
-    for (span, capture) in spans.iter_mut() {
+    for (span, capture) in &mut spans {
         if capture == "function" {
             let name = source.get(span.start..span.end).unwrap_or("");
             if catalog.function(name).is_some() {
@@ -1047,6 +1059,10 @@ fn last_pipe(before: &str) -> Option<usize> {
 
 // ---- Signature help -------------------------------------------------------
 
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "a signature has a handful of parameters, far below u32::MAX"
+)]
 pub fn signature_help(source: &str, offset: usize) -> Option<SignatureHelp> {
     let before = &source[..offset.min(source.len())];
     let (name, active) = innermost_call(before)?;

@@ -2,6 +2,11 @@
 //! model is an error with a suggestion; a field a site adds, and every field
 //! after `drop_dm_object_name`, is not.
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "test helpers outside #[test] functions: a panic fails the test"
+)]
+
 use opentide_analysis::{AnalyzeRequest, MemoryWorkspace, analyze, analyze_queries};
 use opentide_core::{Diagnostic, LanguageId, Severity, codes};
 use std::path::PathBuf;

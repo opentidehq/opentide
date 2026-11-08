@@ -679,7 +679,7 @@ pub fn resolve<'c>(
             continue;
         }
         match class_parse(catalog, &fields, &class, &full) {
-            ClassParse::NoMatch => continue,
+            ClassParse::NoMatch => {}
             ClassParse::Throw(message) => return Err(FieldError::Argument(message)),
             ClassParse::Len(len, field, ty) => {
                 if len != full.len() {
@@ -1309,7 +1309,9 @@ pub fn newer_syntax(expr: &Expr, out: &mut Vec<(Span, String)>) {
     fn walk(e: &Expr, out: &mut Vec<(Span, String)>) {
         match e {
             Expr::And(c, _) | Expr::Or(c, _) | Expr::TransformerList(c, _) => {
-                c.iter().for_each(|x| walk(x, out))
+                for x in c {
+                    walk(x, out);
+                }
             }
             Expr::Not(c, _) => walk(c, out),
             Expr::Unary { left, .. } => walk(left, out),
@@ -1345,7 +1347,9 @@ pub fn newer_syntax(expr: &Expr, out: &mut Vec<(Span, String)>) {
                 if arg.is_some() && name != "getopt" {
                     needs(out, *span, "a field argument on a transformer", "0.25.0");
                 }
-                values.iter().for_each(|x| walk(x, out));
+                for x in values {
+                    walk(x, out);
+                }
             }
             _ => {}
         }

@@ -80,6 +80,11 @@ impl Want {
 /// registry name (`EqlFunctionRegistry`). The last entry repeats for
 /// variadic functions.
 pub(crate) fn parameters(name: &str) -> Option<(&'static [Want], bool)> {
+    // `allow`, not `expect`: clippy's glob-import lints never fulfil an expectation.
+    #[allow(
+        clippy::enum_glob_use,
+        reason = "the table reads as EQL's function signatures"
+    )]
     use Want::*;
     Some(match name {
         "between" => (&[Str, Str, Str, Bool], false),

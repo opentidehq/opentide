@@ -220,6 +220,10 @@ impl Dispatcher<'_> {
         self
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "`on` either answers the request or puts it back, so one of the two is set"
+    )]
     fn finish(self) -> Response {
         if let Some(response) = self.response {
             return response;
@@ -235,6 +239,11 @@ impl Dispatcher<'_> {
 
 /// Answer one request.
 pub(crate) fn request(session: &mut Session, request: Request) -> Response {
+    // `allow`, not `expect`: clippy's glob-import lints never fulfil an expectation.
+    #[allow(
+        clippy::wildcard_imports,
+        reason = "the dispatch table names most of lsp-types' requests"
+    )]
     use lsp::request::*;
     let raw = (request.method == Initialize::METHOD).then(|| request.params.clone());
     let dispatcher = Dispatcher {
@@ -286,6 +295,11 @@ pub(crate) fn request(session: &mut Session, request: Request) -> Response {
 /// Apply one notification. One whose params do not deserialize is logged and
 /// dropped; an unknown one is dropped.
 pub(crate) fn notification(session: &mut Session, notification: lsp_server::Notification) {
+    // `allow`, not `expect`: clippy's glob-import lints never fulfil an expectation.
+    #[allow(
+        clippy::wildcard_imports,
+        reason = "the dispatch table names most of lsp-types' notifications"
+    )]
     use lsp::notification::*;
     fn on<N: lsp_types::notification::Notification>(
         session: &mut Session,
@@ -387,7 +401,10 @@ fn initialize(
     // A host with no filesystem hands over its workspace (a browser worker).
     session.supplied =
         crate::session::Supplied::from_options(raw.pointer("/initializationOptions/workspace"));
-    #[allow(deprecated)] // `rootUri` and `rootPath`: what clients without folders send.
+    #[expect(
+        deprecated,
+        reason = "`rootUri` and `rootPath`: what clients without folders send"
+    )]
     let folders: Vec<PathBuf> = match (
         &params.workspace_folders,
         &params.root_uri,
@@ -444,7 +461,7 @@ fn initialize(
         inlay_hint_provider: Some(lsp::OneOf::Left(true)),
         document_link_provider: Some(lsp::DocumentLinkOptions {
             resolve_provider: Some(false),
-            work_done_progress_options: Default::default(),
+            work_done_progress_options: lsp::WorkDoneProgressOptions::default(),
         }),
         code_lens_provider: Some(lsp::CodeLensOptions {
             resolve_provider: Some(false),
@@ -456,7 +473,7 @@ fn initialize(
                 identifier: Some("opentide".into()),
                 inter_file_dependencies: true,
                 workspace_diagnostics: true,
-                work_done_progress_options: Default::default(),
+                work_done_progress_options: lsp::WorkDoneProgressOptions::default(),
             })
         }),
         semantic_tokens_provider: Some(
@@ -471,7 +488,7 @@ fn initialize(
                     },
                     full: Some(lsp::SemanticTokensFullOptions::Bool(true)),
                     range: None,
-                    work_done_progress_options: Default::default(),
+                    work_done_progress_options: lsp::WorkDoneProgressOptions::default(),
                 },
             ),
         ),
@@ -665,16 +682,16 @@ fn document_changed(session: &mut Session, uri: &str, language: LanguageId, root
                 .docs
                 .get(uri)
                 .is_none_or(|d| opentide_analysis::check_lint(&d.text).is_ok());
-        if !parses {
-            // Mid-edit lint.toml keeps the settings that last parsed (#214):
-            // the Tide checks are as they were.
-            mark_configuration(session);
-        } else {
+        if parses {
             if Session::is_lint(uri) {
                 // lint.toml decides the filename and metadata checks (#214).
                 session.reactivate();
             }
             session.mark_all();
+        } else {
+            // Mid-edit lint.toml keeps the settings that last parsed (#214):
+            // the Tide checks are as they were.
+            mark_configuration(session);
         }
     }
 }
@@ -1106,6 +1123,10 @@ struct ItemData {
     field_path: Option<String>,
 }
 
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "LSP positions are u32 (lines, UTF-16 units); a document past 4 GiB is out of scope (#843)"
+)]
 fn handle_completion(
     session: &mut Session,
     params: lsp::CompletionParams,
@@ -1249,6 +1270,10 @@ fn handle_signature_help(
 // ---------------------------------------------------------------------------
 // Navigation.
 
+#[expect(
+    clippy::expect_used,
+    reason = "a regex literal: an invalid pattern fails every test that reaches it"
+)]
 fn uuid_pattern() -> &'static regex::Regex {
     static PATTERN: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
     PATTERN.get_or_init(|| {
@@ -1346,7 +1371,10 @@ fn handle_document_highlight(
     )
 }
 
-#[allow(deprecated)] // `DocumentSymbol::deprecated` and `SymbolInformation::deprecated`: superseded by tags.
+#[expect(
+    deprecated,
+    reason = "`DocumentSymbol::deprecated`, superseded by tags, is still a field to fill"
+)]
 fn symbol(text: &str, node: &opentide_tide::OutlineNode) -> lsp::DocumentSymbol {
     lsp::DocumentSymbol {
         name: node.name.clone(),
@@ -1367,7 +1395,10 @@ fn symbol(text: &str, node: &opentide_tide::OutlineNode) -> lsp::DocumentSymbol 
 
 /// A Tide object as a tree: the object, its sections, each platform block
 /// and each query (P3.1). Any other document lists the engine's symbols.
-#[allow(deprecated)]
+#[expect(
+    deprecated,
+    reason = "`DocumentSymbol::deprecated`, superseded by tags, is still a field to fill"
+)]
 fn handle_document_symbol(
     session: &mut Session,
     params: lsp::DocumentSymbolParams,
@@ -1399,7 +1430,10 @@ fn handle_document_symbol(
     ))
 }
 
-#[allow(deprecated)]
+#[expect(
+    deprecated,
+    reason = "`SymbolInformation::deprecated`, superseded by tags, is still a field to fill"
+)]
 fn handle_workspace_symbol(
     session: &mut Session,
     params: lsp::WorkspaceSymbolParams,
@@ -1503,7 +1537,7 @@ fn handle_code_lens(
     if lens.referenced_by.is_empty() && !matches!(own_type, "objective" | "threat") {
         return Some(Vec::new());
     }
-    let mut counts: std::collections::BTreeMap<&str, usize> = Default::default();
+    let mut counts: std::collections::BTreeMap<&str, usize> = std::collections::BTreeMap::new();
     for object in &lens.referenced_by {
         *counts.entry(object.object_type.as_str()).or_default() += 1;
     }
@@ -2015,6 +2049,10 @@ fn handle_inlay(
     )
 }
 
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "LSP positions are u32 (lines, UTF-16 units); a document past 4 GiB is out of scope (#843)"
+)]
 fn handle_selection_range(
     session: &mut Session,
     params: lsp::SelectionRangeParams,
@@ -2051,6 +2089,10 @@ fn handle_selection_range(
     )
 }
 
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "LSP positions are u32 (lines, UTF-16 units); a document past 4 GiB is out of scope (#843)"
+)]
 pub(crate) fn folding_ranges(text: &str) -> Vec<(u32, u32)> {
     let lines: Vec<&str> = text.lines().collect();
     let last = lines.len().saturating_sub(1);
@@ -2079,6 +2121,10 @@ pub(crate) fn folding_ranges(text: &str) -> Vec<(u32, u32)> {
     out
 }
 
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "LSP positions are u32 (lines, UTF-16 units); a document past 4 GiB is out of scope (#843)"
+)]
 pub(crate) fn enclosing_block(lines: &[&str], line: usize) -> (u32, u32) {
     let line = line.min(lines.len().saturating_sub(1));
     let indent = content_indent(lines.get(line).copied().unwrap_or("")).unwrap_or(0);
@@ -2314,6 +2360,10 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "positions in a test document of a few lines"
+    )]
     fn uuid_at_matches_the_caret_including_the_end_boundary() {
         let uuid = "00000000-0000-4000-8000-000000000001";
         let text = format!("id: {uuid}\n");

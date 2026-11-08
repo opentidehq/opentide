@@ -214,7 +214,7 @@ mod tests {
         assert!(d.range.start.character > 0, "{d:?}");
         let start = d.range.start.character as usize;
         let line = src.lines().nth(2).unwrap();
-        assert_eq!(&line[start..start + 1], ".", "{d:?}");
+        assert_eq!(&line[start..=start], ".", "{d:?}");
     }
 
     #[test]

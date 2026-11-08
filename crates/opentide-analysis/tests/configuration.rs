@@ -2,6 +2,12 @@
 //! schemas give hover and completion. The checker and the schemas are
 //! process-wide, so this binary has its own process and its tests take a lock.
 
+#![expect(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    reason = "test helpers outside #[test] functions: a panic fails the test"
+)]
+
 use opentide_analysis::{
     AnalyzeRequest, ConfigIssue, ConfigRequest, LanguageId, MemoryWorkspace, Severity, analyze,
     codes, configuration_completions, configuration_diagnostics, configuration_hover,
@@ -75,6 +81,10 @@ fn without_a_checker_there_are_no_diagnostics() {
 }
 
 #[test]
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "positions in a test document of a few lines"
+)]
 fn each_finding_is_placed_on_its_key() {
     let _guard = lock();
     let text = "# Sharing\n[[misp]]\nname = \"misp-internal\"\ndistribution = \"this-community\"\n\n[[misp]]\nname = \"misp-lab\"\nmax_tlp = \"white\"\n";

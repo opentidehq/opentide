@@ -3,6 +3,12 @@
 //! watched files, richer diagnostics, code actions, logs and the editor
 //! features built on the Tide index.
 
+#![expect(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    reason = "test helpers outside #[test] functions: a panic fails the test"
+)]
+
 mod common;
 
 use common::*;
@@ -813,6 +819,10 @@ fn workspace_diagnostics_cover_closed_files() {
 /// `RenameFile` gets an action that renames the file; no client gets an edit
 /// of the text, which is the object's name, and fixAll leaves it out.
 #[test]
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "a range in a test document of a few lines"
+)]
 fn filename_slug_is_a_rename_never_a_text_edit() {
     let scratch = Scratch::new("filename-slug-rename");
     let path = scratch.0.join("objects/rules/not-the-slug.yaml");

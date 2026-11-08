@@ -1,3 +1,14 @@
+//! Highlight goldens: `highlight` on each language's sample against
+//! `crates/testdata/highlight/<language>/<name>.json`. KQL, SPL and Tide must
+//! keep every capture the golden has; the Elastic languages and Falco must
+//! match every token. A missing golden is written; `UPDATE_GOLDENS=1` rewrites
+//! them after an intended change.
+
+#![expect(
+    clippy::unwrap_used,
+    reason = "test helpers outside #[test] functions: a panic fails the test"
+)]
+
 use opentide_analysis::highlight;
 use opentide_core::LanguageId;
 use serde_json::Value;

@@ -1,0 +1,7 @@
+# rustfmt's defaults, written down. `cargo fmt` reads the edition from each
+# crate's manifest; these two lines make a bare `rustfmt` (an editor formatting
+# one file) parse edition 2024 and format it as `cargo fmt --all` does.
+# Changing any other option reformats the whole engine: do that in a change of
+# its own, never beside a code change.
+edition = "2024"
+style_edition = "2024"

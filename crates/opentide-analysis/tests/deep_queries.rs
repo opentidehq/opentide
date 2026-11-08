@@ -4,6 +4,11 @@
 //! within a time budget that a quadratic walk (`Node::parent` re-descends
 //! from the root on every call) would blow.
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "test helpers outside #[test] functions: a panic fails the test"
+)]
+
 use std::thread;
 use std::time::{Duration, Instant};
 

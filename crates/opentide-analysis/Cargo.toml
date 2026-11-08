@@ -12,6 +12,9 @@ readme = "README.md"
 keywords = ["kql", "spl", "esql", "detection", "siem"]
 categories = ["parser-implementations", "development-tools"]
 
+[lints]
+workspace = true
+
 [dependencies]
 opentide-core.workspace = true
 opentide-highlight.workspace = true
@@ -32,6 +35,7 @@ toml_edit.workspace = true
 [dev-dependencies]
 serde_json.workspace = true
 toml.workspace = true
+insta.workspace = true
 
 [[bench]]
 name = "analyze"

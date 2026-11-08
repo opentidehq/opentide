@@ -1,0 +1,5 @@
+---
+source: crates/opentide-analysis/tests/snapshots.rs
+expression: "query(LanguageId::Spl, None,\n\"index=main sourcetype=WinEventLog | notacommand x | stats count by host\\n\",)"
+---
+warning spl_unknown_command 0:36-0:49 'notacommand' is not a command opentide knows; if an app on the search head provides it, declare it

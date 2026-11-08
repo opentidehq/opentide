@@ -37,10 +37,10 @@ jobs:
           python-version: "3.12"
 
       # `uv sync` compiles the analysis engine (analysis/, Rust) into opentide (hatch_build.py).
-      # The runner's rustup provides the toolchain; the cache keeps the
+      # rustup installs the toolchain rust-toolchain.toml pins; the cache keeps the
       # compiled engine crates between runs.
       - name: Set up Rust
-        run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
+        run: rustup toolchain install --profile minimal --no-self-update
 
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
@@ -143,6 +143,9 @@ jobs:
       # As in engine-ci.yml, whose `clients` and `elastic-sweep` read this
       # job's Rust cache: rust-cache hashes CARGO_* and RUST* into its key.
       CARGO_TERM_COLOR: always
+      # insta compares snapshots and never writes one here: a missing or
+      # changed snapshot fails the test (crates/AGENTS.md, Snapshots).
+      INSTA_UPDATE: "no"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -157,10 +160,9 @@ jobs:
         with:
           python-version: "3.12"
 
+      # The release rust-toolchain.toml pins, with the rustfmt and clippy it lists.
       - name: Set up Rust
-        run: |
-          rustup toolchain install stable --profile minimal --no-self-update --component rustfmt,clippy
-          rustup default stable
+        run: rustup toolchain install --profile minimal --no-self-update
 
       # Dependencies only: rust-cache drops the workspace crates before saving.
       # engine-ci.yml's `clients` and `elastic-sweep` build a subset of this
@@ -180,6 +182,11 @@ jobs:
 
       - name: clippy
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      # Every dependency between workspace crates points down the layer table
+      # (xtask/layers.toml, plan §4).
+      - name: crate layers
+        run: cargo xtask check-layers
 
       # pydantic_object_issues_are_subset_of_lsp runs src/opentide's models
       # with the interpreter `uv sync` installed (.venv).
@@ -218,11 +225,13 @@ jobs:
         with:
           persist-credentials: false
 
+      # The release rust-toolchain.toml pins, with the rustfmt and clippy it lists,
+      # then the targets the job builds: rustup ignores `--target` on an install
+      # with no name, and `rustup target add` with none adds to the pinned release.
       - name: Set up Rust
         run: |
-          rustup toolchain install stable --profile minimal --no-self-update \
-            --component rustfmt,clippy --target wasm32-unknown-unknown,wasm32-wasip1
-          rustup default stable
+          rustup toolchain install --profile minimal --no-self-update
+          rustup target add wasm32-unknown-unknown wasm32-wasip1
 
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
@@ -239,6 +248,10 @@ jobs:
 
       - name: WebAssembly engine (browser and WASI)
         run: bash scripts/engine/build-wasm.sh
+
+      # The code only wasm32 compiles: the engine job's clippy never sees it.
+      - name: clippy on the WebAssembly targets
+        run: bash scripts/engine/build-wasm.sh clippy
 
       - name: npm packages build and pack
         run: |
@@ -294,10 +307,10 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       # `uv sync` compiles the analysis engine (analysis/, Rust) into opentide (hatch_build.py).
-      # The runner's rustup provides the toolchain; the cache keeps the
+      # rustup installs the toolchain rust-toolchain.toml pins; the cache keeps the
       # compiled engine crates between runs.
       - name: Set up Rust
-        run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
+        run: rustup toolchain install --profile minimal --no-self-update
 
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
@@ -401,10 +414,10 @@ jobs:
           python-version: ${{ env.COVERAGE_PYTHON }}
 
       # `uv sync` compiles the analysis engine (analysis/, Rust) into opentide (hatch_build.py).
-      # The runner's rustup provides the toolchain; the cache keeps the
+      # rustup installs the toolchain rust-toolchain.toml pins; the cache keeps the
       # compiled engine crates between runs.
       - name: Set up Rust
-        run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
+        run: rustup toolchain install --profile minimal --no-self-update
 
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
@@ -461,10 +474,10 @@ jobs:
           python-version: ${{ env.COVERAGE_PYTHON }}
 
       # `uv sync` compiles the analysis engine (analysis/, Rust) into opentide (hatch_build.py).
-      # The runner's rustup provides the toolchain; the cache keeps the
+      # rustup installs the toolchain rust-toolchain.toml pins; the cache keeps the
       # compiled engine crates between runs.
       - name: Set up Rust
-        run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
+        run: rustup toolchain install --profile minimal --no-self-update
 
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
@@ -502,10 +515,10 @@ jobs:
           python-version: "3.14"
 
       # `uv sync` compiles the analysis engine (analysis/, Rust) into opentide (hatch_build.py).
-      # The runner's rustup provides the toolchain; the cache keeps the
+      # rustup installs the toolchain rust-toolchain.toml pins; the cache keeps the
       # compiled engine crates between runs.
       - name: Set up Rust
-        run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
+        run: rustup toolchain install --profile minimal --no-self-update
 
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:

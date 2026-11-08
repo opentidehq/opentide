@@ -4,6 +4,11 @@
 //! from the host's schemas. The checker is process-wide, so this test has a
 //! binary of its own.
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "test helpers outside #[test] functions: a panic fails the test"
+)]
+
 use opentide_analysis::{
     ConfigIssue, ConfigRequest, Severity, install_configuration_schemas, set_configuration_checker,
 };

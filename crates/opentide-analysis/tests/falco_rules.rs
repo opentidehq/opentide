@@ -8,6 +8,11 @@
 //! the object itself come from opentide's field catalog, which knows
 //! `configurations.sysdig`: every converted rule is clean end to end.
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "test helpers outside #[test] functions: a panic fails the test"
+)]
+
 use opentide_analysis::{
     AnalyzeRequest, LanguageId, MemoryWorkspace, Position, analyze, analyze_queries, codes,
     completions, hover,

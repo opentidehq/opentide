@@ -1,0 +1,6 @@
+---
+source: crates/opentide-analysis/tests/snapshots.rs
+expression: "query(LanguageId::Kql, Some(\"sentinel\"),\n\"SecurityEvnt\\n| where EventID == 4688\\n| frobnicate\\n| take 5\\n\",)"
+---
+error kql_unknown_operator 2:2-2:12 unknown tabular operator 'frobnicate'
+warning kql_unknown_table 0:0-0:12 'SecurityEvnt' is not a table opentide knows; if the workspace holds it, declare it in visibility.toml

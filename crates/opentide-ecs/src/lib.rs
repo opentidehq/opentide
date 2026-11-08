@@ -9,6 +9,11 @@
 //! only where Elasticsearch rejects the query) and warn about a near miss of
 //! an ECS field ([`unknown_field`]); any other unknown field is fine.
 
+#![expect(
+    missing_docs,
+    reason = "imported from language-server with public items undocumented: crates/AGENTS.md, Lints"
+)]
+
 use serde::Deserialize;
 use std::sync::OnceLock;
 
@@ -53,6 +58,10 @@ struct Catalog {
     fields: Vec<EcsField>,
 }
 
+#[expect(
+    clippy::expect_used,
+    reason = "parses a catalog compiled in with include_str!: a bad catalog fails the tests, never a user's document"
+)]
 fn catalog() -> &'static Catalog {
     static CATALOG: OnceLock<Catalog> = OnceLock::new();
     CATALOG

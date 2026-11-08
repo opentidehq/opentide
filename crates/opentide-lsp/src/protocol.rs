@@ -139,9 +139,7 @@ impl Recording<'_> {
         if !body.windows(4).any(|w| w == b"\"id\"") {
             return false;
         }
-        serde_json::from_slice::<Value>(body)
-            .ok()
-            .is_some_and(|v| v.get("id").is_some())
+        serde_json::from_slice::<Value>(body).is_ok_and(|v| v.get("id").is_some())
     }
 }
 
@@ -503,7 +501,7 @@ fn respond(
 fn handle_notification(session: &mut Session, notification: Notification) {
     let method = notification.method.clone();
     let handled = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        crate::handlers::notification(session, notification)
+        crate::handlers::notification(session, notification);
     }));
     if let Err(panic) = handled {
         eprintln!(

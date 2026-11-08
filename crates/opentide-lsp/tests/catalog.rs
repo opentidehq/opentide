@@ -2,6 +2,12 @@
 //! workspace index with each object's references, and the notification that
 //! follows it.
 
+#![expect(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    reason = "test helpers outside #[test] functions: a panic fails the test"
+)]
+
 mod common;
 
 use common::*;

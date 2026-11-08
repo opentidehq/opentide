@@ -7,6 +7,12 @@
 //! an installed release. `OPENTIDE_PYTHON` names another interpreter, which must
 //! import `opentide` from `src/opentide` too.
 
+#![expect(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    reason = "test helpers outside #[test] functions: a panic fails the test"
+)]
+
 use opentide_analysis::{AnalyzeRequest, MemoryWorkspace, analyze, index_workspace};
 use opentide_core::LanguageId;
 use std::fs;

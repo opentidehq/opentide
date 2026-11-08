@@ -1,6 +1,12 @@
 //! The column pass (#112) and the column and type checks on documented
 //! sources (#113).
 
+#![expect(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    reason = "test helpers outside #[test] functions: a panic fails the test"
+)]
+
 use opentide_core::{Position, Severity, codes};
 use opentide_kql::schema::Known;
 use opentide_kql::{Profile, analyze, columns, completions, hover, signature_help};
@@ -46,6 +52,10 @@ fn output(src: &str) -> Vec<String> {
     schema.columns.iter().map(|c| c.name.clone()).collect()
 }
 
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "positions in a test document of a few lines"
+)]
 fn hover_at(src: &str, needle: &str, nth: usize) -> String {
     let offset = src.match_indices(needle).nth(nth).expect("needle").0 + 1;
     let before = &src[..offset];

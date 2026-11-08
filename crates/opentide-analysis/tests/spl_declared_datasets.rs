@@ -2,6 +2,11 @@
 //! `visibility::1.0`): a declared sourcetype passes, an undeclared one warns
 //! only in a workspace with Splunk log sources.
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "test helpers outside #[test] functions: a panic fails the test"
+)]
+
 use opentide_analysis::{
     AnalyzeRequest, Catalog, MemoryWorkspace, analyze, completions, hover, install_catalog,
 };

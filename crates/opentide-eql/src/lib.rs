@@ -9,6 +9,11 @@
 //! field-versus-field rule; `lexical` follows the lexer where the grammar
 //! cannot (nested block comments, the expression-depth pre-scan).
 
+#![expect(
+    missing_docs,
+    reason = "imported from language-server with public items undocumented: crates/AGENTS.md, Lints"
+)]
+
 mod ecs;
 mod lexical;
 mod regex;
@@ -114,6 +119,10 @@ pub struct Catalog {
 }
 
 impl Catalog {
+    #[expect(
+        clippy::expect_used,
+        reason = "parses a catalog compiled in with include_str!: a bad catalog fails the tests, never a user's document"
+    )]
     pub fn cached() -> &'static Catalog {
         static CATALOG: OnceLock<Catalog> = OnceLock::new();
         CATALOG.get_or_init(|| {
@@ -239,6 +248,10 @@ fn parse_prepared(source: &str) -> Option<(tree_sitter::Tree, lexical::Prepared<
     Some((tree, prepared))
 }
 
+#[expect(
+    clippy::expect_used,
+    reason = "loads the HighlightSpec compiled in (highlights/spec.toml): a bad spec fails the tests, never a user's document"
+)]
 pub fn analyze(source: &str) -> AnalyzeResult {
     let spec = HighlightSpec::load().expect("highlight spec");
     let catalog = Catalog::cached();
@@ -274,7 +287,7 @@ pub fn analyze(source: &str) -> AnalyzeResult {
     }
     let mut translated = std::collections::HashMap::new();
     opentide_syntax::walk_with_ancestors(root, |node, ancestors| {
-        check_node(node, ancestors, &mut translated, source, catalog, &mut out)
+        check_node(node, ancestors, &mut translated, source, catalog, &mut out);
     });
     check_pipes(root, source, catalog, &mut out);
     let tokens = highlight(&spec, source, &prepared.text);
@@ -355,7 +368,7 @@ fn check_node(
         }
         "binary_expression" | "unary_expression" => semantics::check_types(node, source, out),
         "and_expression" | "or_expression" | "not_expression" | "event_query" => {
-            semantics::check_conditions(node, source, out)
+            semantics::check_conditions(node, source, out);
         }
         "function_call" => {
             if check_function(node, source, catalog, out) {
@@ -618,6 +631,10 @@ fn check_function(node: Node, source: &str, catalog: &Catalog, out: &mut Vec<Dia
     }
 }
 
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "check_runs returns 1..=MAX_RUNS (100)"
+)]
 fn check_sequence(node: Node, source: &str, out: &mut Vec<Diagnostic>) {
     let mut cursor = node.walk();
     let children: Vec<Node> = node.children(&mut cursor).collect();
@@ -841,7 +858,7 @@ fn check_maxspan(unit: Node, source: &str, out: &mut Vec<Diagnostic>) {
                 codes::EQL_MAXSPAN_UNIT,
                 format!("unrecognized time unit [{u}] in `maxspan`; use one of ms, s, m, h, d"),
                 range(source, span),
-            ))
+            ));
         }
         Some(_) => {}
     }
@@ -1025,7 +1042,7 @@ fn highlight(spec: &HighlightSpec, source: &str, parsed: &str) -> Vec<HighlightT
         return Vec::new();
     };
     let catalog = Catalog::cached();
-    for (span, capture) in spans.iter_mut() {
+    for (span, capture) in &mut spans {
         if capture == "function" {
             let name = source.get(span.start..span.end).unwrap_or("");
             if catalog.function(name.trim_end_matches('~')).is_some() {
@@ -1296,6 +1313,10 @@ fn fields_in(source: &str) -> Vec<String> {
 
 // ---- Signature help -------------------------------------------------------
 
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "a signature has a handful of parameters, far below u32::MAX"
+)]
 pub fn signature_help(source: &str, offset: usize) -> Option<SignatureHelp> {
     let before = &source[..offset.min(source.len())];
     let (name, active) = innermost_call(before)?;

@@ -3,6 +3,11 @@
 //! `initialize`, each `\0`-separated body, `shutdown`, `exit`. The seeds run
 //! too. A saved session must end, and must not make a handler panic.
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "test helpers outside #[test] functions: a panic fails the test"
+)]
+
 use std::path::Path;
 
 fn session(data: &[u8]) -> Vec<u8> {

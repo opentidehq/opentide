@@ -10,6 +10,7 @@ from pathlib import Path
 from types import ModuleType
 
 import pytest
+import yaml
 
 from opentide.core.files import tomllib
 
@@ -176,10 +177,33 @@ def test_the_wheel_ships_every_licence_notice_cites() -> None:
     assert all((ROOT / path).is_file() for path in shipped)
 
 
+def _publish_dry_run_rules() -> ModuleType:
+    """The dry-run workflow's own tests parse publish commands (every spelling npm
+    accepts, options before the command, `npx npm@x publish`) and tell a dry run apart."""
+    spec = importlib.util.spec_from_file_location(
+        "publish_dry_run_rules", ROOT / "tests" / "test_ci" / "test_publish_dry_run_workflow.py"
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def test_no_active_workflow_publishes_the_engine() -> None:
     """language-server's Release workflow (parked in .github/engine-workflows/) runs on
-    `v*.*.*` tags, which are opentide's release tags here: it must not run as it is."""
-    for workflow in (ROOT / ".github" / "workflows").glob("*.yml"):
-        text = workflow.read_text(encoding="utf-8")
-        assert "cargo publish" not in text, workflow.name
-        assert "npm publish" not in text, workflow.name
+    `v*.*.*` tags, which are opentide's release tags here: it must not run as it is.
+
+    No active workflow may run `cargo publish` or `npm publish` (in any spelling npm
+    accepts) unless it is a dry run: publish-dry-run.yml rehearses the publishes, and
+    its own tests (tests/test_ci/test_publish_dry_run_workflow.py) keep it unable to
+    publish."""
+    rules = _publish_dry_run_rules()
+    seen = 0
+    for workflow in sorted((ROOT / ".github" / "workflows").glob("*.yml")):
+        data = yaml.safe_load(workflow.read_text(encoding="utf-8")) or {}
+        for job in (data.get("jobs") or {}).values():
+            for step in job.get("steps") or []:
+                for command in rules._publishes(str(step.get("run", ""))):
+                    seen += 1
+                    assert rules._is_dry_run(command), (workflow.name, " ".join(command))
+    assert seen, "the dry-run workflow's rehearsals are found, so the check reads the commands"

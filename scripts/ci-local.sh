@@ -30,7 +30,7 @@ Run local checks that mirror GitHub CI. Faster than waiting on remote runners.
 
 Options:
   --quick       Lint + type-check + package build (ruff, ty, cargo fmt and clippy,
-                engine checks, uv build)
+                cargo xtask check-layers, engine checks, uv build)
   --test        Lint + cargo test + unit pytest (excludes cli_e2e/cli_smoke) — default
   --full        Lint + cargo test + unit pytest + coverage gate + CLI E2E +
                 GitLab CI lint — pre-push
@@ -93,9 +93,10 @@ uv run ruff format --check src/opentide tests scripts
 echo "==> Ty type check"
 uv run ty check src/opentide
 
-echo "==> Cargo workspace: rustfmt, clippy"
+echo "==> Cargo workspace: rustfmt, clippy, crate layers"
 cargo fmt --all --check
 cargo clippy --workspace --all-targets --locked --quiet -- -D warnings
+cargo xtask check-layers
 
 echo "==> Engine invariants (I/O-free crates, names, skills, generated highlights)"
 bash scripts/engine/check-io-free.sh
@@ -119,7 +120,8 @@ fi
 
 # The engine's tests compare it with this checkout's models (.venv, synced above).
 echo "==> Cargo workspace: tests"
-cargo test --workspace --locked --quiet
+# As in CI: insta compares snapshots and never writes one.
+INSTA_UPDATE=no cargo test --workspace --locked --quiet
 echo "==> The engine release script's tests"
 uv run python -m unittest discover -s scripts/engine -p "test_*.py"
 

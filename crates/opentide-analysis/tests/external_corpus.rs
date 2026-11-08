@@ -7,6 +7,11 @@
 //! injected `frobnicate` / `notacommand` on that prefix must be diagnosed.
 //! The broken full file must still produce at least one diagnostic.
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "test helpers outside #[test] functions: a panic fails the test"
+)]
+
 use opentide_core::codes;
 use opentide_kql::{Profile, analyze as analyze_kql};
 use opentide_spl::analyze as analyze_spl;

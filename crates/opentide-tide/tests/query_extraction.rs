@@ -5,6 +5,11 @@
 //! `scripts/engine/oracles/oracle.py` (`embedded`, `elastic_embedded`) uses to feed
 //! the reference parsers, so the oracles check the text the engine checks.
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "test helpers outside #[test] functions: a panic fails the test"
+)]
+
 use opentide_core::LanguageId;
 use opentide_tide::{elastic_query_language, extract_injections, hunt_query_language};
 use serde_yaml::Value;

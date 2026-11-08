@@ -23,15 +23,17 @@ tree-sitter --version
 
 # ---------------------------------------------------------------------------
 # Rust workspace
-# rust-toolchain.toml pins the stable channel plus rustfmt and clippy, so no
-# explicit toolchain install is needed. Warm the dependency cache and target
-# directory so the first `cargo test` in the agent is fast.
+# rust-toolchain.toml pins one Rust release plus rustfmt and clippy;
+# `rustup toolchain install` with no name installs exactly that. Then warm the
+# dependency cache and target directory so the first `cargo test` in the agent
+# is fast.
 #
 # The committed Cargo.lock is what cargo resolves, and CI builds with --locked.
 # The build runs without it so that a checkout whose manifests are ahead of its
 # lock still warms; the committed lock is restored afterwards to keep the
 # working tree clean for the agent.
 # ---------------------------------------------------------------------------
+rustup toolchain install --profile minimal --no-self-update
 lock_backup="$(mktemp)"
 cp Cargo.lock "$lock_backup"
 cargo build --workspace

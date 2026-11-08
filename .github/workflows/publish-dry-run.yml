@@ -84,8 +84,7 @@ jobs:
 
       - name: Set up Rust
         run: |
-          rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
-          rustup component add rustfmt clippy
+          rustup toolchain install --profile minimal --no-self-update
 
       # docs.rs renders the crate documentation from the published package.
       - name: Format, lints and documentation

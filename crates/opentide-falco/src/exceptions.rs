@@ -144,7 +144,7 @@ pub fn check(exceptions: &[Exception], ctx: &Context) -> Vec<ExceptionFinding> {
                 code,
                 level,
                 message,
-            })
+            });
         };
         if !seen.insert(ex.name.clone()) {
             push(

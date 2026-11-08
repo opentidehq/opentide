@@ -359,6 +359,10 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "positions in a test document of a few lines"
+    )]
     fn columns_count_utf16_units() {
         let source =
             format!("name: \"é😀\"\nobjective: {{ description: \"😀\", threats: [{MODEL}] }}\n");

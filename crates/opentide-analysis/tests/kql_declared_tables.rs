@@ -3,6 +3,11 @@
 //! checked, hovered and completed like a documented table's (#146).
 //! Declared datasets are process-wide, so this file holds one test.
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "test helpers outside #[test] functions: a panic fails the test"
+)]
+
 use opentide_analysis::{
     Catalog, LanguageId, MemoryWorkspace, QueryRequest, analyze_query, codes, completions, hover,
     install_catalog,

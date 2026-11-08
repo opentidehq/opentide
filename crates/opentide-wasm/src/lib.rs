@@ -6,12 +6,22 @@
 //! C parsers; [`libc_syscalls`] keeps that libc from importing anything.
 
 #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+#[expect(
+    unsafe_code,
+    reason = "exports the libc syscall symbols (#[unsafe(no_mangle)]) and writes the clock's answer"
+)]
 mod libc_syscalls;
 
 use opentide_core::LanguageId;
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
+#[expect(
+    clippy::expect_used,
+    reason = "loads the HighlightSpec compiled in (highlights/spec.toml): a bad spec fails the tests, never a user's document"
+)]
+/// The semantic token legend: the HighlightSpec capture names, in the order
+/// the token types' indices refer to.
 pub fn legend() -> js_sys::Array {
     let spec = opentide_highlight::HighlightSpec::load().expect("spec");
     let arr = js_sys::Array::new();
@@ -55,8 +65,12 @@ pub struct LanguageServer {
 
 #[wasm_bindgen]
 impl LanguageServer {
+    /// A server before `initialize`, which is the first message it expects.
     #[wasm_bindgen(constructor)]
-    #[allow(clippy::new_without_default)]
+    #[expect(
+        clippy::new_without_default,
+        reason = "JavaScript constructs it with `new LanguageServer()`; Default means nothing there"
+    )]
     pub fn new() -> LanguageServer {
         LanguageServer {
             session: opentide_lsp::MessageSession::new(),

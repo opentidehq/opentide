@@ -1,0 +1,64 @@
+# The crate layer table: plan §4 (docs/internal/unified-core.md, "Crates"), as
+# `cargo xtask check-layers` enforces it. This file is the one place the table
+# is written down; AGENTS.md and the crates' guides cite it.
+#
+# Layers go from the bottom up, and each layer's tiers from the bottom up. A
+# crate may depend only on a crate of a lower layer, or of a lower tier of its
+# own layer: never on one of its own tier, nor on one above it. Normal, build
+# and dev dependencies all count, on every target. Every workspace member is
+# placed exactly once, and every crate placed here is a member, so a new crate
+# fails the check until a change places it here and says why.
+#
+# The mapping of today's crates is a decision for the maintainer (UC-0.4, #802):
+#
+# - The plan names no tiers. Foundation crates depend on one another today (the
+#   query engines on core, syntax and highlight; ES|QL and EQL on Lucene), so
+#   foundation has four tiers, read off `cargo metadata`; domain has two.
+# - opentide-tide and opentide-analysis are Domain: the plan folds both into
+#   opentide-workspace (UC-2.x), and opentide-analysis depends on opentide-tide.
+# - Bindings sit above the facade, not at the bottom where the plan's table
+#   lists them: they wrap the facade (D-5), so they depend on everything below
+#   it. Today they depend on opentide-analysis and opentide-lsp; that each
+#   depends on the facade alone is the facade's rule (UC-5.1, #836).
+# - xtask is Tooling, the top layer: it may read any crate, and no crate may
+#   depend on it.
+# - analysis/ is the package `opentide-native` (bindings/python in the plan).
+
+[[layer]]
+name = "foundation"
+tiers = [
+    ["opentide-core"],
+    ["opentide-syntax", "opentide-highlight", "opentide-ecs"],
+    ["opentide-kql", "opentide-spl", "opentide-kuery", "opentide-lucene", "opentide-falco"],
+    ["opentide-esql", "opentide-eql"],
+]
+
+[[layer]]
+name = "domain"
+tiers = [
+    ["opentide-tide"],
+    ["opentide-analysis"],
+]
+
+[[layer]]
+name = "application"
+tiers = [
+    ["opentide-lsp"],
+]
+
+# The `opentide` facade crate: UC-5.1 (#836) places it here.
+[[layer]]
+name = "facade"
+tiers = []
+
+[[layer]]
+name = "bindings"
+tiers = [
+    ["opentide-native", "opentide-wasm"],
+]
+
+[[layer]]
+name = "tooling"
+tiers = [
+    ["xtask"],
+]

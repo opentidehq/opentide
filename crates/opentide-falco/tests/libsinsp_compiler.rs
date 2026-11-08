@@ -7,6 +7,11 @@
 //! (`PT_BYTEBUF`) is `evt.buffer`; `c.true`, `c.false`, `c.doublequote`, and
 //! `c.singlequote` (`PT_CHARBUF`, no flags) are `fd.name`.
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "test helpers outside #[test] functions: a panic fails the test"
+)]
+
 use opentide_falco::Catalog;
 use opentide_falco::compile::{Compiler, Level};
 use opentide_falco::parser::parse;

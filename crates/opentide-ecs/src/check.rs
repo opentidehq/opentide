@@ -159,6 +159,10 @@ pub fn with_declared_fields<S: AsRef<str>, R>(indices: &[S], f: impl FnOnce() ->
 /// The declared type of `name` in the current scope: `None` when the field
 /// is not declared, `Some(None)` when it is, with a type the checks do not
 /// know.
+#[expect(
+    clippy::option_option,
+    reason = "three answers, as documented above: not declared, declared with an unknown type, declared with a known one"
+)]
 fn declared_type(name: &str) -> Option<Option<&'static str>> {
     DECLARED.with(|d| {
         let fields = d.borrow();

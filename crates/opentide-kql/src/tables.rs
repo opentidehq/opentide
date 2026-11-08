@@ -51,6 +51,10 @@ struct AzureMonitorFile {
 }
 
 /// The Azure Monitor Logs tables, by name.
+#[expect(
+    clippy::expect_used,
+    reason = "parses a catalog compiled in with include_str!: a bad catalog fails the tests, never a user's document"
+)]
 pub fn azure_monitor() -> &'static BTreeMap<String, AzureMonitorTable> {
     static TABLES: OnceLock<BTreeMap<String, AzureMonitorTable>> = OnceLock::new();
     TABLES.get_or_init(|| {
@@ -135,6 +139,10 @@ pub struct Asim {
     pub parsers: BTreeMap<String, AsimParser>,
 }
 
+#[expect(
+    clippy::expect_used,
+    reason = "parses a catalog compiled in with include_str!: a bad catalog fails the tests, never a user's document"
+)]
 pub fn asim() -> &'static Asim {
     static ASIM: OnceLock<Asim> = OnceLock::new();
     ASIM.get_or_init(|| {
