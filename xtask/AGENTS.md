@@ -7,7 +7,7 @@ xtask --`): the repository's Rust tooling, as a workspace member that is never p
 |---------|--------|
 | `check-layers [--metadata FILE] [--layers FILE]` | Checks that every dependency between workspace crates (normal, build and dev, on every target) points down the layer table, [`layers.toml`](layers.toml), against `cargo metadata --no-deps` |
 | `codegen` | Not implemented: UC-1.8 (#814) generates schemas, stubs, types and references with it |
-| `golden` | Not implemented: UC-0.5 (#803) records and checks the oracle's goldens with it |
+| `golden record [--check-determinism]`, `check`, `diff`, `lock`, `coverage` | Records what the frozen Python CLI (the oracle, `tests/golden/ORACLE`) does for every case of `tests/golden/cases.toml`, and checks an engine against the recordings: [`tests/golden/README.md`](../tests/golden/README.md) |
 | `bench` | Not implemented: UC-0.8 (#806) runs the benchmarks against their budgets with it |
 | `help` | The usage |
 
@@ -31,6 +31,12 @@ moving a crate between layers is a design decision for the maintainer, not a fix
 
 - The library (`src/lib.rs`, `src/layers.rs`) computes; `src/main.rs` reads files, runs cargo and
   prints. Tests drive the library with synthetic metadata, no workspace needed.
+- `golden` is its own module, `src/golden/`, a library the comparator (UC-0.7) reuses: the case
+  model (`case.rs`), fixtures (`fixture.rs`), the oracle's install (`oracle.rs`), the runner
+  (`run.rs`, `pty.rs`), the normaliser (`normalise.rs`), recordings and their differences
+  (`recording.rs`, `snapshot.rs`, `blob.rs`) and the coverage report (`coverage.rs`). `main.rs`
+  only dispatches to `golden::main`. A normalisation rule changes with its unit test and a
+  re-record in the same PR.
 - The workspace to check is found at run time (`CARGO_MANIFEST_DIR` as `cargo run` sets it, else
   the working directory), and the table is `xtask/layers.toml` under the root `cargo metadata`
   prints. Never compile a path in with `env!`: a target pool that last served another worktree can
@@ -51,6 +57,11 @@ cargo xtask check-layers
   `tests/cmd/check-layers.in/`).
 - `tests/workspace.rs`: the binary in a two-crate workspace of its own with an upward edge, run as
   `cargo run` and as a plain binary: it must check that workspace, not the repository.
+- `src/golden/*.rs` unit tests: the case expansion, every normalisation rule (live regions, paths,
+  timestamps, durations, hyperlink ids, fresh UUIDs), snapshots, recordings and their round trip,
+  the blob store's SHA-256 against FIPS 180-4 vectors, the requirements pin, the coverage report.
+- `tests/cmd/golden.trycmd`: `xtask golden`'s usage errors. Running the cases needs uv and the
+  oracle: `cargo xtask golden check --engine python` (CI: `.github/workflows/golden.yml`).
 - `tests/lint_policy.rs`: every member inherits `[workspace.lints]`, except the crates allowed
   `unsafe` (`UNSAFE_CRATES`), whose copies must equal the workspace table with
   `unsafe_code = "deny"`.
@@ -62,6 +73,7 @@ cargo xtask check-layers
 
 ## Work items that change this crate
 
-UC-0.4 (#802) check-layers; UC-1.8 (#814) codegen; UC-0.5 (#803) golden; UC-0.8 (#806) bench;
+UC-0.4 (#802) check-layers; UC-1.8 (#814) codegen; UC-0.5 (#803) golden; UC-0.7 (#805) the
+comparator over `golden`; UC-0.8 (#806) bench;
 UC-1.6 (#812) the `sync_vocabularies --check` equivalent; UC-0.3 (#801) wires the checks into one
 CI. Lints and tests: [`crates/AGENTS.md`](../crates/AGENTS.md).

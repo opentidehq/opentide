@@ -20,7 +20,10 @@ commands:
                  --metadata reads `cargo metadata --format-version 1` output
                  from FILE instead of running cargo; --layers reads another table
   codegen        generate schemas, stubs, types and references (UC-1.8, #814)
-  golden         record and check the oracle's goldens (UC-0.5, #803)
+  golden <record|check|diff|lock|coverage> [options]
+                 record what the frozen Python CLI does, and check an engine
+                 against the recordings (tests/golden/README.md);
+                 `cargo xtask golden help` lists the options
   bench          run the benchmarks against their budgets (UC-0.8, #806)
   help           print this message
 
@@ -44,7 +47,7 @@ fn main() -> ExitCode {
             }
         },
         "codegen" => not_yet("codegen", "UC-1.8", 814),
-        "golden" => not_yet("golden", "UC-0.5", 803),
+        "golden" => xtask::golden::main(rest),
         "bench" => not_yet("bench", "UC-0.8", 806),
         "help" | "--help" | "-h" => {
             print!("{USAGE}");

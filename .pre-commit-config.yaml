@@ -7,6 +7,10 @@
 #
 # CodeQL is intentionally NOT a hook — full analysis rebuilds the DB each run (~40–60s
 # locally, minutes in CI). Use .github/workflows/codeql.yml + scripts/codeql-local.sh.
+# The golden recordings and vendored fixtures are bytes the oracle wrote: no
+# hook may rewrite them (tests/golden/README.md).
+exclude: ^tests/golden/(cases|blobs|fixtures)/
+
 default_install_hook_types:
   - pre-commit
   - pre-push
