@@ -29,9 +29,10 @@ pub struct Workspaces {
     pub rules: usize,
     /// How many platforms the warnings copy disabled.
     pub disabled_platforms: usize,
-    /// The fewest warnings `validate` must report on the warnings copy for
-    /// the run to count.
-    pub min_warnings: usize,
+    /// The warnings `validate` must report on the warnings copy for the
+    /// run to count: one per platform block, when the generator says how
+    /// many; `None` for a workspace of one's own (then at least one a rule).
+    pub expected_warnings: Option<usize>,
 }
 
 /// Prepares the workspaces under `work` from `source`, a workspace on disk.
@@ -56,7 +57,7 @@ pub fn prepare(source: &Path, work: &Path) -> Result<Workspaces> {
         rule,
         rules: rule_files.len(),
         disabled_platforms,
-        min_warnings: rule_files.len(),
+        expected_warnings: None,
     })
 }
 

@@ -8,11 +8,11 @@
 # ubuntu-24.04 (4 vCPU, the class the baseline in budgets.toml was recorded on):
 # numbers from another class are not comparable.
 #
-# The last development result: the bench-<engine> artifact of the newest successful
-# run of this workflow on development (a nightly or a manual run). A run that failed
-# its check is never the reference, so a regression stays red until it is fixed or
-# the budgets are re-recorded on purpose. Each run keeps its own results as the
-# bench-<engine> artifact for 90 days.
+# The last development result: the bench-<engine> artifact of the newest run of this
+# workflow on development (a nightly or a manual run) whose job for that engine
+# succeeded. A job that failed its check is never the reference, so a regression stays
+# red until it is fixed or the budgets are re-recorded on purpose. Each run keeps its
+# own results as the bench-<engine> artifact for 90 days.
 #
 # Safety: `pull_request`, never `pull_request_target`: a PR's code runs with a
 # read-only token and no secrets, and the label only decides whether the job runs.
@@ -74,24 +74,47 @@ jobs:
           ENGINE: ${{ matrix.engine }}
         run: cargo xtask bench --engine "$ENGINE" --scale 1 --json --out bench.json > /dev/null
 
+      # The oracle's `deploy --dry-run` on the heavy workspace (which declares tenants for
+      # four platforms) under strace: it must open no network connection.
+      - name: Prove that the dry run reaches no tenant
+        if: matrix.engine == 'python'
+        run: |
+          command -v strace >/dev/null || { sudo apt-get update -q && sudo apt-get install -y -q strace; }
+          heavy="$RUNNER_TEMP/heavy"
+          cargo xtask corpus generate --seed 20261107 --out "$heavy"
+          opentide="$GITHUB_WORKSPACE/target/xtask-bench/oracle/bin/opentide"
+          mkdir -p "$RUNNER_TEMP/home"
+          (cd "$heavy" && env -i PATH=/usr/bin:/bin HOME="$RUNNER_TEMP/home" LANG=C.UTF-8 \
+            strace -f -qq -e trace=connect -o "$RUNNER_TEMP/connect.txt" \
+            "$opentide" --json deploy --dry-run --all --strategy PREVIEW > "$RUNNER_TEMP/dry-run.json")
+          jq -e '.dry_run == true and .ok == true' "$RUNNER_TEMP/dry-run.json" > /dev/null
+          if grep -E 'AF_INET6?' "$RUNNER_TEMP/connect.txt"; then
+            echo "::error::deploy --dry-run opened a network connection"
+            exit 1
+          fi
+          echo "deploy --dry-run planned $(jq '[.plan[] | length] | add' "$RUNNER_TEMP/dry-run.json") rule deployments and opened no network connection."
+
       - name: Find the last development result
         env:
           GH_TOKEN: ${{ github.token }}
           ENGINE: ${{ matrix.engine }}
         run: |
-          run_id=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow bench.yml \
-            --branch development --status success --limit 20 \
-            --json databaseId,event \
-            --jq '[.[] | select(.event == "schedule" or .event == "workflow_dispatch")][0].databaseId // empty')
-          if [ -z "$run_id" ]; then
-            echo "No successful development run yet: checking against the budgets alone."
-            exit 0
-          fi
-          echo "Last development result: run $run_id"
-          if ! gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --name "bench-$ENGINE" --dir previous; then
-            echo "::warning::run $run_id kept no bench-$ENGINE artifact (expired?): checking against the budgets alone."
+          job="Benchmarks ($ENGINE)"
+          runs=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow bench.yml \
+            --branch development --limit 30 --json databaseId,event \
+            --jq '.[] | select(.event == "schedule" or .event == "workflow_dispatch") | .databaseId')
+          for run_id in $runs; do
+            conclusion=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/jobs" \
+              --jq ".jobs[] | select(.name == \"$job\") | .conclusion")
+            [ "$conclusion" = success ] || continue
+            if gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --name "bench-$ENGINE" --dir previous; then
+              echo "Last development result: run $run_id ($job succeeded)"
+              exit 0
+            fi
+            echo "::warning::run $run_id kept no bench-$ENGINE artifact (expired?)"
             rm -rf previous
-          fi
+          done
+          echo "No development run with a successful $job yet: checking against the budgets alone."
 
       - name: Check against the budgets
         run: |

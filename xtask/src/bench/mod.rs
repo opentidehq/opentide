@@ -146,8 +146,13 @@ fn validate_warnings(json: &Value, ws: &workspace::Workspaces) -> Option<String>
         .pointer("/report/warnings")
         .and_then(Value::as_array)
         .map_or(0, Vec::len);
-    (warnings < ws.min_warnings)
-        .then(|| format!("{warnings} warnings, fewer than {}", ws.min_warnings))
+    match ws.expected_warnings {
+        Some(expected) => (warnings != expected).then(|| {
+            format!("{warnings} warnings, not the {expected} the generated platform blocks give")
+        }),
+        None => (warnings < ws.rules)
+            .then(|| format!("{warnings} warnings, fewer than the {} rules", ws.rules)),
+    }
 }
 
 fn deploy_dry_run(json: &Value, ws: &workspace::Workspaces) -> Option<String> {
@@ -659,19 +664,18 @@ fn run_in(options: &Options, root: &Path, base: &Path, work: &Path) -> Result<()
     };
 
     let workspaces = if needs_workspace {
-        let (source, generated) = match &options.workspace {
-            Some(dir) => (dir.clone(), false),
-            None => (generate(options.scale, work)?, true),
+        let (source, expected_warnings) = match &options.workspace {
+            Some(dir) => (dir.clone(), None),
+            None => {
+                let (dir, blocks) = generate(options.scale, work)?;
+                (dir, Some(blocks))
+            }
         };
         let mut ws = workspace::prepare(&source, work)?;
-        // The heavy workspace has 1,000 queries per scale step, each a
-        // warning once its platform is disabled (issue #806); a workspace of
-        // one's own must at least warn once per rule.
-        ws.min_warnings = if generated {
-            1000 * usize::try_from(options.scale).unwrap_or(1)
-        } else {
-            ws.rules
-        };
+        // Every platform block of a rule is one `platform_not_enabled`
+        // warning once its platform is disabled: exactly as many as the
+        // generator wrote; a workspace of one's own must warn once per rule.
+        ws.expected_warnings = expected_warnings;
         eprintln!(
             "bench: workspace {} ({} rules; {} platforms disabled for validate_warnings)",
             source.display(),
@@ -738,13 +742,34 @@ fn run_in(options: &Options, root: &Path, base: &Path, work: &Path) -> Result<()
     Ok(())
 }
 
-/// Generates the heavy workspace under `work` and returns it.
-fn generate(scale: u32, work: &Path) -> Result<PathBuf> {
-    let _ = (scale, work);
-    bail!(
-        "the heavy workspace generator (UC-0.6, #804) has not landed on this branch yet: \
-         pass --workspace DIR"
-    )
+/// Generates the heavy workspace under `work` with UC-0.6's generator
+/// (`cargo xtask corpus generate --seed 20261107 [--scale 10]`, the same code
+/// in process) and returns it with the number of platform blocks its rules
+/// hold.
+fn generate(scale: u32, work: &Path) -> Result<(PathBuf, usize)> {
+    let counts = crate::corpus::generate::Counts::scaled(f64::from(scale))
+        .with_context(|| format!("scale {scale}"))?;
+    let options = crate::corpus::generate::Options {
+        counts,
+        ..crate::corpus::generate::Options::new(workspace::SEED)
+    };
+    let generated = crate::corpus::generate::generate(&options);
+    let dir = work.join("generated");
+    if dir.exists() {
+        std::fs::remove_dir_all(&dir).with_context(|| format!("remove {}", dir.display()))?;
+    }
+    crate::corpus::cli::write_workspace(&generated, &dir)?;
+    let blocks = generated
+        .family(crate::corpus::workspace::Family::Rule)
+        .map(|rule| rule.platforms.len())
+        .sum();
+    eprintln!(
+        "bench: generated the heavy workspace, seed {} ({}, {blocks} platform blocks); digest {}",
+        workspace::SEED,
+        generated.summary(),
+        generated.digest()
+    );
+    Ok((dir, blocks))
 }
 
 fn measure_scenario(
@@ -860,7 +885,7 @@ fn verify_cli(
         rule: PathBuf::new(),
         rules: 0,
         disabled_platforms: 0,
-        min_warnings: 0,
+        expected_warnings: None,
     };
     if let Some(problem) = (scenario.expect)(&json, workspaces.unwrap_or(&empty)) {
         bail!("{problem}");
@@ -1022,7 +1047,7 @@ mod tests {
             rule: PathBuf::from("objects/rules/a.yaml"),
             rules: 1,
             disabled_platforms: 1,
-            min_warnings: 1,
+            expected_warnings: None,
         };
         let scenario = SCENARIOS.iter().find(|s| s.id == "validate_file").unwrap();
         let Program::Run(_, args) = program(

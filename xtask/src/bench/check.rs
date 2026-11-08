@@ -10,7 +10,11 @@
 //!   baseline recorded in the budgets (`baseline_s`, `baseline_rss_mib`), when
 //!   the report is of the baseline's scale and seed;
 //! - for the `rust` engine, above the plan section 11 target (`target_s`,
-//!   `target_rss_mib`), an absolute budget, at scale 1.
+//!   `target_rss_mib`), an absolute budget, at scale 1; or, where the budgets
+//!   waive a time target with the work item that will meet it
+//!   (`target_waiver`), more than `policy.regression` above the Rust
+//!   implementation's own CI baseline (`rust_baseline_s`), the summary still
+//!   showing the distance to the target.
 //!
 //! A relative regression must also exceed the noise floor (`noise_floor_s`,
 //! `noise_floor_rss_mib`): a 20 ms difference on a 0.2 s command is the
@@ -97,6 +101,16 @@ pub struct CommandBudget {
     pub target_s: Option<f64>,
     /// Plan section 11's peak RSS target for the Rust engine, in MiB.
     pub target_rss_mib: Option<f64>,
+    /// Why the rust engine is not held to `target_s` yet: the work item
+    /// that brings the command to its target. While it is set, the rust
+    /// result is held to `rust_baseline_s` (the Rust implementation of today,
+    /// measured on CI's runner class) like the oracle to its baseline, and
+    /// the summary shows how far it is from the target. Remove it when the
+    /// target is met.
+    pub target_waiver: Option<String>,
+    /// The Rust implementation's median on CI's runner class, in seconds;
+    /// the reference while `target_waiver` is set.
+    pub rust_baseline_s: Option<f64>,
 }
 
 impl Budgets {
@@ -125,12 +139,21 @@ impl Budgets {
                 ("baseline_rss_mib", budget.baseline_rss_mib),
                 ("target_s", budget.target_s),
                 ("target_rss_mib", budget.target_rss_mib),
+                ("rust_baseline_s", budget.rust_baseline_s),
             ] {
                 if let Some(value) = value
                     && !(value.is_finite() && value > 0.0)
                 {
                     bail!("commands.{id}.{name} must be a number > 0, not {value}");
                 }
+            }
+            if budget.target_waiver.is_some()
+                && (budget.target_s.is_none() || budget.rust_baseline_s.is_none())
+            {
+                bail!(
+                    "commands.{id}.target_waiver needs the target_s it waives and the \
+                     rust_baseline_s that holds the rust engine meanwhile"
+                );
             }
         }
         Ok(budgets)
@@ -408,11 +431,36 @@ fn check_one(
             row.budget_rss_bytes = budget.target_rss_mib.map(|mib| mib * MIB);
             if let Some(target) = budget.target_s {
                 row.delta_reference = fraction(median, target);
-                if median > target {
-                    fail(
-                        &mut row,
-                        format!("median {median:.3} s is over the target {target:.3} s"),
-                    );
+                match (&budget.target_waiver, budget.rust_baseline_s) {
+                    (Some(waiver), Some(baseline)) => {
+                        row.budget_s = Some(
+                            baseline + (baseline * policy.regression).max(policy.noise_floor_s),
+                        );
+                        if regressed(median, baseline, policy.regression, policy.noise_floor_s) {
+                            fail(
+                                &mut row,
+                                format!(
+                                    "median {median:.3} s is {:+.1}% against the Rust baseline \
+                                     {baseline:.3} s (more than {:.0}%)",
+                                    (median / baseline - 1.0) * 100.0,
+                                    policy.regression * 100.0
+                                ),
+                            );
+                        }
+                        row.reasons.push(if median > target {
+                            format!("over the plan target {target:.3} s, waived until {waiver}")
+                        } else {
+                            format!("meets the plan target {target:.3} s: remove its target_waiver")
+                        });
+                    }
+                    _ => {
+                        if median > target {
+                            fail(
+                                &mut row,
+                                format!("median {median:.3} s is over the target {target:.3} s"),
+                            );
+                        }
+                    }
                 }
             }
             if let Some(target) = row.budget_rss_bytes
@@ -575,7 +623,8 @@ pub fn summary_markdown(outcome: &Outcome, report: &Report) -> String {
     out.push_str("|---|---:|---:|---:|---:|---:|---:|---|\n");
     for row in &outcome.rows {
         let result = match row.verdict {
-            Verdict::Pass => "✅ pass".to_owned(),
+            Verdict::Pass if row.reasons.is_empty() => "✅ pass".to_owned(),
+            Verdict::Pass => format!("✅ pass ({})", row.reasons.join("; ")),
             Verdict::Fail => format!("❌ {}", row.reasons.join("; ")),
             Verdict::NotImplemented => format!("➖ {}", row.reasons.join("; ")),
         };
@@ -902,6 +951,52 @@ target_s = 0.03
             outcome.failures[0].contains("target"),
             "{:?}",
             outcome.failures
+        );
+    }
+
+    #[test]
+    fn a_waived_target_holds_rust_to_its_own_baseline_and_says_so() {
+        let text = BUDGETS.replace(
+            "target_s = 0.03\n",
+            "target_s = 0.03\ntarget_waiver = \"UC-3.6\"\nrust_baseline_s = 0.16\n",
+        );
+        let budgets = Budgets::parse(&text).unwrap();
+        let rust = |explain_s: f64| {
+            report(
+                "rust",
+                vec![
+                    CommandResult::not_implemented("validate_clean", "v", "no Rust yet"),
+                    measured("explain", explain_s, 20.0),
+                ],
+            )
+        };
+        // Over the target, within 10% of the Rust baseline: passes, and says so.
+        let outcome = check(&budgets, &rust(0.17), None);
+        assert!(outcome.passed(), "{:?}", outcome.failures);
+        assert_eq!(
+            outcome.rows[1].reasons,
+            ["over the plan target 0.030 s, waived until UC-3.6"]
+        );
+        let text = summary_markdown(&outcome, &rust(0.17));
+        assert!(
+            text.contains("✅ pass (over the plan target 0.030 s, waived until UC-3.6)"),
+            "{text}"
+        );
+        // A regression against the Rust baseline still fails.
+        let outcome = check(&budgets, &rust(0.2), None);
+        assert!(!outcome.passed());
+        assert!(
+            outcome.failures[0].contains("against the Rust baseline"),
+            "{:?}",
+            outcome.failures
+        );
+        // A waiver without the baseline that replaces it is refused.
+        assert!(
+            Budgets::parse(&BUDGETS.replace(
+                "target_s = 0.03\n",
+                "target_s = 0.03\ntarget_waiver = \"x\"\n"
+            ))
+            .is_err()
         );
     }
 

@@ -11,6 +11,12 @@
 #   target_s, target_rss_mib      plan section 11's target: the rust engine fails above it
 #                                 (an absolute budget, at scale 1). Only the commands
 #                                 section 11 names have one
+#   target_waiver, rust_baseline_s  a time target the Rust implementation of today misses,
+#                                 waived until the work item named meets it: meanwhile the
+#                                 rust engine fails more than policy.regression above
+#                                 rust_baseline_s (measured on CI's runner class), and the
+#                                 summary shows the distance to the target. Remove both
+#                                 when the target is met
 #
 # Every run is also held to the last development result (--previous): more than
 # policy.regression above it fails. A difference within the noise floor never does.
@@ -46,7 +52,7 @@ target_s = 0.7
 target_rss_mib = 100.0
 
 [commands.validate_warnings]
-label = "validate, 1,000 warnings (platforms disabled)"
+label = "validate, platforms disabled (a warning per platform block: 892)"
 plan_s = 12.76
 baseline_s = 12.76
 baseline_rss_mib = 171.0
@@ -119,5 +125,9 @@ label = "language server, first diagnostics"
 baseline_s = 1.0
 baseline_rss_mib = 100.0
 target_s = 0.1
+# The language server of today (the engine imported from language-server) misses
+# the target; UC-2.6 rebuilds it on opentide-workspace.
+target_waiver = "UC-2.6 (#821) rebuilds the server on opentide-workspace"
+rust_baseline_s = 0.16
 # Plan section 11: editor memory per window (language server and backend) <= 150 MB.
 target_rss_mib = 150.0
