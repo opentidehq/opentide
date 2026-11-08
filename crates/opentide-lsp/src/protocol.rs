@@ -40,15 +40,14 @@ pub(crate) enum Frame {
 /// message is a [`Frame::Invalid`], and the next frame can still be read; a
 /// broken header ends the session, since nothing after it can be framed.
 pub(crate) fn read_frame(reader: &mut dyn BufRead) -> io::Result<Option<Frame>> {
-    let mut replay = io::Cursor::new(read_raw_frame(reader)?);
-    let mut recording = Recording {
-        inner: &mut replay,
-        seen: Vec::new(),
-    };
-    match Message::read(&mut recording) {
+    // The frame's bytes, read once: `lsp-server` parses them from memory, and
+    // a frame it cannot parse is answered from the same bytes, which are
+    // exactly what it consumed.
+    let raw = read_raw_frame(reader)?;
+    match Message::read(&mut io::Cursor::new(&raw[..])) {
         // `lsp-server` reads `"id": null` as a notification; it is a request
         // whose id is not valid, and is answered with `id: null`.
-        Ok(Some(Message::Notification(n))) if recording.names_an_id() => Ok(Some(Frame::Invalid {
+        Ok(Some(Message::Notification(n))) if names_an_id(&raw) => Ok(Some(Frame::Invalid {
             id: Value::Null,
             code: ErrorCode::InvalidRequest as i32,
             message: format!(
@@ -58,7 +57,7 @@ pub(crate) fn read_frame(reader: &mut dyn BufRead) -> io::Result<Option<Frame>> 
         })),
         Ok(Some(message)) => Ok(Some(Frame::Message(message))),
         Ok(None) => Ok(None),
-        Err(err) if err.kind() == io::ErrorKind::InvalidData => match recording.body() {
+        Err(err) if err.kind() == io::ErrorKind::InvalidData => match frame_body(&raw) {
             Some(body) if !body.is_empty() => Ok(Some(classify(body))),
             _ => Err(err),
         },
@@ -111,6 +110,8 @@ fn read_raw_frame(reader: &mut dyn BufRead) -> io::Result<Vec<u8>> {
         return Ok(raw);
     };
     let header = raw.len();
+    // Room for a usual message up front; a longer body grows as it arrives.
+    raw.reserve(size.min(1 << 20));
     reader
         .take(u64::try_from(size).unwrap_or(u64::MAX))
         .read_to_end(&mut raw)?;
@@ -173,56 +174,22 @@ fn classify(body: &[u8]) -> Frame {
     }
 }
 
-/// A reader that keeps what it handed out, so a frame `lsp-server` could not
-/// parse can still be answered from its body.
-struct Recording<'a> {
-    inner: &'a mut dyn BufRead,
-    seen: Vec<u8>,
+/// The body of a frame's bytes, after the blank line ending its header.
+fn frame_body(raw: &[u8]) -> Option<&[u8]> {
+    let end = raw.windows(4).position(|w| w == b"\r\n\r\n")?;
+    Some(&raw[end + 4..])
 }
 
-impl Recording<'_> {
-    /// The body of the frame read, after the blank line ending its header.
-    fn body(&self) -> Option<&[u8]> {
-        let end = self.seen.windows(4).position(|w| w == b"\r\n\r\n")?;
-        Some(&self.seen[end + 4..])
+/// Whether the frame's body has a top-level `id` member. Cheap for the usual
+/// notification, which never spells `"id"` at all.
+fn names_an_id(raw: &[u8]) -> bool {
+    let Some(body) = frame_body(raw) else {
+        return false;
+    };
+    if !body.windows(4).any(|w| w == b"\"id\"") {
+        return false;
     }
-}
-
-impl Recording<'_> {
-    /// Whether the body has a top-level `id` member. Cheap for the usual
-    /// notification, which never spells `"id"` at all.
-    fn names_an_id(&self) -> bool {
-        let Some(body) = self.body() else {
-            return false;
-        };
-        if !body.windows(4).any(|w| w == b"\"id\"") {
-            return false;
-        }
-        serde_json::from_slice::<Value>(body).is_ok_and(|v| v.get("id").is_some())
-    }
-}
-
-impl Read for Recording<'_> {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        let n = self.inner.read(buf)?;
-        self.seen.extend_from_slice(&buf[..n]);
-        Ok(n)
-    }
-}
-
-impl BufRead for Recording<'_> {
-    fn fill_buf(&mut self) -> io::Result<&[u8]> {
-        self.inner.fill_buf()
-    }
-
-    fn consume(&mut self, amt: usize) {
-        // The buffer `fill_buf` returned is still there: no read happens.
-        if let Ok(buf) = self.inner.fill_buf() {
-            let n = amt.min(buf.len());
-            self.seen.extend_from_slice(&buf[..n]);
-        }
-        self.inner.consume(amt);
-    }
+    serde_json::from_slice::<Value>(body).is_ok_and(|v| v.get("id").is_some())
 }
 
 /// Where the loop's batches come from.

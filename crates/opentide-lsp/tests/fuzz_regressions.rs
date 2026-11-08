@@ -60,7 +60,7 @@ fn saved_protocol_sessions_end_without_a_failing_handler() {
 
 /// The `framing` target (#843) feeds its input to `serve` unframed. A saved
 /// input, or a seed, must end the session (with an error for a broken
-/// header), never panic or hang.
+/// header), never make a handler panic, never hang.
 #[test]
 fn saved_raw_streams_end_without_a_panic() {
     let fuzz = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fuzz");
@@ -72,8 +72,19 @@ fn saved_raw_streams_end_without_a_panic() {
         for entry in entries.flatten() {
             let bytes = std::fs::read(entry.path()).unwrap();
             let start = std::time::Instant::now();
-            let _ = opentide_lsp::serve(std::io::Cursor::new(bytes), std::io::sink());
+            let mut output = Vec::new();
+            // A broken header ends the session with an error: that is an
+            // answer, not a failure.
+            let _ = opentide_lsp::serve(std::io::Cursor::new(bytes), &mut output);
             let took = start.elapsed();
+            // Under libFuzzer a handler that panics aborts; here `serve`
+            // catches it and answers `-32603`, which must not happen either.
+            let text = String::from_utf8_lossy(&output);
+            assert!(
+                !text.contains("\"code\":-32603"),
+                "{}: {text}",
+                entry.path().display()
+            );
             assert!(
                 took < std::time::Duration::from_secs(30),
                 "{}: {took:?}",
