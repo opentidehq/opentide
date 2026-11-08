@@ -57,3 +57,30 @@ fn saved_protocol_sessions_end_without_a_failing_handler() {
     }
     assert!(ran >= 3, "the seeds ran");
 }
+
+/// The `framing` target (#843) feeds its input to `serve` unframed. A saved
+/// input, or a seed, must end the session (with an error for a broken
+/// header), never panic or hang.
+#[test]
+fn saved_raw_streams_end_without_a_panic() {
+    let fuzz = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fuzz");
+    let mut ran = 0;
+    for dir in ["seeds/framing", "regressions/framing"] {
+        let Ok(entries) = std::fs::read_dir(fuzz.join(dir)) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let bytes = std::fs::read(entry.path()).unwrap();
+            let start = std::time::Instant::now();
+            let _ = opentide_lsp::serve(std::io::Cursor::new(bytes), std::io::sink());
+            let took = start.elapsed();
+            assert!(
+                took < std::time::Duration::from_secs(30),
+                "{}: {took:?}",
+                entry.path().display()
+            );
+            ran += 1;
+        }
+    }
+    assert!(ran >= 3, "the seeds ran");
+}
