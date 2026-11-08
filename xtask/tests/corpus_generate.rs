@@ -23,16 +23,16 @@ fn small(seed: u64, layout: Layout) -> Options {
 #[test]
 fn recorded_digests() {
     let cases = [
-        (small(1, Layout::Explicit), "d9a812c55c9b093f"),
-        (small(1, Layout::Standard), "e53e81ab33ed3999"),
-        (Options::new(20_261_107), "6f22a6344e5ff87c"),
+        (small(1, Layout::Explicit), "20456a95c4e6a368"),
+        (small(1, Layout::Standard), "5341b30d4f6f1886"),
+        (Options::new(20_261_107), "5978a2ab7c093587"),
         (
             Options {
                 counts: Counts::scaled(0.1).unwrap(),
                 layout: Layout::Custom,
                 ..Options::new(20_261_107)
             },
-            "15f88840c2958c75",
+            "da09872fae5d96f4",
         ),
     ];
     for (options, digest) in cases {
@@ -104,7 +104,7 @@ fn counts_and_coverage_of_the_default_workspace() {
     // credential is a $VARIABLE reference.
     let configs: Vec<_> = workspace.family(Family::Config).collect();
     let with_tenants = configs.iter().filter(|c| c.has_tag("tenants")).count();
-    assert!(with_tenants >= 3, "{with_tenants} platforms with tenants");
+    assert!(with_tenants >= 5, "{with_tenants} platforms with tenants");
     for config in &configs {
         for line in config.render().lines() {
             let lower = line.to_ascii_lowercase();
