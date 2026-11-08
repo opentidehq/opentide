@@ -6,6 +6,7 @@ xtask --`): the repository's Rust tooling, as a workspace member that is never p
 | Command | Status |
 |---------|--------|
 | `check-layers [--metadata FILE] [--layers FILE]` | Checks that every dependency between workspace crates (normal, build and dev, on every target) points down the layer table, [`layers.toml`](layers.toml), against `cargo metadata --no-deps` |
+| `corpus generate\|faults\|clean\|codes\|coverage` | The corpora of UC-0.6 (#804): the seeded heavy workspace, the fault catalogue run against the oracle, the code inventory and coverage report ([`tests/corpora/README.md`](../tests/corpora/README.md)) |
 | `codegen` | Not implemented: UC-1.8 (#814) generates schemas, stubs, types and references with it |
 | `golden` | Not implemented: UC-0.5 (#803) records and checks the oracle's goldens with it |
 | `bench [--engine python\|rust] [--scale 1\|10] [--json]`, `bench --check BUDGETS BENCH.json [--previous FILE]` | Runs the plan section 11 benchmarks on the heavy workspace and holds the result to [`tests/bench/budgets.toml`](../tests/bench/budgets.toml) and the last `development` result (below) |
@@ -56,9 +57,12 @@ of it): a command that failed early would measure nothing, so the bench stops wi
 ## Invariants
 
 - The library (`src/lib.rs`, `src/layers.rs`) computes; `src/main.rs` reads files, runs cargo and
-  prints. Tests drive the library with synthetic metadata, no workspace needed. `bench` keeps
-  the same split inside `src/bench/`: `report` and `check` compute, the other modules run
-  processes.
+  prints. `src/corpus/` follows the same split inside its module: `generate`, `yaml`, `rng`,
+  `workspace`, `faults` and `coverage` compute; `corpus/cli.rs` writes workspaces, runs the oracle
+  and prints (main.rs only dispatches to it). `bench` keeps the same split inside `src/bench/`:
+  `report` and `check` compute, the other modules run processes.
+- The corpus generator's output is a function of its options alone (own PRNG and YAML emitter, no
+  clock, environment or file); `tests/corpus_generate.rs` records its digests. Tests drive the library with synthetic metadata, no workspace needed.
 - The workspace to check is found at run time (`CARGO_MANIFEST_DIR` as `cargo run` sets it, else
   the working directory), and the table is `xtask/layers.toml` under the root `cargo metadata`
   prints. Never compile a path in with `env!`: a target pool that last served another worktree can
@@ -79,6 +83,10 @@ cargo xtask check-layers
   `tests/cmd/check-layers.in/`).
 - `tests/workspace.rs`: the binary in a two-crate workspace of its own with an upward edge, run as
   `cargo run` and as a plain binary: it must check that workspace, not the repository.
+- `tests/corpus_generate.rs`: the generator's recorded digests, counts, coverage of platforms and
+  features, layouts, slug file names, no literal secret. `src/corpus/*` unit tests: the YAML
+  emitter, the PRNG's reference values, the catalogue's parser, selectors, operations and verdicts.
+  The oracle runs only in `cargo xtask corpus faults --check` (the `Corpus` workflow).
 - `tests/bench.rs`: `bench` end to end on a stand-in `opentide`: a measured run, then an injected
   slowdown that `--check` must fail; `tests/cmd/bench.trycmd` holds `--check` to fixed reports.
 - `tests/lint_policy.rs`: every member inherits `[workspace.lints]`, except the crates allowed
@@ -92,6 +100,6 @@ cargo xtask check-layers
 
 ## Work items that change this crate
 
-UC-0.4 (#802) check-layers; UC-0.8 (#806) bench; UC-1.8 (#814) codegen; UC-0.5 (#803) golden;
+UC-0.4 (#802) check-layers; UC-0.6 (#804) corpus; UC-0.8 (#806) bench; UC-1.8 (#814) codegen; UC-0.5 (#803) golden;
 UC-1.6 (#812) the `sync_vocabularies --check` equivalent; UC-0.3 (#801) wires the checks into one
 CI. Lints and tests: [`crates/AGENTS.md`](../crates/AGENTS.md).

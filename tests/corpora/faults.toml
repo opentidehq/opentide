@@ -1,0 +1,2029 @@
+# The fault catalogue (UC-0.6, #804; plan §5.3). Each kind mutates its own
+# copy of the clean base workspace and names exactly the codes, with their
+# severity, that the oracle reports; the expectations are adjusted to what
+# opentide 0.23.0 reports, and what surprises is in KNOWN_GAPS.md.
+#
+#   cargo xtask corpus faults --check --engine python
+#   cargo xtask corpus coverage --check
+#
+# Format and process: README.md. COVERAGE.md maps every code to its kinds.
+oracle = "0.23.0"
+
+# The clean workspace: zero findings under every command the kinds use.
+[base]
+seed = 1
+threats = 80
+objectives = 30
+rules = 135
+layout = "explicit"
+
+# The combined fault workspace (`cargo xtask corpus faults --out DIR`, a
+# fixture of UC-0.5's goldens): every kind not marked isolated, once.
+[combined]
+threats = 120
+objectives = 60
+rules = 600
+
+[[kind]]
+id = "uuid-invalid-rule"
+codes = ["invalid_uuid"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "set", path = "metadata.uuid", value = "not-a-uuid-{n}" },
+]
+gap = "KG-04"
+
+[[kind]]
+id = "uuid-invalid-threat"
+codes = ["invalid_uuid"]
+severity = "error"
+target = { family = "threat", without = ["referenced"] }
+ops = [
+    { op = "set", path = "metadata.uuid", value = "{n}-not-a-uuid" },
+]
+gap = "KG-04"
+note = "threats no objective references, so no dangling reference follows"
+
+[[kind]]
+id = "uuid-duplicate-rule"
+class = "cross-file"
+codes = ["duplicate_id"]
+severity = "error"
+target = { family = "rule" }
+count = 6
+ops = [
+    { op = "copy_from_partner", path = "metadata.uuid", from_path = "metadata.uuid" },
+]
+per_target = false
+gap = "KG-04"
+note = "three pairs: one finding per pair, on the file indexed later"
+
+[[kind]]
+id = "uuid-duplicate-invalid"
+class = "cross-file"
+codes = ["duplicate_id", "invalid_uuid"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "set", path = "metadata.uuid", value = "not-a-uuid" },
+]
+per_target = false
+gap = "KG-04"
+note = "five files share one invalid UUID: one invalid_uuid, four duplicate_id"
+
+[[kind]]
+id = "uuid-missing"
+codes = ["missing_uuid"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "delete", path = "metadata.uuid" },
+]
+
+[[kind]]
+id = "schema-missing"
+codes = ["schema_missing"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "delete", path = "metadata.schema" },
+]
+
+[[kind]]
+id = "schema-validation-description"
+codes = ["schema_validation"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "delete", path = "description" },
+]
+
+[[kind]]
+id = "schema-validation-threat-impact"
+codes = ["schema_validation"]
+severity = "error"
+target = { family = "threat" }
+ops = [
+    { op = "set", path = "threat.impact", value = "Data Breach" },
+]
+note = "impact must be a list"
+
+[[kind]]
+id = "schema-validation-reviewed-on-1-0"
+codes = ["schema_validation"]
+severity = "error"
+target = { family = "rule", tags = ["rule::1.0"] }
+ops = [
+    { op = "set", path = "metadata.reviewed", raw = "2026-03-01" },
+]
+gap = "KG-02"
+note = "reviewed is a rule::1.1 field"
+
+[[kind]]
+id = "schema-validation-reviewed-word"
+codes = ["schema_validation"]
+severity = "error"
+target = { family = "rule", tags = ["rule::1.1"] }
+ops = [
+    { op = "set", path = "metadata.reviewed", value = "yesterday" },
+]
+gap = "KG-02"
+
+[[kind]]
+id = "gap-reviewed-in-future"
+codes = []
+severity = "error"
+target = { family = "rule", tags = ["rule::1.1"] }
+ops = [
+    { op = "set", path = "metadata.reviewed", raw = "2099-01-01" },
+]
+gap = "KG-02"
+note = "a review dated in the future: nothing is reported"
+
+[[kind]]
+id = "reviewed-impossible-date"
+codes = ["yaml_parse"]
+severity = "error"
+target = { family = "rule", tags = ["rule::1.1"] }
+ops = [
+    { op = "set", path = "metadata.reviewed", raw = "2026-02-30" },
+]
+gap = "KG-02"
+note = "PyYAML refuses the date before the model sees it"
+
+[[kind]]
+id = "schema-validation-sysdig-constraint"
+codes = ["schema_validation"]
+severity = "error"
+target = { family = "rule", platform = "sysdig" }
+ops = [
+    { op = "set", path = "configurations.sysdig.priority", value = "LOUD" },
+]
+note = "the engine's sysdig_priority surfaces as schema_validation (unreachable as its own code)"
+
+[[kind]]
+id = "vocab-unknown-tlp"
+codes = ["vocab_unknown"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "set", path = "metadata.tlp", value = "clearr" },
+]
+
+[[kind]]
+id = "vocab-unknown-threat-severity"
+codes = ["vocab_unknown"]
+severity = "error"
+target = { family = "threat" }
+ops = [
+    { op = "set", path = "threat.severity", value = "Big incident" },
+]
+
+[[kind]]
+id = "vocab-unknown-entity"
+codes = ["vocab_unknown"]
+severity = "error"
+target = { family = "objective" }
+ops = [
+    { op = "set", path = "objective.signals.0.entities.0", value = "Host::Gizmo" },
+]
+
+[[kind]]
+id = "chaining-relation-unknown"
+codes = ["chaining_relation_unknown"]
+severity = "error"
+target = { family = "threat", tags = ["chaining"] }
+ops = [
+    { op = "set", path = "threat.chaining.0.relation", value = "sequence::succeds" },
+]
+
+[[kind]]
+id = "ref-invalid-detection-model"
+class = "cross-file"
+codes = ["invalid_ref"]
+severity = "error"
+target = { family = "rule", tags = ["model:objective"] }
+ops = [
+    { op = "set", path = "detection_model", value = "00000000-0000-4000-8000-0000deadbeef" },
+]
+note = "a dangling reference"
+
+[[kind]]
+id = "ref-invalid-objective-threat"
+class = "cross-file"
+codes = ["invalid_ref"]
+severity = "error"
+target = { family = "objective", tags = ["threats"] }
+ops = [
+    { op = "set", path = "objective.threats.0", value = "00000000-0000-4000-8000-00000000beef" },
+]
+
+[[kind]]
+id = "gap-rule-status-unchecked"
+codes = []
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "set", path = "status", value = "NOPE" },
+]
+gap = "KG-15"
+note = "the rule-level status is read by no command and checked by none; the block status is (config-enum-unknown-status)"
+
+[[kind]]
+id = "config-enum-unknown-status"
+codes = ["config_enum_unknown"]
+severity = "error"
+target = { family = "rule", platform = "sentinel" }
+ops = [
+    { op = "set", path = "configurations.sentinel.status", value = "NOPE" },
+]
+
+[[kind]]
+id = "config-enum-unknown-responder"
+codes = ["config_enum_unknown"]
+severity = "error"
+target = { family = "rule", tags = ["responders"] }
+ops = [
+    { op = "set", path = "response.responders", value = "Night Shift" },
+]
+
+[[kind]]
+id = "gap-unknown-block-tenant"
+codes = []
+severity = "error"
+target = { family = "rule", platform = "sentinel", tags = ["sentinel:tenants"] }
+ops = [
+    { op = "set", path = "configurations.sentinel.tenants.0", value = "no-such-tenant" },
+]
+gap = "KG-11"
+note = "a block naming a tenant the platform does not declare: nothing is reported"
+
+[[kind]]
+id = "external-id-in-rule"
+codes = ["external_id_in_rule"]
+severity = "error"
+target = { family = "rule", platform = "sentinel" }
+ops = [
+    { op = "set", path = "configurations.sentinel.rule_id", value = "abc-{n}" },
+]
+
+[[kind]]
+id = "nested-object-file"
+codes = ["nested_object_file"]
+severity = "warning"
+target = { family = "rule" }
+ops = [
+    { op = "rename", to = "{dir}nested/{name}" },
+]
+
+[[kind]]
+id = "platform-not-enabled"
+codes = ["platform_not_enabled"]
+severity = "warning"
+target = { family = "config", tags = ["config:platforms"] }
+ops = [
+    { op = "set", path = "platform.enabled", value = false },
+]
+per_target = false
+isolated = true
+note = "reported on every rule block of the disabled platforms, whose queries are then not checked"
+
+[[kind]]
+id = "deployment-state-shape"
+codes = ["deployment_state_shape"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/states/deployment/{uuid}.json", text = "{\"schema\": \"deployment.state::1.0\", \"object_uuid\": \"{uuid}\"}\n" },
+]
+per_target = false
+note = "the finding names the shard, not the rule"
+
+[[kind]]
+id = "deployment-state-platform"
+codes = ["deployment_state_platform"]
+severity = "error"
+target = { family = "rule", platform = "splunk" }
+ops = [
+    { op = "add_file", path = ".opentide/states/deployment/{uuid}.json", text = "{\"schema\": \"deployment.state::1.0\", \"object_uuid\": \"{uuid}\", \"platforms\": {\"splunk\": {\"prod\": \"x\"}}}\n" },
+]
+per_target = false
+
+[[kind]]
+id = "deployment-state-uuid-mismatch"
+codes = ["deployment_state_uuid_mismatch"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/states/deployment/{uuid}.json", text = "{\"schema\": \"deployment.state::1.0\", \"object_uuid\": \"00000000-0000-4000-8000-00000000000{n}\", \"platforms\": {}}\n" },
+]
+per_target = false
+
+[[kind]]
+id = "scope-no-match"
+codes = ["scope_no_match"]
+severity = "error"
+command = ["validate", "--file", "nope.yaml"]
+target = { family = "config", path = ".opentide/configurations/deployment.toml" }
+count = 1
+ops = []
+baseline = false
+per_target = false
+note = "a scope that matches no file; any workspace"
+
+[[kind]]
+id = "yaml-parse-rule"
+codes = ["yaml_parse"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "append_text", text = "broken: [unclosed\n" },
+]
+
+[[kind]]
+id = "yaml-parse-tab"
+codes = ["yaml_parse"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "append_text", text = "\tindent: tab\n" },
+]
+
+[[kind]]
+id = "yaml-parse-empty"
+codes = ["yaml_parse"]
+severity = "error"
+target = { family = "threat", without = ["referenced"] }
+ops = [
+    { op = "write", text = "" },
+]
+
+[[kind]]
+id = "cve-lookup-unavailable"
+codes = ["cve_lookup_unavailable"]
+severity = "warning"
+command = ["validate", "--check", "cve"]
+target = { family = "threat" }
+ops = [
+    { op = "set", path = "threat.cve", value = ["CVE-2024-3400"] },
+]
+env = { HTTPS_PROXY = "http://127.0.0.1:9", HTTP_PROXY = "http://127.0.0.1:9", NO_PROXY = "" }
+per_target = false
+note = "the lookup goes through a dead proxy, so it fails the same way everywhere"
+
+[[kind]]
+id = "compile-invalid-rule-frequency"
+codes = ["compile_invalid_rule"]
+severity = "error"
+target = { family = "rule", platform = "sentinel", tags = ["sentinel:scheduled"] }
+ops = [
+    { op = "set", path = "configurations.sentinel.scheduling.frequency", value = "hourly" },
+]
+isolated = true
+gap = "KG-01"
+note = "the compile check runs only when the run has no other issue"
+
+[[kind]]
+id = "compile-invalid-value-suppression"
+codes = ["compile_invalid_value"]
+severity = "error"
+target = { family = "rule", platform = "sentinel" }
+ops = [
+    { op = "set", path = "configurations.sentinel.alert.suppression", raw = "true" },
+]
+isolated = true
+gap = "KG-10"
+note = "the compile check runs only when the run has no other issue"
+
+[[kind]]
+id = "compile-missing-field-grouping"
+codes = ["compile_missing_field"]
+severity = "error"
+target = { family = "rule", platform = "sentinel" }
+ops = [
+    { op = "delete", path = "configurations.sentinel.grouping.alert" },
+]
+isolated = true
+gap = "KG-10"
+note = "the compile check runs only when the run has no other issue"
+
+[[kind]]
+id = "compile-empty-block-response"
+codes = ["compile_empty_block"]
+severity = "error"
+target = { family = "rule", platform = "sentinel" }
+ops = [
+    { op = "set", path = "response", raw = "null" },
+    { op = "delete", path = "configurations.sentinel.alert.severity" },
+]
+isolated = true
+gap = "KG-10"
+note = "the compile check runs only when the run has no other issue"
+
+[[kind]]
+id = "compile-failed-elastic-severity"
+codes = ["compile_failed"]
+severity = "error"
+target = { family = "rule", platform = "elastic" }
+ops = [
+    { op = "delete", path = "configurations.elastic.severity.mapping" },
+]
+isolated = true
+gap = "KG-09"
+
+[[kind]]
+id = "combo-tlp-and-status"
+class = "combination"
+codes = ["vocab_unknown", "config_enum_unknown"]
+severity = "error"
+target = { family = "rule", platform = "splunk" }
+ops = [
+    { op = "set", path = "metadata.tlp", value = "ambr" },
+    { op = "set", path = "configurations.splunk.status", value = "LIVE" },
+]
+
+[[kind]]
+id = "combo-uuid-and-schema"
+class = "combination"
+codes = ["invalid_uuid", "schema_validation"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "set", path = "metadata.uuid", value = "bad-{n}" },
+    { op = "delete", path = "description" },
+]
+
+[[kind]]
+id = "combo-query-and-vocab"
+class = "combination"
+codes = ["kql_parse_error", "vocab_unknown"]
+severity = "error"
+target = { family = "rule", platform = "sentinel" }
+ops = [
+    { op = "set", path = "configurations.sentinel.query", value = "SecurityEvent | where (\n" },
+    { op = "set", path = "metadata.tlp", value = "whitish" },
+]
+
+[[kind]]
+id = "config-unknown-key-platform"
+codes = ["unknown_key"]
+severity = "error"
+target = { family = "config", tags = ["config:platforms"] }
+ops = [
+    { op = "set", path = "platform.colour", value = "blue" },
+]
+per_target = false
+gap = "KG-12"
+
+[[kind]]
+id = "config-missing-field-tenant"
+codes = ["missing_field"]
+severity = "error"
+target = { family = "config", tags = ["tenants"] }
+ops = [
+    { op = "delete", path = "tenants.0.name" },
+]
+per_target = false
+gap = "KG-12"
+
+[[kind]]
+id = "config-schema-validation-platform"
+codes = ["schema_validation"]
+severity = "error"
+target = { family = "config", tags = ["config:platforms"] }
+ops = [
+    { op = "set", path = "platform.name", value = 5 },
+]
+per_target = false
+gap = "KG-12"
+
+[[kind]]
+id = "config-promotion-target-unknown"
+codes = ["promotion_target_unknown"]
+severity = "error"
+target = { family = "config", path = ".opentide/configurations/deployment.toml" }
+count = 1
+ops = [
+    { op = "set", path = "promotion.promotion_target", value = "NOPE" },
+]
+per_target = false
+gap = "KG-12"
+note = "deployment.toml is one file"
+
+[[kind]]
+id = "config-unknown-key-deployment"
+codes = ["unknown_key"]
+severity = "error"
+target = { family = "config", path = ".opentide/configurations/deployment.toml" }
+count = 1
+ops = [
+    { op = "set", path = "colour", value = "blue" },
+]
+per_target = false
+gap = "KG-12"
+
+[[kind]]
+id = "gap-extra-configuration-file"
+codes = []
+severity = "error"
+target = { family = "config", path = ".opentide/configurations/deployment.toml" }
+count = 1
+ops = [
+    { op = "add_file", path = ".opentide/configurations/colours.toml", text = "[colour]\nname = \"blue\"\n" },
+]
+per_target = false
+gap = "KG-06"
+note = "a .toml under configurations/ that opentide does not know is ignored without a word"
+
+[[kind]]
+id = "config-asset-unknown"
+codes = ["asset_unknown"]
+severity = "warning"
+target = { family = "config", path = ".opentide/configurations/visibility.toml" }
+count = 1
+ops = [
+    { op = "append_text", text = "\n[[logsources]]\nname = \"Ghost1\"\ndescription = \"An unknown asset\"\nsystem = \"sentinel\"\nassets = [\"ghost-1\"]\n\n[[logsources]]\nname = \"Ghost2\"\ndescription = \"An unknown asset\"\nsystem = \"sentinel\"\nassets = [\"ghost-2\"]\n\n[[logsources]]\nname = \"Ghost3\"\ndescription = \"An unknown asset\"\nsystem = \"sentinel\"\nassets = [\"ghost-3\"]\n\n[[logsources]]\nname = \"Ghost4\"\ndescription = \"An unknown asset\"\nsystem = \"sentinel\"\nassets = [\"ghost-4\"]\n\n[[logsources]]\nname = \"Ghost5\"\ndescription = \"An unknown asset\"\nsystem = \"sentinel\"\nassets = [\"ghost-5\"]\n" },
+]
+per_target = false
+note = "five log sources in the one visibility.toml"
+
+[[kind]]
+id = "sharing-api-key-literal"
+codes = ["api_key_literal"]
+severity = "warning"
+command = ["validate", "--check", "sharing-config"]
+target = { family = "config", path = ".opentide/configurations/deployment.toml" }
+count = 1
+ops = [
+    { op = "add_file", path = ".opentide/configurations/sharing.toml", text = "[[misp]]\nname = \"circl1\"\nurl = \"https://misp1.example\"\napi_key = \"obviously-fake-literal-key\"\nmax_tlp = \"amber\"\n[[misp]]\nname = \"circl2\"\nurl = \"https://misp2.example\"\napi_key = \"obviously-fake-literal-key\"\nmax_tlp = \"amber\"\n[[misp]]\nname = \"circl3\"\nurl = \"https://misp3.example\"\napi_key = \"obviously-fake-literal-key\"\nmax_tlp = \"amber\"\n[[misp]]\nname = \"circl4\"\nurl = \"https://misp4.example\"\napi_key = \"obviously-fake-literal-key\"\nmax_tlp = \"amber\"\n[[misp]]\nname = \"circl5\"\nurl = \"https://misp5.example\"\napi_key = \"obviously-fake-literal-key\"\nmax_tlp = \"amber\"\n" },
+]
+per_target = false
+isolated = true
+
+[[kind]]
+id = "sharing-duplicate-name"
+codes = ["duplicate_name"]
+severity = "error"
+command = ["validate", "--check", "sharing-config"]
+target = { family = "config", path = ".opentide/configurations/deployment.toml" }
+count = 1
+ops = [
+    { op = "add_file", path = ".opentide/configurations/sharing.toml", text = "[[misp]]\nname = \"circl\"\nurl = \"https://misp1.example\"\napi_key = \"${MISP_API_KEY}\"\nmax_tlp = \"amber\"\n[[misp]]\nname = \"circl\"\nurl = \"https://misp2.example\"\napi_key = \"${MISP_API_KEY}\"\nmax_tlp = \"amber\"\n[[misp]]\nname = \"circl\"\nurl = \"https://misp3.example\"\napi_key = \"${MISP_API_KEY}\"\nmax_tlp = \"amber\"\n[[misp]]\nname = \"circl\"\nurl = \"https://misp4.example\"\napi_key = \"${MISP_API_KEY}\"\nmax_tlp = \"amber\"\n[[misp]]\nname = \"circl\"\nurl = \"https://misp5.example\"\napi_key = \"${MISP_API_KEY}\"\nmax_tlp = \"amber\"\n" },
+]
+per_target = false
+isolated = true
+
+[[kind]]
+id = "sharing-name-invalid"
+codes = ["name_invalid"]
+severity = "error"
+command = ["validate", "--check", "sharing-config"]
+target = { family = "config", path = ".opentide/configurations/deployment.toml" }
+count = 1
+ops = [
+    { op = "add_file", path = ".opentide/configurations/sharing.toml", text = "[[misp]]\nname = \"Bad Name 1\"\nurl = \"https://misp1.example\"\napi_key = \"${MISP_API_KEY}\"\nmax_tlp = \"amber\"\n[[misp]]\nname = \"Bad Name 2\"\nurl = \"https://misp2.example\"\napi_key = \"${MISP_API_KEY}\"\nmax_tlp = \"amber\"\n[[misp]]\nname = \"Bad Name 3\"\nurl = \"https://misp3.example\"\napi_key = \"${MISP_API_KEY}\"\nmax_tlp = \"amber\"\n[[misp]]\nname = \"Bad Name 4\"\nurl = \"https://misp4.example\"\napi_key = \"${MISP_API_KEY}\"\nmax_tlp = \"amber\"\n[[misp]]\nname = \"Bad Name 5\"\nurl = \"https://misp5.example\"\napi_key = \"${MISP_API_KEY}\"\nmax_tlp = \"amber\"\n" },
+]
+per_target = false
+isolated = true
+
+[[kind]]
+id = "sharing-max-tlp-unknown"
+codes = ["max_tlp_unknown"]
+severity = "error"
+command = ["validate", "--check", "sharing-config"]
+target = { family = "config", path = ".opentide/configurations/deployment.toml" }
+count = 1
+ops = [
+    { op = "add_file", path = ".opentide/configurations/sharing.toml", text = "[[misp]]\nname = \"circl1\"\nurl = \"https://misp1.example\"\napi_key = \"${MISP_API_KEY}\"\nmax_tlp = \"purple\"\n[[misp]]\nname = \"circl2\"\nurl = \"https://misp2.example\"\napi_key = \"${MISP_API_KEY}\"\nmax_tlp = \"purple\"\n[[misp]]\nname = \"circl3\"\nurl = \"https://misp3.example\"\napi_key = \"${MISP_API_KEY}\"\nmax_tlp = \"purple\"\n[[misp]]\nname = \"circl4\"\nurl = \"https://misp4.example\"\napi_key = \"${MISP_API_KEY}\"\nmax_tlp = \"purple\"\n[[misp]]\nname = \"circl5\"\nurl = \"https://misp5.example\"\napi_key = \"${MISP_API_KEY}\"\nmax_tlp = \"purple\"\n" },
+]
+per_target = false
+isolated = true
+
+[[kind]]
+id = "sharing-url-invalid"
+codes = ["url_invalid"]
+severity = "error"
+command = ["validate", "--check", "sharing-config"]
+target = { family = "config", path = ".opentide/configurations/deployment.toml" }
+count = 1
+ops = [
+    { op = "add_file", path = ".opentide/configurations/sharing.toml", text = "[[misp]]\nname = \"circl1\"\nurl = \"ftp://misp1.example\"\napi_key = \"${MISP_API_KEY}\"\nmax_tlp = \"amber\"\n[[misp]]\nname = \"circl2\"\nurl = \"ftp://misp2.example\"\napi_key = \"${MISP_API_KEY}\"\nmax_tlp = \"amber\"\n[[misp]]\nname = \"circl3\"\nurl = \"ftp://misp3.example\"\napi_key = \"${MISP_API_KEY}\"\nmax_tlp = \"amber\"\n[[misp]]\nname = \"circl4\"\nurl = \"ftp://misp4.example\"\napi_key = \"${MISP_API_KEY}\"\nmax_tlp = \"amber\"\n[[misp]]\nname = \"circl5\"\nurl = \"ftp://misp5.example\"\napi_key = \"${MISP_API_KEY}\"\nmax_tlp = \"amber\"\n" },
+]
+per_target = false
+isolated = true
+
+[[kind]]
+id = "sharing-invalid-value"
+codes = ["invalid_value"]
+severity = "error"
+command = ["validate", "--check", "sharing-config"]
+target = { family = "config", path = ".opentide/configurations/deployment.toml" }
+count = 1
+ops = [
+    { op = "add_file", path = ".opentide/configurations/sharing.toml", text = "[[misp]]\nname = \"circl1\"\nurl = \"https://misp1.example\"\napi_key = \"${MISP_API_KEY}\"\nmax_tlp = \"amber\"\nverify_ssl = \"maybe\"\n[[misp]]\nname = \"circl2\"\nurl = \"https://misp2.example\"\napi_key = \"${MISP_API_KEY}\"\nmax_tlp = \"amber\"\nverify_ssl = \"maybe\"\n[[misp]]\nname = \"circl3\"\nurl = \"https://misp3.example\"\napi_key = \"${MISP_API_KEY}\"\nmax_tlp = \"amber\"\nverify_ssl = \"maybe\"\n[[misp]]\nname = \"circl4\"\nurl = \"https://misp4.example\"\napi_key = \"${MISP_API_KEY}\"\nmax_tlp = \"amber\"\nverify_ssl = \"maybe\"\n[[misp]]\nname = \"circl5\"\nurl = \"https://misp5.example\"\napi_key = \"${MISP_API_KEY}\"\nmax_tlp = \"amber\"\nverify_ssl = \"maybe\"\n" },
+]
+per_target = false
+isolated = true
+
+[[kind]]
+id = "sharing-object-type-unknown"
+codes = ["object_type_unknown"]
+severity = "error"
+command = ["validate", "--check", "sharing-config"]
+target = { family = "config", path = ".opentide/configurations/deployment.toml" }
+count = 1
+ops = [
+    { op = "add_file", path = ".opentide/configurations/sharing.toml", text = "[[misp]]\nname = \"circl1\"\nurl = \"https://misp1.example\"\napi_key = \"${MISP_API_KEY}\"\nmax_tlp = \"amber\"\nobject_types = [\"widget\"]\n[[misp]]\nname = \"circl2\"\nurl = \"https://misp2.example\"\napi_key = \"${MISP_API_KEY}\"\nmax_tlp = \"amber\"\nobject_types = [\"widget\"]\n[[misp]]\nname = \"circl3\"\nurl = \"https://misp3.example\"\napi_key = \"${MISP_API_KEY}\"\nmax_tlp = \"amber\"\nobject_types = [\"widget\"]\n[[misp]]\nname = \"circl4\"\nurl = \"https://misp4.example\"\napi_key = \"${MISP_API_KEY}\"\nmax_tlp = \"amber\"\nobject_types = [\"widget\"]\n[[misp]]\nname = \"circl5\"\nurl = \"https://misp5.example\"\napi_key = \"${MISP_API_KEY}\"\nmax_tlp = \"amber\"\nobject_types = [\"widget\"]\n" },
+]
+per_target = false
+isolated = true
+
+[[kind]]
+id = "sharing-organisation-uuid-invalid"
+codes = ["organisation_uuid_invalid"]
+severity = "error"
+command = ["validate", "--check", "sharing-config"]
+target = { family = "config", path = ".opentide/configurations/deployment.toml" }
+count = 1
+ops = [
+    { op = "add_file", path = ".opentide/configurations/sharing.toml", text = "[[misp]]\nname = \"circl1\"\nurl = \"https://misp1.example\"\napi_key = \"${MISP_API_KEY}\"\nmax_tlp = \"amber\"\norganisation_uuid = \"xyz1\"\n[[misp]]\nname = \"circl2\"\nurl = \"https://misp2.example\"\napi_key = \"${MISP_API_KEY}\"\nmax_tlp = \"amber\"\norganisation_uuid = \"xyz2\"\n[[misp]]\nname = \"circl3\"\nurl = \"https://misp3.example\"\napi_key = \"${MISP_API_KEY}\"\nmax_tlp = \"amber\"\norganisation_uuid = \"xyz3\"\n[[misp]]\nname = \"circl4\"\nurl = \"https://misp4.example\"\napi_key = \"${MISP_API_KEY}\"\nmax_tlp = \"amber\"\norganisation_uuid = \"xyz4\"\n[[misp]]\nname = \"circl5\"\nurl = \"https://misp5.example\"\napi_key = \"${MISP_API_KEY}\"\nmax_tlp = \"amber\"\norganisation_uuid = \"xyz5\"\n" },
+]
+per_target = false
+isolated = true
+
+[[kind]]
+id = "sharing-rule-status-unknown"
+codes = ["rule_status_unknown"]
+severity = "error"
+command = ["validate", "--check", "sharing-config"]
+target = { family = "config", path = ".opentide/configurations/deployment.toml" }
+count = 1
+ops = [
+    { op = "add_file", path = ".opentide/configurations/sharing.toml", text = "[[misp]]\nname = \"circl1\"\nurl = \"https://misp1.example\"\napi_key = \"${MISP_API_KEY}\"\nmax_tlp = \"amber\"\nrule_statuses = [\"NOPE\"]\n[[misp]]\nname = \"circl2\"\nurl = \"https://misp2.example\"\napi_key = \"${MISP_API_KEY}\"\nmax_tlp = \"amber\"\nrule_statuses = [\"NOPE\"]\n[[misp]]\nname = \"circl3\"\nurl = \"https://misp3.example\"\napi_key = \"${MISP_API_KEY}\"\nmax_tlp = \"amber\"\nrule_statuses = [\"NOPE\"]\n[[misp]]\nname = \"circl4\"\nurl = \"https://misp4.example\"\napi_key = \"${MISP_API_KEY}\"\nmax_tlp = \"amber\"\nrule_statuses = [\"NOPE\"]\n[[misp]]\nname = \"circl5\"\nurl = \"https://misp5.example\"\napi_key = \"${MISP_API_KEY}\"\nmax_tlp = \"amber\"\nrule_statuses = [\"NOPE\"]\n" },
+]
+per_target = false
+isolated = true
+
+[[kind]]
+id = "sharing-unknown-key"
+codes = ["unknown_key"]
+severity = "error"
+command = ["validate", "--check", "sharing-config"]
+target = { family = "config", path = ".opentide/configurations/deployment.toml" }
+count = 1
+ops = [
+    { op = "add_file", path = ".opentide/configurations/sharing.toml", text = "[[misp]]\nname = \"circl1\"\nurl = \"https://misp1.example\"\napi_key = \"${MISP_API_KEY}\"\nmax_tlp = \"amber\"\ncolour = \"blue\"\n[[misp]]\nname = \"circl2\"\nurl = \"https://misp2.example\"\napi_key = \"${MISP_API_KEY}\"\nmax_tlp = \"amber\"\ncolour = \"blue\"\n[[misp]]\nname = \"circl3\"\nurl = \"https://misp3.example\"\napi_key = \"${MISP_API_KEY}\"\nmax_tlp = \"amber\"\ncolour = \"blue\"\n[[misp]]\nname = \"circl4\"\nurl = \"https://misp4.example\"\napi_key = \"${MISP_API_KEY}\"\nmax_tlp = \"amber\"\ncolour = \"blue\"\n[[misp]]\nname = \"circl5\"\nurl = \"https://misp5.example\"\napi_key = \"${MISP_API_KEY}\"\nmax_tlp = \"amber\"\ncolour = \"blue\"\n" },
+]
+per_target = false
+isolated = true
+
+[[kind]]
+id = "sharing-missing-field"
+codes = ["missing_field"]
+severity = "error"
+command = ["validate", "--check", "sharing-config"]
+target = { family = "config", path = ".opentide/configurations/deployment.toml" }
+count = 1
+ops = [
+    { op = "add_file", path = ".opentide/configurations/sharing.toml", text = "[[misp]]\nname = \"circl1\"\napi_key = \"${MISP_API_KEY}\"\nmax_tlp = \"amber\"\n[[misp]]\nname = \"circl2\"\napi_key = \"${MISP_API_KEY}\"\nmax_tlp = \"amber\"\n[[misp]]\nname = \"circl3\"\napi_key = \"${MISP_API_KEY}\"\nmax_tlp = \"amber\"\n[[misp]]\nname = \"circl4\"\napi_key = \"${MISP_API_KEY}\"\nmax_tlp = \"amber\"\n[[misp]]\nname = \"circl5\"\napi_key = \"${MISP_API_KEY}\"\nmax_tlp = \"amber\"\n" },
+]
+per_target = false
+isolated = true
+
+[[kind]]
+id = "sharing-unknown-connector"
+codes = ["unknown_connector"]
+severity = "warning"
+command = ["validate", "--check", "sharing-config"]
+target = { family = "config", path = ".opentide/configurations/deployment.toml" }
+count = 1
+ops = [
+    { op = "add_file", path = ".opentide/configurations/sharing.toml", text = "[[misp]]\nname = \"circl1\"\nurl = \"https://misp1.example\"\napi_key = \"${MISP_API_KEY}\"\nmax_tlp = \"amber\"\n[[slack]]\nname = \"x1\"\n[[slack]]\nname = \"x2\"\n[[slack]]\nname = \"x3\"\n[[slack]]\nname = \"x4\"\n[[slack]]\nname = \"x5\"\n" },
+]
+per_target = false
+isolated = true
+
+[[kind]]
+id = "gap-sharing-dollar-variable"
+codes = ["api_key_literal"]
+severity = "warning"
+command = ["validate", "--check", "sharing-config"]
+target = { family = "config", path = ".opentide/configurations/deployment.toml" }
+count = 1
+ops = [
+    { op = "add_file", path = ".opentide/configurations/sharing.toml", text = "[[misp]]\nname = \"circl1\"\nurl = \"https://misp1.example\"\napi_key = \"$MISP_API_KEY\"\nmax_tlp = \"amber\"\n[[misp]]\nname = \"circl2\"\nurl = \"https://misp2.example\"\napi_key = \"$MISP_API_KEY\"\nmax_tlp = \"amber\"\n[[misp]]\nname = \"circl3\"\nurl = \"https://misp3.example\"\napi_key = \"$MISP_API_KEY\"\nmax_tlp = \"amber\"\n[[misp]]\nname = \"circl4\"\nurl = \"https://misp4.example\"\napi_key = \"$MISP_API_KEY\"\nmax_tlp = \"amber\"\n[[misp]]\nname = \"circl5\"\nurl = \"https://misp5.example\"\napi_key = \"$MISP_API_KEY\"\nmax_tlp = \"amber\"\n" },
+]
+per_target = false
+isolated = true
+gap = "KG-13"
+note = "$VAR, the form platform tenants use, counts as a literal key in sharing.toml; ${VAR} does not"
+
+[[kind]]
+id = "sharing-config-parse"
+codes = ["config_parse"]
+severity = "error"
+command = ["validate", "--check", "sharing-config"]
+target = { family = "config", path = ".opentide/configurations/deployment.toml" }
+count = 1
+ops = [
+    { op = "add_file", path = ".opentide/configurations/sharing.toml", text = "[[misp]]\nname = \"circl1\"\nurl = \"https://misp1.example\"\napi_key = \"${MISP_API_KEY}\"\nmax_tlp = \"amber\"\nx = = 1\n" },
+]
+per_target = false
+isolated = true
+
+[[kind]]
+id = "sharing-directory"
+codes = ["sharing_directory"]
+severity = "error"
+command = ["validate", "--check", "sharing-config"]
+target = { family = "config", path = ".opentide/configurations/deployment.toml" }
+count = 1
+ops = [
+    { op = "add_file", path = ".opentide/configurations/sharing/a.toml", text = "[[misp]]\nname = \"circl1\"\nurl = \"https://misp1.example\"\napi_key = \"${MISP_API_KEY}\"\nmax_tlp = \"amber\"\n" },
+]
+per_target = false
+isolated = true
+
+[[kind]]
+id = "lint-filename-mismatch"
+codes = ["filename_mismatch"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule" }
+ops = [
+    { op = "rename", to = "{dir}renamed-{n}.yaml" },
+]
+gap = "KG-03"
+
+[[kind]]
+id = "lint-filename-mismatch-prefix"
+codes = ["filename_mismatch"]
+severity = "warning"
+command = ["lint"]
+target = { family = "threat" }
+ops = [
+    { op = "rename", to = "{dir}{stem}-v2.yaml" },
+]
+gap = "KG-03"
+note = "the engine's filename_slug accepts this name; lint does not"
+
+[[kind]]
+id = "lint-filename-pattern"
+codes = ["filename_pattern"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/lint.toml", text = "[filenames]\npattern = '^rule-[a-z0-9-]+$'\n" },
+]
+note = "the slug names do not start with rule-"
+
+[[kind]]
+id = "lint-metadata-recommended"
+codes = ["metadata_recommended"]
+severity = "info"
+command = ["lint"]
+target = { family = "rule" }
+ops = [
+    { op = "delete", path = "metadata.author" },
+]
+gap = "KG-05"
+
+[[kind]]
+id = "lint-metadata-recommended-organisation"
+codes = ["metadata_recommended"]
+severity = "info"
+command = ["lint"]
+target = { family = "objective" }
+ops = [
+    { op = "delete", path = "metadata.organisation" },
+]
+gap = "KG-05"
+
+[[kind]]
+id = "lint-name-missing"
+codes = ["name_missing"]
+severity = "error"
+command = ["lint"]
+target = { family = "rule" }
+ops = [
+    { op = "delete", path = "name" },
+]
+
+[[kind]]
+id = "lint-placeholder"
+codes = ["placeholder"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule" }
+ops = [
+    { op = "set", path = "metadata.author", raw = "Corpus Generator  # opentide:placeholder" },
+]
+
+[[kind]]
+id = "lint-yaml-parse"
+codes = ["yaml_parse"]
+severity = "error"
+command = ["lint"]
+target = { family = "rule" }
+ops = [
+    { op = "append_text", text = "broken: [unclosed\n" },
+]
+
+[[kind]]
+id = "kql-parse-error"
+codes = ["kql_parse_error"]
+severity = "error"
+command = ["validate"]
+target = { family = "rule", platform = "sentinel" }
+ops = [
+    { op = "set", path = "configurations.sentinel.query", value = "SecurityEvent\n| where (\n" },
+]
+
+[[kind]]
+id = "kql-control-command-unsupported"
+codes = ["kql_control_command_unsupported"]
+severity = "error"
+command = ["validate"]
+target = { family = "rule", platform = "sentinel" }
+ops = [
+    { op = "set", path = "configurations.sentinel.query", value = ".show tables\n" },
+]
+
+[[kind]]
+id = "kql-type-mismatch"
+codes = ["kql_type_mismatch"]
+severity = "error"
+command = ["validate"]
+target = { family = "rule", platform = "sentinel" }
+ops = [
+    { op = "set", path = "configurations.sentinel.query", value = "SigninLogs\n| where ResultType > 5\n" },
+]
+
+[[kind]]
+id = "kql-unknown-column"
+codes = ["kql_unknown_column"]
+severity = "error"
+command = ["validate"]
+target = { family = "rule", platform = "sentinel" }
+ops = [
+    { op = "set", path = "configurations.sentinel.query", value = "SecurityEvent\n| where EventIDD == 4688\n" },
+]
+
+[[kind]]
+id = "kql-unknown-function"
+codes = ["kql_unknown_function"]
+severity = "error"
+command = ["validate"]
+target = { family = "rule", platform = "sentinel" }
+ops = [
+    { op = "set", path = "configurations.sentinel.query", value = "SecurityEvent\n| extend x = tolowr(Computer)\n" },
+]
+
+[[kind]]
+id = "kql-unknown-operator"
+codes = ["kql_unknown_operator"]
+severity = "error"
+command = ["validate"]
+target = { family = "rule", platform = "sentinel" }
+ops = [
+    { op = "set", path = "configurations.sentinel.query", value = "SecurityEvent\n| frobnicate\n" },
+]
+
+[[kind]]
+id = "kql-unknown-table"
+codes = ["kql_unknown_table"]
+severity = "error"
+command = ["validate"]
+target = { family = "rule", platform = "defender_for_endpoint" }
+ops = [
+    { op = "set", path = "configurations.defender_for_endpoint.query", value = "DeviceProcessEvnts\n| take 1\n" },
+]
+
+[[kind]]
+id = "kql-deprecated-function"
+codes = ["kql_deprecated_function"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "sentinel" }
+ops = [
+    { op = "set", path = "configurations.sentinel.query", value = "SecurityEvent\n| summarize any(Computer)\n" },
+]
+
+[[kind]]
+id = "kql-deprecated-operator"
+codes = ["kql_deprecated_operator"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "sentinel" }
+ops = [
+    { op = "set", path = "configurations.sentinel.query", value = "SecurityEvent\n| where Computer containscs 'a'\n" },
+]
+
+[[kind]]
+id = "kql-join-summarize-before-project"
+codes = ["kql_join_summarize_before_project"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "sentinel" }
+ops = [
+    { op = "set", path = "configurations.sentinel.query", value = "SecurityEvent\n| join kind=inner (SigninLogs) on $left.Account == $right.UserPrincipalName\n| project Computer\n" },
+]
+
+[[kind]]
+id = "kql-render-not-valid"
+codes = ["kql_render_not_valid"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "sentinel" }
+ops = [
+    { op = "set", path = "configurations.sentinel.query", value = "SecurityEvent\n| render table\n" },
+]
+
+[[kind]]
+id = "kql-unscoped-search"
+codes = ["kql_unscoped_search"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "sentinel" }
+ops = [
+    { op = "set", path = "configurations.sentinel.query", value = "search \"error\"\n" },
+]
+
+[[kind]]
+id = "kql-unscoped-union"
+codes = ["kql_unscoped_union"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "sentinel" }
+ops = [
+    { op = "set", path = "configurations.sentinel.query", value = "union * | take 1\n" },
+]
+gap = "KG-08"
+
+[[kind]]
+id = "kql-where-not-first"
+codes = ["kql_where_not_first"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "sentinel" }
+ops = [
+    { op = "set", path = "configurations.sentinel.query", value = "SecurityEvent\n| extend Computer = tolower(Computer)\n| where EventID == 4688\n" },
+]
+
+[[kind]]
+id = "kql-wildcard-table"
+codes = ["kql_wildcard_table"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "sentinel" }
+ops = [
+    { op = "set", path = "configurations.sentinel.query", value = "search in (SecurityEvent, *) \"error\"\n" },
+]
+gap = "KG-08"
+
+[[kind]]
+id = "kql-table-not-declared"
+codes = ["kql_table_not_declared"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "sentinel" }
+ops = [
+    { op = "set", path = "configurations.sentinel.query", value = "AuditLogs\n| where OperationName == \"Add member to role\"\n" },
+]
+
+[[kind]]
+id = "kql-wildcard-union-validate"
+codes = ["kql_parse_error"]
+severity = "error"
+command = ["validate"]
+target = { family = "rule", platform = "sentinel" }
+ops = [
+    { op = "set", path = "configurations.sentinel.query", value = "union * | take 1\n" },
+]
+gap = "KG-08"
+note = "the same query lint reports as kql_unscoped_union is a parse error to validate"
+
+[[kind]]
+id = "spl-command-without-pipe"
+codes = ["spl_command_without_pipe"]
+severity = "error"
+command = ["validate"]
+target = { family = "rule", platform = "splunk" }
+ops = [
+    { op = "set", path = "configurations.splunk.query", value = "stats count by host\n" },
+]
+
+[[kind]]
+id = "spl-empty-command"
+codes = ["spl_empty_command"]
+severity = "error"
+command = ["validate"]
+target = { family = "rule", platform = "splunk" }
+ops = [
+    { op = "set", path = "configurations.splunk.query", value = "index=a | stats\n" },
+]
+
+[[kind]]
+id = "spl-parse-error"
+codes = ["spl_parse_error"]
+severity = "error"
+command = ["validate"]
+target = { family = "rule", platform = "splunk" }
+ops = [
+    { op = "set", path = "configurations.splunk.query", value = "index=main | eval x=(\n" },
+]
+
+[[kind]]
+id = "spl-search-operator"
+codes = ["spl_search_operator"]
+severity = "error"
+command = ["validate"]
+target = { family = "rule", platform = "splunk" }
+ops = [
+    { op = "set", path = "configurations.splunk.query", value = "index=main host==x\n" },
+]
+
+[[kind]]
+id = "spl-unknown-datamodel"
+codes = ["spl_unknown_datamodel"]
+severity = "error"
+command = ["validate"]
+target = { family = "rule", platform = "splunk" }
+ops = [
+    { op = "set", path = "configurations.splunk.query", value = "| tstats count from datamodel=Endpointz\n" },
+]
+
+[[kind]]
+id = "spl-unknown-datamodel-field"
+codes = ["spl_unknown_datamodel_field"]
+severity = "error"
+command = ["validate"]
+target = { family = "rule", platform = "splunk" }
+ops = [
+    { op = "set", path = "configurations.splunk.query", value = "| tstats count from datamodel=Endpoint.Processes by Processes.process_nam\n" },
+]
+
+[[kind]]
+id = "spl-empty-stage"
+codes = ["spl_empty_stage"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "splunk" }
+ops = [
+    { op = "set", path = "configurations.splunk.query", value = "index=main | head 1 |\n" },
+]
+
+[[kind]]
+id = "spl-leading-not"
+codes = ["spl_leading_not"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "splunk" }
+ops = [
+    { op = "set", path = "configurations.splunk.query", value = "NOT host=a index=main\n" },
+]
+
+[[kind]]
+id = "spl-subsearch-truncation"
+codes = ["spl_subsearch_truncation"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "splunk" }
+ops = [
+    { op = "set", path = "configurations.splunk.query", value = "index=main | join host [search index=other]\n" },
+]
+
+[[kind]]
+id = "spl-unknown-command"
+codes = ["spl_unknown_command"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "splunk" }
+ops = [
+    { op = "set", path = "configurations.splunk.query", value = "index=main | frobnicate\n" },
+]
+
+[[kind]]
+id = "spl-wildcard"
+codes = ["spl_wildcard"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "splunk" }
+ops = [
+    { op = "set", path = "configurations.splunk.query", value = "*fail\n" },
+]
+
+[[kind]]
+id = "spl-dataset-not-declared"
+codes = ["spl_dataset_not_declared"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "splunk" }
+ops = [
+    { op = "set", path = "configurations.splunk.query", value = "sourcetype=linux_secure | head 1\n" },
+]
+
+[[kind]]
+id = "kuery-parse-error"
+codes = ["kuery_parse_error"]
+severity = "error"
+command = ["validate"]
+target = { family = "rule", platform = "elastic", tags = ["elastic:kuery"] }
+ops = [
+    { op = "set", path = "configurations.elastic.query", value = "message: cannot run\n" },
+]
+
+[[kind]]
+id = "ecs-type-mismatch"
+codes = ["ecs_type_mismatch"]
+severity = "error"
+command = ["validate"]
+target = { family = "rule", platform = "elastic", tags = ["elastic:kuery"] }
+ops = [
+    { op = "set", path = "configurations.elastic.query", value = "process.pid: abc\n" },
+]
+
+[[kind]]
+id = "kuery-escape"
+codes = ["kuery_escape"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "elastic", tags = ["elastic:kuery"] }
+ops = [
+    { op = "set", path = "configurations.elastic.query", value = "process.command_line:\"C:\\temp\\x\"\n" },
+]
+
+[[kind]]
+id = "kuery-free-text"
+codes = ["kuery_free_text"]
+severity = "info"
+command = ["lint"]
+target = { family = "rule", platform = "elastic", tags = ["elastic:kuery"] }
+ops = [
+    { op = "set", path = "configurations.elastic.query", value = "powershell\n" },
+]
+
+[[kind]]
+id = "kuery-looks-like-lucene"
+codes = ["kuery_looks_like_lucene", "kuery_lucene_syntax"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "elastic", tags = ["elastic:kuery"] }
+ops = [
+    { op = "set", path = "configurations.elastic.query", value = "_exists_:host.name AND bytes:[100 TO 200]\n" },
+]
+
+[[kind]]
+id = "kuery-lucene-syntax"
+codes = ["kuery_lucene_syntax"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "elastic", tags = ["elastic:kuery"] }
+ops = [
+    { op = "set", path = "configurations.elastic.query", value = "bytes:[100 TO 200]\n" },
+]
+
+[[kind]]
+id = "kuery-question-mark"
+codes = ["kuery_question_mark"]
+severity = "info"
+command = ["lint"]
+target = { family = "rule", platform = "elastic", tags = ["elastic:kuery"] }
+ops = [
+    { op = "set", path = "configurations.elastic.query", value = "user.name:jo?n\n" },
+]
+
+[[kind]]
+id = "kuery-quoted-wildcard"
+codes = ["kuery_quoted_wildcard"]
+severity = "info"
+command = ["lint"]
+target = { family = "rule", platform = "elastic", tags = ["elastic:kuery"] }
+ops = [
+    { op = "set", path = "configurations.elastic.query", value = "process.name:\"cmd*\"\n" },
+]
+
+[[kind]]
+id = "kuery-range-type"
+codes = ["kuery_range_type"]
+severity = "info"
+command = ["lint"]
+target = { family = "rule", platform = "elastic", tags = ["elastic:kuery"] }
+ops = [
+    { op = "set", path = "configurations.elastic.query", value = "process.name >= 10\n" },
+]
+
+[[kind]]
+id = "ecs-unknown-field"
+codes = ["ecs_unknown_field"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "elastic", tags = ["elastic:kuery"] }
+ops = [
+    { op = "set", path = "configurations.elastic.query", value = "process.nmae: x\n" },
+]
+
+[[kind]]
+id = "lookback-long"
+codes = ["lookback_long"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "elastic", tags = ["elastic:kuery"] }
+ops = [
+    { op = "set", path = "configurations.elastic.scheduling.lookback", value = "2h" },
+]
+
+[[kind]]
+id = "lookback-zero"
+codes = ["lookback_zero"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "elastic", tags = ["elastic:kuery"] }
+ops = [
+    { op = "set", path = "configurations.elastic.scheduling.lookback", value = "0m" },
+]
+
+[[kind]]
+id = "risk-band"
+codes = ["risk_band"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "elastic", tags = ["elastic:kuery"] }
+ops = [
+    { op = "delete", path = "configurations.elastic.severity" },
+    { op = "set", path = "configurations.elastic.risk", value = 90 },
+]
+
+[[kind]]
+id = "technique-not-enterprise"
+codes = ["technique_not_enterprise"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "elastic" }
+ops = [
+    { op = "set", path = "techniques", value = ["T1626"] },
+]
+
+[[kind]]
+id = "threshold-lookback"
+codes = ["threshold_lookback"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "elastic", tags = ["elastic:threshold"] }
+ops = [
+    { op = "set", path = "configurations.elastic.scheduling.interval", value = "5m" },
+    { op = "set", path = "configurations.elastic.scheduling.lookback", value = "10m" },
+]
+
+[[kind]]
+id = "lucene-fuzzy"
+codes = ["lucene_fuzzy"]
+severity = "error"
+command = ["validate"]
+target = { family = "rule", platform = "elastic", tags = ["elastic:lucene"] }
+ops = [
+    { op = "set", path = "configurations.elastic.query", value = "process.name:foo~3\n" },
+]
+
+[[kind]]
+id = "lucene-parse-error"
+codes = ["lucene_parse_error"]
+severity = "error"
+command = ["validate"]
+target = { family = "rule", platform = "elastic", tags = ["elastic:lucene"] }
+ops = [
+    { op = "set", path = "configurations.elastic.query", value = "name:(a OR b\n" },
+]
+
+[[kind]]
+id = "lucene-bare-term"
+codes = ["lucene_bare_term"]
+severity = "info"
+command = ["lint"]
+target = { family = "rule", platform = "elastic", tags = ["elastic:lucene"] }
+ops = [
+    { op = "set", path = "configurations.elastic.query", value = "user.name:alice bob\n" },
+]
+
+[[kind]]
+id = "lucene-escape"
+codes = ["lucene_escape"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "elastic", tags = ["elastic:lucene"] }
+ops = [
+    { op = "set", path = "configurations.elastic.query", value = "process.command_line:\"C:\\Windows\"\n" },
+]
+
+[[kind]]
+id = "lucene-kuery-syntax"
+codes = ["lucene_kuery_syntax"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "elastic", tags = ["elastic:lucene"] }
+ops = [
+    { op = "set", path = "configurations.elastic.query", value = "process.pid >= 10\n" },
+]
+
+[[kind]]
+id = "lucene-looks-like-kuery"
+codes = ["lucene_looks_like_kuery", "lucene_kuery_syntax", "lucene_lowercase_operator"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "elastic", tags = ["elastic:lucene"] }
+ops = [
+    { op = "set", path = "configurations.elastic.query", value = "process.name:cmd.exe and event.code >= 4624\n" },
+]
+
+[[kind]]
+id = "lucene-lowercase-operator"
+codes = ["lucene_lowercase_operator"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "elastic", tags = ["elastic:lucene"] }
+ops = [
+    { op = "set", path = "configurations.elastic.query", value = "process.name:cmd.exe and user.name:root\n" },
+]
+
+[[kind]]
+id = "lucene-mixed-operators"
+codes = ["lucene_mixed_operators"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "elastic", tags = ["elastic:lucene"] }
+ops = [
+    { op = "set", path = "configurations.elastic.query", value = "process.name:a OR process.name:b AND user.name:c\n" },
+]
+
+[[kind]]
+id = "lucene-range-operator"
+codes = ["lucene_range_operator", "lucene_bare_term"]
+severity = { lucene_range_operator = "warning", lucene_bare_term = "info" }
+command = ["lint"]
+target = { family = "rule", platform = "elastic", tags = ["elastic:lucene"] }
+ops = [
+    { op = "set", path = "configurations.elastic.query", value = "event.code:> 10\n" },
+]
+
+[[kind]]
+id = "lucene-regexp"
+codes = ["lucene_regexp"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "elastic", tags = ["elastic:lucene"] }
+ops = [
+    { op = "set", path = "configurations.elastic.query", value = "process.name:/(?i)cmd.*/\n" },
+]
+
+[[kind]]
+id = "lucene-unescaped-slash"
+codes = ["lucene_unescaped_slash"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "elastic", tags = ["elastic:lucene"] }
+ops = [
+    { op = "set", path = "configurations.elastic.query", value = "file.path:/var/log AND process.pid:1\n" },
+]
+
+[[kind]]
+id = "lucene-elasticsearch-only"
+codes = ["lucene_elasticsearch_only"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "carbon_black_cloud" }
+ops = [
+    { op = "set", path = "configurations.carbon_black_cloud.query", value = "_exists_:process_name\n" },
+]
+
+[[kind]]
+id = "eql-argument-type"
+codes = ["eql_argument_type"]
+severity = "error"
+command = ["validate"]
+target = { family = "rule", platform = "elastic", tags = ["elastic:eql"] }
+ops = [
+    { op = "set", path = "configurations.elastic.query", value = "process where length(1) > 0\n" },
+]
+
+[[kind]]
+id = "eql-field-comparison"
+codes = ["eql_field_comparison"]
+severity = "error"
+command = ["validate"]
+target = { family = "rule", platform = "elastic", tags = ["elastic:eql"] }
+ops = [
+    { op = "set", path = "configurations.elastic.query", value = "process where process.pid == process.parent.pid\n" },
+]
+
+[[kind]]
+id = "eql-function-arity"
+codes = ["eql_function_arity"]
+severity = "error"
+command = ["validate"]
+target = { family = "rule", platform = "elastic", tags = ["elastic:eql"] }
+ops = [
+    { op = "set", path = "configurations.elastic.query", value = "process where length(process.name, process.pid) > 1\n" },
+]
+
+[[kind]]
+id = "eql-maxspan-unit"
+codes = ["eql_maxspan_unit"]
+severity = "error"
+command = ["validate"]
+target = { family = "rule", platform = "elastic", tags = ["elastic:eql"] }
+ops = [
+    { op = "set", path = "configurations.elastic.query", value = "sequence with maxspan=5w [process where true] [file where true]\n" },
+]
+
+[[kind]]
+id = "eql-not-boolean"
+codes = ["eql_not_boolean"]
+severity = "error"
+command = ["validate"]
+target = { family = "rule", platform = "elastic", tags = ["elastic:eql"] }
+ops = [
+    { op = "set", path = "configurations.elastic.query", value = "process where 1\n" },
+]
+
+[[kind]]
+id = "eql-parse-error"
+codes = ["eql_parse_error"]
+severity = "error"
+command = ["validate"]
+target = { family = "rule", platform = "elastic", tags = ["elastic:eql"] }
+ops = [
+    { op = "set", path = "configurations.elastic.query", value = "process where process.name == 'cmd.exe'\n" },
+]
+
+[[kind]]
+id = "eql-unknown-function"
+codes = ["eql_unknown_function"]
+severity = "error"
+command = ["validate"]
+target = { family = "rule", platform = "elastic", tags = ["elastic:eql"] }
+ops = [
+    { op = "set", path = "configurations.elastic.query", value = "process where startsWth(process.name, \"a\")\n" },
+]
+
+[[kind]]
+id = "eql-unsupported"
+codes = ["eql_unsupported"]
+severity = "error"
+command = ["validate"]
+target = { family = "rule", platform = "elastic", tags = ["elastic:eql"] }
+ops = [
+    { op = "set", path = "configurations.elastic.query", value = "process where true | unique process.name\n" },
+]
+
+[[kind]]
+id = "eql-case-sensitive"
+codes = ["eql_case_sensitive"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "elastic", tags = ["elastic:eql"] }
+ops = [
+    { op = "set", path = "configurations.elastic.query", value = "PROCESS where true\n" },
+]
+
+[[kind]]
+id = "eql-expression-depth"
+codes = ["eql_expression_depth"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "elastic", tags = ["elastic:eql"] }
+ops = [
+    { op = "set", path = "configurations.elastic.query", value = "process where ((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((true))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))\n" },
+]
+
+[[kind]]
+id = "eql-literal-wildcard"
+codes = ["eql_literal_wildcard"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "elastic", tags = ["elastic:eql"] }
+ops = [
+    { op = "set", path = "configurations.elastic.query", value = "process where process.name == \"*.exe\"\n" },
+]
+
+[[kind]]
+id = "eql-maxspan-lookback"
+codes = ["eql_maxspan_lookback"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "elastic", tags = ["elastic:eql"] }
+ops = [
+    { op = "set", path = "configurations.elastic.query", value = "sequence with maxspan=3m [process where true] [file where true]\n" },
+]
+
+[[kind]]
+id = "eql-maxspan-missing"
+codes = ["eql_maxspan_missing"]
+severity = "info"
+command = ["lint"]
+target = { family = "rule", platform = "elastic", tags = ["elastic:eql"] }
+ops = [
+    { op = "set", path = "configurations.elastic.query", value = "sequence [process where true] [file where true]\n" },
+]
+
+[[kind]]
+id = "eql-maxspan-window"
+codes = ["eql_maxspan_window"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "elastic", tags = ["elastic:eql"] }
+ops = [
+    { op = "set", path = "configurations.elastic.query", value = "sequence with maxspan=1h [process where true] [file where true]\n" },
+]
+
+[[kind]]
+id = "eql-nested-comment"
+codes = ["eql_nested_comment"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "elastic", tags = ["elastic:eql"] }
+ops = [
+    { op = "set", path = "configurations.elastic.query", value = "process where /* outer /* inner */ still comment */ true\n" },
+]
+
+[[kind]]
+id = "eql-regex"
+codes = ["eql_regex"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "elastic", tags = ["elastic:eql"] }
+ops = [
+    { op = "set", path = "configurations.elastic.query", value = "process where process.name regex \"(?i)cmd\"\n" },
+]
+
+[[kind]]
+id = "eql-runs-ignored"
+codes = ["eql_runs_ignored"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "elastic", tags = ["elastic:eql"] }
+ops = [
+    { op = "set", path = "configurations.elastic.query", value = "sequence with maxspan=1m [process where true] with runs=2.5 [file where true]\n" },
+]
+
+[[kind]]
+id = "eql-until-term"
+codes = ["eql_until_term"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "elastic", tags = ["elastic:eql"] }
+ops = [
+    { op = "set", path = "configurations.elastic.query", value = "sequence with maxspan=1m [process where true] [file where true] until ![network where true]\n" },
+]
+
+[[kind]]
+id = "esql-parse-error"
+codes = ["esql_parse_error"]
+severity = "error"
+command = ["validate"]
+target = { family = "rule", platform = "elastic", tags = ["elastic:esql"] }
+ops = [
+    { op = "set", path = "configurations.elastic.query", value = "FROM logs-* METADATA _id | WHERE (\n" },
+]
+
+[[kind]]
+id = "esql-pattern"
+codes = ["esql_pattern"]
+severity = "error"
+command = ["validate"]
+target = { family = "rule", platform = "elastic", tags = ["elastic:esql"] }
+ops = [
+    { op = "set", path = "configurations.elastic.query", value = "FROM logs-* METADATA _id | WHERE process.name LIKE \"a\\\\b\"\n" },
+]
+
+[[kind]]
+id = "esql-unknown-command"
+codes = ["esql_unknown_command"]
+severity = "error"
+command = ["validate"]
+target = { family = "rule", platform = "elastic", tags = ["elastic:esql"] }
+ops = [
+    { op = "set", path = "configurations.elastic.query", value = "FROM logs-* METADATA _id | WEHRE process.name == \"x\"\n" },
+]
+
+[[kind]]
+id = "esql-unknown-function"
+codes = ["esql_unknown_function"]
+severity = "error"
+command = ["validate"]
+target = { family = "rule", platform = "elastic", tags = ["elastic:esql"] }
+ops = [
+    { op = "set", path = "configurations.elastic.query", value = "FROM logs-* METADATA _id | EVAL x = STARTSWITH(process.name, \"b\")\n" },
+]
+
+[[kind]]
+id = "esql-unknown-type"
+codes = ["esql_unknown_type"]
+severity = "error"
+command = ["validate"]
+target = { family = "rule", platform = "elastic", tags = ["elastic:esql"] }
+ops = [
+    { op = "set", path = "configurations.elastic.query", value = "FROM logs-* METADATA _id | EVAL x = process.pid::foo\n" },
+]
+
+[[kind]]
+id = "esql-expression-depth"
+codes = ["esql_expression_depth"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "elastic", tags = ["elastic:esql"] }
+ops = [
+    { op = "set", path = "configurations.elastic.query", value = "FROM logs-* METADATA _id | WHERE ((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((true))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))\n" },
+]
+
+[[kind]]
+id = "esql-group-by-column"
+codes = ["esql_group_by_column"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "elastic", tags = ["elastic:esql"] }
+ops = [
+    { op = "set", path = "configurations.elastic.query", value = "FROM logs-* | STATS c = COUNT(*) BY host.name\n" },
+    { op = "set", path = "configurations.elastic.suppression", value = { group_by = ["user.name"] } },
+]
+
+[[kind]]
+id = "esql-metadata-id"
+codes = ["esql_metadata_id"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "elastic", tags = ["elastic:esql"] }
+ops = [
+    { op = "set", path = "configurations.elastic.query", value = "FROM logs-* | WHERE process.name == \"x\"\n" },
+]
+
+[[kind]]
+id = "esql-unavailable"
+codes = ["esql_unavailable"]
+severity = "info"
+command = ["lint"]
+target = { family = "rule", platform = "elastic", tags = ["elastic:esql"] }
+ops = [
+    { op = "set", path = "configurations.elastic.query", value = "FROM logs-* METADATA _id | INLINE STATS c = COUNT(*) BY host.name\n" },
+]
+
+[[kind]]
+id = "elastic-dataset-not-declared"
+codes = ["elastic_dataset_not_declared"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "elastic", tags = ["elastic:kuery"] }
+ops = [
+    { op = "set", path = "configurations.elastic.index", value = ["winlogbeat-*"] },
+]
+
+[[kind]]
+id = "falco-append-condition"
+codes = ["falco_append_condition"]
+severity = "error"
+command = ["validate"]
+target = { family = "rule", platform = "sysdig" }
+ops = [
+    { op = "set", path = "configurations.sysdig.condition", value = "and proc.name = x\n" },
+]
+
+[[kind]]
+id = "falco-field-argument"
+codes = ["falco_field_argument"]
+severity = "error"
+command = ["validate"]
+target = { family = "rule", platform = "sysdig" }
+ops = [
+    { op = "set", path = "configurations.sysdig.condition", value = "spawned_process and proc.name[1] = x\n" },
+]
+
+[[kind]]
+id = "falco-invalid-regex"
+codes = ["falco_invalid_regex"]
+severity = "error"
+command = ["validate"]
+target = { family = "rule", platform = "sysdig" }
+ops = [
+    { op = "set", path = "configurations.sysdig.condition", value = "spawned_process and proc.name regex '('\n" },
+]
+
+[[kind]]
+id = "falco-operator-type"
+codes = ["falco_operator_type"]
+severity = "error"
+command = ["validate"]
+target = { family = "rule", platform = "sysdig" }
+ops = [
+    { op = "set", path = "configurations.sysdig.condition", value = "spawned_process and proc.pid contains 5\n" },
+]
+
+[[kind]]
+id = "falco-parse-error"
+codes = ["falco_parse_error"]
+severity = "error"
+command = ["validate"]
+target = { family = "rule", platform = "sysdig" }
+ops = [
+    { op = "set", path = "configurations.sysdig.condition", value = "spawned_process and proc.name =\n" },
+]
+
+[[kind]]
+id = "falco-rhs-field"
+codes = ["falco_rhs_field"]
+severity = "error"
+command = ["validate"]
+target = { family = "rule", platform = "sysdig" }
+ops = [
+    { op = "set", path = "configurations.sysdig.condition", value = "spawned_process and proc.name = val(proc.pid)\n" },
+]
+
+[[kind]]
+id = "falco-transformer"
+codes = ["falco_transformer"]
+severity = "error"
+command = ["validate"]
+target = { family = "rule", platform = "sysdig" }
+ops = [
+    { op = "set", path = "configurations.sysdig.condition", value = "spawned_process and tolower(proc.pid) = 1\n" },
+]
+
+[[kind]]
+id = "falco-unknown-event"
+codes = ["falco_unknown_event"]
+severity = "error"
+command = ["validate"]
+target = { family = "rule", platform = "sysdig" }
+ops = [
+    { op = "set", path = "configurations.sysdig.condition", value = "evt.type = opne and proc.name = bash\n" },
+]
+
+[[kind]]
+id = "falco-unknown-field"
+codes = ["falco_unknown_field"]
+severity = "error"
+command = ["validate"]
+target = { family = "rule", platform = "sysdig" }
+ops = [
+    { op = "set", path = "configurations.sysdig.condition", value = "spawned_process and proc.nmae = bash\n" },
+]
+
+[[kind]]
+id = "falco-value-type"
+codes = ["falco_value_type"]
+severity = "error"
+command = ["validate"]
+target = { family = "rule", platform = "sysdig" }
+ops = [
+    { op = "set", path = "configurations.sysdig.condition", value = "spawned_process and proc.pid = abc\n" },
+]
+
+[[kind]]
+id = "falco-misplaced-list"
+codes = ["falco_misplaced_list"]
+severity = "error"
+target = { family = "rule", platform = "sysdig" }
+ops = [
+    { op = "copy_path", path = "configurations.sysdig.condition", from_path = "configurations.sysdig.lists.0.name" },
+]
+
+[[kind]]
+id = "falco-output-syntax"
+codes = ["falco_output_syntax"]
+severity = "error"
+target = { family = "rule", platform = "sysdig" }
+ops = [
+    { op = "set", path = "configurations.sysdig.output", value = "Shell %proc.name %" },
+]
+
+[[kind]]
+id = "falco-deprecated-field"
+codes = ["falco_deprecated_field"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "sysdig" }
+ops = [
+    { op = "set", path = "configurations.sysdig.condition", value = "spawned_process and evt.dir = <\n" },
+]
+
+[[kind]]
+id = "falco-field-as-value"
+codes = ["falco_field_as_value"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "sysdig" }
+ops = [
+    { op = "set", path = "configurations.sysdig.condition", value = "spawned_process and proc.name = proc.pname\n" },
+]
+
+[[kind]]
+id = "falco-newer-syntax"
+codes = ["falco_newer_syntax"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "sysdig" }
+ops = [
+    { op = "set", path = "configurations.sysdig.condition", value = "spawned_process and proc.name = anyof (bash, sh)\n" },
+]
+
+[[kind]]
+id = "falco-no-evttype"
+codes = ["falco_no_evttype"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "sysdig" }
+ops = [
+    { op = "set", path = "configurations.sysdig.condition", value = "proc.name = bash\n" },
+]
+
+[[kind]]
+id = "falco-regex-simple"
+codes = ["falco_regex_simple"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "sysdig" }
+ops = [
+    { op = "set", path = "configurations.sysdig.condition", value = "spawned_process and proc.name regex bash\n" },
+]
+
+[[kind]]
+id = "falco-transformer-as-value"
+codes = ["falco_transformer_as_value"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "sysdig" }
+ops = [
+    { op = "set", path = "configurations.sysdig.condition", value = "spawned_process and proc.name = \"tolower(x)\"\n" },
+]
+
+[[kind]]
+id = "falco-unknown-list"
+codes = ["falco_unknown_list"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "sysdig" }
+ops = [
+    { op = "set", path = "configurations.sysdig.condition", value = "spawned_process and proc.name in nope_list\n" },
+]
+
+[[kind]]
+id = "falco-unknown-macro"
+codes = ["falco_unknown_macro"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "sysdig" }
+ops = [
+    { op = "set", path = "configurations.sysdig.condition", value = "spawned_process and my_private_macro\n" },
+]
+
+[[kind]]
+id = "falco-exception"
+codes = ["falco_exception"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "sysdig" }
+ops = [
+    { op = "set", path = "configurations.sysdig.condition", value = "spawned_process and proc.name = bash\n" },
+    { op = "set", path = "configurations.sysdig.exceptions", value = [{ name = "e", fields = ["proc.pname"], comps = ["="], values = [["x"]] }, { name = "e", fields = ["proc.pname"], comps = ["="], values = [["y"]] }] },
+]
+note = "two exceptions with one name"
+
+[[kind]]
+id = "falco-unknown-rule"
+codes = ["falco_unknown_rule"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "sysdig" }
+ops = [
+    { op = "set", path = "configurations.sysdig.condition", value = "and not proc.pname in (x)\n" },
+    { op = "delete", path = "configurations.sysdig.tags" },
+    { op = "set", path = "configurations.sysdig.append_to_rule", value = "No such rule" },
+]
+
+[[kind]]
+id = "falco-unknown-source"
+codes = ["falco_unknown_source"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "sysdig" }
+ops = [
+    { op = "set", path = "configurations.sysdig.condition", value = "spawned_process and proc.name = bash\n" },
+    { op = "set", path = "configurations.sysdig.source", value = "my_plugin" },
+    { op = "delete", path = "configurations.sysdig.output" },
+]
+
+[[kind]]
+id = "falco-unsafe-na-check"
+codes = ["falco_unsafe_na_check"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "sysdig" }
+ops = [
+    { op = "set", path = "configurations.sysdig.condition", value = "ka.user.name = <NA>\n" },
+    { op = "set", path = "configurations.sysdig.source", value = "k8s_audit" },
+]
+
+[[kind]]
+id = "sysdig-list-self-reference"
+codes = ["sysdig_list_self_reference"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "sysdig" }
+ops = [
+    { op = "copy_path", path = "configurations.sysdig.lists.0.items.0", from_path = "configurations.sysdig.lists.0.name" },
+]
+
+# Codes in scope that no workspace can produce through `validate` or `lint`,
+# each with the evidence (where it is emitted, and why the CLI never reports it).
+
+[[unreachable]]
+code = "cbc_unknown_field"
+reason = "an engine warning; validate keeps only engine errors and lint only warnings with a query prefix (kql_, spl_, esql_, eql_, kuery_, lucene_, ecs_, falco_) or in its advisory lists (cli/services/lint.py _query_findings), so only the language server reports it"
+
+[[unreachable]]
+code = "config_check_failed"
+reason = "the language server's code for a configuration checker that raised; no CLI path emits it"
+
+[[unreachable]]
+code = "crowdstrike_unsupported"
+reason = "an engine warning on every CrowdStrike block that lint's query filter drops (cli/services/lint.py _query_findings) and validate never keeps (errors only); language server only"
+
+[[unreachable]]
+code = "defender_output_columns"
+reason = "declared in opentide-core's codes but emitted by no crate"
+
+[[unreachable]]
+code = "deprecated_field"
+reason = "needs a `tide.meta.deprecation` marker in a metaschema; no field of 0.23.0's models carries one (the deprecations catalogue is empty)"
+
+[[unreachable]]
+code = "engine_unavailable"
+reason = "raised only when opentide._native fails to import (a damaged installation), not by any workspace"
+
+[[unreachable]]
+code = "external_id_shape"
+reason = "raised by deploy and deploy migrate-state; validate wraps a bad id inside a state shard into deployment_state_shape"
+
+[[unreachable]]
+code = "filename_slug"
+reason = "an engine warning lint's query filter drops; lint's own filename_mismatch reports the file (KG-03)"
+
+[[unreachable]]
+code = "invalid_cve"
+reason = "needs Vulnerability-Lookup (vulnerability.circl.lu) to answer 'not found'; offline, and through the runner's dead proxy, the oracle reports cve_lookup_unavailable (kind cve-lookup-unavailable)"
+
+[[unreachable]]
+code = "missing_author"
+reason = "an engine warning lint's query filter drops; lint's own metadata_recommended reports it (KG-05)"
+
+[[unreachable]]
+code = "missing_organisation"
+reason = "an engine warning lint's query filter drops; lint's own metadata_recommended reports it (KG-05)"
+
+[[unreachable]]
+code = "not_a_configuration_file"
+reason = "emitted only by validation.configuration.configuration_file_issues, which no CLI path calls; an extra .opentide/configurations/*.toml is silently ignored (KG-06)"
+
+[[unreachable]]
+code = "recommended_field_missing"
+reason = "an engine warning lint's query filter drops; language server only (KG-05)"
+
+[[unreachable]]
+code = "retired_configuration_file"
+reason = "every command refuses the workspace before validating (failure.code retired_configuration_file, no finding); only the editor's per-file check reports it as a finding (KG-06)"
+
+[[unreachable]]
+code = "sysdig_definition_duplicate"
+reason = "the engine emits it from the Sysdig block constraint check, which validate's queries check does not run; validate reports schema_validation naming the code instead (kind schema-validation-sysdig-constraint)"
+
+[[unreachable]]
+code = "sysdig_definition_name"
+reason = "the engine emits it from the Sysdig block constraint check, which validate's queries check does not run; validate reports schema_validation naming the code instead (kind schema-validation-sysdig-constraint)"
+
+[[unreachable]]
+code = "sysdig_definition_order"
+reason = "the engine emits it from the Sysdig block constraint check, which validate's queries check does not run; validate reports schema_validation naming the code instead (kind schema-validation-sysdig-constraint)"
+
+[[unreachable]]
+code = "sysdig_exception_shape"
+reason = "the engine emits it from the Sysdig block constraint check, which validate's queries check does not run; validate reports schema_validation naming the code instead (kind schema-validation-sysdig-constraint)"
+
+[[unreachable]]
+code = "sysdig_list_in_value"
+reason = "the engine emits it from the Sysdig block constraint check, which validate's queries check does not run; validate reports schema_validation naming the code instead (kind schema-validation-sysdig-constraint)"
+
+[[unreachable]]
+code = "sysdig_priority"
+reason = "the engine emits it from the Sysdig block constraint check, which validate's queries check does not run; validate reports schema_validation naming the code instead (kind schema-validation-sysdig-constraint)"
+
+[[unreachable]]
+code = "sysdig_rule_shape"
+reason = "the engine emits it from the Sysdig block constraint check, which validate's queries check does not run; validate reports schema_validation naming the code instead (kind schema-validation-sysdig-constraint)"
+
+[[unreachable]]
+code = "sysdig_source"
+reason = "the engine emits it from the Sysdig block constraint check, which validate's queries check does not run; validate reports schema_validation naming the code instead (kind schema-validation-sysdig-constraint)"
+
+[[unreachable]]
+code = "sysdig_tuning_keys"
+reason = "the engine emits it from the Sysdig block constraint check, which validate's queries check does not run; validate reports schema_validation naming the code instead (kind schema-validation-sysdig-constraint)"

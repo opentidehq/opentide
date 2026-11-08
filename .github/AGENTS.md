@@ -20,11 +20,13 @@ whatever its base: a stacked PR targets the branch below it, not `development`.
 | `cli-e2e`, `cli-windows-smoke`, `gitlab-ci-lint` | The sharded E2E suite, a Windows smoke run, the generated GitLab pipelines; none waits for `test` |
 
 The Rust jobs of `ci.yml`, `engine-ci.yml`, `oracle.yml` and the parked `release.yml` (below)
-install the one release `rust-toolchain.toml` pins (`rustup toolchain install` with no name, plus
-the targets the job builds), never floating `stable`: cargo in a checkout runs that release
-whatever else is installed (`tests/test_ci/test_rust_toolchain.py`). The file says how to move it
-(`engine-fuzz.yml` runs nightly, by name). Every Python job
-builds the engine through `uv sync`, with a Rust cache. The `engine` job sets
+install the one release `rust-toolchain.toml` pins (`rustup toolchain install` with no name),
+never floating `stable`: cargo in a checkout runs that release whatever else is installed
+(`tests/test_ci/test_rust_toolchain.py`). That install takes the file's components and drops
+`--target` and `--component` without an error, so a job adds the targets it builds with
+`rustup target add`, which with no toolchain named adds them to the pinned release.
+`rust-toolchain.toml` says how to move the pin (`engine-fuzz.yml` runs nightly, by name). Every
+Python job builds the engine through `uv sync`, with a Rust cache. The `engine` job sets
 `RUSTFLAGS=-Dwarnings` (a warning fails the build), `CARGO_PROFILE_DEV_DEBUG=line-tables-only`
 and `INSTA_UPDATE=no` (a snapshot that differs fails; CI never writes one). Its Rust cache is
 shared with `engine-ci.yml`'s `clients` and `elastic-sweep`, which read it and save none

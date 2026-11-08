@@ -52,7 +52,7 @@ target_s = 0.7
 target_rss_mib = 100.0
 
 [commands.validate_warnings]
-label = "validate, platforms disabled (a warning per platform block: 892)"
+label = "validate, platforms disabled (a warning per platform block)"
 plan_s = 12.76
 baseline_s = 12.76
 baseline_rss_mib = 171.0
