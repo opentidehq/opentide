@@ -1442,8 +1442,8 @@
                 "text": "git is on `PATH`."
               },
               "help": {
-                "text": "git\n\ngit is on PATH.\n\nReported by opentide doctor. Warns when it is missing: --changed, the default branch and the CI setup need it.\n\nExample\n\n✓ git <GIT_VERSION> · git\n\nHow to fix\n\nInstall git from your package manager or https://git-scm.com.",
-                "markdown": "# git\n\ngit is on `PATH`.\n\nReported by `opentide doctor`. Warns when it is missing: `--changed`, the default branch and the CI setup need it.\n\n## Example\n\n```text\n✓ git <GIT_VERSION> · git\n```\n\n## How to fix\n\nInstall git from your package manager or https://git-scm.com.\n"
+                "text": "git\n\ngit is on PATH.\n\nReported by opentide doctor. Warns when it is missing: --changed, the default branch and the CI setup need it.\n\nExample\n\n✓ git 2.43.0 · git\n\nHow to fix\n\nInstall git from your package manager or https://git-scm.com.",
+                "markdown": "# git\n\ngit is on `PATH`.\n\nReported by `opentide doctor`. Warns when it is missing: `--changed`, the default branch and the CI setup need it.\n\n## Example\n\n```text\n✓ git 2.43.0 · git\n```\n\n## How to fix\n\nInstall git from your package manager or https://git-scm.com.\n"
               }
             },
             {
