@@ -1,0 +1,9 @@
+error[vocab_unknown]: 'high' is not a alert severity value
+   ╭─▶ Objects/Detection Rules/rule-0001-sentinel-kql.yaml:14:11
+   │
+13 │ status: STAGING
+14 │ severity: high
+   │           ━━━━ not in alert_severity::1.0
+   │
+   ╰─ help: did you mean 'High'?
+

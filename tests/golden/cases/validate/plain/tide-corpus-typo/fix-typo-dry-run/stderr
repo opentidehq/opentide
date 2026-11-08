@@ -1,0 +1,2 @@
+✗ 1 error in 1 file · would fix 1 value in 1 file · 12 objects checked · 7 queries · <SECONDS>
+→ opentide validate --fix · apply 1 safe fix

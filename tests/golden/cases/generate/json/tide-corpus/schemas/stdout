@@ -1,0 +1,1 @@
+{"phases":["schemas"],"steps":[{"name":"schemas","status":"ok","count":8,"unit":"file","seconds":0.0,"where":".opentide/"}],"ok":true,"status":"completed","message":"Generated 8 files in <SECONDS> · schemas","schema_version":1,"command":"generate","duration_ms":0,"exit_code":0,"summary":{"files":8,"removed":0,"phases":1,"seconds":0.0},"next_actions":[],"failure":null}

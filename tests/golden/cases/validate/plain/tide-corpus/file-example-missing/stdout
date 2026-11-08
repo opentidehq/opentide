@@ -1,0 +1,2 @@
+error[scope_no_match]: No objects matched the validation scope (check --file, --uuid, --type)
+

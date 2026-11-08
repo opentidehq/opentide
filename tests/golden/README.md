@@ -76,17 +76,27 @@ option or a choice, a missing option, a prompt without a terminal, `--json` afte
 (prompt_toolkit works the terminal in raw mode and asks it for the cursor position, which needs a
 terminal emulator); their non-terminal behaviour, exit 2 naming the flags, is recorded in the other modes.
 
+Examples in `docs/cli` that are not recorded, and why: `--install-completion` and
+`--show-completion` (they detect the shell from the parent process); `--proxy
+http://proxy.internal.example:8080 …` (a host name to resolve: the network is refused through a
+proxy on the loopback instead); `--repo /path/to/repo …` and `--repo path/to/detections tui`
+(stand-in paths; `--repo does-not-exist` is recorded); `mcp start` (UC-3.7) and `lsp start` (the
+language server's own stdio tests), recorded as `--help`; `opentide --debug generate` (its debug
+log names each phase's time and the slowest phase, so it is recorded as `--no-color generate`).
+Examples with a placeholder (`<uuid>`) run with a fixture's real identifier.
+
 ## Fixtures
 
 | Name | What |
 |------|------|
 | `tide-corpus` | [`tests/fixtures/tide_corpus/current`](../fixtures/tide_corpus/), moved to the `.opentide/` layout as `tests/corpus_support.py` does |
 | `vscode` | the VS Code extension's fixture workspace, vendored unchanged in [`fixtures/vscode-workspace/`](fixtures/vscode-workspace/) (source and commit in `vscode-workspace.SOURCE.toml`, MIT licence in `vscode-workspace.LICENSE`) |
+| `tide-corpus-typo` | `tide-corpus` with one declared edit (`edits` in `cases.toml`): `severity: high`, a typo `validate --fix` repairs, so a file changed in place is recorded |
+| `heavy-small` | UC-0.6's generator, seed 1: 30 threats, 30 objectives, 50 rules (`cargo xtask corpus generate`), generated once per run and copied per case, never committed |
+| `fault` | UC-0.6's fault workspace (`cargo xtask corpus faults`), likewise generated; its outputs are recorded as they are, not asserted against the fault manifest |
 | `empty` | a workspace with an empty `.opentide/` |
 | `none` | no workspace: an empty directory |
 
-UC-0.6's generated workspaces (the small heavy workspace, seed 1, and the fault workspace) join as
-`kind = "generated"` fixtures: generated from their seed at record and check time, never committed.
 Each case gets a fresh copy of its fixture.
 
 ## A recording
@@ -114,7 +124,7 @@ Applied to stdout, stderr, file paths and file contents (UTF-8 only), in this or
 | The case's workspace, home, root, the engine's directories and the Python its environment links to | `<WS>`, `<HOME>`, `<TMP>`, `<ENGINE_BIN>`, `<ENGINE>`, `<PYTHON>` | temporary directories, the recorder's home |
 | The host's kernel release (the crash handler's `os` fact and issue link) | `<KERNEL>` | the host |
 | `crash-<time>-<pid>.log` | `crash-<TIMESTAMP>-<PID>.log` | the crash handler's log name |
-| ISO 8601 date-times on the dates the case ran, and the clock time that starts a log line (`18:22:33 debug: …`) | every digit `0` (`0000-00-00T00:00:00.000000+00:00`), so the format is still compared | the clock |
+| ISO 8601 date-times on the dates the case ran or the 7 days before (a default window reaches back), and the clock time that starts a log line (`18:22:33 debug: …`) | every digit `0` (`0000-00-00T00:00:00.000000+00:00`), so the format is still compared | the clock |
 | The dates the case ran (`YYYY-MM-DD`) | `<TODAY>` | the clock |
 | JSON `duration_ms`, `elapsed_ms`, `wall_ms`, `seconds` | `0`, or `0.0` for a float | wall times; the document keeps its types |
 | `1.3s`, `2m05s` in text, and the spaces around it | `<SECONDS>`, one space each side at most | wall times in outcome lines and padded table columns |
