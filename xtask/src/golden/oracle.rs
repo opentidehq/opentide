@@ -64,6 +64,16 @@ impl Oracle {
                 && oracle.wheel_sha256.chars().all(|c| c.is_ascii_hexdigit()),
             "ORACLE: wheel_sha256 is not a SHA-256"
         );
+        // The version names a directory of the cache, which is replaced on reinstall.
+        ensure!(
+            !oracle.version.is_empty()
+                && oracle
+                    .version
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '+' | '-')),
+            "ORACLE: version `{}` is not a release number",
+            oracle.version
+        );
         ensure!(
             oracle
                 .wheel
@@ -250,8 +260,11 @@ fn python_home(venv: &Path) -> Option<PathBuf> {
         .find_map(|line| line.strip_prefix("home").map(str::trim))?
         .strip_prefix('=')?
         .trim();
-    let home = Path::new(home);
-    Some(home.parent().unwrap_or(home).to_path_buf())
+    // A uv-managed Python lives in `…/cpython-<version>-<platform>/bin`; any
+    // other home (`/usr/bin`) is left alone rather than replace `/usr`.
+    let install = Path::new(home).parent()?;
+    let name = install.file_name()?.to_string_lossy();
+    name.starts_with("cpython-").then(|| install.to_path_buf())
 }
 
 fn uv(args: &[&str]) -> Result<()> {
@@ -335,6 +348,24 @@ requirements = "oracle-requirements.txt"
             Path::new("/root/.local/share/uv/python/cpython-3.13.14-linux-x86_64-gnu")
         );
         assert!(python_home(&dir.path().join("none")).is_none());
+        fs::write(dir.path().join("pyvenv.cfg"), "home = /usr/bin\n").unwrap();
+        assert!(python_home(dir.path()).is_none());
+    }
+
+    #[test]
+    fn rejects_a_version_that_is_a_path() {
+        let text = toml::to_string(&Oracle {
+            version: "../../x".into(),
+            wheel: "opentide-../../x-a.whl".into(),
+            ..oracle()
+        })
+        .unwrap();
+        assert!(
+            Oracle::parse(&text)
+                .unwrap_err()
+                .to_string()
+                .contains("release number")
+        );
     }
 
     #[test]

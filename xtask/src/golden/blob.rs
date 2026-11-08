@@ -44,10 +44,12 @@ pub fn unused(dir: &Path, used: &BTreeSet<String>) -> Result<Vec<String>> {
         return Ok(out);
     }
     for entry in fs::read_dir(dir).with_context(|| format!("read {}", dir.display()))? {
-        let name = entry
-            .with_context(|| format!("read {}", dir.display()))?
-            .file_name();
-        let name = name.to_string_lossy().into_owned();
+        let entry = entry.with_context(|| format!("read {}", dir.display()))?;
+        let name = entry.file_name().to_string_lossy().into_owned();
+        ensure!(
+            entry.file_type().is_ok_and(|t| t.is_file()),
+            "blobs/{name}: only blob files belong in the blob store"
+        );
         if !used.contains(&name) {
             out.push(name);
         }
@@ -239,5 +241,12 @@ mod tests {
         put(dir.path(), b"other").unwrap();
         let used = BTreeSet::from([hash]);
         assert_eq!(unused(dir.path(), &used).unwrap(), [sha256_hex(b"other")]);
+        fs::create_dir(dir.path().join("stray")).unwrap();
+        assert!(
+            unused(dir.path(), &used)
+                .unwrap_err()
+                .to_string()
+                .contains("stray")
+        );
     }
 }

@@ -1213,12 +1213,14 @@ fixtures = ["tide-corpus"]
 command = "doctor"
 variant = "default"
 args = ["doctor"]
+normalise = ["host-git"]
 fixtures = ["tide-corpus", "vscode", "heavy-small", "fault", "empty", "none"]
 
 [[case]]
 command = "doctor"
 variant = "offline"
 args = ["doctor", "--offline"]
+normalise = ["host-git"]
 fixtures = ["tide-corpus", "vscode"]
 
 [[case]]

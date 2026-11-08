@@ -12,7 +12,9 @@
 //! 2. **Paths** (`<WS>`, `<HOME>`, `<TMP>`, `<ENGINE_BIN>`, `<ENGINE>`): the
 //!    case's directories and the engine's installation, longest first.
 //! 3. **Crash logs** (`crash-<TIMESTAMP>-<PID>.log`): the name the crash
-//!    handler gives its log.
+//!    handler gives its log; and the language-server catalog cache's
+//!    directory (`lsp-catalogs/<CATALOG-FINGERPRINT>`), a hash of the
+//!    installation's paths and file times.
 //! 4. **Timestamps**: ISO 8601 date-times on the dates the case ran, and the
 //!    clock time that starts a log line (`18:22:33 debug: …`), get every digit
 //!    replaced by `0`, so the format (separators, fraction width, offset
@@ -25,8 +27,9 @@
 //!    on either side made one (a table column pads to its widest value).
 //! 7. **Hyperlink ids** (`id=<ID>`): Rich numbers terminal hyperlinks
 //!    (`ESC]8;id=…;url`) at random.
-//! 8. **Host tool versions** (`git <GIT_VERSION>`): `opentide doctor` prints
-//!    the git it finds.
+//! 8. **Host tool versions** (`git <GIT_VERSION>`, only for cases that opt
+//!    in with `host-git`): `opentide doctor` prints the git it finds; help
+//!    text quotes a literal example that must stay.
 //! 9. **Fresh UUIDs** (`<UUID-1>`, …, only for cases that opt in): UUIDs the
 //!    fixture does not contain, numbered by first appearance.
 //!
@@ -98,6 +101,7 @@ regex!(
     log_clock,
     r"(?m)^((?:\x1b\[\?25l<LIVE>)?(?:\x1b\[[0-9;]*m)*)(\d{2}:\d{2}:\d{2}(?:[.,]\d+)?)((?:\x1b\[[0-9;]*m)* (?:\x1b\[[0-9;]*m)*(?:debug|info|warning|error|critical)\b)"
 );
+regex!(catalog_fingerprint, r"(lsp-catalogs[/\\])[0-9a-f]{32}\b");
 regex!(crash_log, r"crash-\d{8}T\d{6}\d*Z-\d+\.log");
 regex!(
     duration_ms,
@@ -155,7 +159,10 @@ impl Normaliser {
             literals,
             timestamp,
             today,
-            git: volatile.git_version.clone(),
+            git: volatile
+                .git_version
+                .clone()
+                .filter(|_| rules.contains(&Rule::HostGit)),
             fresh_uuids,
         }
     }
@@ -198,6 +205,9 @@ impl Normaliser {
         out = crash_log()
             .replace_all(&out, "crash-<TIMESTAMP>-<PID>.log")
             .into_owned();
+        out = catalog_fingerprint()
+            .replace_all(&out, "${1}<CATALOG-FINGERPRINT>")
+            .into_owned();
         out = log_clock()
             .replace_all(&out, |caps: &Captures<'_>| {
                 format!("{}{}{}", &caps[1], zero_digits(&caps[2]), &caps[3])
@@ -217,24 +227,32 @@ impl Normaliser {
                 format!("{}{zero}", &caps[1])
             })
             .into_owned();
-        out = seconds()
-            .replace_all(&out, |caps: &Captures<'_>| {
-                // A table pads the column to its widest value: the padding on
-                // either side of the token is timing too, so any run of spaces
-                // becomes one.
-                let space = |i: usize| if caps[i].is_empty() { "" } else { " " };
-                let lead = if caps[1].ends_with(' ') { "" } else { space(2) };
-                format!(
-                    "{}{}{}{}<SECONDS>{}{}",
-                    &caps[1],
-                    lead,
-                    &caps[3],
-                    space(4),
-                    &caps[5],
-                    space(6)
-                )
-            })
-            .into_owned();
+        // The trailing spaces a match takes can be the leading ones of the next
+        // duration (`1.6s 2.4s`): repeat until nothing changes.
+        loop {
+            let next = seconds()
+                .replace_all(&out, |caps: &Captures<'_>| {
+                    // A table pads the column to its widest value: the padding on
+                    // either side of the token is timing too, so any run of spaces
+                    // becomes one.
+                    let space = |i: usize| if caps[i].is_empty() { "" } else { " " };
+                    let lead = if caps[1].ends_with(' ') { "" } else { space(2) };
+                    format!(
+                        "{}{}{}{}<SECONDS>{}{}",
+                        &caps[1],
+                        lead,
+                        &caps[3],
+                        space(4),
+                        &caps[5],
+                        space(6)
+                    )
+                })
+                .into_owned();
+            if next == out {
+                break;
+            }
+            out = next;
+        }
         out = osc8_id().replace_all(&out, "${1}id=<ID>").into_owned();
         if let Some(version) = &self.git {
             out = out.replace(&format!("git {version}"), "git <GIT_VERSION>");
@@ -419,6 +437,12 @@ mod tests {
             "templates  4 files \x1b[2m <SECONDS>\x1b[0m\nschemas    8 files \x1b[2m <SECONDS>\x1b[0m\n"
         );
         assert_eq!(norm("| 0.3s   | x |"), norm("| 12.3s  | x |"));
+        // Two durations side by side.
+        assert_eq!(
+            norm("took 1.6s 2.4s total"),
+            "took <SECONDS> <SECONDS> total"
+        );
+        assert_eq!(norm("a 0.3s  1.2s"), "a <SECONDS> <SECONDS>");
         // Versions, decimals with two places and words are left alone.
         assert_eq!(
             norm("python 3.13s1 v1.2.3s 0.25s rule::1.0"),
@@ -478,9 +502,31 @@ mod tests {
     }
 
     #[test]
-    fn git_version() {
-        assert_eq!(norm("✓ git 2.43.0 · git"), "✓ git <GIT_VERSION> · git");
-        assert_eq!(norm("tool 2.43.0"), "tool 2.43.0");
+    fn git_version_only_where_asked() {
+        let mut doctor = Normaliser::new(&volatile(), &[Rule::HostGit], []);
+        assert_eq!(
+            doctor.text("✓ git 2.43.0 · git"),
+            "✓ git <GIT_VERSION> · git"
+        );
+        assert_eq!(doctor.text("tool 2.43.0"), "tool 2.43.0");
+        // Help text quotes the same line as an example: it is content.
+        assert_eq!(
+            norm("Example\n\n✓ git 2.43.0 · git"),
+            "Example\n\n✓ git 2.43.0 · git"
+        );
+    }
+
+    #[test]
+    fn catalog_cache_fingerprints() {
+        // A hash of the installation's paths and file times.
+        assert_eq!(
+            norm("home/.cache/opentide/lsp-catalogs/1b710955f6665676aede66615e5c3e59/fields.json"),
+            "home/.cache/opentide/lsp-catalogs/<CATALOG-FINGERPRINT>/fields.json"
+        );
+        assert_eq!(
+            norm("objects/1b710955f6665676aede66615e5c3e59"),
+            "objects/1b710955f6665676aede66615e5c3e59"
+        );
     }
 
     #[test]
