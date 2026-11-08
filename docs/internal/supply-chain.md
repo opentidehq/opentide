@@ -51,6 +51,10 @@ nightly and never distributed. The `deny` job checks them for advisories, bans a
 same `deny.toml`, and `--locked` keeps `fuzz/Cargo.lock` current. Their licences are not checked:
 nothing in `fuzz/` ships.
 
+**publishing/.** The crate that reserves the name `opentide` on crates.io
+(`publishing/placeholders/crates/opentide`) has its own workspace and lock file and no
+dependencies. It is published, so the `deny` job runs every check on it, licences included.
+
 **Versions.** CI pins cargo-deny 0.20.2 (older releases cannot parse the advisory database's CVSS
 4.0 entries) and cargo-audit 0.22.2. A newer release comes in a change of its own.
 

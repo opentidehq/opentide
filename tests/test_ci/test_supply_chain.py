@@ -97,6 +97,15 @@ def test_cargo_deny_gates_every_pull_request_at_a_pinned_version() -> None:
     runs = " ".join(s.get("run", "") for s in steps)
     assert "cargo deny --config deny.toml --locked check" in runs
     assert "--manifest-path fuzz/Cargo.toml" in runs
+    # Every other Cargo workspace in the repository has its own deny step.
+    lockfiles = sorted(
+        str(p.parent.relative_to(ROOT))
+        for p in ROOT.glob("**/Cargo.lock")
+        if not {"target", "node_modules", ".git"} & set(p.relative_to(ROOT).parts)
+    )
+    for workspace in lockfiles:
+        if workspace != ".":
+            assert f"--manifest-path {workspace}/Cargo.toml" in runs, workspace
     assert ci["jobs"]["deny"]["permissions"] == {"contents": "read"}
 
 

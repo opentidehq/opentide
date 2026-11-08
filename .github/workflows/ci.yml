@@ -386,7 +386,8 @@ jobs:
   # RustSec advisories (vulnerable, unsound, unmaintained, yanked), a second
   # version of a shipped crate, OpenSSL, and any source but crates.io. fuzz/
   # (its own lock, never shipped) is checked for advisories, bans and
-  # sources with the same deny.toml. The advisory database is fetched fresh,
+  # sources with the same deny.toml; the publishing/ placeholder crate (its
+  # own lock, published) for everything. The advisory database is fetched fresh,
   # so a new advisory fails the next pull request until it is fixed or
   # excepted with a reason in deny.toml. cargo-deny is the prebuilt release,
   # checksum-checked, at the version pinned here.
@@ -411,6 +412,10 @@ jobs:
         run: cargo deny --config deny.toml --locked check
       - name: cargo deny (fuzz/)
         run: cargo deny --config deny.toml --manifest-path fuzz/Cargo.toml --locked check advisories bans sources
+      # The crate that reserves `opentide` on crates.io: a workspace and lock of
+      # its own, published, so every check applies.
+      - name: cargo deny (publishing/ placeholder crate)
+        run: cargo deny --config deny.toml --manifest-path publishing/placeholders/crates/opentide/Cargo.toml --locked check
 
   # The vendored parser.c of every grammar is what tree-sitter-cli generates
   # from its grammar.js (crates/AGENTS.md: never hand-edited).

@@ -14,9 +14,10 @@ fn root() -> PathBuf {
     PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/.."))
 }
 
-/// The directories whose Rust the listing covers: the workspace's members
-/// and `fuzz/` (its own workspace, also ours).
-const DIRECTORIES: &[&str] = &["crates", "analysis", "xtask", "fuzz"];
+/// The directories whose Rust the listing covers: the workspace's members,
+/// `fuzz/` and the publishing placeholders (workspaces of their own, also
+/// ours).
+const DIRECTORIES: &[&str] = &["crates", "analysis", "xtask", "fuzz", "publishing"];
 
 fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), Box<dyn Error>> {
     for entry in std::fs::read_dir(dir).map_err(|err| format!("{}: {err}", dir.display()))? {

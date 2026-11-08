@@ -7,7 +7,9 @@
 # target. `fuzz/` (its own workspace and lock, never distributed) is checked
 # by the same job with this file: `cargo deny --manifest-path fuzz/Cargo.toml
 # check advisories bans sources`. Its licences are not: nothing from fuzz/ is
-# shipped.
+# shipped. The crate that reserves `opentide` on crates.io
+# (publishing/placeholders/crates/opentide, its own workspace and lock) is
+# published, so the job runs every check on it.
 
 [graph]
 # Every target a wheel, a binary or a WebAssembly artifact is built for: an
