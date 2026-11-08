@@ -14,7 +14,8 @@
 //! 3. **Crash logs** (`crash-<TIMESTAMP>-<PID>.log`): the name the crash
 //!    handler gives its log.
 //! 4. **Timestamps** (`<TIMESTAMP>`): ISO 8601 date-times on the dates the
-//!    case ran.
+//!    case ran; and `<TIME>` for the clock time that starts a debug log line
+//!    (`18:22:33 debug: …`).
 //! 5. **Today** (`<TODAY>`): the dates the case ran, `YYYY-MM-DD`.
 //! 6. **Durations**: the values of the JSON keys `duration_ms`, `elapsed_ms`,
 //!    `wall_ms` and `seconds` (every one a wall time in opentide's output)
@@ -74,6 +75,10 @@ macro_rules! regex {
 
 regex!(position_cursor, r"\r\x1b\[2K((?:\x1b\[1A\x1b\[2K)*)");
 regex!(transient_erase, r"^\r((?:\x1b\[1A\x1b\[2K)+)");
+regex!(
+    log_clock,
+    r"(?m)^((?:\x1b\[[0-9;]*m)*)\d{2}:\d{2}:\d{2}(?:[.,]\d+)?((?:\x1b\[[0-9;]*m)* )"
+);
 regex!(crash_log, r"crash-\d{8}T\d{6}\d*Z-\d+\.log");
 regex!(
     duration_ms,
@@ -157,6 +162,7 @@ impl Normaliser {
         out = crash_log()
             .replace_all(&out, "crash-<TIMESTAMP>-<PID>.log")
             .into_owned();
+        out = log_clock().replace_all(&out, "${1}<TIME>${2}").into_owned();
         if let Some(timestamp) = &self.timestamp {
             out = timestamp.replace_all(&out, "<TIMESTAMP>").into_owned();
         }
@@ -350,6 +356,16 @@ mod tests {
         assert_eq!(norm("at 2024-01-01T00:00:00Z"), "at 2024-01-01T00:00:00Z");
         let none = Normaliser::new(&Volatile::default(), &[], []).text("2026-11-08");
         assert_eq!(none, "2026-11-08");
+    }
+
+    #[test]
+    fn log_line_clock_times() {
+        assert_eq!(
+            norm("18:22:33 debug: Resolving · vocab: tlp::1.0\n\x1b[2m09:01:02.5\x1b[0m info: x\n"),
+            "<TIME> debug: Resolving · vocab: tlp::1.0\n\x1b[2m<TIME>\x1b[0m info: x\n"
+        );
+        // Only at the start of a line.
+        assert_eq!(norm("at 18:22:33 today"), "at 18:22:33 today");
     }
 
     #[test]

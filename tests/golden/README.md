@@ -114,6 +114,7 @@ Applied to stdout, stderr, file paths and file contents (UTF-8 only), in this or
 | The case's workspace, home, root, and the engine's directories | `<WS>`, `<HOME>`, `<TMP>`, `<ENGINE_BIN>`, `<ENGINE>` | temporary directories |
 | `crash-<time>-<pid>.log` | `crash-<TIMESTAMP>-<PID>.log` | the crash handler's log name |
 | ISO 8601 date-times on the dates the case ran | `<TIMESTAMP>` | the clock |
+| The clock time that starts a log line (`18:22:33 debug: …`) | `<TIME>` | the clock |
 | The dates the case ran (`YYYY-MM-DD`) | `<TODAY>` | the clock |
 | JSON `duration_ms`, `elapsed_ms`, `wall_ms`, `seconds` | `0` | wall times; the document stays JSON |
 | `1.3s`, `2m05s` in text | `<SECONDS>` | wall times in outcome lines |
