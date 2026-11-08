@@ -597,6 +597,7 @@ dependencies = [
 name = "opentide-compare"
 version = "0.11.0"
 dependencies = [
+ "regex",
  "serde",
  "serde_json",
  "toml",

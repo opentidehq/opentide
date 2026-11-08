@@ -16,6 +16,7 @@ description = "opentide's differential comparator: the oracle's run against a ca
 workspace = true
 
 [dependencies]
+regex.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 toml.workspace = true
