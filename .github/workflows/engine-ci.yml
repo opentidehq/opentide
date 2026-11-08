@@ -121,8 +121,10 @@ jobs:
 
   # Every engine crate builds from its packaged sources, as it will from
   # crates.io: a crate that reads a file outside OPENTIDE_ASSETS fails here, not
-  # at release. The binding (analysis/, opentide-native) is not a crate to
-  # publish. release.py's own tests run in ci.yml's `engine` job.
+  # at release. The binding (analysis/, opentide-native), the tooling (xtask)
+  # and the differential comparator (opentide-compare, which only they use)
+  # are not crates to publish. release.py's own tests run in ci.yml's `engine`
+  # job.
   package:
     name: Engine crates package
     runs-on: ubuntu-latest
@@ -139,7 +141,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: python3 scripts/engine/release.py vendor
-      - run: cargo package --locked --workspace --exclude opentide-native --allow-dirty
+      - run: cargo package --locked --workspace --exclude opentide-native --exclude xtask --exclude opentide-compare --allow-dirty
       # The crates carry the embedded catalogs; catch an oracle reference here
       # rather than at release time.
       - name: license scan (no oracle references)
