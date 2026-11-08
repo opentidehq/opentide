@@ -2,7 +2,8 @@ name: CI
 
 on:
   push:
-    branches: [main, development]
+    # integration/unified-core: the Unified Core PRs merge there before development.
+    branches: [main, development, integration/unified-core]
   pull_request:
     # All base branches: a stacked PR targets the branch below it, not development.
 

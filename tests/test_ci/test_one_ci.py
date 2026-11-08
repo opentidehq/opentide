@@ -237,6 +237,13 @@ def test_ci_runs_on_every_pull_request_and_on_development() -> None:
     assert "development" in triggers["push"]["branches"]
 
 
+@pytest.mark.parametrize("name", ["ci.yml", "codeql.yml", "oracle.yml"])
+def test_the_integration_branch_gets_ci_after_each_merge(name: str) -> None:
+    """The Unified Core PRs merge into integration/unified-core before development."""
+    branches = _triggers(_load(WORKFLOWS / name))["push"]["branches"]
+    assert {"development", "integration/unified-core"} <= set(branches), name
+
+
 @pytest.mark.parametrize(
     ("job", "command"),
     [
