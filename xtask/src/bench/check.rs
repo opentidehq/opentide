@@ -50,6 +50,76 @@ pub struct Budgets {
     pub baseline: Baseline,
     /// One entry per command id.
     pub commands: BTreeMap<String, CommandBudget>,
+    /// Medians recorded on other CPU models than `baseline.cpu_model` (python)
+    /// and `baseline.rust_cpu_model` (rust): one entry per engine and CPU.
+    #[serde(default)]
+    pub cpu_baseline: Vec<CpuBaseline>,
+}
+
+/// The medians of one engine on one more CPU model, from one CI run.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CpuBaseline {
+    /// `python` or `rust`.
+    pub engine: String,
+    /// The CPU (`model name`), as a report's `host.cpu_model` names it.
+    pub cpu_model: String,
+    /// The CI run the numbers were copied from.
+    pub source: String,
+    /// Median seconds per command id.
+    pub median_s: BTreeMap<String, f64>,
+}
+
+impl Budgets {
+    /// The time baseline of `id` for `engine` on `cpu`: the recorded median
+    /// on that CPU (`true`), or, on a CPU nothing was recorded on, the
+    /// slowest recorded median of the command (`false`).
+    fn time_reference(&self, engine: &str, id: &str, cpu: Option<&str>) -> Option<(f64, bool)> {
+        let (reference, reference_cpu) = match engine {
+            "rust" => (
+                self.commands.get(id).and_then(|c| c.rust_baseline_s),
+                self.baseline.rust_cpu_model.as_deref(),
+            ),
+            _ => (
+                self.commands.get(id).and_then(|c| c.baseline_s),
+                Some(self.baseline.cpu_model.as_str()),
+            ),
+        };
+        let others = self
+            .cpu_baseline
+            .iter()
+            .filter(|b| b.engine == engine)
+            .filter_map(|b| b.median_s.get(id).map(|s| (*s, b.cpu_model.as_str())));
+        let known: Vec<(f64, Option<&str>)> = reference
+            .map(|s| (s, reference_cpu))
+            .into_iter()
+            .chain(others.map(|(s, c)| (s, Some(c))))
+            .collect();
+        if let Some(cpu) = cpu
+            && let Some((s, _)) = known.iter().find(|(_, c)| *c == Some(cpu))
+        {
+            return Some((*s, true));
+        }
+        known
+            .iter()
+            .map(|(s, _)| *s)
+            .max_by(f64::total_cmp)
+            .map(|s| (s, false))
+    }
+
+    /// Whether any time baseline of `engine` was recorded on `cpu`.
+    fn knows_cpu(&self, engine: &str, cpu: Option<&str>) -> bool {
+        let Some(cpu) = cpu else { return false };
+        let reference = match engine {
+            "rust" => self.baseline.rust_cpu_model.as_deref() == Some(cpu),
+            _ => self.baseline.cpu_model == cpu,
+        };
+        reference
+            || self
+                .cpu_baseline
+                .iter()
+                .any(|b| b.engine == engine && b.cpu_model == cpu)
+    }
 }
 
 /// The regression rule.
@@ -169,6 +239,32 @@ impl Budgets {
                     "commands.{id}.target_waiver needs the target_s it waives and the \
                      rust_baseline_s that holds the rust engine meanwhile"
                 );
+            }
+        }
+        for (index, entry) in budgets.cpu_baseline.iter().enumerate() {
+            if !matches!(entry.engine.as_str(), "python" | "rust") {
+                bail!(
+                    "cpu_baseline[{index}].engine is python or rust, not {}",
+                    entry.engine
+                );
+            }
+            if budgets.cpu_baseline[..index]
+                .iter()
+                .any(|b| b.engine == entry.engine && b.cpu_model == entry.cpu_model)
+            {
+                bail!(
+                    "cpu_baseline[{index}]: {} on {} twice",
+                    entry.engine,
+                    entry.cpu_model
+                );
+            }
+            for (id, value) in &entry.median_s {
+                if !budgets.commands.contains_key(id) {
+                    bail!("cpu_baseline[{index}].median_s.{id}: no such command");
+                }
+                if !(value.is_finite() && *value > 0.0) {
+                    bail!("cpu_baseline[{index}].median_s.{id} must be a number > 0, not {value}");
+                }
             }
         }
         Ok(budgets)
@@ -336,30 +432,18 @@ pub fn check(budgets: &Budgets, report: &Report, previous: Option<&Report>) -> O
         && report.seed == Some(budgets.baseline.seed)
         && report.oracle.as_deref() == Some(budgets.baseline.oracle.as_str())
         && (report.runs, report.warmup) == (budgets.baseline.runs, budgets.baseline.warmup);
-    let same_cpu = report.host.cpu_model.as_deref() == Some(budgets.baseline.cpu_model.as_str());
-    let other_cpu = baseline_applies && !same_cpu;
-    if other_cpu {
+    let cpu = report.host.cpu_model.as_deref();
+    let other_cpu = !budgets.knows_cpu(&report.engine, cpu);
+    if other_cpu && (baseline_applies || report.engine == "rust") {
         notes.push(format!(
-            "the oracle baseline was measured on {}; this runner is {}: its times are held \
-             to the baseline + {:.0}% (RSS + {:.0}%)",
-            budgets.baseline.cpu_model,
-            report.host.cpu_model.as_deref().unwrap_or("an unknown CPU"),
+            "no {} baseline was recorded on {}: its times are held to the slowest recorded \
+             CPU's + {:.0}% (RSS + {:.0}%); add a [[cpu_baseline]] for it from a CI run",
+            report.engine,
+            cpu.unwrap_or("an unknown CPU"),
             policy.cross_cpu_regression * 100.0,
             policy.regression * 100.0
         ));
     }
-    let time_tolerance = if same_cpu {
-        policy.regression
-    } else {
-        policy.cross_cpu_regression
-    };
-    let rust_same_cpu =
-        report.host.cpu_model.is_some() && report.host.cpu_model == budgets.baseline.rust_cpu_model;
-    let rust_time_tolerance = if rust_same_cpu {
-        policy.regression
-    } else {
-        policy.cross_cpu_regression
-    };
     let heavy = report.seed == Some(SEED_OF_TARGETS);
     let reference = match report.engine.as_str() {
         "rust" if report.scale == 1 && heavy => "plan section 11 target".to_owned(),
@@ -379,9 +463,8 @@ pub fn check(budgets: &Budgets, report: &Report, previous: Option<&Report>) -> O
             ));
             "none (targets are for scale 1)".to_owned()
         }
-        _ if other_cpu => format!(
-            "oracle baseline from another CPU ({}; budget = baseline + {:.0}%)",
-            budgets.baseline.cpu_model,
+        _ if baseline_applies && other_cpu => format!(
+            "oracle baseline of the slowest recorded CPU (budget = baseline + {:.0}%)",
             policy.cross_cpu_regression * 100.0
         ),
         _ if baseline_applies => format!(
@@ -439,8 +522,7 @@ pub fn check(budgets: &Budgets, report: &Report, previous: Option<&Report>) -> O
             policy,
             Applies {
                 baseline: baseline_applies,
-                time_tolerance,
-                rust_time_tolerance,
+                time: budgets.time_reference(&report.engine, &result.id, cpu),
             },
             &mut failures,
         );
@@ -479,11 +561,10 @@ pub fn check(budgets: &Budgets, report: &Report, previous: Option<&Report>) -> O
 struct Applies {
     /// The oracle baseline (same engine, oracle, workspace and run count).
     baseline: bool,
-    /// The time tolerance against it: `regression` on its CPU,
-    /// `cross_cpu_regression` on another.
-    time_tolerance: f64,
-    /// The same for the Rust baselines of waived targets.
-    rust_time_tolerance: f64,
+    /// The command's time baseline for the report's engine and CPU, and
+    /// whether it was recorded on that CPU (`regression`) or is the slowest
+    /// recorded one (`cross_cpu_regression`).
+    time: Option<(f64, bool)>,
 }
 
 fn check_one(
@@ -497,9 +578,15 @@ fn check_one(
 ) -> Row {
     let Applies {
         baseline: baseline_applies,
-        time_tolerance,
-        rust_time_tolerance,
+        time,
     } = applies;
+    let tolerance = |same_cpu: bool| {
+        if same_cpu {
+            policy.regression
+        } else {
+            policy.cross_cpu_regression
+        }
+    };
     let id = &result.id;
     let mut row = Row {
         id: id.clone(),
@@ -553,8 +640,9 @@ fn check_one(
             row.budget_rss_bytes = budget.target_rss_mib.map(|mib| mib * MIB);
             if let Some(target) = budget.target_s {
                 row.delta_reference = fraction(median, target);
-                match (&budget.target_waiver, budget.rust_baseline_s) {
-                    (Some(waiver), Some(baseline)) => {
+                match (&budget.target_waiver, time) {
+                    (Some(waiver), Some((baseline, same_cpu))) => {
+                        let rust_time_tolerance = tolerance(same_cpu);
                         row.budget_s = Some(
                             baseline + (baseline * rust_time_tolerance).max(policy.noise_floor_s),
                         );
@@ -605,8 +693,9 @@ fn check_one(
             }
         }
     } else if baseline_applies {
-        match budget.baseline_s {
-            Some(baseline) => {
+        match time {
+            Some((baseline, same_cpu)) => {
+                let time_tolerance = tolerance(same_cpu);
                 row.budget_s =
                     Some(baseline + (baseline * time_tolerance).max(policy.noise_floor_s));
                 row.delta_reference = fraction(median, baseline);
@@ -1122,7 +1211,7 @@ target_s = 0.03
         let outcome = check(&budgets(), &on_xeon(4.2, 33.0), None);
         assert!(outcome.passed(), "{:?}", outcome.failures);
         assert!(
-            outcome.notes[0].contains("this runner is INTEL(R) XEON(R) PLATINUM 8573C"),
+            outcome.notes[0].contains("no python baseline was recorded on INTEL(R) XEON(R)"),
             "{:?}",
             outcome.notes
         );
@@ -1154,6 +1243,45 @@ target_s = 0.03
             outcome.rows[1].reasons
         );
         assert!(!check(&budgets, &rust(0.3), None).passed());
+    }
+
+    #[test]
+    fn a_cpu_with_its_own_baseline_is_held_to_it_at_ten_percent() {
+        let text = format!(
+            "{BUDGETS}\n[[cpu_baseline]]\nengine = \"python\"\ncpu_model = \"AMD EPYC 7763\"\n\
+             source = \"test\"\nmedian_s = {{ validate_clean = 5.0, explain = 0.3 }}\n"
+        );
+        let budgets = Budgets::parse(&text).unwrap();
+        let on_7763 = |validate_s: f64| {
+            let mut r = report(
+                "python",
+                vec![
+                    measured("validate_clean", validate_s, 170.0),
+                    measured("explain", 0.3, 33.0),
+                ],
+            );
+            r.host.cpu_model = Some("AMD EPYC 7763".into());
+            r
+        };
+        // 5.4 s is +8% on its own CPU's 5.0 s (and +80% on the reference's 3.0 s).
+        let outcome = check(&budgets, &on_7763(5.4), None);
+        assert!(outcome.passed(), "{:?}", outcome.failures);
+        assert!(outcome.notes.is_empty(), "{:?}", outcome.notes);
+        // 5.6 s is +12%: fails at 10%.
+        assert!(!check(&budgets, &on_7763(5.6), None).passed());
+        // An unrecorded CPU is held to the slowest recorded (5.0 s) + 50%.
+        let mut r = on_7763(7.4);
+        r.host.cpu_model = Some("Some Future CPU".into());
+        assert!(check(&budgets, &r, None).passed());
+        r.results[0] = measured("validate_clean", 7.6, 170.0);
+        assert!(!check(&budgets, &r, None).passed());
+        // Unknown commands, duplicates and bad numbers are refused.
+        assert!(Budgets::parse(&text.replace("explain = 0.3", "nonesuch = 0.3")).is_err());
+        assert!(Budgets::parse(&text.replace("explain = 0.3", "explain = 0.0")).is_err());
+        let twice = format!(
+            "{text}\n[[cpu_baseline]]\nengine = \"python\"\ncpu_model = \"AMD EPYC 7763\"\nsource = \"x\"\nmedian_s = {{}}\n"
+        );
+        assert!(Budgets::parse(&twice).is_err());
     }
 
     #[test]

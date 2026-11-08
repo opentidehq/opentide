@@ -50,8 +50,9 @@ of it): a command that failed early would measure nothing, so the bench stops wi
   (`python`), or over the plan section 11 target (`rust`); differences within the noise floor
   never fail. It prints, and with `--summary` appends, a Markdown table per command.
 - Comparability: a report is held to the oracle baseline only with the same oracle, workspace and
-  run count as recorded in the budgets; on another CPU model its times get the generous
-  `cross_cpu_regression` (50%) instead of 10%. A previous result counts only with the same engine,
+  run count as recorded in the budgets. Times are kept per CPU model (`[baseline]` and
+  `[[cpu_baseline]]`: GitHub's runners of one class span CPUs up to 1.8x apart); on a CPU with
+  no entry, times get the slowest recorded + `cross_cpu_regression` (50%). RSS keeps 10%. A previous result counts only with the same engine,
   oracle, workspace, run count and CPU model; GitHub's `ubuntu-24.04` runners come on several
   CPUs, so CI looks for the newest successful development run on the same CPU.
 - Peak RSS has a floor: on Linux a child's `ru_maxrss` is the larger of its own peak and xtask's

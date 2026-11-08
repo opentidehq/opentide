@@ -144,3 +144,37 @@ target_waiver = "UC-2.6 (#821) rebuilds the server on opentide-workspace"
 rust_baseline_s = 0.154
 # Plan section 11: editor memory per window (language server and backend) <= 150 MB.
 target_rss_mib = 150.0
+
+# The medians on more CPU models of the runner class, each from one CI run of the
+# workflow (same oracle, workspace and run count as [baseline]). A report on one of
+# these CPUs is held to its own numbers at policy.regression; on a CPU listed nowhere,
+# to the slowest recorded + policy.cross_cpu_regression. Add an entry when a job's
+# summary notes an unrecorded CPU, copying that job's medians.
+
+[[cpu_baseline]]
+engine = "python"
+cpu_model = "AMD EPYC 7763 64-Core Processor"
+source = "https://github.com/opentidehq/opentide/actions/runs/42511597394"
+
+[cpu_baseline.median_s]
+validate_clean = 4.338
+validate_warnings = 17.515
+validate_file = 2.222
+lint = 4.905
+lint_file = 1.030
+info = 1.524
+info_catalog = 1.804
+deploy_dry_run = 3.337
+generate_docs = 20.287
+generate_exports_navigator = 1.433
+rules_unreviewed = 0.590
+explain = 0.198
+lsp_first_diagnostics = 2.625
+
+[[cpu_baseline]]
+engine = "rust"
+cpu_model = "AMD EPYC 9V74 80-Core Processor"
+source = "https://github.com/opentidehq/opentide/actions/runs/42511597394"
+
+[cpu_baseline.median_s]
+lsp_first_diagnostics = 0.178
