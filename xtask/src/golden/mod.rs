@@ -58,7 +58,8 @@ commands:
   coverage   rewrite COVERAGE.md from cases.toml and the recordings
 
 --filter GLOB  only the cases whose id (<command>/<mode>/<fixture>/<variant>) matches
---engine       python (the oracle, the default); rust (UC-3) and compare (UC-0.7) come later
+--engine       python (the oracle, the default); rust (UC-3) and compare (UC-0.7) come
+               later: until then they cannot start (exit status 2)
 
 exit status: 0 passed, 1 a difference or a failed case, 2 usage error or the run could not start
 ";
@@ -211,19 +212,12 @@ impl Command {
         }
         let engine = match self.engine.as_str() {
             "python" => oracle.provision(&layout.golden, &oracle::cache_dir(&layout.target))?,
-            "rust" => {
-                eprintln!(
-                    "xtask golden: --engine rust is not implemented yet; the Rust CLI arrives with UC-3"
-                );
-                return Ok(false);
-            }
-            "compare" => {
-                eprintln!(
-                    "xtask golden: --engine compare is not implemented yet; UC-0.7 \
-                     (https://github.com/opentidehq/opentide/issues/805) implements it"
-                );
-                return Ok(false);
-            }
+            // The run cannot start: exit status 2, as the usage says.
+            "rust" => bail!("--engine rust is not implemented yet; the Rust CLI arrives with UC-3"),
+            "compare" => bail!(
+                "--engine compare is not implemented yet; UC-0.7 \
+                 (https://github.com/opentidehq/opentide/issues/805) implements it"
+            ),
             other => bail!("unknown engine `{other}`: python, rust or compare"),
         };
         let selected = select(&all, self.filter.as_deref())?;
@@ -234,7 +228,8 @@ impl Command {
             fixtures,
             engine,
             git_version: run::git_version(),
-            temp_parent: std::env::temp_dir(),
+            kernel_release: run::kernel_release(),
+            temp_parent: run::temp_parent(),
         };
         // Files the cases create get the same permissions on every host.
         #[cfg(unix)]
@@ -283,7 +278,20 @@ impl Command {
         }
         let cases_dir = layout.cases();
         for recording in first.iter().flatten() {
-            recording.write(&cases_dir.join(&recording.case.id), &layout.blobs())?;
+            let dir = cases_dir.join(&recording.case.id);
+            // Case ids are checked parts (case.rs), so this never leaves cases/.
+            anyhow::ensure!(
+                dir.starts_with(&cases_dir)
+                    && !recording
+                        .case
+                        .id
+                        .split('/')
+                        .any(|p| p == ".." || p.is_empty()),
+                "case id `{}` would write outside {}",
+                recording.case.id,
+                cases_dir.display()
+            );
+            recording.write(&dir, &layout.blobs())?;
         }
         if self.filter.is_none() {
             let wanted: BTreeSet<&str> = all.iter().map(|c| c.id.as_str()).collect();
@@ -342,7 +350,17 @@ impl Command {
                 );
                 continue;
             }
-            let recorded = Recording::read(&dir, &layout.blobs())?;
+            let recorded = match Recording::read(&dir, &layout.blobs()) {
+                Ok(recorded) => recorded,
+                Err(error) => {
+                    failed += 1;
+                    eprintln!(
+                        "{}: the recording cannot be read: {error:#}",
+                        actual.case.id
+                    );
+                    continue;
+                }
+            };
             let differences = recorded.differences(actual);
             if !differences.is_empty() {
                 failed += 1;
@@ -480,9 +498,9 @@ pub fn run_all(
                     let i = next.fetch_add(1, Ordering::SeqCst);
                     let Some(case) = cases.get(i) else { break };
                     let result = run::run_case(case, ctx);
-                    if let Ok(mut slots) = results.lock() {
-                        slots[i] = Some(result);
-                    }
+                    results
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)[i] = Some(result);
                     let n = done.fetch_add(1, Ordering::SeqCst) + 1;
                     if n % 100 == 0 || n == cases.len() {
                         eprintln!(
@@ -497,7 +515,7 @@ pub fn run_all(
     });
     results
         .into_inner()
-        .unwrap_or_default()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
         .into_iter()
         .map(|slot| slot.unwrap_or_else(|| Err(anyhow::anyhow!("the case did not run"))))
         .collect()

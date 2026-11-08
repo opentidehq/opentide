@@ -21,7 +21,8 @@ commands:
   coverage   rewrite COVERAGE.md from cases.toml and the recordings
 
 --filter GLOB  only the cases whose id (<command>/<mode>/<fixture>/<variant>) matches
---engine       python (the oracle, the default); rust (UC-3) and compare (UC-0.7) come later
+--engine       python (the oracle, the default); rust (UC-3) and compare (UC-0.7) come
+               later: until then they cannot start (exit status 2)
 
 exit status: 0 passed, 1 a difference or a failed case, 2 usage error or the run could not start
 

@@ -21,7 +21,10 @@ on:
     paths:
       - "tests/golden/**"
       - "tests/fixtures/tide_corpus/**"
+      - "tests/corpora/**"
       - "xtask/**"
+      - ".cargo/**"
+      - ".gitattributes"
       - "Cargo.toml"
       - "Cargo.lock"
       - "rust-toolchain.toml"

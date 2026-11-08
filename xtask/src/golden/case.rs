@@ -211,6 +211,13 @@ impl Spec {
     }
 
     fn check(&self) -> Result<()> {
+        // A case id names a directory under cases/: every part is checked.
+        for name in self.fixtures.keys() {
+            ensure!(
+                is_name(name),
+                "fixture `{name}`: use letters, digits, `-` and `_`"
+            );
+        }
         for name in &self.defaults.fixtures {
             ensure!(
                 self.fixtures.contains_key(name),
@@ -227,14 +234,22 @@ impl Spec {
                 case.variant
             );
             ensure!(
-                !case.variant.is_empty()
-                    && case
-                        .variant
-                        .chars()
-                        .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'),
+                is_name(&case.variant),
                 "case `{}` variant `{}`: use letters, digits, `-` and `_`",
                 case.command,
                 case.variant
+            );
+            ensure!(
+                case.command.is_empty()
+                    || case.command.split(' ').all(|word| {
+                        is_name(word)
+                            && word
+                                .chars()
+                                .next()
+                                .is_some_and(|c| c.is_ascii_alphanumeric())
+                    }),
+                "case command `{}`: words of letters, digits, `-` and `_`, one space apart",
+                case.command
             );
             for name in case.fixtures.iter().flatten() {
                 ensure!(
@@ -274,6 +289,14 @@ impl Spec {
         }
         Ok(out)
     }
+}
+
+/// A name that is safe as one part of a path: letters, digits, `-`, `_`.
+fn is_name(name: &str) -> bool {
+    !name.is_empty()
+        && name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
 }
 
 /// Replaces `{name}` in each argument; `None` when a variable is missing.
@@ -512,6 +535,16 @@ env = { DEBUG = "*" }
             .unwrap_err()
             .to_string();
         assert!(error.contains("expands to no fixture"), "{error}");
+        let escape =
+            format!("{SPEC}\n[[case]]\ncommand = \"../../..\"\nvariant = \"a\"\nargs = []\n");
+        assert!(
+            Spec::parse(&escape)
+                .unwrap_err()
+                .to_string()
+                .contains("case command")
+        );
+        let fixture = SPEC.replace("[fixtures.none]", "[fixtures.\"../x\"]");
+        assert!(Spec::parse(&fixture).is_err());
     }
 
     #[test]
