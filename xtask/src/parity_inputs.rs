@@ -8,9 +8,10 @@
 //! | Recordings | `tests/golden/cases/<command>/<mode>/<fixture>/<case>/` (a multi-word command joined with `.`) | UC-0.5 (#803) |
 //! | Approved diffs | `tests/golden/APPROVED_DIFFS.toml`, parsed and checked by `opentide-compare` | UC-0.7 (#805) |
 //! | Engine state | `--engines FILE`: `{"rust": [["validate"], ...], "flipped": [...]}`, which `scripts/parity_engines.py` writes from `RUST_COMMANDS` in `src/opentide/cli/engines.py` | UC-0.7 (#805) |
+//! | Fault catalogue | `tests/corpora/codes.toml` (`[groups]`: arrays of diagnostic codes, generated from the oracle) and `tests/corpora/faults.toml` (`[[kind]]` with `codes`) | UC-0.6 (#804) |
 //! | Compare results | `--compare FILE`: the `opentide_compare::RunReport` JSON of `golden check --engine compare`; case ids `<command>/<mode>/<fixture>/<variant>`; CI uploads it as `golden-compare` from `golden.yml` | UC-0.5, UC-0.7 |
 
-use crate::parity::{Cell, Engine, Inputs};
+use crate::parity::{Cell, Engine, FaultCoverage, Inputs};
 use anyhow::{Context, Result, bail};
 use serde::Deserialize;
 use std::collections::{BTreeMap, BTreeSet};
@@ -186,6 +187,38 @@ pub fn compare(json: &str) -> Result<(BTreeMap<Cell, bool>, usize)> {
     Ok((cells, report.stale.len()))
 }
 
+#[derive(Deserialize)]
+struct CodesFile {
+    groups: BTreeMap<String, Vec<String>>,
+}
+
+#[derive(Deserialize)]
+struct FaultsFile {
+    #[serde(default)]
+    kind: Vec<FaultKind>,
+}
+
+#[derive(Deserialize)]
+struct FaultKind {
+    codes: Vec<String>,
+}
+
+/// The fault catalogue's coverage: every code of every group of `codes.toml`,
+/// and those a kind of `faults.toml` produces. Other fields of either file
+/// are UC-0.6's and are not read here.
+///
+/// # Errors
+///
+/// Either text is not TOML of that shape.
+pub fn faults(codes_toml: &str, faults_toml: &str) -> Result<FaultCoverage> {
+    let codes: CodesFile = toml::from_str(codes_toml).context("read codes.toml")?;
+    let kinds: FaultsFile = toml::from_str(faults_toml).context("read faults.toml")?;
+    Ok(FaultCoverage {
+        codes: codes.groups.into_values().flatten().collect(),
+        covered: kinds.kind.into_iter().flat_map(|kind| kind.codes).collect(),
+    })
+}
+
 /// Every input: the repository's under `root`, plus the engine state and the
 /// compare results when their files are given.
 ///
@@ -231,8 +264,20 @@ pub fn read(
         compare,
         stale_entries: stale,
         approved_diffs: approved,
-        faults: None,
+        faults: fault_coverage(&root.join("tests").join("corpora"))?,
     })
+}
+
+/// The fault coverage when both catalogue files exist under `corpora`.
+fn fault_coverage(corpora: &Path) -> Result<Option<FaultCoverage>> {
+    let (codes, kinds) = (corpora.join("codes.toml"), corpora.join("faults.toml"));
+    if !(codes.is_file() && kinds.is_file()) {
+        return Ok(None);
+    }
+    let read = |path: &Path| {
+        std::fs::read_to_string(path).with_context(|| format!("read {}", path.display()))
+    };
+    faults(&read(&codes)?, &read(&kinds)?).map(Some)
 }
 
 #[cfg(test)]
@@ -300,6 +345,26 @@ mod tests {
             BTreeMap::new()
         );
         assert!(approved_diffs("[[diff]]\ncommand = \"info\"\n").is_err());
+    }
+
+    #[test]
+    fn reads_the_fault_catalogues_coverage() {
+        let coverage = faults(
+            "oracle = \"0.23.0\"\n[groups]\nvalidation = [\"invalid_uuid\", \"missing_field\"]\n\
+             lint = [\"missing_field\", \"long_name\"]\n",
+            "[[kind]]\nid = \"uuid-invalid-rule\"\ncodes = [\"invalid_uuid\"]\nseverity = \"error\"\n\
+             [[unreachable]]\ncode = \"long_name\"\nreason = \"r\"\n",
+        )
+        .unwrap();
+        assert_eq!(
+            coverage.codes,
+            ["invalid_uuid", "long_name", "missing_field"]
+                .map(String::from)
+                .into()
+        );
+        assert_eq!(coverage.covered, ["invalid_uuid".to_owned()].into());
+        assert!(faults("[groups]\n", "").is_ok());
+        assert!(faults("groups = 1", "").is_err());
     }
 
     #[test]

@@ -5,7 +5,7 @@ description: How strong the verifier is — Rust line coverage per crate with it
 
 # Test strength
 
-> Status: **implemented** by UC-X.2 ([#844](https://github.com/opentidehq/opentide/issues/844)),
+> Status: **implemented**, with the mutation baseline pending the first weekly run, by UC-X.2 ([#844](https://github.com/opentidehq/opentide/issues/844)),
 > plan [§5.4 "Strength"](https://github.com/opentidehq/opentide/blob/docs/unified-core-plan/docs/internal/unified-core.md#54-layered-tests). Three measures: coverage gates per
 > crate, mutation testing, and the [parity dashboard](./parity.md).
 
@@ -115,7 +115,7 @@ cargo mutants -p opentide-analysis --in-diff /tmp/change.diff
 | Engine state | `RUST_COMMANDS` in `src/opentide/cli/engines.py`, read by `scripts/parity_engines.py` (`--engines`) | read; empty today, and there is no flipped state yet |
 | Compare results | the `RunReport` JSON of `cargo xtask golden check --engine compare` (`--compare`) | arrives with UC-0.5's golden-compare job |
 | Approved diffs | `tests/golden/APPROVED_DIFFS.toml`, parsed and checked with `opentide-compare` | read |
-| Fault catalogue | UC-0.6 ([#804](https://github.com/opentidehq/opentide/issues/804)) | not yet |
+| Fault catalogue | `tests/corpora/codes.toml` (every diagnostic code, generated from the oracle) and `tests/corpora/faults.toml` (each kind's `codes`) | read once both exist: UC-0.6 ([#804](https://github.com/opentidehq/opentide/issues/804)) adds them |
 
 The [`parity`](https://github.com/opentidehq/opentide/blob/development/.github/workflows/parity.yml)
 workflow renders it on every pull request and push (job summary) and, on a push to

@@ -42,6 +42,8 @@ def test_reads_every_command_path_of_the_literal() -> None:
     )
     assert parity_engines.rust_commands(source) == [["info", "catalog"], ["validate"]]
     assert parity_engines.rust_commands("RUST_COMMANDS = {}\n") == []
+    # The root command (`opentide` itself) is the empty path.
+    assert parity_engines.rust_commands("RUST_COMMANDS = {(): None}\n") == [[]]
 
 
 @pytest.mark.parametrize(

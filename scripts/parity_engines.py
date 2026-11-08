@@ -29,7 +29,8 @@ class EngineStateError(ValueError):
 
 
 def _path(node: ast.expr) -> list[str]:
-    if not isinstance(node, ast.Tuple) or not node.elts:
+    # An empty tuple is the root command, `opentide` itself.
+    if not isinstance(node, ast.Tuple):
         raise EngineStateError(f"{TABLE}: a key is not a tuple of words (line {node.lineno})")
     words: list[str] = []
     for element in node.elts:

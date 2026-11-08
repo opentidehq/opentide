@@ -82,7 +82,7 @@ jobs:
       #   they need binaries this job does not install, and reach no Rust.
       - name: Instrumented tests (Rust, and Python through the binding)
         run: |
-          eval "$(cargo llvm-cov show-env --export-prefix)"
+          eval "$(cargo llvm-cov show-env --sh)"
           cargo llvm-cov clean --workspace
           OPENTIDE_ENGINE_PROFILE=dev uv sync --group dev --reinstall-package opentide
           cargo nextest run --workspace --locked --profile ci
@@ -93,7 +93,7 @@ jobs:
       # not cargo-llvm-cov's own target/llvm-cov-target): the same exports.
       - name: Coverage reports
         run: |
-          eval "$(cargo llvm-cov show-env --export-prefix)"
+          eval "$(cargo llvm-cov show-env --sh)"
           cargo llvm-cov report --json --summary-only --output-path target/coverage.json
           cargo llvm-cov report --lcov --output-path target/lcov.info
 
