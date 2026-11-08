@@ -66,8 +66,9 @@ include-build = false
 unused-allowed-license = "allow"
 
 [licenses.private]
-# The workspace's own crates are EUPL-1.2 and never fail this check;
-# publish = false crates (xtask, the bindings) are ours too.
+# Unpublished members (publish = false: xtask, the binding in analysis/,
+# opentide-wasm) are skipped. The published opentide-* crates are checked
+# like any other and pass as EUPL-1.2.
 ignore = true
 
 [bans]

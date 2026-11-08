@@ -218,4 +218,9 @@ def test_a_release_restores_no_other_cache() -> None:
                 inputs = step.get("with") or {}
                 assert not uses.startswith("actions/cache"), (name, job_id)
                 assert "cache" not in inputs, (name, job_id, uses)
-                assert "enable-cache" not in inputs, (name, job_id, uses)
+                if uses.startswith("astral-sh/setup-uv"):
+                    # Its default, "auto", caches on GitHub-hosted runners:
+                    # it must be turned off by name.
+                    assert inputs.get("enable-cache") is False, (name, job_id, uses)
+                else:
+                    assert "enable-cache" not in inputs, (name, job_id, uses)

@@ -92,3 +92,14 @@ def test_structural_problems_catch_what_the_schema_does_not() -> None:
     empty = _bom("pkg", [], {"pkg": []})
     assert sbom.structural_problems(empty) == []
     assert not sbom.depends_on_something(empty)
+
+
+def test_sboms_carry_the_epoch_and_no_random_serial() -> None:
+    bom = _bom("a", [], {"a": []})
+    bom["serialNumber"] = "urn:uuid:random"
+    bom["metadata"]["timestamp"] = "2026-11-08T05:53:40.297Z"
+    fixed = sbom.reproducible(bom, "1700000000")
+    assert "serialNumber" not in fixed
+    assert fixed["metadata"]["timestamp"] == "2023-11-14T22:13:20Z"
+    assert sbom.reproducible(bom, None)["metadata"]["timestamp"] == bom["metadata"]["timestamp"]
+    assert "serialNumber" in bom  # the input is left as it was

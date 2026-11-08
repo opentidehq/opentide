@@ -106,7 +106,9 @@ def test_only_the_scheduled_audit_may_write_issues() -> None:
         scopes = [workflow.get("permissions") or {}] + [
             job.get("permissions") or {} for job in workflow["jobs"].values()
         ]
-        writes_issues = any(isinstance(s, dict) and s.get("issues") == "write" for s in scopes)
+        writes_issues = any(
+            s == "write-all" or (isinstance(s, dict) and s.get("issues") == "write") for s in scopes
+        )
         if path.name == "rust-audit.yml":
             assert writes_issues
             assert _triggers(workflow) == {"schedule", "workflow_dispatch"}
@@ -172,5 +174,26 @@ def test_the_audit_reads_deny_tomls_exceptions_and_renders_findings() -> None:
     assert "[RUSTSEC-0000-0001](https://x)" in body
     assert "a \\| b &lt;x&gt;" in body
     assert "&gt;=1.0.1" in body and "none published" in body
+    # Advisory text cannot mention, link or embed.
+    hostile = dict(report)
+    hostile["vulnerabilities"] = {
+        "list": [
+            {
+                "advisory": {
+                    "id": "X",
+                    "title": "@octocat ![i](https://t/p) [l](https://e) `c`",
+                    "url": "javascript:alert(1)",
+                },
+                "package": {"name": "a", "version": "1"},
+            }
+        ]
+    }
+    body = audit.render({"Cargo.lock": hostile})
+    assert "@octocat" not in body
+    assert "![i](" not in body and "[l](" not in body and "`c`" not in body
+    assert "javascript:" not in body
+    long = dict(report)
+    long["vulnerabilities"] = {"list": report["vulnerabilities"]["list"] * 2000}
+    assert len(audit.render({"Cargo.lock": long})) <= audit.BODY_LIMIT + 200
     with pytest.raises(ValueError):
         audit.findings({"database": {}})

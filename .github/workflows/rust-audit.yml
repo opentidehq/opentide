@@ -46,7 +46,13 @@ jobs:
         id: audit
         run: |
           set -uo pipefail
-          mapfile -t ignores < <(python3 scripts/engine/audit.py ignores)
+          # deny.toml's exceptions; a failure here must not run the audit
+          # without them.
+          ignores_out="$(python3 scripts/engine/audit.py ignores)" || exit 1
+          ignores=()
+          if [ -n "${ignores_out}" ]; then
+            mapfile -t ignores <<<"${ignores_out}"
+          fi
           found=false
           mkdir -p audit
           for lock in Cargo.lock fuzz/Cargo.lock; do

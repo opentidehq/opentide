@@ -487,7 +487,7 @@ jobs:
 
   # Each fuzz target (fuzz/, cargo-fuzz on nightly) for 60 seconds from its
   # seeds and saved regressions: a panic or a timeout on a pull request fails
-  # here. engine-fuzz.yml runs each for five minutes a night with the corpus
+  # here. engine-fuzz.yml runs each for ten minutes a night with the corpus
   # it keeps.
   fuzz-smoke:
     name: Fuzz smoke (${{ matrix.targets }})

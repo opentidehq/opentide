@@ -64,9 +64,26 @@ def findings(report: dict[str, Any]) -> list[dict[str, str]]:
     return found
 
 
+# GitHub's limit on an issue body is 65536 characters; stay well under it.
+BODY_LIMIT = 60000
+
+
 def _cell(text: str) -> str:
-    """``text`` safe in a Markdown table cell: advisory titles are external."""
-    return text.replace("|", "\\|").replace("\n", " ").replace("<", "&lt;").replace(">", "&gt;")
+    """``text`` inert in a Markdown table cell: advisory titles are external
+    text, so no table break, HTML, link, image, code span or @-mention
+    (which would notify someone) survives."""
+    text = text.replace("\n", " ").replace("<", "&lt;").replace(">", "&gt;")
+    for char in "\\|[]()!`*_~#":
+        text = text.replace(char, f"\\{char}")
+    # A zero-width joiner after `@` keeps a name from becoming a mention.
+    return text.replace("@", "@\u200d")
+
+
+def _link(advisory: str, url: str) -> str:
+    """The advisory id, linked to its page when the URL is a plain https one."""
+    if url.startswith("https://") and not any(c in url for c in " ()[]<>\"'`"):
+        return f"[{_cell(advisory)}]({url})"
+    return _cell(advisory)
 
 
 def render(reports: dict[str, dict[str, Any]], run_url: str = "") -> str:
@@ -88,16 +105,19 @@ def render(reports: dict[str, dict[str, Any]], run_url: str = "") -> str:
             continue
         lines += ["| Kind | Advisory | Crate | Fix | Title |", "| --- | --- | --- | --- | --- |"]
         for row in rows:
-            advisory = f"[{row['id']}]({row['url']})" if row["url"] else row["id"]
             lines.append(
-                f"| {row['kind']} | {_cell(advisory)} | `{_cell(row['crate'])}` "
+                f"| {_cell(row['kind'])} | {_link(row['id'], row['url'])} | {_cell(row['crate'])} "
                 f"{_cell(row['version'])} | {_cell(row['fix'])} | {_cell(row['title'])} |"
             )
         lines.append("")
     if run_url:
         lines += [f"Run: {run_url}", ""]
     lines.insert(0, f"**{total} advisories.**\n")
-    return "\n".join(lines)
+    body = "\n".join(lines)
+    if len(body) > BODY_LIMIT:
+        cut = body.rfind("\n", 0, BODY_LIMIT)
+        body = body[:cut] + "\n\n(Cut to fit an issue: the run's summary has every row.)\n"
+    return body
 
 
 def main(argv: list[str]) -> int:

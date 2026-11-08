@@ -69,8 +69,9 @@ fn code_only(text: &str) -> String {
                 }
             }
             out.push(' ');
-        } else if c == 'r' && (at(i + 1) == '"' || at(i + 1) == '#') && !ident_before(&chars, i) {
-            // A raw string: r"…", r#"…"#, … (or an identifier starting with r).
+        } else if c == 'r' && (at(i + 1) == '"' || at(i + 1) == '#') && raw_prefix(&chars, i) {
+            // A raw string: r"…", r#"…"#, br"…", cr#"…"#, … (or an
+            // identifier ending in r, which `raw_prefix` refuses).
             let mut j = i + 1;
             let mut hashes = 0;
             while at(j) == '#' {
@@ -127,6 +128,16 @@ fn code_only(text: &str) -> String {
 
 fn ident_before(chars: &[char], i: usize) -> bool {
     i > 0 && (chars[i - 1].is_alphanumeric() || chars[i - 1] == '_')
+}
+
+/// Whether the `r` at `i` starts a raw string literal: alone (`r"`), or
+/// after the `b` of a raw byte string or the `c` of a raw C string, and not
+/// inside an identifier.
+fn raw_prefix(chars: &[char], i: usize) -> bool {
+    if !ident_before(chars, i) {
+        return true;
+    }
+    matches!(chars[i - 1], 'b' | 'c') && !ident_before(chars, i - 1)
 }
 
 /// How many times the keyword `unsafe` stands in `code` as a word of its own.
@@ -206,6 +217,12 @@ fn the_scan_skips_comments_and_literals() {
     let code = code_only(
         "// unsafe\n/* unsafe /* nested */ unsafe */ let s = \"unsafe\"; \
          let r = r#\"unsafe \"x\" \"#; let c = '\"'; fn f<'a>() {} unsafe { x() }",
+    );
+    assert_eq!(unsafe_keywords(&code), 1, "{code}");
+    // Raw byte and C strings, whose quotes inside must not end them.
+    let code = code_only(
+        "let s = br#\"a\"b\"#; unsafe { f() } let t = br#\"x \"unsafe\" y\"#; \
+         let u = cr\"unsafe\"; let v = b\"unsafe\"; let w = b'\"'; let bar = 1;",
     );
     assert_eq!(unsafe_keywords(&code), 1, "{code}");
     assert_eq!(

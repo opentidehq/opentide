@@ -19,8 +19,9 @@
 The Rust SBOMs come from cargo-cyclonedx without build dependencies (`cc`
 runs at build time and ships nothing). Its references name each workspace
 crate by its path on disk; `generate` writes them relative to the
-repository, so an SBOM is the same wherever it is built. Set
-`SOURCE_DATE_EPOCH` for a fixed timestamp.
+repository, so an SBOM is the same wherever it is built. With
+`SOURCE_DATE_EPOCH` set, every SBOM carries that time, and none a random
+serial number, so two runs on one commit write the same files.
 
 `validate` checks each file against the CycloneDX 1.5 JSON schema
 (cyclonedx-python-lib, run through `uv`), then what the schema cannot:
@@ -32,6 +33,7 @@ lists. `generate` also fails when a Rust or wheel SBOM lists no dependency
 from __future__ import annotations
 
 import argparse
+import datetime
 import json
 import os
 import re
@@ -159,6 +161,19 @@ def merge_wheel(python: Bom, native: Bom, version: str | None = None) -> Bom:
     return merged
 
 
+def reproducible(bom: Bom, epoch: str | None) -> Bom:
+    """``bom`` with no random serial number and, when ``epoch`` (the value of
+    ``SOURCE_DATE_EPOCH``) is set, its timestamp at that time: cargo-cyclonedx
+    honours the variable, but ``uv export`` and ``npm sbom`` stamp the
+    current time and a random serial."""
+    bom = json.loads(json.dumps(bom))
+    bom.pop("serialNumber", None)
+    if epoch:
+        moment = datetime.datetime.fromtimestamp(int(epoch), tz=datetime.timezone.utc)
+        bom.setdefault("metadata", {})["timestamp"] = moment.strftime("%Y-%m-%dT%H:%M:%SZ")
+    return bom
+
+
 def structural_problems(bom: Bom) -> list[str]:
     """What the JSON schema does not check: unique references, and
     dependencies that name listed components."""
@@ -237,6 +252,7 @@ def _read(path: Path) -> Bom:
 
 
 def _write(path: Path, bom: Bom) -> None:
+    bom = reproducible(bom, os.environ.get("SOURCE_DATE_EPOCH"))
     path.write_text(json.dumps(bom, indent=2) + "\n", encoding="utf-8")
 
 
@@ -272,7 +288,13 @@ def generate(out: Path, version: str | None = None) -> list[Path]:
             )
         )
         native = _read(by_target["all"] / f"{NATIVE}.json")
-        wheel = merge_wheel(python, native, wheel_version(version, ROOT))
+        resolved = wheel_version(version, ROOT)
+        if resolved is None:
+            raise SystemExit(
+                "sbom.py: the wheel's version is unknown: pass --wheel-version "
+                "(CI: `hatch version`) or build the package first (`uv sync`)"
+            )
+        wheel = merge_wheel(python, native, resolved)
         _check_dependencies("opentide-wheel.cdx.json", wheel)
         _write(out / "opentide-wheel.cdx.json", wheel)
         written.append(out / "opentide-wheel.cdx.json")

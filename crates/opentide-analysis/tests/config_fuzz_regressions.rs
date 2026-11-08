@@ -166,3 +166,34 @@ fn saved_configuration_inputs_do_not_crash_or_hang() {
     set_configuration_checker(None);
     assert!(ran >= 10, "the seeds ran ({ran})");
 }
+
+/// `fuzz/src/lib.rs` compiles in the schemas by name; this replay reads the
+/// directory. A schema added to one and not the other would fuzz a host the
+/// replay does not reproduce.
+#[test]
+fn the_fuzz_target_installs_every_schema_the_replay_does() {
+    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../testdata/config/schemas");
+    let mut on_disk: Vec<String> = std::fs::read_dir(&dir)
+        .unwrap()
+        .flatten()
+        .map(|entry| entry.file_name().to_string_lossy().to_string())
+        .filter(|name| {
+            name != "configurations.router.json"
+                && std::path::Path::new(name)
+                    .extension()
+                    .is_some_and(|ext| ext == "json")
+        })
+        .collect();
+    on_disk.sort();
+    let harness = std::fs::read_to_string(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fuzz/src/lib.rs"),
+    )
+    .unwrap();
+    let mut compiled: Vec<String> = harness
+        .split("schema!(\"")
+        .skip(1)
+        .filter_map(|rest| rest.split_once('"').map(|(name, _)| name.to_string()))
+        .collect();
+    compiled.sort();
+    assert_eq!(compiled, on_disk);
+}

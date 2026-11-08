@@ -283,6 +283,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # The tags, for the wheel's version (hatch-vcs).
+          fetch-depth: 0
       # The release rust-toolchain.toml pins (`rustup toolchain install` with no
       # name), with the browser build's target cargo-cyclonedx resolves for.
       - name: Set up Rust
@@ -294,7 +296,11 @@ jobs:
         with:
           shared-key: engine-release
           key: sbom
+      # setup-uv caches by default on GitHub's runners ("auto"); a release
+      # builds from nothing (tests/test_ci/test_rust_caches.py).
       - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          enable-cache: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
@@ -305,7 +311,9 @@ jobs:
           set -euo pipefail
           SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
           export SOURCE_DATE_EPOCH
-          python3 scripts/engine/sbom.py generate dist
+          # The version the wheel built from this commit carries.
+          wheel_version="$(uvx --quiet --from hatch==1.18.2 --with hatch-vcs==0.5.0 hatch version)"
+          python3 scripts/engine/sbom.py generate dist --wheel-version "${wheel_version}"
           python3 scripts/engine/sbom.py validate dist/*.cdx.json
           mkdir -p wheel
           mv dist/opentide-wheel.cdx.json wheel/
