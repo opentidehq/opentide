@@ -1,0 +1,6 @@
+# Vendored, unchanged, from opentidehq/vscode-extension (MIT, see
+# vscode-workspace.LICENSE): the extension's fixture workspace.
+repository = "https://github.com/opentidehq/vscode-extension"
+commit = "9888813d5484dffe663c9a57c07aad80a0897181"
+path = "test/fixtures/workspace"
+licence = "MIT"

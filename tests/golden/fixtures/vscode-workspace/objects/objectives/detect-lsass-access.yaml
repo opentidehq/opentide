@@ -1,0 +1,5 @@
+name: Detect LSASS access
+metadata:
+  uuid: 04149254-2a5b-4c1e-9f0e-3c1d2b5a6e7f
+  schema: objective::1.0
+  tlp: amber
