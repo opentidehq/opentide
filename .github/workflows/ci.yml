@@ -246,6 +246,10 @@ jobs:
       - name: WebAssembly engine (browser and WASI)
         run: bash scripts/engine/build-wasm.sh
 
+      # The code only wasm32 compiles: the engine job's clippy never sees it.
+      - name: clippy on the WebAssembly targets
+        run: bash scripts/engine/build-wasm.sh clippy
+
       - name: npm packages build and pack
         run: |
           for p in lsp-client lsp-worker; do (cd "packages/$p" && npm ci); done

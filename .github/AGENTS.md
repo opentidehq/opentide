@@ -15,7 +15,7 @@ whatever its base: a stacked PR targets the branch below it, not `development`.
 |-----|----------------|
 | `lint` | ruff, ty, `uv build` and `twine check`; the vocabulary drift gate and the model field descriptions (below) when their files change |
 | `engine` | The Cargo workspace: rustfmt, clippy `-D warnings`, `cargo xtask check-layers`, `cargo test --workspace` (doctests included), the engine's invariant scripts (`scripts/engine/check-io-free.sh`, `check-names.sh`, `validate-skills.sh`, `generate-highlights --check`), the bundled Tide catalog test and the engine release script's tests |
-| `engine-wasm` | `scripts/engine/build-wasm.sh` (both WebAssembly artifacts), the npm packages and the TypeScript client against the native, worker and WASI servers |
+| `engine-wasm` | `scripts/engine/build-wasm.sh` (both WebAssembly artifacts, and `clippy` for the code only wasm32 compiles), the npm packages and the TypeScript client against the native, worker and WASI servers |
 | `test` | The Python matrix, **3.10–3.14** |
 | `cli-e2e`, `cli-windows-smoke`, `gitlab-ci-lint` | The sharded E2E suite, a Windows smoke run, the generated GitLab pipelines; none waits for `test` |
 

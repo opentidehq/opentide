@@ -22,12 +22,13 @@ of the two crates allowed `unsafe` (the libc shims): its `[lints]` copy the work
 ```bash
 cargo nextest run --profile fast -p opentide-wasm        # native unit tests
 bash scripts/engine/build-wasm.sh browser                # the real artifact (fetches wasi-sdk)
+bash scripts/engine/build-wasm.sh clippy                 # clippy for wasm32 (and wasip1 lsp)
 ```
 
-Code under `cfg(target_arch = "wasm32")` is linted only by
-`cargo clippy -p opentide-wasm --target wasm32-unknown-unknown`, which needs a wasm C compiler
-and libc headers for the grammars (see `build-wasm.sh`). CI's `engine-wasm` job builds it with
-`-Dwarnings` and smoke-tests it in Node.
+Code under `cfg(target_arch = "wasm32")` is linted only by clippy for that target, which needs a
+wasm C compiler and libc headers for the grammars: `build-wasm.sh clippy` sets them up (or reuses
+`WASI_SDK_PATH`). CI's `engine-wasm` job runs it, builds the artifact with `-Dwarnings` and
+smoke-tests it in Node.
 
 ## Do not
 

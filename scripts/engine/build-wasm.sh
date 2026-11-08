@@ -10,7 +10,11 @@
 # (crates/opentide-wasm/src/libc_syscalls.rs), so it imports nothing but
 # wasm-bindgen's glue. WASI_SDK_PATH reuses an existing install.
 #
-#   scripts/engine/build-wasm.sh [browser] [wasi]    default: both
+#   scripts/engine/build-wasm.sh [browser] [wasi] [clippy]    default: browser wasi
+#
+# `clippy` lints the code only these targets compile (libc_syscalls.rs, the
+# wasip1 paths of opentide-lsp), which the workspace's native clippy run cannot
+# see, with the same C toolchain and -D warnings.
 set -euo pipefail
 root="$(cd "$(dirname "$0")/../.." && pwd)"
 targets=("$@")
@@ -60,8 +64,20 @@ for target in "${targets[@]}"; do
       CFLAGS_wasm32_wasip1="--sysroot=$sysroot" \
         cargo build --release -p opentide-lsp --target wasm32-wasip1
       node "$root/scripts/engine/wasm-smoke.mjs" wasi "$root/target/wasm32-wasip1/release/opentide-lsp.wasm" ;;
+    clippy)
+      rustup target add wasm32-unknown-unknown wasm32-wasip1 >/dev/null
+      CC_wasm32_unknown_unknown="$WASI_SDK_PATH/bin/clang" \
+      AR_wasm32_unknown_unknown="$WASI_SDK_PATH/bin/llvm-ar" \
+      CFLAGS_wasm32_unknown_unknown="-isystem $sysroot/include/wasm32-wasip1 -D__wasi__" \
+        cargo clippy --locked -p opentide-wasm --target wasm32-unknown-unknown --all-targets -- -D warnings
+      # The library and the binary: the tests' dev-dependencies (os_pipe, through
+      # trycmd) do not build for wasip1.
+      CC_wasm32_wasip1="$WASI_SDK_PATH/bin/clang" \
+      AR_wasm32_wasip1="$WASI_SDK_PATH/bin/llvm-ar" \
+      CFLAGS_wasm32_wasip1="--sysroot=$sysroot" \
+        cargo clippy --locked -p opentide-lsp --target wasm32-wasip1 --lib --bins -- -D warnings ;;
     *)
-      echo "unknown target: $target (browser or wasi)"
+      echo "unknown target: $target (browser, wasi or clippy)"
       exit 2 ;;
   esac
 done
