@@ -5,7 +5,7 @@ expression: "serde_json::to_string_pretty(&schema).unwrap()"
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "SampleV1_1",
-  "description": "The sample family, revision 1.1 (`sample::1.1`): adds `tags`.",
+  "description": "The sample family, revision 1.1 (`sample::1.1`): overrides `effort`,\nwhich keeps its position, and adds `tags` after the shared fields.",
   "type": "object",
   "properties": {
     "description": {
@@ -15,14 +15,15 @@ expression: "serde_json::to_string_pretty(&schema).unwrap()"
       "tide.template.spacer": true
     },
     "effort": {
-      "description": "Implementation effort, from 1 to 10.",
+      "description": "Implementation effort, from 1 to 10; templates write it.",
       "type": [
         "integer",
         "null"
       ],
       "format": "int64",
       "maximum": 10,
-      "minimum": 1
+      "minimum": 1,
+      "tide.template.required": true
     },
     "enabled": {
       "description": "Whether the object is in use.",
@@ -79,8 +80,9 @@ expression: "serde_json::to_string_pretty(&schema).unwrap()"
       "type": "object",
       "properties": {
         "description": {
-          "description": "Example description.",
+          "description": "Example description, not empty.",
           "type": "string",
+          "minLength": 1,
           "tide.template.multiline": true
         },
         "language": {

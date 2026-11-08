@@ -20,7 +20,7 @@ depends on opentide-core (`codes`). Not published yet (`publish = false` in `Car
 | `src/keys.rs` | The 23 `tide.*` keys as constants, each with where the oracle sets it (`Origin`) |
 | `src/error.rs` | `SchemaError`, `ErrorKind` (Pydantic's error type) and `code(Surface)` (the CLI's code) |
 | `src/pins.rs` | `Pins`: the vocabulary versions a revision pins, garde's context |
-| `src/revision.rs` | `revisions!`: one struct per revision, shared fields written once (`@shared,`) |
+| `src/revision.rs` | `revisions!`: one struct per revision, shared fields written once, in groups `@0,` … `@3,` around overridden fields |
 | `src/sample.rs` | Every derive and field convention on a two-revision family; not part of the model |
 | `tests/roundtrip.rs` | YAML → struct → YAML byte for byte; optional, defaulted, alias, closure, pins |
 | `tests/json_schema.rs` | The derived schema (insta snapshot) and its `tide.*` keys |

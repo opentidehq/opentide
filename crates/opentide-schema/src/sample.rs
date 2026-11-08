@@ -13,10 +13,13 @@
 //! | `schema_id` | serialised as `schema`, also read as `schema_id` (Pydantic `alias` with `populate_by_name=True`) |
 //! | `description` | `tide.*` keys as `#[schemars(extend(...))]` |
 //! | `severity` | a vocabulary field: `tide.vocab`, and a custom validator that reads the [`Pins`] context |
-//! | `effort` | optional (`T \| None = None`): `Option<T>`, missing or `null` read as `None`, `None` not written; a garde constraint schemars also emits |
+//! | `effort` | optional (`T \| None = None`): `Option<T>`, missing or `null` read as `None`, `None` not written; a garde constraint schemars also emits. Revision 1.1 overrides it (adding `tide.template.required`) and it keeps its position, between shared groups `@0` and `@1`, as an overridden Pydantic field does |
 //! | `enabled` | defaulted (`bool = True`): missing reads as the default, which is always written |
-//! | `examples` | an optional list of a shared, closed sub-struct, validated with `dive` |
-//! | `tags` | a field only revision 1.1 has, defaulted to empty |
+//! | `examples` | an optional list of a shared, closed sub-struct, validated with `dive` (its `description` must not be empty) |
+//! | `tags` | a field only revision 1.1 has, defaulted to empty, after the inherited ones |
+//!
+//! Every class is `frozen` and has `eq` and `hash`, as a frozen Pydantic model
+//! is hashable by its field values.
 
 use garde::Validate;
 use schemars::JsonSchema;
@@ -26,12 +29,12 @@ use crate::pins::Pins;
 use crate::revision::revisions;
 
 /// An example of a sample object: a sub-struct every revision shares as is.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Validate)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema, Validate)]
 #[serde(deny_unknown_fields)]
 #[garde(context(Pins))]
 #[cfg_attr(
     feature = "python",
-    pyo3::pyclass(frozen, get_all, eq, module = "opentide_schema")
+    pyo3::pyclass(frozen, get_all, eq, hash, module = "opentide_schema")
 )]
 #[cfg_attr(
     feature = "python",
@@ -41,9 +44,9 @@ use crate::revision::revisions;
     )
 )]
 pub struct SampleExample {
-    /// Example description.
+    /// Example description, not empty.
     #[schemars(extend("tide.template.multiline" = true))]
-    #[garde(skip)]
+    #[garde(length(min = 1))]
     pub description: String,
     /// Example URL.
     #[schemars(extend("format" = "uri"))]
@@ -56,46 +59,46 @@ pub struct SampleExample {
 }
 
 revisions! {
-    shared {
-        /// Display name.
-        #[garde(skip)]
-        pub name: String,
-        /// Globally unique object identifier.
-        #[garde(skip)]
-        pub uuid: String,
-        /// Schema identifier.
-        #[serde(rename = "schema", alias = "schema_id")]
-        #[garde(skip)]
-        pub schema_id: String,
-        /// What the object is for.
-        #[schemars(extend("tide.template.multiline" = true, "tide.template.spacer" = true))]
-        #[garde(skip)]
-        pub description: String,
-        /// Alert severity, from the `alert_severity` vocabulary.
-        #[schemars(extend("tide.vocab" = "alert_severity"))]
-        #[garde(custom(pinned("alert_severity")))]
-        pub severity: String,
-        /// Implementation effort, from 1 to 10.
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[garde(range(min = 1, max = 10))]
-        pub effort: Option<i64>,
-        /// Whether the object is in use.
-        #[serde(default = "default_true")]
-        #[garde(skip)]
-        pub enabled: bool,
-        /// Example queries.
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[garde(dive)]
-        pub examples: Option<Vec<SampleExample>>,
-    }
+    shared [
+        {
+            /// Display name.
+            #[garde(skip)]
+            pub name: String,
+            /// Globally unique object identifier.
+            #[garde(skip)]
+            pub uuid: String,
+            /// Schema identifier.
+            #[serde(rename = "schema", alias = "schema_id")]
+            #[garde(skip)]
+            pub schema_id: String,
+            /// What the object is for.
+            #[schemars(extend("tide.template.multiline" = true, "tide.template.spacer" = true))]
+            #[garde(skip)]
+            pub description: String,
+            /// Alert severity, from the `alert_severity` vocabulary.
+            #[schemars(extend("tide.vocab" = "alert_severity"))]
+            #[garde(custom(pinned("alert_severity")))]
+            pub severity: String,
+        }
+        {
+            /// Whether the object is in use.
+            #[serde(default = "default_true")]
+            #[garde(skip)]
+            pub enabled: bool,
+            /// Example queries.
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            #[garde(dive)]
+            pub examples: Option<Vec<SampleExample>>,
+        }
+    ]
 
     /// The sample family, revision 1.0 (`sample::1.0`).
-    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Validate)]
+    #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema, Validate)]
     #[serde(deny_unknown_fields)]
     #[garde(context(Pins))]
     #[cfg_attr(
         feature = "python",
-        pyo3::pyclass(frozen, get_all, eq, module = "opentide_schema")
+        pyo3::pyclass(frozen, get_all, eq, hash, module = "opentide_schema")
     )]
     #[cfg_attr(
         feature = "python",
@@ -105,16 +108,22 @@ revisions! {
         )
     )]
     pub struct SampleV1_0 {
-        @shared,
+        @0,
+        /// Implementation effort, from 1 to 10.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[garde(range(min = 1, max = 10))]
+        pub effort: Option<i64>,
+        @1,
     }
 
-    /// The sample family, revision 1.1 (`sample::1.1`): adds `tags`.
-    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Validate)]
+    /// The sample family, revision 1.1 (`sample::1.1`): overrides `effort`,
+    /// which keeps its position, and adds `tags` after the shared fields.
+    #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema, Validate)]
     #[serde(deny_unknown_fields)]
     #[garde(context(Pins))]
     #[cfg_attr(
         feature = "python",
-        pyo3::pyclass(frozen, get_all, eq, module = "opentide_schema")
+        pyo3::pyclass(frozen, get_all, eq, hash, module = "opentide_schema")
     )]
     #[cfg_attr(
         feature = "python",
@@ -124,7 +133,13 @@ revisions! {
         )
     )]
     pub struct SampleV1_1 {
-        @shared,
+        @0,
+        /// Implementation effort, from 1 to 10; templates write it.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[schemars(extend("tide.template.required" = true))]
+        #[garde(range(min = 1, max = 10))]
+        pub effort: Option<i64>,
+        @1,
         /// Free-form tags.
         #[serde(default)]
         #[garde(skip)]

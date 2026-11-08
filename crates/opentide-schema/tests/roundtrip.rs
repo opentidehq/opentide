@@ -158,3 +158,52 @@ fn sub_structs_are_shared_by_revisions() {
     };
     assert_eq!(SampleV1_1::from(old).examples, Some(vec![example]));
 }
+
+#[test]
+fn dive_validates_the_sub_structs_with_their_paths() {
+    let pins = Pins::new([("alert_severity", "1.0")]);
+    let yaml =
+        minimal() + "examples:\n- description: ok\n  link: l\n- description: ''\n  link: l\n";
+    let sample: Sample = read(&yaml).unwrap();
+    let report = sample.validate_with(&pins).unwrap_err();
+    let paths: Vec<String> = report.iter().map(|(path, _)| path.to_string()).collect();
+    assert_eq!(paths, ["examples[1].description"]);
+}
+
+#[test]
+fn an_overridden_field_keeps_its_position_in_every_revision() {
+    fn keys(yaml: &str) -> Vec<String> {
+        yaml.lines()
+            .filter(|line| !line.starts_with([' ', '-']))
+            .filter_map(|line| line.split_once(':').map(|(key, _)| key.to_owned()))
+            .collect()
+    }
+    let new: Sample = read(FIXTURE).unwrap();
+    let old = SampleV1_0 {
+        name: new.name.clone(),
+        uuid: new.uuid.clone(),
+        schema_id: "sample::1.0".into(),
+        description: new.description.clone(),
+        severity: new.severity.clone(),
+        effort: new.effort,
+        enabled: new.enabled,
+        examples: new.examples.clone(),
+    };
+    let old_keys = keys(&serde_yaml::to_string(&old).unwrap());
+    let new_keys = keys(&serde_yaml::to_string(&new).unwrap());
+    assert_eq!(old_keys[4..6], ["severity", "effort"]);
+    // 1.1 has the same keys in the same order, then its new field.
+    assert_eq!(new_keys[..old_keys.len()], old_keys[..]);
+    assert_eq!(new_keys[old_keys.len()..], ["tags"]);
+
+    let required = |schema: serde_json::Value| {
+        schema["properties"]["effort"]
+            .get("tide.template.required")
+            .cloned()
+    };
+    assert_eq!(
+        required(schemars::schema_for!(Sample).to_value()),
+        Some(serde_json::Value::Bool(true))
+    );
+    assert_eq!(required(schemars::schema_for!(SampleV1_0).to_value()), None);
+}

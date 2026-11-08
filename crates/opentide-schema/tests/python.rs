@@ -12,6 +12,17 @@ use pyo3::types::PyDict;
 
 const FIXTURE: &str = include_str!("fixtures/sample-1.1.yaml");
 
+/// Compiles only for a `frozen` class. `get_all` without `set_all` already
+/// makes the attributes read-only in Python, so assertions in Python cannot
+/// tell a frozen class from another; this can.
+const fn assert_frozen<T: pyo3::PyClass<Frozen = pyo3::pyclass::boolean_struct::True>>() {}
+
+const _: () = {
+    assert_frozen::<SampleV1_0>();
+    assert_frozen::<Sample>();
+    assert_frozen::<SampleExample>();
+};
+
 fn run(code: &str, sample: Sample) {
     Python::initialize();
     Python::attach(|py| -> PyResult<()> {
@@ -23,13 +34,7 @@ fn run(code: &str, sample: Sample) {
             .getattr("modules")?
             .set_item("opentide_schema", &module)?;
         let globals = PyDict::new(py);
-        let object = Bound::new(py, sample)?;
-        // `Bound::get` exists only for `frozen` classes: without `frozen`
-        // this line does not compile. (`get_all` without `set_all` already
-        // makes the attributes read-only in Python, so the assertions below
-        // cannot tell a frozen class from another.)
-        let _frozen: &Sample = object.get();
-        globals.set_item("sample", object)?;
+        globals.set_item("sample", Py::new(py, sample)?)?;
         let code = CString::new(code)
             .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))?;
         py.run(&code, Some(&globals), None)
@@ -59,6 +64,9 @@ assert type(example) is SampleExample
 assert example.link == "https://example.org/plain"
 assert example.language is None
 assert sample.examples[0] == sample.examples[0]
+# Hashable by value, as a frozen Pydantic model is.
+assert hash(sample) == hash(sample) and len({sample, sample}) == 1
+assert len({sample.examples[0], sample.examples[1]}) == 2
 
 for target, name in ((sample, "name"), (sample, "tags"), (example, "language")):
     try:
