@@ -101,9 +101,10 @@ its worktree, so the next worktree it serves, one after another, finds the depen
 git fetch origin
 git worktree add -b feat/slug ../wt/slug origin/development
 cd ../wt/slug
-export CARGO_TARGET_DIR="$(cd .. && pwd)/.target/pool-a"  # absolute; a pool no other worktree uses now
+# POOL names a pool no other worktree uses now (ls ../.target): the next line fails without it
+export CARGO_TARGET_DIR="$(cd .. && pwd)/.target/${POOL:?name a pool no other worktree uses now}"
 export CARGO_INCREMENTAL=0                      # one-shot runs: no incremental cache to grow
-git ls-files -z | xargs -0 touch                # the pool served another worktree: rebuild this one's crates
+git ls-files -z | xargs -0 touch -c             # the pool served another worktree: rebuild this one's crates
 uv sync --group dev                             # this worktree's .venv; _native builds in the pool
 ```
 
@@ -115,7 +116,10 @@ uv sync --group dev                             # this worktree's .venv; _native
   (and its `env!("CARGO_MANIFEST_DIR")` paths) without a word. Cargo's lock on the target
   directory only makes two builds wait for each other. Touch the tracked files when a pool passes
   to another worktree, as above; agents working at once cannot know when to, so they never share a
-  pool. CI is not affected: every run starts from a fresh checkout.
+  pool, and whoever starts them gives each its `POOL`. CI is not affected: every run starts from a
+  fresh checkout.
+- `touch -c` only updates the modification times of files that exist: a tracked file deleted in
+  the worktree stays deleted (plain `touch` recreates it empty, and `git commit -a` commits that).
 - A compiler cache does not bridge pools as this recipe stands: sccache (0.19) keys each crate on
   every `CARGO_*` variable, `CARGO_TARGET_DIR` included, so two pools never share an entry.
 - Size pools to the disk (a warm pool is several GB). Keep each pool's environment the same
