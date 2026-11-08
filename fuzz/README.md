@@ -26,8 +26,10 @@ past `-timeout`, is a failure.
 UC-X.1 (#843) asks for four more inputs to be fuzzed. Two have Rust code today
 and a target here: configuration TOML (`config`) and the message reader
 (`framing`, the language server's; `protocol` covers what follows it). The
-other two have no Rust code yet, so they have no target; the item that writes
-the code adds one:
+other two are opentide's own, which has no Rust code yet: `from_node`, and the
+`opentide` CLI's arguments (the one Rust CLI today, `opentide-lsp`'s, is clap
+derive with no parsing of its own). The item that writes the code adds the
+target:
 
 | Input | Target arrives with |
 | --- | --- |

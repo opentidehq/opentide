@@ -196,4 +196,12 @@ fn the_fuzz_target_installs_every_schema_the_replay_does() {
         .collect();
     compiled.sort();
     assert_eq!(compiled, on_disk);
+    // The first byte of an input picks a file by its index: the same list.
+    let files = harness
+        .split_once("pub const CONFIGURATION_FILES: &[&str] = &[")
+        .and_then(|(_, rest)| rest.split_once("];"))
+        .map(|(list, _)| list)
+        .unwrap();
+    let listed: Vec<&str> = files.split('"').skip(1).step_by(2).collect();
+    assert_eq!(listed, FILES);
 }

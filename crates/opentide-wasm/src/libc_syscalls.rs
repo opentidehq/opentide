@@ -22,37 +22,44 @@
 const ERRNO_SUCCESS: i32 = 0;
 const ERRNO_BADF: i32 = 8;
 
+// SAFETY: the only definition of a wasi-libc import symbol (module docs).
 #[unsafe(no_mangle)]
 extern "C" fn __imported_wasi_snapshot_preview1_fd_write(_: i32, _: i32, _: i32, _: i32) -> i32 {
     ERRNO_BADF
 }
 
+// SAFETY: the only definition of a wasi-libc import symbol (module docs).
 #[unsafe(no_mangle)]
 extern "C" fn __imported_wasi_snapshot_preview1_fd_read(_: i32, _: i32, _: i32, _: i32) -> i32 {
     ERRNO_BADF
 }
 
+// SAFETY: the only definition of a wasi-libc import symbol (module docs).
 #[unsafe(no_mangle)]
 extern "C" fn __imported_wasi_snapshot_preview1_fd_close(_: i32) -> i32 {
     ERRNO_BADF
 }
 
+// SAFETY: the only definition of a wasi-libc import symbol (module docs).
 #[unsafe(no_mangle)]
 extern "C" fn __imported_wasi_snapshot_preview1_fd_seek(_: i32, _: i64, _: i32, _: i32) -> i32 {
     ERRNO_BADF
 }
 
+// SAFETY: the only definition of a wasi-libc import symbol (module docs).
 #[unsafe(no_mangle)]
 extern "C" fn __imported_wasi_snapshot_preview1_fd_fdstat_get(_: i32, _: i32) -> i32 {
     ERRNO_BADF
 }
 
+// SAFETY: the only definition of a wasi-libc import symbol (module docs).
 #[unsafe(no_mangle)]
 extern "C" fn __imported_wasi_snapshot_preview1_fd_fdstat_set_flags(_: i32, _: i32) -> i32 {
     ERRNO_BADF
 }
 
 /// `clock_time_get(id, precision, *time)`: always 0 ns.
+// SAFETY: the only definition of a wasi-libc import symbol (module docs).
 #[unsafe(no_mangle)]
 #[expect(
     clippy::cast_sign_loss,
