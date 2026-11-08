@@ -23,7 +23,9 @@ changing; the parity dashboard says how far each command has come against the Py
 
 One instrumented build ([cargo-llvm-cov](https://github.com/taiki-e/cargo-llvm-cov)) is measured by
 two suites: every Rust test of the workspace (`cargo nextest run --workspace --profile ci`), and the
-Python tests that call the PyO3 binding `opentide._native`, whose functions only Python calls. The
+whole Python suite, unit and end-to-end, since only Python calls the functions of the PyO3 binding
+`opentide._native` (directly, or through `opentide.analysis` and the CLI). Only the GitLab lint
+tests are left out: they need binaries the job does not install and reach no Rust. The
 gate sums each workspace member's lines (every file under its directory) and compares the sum with
 its gate:
 
@@ -51,8 +53,7 @@ cargo llvm-cov --workspace --no-report && \
   cargo xtask coverage gate --report target/coverage.json  # per crate, Rust tests only
 ```
 
-The workflow's step "Instrumented tests" is the full measurement, the binding's Python tests
-included; run its commands to reproduce it. Doctests are not measured (cargo-llvm-cov needs nightly
+The workflow's step "Instrumented tests" is the full measurement, the Python suite included; run its commands to reproduce it. Doctests are not measured (cargo-llvm-cov needs nightly
 for them).
 
 A child process the tests start counts only when it exits normally: a killed process writes no
@@ -89,6 +90,10 @@ mutants, 80 caught, 24 missed, 34 unviable (76.9%); `opentide-tide` 764 of 1,546
 292 missed, 61 unviable (58.5%). Until the baseline exists the report shows "none" and every
 survivor is listed.
 
+The workflow rewrites an issue's description every week, so an equivalent mutant is explained in a
+comment on the issue, not in its description. An issue is not closed when its crate falls back
+under `issue_above`: close it by hand once its survivors are killed.
+
 To record the first or a new baseline, take `mutants-baseline.toml` from a full run's `mutants-report` artifact
 (or run the report locally with `--write-baseline`) and commit it in a reviewed change, lowering
 `issue_above` to the new missed count. Never edit the baseline by hand.
@@ -116,3 +121,8 @@ The [`parity`](https://github.com/opentidehq/opentide/blob/development/.github/w
 workflow renders it on every pull request and push (job summary) and, on a push to
 `development`, commits it when it changed. The page carries no date or commit, so it changes only
 when the migration does.
+
+Two things stop the dashboard job, on purpose: a ledger that fails `opentide-compare`'s checks, and
+a compare result for a recording that does not exist. A command with a Rust implementation and no
+recordings is not an error: the page lists it under "Rust implementations without recordings".
+Run `cargo xtask parity dashboard --check` locally; the bot commits the page itself.

@@ -248,7 +248,7 @@ impl Baseline {
 pub enum RunError {
     /// A shard's baseline (the unmutated tree) failed.
     BaselineFailed,
-    /// The same mutant appears in two shards.
+    /// The same mutant appears twice, in one shard or in two.
     Duplicate(String),
     /// A mutant of a crate the policy does not list.
     Unlisted(String),
@@ -260,7 +260,7 @@ impl fmt::Display for RunError {
             Self::BaselineFailed => f.write_str(
                 "a shard's baseline failed: the unmutated tree did not build or pass its tests",
             ),
-            Self::Duplicate(name) => write!(f, "`{name}` appears in two shards"),
+            Self::Duplicate(name) => write!(f, "`{name}` appears twice in the outcomes"),
             Self::Unlisted(krate) => {
                 write!(f, "mutants of `{krate}`, which the policy does not list")
             }
@@ -324,8 +324,13 @@ pub fn merge(policy: &Policy, runs: &[Run]) -> Result<Report, RunError> {
 }
 
 /// The most surviving mutants one issue lists; the rest are in the run's
-/// artifact. Keeps the body well under GitHub's 65,536 characters.
+/// artifact.
 pub const ISSUE_LIST_LIMIT: usize = 300;
+
+/// The most characters the list of survivors takes in one issue body, so
+/// that the body stays under GitHub's limit of 65,536 whatever the length of
+/// the mutants' names.
+pub const ISSUE_LIST_CHARS: usize = 60_000;
 
 impl Report {
     /// The summary as Markdown, for the job summary.
@@ -391,8 +396,9 @@ impl Report {
                 "The weekly mutation run ({run_url}) found **{count} surviving mutants** in \
                  `{}`: each one is a change to the code that every test still passes. \
                  The threshold is {} (`xtask/mutants.toml`).\n\n\
-                 Kill a survivor with a test that fails on the mutated code, or record why it \
-                 is equivalent. Reproduce one with `cargo mutants -p {} --file <file> \
+                 Kill a survivor with a test that fails on the mutated code, or say in a \
+                 comment why it is equivalent: the workflow rewrites this description every \
+                 week. Reproduce one with `cargo mutants -p {} --file <file> \
                  --re '<function>'`.\n\n",
                 krate.name,
                 krate
@@ -400,14 +406,22 @@ impl Report {
                     .map_or_else(|| "not set yet".to_owned(), |n| n.to_string()),
                 krate.name
             );
+            let mut listed = 0;
+            let mut chars = 0;
             for mutant in missed.iter().take(ISSUE_LIST_LIMIT) {
-                let _ = writeln!(body, "- [ ] `{}`", mutant.name.replace('`', "'"));
+                let line = format!("- `{}`\n", mutant.name.replace('`', "'"));
+                if chars + line.chars().count() > ISSUE_LIST_CHARS {
+                    break;
+                }
+                chars += line.chars().count();
+                body.push_str(&line);
+                listed += 1;
             }
-            if missed.len() > ISSUE_LIST_LIMIT {
+            if missed.len() > listed {
                 let _ = writeln!(
                     body,
                     "\n…and {} more: the full list is `missed.txt` in the run's artifact.",
-                    missed.len() - ISSUE_LIST_LIMIT
+                    missed.len() - listed
                 );
             }
             body.push_str("\n_Opened and updated by the weekly `mutants` workflow._\n");
@@ -573,7 +587,7 @@ why = "folds into opentide-workspace"
         let (krate, body) = &issues[0];
         assert_eq!(krate, "tide");
         assert!(body.contains("**2 surviving mutants**"), "{body}");
-        assert!(body.contains("- [ ] `a: replace 'f'`"), "{body}");
+        assert!(body.contains("- `a: replace 'f'`"), "{body}");
         assert!(body.contains("RUN"), "{body}");
     }
 
@@ -585,8 +599,26 @@ why = "folds into opentide-workspace"
             .collect();
         let report = merge(&policy, &[run("Success", &mutants)]).unwrap();
         let body = &report.issues(&policy, "RUN")[0].1;
-        assert_eq!(body.matches("- [ ] ").count(), ISSUE_LIST_LIMIT);
+        assert_eq!(body.matches("\n- `").count(), ISSUE_LIST_LIMIT);
         assert!(body.contains("…and 2 more"), "{body}");
+    }
+
+    #[test]
+    fn a_body_of_long_names_stays_under_githubs_limit() {
+        let policy = Policy::parse("[[crate]]\nname = \"tide\"").unwrap();
+        let long = "x".repeat(400);
+        let mutants: Vec<String> = (0..ISSUE_LIST_LIMIT)
+            .map(|i| outcome("tide", &format!("{i:04}{long}"), "MissedMutant"))
+            .collect();
+        let report = merge(&policy, &[run("Success", &mutants)]).unwrap();
+        let body = &report.issues(&policy, "RUN")[0].1;
+        assert!(body.chars().count() < 65_536, "{}", body.chars().count());
+        let listed = body.matches("\n- `").count();
+        assert!(listed < ISSUE_LIST_LIMIT, "{listed}");
+        assert!(
+            body.contains(&format!("…and {} more", ISSUE_LIST_LIMIT - listed)),
+            "{body}"
+        );
     }
 
     #[test]

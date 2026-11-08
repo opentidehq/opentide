@@ -401,7 +401,8 @@ fn mutants_command(args: &[String]) -> Result<()> {
     let mut args = args.iter();
     while let Some(arg) = args.next() {
         let name = match (sub.as_str(), arg.as_str()) {
-            (_, "--policy" | "--metadata")
+            (_, "--policy")
+            | ("crates", "--metadata")
             | (
                 "report",
                 "--outcomes" | "--baseline" | "--issues" | "--run-url" | "--write-baseline"
@@ -454,6 +455,9 @@ fn mutants_command(args: &[String]) -> Result<()> {
             if outcomes.is_empty() {
                 bail!("--outcomes FILE is required");
             }
+            if options.contains_key("--write-baseline") != options.contains_key("--commit") {
+                bail!("--write-baseline FILE and --commit SHA go together");
+            }
             let runs = outcomes
                 .iter()
                 .map(|path| {
@@ -487,7 +491,7 @@ fn mutants_command(args: &[String]) -> Result<()> {
             if let Some(path) = options.get("--write-baseline") {
                 let commit = options
                     .get("--commit")
-                    .context("--write-baseline needs --commit SHA")?;
+                    .context("--write-baseline FILE and --commit SHA go together")?;
                 let text = report.baseline(commit).to_toml()?;
                 std::fs::write(path, text).with_context(|| format!("write {path}"))?;
             }

@@ -125,8 +125,6 @@ pub fn state(inputs: &Inputs, cell: &Cell) -> State {
 /// A mistake in the inputs: the dashboard is not written from them.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InputError {
-    /// The engine state names a command with no recording.
-    UnknownCommand(String),
     /// A compare result for a recording that does not exist.
     UnknownRecording(Cell),
     /// A fault kind's code that is not a diagnostic code.
@@ -136,10 +134,6 @@ pub enum InputError {
 impl fmt::Display for InputError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::UnknownCommand(command) => write!(
-                f,
-                "the engine state names `{command}`, which has no recording under tests/golden/"
-            ),
             Self::UnknownRecording(cell) => write!(
                 f,
                 "a compare result for `{}` in {} on {}, which has no recording",
@@ -157,13 +151,7 @@ impl fmt::Display for InputError {
 
 /// Checks that the inputs agree with one another: every error, in order.
 pub fn check(inputs: &Inputs) -> Vec<InputError> {
-    let commands: BTreeSet<&str> = inputs.goldens.iter().map(|c| c.command.as_str()).collect();
-    let mut errors: Vec<InputError> = inputs
-        .engines
-        .keys()
-        .filter(|command| !commands.contains(command.as_str()))
-        .map(|command| InputError::UnknownCommand(command.clone()))
-        .collect();
+    let mut errors = Vec::new();
     if let Some(compare) = &inputs.compare {
         errors.extend(
             compare
@@ -273,6 +261,23 @@ pub fn page(inputs: &Inputs) -> String {
         out.push_str(
             "\nNo compare results were given: every command with a Rust implementation that is \
              not flipped shows **compare not run**.\n",
+        );
+    }
+
+    // A Rust implementation with nothing recorded for compare to judge: not an
+    // error of the inputs (the dashboard must keep rendering), but a gap.
+    let unrecorded: Vec<String> = inputs
+        .engines
+        .keys()
+        .filter(|command| !commands.contains(command.as_str()))
+        .map(|command| format!("`{}`", format!("opentide {command}").trim_end()))
+        .collect();
+    if !unrecorded.is_empty() {
+        let _ = write!(
+            out,
+            "\n## Rust implementations without recordings\n\n{}: compare has nothing to \
+             judge them against until their goldens are recorded.\n",
+            unrecorded.join(", ")
         );
     }
 
@@ -473,6 +478,18 @@ mod tests {
     }
 
     #[test]
+    fn a_rust_command_without_recordings_is_listed_not_an_error() {
+        let mut inputs = inputs();
+        inputs.engines.insert("frobnicate".into(), Engine::Shadow);
+        assert!(check(&inputs).is_empty());
+        let page = page(&inputs);
+        assert!(
+            page.contains("## Rust implementations without recordings\n\n`opentide frobnicate`"),
+            "{page}"
+        );
+    }
+
+    #[test]
     fn the_page_is_a_pure_function_of_its_inputs() {
         assert_eq!(page(&inputs()), page(&inputs()));
     }
@@ -480,7 +497,6 @@ mod tests {
     #[test]
     fn inputs_that_disagree_are_errors() {
         let mut bad = inputs();
-        bad.engines.insert("frobnicate".into(), Engine::Shadow);
         bad.compare
             .as_mut()
             .unwrap()
@@ -489,7 +505,6 @@ mod tests {
         assert_eq!(
             check(&bad),
             [
-                InputError::UnknownCommand("frobnicate".into()),
                 InputError::UnknownRecording(cell("validate", "agent", "tide_corpus")),
                 InputError::UnknownCode("zzz".into()),
             ]

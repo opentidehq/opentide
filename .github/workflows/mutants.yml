@@ -22,8 +22,10 @@ on:
 permissions:
   contents: read
 
+# One group per trigger: a manual run queued behind the schedule's must not
+# replace it, or that week files no issue.
 concurrency:
-  group: mutants
+  group: mutants-${{ github.event_name }}
   cancel-in-progress: false
 
 env:
@@ -51,6 +53,7 @@ jobs:
       # (not a member yet) is left out until its work item creates it.
       - id: crates
         run: |
+          set -o pipefail
           crates=$(cargo xtask mutants crates | tr '\n' ' ')
           echo "crates=$crates" >> "$GITHUB_OUTPUT"
           echo "Mutating: $crates" >> "$GITHUB_STEP_SUMMARY"

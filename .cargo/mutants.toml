@@ -8,7 +8,7 @@
 # Which crates the weekly run mutates, and when their survivors become issues,
 # is xtask/mutants.toml; docs/internal/test-strength.md explains the scores.
 # There is no exclude list here: a mutant that cannot be killed is recorded as
-# equivalent in its issue, not hidden from the run.
+# equivalent in a comment on its crate's issue, not hidden from the run.
 
 # The tests of the mutated package, through nextest (the default profile of
 # .config/nextest.toml). Doctests are not run.

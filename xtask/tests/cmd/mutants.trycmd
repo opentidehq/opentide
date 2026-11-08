@@ -17,7 +17,16 @@ cargo-mutants 27.1.0.
 
 $ xtask mutants report --policy policy.toml --outcomes shard-0.json --outcomes shard-0.json
 ? 2
-xtask mutants: `crates/core/src/lib.rs:3:5: replace f -> bool with true` appears in two shards
+xtask mutants: `crates/core/src/lib.rs:3:5: replace f -> bool with true` appears twice in the outcomes
+
+$ xtask mutants report --policy policy.toml --outcomes shard-0.json --write-baseline new.toml
+? 2
+xtask mutants: --write-baseline FILE and --commit SHA go together
+
+$ xtask mutants report --policy policy.toml --metadata metadata.json --outcomes shard-0.json
+? 2
+xtask mutants: unknown option `--metadata` for `mutants report`
+...
 
 $ xtask mutants report --policy policy.toml
 ? 2

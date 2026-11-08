@@ -33,7 +33,8 @@ permissions:
 
 concurrency:
   group: parity-${{ github.ref }}
-  # Runs on development queue rather than cancel, so each push's page lands.
+  # On development a run is not cancelled mid-commit; GitHub keeps one pending
+  # run per group, so the newest push's page is the one that lands.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -95,7 +96,8 @@ jobs:
           PUSHED: ${{ github.sha }}
         run: |
           cp parity/parity.md docs/internal/parity.md
-          if git diff --quiet -- docs/internal/parity.md; then
+          # porcelain also sees the page when it is not tracked yet.
+          if [ -z "$(git status --porcelain -- docs/internal/parity.md)" ]; then
             echo "The dashboard is unchanged." >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi

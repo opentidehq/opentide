@@ -4,8 +4,8 @@ Two of them write: the weekly mutation run files issues and the parity
 workflow commits the dashboard. These tests hold the design that keeps that
 safe: read-only by default, a write permission only on the one job that needs
 it, only on the trigger it is for, and in a job that runs no repository code.
-They also hold the coverage workflow to measuring every Python test file that
-calls the PyO3 binding, whose functions only Python calls.
+They also hold the coverage workflow to measuring the PyO3 binding with the
+whole Python suite, since only Python calls its functions.
 """
 
 from __future__ import annotations
@@ -94,32 +94,17 @@ def test_actions_are_pinned_and_run_steps_interpolate_nothing(name: str) -> None
             assert "${{" not in str(step.get("run", "")), (name, job_id, step.get("name"))
 
 
-def _pytest_paths() -> list[str]:
+def test_coverage_measures_the_binding_with_the_whole_python_suite() -> None:
+    """opentide-native's functions only Python calls, directly or through
+    opentide.analysis and the CLI: a list of test files would miss some."""
     job = _load("coverage.yml")["jobs"]["rust"]
     runs = [str(step.get("run", "")) for step in job["steps"]]
     (script,) = [run for run in runs if "pytest" in run]
     words = shlex.split(script[script.index("pytest") :].replace("\\\n", " "))
-    return [word for word in words if word.startswith("tests/")]
-
-
-def test_coverage_measures_every_python_test_of_the_binding() -> None:
-    paths = _pytest_paths()
-    assert paths
-    for path in paths:
-        assert (ROOT / path).exists(), path
-    here = Path(__file__).resolve()
-    users = sorted(
-        file.relative_to(ROOT).as_posix()
-        for file in (ROOT / "tests").rglob("*.py")
-        if file.resolve() != here and re.search(r"\b_native\b", file.read_text(encoding="utf-8"))
-    )
-    assert users
-
-    def measured(file: str) -> bool:
-        return any(file == path or file.startswith(path.rstrip("/") + "/") for path in paths)
-
-    missing = [file for file in users if not measured(file)]
-    assert not missing, f"add these to coverage.yml's pytest step: {missing}"
+    assert words[1] == "tests/", words
+    assert words[words.index("-m") + 1] == "not gitlab_ci_lint", words
+    assert "OPENTIDE_ENGINE_PROFILE=dev uv sync" in script
+    assert script.index("cargo llvm-cov show-env") < script.index("uv sync")
 
 
 def test_coverage_gates_the_crates_with_the_policy() -> None:

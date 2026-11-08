@@ -133,18 +133,21 @@ impl Lsp {
     /// request the test sent. Dropping an `Lsp` ends it this way.
     pub fn end(&mut self) -> Option<std::process::ExitStatus> {
         let exit = br#"{"jsonrpc":"2.0","method":"exit"}"#;
-        // The server may have exited already: a broken pipe is not an error.
-        let _ = write!(self.stdin, "Content-Length: {}\r\n\r\n", exit.len());
-        let _ = self.stdin.write_all(exit);
-        let _ = self.stdin.flush();
         let stderr = self.child.stderr.take();
         let reader = &mut self.reader;
+        let stdin = &mut self.stdin;
         let child = &mut self.child;
         std::thread::scope(|scope| {
+            // Drain first: a server blocked writing to a full pipe reads no
+            // more input, and `exit` could then never be written.
             scope.spawn(move || std::io::copy(reader, &mut std::io::sink()));
             if let Some(mut stderr) = stderr {
                 scope.spawn(move || std::io::copy(&mut stderr, &mut std::io::sink()));
             }
+            // The server may have exited already: a broken pipe is not an error.
+            let _ = write!(stdin, "Content-Length: {}\r\n\r\n", exit.len());
+            let _ = stdin.write_all(exit);
+            let _ = stdin.flush();
             let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
             loop {
                 match child.try_wait() {

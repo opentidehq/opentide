@@ -2,10 +2,11 @@
 # as `cargo xtask coverage gate` enforces them in the `coverage` workflow
 # (.github/workflows/coverage.yml) on every pull request and push.
 #
-# cargo-llvm-cov runs the workspace's tests once, instrumented
-# (`cargo llvm-cov nextest --workspace --profile ci`), and exports one summary
-# per source file; the gate sums the lines of each member's directory and
-# compares the sum with that member's gate: the entry below, else
+# One cargo-llvm-cov build (`show-env`) runs the workspace's Rust tests
+# (`cargo nextest run --workspace --profile ci`) and the Python suite, which
+# drives the PyO3 binding, then exports one summary per source file. The gate
+# sums the lines of each member's directory and compares the sum with that
+# member's gate: the entry below, else
 # `default_lines`. Every member is gated; there is no exclude list, and a member
 # none of whose lines the run measured fails.
 #
