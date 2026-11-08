@@ -257,3 +257,46 @@ def test_the_jobs_that_build_for_a_target_are_seen() -> None:
 )
 def test_an_added_target_is_seen(script: str, added: set[str]) -> None:
     assert _targets_added(script) == added
+
+
+# A rustup command that installs a toolchain or adds a target or component.
+RUSTUP_SETUP = re.compile(r"\brustup +(?:toolchain +install|target +add|component +add)\b")
+
+
+def _masked_setups(step: dict[str, Any]) -> list[str]:
+    """The rustup setup commands in a step whose failure would not fail the step."""
+    if not any(RUSTUP_SETUP.search(line) for line in _lines(str(step.get("run", "")))):
+        return []
+    if step.get("continue-on-error"):
+        return ["continue-on-error"]
+    return [
+        line.strip()
+        for line in _lines(str(step.get("run", "")))
+        if RUSTUP_SETUP.search(line) and "||" in line
+    ]
+
+
+@pytest.mark.parametrize("path", WORKFLOWS, ids=lambda path: path.name)
+def test_a_failed_rustup_setup_fails_the_step(path: Path) -> None:
+    """No ``|| true`` (or other ``||``) or ``continue-on-error`` hides a failed install or add.
+
+    A target that was not added only shows up later as a missing std, or not at
+    all if the job builds nothing for it in that run.
+    """
+    for job_id, step in _steps(path):
+        assert _masked_setups(step) == [], (path.name, job_id)
+
+
+@pytest.mark.parametrize(
+    ("step", "masked"),
+    [
+        ({"run": "rustup target add ${{ matrix.target }} || true"}, 1),
+        ({"run": "rustup toolchain install --no-self-update \\\n  || echo skipped"}, 1),
+        ({"run": "rustup component add rustfmt", "continue-on-error": True}, 1),
+        ({"run": "rustup target add wasm32-wasip1\ncargo build || exit 1"}, 0),
+        ({"run": "# rustup target add wasm32-wasip1 || true"}, 0),
+        ({"run": "cargo build || true", "continue-on-error": True}, 0),
+    ],
+)
+def test_a_masked_rustup_setup_is_seen(step: dict[str, Any], masked: int) -> None:
+    assert len(_masked_setups(step)) == masked
