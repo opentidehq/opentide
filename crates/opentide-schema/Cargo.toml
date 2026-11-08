@@ -28,11 +28,12 @@ python = ["dep:pyo3"]
 wasm = []
 
 [dependencies]
+opentide-core.workspace = true
 serde.workspace = true
 schemars.workspace = true
 garde.workspace = true
 thiserror.workspace = true
-pyo3 = { version = "0.30.1", features = ["abi3-py310"], optional = true }
+pyo3 = { workspace = true, features = ["abi3-py310"], optional = true }
 
 [dev-dependencies]
 insta.workspace = true

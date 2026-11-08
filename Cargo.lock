@@ -340,8 +340,6 @@ checksum = "5d7f479d28d1daedf23970890723b8774d120aa627abcb33c1d7c93d0965e6c3"
 dependencies = [
  "compact_str",
  "garde_derive",
- "once_cell",
- "regex",
  "smallvec",
 ]
 
@@ -353,7 +351,6 @@ checksum = "7b0252cacdca8e6f30a900e6d436fbf294e23f674b9288ca4a5bd35976bef87c"
 dependencies = [
  "proc-macro2",
  "quote",
- "regex",
  "syn 2.0.119",
 ]
 
@@ -795,6 +792,7 @@ version = "0.11.0"
 dependencies = [
  "garde",
  "insta",
+ "opentide-core",
  "pyo3",
  "schemars",
  "serde",

@@ -9,6 +9,23 @@
 
 use std::fmt;
 
+/// The CLI's codes for schema errors. `schema_validation` is the engine's
+/// already ([`opentide_core::codes::SCHEMA_VALIDATION`]); the other four are
+/// codes the Python CLI prints that no engine crate emits yet, so they are not
+/// in `opentide_core::codes::ALL` (whose codes the language server describes).
+/// Each moves there when the workspace port that emits it lands (UC-2.2, #817).
+pub mod codes {
+    pub use opentide_core::codes::SCHEMA_VALIDATION;
+    /// An object file that is not YAML (`loading/`).
+    pub const YAML_PARSE: &str = "yaml_parse";
+    /// A configuration file that is not TOML (`validation/configuration.py`).
+    pub const CONFIG_PARSE: &str = "config_parse";
+    /// A required configuration key is missing (`validation/configuration.py`).
+    pub const MISSING_FIELD: &str = "missing_field";
+    /// A configuration key the model does not declare (`validation/configuration.py`).
+    pub const UNKNOWN_KEY: &str = "unknown_key";
+}
+
 /// Where a model is read from. The same Pydantic error maps to a different
 /// diagnostic code for an object file than for a configuration file.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -110,11 +127,11 @@ impl SchemaError {
     /// `validation/configuration.py` choose them.
     pub const fn code(&self, surface: Surface) -> &'static str {
         match (self.kind, surface) {
-            (ErrorKind::Syntax, Surface::Object) => "yaml_parse",
-            (ErrorKind::Syntax, Surface::Configuration) => "config_parse",
-            (ErrorKind::Missing, Surface::Configuration) => "missing_field",
-            (ErrorKind::UnknownKey, Surface::Configuration) => "unknown_key",
-            _ => "schema_validation",
+            (ErrorKind::Syntax, Surface::Object) => codes::YAML_PARSE,
+            (ErrorKind::Syntax, Surface::Configuration) => codes::CONFIG_PARSE,
+            (ErrorKind::Missing, Surface::Configuration) => codes::MISSING_FIELD,
+            (ErrorKind::UnknownKey, Surface::Configuration) => codes::UNKNOWN_KEY,
+            _ => codes::SCHEMA_VALIDATION,
         }
     }
 
