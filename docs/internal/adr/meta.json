@@ -1,0 +1,4 @@
+{
+  "title": "Architecture decisions",
+  "pages": ["0001-tide-model-as-rust-code"]
+}
