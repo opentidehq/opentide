@@ -76,8 +76,18 @@ pub struct Baseline {
     pub scale: u32,
     /// The heavy workspace's seed.
     pub seed: u64,
+    /// Measured runs per command.
+    pub runs: u32,
+    /// Warm-up runs per command.
+    pub warmup: u32,
     /// The runner class: `ubuntu-24.04, 4 vCPU`.
     pub runner: String,
+    /// The CPU the oracle baseline was measured on (`model name`): GitHub's
+    /// runners of one class come on several CPU generations, and a report
+    /// from another CPU is not held to the baseline (a note says so).
+    pub cpu_model: String,
+    /// The CPU the `rust_baseline_s` numbers were measured on.
+    pub rust_cpu_model: Option<String>,
     /// The CI run the numbers were copied from.
     pub source: String,
 }
@@ -162,12 +172,38 @@ impl Budgets {
 
 /// Parses a report and refuses a schema this code does not know.
 pub fn parse_report(text: &str) -> Result<Report> {
-    let report: Report = serde_json::from_str(text)?;
+    let raw: serde_json::Value = serde_json::from_str(text)?;
+    // `seed` is null for a workspace of one's own; a report without the key
+    // is not one this tool wrote.
+    if raw.get("seed").is_none() {
+        bail!("the report has no `seed` (null for a workspace of its own)");
+    }
+    let report: Report = serde_json::from_value(raw)?;
     if report.schema_version != SCHEMA_VERSION {
         bail!(
             "schema_version {} (this xtask reads {SCHEMA_VERSION})",
             report.schema_version
         );
+    }
+    if report.runs == 0 {
+        bail!("the report measured no run (runs = 0)");
+    }
+    for result in &report.results {
+        let id = &result.id;
+        let times = result.median_s.iter().chain(&result.samples_s);
+        if let Some(bad) = times.copied().find(|s| !(s.is_finite() && *s >= 0.0)) {
+            bail!("{id}: a time of {bad} s");
+        }
+        match result.status {
+            Status::Measured if result.median_s.is_none() || result.peak_rss_bytes.is_none() => {
+                bail!("{id}: measured, but without a median time and RSS");
+            }
+            Status::Measured => {}
+            Status::NotImplemented if report.engine != "rust" => {
+                bail!("{id}: not implemented in the {} engine", report.engine);
+            }
+            Status::NotImplemented => {}
+        }
     }
     Ok(report)
 }
@@ -258,6 +294,28 @@ fn incomparable(report: &Report, previous: &Report) -> Option<String> {
             workspace_name(report.seed)
         ));
     }
+    if previous.oracle != report.oracle {
+        return Some(format!(
+            "oracle {} != {}",
+            previous.oracle.as_deref().unwrap_or("none"),
+            report.oracle.as_deref().unwrap_or("none")
+        ));
+    }
+    if (previous.runs, previous.warmup) != (report.runs, report.warmup) {
+        return Some(format!(
+            "{} runs after {} warm-up != {} after {}",
+            previous.runs, previous.warmup, report.runs, report.warmup
+        ));
+    }
+    // GitHub's 4-vCPU runners come on more than one CPU generation; a 10%
+    // rule between two of them measures the hardware, not the change.
+    if previous.host.cpu_model != report.host.cpu_model {
+        return Some(format!(
+            "CPU {} != {}",
+            previous.host.cpu_model.as_deref().unwrap_or("unknown"),
+            report.host.cpu_model.as_deref().unwrap_or("unknown")
+        ));
+    }
     None
 }
 
@@ -270,7 +328,22 @@ pub fn check(budgets: &Budgets, report: &Report, previous: Option<&Report>) -> O
 
     let baseline_applies = report.engine == budgets.baseline.engine
         && report.scale == budgets.baseline.scale
-        && report.seed == Some(budgets.baseline.seed);
+        && report.seed == Some(budgets.baseline.seed)
+        && report.oracle.as_deref() == Some(budgets.baseline.oracle.as_str())
+        && (report.runs, report.warmup) == (budgets.baseline.runs, budgets.baseline.warmup);
+    let same_cpu = report.host.cpu_model.as_deref() == Some(budgets.baseline.cpu_model.as_str());
+    if baseline_applies && !same_cpu {
+        notes.push(format!(
+            "the oracle baseline was measured on {}; this runner is {}: no baseline applies \
+             (the last development result on this CPU still does)",
+            budgets.baseline.cpu_model,
+            report.host.cpu_model.as_deref().unwrap_or("an unknown CPU")
+        ));
+    }
+    let other_cpu = baseline_applies && !same_cpu;
+    let baseline_applies = baseline_applies && same_cpu;
+    let rust_baseline_applies =
+        report.host.cpu_model.is_some() && report.host.cpu_model == budgets.baseline.rust_cpu_model;
     let heavy = report.seed == Some(SEED_OF_TARGETS);
     let reference = match report.engine.as_str() {
         "rust" if report.scale == 1 && heavy => "plan section 11 target".to_owned(),
@@ -290,6 +363,10 @@ pub fn check(budgets: &Budgets, report: &Report, previous: Option<&Report>) -> O
             ));
             "none (targets are for scale 1)".to_owned()
         }
+        _ if other_cpu => format!(
+            "none (the oracle baseline is from {})",
+            budgets.baseline.cpu_model
+        ),
         _ if baseline_applies => format!(
             "oracle baseline ({}, {}; budget = baseline + {:.0}%)",
             budgets.baseline.oracle,
@@ -298,14 +375,21 @@ pub fn check(budgets: &Budgets, report: &Report, previous: Option<&Report>) -> O
         ),
         _ => {
             notes.push(format!(
-                "the oracle baseline is {} at scale {}, seed {}; this report is {} at \
-                 scale {}, {}: no baseline applies",
+                "the oracle baseline is {} ({}) at scale {}, seed {}, {} runs after {} \
+                 warm-up; this report is {} ({}) at scale {}, {}, {} runs after {}: no \
+                 baseline applies",
                 budgets.baseline.engine,
+                budgets.baseline.oracle,
                 budgets.baseline.scale,
                 budgets.baseline.seed,
+                budgets.baseline.runs,
+                budgets.baseline.warmup,
                 report.engine,
+                report.oracle.as_deref().unwrap_or("no oracle"),
                 report.scale,
-                workspace_name(report.seed)
+                workspace_name(report.seed),
+                report.runs,
+                report.warmup
             ));
             "none (another engine, scale or seed than the baseline)".to_owned()
         }
@@ -336,7 +420,10 @@ pub fn check(budgets: &Budgets, report: &Report, previous: Option<&Report>) -> O
             budget,
             prior,
             policy,
-            baseline_applies,
+            Applies {
+                baseline: baseline_applies,
+                rust_baseline: rust_baseline_applies,
+            },
             &mut failures,
         );
         rows.push(row);
@@ -369,15 +456,28 @@ pub fn check(budgets: &Budgets, report: &Report, previous: Option<&Report>) -> O
     }
 }
 
+/// Which recorded baselines a report is held to.
+#[derive(Clone, Copy)]
+struct Applies {
+    /// The oracle baseline (same engine, oracle, workspace, runs and CPU).
+    baseline: bool,
+    /// The Rust baselines of waived targets (same CPU).
+    rust_baseline: bool,
+}
+
 fn check_one(
     report: &Report,
     result: &CommandResult,
     budget: Option<&CommandBudget>,
     prior: Option<&CommandResult>,
     policy: &Policy,
-    baseline_applies: bool,
+    applies: Applies,
     failures: &mut Vec<String>,
 ) -> Row {
+    let Applies {
+        baseline: baseline_applies,
+        rust_baseline: rust_baseline_applies,
+    } = applies;
     let id = &result.id;
     let mut row = Row {
         id: id.clone(),
@@ -436,7 +536,17 @@ fn check_one(
                         row.budget_s = Some(
                             baseline + (baseline * policy.regression).max(policy.noise_floor_s),
                         );
-                        if regressed(median, baseline, policy.regression, policy.noise_floor_s) {
+                        if !rust_baseline_applies {
+                            row.budget_s = None;
+                            row.reasons.push(
+                                "the Rust baseline is from another CPU: not compared".to_owned(),
+                            );
+                        } else if regressed(
+                            median,
+                            baseline,
+                            policy.regression,
+                            policy.noise_floor_s,
+                        ) {
                             fail(
                                 &mut row,
                                 format!(
@@ -727,7 +837,11 @@ engine = "python"
 oracle = "opentide 0.23.0"
 scale = 1
 seed = 20261107
+runs = 5
+warmup = 1
 runner = "ubuntu-24.04, 4 vCPU"
+cpu_model = "AMD EPYC 9V45 96-Core Processor"
+rust_cpu_model = "AMD EPYC 9V45 96-Core Processor"
 source = "test"
 
 [commands.validate_clean]
@@ -773,8 +887,11 @@ target_s = 0.03
             seed: Some(20_261_107),
             runs: 5,
             warmup: 1,
-            oracle: None,
-            host: Host::default(),
+            oracle: (engine == "python").then(|| "opentide 0.23.0".to_owned()),
+            host: Host {
+                cpu_model: Some("AMD EPYC 9V45 96-Core Processor".into()),
+                ..Host::default()
+            },
             git_sha: Some("0123456789abcdef".into()),
             created_unix: 0,
             results,
@@ -896,6 +1013,142 @@ target_s = 0.03
                 .unwrap_or("")
                 .contains("0123456789ab")
         );
+    }
+
+    #[test]
+    fn another_oracle_or_run_count_is_held_to_neither_baseline_nor_previous() {
+        let mut r = report(
+            "python",
+            vec![
+                measured("validate_clean", 9.0, 170.0),
+                measured("explain", 0.2, 33.0),
+            ],
+        );
+        let previous = r.clone();
+        r.oracle = Some("opentide 0.24.0".into());
+        let outcome = check(&budgets(), &r, Some(&previous));
+        assert!(outcome.passed(), "{:?}", outcome.failures);
+        assert!(
+            outcome
+                .notes
+                .iter()
+                .any(|n| n.contains("no baseline applies")),
+            "{:?}",
+            outcome.notes
+        );
+        assert!(
+            outcome
+                .notes
+                .iter()
+                .any(|n| n.contains("oracle opentide 0.23.0 != opentide 0.24.0")),
+            "{:?}",
+            outcome.notes
+        );
+        let mut r = previous.clone();
+        r.runs = 1;
+        r.warmup = 0;
+        let outcome = check(&budgets(), &r, Some(&previous));
+        assert!(
+            outcome.notes.iter().any(|n| n.contains("1 runs after 0")),
+            "{:?}",
+            outcome.notes
+        );
+        assert!(outcome.passed());
+    }
+
+    #[test]
+    fn a_previous_result_on_another_cpu_is_not_compared() {
+        let mut previous = report(
+            "python",
+            vec![
+                measured("validate_clean", 2.0, 170.0),
+                measured("explain", 0.2, 33.0),
+            ],
+        );
+        previous.host.cpu_model = Some("AMD EPYC 7763".into());
+        let mut current = report(
+            "python",
+            vec![
+                measured("validate_clean", 3.0, 170.0),
+                measured("explain", 0.2, 33.0),
+            ],
+        );
+        current.host.cpu_model = Some("AMD EPYC 9V74".into());
+        let outcome = check(&budgets(), &current, Some(&previous));
+        assert!(outcome.passed(), "{:?}", outcome.failures);
+        assert!(
+            outcome
+                .notes
+                .iter()
+                .any(|n| n.contains("CPU AMD EPYC 7763 != AMD EPYC 9V74")),
+            "{:?}",
+            outcome.notes
+        );
+    }
+
+    #[test]
+    fn another_cpu_than_the_baselines_is_held_to_neither_baseline() {
+        let mut r = report(
+            "python",
+            vec![
+                measured("validate_clean", 9.0, 170.0),
+                measured("explain", 0.2, 33.0),
+            ],
+        );
+        r.host.cpu_model = Some("INTEL(R) XEON(R) PLATINUM 8573C".into());
+        let outcome = check(&budgets(), &r, None);
+        assert!(outcome.passed(), "{:?}", outcome.failures);
+        assert!(
+            outcome.notes[0].contains("this runner is INTEL(R) XEON(R) PLATINUM 8573C"),
+            "{:?}",
+            outcome.notes
+        );
+
+        let text = BUDGETS.replace(
+            "target_s = 0.03\n",
+            "target_s = 0.03\ntarget_waiver = \"UC-3.6\"\nrust_baseline_s = 0.16\n",
+        );
+        let budgets = Budgets::parse(&text).unwrap();
+        let mut r = report(
+            "rust",
+            vec![
+                CommandResult::not_implemented("validate_clean", "v", "no Rust yet"),
+                measured("explain", 0.5, 20.0),
+            ],
+        );
+        r.host.cpu_model = Some("INTEL(R) XEON(R) PLATINUM 8573C".into());
+        let outcome = check(&budgets, &r, None);
+        assert!(outcome.passed(), "{:?}", outcome.failures);
+        assert!(
+            outcome.rows[1].reasons[0].contains("another CPU"),
+            "{:?}",
+            outcome.rows[1].reasons
+        );
+    }
+
+    #[test]
+    fn a_report_that_measures_nothing_is_refused() {
+        let good = report("python", vec![measured("explain", 0.2, 33.0)]);
+        let text = |r: &Report| serde_json::to_string(r).unwrap();
+        assert!(parse_report(&text(&good)).is_ok());
+        let mut r = good.clone();
+        r.results[0] = CommandResult::not_implemented("explain", "e", "no Rust yet");
+        assert!(
+            parse_report(&text(&r)).is_err(),
+            "python cannot be not_implemented"
+        );
+        let mut r = good.clone();
+        r.results[0].median_s = Some(-1.0);
+        assert!(parse_report(&text(&r)).is_err());
+        let mut r = good.clone();
+        r.results[0].peak_rss_bytes = None;
+        assert!(parse_report(&text(&r)).is_err());
+        let mut r = good.clone();
+        r.runs = 0;
+        assert!(parse_report(&text(&r)).is_err());
+        let mut raw: serde_json::Value = serde_json::from_str(&text(&good)).unwrap();
+        raw.as_object_mut().unwrap().remove("seed");
+        assert!(parse_report(&raw.to_string()).is_err());
     }
 
     #[test]

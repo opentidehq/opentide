@@ -7,7 +7,8 @@
 //! `textDocument/didOpen`, answers any request the server makes with `null`,
 //! and stops the clock at the first diagnostics for the opened document. It
 //! then shuts the server down (`shutdown`, `exit`) and reaps it with
-//! `wait4(2)` for its peak RSS. A server that does not answer within the
+//! `wait4(2)` for its peak RSS. A server that does not exit within
+//! [`EXIT_TIMEOUT`] of `exit`, or does not answer within the
 //! timeout is killed and the run fails.
 
 use crate::bench::measure::{self, RunDir};
@@ -23,6 +24,10 @@ use std::time::{Duration, Instant};
 
 /// How long a server may take to its first diagnostics, and to shut down.
 pub const TIMEOUT: Duration = Duration::from_secs(300);
+
+/// How long a server may take to exit after `exit` (or after it was killed
+/// for not answering).
+pub const EXIT_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Writes one LSP message: a `Content-Length` header and the JSON body.
 pub fn write_message(writer: &mut impl Write, message: &Value) -> Result<()> {
@@ -102,6 +107,7 @@ pub fn first_diagnostics(
     let root_uri = file_uri(&root);
     let uri = file_uri(&path);
 
+    let floor = measure::own_peak_rss();
     let start = Instant::now();
     let mut child = command
         .spawn()
@@ -132,8 +138,19 @@ pub fn first_diagnostics(
             Err(err)
         }
     };
-    let (peak_rss_bytes, exit_code) = measure::reap(child)?;
-    let _ = reader.join();
+    // Bounded: a server that ignores `exit` is killed at the deadline. The
+    // reader thread is not joined: a grandchild holding the server's stdout
+    // open would block it; it ends when the pipe closes.
+    let deadline = Instant::now() + EXIT_TIMEOUT;
+    let reaped = measure::reap_by(child, deadline);
+    drop(reader);
+    let (peak_rss_bytes, exit_code) = reaped.with_context(|| {
+        format!(
+            "{} did not exit within {EXIT_TIMEOUT:?} of `exit`",
+            program.display()
+        )
+    })?;
+    measure::distinct_from_own(peak_rss_bytes, floor)?;
     let (elapsed, diagnostics) = outcome.with_context(|| {
         format!(
             "{} (stderr: {})",

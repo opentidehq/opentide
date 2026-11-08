@@ -17,8 +17,9 @@ use std::time::{Duration, Instant};
 use wait4::Wait4;
 
 /// `XTASK_BENCH_INJECT_SLEEP_MS`: a test-only slowdown. When set, every
-/// measured run sleeps this many milliseconds between the spawn and the wait,
-/// inside the timed window, as a slower command would. The tests use it to
+/// measured run's wall time includes this many more milliseconds (a sleep
+/// after the process exits, inside the timed window), as a slower command
+/// would. The tests use it to
 /// prove that a slowdown fails the budget check; nothing else sets it, and a
 /// report of a run with it set says so in its notes.
 pub const INJECT_SLEEP_ENV: &str = "XTASK_BENCH_INJECT_SLEEP_MS";
@@ -169,6 +170,9 @@ pub struct Measured {
     pub sample: Sample,
     /// Its exit code; `None` when a signal ended it.
     pub exit_code: Option<i32>,
+    /// xtask's own peak RSS at the spawn: the floor under the measured one
+    /// ([`own_peak_rss`], [`distinct_from_own`]).
+    pub own_peak_rss: Option<u64>,
 }
 
 /// Spawns `command`, waits for it with `wait4(2)`, and measures it: the wall
@@ -176,14 +180,17 @@ pub struct Measured {
 /// process and the children it waited for. `inject` sleeps inside the timed
 /// window ([`INJECT_SLEEP_ENV`]).
 pub fn run(command: &mut Command, inject: Option<Duration>) -> Result<Measured> {
+    let own_peak_rss = own_peak_rss();
     let start = Instant::now();
     let child = command
         .spawn()
         .with_context(|| format!("spawn {:?}", command.get_program()))?;
+    let usage = child.wait4().context("wait4")?;
+    // After the wait, not during it: a sleep that overlapped the child would
+    // add nothing to a command that runs longer than the sleep.
     if let Some(sleep) = inject {
         std::thread::sleep(sleep);
     }
-    let usage = child.wait4().context("wait4")?;
     let wall = start.elapsed();
     Ok(Measured {
         sample: Sample {
@@ -191,7 +198,42 @@ pub fn run(command: &mut Command, inject: Option<Duration>) -> Result<Measured> 
             peak_rss_bytes: usage.rusage.maxrss,
         },
         exit_code: usage.status.code(),
+        own_peak_rss,
     })
+}
+
+/// This process's own peak RSS (`VmHWM` in `/proc/self/status`), in bytes;
+/// `None` where there is no `/proc`.
+///
+/// On Linux a child's `ru_maxrss` is the larger of its own peak and the
+/// spawning process's peak at the spawn: `exec` records the high-water mark
+/// of the memory the child shared with its parent until then. A measured
+/// peak at or under xtask's own is that floor, not the command's.
+pub fn own_peak_rss() -> Option<u64> {
+    let status = std::fs::read_to_string("/proc/self/status").ok()?;
+    let kb = status
+        .lines()
+        .find_map(|line| line.strip_prefix("VmHWM:"))?
+        .trim()
+        .strip_suffix("kB")?
+        .trim()
+        .parse::<u64>()
+        .ok()?;
+    Some(kb * 1024)
+}
+
+/// Refuses a measured peak RSS that does not exceed xtask's own: it could be
+/// the floor [`own_peak_rss`] describes, and the command's own peak unknown.
+pub fn distinct_from_own(measured: u64, own: Option<u64>) -> Result<()> {
+    match own {
+        Some(own) if measured <= own => bail!(
+            "the measured peak RSS ({} KiB) does not exceed xtask's own ({} KiB), so it may \
+             be xtask's, not the command's",
+            measured / 1024,
+            own / 1024
+        ),
+        _ => Ok(()),
+    }
 }
 
 /// Waits for a child that was spawned elsewhere (the language server, whose
@@ -200,6 +242,22 @@ pub fn run(command: &mut Command, inject: Option<Duration>) -> Result<Measured> 
 pub fn reap(child: Child) -> Result<(u64, Option<i32>)> {
     let usage = child.wait4().context("wait4")?;
     Ok((usage.rusage.maxrss, usage.status.code()))
+}
+
+/// [`reap`] with a deadline: a child still running at `deadline` is killed
+/// (and reaped), and the result is an error rather than a wait forever.
+pub fn reap_by(mut child: Child, deadline: Instant) -> Result<(u64, Option<i32>)> {
+    loop {
+        if let Some(usage) = child.try_wait4().context("wait4")? {
+            return Ok((usage.rusage.maxrss, usage.status.code()));
+        }
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = reap(child);
+            bail!("the process did not exit in time and was killed");
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    }
 }
 
 #[cfg(all(test, unix))]
@@ -230,26 +288,45 @@ mod tests {
 
     #[test]
     fn the_peak_rss_is_the_child_not_this_process() {
-        // A child that touches 64 MiB has a peak RSS above 64 MiB; one that
-        // does nothing stays far below it, whatever this test process holds.
+        // A child that touches 64 MiB more than this process holds has a
+        // peak RSS above that; wait4 counts the grandchild `sh` waits for.
         let root = scratch("rss");
         let run_dir = RunDir::prepare(&root, None).unwrap();
-        let mut small = command(Path::new("sh"), &["-c".into(), "true".into()], &run_dir).unwrap();
-        let small = run(&mut small, None).unwrap().sample.peak_rss_bytes;
-        // dd reads /dev/zero into one 64 MiB buffer, touching every page; a
-        // grandchild under `sh`, which waits for it, so wait4 counts it too.
+        let own = own_peak_rss().unwrap();
+        let mib = own / (1024 * 1024) + 64;
         let mut big = command(
             Path::new("sh"),
             &[
                 "-c".into(),
-                "dd if=/dev/zero of=/dev/null bs=64M count=1 2>/dev/null; true".into(),
+                format!("dd if=/dev/zero of=/dev/null bs={mib}M count=1 2>/dev/null; true").into(),
             ],
             &run_dir,
         )
         .unwrap();
         let big = run(&mut big, None).unwrap().sample.peak_rss_bytes;
-        assert!(small < 32 * 1024 * 1024, "small child: {small} bytes");
-        assert!(big > 64 * 1024 * 1024, "big child: {big} bytes");
+        assert!(big > mib * 1024 * 1024, "big child: {big} bytes, own {own}");
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn a_peak_rss_under_xtasks_own_is_reported_as_such() {
+        // `sh -c true` peaks far below this test process: what wait4 reports
+        // is this process's high-water mark, and the guard says so.
+        let root = scratch("floor");
+        let run_dir = RunDir::prepare(&root, None).unwrap();
+        let ballast = vec![1u8; 48 << 20];
+        std::hint::black_box(&ballast);
+        let mut small = command(Path::new("sh"), &["-c".into(), "true".into()], &run_dir).unwrap();
+        let measured = run(&mut small, None).unwrap();
+        let own = measured.own_peak_rss.unwrap();
+        assert!(own >= 48 << 20, "{own}");
+        let error = distinct_from_own(measured.sample.peak_rss_bytes, measured.own_peak_rss)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("does not exceed xtask's own"), "{error}");
+        assert!(distinct_from_own(10, Some(5)).is_ok());
+        assert!(distinct_from_own(5, Some(5)).is_err());
+        assert!(distinct_from_own(5, None).is_ok());
         std::fs::remove_dir_all(root).unwrap();
     }
 
@@ -270,13 +347,37 @@ mod tests {
     }
 
     #[test]
-    fn an_injected_sleep_lands_inside_the_timed_window() {
+    fn an_injected_sleep_adds_to_the_commands_own_time() {
+        // A 0.3 s command with 0.3 s injected measures at least 0.6 s: the
+        // sleep adds to the command's time, it does not overlap it.
         let root = scratch("inject");
         let run_dir = RunDir::prepare(&root, None).unwrap();
+        let mut command = command(
+            Path::new("sh"),
+            &["-c".into(), "sleep 0.3".into()],
+            &run_dir,
+        )
+        .unwrap();
+        let measured = run(&mut command, Some(Duration::from_millis(300))).unwrap();
+        assert!(measured.sample.wall_s >= 0.6, "{}", measured.sample.wall_s);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn a_child_that_outlives_its_deadline_is_killed_not_awaited() {
+        let root = scratch("deadline");
+        let run_dir = RunDir::prepare(&root, None).unwrap();
         let mut command =
-            command(Path::new("sh"), &["-c".into(), "true".into()], &run_dir).unwrap();
-        let measured = run(&mut command, Some(Duration::from_millis(200))).unwrap();
-        assert!(measured.sample.wall_s >= 0.2, "{}", measured.sample.wall_s);
+            command(Path::new("sh"), &["-c".into(), "sleep 30".into()], &run_dir).unwrap();
+        let child = command.spawn().unwrap();
+        let started = Instant::now();
+        let outcome = reap_by(child, started + Duration::from_millis(200));
+        assert!(outcome.is_err());
+        assert!(
+            started.elapsed() < Duration::from_secs(10),
+            "{:?}",
+            started.elapsed()
+        );
         std::fs::remove_dir_all(root).unwrap();
     }
 

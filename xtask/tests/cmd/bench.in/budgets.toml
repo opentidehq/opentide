@@ -10,7 +10,11 @@ engine = "python"
 oracle = "opentide 0.23.0"
 scale = 1
 seed = 20261107
+# The run count of the baseline: a report of another count is not compared with it.
+runs = 5
+warmup = 1
 runner = "ubuntu-24.04, 4 vCPU"
+cpu_model = "AMD EPYC 7763 64-Core Processor"
 source = "bench.trycmd"
 
 [commands.validate_clean]

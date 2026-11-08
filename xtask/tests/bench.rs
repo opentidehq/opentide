@@ -32,7 +32,10 @@ fn fake_opentide(dir: &Path) -> PathBuf {
     let path = dir.join("opentide");
     std::fs::write(
         &path,
+        // 64 MiB of ballast (dd's buffer): a real command peaks above
+        // xtask's own RSS, and the bench refuses one that does not.
         "#!/bin/sh\n\
+         dd if=/dev/zero of=/dev/null bs=64M count=1 2>/dev/null\n\
          printf '%s\\n' '{\"code\":\"vocab_unknown\",\"ok\":true,\"exit_code\":0}'\n",
     )
     .unwrap();
@@ -86,6 +89,10 @@ fn budgets_from(report: &serde_json::Value, path: &Path) {
     assert_eq!(explain["id"], "explain");
     assert_eq!(explain["status"], "measured");
     let median = explain["median_s"].as_f64().unwrap();
+    let oracle = report["oracle"].as_str().unwrap();
+    // On a machine without /proc/cpuinfo the CPU is unknown, and no
+    // baseline applies; the test's machines have one.
+    let cpu = report["host"]["cpu_model"].as_str().expect("a CPU model");
     #[expect(clippy::cast_precision_loss, reason = "a test RSS")]
     let rss_mib = explain["peak_rss_bytes"].as_u64().unwrap() as f64 / (1024.0 * 1024.0);
     std::fs::write(
@@ -93,8 +100,9 @@ fn budgets_from(report: &serde_json::Value, path: &Path) {
         format!(
             "schema_version = 1\n\n\
              [policy]\nregression = 0.10\nnoise_floor_s = 0.03\nnoise_floor_rss_mib = 2.0\n\n\
-             [baseline]\nengine = \"python\"\noracle = \"stand-in\"\nscale = 1\nseed = 20261107\n\
-             runner = \"this machine\"\nsource = \"tests/bench.rs\"\n\n\
+             [baseline]\nengine = \"python\"\noracle = \"{oracle}\"\nscale = 1\nseed = 20261107\n\
+             runs = 3\nwarmup = 0\n\
+             runner = \"this machine\"\ncpu_model = \"{cpu}\"\nsource = \"tests/bench.rs\"\n\n\
              [commands.explain]\nlabel = \"explain\"\nbaseline_s = {median}\n\
              baseline_rss_mib = {rss_mib}\ntarget_s = 0.03\n"
         ),
@@ -211,5 +219,37 @@ fn a_command_that_fails_is_not_measured() {
     assert_eq!(output.status.code(), Some(2));
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("exited 1, not [0]"), "{stderr}");
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn a_relative_opentide_path_is_resolved_against_the_working_directory() {
+    // The commands run in a copy of the workspace; `--opentide ./opentide`
+    // must still name the file next to where xtask was started.
+    let dir = scratch("relative");
+    fake_opentide(&dir);
+    let output = Command::new(env!("CARGO_BIN_EXE_xtask"))
+        .current_dir(&dir)
+        .env("CARGO_MANIFEST_DIR", env!("CARGO_MANIFEST_DIR"))
+        .env_remove("XTASK_BENCH_INJECT_SLEEP_MS")
+        .args([
+            "bench",
+            "--only",
+            "explain",
+            "--opentide",
+            "./opentide",
+            "--runs",
+            "1",
+            "--warmup",
+            "0",
+            "--json",
+        ])
+        .output()
+        .expect("run xtask");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     std::fs::remove_dir_all(dir).unwrap();
 }

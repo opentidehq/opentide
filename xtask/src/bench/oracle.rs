@@ -121,8 +121,16 @@ pub fn ensure_oracle(root: &Path, dir: &Path) -> Result<(PathBuf, String)> {
     }
     // Every run must find the standard library compiled; one that does not
     // measures the compiler (see COMPILE_STDLIB).
-    run(Command::new(dir.join("bin").join("python")).args(["-c", STDLIB_IS_COMPILED]))
-        .context("the oracle's standard library has no bytecode")?;
+    let python = dir.join("bin").join("python");
+    if run(Command::new(&python).args(["-c", STDLIB_IS_COMPILED])).is_err() {
+        // uv may have reinstalled the interpreter since the stamp: compile
+        // its standard library again, then insist.
+        run(Command::new(&python)
+            .args(["-c", COMPILE_STDLIB])
+            .env("PYTHONDONTWRITEBYTECODE", ""))?;
+        run(Command::new(&python).args(["-c", STDLIB_IS_COMPILED]))
+            .context("the oracle's standard library has no bytecode")?;
+    }
     let output = Command::new(&opentide)
         .arg("--version")
         .output()

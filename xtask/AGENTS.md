@@ -49,6 +49,13 @@ of it): a command that failed early would measure nothing, so the bench stops wi
   over the last `development` result (`--previous`), over the oracle baseline in the budgets
   (`python`), or over the plan section 11 target (`rust`); differences within the noise floor
   never fail. It prints, and with `--summary` appends, a Markdown table per command.
+- Comparability: a report is held to the oracle baseline only with the same oracle, workspace,
+  run count and CPU model as recorded in the budgets, and to a previous result only with the same
+  engine, oracle, workspace, run count and CPU model; otherwise the summary says why it was not
+  compared. GitHub's `ubuntu-24.04` runners come on several CPUs, so CI looks for the newest
+  successful development run on the same CPU.
+- Peak RSS has a floor: on Linux a child's `ru_maxrss` is the larger of its own peak and xtask's
+  peak at the spawn. A sample at or under xtask's own `VmHWM` is refused, never reported.
 - `XTASK_BENCH_INJECT_SLEEP_MS` is test-only: a sleep inside every measured run's timed window.
   `tests/bench.rs` proves that it makes the check fail.
 - CI: [`bench.yml`](../.github/workflows/bench.yml). Re-record the baseline only from a CI run on

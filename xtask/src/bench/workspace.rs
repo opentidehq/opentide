@@ -35,8 +35,10 @@ pub struct Workspaces {
     pub expected_warnings: Option<usize>,
 }
 
-/// Prepares the workspaces under `work` from `source`, a workspace on disk.
-pub fn prepare(source: &Path, work: &Path) -> Result<Workspaces> {
+/// Prepares the workspaces under `work` from `source`, a workspace on disk;
+/// the platforms-disabled copy only when `with_warnings` (a run that does
+/// not measure it needs no enabled platform).
+pub fn prepare(source: &Path, work: &Path, with_warnings: bool) -> Result<Workspaces> {
     let clean = work.join("clean");
     let warnings = work.join("warnings");
     for dir in [&clean, &warnings] {
@@ -45,8 +47,12 @@ pub fn prepare(source: &Path, work: &Path) -> Result<Workspaces> {
         }
     }
     copy_tree(source, &clean)?;
-    copy_tree(source, &warnings)?;
-    let disabled_platforms = disable_platforms(&warnings)?;
+    let disabled_platforms = if with_warnings {
+        copy_tree(source, &warnings)?;
+        disable_platforms(&warnings)?
+    } else {
+        0
+    };
     let rule_files = rule_files(&clean)?;
     let Some(rule) = rule_files.first().cloned() else {
         bail!("{} holds no rule file under {RULES_DIR}/", source.display());

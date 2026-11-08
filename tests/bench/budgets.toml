@@ -39,95 +39,105 @@ engine = "python"
 oracle = "opentide 0.23.0"
 scale = 1
 seed = 20261107
-runner = "to be recorded"
-source = "to be recorded"
+# The run count of the baseline: a report of another count is not compared with it.
+runs = 5
+warmup = 1
+runner = "ubuntu-24.04 (GitHub-hosted, 4 vCPU, image 20261101.360.1)"
+# GitHub's runners of this class come on several CPUs (seen: AMD EPYC 9V45, AMD EPYC
+# 9V74, Intel Xeon Platinum 8573C); a report from another CPU is not held to the
+# baseline, only to the last development result on its own CPU.
+cpu_model = "AMD EPYC 9V45 96-Core Processor"
+rust_cpu_model = "INTEL(R) XEON(R) PLATINUM 8573C"
+# Run 42510209388 (commit 078ca8d, heavy workspace digest 5978a2ab7c093587): the
+# python job for baseline_*, the rust job for rust_baseline_s.
+source = "https://github.com/opentidehq/opentide/actions/runs/42510209388"
 
 [commands.validate_clean]
 label = "validate, clean"
 plan_s = 3.18
 plan_rss_mib = 171.0
-baseline_s = 3.18
-baseline_rss_mib = 171.0
+baseline_s = 2.443
+baseline_rss_mib = 190.1
 target_s = 0.7
 target_rss_mib = 100.0
 
 [commands.validate_warnings]
 label = "validate, platforms disabled (a warning per platform block)"
 plan_s = 12.76
-baseline_s = 12.76
-baseline_rss_mib = 171.0
+baseline_s = 9.869
+baseline_rss_mib = 184.7
 target_s = 0.7
 
 [commands.validate_file]
 label = "validate --file"
 plan_s = 1.77
-baseline_s = 1.77
-baseline_rss_mib = 171.0
+baseline_s = 1.484
+baseline_rss_mib = 115.7
 target_s = 0.1
 
 [commands.lint]
 label = "lint"
-baseline_s = 1.0
-baseline_rss_mib = 100.0
+baseline_s = 2.91
+baseline_rss_mib = 133.6
 
 [commands.lint_file]
 label = "lint --file"
 plan_s = 0.73
-baseline_s = 0.73
-baseline_rss_mib = 100.0
+baseline_s = 0.645
+baseline_rss_mib = 78.6
 
 [commands.info]
 label = "info"
-baseline_s = 1.0
-baseline_rss_mib = 100.0
+baseline_s = 0.947
+baseline_rss_mib = 89.9
 
 [commands.info_catalog]
 label = "info catalog"
 plan_s = 1.36
-baseline_s = 1.36
-baseline_rss_mib = 100.0
+baseline_s = 1.133
+baseline_rss_mib = 105.7
 target_s = 0.15
 
 [commands.deploy_dry_run]
 label = "deploy --dry-run --all --strategy PREVIEW"
 plan_s = 2.20
-baseline_s = 2.20
-baseline_rss_mib = 100.0
+baseline_s = 2.158
+baseline_rss_mib = 120.6
 target_s = 0.3
 
 [commands.generate_docs]
 label = "generate docs"
 plan_s = 11.61
-baseline_s = 11.61
-baseline_rss_mib = 100.0
+baseline_s = 11.738
+baseline_rss_mib = 131.9
 target_s = 1.5
 
 [commands.generate_exports_navigator]
 label = "generate exports navigator"
-baseline_s = 1.0
-baseline_rss_mib = 100.0
+baseline_s = 0.889
+baseline_rss_mib = 76.3
 
 [commands.rules_unreviewed]
 label = "rules unreviewed"
-baseline_s = 1.0
-baseline_rss_mib = 100.0
+baseline_s = 0.359
+baseline_rss_mib = 52.9
 
 [commands.explain]
 label = "explain vocab_unknown"
 plan_s = 0.18
-baseline_s = 0.18
-baseline_rss_mib = 33.0
+baseline_s = 0.136
+baseline_rss_mib = 36.3
 target_s = 0.03
 
 [commands.lsp_first_diagnostics]
 label = "language server, first diagnostics"
 # Plan section 2: 0.7 to 3.0 s in the editor (vscode-extension, Python backend).
-baseline_s = 1.0
-baseline_rss_mib = 100.0
+baseline_s = 1.515
+baseline_rss_mib = 163.2
 target_s = 0.1
 # The language server of today (the engine imported from language-server) misses
 # the target; UC-2.6 rebuilds it on opentide-workspace.
 target_waiver = "UC-2.6 (#821) rebuilds the server on opentide-workspace"
-rust_baseline_s = 0.147
+rust_baseline_s = 0.154
 # Plan section 11: editor memory per window (language server and backend) <= 150 MB.
 target_rss_mib = 150.0

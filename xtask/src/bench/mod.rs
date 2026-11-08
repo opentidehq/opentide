@@ -327,6 +327,12 @@ pub enum Mode {
     Help,
 }
 
+/// A path argument made absolute against the working directory: the
+/// commands run in a workspace copy, where a relative path means nothing.
+fn absolute(text: &str) -> Result<PathBuf> {
+    std::path::absolute(text).with_context(|| format!("resolve {text}"))
+}
+
 /// Parses the arguments after `bench`.
 pub fn parse_args(args: &[String]) -> Result<Mode> {
     let mut options = Options {
@@ -382,7 +388,7 @@ pub fn parse_args(args: &[String]) -> Result<Mode> {
                 run_only = true;
             }
             "--out" => {
-                options.out = Some(PathBuf::from(value()?));
+                options.out = Some(absolute(&value()?)?);
                 run_only = true;
             }
             "--runs" | "--warmup" => {
@@ -415,15 +421,15 @@ pub fn parse_args(args: &[String]) -> Result<Mode> {
                 run_only = true;
             }
             "--workspace" => {
-                options.workspace = Some(PathBuf::from(value()?));
+                options.workspace = Some(absolute(&value()?)?);
                 run_only = true;
             }
             "--opentide" => {
-                options.opentide = Some(PathBuf::from(value()?));
+                options.opentide = Some(absolute(&value()?)?);
                 run_only = true;
             }
             "--lsp" => {
-                options.lsp = Some(PathBuf::from(value()?));
+                options.lsp = Some(absolute(&value()?)?);
                 run_only = true;
             }
             other => bail!("unknown option `{other}`"),
@@ -671,16 +677,27 @@ fn run_in(options: &Options, root: &Path, base: &Path, work: &Path) -> Result<()
                 (dir, Some(blocks))
             }
         };
-        let mut ws = workspace::prepare(&source, work)?;
+        let with_warnings = selected
+            .iter()
+            .filter(runnable)
+            .any(|s| s.input == Input::Warnings);
+        let mut ws = workspace::prepare(&source, work, with_warnings)?;
         // Every platform block of a rule is one `platform_not_enabled`
         // warning once its platform is disabled: exactly as many as the
         // generator wrote; a workspace of one's own must warn once per rule.
         ws.expected_warnings = expected_warnings;
         eprintln!(
-            "bench: workspace {} ({} rules; {} platforms disabled for validate_warnings)",
+            "bench: workspace {} ({} rules{})",
             source.display(),
             ws.rules,
-            ws.disabled_platforms
+            if with_warnings {
+                format!(
+                    "; {} platforms disabled for validate_warnings",
+                    ws.disabled_platforms
+                )
+            } else {
+                String::new()
+            }
         );
         Some(ws)
     } else {
@@ -798,6 +815,7 @@ fn measure_scenario(
                 let mut command = measure::command(program, args, &run_dir)?;
                 let measured = measure::run(&mut command, sleep)?;
                 verify_cli(scenario, &run_dir, measured.exit_code, workspaces)?;
+                measure::distinct_from_own(measured.sample.peak_rss_bytes, measured.own_peak_rss)?;
                 measured.sample
             }
             Kind::Lsp => {
