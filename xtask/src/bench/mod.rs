@@ -34,6 +34,9 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::Duration;
 
+/// The hidden mode in which a child xtask generates the heavy workspace.
+const INTERNAL_GENERATE: &str = "--internal-generate";
+
 /// The usage of `cargo xtask bench`.
 pub const USAGE: &str = "\
 usage: cargo xtask bench [--engine python|rust] [--scale 1|10] [--json] [--out FILE]
@@ -458,6 +461,24 @@ pub fn parse_args(args: &[String]) -> Result<Mode> {
 
 /// `cargo xtask bench`: parses, runs or checks, and prints.
 pub fn main(args: &[String]) -> ExitCode {
+    if let [flag, scale, dir] = args
+        && flag == INTERNAL_GENERATE
+    {
+        let outcome = scale
+            .parse::<u32>()
+            .context("scale")
+            .and_then(|scale| generate_here(scale, Path::new(dir)));
+        return match outcome {
+            Ok(blocks) => {
+                println!("{blocks}");
+                ExitCode::SUCCESS
+            }
+            Err(err) => {
+                eprintln!("xtask bench {INTERNAL_GENERATE}: {err:#}");
+                ExitCode::from(2)
+            }
+        };
+    }
     let mode = match parse_args(args) {
         Ok(mode) => mode,
         Err(err) => {
@@ -763,7 +784,36 @@ fn run_in(options: &Options, root: &Path, base: &Path, work: &Path) -> Result<()
 /// (`cargo xtask corpus generate --seed 20261107 [--scale 10]`, the same code
 /// in process) and returns it with the number of platform blocks its rules
 /// hold.
+///
+/// The generator runs in a child xtask (`bench --internal-generate`): the
+/// corpus it builds in memory (about 110 MiB at scale 10) would otherwise
+/// stay in this process, whose high-water mark is the floor under every
+/// measured peak RSS (`measure::own_peak_rss`).
 fn generate(scale: u32, work: &Path) -> Result<(PathBuf, usize)> {
+    let dir = work.join("generated");
+    let exe = std::env::current_exe().context("find this xtask")?;
+    let output = std::process::Command::new(&exe)
+        .arg("bench")
+        .arg(INTERNAL_GENERATE)
+        .arg(scale.to_string())
+        .arg(&dir)
+        .stderr(std::process::Stdio::inherit())
+        .output()
+        .with_context(|| format!("run {} bench {INTERNAL_GENERATE}", exe.display()))?;
+    if !output.status.success() {
+        bail!("generating the heavy workspace failed ({})", output.status);
+    }
+    let text = String::from_utf8_lossy(&output.stdout);
+    let blocks = text
+        .trim()
+        .parse()
+        .with_context(|| format!("the generator printed {text:?}, not a block count"))?;
+    Ok((dir, blocks))
+}
+
+/// `bench --internal-generate SCALE DIR`: writes the heavy workspace to DIR
+/// and prints the number of platform blocks its rules hold.
+fn generate_here(scale: u32, dir: &Path) -> Result<usize> {
     let counts = crate::corpus::generate::Counts::scaled(f64::from(scale))
         .with_context(|| format!("scale {scale}"))?;
     let options = crate::corpus::generate::Options {
@@ -771,11 +821,10 @@ fn generate(scale: u32, work: &Path) -> Result<(PathBuf, usize)> {
         ..crate::corpus::generate::Options::new(workspace::SEED)
     };
     let generated = crate::corpus::generate::generate(&options);
-    let dir = work.join("generated");
     if dir.exists() {
-        std::fs::remove_dir_all(&dir).with_context(|| format!("remove {}", dir.display()))?;
+        std::fs::remove_dir_all(dir).with_context(|| format!("remove {}", dir.display()))?;
     }
-    crate::corpus::cli::write_workspace(&generated, &dir)?;
+    crate::corpus::cli::write_workspace(&generated, dir)?;
     let blocks = generated
         .family(crate::corpus::workspace::Family::Rule)
         .map(|rule| rule.platforms.len())
@@ -786,7 +835,7 @@ fn generate(scale: u32, work: &Path) -> Result<(PathBuf, usize)> {
         generated.summary(),
         generated.digest()
     );
-    Ok((dir, blocks))
+    Ok(blocks)
 }
 
 fn measure_scenario(

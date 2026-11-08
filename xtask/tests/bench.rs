@@ -99,7 +99,7 @@ fn budgets_from(report: &serde_json::Value, path: &Path) {
         path,
         format!(
             "schema_version = 1\n\n\
-             [policy]\nregression = 0.10\nnoise_floor_s = 0.03\nnoise_floor_rss_mib = 2.0\n\n\
+             [policy]\nregression = 0.10\nnoise_floor_s = 0.03\nnoise_floor_rss_mib = 2.0\ncross_cpu_regression = 0.5\n\n\
              [baseline]\nengine = \"python\"\noracle = \"{oracle}\"\nscale = 1\nseed = 20261107\n\
              runs = 3\nwarmup = 0\n\
              runner = \"this machine\"\ncpu_model = \"{cpu}\"\nsource = \"tests/bench.rs\"\n\n\

@@ -150,7 +150,6 @@ pub fn first_diagnostics(
             program.display()
         )
     })?;
-    measure::distinct_from_own(peak_rss_bytes, floor)?;
     let (elapsed, diagnostics) = outcome.with_context(|| {
         format!(
             "{} (stderr: {})",
@@ -164,6 +163,8 @@ pub fn first_diagnostics(
             run.stderr_tail().trim()
         );
     }
+    // Last: a server that failed says why above, not that its RSS was small.
+    measure::distinct_from_own(peak_rss_bytes, floor)?;
     Ok(FirstDiagnostics {
         sample: Sample {
             wall_s: elapsed.as_secs_f64(),

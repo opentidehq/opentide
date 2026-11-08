@@ -210,6 +210,10 @@ pub fn run(command: &mut Command, inject: Option<Duration>) -> Result<Measured> 
 /// of the memory the child shared with its parent until then. A measured
 /// peak at or under xtask's own is that floor, not the command's.
 pub fn own_peak_rss() -> Option<u64> {
+    // Reset the high-water mark to the current RSS first (`clear_refs` 5):
+    // what xtask held earlier (the generated corpus, at scale 10 about
+    // 110 MiB) is gone and must not raise the floor of every later run.
+    let _ = std::fs::write("/proc/self/clear_refs", "5");
     let status = std::fs::read_to_string("/proc/self/status").ok()?;
     let kb = status
         .lines()

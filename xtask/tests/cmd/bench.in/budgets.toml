@@ -4,6 +4,7 @@ schema_version = 1
 regression = 0.10
 noise_floor_s = 0.03
 noise_floor_rss_mib = 2.0
+cross_cpu_regression = 0.50
 
 [baseline]
 engine = "python"

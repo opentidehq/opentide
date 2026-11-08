@@ -33,6 +33,9 @@ regression = 0.10
 # RSS of one Python process by about 1 MiB (allocator arenas).
 noise_floor_s = 0.03
 noise_floor_rss_mib = 2.0
+# Against a baseline from another CPU model than the runner's (GitHub mixes CPU
+# generations in one runner class) a time may be 50% over before it fails; RSS keeps 10%.
+cross_cpu_regression = 0.50
 
 [baseline]
 engine = "python"
