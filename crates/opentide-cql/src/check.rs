@@ -18,12 +18,13 @@ pub const REGEX_FLAGS: &str = "dgimF";
 /// example relies on (`"\x1b[93;41mColor"` becomes `Color`).
 const STRING_ESCAPES: &[char] = &['"', '\\', 'n', 't', 'u', 'x'];
 
-pub(crate) fn diagnostics(root: Node, source: &str, ctx: &Context) -> Vec<Diagnostic> {
+pub fn diagnostics(root: Node, source: &str, ctx: &Context) -> Vec<Diagnostic> {
     let catalog = Catalog::cached();
     let mut out = Vec::new();
-    // Checks that look upward read `ancestors`: `Node::parent` re-descends
-    // from the root, which makes a deeply nested query quadratic.
-    walk_with_ancestors(root, |node, ancestors| {
+    // Checks that look upward read `ancestors` and `above`: `Node::parent`
+    // re-descends from the root, and so would a scan of `ancestors` at every
+    // node, which makes a deeply nested query quadratic.
+    walk_with_above(root, source, catalog, |node, ancestors, above| {
         if node.is_error() || node.is_missing() {
             return;
         }
@@ -37,14 +38,14 @@ pub(crate) fn diagnostics(root: Node, source: &str, ctx: &Context) -> Vec<Diagno
         ];
         // Inside a syntax error the tree is a guess: its first error is the
         // finding, not what the guess looks like.
-        if CHECKED.contains(&node.kind()) && ancestors.iter().any(|a| a.is_error()) {
+        if CHECKED.contains(&node.kind()) && above.error {
             return;
         }
         match node.kind() {
-            "function_call" => function_call(node, ancestors, source, catalog, &mut out),
+            "function_call" => function_call(node, ancestors, above, source, catalog, &mut out),
             "regex" => regex(node, source, &mut out),
             "string" => string(node, ancestors, source, &mut out),
-            "link_constraint" => link_constraint(node, ancestors, source, &mut out),
+            "link_constraint" => link_constraint(node, above, source, &mut out),
             "field_filter" => event_name(node, source, catalog, &mut out),
             "or_filter" => regex_group_under_or(node, source, &mut out),
             _ => {}
@@ -59,6 +60,55 @@ pub(crate) fn diagnostics(root: Node, source: &str, ctx: &Context) -> Vec<Diagno
         correlation_rule(root, source, catalog, &mut out);
     }
     out
+}
+
+/// What the ancestors of a node add up to, so that no check scans them: one
+/// scan per node is quadratic in the nesting depth (`groupBy(a, function=`
+/// 3000 times). Indexes are into the `ancestors` slice.
+#[derive(Debug, Clone, Copy, Default)]
+struct Above {
+    /// An ancestor is a syntax error.
+    error: bool,
+    /// The nearest enclosing `function_call`.
+    call: Option<usize>,
+    /// The nearest enclosing `correlate()` call.
+    correlate: Option<usize>,
+    /// An ancestor is a `correlate()` call or a call to an aggregate.
+    correlate_or_aggregate: bool,
+}
+
+/// [`walk_with_ancestors`], with [`Above`] for each node, kept on a stack
+/// beside `ancestors`: each ancestor is summarised once, when the walk enters
+/// its children.
+fn walk_with_above<'t>(
+    root: Node<'t>,
+    source: &str,
+    catalog: &Catalog,
+    mut f: impl FnMut(Node<'t>, &[Node<'t>], Above),
+) {
+    // `summary[i]` covers `ancestors[..=i]`.
+    let mut summary: Vec<Above> = Vec::new();
+    walk_with_ancestors(root, |node, ancestors| {
+        summary.truncate(ancestors.len());
+        while summary.len() < ancestors.len() {
+            let i = summary.len();
+            let a = ancestors[i];
+            let prev = summary.last().copied().unwrap_or_default();
+            let is_call = a.kind() == "function_call";
+            let correlate = is_call && is_correlate(a, source);
+            let aggregate = is_call
+                && catalog
+                    .function(call_name(a, source))
+                    .is_some_and(|f| f.aggregate);
+            summary.push(Above {
+                error: prev.error || a.is_error(),
+                call: if is_call { Some(i) } else { prev.call },
+                correlate: if correlate { Some(i) } else { prev.correlate },
+                correlate_or_aggregate: prev.correlate_or_aggregate || correlate || aggregate,
+            });
+        }
+        f(node, ancestors, summary.last().copied().unwrap_or_default());
+    });
 }
 
 /// The name a call is written with (`groupBy`, `array:filter`).
@@ -101,6 +151,7 @@ pub(crate) fn unquote(s: &str) -> &str {
 fn function_call(
     call: Node,
     ancestors: &[Node],
+    above: Above,
     source: &str,
     catalog: &Catalog,
     out: &mut Vec<Diagnostic>,
@@ -150,7 +201,7 @@ fn function_call(
             name_range(),
         ));
     }
-    placement(call, function, ancestors, source, out);
+    placement(call, function, ancestors, above, source, out);
     let implied = implied_parameters(call, ancestors);
     arguments(call, function, implied, source, catalog, out);
 }
@@ -163,6 +214,7 @@ fn placement(
     call: Node,
     function: &Function,
     ancestors: &[Node],
+    above: Above,
     source: &str,
     out: &mut Vec<Diagnostic>,
 ) {
@@ -171,15 +223,8 @@ fn placement(
             .map(|n| range(source, n))
             .unwrap_or_else(|| range(source, call))
     };
-    let calls = || {
-        ancestors
-            .iter()
-            .enumerate()
-            .rev()
-            .filter(|(_, a)| a.kind() == "function_call")
-    };
     if function.name == "correlate" {
-        if let Some((_, outer)) = calls().next() {
+        if let Some(outer) = above.call.and_then(|i| ancestors.get(i)) {
             let outer_name = call_name(*outer, source);
             if !outer_name.eq_ignore_ascii_case("defineTable") {
                 out.push(Diagnostic::error(
@@ -192,7 +237,7 @@ fn placement(
     }
     if function.aggregate {
         // The nearest enclosing correlate(), and the argument of it we are in.
-        if let Some((i, _)) = calls().find(|(_, a)| is_correlate(**a, source)) {
+        if let Some(i) = above.correlate {
             let in_aggregation = ancestors.get(i + 2).is_some_and(|arg| {
                 arg.kind() == "named_argument"
                     && arg
@@ -794,8 +839,8 @@ fn regex_group_under_or(node: Node, source: &str, out: &mut Vec<Diagnostic>) {
 }
 
 /// `a <=> B.b` links two correlate() queries; anywhere else it is an error.
-fn link_constraint(node: Node, ancestors: &[Node], source: &str, out: &mut Vec<Diagnostic>) {
-    if ancestors.iter().any(|n| is_correlate(*n, source)) {
+fn link_constraint(node: Node, above: Above, source: &str, out: &mut Vec<Diagnostic>) {
+    if above.correlate.is_some() {
         return;
     }
     out.push(Diagnostic::error(
@@ -852,7 +897,7 @@ fn is_correlate(node: Node, source: &str) -> bool {
 fn correlation_rule(root: Node, source: &str, catalog: &Catalog, out: &mut Vec<Diagnostic>) {
     let mut has_correlate = false;
     let mut outside: Vec<(Node, &str)> = Vec::new();
-    walk_with_ancestors(root, |n, ancestors| {
+    walk_with_above(root, source, catalog, |n, _, above| {
         if n.kind() != "function_call" {
             return;
         }
@@ -863,16 +908,7 @@ fn correlation_rule(root: Node, source: &str, catalog: &Catalog, out: &mut Vec<D
         // Aggregates inside correlate()'s own arguments follow its rules, and
         // one inside another aggregate (`groupBy(x, function=count())`) is
         // that aggregate's finding.
-        let under_aggregate = |a: &Node| {
-            a.kind() == "function_call"
-                && catalog
-                    .function(call_name(*a, source))
-                    .is_some_and(|f| f.aggregate)
-        };
-        if ancestors
-            .iter()
-            .any(|a| is_correlate(*a, source) || under_aggregate(a))
-        {
+        if above.correlate_or_aggregate {
             return;
         }
         if let Some(function) = catalog

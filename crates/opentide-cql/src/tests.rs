@@ -269,6 +269,42 @@ fn deep_nesting_stays_fast() {
     );
 }
 
+/// No check scans the ancestors of each node: an aggregate looked for an
+/// enclosing correlate() through all of them, which took seconds at this
+/// depth. The correlation-rule checks and nested `case` blocks read the same
+/// summary of the ancestors.
+#[test]
+fn deep_nesting_stays_fast_in_every_check() {
+    let aggregates = format!(
+        "{}count(){}",
+        "groupBy(a, function=".repeat(3000),
+        ")".repeat(3000)
+    );
+    let cases = format!(
+        "{}x := 1{}",
+        "case { a=1 | ".repeat(3000),
+        "; * }".repeat(3000)
+    );
+    let linked = format!(
+        "correlate(A: {{ a=1 }}, B: {{ {}b=1{} | aid <=> A.aid }}, within=5m)",
+        "(".repeat(3000),
+        " c=1)".repeat(3000)
+    );
+    for q in [&aggregates, &cases, &linked] {
+        for ctx in [Context::default(), Context::CORRELATION_RULE] {
+            let t = std::time::Instant::now();
+            let r = analyze_with(q, &ctx);
+            assert!(r.diagnostics.is_empty(), "{:?}", r.diagnostics);
+            assert!(
+                t.elapsed() < std::time::Duration::from_secs(1),
+                "{:?} for {}",
+                t.elapsed(),
+                &q[..40]
+            );
+        }
+    }
+}
+
 // Review regressions: each failed before its fix.
 
 #[test]
