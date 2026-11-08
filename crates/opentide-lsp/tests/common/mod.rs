@@ -123,13 +123,15 @@ impl Lsp {
     }
 }
 
-/// Ends the server with an `exit` notification and waits for it, reading
-/// what it still writes so that a full pipe cannot hold it. A killed server
-/// writes no coverage profile, so `cargo llvm-cov` (the `coverage` workflow,
-/// UC-X.2 #844) would lose the counters of every request the test sent; one
-/// that has not exited after 10 s is killed all the same.
-impl Drop for Lsp {
-    fn drop(&mut self) {
+impl Lsp {
+    /// Ends the server with an `exit` notification and waits for it, reading
+    /// what it still writes so that a full pipe cannot hold it; its exit
+    /// status, or `None` if it had not exited after 10 s and was killed.
+    ///
+    /// A killed server writes no coverage profile, so `cargo llvm-cov` (the
+    /// `coverage` workflow, UC-X.2 #844) would lose the counters of every
+    /// request the test sent. Dropping an `Lsp` ends it this way.
+    pub fn end(&mut self) -> Option<std::process::ExitStatus> {
         let exit = br#"{"jsonrpc":"2.0","method":"exit"}"#;
         // The server may have exited already: a broken pipe is not an error.
         let _ = write!(self.stdin, "Content-Length: {}\r\n\r\n", exit.len());
@@ -144,15 +146,26 @@ impl Drop for Lsp {
                 scope.spawn(move || std::io::copy(&mut stderr, &mut std::io::sink()));
             }
             let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-            while matches!(child.try_wait(), Ok(None)) {
-                if std::time::Instant::now() >= deadline {
-                    let _ = child.kill();
-                    let _ = child.wait();
-                    break;
+            loop {
+                match child.try_wait() {
+                    Ok(Some(status)) => return Some(status),
+                    Ok(None) if std::time::Instant::now() < deadline => {
+                        std::thread::sleep(std::time::Duration::from_millis(5));
+                    }
+                    _ => {
+                        let _ = child.kill();
+                        let _ = child.wait();
+                        return None;
+                    }
                 }
-                std::thread::sleep(std::time::Duration::from_millis(5));
             }
-        });
+        })
+    }
+}
+
+impl Drop for Lsp {
+    fn drop(&mut self) {
+        self.end();
     }
 }
 
