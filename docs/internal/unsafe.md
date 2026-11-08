@@ -24,8 +24,10 @@ Two clippy lints hold every block to account:
 - `multiple_unsafe_ops_per_block` (denied): each block holds one unsafe operation, so its
   comment answers for exactly one thing.
 
-Neither lint reads an `unsafe extern` block or an unsafe attribute. Those carry a `SAFETY`
-comment by this policy, and the table below lists them with the blocks.
+Neither lint reads an `unsafe extern` block, an `unsafe fn` or an unsafe attribute. Those
+carry a `SAFETY` comment by this policy (and an `unsafe fn` a `# Safety` section), and the
+table below lists them with the blocks. `xtask/tests/unsafe_listing.rs` fails when an
+`unsafe` keyword has no `SAFETY:` comment in the lines just above it.
 
 ## Every site
 
@@ -51,6 +53,7 @@ in the same change.
 | `crates/opentide-wasm/src/libc_syscalls.rs` | `fd_fdstat_get` | `#[unsafe(no_mangle)]` on `__imported_wasi_snapshot_preview1_fd_fdstat_get` | As `fd_write` |
 | `crates/opentide-wasm/src/libc_syscalls.rs` | `fd_fdstat_set_flags` | `#[unsafe(no_mangle)]` on `__imported_wasi_snapshot_preview1_fd_fdstat_set_flags` | As `fd_write` |
 | `crates/opentide-wasm/src/libc_syscalls.rs` | `clock_time_get` | `#[unsafe(no_mangle)]` on `__imported_wasi_snapshot_preview1_clock_time_get` | As `fd_write` (its precision is the i64) |
+| `crates/opentide-wasm/src/libc_syscalls.rs` | `clock_time_get` | `unsafe extern "C" fn`: the function writes through a caller-supplied address | Its `# Safety` section states the contract: `time` must be the address of a `u64` writable for the call. wasi-libc's `__wasi_clock_time_get`, the only caller, passes exactly that; no Rust code calls it. A safe signature would promise any caller could pass any i32 |
 | `crates/opentide-wasm/src/libc_syscalls.rs` | `clock_time_get` | `unsafe { (time as usize as *mut u64).write_unaligned(0) }` | wasi-libc's `__wasi_clock_time_get` passes the address of its caller's `__wasi_timestamp_t` (a u64 in linear memory) as this i32. A wasm32 address is 32 bits, so `as usize` restores it whole; it is valid for an 8-byte write for the call; `write_unaligned` asks nothing of alignment |
 
 ## Not ours

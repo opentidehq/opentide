@@ -45,6 +45,7 @@ fn code_only(text: &str) -> String {
     let mut i = 0;
     let at = |i: usize| chars.get(i).copied().unwrap_or('\0');
     while i < chars.len() {
+        let start = i;
         let c = chars[i];
         if c == '/' && at(i + 1) == '/' {
             while i < chars.len() && chars[i] != '\n' {
@@ -69,7 +70,7 @@ fn code_only(text: &str) -> String {
                     i += 1;
                 }
             }
-            out.push(' ');
+            gap(&mut out, &chars[start..i.min(chars.len())]);
         } else if c == 'r' && (at(i + 1) == '"' || at(i + 1) == '#') && raw_prefix(&chars, i) {
             // A raw string: r"…", r#"…"#, br"…", cr#"…"#, … (or an
             // identifier ending in r, which `raw_prefix` refuses).
@@ -91,8 +92,8 @@ fn code_only(text: &str) -> String {
                     }
                     j += 1;
                 }
-                out.push(' ');
                 i = j;
+                gap(&mut out, &chars[start..i.min(chars.len())]);
             } else {
                 out.push(c);
                 i += 1;
@@ -106,7 +107,7 @@ fn code_only(text: &str) -> String {
                 i += 1;
             }
             i += 1;
-            out.push(' ');
+            gap(&mut out, &chars[start..i.min(chars.len())]);
         } else if c == '\'' && (at(i + 2) == '\'' || at(i + 1) == '\\') {
             // A character literal ('x', '\n', '\u{..}'); a lifetime has no
             // closing quote and stays.
@@ -118,13 +119,20 @@ fn code_only(text: &str) -> String {
                 i += 1;
             }
             i += 1;
-            out.push(' ');
+            gap(&mut out, &chars[start..i.min(chars.len())]);
         } else {
             out.push(c);
             i += 1;
         }
     }
     out
+}
+
+/// A space for a skipped comment or literal, keeping its line breaks so
+/// that line numbers in the result are the source's.
+fn gap(out: &mut String, skipped: &[char]) {
+    out.push(' ');
+    out.extend(skipped.iter().filter(|c| **c == '\n'));
 }
 
 fn ident_before(chars: &[char], i: usize) -> bool {
@@ -152,6 +160,23 @@ fn unsafe_keywords(code: &str) -> usize {
         })
         .count()
 }
+
+/// The 1-based lines of `code` where the keyword `unsafe` stands as a word.
+fn unsafe_lines(code: &str) -> Vec<usize> {
+    let word = |c: char| c.is_alphanumeric() || c == '_';
+    code.match_indices("unsafe")
+        .filter(|(at, _)| {
+            let before = code[..*at].chars().next_back();
+            let after = code[at + "unsafe".len()..].chars().next();
+            !before.is_some_and(word) && !after.is_some_and(word)
+        })
+        .map(|(at, _)| code[..at].matches('\n').count() + 1)
+        .collect()
+}
+
+/// How far above an `unsafe` its `SAFETY:` comment may stand: past the
+/// attributes and doc lines of the item it is on.
+const SAFETY_WINDOW: usize = 8;
 
 /// The rows of the listing's table, counted by their file column.
 fn listed() -> Result<BTreeMap<String, usize>, Box<dyn Error>> {
@@ -211,6 +236,37 @@ fn every_unsafe_is_listed_with_its_reason() -> TestResult {
          gives it. Add or remove the rows, with why each site is sound"
     );
     Ok(())
+}
+
+#[test]
+fn every_unsafe_has_a_safety_comment_just_above() -> TestResult {
+    let root = root();
+    let mut files = Vec::new();
+    for dir in DIRECTORIES {
+        rust_files(&root.join(dir), &mut files)?;
+    }
+    let mut missing = Vec::new();
+    for file in files {
+        let text = std::fs::read_to_string(&file)?;
+        let lines: Vec<&str> = text.lines().collect();
+        for line in unsafe_lines(&code_only(&text)) {
+            let from = line.saturating_sub(SAFETY_WINDOW + 1);
+            if !lines[from..line].iter().any(|l| l.contains("SAFETY:")) {
+                missing.push(format!("{}:{line}", file.strip_prefix(&root)?.display()));
+            }
+        }
+    }
+    assert!(
+        missing.is_empty(),
+        "an `unsafe` with no `// SAFETY:` comment in the {SAFETY_WINDOW} lines above it: {missing:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn the_scan_keeps_line_numbers() {
+    let code = code_only("/* a\nb */ \"x\ny\" r#\"\n\"#\nunsafe {}");
+    assert_eq!(unsafe_lines(&code), [5]);
 }
 
 #[test]
