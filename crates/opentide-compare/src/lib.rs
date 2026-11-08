@@ -16,6 +16,8 @@
 //! - every file the command created, changed or deleted: presence, mode and
 //!   bytes, the bytes as JSON or text as a stream is.
 
+#![forbid(unsafe_code)]
+
 pub mod glob;
 pub mod json;
 pub mod ledger;
