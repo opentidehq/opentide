@@ -701,16 +701,21 @@ mod tests {
         ),
         (
             "opentide-native",
-            &[("opentide-analysis", None), ("opentide-lsp", None)],
+            &[
+                ("opentide-analysis", None),
+                ("opentide-lsp", None),
+                ("opentide-compare", None),
+            ],
         ),
-        ("xtask", &[]),
+        ("xtask", &[("opentide-compare", None)]),
+        ("opentide-compare", &[]),
     ];
 
     #[test]
     fn the_repository_table_places_todays_workspace() {
         let report = check(&table(REPOSITORY_TABLE), &metadata(WORKSPACE));
         assert_eq!(report.violations, []);
-        assert_eq!(report.crates, 17);
+        assert_eq!(report.crates, 18);
     }
 
     #[test]

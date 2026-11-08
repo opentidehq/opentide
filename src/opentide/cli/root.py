@@ -147,3 +147,8 @@ def main_callback(
             code=USAGE_INVALID_VALUE,
             next_actions=steps,
         )
+    # OPENTIDE_ENGINE (#805): returns to run the Python implementation, else
+    # runs the Rust one, or both, and exits.
+    from opentide.cli.engines import dispatch
+
+    dispatch(cli_ctx, ctx)

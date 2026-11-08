@@ -8,6 +8,7 @@ use anyhow::{Context, Result, bail};
 use std::ffi::OsString;
 use std::path::PathBuf;
 use std::process::{Command, ExitCode};
+use xtask::compare;
 use xtask::layers::{self, LayerTable, Metadata};
 use xtask::{coverage, mutants, parity, parity_inputs};
 
@@ -40,6 +41,15 @@ commands:
                  against the oracle, approved diffs, fault coverage) into FILE,
                  by default docs/internal/parity.md; --check fails when FILE
                  differs from the rendering instead of writing it
+  compare --oracle DIR --candidate DIR --command PATH [--case ID]
+          [--ledger FILE] [--report FILE]
+                 compare a candidate's run with the oracle's, applying the
+                 approved-diffs ledger (tests/golden/APPROVED_DIFFS.toml); a
+                 run is a folder with exit_code, stdout, stderr, files/ and
+                 deleted. --report writes the JSON report to FILE
+  compare --check-ledger [--ledger FILE] [--changelog FILE]
+                 check the ledger's schema, and that CHANGELOG.md holds each
+                 entry's changelog reference
   codegen        generate schemas, stubs, types and references (UC-1.8, #814)
   golden         record and check the oracle's goldens (UC-0.5, #803)
   bench          run the benchmarks against their budgets (UC-0.8, #806)
@@ -87,6 +97,14 @@ fn main() -> ExitCode {
                 ExitCode::from(2)
             }
         },
+        "compare" => match run_compare(rest) {
+            Ok(true) => ExitCode::SUCCESS,
+            Ok(false) => ExitCode::FAILURE,
+            Err(error) => {
+                eprintln!("xtask compare: {error:#}");
+                ExitCode::from(2)
+            }
+        },
         "codegen" => not_yet("codegen", "UC-1.8", 814),
         "golden" => not_yet("golden", "UC-0.5", 803),
         "bench" => not_yet("bench", "UC-0.8", 806),
@@ -109,6 +127,146 @@ fn not_yet(command: &str, item: &str, issue: u32) -> ExitCode {
          (https://github.com/opentidehq/opentide/issues/{issue}) implements it"
     );
     ExitCode::FAILURE
+}
+
+/// `compare`: whether the runs are equal, or the ledger is valid.
+fn run_compare(args: &[String]) -> Result<bool> {
+    let mut options: std::collections::BTreeMap<&str, PathBuf> = std::collections::BTreeMap::new();
+    let mut check_ledger = false;
+    let mut args = args.iter();
+    while let Some(arg) = args.next() {
+        let name = match arg.as_str() {
+            "--check-ledger" => {
+                check_ledger = true;
+                continue;
+            }
+            name @ ("--oracle" | "--candidate" | "--command" | "--case" | "--ledger"
+            | "--report" | "--changelog") => name,
+            other => bail!("unknown option `{other}`\n\n{USAGE}"),
+        };
+        let value = args
+            .next()
+            .map(PathBuf::from)
+            .with_context(|| format!("{name} needs a value"))?;
+        options.insert(name, value);
+    }
+    let root = workspace_root()?;
+    let ledger_path = options
+        .remove("--ledger")
+        .unwrap_or_else(|| root.join(compare::LEDGER));
+    let changelog_path = options
+        .remove("--changelog")
+        .unwrap_or_else(|| root.join("CHANGELOG.md"));
+    let changelog = std::fs::read_to_string(&changelog_path)
+        .with_context(|| format!("read {}", changelog_path.display()))?;
+    let ledger = match compare::read_ledger(&ledger_path, &changelog) {
+        Ok(ledger) => ledger,
+        Err(error) => {
+            eprintln!("error: {error:#}");
+            return Ok(false);
+        }
+    };
+    if check_ledger {
+        if let Some(extra) = options.keys().next() {
+            bail!("--check-ledger takes only --ledger and --changelog, not {extra}");
+        }
+        println!(
+            "compare: {} holds {} approved difference(s), each with every field",
+            ledger_path.display(),
+            ledger.entries.len()
+        );
+        return Ok(true);
+    }
+    let required = |name: &str, options: &mut std::collections::BTreeMap<&str, PathBuf>| {
+        options
+            .remove(name)
+            .with_context(|| format!("{name} is required\n\n{USAGE}"))
+    };
+    let oracle_dir = required("--oracle", &mut options)?;
+    let candidate_dir = required("--candidate", &mut options)?;
+    let command = required("--command", &mut options)?
+        .to_string_lossy()
+        .into_owned();
+    let case = options
+        .remove("--case")
+        .map(|case| case.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let report_path = options.remove("--report");
+
+    let oracle = compare::read_run(&oracle_dir)?;
+    let candidate = compare::read_run(&candidate_dir)?;
+    let mut usage = opentide_compare::ledger::Usage::default();
+    let report = opentide_compare::compare(
+        opentide_compare::Case {
+            command: &command,
+            id: &case,
+        },
+        &oracle,
+        &candidate,
+        &ledger,
+        &mut usage,
+    );
+    for difference in &report.differences {
+        let pointer = difference
+            .pointer
+            .as_deref()
+            .map(|pointer| {
+                format!(
+                    " at {}",
+                    if pointer.is_empty() {
+                        "the root"
+                    } else {
+                        pointer
+                    }
+                )
+            })
+            .unwrap_or_default();
+        let at = difference
+            .at
+            .as_deref()
+            .map(|at| format!(", {at}"))
+            .unwrap_or_default();
+        eprintln!(
+            "error: {} {}{pointer}{at}\n  oracle:    {}\n  candidate: {}",
+            difference.target,
+            difference.kind.as_str(),
+            difference.oracle,
+            difference.candidate
+        );
+    }
+    if let Some(path) = &report_path {
+        let text = serde_json::to_string_pretty(&report).context("serialise the report")?;
+        std::fs::write(path, text + "\n").with_context(|| format!("write {}", path.display()))?;
+    }
+    if report.equal {
+        println!(
+            "compare: `{command}` is equal ({} approved difference(s))",
+            report.approved.len()
+        );
+    } else {
+        eprintln!(
+            "compare: `{command}` differs: {} difference(s){}",
+            report.differences.len() + report.omitted,
+            if report.approved.is_empty() {
+                String::new()
+            } else {
+                format!(", {} approved", report.approved.len())
+            }
+        );
+    }
+    Ok(report.equal)
+}
+
+/// The workspace root, found at run time: the parent of `CARGO_MANIFEST_DIR`
+/// (`cargo run` sets it to xtask's folder), else the working directory.
+fn workspace_root() -> Result<PathBuf> {
+    match std::env::var_os("CARGO_MANIFEST_DIR") {
+        Some(dir) => PathBuf::from(dir)
+            .parent()
+            .map(std::path::Path::to_path_buf)
+            .context("CARGO_MANIFEST_DIR has no parent"),
+        None => std::env::current_dir().context("read the working directory"),
+    }
 }
 
 /// Runs the check and prints its report: whether the workspace passed.

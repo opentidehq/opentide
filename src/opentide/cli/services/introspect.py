@@ -96,6 +96,13 @@ def environment() -> list[dict[str, str]]:
             ),
         },
         {
+            "name": "OPENTIDE_ENGINE",
+            "meaning": (
+                "Implementation that runs a command: python (default), rust, or compare "
+                "(both, failing with exit 70 when they differ)"
+            ),
+        },
+        {
             "name": "OPENTIDE_CACHE_DIR",
             "meaning": "Where opentide caches the language-server catalogs it generates",
         },

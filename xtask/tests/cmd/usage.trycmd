@@ -31,6 +31,15 @@ commands:
                  against the oracle, approved diffs, fault coverage) into FILE,
                  by default docs/internal/parity.md; --check fails when FILE
                  differs from the rendering instead of writing it
+  compare --oracle DIR --candidate DIR --command PATH [--case ID]
+          [--ledger FILE] [--report FILE]
+                 compare a candidate's run with the oracle's, applying the
+                 approved-diffs ledger (tests/golden/APPROVED_DIFFS.toml); a
+                 run is a folder with exit_code, stdout, stderr, files/ and
+                 deleted. --report writes the JSON report to FILE
+  compare --check-ledger [--ledger FILE] [--changelog FILE]
+                 check the ledger's schema, and that CHANGELOG.md holds each
+                 entry's changelog reference
   codegen        generate schemas, stubs, types and references (UC-1.8, #814)
   golden         record and check the oracle's goldens (UC-0.5, #803)
   bench          run the benchmarks against their budgets (UC-0.8, #806)

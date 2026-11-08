@@ -103,6 +103,7 @@ When opentide stops on an unexpected error, `--debug` also prints the traceback,
 | `OPENTIDE_VALIDATE_PARALLEL_THRESHOLD` | Fewest objects before `validate` runs in parallel (default 32) |
 | `OPENTIDE_QUERY_CHECK_TIMEOUT` | Seconds each `validate query --live` check may wait for a tenant's answer, like `--check-timeout` (default 120); see [Slow queries](./validate.md#slow-queries-and-timeouts) |
 | `OPENTIDE_PROGRESS` | `0` turns terminal progress (OSC 9;4) off; `1` sends it to any terminal in `human` mode. See [Progress in the tab and taskbar](#progress-in-the-tab-and-taskbar). `json` writes progress events on stderr instead, in every mode; see [Progress events](./json-output.md#progress-events) |
+| `OPENTIDE_ENGINE` | Which implementation runs a command: `python` (the default), `rust`, or `compare`, which runs both and exits `70` when they differ; see [Choosing the implementation](./json-output.md#choosing-the-implementation) |
 | `OPENTIDE_CACHE_DIR` | Where opentide caches what it generates for the language server (`lsp-catalogs/`); default: the user cache directory |
 | `CLAUDECODE`, `AI_AGENT`, … | Set by a coding agent: selects `agent` output mode |
 
