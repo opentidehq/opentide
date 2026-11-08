@@ -30,7 +30,7 @@ One workspace (root `Cargo.toml`, one `Cargo.lock`; `fuzz/` keeps its own). A cr
 | Layer, tier | Crates (each with an `AGENTS.md`) |
 | --- | --- |
 | foundation 0 | [`opentide-core`](opentide-core/AGENTS.md) |
-| foundation 1 | [`opentide-syntax`](opentide-syntax/AGENTS.md), [`opentide-highlight`](opentide-highlight/AGENTS.md), [`opentide-ecs`](opentide-ecs/AGENTS.md) |
+| foundation 1 | [`opentide-syntax`](opentide-syntax/AGENTS.md), [`opentide-highlight`](opentide-highlight/AGENTS.md), [`opentide-ecs`](opentide-ecs/AGENTS.md), [`opentide-schema`](opentide-schema/AGENTS.md) |
 | foundation 2 | [`opentide-kql`](opentide-kql/AGENTS.md), [`opentide-spl`](opentide-spl/AGENTS.md), [`opentide-kuery`](opentide-kuery/AGENTS.md), [`opentide-lucene`](opentide-lucene/AGENTS.md), [`opentide-falco`](opentide-falco/AGENTS.md) |
 | foundation 3 | [`opentide-esql`](opentide-esql/AGENTS.md), [`opentide-eql`](opentide-eql/AGENTS.md) |
 | domain 0, 1 | [`opentide-tide`](opentide-tide/AGENTS.md), then [`opentide-analysis`](opentide-analysis/AGENTS.md) |
@@ -41,7 +41,7 @@ One workspace (root `Cargo.toml`, one `Cargo.lock`; `fuzz/` keeps its own). A cr
 
 ## Hard rules
 
-- No `std::fs` in `crates/opentide-{core,highlight,syntax,kql,spl,esql,eql,kuery,lucene,falco,ecs,tide,analysis}/src`. Tests may read the repo.
+- No `std::fs` in `crates/opentide-{core,highlight,syntax,kql,spl,esql,eql,kuery,lucene,falco,ecs,tide,analysis,schema}/src`. Tests may read the repo.
 - Do not rename a HighlightSpec capture. Adding one is a minor (`highlights/spec.toml` `[meta].version`).
 - Do not validate CrowdStrike. `configurations.crowdstrike.*` stays unsupported.
 - Control commands (`.show`, `.create`) parse so the engine can emit `kql_control_command_unsupported`. They are not valid detections.

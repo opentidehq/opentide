@@ -23,12 +23,15 @@
 # - xtask is Tooling, the top layer: it may read any crate, and no crate may
 #   depend on it.
 # - analysis/ is the package `opentide-native` (bindings/python in the plan).
+# - opentide-schema (UC-1.1, #807) is foundation tier 1, as the plan's table
+#   puts it: it may build on opentide-core (spans, UC-1.2), and every domain
+#   crate may depend on it.
 
 [[layer]]
 name = "foundation"
 tiers = [
     ["opentide-core"],
-    ["opentide-syntax", "opentide-highlight", "opentide-ecs"],
+    ["opentide-syntax", "opentide-highlight", "opentide-ecs", "opentide-schema"],
     ["opentide-kql", "opentide-spl", "opentide-kuery", "opentide-lucene", "opentide-falco"],
     ["opentide-esql", "opentide-eql"],
 ]

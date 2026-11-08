@@ -1,0 +1,106 @@
+---
+source: crates/opentide-schema/tests/json_schema.rs
+expression: "serde_json::to_string_pretty(&schema).unwrap()"
+---
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SampleV1_1",
+  "description": "The sample family, revision 1.1 (`sample::1.1`): adds `tags`.",
+  "type": "object",
+  "properties": {
+    "description": {
+      "description": "What the object is for.",
+      "type": "string",
+      "tide.template.multiline": true,
+      "tide.template.spacer": true
+    },
+    "effort": {
+      "description": "Implementation effort, from 1 to 10.",
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int64",
+      "maximum": 10,
+      "minimum": 1
+    },
+    "enabled": {
+      "description": "Whether the object is in use.",
+      "type": "boolean",
+      "default": true
+    },
+    "examples": {
+      "description": "Example queries.",
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/$defs/SampleExample"
+      }
+    },
+    "name": {
+      "description": "Display name.",
+      "type": "string"
+    },
+    "schema": {
+      "description": "Schema identifier.",
+      "type": "string"
+    },
+    "severity": {
+      "description": "Alert severity, from the `alert_severity` vocabulary.",
+      "type": "string",
+      "tide.vocab": "alert_severity"
+    },
+    "tags": {
+      "description": "Free-form tags.",
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "string"
+      }
+    },
+    "uuid": {
+      "description": "Globally unique object identifier.",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "name",
+    "uuid",
+    "schema",
+    "description",
+    "severity"
+  ],
+  "$defs": {
+    "SampleExample": {
+      "description": "An example of a sample object: a sub-struct every revision shares as is.",
+      "type": "object",
+      "properties": {
+        "description": {
+          "description": "Example description.",
+          "type": "string",
+          "tide.template.multiline": true
+        },
+        "language": {
+          "description": "Query language.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "link": {
+          "description": "Example URL.",
+          "type": "string",
+          "format": "uri"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "description",
+        "link"
+      ]
+    }
+  }
+}
