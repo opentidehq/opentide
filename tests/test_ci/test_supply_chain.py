@@ -7,10 +7,16 @@ release lists in THIRD-PARTY-LICENSES.html), and keep its exceptions explained.
 
 from __future__ import annotations
 
+import importlib.util
+import json
+import shlex
+import subprocess
 from pathlib import Path
+from types import ModuleType
 from typing import Any
 
 import pytest
+import yaml
 
 from opentide.core.files import tomllib
 
@@ -39,7 +45,16 @@ def test_every_advisory_exception_has_a_reason_and_an_issue() -> None:
         assert entry.get("reason"), f"{entry['id']} has no reason"
         assert "#" in entry["reason"], f"{entry['id']}: name the follow-up issue"
     assert advisories["unmaintained"] == "all"
+    assert advisories["unsound"] == "all"
     assert advisories["yanked"] == "deny"
+
+
+def test_the_graph_is_every_target_and_feature() -> None:
+    """An empty target list checks the crates of every platform (Windows,
+    macOS, wasm32), and every feature's dependencies with them."""
+    graph = _toml("deny.toml")["graph"]
+    assert graph["targets"] == []
+    assert graph["all-features"] is True
 
 
 def test_openssl_is_banned_in_favour_of_rustls() -> None:
@@ -59,12 +74,6 @@ def test_duplicates_and_sources_fail_unless_explained() -> None:
 
 
 # --- The workflows that run the gates -------------------------------------
-
-import importlib.util  # noqa: E402 -- the workflow tests' own imports
-import json  # noqa: E402
-from types import ModuleType  # noqa: E402
-
-import yaml  # noqa: E402
 
 WORKFLOWS = ROOT / ".github" / "workflows"
 
@@ -87,26 +96,56 @@ def _audit() -> ModuleType:
     return module
 
 
+def _lockfile_workspaces() -> list[str]:
+    """The directory of every tracked Cargo.lock (`.` for the workspace)."""
+    listed = subprocess.run(
+        ["git", "ls-files", "--", ":(glob)**/Cargo.lock"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.split()
+    return sorted(str(Path(lock).parent) for lock in listed)
+
+
 def test_cargo_deny_gates_every_pull_request_at_a_pinned_version() -> None:
     ci = _workflow("ci.yml")
     assert "pull_request" in _triggers(ci)
-    steps = ci["jobs"]["deny"]["steps"]
+    job = ci["jobs"]["deny"]
+    assert job["permissions"] == {"contents": "read"}
+    assert "continue-on-error" not in job
+    steps = job["steps"]
+    assert not [s for s in steps if "continue-on-error" in s]
     installs = [s for s in steps if "taiki-e/install-action" in s.get("uses", "")]
     assert installs and installs[0]["with"]["tool"] == "cargo-deny@0.20.2"
     assert installs[0]["with"]["fallback"] == "none"
-    runs = " ".join(s.get("run", "") for s in steps)
-    assert "cargo deny --config deny.toml --locked check" in runs
-    assert "--manifest-path fuzz/Cargo.toml" in runs
-    # Every other Cargo workspace in the repository has its own deny step.
-    lockfiles = sorted(
-        str(p.parent.relative_to(ROOT))
-        for p in ROOT.glob("**/Cargo.lock")
-        if not {"target", "node_modules", ".git"} & set(p.relative_to(ROOT).parts)
+    # Each deny step's whole command, so narrowing a gate (dropping a check,
+    # a workspace or --locked) fails here.
+    commands = sorted(
+        shlex.split(s["run"]) for s in steps if s.get("run", "").startswith("cargo deny")
     )
-    for workspace in lockfiles:
-        if workspace != ".":
-            assert f"--manifest-path {workspace}/Cargo.toml" in runs, workspace
-    assert ci["jobs"]["deny"]["permissions"] == {"contents": "read"}
+    expected = []
+    for workspace in _lockfile_workspaces():
+        manifest = [] if workspace == "." else ["--manifest-path", f"{workspace}/Cargo.toml"]
+        # fuzz/ ships nothing: its licences are not checked.
+        checks = ["advisories", "bans", "sources"] if workspace == "fuzz" else []
+        expected.append(
+            ["cargo", "deny", "--config", "deny.toml", *manifest, "--locked", "check", *checks]
+        )
+    assert commands == sorted(expected)
+
+
+def test_the_daily_audit_reads_every_lock_with_warnings_denied() -> None:
+    """The audit step lists the locks with git, so a new Cargo.lock is
+    audited, and denies warnings (unmaintained, unsound, yanked), as
+    cargo-deny does."""
+    steps = _workflow("rust-audit.yml")["jobs"]["audit"]["steps"]
+    run = next(s["run"] for s in steps if s.get("id") == "audit")
+    assert "git ls-files -- ':(glob)**/Cargo.lock'" in run
+    assert 'cargo audit --file "${lock}" --json --deny warnings "${ignores[@]}"' in run
+    assert "continue-on-error" not in json.dumps(steps)
+    # The pathspec the step uses finds every lock the deny job checks.
+    assert len(_lockfile_workspaces()) >= 3
 
 
 def test_only_the_scheduled_audit_may_write_issues() -> None:

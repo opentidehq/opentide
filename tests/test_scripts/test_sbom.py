@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -103,3 +104,56 @@ def test_sboms_carry_the_epoch_and_no_random_serial() -> None:
     assert fixed["metadata"]["timestamp"] == "2023-11-14T22:13:20Z"
     assert sbom.reproducible(bom, None)["metadata"]["timestamp"] == bom["metadata"]["timestamp"]
     assert "serialNumber" in bom  # the input is left as it was
+
+
+class _Validator:
+    """Stands in for the CycloneDX schema validator `validate()` runs through
+    uv: records each call and answers with ``returncode``."""
+
+    def __init__(self, returncode: int) -> None:
+        self.returncode = returncode
+        self.calls: list[list[str]] = []
+
+    def __call__(self, command: list[str], **_: Any) -> Any:
+        self.calls.append(command)
+        return type("Completed", (), {"returncode": self.returncode})()
+
+
+def _write_bom(path: Path, bom: dict[str, Any]) -> Path:
+    path.write_text(json.dumps(bom), encoding="utf-8")
+    return path
+
+
+def test_validate_passes_a_valid_sbom(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    validator = _Validator(0)
+    monkeypatch.setattr(sbom.subprocess, "run", validator)
+    good = _write_bom(tmp_path / "good.cdx.json", _bom("a", ["b"], {"a": ["b"], "b": []}))
+    assert sbom.validate([good]) == 0
+    # The schema check ran, on that file, with the pinned validator.
+    assert validator.calls and str(good) in validator.calls[0]
+    assert sbom.VALIDATOR in validator.calls[0]
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        pytest.param(lambda b: b.update(specVersion="1.4"), id="wrong-spec-version"),
+        pytest.param(lambda b: b["dependencies"].append({"ref": "zz"}), id="dangling-ref"),
+    ],
+)
+def test_validate_fails_a_structurally_wrong_sbom(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, change: Any
+) -> None:
+    monkeypatch.setattr(sbom.subprocess, "run", _Validator(0))
+    bom = _bom("a", ["b"], {"a": ["b"], "b": []})
+    change(bom)
+    assert sbom.validate([_write_bom(tmp_path / "bad.cdx.json", bom)]) == 1
+
+
+def test_validate_fails_when_the_schema_check_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A schema violation is the validator's to report: its exit status counts.
+    monkeypatch.setattr(sbom.subprocess, "run", _Validator(1))
+    good = _write_bom(tmp_path / "x.cdx.json", _bom("a", ["b"], {"a": ["b"], "b": []}))
+    assert sbom.validate([good]) == 1

@@ -21,7 +21,7 @@ merge first; CodeQL and the oracles run there too). Jobs run in parallel; a new 
 | `grammars`, `textmate` | Every vendored `parser.c` is what tree-sitter-cli 0.25.10 generates (`check-grammars.sh`); the TextMate grammars as VS Code reads them |
 | `elastic-sweep` | Every public Elastic detection rule (a pinned commit) passes the engine |
 | `fuzz-smoke` | Each fuzz target of `fuzz/` for 60 s from its seeds and saved regressions (nightly, up to three targets per runner; cargo-fuzz pinned) |
-| `deny` | `cargo deny check` against [`deny.toml`](../deny.toml) (licences, RustSec advisories, duplicate versions, OpenSSL, sources) for the workspace, and advisories, bans and sources for `fuzz/`; cargo-deny 0.20.2, prebuilt and checksum-checked ([`docs/internal/supply-chain.md`](../docs/internal/supply-chain.md)) |
+| `deny` | `cargo deny check` against [`deny.toml`](../deny.toml) (licences, RustSec advisories, duplicate versions, OpenSSL, sources) for the workspace and the `publishing/` placeholder crate, and advisories, bans and sources for `fuzz/`; cargo-deny 0.20.2, prebuilt and checksum-checked ([`docs/internal/supply-chain.md`](../docs/internal/supply-chain.md)) |
 | `engine-release-dry-run` | The engine release's own asset jobs ([`engine-release-build.yml`](workflows/engine-release-build.yml)) for the workspace version: every asset, the CycloneDX SBOMs (`scripts/engine/sbom.py`, schema-checked), SHA256SUMS, and `release.py check-assets` (language-server v0.11.0's names with the version substituted, plus the SBOMs). No tag, attestation, release or publish; `contents: read` |
 | `engine-release-consumers` | opentidehq/vscode-extension's own grammar and engine scripts (a pinned commit) accept the dry run's assets as this repository's release (`scripts/engine/check-vscode-extension.mjs`) |
 | `test` | The Python matrix, **3.10–3.14**, coverage gate on 3.14 |
@@ -139,8 +139,8 @@ together.
 - [`engine-release.yml`](workflows/engine-release.yml): the engine's release (below).
 - [`engine-fuzz.yml`](workflows/engine-fuzz.yml) fuzzes every target for ten minutes a night with
   the corpus it keeps, and uploads what crashed; a schedule of its own, so not part of ci.yml.
-- [`rust-audit.yml`](workflows/rust-audit.yml) runs `cargo audit` on both Rust lock files every
-  day, with deny.toml's exceptions, and opens or comments on one issue when it finds an advisory.
+- [`rust-audit.yml`](workflows/rust-audit.yml) runs `cargo audit` on every Rust lock file
+  (`git ls-files`) every day, with deny.toml's exceptions, and opens or comments on one issue when it finds an advisory.
   Its issue job is the only job in any workflow with `issues: write`, and it never runs on a pull
   request (`tests/test_ci/test_supply_chain.py`).
 - [`oracle.yml`](workflows/oracle.yml) checks the query parsers against Kusto.Language, Splunk,

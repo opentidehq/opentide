@@ -1,6 +1,6 @@
 name: Rust audit
 
-# RustSec advisories in the Rust lock files, every day (#843). cargo-deny gates
+# RustSec advisories in every Rust lock file, every day (#843). cargo-deny gates
 # each pull request (ci.yml, `deny`); this run catches an advisory published
 # after a change merged, with nobody opening a pull request, and opens (or
 # comments on) one issue for the maintainers. Both read deny.toml's
@@ -42,7 +42,7 @@ jobs:
       # as cargo-deny counts them. A report that is not cargo audit's JSON (the
       # database could not be fetched, say) fails this run instead of opening
       # an issue.
-      - name: audit Cargo.lock and fuzz/Cargo.lock
+      - name: audit every Cargo.lock
         id: audit
         run: |
           set -uo pipefail
@@ -55,7 +55,11 @@ jobs:
           fi
           found=false
           mkdir -p audit
-          for lock in Cargo.lock fuzz/Cargo.lock; do
+          # Every Cargo.lock in the repository (the workspace, fuzz/, the
+          # publishing/ placeholder crate): a new one is audited without an edit.
+          locks_out="$(git ls-files -- ':(glob)**/Cargo.lock')" || exit 1
+          mapfile -t locks <<<"${locks_out}"
+          for lock in "${locks[@]}"; do
             out="audit/$(echo "${lock}" | tr '/' '-').json"
             if ! cargo audit --file "${lock}" --json --deny warnings "${ignores[@]}" > "${out}"; then
               found=true
