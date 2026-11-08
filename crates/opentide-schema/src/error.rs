@@ -10,10 +10,12 @@
 use std::fmt;
 
 /// The CLI's codes for schema errors. `schema_validation` is the engine's
-/// already ([`opentide_core::codes::SCHEMA_VALIDATION`]); the other four are
-/// codes the Python CLI prints that no engine crate emits yet, so they are not
-/// in `opentide_core::codes::ALL` (whose codes the language server describes).
-/// Each moves there when the workspace port that emits it lands (UC-2.2, #817).
+/// already ([`opentide_core::codes::SCHEMA_VALIDATION`]). The other four are
+/// created by the Python CLI; the language server only relays three of them
+/// from the host's configuration checker. `opentide_core::codes::ALL` lists
+/// the codes the engine itself emits, each with a description
+/// (`codes::describe`), so each of the four moves there with the Rust port
+/// that emits it (UC-2.2, #817; UC-1.5, #811).
 pub mod codes {
     pub use opentide_core::codes::SCHEMA_VALIDATION;
     /// An object file that is not YAML (`loading/`).

@@ -13,7 +13,8 @@
 #
 # - The plan names no tiers. Foundation crates depend on one another today (the
 #   query engines on core, syntax and highlight; ES|QL and EQL on Lucene), so
-#   foundation has four tiers, read off `cargo metadata`; domain has two.
+#   foundation has four tiers read off `cargo metadata`, and a fifth, from the
+#   plan's row order, for opentide-schema (below); domain has two.
 # - opentide-tide and opentide-analysis are Domain: the plan folds both into
 #   opentide-workspace (UC-2.x), and opentide-analysis depends on opentide-tide.
 # - Bindings sit above the facade, not at the bottom where the plan's table

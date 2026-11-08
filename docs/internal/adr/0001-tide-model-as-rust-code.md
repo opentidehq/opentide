@@ -27,7 +27,7 @@ The plan moves every implementation into one Rust workspace (D-1). The model com
 | Fields | 785 | `model_fields` of those classes, inherited fields counted on each class (632 declared) |
 | Closed classes | 168 | `extra="forbid"`; 5 configuration classes are `extra="allow"`, 3 internal ones are open (`results`, `version`) |
 | Frozen classes | 174 | `frozen=True` (all but the two `results` classes) |
-| Registered revisions | 15 | 5 object and configuration families (`objective::1.0`, `rule::1.0`, `rule::1.1`, `threat::1.0`, `visibility::1.0`), 9 platform blocks (`platform::sentinel::1.0` … `platform::sysdig::1.0`) and `sharing::misp::1.0` (`__schema_identifier__`) |
+| Schema revisions | 15 | `__schema_identifier__` declarations: 5 revisions of 4 families in the registry (`schema_registry.py`: `objective::1.0`, `rule::1.0`, `rule::1.1`, `threat::1.0`, `visibility::1.0`), 9 platform blocks in `PLATFORM_CONFIG_MODELS` (`platform::sentinel::1.0` … `platform::sysdig::1.0`) and `sharing::misp::1.0`, in no registry |
 | `tide.*` metadata keys | 23 | [the table below](#the-tide-metadata-keys) |
 | Validators | 21 | 15 decorated (10 `field_validator`, 5 `model_validator`; one of them, `VocabularyEntry._coerce_stages`, in `generation/vocabulary.py`) and 6 `Annotated` (3 `AfterValidator`, 3 `BeforeValidator`) |
 
