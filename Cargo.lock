@@ -755,6 +755,7 @@ dependencies = [
  "opentide-core",
  "serde_json",
  "tree-sitter",
+ "tree-sitter-language",
 ]
 
 [[package]]
