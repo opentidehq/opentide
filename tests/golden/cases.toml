@@ -9,7 +9,7 @@
 
 [defaults]
 modes = ["human", "plain", "json", "agent"]
-fixtures = ["tide-corpus", "vscode", "empty", "none"]
+fixtures = ["tide-corpus", "vscode", "heavy-small", "empty", "none"]
 timeout_secs = 180
 
 [fixtures.tide-corpus]
@@ -23,6 +23,11 @@ kind = "copy"
 source = "tests/golden/fixtures/vscode-workspace"
 about = "the VS Code extension's fixture workspace, vendored (fixtures/vscode-workspace.SOURCE.toml)"
 vars = { objective = "04149254-2a5b-4c1e-9f0e-3c1d2b5a6e7f", rule = "ff8bf67e-64dc-460d-b5df-48db643f3560", rule_file = "objects/rules/suspicious-lsass-access.yaml" }
+
+[fixtures.heavy-small]
+kind = "generated"
+argv = ["cargo", "xtask", "corpus", "generate", "--seed", "1", "--threats", "30", "--objectives", "30", "--rules", "50", "--out", "{out}"]
+about = "UC-0.6's heavy workspace generator, seed 1: 30 threats, 30 objectives, 50 rules; generated at record and check time, never committed"
 
 [fixtures.empty]
 kind = "skeleton"

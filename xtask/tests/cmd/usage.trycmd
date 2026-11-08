@@ -11,6 +11,10 @@ commands:
                  down the layer table (xtask/layers.toml, plan section 4).
                  --metadata reads `cargo metadata --format-version 1` output
                  from FILE instead of running cargo; --layers reads another table
+  corpus <command>
+                 generate the heavy workspace, run the fault catalogue
+                 against the oracle, report coverage (UC-0.6, #804);
+                 `cargo xtask corpus help` lists its commands
   codegen        generate schemas, stubs, types and references (UC-1.8, #814)
   golden <record|check|diff|lock|coverage> [options]
                  record what the frozen Python CLI does, and check an engine

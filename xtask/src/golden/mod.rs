@@ -227,9 +227,11 @@ impl Command {
             other => bail!("unknown engine `{other}`: python, rust or compare"),
         };
         let selected = select(&all, self.filter.as_deref())?;
+        // Generated fixtures are generated once per run, then copied per case.
+        let (fixtures, _generated) = prepare_fixtures(&spec.fixtures, &selected, &layout.repo)?;
         let ctx = RunContext {
             repo: layout.repo.clone(),
-            fixtures: spec.fixtures.clone(),
+            fixtures,
             engine,
             git_version: run::git_version(),
             temp_parent: std::env::temp_dir(),
@@ -394,6 +396,43 @@ impl Command {
         );
         Ok(failed == 0)
     }
+}
+
+/// The fixtures, with each `generated` one the cases use generated now into
+/// a temporary directory (kept alive by the returned guards) and turned into
+/// a `copy` of it.
+fn prepare_fixtures(
+    fixtures: &std::collections::BTreeMap<String, fixture::FixtureSpec>,
+    cases: &[Case],
+    repo: &Path,
+) -> Result<(
+    std::collections::BTreeMap<String, fixture::FixtureSpec>,
+    Vec<tempfile::TempDir>,
+)> {
+    let used: BTreeSet<&str> = cases.iter().map(|c| c.fixture.as_str()).collect();
+    let mut out = fixtures.clone();
+    let mut guards = Vec::new();
+    for (name, spec) in fixtures {
+        if spec.kind != fixture::FixtureKind::Generated || !used.contains(name.as_str()) {
+            continue;
+        }
+        let dir = tempfile::Builder::new()
+            .prefix("golden-fixture-")
+            .tempdir()
+            .context("create a directory for a generated fixture")?;
+        let ws = dir.path().join("ws");
+        std::fs::create_dir(&ws).with_context(|| format!("create {}", ws.display()))?;
+        spec.materialise(repo, &ws)
+            .with_context(|| format!("generate fixture `{name}`"))?;
+        let copy = fixture::FixtureSpec {
+            kind: fixture::FixtureKind::Copy,
+            source: Some(ws.to_string_lossy().into_owned()),
+            ..spec.clone()
+        };
+        out.insert(name.clone(), copy);
+        guards.push(dir);
+    }
+    Ok((out, guards))
 }
 
 /// The cases whose id matches `filter` (a glob), or all of them.
