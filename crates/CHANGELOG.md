@@ -21,12 +21,20 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
   - Highlighting: `highlights/generated/cql.tmLanguage.json`, scope `source.opentide.cql` (Cassandra's CQL extensions own `source.cql`), and the CrowdStrike block's query as an embedded region of Tide YAML
   - Editors: the Helix, Neovim and Zed samples and `@opentide/lsp-client` map `*.cql` to `cql`
 
+## [0.11.0] - 2026-11-06
+
+Filename and metadata warnings now follow the workspace's `lint.toml` as `opentide lint` does, a `detection_model` naming a signal is no longer an `invalid_ref`, and hover and findings point at the exact value they are about.
+
+### Added
+
 - **`opentide/didChangeWorkspace` updates the workspace a host supplied on `initialize`.** A host with no filesystem, such as a browser worker, sends it when files change outside the editor, without a restart; the server re-indexes, re-checks open documents and sends `opentide/catalogChanged` for a catalog the client got that changed. `docs/EDITORS.md` (Custom RPCs) has the shape.
   - `documents` and `objects`: added or changed
   - `removed`: the URIs of files that are gone
   - `visibility`: the text of `visibility.toml`, or `null` when it is gone
   - `capabilities.experimental.opentide.workspaceUpdates` is `true`, so a client can tell this server from an older one
   - `@opentide/lsp-client`: `OpentideClient.updateWorkspace(change)` sends it
+- **`filename_pattern` reports a file name `[filenames] pattern` does not match.** A warning on the `name` value, as `opentide lint` reports it; a pattern the Rust `regex` crate cannot compile is left to `opentide lint` ([#214](https://github.com/opentidehq/language-server/issues/214)).
+- **Hosts install a root's `lint.toml` with `opentide_analysis::install_lint`.** For a host other than `opentide-lsp`, which reads the file itself; `opentide_analysis::check_lint` parses one without installing it ([#214](https://github.com/opentidehq/language-server/issues/214)).
 
 ### Changed
 
@@ -35,6 +43,23 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
   - Each root's `opentide/catalog` lists its own objects
   - An object supplied with no `uri`, or outside every folder, is still every root's
   - A root's `.opentide/configurations/visibility.toml` among the supplied documents declares its datasets, in place of the `visibility` the host supplies for every root
+- **Reference findings are on the value, not its key.** `invalid_ref` is on the UUID it is about in these fields, and `filename_slug` on the `name` value ([#215](https://github.com/opentidehq/language-server/issues/215)).
+  - `detection_model`
+  - each `objective.threats` entry, on its own UUID, where all of them shared the `threats` key
+  - a `threat.chaining` `vector`
+
+### Fixed
+
+- **A `detection_model` naming a signal is not an `invalid_ref`.** A rule may implement a signal an indexed objective declares, as `opentide validate` accepts; the message says `is not an indexed objective or signal`, and the suggestion is a UUID within two edits of the value, never the first indexed objective ([#213](https://github.com/opentidehq/language-server/issues/213)).
+- **The `invalid_ref` quick fix keeps the YAML valid.** It replaces the UUID, where it used to replace the key with one (`<uuid>: <old uuid>`) ([#215](https://github.com/opentidehq/language-server/issues/215)).
+- **The `filename_slug` fix renames the file, not the object.** Its suggestion is a `RenameFile` beside the file, for a client that applies one, a `file:` document and a name no other file has; it is never a text edit, and `source.fixAll.opentide` leaves it out ([#215](https://github.com/opentidehq/language-server/issues/215)).
+- **Filename and metadata warnings follow `lint.toml`.** `filename_slug`, `missing_author` and `missing_organisation` read the root's `.opentide/configurations/lint.toml` as `opentide lint` does, so a repository with its own naming, or no `organisation` requirement, no longer carries a warning on every object ([OBJECTS.md](docs/OBJECTS.md#linttoml), [#214](https://github.com/opentidehq/language-server/issues/214)).
+  - `[filenames] enabled`, `style` (`slug`, `name`, `none`) and the `[filenames.<kind>]` tables
+  - `[metadata] enabled` and `required`
+  - each check's `severity`
+  - the open buffer, else the file on disk, else a supplied document; editing it re-checks open documents
+  - `opentide-lsp analyze` reads the workspace's file too
+- **Debug fixtures and unsaved buffers get no false filename warning.** `x.debug.yaml` is compared without its `.debug` infix, and its suggestion keeps it; an `untitled:` document gets no `filename_slug` or `filename_pattern` ([#214](https://github.com/opentidehq/language-server/issues/214)).
 
 ## [0.10.0] - 2026-11-04
 
@@ -622,6 +647,7 @@ The first working server serves KQL, SPL and Tide YAML over stdio and WASM, with
 - **A frozen HighlightSpec with generated editor maps.** Semantic tokens use the standard LSP legend.
 - **Stdio and WASM hosts, with Zed, Helix and Neovim samples.**
 
+[0.11.0]: https://github.com/opentidehq/language-server/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/opentidehq/language-server/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/opentidehq/language-server/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/opentidehq/language-server/compare/v0.8.0...v0.9.0

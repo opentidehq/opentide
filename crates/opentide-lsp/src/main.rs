@@ -122,6 +122,15 @@ fn detect_language(path: &Path, override_lang: Option<&str>) -> Result<LanguageI
 }
 
 fn cmd_analyze(file: &Path, language: Option<&str>, platform: Option<&str>) -> Result<()> {
+    // A bare file name is in the current directory: the filename checks
+    // skip a path with no directory, as they do an unsaved buffer.
+    let here;
+    let file = if file.parent().is_none_or(|p| p.as_os_str().is_empty()) {
+        here = Path::new(".").join(file);
+        here.as_path()
+    } else {
+        file
+    };
     let text = read_document(file)?;
     let language = detect_language(file, language)?;
     if let Some(platform) = platform.filter(|_| language != LanguageId::TideYaml) {
@@ -147,6 +156,17 @@ fn cmd_analyze(file: &Path, language: Option<&str>, platform: Option<&str>) -> R
             let config = workspace.join(opentide_analysis::ELASTIC_CONFIGURATION);
             if let Ok(text) = std::fs::read_to_string(&config) {
                 files.push((config.display().to_string(), text));
+            }
+            // The filename and metadata checks follow the workspace's
+            // lint.toml, as the server and `opentide lint` do (#214).
+            let lint = workspace.join(opentide_analysis::LINT_CONFIGURATION);
+            if let Ok(text) = std::fs::read_to_string(&lint) {
+                if let Err(err) = opentide_analysis::install_lint(Some(&text)) {
+                    eprintln!(
+                        "opentide-lsp: {}: {err}; opentide lint's defaults apply",
+                        lint.display()
+                    );
+                }
             }
         }
     }

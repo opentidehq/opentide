@@ -6,8 +6,8 @@ use crate::server::{collect_objects, install_workspace_catalog_from, workspace_r
 use crate::uri::uri_to_path;
 use lsp_server::{Message, Notification, ReqQueue, Response};
 use opentide_analysis::{
-    AnalyzeRequest, AnalyzeResponse, IndexedObject, VISIBILITY_CONFIGURATION, WorkspaceHost,
-    analyze, install_visibility, is_configuration_path,
+    AnalyzeRequest, AnalyzeResponse, IndexedObject, LINT_CONFIGURATION, VISIBILITY_CONFIGURATION,
+    WorkspaceHost, analyze, install_lint, install_visibility, is_configuration_path,
 };
 use opentide_core::LanguageId;
 use std::cell::{Cell, RefCell};
@@ -39,6 +39,9 @@ pub(crate) struct ClientCaps {
     /// A workspace edit may create a file (`documentChanges` with the
     /// `create` resource operation).
     pub create_files: bool,
+    /// The client applies `RenameFile` operations (`workspaceEdit.documentChanges`
+    /// and `resourceOperations: ["rename"]`): a `filename_slug` fix renames the file.
+    pub rename_files: bool,
     pub code_description: bool,
     pub deprecated_tag: bool,
     pub related_information: bool,
@@ -71,6 +74,8 @@ pub(crate) struct Root {
     /// The last `visibility.toml` text that parsed: a buffer that is not
     /// TOML yet (mid-edit) keeps these declarations.
     good_visibility: RefCell<Option<Option<String>>>,
+    /// The last `lint.toml` text that parsed (#214), kept the same way.
+    good_lint: RefCell<Option<String>>,
 }
 
 impl Root {
@@ -83,6 +88,7 @@ impl Root {
             visibility: None,
             catalog: CatalogState::default(),
             good_visibility: RefCell::default(),
+            good_lint: RefCell::default(),
         }
     }
 
@@ -144,6 +150,10 @@ impl Root {
 
     fn visibility_path(&self) -> PathBuf {
         self.path.join(VISIBILITY_CONFIGURATION)
+    }
+
+    fn lint_path(&self) -> PathBuf {
+        self.path.join(LINT_CONFIGURATION)
     }
 }
 
@@ -612,6 +622,7 @@ impl Session {
             self.log_warning(&err);
             self.warn_once(&err);
         }
+        self.activate_lint(r);
         let Some(r) = r else {
             if let Err(err) = install_visibility(self.supplied.visibility.as_deref()) {
                 self.log_warning(&format!("opentide-lsp: {err}; no datasets are declared"));
@@ -655,6 +666,42 @@ impl Session {
                     ));
                 }
                 let _ = install_visibility(kept.flatten().as_deref());
+            }
+        }
+    }
+
+    /// Install the root's `lint.toml` (#214): the editor's buffer, else the
+    /// file on disk, else the root's own among the supplied documents.
+    /// Without one, or outside every root, `opentide lint`'s defaults. Text
+    /// that does not parse keeps the last settings of that root that did.
+    fn activate_lint(&self, r: Option<&Root>) {
+        let Some(r) = r else {
+            let _ = install_lint(None);
+            return;
+        };
+        let path = r.lint_path();
+        let key = path_key(&path.display().to_string());
+        let text = self
+            .docs
+            .iter()
+            .find(|(uri, _)| path_key(&uri_to_path(uri)) == key)
+            .map(|(_, doc)| doc.text.clone())
+            .or_else(|| std::fs::read_to_string(&path).ok())
+            .or_else(|| {
+                self.supplied
+                    .files
+                    .get(&key)
+                    .map(|(_, text, _)| text.clone())
+            });
+        match install_lint(text.as_deref()) {
+            Ok(()) => {
+                *r.good_lint.borrow_mut() = text;
+            }
+            Err(err) => {
+                self.log_warning(&format!(
+                    "opentide-lsp: {err}; the last lint settings that parsed stay in use"
+                ));
+                let _ = install_lint(r.good_lint.borrow().as_deref());
             }
         }
     }
@@ -1212,6 +1259,13 @@ impl Session {
             typ: lsp_types::MessageType::WARNING,
             message: format!("opentide: {message}"),
         });
+    }
+
+    /// Whether `uri` is the `lint.toml` of a root.
+    pub(crate) fn is_lint(uri: &str) -> bool {
+        uri_to_path(uri)
+            .replace('\\', "/")
+            .ends_with(LINT_CONFIGURATION)
     }
 
     /// Whether `uri` is the `visibility.toml` of a root.

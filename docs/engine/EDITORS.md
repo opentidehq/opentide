@@ -111,12 +111,16 @@ Suggestions the KQL, SPL and Tide engines attach:
 | `spl_search_operator` | the operator | `=`, `!=`, `>=` or `<=` ([spl/search-syntax.md](spl/search-syntax.md)) |
 | `spl_command_without_pipe` | the command word | `\| {command}` |
 | `spl_unknown_datamodel`, `spl_unknown_datamodel_field` | the data model reference | the corrected name ([spl/cim-fields.md](spl/cim-fields.md)) |
-| `invalid_ref` on `detection_model` | the `detection_model` key | UUID of the first indexed objective, when one exists |
+| `invalid_ref` on `detection_model` | the UUID value | the objective or signal UUID within two edits of the value, ignoring case (a mistyped or swapped character); none when nothing is that close, so an unrelated objective is never offered |
 | `schema_validation` (string where a list is required) | the field key | `- {text}` |
-| `filename_slug` | the first `name:` key | `{slug}.yaml` |
+| `filename_slug` | the `name` value | `{stem}.yaml` (`{stem}.debug.yaml` for a debug file), the stem `[filenames] style` derives from the name (`slug` or `name`, [OBJECTS.md](OBJECTS.md)), a file name: the quick fix renames the file (`RenameFile`, for a client with `workspaceEdit.documentChanges` and `resourceOperations: ["rename"]`) beside it, only for a `file:` document and when no other file, open document or supplied document has that name (the same file under another case is renamed), and is never a text edit nor part of `source.fixAll.opentide` |
 
-On Tide keys the range is the key, so applying the edit overwrites the key
-text. On query tokens the range is the bad name, so the edit replaces that
+A reference finding (`invalid_ref` on `detection_model`, on each
+`objective.threats` entry and on a `threat.chaining` `vector`) is on the UUID
+value, so applying its edit replaces the value and the YAML stays valid
+([#215](https://github.com/opentidehq/language-server/issues/215)); a value
+the text does not spell out after its key (an alias, whose UUID is at its anchor) keeps the key's range. On other Tide
+keys the range is the key, so applying the edit overwrites the key text. On query tokens the range is the bad name, so the edit replaces that
 name. The Elastic engines attach suggestions too ([LANGUAGE.md](LANGUAGE.md)).
 
 ## Custom RPCs
@@ -207,7 +211,7 @@ const client = createOpentideClient({ transport: "worker", worker });
 const { diagnostics } = await client.analyze("kql", "SecurityEvent | take 1");
 ```
 
-The browser has no filesystem to index, so pass the workspace on `initialize`: `workspace: { objects: [{ uuid, schema, name }], documents: [{ uri, text }], visibility }` (`initializationOptions.workspace` for any other client). Without it, a rule's `detection_model` is an `invalid_ref`. A document the client opens is that object, not a second one with its UUID, and a root's own files win over what is supplied. A supplied document under a workspace folder belongs to that folder's root alone, as a file on disk would, so a reference from one folder to another's object is an `invalid_ref`, as the CLI reports it; an object supplied with no `uri`, or one outside every folder, is every root's. A root's `.opentide/configurations/visibility.toml` among the documents declares that root's datasets; `visibility` declares them for a root that has none. When those files change, send `opentide/didChangeWorkspace` with what changed ([Custom RPCs](#custom-rpcs)), `client.updateWorkspace(change)` with `createOpentideClient`: the server has no file watcher to read, since it has no files.
+The browser has no filesystem to index, so pass the workspace on `initialize`: `workspace: { objects: [{ uuid, schema, name }], documents: [{ uri, text }], visibility }` (`initializationOptions.workspace` for any other client). Without it, a rule's `detection_model` is an `invalid_ref`. A document the client opens is that object, not a second one with its UUID, and a root's own files win over what is supplied. A supplied document under a workspace folder belongs to that folder's root alone, as a file on disk would, so a reference from one folder to another's object is an `invalid_ref`, as the CLI reports it; an object supplied with no `uri`, or one outside every folder, is every root's. A root's `.opentide/configurations/visibility.toml` among the documents declares that root's datasets; `visibility` declares them for a root that has none. A root's `.opentide/configurations/lint.toml` among the documents sets its filename and metadata checks ([OBJECTS.md](OBJECTS.md#linttoml)). When those files change, send `opentide/didChangeWorkspace` with what changed ([Custom RPCs](#custom-rpcs)), `client.updateWorkspace(change)` with `createOpentideClient`: the server has no file watcher to read, since it has no files.
 
 To highlight in the same thread instead, load the module with `loadHighlightModule` and hand it over as `module`:
 
