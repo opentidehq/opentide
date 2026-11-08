@@ -23,7 +23,12 @@ fn recording(stdout: &str) -> Recording {
             variant: "rules".into(),
             mode: Mode::Json,
             fixture: "none".into(),
-            argv: vec!["opentide".into(), "--json".into(), "info".into(), "rules".into()],
+            argv: vec![
+                "opentide".into(),
+                "--json".into(),
+                "info".into(),
+                "rules".into(),
+            ],
             cwd: ".".into(),
             env: BTreeMap::new(),
             stdin: Stdin {
@@ -83,7 +88,10 @@ fn comparator_golden_catches_a_divergent_fake_candidate() {
     repo(dir.path(), "");
     let (passed, report) = run(dir.path(), "{\"ok\":true,\"summary\":{\"rules\":4}}\n");
     assert!(!passed);
-    assert_eq!(report["cases"][0]["differences"][0]["pointer"], "/summary/rules");
+    assert_eq!(
+        report["cases"][0]["differences"][0]["pointer"],
+        "/summary/rules"
+    );
     let (passed, _) = run(dir.path(), "{\"ok\":true,\"summary\":{\"rules\":3}}\n");
     assert!(passed);
 }
