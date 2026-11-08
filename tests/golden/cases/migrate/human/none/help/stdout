@@ -1,0 +1,15 @@
+[1m                                                                                                    [0m
+[1m [0m[1;33mUsage: [0m[1mopentide migrate [OPTIONS] COMMAND [ARGS]...[0m[1m                                               [0m[1m [0m
+[1m                                                                                                    [0m
+ Rewrite objects for a newer opentide model                                                         
+                                                                                                    
+[2m╭─[0m[2m Options [0m[2m───────────────────────────────────────────────────────────────────────────────────────[0m[2m─╮[0m
+[2m│[0m [1;36m-[0m[1;36m-help[0m          Show this message and exit.                                                      [2m│[0m
+[2m╰──────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+[2m╭─[0m[2m Commands [0m[2m──────────────────────────────────────────────────────────────────────────────────────[0m[2m─╮[0m
+[2m│[0m [1;36mvocab-scope[0m[1;36m [0m Re-prefix stage-scoped vocabulary values                                            [2m│[0m
+[2m╰──────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+
+[2m Examples[0m
+   [1m$ opentide migrate vocab-scope[0m
+   [1m$ opentide migrate vocab-scope --apply[0m

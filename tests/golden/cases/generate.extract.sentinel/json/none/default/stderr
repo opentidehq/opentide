@@ -1,0 +1,1 @@
+{"detail":"You must first have Sentinel tenants configured to initiate the import","advice":"run 'opentide setup platforms --sentinel'","event":"sentinel_tenants_not_configured","logger":"opentide.extraction.sentinel_importer","level":"critical","timestamp":"0000-00-00 00:00:00"}

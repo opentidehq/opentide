@@ -1,0 +1,3 @@
+  version  0.23.0
+platforms  Microsoft Sentinel  enabled · deploy, validate, query
+✓ 10 rules · 1 threat · 1 objective · 0 load errors

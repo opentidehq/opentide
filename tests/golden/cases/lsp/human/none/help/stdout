@@ -1,0 +1,18 @@
+[1m                                                                                                    [0m
+[1m [0m[1;33mUsage: [0m[1mopentide lsp [OPTIONS] COMMAND [ARGS]...[0m[1m                                                   [0m[1m [0m
+[1m                                                                                                    [0m
+ Serve the language server for editors                                                              
+                                                                                                    
+ [2mThe server is the analysis engine that pip install opentide installs: KQL, SPL, ES|QL, EQL, Kibana[0m 
+ [2mKQL, Lucene and Tide YAML. The editor owns the process and speaks the protocol on stdio. On the [0m   
+ [2mcommand line, opentide validate and opentide lint report what it finds.[0m                            
+                                                                                                    
+[2m╭─[0m[2m Options [0m[2m───────────────────────────────────────────────────────────────────────────────────────[0m[2m─╮[0m
+[2m│[0m [1;36m-[0m[1;36m-help[0m          Show this message and exit.                                                      [2m│[0m
+[2m╰──────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+[2m╭─[0m[2m Commands [0m[2m──────────────────────────────────────────────────────────────────────────────────────[0m[2m─╮[0m
+[2m│[0m [1;36mstart[0m[1;36m [0m Serve LSP on stdio until the editor closes stdin                                          [2m│[0m
+[2m╰──────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+
+[2m Examples[0m
+   [1m$ opentide lsp start[0m

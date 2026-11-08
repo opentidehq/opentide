@@ -1,0 +1,11 @@
+                                                                                
+ Usage: opentide generate extract defender [OPTIONS]                            
+                                                                                
+ Import Defender custom detections (needs tenant credentials).                  
+                                                                                
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+ Examples
+   $ opentide generate extract defender

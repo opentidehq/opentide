@@ -1,0 +1,81 @@
+[1m                                                                                                    [0m
+[1m [0m[1;33mUsage: [0m[1mopentide setup [OPTIONS] COMMAND [ARGS]...[0m[1m                                                 [0m[1m [0m
+[1m                                                                                                    [0m
+ Set up a detection repository and its tooling                                                      
+                                                                                                    
+[2m╭─[0m[2m Options [0m[2m───────────────────────────────────────────────────────────────────────────────────────[0m[2m─╮[0m
+[2m│[0m [1;36m-[0m[1;36m-path[0m              [1;32m-C[0m                         [1;2;33m<[0m[1;33mstr[0m[1;2;33m>[0m[1;33m   [0m  Repository path [2m[default: .][0m            [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-name[0m                                         [1;2;33m<[0m[1;33mstr[0m[1;2;33m>[0m[1;33m   [0m  Repository name, used in the README     [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-org[0m                                          [1;2;33m<[0m[1;33mstr[0m[1;2;33m>[0m[1;33m   [0m  Organisation or team, used in the       [2m│[0m
+[2m│[0m                                                          README                                  [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-description[0m                                  [1;2;33m<[0m[1;33mstr[0m[1;2;33m>[0m[1;33m   [0m  One-line description, used in the       [2m│[0m
+[2m│[0m                                                          README                                  [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-platform[0m                                     [1;33mPLATFORM[0m  Enable a detection platform             [2m│[0m
+[2m│[0m                                                          (repeatable): sentinel, splunk,         [2m│[0m
+[2m│[0m                                                          crowdstrike, defender_for_endpoint,     [2m│[0m
+[2m│[0m                                                          sentinel_one, carbon_black_cloud,       [2m│[0m
+[2m│[0m                                                          harfanglab, elastic, sysdig             [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-ci[0m                                           [1;33mPROVIDER[0m  CI/CD pipeline to write: github,        [2m│[0m
+[2m│[0m                                                          gitlab, azure or none                   [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-staging[0m               [1;35m-[0m[1;35m-no[0m[1;35m-staging[0m           [1;33m        [0m  Deploy to staging tenants from pull     [2m│[0m
+[2m│[0m                                                          requests                                [2m│[0m
+[2m│[0m                                                          [2m[default: staging]                     [0m [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-inflight[0m              [1;35m-[0m[1;35m-no[0m[1;35m-inflight[0m          [1;33m        [0m  Update .opentide/inflight/ preview      [2m│[0m
+[2m│[0m                                                          shards on pull requests                 [2m│[0m
+[2m│[0m                                                          [2m[default: inflight]                    [0m [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-sharing[0m               [1;35m-[0m[1;35m-no[0m[1;35m-sharing[0m           [1;33m        [0m  Share changed objects on the default    [2m│[0m
+[2m│[0m                                                          branch (off unless selected)            [2m│[0m
+[2m│[0m                                                          [2m[default: no-sharing]                  [0m [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-lint[0m[1;36m-changed[0m          [1;35m-[0m[1;35m-lint[0m[1;35m-all[0m             [1;33m        [0m  Gate lint on the object files each run  [2m│[0m
+[2m│[0m                                                          changes, so a catalogue with inherited  [2m│[0m
+[2m│[0m                                                          findings can adopt it (validate still   [2m│[0m
+[2m│[0m                                                          checks every file)                      [2m│[0m
+[2m│[0m                                                          [2m[default: lint-all]                    [0m [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-promotion[0m             [1;35m-[0m[1;35m-no[0m[1;35m-promotion[0m         [1;33m        [0m  Write [promotion] enabled in            [2m│[0m
+[2m│[0m                                                          deployment.toml. Omit to keep the       [2m│[0m
+[2m│[0m                                                          repository's setting.                   [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-promotion[0m[1;36m-target[0m                             [1;2;33m<[0m[1;33mstr[0m[1;2;33m>[0m[1;33m   [0m  Status deploy promotes rules to. Omit   [2m│[0m
+[2m│[0m                                                          to keep the repository's setting.       [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-python[0m[1;36m-version[0m                               [1;2;33m<[0m[1;33mstr[0m[1;2;33m>[0m[1;33m   [0m  Python version the pipeline installs    [2m│[0m
+[2m│[0m                                                          [2m[default: 3.12]                     [0m    [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-explorer[0m[1;36m-pages[0m        [1;35m-[0m[1;35m-no[0m[1;35m-explorer-pages[0m    [1;33m        [0m  Include GitHub Pages explorer build and [2m│[0m
+[2m│[0m                                                          deploy jobs                             [2m│[0m
+[2m│[0m                                                          [2m[default: no-explorer-pages]           [0m [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-default[0m[1;36m-branch[0m                               [1;2;33m<[0m[1;33mstr[0m[1;2;33m>[0m[1;33m   [0m  Branch that deploys and receives        [2m│[0m
+[2m│[0m                                                          inflight shards (default: origin/HEAD,  [2m│[0m
+[2m│[0m                                                          then the checked-out branch, then       [2m│[0m
+[2m│[0m                                                          init.defaultBranch, then main; GitLab   [2m│[0m
+[2m│[0m                                                          uses $CI_DEFAULT_BRANCH)                [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-vscode[0m[1;36m-setup[0m                                 [1;33m        [0m  Run deprecated setup vscode: the        [2m│[0m
+[2m│[0m                                                          extension recommendation and snippets   [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-mcp[0m                                          [1;33mHOST    [0m  Write MCP configuration for vscode,     [2m│[0m
+[2m│[0m                                                          cursor, claude-code or generic          [2m│[0m
+[2m│[0m                                                          (repeatable)                            [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-skills[0m                                       [1;33mTARGET  [0m  Install agent skills for claude-code,   [2m│[0m
+[2m│[0m                                                          cursor, github-copilot or generic       [2m│[0m
+[2m│[0m                                                          (repeatable)                            [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-plugin[0m                                       [1;33m        [0m  Register the opentidehq/skills Agent    [2m│[0m
+[2m│[0m                                                          Plugin for Claude Code                  [2m│[0m
+[2m│[0m                                                          (.claude/settings.json)                 [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-hooks[0m                                        [1;33m        [0m  Validate objects on every commit        [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-env[0m                                          [1;33m        [0m  Write .env.example and ignore .env      [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-plan[0m                                         [1;33m        [0m  List the files each step would write,   [2m│[0m
+[2m│[0m                                                          and write nothing                       [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-yes[0m               [1;32m-y[0m                         [1;33m        [0m  Non-interactive mode                    [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-help[0m                                         [1;33m        [0m  Show this message and exit.             [2m│[0m
+[2m╰──────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+[2m╭─[0m[2m Commands [0m[2m──────────────────────────────────────────────────────────────────────────────────────[0m[2m─╮[0m
+[2m│[0m [1;36mrepo     [0m[1;36m [0m Scaffold a detection repository                                                       [2m│[0m
+[2m│[0m [1;36mplatforms[0m[1;36m [0m Enable platform configuration files                                                   [2m│[0m
+[2m│[0m [1;36mci       [0m[1;36m [0m Write CI/CD pipeline files                                                            [2m│[0m
+[2m│[0m [1;36menv      [0m[1;36m [0m Write .env.example and ignore .env                                                    [2m│[0m
+[2m│[0m [1;36mhooks    [0m[1;36m [0m Validate objects on every commit                                                      [2m│[0m
+[2m│[0m [1;36mmcp      [0m[1;36m [0m Write MCP configuration for editors and agents                                        [2m│[0m
+[2m│[0m [1;36mvscode   [0m[1;36m [0m Write VS Code schemas and snippets (deprecated)                                       [2m│[0m
+[2m│[0m [1;36mskills   [0m[1;36m [0m Discover and install agent skills                                                     [2m│[0m
+[2m╰──────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+
+[2m Examples[0m
+   [1m$ opentide setup[0m
+   [1m$ opentide setup --yes --name "Detections" --platform sentinel --ci github[0m
+   [1m$ opentide setup --plan --platform sentinel --mcp vscode --hooks --env[0m

@@ -1,0 +1,2 @@
+error: opentide new threat needs --name; it prompts only at an interactive terminal
+tip: add --json for machine-readable output

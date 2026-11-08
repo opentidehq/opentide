@@ -1,0 +1,10 @@
+[1;34mnote[metadata_recommended][0m[1m: [0m[1mRecommended metadata missing: author, organisation[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/suspicious-lsass-access.yaml\objects/rules/suspicious-lsass-access.yaml:2:1]8;;\
+[34m  [0m[34m│[0m
+[34m1 [0m[34m│[0m name: Suspicious LSASS Access
+[34m2 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m [1;34m━━━━━━━━[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m add the missing keys under metadata
+
+[1;32m✓[0m 1 note in 1 file

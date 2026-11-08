@@ -1,0 +1,22 @@
+                                   Rules (10)                                   
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━┓
+┃ UUID                                 ┃ Name              ┃ Platforms         ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━┩
+│ 00000000-0000-4000-8003-000000000001 │ Sentinel KQL Rule │ sentinel          │
+│ 00000000-0000-4000-8003-000000000002 │ Defender KQL Rule │ defender_for_endp │
+│                                      │                   │ oint              │
+│ 00000000-0000-4000-8003-000000000003 │ Splunk SPL Rule   │ splunk            │
+│ 00000000-0000-4000-8003-000000000004 │ SentinelOne S1QL  │ sentinel_one      │
+│                                      │ Rule              │                   │
+│ 00000000-0000-4000-8003-000000000005 │ Carbon Black      │ carbon_black_clou │
+│                                      │ Lucene Rule       │ d                 │
+│ 00000000-0000-4000-8003-000000000006 │ CrowdStrike       │ crowdstrike       │
+│                                      │ Deploy Rule       │                   │
+│ 00000000-0000-4000-8003-000000000007 │ HarfangLab Deploy │ harfanglab        │
+│                                      │ Rule              │                   │
+│ 00000000-0000-4000-8003-000000000008 │ Staging Promote   │ sentinel          │
+│                                      │ Rule              │                   │
+│ 00000000-0000-4000-8003-000000000009 │ Elastic KQL Rule  │ elastic           │
+│ 00000000-0000-4000-8003-0000005d1a90 │ Sysdig Falco Rule │ sysdig            │
+└──────────────────────────────────────┴───────────────────┴───────────────────┘
+✓ 10 rules · 1 threat · 1 objective · 0 load errors

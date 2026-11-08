@@ -1,0 +1,4 @@
+error: Sentinel tenants not configured · detail: You must first have Sentinel tenants configured to initiate the import · advice: run 'opentide setup platforms --sentinel'
+✗ import from sentinel · <SECONDS>
+error: No Sentinel tenants are configured
+tip: add --json for machine-readable output

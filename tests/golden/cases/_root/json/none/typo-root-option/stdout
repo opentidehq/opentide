@@ -1,0 +1,1 @@
+{"error":"No such option: --jsn","ok":false,"status":"failed","message":"No such option: --jsn","schema_version":1,"command":"","duration_ms":0,"exit_code":2,"summary":{},"next_actions":[],"failure":{"code":"usage_unknown_option","message":"No such option: --jsn","argument":"--jsn","suggestion":"--json","crash_log":null}}

@@ -1,0 +1,31 @@
+[1m                                                                                                    [0m
+[1m [0m[1;33mUsage: [0m[1mopentide setup skills [OPTIONS] COMMAND [ARGS]...[0m[1m                                          [0m[1m [0m
+[1m                                                                                                    [0m
+ Agent skills discovery and installation                                                            
+                                                                                                    
+[2m╭─[0m[2m Options [0m[2m───────────────────────────────────────────────────────────────────────────────────────[0m[2m─╮[0m
+[2m│[0m [1;36m-[0m[1;36m-path[0m            [1;32m-C[0m      [1;2;33m<[0m[1;33mstr[0m[1;2;33m>[0m  Repository path [2m[default: .][0m                                    [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-cursor[0m                  [1;33m     [0m  Copy the skills to .cursor/skills/                              [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-claude[0m[1;36m-code[0m             [1;33m     [0m  Write CLAUDE.md and copy the skills to .claude/skills/          [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-generic[0m                 [1;33m     [0m  Write AGENTS.md for any agent that reads .agents/skills/        [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-github[0m[1;36m-copilot[0m          [1;33m     [0m  Write .github/copilot-instructions.md, and AGENTS.md as         [2m│[0m
+[2m│[0m                                  [1;36m-[0m[1;36m-generic[0m does                                                  [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-install[0m                 [1;2;33m<[0m[1;33mstr[0m[1;2;33m>[0m  Skill slug to install (repeatable); default: the rule and       [2m│[0m
+[2m│[0m                                  engineering skills                                              [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-all[0m                     [1;33m     [0m  Install every skill in the catalogue                            [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-plugin[0m                  [1;33m     [0m  Register the opentidehq/skills Agent Plugin (skills and MCP     [2m│[0m
+[2m│[0m                                  server) for Claude Code in .claude/settings.json                [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-name[0m                    [1;2;33m<[0m[1;33mstr[0m[1;2;33m>[0m  Heading of the agent files; default: the folder name            [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-org[0m                     [1;2;33m<[0m[1;33mstr[0m[1;2;33m>[0m  Organisation named in the agent files                           [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-description[0m             [1;2;33m<[0m[1;33mstr[0m[1;2;33m>[0m  One paragraph under the heading of the agent files              [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-plan[0m                    [1;33m     [0m  List the files each step would write, and write nothing         [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-yes[0m             [1;32m-y[0m      [1;33m     [0m  Install without asking                                          [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-help[0m                    [1;33m     [0m  Show this message and exit.                                     [2m│[0m
+[2m╰──────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+[2m╭─[0m[2m Commands [0m[2m──────────────────────────────────────────────────────────────────────────────────────[0m[2m─╮[0m
+[2m│[0m [1;36mdiscover[0m[1;36m [0m List the skills in the opentidehq/skills catalogue                                     [2m│[0m
+[2m│[0m [1;36mshow    [0m[1;36m [0m Show one skill from the catalogue                                                      [2m│[0m
+[2m╰──────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+
+[2m Examples[0m
+   [1m$ opentide setup skills --claude-code --yes[0m

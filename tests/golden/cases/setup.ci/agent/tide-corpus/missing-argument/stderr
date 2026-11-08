@@ -1,0 +1,4 @@
+error: Missing argument 'ci_platform': choose from github, gitlab, azure.
+  usage: opentide setup ci [OPTIONS] {ci_platform}:<github|gitlab|azure>
+  help: run 'opentide setup ci --help'
+tip: add --json for machine-readable output

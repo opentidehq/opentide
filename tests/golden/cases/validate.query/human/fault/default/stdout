@@ -1,0 +1,446 @@
+[1;31merror[ecs_type_mismatch][0m[1m: [0m[1m`process.pid` is a `long` field in ECS v9.5.0: Elasticsearch rejects the[0m
+  [1mvalue `abc`, which is not a number, on it[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/covert-exfiltration-rule-0083.yaml\objects/rules/covert-exfiltration-rule-0083.yaml:71:20]8;;\
+[34m   [0m[34m│[0m
+[34m70 [0m[34m│[0m     query: |
+[34m71 [0m[34m│[0m       process.pid[35m:[0m [32mabc[0m
+[34m   [0m[34m│[0m                    [1;31m━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the ECS field reference: https://www.elastic.co/docs/reference/ecs/ecs-field-reference
+
+[1;31merror[falco_value_type][0m[1m: [0m[1mabc is not a valid number: `proc.pid` is a number (INT64)[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/covert-implant-rule-0157.yaml\objects/rules/covert-implant-rule-0157.yaml:92:38]8;;\
+[34m   [0m[34m│[0m
+[34m91 [0m[34m│[0m     condition: |
+[34m92 [0m[34m│[0m       [36mspawned_process[0m [1;35mand[0m proc.pid [35m=[0m [32mabc[0m
+[34m   [0m[34m│[0m                                      [1;31m━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+[1;31merror[kql_parse_error][0m[1m: [0m[1mKQL syntax error[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/covert-tunnel-rule-0088.yaml\objects/rules/covert-tunnel-rule-0088.yaml:62:7]8;;\
+[34m   [0m[34m│[0m
+[34m61 [0m[34m│[0m     query: |
+[34m62 [0m[34m│[0m       union [35m*[0m [1;35m|[0m take [33m1[0m
+[34m   [0m[34m│[0m       [1;31m━━━━━━━━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the KQL reference: https://learn.microsoft.com/kusto/query/
+
+[1;31merror[eql_unsupported][0m[1m: [0m[1mElasticsearch EQL does not support the `unique` pipe; only `head` and `tail`[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/elevated-downgrade-rule-0197.yaml\objects/rules/elevated-downgrade-rule-0197.yaml:53:28]8;;\
+[34m   [0m[34m│[0m
+[34m52 [0m[34m│[0m     query: |
+[34m53 [0m[34m│[0m       [96mprocess[0m [1;35mwhere[0m [33mtrue[0m [1;35m|[0m [1;35munique[0m process.name
+[34m   [0m[34m│[0m                            [1;31m━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql
+
+[1;31merror[spl_unknown_datamodel][0m[1m: [0m[1m`Endpointz` is not a CIM data model; did you mean `Endpoint`?[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/elevated-dropper-rule-0066.yaml\objects/rules/elevated-dropper-rule-0066.yaml:54:37]8;;\
+[34m   [0m[34m│[0m
+[34m53 [0m[34m│[0m     query: |
+[34m54 [0m[34m│[0m       [1;35m|[0m [1;35mtstats[0m [36mcount[0m [1;35mfrom[0m [1;35mdatamodel[0m[35m=[0mEndpointz
+[34m   [0m[34m│[0m                                     [1;31m━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m try: Endpoint
+
+[1;31merror[spl_unknown_datamodel_field][0m[1m: [0m[1m`process_nam` is not a field of the CIM Endpoint.Processes[0m
+  [1mdataset; did you mean `Processes.process_name`?[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/elevated-injection-rule-0075.yaml\objects/rules/elevated-injection-rule-0075.yaml:40:59]8;;\
+[34m   [0m[34m│[0m
+[34m39 [0m[34m│[0m     query: |
+[34m40 [0m[34m│[0m       [1;35m|[0m [1;35mtstats[0m [36mcount[0m [1;35mfrom[0m [1;35mdatamodel[0m[35m=[0m[96mEndpoint.Processes[0m [1;35mby[0m Processes.process_nam
+[34m   [0m[34m│[0m                                                           [1;31m━━━━━━━━━━━━━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m try: Processes.process_name
+
+[1;31merror[kql_unknown_table][0m[1m: [0m[1munknown table 'DeviceProcessEvnts'; if the workspace holds it, declare it[0m
+  [1mfor defender_for_endpoint in visibility.toml[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/elevated-pivot-rule-0038.yaml\objects/rules/elevated-pivot-rule-0038.yaml:59:7]8;;\
+[34m   [0m[34m│[0m
+[34m58 [0m[34m│[0m     query: |
+[34m59 [0m[34m│[0m       [96mDeviceProcessEvnts[0m
+[34m   [0m[34m│[0m       [1;31m━━━━━━━━━━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m did you mean 'DeviceProcessEvents'?
+
+[1;31merror[kql_parse_error][0m[1m: [0m[1mKQL syntax error[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/elevated-relay-rule-0034.yaml\objects/rules/elevated-relay-rule-0034.yaml:64:21]8;;\
+[34m   [0m[34m│[0m
+[34m63 [0m[34m│[0m     query: |
+[34m64 [0m[34m│[0m       [96mSecurityEvent[0m [1;35m|[0m where (
+[34m   [0m[34m│[0m                     [1;31m━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the KQL reference: https://learn.microsoft.com/kusto/query/
+
+[1;31merror[kql_unknown_function][0m[1m: [0m[1munknown function 'tolowr'[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/elevated-relay-rule-0055.yaml\objects/rules/elevated-relay-rule-0055.yaml:60:20]8;;\
+[34m   [0m[34m│[0m
+[34m59 [0m[34m│[0m       [96mSecurityEvent[0m
+[34m60 [0m[34m│[0m       [1;35m|[0m [1;35mextend[0m x [35m=[0m [36mtolowr[0m(Computer)
+[34m   [0m[34m│[0m                    [1;31m━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m did you mean 'tolower'?
+
+[1;31merror[eql_maxspan_unit][0m[1m: [0m[1munrecognized time unit [w] in `maxspan`; use one of ms, s, m, h, d[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/elevated-relay-rule-0107.yaml\objects/rules/elevated-relay-rule-0107.yaml:54:29]8;;\
+[34m   [0m[34m│[0m
+[34m53 [0m[34m│[0m     query: |
+[34m54 [0m[34m│[0m       [1;35msequence[0m [1;35mwith[0m [1;35mmaxspan[0m[35m=[0m[33m5[0m[33mw[0m [[96mprocess[0m [1;35mwhere[0m [33mtrue[0m] [[96mfile[0m [1;35mwhere[0m [33mtrue[0m]
+[34m   [0m[34m│[0m                             [1;31m━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql
+
+[1;31merror[kuery_parse_error][0m[1m: [0m[1mKibana ends an unquoted value at `not ` and rejects the query; quote the[0m
+  [1mvalue[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/elevated-tunnel-rule-0053.yaml\objects/rules/elevated-tunnel-rule-0053.yaml:40:19]8;;\
+[34m   [0m[34m│[0m
+[34m39 [0m[34m│[0m     query: |
+[34m40 [0m[34m│[0m       message[35m:[0m [32mcannot[0m [32mrun[0m
+[34m   [0m[34m│[0m                   [1;31m━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m try: "cannot run"
+
+[1;31merror[falco_operator_type][0m[1m: [0m[1m'contains' operator not supported for numeric filters (`proc.pid` is a[0m
+  [1mnumber (INT64))[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/encoded-beacon-rule-0124.yaml\objects/rules/encoded-beacon-rule-0124.yaml:68:36]8;;\
+[34m   [0m[34m│[0m
+[34m67 [0m[34m│[0m     condition: |
+[34m68 [0m[34m│[0m       [36mspawned_process[0m [1;35mand[0m proc.pid [35mcontains[0m [33m5[0m
+[34m   [0m[34m│[0m                                    [1;31m━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+[1;31merror[esql_unknown_type][0m[1m: [0m[1m`foo` is not an ES|QL type Elasticsearch can cast to; use a type such as[0m
+  [1m`keyword`, `long`, `double`, `ip`, or `datetime`[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/encoded-downgrade-rule-0170.yaml\objects/rules/encoded-downgrade-rule-0170.yaml:53:56]8;;\
+[34m   [0m[34m│[0m
+[34m52 [0m[34m│[0m     query: |
+[34m53 [0m[34m│[0m       [1;35mFROM[0m [96mlogs-*[0m [1;35mMETADATA[0m [33m_id[0m [1;35m|[0m [1;35mEVAL[0m x [35m=[0m process.pid[35m::[0m[96mfoo[0m
+[34m   [0m[34m│[0m                                                        [1;31m━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m try: bool
+
+[1;31merror[spl_parse_error][0m[1m: [0m[1mSPL syntax error: unexpected 'index'[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/encoded-dropper-rule-0057.yaml\objects/rules/encoded-dropper-rule-0057.yaml:55:7]8;;\
+[34m   [0m[34m│[0m
+[34m54 [0m[34m│[0m     query: |
+[34m55 [0m[34m│[0m       index[35m=[0mmain [1;35m|[0m eval x[35m=[0m(
+[34m   [0m[34m│[0m       [1;31m━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the SPL reference: https://docs.splunk.com/Documentation/Splunk/latest/SearchReference
+
+[1;31merror[kql_parse_error][0m[1m: [0m[1mKQL syntax error[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/encoded-loader-rule-0037.yaml\objects/rules/encoded-loader-rule-0037.yaml:50:7]8;;\
+[34m   [0m[34m│[0m
+[34m49 [0m[34m│[0m       [96mSecurityEvent[0m
+[34m50 [0m[34m│[0m       [1;35m|[0m where (
+[34m   [0m[34m│[0m       [1;31m━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the KQL reference: https://learn.microsoft.com/kusto/query/
+
+[1;31merror[kql_unknown_column][0m[1m: [0m[1m'EventIDD' is not a column of SecurityEvent[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/encoded-relay-rule-0052.yaml\objects/rules/encoded-relay-rule-0052.yaml:50:15]8;;\
+[34m   [0m[34m│[0m
+[34m49 [0m[34m│[0m       [96mSecurityEvent[0m
+[34m50 [0m[34m│[0m       [1;35m|[0m [1;35mwhere[0m EventIDD [35m==[0m [33m4688[0m
+[34m   [0m[34m│[0m               [1;31m━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m try: EventID
+
+[1;31merror[kql_type_mismatch][0m[1m: [0m[1m`>` is not defined for `ResultType`, a string column; Kusto rejects the[0m
+  [1mquery[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/lateral-dropper-rule-0046.yaml\objects/rules/lateral-dropper-rule-0046.yaml:60:26]8;;\
+[34m   [0m[34m│[0m
+[34m59 [0m[34m│[0m       [96mSigninLogs[0m
+[34m60 [0m[34m│[0m       [1;35m|[0m [1;35mwhere[0m ResultType [35m>[0m [33m5[0m
+[34m   [0m[34m│[0m                          [1;31m━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the KQL reference: https://learn.microsoft.com/kusto/query/
+
+[1;31merror[falco_field_argument][0m[1m: [0m[1m`proc.name` takes no argument, but `[1]` is given[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/lateral-dropper-rule-0108.yaml\objects/rules/lateral-dropper-rule-0108.yaml:55:27]8;;\
+[34m   [0m[34m│[0m
+[34m54 [0m[34m│[0m     condition: |
+[34m55 [0m[34m│[0m       [36mspawned_process[0m [1;35mand[0m proc.name[[32m1[0m] [35m=[0m [32mx[0m
+[34m   [0m[34m│[0m                           [1;31m━━━━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+[1;31merror[kql_control_command_unsupported][0m[1m: [0m[1mKQL control command '.show' is not valid in detections[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/lateral-harvest-rule-0043.yaml\objects/rules/lateral-harvest-rule-0043.yaml:55:7]8;;\
+[34m   [0m[34m│[0m
+[34m54 [0m[34m│[0m     query: |
+[34m55 [0m[34m│[0m       [31m.[0m[31mshow[0m [31mtables[0m
+[34m   [0m[34m│[0m       [1;31m━━━━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the KQL reference: https://learn.microsoft.com/kusto/query/
+
+[1;31merror[falco_unknown_event][0m[1m: [0m[1munknown event type opne[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/lateral-harvest-rule-0151.yaml\objects/rules/lateral-harvest-rule-0151.yaml:98:18]8;;\
+[34m   [0m[34m│[0m
+[34m97 [0m[34m│[0m     condition: |
+[34m98 [0m[34m│[0m       evt.type [35m=[0m [32mopne[0m [1;35mand[0m proc.name [35m=[0m [32mbash[0m
+[34m   [0m[34m│[0m                  [1;31m━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m did you mean 'open'?
+
+[1;31merror[falco_misplaced_list][0m[1m: [0m[1m`corpus_shells_397` is a list, not a macro: use it in a value list, `in[0m
+  [1m(corpus_shells_397)`[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/lateral-injection-rule-0162.yaml\objects/rules/lateral-injection-rule-0162.yaml:54:16]8;;\
+[34m   [0m[34m│[0m
+[34m53 [0m[34m│[0m       - [32msysdig-production[0m
+[34m54 [0m[34m│[0m     condition: [36mcorpus_shells_397[0m
+[34m   [0m[34m│[0m                [1;31m━━━━━━━━━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+[1;31merror[eql_unknown_function][0m[1m: [0m[1munknown EQL function `startsWth`[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/lateral-loader-rule-0182.yaml\objects/rules/lateral-loader-rule-0182.yaml:78:21]8;;\
+[34m   [0m[34m│[0m
+[34m77 [0m[34m│[0m     query: |
+[34m78 [0m[34m│[0m       [96mprocess[0m [1;35mwhere[0m [36mstartsWth[0m(process.name, [32m"a"[0m)
+[34m   [0m[34m│[0m                     [1;31m━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m did you mean 'startsWith'?
+
+[1;31merror[esql_unknown_function][0m[1m: [0m[1munknown ES|QL function `STARTSWITH`[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/persistent-injection-rule-0155.yaml\objects/rules/persistent-injection-rule-0155.yaml:60:43]8;;\
+[34m   [0m[34m│[0m
+[34m59 [0m[34m│[0m     query: |
+[34m60 [0m[34m│[0m       [1;35mFROM[0m [96mlogs-*[0m [1;35mMETADATA[0m [33m_id[0m [1;35m|[0m [1;35mEVAL[0m x [35m=[0m [36mSTARTSWITH[0m(process.name, [32m"b"[0m)
+[34m   [0m[34m│[0m                                           [1;31m━━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m did you mean 'STARTS_WITH'?
+
+[1;31merror[eql_function_arity][0m[1m: [0m[1m`length` takes 1 arguments, found 2[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/persistent-pivot-rule-0092.yaml\objects/rules/persistent-pivot-rule-0092.yaml:69:21]8;;\
+[34m   [0m[34m│[0m
+[34m68 [0m[34m│[0m     query: |
+[34m69 [0m[34m│[0m       [96mprocess[0m [1;35mwhere[0m [36mlength[0m(process.name, process.pid) [35m>[0m [33m1[0m
+[34m   [0m[34m│[0m                     [1;31m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql
+
+[1;31merror[eql_not_boolean][0m[1m: [0m[1minteger `1` is not a condition: EQL needs a boolean here (a comparison, a[0m
+  [1mpredicate, `true` or `false`)[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rapid-dropper-rule-0137.yaml\objects/rules/rapid-dropper-rule-0137.yaml:82:21]8;;\
+[34m   [0m[34m│[0m
+[34m81 [0m[34m│[0m     query: |
+[34m82 [0m[34m│[0m       [96mprocess[0m [1;35mwhere[0m [33m1[0m
+[34m   [0m[34m│[0m                     [1;31m━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql
+
+[1;31merror[falco_transformer][0m[1m: [0m[1mcan't add field transformer: type 'INT64' is not supported by 'tolower'[0m
+  [1mtransformer applied on field 'proc.pid'[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rapid-dropper-rule-0144.yaml\objects/rules/rapid-dropper-rule-0144.yaml:50:27]8;;\
+[34m   [0m[34m│[0m
+[34m49 [0m[34m│[0m     condition: |
+[34m50 [0m[34m│[0m       [36mspawned_process[0m [1;35mand[0m [36mtolower([0mproc.pid) [35m=[0m [33m1[0m
+[34m   [0m[34m│[0m                           [1;31m━━━━━━━━━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+[1;31merror[esql_parse_error][0m[1m: [0m[1mES|QL syntax error near `|`[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rapid-implant-rule-0080.yaml\objects/rules/rapid-implant-rule-0080.yaml:37:32]8;;\
+[34m   [0m[34m│[0m
+[34m36 [0m[34m│[0m     query: |
+[34m37 [0m[34m│[0m       [1;35mFROM[0m [96mlogs-*[0m [1;35mMETADATA[0m [33m_id[0m [1;35m|[0m [1;35mWHERE[0m (
+[34m   [0m[34m│[0m                                [1;31m━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the ES|QL reference: https://www.elastic.co/docs/reference/query-languages/esql
+
+[1;31merror[falco_unknown_field][0m[1m: [0m[1m`proc.name` is a field of the `syscall` source, not of `k8s_audit`[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rapid-implant-rule-0279.yaml\objects/rules/rapid-implant-rule-0279.yaml:57:54]8;;\
+[34m   [0m[34m│[0m
+[34m56 [0m[34m│[0m           - [32mdash[0m
+[34m57 [0m[34m│[0m     output: Shell spawned in a container (proc.name=%proc.name)
+[34m   [0m[34m│[0m                                                      [1;31m━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+[1;31merror[lucene_fuzzy][0m[1m: [0m[1mElasticsearch allows an edit distance of 0, 1, or 2, and rejects `~3`; use `~2`[0m
+  [1mor `~AUTO`[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rapid-injection-rule-0056.yaml\objects/rules/rapid-injection-rule-0056.yaml:68:23]8;;\
+[34m   [0m[34m│[0m
+[34m67 [0m[34m│[0m     query: |
+[34m68 [0m[34m│[0m       process.name[35m:[0m[32mfoo[0m[33m~3[0m
+[34m   [0m[34m│[0m                       [1;31m━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the Lucene query string reference:
+   [34m [0m        https://www.elastic.co/docs/reference/query-languages/query-dsl/
+   [34m [0m        query-dsl-query-string-query
+
+[1;31merror[kql_parse_error][0m[1m: [0m[1mKQL syntax error[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rapid-injection-rule-0097.yaml\objects/rules/rapid-injection-rule-0097.yaml:75:31]8;;\
+[34m   [0m[34m│[0m
+[34m74 [0m[34m│[0m     query: |
+[34m75 [0m[34m│[0m       search [35min[0m (SecurityEvent, [35m*[0m) [32m"error"[0m
+[34m   [0m[34m│[0m                               [1;31m━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the KQL reference: https://learn.microsoft.com/kusto/query/
+
+[1;31merror[falco_append_condition][0m[1m: [0m[1ma condition that starts with `and` or `or` only extends another[0m
+  [1mrule's: set `append_to_rule`, or remove the leading operator[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/remote-beacon-rule-0099.yaml\objects/rules/remote-beacon-rule-0099.yaml:37:7]8;;\
+[34m   [0m[34m│[0m
+[34m36 [0m[34m│[0m     condition: |
+[34m37 [0m[34m│[0m       [1;35mand[0m proc.name [35m=[0m [32mx[0m
+[34m   [0m[34m│[0m       [1;31m━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+[1;31merror[falco_invalid_regex][0m[1m: [0m[1minvalid regex pattern: error: unclosed group[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/remote-spray-rule-0117.yaml\objects/rules/remote-spray-rule-0117.yaml:42:43]8;;\
+[34m   [0m[34m│[0m
+[34m41 [0m[34m│[0m     condition: |
+[34m42 [0m[34m│[0m       [36mspawned_process[0m [1;35mand[0m proc.name [35mregex[0m [32m'('[0m
+[34m   [0m[34m│[0m                                           [1;31m━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+[1;31merror[eql_parse_error][0m[1m: [0m[1muse double quotes ["] for string literals, not single quotes ['][0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rogue-dropper-rule-0152.yaml\objects/rules/rogue-dropper-rule-0152.yaml:36:37]8;;\
+[34m   [0m[34m│[0m
+[34m35 [0m[34m│[0m     query: |
+[34m36 [0m[34m│[0m       [96mprocess[0m [1;35mwhere[0m process.name [35m==[0m [32m'cmd.exe'[0m
+[34m   [0m[34m│[0m                                     [1;31m━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql
+
+[1;31merror[spl_empty_command][0m[1m: [0m[1m`stats` with no arguments returns no results[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rogue-harvest-rule-0048.yaml\objects/rules/rogue-harvest-rule-0048.yaml:50:17]8;;\
+[34m   [0m[34m│[0m
+[34m49 [0m[34m│[0m     query: |
+[34m50 [0m[34m│[0m       index[35m=[0ma [1;35m|[0m [1;35mstats[0m
+[34m   [0m[34m│[0m                 [1;31m━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the SPL reference: https://docs.splunk.com/Documentation/Splunk/latest/SearchReference
+
+[1;31merror[esql_pattern][0m[1m: [0m[1mLIKE escapes only `*`, `?`, and `\`; a backslash before `b` fails. Write `\\`[0m
+  [1mfor a literal backslash[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rogue-implant-rule-0110.yaml\objects/rules/rogue-implant-rule-0110.yaml:54:58]8;;\
+[34m   [0m[34m│[0m
+[34m53 [0m[34m│[0m     query: |
+[34m54 [0m[34m│[0m       [1;35mFROM[0m [96mlogs-*[0m [1;35mMETADATA[0m [33m_id[0m [1;35m|[0m [1;35mWHERE[0m process.name [1;35mLIKE[0m [32m"a\\b"[0m
+[34m   [0m[34m│[0m                                                          [1;31m━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the ES|QL reference: https://www.elastic.co/docs/reference/query-languages/esql
+
+[1;31merror[eql_field_comparison][0m[1m: [0m[1mElasticsearch EQL cannot compare a field with another field (`==`); one[0m
+  [1mside must be a constant[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rogue-injection-rule-0062.yaml\objects/rules/rogue-injection-rule-0062.yaml:43:21]8;;\
+[34m   [0m[34m│[0m
+[34m42 [0m[34m│[0m     query: |
+[34m43 [0m[34m│[0m       [96mprocess[0m [1;35mwhere[0m process.pid [35m==[0m process.parent.pid
+[34m   [0m[34m│[0m                     [1;31m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql
+
+[1;31merror[spl_command_without_pipe][0m[1m: [0m[1mthe search starts with the command name `stats` but no `|`; Splunk[0m
+  [1msearches for the word `stats` instead of running the command[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rogue-loader-rule-0040.yaml\objects/rules/rogue-loader-rule-0040.yaml:95:7]8;;\
+[34m   [0m[34m│[0m
+[34m94 [0m[34m│[0m     query: |
+[34m95 [0m[34m│[0m       [1;35mstats[0m [36mcount[0m [1;35mby[0m host
+[34m   [0m[34m│[0m       [1;31m━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m try: | stats
+
+[1;31merror[falco_parse_error][0m[1m: [0m[1mexpected a string value or a field with a valid transformer: 'val',[0m
+  [1m'tolower', 'toupper', 'b64', 'basename', 'len', 'join', 'concat', 'getopt' (libsinsp)[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rogue-loader-rule-0126.yaml\objects/rules/rogue-loader-rule-0126.yaml:58:37]8;;\
+[34m   [0m[34m│[0m
+[34m57 [0m[34m│[0m     condition: |
+[34m58 [0m[34m│[0m       [36mspawned_process[0m [1;35mand[0m proc.name [35m=[0m
+[34m   [0m[34m│[0m                                     [1;31m━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+[1;31merror[eql_argument_type][0m[1m: [0m[1mthe first argument of `length` must be a string, found integer `1`[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/scheduled-beacon-rule-0047.yaml\objects/rules/scheduled-beacon-rule-0047.yaml:76:28]8;;\
+[34m   [0m[34m│[0m
+[34m75 [0m[34m│[0m     query: |
+[34m76 [0m[34m│[0m       [96mprocess[0m [1;35mwhere[0m [36mlength[0m([33m1[0m) [35m>[0m [33m0[0m
+[34m   [0m[34m│[0m                            [1;31m━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql
+
+[1;31merror[falco_output_syntax][0m[1m: [0m[1minvalid formatting syntax: formatting cannot end with a % (libsinsp)[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/scheduled-beacon-rule-0171.yaml\objects/rules/scheduled-beacon-rule-0171.yaml:59:30]8;;\
+[34m   [0m[34m│[0m
+[34m58 [0m[34m│[0m           - [32mksh[0m
+[34m59 [0m[34m│[0m     output: Shell %proc.name %
+[34m   [0m[34m│[0m                              [1;31m━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+[1;31merror[spl_search_operator][0m[1m: [0m[1m'==' is not a search operator: Splunk accepts it but the comparison[0m
+  [1mnever matches; use '='[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/scheduled-implant-rule-0065.yaml\objects/rules/scheduled-implant-rule-0065.yaml:85:22]8;;\
+[34m   [0m[34m│[0m
+[34m84 [0m[34m│[0m     query: |
+[34m85 [0m[34m│[0m       index[35m=[0mmain host[35m==[0mx
+[34m   [0m[34m│[0m                      [1;31m━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m try: =
+
+[1;31merror[kql_unknown_operator][0m[1m: [0m[1munknown tabular operator 'frobnicate'[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/scheduled-injection-rule-0061.yaml\objects/rules/scheduled-injection-rule-0061.yaml:58:9]8;;\
+[34m   [0m[34m│[0m
+[34m57 [0m[34m│[0m       [96mSecurityEvent[0m
+[34m58 [0m[34m│[0m       [1;35m|[0m frobnicate
+[34m   [0m[34m│[0m         [1;31m━━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the KQL reference: https://learn.microsoft.com/kusto/query/
+
+[1;31merror[esql_unknown_command][0m[1m: [0m[1munknown ES|QL command `WEHRE`; Elasticsearch rejects it, and Kibana 9.4[0m
+  [1mand 9.5 run a non-aggregating rule without it[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/scheduled-injection-rule-0125.yaml\objects/rules/scheduled-injection-rule-0125.yaml:52:34]8;;\
+[34m   [0m[34m│[0m
+[34m51 [0m[34m│[0m     query: |
+[34m52 [0m[34m│[0m       [1;35mFROM[0m [96mlogs-*[0m [1;35mMETADATA[0m [33m_id[0m [1;35m|[0m [31mWEHRE[0m [32mprocess.name[0m [32m==[0m [32m"x"[0m
+[34m   [0m[34m│[0m                                  [1;31m━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m did you mean 'WHERE'?
+
+[1;31merror[falco_unknown_field][0m[1m: [0m[1m`proc.nmae` is not a Falco field of the `syscall` source[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/scheduled-loader-rule-0153.yaml\objects/rules/scheduled-loader-rule-0153.yaml:42:27]8;;\
+[34m   [0m[34m│[0m
+[34m41 [0m[34m│[0m     condition: |
+[34m42 [0m[34m│[0m       [36mspawned_process[0m [1;35mand[0m proc.nmae [35m=[0m [32mbash[0m
+[34m   [0m[34m│[0m                           [1;31m━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m try: proc.name
+
+[1;31merror[lucene_parse_error][0m[1m: [0m[1mLucene syntax error: missing `)`[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/scheduled-tunnel-rule-0071.yaml\objects/rules/scheduled-tunnel-rule-0071.yaml:48:7]8;;\
+[34m   [0m[34m│[0m
+[34m47 [0m[34m│[0m     query: |
+[34m48 [0m[34m│[0m       name[35m:[0m([32ma[0m [1;35mOR[0m [32mb[0m
+[34m   [0m[34m│[0m       [1;31m━━━━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the Lucene query string reference:
+   [34m [0m        https://www.elastic.co/docs/reference/query-languages/query-dsl/
+   [34m [0m        query-dsl-query-string-query
+
+[1;31merror[falco_rhs_field][0m[1m: [0m[1mfield 'proc.name' has type 'a string (CHARBUF)' while the right-hand side[0m
+  [1mfield 'proc.pid' has incompatible type 'a number (INT64)'[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/silent-beacon-rule-0135.yaml\objects/rules/silent-beacon-rule-0135.yaml:57:39]8;;\
+[34m   [0m[34m│[0m
+[34m56 [0m[34m│[0m     condition: |
+[34m57 [0m[34m│[0m       [36mspawned_process[0m [1;35mand[0m proc.name [35m=[0m [36mval([0mproc.pid)
+[34m   [0m[34m│[0m                                       [1;31m━━━━━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+[1;31merror[kql_parse_error][0m[1m: [0m[1mKQL syntax error[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/staged-injection-rule-0106.yaml\objects/rules/staged-injection-rule-0106.yaml:58:7]8;;\
+[34m   [0m[34m│[0m
+[34m57 [0m[34m│[0m     query: |
+[34m58 [0m[34m│[0m       union [35m*[0m [1;35m|[0m take [33m1[0m
+[34m   [0m[34m│[0m       [1;31m━━━━━━━━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the KQL reference: https://learn.microsoft.com/kusto/query/
+

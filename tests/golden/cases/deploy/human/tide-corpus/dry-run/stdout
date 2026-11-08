@@ -1,0 +1,43 @@
+[1mDeploy plan[0m[1;2m · strategy [0m[1mPREVIEW[0m[1;2m · 9 platforms, 2 tenants[0m[1;2m · dry run, nothing is sent[0m
+
+[1msentinel[0m[2m · 0 tenants[0m
+  [1;32m+ create or update[0m  [1mSentinel KQL Rule[0m     [2m…000000000001[0m  [2mstatus STAGING[0m
+  [1;32m+ create or update[0m  [1mStaging Promote Rule[0m  [2m…000000000008[0m  [2mstatus STAGING[0m
+
+[1mdefender_for_endpoint[0m[2m · 0 tenants[0m
+  [1;32m+ create[0m  [1mDefender KQL Rule[0m  [2m…000000000002[0m  [2mstatus STAGING[0m
+
+[1msplunk[0m[2m · 0 tenants[0m
+  [1;32m+ create or update[0m  [1mSplunk SPL Rule[0m  [2m…000000000003[0m  [2mstatus STAGING[0m
+
+[1msentinel_one[0m[2m · 0 tenants[0m
+  [1;32m+ create[0m  [1mSentinelOne S1QL Rule[0m  [2m…000000000004[0m  [2mstatus STAGING[0m
+
+[1mcarbon_black_cloud[0m[2m · 0 tenants[0m
+  [1;32m+ create or update[0m  [1mCarbon Black Lucene Rule[0m  [2m…000000000005[0m  [2mstatus STAGING[0m
+
+[1mcrowdstrike[0m[2m · 0 tenants[0m
+  [1;32m+ create[0m  [1mCrowdStrike Deploy Rule[0m  [2m…000000000006[0m  [2mstatus STAGING[0m
+
+[1mharfanglab[0m[2m · 0 tenants[0m
+  [1;32m+ create or update[0m  [1mHarfangLab Deploy Rule[0m  [2m…000000000007[0m  [2mstatus STAGING[0m
+
+[1melastic[0m[2m · 1 tenant[0m
+  [1mstaging[0m
+    [1;32m+ create or update[0m  [1mElastic KQL Rule[0m  [2m…000000000009[0m  [2mstatus STAGING[0m
+
+[1msysdig[0m[2m · 1 tenant[0m
+  [1mstaging[0m
+    [1;32m+ create[0m  [1mSysdig Falco Rule[0m  [2m…0000005d1a90[0m  [2mstatus STAGING[0m
+
+[1mPlan:[0m 4 to create, 0 to update, 6 to create or update, 0 to disable, 0 to delete
+  [1;36mhelp:[0m add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/sentinel.toml;
+        add (or uncomment) a [[tenants]] entry in
+        .opentide/configurations/platforms/defender_for_endpoint.toml; add (or uncomment) a
+        [[tenants]] entry in .opentide/configurations/platforms/splunk.toml; add (or uncomment) a
+        [[tenants]] entry in .opentide/configurations/platforms/sentinel_one.toml; add (or
+        uncomment) a [[tenants]] entry in
+        .opentide/configurations/platforms/carbon_black_cloud.toml; add (or uncomment) a [[tenants]]
+        entry in .opentide/configurations/platforms/crowdstrike.toml; add (or uncomment) a
+        [[tenants]] entry in .opentide/configurations/platforms/harfanglab.toml
+[2mdry run, nothing sent[0m

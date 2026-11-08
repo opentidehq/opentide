@@ -1,0 +1,24 @@
+                                                                                
+ Usage: opentide info [OPTIONS] [section] [name]                                
+                                                                                
+ Show repository and platform information                                       
+                                                                                
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│   section      <str>                                                         │
+│   name         <str>  Vocabulary to inspect, with the vocab section (e.g.    │
+│                       surface)                                               │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --platform         PLATFORM  Detection platform: sentinel, splunk,           │
+│                              crowdstrike, defender_for_endpoint,             │
+│                              sentinel_one, carbon_black_cloud, harfanglab,   │
+│                              elastic, sysdig                                 │
+│ --technique        <str>     ATT&CK technique ID for the coverage section    │
+│                              (T1059)                                         │
+│ --strict                     Exit non-zero when any object failed to load    │
+│ --help                       Show this message and exit.                     │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+ Examples
+   $ opentide info
+   $ opentide info --platform sentinel

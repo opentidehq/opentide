@@ -1,0 +1,4 @@
+error: Missing command.
+  usage: opentide migrate [OPTIONS] COMMAND [ARGS]...
+  help: run 'opentide migrate --help'
+tip: add --json for machine-readable output

@@ -1,0 +1,9 @@
+                                                                                
+ Usage: opentide generate exports objects [OPTIONS]                             
+                                                                                
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+ Examples
+   $ opentide generate exports objects

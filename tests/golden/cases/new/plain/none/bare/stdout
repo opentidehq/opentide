@@ -1,0 +1,21 @@
+                                                                                
+ Usage: opentide new [OPTIONS] COMMAND [ARGS]...                                
+                                                                                
+ Scaffold a threat, objective or rule from its template                         
+                                                                                
+ The new file gets a fresh UUID, today's date, your git author and the          
+ catalogue's organisation, and is named the way opentide lint expects. Required 
+ values nobody has chosen yet are placeholders, listed in the output: replace   
+ them, then run opentide validate --file on the path.                           
+                                                                                
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ threat     Scaffold a threat                                                 │
+│ objective  Scaffold a detection objective                                    │
+│ rule       Scaffold a detection rule                                         │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+ Examples
+   $ opentide new threat --name "Credential Dumping"

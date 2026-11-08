@@ -1,0 +1,12 @@
+  [1;2mversion[0m  0.23.0
+[1;2mplatforms[0m  [1mCarbon Black Cloud[0m               [32menabled[0m[2m · [0m[2mdeploy, validate, query[0m
+           [1mCrowdStrike Falcon[0m               [32menabled[0m[2m · [0m[2mdeploy, query[0m
+           [1mMicrosoft Defender for Endpoint[0m  [32menabled[0m[2m · [0m[2mdeploy, validate, query[0m
+           [1mElastic Security[0m                 [32menabled[0m[2m · [0m[2mdeploy, validate, query[0m
+           [1mHarfangLab[0m                       [32menabled[0m[2m · [0m[2mdeploy, query[0m
+           [1mMicrosoft Sentinel[0m               [32menabled[0m[2m · [0m[2mdeploy, validate, query[0m
+           [1mSentinelOne[0m                      [32menabled[0m[2m · [0m[2mdeploy, validate, query[0m
+           [1mSplunk Enterprise Security[0m       [32menabled[0m[2m · [0m[2mdeploy, validate, query[0m
+           [1mSysdig Secure[0m                    [32menabled[0m[2m · [0m[2mdeploy[0m
+[1;33m![0m 592 rules · 119 threats · 60 objectives · 8 load errors
+[1;36m→[0m [1mopentide validate[0m[2m · [0m[2mshow where each object failed to load[0m

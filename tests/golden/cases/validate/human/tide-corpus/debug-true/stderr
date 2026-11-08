@@ -1,0 +1,47 @@
+[?25l<LIVE>[2m00:00:00 [0m[2;35mdebug: [0mResolving vocab enums · vocab: criticality::1.0
+[2m00:00:00 [0m[2;35mdebug: [0mResolving vocab enums · vocab: tlp::1.0
+[2m00:00:00 [0m[2;35mdebug: [0mResolving vocab enums · vocab: severity::1.0
+[2m00:00:00 [0m[2;35mdebug: [0mResolving vocab enums · vocab: impact::1.0
+[2m00:00:00 [0m[2;35mdebug: [0mResolving vocab enums · vocab: leverage::1.0
+[2m00:00:00 [0m[2;35mdebug: [0mResolving vocab enums · vocab: viability::1.0
+[2m00:00:00 [0m[2;35mdebug: [0mResolving vocab enums · vocab: surface::1.0
+[2m00:00:00 [0m[2;35mdebug: [0mResolving vocab enums · vocab: att&ck::1.2
+[2m00:00:00 [0m[2;35mdebug: [0mResolving vocab enums · vocab: actors::1.1
+[2m00:00:00 [0m[2;35mdebug: [0mResolving vocab enums · vocab: chaining_relations
+[2m00:00:00 [0m[2;35mdebug: [0mResolving vocab enums · vocab: detection.types::1.0
+[2m00:00:00 [0m[2;35mdebug: [0mResolving vocab enums · vocab: alert_severity::1.0
+[2m00:00:00 [0m[2;35mdebug: [0mResolving vocab enums · vocab: detection.methodology::1.0
+[2m00:00:00 [0m[2;35mdebug: [0mResolving vocab enums · vocab: signal.entities::1.0
+[2m00:00:00 [0m[2;35mdebug: [0mResolving vocab enums · vocab: detection.composition::1.0
+[2m00:00:00 [0m[2;35mdebug: [0mResolving vocab enums · vocab: objective
+[2m00:00:00 [0m[34minfo: [0mFinal compiled query · arg0: SecurityEvent
+| where EventID == 4688
+| take 1
+
+[2m00:00:00 [0m[34minfo: [0mEvent grouping configuration · detail: SingleAlert
+[2m00:00:00 [0m[34minfo: [0mAlert enabled · detail: True
+[2m00:00:00 [0m[34minfo: [0mAlert grouping enabled · detail: False
+[2m00:00:00 [0m[34minfo: [0mCompiled rule · detail: {"kind": "Scheduled", "properties": {"enabled": true, 
+"query": "SecurityEvent\n| where EventID == 4688\n| take 1\n", "suppressionEnabled": false, 
+"suppressionDuration": "PT01H00M00S", "queryFrequency": "PT01H00M00S", "queryPeriod": "PT02H00M00S",
+"alertDetailsOverride": {"alertDisplayNameFormat": "Sentinel KQL Rule"}, "eventGroupingSettings": 
+{"aggregationKind": "SingleAlert"}, "incidentConfiguration": {"createIncident": true, 
+"groupingConfiguration": {"enabled": false, "lookbackDuration": "PT01H00M00S", 
+"reopenClosedIncident": false, "matchingMethod": "AllEntities"}}, "severity": "High", "displayName":
+"Sentinel KQL Rule", "description": "Simulated Sentinel rule for CLI E2E corpus.\n", "tactics": 
+["Execution"], "techniques": ["T1059"]}}
+[2m00:00:00 [0m[34minfo: [0mFinal compiled query · arg0: SecurityEvent | take 1
+
+[2m00:00:00 [0m[34minfo: [0mEvent grouping configuration · detail: SingleAlert
+[2m00:00:00 [0m[34minfo: [0mAlert enabled · detail: True
+[2m00:00:00 [0m[34minfo: [0mAlert grouping enabled · detail: False
+[2m00:00:00 [0m[34minfo: [0mCompiled rule · detail: {"kind": "Scheduled", "properties": {"enabled": true, 
+"query": "SecurityEvent | take 1\n", "suppressionEnabled": false, "suppressionDuration": 
+"PT01H00M00S", "queryFrequency": "PT01H00M00S", "queryPeriod": "PT02H00M00S", 
+"alertDetailsOverride": {"alertDisplayNameFormat": "Staging Promote Rule"}, "eventGroupingSettings":
+{"aggregationKind": "SingleAlert"}, "incidentConfiguration": {"createIncident": true, 
+"groupingConfiguration": {"enabled": false, "lookbackDuration": "PT01H00M00S", 
+"reopenClosedIncident": false, "matchingMethod": "AllEntities"}}, "severity": "Medium", 
+"displayName": "Staging Promote Rule", "description": "Rule with higher metadata.version for 
+mutate/promote E2E tests.\n", "tactics": ["Execution"], "techniques": ["T1059"]}}
+[?25h[1A[2K

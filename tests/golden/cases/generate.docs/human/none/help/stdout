@@ -1,0 +1,24 @@
+[1m                                                                                                    [0m
+[1m [0m[1;33mUsage: [0m[1mopentide generate docs [OPTIONS] COMMAND [ARGS]...[0m[1m                                         [0m[1m [0m
+[1m                                                                                                    [0m
+ Generate markdown documentation for detection objects                                              
+                                                                                                    
+[2m╭─[0m[2m Options [0m[2m───────────────────────────────────────────────────────────────────────────────────────[0m[2m─╮[0m
+[2m│[0m [1;36m-[0m[1;36m-output[0m            [1;2;33m<[0m[1;33mstr[0m[1;2;33m>[0m  Write the pages here instead of the configured docs folder            [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-flavor[0m            [1;2;33m<[0m[1;33mstr[0m[1;2;33m>[0m  Markdown flavour: github, gitlab, azure_devops or generic             [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-rules[0m             [1;33m     [0m  Only rule pages; combine with [1;36m-[0m[1;36m-threats[0m, [1;36m-[0m[1;36m-objectives[0m                 [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-threats[0m           [1;33m     [0m  Only threat pages; combine with [1;36m-[0m[1;36m-rules[0m, [1;36m-[0m[1;36m-objectives[0m                 [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-objectives[0m        [1;33m     [0m  Only objective pages; combine with [1;36m-[0m[1;36m-rules[0m, [1;36m-[0m[1;36m-threats[0m                 [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-changed[0m           [1;33m     [0m  Regenerate only the pages of objects git reports as changed           [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-help[0m              [1;33m     [0m  Show this message and exit.                                           [2m│[0m
+[2m╰──────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+[2m╭─[0m[2m Commands [0m[2m──────────────────────────────────────────────────────────────────────────────────────[0m[2m─╮[0m
+[2m│[0m [1;36mrules     [0m[1;36m [0m Generate rule documentation                                                          [2m│[0m
+[2m│[0m [1;36mobjectives[0m[1;36m [0m Generate objective documentation                                                     [2m│[0m
+[2m│[0m [1;36mthreats   [0m[1;36m [0m Generate threat documentation                                                        [2m│[0m
+[2m│[0m [1;36mindex     [0m[1;36m [0m Generate the documentation index pages                                               [2m│[0m
+[2m╰──────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+
+[2m Examples[0m
+   [1m$ opentide generate docs[0m
+   [1m$ opentide generate docs --changed[0m

@@ -1,0 +1,19 @@
+                                                                                
+ Usage: opentide share retract [OPTIONS]                                        
+                                                                                
+ Unpublish a shared event, or delete it when `--delete --yes` is set.           
+                                                                                
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --target         <str>  Destination block name. Repeatable.                  │
+│ --uuid           <str>  Limit to these object UUIDs.                         │
+│ --type           <str>  Limit to threat, objective, or rule.                 │
+│ --file           <str>  Limit to these object files.                         │
+│ --delete                Delete the remote event instead of unpublishing it.  │
+│ --yes                   Confirm --delete.                                    │
+│ --workers        <int>  Parallel object workers for one destination.         │
+│                         [default: 1]                                         │
+│ --help                  Show this message and exit.                          │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+ Examples
+   $ opentide share retract --uuid <uuid>

@@ -1,0 +1,4 @@
+[1;33mwarning:[0m This folder is not a git repository yet, so the pipeline targets 'main'; create it on that
+         branch with 'git init -b main', or write the pipeline for another one with 'opentide setup
+         ci <provider> --default-branch <branch>'.
+[1;33mwarning:[0m Not a Git repository; wrote hook files without installing .git/hooks.

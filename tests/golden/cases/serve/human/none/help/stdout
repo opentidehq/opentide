@@ -1,0 +1,17 @@
+[1m                                                                                                    [0m
+[1m [0m[1;33mUsage: [0m[1mopentide serve [OPTIONS][0m[1m                                                                   [0m[1m [0m
+[1m                                                                                                    [0m
+ Run CLI commands in one warm process, for editors                                                  
+                                                                                                    
+ [2mJSON-RPC 2.0 on stdio, one message per line. Each run request executes a[0m                           
+ [2mcommand as opentide [0m[1;2;36m-[0m[1;2;36m-json[0m[2m would and answers with its document and exit[0m                            
+ [2mcode, without starting Python and rebuilding the registry each time. The[0m                           
+ [2meditor owns the process: it ends on exit or when stdin closes. stdout[0m                              
+ [2mcarries the protocol only; logs go to stderr.[0m                                                      
+                                                                                                    
+[2m╭─[0m[2m Options [0m[2m───────────────────────────────────────────────────────────────────────────────────────[0m[2m─╮[0m
+[2m│[0m [1;36m-[0m[1;36m-help[0m          Show this message and exit.                                                      [2m│[0m
+[2m╰──────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+
+[2m Examples[0m
+   [1m$ opentide serve[0m

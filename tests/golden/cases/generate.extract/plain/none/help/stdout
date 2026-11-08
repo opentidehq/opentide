@@ -1,0 +1,16 @@
+                                                                                
+ Usage: opentide generate extract [OPTIONS] COMMAND [ARGS]...                   
+                                                                                
+ Import rules from external platforms                                           
+                                                                                
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ sentinel  Import Sentinel analytics rules                                    │
+│ defender  Import Defender custom detections                                  │
+│ elastic   Import Elastic Security detection rules                            │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+ Examples
+   $ opentide generate extract sentinel

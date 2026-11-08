@@ -1,0 +1,20 @@
+                                                                                
+ Usage: opentide generate explorer [OPTIONS]                                    
+                                                                                
+ Write explorer.bundle.json and explorer.search.json under .opentide/exports/.  
+                                                                                
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --include-visibility               Also write explorer.visibility.json: the  │
+│                                    log sources visibility.toml declares and  │
+│                                    the rules that use them. Off by default:  │
+│                                    it shows what you cannot see. A run       │
+│                                    without it removes the file               │
+│ --visibility-tlp            <str>  The TLP the explorer shows on the         │
+│                                    Visibility view: clear, green, amber,     │
+│                                    amber+strict or red                       │
+│                                    [default: amber]                          │
+│ --help                             Show this message and exit.               │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+ Examples
+   $ opentide generate explorer

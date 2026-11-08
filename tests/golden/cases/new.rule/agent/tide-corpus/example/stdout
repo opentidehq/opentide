@@ -1,0 +1,3 @@
+✓ Created Objects/Detection Rules/suspicious-lsass-access.yaml · 4 placeholders to replace
+  note: each ends in '# opentide:placeholder'; opentide lint lists them
+→ opentide validate --file Objects/Detection Rules/suspicious-lsass-access.yaml · check it

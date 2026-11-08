@@ -109,9 +109,7 @@ pub fn run_case(case: &Case, ctx: &RunContext) -> Result<Recording> {
     );
     let mut literals = path_literals(&paths);
     if let Some(release) = &ctx.kernel_release {
-        // The crash handler's `os` fact and its issue link (URL-encoded around
-        // it): `Linux <release> (x86_64)`.
-        literals.push((release.clone(), "<KERNEL>".to_owned()));
+        literals.extend(kernel_literals(release));
     }
     let volatile = Volatile {
         literals,
@@ -354,6 +352,25 @@ pub fn kernel_release() -> Option<String> {
     (!release.is_empty()).then(|| release.to_owned())
 }
 
+/// The crash handler's `os` fact, `Linux <release> (<machine>)`, as it
+/// prints it and as its pre-filled issue link encodes it: only in that
+/// context, so a short release (`6.1.0`) never replaces a version elsewhere.
+pub fn kernel_literals(release: &str) -> Vec<(String, String)> {
+    let encoded = release.replace('+', "%2B");
+    let mut out = Vec::new();
+    for (space, paren, rel) in [
+        (" ", "(", release),
+        ("+", "%28", encoded.as_str()),
+        ("%20", "%28", encoded.as_str()),
+    ] {
+        out.push((
+            format!("Linux{space}{rel}{space}{paren}"),
+            format!("Linux{space}<KERNEL>{space}{paren}"),
+        ));
+    }
+    out
+}
+
 /// Where case directories go: `/tmp` on Unix whatever `TMPDIR` says, so an
 /// absolute path in an output has the same length on every host (Rich wraps
 /// lines by length); the system's temporary directory elsewhere.
@@ -370,4 +387,26 @@ pub fn git_version() -> Option<String> {
     let output = Command::new("git").arg("--version").output().ok()?;
     let text = String::from_utf8(output.stdout).ok()?;
     text.split_whitespace().nth(2).map(str::to_owned)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn kernel_release_only_in_its_context() {
+        let literals = kernel_literals("6.1.0+x");
+        let mut normaliser = Normaliser::new(
+            &Volatile {
+                literals,
+                ..Volatile::default()
+            },
+            &[],
+            [],
+        );
+        assert_eq!(
+            normaliser.text("os: Linux 6.1.0+x (x86_64)\nhttps://i?os=Linux+6.1.0%2Bx+%28x86_64%29 rule version 6.1.0+x"),
+            "os: Linux <KERNEL> (x86_64)\nhttps://i?os=Linux+<KERNEL>+%28x86_64%29 rule version 6.1.0+x"
+        );
+    }
 }

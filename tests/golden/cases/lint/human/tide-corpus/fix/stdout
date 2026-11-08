@@ -1,0 +1,157 @@
+[1;33mwarning[filename_mismatch][0m[1m: [0m[1mFilename 'objective-0001-credential-access.yaml' does not match[0m
+  [1mslugify(name)='credential-access-objective'[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/objectives/credential-access-objective.yaml\objects/objectives/credential-access-objective.yaml]8;;\
+  [34m╰─[0m [1;34mnote:[0m renamed from objects/objectives/objective-0001-credential-access.yaml
+
+[1;34mnote[metadata_recommended][0m[1m: [0m[1mRecommended metadata missing: author, organisation[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/objectives/credential-access-objective.yaml\objects/objectives/credential-access-objective.yaml:3:1]8;;\
+[34m  [0m[34m│[0m
+[34m3 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m [1;34m━━━━━━━━[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m add the missing keys under metadata
+
+[1;33mwarning[filename_mismatch][0m[1m: [0m[1mFilename 'rule-0005-carbon-black-lucene.yaml' does not match[0m
+  [1mslugify(name)='carbon-black-lucene-rule'[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/carbon-black-lucene-rule.yaml\objects/rules/carbon-black-lucene-rule.yaml]8;;\
+  [34m╰─[0m [1;34mnote:[0m renamed from objects/rules/rule-0005-carbon-black-lucene.yaml
+
+[1;34mnote[metadata_recommended][0m[1m: [0m[1mRecommended metadata missing: author, organisation[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/carbon-black-lucene-rule.yaml\objects/rules/carbon-black-lucene-rule.yaml:3:1]8;;\
+[34m  [0m[34m│[0m
+[34m3 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m [1;34m━━━━━━━━[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m add the missing keys under metadata
+
+[1;33mwarning[filename_mismatch][0m[1m: [0m[1mFilename 'rule-0006-crowdstrike-deploy-only.yaml' does not match[0m
+  [1mslugify(name)='crowdstrike-deploy-rule'[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/crowdstrike-deploy-rule.yaml\objects/rules/crowdstrike-deploy-rule.yaml]8;;\
+  [34m╰─[0m [1;34mnote:[0m renamed from objects/rules/rule-0006-crowdstrike-deploy-only.yaml
+
+[1;34mnote[metadata_recommended][0m[1m: [0m[1mRecommended metadata missing: author, organisation[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/crowdstrike-deploy-rule.yaml\objects/rules/crowdstrike-deploy-rule.yaml:3:1]8;;\
+[34m  [0m[34m│[0m
+[34m3 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m [1;34m━━━━━━━━[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m add the missing keys under metadata
+
+[1;33mwarning[filename_mismatch][0m[1m: [0m[1mFilename 'rule-0002-defender-kql.yaml' does not match[0m
+  [1mslugify(name)='defender-kql-rule'[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/defender-kql-rule.yaml\objects/rules/defender-kql-rule.yaml]8;;\
+  [34m╰─[0m [1;34mnote:[0m renamed from objects/rules/rule-0002-defender-kql.yaml
+
+[1;34mnote[metadata_recommended][0m[1m: [0m[1mRecommended metadata missing: author, organisation[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/defender-kql-rule.yaml\objects/rules/defender-kql-rule.yaml:3:1]8;;\
+[34m  [0m[34m│[0m
+[34m3 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m [1;34m━━━━━━━━[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m add the missing keys under metadata
+
+[1;33mwarning[filename_mismatch][0m[1m: [0m[1mFilename 'rule-0009-elastic-kql.yaml' does not match[0m
+  [1mslugify(name)='elastic-kql-rule'[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/elastic-kql-rule.yaml\objects/rules/elastic-kql-rule.yaml]8;;\
+  [34m╰─[0m [1;34mnote:[0m renamed from objects/rules/rule-0009-elastic-kql.yaml
+
+[1;34mnote[metadata_recommended][0m[1m: [0m[1mRecommended metadata missing: author, organisation[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/elastic-kql-rule.yaml\objects/rules/elastic-kql-rule.yaml:3:1]8;;\
+[34m  [0m[34m│[0m
+[34m3 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m [1;34m━━━━━━━━[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m add the missing keys under metadata
+
+[1;33mwarning[filename_mismatch][0m[1m: [0m[1mFilename 'rule-0007-harfanglab-deploy-only.yaml' does not match[0m
+  [1mslugify(name)='harfanglab-deploy-rule'[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/harfanglab-deploy-rule.yaml\objects/rules/harfanglab-deploy-rule.yaml]8;;\
+  [34m╰─[0m [1;34mnote:[0m renamed from objects/rules/rule-0007-harfanglab-deploy-only.yaml
+
+[1;34mnote[metadata_recommended][0m[1m: [0m[1mRecommended metadata missing: author, organisation[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/harfanglab-deploy-rule.yaml\objects/rules/harfanglab-deploy-rule.yaml:3:1]8;;\
+[34m  [0m[34m│[0m
+[34m3 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m [1;34m━━━━━━━━[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m add the missing keys under metadata
+
+[1;33mwarning[filename_mismatch][0m[1m: [0m[1mFilename 'rule-0001-sentinel-kql.yaml' does not match[0m
+  [1mslugify(name)='sentinel-kql-rule'[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/sentinel-kql-rule.yaml\objects/rules/sentinel-kql-rule.yaml]8;;\
+  [34m╰─[0m [1;34mnote:[0m renamed from objects/rules/rule-0001-sentinel-kql.yaml
+
+[1;34mnote[metadata_recommended][0m[1m: [0m[1mRecommended metadata missing: author, organisation[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/sentinel-kql-rule.yaml\objects/rules/sentinel-kql-rule.yaml:3:1]8;;\
+[34m  [0m[34m│[0m
+[34m3 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m [1;34m━━━━━━━━[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m add the missing keys under metadata
+
+[1;33mwarning[filename_mismatch][0m[1m: [0m[1mFilename 'rule-0004-sentinel-one-s1ql.yaml' does not match[0m
+  [1mslugify(name)='sentinelone-s1ql-rule'[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/sentinelone-s1ql-rule.yaml\objects/rules/sentinelone-s1ql-rule.yaml]8;;\
+  [34m╰─[0m [1;34mnote:[0m renamed from objects/rules/rule-0004-sentinel-one-s1ql.yaml
+
+[1;34mnote[metadata_recommended][0m[1m: [0m[1mRecommended metadata missing: author, organisation[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/sentinelone-s1ql-rule.yaml\objects/rules/sentinelone-s1ql-rule.yaml:3:1]8;;\
+[34m  [0m[34m│[0m
+[34m3 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m [1;34m━━━━━━━━[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m add the missing keys under metadata
+
+[1;33mwarning[filename_mismatch][0m[1m: [0m[1mFilename 'rule-0003-splunk-spl.yaml' does not match[0m
+  [1mslugify(name)='splunk-spl-rule'[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/splunk-spl-rule.yaml\objects/rules/splunk-spl-rule.yaml]8;;\
+  [34m╰─[0m [1;34mnote:[0m renamed from objects/rules/rule-0003-splunk-spl.yaml
+
+[1;34mnote[metadata_recommended][0m[1m: [0m[1mRecommended metadata missing: author, organisation[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/splunk-spl-rule.yaml\objects/rules/splunk-spl-rule.yaml:3:1]8;;\
+[34m  [0m[34m│[0m
+[34m3 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m [1;34m━━━━━━━━[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m add the missing keys under metadata
+
+[1;33mwarning[filename_mismatch][0m[1m: [0m[1mFilename 'rule-0008-staging-promote.yaml' does not match[0m
+  [1mslugify(name)='staging-promote-rule'[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/staging-promote-rule.yaml\objects/rules/staging-promote-rule.yaml]8;;\
+  [34m╰─[0m [1;34mnote:[0m renamed from objects/rules/rule-0008-staging-promote.yaml
+
+[1;34mnote[metadata_recommended][0m[1m: [0m[1mRecommended metadata missing: author, organisation[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/staging-promote-rule.yaml\objects/rules/staging-promote-rule.yaml:3:1]8;;\
+[34m  [0m[34m│[0m
+[34m3 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m [1;34m━━━━━━━━[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m add the missing keys under metadata
+
+[1;33mwarning[filename_mismatch][0m[1m: [0m[1mFilename 'rule-0013-sysdig-falco.yaml' does not match[0m
+  [1mslugify(name)='sysdig-falco-rule'[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/sysdig-falco-rule.yaml\objects/rules/sysdig-falco-rule.yaml]8;;\
+  [34m╰─[0m [1;34mnote:[0m renamed from objects/rules/rule-0013-sysdig-falco.yaml
+
+[1;34mnote[metadata_recommended][0m[1m: [0m[1mRecommended metadata missing: author, organisation[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/sysdig-falco-rule.yaml\objects/rules/sysdig-falco-rule.yaml:3:1]8;;\
+[34m  [0m[34m│[0m
+[34m3 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m [1;34m━━━━━━━━[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m add the missing keys under metadata
+
+[1;33mwarning[filename_mismatch][0m[1m: [0m[1mFilename 'threat-0001-simulated-actor.yaml' does not match[0m
+  [1mslugify(name)='simulated-actor'[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/threats/simulated-actor.yaml\objects/threats/simulated-actor.yaml]8;;\
+  [34m╰─[0m [1;34mnote:[0m renamed from objects/threats/threat-0001-simulated-actor.yaml
+
+[1;34mnote[metadata_recommended][0m[1m: [0m[1mRecommended metadata missing: author, organisation[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/threats/simulated-actor.yaml\objects/threats/simulated-actor.yaml:4:1]8;;\
+[34m  [0m[34m│[0m
+[34m4 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m [1;34m━━━━━━━━[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m add the missing keys under metadata
+
+[1;32m✓[0m 12 notes in 12 files · 12 fixed

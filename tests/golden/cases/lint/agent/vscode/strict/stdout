@@ -1,0 +1,18 @@
+note[metadata_recommended]: Recommended metadata missing: author, organisation
+  ╭─▶ objects/objectives/detect-lsass-access.yaml:2:1
+  │
+1 │ name: Detect LSASS access
+2 │ metadata:
+  │ ━━━━━━━━
+  │
+  ╰─ help: add the missing keys under metadata
+
+note[metadata_recommended]: Recommended metadata missing: author, organisation
+  ╭─▶ objects/rules/suspicious-lsass-access.yaml:2:1
+  │
+1 │ name: Suspicious LSASS Access
+2 │ metadata:
+  │ ━━━━━━━━
+  │
+  ╰─ help: add the missing keys under metadata
+

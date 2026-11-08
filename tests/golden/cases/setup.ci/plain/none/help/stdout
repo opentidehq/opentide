@@ -1,0 +1,71 @@
+                                                                                
+ Usage: opentide setup ci [OPTIONS] {ci_platform}:<github|gitlab|azure>         
+                                                                                
+ Generate CI/CD pipeline files (platforms discovered from repo config).         
+                                                                                
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    ci_platform      <github|gitlab|azure>  github, gitlab, or azure        │
+│                                              [required]                      │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --path              -C                         <str>  Repository path        │
+│                                                       [default: .]           │
+│ --staging               --no-staging                  Deploy to staging      │
+│                                                       tenants from pull      │
+│                                                       requests               │
+│                                                       [default: staging]     │
+│ --inflight              --no-inflight                 Update                 │
+│                                                       .opentide/inflight/    │
+│                                                       preview shards on pull │
+│                                                       requests               │
+│                                                       [default: inflight]    │
+│ --sharing               --no-sharing                  Share changed objects  │
+│                                                       on the default branch  │
+│                                                       (off unless selected)  │
+│                                                       [default: no-sharing]  │
+│ --lint-changed          --lint-all                    Gate lint on the       │
+│                                                       object files each run  │
+│                                                       changes, so a          │
+│                                                       catalogue with         │
+│                                                       inherited findings can │
+│                                                       adopt it (validate     │
+│                                                       still checks every     │
+│                                                       file)                  │
+│                                                       [default: lint-all]    │
+│ --promotion             --no-promotion                Write [promotion]      │
+│                                                       enabled in             │
+│                                                       deployment.toml. Omit  │
+│                                                       to keep the            │
+│                                                       repository's setting.  │
+│ --promotion-target                             <str>  Status deploy promotes │
+│                                                       rules to. Omit to keep │
+│                                                       the repository's       │
+│                                                       setting.               │
+│ --python-version                               <str>  Python version the     │
+│                                                       pipeline installs      │
+│                                                       [default: 3.12]        │
+│ --explorer-pages        --no-explorer-pages           Include GitHub Pages   │
+│                                                       explorer build and     │
+│                                                       deploy jobs            │
+│                                                       [default:              │
+│                                                       no-explorer-pages]     │
+│ --default-branch                               <str>  Branch that deploys    │
+│                                                       and receives inflight  │
+│                                                       shards (default:       │
+│                                                       origin/HEAD, then the  │
+│                                                       checked-out branch,    │
+│                                                       then                   │
+│                                                       init.defaultBranch,    │
+│                                                       then main; GitLab uses │
+│                                                       $CI_DEFAULT_BRANCH)    │
+│ --plan                                                List the files each    │
+│                                                       step would write, and  │
+│                                                       write nothing          │
+│ --yes               -y                                Write without asking   │
+│                                                       for confirmation       │
+│ --help                                                Show this message and  │
+│                                                       exit.                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+ Examples
+   $ opentide setup ci github --yes

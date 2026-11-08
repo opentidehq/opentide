@@ -1,0 +1,4 @@
+error: No such option: --strictt
+  help: did you mean '--strict'?
+  usage: opentide validate [OPTIONS] COMMAND [ARGS]...
+  help: run 'opentide validate --help'

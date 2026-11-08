@@ -1,0 +1,46 @@
+name: LSASS Access
+
+metadata:
+  uuid: <UUID-1>
+  schema: rule::1.1
+  version: 1
+  created: <TODAY>
+  modified: <TODAY>
+  tlp: amber
+  #author: 
+  #contributors:
+    #- 
+  #organisation:
+    #uuid: 
+    #name: 
+  #reviewed: YYYY-MM-DD
+
+description: |  # opentide:placeholder
+  ...
+#status: 
+#severity: 
+#techniques:
+  #- 
+#references:
+  #public:
+    #1: 
+  #internal:
+    #key: 
+  #reports:
+    #- 
+detection_model: 00000000-0000-4000-8002-000000000001
+response:
+  alert_severity: Informational
+  #playbook: 
+  #responders: 
+  #procedure:
+    #analysis: |
+      #...
+    #searches:
+      #- purpose: 
+        #system: 
+        #query: |
+          #...
+    #containment: 
+configurations:
+  # Other platforms: copy a block from .opentide/templates/rule.1.1.template.yaml

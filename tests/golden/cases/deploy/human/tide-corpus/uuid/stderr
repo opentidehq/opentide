@@ -1,0 +1,2 @@
+[1;33mwarning:[0m sentinel has no tenants configured in .opentide/configurations/platforms/sentinel.toml, so
+         a real deploy would stop

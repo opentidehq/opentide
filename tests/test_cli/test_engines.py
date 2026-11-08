@@ -72,13 +72,13 @@ def test_the_engine_is_read_per_process(workspace: Path, monkeypatch: pytest.Mon
     assert invoke(args, None)[0] != 2
 
 
-def test_rust_on_a_command_without_rust_is_engine_unavailable(workspace: Path) -> None:
+def test_rust_on_a_command_without_rust_is_engine_not_ported(workspace: Path) -> None:
     code, stdout, _ = invoke(["--json", "--repo", str(workspace), "validate"], "rust")
     assert code == 2
     doc = document(stdout)
     assert doc["exit_code"] == 2
     assert doc["command"] == "validate"
-    assert doc["failure"]["code"] == "engine_unavailable"
+    assert doc["failure"]["code"] == "engine_not_ported"
     assert doc["failure"]["argument"] == "OPENTIDE_ENGINE"
     assert "opentide validate has no Rust implementation yet" in doc["failure"]["message"]
     assert stdout.endswith("}\n") and stdout.count("\n") == 1
@@ -411,3 +411,24 @@ def test_compare_refuses_relative_paths_that_leave_the_workspace(
     assert code == 2
     assert "../site" in document(stdout)["failure"]["message"]
     assert engines._outside(["objects/a.yaml", "./b", "x/../y"], workspace) is None
+
+
+def test_engine_unavailable_keeps_exit_1_and_its_meaning(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``engine_unavailable`` is the compiled engine not loading (exit 1), never the dispatch's."""
+    from opentide import analysis
+
+    def missing() -> None:
+        raise analysis.EngineUnavailableError("hidden by the test")
+
+    monkeypatch.setattr(analysis, "engine", missing)
+    monkeypatch.setitem(engines.RUST_COMMANDS, ("explain",), fake("same"))
+    monkeypatch.chdir(workspace)
+    code, stdout, _ = invoke(["--json", "--repo", str(workspace), "explain", "internal"], "compare")
+    assert code == 1
+    failure = document(stdout)["failure"]
+    assert failure["code"] == "engine_unavailable"
+    assert failure["message"].startswith("The opentide analysis engine does not load")
+    page = Path(analysis.__file__).parent / "data" / "diagnostics" / "engine_unavailable.md"
+    assert "OPENTIDE_ENGINE" not in page.read_text(encoding="utf-8")

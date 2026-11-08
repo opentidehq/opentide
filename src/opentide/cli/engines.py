@@ -6,7 +6,7 @@ one. ``OPENTIDE_ENGINE`` chooses, read once per process by the root callback:
 
 - ``python`` (the default, also when unset or empty): the Python implementation.
 - ``rust``: the Rust implementation. A command without one is a usage error,
-  ``failure.code`` ``engine_unavailable``, exit 2.
+  ``failure.code`` ``engine_not_ported``, exit 2.
 - ``compare``: both, each on its own copy of the workspace, and their exit
   codes, stdout, stderr and the files they wrote are compared with the
   comparator ``cargo xtask compare`` uses (``crates/opentide-compare``). If they
@@ -85,9 +85,13 @@ def dispatch(cli_ctx: CliContext, click_ctx: _click.Context) -> None:
     Called by the root callback once the context is set up and ``--repo``
     checked, before the command's own options are parsed.
     """
-    from opentide.analysis import ENGINE_UNAVAILABLE
     from opentide.cli.lazy import ROOT_ARGS_KEY, command_words
-    from opentide.cli.ui.contract import USAGE_EXIT_CODE, USAGE_INVALID_CHOICE, did_you_mean
+    from opentide.cli.ui.contract import (
+        ENGINE_NOT_PORTED,
+        USAGE_EXIT_CODE,
+        USAGE_INVALID_CHOICE,
+        did_you_mean,
+    )
 
     engine = requested()
     if engine == PYTHON or click_ctx.resilient_parsing:
@@ -116,7 +120,7 @@ def dispatch(cli_ctx: CliContext, click_ctx: _click.Context) -> None:
                 path,
                 f"opentide {path} has no Rust implementation yet: "
                 f"unset {ENGINE_ENV}, or set it to {PYTHON} or {COMPARE}.",
-                code=ENGINE_UNAVAILABLE,
+                code=ENGINE_NOT_PORTED,
                 exit_code=USAGE_EXIT_CODE,
                 argument=ENGINE_ENV,
             )

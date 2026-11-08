@@ -1,0 +1,3 @@
+error: Skills manifest remote unavailable · source: opentidehq/skills · ref: main
+error: Could not fetch skills catalogue from opentidehq/skills@main. Check network access and that the skills repository is publicly reachable.
+tip: add --json for machine-readable output

@@ -1,0 +1,186 @@
+error[schema_validation]: missing required field 'description'
+  ╭─▶ detections/rules/custom-folder-rule.yaml:1:1
+  │
+1 │ name: Suspicious LSASS Access
+  │ ━━━━ add 'description' at the top level
+  │
+  ╰─ help: the template in .opentide/templates/ shows the field and its values
+
+error[schema_validation]: missing required field 'created' in metadata
+  ╭─▶ detections/rules/custom-folder-rule.yaml:2:1
+  │
+1 │ name: Suspicious LSASS Access
+2 │ metadata:
+  │ ━━━━━━━━ add 'created' under this key
+  │
+  ╰─ help: the template in .opentide/templates/ shows the field and its values
+
+error[schema_validation]: missing required field 'modified' in metadata
+  ╭─▶ detections/rules/custom-folder-rule.yaml:2:1
+  │
+1 │ name: Suspicious LSASS Access
+2 │ metadata:
+  │ ━━━━━━━━ add 'modified' under this key
+  │
+  ╰─ help: the template in .opentide/templates/ shows the field and its values
+
+error[schema_validation]: missing required field 'version' in metadata
+  ╭─▶ detections/rules/custom-folder-rule.yaml:2:1
+  │
+1 │ name: Suspicious LSASS Access
+2 │ metadata:
+  │ ━━━━━━━━ add 'version' under this key
+  │
+  ╰─ help: the template in .opentide/templates/ shows the field and its values
+
+error[schema_validation]: missing required field 'alert' in configurations.sentinel
+  ╭─▶ detections/rules/custom-folder-rule.yaml:8:3
+  │
+7 │ configurations:
+8 │   sentinel:
+  │   ━━━━━━━━ add 'alert' under this key
+  │
+  ╰─ help: the template in .opentide/templates/ shows the field and its values
+
+error[schema_validation]: missing required field 'scheduling' in configurations.sentinel
+  ╭─▶ detections/rules/custom-folder-rule.yaml:8:3
+  │
+7 │ configurations:
+8 │   sentinel:
+  │   ━━━━━━━━ add 'scheduling' under this key
+  │
+  ╰─ help: the template in .opentide/templates/ shows the field and its values
+
+error[schema_validation]: missing required field 'status' in configurations.sentinel
+  ╭─▶ detections/rules/custom-folder-rule.yaml:8:3
+  │
+7 │ configurations:
+8 │   sentinel:
+  │   ━━━━━━━━ add 'status' under this key
+  │
+  ╰─ help: the template in .opentide/templates/ shows the field and its values
+
+warning[platform_not_enabled]: this block will not deploy while sentinel is disabled in this workspace
+  ╭─▶ detections/rules/custom-folder-rule.yaml:8:3
+  │
+7 │ configurations:
+8 │   sentinel:
+  │   ━━━━━━━━
+  │
+  ╰─ help: enable sentinel with 'opentide setup platforms --sentinel'
+
+error[schema_validation]: missing required field 'description'
+  ╭─▶ detections/rules/misspelled-tlp.yaml:1:1
+  │
+1 │ name: Misspelled TLP
+  │ ━━━━ add 'description' at the top level
+  │
+  ╰─ help: the template in .opentide/templates/ shows the field and its values
+
+error[schema_validation]: missing required field 'created' in metadata
+  ╭─▶ detections/rules/misspelled-tlp.yaml:2:1
+  │
+1 │ name: Misspelled TLP
+2 │ metadata:
+  │ ━━━━━━━━ add 'created' under this key
+  │
+  ╰─ help: the template in .opentide/templates/ shows the field and its values
+
+error[schema_validation]: missing required field 'modified' in metadata
+  ╭─▶ detections/rules/misspelled-tlp.yaml:2:1
+  │
+1 │ name: Misspelled TLP
+2 │ metadata:
+  │ ━━━━━━━━ add 'modified' under this key
+  │
+  ╰─ help: the template in .opentide/templates/ shows the field and its values
+
+error[schema_validation]: missing required field 'version' in metadata
+  ╭─▶ detections/rules/misspelled-tlp.yaml:2:1
+  │
+1 │ name: Misspelled TLP
+2 │ metadata:
+  │ ━━━━━━━━ add 'version' under this key
+  │
+  ╰─ help: the template in .opentide/templates/ shows the field and its values
+
+error[vocab_unknown]: 'ambr' is not a TLP value
+  ╭─▶ detections/rules/misspelled-tlp.yaml:5:8
+  │
+4 │   schema: rule::1.1
+5 │   tlp: ambr
+  │        ━━━━ not in tlp::1.0
+  │
+  ╰─ help: did you mean 'amber'?
+
+error[schema_validation]: missing required field 'alert' in configurations.sentinel
+  ╭─▶ detections/rules/misspelled-tlp.yaml:8:3
+  │
+7 │ configurations:
+8 │   sentinel:
+  │   ━━━━━━━━ add 'alert' under this key
+  │
+  ╰─ help: the template in .opentide/templates/ shows the field and its values
+
+error[schema_validation]: missing required field 'scheduling' in configurations.sentinel
+  ╭─▶ detections/rules/misspelled-tlp.yaml:8:3
+  │
+7 │ configurations:
+8 │   sentinel:
+  │   ━━━━━━━━ add 'scheduling' under this key
+  │
+  ╰─ help: the template in .opentide/templates/ shows the field and its values
+
+error[schema_validation]: missing required field 'status' in configurations.sentinel
+  ╭─▶ detections/rules/misspelled-tlp.yaml:8:3
+  │
+7 │ configurations:
+8 │   sentinel:
+  │   ━━━━━━━━ add 'status' under this key
+  │
+  ╰─ help: the template in .opentide/templates/ shows the field and its values
+
+warning[platform_not_enabled]: this block will not deploy while sentinel is disabled in this workspace
+  ╭─▶ detections/rules/misspelled-tlp.yaml:8:3
+  │
+7 │ configurations:
+8 │   sentinel:
+  │   ━━━━━━━━
+  │
+  ╰─ help: enable sentinel with 'opentide setup platforms --sentinel'
+
+error[schema_validation]: missing required field 'objective'
+  ╭─▶ objects/objectives/detect-lsass-access.yaml:1:1
+  │
+1 │ name: Detect LSASS access
+  │ ━━━━ add 'objective' at the top level
+  │
+  ╰─ help: the template in .opentide/templates/ shows the field and its values
+
+error[schema_validation]: missing required field 'created' in metadata
+  ╭─▶ objects/objectives/detect-lsass-access.yaml:2:1
+  │
+1 │ name: Detect LSASS access
+2 │ metadata:
+  │ ━━━━━━━━ add 'created' under this key
+  │
+  ╰─ help: the template in .opentide/templates/ shows the field and its values
+
+error[schema_validation]: missing required field 'modified' in metadata
+  ╭─▶ objects/objectives/detect-lsass-access.yaml:2:1
+  │
+1 │ name: Detect LSASS access
+2 │ metadata:
+  │ ━━━━━━━━ add 'modified' under this key
+  │
+  ╰─ help: the template in .opentide/templates/ shows the field and its values
+
+error[schema_validation]: missing required field 'version' in metadata
+  ╭─▶ objects/objectives/detect-lsass-access.yaml:2:1
+  │
+1 │ name: Detect LSASS access
+2 │ metadata:
+  │ ━━━━━━━━ add 'version' under this key
+  │
+  ╰─ help: the template in .opentide/templates/ shows the field and its values
+

@@ -72,7 +72,8 @@ Every document carries these keys next to the command's own. Keys that existed b
 | `template_missing` | 1 | `new`: generation ran but wrote no template or schema for the family |
 | `doctor_checks_failed` | 1 | `doctor`: at least one check failed. Read `checks` for which |
 | `issues_found` | 1 | The command failed on what it found: `validate` errors (or warnings under `--strict`), `validate query` errors (or warnings under `--strict`), `lint --strict` findings, `info --strict` load errors. The findings are in the document |
-| `engine_unavailable` | 1 or 2 | Exit 1: the analysis engine compiled into opentide does not load: `validate query` offline, `lint` (its `queries` check), and `OPENTIDE_ENGINE=compare` on a command it compares. In `validate`, an `engine_unavailable` issue instead. `advice` names the reinstall command. Exit 2: [`OPENTIDE_ENGINE=rust`](#choosing-the-implementation) on a command that has no Rust implementation; `argument` is `OPENTIDE_ENGINE` |
+| `engine_unavailable` | 1 | The analysis engine compiled into opentide does not load: `validate query` offline, `lint` (its `queries` check), and `OPENTIDE_ENGINE=compare` on a command it compares. In `validate`, an `engine_unavailable` issue instead. `advice` names the reinstall command |
+| `engine_not_ported` | 2 | [`OPENTIDE_ENGINE=rust`](#choosing-the-implementation) on a command that has no Rust implementation yet; `argument` is `OPENTIDE_ENGINE` |
 | `engine_mismatch` | 70 | [`OPENTIDE_ENGINE=compare`](#choosing-the-implementation): the command's Python and Rust implementations did not do the same. `message` names the diff report |
 | `config_parse` | 1 | A configuration TOML file does not parse. `diagnostics` holds the file, line and column |
 | `yaml_parse` | 1 | `deploy` read a rule file whose YAML is not one mapping. `diagnostics` holds the file and line |
@@ -152,7 +153,7 @@ opentide is moving its commands from Python to Rust, one at a time ([#790](https
 | Value | Runs |
 |-------|------|
 | `python`, empty or unset | The Python implementation, as before |
-| `rust` | The Rust implementation. A command that has none exits `2` with `failure.code` `engine_unavailable` and `failure.argument` `OPENTIDE_ENGINE` |
+| `rust` | The Rust implementation. A command that has none exits `2` with `failure.code` `engine_not_ported` and `failure.argument` `OPENTIDE_ENGINE` |
 | `compare` | Both, each on its own copy of the workspace, and compares their exit codes, stdout, stderr and the files each created, changed or deleted. JSON is compared by its data, then by the order of every object's keys, then byte for byte. If they agree, the Python run's output and exit code are the command's. If not, the command exits `70` with `failure.code` `engine_mismatch`, and `failure.message` names the diff report. A command that has no Rust implementation runs Python alone |
 
 Any other value is a usage error (`usage_invalid_choice`, exit `2`, `argument` `OPENTIDE_ENGINE`). No command has a Rust implementation yet, so today `rust` refuses every command and `compare` runs Python. The variable chooses the implementation, never what a command does: the documents on this site are the contract both implementations print.

@@ -1,0 +1,3 @@
+error: Missing command.
+  usage: opentide rules [OPTIONS] COMMAND [ARGS]...
+  help: run 'opentide rules --help'

@@ -1,0 +1,13 @@
+                                                                                
+ Usage: opentide generate docs threats [OPTIONS]                                
+                                                                                
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --output        <str>  Write the pages here instead of the configured docs   │
+│                        folder                                                │
+│ --flavor        <str>  Markdown flavour: github, gitlab, azure_devops or     │
+│                        generic                                               │
+│ --help                 Show this message and exit.                           │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+ Examples
+   $ opentide generate docs threats

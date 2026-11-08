@@ -1,0 +1,2 @@
+error: window must look like 90d, 12h, or 30m
+tip: add --json for machine-readable output

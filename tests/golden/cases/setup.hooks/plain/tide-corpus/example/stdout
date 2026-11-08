@@ -1,0 +1,4 @@
+  .pre-commit-config.yaml      validate on commit
+  .opentide/hooks/pre-commit
+
+✓ Wrote 2 files

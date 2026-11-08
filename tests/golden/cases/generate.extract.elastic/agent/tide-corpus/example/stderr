@@ -1,0 +1,4 @@
+error: Environment variable missing · detail: Unset configuration variables: $ELASTIC_API_KEY · advice: Set those environment variables before a live check.
+✗ import from elastic · <SECONDS>
+error: No Elastic tenant is configured for Kibana space 'default'
+tip: add --json for machine-readable output

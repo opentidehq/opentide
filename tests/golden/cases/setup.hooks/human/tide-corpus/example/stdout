@@ -1,0 +1,4 @@
+  [1m.pre-commit-config.yaml[0m      [2mvalidate on commit[0m
+  [1m.opentide/hooks/pre-commit[0m
+
+[1;32m✓[0m Wrote 2 files

@@ -1,0 +1,3 @@
+✓ Created Objects/Threat Vectors/credential-dumping.yaml · 9 placeholders to replace
+  note: each ends in '# opentide:placeholder'; opentide lint lists them
+→ opentide validate --file Objects/Threat Vectors/credential-dumping.yaml · check it
