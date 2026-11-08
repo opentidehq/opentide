@@ -37,10 +37,10 @@ jobs:
           python-version: "3.12"
 
       # `uv sync` compiles the analysis engine (analysis/, Rust) into opentide (hatch_build.py).
-      # The runner's rustup provides the toolchain; the cache keeps the
+      # rustup installs the toolchain rust-toolchain.toml pins; the cache keeps the
       # compiled engine crates between runs.
       - name: Set up Rust
-        run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
+        run: rustup toolchain install --profile minimal --no-self-update
 
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
@@ -162,8 +162,7 @@ jobs:
 
       - name: Set up Rust
         run: |
-          rustup toolchain install stable --profile minimal --no-self-update --component rustfmt,clippy
-          rustup default stable
+          rustup toolchain install --profile minimal --no-self-update --component rustfmt,clippy
 
       # Dependencies only: rust-cache drops the workspace crates before saving.
       # engine-ci.yml's `clients` and `elastic-sweep` build a subset of this
@@ -228,9 +227,8 @@ jobs:
 
       - name: Set up Rust
         run: |
-          rustup toolchain install stable --profile minimal --no-self-update \
+          rustup toolchain install --profile minimal --no-self-update \
             --component rustfmt,clippy --target wasm32-unknown-unknown,wasm32-wasip1
-          rustup default stable
 
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
@@ -302,10 +300,10 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       # `uv sync` compiles the analysis engine (analysis/, Rust) into opentide (hatch_build.py).
-      # The runner's rustup provides the toolchain; the cache keeps the
+      # rustup installs the toolchain rust-toolchain.toml pins; the cache keeps the
       # compiled engine crates between runs.
       - name: Set up Rust
-        run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
+        run: rustup toolchain install --profile minimal --no-self-update
 
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
@@ -409,10 +407,10 @@ jobs:
           python-version: ${{ env.COVERAGE_PYTHON }}
 
       # `uv sync` compiles the analysis engine (analysis/, Rust) into opentide (hatch_build.py).
-      # The runner's rustup provides the toolchain; the cache keeps the
+      # rustup installs the toolchain rust-toolchain.toml pins; the cache keeps the
       # compiled engine crates between runs.
       - name: Set up Rust
-        run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
+        run: rustup toolchain install --profile minimal --no-self-update
 
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
@@ -469,10 +467,10 @@ jobs:
           python-version: ${{ env.COVERAGE_PYTHON }}
 
       # `uv sync` compiles the analysis engine (analysis/, Rust) into opentide (hatch_build.py).
-      # The runner's rustup provides the toolchain; the cache keeps the
+      # rustup installs the toolchain rust-toolchain.toml pins; the cache keeps the
       # compiled engine crates between runs.
       - name: Set up Rust
-        run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
+        run: rustup toolchain install --profile minimal --no-self-update
 
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
@@ -510,10 +508,10 @@ jobs:
           python-version: "3.14"
 
       # `uv sync` compiles the analysis engine (analysis/, Rust) into opentide (hatch_build.py).
-      # The runner's rustup provides the toolchain; the cache keeps the
+      # rustup installs the toolchain rust-toolchain.toml pins; the cache keeps the
       # compiled engine crates between runs.
       - name: Set up Rust
-        run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
+        run: rustup toolchain install --profile minimal --no-self-update
 
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:

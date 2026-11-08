@@ -76,6 +76,10 @@ fn raw_queries_without_indices_are_not_checked() {
 }
 
 #[test]
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "positions in a test document of a few lines"
+)]
 fn a_kuery_rule_on_logs_indices() {
     let source = rule(
         "    type: query\n    language: kuery\n    index: [logs-endpoint.events.*]\n    query: source.ip:10.* and process.nmae:cmd.exe\n",

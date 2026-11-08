@@ -43,7 +43,7 @@
 //! (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 //! THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#![allow(
+#![expect(
     clippy::needless_range_loop,
     reason = "state numbers index several parallel tables, as in Lucene"
 )]
@@ -1301,6 +1301,10 @@ enum Determinize {
 
 /// Lucene's subset construction. The effort is the size of every state set
 /// it visits; it fails when that reaches ten times `limit`.
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "interval ends are u32 bounds widened to u64 for `max + 1`; a range inside an open destination ends at u32::MAX at most"
+)]
 fn determinize(a: &Automaton, limit: u64) -> Result<Automaton, Determinize> {
     if a.is_deterministic() || a.len() <= 1 {
         return Ok(a.clone());

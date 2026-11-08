@@ -401,7 +401,7 @@ fn initialize(
     // A host with no filesystem hands over its workspace (a browser worker).
     session.supplied =
         crate::session::Supplied::from_options(raw.pointer("/initializationOptions/workspace"));
-    #[allow(
+    #[expect(
         deprecated,
         reason = "`rootUri` and `rootPath`: what clients without folders send"
     )]
@@ -1123,6 +1123,10 @@ struct ItemData {
     field_path: Option<String>,
 }
 
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "LSP positions are u32 (lines, UTF-16 units); a document past 4 GiB is out of scope (#843)"
+)]
 fn handle_completion(
     session: &mut Session,
     params: lsp::CompletionParams,
@@ -1367,7 +1371,7 @@ fn handle_document_highlight(
     )
 }
 
-#[allow(
+#[expect(
     deprecated,
     reason = "`DocumentSymbol::deprecated`, superseded by tags, is still a field to fill"
 )]
@@ -1391,7 +1395,7 @@ fn symbol(text: &str, node: &opentide_tide::OutlineNode) -> lsp::DocumentSymbol 
 
 /// A Tide object as a tree: the object, its sections, each platform block
 /// and each query (P3.1). Any other document lists the engine's symbols.
-#[allow(
+#[expect(
     deprecated,
     reason = "`DocumentSymbol::deprecated`, superseded by tags, is still a field to fill"
 )]
@@ -1426,7 +1430,7 @@ fn handle_document_symbol(
     ))
 }
 
-#[allow(
+#[expect(
     deprecated,
     reason = "`SymbolInformation::deprecated`, superseded by tags, is still a field to fill"
 )]
@@ -2045,6 +2049,10 @@ fn handle_inlay(
     )
 }
 
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "LSP positions are u32 (lines, UTF-16 units); a document past 4 GiB is out of scope (#843)"
+)]
 fn handle_selection_range(
     session: &mut Session,
     params: lsp::SelectionRangeParams,
@@ -2081,6 +2089,10 @@ fn handle_selection_range(
     )
 }
 
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "LSP positions are u32 (lines, UTF-16 units); a document past 4 GiB is out of scope (#843)"
+)]
 pub(crate) fn folding_ranges(text: &str) -> Vec<(u32, u32)> {
     let lines: Vec<&str> = text.lines().collect();
     let last = lines.len().saturating_sub(1);
@@ -2109,6 +2121,10 @@ pub(crate) fn folding_ranges(text: &str) -> Vec<(u32, u32)> {
     out
 }
 
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "LSP positions are u32 (lines, UTF-16 units); a document past 4 GiB is out of scope (#843)"
+)]
 pub(crate) fn enclosing_block(lines: &[&str], line: usize) -> (u32, u32) {
     let line = line.min(lines.len().saturating_sub(1));
     let indent = content_indent(lines.get(line).copied().unwrap_or("")).unwrap_or(0);
@@ -2344,6 +2360,10 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "positions in a test document of a few lines"
+    )]
     fn uuid_at_matches_the_caret_including_the_end_boundary() {
         let uuid = "00000000-0000-4000-8000-000000000001";
         let text = format!("id: {uuid}\n");

@@ -651,7 +651,7 @@ fn gates_for_type(row: &TypeRow, span: ByteSpan) -> gates::Gate {
 /// first documented release is a warning, and with no target, first
 /// documented at 9.2 or later is information (missing on 8.19). Preview
 /// names may change.
-#[allow(
+#[expect(
     clippy::too_many_arguments,
     reason = "a private helper, called with each fact of one name"
 )]
@@ -1059,6 +1059,10 @@ fn last_pipe(before: &str) -> Option<usize> {
 
 // ---- Signature help -------------------------------------------------------
 
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "a signature has a handful of parameters, far below u32::MAX"
+)]
 pub fn signature_help(source: &str, offset: usize) -> Option<SignatureHelp> {
     let before = &source[..offset.min(source.len())];
     let (name, active) = innermost_call(before)?;

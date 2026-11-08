@@ -1021,6 +1021,10 @@ fn remap_diagnostic(source: &str, inj: &InjectedQuery, mut d: Diagnostic) -> Dia
 }
 
 /// Byte offset of an LSP position (UTF-16 columns) inside an injected query.
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "a char is one or two UTF-16 units"
+)]
 fn inner_offset(inner: &str, position: opentide_core::Position) -> usize {
     let mut line = 0u32;
     let mut col = 0u32;
@@ -1787,7 +1791,7 @@ fn diagnose_field_value(
         match value {
             serde_yaml::Value::Sequence(items) => {
                 if let Some(min) = field.min_items {
-                    if (items.len() as u32) < min {
+                    if items.len() < min as usize {
                         diagnostics.push(
                             Diagnostic::error(
                                 codes::SCHEMA_VALIDATION,
@@ -1888,9 +1892,7 @@ fn key_range(source: &str, key: &str) -> Range {
 }
 
 fn is_uuidv4(value: &str) -> bool {
-    Uuid::parse_str(value)
-        .ok()
-        .is_some_and(|u| u.get_version_num() == 4)
+    Uuid::parse_str(value).is_ok_and(|u| u.get_version_num() == 4)
 }
 
 fn document_symbols(source: &str, object: &TideObject, object_type: &str) -> Vec<DocumentSymbol> {

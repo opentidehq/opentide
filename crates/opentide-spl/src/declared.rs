@@ -216,7 +216,7 @@ fn end_of_term(bytes: &[u8], mut i: usize, end: usize) -> usize {
 }
 
 /// The values after `index`: `=v`, `::v`, `!=v` (negated), ` IN (a, b)`.
-#[allow(
+#[expect(
     clippy::type_complexity,
     reason = "a private parse result: the value spans and whether they are negated, then the index after them"
 )]

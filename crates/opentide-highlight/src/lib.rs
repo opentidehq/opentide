@@ -139,6 +139,10 @@ impl HighlightSpec {
         Ok(SPEC.get_or_init(|| spec.clone()).clone())
     }
 
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "an index into the spec's token types, a few dozen"
+    )]
     pub fn token_index(&self, capture: &str) -> Result<u32, HighlightError> {
         self.legend
             .iter()
@@ -625,6 +629,10 @@ pub const LSP_TOKEN_TYPES: &[&str] = &[
     "decorator",
 ];
 
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "an index into LSP_TOKEN_TYPES, a few dozen"
+)]
 pub fn lsp_token_type_index(capture: &str) -> u32 {
     let name = match capture {
         "comment" => "comment",

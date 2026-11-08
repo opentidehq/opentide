@@ -236,6 +236,10 @@ fn tide_yaml_pull_diagnostics_and_symbols() {
         "{symbols}"
     );
 
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "positions in a test document of a few lines"
+    )]
     fn pos(text: &str, needle: &str) -> (u32, u32) {
         let off = text.find(needle).expect(needle);
         let line = text[..off].bytes().filter(|b| *b == b'\n').count() as u32;

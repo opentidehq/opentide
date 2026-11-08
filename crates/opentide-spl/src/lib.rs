@@ -1108,6 +1108,10 @@ fn function_signature(f: &FunctionRow, active: u32) -> Option<SignatureHelp> {
     Some(signature_from_label(label, f.docs.clone(), active))
 }
 
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "a signature has a handful of parameters, far below u32::MAX"
+)]
 fn signature_from_label(
     label: String,
     documentation: Option<String>,
@@ -1169,6 +1173,10 @@ fn command_signature(catalog: &Catalog, cmd: &str, before: &str) -> Option<Signa
     })
 }
 
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "an index into one command's options, a handful"
+)]
 fn active_option(before: &str, opts: &[&CommandOption]) -> u32 {
     let lower = before.to_ascii_lowercase();
     let mut best: Option<(usize, u32)> = None;
@@ -1752,6 +1760,10 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "positions in a test document of a few lines"
+    )]
     fn command_options_drive_signature_help() {
         let src = "| tstats ";
         let help = signature_help(src, src.len()).expect("tstats");

@@ -1,3 +1,16 @@
+# The Rust that builds, lints and tests the workspace here and in CI: one exact
+# release, so that a new stable's lints (clippy::pedantic gains some with most
+# releases, and CI denies warnings) arrive in a change of their own instead of
+# failing every open PR on the day it ships. CI installs this file's toolchain
+# (`rustup toolchain install` with no name). The crates' floor is a separate
+# promise: `rust-version` in Cargo.toml (MSRV), which this pin never lowers.
+#
+# To move to a newer release, in one PR: change `channel`, then run
+# `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`
+# and `cargo nextest run --workspace --profile ci`; fix what the new lints
+# report, or allow one in the root Cargo.toml with its reason (crates/AGENTS.md,
+# "Lints"). The sdist leaves this file out (pyproject.toml), so a build from it
+# uses whatever toolchain it finds.
 [toolchain]
-channel = "stable"
+channel = "1.99.1"
 components = ["rustfmt", "clippy"]

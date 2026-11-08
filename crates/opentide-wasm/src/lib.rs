@@ -67,7 +67,7 @@ pub struct LanguageServer {
 impl LanguageServer {
     /// A server before `initialize`, which is the first message it expects.
     #[wasm_bindgen(constructor)]
-    #[allow(
+    #[expect(
         clippy::new_without_default,
         reason = "JavaScript constructs it with `new LanguageServer()`; Default means nothing there"
     )]

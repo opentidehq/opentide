@@ -764,6 +764,10 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "positions in a test document of a few lines"
+    )]
     fn misspelled_field_is_an_error_with_a_suggestion() {
         let src = "| tstats count from datamodel=Endpoint.Processes by Processes.proces_name";
         let found = field_errors(src);
@@ -872,6 +876,10 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "positions in a test document of a few lines"
+    )]
     fn datamodel_and_from_commands_are_checked() {
         let found = field_errors(
             "| datamodel Endpoint Processes search | stats count by Processes.parent_proces_name",

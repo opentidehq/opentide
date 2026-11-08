@@ -79,6 +79,10 @@ fn install(datasets: Option<&str>) {
 }
 
 #[test]
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "positions in a test document of a few lines"
+)]
 fn declared_index_patterns_and_their_columns() {
     let undeclared = codes::ELASTIC_DATASET_NOT_DECLARED;
     let rule = "    type: query\n    index:\n      - logs-azure.signinlogs-*\n      - filebeat-*\n    query: event.action:x\n";

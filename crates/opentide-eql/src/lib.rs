@@ -631,6 +631,10 @@ fn check_function(node: Node, source: &str, catalog: &Catalog, out: &mut Vec<Dia
     }
 }
 
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "check_runs returns 1..=MAX_RUNS (100)"
+)]
 fn check_sequence(node: Node, source: &str, out: &mut Vec<Diagnostic>) {
     let mut cursor = node.walk();
     let children: Vec<Node> = node.children(&mut cursor).collect();
@@ -1309,6 +1313,10 @@ fn fields_in(source: &str) -> Vec<String> {
 
 // ---- Signature help -------------------------------------------------------
 
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "a signature has a handful of parameters, far below u32::MAX"
+)]
 pub fn signature_help(source: &str, offset: usize) -> Option<SignatureHelp> {
     let before = &source[..offset.min(source.len())];
     let (name, active) = innermost_call(before)?;

@@ -217,6 +217,10 @@ pub fn offset_to_position(source: &str, offset: usize) -> Position {
 /// Convert an LSP position (UTF-16 columns) to a UTF-8 byte offset, the
 /// inverse of [`offset_to_position`]. A column past the end of its line
 /// clamps to the line end; a line past the end of the text gives its length.
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "a char is one or two UTF-16 units"
+)]
 pub fn position_to_offset(source: &str, position: Position) -> usize {
     let mut line = 0u32;
     let mut col = 0u32;
@@ -269,6 +273,10 @@ impl<'a> LineIndex<'a> {
     }
 
     /// Same result as [`offset_to_position`].
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "LSP positions are u32 (lines, UTF-16 units); a document past 4 GiB is out of scope (#843)"
+    )]
     pub fn position(&self, offset: usize) -> Position {
         let mut offset = offset.min(self.source.len());
         while !self.source.is_char_boundary(offset) {

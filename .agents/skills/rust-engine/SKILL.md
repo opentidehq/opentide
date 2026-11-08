@@ -8,7 +8,7 @@ metadata:
 
 # Rust engine
 
-The workspace is edition **2024**, `rust-version` **1.85**, toolchain channel `stable` with `rustfmt` and `clippy` (`rust-toolchain.toml`). CI exports `RUSTFLAGS=-Dwarnings` and runs `cargo clippy --workspace --all-targets -- -D warnings`. A warning is a failed build.
+The workspace is edition **2024**, `rust-version` **1.85**, toolchain pinned to one exact release with `rustfmt` and `clippy` (`rust-toolchain.toml`, which says how to move it; CI installs the same file's toolchain). CI exports `RUSTFLAGS=-Dwarnings` and runs `cargo clippy --workspace --all-targets -- -D warnings`. A warning is a failed build.
 
 Read `references/crates.md` before adding a dependency or a new crate. Read `references/edition-2024.md` before writing `unsafe`, `extern`, or a function that returns `impl Trait`.
 

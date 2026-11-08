@@ -121,7 +121,6 @@ unnecessary_wraps = "allow" # LSP handlers return the Result `.on::<Request>` ex
 missing_errors_doc = "allow" # `# Errors` sections come with the missing_docs work
 missing_panics_doc = "allow" # `# Panics` sections come with the missing_docs work
 doc_markdown = "allow" # product and language names (ES|QL, CrowdStrike) are prose
-cast_possible_truncation = "allow" # LSP positions are u32; checked casts change behaviour past 4 GiB: UC-X.1 (#843)
 too_many_lines = "allow" # engine dispatchers match every node kind in one function
 match_same_arms = "allow" # one arm per language or node kind, even when two arms agree
 map_unwrap_or = "allow" # style, at 57 sites
@@ -130,6 +129,7 @@ format_push_string = "allow" # an allocation per diagnostic message; not a hot p
 needless_raw_string_hashes = "allow" # fixtures keep `r#"` so they can gain a quote
 items_after_statements = "allow" # a OnceLock cache sits next to its one use
 single_match_else = "allow" # style, at 10 sites
+assert_is_empty = "allow" # new in clippy 1.99: 196 test sites of `assert!(v.is_empty())`, whose rewrite `assert_eq!(v, [] as [T; 0])` names each element type
 
 [profile.release]
 lto = true

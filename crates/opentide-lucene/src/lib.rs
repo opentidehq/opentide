@@ -516,6 +516,10 @@ fn fuzziness(
 }
 
 /// Elasticsearch's `Fuzziness.fromString`, as `query_string` applies it.
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "the value is integral, and `as` saturates (NaN to 0) as Java's (int) does; outside 0..=2 is rejected"
+)]
 fn elastic_fuzziness_error(slop: &str) -> Option<String> {
     let upper = slop.to_ascii_uppercase();
     if upper == "AUTO" {

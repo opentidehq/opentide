@@ -1,5 +1,7 @@
 //! The test client shared by the protocol tests (#185 P2.8): the server
 //! binary over stdio, real LSP frames, and helpers to read what it sends.
+// `allow`, not `expect`: a test binary that uses every helper would leave an
+// expectation unfulfilled.
 #![allow(
     dead_code,
     reason = "each test binary uses a different part of the shared client"

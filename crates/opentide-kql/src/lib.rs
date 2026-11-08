@@ -2138,6 +2138,10 @@ pub fn hover(source: &str, offset: usize, profile: Profile) -> Option<String> {
     None
 }
 
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "a signature has a handful of parameters, far below u32::MAX"
+)]
 pub fn signature_help(source: &str, offset: usize, profile: Profile) -> Option<SignatureHelp> {
     let workspace = Catalog::for_workspace(profile, source);
     let catalog = &*workspace;
@@ -2269,6 +2273,10 @@ fn asim_hover(parser: &tables::AsimParser) -> String {
     md
 }
 
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "a signature has a handful of parameters, far below u32::MAX"
+)]
 fn signature_for_name(catalog: &Catalog, name: &str, active: u32) -> Option<SignatureHelp> {
     if let Some(parser) = catalog.asim_parser(name) {
         let parameters: Vec<ParameterInformation> = parser
@@ -2343,6 +2351,10 @@ fn parameter_list(params: &[ParamRow], signature: &str) -> Vec<ParameterInformat
     parameters_from_signature(signature)
 }
 
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "a signature has a handful of parameters, far below u32::MAX"
+)]
 fn active_operator_parameter(before: &str, params: &[ParameterInformation]) -> u32 {
     let lower = before.to_ascii_lowercase();
     if lower.contains(" on ") {

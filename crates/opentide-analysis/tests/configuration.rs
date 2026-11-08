@@ -81,6 +81,10 @@ fn without_a_checker_there_are_no_diagnostics() {
 }
 
 #[test]
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "positions in a test document of a few lines"
+)]
 fn each_finding_is_placed_on_its_key() {
     let _guard = lock();
     let text = "# Sharing\n[[misp]]\nname = \"misp-internal\"\ndistribution = \"this-community\"\n\n[[misp]]\nname = \"misp-lab\"\nmax_tlp = \"white\"\n";

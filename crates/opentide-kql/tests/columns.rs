@@ -52,6 +52,10 @@ fn output(src: &str) -> Vec<String> {
     schema.columns.iter().map(|c| c.name.clone()).collect()
 }
 
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "positions in a test document of a few lines"
+)]
 fn hover_at(src: &str, needle: &str, nth: usize) -> String {
     let offset = src.match_indices(needle).nth(nth).expect("needle").0 + 1;
     let before = &src[..offset];

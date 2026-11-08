@@ -735,6 +735,10 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "positions in a test document of a few lines"
+    )]
     fn hover_and_completions_inside_tide_injected_kql() {
         let src = r#"name: Sentinel KQL Rule
 metadata:
@@ -775,6 +779,10 @@ configurations:
     }
 
     #[test]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "positions in a test document of a few lines"
+    )]
     fn tide_field_hover_and_path_scoped_completions() {
         let src = r#"name: Sentinel KQL Rule
 metadata:

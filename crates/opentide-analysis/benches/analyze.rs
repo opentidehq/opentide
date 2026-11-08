@@ -62,6 +62,10 @@ impl WorkspaceHost for Indexed {
     }
 }
 
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "a handful of benchmark texts"
+)]
 fn main() {
     let host = MemoryWorkspace::default();
     println!("{:<10} {:>6} {:>14}", "language", "files", "median/file");

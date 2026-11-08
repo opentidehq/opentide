@@ -37,7 +37,6 @@ unnecessary_wraps = "allow"
 missing_errors_doc = "allow"
 missing_panics_doc = "allow"
 doc_markdown = "allow"
-cast_possible_truncation = "allow"
 too_many_lines = "allow"
 match_same_arms = "allow"
 map_unwrap_or = "allow"
@@ -46,6 +45,7 @@ format_push_string = "allow"
 needless_raw_string_hashes = "allow"
 items_after_statements = "allow"
 single_match_else = "allow"
+assert_is_empty = "allow"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
