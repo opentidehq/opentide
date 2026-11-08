@@ -5,17 +5,19 @@ name: Oracle
 # `falco --validate`, and the Elastic and Lucene parsers (@elastic/esql,
 # EqlBase.g4, Kibana's kuery grammar, Lucene's QueryParser). A disagreement not
 # listed in crates/testdata/oracles/exceptions.toml is a red build, and so is a
-# listed one that is gone. The references never ship: the `package` job of
-# engine-ci.yml runs scripts/engine/license-scan.sh on the packaged crates, as
-# the engine's parked release workflow (.github/engine-workflows/release.yml)
-# does on every artifact.
+# listed one that is gone. The references never ship: ci.yml's
+# `engine-package` job runs scripts/engine/license-scan.sh on the packaged
+# crates, as the engine's release (engine-release-build.yml) does on every
+# asset.
 #
-# Imported from opentidehq/language-server (#800). No tag trigger: here `v*`
+# Imported from opentidehq/language-server (#800), whose oracles also ran on
+# its release tags: here that is an `engine-v*` tag (engine-release.yml). `v*`
 # tags are opentide's releases, cut from a development commit these jobs
 # already checked.
 on:
   push:
     branches: [main, development]
+    tags: ["engine-v*"]
   pull_request:
     paths:
       - "crates/**"

@@ -1,0 +1,331 @@
+name: Engine release
+
+# The engine's release (the crates/ workspace: opentide-lsp and its crates),
+# language-server's Release workflow brought here (#801). opentide's own release
+# (PyPI) owns the `v*` tags of this repository: an engine release is an
+# `engine-v*` tag, or Run workflow on development.
+#
+# - `engine-vX.Y.Z` (or Run workflow on development, which releases the
+#   version in Cargo.toml and creates its tag with the GitHub Release): the
+#   GitHub Release with every asset, its SHA256SUMS and their build provenance,
+#   then the crates on crates.io and the npm packages.
+# - `engine-vX.Y.Z-rc.N`, a release candidate: a GitHub pre-release with every
+#   asset, SHA256SUMS and provenance; nothing goes to crates.io or npm.
+# - Run workflow with publish_only resumes crates.io publishing for a version
+#   whose GitHub Release already exists: it builds and releases nothing, checks
+#   the published assets as a release does, and publishes only the crates
+#   crates.io does not have yet.
+#
+# The assets are built by engine-release-build.yml, which ci.yml also runs on
+# every pull request (a dry run, no tag): the same jobs, the same asset names.
+# An engine release is never the repository's "latest" release: that is
+# opentide's.
+on:
+  push:
+    tags:
+      - "engine-v*"
+  workflow_dispatch:
+    inputs:
+      publish_only:
+        description: "Resume crates.io publishing for the already-released version in Cargo.toml"
+        type: boolean
+        default: false
+
+# A second run for the same tag waits for the first.
+concurrency:
+  group: engine-release-${{ github.ref }}
+  cancel-in-progress: false
+
+# Read-only unless a job asks for more: only release writes the repository,
+# and only attest, crates and npm hold an OIDC token.
+permissions:
+  contents: read
+
+jobs:
+  # The tag, the crate pins, and CHANGELOG.md agree, and every crate builds from
+  # its packaged sources, before anything is built or published.
+  verify:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+      prerelease: ${{ steps.tag.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The release rust-toolchain.toml pins (`rustup toolchain install` with no name).
+      - name: Set up Rust
+        run: rustup toolchain install --profile minimal --no-self-update
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: tag
+        id: tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PUBLISH_ONLY: ${{ inputs.publish_only }}
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
+            tag="${GITHUB_REF_NAME}"
+            # A re-run of the tag push would rebuild assets that do not
+            # reproduce byte for byte and upload them over the published ones.
+            python3 scripts/engine/release.py unpublished "${tag}"
+          else
+            if [ "${GITHUB_REF}" != "refs/heads/development" ]; then
+              echo "::error::Run the release from development, not ${GITHUB_REF_NAME}"
+              exit 1
+            fi
+            tag="$(python3 scripts/engine/release.py tag)"
+            if [ "${PUBLISH_ONLY}" = "true" ]; then
+              if ! gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+                echo "::error::publish_only resumes a released version, and ${tag} has no GitHub Release"
+                exit 1
+              fi
+              # The crates are published from this commit: their sources must be the tag's.
+              git fetch --quiet --depth=1 origin "refs/tags/${tag}:refs/tags/${tag}"
+              if ! git diff --quiet "${tag}" HEAD -- crates data/catalogs grammars highlights Cargo.toml Cargo.lock LICENSE NOTICE; then
+                echo "::error::the crate sources changed since ${tag}; publish_only would publish different crates"
+                exit 1
+              fi
+            elif gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+              echo "::error::${tag} is already released; bump the version first (scripts/engine/release.py bump)"
+              exit 1
+            fi
+          fi
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$(python3 scripts/engine/release.py prerelease "${tag}")" >> "$GITHUB_OUTPUT"
+      - name: release.py check
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: python3 scripts/engine/release.py check "${TAG}"
+      - run: python3 scripts/engine/release.py vendor
+      - run: cargo package --locked --workspace --exclude opentide-native --allow-dirty
+      - name: license scan (no oracle references)
+        run: bash scripts/engine/license-scan.sh target/package/*.crate
+
+  # Every asset, the licences and SHA256SUMS, as the artifact `release-assets`.
+  # No OIDC token there: crates.io and npm trust this workflow as a whole, so a
+  # token minted in any of its jobs can publish, and cargo-about builds
+  # third-party crates (their build.rs run).
+  build:
+    needs: verify
+    if: ${{ !inputs.publish_only }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/engine-release-build.yml
+    with:
+      tag: ${{ needs.verify.outputs.tag }}
+
+  # Sigstore-signed SLSA provenance for every asset, SHA256SUMS included
+  # (language-server#196). The one job besides crates and npm that holds an
+  # OIDC token: it downloads the assets and runs the attest action, nothing else.
+  attest:
+    needs: build
+    if: ${{ !inputs.publish_only }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-assets
+          path: dist
+      - name: attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist/*
+
+  release:
+    needs: [verify, attest]
+    if: ${{ !inputs.publish_only }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ needs.verify.outputs.tag }}
+      PRERELEASE: ${{ needs.verify.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-assets
+          path: dist
+      - name: attach GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 scripts/engine/release.py notes "${TAG}" > notes.md
+          # Never the repository's latest release (that is opentide's); a
+          # release candidate is a pre-release.
+          flags=(--latest=false)
+          if [ "${PRERELEASE}" = "true" ]; then
+            flags+=(--prerelease)
+          fi
+          # From "Run workflow", the tag does not exist yet: the release creates it
+          # on the commit this run built.
+          if ! gh release create "${TAG}" dist/* \
+            --repo "${GITHUB_REPOSITORY}" \
+            --target "${GITHUB_SHA}" \
+            --title "opentide-lsp ${TAG}" \
+            --notes-file notes.md \
+            "${flags[@]}"; then
+            # The release exists: created by hand, with notes only. Never upload
+            # over assets it already has (a re-run of this job): consumers
+            # pinned their digests, and this run's differ. Without --clobber, an
+            # asset that appeared meanwhile fails the upload too.
+            python3 scripts/engine/release.py unpublished "${TAG}"
+            gh release upload "${TAG}" dist/* --repo "${GITHUB_REPOSITORY}"
+          fi
+
+  # What a consumer downloads checks out: the sums, the asset set, and each
+  # asset's attestation (language-server#196). It runs after the release, and
+  # on its own for publish_only, which resumes a release whose check may have
+  # failed: crates and npm publish only once it passed.
+  verify-assets:
+    needs: [verify, release]
+    if: ${{ always() && needs.verify.result == 'success' && (needs.release.result == 'success' || (inputs.publish_only && needs.release.result == 'skipped')) }}
+    runs-on: ubuntu-latest
+    # `gh attestation verify` reads the repository's attestations with this
+    # job's token.
+    permissions:
+      contents: read
+      attestations: read
+    env:
+      TAG: ${{ needs.verify.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: verify the published assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p published
+          gh release download "${TAG}" --repo "${GITHUB_REPOSITORY}" --dir published
+          # sha256sum checks the names SHA256SUMS lists; verify-sums also fails on
+          # an asset it leaves out, and check-assets on a set that differs from
+          # the one editors pin.
+          (cd published && sha256sum --check --strict SHA256SUMS)
+          python3 scripts/engine/release.py verify-sums published
+          python3 scripts/engine/release.py check-assets published "${TAG}"
+          # --repo alone accepts an attestation any workflow of the repository
+          # signed, on any branch: each asset's must come from engine-release.yml
+          # run from development or from this tag.
+          repo_re="${GITHUB_REPOSITORY//./\\.}"
+          tag_re="${TAG//./\\.}"
+          identity="^https://github\\.com/${repo_re}/\\.github/workflows/engine-release\\.yml@refs/(heads/development|tags/${tag_re})\$"
+          for asset in published/*; do
+            gh attestation verify "${asset}" --repo "${GITHUB_REPOSITORY}" --cert-identity-regex "${identity}"
+          done
+
+  # crates.io is permanent: publish only once the GitHub Release exists and its
+  # assets verified (verify-assets), and never for a release candidate. The
+  # crates go up in dependency order, each pinned to this version; a crate
+  # already published is skipped, so a re-run resumes. `cargo publish
+  # --no-verify` builds nothing here, where the OIDC token and the registry
+  # tokens are: a build runs every dependency's build script. `verify` built
+  # each package, without them. crates.io rate-limits new crates (one every ten
+  # minutes after the first few), which only the first release meets.
+  #
+  # Trusted publishing: once every crate exists, `release.py trust` registers
+  # this workflow as a trusted publisher for each (with CARGO_REGISTRY_TOKEN,
+  # which needs the trusted-publishing scope), and later releases log in with
+  # the workflow's OIDC identity instead of the token. The token then only
+  # publishes a crate that does not exist yet, which crates.io requires.
+  crates:
+    needs: [verify, release, verify-assets]
+    # After the release, or on its own for publish_only (the release job is
+    # skipped then); either way only once the published assets verified.
+    if: ${{ always() && needs.verify.result == 'success' && needs.verify.outputs.prerelease == 'false' && needs.verify-assets.result == 'success' && (needs.release.result == 'success' || (inputs.publish_only && needs.release.result == 'skipped')) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The release rust-toolchain.toml pins (`rustup toolchain install` with no name).
+      - name: Set up Rust
+        run: rustup toolchain install --profile minimal --no-self-update
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - run: python3 scripts/engine/release.py vendor
+      # Fails until trusted publishing is registered; the token covers that.
+      - name: crates.io login (trusted publishing)
+        id: trusted
+        continue-on-error: true
+        uses: rust-lang/crates-io-auth-action@3268eb413133e2960fa4ae0e963ca76380c54cd9 # v1.0.6
+      - name: publish to crates.io
+        env:
+          TRUSTED_TOKEN: ${{ steps.trusted.outputs.token }}
+          STORED_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          # Trusted publishing cannot create a crate: release.py publishes a crate
+          # crates.io does not have yet with the stored token.
+          NEW_CRATE_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -n "${TRUSTED_TOKEN}" ]; then
+            echo "Publishing with trusted publishing"
+            export CARGO_REGISTRY_TOKEN="${TRUSTED_TOKEN}"
+          elif [ -n "${STORED_TOKEN}" ]; then
+            echo "Publishing with CARGO_REGISTRY_TOKEN"
+            export CARGO_REGISTRY_TOKEN="${STORED_TOKEN}"
+          else
+            echo "::error::No trusted publishing and no CARGO_REGISTRY_TOKEN; the crates were not published"
+            exit 1
+          fi
+          python3 scripts/engine/release.py publish
+      - name: register trusted publishing
+        env:
+          CRATES_IO_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: python3 scripts/engine/release.py trust engine-release.yml
+
+  # npm (language-server#167): @opentide/lsp-client and @opentide/lsp-worker at
+  # the tag's version, with npm trusted publishing (the workflow's OIDC identity,
+  # no token), never for a release candidate. It runs only once the repository
+  # variable NPM_PUBLISH is "true", set after the two packages are registered
+  # with this workflow as their trusted publisher; until then it is skipped. A
+  # version already on npm is skipped, so a re-run resumes.
+  npm:
+    needs: [verify, release, verify-assets]
+    if: vars.NPM_PUBLISH == 'true' && needs.verify.outputs.prerelease == 'false'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      TAG: ${{ needs.verify.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+      - name: build and check the packs
+        run: |
+          for p in lsp-client lsp-worker; do (cd "packages/$p" && npm ci); done
+          node scripts/engine/check-npm-packs.mjs
+      - name: publish
+        run: |
+          set -euo pipefail
+          VERSION="${TAG#engine-v}"
+          for p in lsp-client lsp-worker; do
+            name="@opentide/$p"
+            if npm view "$name@$VERSION" version >/dev/null 2>&1; then
+              echo "$name@$VERSION is already published"
+              continue
+            fi
+            (cd "packages/$p" && npm version "$VERSION" --no-git-tag-version --allow-same-version && npm publish --provenance --access public)
+          done

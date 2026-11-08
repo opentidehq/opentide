@@ -54,7 +54,7 @@ Pinned stack (do not bump in passing):
 | `uuid` 1 (`v4` feature) | 1.26 | Tide object ids in `opentide-tide` |
 | `tree-sitter` | 0.25.10 | `opentide-syntax` and the query engines. See `tree-sitter` |
 
-`Cargo.lock` is exactly what cargo resolves for the workspace: CI passes `--locked` (`ci.yml`, job `engine`; `engine-ci.yml`), so a lock that needs rewriting fails it. Commit a re-resolved lock only with a change that means to change dependencies, and check with `cargo tree` that nothing else moved. If a command rewrites `Cargo.lock` for any other change, restore the committed file (`git checkout -- Cargo.lock`). `scripts/engine/cloud-agent-install.sh` restores it after warming the build. `fuzz/` keeps its own lock.
+`Cargo.lock` is exactly what cargo resolves for the workspace: CI passes `--locked` (`ci.yml`, every Rust job), so a lock that needs rewriting fails it. Commit a re-resolved lock only with a change that means to change dependencies, and check with `cargo tree` that nothing else moved. If a command rewrites `Cargo.lock` for any other change, restore the committed file (`git checkout -- Cargo.lock`). `scripts/engine/cloud-agent-install.sh` restores it after warming the build. `fuzz/` keeps its own lock.
 
 ## Types agents get wrong
 
@@ -98,7 +98,7 @@ Catalogs and the highlight spec load through `std::sync::OnceLock` (`Catalog::ca
 - Integration tests may use `PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")` to find `crates/testdata/`.
 - Assert diagnostic **codes** (and field paths when the contract says so). Snapshot (insta, `insta::assert_snapshot!`) what a contract fixes, such as a diagnostic's code, range and message or a renderer's output, rendered as text; never a whole struct. Conventions: `crates/AGENTS.md`, "Tests".
 - While iterating, `cargo nextest run --profile fast -p <crate>` (`.config/nextest.toml`); name the test binary with `cargo test -p opentide-kql --lib`. `cargo test --workspace` stays the plain full check.
-- CI runs `cargo test --workspace` (`ci.yml`, job `engine`, doctests included, `INSTA_UPDATE=no`) and, on Windows, `cargo nextest run -p opentide-lsp -p opentide-core --profile ci` (`engine-ci.yml`); nextest does not run doctests (`cargo test --workspace --doc` does). Each test gets its own process under nextest, so a test cannot rely on a `OnceLock` or other static that another test filled. `cargo nextest run --workspace --profile ci` is the same check as CI's.
+- CI runs `cargo nextest run --workspace --profile ci` on Linux, macOS and Windows and `cargo test --workspace --doc` on Linux (`ci.yml`, job `engine-test`, `INSTA_UPDATE=no`); nextest does not run doctests (`cargo test --workspace --doc` does). Each test gets its own process under nextest, so a test cannot rely on a `OnceLock` or other static that another test filled. `cargo nextest run --workspace --profile ci` is the same check as CI's.
 - The dev and test profiles build dependencies at `opt-level = 1` with line tables (`[profile.dev.package."*"]`); workspace crates stay at 0 with full debuginfo. The tests spend most of their time in `toml`, `serde`, `regex` and tree-sitter, which run about four times slower unoptimised. Do not drop it to speed up a cold build.
 - `crates/opentide-syntax/build.rs` watches each grammar's `src/` directory. Never print `rerun-if-changed` for a path that may not exist: cargo then treats the build script as stale on every run and rebuilds every crate.
 - `cargo fmt --all` before finishing. rustfmt is not optional.
