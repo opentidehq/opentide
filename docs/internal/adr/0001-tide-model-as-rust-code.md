@@ -27,7 +27,7 @@ The plan moves every implementation into one Rust workspace (D-1). The model com
 | Fields | 785 | `model_fields` of those classes, inherited fields counted on each class (632 declared) |
 | Closed classes | 168 | `extra="forbid"`; 5 configuration classes are `extra="allow"`, 3 internal ones are open (`results`, `version`) |
 | Frozen classes | 174 | `frozen=True` (all but the two `results` classes) |
-| Revisions | 5 | `objective::1.0`, `rule::1.0`, `rule::1.1`, `threat::1.0`, `visibility::1.0` |
+| Registered revisions | 15 | 5 object and configuration families (`objective::1.0`, `rule::1.0`, `rule::1.1`, `threat::1.0`, `visibility::1.0`), 9 platform blocks (`platform::sentinel::1.0` … `platform::sysdig::1.0`) and `sharing::misp::1.0` (`__schema_identifier__`) |
 | `tide.*` metadata keys | 23 | [the table below](#the-tide-metadata-keys) |
 | Validators | 21 | 15 decorated (10 `field_validator`, 5 `model_validator`; one of them, `VocabularyEntry._coerce_stages`, in `generation/vocabulary.py`) and 6 `Annotated` (3 `AfterValidator`, 3 `BeforeValidator`) |
 
@@ -55,7 +55,7 @@ The Tide model is Rust code in the `opentide-schema` crate (plan §4, "The model
 - **One concrete struct per revision:** `RuleV1_0`, `RuleV1_1`, and an alias for the newest, `pub type Rule = RuleV1_1`. `metadata.schema` selects the struct (UC-1.7, [#813](https://github.com/opentidehq/opentide/issues/813)).
 - **No generic model.** `#[pyclass]` accepts no generic parameters, so `Rule<V>` cannot be a Python class. `crates/opentide-schema/tests/ui/pyclass_generic.rs` is a compile-fail case (trybuild) that records PyO3's error: "`#[pyclass] cannot have generic parameters`".
 - **Shared fields are written once.** The `revisions!` macro (`src/revision.rs`) repeats a family's shared fields into each revision struct where its body says `@shared,`. A sub-struct that does not change between revisions is one struct, used by every revision.
-- **Naming.** A revision struct is the family's Rust name plus `V<major>_<minor>`. The Python class keeps today's name (`DetectionRule`, `DetectionRule_v1_1`) with `#[pyclass(name = "...")]` (UC-1.9).
+- **Naming.** A revision struct is the family's Rust name plus `V<major>_<minor>`: `RuleV1_1`, and for the platform blocks and sharing the platform's or integration's name, `SentinelConfigV1_0` for `platform::sentinel::1.0` and `MispIntegrationV1_0` for `sharing::misp::1.0` (UC-1.4, UC-1.5). The Python class keeps today's name (`DetectionRule`, `DetectionRule_v1_1`) with `#[pyclass(name = "...")]` (UC-1.9).
 - **Migrations** are `From` impls along a forward one-step chain, applied in memory. Files change only through `opentide migrate`.
 
 ### The `tide.*` metadata keys
@@ -120,7 +120,7 @@ Pydantic's three cases, and their exact Rust equivalents (counts over the 785 fi
 
 ### Errors
 
-Every error is an `opentide_schema::SchemaError`: an `ErrorKind`, the path (`PathSegment::Key` or `Index`, Pydantic's `loc`) and the message in Pydantic's wording. `ErrorKind::pydantic_type()` is Pydantic's error type (`missing`, `extra_forbidden`, `string_type`, `value_error`, …), which the differential runner compares, and `SchemaError::code(surface)` is the code the CLI prints, the same codes as today, none new:
+Every error is an `opentide_schema::SchemaError`: an `ErrorKind`, the path (`PathSegment::Key` or `Index`, Pydantic's `loc`) and the message in Pydantic's wording. `ErrorKind::pydantic_type()` is Pydantic's error type (`missing`, `extra_forbidden`, `string_type`, `value_error`, …), which the differential runner compares, and `SchemaError::code(surface)` is the code the CLI prints, the same codes as today, none new. They are constants (`opentide_schema::error::codes`): `schema_validation` is `opentide_core::codes::SCHEMA_VALIDATION`, and the four codes no engine crate emits yet move into `opentide_core::codes` with the port that emits them (UC-2.2):
 
 | Kind | Object file | Configuration file |
 |------|-------------|--------------------|
@@ -196,6 +196,6 @@ The 21 validators and their Rust form. The plan counts 14 constraints or Tide ke
   print(len(literals - modules_or_loggers - captures))                      # 23
   ```
 
-- The skeleton's verification, run in CI's `schema` job: `cargo build -p opentide-schema --features python`, `cargo build -p opentide-schema --target wasm32-unknown-unknown --features wasm`, `cargo nextest run -p opentide-schema --features python`, `cargo xtask check-layers`.
+- The skeleton's verification: `cargo build -p opentide-schema --features python`, `cargo build -p opentide-schema --target wasm32-unknown-unknown --features wasm` and `cargo nextest run -p opentide-schema --features python` run in the `schema` workflow (`.github/workflows/schema.yml`); `cargo xtask check-layers` and `scripts/engine/check-io-free.sh` run in `ci.yml`'s `engine` job.
 - PyO3 on generics: <https://pyo3.rs/v0.30.1/class.html#no-generic-parameters>, and `crates/opentide-schema/tests/ui/pyclass_generic.stderr`.
 - Plan §4, "The model", and §5.5, "Code rules" (typed errors mapped to stable codes).

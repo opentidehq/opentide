@@ -29,6 +29,7 @@ Read `references/crates.md` before adding a dependency or a new crate. Read `ref
 | `opentide-lucene` | no | `Diagnostic` | Lucene `query_string` checks |
 | `opentide-falco` | no | `Diagnostic` | Falco conditions: fields per event source, default macros and lists, events (`OnceLock`), output templates |
 | `opentide-ecs` | no | `Diagnostic` | ECS field catalog (`OnceLock`), ECS-index detection, the ECS type and near-miss helpers the Elastic engines share |
+| `opentide-schema` | no | `thiserror` (`SchemaError`) | The Tide model as code: serde, garde, schemars, PyO3 (UC-1.1, ADR 0001) |
 | `opentide-tide` | no | `Diagnostic` | Tide YAML, UUID graph, injection |
 | `opentide-analysis` | no | — | `WorkspaceHost` orchestrator |
 | `opentide-lsp` | yes | `anyhow` | stdio host and CLI |
