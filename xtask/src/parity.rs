@@ -180,6 +180,13 @@ fn ratio(part: usize, whole: usize) -> String {
     format!("{}.{}%", tenths / 10, tenths % 10)
 }
 
+/// Whether a page on disk is `page`, line endings aside: a Windows checkout
+/// may hold the committed page with CRLF (git's autocrlf), which is the same
+/// page.
+pub fn same_page(on_disk: &str, page: &str) -> bool {
+    on_disk.replace("\r\n", "\n") == page
+}
+
 /// The page, `docs/internal/parity.md`, with its frontmatter.
 pub fn page(inputs: &Inputs) -> String {
     let mut out = String::from(
@@ -530,6 +537,14 @@ mod tests {
             page.contains("## Rust implementations without recordings\n\n`opentide frobnicate`"),
             "{page}"
         );
+    }
+
+    #[test]
+    fn a_crlf_checkout_of_the_page_is_the_same_page() {
+        let page = page(&inputs());
+        assert!(same_page(&page, &page));
+        assert!(same_page(&page.replace('\n', "\r\n"), &page));
+        assert!(!same_page(&format!("{page}x"), &page));
     }
 
     #[test]

@@ -588,7 +588,7 @@ fn parity_command(args: &[String]) -> Result<bool> {
     let page = parity::page(&inputs);
     if check {
         let current = std::fs::read_to_string(&out).unwrap_or_default();
-        if current == page {
+        if parity::same_page(&current, &page) {
             println!("parity: {} is up to date", out.display());
             return Ok(true);
         }
