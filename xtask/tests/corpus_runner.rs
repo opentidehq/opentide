@@ -334,6 +334,17 @@ ops = [{ op = "set", path = "status", value = "NOPE" }]
             "--only",
             "uuid-invalid-rule"
         ]));
+        // The configuration kinds (UC-1.5) need the oracle too.
+        assert!(fails(&[
+            "faults",
+            "--check",
+            "--engine",
+            "rust",
+            "--only",
+            "configuration",
+            "--oracle",
+            "/nonexistent/opentide"
+        ]));
         let args = ["clean", "--engine", "rust", "--repo", "."].map(str::to_string);
         assert_eq!(run(&args).unwrap(), 1, "clean has no Rust run: it fails");
         assert_eq!(run(&["help".to_string()]).unwrap(), 0);

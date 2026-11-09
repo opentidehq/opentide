@@ -751,12 +751,15 @@ dependencies = [
  "garde",
  "opentide-core",
  "opentide-schema-derive",
+ "regex",
  "saphyr",
  "saphyr-parser",
  "schemars",
  "serde",
  "serde-saphyr",
+ "serde_json",
  "thiserror",
+ "toml_edit",
 ]
 
 [[package]]

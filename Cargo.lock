@@ -899,6 +899,7 @@ dependencies = [
  "opentide-schema-derive",
  "proptest",
  "pyo3",
+ "regex",
  "saphyr",
  "saphyr-parser",
  "schemars",
@@ -908,6 +909,7 @@ dependencies = [
  "serde_yaml",
  "thiserror",
  "toml 0.8.23",
+ "toml_edit 0.22.27",
  "trybuild",
 ]
 
