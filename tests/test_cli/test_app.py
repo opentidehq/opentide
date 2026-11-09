@@ -142,8 +142,11 @@ def test_debug_env_var_is_read_as_a_switch(argv: list[str], value: str, debug: b
     assert seen == [debug]
 
 
-def test_validate_query_crowdstrike_not_supported() -> None:
-    result = runner.invoke(app, ["--json", "validate", "query", "--platform", "crowdstrike"])
+def test_validate_query_crowdstrike_live_not_supported() -> None:
+    """CQL is checked offline only: CrowdStrike has no tenant check to call."""
+    result = runner.invoke(
+        app, ["--json", "validate", "query", "--platform", "crowdstrike", "--live"]
+    )
     assert result.exit_code != 0
     assert "not supported" in result.stdout.lower() or "not supported" in result.stderr.lower()
 

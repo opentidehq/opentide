@@ -166,7 +166,7 @@ Then add `opentide` to the `language-servers` of the languages you edit. Zed tak
 | Carbon Black Cloud | Lucene (Carbon Black dialect) | ✅ |
 | Sysdig Secure | Falco (the block's `condition`, exceptions, macros and lists) | ✅ |
 | SentinelOne | S1QL | ❌ tenant only: `opentide validate query --platform sentinel_one --live` |
-| CrowdStrike | CQL (the block's `query`, a correlation rule; a hunt with `system: crowdstrike`) | ✅ in the editor only: `opentide validate` and `opentide lint` do not check CrowdStrike queries |
+| CrowdStrike | CQL (the block's `query`, a correlation rule; a hunt with `system: crowdstrike`) | ✅ |
 | HarfangLab | — | ❌ never validated |
 
 ## opentide lsp start and opentide-lsp
