@@ -28,7 +28,7 @@ fn main() {
         &root.join("grammars/tree-sitter-opentide-spl/src"),
         "tree-sitter-opentide-spl",
     );
-    for lang in ["esql", "eql", "kuery", "lucene", "falco"] {
+    for lang in ["esql", "eql", "kuery", "lucene", "falco", "cql"] {
         compile_grammar(
             &root.join(format!("grammars/tree-sitter-opentide-{lang}/src")),
             &format!("tree-sitter-opentide-{lang}"),
@@ -40,7 +40,9 @@ fn main() {
     // one exists yet. Naming a scanner.c that does not exist would leave this script
     // permanently stale, so every cargo invocation would recompile the parsers and
     // every crate above them.
-    for lang in ["kql", "spl", "esql", "eql", "kuery", "lucene", "falco"] {
+    for lang in [
+        "kql", "spl", "esql", "eql", "kuery", "lucene", "falco", "cql",
+    ] {
         let src = root.join(format!("grammars/tree-sitter-opentide-{lang}/src"));
         println!("cargo:rerun-if-changed={}", src.display());
     }
@@ -50,7 +52,8 @@ fn compile_grammar(src: &std::path::Path, name: &str) {
     let mut build = cc::Build::new();
     build.include(src);
     build.file(src.join("parser.c"));
-    // External scanner, when the grammar declares `externals` (ES|QL nested comments).
+    // External scanner, when the grammar declares `externals` (ES|QL nested comments;
+    // CQL words, patterns and slashes, whose meaning depends on what follows).
     let scanner = src.join("scanner.c");
     if scanner.exists() {
         build.file(scanner);

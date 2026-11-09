@@ -7,7 +7,9 @@ then ``## Example`` and ``## How to fix``. ``docs/cli/diagnostics.md`` is genera
 
 The analysis engine's codes (``kql_parse_error``, ...) get a page too, built
 from the engine's own sentence (:func:`engine_page`), so a code the engine
-adds is explained without a file here. A file of the same name wins.
+adds is explained without a file here. A file of the same name wins. A code
+nothing reports any more keeps a page that says so (:func:`retired_page`, from
+:data:`opentide.cli.services.retired_codes.RETIRED_CODES`).
 """
 
 from __future__ import annotations
@@ -15,6 +17,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from opentide.cli.services.retired_codes import RETIRED_CODES, RetiredCode
 from opentide.package.paths import bundled_data_root
 
 #: Where the generated reference lives, relative to the repository root.
@@ -37,10 +40,12 @@ class ExplainPage:
 
 
 def diagnostic_codes() -> list[str]:
-    """Every code that has a page, the engine's included, sorted."""
+    """Every code that has a page, the engine's and the retired ones included, sorted."""
     from opentide.analysis import engine_codes
 
-    return sorted({path.stem for path in pages_root().glob("*.md")} | set(engine_codes()))
+    return sorted(
+        {path.stem for path in pages_root().glob("*.md")} | set(engine_codes()) | set(RETIRED_CODES)
+    )
 
 
 def load_page(code: str) -> ExplainPage | None:
@@ -50,7 +55,10 @@ def load_page(code: str) -> ExplainPage | None:
         return None
     path = pages_root() / f"{code}.md"
     if not path.is_file():
-        return engine_page(code)
+        page = engine_page(code)
+        if page is None and (retired := RETIRED_CODES.get(code)) is not None:
+            return retired_page(retired)
+        return page
     markdown = path.read_text(encoding="utf-8")
     return ExplainPage(code=code, summary=_summary(markdown), markdown=markdown)
 
@@ -59,6 +67,12 @@ def load_page(code: str) -> ExplainPage | None:
 _OBJECT_CODES = frozenset(
     {"filename_slug", "filename_pattern", "missing_author", "missing_organisation"}
 )
+
+#: The engine's codes for a CrowdStrike Query Language (CQL) query. Only the
+#: editor reports them: CrowdStrike is not in ``OFFLINE_QUERY_LANGUAGES``, so
+#: ``opentide validate`` and ``opentide lint`` do not check CrowdStrike queries.
+_EDITOR_ONLY_QUERY_PREFIX = "cql_"
+_CQL_REFERENCE = "https://library.humio.com/crowdstrike-query-language/"
 
 
 def engine_page(code: str) -> ExplainPage | None:
@@ -86,6 +100,21 @@ def engine_page(code: str) -> ExplainPage | None:
             "Change the query where the frame points, then run `opentide validate query` "
             "(`--file` for one rule or query file) or `opentide lint --check queries` again. "
             f"The [{language} reference]({url}) describes the syntax and the commands the "
+            "engine checks against."
+        )
+    elif code.startswith(_EDITOR_ONLY_QUERY_PREFIX):
+        where = (
+            "Reported by the analysis engine in a CQL query, the CrowdStrike Query Language of "
+            "Falcon LogScale and Next-Gen SIEM, at the place in the query: an editor running "
+            "`opentide lsp start` shows it in a CrowdStrike rule's "
+            "`configurations.crowdstrike.query`, a hunt search with `system: crowdstrike` and a "
+            "`.cql` file, and `opentide tui` in the objects. `opentide validate` and "
+            "`opentide lint` do not check CrowdStrike queries."
+        )
+        example = "opentide lsp start"
+        fix = (
+            "Change the query where the editor points. CrowdStrike's "
+            f"[CQL reference]({_CQL_REFERENCE}) describes the syntax and the functions the "
             "engine checks against."
         )
     elif code in ELASTIC_ADVISORY_CODES:
@@ -126,6 +155,20 @@ def engine_page(code: str) -> ExplainPage | None:
         f"## How to fix\n\n{fix}\n"
     )
     return ExplainPage(code=code, summary=sentence, markdown=markdown)
+
+
+def retired_page(retired: RetiredCode) -> ExplainPage:
+    """The page of a code nothing reports any more: when it was retired, and what replaced it."""
+    summary = f"Retired in {retired.retired_in}; {retired.successor}."
+    markdown = (
+        f"# {retired.code}\n\n{summary}\n\n"
+        f"Severity: {retired.level}, while it was reported. {retired.meaning}\n\n"
+        f"{retired.reported_by}\n\n"
+        f"## Example\n\n```text\n{retired.example}\n```\n\n"
+        "## How to fix\n\nNothing to fix: no command reports this code any more. A "
+        "suppression list or SARIF baseline that names it can drop it.\n"
+    )
+    return ExplainPage(code=retired.code, summary=summary, markdown=markdown)
 
 
 def _summary(markdown: str) -> str:

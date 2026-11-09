@@ -17,6 +17,7 @@ The state under **today** was read from the registries' public APIs on **2026-11
 |------|-------|--------------|-------------------------|----------------------------|
 | `opentide` | not published | none | none | `opentidehq/opentide`, `publish.yml`, registered at UC-5.5, the first workflow that publishes it ([step 10](#10-at-uc-55-publishyml)) |
 | `opentide-core`, `opentide-highlight`, `opentide-syntax`, `opentide-kql`, `opentide-spl`, `opentide-esql`, `opentide-eql`, `opentide-kuery`, `opentide-lucene`, `opentide-falco`, `opentide-ecs`, `opentide-tide`, `opentide-analysis`, `opentide-lsp` (14 crates) | 0.11.0 | user `behemothsecurity` | `opentidehq/language-server`, `release.yml` (its `release.py trust` step registers it): crates.io records every 0.11.0 as published by trusted publishing from that repository | `opentidehq/opentide`, [the engine release workflow](#the-engine-release-workflow), once UC-0.3 has merged it into `development` ([step 9](#9-when-uc-03-has-merged-the-engine-release-workflow)); then `publish.yml` from UC-5.5 |
+| `opentide-cql` | 0.12.0 | user `behemothsecurity` | none recorded: language-server 0.12.0 (2026-11-09) published its first version with a token, as a new crate's first version must be, so crates.io records no trusted publishing for it | the same as the 14 crates above; its publisher is added as theirs are ([step 9](#9-when-uc-03-has-merged-the-engine-release-workflow)) |
 
 `opentide-wasm` is `publish = false` in language-server and has no crates.io name. The plan's new crates (`opentide-schema`, `opentide-schema-derive`, `opentide-workspace`, `opentide-compile`, `opentide-connectors`, `opentide-cli`) are unclaimed. crates.io's [usage policy](https://crates.io/policies) does not allow a crate that exists only to hold a name for a prolonged period, without functionality or development activity, so they are published when they have content (see [Decisions](#decisions-for-the-maintainer)).
 
@@ -59,8 +60,8 @@ language-server's `release.yml` publishes the engine crates, the engine assets a
 
 | Registry | Names | Workflow | Environment | From |
 |----------|-------|----------|-------------|------|
-| crates.io | the 14 engine crates | the engine release workflow | none today; `crates-io` if [decided](#decisions-for-the-maintainer) | once UC-0.3 has merged it into `development`, before its first engine release ([step 9](#9-when-uc-03-has-merged-the-engine-release-workflow)) |
-| crates.io | `opentide`, and the 14 engine crates from UC-5.5 | `publish.yml` | as above | UC-5.5, once `publish.yml` is on `development` ([step 10](#10-at-uc-55-publishyml)) |
+| crates.io | the 15 engine crates | the engine release workflow | none today; `crates-io` if [decided](#decisions-for-the-maintainer) | once UC-0.3 has merged it into `development`, before its first engine release ([step 9](#9-when-uc-03-has-merged-the-engine-release-workflow)) |
+| crates.io | `opentide`, and the 15 engine crates from UC-5.5 | `publish.yml` | as above | UC-5.5, once `publish.yml` is on `development` ([step 10](#10-at-uc-55-publishyml)) |
 | npm | `@opentide/lsp-client`, `@opentide/lsp-worker` | the engine release workflow | none today; `npm` if decided | within two days before the first engine release that publishes them ([step 9](#9-when-uc-03-has-merged-the-engine-release-workflow)) |
 | npm | `@opentide/opentide`, `opentide`, and the lsp packages from UC-5.5 | `publish.yml` | as above | within two days before the first release that publishes them ([step 10](#10-at-uc-55-publishyml)) |
 | PyPI | `opentide` | `publish-pypi.yml` | `pypi` | configured; it published 0.23.0 |
@@ -158,21 +159,21 @@ Work from a clean checkout of `development` that contains this page (`git status
 
    ```bash
    for crate in opentide opentide-core opentide-highlight opentide-syntax opentide-kql opentide-spl \
-       opentide-esql opentide-eql opentide-kuery opentide-lucene opentide-falco opentide-ecs \
-       opentide-tide opentide-analysis opentide-lsp; do
+       opentide-esql opentide-eql opentide-kuery opentide-lucene opentide-falco opentide-cql \
+       opentide-ecs opentide-tide opentide-analysis opentide-lsp; do
      cargo owner --add <second-github-login> "$crate" || { echo "stopped at $crate"; break; }
    done
    ```
 
    Each crate prints `Owner Crates.io user <login> has been invited to be an owner of crate <crate>`. The loop stops at the first error and stays logged in. Fix the cause and run it again: a crate that already has the invitation prints `already has a pending invitation` and the loop goes on.
-3. Once all 15 crates have printed that, run `cargo logout` and revoke the token on [API Tokens](https://crates.io/settings/tokens).
+3. Once all 16 crates have printed that, run `cargo logout` and revoke the token on [API Tokens](https://crates.io/settings/tokens).
 4. The second owner accepts each invitation at [Pending invites](https://crates.io/me/pending-invites).
 5. **Verify:** every crate lists two people.
 
    ```bash
    for crate in opentide opentide-core opentide-highlight opentide-syntax opentide-kql opentide-spl \
-       opentide-esql opentide-eql opentide-kuery opentide-lucene opentide-falco opentide-ecs \
-       opentide-tide opentide-analysis opentide-lsp; do
+       opentide-esql opentide-eql opentide-kuery opentide-lucene opentide-falco opentide-cql \
+       opentide-ecs opentide-tide opentide-analysis opentide-lsp; do
      printf '%s: ' "$crate"
      curl -s -A "opentide-maintainer (https://github.com/opentidehq/opentide)" "https://crates.io/api/v1/crates/$crate/owners" \
        | jq -r '[.users[] | select(.kind == "user") | .login] | join(" ")'
@@ -277,7 +278,7 @@ After steps 1 to 6, and again after each of steps 9 and 10, open a pull request 
 
 Once the engine release workflow is on `development`, under the name you decided ([decision 2](#decisions-for-the-maintainer)), and before its first engine release:
 
-**crates.io, each of the 14 engine crates:**
+**crates.io, each of the 15 engine crates:**
 
 1. Open `https://crates.io/crates/<crate>/settings`, section **Trusted Publishing**, click **Add**.
 2. **Publisher** GitHub; **Repository owner** `opentidehq`; **Repository name** `opentide`; **Workflow filename** the workflow's file name (the name only, with `.yml`); **Environment name** empty, or `crates-io` if you created it in step 7. Under the filename, crates.io must say **Workflow file found**. **Workflow file not found** means a typo or a file that is not on `development`: crates.io saves the publisher anyway, so correct it before you click **Add**.
@@ -314,7 +315,7 @@ Then record it (step 8).
 
 UC-5.5 ([#840](https://github.com/opentidehq/opentide/issues/840)) publishes everything from `publish.yml`, which replaces `publish-pypi.yml` and the engine release workflow. Once `publish.yml` is on `development`, and before its first release:
 
-1. **crates.io:** add the publisher `opentidehq` / `opentide` / `publish.yml` to `opentide` (its first publisher) and to the 14 engine crates, as in step 9. After the first release, remove the engine release workflow's publisher from the engine crates, and tick **Require trusted publishing for all new versions** on `opentide`.
+1. **crates.io:** add the publisher `opentidehq` / `opentide` / `publish.yml` to `opentide` (its first publisher) and to the 15 engine crates, as in step 9. After the first release, remove the engine release workflow's publisher from the engine crates, and tick **Require trusted publishing for all new versions** on `opentide`.
 2. **npm:** within two days before that release:
    - On `@opentide/opentide` and `opentide`, which have no publisher yet, register `publish.yml` as in step 9, on the website or with `npm trust github @opentide/opentide --repo opentidehq/opentide --file publish.yml --allow-publish`.
    - On `@opentide/lsp-client` and `@opentide/lsp-worker`, which already have the engine release workflow's publisher, use the website: **Settings**, **Trusted publishing**, **Add trusted publisher**, then the fields of step 9 with `publish.yml`. The CLI refuses a second configuration. Remove the engine release workflow's publisher after the release.

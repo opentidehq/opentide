@@ -36,6 +36,11 @@ export interface OpentideLanguage {
  * Kibana KQL (Elastic `language: kuery`). Tide YAML is scoped to `objects/`,
  * where the server owns diagnostics (turn yamlls off there).
  *
+ * `cql` is the CrowdStrike Query Language (Falcon LogScale, Next-Gen SIEM).
+ * Cassandra's CQL uses the `.cql` extension too: where a workspace holds
+ * Cassandra scripts, leave out the `.cql` file pattern and match `cql` by
+ * language id alone.
+ *
  * `opentide-config` is configuration TOML (`.opentide/configurations/`). The
  * host that runs the server checks it (`opentide lsp start`); `opentide-lsp`
  * on its own reports nothing for it, so `analyze` and `highlight` refuse it.
@@ -50,6 +55,7 @@ export const LANGUAGES: readonly OpentideLanguage[] = [
   { id: "kuery", name: "Kibana KQL", patterns: ["**/*.kuery"] },
   { id: "lucene", name: "Lucene", patterns: ["**/*.lucene"] },
   { id: "falco", name: "Falco", patterns: ["**/*.falco"] },
+  { id: "cql", name: "CrowdStrike Query Language", patterns: ["**/*.cql"] },
   { id: "opentide-config", name: "opentide configuration", patterns: ["**/.opentide/configurations/**/*.toml"] },
 ];
 

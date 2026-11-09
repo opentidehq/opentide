@@ -26,6 +26,7 @@ const files = {
   'source.eql': 'eql.tmLanguage.json',
   'source.kuery': 'kuery.tmLanguage.json',
   'source.falco': 'falco.tmLanguage.json',
+  'source.opentide.cql': 'cql.tmLanguage.json',
 };
 const registry = new textmate.Registry({
   onigLib: Promise.resolve({
@@ -69,6 +70,10 @@ configurations:
   sysdig:
     condition: >
       spawned_process and proc.name = bash
+  crowdstrike:
+    query: |
+      #event_simpleName=ProcessRollup2
+      | groupBy([aid], function=count())
   elastic:
     type: query
     language: lucene
@@ -94,6 +99,17 @@ test('a plain SPL scalar and a Carbon Black query are embedded too', () => {
   assert.ok(falco, 'sysdig.condition is embedded Falco');
 });
 
+test('a CrowdStrike query is embedded CQL, in the source.opentide.cql grammar', () => {
+  const all = tokens(RULE);
+  const groupBy = all.find(([t]) => t.includes('groupBy'));
+  assert.ok(groupBy, 'groupBy is a token');
+  assert.ok(groupBy[1].includes('meta.embedded.block.cql'), groupBy[1].join(' '));
+  // The CQL grammar's own pipe scope, inside the region.
+  const pipe = all.find(([t, s]) => t.trim() === '|' && s.includes('meta.embedded.block.cql'));
+  assert.ok(pipe, 'the CQL pipe is a token of the region');
+  assert.ok(pipe[1].includes('keyword.operator.pipe.opentide'), pipe[1].join(' '));
+});
+
 test('Elastic queries and text after the block get no region', () => {
   const all = tokens(RULE);
   const elastic = all.filter(([t]) => t.includes('process.name'));
@@ -114,5 +130,6 @@ test('package-contributions.json maps each region to its language id', () => {
     'meta.embedded.block.spl': 'spl',
     'meta.embedded.block.lucene': 'lucene',
     'meta.embedded.block.falco': 'falco',
+    'meta.embedded.block.cql': 'cql',
   });
 });
