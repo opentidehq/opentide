@@ -623,10 +623,11 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
 name = "opentide-analysis"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "insta",
  "opentide-core",
+ "opentide-cql",
  "opentide-ecs",
  "opentide-eql",
  "opentide-esql",
@@ -646,7 +647,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-core"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "serde",
  "thiserror",
@@ -654,8 +655,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "opentide-cql"
+version = "0.12.0"
+dependencies = [
+ "opentide-core",
+ "opentide-highlight",
+ "opentide-syntax",
+ "serde",
+ "serde_json",
+ "toml 0.8.23",
+ "tree-sitter",
+]
+
+[[package]]
 name = "opentide-ecs"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "opentide-core",
  "serde",
@@ -664,7 +678,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-eql"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "opentide-core",
  "opentide-ecs",
@@ -678,7 +692,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-esql"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "opentide-core",
  "opentide-ecs",
@@ -692,7 +706,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-falco"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "opentide-core",
  "opentide-highlight",
@@ -706,7 +720,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-highlight"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "opentide-core",
  "regex",
@@ -718,7 +732,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-kql"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "opentide-core",
  "opentide-highlight",
@@ -731,7 +745,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-kuery"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "opentide-core",
  "opentide-ecs",
@@ -743,7 +757,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-lsp"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -765,7 +779,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-lucene"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "opentide-core",
  "opentide-ecs",
@@ -788,7 +802,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-schema"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "garde",
  "insta",
@@ -804,7 +818,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-spl"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "opentide-core",
  "opentide-highlight",
@@ -816,7 +830,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-syntax"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "cc",
  "opentide-core",
@@ -827,9 +841,10 @@ dependencies = [
 
 [[package]]
 name = "opentide-tide"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "opentide-core",
+ "opentide-cql",
  "opentide-ecs",
  "opentide-eql",
  "opentide-esql",
@@ -849,7 +864,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-wasm"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "js-sys",
  "opentide-analysis",

@@ -1,0 +1,12 @@
+{
+  "name": "tree-sitter-opentide-cql",
+  "version": "0.1.0",
+  "description": "Tree-sitter grammar for the CrowdStrike Query Language (CQL, Falcon LogScale) (opentide)",
+  "license": "EUPL-1.2",
+  "tree-sitter": [
+    {
+      "scope": "source.cql",
+      "file-types": ["cql"]
+    }
+  ]
+}
