@@ -671,6 +671,58 @@ jobs:
           cargo bench --locked -p opentide-analysis --bench analyze | tee bench.txt
           { echo '### analyze() per language'; echo; echo '```'; cat bench.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
 
+  # The corpora of UC-0.6 (#804, tests/corpora/README.md) against the oracle,
+  # opentide 0.23.0 from PyPI (every wheel hash-pinned): the heavy workspace has
+  # no finding, every fault kind reports exactly its codes, the code inventory is
+  # the oracle's and COVERAGE.md is current with no code missing.
+  corpus:
+    name: Corpus (generator, faults, coverage) against opentide 0.23.0
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      RUSTFLAGS: "-Dwarnings"
+      CARGO_INCREMENTAL: "0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+      - name: Set up Rust
+        run: rustup toolchain install --profile minimal --no-self-update
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: corpus
+      - name: Install the oracle (opentide 0.23.0, hash-pinned, own venv)
+        run: |
+          uv venv --python 3.12 "$RUNNER_TEMP/oracle"
+          uv pip install --python "$RUNNER_TEMP/oracle/bin/python" --require-hashes \
+            -r tests/corpora/oracle-requirements.txt
+          echo "OPENTIDE_ORACLE=$RUNNER_TEMP/oracle/bin/opentide" >> "$GITHUB_ENV"
+      - name: Generator tests (determinism digests)
+        run: cargo test --locked -p xtask --test corpus_generate
+      - name: The heavy workspace has zero findings
+        run: |
+          cargo xtask corpus generate --seed 20261107 --out "$RUNNER_TEMP/heavy"
+          cargo xtask corpus clean --engine python --repo "$RUNNER_TEMP/heavy"
+      - name: Fault catalogue against the oracle
+        run: cargo xtask corpus faults --check --engine python --report "$RUNNER_TEMP/faults.json"
+      - name: Upload the fault report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: corpus-faults-report
+          path: ${{ runner.temp }}/faults.json
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: The code inventory is the oracle's
+        run: |
+          cargo xtask corpus codes --engine python > "$RUNNER_TEMP/codes.toml"
+          diff -u tests/corpora/codes.toml "$RUNNER_TEMP/codes.toml"
+      - name: Coverage report is current, no code missing
+        run: cargo xtask corpus coverage --check
+
   test:
     name: Test (${{ matrix.python-version }})
     runs-on: ubuntu-latest
