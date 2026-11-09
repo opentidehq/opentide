@@ -68,12 +68,18 @@ impl Folder {
 pub struct Instance<'a> {
     /// `<workspace>/.opentide/configurations`, when it exists.
     pub workspace: Option<&'a Folder>,
-    /// The test fixture overlay the oracle merges when
-    /// `OPENTIDE_TIDE_WORKSPACE` is set (it then skips the parent).
+    /// The test fixture overlay (`tests/fixtures/generation/configurations`
+    /// of the repository) the oracle merges after the workspace when
+    /// `OPENTIDE_TIDE_WORKSPACE` is set and that folder exists. It does not
+    /// skip the parent: [`Self::skip_parent`] does.
     pub overlay: Option<&'a Folder>,
     /// `<workspace>/../.opentide/configurations`, when it exists and is not
     /// the workspace's own.
     pub parent: Option<&'a Folder>,
+    /// Leave [`Self::parent`] out, retired entries included: set it whenever
+    /// `OPENTIDE_TIDE_WORKSPACE` is set (generation sets it), whether or not
+    /// there is an overlay, as the oracle does.
+    pub skip_parent: bool,
 }
 
 /// Why a workspace's configuration does not resolve; every command stops
@@ -208,14 +214,20 @@ fn fetch(folder: &Folder, parsed: &mut usize) -> Result<Node, ResolveError> {
         .collect();
     names.sort_unstable();
     names.dedup();
-    let mut entries = Vec::new();
+    let mut entries: Vec<(String, Node)> = Vec::new();
+    // A key read twice (`platforms.toml` after the folder `platforms`) takes
+    // the later entry in name order, as the oracle's dict assignment does.
+    let mut put = |key: &str, node: Node| match entries.iter_mut().find(|(seen, _)| seen == key) {
+        Some((_, existing)) => *existing = node,
+        None => entries.push((key.to_owned(), node)),
+    };
     for name in names {
         if let Some((_, text)) = folder.files.iter().find(|(path, _)| path == name) {
             if !checks::is_toml(name) || name == "sharing.toml" {
                 continue;
             }
             let key = name.strip_suffix(".toml").unwrap_or(name);
-            entries.push((key.to_owned(), parse(folder, name, text, parsed)?));
+            put(key, parse(folder, name, text, parsed)?);
             continue;
         }
         if name.starts_with('.') || name.starts_with("__") {
@@ -236,7 +248,7 @@ fn fetch(folder: &Folder, parsed: &mut usize) -> Result<Node, ResolveError> {
             let document = parse(folder, &format!("{prefix}{file}"), text, parsed)?;
             tables.push((stem(file).to_owned(), document));
         }
-        entries.push((name.to_owned(), table(tables)));
+        put(name, table(tables));
     }
     Ok(table(entries))
 }
@@ -294,7 +306,7 @@ pub fn resolve(instance: &Instance<'_>) -> Result<Resolved, ResolveError> {
         let layer = fetch(overlay, &mut parsed)?;
         merge_layer(&mut unified, &layer);
     }
-    if let (Some(parent), None) = (instance.parent, instance.overlay) {
+    if let Some(parent) = instance.parent.filter(|_| !instance.skip_parent) {
         reject_retired(parent)?;
         let layer = fetch(parent, &mut parsed)?;
         merge_layer(&mut unified, &layer);
@@ -383,6 +395,7 @@ mod tests {
             workspace: Some(&workspace),
             overlay: None,
             parent: Some(&parent),
+            skip_parent: false,
         })
         .unwrap();
         let json = resolved.to_json();
@@ -392,6 +405,81 @@ mod tests {
         assert_eq!(json["empty"], serde_json::json!({}));
         assert!(json.get(".hidden").is_none());
         assert_eq!(resolved.parsed, bundled::FILES.len() - 1 + 3);
+    }
+
+    #[test]
+    fn a_file_replaces_the_folder_of_its_name() {
+        // `platforms.toml` sorts after `platforms`: the oracle's dict keeps
+        // the file, and the folder's `enabled = true` is not merged.
+        let workspace = folder(
+            &[
+                ("platforms.toml", "[splunk]\nx = 1\n"),
+                ("platforms/splunk.toml", "[platform]\nenabled = true\n"),
+            ],
+            &["platforms"],
+        );
+        let resolved = resolve(&Instance {
+            workspace: Some(&workspace),
+            ..Instance::default()
+        })
+        .unwrap();
+        let json = resolved.to_json();
+        assert_eq!(json["platforms"]["splunk"]["x"], 1);
+        assert_eq!(json["platforms"]["splunk"]["platform"]["enabled"], false);
+        let layer = fetch(&workspace, &mut 0).unwrap();
+        let Value::Map(entries) = &layer.value else {
+            panic!("a table");
+        };
+        let keys: Vec<_> = entries
+            .iter()
+            .map(|entry| entry.key.value.as_str())
+            .collect();
+        assert_eq!(keys, [Some("platforms")]);
+    }
+
+    #[test]
+    fn skip_parent_leaves_the_parent_out_with_or_without_an_overlay() {
+        let workspace = folder(
+            &[("deployment.toml", "default_responders = \"soc\"\n")],
+            &[],
+        );
+        let overlay = folder(&[("paths.toml", "overlay = true\n")], &[]);
+        let parent = folder(
+            &[
+                ("deployment.toml", "default_responders = \"cert\"\n"),
+                ("global.toml", ""),
+            ],
+            &[],
+        );
+        let with_overlay = resolve(&Instance {
+            workspace: Some(&workspace),
+            overlay: Some(&overlay),
+            parent: Some(&parent),
+            skip_parent: true,
+        })
+        .unwrap()
+        .to_json();
+        assert_eq!(with_overlay["paths"]["overlay"], true);
+        assert_eq!(with_overlay["deployment"]["default_responders"], "soc");
+        let without_overlay = resolve(&Instance {
+            workspace: Some(&workspace),
+            overlay: None,
+            parent: Some(&parent),
+            skip_parent: true,
+        })
+        .unwrap()
+        .to_json();
+        assert_eq!(without_overlay["deployment"]["default_responders"], "soc");
+        assert!(without_overlay["paths"].get("overlay").is_none());
+        // Without the flag the parent is read, its retired entry included.
+        let error = resolve(&Instance {
+            workspace: Some(&workspace),
+            overlay: Some(&overlay),
+            parent: Some(&parent),
+            skip_parent: false,
+        })
+        .unwrap_err();
+        assert_eq!(error.code(), Some("retired_configuration_file"));
     }
 
     #[test]

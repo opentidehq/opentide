@@ -752,6 +752,7 @@ dependencies = [
  "opentide-core",
  "opentide-schema-derive",
  "regex",
+ "regex-syntax",
  "saphyr",
  "saphyr-parser",
  "schemars",

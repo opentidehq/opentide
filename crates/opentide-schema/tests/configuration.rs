@@ -6,16 +6,18 @@
 //! as JSON and its findings, or the error resolution stops on; each
 //! `lint.toml`'s settings or error; each `sharing.toml`'s findings.
 //!
-//! A case whose result differs names the `[[difference]]` that explains it;
-//! a case that names one and does not differ fails, as does a difference no
-//! case names.
+//! A case whose result differs names the `[[difference]]` that explains it.
+//! A difference lists the `fields` it may change (`message`, `resolved`, ...):
+//! every other field of such a case (code, severity, field path, file, line,
+//! column, context) is still compared with the oracle's. A case that names a
+//! difference and does not differ fails, as does a difference no case names.
 
 #![expect(
     clippy::unwrap_used,
     reason = "test helpers: a fixture that does not parse fails the test"
 )]
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use opentide_schema::configuration::checks::{self, Layers};
@@ -116,6 +118,8 @@ fn workspace_case(case: &toml::Value) -> Json {
         workspace: Some(&workspace),
         overlay: None,
         parent: parent.as_ref(),
+        // The oracle runs without OPENTIDE_TIDE_WORKSPACE.
+        skip_parent: false,
     }) {
         Ok(resolved) => json!({
             "resolved": resolved.to_json(),
@@ -184,6 +188,8 @@ fn sharing_case(case: &toml::Value) -> Json {
         workspace: Some(&workspace),
         overlay: None,
         parent: parent.as_ref(),
+        // The oracle runs without OPENTIDE_TIDE_WORKSPACE.
+        skip_parent: false,
     })
     .unwrap();
     let statuses = resolved
@@ -218,15 +224,91 @@ fn sharing_case(case: &toml::Value) -> Json {
     )
 }
 
+/// The paths at which `rust` differs from `oracle`, apart from the members
+/// named in `allowed` (at any depth). An array of another length differs as
+/// a whole.
+fn differences_outside(
+    oracle: &Json,
+    rust: &Json,
+    allowed: &BTreeSet<String>,
+    path: &str,
+    out: &mut Vec<String>,
+) {
+    match (oracle, rust) {
+        (Json::Object(left), Json::Object(right)) => {
+            let keys: BTreeSet<&String> = left.keys().chain(right.keys()).collect();
+            for key in keys {
+                if allowed.contains(key.as_str()) {
+                    continue;
+                }
+                let at = format!("{path}/{key}");
+                match (left.get(key), right.get(key)) {
+                    (Some(left), Some(right)) => {
+                        differences_outside(left, right, allowed, &at, out);
+                    }
+                    _ => out.push(at),
+                }
+            }
+        }
+        (Json::Array(left), Json::Array(right)) if left.len() == right.len() => {
+            for (index, (left, right)) in left.iter().zip(right).enumerate() {
+                differences_outside(left, right, allowed, &format!("{path}/{index}"), out);
+            }
+        }
+        _ if oracle == rust => {}
+        _ => out.push(if path.is_empty() {
+            "/".to_owned()
+        } else {
+            path.to_owned()
+        }),
+    }
+}
+
+/// Checks one case against the oracle; a failure's description, if any.
+fn compare(
+    id: &str,
+    oracle: &Json,
+    rust: &Json,
+    difference: Option<(&str, &BTreeSet<String>)>,
+) -> Option<String> {
+    let shown = || {
+        format!(
+            "\n  oracle: {}\n  rust:   {}",
+            serde_json::to_string(oracle).unwrap(),
+            serde_json::to_string(rust).unwrap()
+        )
+    };
+    let Some((name, allowed)) = difference else {
+        return (rust != oracle).then(|| format!("{id}:{}", shown()));
+    };
+    if rust == oracle {
+        return Some(format!("{id}: names `{name}` but matches the oracle"));
+    }
+    let mut outside = Vec::new();
+    differences_outside(oracle, rust, allowed, "", &mut outside);
+    (!outside.is_empty()).then(|| {
+        format!(
+            "{id}: `{name}` may change {allowed:?}, but {} differ{}",
+            outside.join(", "),
+            shown()
+        )
+    })
+}
+
 #[test]
 fn configuration_cases_match_the_oracle_or_name_their_difference() {
     let table: Json = serde_json::from_str(TABLE).unwrap();
     let cases: toml::Value = toml::from_str(CASES).unwrap();
-    let differences: BTreeSet<String> = cases["difference"]
+    let differences: BTreeMap<String, BTreeSet<String>> = cases["difference"]
         .as_array()
         .unwrap()
         .iter()
-        .map(|difference| difference["id"].as_str().unwrap().to_owned())
+        .map(|difference| {
+            let fields: BTreeSet<String> = strings(difference.get("fields")).into_iter().collect();
+            let id = difference["id"].as_str().unwrap().to_owned();
+            assert!(!fields.is_empty(), "difference `{id}` lists no `fields`");
+            (id, fields)
+        })
         .collect();
     let mut used = BTreeSet::new();
     let mut failures = Vec::new();
@@ -240,32 +322,48 @@ fn configuration_cases_match_the_oracle_or_name_their_difference() {
             other => panic!("{id}: unknown kind {other}"),
         };
         let oracle = &table["cases"][id];
-        let difference = case.get("difference").and_then(toml::Value::as_str);
-        match difference {
-            Some(name) => {
-                assert!(
-                    differences.contains(name),
-                    "{id}: unknown difference {name}"
-                );
+        let difference = case
+            .get("difference")
+            .and_then(toml::Value::as_str)
+            .map(|name| {
+                let fields = differences
+                    .get(name)
+                    .unwrap_or_else(|| panic!("{id}: unknown difference {name}"));
                 used.insert(name.to_owned());
-                if &rust == oracle {
-                    failures.push(format!("{id}: names `{name}` but matches the oracle"));
-                }
-            }
-            None if &rust != oracle => failures.push(format!(
-                "{id}:\n  oracle: {}\n  rust:   {}",
-                serde_json::to_string(oracle).unwrap(),
-                serde_json::to_string(&rust).unwrap()
-            )),
-            None => {}
-        }
+                (name, fields)
+            });
+        failures.extend(compare(id, oracle, &rust, difference));
     }
-    for name in &differences {
+    for name in differences.keys() {
         if !used.contains(name) {
             failures.push(format!("difference `{name}` is named by no case"));
         }
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[test]
+fn a_difference_still_compares_the_fields_it_does_not_name() {
+    let allowed: BTreeSet<String> = ["message".to_owned()].into();
+    let oracle = json!([{"code": "config_parse", "message": "a", "line": 1, "column": 5}]);
+    let same_place = json!([{"code": "config_parse", "message": "b", "line": 1, "column": 5}]);
+    assert_eq!(
+        compare("c", &oracle, &same_place, Some(("d", &allowed))),
+        None
+    );
+    for moved in [
+        json!([{"code": "config_parse", "message": "b", "line": 1, "column": 6}]),
+        json!([{"code": "unknown_key", "message": "b", "line": 1, "column": 5}]),
+        json!([{"code": "config_parse", "message": "b", "line": 1}]),
+        json!([]),
+    ] {
+        assert!(
+            compare("c", &oracle, &moved, Some(("d", &allowed))).is_some(),
+            "{moved}"
+        );
+    }
+    assert!(compare("c", &oracle, &oracle, Some(("d", &allowed))).is_some());
+    assert!(compare("c", &oracle, &same_place, None).is_some());
 }
 
 #[test]

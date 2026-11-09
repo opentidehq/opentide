@@ -16,17 +16,35 @@
 #   for a workspace holding `files`.
 #
 # A case whose Rust result differs names the `difference` that explains it
-# (its reason and the bold lead of its CHANGELOG.md entry); the test fails
-# when it no longer differs, or when a difference no case names.
+# (its reason and the bold lead of its CHANGELOG.md entry). A difference's
+# `fields` are the members it may change, at any depth of the result; every
+# other member (code, severity, field path, file, line, column, context) is
+# still compared with the oracle's. The test fails when such a case no longer
+# differs, when it differs outside its difference's `fields`, or when a
+# difference no case names.
 
 [[difference]]
 id = "toml-parse-message"
 reason = "A configuration file that is not TOML is refused by the toml_edit crate, which says what is wrong (`expected `=``, `invalid table header`) where the oracle said `TOMLDecodeError` or tomllib's own words; the position is the crate's."
+fields = ["message"]
 changelog = "**Configuration files are read by the Rust engine**"
 
 [[difference]]
 id = "lint-pattern-regex"
-reason = "A `[filenames]` `pattern` is compiled by the Rust `regex` crate, which has no look-around or back-reference: such a pattern is refused with the crate's reason, where Python's `re` compiled it; an invalid pattern's reason is the crate's."
+reason = "A `[filenames]` `pattern` is compiled by the Rust `regex` crate, which has no look-around or back-reference: such a pattern is refused with the crate's reason, where Python's `re` compiled it; an invalid pattern's reason is the crate's. A refused pattern's outcome is an error where the oracle's was the settings."
+fields = ["error", "checks", "filenames", "required_metadata"]
+changelog = "**Configuration files are read by the Rust engine**"
+
+[[difference]]
+id = "toml-integer-range"
+reason = "TOML 1.0 integers are 64-bit: toml_edit refuses an integer outside the i64 range (`number too large to fit in target type`), so the file is a `config_parse` error and resolution stops, where tomllib read it as a Python int."
+fields = ["resolved", "issues", "error"]
+changelog = "**Configuration files are read by the Rust engine**"
+
+[[difference]]
+id = "toml-datetime-text"
+reason = "A TOML date-time is kept as toml_datetime writes it, losslessly: fractional seconds as written (`.5`, nanoseconds), a `-00:00` offset as `+00:00`. The oracle rounded to microseconds, padded the fraction to six digits and wrote UTC as `Z`; a message quotes the value as a string (`'1979-05-27T07:32:00Z'`) where the oracle wrote `datetime.datetime(...)`."
+fields = ["dt_fraction", "dt_offset", "time_nanos", "error", "message"]
 changelog = "**Configuration files are read by the Rust engine**"
 
 # --- routing ---------------------------------------------------------------------------
@@ -659,3 +677,113 @@ id = "sharing-config-unparsable"
 kind = "sharing"
 files = { "sharing.toml" = "[[misp]\n" }
 difference = "toml-parse-message"
+
+# --- review findings (V1.5) ------------------------------------------------------------
+
+# Only a `systems` entry directly in a configuration folder is retired.
+[[case]]
+id = "retired-systems-nested"
+kind = "text"
+path = "/w/.opentide/configurations/platforms/systems/x.toml"
+text = "x = 1\n"
+
+[[case]]
+id = "retired-systems-elsewhere"
+kind = "text"
+path = "/w/other/systems/x.toml"
+text = "x = 1\n"
+
+[[case]]
+id = "workspace-parent-retired-global"
+kind = "workspace"
+files = { "deployment.toml" = "default_responders = \"soc\"\n" }
+parent = { "global.toml" = "x = 1\n" }
+
+[[case]]
+id = "workspace-parent-retired-systems"
+kind = "workspace"
+parent = { "systems/splunk.toml" = "x = 1\n" }
+
+# A file and a folder of the same name: the file comes later in name order
+# and replaces the folder.
+[[case]]
+id = "workspace-file-and-folder"
+kind = "workspace"
+files = { "platforms.toml" = "[splunk]\nx = 1\n", "platforms/splunk.toml" = "[platform]\nenabled = true\n" }
+
+# The error's column counts code points, after a two-byte and a four-byte
+# character.
+[[case]]
+id = "workspace-parse-error-accent"
+kind = "workspace"
+files = { "visibility.toml" = "a = \"éé\" x\n" }
+difference = "toml-parse-message"
+
+[[case]]
+id = "workspace-parse-error-astral"
+kind = "workspace"
+files = { "visibility.toml" = "a = \"😀\" x\n" }
+difference = "toml-parse-message"
+
+[[case]]
+id = "workspace-integer-range"
+kind = "workspace"
+files = { "custom.toml" = "a = 9223372036854775807\nb = -9223372036854775808\n" }
+
+[[case]]
+id = "workspace-integer-past-range"
+kind = "workspace"
+files = { "custom.toml" = "a = 9223372036854775808\n" }
+difference = "toml-integer-range"
+
+[[case]]
+id = "workspace-datetimes"
+kind = "workspace"
+files = { "custom.toml" = "plain = 1979-05-27T07:32:00Z\nlocal = 1979-05-27T07:32:00\nmicros = 07:32:00.123456\ndt_fraction = 1979-05-27 07:32:00.5Z\ndt_offset = 1979-05-27T07:32:00-00:00\ntime_nanos = 07:32:00.123456789\n" }
+difference = "toml-datetime-text"
+
+[[case]]
+id = "sharing-datetime-entry"
+kind = "text"
+path = "/w/.opentide/configurations/sharing.toml"
+text = "[[misp]]\nname = \"a\"\nurl = \"https://a\"\napi_key = \"${K}\"\nmax_tlp = \"red\"\nrule_statuses = [1979-05-27T07:32:00Z]\n"
+difference = "toml-datetime-text"
+
+[[case]]
+id = "lint-enabled-datetime"
+kind = "lint"
+text = "[placeholders]\nenabled = 1979-05-27T07:32:00Z\n"
+difference = "toml-datetime-text"
+
+# Characters that do not print are escaped by general category.
+[[case]]
+id = "sharing-unprintable-entries"
+kind = "text"
+path = "/w/.opentide/configurations/sharing.toml"
+text = "[[misp]]\nname = \"a\"\nurl = \"https://a\"\napi_key = \"${K}\"\nmax_tlp = \"red\"\nrule_statuses = [\"\\uE000\", \"\\u0600x\", \"\\u0378\", \"\\uFFF9\", \"\\u00A0\", \"\\u3000\", \"\\u2028\", \"\\u00AD\", \"\\U000F0000\", \"\\U0001F600\", \"a b\", \"\\u00E9\", \"\\u0085\"]\n"
+status_names = []
+
+# Floats are written as the oracle's repr writes them, exponent included.
+[[case]]
+id = "sharing-float-entries"
+kind = "text"
+path = "/w/.opentide/configurations/sharing.toml"
+text = "[[misp]]\nname = \"a\"\nurl = \"https://a\"\napi_key = \"${K}\"\nmax_tlp = \"red\"\nrule_statuses = [1e20, 1.5e-7, 1e16, 1e-5, 0.0001, 1e15, -2.5e-300, 1.7976931348623157e308, 5e-324, 123.0, -0.0]\n"
+
+[[case]]
+id = "lint-enabled-floats"
+kind = "lint"
+text = "[placeholders]\nenabled = [1e20, 1.5e-7, 1e16, 1e-5, 0.0001, 1e15, 9999999999999998.0, 5e-324]\n"
+
+[[case]]
+id = "lint-pattern-verbose-comment"
+kind = "lint"
+text = "[filenames]\npattern = '(?x)a # c'\n"
+
+# Duplicated blocks leave the merge: the oracle reports only duplicate_name,
+# not the invalid url or literal api_key of one of them.
+[[case]]
+id = "sharing-duplicates-invalid"
+kind = "text"
+path = "/w/.opentide/configurations/sharing.toml"
+text = "[[misp]]\nname = \"dup\"\nurl = \"https://a\"\napi_key = \"${K}\"\nmax_tlp = \"red\"\n[[misp]]\nname = \"dup\"\nurl = \"ftp://b\"\napi_key = \"literal\"\nmax_tlp = \"red\"\n"

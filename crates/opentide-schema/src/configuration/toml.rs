@@ -27,17 +27,37 @@ pub struct ParseError {
     pub too_deep: bool,
 }
 
-/// Line starts of a text, to turn byte offsets into [`Mark`]s.
+/// Line starts of a text, to turn byte offsets into [`Mark`]s: each line's
+/// first byte and the number of characters before it, so that a mark counts
+/// only the characters of its own line.
 struct Positions<'t> {
     text: &'t str,
     line_starts: Vec<usize>,
+    line_chars: Vec<usize>,
+    /// How many bytes [`Self::mark`] has counted characters over.
+    #[cfg(test)]
+    scanned: std::cell::Cell<usize>,
 }
 
 impl<'t> Positions<'t> {
     fn new(text: &'t str) -> Self {
         let mut line_starts = vec![0];
-        line_starts.extend(text.match_indices('\n').map(|(at, _)| at + 1));
-        Self { text, line_starts }
+        let mut line_chars = vec![0];
+        let mut chars = 0;
+        let mut previous = 0;
+        for (at, _) in text.match_indices('\n') {
+            chars += text[previous..=at].chars().count();
+            previous = at + 1;
+            line_starts.push(previous);
+            line_chars.push(chars);
+        }
+        Self {
+            text,
+            line_starts,
+            line_chars,
+            #[cfg(test)]
+            scanned: std::cell::Cell::new(text.len()),
+        }
     }
 
     fn mark(&self, byte: usize) -> Mark {
@@ -47,11 +67,13 @@ impl<'t> Positions<'t> {
         }
         let line = self.line_starts.partition_point(|start| *start <= byte);
         let start = self.line_starts[line.saturating_sub(1)];
-        let column = self.text[start..byte].chars().count() + 1;
+        let before = self.text[start..byte].chars().count();
+        #[cfg(test)]
+        self.scanned.set(self.scanned.get() + (byte - start));
         Mark {
-            index: self.text[..byte].chars().count(),
+            index: self.line_chars[line.saturating_sub(1)] + before,
             line,
-            column,
+            column: before + 1,
         }
     }
 }
@@ -256,6 +278,47 @@ mod tests {
         assert!(parse(&value).is_err());
         let header = vec!["a"; 60].join(".");
         assert!(parse(&format!("[{header}]\nx = 1\n")).is_ok());
+    }
+
+    #[test]
+    fn an_error_after_a_multibyte_character_counts_code_points() {
+        // `x` is the 9th code point after two two-byte characters (byte 11),
+        // and the 8th after one four-byte character (byte 11).
+        let accent = parse("a = \"éé\" x\n").unwrap_err();
+        assert_eq!((accent.line, accent.column), (Some(1), Some(10)));
+        let astral = parse("a = \"😀\" x\n").unwrap_err();
+        assert_eq!((astral.line, astral.column), (Some(1), Some(9)));
+        let second_line = parse("\"é\" = 1\na = \"😀é\" x\n").unwrap_err();
+        assert_eq!((second_line.line, second_line.column), (Some(2), Some(10)));
+    }
+
+    #[test]
+    fn a_mark_counts_only_the_characters_of_its_line() {
+        // Every mark used to count the characters from the start of the
+        // text, so parsing was quadratic in its length.
+        let mut text = String::new();
+        for n in 0..2_000 {
+            text.push_str(&format!("k{n} = \"é\"\n"));
+        }
+        let positions = Positions::new(&text);
+        let mut marks = Vec::new();
+        for (at, _) in text.match_indices('=') {
+            marks.push(positions.mark(at));
+        }
+        assert!(
+            positions.scanned.get() <= 2 * text.len(),
+            "{} bytes scanned for a text of {}",
+            positions.scanned.get(),
+            text.len()
+        );
+        let last = marks.last().unwrap();
+        assert_eq!((last.line, last.column), (2_000, 7));
+        let expected = text[..text.rfind('=').unwrap()].chars().count();
+        assert_eq!(last.index, expected);
+        let node = parse(&text).unwrap();
+        let value = node.get("k1999").unwrap();
+        assert_eq!((value.start.line, value.start.column), (2_000, 9));
+        assert_eq!(value.start.index, expected + 2);
     }
 
     #[test]

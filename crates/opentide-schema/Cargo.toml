@@ -42,6 +42,8 @@ opentide-schema-derive.workspace = true
 toml_edit.workspace = true
 # Pattern constraints and the lint `pattern`, as pydantic-core does.
 regex.workspace = true
+# The lint `pattern` anchored on its parsed form, verbose comments and all.
+regex-syntax.workspace = true
 serde_json.workspace = true
 pyo3 = { workspace = true, features = ["abi3-py310"], optional = true }
 

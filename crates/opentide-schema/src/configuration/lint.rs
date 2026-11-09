@@ -5,7 +5,11 @@
 //!
 //! A `[filenames]` `pattern` is compiled by the `regex` crate, which has no
 //! look-around or back-reference: such a pattern is refused with the crate's
-//! own reason (an approved difference, `tests/golden/APPROVED_DIFFS.toml`).
+//! own reason. That is an intended difference, recorded as
+//! `lint-pattern-regex` in `tests/oracle/config_cases.toml` and in the
+//! CHANGELOG entry "Configuration files are read by the Rust engine"
+//! (`tests/golden/APPROVED_DIFFS.toml` takes it when a command that reads
+//! `lint.toml` runs in Rust).
 
 use regex::Regex;
 
@@ -250,10 +254,17 @@ fn reject_unknown_kinds(table: &Node, unknown: &[String]) -> Result<(), LintConf
 }
 
 fn compile(raw: &str, place: &str) -> Result<Regex, LintConfigError> {
-    // The pattern is checked as written, then anchored: wrapping it first
-    // would accept an unbalanced `a)(b`.
+    // The pattern is checked as written, then anchored on its parsed form
+    // (`fullmatch`): wrapping the text would accept an unbalanced `a)(b`,
+    // and a verbose (`(?x)`) comment at its end would swallow the wrapper's
+    // `)`. The HIR prints as an equivalent pattern without flags or comments.
     Regex::new(raw)
-        .and_then(|_| Regex::new(&format!(r"\A(?:{raw})\z")))
+        .and_then(|_| {
+            let hir = regex_syntax::Parser::new()
+                .parse(raw)
+                .map_err(|error| regex::Error::Syntax(error.to_string()))?;
+            Regex::new(&format!(r"\A(?:{hir})\z"))
+        })
         .map_err(|error| {
             let reason = error
                 .to_string()
@@ -402,5 +413,22 @@ mod tests {
         assert!(regex.is_match("a"));
         assert!(!regex.is_match("ab"));
         assert!(!regex.is_match("xa"));
+        let either = filenames("[filenames]\npattern = \"a|ab\"\n").unwrap();
+        assert!(either.filenames.regex.unwrap().is_match("ab"));
+    }
+
+    #[test]
+    fn a_verbose_pattern_ending_in_a_comment_is_anchored() {
+        // Wrapped as text, `\A(?:(?x)a # c)\z` has its `)` commented out.
+        let config = filenames("[filenames]\npattern = '(?x)a # c'\n").unwrap();
+        assert_eq!(config.filenames.pattern.as_deref(), Some("(?x)a # c"));
+        let regex = config.filenames.regex.unwrap();
+        assert!(regex.is_match("a"));
+        assert!(!regex.is_match("a # c"));
+        assert!(!regex.is_match("ab"));
+        let flags = filenames("[filenames]\npattern = '(?i)r-[a-z]+'\n").unwrap();
+        let regex = flags.filenames.regex.unwrap();
+        assert!(regex.is_match("R-ABC"));
+        assert!(!regex.is_match("R-ABC-"));
     }
 }

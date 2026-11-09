@@ -72,6 +72,9 @@ lsp-server = "0.10"
 lsp-types = "0.97"
 url = "2.5"
 regex = "1"
+# The parsed pattern (HIR) of a `regex` pattern, to anchor it whatever its
+# flags (opentide-schema `lint`): the version `regex` itself locks.
+regex-syntax = "0.8"
 serde_yaml = "0.9"
 clap = { version = "4", features = ["derive"] }
 tree-sitter = "0.25"

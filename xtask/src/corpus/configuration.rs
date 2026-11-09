@@ -152,6 +152,8 @@ pub fn rust_findings(
         workspace,
         overlay: None,
         parent,
+        // The oracle runs without OPENTIDE_TIDE_WORKSPACE.
+        skip_parent: false,
     }) {
         Ok(resolved) => resolved,
         Err(error) => {
