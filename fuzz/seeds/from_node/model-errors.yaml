@@ -1,0 +1,3 @@
+text: t
+inner: [a]
+inners: [x, 1, ~]

@@ -7,7 +7,10 @@
 //! prints today ([`SchemaError::code`]). No new code is minted here: the codes
 //! are the ones `src/opentide/validation` emits at the frozen tag.
 
+use std::collections::BTreeMap;
 use std::fmt;
+
+use crate::node::Span;
 
 /// The CLI's codes for schema errors. `schema_validation` is the engine's
 /// already ([`opentide_core::codes::SCHEMA_VALIDATION`]). The other four are
@@ -45,8 +48,10 @@ pub enum Surface {
 
 /// The kind of a schema error, one per Pydantic error type the model raises.
 ///
-/// The enum is `non_exhaustive`: UC-1.2 (#808) adds the kinds the structural
-/// conversion reports, each with its Pydantic type.
+/// The structural conversion (UC-1.2, #808, [`crate::from_node`]) reports
+/// `Missing`, `UnknownKey`, and `InvalidType` / `InvalidValue` with Pydantic's
+/// type (`string_type`, `int_parsing`, `model_type`, `invalid_key`,
+/// `literal_error`, `enum`, `vocab_list_type`, …), and `Limit` when it stops.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum ErrorKind {
@@ -65,6 +70,10 @@ pub enum ErrorKind {
     /// rejects, with Pydantic's exact type: `value_error`, `literal_error`,
     /// `greater_than_equal`, …
     InvalidValue(&'static str),
+    /// The conversion stopped: the document produced more work than
+    /// [`crate::from_node::BUDGET`] allows (a tree of aliases nested to
+    /// billions of nodes). Not a Pydantic error; the oracle would keep going.
+    Limit,
 }
 
 impl ErrorKind {
@@ -74,7 +83,7 @@ impl ErrorKind {
     /// Pydantic runs.
     pub const fn pydantic_type(self) -> Option<&'static str> {
         match self {
-            Self::Syntax => None,
+            Self::Syntax | Self::Limit => None,
             Self::Missing => Some("missing"),
             Self::UnknownKey => Some("extra_forbidden"),
             Self::InvalidType(pydantic) | Self::InvalidValue(pydantic) => Some(pydantic),
@@ -111,6 +120,18 @@ pub struct SchemaError {
     pub path: Vec<PathSegment>,
     /// The message, in Pydantic's wording where Pydantic reports the error.
     pub message: String,
+    /// Where the CLI points for it (`SourceFiles.span`), when the error came
+    /// from a document: [`crate::node::Document::span`].
+    pub span: Option<Span>,
+    /// The finding's `yaml_line` (0-based, `attach_yaml_lines`):
+    /// [`crate::node::Document::yaml_line`].
+    pub yaml_line: Option<usize>,
+    /// Pydantic's `input`, when it is a string (`validation/errors.py` reads
+    /// only string inputs: references, vocabulary values).
+    pub input: Option<String>,
+    /// Pydantic's `ctx`, each value as `str()` gives it (`class_name`,
+    /// `expected`, `field`, `value`, `error`).
+    pub context: BTreeMap<String, String>,
 }
 
 impl SchemaError {
@@ -120,6 +141,10 @@ impl SchemaError {
             kind,
             path,
             message: message.into(),
+            span: None,
+            yaml_line: None,
+            input: None,
+            context: BTreeMap::new(),
         }
     }
 
@@ -198,6 +223,7 @@ mod tests {
     #[test]
     fn pydantic_types_are_pydantics() {
         assert_eq!(ErrorKind::Syntax.pydantic_type(), None);
+        assert_eq!(ErrorKind::Limit.pydantic_type(), None);
         assert_eq!(ErrorKind::Missing.pydantic_type(), Some("missing"));
         assert_eq!(
             ErrorKind::UnknownKey.pydantic_type(),

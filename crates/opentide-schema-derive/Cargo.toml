@@ -1,0 +1,24 @@
+[package]
+name = "opentide-schema-derive"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+description = "opentide engine component: #[derive(FromNode)], the structural conversion of opentide-schema's models from the YAML node tree. Internal: depend on the opentide facade."
+readme = "../COMPONENT.md"
+# Not published while opentide-schema is not (its Cargo.toml says when).
+publish = false
+
+[lib]
+proc-macro = true
+
+[lints]
+workspace = true
+
+[dependencies]
+proc-macro2.workspace = true
+quote.workspace = true
+syn.workspace = true

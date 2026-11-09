@@ -1,0 +1,3 @@
+text: t
+items: one
+inners: {label: x}

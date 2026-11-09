@@ -1,0 +1,16 @@
+a: plain text
+b: 'single ''quoted'''
+c: "double \"quoted\" \t \u00e9 \x41"
+d: |
+  literal
+  block
+e: >
+  folded
+  block
+f: |-
+  strip
+g: |+
+  keep
+
+h: multi
+  line plain

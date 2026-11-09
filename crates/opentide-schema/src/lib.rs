@@ -20,12 +20,20 @@
 //! with UC-1.3 (#809) onwards. The crate is I/O-free and internal: the
 //! `opentide` facade (UC-5.1, #836) is the public API.
 
+// The derive's expansion names `::opentide_schema::…`, here as in every crate
+// that uses it.
+extern crate self as opentide_schema;
+
 pub mod error;
+pub mod from_node;
 pub mod keys;
+pub mod node;
 pub mod pins;
 mod revision;
 pub mod sample;
 pub mod vocab;
 
 pub use error::{ErrorKind, PathSegment, SchemaError, Surface};
+pub use from_node::FromNode;
+pub use opentide_schema_derive::FromNode;
 pub use pins::{PinTable, Pins};

@@ -1,0 +1,1065 @@
+# The YAML resolution table (UC-1.2, #808): each case is a document read by
+# the oracle's loader (`opentide.core.io.parse_yaml`: PyYAML's CSafeLoader,
+# YAML 1.1, with opentide's timestamp and duplicate-key handling) and by
+# opentide-schema's (`opentide_schema::node`: saphyr, YAML 1.2 core schema).
+# `yaml_table.py` runs each case through the oracle and writes
+# `yaml_table.json`:
+#
+#   <oracle python> crates/opentide-schema/tests/oracle/yaml_table.py
+#
+# `tests/yaml_table.rs` compares the two case by case and writes the result to
+# `crates/opentide-schema/YAML.md`.
+#
+# A case is `[[case]]` with an `id`, the document as `yaml` (or `bytes_hex`
+# for bytes that TOML cannot hold, such as a BOM), the `group` of the issue's
+# list it belongs to, and, where the two loaders read it differently, the
+# `difference` that explains why. Each `[[difference]]` gives the reason, the
+# bold lead of its CHANGELOG.md entry, and whether it changes how an existing
+# workspace file reads (`workspace`).
+
+[[difference]]
+id = "booleans"
+reason = "YAML 1.2 has two booleans, `true` and `false` (also written `True`, `TRUE`, `False`, `FALSE`). `yes`, `no`, `on`, `off` are strings, which YAML 1.1 read as booleans. A boolean field written `enabled: yes` is now a type error (`bool_type`)."
+changelog = "**Tide objects are read as YAML 1.2**"
+workspace = true
+
+[[difference]]
+id = "timestamps"
+reason = "YAML 1.2's core schema has no timestamp type: a date is the string written. The oracle turned a date or timestamp into ISO 8601 text (`2026-01-01 10:00:00` became `2026-01-01T10:00:00`) and refused the file when the date cannot exist (`2026-02-30`). The text is kept as written; checking that a date exists is the date field's own check (UC-1.3), not the YAML reader's."
+changelog = "**Tide objects are read as YAML 1.2**"
+workspace = true
+
+[[difference]]
+id = "integers"
+reason = "YAML 1.2 integers are decimal, `0o` octal and `0x` hexadecimal. `017` is 17 (YAML 1.1: 15, octal), `0o17` is 15 (YAML 1.1: a string); `0b101`, `1_000` and sexagesimal `1:20` are strings (YAML 1.1: integers). A sign goes before the digits only: `0x-A` and `-0x1` are strings, and `!!int 0x-A` refuses the file (YAML 1.1: -10)."
+changelog = "**Tide objects are read as YAML 1.2**"
+workspace = true
+
+[[difference]]
+id = "integer-range"
+reason = "An integer is a 64-bit integer. One that does not fit refuses the file, where saphyr alone would read it as an approximate float or a string; the oracle read Python's unbounded `int`. No Tide field holds such a number."
+changelog = "**Tide objects are read as YAML 1.2**"
+workspace = false
+
+[[difference]]
+id = "floats"
+reason = "YAML 1.2 reads `1e3` and `1e+3` as floats; YAML 1.1 needs a dot (`1.0e3`) and read them as strings."
+changelog = "**Tide objects are read as YAML 1.2**"
+workspace = false
+
+[[difference]]
+id = "duplicate-keys"
+reason = "A key is the same key when it is the same type and value, as the YAML specification defines node equality: `null` and `~` collide (the oracle compared the raw text and kept the last), and `1`, `1.0` and `\"1\"` are three keys (the oracle compared Python values or raw text). A repeated key refuses the file, as it did."
+changelog = "**Tide objects are read as YAML 1.2**"
+workspace = true
+
+[[difference]]
+id = "anchors"
+reason = "YAML 1.2 lets an anchor be defined again; an alias refers to the latest definition. libyaml refused the file."
+changelog = "**Tide objects are read as YAML 1.2**"
+workspace = false
+
+[[difference]]
+id = "merge-keys"
+reason = "Merge keys (`<<: *base`) are a YAML 1.1 type that YAML 1.2 dropped: `<<` is an ordinary key. A model reports it as an unknown key (`extra_forbidden`); the oracle merged the anchored mapping in."
+changelog = "**Tide objects are read as YAML 1.2**"
+workspace = true
+
+[[difference]]
+id = "bom"
+reason = "A byte order mark may start the file; inside a value it refuses the file, as YAML 1.2 says. The oracle kept it in the string."
+changelog = "**Tide objects are read as YAML 1.2**"
+workspace = true
+
+[[difference]]
+id = "tab-after-colon"
+reason = "saphyr refuses a tab right after a mapping's `:` (`a:<TAB>1`), which libyaml accepts and the YAML 1.2 grammar allows as separating white space. A space before the tab (`a: <TAB>1`) is read by both."
+changelog = "**Tide objects are read as YAML 1.2**"
+workspace = true
+
+[[difference]]
+id = "tags"
+reason = "Tags follow the YAML 1.2 core schema: the non-specific `!` makes a string (`! 12` is the string 12), an explicit `!!int`, `!!float`, `!!bool` or `!!null` must fit its text, and other tags (`!!binary`, `!!set`, `!!omap`, `!!pairs`, `!!timestamp`, local tags) refuse the file, where the oracle constructed Python objects. A plain `=` or `<<` is a string (PyYAML had no constructor for them)."
+changelog = "**Tide objects are read as YAML 1.2**"
+workspace = false
+
+[[difference]]
+id = "empty-key"
+reason = "YAML 1.2 allows an empty implicit key (`: 1` is the key `null`); a model reports it as a key that is not a string. libyaml refused the file."
+changelog = "**Tide objects are read as YAML 1.2**"
+workspace = false
+
+[[difference]]
+id = "line-breaks"
+reason = "YAML 1.2 breaks lines on line feed and carriage return only: NEL (U+0085) and the line and paragraph separators (U+2028, U+2029) are characters of the text. YAML 1.1 broke lines on them."
+changelog = "**Tide objects are read as YAML 1.2**"
+workspace = false
+
+# --- yes, no, on, off, y, n -------------------------------------------------
+[[case]]
+group = "bool"
+id = "bool-words"
+difference = "booleans"
+yaml = """
+a: yes
+b: Yes
+c: YES
+d: no
+e: No
+f: NO
+g: on
+h: On
+i: ON
+j: off
+k: Off
+l: OFF
+m: true
+n: True
+o: TRUE
+p: false
+q: False
+r: FALSE
+"""
+
+[[case]]
+group = "bool"
+id = "bool-not-words"
+yaml = """
+a: y
+b: n
+c: Y
+d: N
+e: yEs
+f: tRUE
+g: oN
+h: 'yes'
+i: "no"
+j: !!str on
+k: t
+l: f
+"""
+
+[[case]]
+group = "bool"
+id = "bool-keys"
+difference = "booleans"
+yaml = """
+yes: 1
+off: 2
+y: 3
+"""
+
+[[case]]
+group = "bool"
+id = "bool-explicit-tag"
+difference = "booleans"
+yaml = """
+a: !!bool yes
+b: !!bool false
+"""
+
+# --- ~ and null ---------------------------------------------------------------
+[[case]]
+group = "null"
+id = "null-forms"
+yaml = """
+a: ~
+b: null
+c: Null
+d: NULL
+e:
+f: nULL
+g: 'null'
+h: "~"
+i: !!null ''
+"""
+
+[[case]]
+group = "null"
+id = "null-in-flow"
+yaml = "a: [~, null]\nb: {x: , y: ~}\n"
+
+[[case]]
+group = "null"
+id = "null-flow-empty-entry"
+yaml = "a: [~, , ]\n"
+
+[[case]]
+group = "null"
+id = "null-key"
+difference = "duplicate-keys"
+yaml = """
+~: a
+null: b
+"""
+
+# --- dates and timestamps --------------------------------------------------
+[[case]]
+group = "timestamp"
+id = "date"
+difference = "timestamps"
+yaml = """
+a: 2026-01-01
+b: '2026-01-01'
+c: 2026-1-1
+d: 20260101
+e: 2026-01-01T10:00:00Z
+f: 2026-01-01T10:00:00+02:00
+g: 2026-01-01 10:00:00
+h: 2026-01-01t10:00:00z
+i: 2026-01-01T10:00:00.5Z
+j: 2026-01-01T10:00:00.1234567-05:30
+k: 2026-01-01 10:00:00 +02
+l: 2026-1-1T1:00:00
+m: 2026-01-01T10:00:00-00:00
+n: 2026-01-01T10:00:00.000000Z
+o: 2026-01-01T10:00:00.
+p: 2026-01-01  	10:00:00Z
+"""
+
+[[case]]
+group = "timestamp"
+id = "date-timestamp-tag"
+difference = "tags"
+yaml = "a: !!timestamp 2026-01-01\n"
+
+[[case]]
+group = "timestamp"
+id = "date-impossible"
+difference = "timestamps"
+yaml = "a: 2026-02-30\n"
+
+[[case]]
+group = "timestamp"
+id = "date-month-13"
+difference = "timestamps"
+yaml = "a: 2026-13-01\n"
+
+[[case]]
+group = "timestamp"
+id = "timestamp-hour-25"
+difference = "timestamps"
+yaml = "a: 2026-01-01T25:00:00\n"
+
+[[case]]
+group = "timestamp"
+id = "timestamp-offset-99"
+difference = "timestamps"
+yaml = "a: 2026-01-01T10:00:00+99\n"
+
+[[case]]
+group = "timestamp"
+id = "date-year-zero"
+difference = "timestamps"
+yaml = "a: 0000-01-01\n"
+
+[[case]]
+group = "timestamp"
+id = "date-leap-day"
+yaml = "a: 2024-02-29\nb: 2000-02-29\n"
+
+[[case]]
+group = "timestamp"
+id = "date-not-leap"
+difference = "timestamps"
+yaml = "a: 1900-02-29\n"
+
+[[case]]
+group = "timestamp"
+id = "date-key"
+yaml = "2026-01-01: a\n"
+
+# --- octal and hex -----------------------------------------------------------
+[[case]]
+group = "int"
+id = "int-bases"
+difference = "integers"
+yaml = """
+a: 0o17
+b: 017
+c: 0x1F
+d: 0X1F
+e: 0b101
+f: 0B101
+g: -017
+h: +0x_1f
+i: 08
+j: 0
+k: -0
+l: +12
+m: 012345670
+n: 0x
+o: 0b2
+p: 00
+q: 0_7
+"""
+
+[[case]]
+group = "int"
+id = "int-big"
+difference = "integer-range"
+yaml = """
+a: 123456789012345678901234567890
+b: -9223372036854775809
+c: 9223372036854775807
+d: 0xFFFFFFFFFFFFFFFFFFFF
+e: 0777777777777777777777777777
+"""
+
+[[case]]
+group = "int"
+id = "int-explicit-tag"
+yaml = """
+a: !!int "42"
+b: !!int 0x10
+c: !!str 42
+"""
+
+[[case]]
+group = "int"
+id = "int-key"
+difference = "duplicate-keys"
+yaml = """
+1: a
+0x10: b
+"1": c
+"""
+
+[[case]]
+group = "int"
+id = "int-binary-empty"
+difference = "integers"
+yaml = "a: 0b_\n"
+
+[[case]]
+group = "int"
+id = "int-hex-empty"
+difference = "integers"
+yaml = "a: 0x_\n"
+
+# A sign after the base prefix: the core schema's integers have none there
+# (Rust's `from_str_radix`, which saphyr uses, accepts one).
+[[case]]
+group = "int"
+id = "int-sign-after-prefix"
+yaml = """
+a: 0x-A
+b: 0x+A
+c: 0o-7
+d: 0o+7
+e: 0x-8000000000000000
+"""
+
+[[case]]
+group = "int"
+id = "int-octal-digits-8-and-9"
+yaml = "a: 0o8\nb: 0o9\nc: 0o78\n"
+
+[[case]]
+group = "int"
+id = "int-explicit-tag-sign-after-prefix"
+difference = "integers"
+yaml = "a: !!int 0x-A\n"
+
+[[case]]
+group = "int"
+id = "float-explicit-tag-sign-after-prefix"
+yaml = "a: !!float 0o+7\n"
+
+# --- numbers with _ ---------------------------------------------------------
+[[case]]
+group = "underscore"
+id = "underscore"
+difference = "integers"
+yaml = """
+a: 1_000
+b: 1_000.5
+c: 0b1_0
+d: 0x_FF
+e: 1__0
+f: _1
+g: 1_
+h: 1_.5
+i: 0_17
+"""
+
+# --- sexagesimal -------------------------------------------------------------
+[[case]]
+group = "sexagesimal"
+id = "sexagesimal"
+difference = "integers"
+yaml = """
+a: 190:20:30
+b: 1:20
+c: -1:30
+d: 190:20:30.15
+e: 1:60
+f: 01:20
+g: 1:2:3
+h: 12:30:00
+i: 1:5
+"""
+
+# --- .inf and .nan; other floats ---------------------------------------------
+[[case]]
+group = "float"
+id = "float-special"
+yaml = """
+a: .inf
+b: -.inf
+c: +.Inf
+d: .INF
+e: .nan
+f: .NaN
+g: .NAN
+h: inf
+i: nan
+j: -.nan
+k: .iNf
+"""
+
+[[case]]
+group = "float"
+id = "float-forms"
+difference = "floats"
+yaml = """
+a: 1.0
+b: 1.
+c: .5
+d: 1e3
+e: 1.0e3
+f: 1.0e+3
+g: 1.0E-3
+h: -1.5
+i: +1.5
+j: 1.0e+400
+k: 0.1
+l: 1.5e+16
+m: 1.0e-5
+n: 123456789.123456789
+o: 1e+3
+p: 0.0001
+q: 1.0e+16
+r: 100000000000000000.0
+s: -0.0
+"""
+
+[[case]]
+group = "float"
+id = "float-key"
+yaml = "1.5: a\n"
+
+# --- duplicate keys ----------------------------------------------------------
+[[case]]
+group = "duplicate"
+id = "duplicate-key"
+yaml = """
+a: 1
+b: 2
+a: 3
+"""
+
+[[case]]
+group = "duplicate"
+id = "duplicate-key-nested"
+yaml = """
+a:
+  x: 1
+  x: 2
+"""
+
+[[case]]
+group = "duplicate"
+id = "duplicate-key-int-and-str"
+difference = "duplicate-keys"
+yaml = """
+1: a
+'1': b
+"""
+
+[[case]]
+group = "duplicate"
+id = "duplicate-key-bool-spellings"
+difference = "booleans"
+yaml = """
+yes: a
+true: b
+"""
+
+[[case]]
+group = "duplicate"
+id = "duplicate-key-in-flow"
+yaml = "a: {x: 1, x: 2}\n"
+
+# --- anchors and aliases ---------------------------------------------------------
+[[case]]
+group = "alias"
+id = "alias"
+yaml = """
+base: &b
+  x: 1
+  y: [1, 2]
+copy: *b
+item: &s hello
+again: *s
+"""
+
+[[case]]
+group = "alias"
+id = "alias-undefined"
+yaml = "a: *nothing\n"
+
+[[case]]
+group = "alias"
+id = "alias-recursive"
+yaml = "a: &x\n  b: *x\n"
+
+[[case]]
+group = "alias"
+id = "alias-redefined"
+difference = "anchors"
+yaml = """
+a: &x 1
+b: *x
+c: &x 2
+d: *x
+"""
+
+[[case]]
+group = "alias"
+id = "alias-as-key"
+yaml = """
+k: &k name
+*k : value
+"""
+
+[[case]]
+group = "alias"
+id = "alias-nested-laughs"
+yaml = """
+a: &a [x, x]
+b: &b [*a, *a]
+c: &c [*b, *b]
+d: [*c, *c]
+"""
+
+# --- merge keys (<<) ---------------------------------------------------------
+[[case]]
+group = "merge"
+id = "merge"
+difference = "merge-keys"
+yaml = """
+base: &b
+  x: 1
+  y: 2
+item:
+  <<: *b
+  y: 3
+  z: 4
+"""
+
+[[case]]
+group = "merge"
+id = "merge-list"
+difference = "merge-keys"
+yaml = """
+one: &one {a: 1, b: 1}
+two: &two {b: 2, c: 2}
+item:
+  <<: [*one, *two]
+  d: 4
+"""
+
+[[case]]
+group = "merge"
+id = "merge-own-key-first"
+difference = "merge-keys"
+yaml = """
+base: &b {x: 1}
+item:
+  x: 0
+  <<: *b
+"""
+
+[[case]]
+group = "merge"
+id = "merge-inline"
+difference = "merge-keys"
+yaml = """
+item:
+  <<: {x: 1}
+  y: 2
+"""
+
+[[case]]
+group = "merge"
+id = "merge-scalar"
+difference = "merge-keys"
+yaml = """
+item:
+  <<: 1
+"""
+
+[[case]]
+group = "merge"
+id = "merge-quoted-key"
+yaml = """
+item:
+  '<<': {x: 1}
+"""
+
+[[case]]
+group = "merge"
+id = "merge-nested"
+difference = "merge-keys"
+yaml = """
+a: &a {x: 1}
+b: &b {<<: *a, y: 2}
+c:
+  <<: *b
+  z: 3
+"""
+
+[[case]]
+group = "merge"
+id = "merge-twice"
+yaml = """
+a: &a {x: 1}
+item:
+  <<: *a
+  <<: *a
+"""
+
+# --- multiple documents ------------------------------------------------------
+[[case]]
+group = "documents"
+id = "documents-two"
+yaml = "a: 1\n---\nb: 2\n"
+
+[[case]]
+group = "documents"
+id = "documents-explicit-one"
+yaml = "---\na: 1\n...\n"
+
+[[case]]
+group = "documents"
+id = "documents-start-only"
+yaml = "---\n"
+
+[[case]]
+group = "documents"
+id = "documents-empty"
+yaml = ""
+
+[[case]]
+group = "documents"
+id = "documents-comment-only"
+yaml = "# nothing\n"
+
+[[case]]
+group = "documents"
+id = "documents-end-then-more"
+yaml = "a: 1\n...\n---\nb: 2\n"
+
+[[case]]
+group = "documents"
+id = "documents-yaml-directive"
+yaml = "%YAML 1.1\n---\na: 1\n"
+
+[[case]]
+group = "documents"
+id = "documents-yaml-directive-1-2"
+yaml = "%YAML 1.2\n---\na: 1\n"
+
+# --- a BOM -----------------------------------------------------------------
+[[case]]
+group = "bom"
+id = "bom-leading"
+bytes_hex = "efbbbf613a20310a"
+
+[[case]]
+group = "bom"
+id = "bom-twice"
+bytes_hex = "efbbbfefbbbf613a20310a"
+
+[[case]]
+group = "bom"
+id = "bom-in-value"
+difference = "bom"
+bytes_hex = "613a2078efbbbf790a"
+
+# --- tabs ---------------------------------------------------------------------
+[[case]]
+group = "tabs"
+id = "tab-indent"
+yaml = "a:\n\tb: 1\n"
+
+[[case]]
+group = "tabs"
+id = "tab-after-colon"
+difference = "tab-after-colon"
+yaml = "a:\t1\nb: \tx\n"
+
+[[case]]
+group = "tabs"
+id = "tab-in-value"
+yaml = "a: x\ty\n"
+
+[[case]]
+group = "tabs"
+id = "tab-appended-key"
+yaml = "a: 1\n\tindent: tab\n"
+
+[[case]]
+group = "tabs"
+id = "tab-in-flow"
+yaml = "a: [1,\t2]\n"
+
+[[case]]
+group = "tabs"
+id = "tab-in-block-scalar"
+yaml = "a: |\n  x\ty\n"
+
+[[case]]
+group = "tabs"
+id = "tab-before-comment"
+yaml = "a: 1\t# c\n"
+
+# --- CRLF ------------------------------------------------------------------
+[[case]]
+group = "crlf"
+id = "crlf"
+yaml = "a: 1\r\nb: |\r\n  x\r\n  y\r\nc: \"p\r\n  q\"\r\n"
+
+[[case]]
+group = "crlf"
+id = "cr-only"
+yaml = "a: 1\rb: 2\r"
+
+# --- strings and other scalars ------------------------------------------------------
+[[case]]
+group = "string"
+id = "string-styles"
+yaml = """
+a: plain text
+b: 'single ''quoted'''
+c: "double \\"quoted\\" \\t \\u00e9 \\x41"
+d: |
+  literal
+  block
+e: >
+  folded
+  block
+f: |-
+  strip
+g: |+
+  keep
+
+h: multi
+  line plain
+"""
+
+[[case]]
+group = "string"
+id = "string-value-tag"
+difference = "tags"
+yaml = "a: =\n"
+
+[[case]]
+group = "string"
+id = "string-unicode"
+yaml = "a: \"日本 🔥 é\"\nb: 🔥\n"
+
+[[case]]
+group = "string"
+id = "string-escapes-1-2"
+yaml = "a: \"\\/\"\n"
+
+[[case]]
+group = "string"
+id = "string-nel-and-ls"
+yaml = "a: \"x\\Ny\\Lz\\Pw\\_v\"\n"
+
+[[case]]
+group = "tags"
+id = "tag-unknown"
+yaml = "a: !custom x\n"
+
+[[case]]
+group = "tags"
+id = "tag-python"
+yaml = "a: !!python/name:os.system ''\n"
+
+[[case]]
+group = "tags"
+id = "tag-non-specific"
+difference = "tags"
+yaml = "a: ! 12\n"
+
+[[case]]
+group = "tags"
+id = "tag-str-on-map"
+yaml = "a: !!str {x: 1}\n"
+
+[[case]]
+group = "tags"
+id = "tag-map-seq"
+yaml = "a: !!map {x: 1}\nb: !!seq [1]\n"
+
+[[case]]
+group = "tags"
+id = "tag-verbatim"
+yaml = "a: !<tag:yaml.org,2002:str> 12\n"
+
+[[case]]
+group = "tags"
+id = "tag-directive"
+yaml = "%TAG !e! tag:yaml.org,2002:\n---\na: !e!str 12\n"
+
+[[case]]
+group = "keys"
+id = "key-complex-seq"
+yaml = "? [a, b]\n: 1\n"
+
+[[case]]
+group = "keys"
+id = "key-complex-map"
+yaml = "? {a: 1}\n: 1\n"
+
+[[case]]
+group = "keys"
+id = "key-explicit-scalar"
+yaml = "? a\n: 1\n"
+
+[[case]]
+group = "keys"
+id = "key-empty"
+difference = "empty-key"
+yaml = ": 1\n"
+
+[[case]]
+group = "structure"
+id = "root-scalar"
+yaml = "just text\n"
+
+[[case]]
+group = "structure"
+id = "root-sequence"
+yaml = "- a\n- b\n"
+
+[[case]]
+group = "structure"
+id = "unclosed-flow"
+yaml = "a: 1\nbroken: [unclosed\n"
+
+[[case]]
+group = "structure"
+id = "bad-indent"
+yaml = "a:\n  b: 1\n c: 2\n"
+
+[[case]]
+group = "structure"
+id = "colon-in-plain"
+yaml = "a: b: c\n"
+
+[[case]]
+group = "structure"
+id = "nested-flow"
+yaml = "a: {b: [1, {c: d}], e: f}\n"
+
+[[case]]
+group = "structure"
+id = "control-character"
+bytes_hex = "613a2078017a0a"
+
+# The position counts CRLF as one line break and starts each line at column 1.
+[[case]]
+group = "structure"
+id = "control-character-on-line-3-crlf"
+yaml = "a: 1\r\nb: 2\r\nc: x\u0001\r\n"
+
+[[case]]
+group = "structure"
+id = "not-utf8"
+bytes_hex = "613a20ff0a"
+
+[[case]]
+group = "structure"
+id = "plain-with-hash"
+yaml = "a: x#y\nb: x #y\n"
+
+[[case]]
+group = "structure"
+id = "empty-flow"
+yaml = "a: []\nb: {}\n"
+
+[[case]]
+group = "tags"
+id = "tag-explicit-errors-bool"
+yaml = "a: !!bool maybe\n"
+
+[[case]]
+group = "tags"
+id = "tag-explicit-errors-int"
+yaml = "a: !!int 1.5\n"
+
+[[case]]
+group = "tags"
+id = "tag-explicit-errors-float"
+yaml = "a: !!float abc\n"
+
+[[case]]
+group = "tags"
+id = "tag-explicit-errors-timestamp"
+yaml = "a: !!timestamp yesterday\n"
+
+[[case]]
+group = "tags"
+id = "tag-explicit-null-text"
+difference = "tags"
+yaml = "a: !!null text\n"
+
+[[case]]
+group = "tags"
+id = "tag-explicit-float-forms"
+difference = "tags"
+yaml = "a: !!float 1\nb: !!float infinity\nc: !!float ' 2.5 '\nd: !!float 1:30\n"
+
+[[case]]
+group = "tags"
+id = "tag-quoted-non-specific"
+difference = "tags"
+yaml = "a: ! '12'\n"
+
+[[case]]
+group = "tags"
+id = "tag-merge-as-value"
+difference = "tags"
+yaml = "a: <<\n"
+
+[[case]]
+group = "tags"
+id = "tag-value-as-key"
+yaml = "=: 1\n"
+
+[[case]]
+group = "unsupported"
+id = "tag-binary"
+difference = "tags"
+yaml = "a: !!binary aGVsbG8=\n"
+
+[[case]]
+group = "unsupported"
+id = "tag-set"
+difference = "tags"
+yaml = "a: !!set {x, y}\n"
+
+[[case]]
+group = "unsupported"
+id = "tag-omap"
+difference = "tags"
+yaml = "a: !!omap [x: 1]\n"
+
+[[case]]
+group = "unsupported"
+id = "tag-pairs"
+difference = "tags"
+yaml = "a: !!pairs [x: 1]\n"
+
+[[case]]
+group = "structure"
+id = "deep-nesting"
+yaml = "a: [[[[[[[[[[[[[[[[[[[[1]]]]]]]]]]]]]]]]]]]\n"
+
+[[case]]
+group = "structure"
+id = "nel-in-plain"
+difference = "line-breaks"
+yaml = "a: x\u0085y\nb: 1\n"
+
+[[case]]
+group = "structure"
+id = "line-separator"
+difference = "line-breaks"
+yaml = "a: x\u2028y\n"
+
+[[case]]
+group = "keys"
+id = "key-int-float-bool-merge"
+difference = "duplicate-keys"
+yaml = "1: a\n1.0: b\n"
+
+[[case]]
+group = "merge"
+id = "merge-overrides-int-key"
+difference = "merge-keys"
+yaml = "base: &b {1: x}\nitem:\n  <<: *b\n  True: y\n"
+
+# Documents that end without a line break, in each scalar style.
+[[case]]
+group = "eof"
+id = "eof-block-scalar-without-line-break"
+yaml = "a: |\n x"
+
+[[case]]
+group = "eof"
+id = "eof-fuzz-block-scalar-ends-the-file"
+yaml = "a: tetx;0|\n|\n x\ty:"
+
+[[case]]
+group = "eof"
+id = "eof-folded-scalar-without-line-break"
+yaml = "a: >\n x\n y"
+
+[[case]]
+group = "eof"
+id = "eof-tag-before-comma"
+yaml = "a: [!!str , x]\n"
+
+[[case]]
+group = "eof"
+id = "eof-escape-at-end"
+yaml = "a: \"x\\"
+
+[[case]]
+group = "eof"
+id = "eof-plain-without-line-break"
+yaml = "a: x"
+
+# A block scalar whose last content line ends in a line break, followed by a
+# last line of blanks without one: the scalar keeps its line break (clip).
+[[case]]
+group = "eof"
+id = "eof-literal-then-blank-line"
+yaml = "a: |\n  x\n "
+
+[[case]]
+group = "eof"
+id = "eof-folded-then-blank-line"
+yaml = "a: >\n  x\n "
+
+[[case]]
+group = "eof"
+id = "eof-literal-item-then-blank-line"
+yaml = "- |\n  x\n "
+
+[[case]]
+group = "eof"
+id = "eof-literal-two-lines-then-blank-line"
+yaml = "a: |\n  x\n  y\n "
+
+[[case]]
+group = "eof"
+id = "eof-literal-crlf-then-blank-line"
+yaml = "a: |\n  x\r\n "
+
+# A block scalar without a final line break that does not end the file.
+[[case]]
+group = "eof"
+id = "eof-literal-then-key-without-line-break"
+yaml = "a: |\n  x\nb: 1"
+
+[[case]]
+group = "eof"
+id = "eof-literal-then-comment-without-line-break"
+yaml = "a: |\n  x\n# c"

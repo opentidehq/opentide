@@ -1,0 +1,10 @@
+name: n
+uuid: u
+schema: sample::1.1
+description: d
+severity: Low
+effort: 3
+examples:
+  - description: e
+    link: https://example.org
+tags: [a]
