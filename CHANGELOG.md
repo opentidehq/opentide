@@ -8,20 +8,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ### Upgrade
 
-- If your editor setup matches or suppresses `crowdstrike_unsupported`, match the `cql_*` codes instead (`opentide explain cql_parse_error`).
-
-### Breaking
-
-- **`crowdstrike_unsupported` is gone; the editor checks CrowdStrike queries as CQL.** `opentide lsp start` and `opentide tui` showed one `crowdstrike_unsupported` warning on a CrowdStrike rule; they show the `cql_*` findings of its query instead, and `opentide explain crowdstrike_unsupported` exits `2` ([language-server 0.12.0](https://github.com/opentidehq/language-server/releases/tag/v0.12.0), [#800](https://github.com/opentidehq/opentide/issues/800)).
+- If your editor setup matches or suppresses `crowdstrike_unsupported`, match the `cql_*` codes too: the editor no longer reports it (`opentide explain cql_parse_error`).
 
 ### Added
 
 - **The editor checks the CrowdStrike Query Language (CQL).** `opentide lsp start` and `opentide tui` check `configurations.crowdstrike.query` (a Next-Gen SIEM correlation rule), hunts with `system: crowdstrike` and `.cql` files against CrowdStrike's published grammar and function reference, with hover, completion and highlighting. `opentide validate` and `opentide lint` do not check CrowdStrike queries ([language-server 0.12.0](https://github.com/opentidehq/language-server/releases/tag/v0.12.0)).
-  - 20 codes, each with an `opentide explain` page and a section in [Diagnostic codes](docs/cli/diagnostics.md): `cql_parse_error`, `cql_unknown_function`, `cql_parameter_value`, `cql_unknown_event`, …
+  - 20 codes, each with an `opentide explain` page, an entry in `opentide explain`'s list and MCP `explain`, a rule in the SARIF rule catalogue of `lint` and `validate --format sarif`, and a section in [Diagnostic codes](docs/cli/diagnostics.md): `cql_parse_error`, `cql_unknown_function`, `cql_parameter_value`, `cql_unknown_event`, …
   - Language id `cql`, aliases `opentide-cql`, `logscale` and `crowdstrike` ([opentide lsp](docs/cli/lsp.md#languages))
 
 ### Changed
 
+- **`crowdstrike_unsupported` is retired; it stays explainable.** The editor (`opentide lsp start`) and `opentide tui` showed it as a warning on every CrowdStrike rule; they show the `cql_*` findings of its query instead. `opentide explain crowdstrike_unsupported`, MCP `explain`, the SARIF rule catalogue (tagged `retired`) and [Diagnostic codes](docs/cli/diagnostics.md#crowdstrike_unsupported) keep it, with a page saying it was retired in engine 0.12.0 ([#800](https://github.com/opentidehq/opentide/issues/800)).
 - **The analysis engine builds from this repository** ([#800](https://github.com/opentidehq/opentide/issues/800)). Its crates moved here from opentidehq/language-server with their history, and opentide compiles them by path instead of from crates.io; the engine is language-server 0.12.0, whose only finding change is CrowdStrike's (above). The sdist carries them, and the wheel and sdist ship `NOTICE`, the notices of the data the engine embeds, with the licence and notice files it cites (Elastic Common Schema, Falco).
 
 ### Fixed
