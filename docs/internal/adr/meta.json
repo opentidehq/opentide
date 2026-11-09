@@ -2,6 +2,7 @@
   "title": "Architecture decisions",
   "pages": [
     "index",
+    "0001-tide-model-as-rust-code",
     "0002-all-logic-in-rust",
     "0003-cli-is-opentide-cli",
     "0004-merge-language-server",

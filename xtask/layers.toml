@@ -13,7 +13,8 @@
 #
 # - The plan names no tiers. Foundation crates depend on one another today (the
 #   query engines on core, syntax and highlight; ES|QL and EQL on Lucene), so
-#   foundation has four tiers, read off `cargo metadata`; domain has two.
+#   foundation has four tiers read off `cargo metadata`, and a fifth, from the
+#   plan's row order, for opentide-schema (below); domain has two.
 # - opentide-tide and opentide-analysis are Domain: the plan folds both into
 #   opentide-workspace (UC-2.x), and opentide-analysis depends on opentide-tide.
 # - Bindings sit above the facade, not at the bottom where the plan's table
@@ -23,6 +24,10 @@
 # - xtask is Tooling, the top layer: it may read any crate, and no crate may
 #   depend on it.
 # - analysis/ is the package `opentide-native` (bindings/python in the plan).
+# - opentide-schema (UC-1.1, #807) is the top foundation tier: the plan's
+#   table puts it in the row above core, syntax, highlight and the query
+#   crates, so it may build on any of them (spans, UC-1.2) and none of them
+#   may depend on the model; every domain crate may.
 
 [[layer]]
 name = "foundation"
@@ -31,6 +36,7 @@ tiers = [
     ["opentide-syntax", "opentide-highlight", "opentide-ecs"],
     ["opentide-kql", "opentide-spl", "opentide-kuery", "opentide-lucene", "opentide-falco", "opentide-cql"],
     ["opentide-esql", "opentide-eql"],
+    ["opentide-schema"],
 ]
 
 [[layer]]

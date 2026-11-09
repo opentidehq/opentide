@@ -93,3 +93,17 @@ path = "fuzz_targets/protocol.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "config"
+path = "fuzz_targets/config.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "framing"
+path = "fuzz_targets/framing.rs"
+test = false
+doc = false
+bench = false

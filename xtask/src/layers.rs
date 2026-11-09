@@ -714,6 +714,8 @@ mod tests {
             &[("opentide-analysis", None), ("opentide-lsp", None)],
         ),
         ("xtask", &[]),
+        // Appended, not in layer order, so the indexes the tests below use stay put.
+        ("opentide-schema", &[("opentide-core", None)]),
     ];
 
     #[test]
