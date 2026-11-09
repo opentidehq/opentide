@@ -15,7 +15,8 @@ most of the win.
 
 Also covers the vocabulary drift gate's path filter. It used ``rg``, which
 GitHub-hosted runners do not ship; inside ``if`` the missing command read as
-"no match", so ``sync_vocabularies.py --check`` never ran. When the gate fires,
+"no match", so the drift check never ran. The check is
+``cargo xtask vocab sync --check`` (``xtask/src/vocab/sync.rs``). When the gate fires,
 ``--check`` must see a specifications checkout: without one it only compares the
 lockfile with the bundle, and hand-edited pins pass once relocked.
 
@@ -146,7 +147,7 @@ def _vocab_gate_pattern(workflow: dict[str, Any]) -> str:
         ("src/opentide/data/vocabulary/att&ck.vocab.toml", True),
         ("src/opentide/data/pins/threat.toml", True),
         ("data/specifications.lock.json", True),
-        ("scripts/build/sync_vocabularies.py", True),
+        ("xtask/src/vocab/sync.rs", True),
         ("src/opentide/models/vocab_pins.py", False),
     ],
 )
@@ -160,8 +161,10 @@ def test_vocab_drift_check_compares_against_a_specifications_checkout(
     workflow: dict[str, Any],
 ) -> None:
     steps = workflow["jobs"]["lint"]["steps"]
-    checks = [step for step in steps if "sync_vocabularies.py --check" in str(step.get("run", ""))]
-    assert len(checks) == 1, "expected exactly one sync_vocabularies.py --check step in lint"
+    checks = [
+        step for step in steps if "cargo xtask vocab sync --check" in str(step.get("run", ""))
+    ]
+    assert len(checks) == 1, "expected exactly one `cargo xtask vocab sync --check` step in lint"
     root = checks[0].get("env", {}).get("OPENTIDE_SPECIFICATIONS_ROOT", "")
     assert root == "${{ github.workspace }}/specifications"
 

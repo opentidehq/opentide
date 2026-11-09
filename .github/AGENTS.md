@@ -50,7 +50,7 @@ by the other Python jobs), `engine-check`, `engine-wasm`, `engine-package`, `eng
 **Coverage:** gate on Python **3.14** only (`COVERAGE_PYTHON`); the Code Quality upload is
 best-effort, the HTML report an artifact. **Vocabulary drift gate:** when vocab TOML, schema pins,
 `data/specifications.lock.json` or the sync script change, CI checks out `opentidehq/specifications`
-(`main`) and runs `scripts/build/sync_vocabularies.py --check` against it.
+(`main`) and runs `cargo xtask vocab sync --check` against it.
 
 **Bundled Tide catalog:** the engine compiles in a Tide catalog (`data/catalogs/tide/`, and the
 key lists of `highlights/queries/tide/highlights.scm`) for editors that run `opentide-lsp` on its

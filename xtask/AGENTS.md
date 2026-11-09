@@ -15,6 +15,7 @@ xtask --`): the repository's Rust tooling, as a workspace member that is never p
 | `golden check --engine compare [--report FILE]` | Runs every case whose command has a Rust implementation (`opentide.cli.engines.RUST_COMMANDS`) through this repository's CLI with `OPENTIDE_ENGINE=rust`, and compares it with the recording through `opentide-compare` and `tests/golden/APPROVED_DIFFS.toml`; a stale ledger entry fails it (UC-0.7, #805; CI job `Golden compare`) |
 | `compare --oracle DIR --candidate DIR --command PATH`, `compare --check-ledger` | Two runs on disk through the comparator; the ledger's schema and changelog references (`src/compare.rs`, `crates/opentide-compare/AGENTS.md`) |
 | `bench [--engine python\|rust] [--scale 1\|10] [--json]`, `bench --check BUDGETS BENCH.json [--previous FILE]` | Runs the plan section 11 benchmarks on the heavy workspace and holds the result to [`tests/bench/budgets.toml`](../tests/bench/budgets.toml) and the last `development` result (below) |
+| `vocab sync [--check]`, `vocab sentinel-attack [--check] [--stix-dir DIR]`, `vocab diff --against python` | The vocabularies (UC-1.6, #812, `src/vocab/`): the bundled vocabularies and schema pins against `opentidehq/specifications` and the lockfile (CI's drift gate runs `--check`); Sentinel's ATT&CK v18 list from MITRE's STIX bundles; `opentide-schema`'s resolution and suggestions against the oracle on every corpus fixture, suggestion differences approved in `tests/golden/vocab/APPROVED.toml` |
 | `help` | The usage |
 
 Exit status: 0 passed; 1 a check failed, or the command is not implemented yet (so no script
@@ -139,6 +140,5 @@ cargo xtask check-layers
 ## Work items that change this crate
 
 UC-0.4 (#802) check-layers; UC-0.6 (#804) corpus; UC-1.8 (#814) codegen; UC-0.5 (#803) golden;
-UC-0.7 (#805) the comparator over `golden`; UC-X.2 (#844) coverage, mutants, parity; UC-0.8 (#806) bench; UC-1.6 (#812) the
-`sync_vocabularies --check` equivalent; UC-0.3 (#801) wired the checks into one
+UC-0.7 (#805) the comparator over `golden`; UC-X.2 (#844) coverage, mutants, parity; UC-0.8 (#806) bench; UC-1.6 (#812) `vocab`; UC-0.3 (#801) wired the checks into one
 CI. Lints and tests: [`crates/AGENTS.md`](../crates/AGENTS.md).

@@ -827,7 +827,9 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
+ "strsim",
  "thiserror",
+ "toml 0.8.23",
  "trybuild",
 ]
 
@@ -1755,12 +1757,15 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "glob",
+ "indexmap",
  "opentide-compare",
+ "opentide-schema",
  "regex",
  "rustix",
  "serde",
  "serde_json",
  "similar 2.7.0",
+ "strsim",
  "tempfile",
  "toml 0.8.23",
  "trycmd",

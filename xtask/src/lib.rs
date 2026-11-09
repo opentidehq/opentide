@@ -13,3 +13,4 @@ pub mod layers;
 pub mod mutants;
 pub mod parity;
 pub mod parity_inputs;
+pub mod vocab;

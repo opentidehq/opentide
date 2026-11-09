@@ -65,6 +65,10 @@ commands:
                  against the recordings (tests/golden/README.md);
                  `cargo xtask golden help` lists the options
   bench          run the benchmarks against their budgets (UC-0.8, #806)
+  vocab <sync|sentinel-attack|diff> [options]
+                 the vocabularies: sync and check them against specifications,
+                 generate Sentinel's ATT&CK list, compare with the oracle
+                 (UC-1.6, #812); `cargo xtask vocab help` lists the options
   help           print this message
 
 exit status: 0 passed, 1 check failed or not implemented yet,
@@ -127,6 +131,7 @@ fn main() -> ExitCode {
         "codegen" => not_yet("codegen", "UC-1.8", 814),
         "golden" => xtask::golden::main(rest),
         "bench" => xtask::bench::main(rest),
+        "vocab" => xtask::vocab::main(rest),
         "help" | "--help" | "-h" => {
             print!("{USAGE}");
             ExitCode::SUCCESS
