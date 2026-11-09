@@ -5250,7 +5250,8 @@
             "eql",
             "kuery",
             "lucene",
-            "falco"
+            "falco",
+            "cql"
           ],
           "title": "Language",
           "type": "string"

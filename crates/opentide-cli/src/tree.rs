@@ -1664,7 +1664,7 @@ pub struct ValidateArgs {
 pub struct ValidateQueryArgs {
     #[arg(
         long = "platform",
-        help = "Check this platform's queries. Offline, default every platform the engine parses: carbon_black_cloud, defender_for_endpoint, elastic, sentinel, splunk, sysdig. --live needs one of: carbon_black_cloud, defender_for_endpoint, elastic, sentinel, sentinel_one, splunk",
+        help = "Check this platform's queries. Offline, default every platform the engine parses: carbon_black_cloud, crowdstrike, defender_for_endpoint, elastic, sentinel, splunk, sysdig. --live needs one of: carbon_black_cloud, defender_for_endpoint, elastic, sentinel, sentinel_one, splunk",
         value_name = "PLATFORM"
     )]
     pub platform: Option<Platform>,
@@ -1687,7 +1687,7 @@ pub struct ValidateQueryArgs {
         help = "Check only the rule files this run changed: the pull or merge request, the push, or outside CI the last commit (the files deploy reads)"
     )]
     pub changed: bool,
-    #[arg(long = "file", help = "Check only this rule file, or this query file (.kql, .spl, .esql, .eql, .kuery, .lucene, .falco) offline (repeatable)", action = clap::ArgAction::Append)]
+    #[arg(long = "file", help = "Check only this rule file, or this query file (.kql, .spl, .esql, .eql, .kuery, .lucene, .falco, .cql) offline (repeatable)", action = clap::ArgAction::Append)]
     pub file: Vec<String>,
     #[arg(long = "uuid", help = "Check only the rule with this UUID (repeatable)", action = clap::ArgAction::Append)]
     pub uuid: Vec<String>,

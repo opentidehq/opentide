@@ -1,6 +1,7 @@
 //! `data/output-schemas.json` is generated from the oracle's catalogue
 //! (`tests/golden/cases/commands/json/none/default/stdout`): each command's
-//! `output_schema`, then `$defs`. `OPENTIDE_CLI_BLESS=1` rewrites it.
+//! `output_schema`, then `$defs`, with the changes today's CLI made after
+//! the oracle (`common/since_oracle.rs`). `OPENTIDE_CLI_BLESS=1` rewrites it.
 
 #![expect(
     clippy::unwrap_used,
@@ -9,6 +10,10 @@
 
 use opentide_cli::json::{Json, document_text};
 use std::path::Path;
+
+#[path = "common/since_oracle.rs"]
+#[expect(dead_code, reason = "`to_oracle` is used by the goldens test")]
+mod since_oracle;
 
 fn generated() -> String {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -32,10 +37,11 @@ fn generated() -> String {
             )
         })
         .collect();
-    let document = Json::object([
+    let mut document = Json::object([
         ("output_schemas", Json::Object(schemas)),
         ("$defs", catalogue.get("$defs").cloned().unwrap()),
     ]);
+    since_oracle::to_today(&mut document);
     document_text(&document, true)
 }
 

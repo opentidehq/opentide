@@ -26,6 +26,10 @@ use regex::Regex;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
+#[path = "common/since_oracle.rs"]
+#[expect(dead_code, reason = "`to_today` is used by the schemas test")]
+mod since_oracle;
+
 /// The case ids this test replays: command, variants.
 const CASES: &[(&str, &[&str])] = &[
     (
@@ -170,7 +174,8 @@ fn replay(dir: &Path, scratch: &Path) -> Outcome {
 /// The catalogue without its last `environment` row, `OPENTIDE_ENGINE`: the
 /// variable UC-0.7 (#805) added after the oracle, at the end of the list so
 /// that the oracle's list is a prefix of today's. The Python CLI prints it
-/// too (`opentide.cli.services.introspect.environment`).
+/// too (`opentide.cli.services.introspect.environment`). The other changes
+/// made after the oracle are undone by [`since_oracle::to_oracle`].
 fn without_engine_variable(stdout: &str) -> String {
     let Ok(mut document) = Json::parse(stdout) else {
         return stdout.to_owned();
@@ -188,6 +193,7 @@ fn without_engine_variable(stdout: &str) -> String {
         Some(&Json::str("OPENTIDE_ENGINE")),
         "the catalogue's last variable is OPENTIDE_ENGINE"
     );
+    since_oracle::to_oracle(&mut document);
     document_text(&document, stdout.starts_with("{\n"))
 }
 
