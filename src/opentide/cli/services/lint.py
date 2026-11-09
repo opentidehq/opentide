@@ -583,7 +583,6 @@ def _query_findings(root: Path, records: list[_ObjectRecord]) -> list[dict[str, 
         ELASTIC_ADVISORY_CODES,
         SYSDIG_ADVISORY_CODES,
         check_file,
-        editor_only_queries,
         install_workspace_visibility,
         workspace,
     )
@@ -598,12 +597,8 @@ def _query_findings(root: Path, records: list[_ObjectRecord]) -> list[dict[str, 
             continue
         lines = record.text.splitlines()
         marked = {marked.line + 1 for marked in record.placeholder_lines}
-        # A query in a language the CLI does not check offline is the editor's (CQL).
-        editor_only = editor_only_queries(space, record.text)
         for finding in check_file(space, record.path, record.text):
             if finding.severity == "error" or _in_placeholder(finding, lines, marked):
-                continue
-            if any(finding.field_path[: len(path)] == path for path in editor_only):
                 continue
             if (
                 engine_reference(finding.code) is None

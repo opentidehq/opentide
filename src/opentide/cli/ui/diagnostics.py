@@ -890,6 +890,7 @@ ENGINE_REFERENCES: dict[str, tuple[str, str]] = {
     ),
     "ecs_": ("ECS field", "https://www.elastic.co/docs/reference/ecs/ecs-field-reference"),
     "falco_": ("Falco condition", "https://falco.org/docs/concepts/rules/conditions/"),
+    "cql_": ("CQL", "https://library.humio.com/crowdstrike-query-language/"),
 }
 
 
