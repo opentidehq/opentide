@@ -11,6 +11,31 @@ commands:
                  down the layer table (xtask/layers.toml, plan section 4).
                  --metadata reads `cargo metadata --format-version 1` output
                  from FILE instead of running cargo; --layers reads another table
+  coverage gate --report FILE [--policy FILE] [--metadata FILE]
+                 check each workspace crate's line coverage against its gate
+                 (xtask/coverage.toml, plan section 5.4). FILE is the export of
+                 `cargo llvm-cov report --json --summary-only`; prints a
+                 Markdown table for the job summary
+  mutants crates [--policy FILE] [--metadata FILE]
+                 print the crates the weekly mutation run mutates, one per line
+                 (xtask/mutants.toml)
+  mutants report --outcomes FILE [--outcomes FILE ...] [--policy FILE]
+                 [--baseline FILE] [--issues DIR] [--run-url URL]
+                 [--write-baseline FILE --commit SHA]
+                 merge cargo-mutants' outcomes.json of every shard and print the
+                 scores against the baseline; --issues writes DIR/<crate>.md for
+                 each crate whose surviving mutants exceed its threshold;
+                 --write-baseline records this run as the baseline
+  parity dashboard [--root DIR] [--out FILE] [--check] [--require-inputs]
+                   [--engines FILE] [--compare FILE]
+                 render the parity dashboard (each command x corpus x mode
+                 against the oracle, approved diffs, fault coverage) into FILE,
+                 by default docs/internal/parity.md; --check fails when FILE
+                 differs from the rendering instead of writing it;
+                 --require-inputs fails when the recordings, the ledger or the
+                 fault catalogue is missing. --engines
+                 reads the engine state (scripts/parity_engines.py), --compare
+                 the RunReport JSON of a compare run
   compare --oracle DIR --candidate DIR --command PATH [--case ID]
           [--ledger FILE] [--report FILE]
                  compare a candidate's run with the oracle's, applying the

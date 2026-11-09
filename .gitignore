@@ -137,3 +137,7 @@ highlights/test/node_modules
 # accepts or rejects it. Never commit one.
 *.snap.new
 *.pending-snap
+
+# cargo-mutants output (.cargo/mutants.toml)
+/mutants.out/
+/mutants.out.old/

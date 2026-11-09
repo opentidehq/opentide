@@ -1,0 +1,35 @@
+`mutants` on a one-crate workspace (mutants.in/): the crates to mutate (a
+pending crate left out), and two shards' outcomes merged into one report.
+
+```console
+$ xtask mutants crates --policy policy.toml --metadata metadata.json
+core
+
+$ xtask mutants report --policy policy.toml --outcomes shard-0.json --outcomes shard-1.json
+## Mutation testing (cargo-mutants)
+
+| Crate | Mutants | Caught | Missed | Timeout | Unviable | Score | Baseline score | Issue above |
+|-------|--------:|-------:|-------:|--------:|---------:|------:|---------------:|------------:|
+| `schema` | pending: UC-1.1 (#807) creates it | | | | | | none | any |
+| `core` | 4 | 2 | 1 | 0 | 1 | 66.66% | none | 0 |
+
+cargo-mutants 27.1.0.
+
+$ xtask mutants report --policy policy.toml --outcomes shard-0.json --outcomes shard-0.json
+? 2
+xtask mutants: `crates/core/src/lib.rs:3:5: replace f -> bool with true` appears twice in the outcomes
+
+$ xtask mutants report --policy policy.toml --outcomes shard-0.json --write-baseline new.toml
+? 2
+xtask mutants: --write-baseline FILE and --commit SHA go together
+
+$ xtask mutants report --policy policy.toml --metadata metadata.json --outcomes shard-0.json
+? 2
+xtask mutants: unknown option `--metadata` for `mutants report`
+...
+
+$ xtask mutants report --policy policy.toml
+? 2
+xtask mutants: --outcomes FILE is required
+
+```

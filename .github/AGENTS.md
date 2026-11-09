@@ -172,6 +172,25 @@ together.
 Where each of language-server's workflow jobs went (or why it was dropped):
 [`docs/engine/IMPORT.md`](../docs/engine/IMPORT.md#where-the-workflows-went).
 
+## Test strength (UC-X.2, #844)
+
+[`docs/internal/test-strength.md`](../docs/internal/test-strength.md) explains the three measures;
+`tests/test_ci/test_test_strength_workflows.py` holds their permissions and triggers.
+
+- [`coverage.yml`](workflows/coverage.yml), on every pull request and push: job **Rust coverage
+  gates**. One cargo-llvm-cov build measured by the workspace's Rust tests and by the whole Python
+  suite, which drives `opentide._native`; `cargo xtask coverage gate` checks each crate against
+  `xtask/coverage.toml`. Read-only.
+- [`mutants.yml`](workflows/mutants.yml), weekly and on demand: cargo-mutants on the crates of
+  `xtask/mutants.toml` in eight shards, a report against `xtask/mutants-baseline.toml`, and on the
+  schedule only a job with `issues: write` (no checkout, no repository code) that opens or updates
+  one issue per crate above its threshold.
+- [`parity.yml`](workflows/parity.yml), on every pull request, push, daily schedule and manual run:
+  `cargo xtask parity dashboard` into the job summary and an artifact, read-only. Committing
+  `docs/internal/parity.md` is off unless the repository variable `PARITY_COMMIT` is `true`; then
+  only on the schedule or a manual run of `development` or `integration/unified-core`, a job with
+  `contents: write` (no repository code, one path, never forces) commits it when it changed.
+
 ## Releases
 
 **opentide (PyPI):** merge the notes PR, then Run workflow on

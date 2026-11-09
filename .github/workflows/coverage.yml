@@ -1,0 +1,116 @@
+# Rust line coverage per crate, against the gates of xtask/coverage.toml (plan
+# §5.4 "Strength", UC-X.2 #844): 90% for opentide-schema, -workspace, -compile
+# and -cli once they exist, 80% for every other workspace member. Python's gate
+# (85%) stays in ci.yml's `test` job.
+#
+# A workflow of its own, not a job of ci.yml: an instrumented build of the whole
+# workspace takes a target directory of its own (target/llvm-cov-target) and a
+# cache of its own, and ci.yml is being restructured by UC-0.3 (#801). The
+# check to require is `Rust coverage gates` (a maintainer sets required checks).
+name: Coverage
+
+on:
+  pull_request:
+  push:
+    branches: [development, integration/unified-core]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: coverage-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust:
+    name: Rust coverage gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    env:
+      CARGO_TERM_COLOR: always
+      # insta compares snapshots and never writes one in CI (crates/AGENTS.md).
+      INSTA_UPDATE: "no"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          enable-cache: true
+
+      # The tests that compare the engine with the Pydantic models run .venv's
+      # interpreter (crates/AGENTS.md, "Tests"), as in ci.yml's `engine` job.
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      # The release rust-toolchain.toml pins, then the LLVM tools that
+      # cargo-llvm-cov merges the profiles with: an install that names no
+      # toolchain ignores --component (tests/test_ci/test_rust_toolchain.py).
+      - name: Set up Rust
+        run: |
+          rustup toolchain install --profile minimal --no-self-update
+          rustup component add llvm-tools-preview
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: . -> target
+          shared-key: coverage
+
+      - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
+        with:
+          tool: cargo-llvm-cov@0.9.1,cargo-nextest@0.9.148
+
+      # One instrumented build, measured by two suites. cargo-llvm-cov's
+      # show-env exports the instrumentation (a rustc wrapper that instruments
+      # the workspace's crates only) and where each process writes its profile;
+      # `uv sync` then builds `opentide._native` with it in the `dev` profile, so
+      # the binding the Python package loads writes counters too.
+      #
+      # - Every Rust test of the workspace, as nextest's `ci` profile runs them.
+      #   Doctests are not measured (cargo-llvm-cov needs nightly for them);
+      #   ci.yml's `engine` job runs them.
+      # - The whole Python suite, unit and end-to-end: the binding's functions
+      #   are wrappers that only Python calls (directly, or through
+      #   opentide.analysis and the CLI), so Rust tests alone measure a
+      #   fraction of opentide-native. Only the GitLab lint tests are left out:
+      #   they need binaries this job does not install, and reach no Rust.
+      - name: Instrumented tests (Rust, and Python through the binding)
+        run: |
+          eval "$(cargo llvm-cov show-env --sh)"
+          cargo llvm-cov clean --workspace
+          OPENTIDE_ENGINE_PROFILE=dev uv sync --group dev --reinstall-package opentide
+          cargo nextest run --workspace --locked --profile ci
+          uv run --no-sync pytest tests/ -q --no-cov -p no:cacheprovider -n 4 \
+            -m "not gitlab_ci_lint"
+
+      # The report reads the profiles where show-env pointed them (target/,
+      # not cargo-llvm-cov's own target/llvm-cov-target): the same exports.
+      - name: Coverage reports
+        run: |
+          eval "$(cargo llvm-cov show-env --sh)"
+          cargo llvm-cov report --json --summary-only --output-path target/coverage.json
+          cargo llvm-cov report --lcov --output-path target/lcov.info
+
+      # One row per crate in the job summary; fails when a crate is below its
+      # gate, when the policy loosens one, or when a member measured nothing.
+      - name: Gate per crate
+        run: |
+          set -o pipefail
+          cargo xtask coverage gate --report target/coverage.json | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the LCOV report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: rust-coverage
+          path: |
+            target/lcov.info
+            target/coverage.json
+          if-no-files-found: ignore
+          retention-days: 14

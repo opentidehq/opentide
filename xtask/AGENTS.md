@@ -6,6 +6,9 @@ xtask --`): the repository's Rust tooling, as a workspace member that is never p
 | Command | Status |
 |---------|--------|
 | `check-layers [--metadata FILE] [--layers FILE]` | Checks that every dependency between workspace crates (normal, build and dev, on every target) points down the layer table, [`layers.toml`](layers.toml), against `cargo metadata --no-deps` |
+| `coverage gate --report FILE [--policy FILE] [--metadata FILE]` | Line coverage per workspace crate (cargo-llvm-cov's JSON export) against the gates of [`coverage.toml`](coverage.toml): 90% for opentide-schema, -workspace, -compile and -cli once they exist, 80% for every other member; prints a Markdown table. UC-X.2 (#844) |
+| `mutants crates`, `mutants report --outcomes FILE ...` | The crates the weekly mutation run mutates ([`mutants.toml`](mutants.toml)); the shards' cargo-mutants outcomes merged, scored against [`mutants-baseline.toml`](mutants-baseline.toml), with an issue body per crate above its threshold and `--write-baseline` to record a run. UC-X.2 (#844) |
+| `parity dashboard [--root DIR] [--out FILE] [--check]` | Renders `docs/internal/parity.md` (each command × corpus × mode against the oracle, approved diffs, fault coverage) from the goldens, engine state, ledger and fault catalogue; `--check` fails on drift. UC-X.2 (#844) |
 | `corpus generate\|faults\|clean\|codes\|coverage` | The corpora of UC-0.6 (#804): the seeded heavy workspace, the fault catalogue run against the oracle, the code inventory and coverage report ([`tests/corpora/README.md`](../tests/corpora/README.md)) |
 | `codegen` | Not implemented: UC-1.8 (#814) generates schemas, stubs, types and references with it |
 | `golden record [--check-determinism]`, `check`, `diff`, `lock`, `coverage` | Records what the frozen Python CLI (the oracle, `tests/golden/ORACLE`) does for every case of `tests/golden/cases.toml`, and checks an engine against the recordings: [`tests/golden/README.md`](../tests/golden/README.md) |
@@ -105,7 +108,10 @@ cargo xtask check-layers
 - `src/layers.rs` unit tests: synthetic tables and metadata, including a deliberate upward
   dependency on the repository's own table, which must fail.
 - `tests/cli.rs`: the binary through trycmd (`tests/cmd/*.trycmd`, fixtures in
-  `tests/cmd/check-layers.in/`).
+  `tests/cmd/<case>.in/`).
+- `src/coverage.rs`, `src/mutants.rs`, `src/parity.rs`, `src/parity_inputs.rs` unit tests:
+  synthetic llvm-cov exports, cargo-mutants outcomes and dashboard inputs. The test-strength
+  measures are described in `docs/internal/test-strength.md`.
 - `tests/workspace.rs`: the binary in a two-crate workspace of its own with an upward edge, run as
   `cargo run` and as a plain binary: it must check that workspace, not the repository.
 - `src/golden/*.rs` unit tests: the case expansion, every normalisation rule (live regions, paths,
@@ -133,6 +139,6 @@ cargo xtask check-layers
 ## Work items that change this crate
 
 UC-0.4 (#802) check-layers; UC-0.6 (#804) corpus; UC-1.8 (#814) codegen; UC-0.5 (#803) golden;
-UC-0.7 (#805) the comparator over `golden`; UC-0.8 (#806) bench; UC-1.6 (#812) the
+UC-0.7 (#805) the comparator over `golden`; UC-X.2 (#844) coverage, mutants, parity; UC-0.8 (#806) bench; UC-1.6 (#812) the
 `sync_vocabularies --check` equivalent; UC-0.3 (#801) wired the checks into one
 CI. Lints and tests: [`crates/AGENTS.md`](../crates/AGENTS.md).

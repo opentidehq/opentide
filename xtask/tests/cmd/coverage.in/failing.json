@@ -1,0 +1,4 @@
+{"type": "llvm.coverage.json.export", "version": "2.0.1", "data": [{"files": [
+  {"filename": "/w/crates/core/src/lib.rs", "summary": {"lines": {"count": 100, "covered": 81, "percent": 81.0}}},
+  {"filename": "/w/crates/schema/src/lib.rs", "summary": {"lines": {"count": 50, "covered": 44, "percent": 88.0}}}
+], "totals": {}}]}

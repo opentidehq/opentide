@@ -1816,6 +1816,37 @@ fn the_lifecycle_is_enforced_and_the_exit_code_reports_it() {
     assert_eq!(status.code(), Some(1));
 }
 
+/// UC-X.2 (#844): the test client ends its server with `exit` and the server
+/// exits on its own (status 1: no `shutdown` came first), rather than being
+/// killed, which would lose the coverage profile an instrumented build writes
+/// at exit.
+#[test]
+fn the_test_client_ends_its_server_with_exit() {
+    let mut lsp = Lsp::spawn();
+    lsp.request("initialize", json!({ "capabilities": {} }));
+    let status = lsp.end().expect("the server exits within 10 s");
+    assert_eq!(status.code(), Some(1), "{status:?}");
+    // Ending it again finds it exited.
+    assert_eq!(lsp.end().and_then(|s| s.code()), Some(1));
+}
+
+/// UC-X.2 (#844): dropping the client, as every test does, ends the server
+/// the same way: it exits with a code, never by the kill that would lose its
+/// coverage profile.
+#[test]
+fn dropping_the_test_client_lets_its_server_exit() {
+    {
+        let mut lsp = Lsp::spawn();
+        lsp.request("initialize", json!({ "capabilities": {} }));
+    }
+    let exit = LAST_DROP_EXIT.with(std::cell::Cell::get);
+    assert_eq!(
+        exit,
+        DropExit::Code(1),
+        "the server was killed or not dropped"
+    );
+}
+
 /// #185 P0.7: a frame whose body is not a message is answered with
 /// `id: null`, and the session goes on.
 #[test]

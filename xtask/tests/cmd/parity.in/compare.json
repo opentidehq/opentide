@@ -1,0 +1,3 @@
+{"schema_version": 1, "equal": true, "stale": [], "cases": [
+  {"command": "validate", "case": "validate/json/tide_corpus/default", "equal": true, "differences": [], "omitted": 0, "approved": []}
+]}

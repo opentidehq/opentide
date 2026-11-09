@@ -123,9 +123,74 @@ impl Lsp {
     }
 }
 
+impl Lsp {
+    /// Ends the server with an `exit` notification and waits for it, reading
+    /// what it still writes so that a full pipe cannot hold it; its exit
+    /// status, or `None` if it had not exited after 10 s and was killed.
+    ///
+    /// A killed server writes no coverage profile, so `cargo llvm-cov` (the
+    /// `coverage` workflow, UC-X.2 #844) would lose the counters of every
+    /// request the test sent. Dropping an `Lsp` ends it this way.
+    pub fn end(&mut self) -> Option<std::process::ExitStatus> {
+        let exit = br#"{"jsonrpc":"2.0","method":"exit"}"#;
+        let stderr = self.child.stderr.take();
+        let reader = &mut self.reader;
+        let stdin = &mut self.stdin;
+        let child = &mut self.child;
+        std::thread::scope(|scope| {
+            // Drain first: a server blocked writing to a full pipe reads no
+            // more input, and `exit` could then never be written.
+            scope.spawn(move || std::io::copy(reader, &mut std::io::sink()));
+            if let Some(mut stderr) = stderr {
+                scope.spawn(move || std::io::copy(&mut stderr, &mut std::io::sink()));
+            }
+            // The server may have exited already: a broken pipe is not an error.
+            let _ = write!(stdin, "Content-Length: {}\r\n\r\n", exit.len());
+            let _ = stdin.write_all(exit);
+            let _ = stdin.flush();
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+            loop {
+                match child.try_wait() {
+                    Ok(Some(status)) => return Some(status),
+                    Ok(None) if std::time::Instant::now() < deadline => {
+                        std::thread::sleep(std::time::Duration::from_millis(5));
+                    }
+                    _ => {
+                        let _ = child.kill();
+                        let _ = child.wait();
+                        return None;
+                    }
+                }
+            }
+        })
+    }
+}
+
+/// How a dropped `Lsp`'s server ended.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DropExit {
+    /// No `Lsp` has been dropped on this thread yet.
+    None,
+    /// The server exited on its own with this code.
+    Code(i32),
+    /// The server died by a signal or had to be killed.
+    Killed,
+}
+
+thread_local! {
+    /// How the last `Lsp` dropped on this thread ended. Tests drop on their
+    /// own thread, so parallel tests do not mix.
+    pub static LAST_DROP_EXIT: std::cell::Cell<DropExit> =
+        const { std::cell::Cell::new(DropExit::None) };
+}
+
 impl Drop for Lsp {
     fn drop(&mut self) {
-        let _ = self.child.kill();
+        let exit = match self.end().and_then(|status| status.code()) {
+            Some(code) => DropExit::Code(code),
+            None => DropExit::Killed,
+        };
+        LAST_DROP_EXIT.with(|last| last.set(exit));
     }
 }
 

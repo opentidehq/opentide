@@ -148,7 +148,7 @@ def test_the_daily_audit_reads_every_lock_with_warnings_denied() -> None:
     assert len(_lockfile_workspaces()) >= 3
 
 
-def test_only_the_scheduled_audit_may_write_issues() -> None:
+def test_only_the_scheduled_audit_and_mutants_may_write_issues() -> None:
     for path in sorted(WORKFLOWS.glob("*.yml")):
         workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
         scopes = [workflow.get("permissions") or {}] + [
@@ -166,6 +166,25 @@ def test_only_the_scheduled_audit_may_write_issues() -> None:
             assert jobs["issue"]["permissions"] == {"issues": "write"}
             # The job that holds the token checks out and builds nothing.
             issue_steps = jobs["issue"]["steps"]
+            assert not [s for s in issue_steps if "actions/checkout" in s.get("uses", "")]
+            assert not [s for s in issue_steps if "cargo " in s.get("run", "")]
+        elif path.name == "mutants.yml":
+            # The weekly mutation run (UC-X.2, #844) files its surviving
+            # mutants, under the same rules: one job holds the token, runs on
+            # the schedule only, and checks out and builds nothing.
+            assert writes_issues
+            assert _triggers(workflow) == {"schedule", "workflow_dispatch"}
+            assert workflow["permissions"] == {"contents": "read"}
+            jobs = workflow["jobs"]
+            writers = [
+                name
+                for name, job in jobs.items()
+                if (job.get("permissions") or {}) != {"contents": "read"}
+            ]
+            assert writers == ["issues"]
+            assert jobs["issues"]["permissions"] == {"issues": "write"}
+            assert jobs["issues"]["if"] == "github.event_name == 'schedule'"
+            issue_steps = jobs["issues"]["steps"]
             assert not [s for s in issue_steps if "actions/checkout" in s.get("uses", "")]
             assert not [s for s in issue_steps if "cargo " in s.get("run", "")]
         else:
