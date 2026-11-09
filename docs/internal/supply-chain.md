@@ -39,7 +39,7 @@ left out, as cargo-deny leaves them out by default. These test tools duplicate a
 reviewed and harmless because none of them ships: `trycmd`'s `toml_edit` 0.25 (with `winnow` 1,
 `toml_datetime` 1 and `serde_spanned` 1) beside the engine's `toml` 0.8 and `toml_edit` 0.22;
 `trycmd`'s `shlex` 1 beside `cc`'s `shlex` 2; `insta`'s `similar` 2 beside `snapbox`'s `similar` 3;
-`tempfile`'s `bitflags` 2 beside `lsp-types`'s `bitflags` 1. `openssl-sys`, `openssl` and
+`tempfile`'s `bitflags` 2 beside `lsp-types`'s `bitflags` 1. xtask, which is tooling and never ships, uses `rustix` (the golden runner's pseudo-terminals) and `tempfile` at run time, so `bitflags` 2 is in the checked graph through it alone: `skip` names `bitflags@2.13.2` with that reason. `openssl-sys`, `openssl` and
 `native-tls` are banned: TLS is rustls (plan D-8; per-tenant TLS settings are a §3 invariant), with
 no system library to link on every wheel target. Wildcard version requirements fail.
 

@@ -92,7 +92,12 @@ deny = [
 # out, cargo-deny's default: test tools never leave a checkout; the ones they
 # duplicate are listed in docs/internal/supply-chain.md). A second version
 # fails the check until it is removed, or skipped here with its reason.
-skip = []
+skip = [
+  # xtask (never published or shipped) needs rustix for the golden runner's
+  # pseudo-terminals, and tempfile: both bring bitflags 2, beside the bitflags
+  # 1 of lsp-types (fluent-uri 0.1). No shipped crate depends on bitflags 2.
+  { crate = "bitflags@2.13.2", reason = "only xtask (tooling, never shipped) uses it at run time, through rustix and tempfile; the shipped crates use bitflags 1 through lsp-types" },
+]
 
 # Every crate comes from crates.io. A git or another registry's crate fails
 # until it is named here with its reason.
