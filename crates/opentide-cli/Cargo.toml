@@ -1,0 +1,44 @@
+[package]
+name = "opentide-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+# Published with content, once commands run on it (docs/internal/publishing.md).
+publish = false
+description = "The opentide command line: command tree, output modes, JSON envelope, exit codes, crash handler"
+
+[lints]
+workspace = true
+
+[lib]
+name = "opentide_cli"
+path = "src/lib.rs"
+
+[[bin]]
+name = "opentide"
+path = "src/main.rs"
+
+[dependencies]
+clap = { workspace = true, features = ["env", "string"] }
+ctrlc = "3.4"
+form_urlencoded = "1.2"
+humantime = "2.4"
+regex.workspace = true
+url.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+shlex = "2.0"
+strsim = "0.11"
+terminal_size = "0.4"
+textwrap = { version = "0.16", default-features = false, features = ["unicode-width"] }
+toml.workspace = true
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["registry", "std"] }
+
+[dev-dependencies]
+# The goldens' case.toml and outcome.toml (tests/framework_goldens.rs).
+

@@ -30,7 +30,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [kql, spl, esql, eql, kuery, lucene, falco, cql, tide, protocol, config, framing, from_node]
+        target: [kql, spl, esql, eql, kuery, lucene, falco, cql, tide, protocol, config, framing, cli, from_node]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
