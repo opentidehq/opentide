@@ -46,8 +46,12 @@ fn framework_schemas_are_the_oracles() {
     if std::env::var_os("OPENTIDE_CLI_BLESS").is_some() {
         std::fs::write(&path, &expected).unwrap();
     }
+    // A Windows checkout may turn the file's line endings into CRLF.
     assert!(
-        std::fs::read_to_string(&path).unwrap() == expected,
+        std::fs::read_to_string(&path)
+            .unwrap()
+            .replace("\r\n", "\n")
+            == expected,
         "data/output-schemas.json is stale: OPENTIDE_CLI_BLESS=1 cargo nextest run -p opentide-cli framework_schemas"
     );
 }

@@ -697,9 +697,13 @@ mod tests {
         let state =
             std::env::temp_dir().join(format!("opentide-cli-app-crash-{}", std::process::id()));
         let state_text = state.display().to_string();
+        // The state directory on every platform: XDG on Linux, under HOME on
+        // macOS, LOCALAPPDATA on Windows.
         let pairs = [
             ("XDG_STATE_HOME", state_text.as_str()),
-            ("HOME", "/h"),
+            ("HOME", state_text.as_str()),
+            ("USERPROFILE", state_text.as_str()),
+            ("LOCALAPPDATA", state_text.as_str()),
             ("API_TOKEN", "s3cr3t-value"),
         ];
         let panicked = ran(
@@ -909,7 +913,9 @@ mod tests {
                 ("SPLUNK_TOKEN", secret.as_str()),
                 ("HTTPS_PROXY", proxy.as_str()),
                 ("XDG_STATE_HOME", state_home.as_str()),
-                ("HOME", "/h"),
+                ("HOME", state_home.as_str()),
+                ("USERPROFILE", state_home.as_str()),
+                ("LOCALAPPDATA", state_home.as_str()),
             ];
             let line = format!("--debug --json --repo {repo} validate --api-key {secret}");
             let leak = format!(
