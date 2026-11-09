@@ -483,6 +483,15 @@ mod tests {
             "Authorization: ***"
         );
         assert_eq!(redactor.redact("sent bearer abcdef123"), "sent bearer ***");
+        // Any case, outside an Authorization field too.
+        assert_eq!(redactor.redact("sent BEARER abcdef123"), "sent BEARER ***");
+        assert_eq!(
+            redactor.redact("got Basic QWxhZGRpbjpvcGVu"),
+            "got Basic ***"
+        );
+        // A secret as `{:?}` writes it.
+        let quoted = Redactor::new(["ab\"cd\\ef".to_owned()], Vec::new());
+        assert_eq!(quoted.redact("x=\"ab\\\"cd\\\\ef\""), "x=\"***\"");
         assert_eq!(redactor.redact("basic QWxhZGRpbjpvcGVu"), "basic ***");
         assert_eq!(
             redactor.redact("token ghp_abcdefghijklmnopqrstuvwxyz"),
