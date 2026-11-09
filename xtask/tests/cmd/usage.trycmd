@@ -26,12 +26,14 @@ commands:
                  scores against the baseline; --issues writes DIR/<crate>.md for
                  each crate whose surviving mutants exceed its threshold;
                  --write-baseline records this run as the baseline
-  parity dashboard [--root DIR] [--out FILE] [--check] [--engines FILE]
-                   [--compare FILE]
+  parity dashboard [--root DIR] [--out FILE] [--check] [--require-inputs]
+                   [--engines FILE] [--compare FILE]
                  render the parity dashboard (each command x corpus x mode
                  against the oracle, approved diffs, fault coverage) into FILE,
                  by default docs/internal/parity.md; --check fails when FILE
-                 differs from the rendering instead of writing it. --engines
+                 differs from the rendering instead of writing it;
+                 --require-inputs fails when the recordings, the ledger or the
+                 fault catalogue is missing. --engines
                  reads the engine state (scripts/parity_engines.py), --compare
                  the RunReport JSON of a compare run
   compare --oracle DIR --candidate DIR --command PATH [--case ID]

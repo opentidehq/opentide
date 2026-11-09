@@ -36,12 +36,14 @@ commands:
                  scores against the baseline; --issues writes DIR/<crate>.md for
                  each crate whose surviving mutants exceed its threshold;
                  --write-baseline records this run as the baseline
-  parity dashboard [--root DIR] [--out FILE] [--check] [--engines FILE]
-                   [--compare FILE]
+  parity dashboard [--root DIR] [--out FILE] [--check] [--require-inputs]
+                   [--engines FILE] [--compare FILE]
                  render the parity dashboard (each command x corpus x mode
                  against the oracle, approved diffs, fault coverage) into FILE,
                  by default docs/internal/parity.md; --check fails when FILE
-                 differs from the rendering instead of writing it. --engines
+                 differs from the rendering instead of writing it;
+                 --require-inputs fails when the recordings, the ledger or the
+                 fault catalogue is missing. --engines
                  reads the engine state (scripts/parity_engines.py), --compare
                  the RunReport JSON of a compare run
   compare --oracle DIR --candidate DIR --command PATH [--case ID]
@@ -525,11 +527,16 @@ fn parity_command(args: &[String]) -> Result<bool> {
     let mut engines: Option<PathBuf> = None;
     let mut compare_report: Option<PathBuf> = None;
     let mut check = false;
+    let mut require_inputs = false;
     let mut args = args.iter();
     while let Some(arg) = args.next() {
         let slot = match arg.as_str() {
             "--check" => {
                 check = true;
+                continue;
+            }
+            "--require-inputs" => {
+                require_inputs = true;
                 continue;
             }
             "--root" => &mut root,
@@ -554,6 +561,19 @@ fn parity_command(args: &[String]) -> Result<bool> {
     let out = out.unwrap_or_else(|| root.join("docs").join("internal").join("parity.md"));
 
     let inputs = parity_inputs::read(&root, engines.as_deref(), compare_report.as_deref())?;
+    if require_inputs {
+        let missing = parity_inputs::missing_sources(&inputs);
+        if !missing.is_empty() {
+            for source in &missing {
+                eprintln!("error: missing {source}");
+            }
+            eprintln!(
+                "parity: --require-inputs and {} source(s) missing; nothing written",
+                missing.len()
+            );
+            return Ok(false);
+        }
+    }
     let errors = parity::check(&inputs);
     if !errors.is_empty() {
         for error in &errors {

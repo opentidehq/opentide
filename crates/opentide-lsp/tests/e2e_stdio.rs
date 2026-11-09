@@ -1703,6 +1703,23 @@ fn the_test_client_ends_its_server_with_exit() {
     assert_eq!(lsp.end().and_then(|s| s.code()), Some(1));
 }
 
+/// UC-X.2 (#844): dropping the client, as every test does, ends the server
+/// the same way: it exits with a code, never by the kill that would lose its
+/// coverage profile.
+#[test]
+fn dropping_the_test_client_lets_its_server_exit() {
+    {
+        let mut lsp = Lsp::spawn();
+        lsp.request("initialize", json!({ "capabilities": {} }));
+    }
+    let exit = LAST_DROP_EXIT.with(std::cell::Cell::get);
+    assert_eq!(
+        exit,
+        DropExit::Code(1),
+        "the server was killed or not dropped"
+    );
+}
+
 /// #185 P0.7: a frame whose body is not a message is answered with
 /// `id: null`, and the session goes on.
 #[test]

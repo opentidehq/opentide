@@ -271,11 +271,40 @@ pub fn read(
     })
 }
 
+/// The sources `--require-inputs` insists on: in this repository every one
+/// exists, so a missing one is a broken checkout or a moved file, never "not
+/// there yet". Returns the missing sources' descriptions.
+pub fn missing_sources(inputs: &Inputs) -> Vec<&'static str> {
+    let mut missing = Vec::new();
+    if inputs.goldens.is_empty() {
+        missing.push("the golden recordings (tests/golden/cases/)");
+    }
+    if inputs.approved_diffs.is_none() {
+        missing.push("the approved-diffs ledger (tests/golden/APPROVED_DIFFS.toml)");
+    }
+    if inputs.faults.is_none() {
+        missing.push("the fault catalogue (tests/corpora/codes.toml and faults.toml)");
+    }
+    missing
+}
+
 /// The fault coverage when both catalogue files exist under `corpora`.
 fn fault_coverage(corpora: &Path) -> Result<Option<FaultCoverage>> {
     let (codes, kinds) = (corpora.join("codes.toml"), corpora.join("faults.toml"));
-    if !(codes.is_file() && kinds.is_file()) {
-        return Ok(None);
+    match (codes.is_file(), kinds.is_file()) {
+        (false, false) => return Ok(None),
+        (true, true) => {}
+        // One without the other is a broken catalogue, not a missing one.
+        (true, false) => bail!(
+            "{} exists but {} does not",
+            codes.display(),
+            kinds.display()
+        ),
+        (false, true) => bail!(
+            "{} exists but {} does not",
+            kinds.display(),
+            codes.display()
+        ),
     }
     let read = |path: &Path| {
         std::fs::read_to_string(path).with_context(|| format!("read {}", path.display()))
@@ -355,9 +384,9 @@ mod tests {
         // The repository's own catalogue: the same counts as
         // `cargo xtask corpus coverage`.
         let corpora = Path::new(env!("CARGO_MANIFEST_DIR")).join("../tests/corpora");
-        let Some(coverage) = fault_coverage(&corpora).unwrap() else {
-            return; // a checkout without UC-0.6's catalogue
-        };
+        let coverage = fault_coverage(&corpora)
+            .unwrap()
+            .expect("the repository carries UC-0.6's fault catalogue");
         let codes = crate::corpus::coverage::Codes::parse(
             &std::fs::read_to_string(corpora.join("codes.toml")).unwrap(),
         )
@@ -388,6 +417,29 @@ mod tests {
         );
         assert_eq!(coverage.problems, report.problems);
         assert!(faults("not toml [", "").is_err());
+    }
+
+    #[test]
+    fn half_a_fault_catalogue_is_an_error() {
+        let root = std::env::temp_dir().join(format!("xtask-faults-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        assert!(fault_coverage(&root).unwrap().is_none());
+        std::fs::write(root.join("codes.toml"), "[groups]\n").unwrap();
+        let error = format!("{:#}", fault_coverage(&root).unwrap_err());
+        std::fs::remove_dir_all(&root).unwrap();
+        assert!(error.contains("faults.toml does not"), "{error}");
+    }
+
+    #[test]
+    fn require_inputs_names_every_missing_source() {
+        assert_eq!(missing_sources(&Inputs::default()).len(), 3);
+        let repository = read(
+            &Path::new(env!("CARGO_MANIFEST_DIR")).join(".."),
+            None,
+            None,
+        )
+        .unwrap();
+        assert_eq!(missing_sources(&repository), Vec::<&str>::new());
     }
 
     #[test]

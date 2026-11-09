@@ -71,8 +71,14 @@ jobs:
           set -o pipefail
           mkdir -p parity
           python3 scripts/parity_engines.py > parity/engines.json
-          cargo xtask parity dashboard --engines parity/engines.json --out parity/parity.md
+          cargo xtask parity dashboard --require-inputs --engines parity/engines.json --out parity/parity.md
           cat parity/parity.md >> "$GITHUB_STEP_SUMMARY"
+
+      # The committed page must match: a change to the goldens, the engine
+      # state, the ledger or the fault catalogue regenerates it in the same
+      # pull request (`cargo xtask parity dashboard`).
+      - name: The committed page is current
+        run: cargo xtask parity dashboard --require-inputs --engines parity/engines.json --check
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

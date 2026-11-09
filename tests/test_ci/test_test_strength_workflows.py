@@ -126,6 +126,34 @@ def test_coverage_gates_the_crates_with_the_policy() -> None:
         assert re.search(rf'crate = "{crate}"\nlines = 90\n', policy), crate
 
 
+def test_a_failing_gate_turns_the_job_red() -> None:
+    """A gate that fails must fail the check: `gate | tee` without pipefail exits
+    with tee's status, and `|| true` or continue-on-error would hide it."""
+    workflow = _load("coverage.yml")
+    triggers = _triggers(workflow)
+    assert "pull_request" in triggers and "push" in triggers, triggers
+    job = workflow["jobs"]["rust"]
+    assert "continue-on-error" not in job
+    for step in job["steps"]:
+        assert "continue-on-error" not in step, step.get("name")
+        assert "|| true" not in str(step.get("run", "")), step.get("name")
+    (gate,) = [s for s in job["steps"] if "cargo xtask coverage gate" in str(s.get("run", ""))]
+    assert str(gate["run"]).lstrip().startswith("set -o pipefail"), gate["run"]
+    (build,) = [s for s in job["steps"] if "uv sync" in str(s.get("run", ""))]
+    assert "--reinstall-package opentide" in str(build["run"])
+
+
+def test_the_dashboard_job_fails_on_a_stale_page_or_a_missing_input() -> None:
+    steps = _load("parity.yml")["jobs"]["dashboard"]["steps"]
+    runs = [str(s.get("run", "")) for s in steps]
+    renders = [r for r in runs if "cargo xtask parity dashboard" in r]
+    assert renders
+    assert all("--require-inputs" in r for r in renders), renders
+    assert any("--check" in r for r in renders), renders
+    for step in steps:
+        assert "continue-on-error" not in step, step.get("name")
+
+
 def test_the_mutation_run_accepts_survivors_and_fails_on_anything_else() -> None:
     steps = _load("mutants.yml")["jobs"]["mutate"]["steps"]
     (run,) = [str(s["run"]) for s in steps if "cargo mutants" in str(s.get("run", ""))]

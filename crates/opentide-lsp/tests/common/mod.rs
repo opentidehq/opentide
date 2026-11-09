@@ -166,9 +166,31 @@ impl Lsp {
     }
 }
 
+/// How a dropped `Lsp`'s server ended.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DropExit {
+    /// No `Lsp` has been dropped on this thread yet.
+    None,
+    /// The server exited on its own with this code.
+    Code(i32),
+    /// The server died by a signal or had to be killed.
+    Killed,
+}
+
+thread_local! {
+    /// How the last `Lsp` dropped on this thread ended. Tests drop on their
+    /// own thread, so parallel tests do not mix.
+    pub static LAST_DROP_EXIT: std::cell::Cell<DropExit> =
+        const { std::cell::Cell::new(DropExit::None) };
+}
+
 impl Drop for Lsp {
     fn drop(&mut self) {
-        self.end();
+        let exit = match self.end().and_then(|status| status.code()) {
+            Some(code) => DropExit::Code(code),
+            None => DropExit::Killed,
+        };
+        LAST_DROP_EXIT.with(|last| last.set(exit));
     }
 }
 

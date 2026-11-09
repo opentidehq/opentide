@@ -120,6 +120,10 @@ cargo mutants -p opentide-analysis --in-diff /tmp/change.diff
 The [`parity`](https://github.com/opentidehq/opentide/blob/development/.github/workflows/parity.yml)
 workflow renders it on every pull request, push, daily schedule and manual run, into the job
 summary and the `parity-dashboard` artifact, with a read-only token. By default nothing is pushed.
+The same job fails when the committed page differs from the rendering (`--check`), so a change
+to the goldens, the engine state, the ledger or the fault catalogue regenerates the page in its own
+pull request, and when a source is missing (`--require-inputs`): in this repository every source
+exists, so a missing one is a broken checkout, never "not there yet".
 
 Committing the page to the branch is a maintainer option: set the repository variable
 `PARITY_COMMIT` to `true`, and let `github-actions[bot]` push to the branch. The `commit` job then

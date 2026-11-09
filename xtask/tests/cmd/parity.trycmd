@@ -17,6 +17,12 @@ $ xtask parity dashboard --root . --engines missing.json
 ? 2
 xtask parity: read missing.json: [..]
 
+$ xtask parity dashboard --root . --require-inputs --check
+? 1
+error: missing the approved-diffs ledger (tests/golden/APPROVED_DIFFS.toml)
+error: missing the fault catalogue (tests/corpora/codes.toml and faults.toml)
+parity: --require-inputs and 2 source(s) missing; nothing written
+
 $ xtask parity summary
 ? 2
 xtask parity: expected `parity dashboard`
