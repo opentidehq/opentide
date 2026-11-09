@@ -1,4 +1,4 @@
-//! Reads the parity dashboard's [`Inputs`](crate::parity::Inputs) from a
+//! Reads the parity dashboard's [`Inputs`] from a
 //! repository checkout. Each source is optional until the work item that
 //! creates it lands; a missing source reads as "not there yet", never as an
 //! error, and the page says so.
