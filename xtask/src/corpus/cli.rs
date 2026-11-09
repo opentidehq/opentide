@@ -3,6 +3,7 @@
 use super::coverage;
 use super::faults::{self, Catalogue, Kind, Verdict};
 use super::generate::{self, Counts, Layout, Options};
+use super::structural;
 use super::workspace::Workspace;
 use anyhow::{Context, Result, bail};
 use std::collections::{BTreeMap, BTreeSet};
@@ -27,6 +28,12 @@ commands:
                  apply each fault kind of tests/corpora/faults.toml to its own
                  copy of the clean workspace, run the oracle, and check it
                  reports exactly the expected codes and severities
+  faults --check --engine rust [--oracle BIN] [--only structural|ID,...]
+         [--keep DIR] [--catalogue FILE]
+                 the structural fault kinds (UC-1.2): each object file read and
+                 converted by opentide-schema, every schema_validation finding
+                 compared with the oracle's field for field (code, field path,
+                 message, line, columns, yaml_line), and yaml_parse by code
   faults --out DIR [--catalogue FILE]
                  write one workspace ([combined] counts) with every fault
                  kind not marked isolated applied once (twice if cross-file)
@@ -45,8 +52,9 @@ commands:
                  --dir reads faults.toml, codes.toml and COVERAGE.md from DIR
 
 The oracle is BIN, else $OPENTIDE_ORACLE, else `opentide` on PATH; it must
-print the version faults.toml names. `--engine rust` comes with the Rust
-engine (UC-2.x).
+print the version faults.toml names. `--engine rust` covers the structural
+kinds today (opentide-schema, UC-1.2); every kind comes with the Rust
+engine's validate (UC-2.x).
 ";
 
 /// Runs `corpus <args>`; the process exit status.
@@ -451,6 +459,9 @@ fn faults_command(args: &[String]) -> Result<u8> {
     if !parsed.check {
         bail!("faults needs --check or --out\n\n{USAGE}");
     }
+    if parsed.engine.as_deref() == Some("rust") {
+        return structural_check(&parsed, &catalogue);
+    }
     if let Some(code) = require_python(parsed.engine.as_deref())? {
         return Ok(code);
     }
@@ -627,6 +638,172 @@ fn run_kind(
         require_run(&document, &kind.command, object_files(&workspace), &kind.id)?;
     }
     Ok((faults::judge(kind, &target_paths, &found), target_paths))
+}
+
+/// `faults --check --engine rust`: the structural kinds, the Rust conversion
+/// against the oracle, finding for finding ([`structural`]).
+fn structural_check(parsed: &FaultArgs, catalogue: &Catalogue) -> Result<u8> {
+    let structural: BTreeSet<&str> = structural::STRUCTURAL.iter().map(|(id, _)| *id).collect();
+    let mut ids: BTreeSet<String> = BTreeSet::new();
+    match &parsed.only {
+        None => ids.extend(structural.iter().map(|id| (*id).to_string())),
+        Some(only) => {
+            for id in only {
+                if id == structural::GROUP {
+                    ids.extend(structural.iter().map(|id| (*id).to_string()));
+                } else if structural.contains(id.as_str()) {
+                    ids.insert(id.clone());
+                } else if catalogue.kind(id).is_none() {
+                    bail!("--only: no fault kind `{id}`");
+                } else {
+                    bail!(
+                        "--engine rust checks the structural kinds only (UC-1.2; --only \
+                         structural lists them): `{id}` comes with the Rust engine's validate \
+                         (UC-2.x)"
+                    );
+                }
+            }
+        }
+    }
+    let bin = oracle_bin(parsed.oracle.as_deref());
+    check_oracle_version(&bin, &catalogue.oracle)?;
+    let base = generate::generate(&catalogue.base.options()?);
+    let scratch = match &parsed.keep {
+        Some(dir) => dir.clone(),
+        None => {
+            std::env::temp_dir().join(format!("opentide-corpus-structural-{}", std::process::id()))
+        }
+    };
+    let scratch = std::path::absolute(&scratch)
+        .with_context(|| format!("cannot resolve {}", scratch.display()))?;
+    if scratch.exists() {
+        bail!(
+            "{} exists; remove it or name another --keep",
+            scratch.display()
+        );
+    }
+    let guard = Scratch {
+        path: scratch.clone(),
+        keep: parsed.keep.is_some(),
+    };
+    let changelog = std::fs::read_to_string(repo_root().join("CHANGELOG.md"))
+        .context("reading CHANGELOG.md for the approved differences")?;
+    let started = Instant::now();
+    let mut failed = 0usize;
+    // The clean base: the stand-in models report nothing on any object.
+    let mut checked = 0usize;
+    for file in &base.files {
+        if let Some(found) = structural::check_object(&file.path, file.render().as_bytes()) {
+            checked += 1;
+            if !found.is_empty() {
+                bail!(
+                    "the clean base: the Rust conversion reports {} finding(s) on {}, first: {}",
+                    found.len(),
+                    file.path,
+                    found[0]
+                );
+            }
+        }
+    }
+    println!(
+        "ok   {:<48} {checked} rules and threats, no finding",
+        "(clean base)"
+    );
+    for id in &ids {
+        let kind = catalogue
+            .kind(id)
+            .with_context(|| format!("no fault kind `{id}` in the catalogue"))?;
+        let mut workspace = base.clone();
+        let targets = faults::select(&workspace, kind, &BTreeSet::new())?;
+        let target_paths = faults::apply(&mut workspace, kind, &targets)?;
+        let dir = scratch.join(&kind.id);
+        write_workspace(&workspace, &dir)?;
+        let mut env = kind.env.clone();
+        env.entry("XDG_STATE_HOME".to_string())
+            .or_insert_with(|| scratch.join("_state").to_string_lossy().into_owned());
+        let document = run_oracle(&bin, &dir, &kind.command, &env)?;
+        let mut problems = Vec::new();
+        let mut compared = 0usize;
+        let approved = structural::approved(id);
+        let mut applied = 0usize;
+        for file in &workspace.files {
+            let Some(rust) = structural::check_object(&file.path, file.render().as_bytes()) else {
+                continue;
+            };
+            let rust = structural::comparable(&rust);
+            let oracle = structural::oracle_findings(&document, &file.path);
+            compared += rust.len();
+            if rust != oracle
+                && let Some(approved) = approved
+                && serde_json::from_str::<serde_json::Value>(approved.oracle)?
+                    == serde_json::Value::from(oracle.clone())
+                && serde_json::from_str::<serde_json::Value>(approved.rust)?
+                    == serde_json::Value::from(rust.clone())
+            {
+                applied += 1;
+                continue;
+            }
+            if rust != oracle {
+                problems.push(format!(
+                    "{}:\n         oracle: {}\n         rust:   {}",
+                    file.path,
+                    serde_json::to_string(&oracle)?,
+                    serde_json::to_string(&rust)?
+                ));
+            }
+        }
+        if let Some(approved) = approved {
+            if applied == 0 {
+                problems.push(format!(
+                    "the approved difference applied to no file: it is stale ({})",
+                    approved.reason
+                ));
+            }
+            if !changelog.contains(approved.changelog) {
+                problems.push(format!("CHANGELOG.md has no {:?}", approved.changelog));
+            }
+        }
+        // Not vacuous: each target carries a finding the two agree on, or the
+        // approved difference.
+        for path in target_paths.iter().filter(|_| approved.is_none()) {
+            let file = workspace
+                .files
+                .iter()
+                .find(|file| &file.path == path)
+                .with_context(|| format!("{id}: no target {path}"))?;
+            let rust =
+                structural::check_object(&file.path, file.render().as_bytes()).unwrap_or_default();
+            if rust.is_empty() {
+                problems.push(format!("{path}: no finding on a target"));
+            }
+        }
+        let status = if problems.is_empty() { "ok  " } else { "FAIL" };
+        println!(
+            "{status} {id:<48} {} target(s), {compared} finding(s) compared{}",
+            target_paths.len(),
+            if applied > 0 {
+                format!(", {applied} file(s) differ as approved")
+            } else {
+                String::new()
+            }
+        );
+        for problem in &problems {
+            println!("       - {problem}");
+        }
+        if !problems.is_empty() {
+            failed += 1;
+        }
+    }
+    drop(guard);
+    println!(
+        "corpus faults --engine rust: {} structural kinds, {} passed, {failed} failed, in {:.1} s \
+         against {}",
+        ids.len(),
+        ids.len() - failed,
+        started.elapsed().as_secs_f64(),
+        catalogue.oracle
+    );
+    Ok(u8::from(failed > 0))
 }
 
 /// `DIR.faults.json` beside `DIR` (also for `DIR/`), never inside it.

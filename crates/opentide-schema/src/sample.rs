@@ -25,11 +25,14 @@ use garde::Validate;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+use crate::FromNode;
 use crate::pins::Pins;
 use crate::revision::revisions;
 
 /// An example of a sample object: a sub-struct every revision shares as is.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema, Validate)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema, Validate, FromNode,
+)]
 #[serde(deny_unknown_fields)]
 #[garde(context(Pins))]
 #[cfg_attr(
@@ -93,7 +96,7 @@ revisions! {
     ]
 
     /// The sample family, revision 1.0 (`sample::1.0`).
-    #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema, Validate)]
+    #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema, Validate, FromNode)]
     #[serde(deny_unknown_fields)]
     #[garde(context(Pins))]
     #[cfg_attr(
@@ -118,7 +121,7 @@ revisions! {
 
     /// The sample family, revision 1.1 (`sample::1.1`): overrides `effort`,
     /// which keeps its position, and adds `tags` after the shared fields.
-    #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema, Validate)]
+    #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema, Validate, FromNode)]
     #[serde(deny_unknown_fields)]
     #[garde(context(Pins))]
     #[cfg_attr(

@@ -1,0 +1,18 @@
+name: Suspicious service creation
+uuid: 00000000-0000-4000-8001-000000000001
+schema: sample::1.1
+description: |
+  A service is created from a temporary directory.
+  Two lines, kept as a block scalar.
+severity: High
+effort: 3
+enabled: false
+examples:
+- description: Sentinel
+  link: https://example.org/sentinel
+  language: kql
+- description: No language
+  link: https://example.org/plain
+tags:
+- persistence
+- windows

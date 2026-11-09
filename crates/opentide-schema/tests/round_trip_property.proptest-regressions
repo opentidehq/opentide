@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 92144e6730e6557cc864c55c667e68059476f702be02ea68aeb6138acc79fa42 # shrinks to sample = SampleV1_1 { name: "", uuid: "", schema_id: "", description: "0x-A", severity: "", effort: None, enabled: false, examples: None, tags: [] }
