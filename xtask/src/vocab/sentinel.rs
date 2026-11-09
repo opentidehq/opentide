@@ -254,6 +254,22 @@ fn load_release(dir: &Path, release: &str) -> Result<Release> {
     Ok(Release::from_objects(bundles.iter().map(Vec::as_slice)))
 }
 
+/// curl's options for a bundle: HTTPS only, redirects included (the bundles
+/// become committed package data), TLS 1.2 or later, failing on an HTTP error.
+const CURL: [&str; 11] = [
+    "--fail",
+    "--silent",
+    "--show-error",
+    "--location",
+    "--proto",
+    "=https",
+    "--proto-redir",
+    "=https",
+    "--tlsv1.2",
+    "--max-time",
+    "300",
+];
+
 fn download(dir: &Path, releases: &[&str]) -> Result<()> {
     for release in releases {
         for domain in DOMAINS {
@@ -263,15 +279,8 @@ fn download(dir: &Path, releases: &[&str]) -> Result<()> {
             let path = bundle_path(dir, domain, release);
             fs::create_dir_all(path.parent().context("a bundle path has a parent")?)?;
             let status = Command::new("curl")
-                .args([
-                    "--fail",
-                    "--silent",
-                    "--show-error",
-                    "--location",
-                    "--max-time",
-                    "300",
-                    "--output",
-                ])
+                .args(CURL)
+                .arg("--output")
                 .arg(&path)
                 .arg(&url)
                 .status()
@@ -320,7 +329,14 @@ pub fn run(vocabulary: &Path, output: &Path, stix_dir: Option<&Path>, check: boo
     };
     let list = generate(&dir, &later_release)?;
     let expected = text(&list)?;
-    let current = fs::read_to_string(output).unwrap_or_default();
+    // A missing file is stale; one that cannot be read is an error, not stale.
+    let current = match fs::read_to_string(output) {
+        Ok(text) => text,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(error) => {
+            return Err(error).with_context(|| format!("read {}", output.display()));
+        }
+    };
     if check {
         if current == expected {
             println!("{} is current", output.display());
@@ -507,6 +523,34 @@ mod tests {
         assert!(run(&vocabulary, &output, Some(stix.path()), true).unwrap());
         let text = fs::read_to_string(&output).unwrap();
         assert!(text.starts_with("{\n \"attack\": \"18.1\",\n \"domains\": [\n  \"enterprise\""));
+    }
+
+    #[test]
+    fn an_unreadable_output_is_an_error_not_stale() {
+        let stix = stix();
+        let dir = tempfile::tempdir().unwrap();
+        let vocabulary = dir.path().join("att&ck.vocab.toml");
+        fs::write(
+            &vocabulary,
+            "name = \"ATT&CK\"\nfield = \"att&ck\"\nsource_version = \"20.0\"\n",
+        )
+        .unwrap();
+        let binary = dir.path().join("binary.json");
+        fs::write(&binary, [0xff, 0xfe, 0x00]).unwrap();
+        let error = run(&vocabulary, &binary, Some(stix.path()), true).unwrap_err();
+        assert!(format!("{error:#}").contains("binary.json"), "{error:#}");
+        // A directory where the file should be.
+        let error = run(&vocabulary, dir.path(), Some(stix.path()), true).unwrap_err();
+        assert!(format!("{error:#}").starts_with("read "), "{error:#}");
+    }
+
+    #[test]
+    fn bundles_download_over_https_only() {
+        let args = CURL.join(" ");
+        assert!(args.contains("--proto =https"), "{args}");
+        assert!(args.contains("--proto-redir =https"), "{args}");
+        assert!(args.contains("--tlsv1.2"), "{args}");
+        assert!(args.contains("--fail"), "{args}");
     }
 
     fn repo() -> PathBuf {
