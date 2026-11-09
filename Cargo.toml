@@ -70,6 +70,8 @@ lsp-server = "0.10"
 lsp-types = "0.97"
 url = "2.5"
 regex = "1"
+# "did you mean" suggestions (opentide-core `suggest`): edit distances. Also clap's.
+strsim = "0.11"
 serde_yaml = "0.9"
 clap = { version = "4", features = ["derive"] }
 tree-sitter = "0.25"

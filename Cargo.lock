@@ -660,7 +660,7 @@ name = "opentide-core"
 version = "0.12.0"
 dependencies = [
  "serde",
- "serde_json",
+ "strsim",
  "thiserror",
  "toml 0.8.23",
 ]
