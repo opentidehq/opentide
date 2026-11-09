@@ -17,6 +17,10 @@ fn minimal() -> String {
 
 #[test]
 fn round_trips_byte_for_byte() {
+    assert!(
+        !FIXTURE.contains('\r'),
+        "the fixture was checked out with CRLF: tests/fixtures/.gitattributes pins LF"
+    );
     let sample: Sample = read(FIXTURE).unwrap();
     assert_eq!(sample.examples.as_ref().unwrap().len(), 2);
     assert_eq!(sample.examples.as_ref().unwrap()[1].language, None);
