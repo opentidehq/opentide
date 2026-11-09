@@ -45,6 +45,7 @@ Why the files that do not map one to one went where they did:
 - **`README.md`** describes the `opentide-lsp` binary and was already that crate's crates.io readme.
 - **`tests/clients/`** is a pytest-lsp suite for the server binary, with its own dependencies. Under `scripts/engine/` ruff lints it, and opentide's test suite, which collects `tests/`, does not run it.
 - **Workflows.** The filter puts them in `.github/engine-workflows/`, where GitHub does not run them: language-server's `release.yml` triggers on `v*.*.*` tags, which opentide's releases push, and would publish the engine crates and npm packages, so it stays there until UC-0.3 gives engine releases tags of their own. The commits after the merge move the others on to `.github/workflows/` with their history, so the engine keeps every gate it had: `oracle.yml` (without its tag trigger), `ci.yml` as `engine-ci.yml` (its name collides with opentide's; its rustfmt, clippy, test and WebAssembly steps run in `ci.yml`'s `engine` and `engine-wasm` jobs) and `fuzz.yml` as `engine-fuzz.yml`.
+  Since UC-0.3 (#801) `engine-ci.yml` is folded into `ci.yml`, `release.yml` is `.github/workflows/engine-release.yml` (on `engine-v*` tags) with its asset jobs in `engine-release-build.yml`, and `.github/engine-workflows/` is gone; `.github/AGENTS.md` maps each language-server job to its home.
 - **Commit messages.** A bare `#N` in a language-server commit message became `opentidehq/language-server#N`, so it still names the issue or pull request it meant. A `#N` right after a letter, digit, `_`, `/`, `&`, `.` or `-` was left as it was, as the expression below says: the second half of `#120-#122` or `#20/#21` still reads as this repository's issue of that number.
 
 The merge had two add/add conflicts, resolved in the merge commit: `.gitignore` kept opentide's rules followed by language-server's, and `.cursor/environment.json` kept opentide's.
@@ -93,3 +94,22 @@ The commits after the merge make the imported tree build and test here:
 ## Repeating it at a later commit
 
 If language-server `main` moves after this import, run the invocation above with the new commit in `sha`. git-filter-repo rewrites a commit to the same hash when its content, parents and message are the same, so the filtered history up to `6f2ad70` is the history already merged here, ending at `86ac6b88`, and the new commits follow it. Merge the new filtered tip into a branch of this repository: only the new commits come in. Paths in their changes need the same follow-up as above.
+
+## Where the workflows went
+
+Since UC-0.3 ([#801](https://github.com/opentidehq/opentide/issues/801)), each job of language-server's workflows has this home here, or was dropped for the reason given.
+
+| language-server | Job | Here |
+| --- | --- | --- |
+| `ci.yml` | `test` | ci.yml `engine` (rustfmt, clippy, layers, rustdoc, invariants, schemas test), `engine-test` (tests, doctests), `engine-wasm` (npm packs, lsp-client stdio), `textmate` |
+| `ci.yml` | `windows` | ci.yml `engine-test` (windows-latest), now the whole workspace |
+| `ci.yml` | `clients`, `bench` | ci.yml `clients`, `bench`, still informational |
+| `ci.yml` | `package` | ci.yml `engine-package` (packaging and licence scan); its `release.py` tests run in `engine` |
+| `ci.yml` | `grammars` | ci.yml `grammars` |
+| `ci.yml` | `wasm` | ci.yml `engine-wasm` |
+| `ci.yml` | `elastic-sweep` | ci.yml `elastic-sweep` |
+| `fuzz.yml` | `fuzz` | `engine-fuzz.yml` (nightly, five minutes), and ci.yml `fuzz-smoke` (60 s per target, every PR) |
+| `oracle.yml` | every job | `oracle.yml`, its tag trigger `engine-v*` instead of `v*.*.*` |
+| `release.yml` | every job | `engine-release.yml` (`git mv`); `native`, `wasm`, `highlights` and the licences of `assets` moved to `engine-release-build.yml`, which ci.yml also runs as a dry run |
+| `backfill-releases.yml` | `backfill` | dropped: a one-off for language-server's tags before 0.5 |
+| `opentide-canary.yml` | `canary` | dropped: `tests/test_generation/test_bundled_tide_catalog.py` checks the bundled Tide catalog against this checkout's models |

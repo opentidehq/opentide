@@ -6,6 +6,10 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ## [Unreleased]
 
+### Changed
+
+- **Releases come from opentidehq/opentide, tagged `engine-vX.Y.Z`** ([opentide#801](https://github.com/opentidehq/opentide/issues/801)). The engine moved there with its history; its GitHub Releases carry the same assets under the same names (`highlights-vX.Y.Z.zip`, `opentide-wasm-web-vX.Y.Z.zip`, `opentide-lsp-vX.Y.Z-<target>`, the licences and `SHA256SUMS`), so an editor that pins them changes only the URL: `https://github.com/opentidehq/opentide/releases/download/engine-vX.Y.Z/<asset>`. Their build provenance is signed by `opentidehq/opentide/.github/workflows/engine-release.yml`: verify with `gh attestation verify <asset> --repo opentidehq/opentide` and the identity in `crates/opentide-lsp/README.md`. A release candidate (`engine-vX.Y.Z-rc.N`) is a GitHub pre-release with every asset and nothing on crates.io or npm. Releases up to 0.11.0 stay on opentidehq/language-server.
+
 ## [0.11.0] - 2026-11-06
 
 Filename and metadata warnings now follow the workspace's `lint.toml` as `opentide lint` does, a `detection_model` naming a signal is no longer an `invalid_ref`, and hover and findings point at the exact value they are about.

@@ -116,6 +116,6 @@ fn run_by_cargo_it_checks_the_workspace_cargo_ran_it_for() -> TestResult {
 fn run_directly_it_checks_the_workspace_of_its_working_directory() -> TestResult {
     let workspace = Workspace::new("direct")?;
     let output = workspace.check_layers(&workspace.root.join("high"), None)?;
-    assert_fails_on_the_upward_edge(&output, &workspace.root.join("xtask/layers.toml"));
+    assert_fails_on_the_upward_edge(&output, &workspace.root.join("xtask").join("layers.toml"));
     Ok(())
 }
