@@ -728,13 +728,14 @@ mod tests {
             &[("opentide-core", None), ("opentide-schema-derive", None)],
         ),
         ("opentide-schema-derive", &[]),
+        ("opentide-cli", &[]),
     ];
 
     #[test]
     fn the_repository_table_places_todays_workspace() {
         let report = check(&table(REPOSITORY_TABLE), &metadata(WORKSPACE));
         assert_eq!(report.violations, []);
-        assert_eq!(report.crates, 21);
+        assert_eq!(report.crates, 22);
     }
 
     #[test]

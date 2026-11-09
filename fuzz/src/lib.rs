@@ -249,6 +249,61 @@ pub fn configuration(data: &[u8]) {
     }
 }
 
+/// The `opentide` command line (UC-3.3, #825): `\0`-separated arguments
+/// through the whole clap tree, hoisting, the output modes and the usage
+/// errors. The run catches its own panics and reports them as a crash
+/// (`error[internal]`), so that report is the failure here. Nothing reaches
+/// the filesystem but `--repo`'s existence check: no workspace, no home.
+pub fn cli(data: &[u8]) {
+    let argv: Vec<String> = data
+        .split(|b| *b == 0)
+        .map(|part| String::from_utf8_lossy(part).into_owned())
+        .collect();
+    let (code, stdout, stderr) = run_cli(&argv);
+    assert!(
+        !stderr.contains("error[internal]"),
+        "{argv:?} crashed: {stderr}"
+    );
+    assert!(matches!(code, 0..=2), "{argv:?} exited {code}");
+    // A JSON-mode run prints one document or nothing on stdout.
+    if argv.iter().any(|arg| arg == "--json") && !stdout.is_empty() && !stdout.starts_with(' ') {
+        assert!(stdout.ends_with('\n'), "{argv:?}: {stdout}");
+    }
+}
+
+/// Runs `opentide` in-process on `argv`: exit code, stdout, stderr.
+pub fn run_cli(argv: &[String]) -> (i32, String, String) {
+    use std::sync::{Arc, Mutex};
+    #[derive(Clone, Default)]
+    struct Buffer(Arc<Mutex<Vec<u8>>>);
+    impl std::io::Write for Buffer {
+        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+            if let Ok(mut buffer) = self.0.lock() {
+                buffer.extend_from_slice(bytes);
+            }
+            Ok(bytes.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    let err = Buffer::default();
+    let host = opentide_cli::Host {
+        version: "0.0.0".into(),
+        stdout_tty: false,
+        stderr_tty: false,
+        log_sink: Arc::new(Mutex::new(err.clone())),
+        cwd: None,
+        width: None,
+        interrupt: opentide_cli::app::Interrupt::default(),
+    };
+    let env = opentide_cli::env::Env::default();
+    let mut out = Vec::new();
+    let code = opentide_cli::run(argv, &env, &host, &mut out, &mut err.clone());
+    let stderr = err.0.lock().map(|b| String::from_utf8_lossy(&b).into_owned()).unwrap_or_default();
+    (code, String::from_utf8_lossy(&out).into_owned(), stderr)
+}
+
 /// A Tide object from arbitrary bytes (`from_node`, UC-1.2): read them as the
 /// oracle reads an object file, convert the tree into every model, and check
 /// what comes out. An error's span lies in the document; a value that

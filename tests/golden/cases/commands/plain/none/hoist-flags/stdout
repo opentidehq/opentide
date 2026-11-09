@@ -1,0 +1,59 @@
+validate         Validate objects and queries
+  query          Check rule queries offline, or on the tenants (--live)
+query            Run a read-only query on platform tenants and show rows
+lint             Check file names and recommended metadata
+info             Show repository and platform information
+new              Scaffold a threat, objective or rule from its template
+  threat         Scaffold a threat
+  objective      Scaffold a detection objective
+  rule           Scaffold a detection rule
+generate         Generate schemas, templates, docs and exports
+  explorer       Write the explorer bundle and search index
+  docs           Generate markdown documentation for detection objects
+    rules        Generate rule documentation
+    objectives   Generate objective documentation
+    threats      Generate threat documentation
+    index        Generate the documentation index pages
+  exports        Export catalogue artefacts
+    navigator    Export the ATT&CK Navigator layer
+    objects      Export every object as one JSON file
+    revisions    Export the revisions snapshot
+  extract        Import rules from external platforms
+    sentinel     Import Sentinel analytics rules
+    defender     Import Defender custom detections
+    elastic      Import Elastic Security detection rules
+  inflight       Inflight preview shard generation and prune
+    prune        Remove inflight shards already on the default branch
+rules            Detection rule maintenance
+  unreviewed     List rules not reviewed within a window
+deploy           Deploy rules to platform tenants
+  migrate-state  Move vendor ids from rules into deployment state
+share            Publish objects to intelligence platforms
+  push           Create or update one MISP event per selected object
+  preview        Show what push would do, without a request
+  status         Compare the local ledger with object versions
+  retract        Unpublish or delete a shared event
+  targets        List sharing destinations, never their API keys
+setup            Set up a detection repository and its tooling
+  repo           Scaffold a detection repository
+  platforms      Enable platform configuration files
+  ci             Write CI/CD pipeline files
+  env            Write .env.example and ignore .env
+  hooks          Validate objects on every commit
+  mcp            Write MCP configuration for editors and agents
+  vscode         Write VS Code schemas and snippets (deprecated)
+  skills         Discover and install agent skills
+    discover     List the skills in the opentidehq/skills catalogue
+    show         Show one skill from the catalogue
+doctor           Check the installation, the workspace and its integrations
+migrate          Rewrite objects for a newer opentide model
+  vocab-scope    Re-prefix stage-scoped vocabulary values
+tui              Browse the catalogue and its diagnostics in a terminal UI
+explain          Explain a diagnostic code and how to fix it
+commands         List every command and option, for agents
+mcp              Run the opentide MCP server for editors and agents
+  start          Serve MCP on stdio until the host closes stdin
+lsp              Serve the language server for editors
+  start          Serve LSP on stdio until the editor closes stdin
+serve            Run CLI commands in one warm process, for editors
+✓ 58 commands
