@@ -121,10 +121,13 @@ jobs:
           persist-credentials: false
 
       # `cargo xtask vocab sync --check` (xtask/src/vocab/sync.rs, UC-1.6 #812).
+      # RUSTFLAGS on the step, not the job: the job's environment keys the
+      # binding's cache it reads (python-engine), built without it.
       - name: Check vocabulary and pin sync drift
         if: steps.vocab_changes.outputs.changed == 'true'
         env:
           OPENTIDE_SPECIFICATIONS_ROOT: ${{ github.workspace }}/specifications
+          RUSTFLAGS: "-Dwarnings"
         run: cargo xtask vocab sync --check
 
       # OPENTIDE_REQUIRE_SPECIFICATIONS turns the test's "no checkout" skip into a

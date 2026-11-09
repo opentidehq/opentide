@@ -5,3 +5,10 @@ tests/golden/blobs/** -text linguist-generated
 tests/golden/COVERAGE.md linguist-generated
 tests/golden/oracle-requirements.txt linguist-generated
 tests/golden/fixtures/** -text
+
+# Digested and compiled in byte for byte (data/specifications.lock.json through
+# `cargo xtask vocab`, opentide-schema's include_str!): no end-of-line conversion,
+# so a Windows checkout holds the bytes specifications publishes.
+src/opentide/data/vocabulary/*.vocab.toml -text
+src/opentide/data/pins/*.toml -text
+src/opentide/data/sentinel/*.json -text
