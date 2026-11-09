@@ -20,6 +20,7 @@ with `engine_not_ported`, exit 2, as `OPENTIDE_ENGINE=rust` does.
 | `style.rs` | `error:` / `help:` / `usage:` lines, `→` next actions, the agent tip; SGR in `human`, bold without colour for `--no-color` on a terminal; wrapping on a terminal only |
 | `logging.rs` | A `tracing` layer: levels per mode, stderr only, redacted |
 | `crash.rs`, `redact.rs` | `error[internal]`, the crash log in the state directory, the issue link; the redaction of secrets and tenant names |
+| `render/` | The renderers (UC-3.4, #826): `text.rs` styled text written as SGR runs and OSC 8 links, cells by `unicode-width`; `codeframe.rs` the `error[code]` frames (hand-drawn: `annotate-snippets` cannot draw this layout), `--fix`'s diff and `fixed:` lines; `outcome.rs` outcome, warning, error and next-step lines and a result's text; `report.rs` SARIF and Code Quality (`sha2` fingerprints); `ci.rs` and `summary.rs` the GitHub, GitLab and Azure sinks; `progress.rs` step lines, the checklist and `OPENTIDE_PROGRESS=json` events |
 
 ## Place
 
@@ -54,11 +55,28 @@ the filesystem. The bindings (`main(argv)` from Python and npm, UC-3.8 and UC-5.
   -p opentide-cli framework_schemas` rewrites it from the oracle's recording.
 - Library crates log through `tracing` and never print; this crate's `logging` layer writes their
   events.
+- The renderers' output is the contract (plan §3 invariant 1): `tests/render.rs` renders the
+  oracle's inputs (`tests/render/*.input.json`) and compares with the oracle's output
+  (`tests/render/snapshots/`) byte for byte. Both are written by
+  `scripts/golden/render_oracle.py` run with the oracle's interpreter, never edited and never
+  updated from the Rust side (`cargo insta accept` would hide a regression): golden.yml checks
+  them against the oracle on every pull request into integration/unified-core.
 
 ## Test
 
 ```bash
 cargo nextest run -p opentide-cli                       # unit, goldens, fuzz seeds
 cargo nextest run -p opentide-cli framework             # the framework's tests (UC-3.3)
+cargo nextest run -p opentide-cli render                # the renderers against the oracle (UC-3.4)
 bash scripts/engine/fuzz.sh cli 60                      # the argv fuzz target (nightly)
+```
+
+Regenerating the renderers' oracle files (after a change to the driver's cases, or a new oracle):
+
+```bash
+cargo xtask golden record --filter 'validate/plain/fault/default'   # installs the oracle
+cargo xtask corpus faults --out /tmp/fault
+python="$(echo "$CARGO_TARGET_DIR"/golden/oracle-*/bin/python)"
+"$python" -I scripts/golden/render_oracle.py --fault /tmp/fault --scratch "$(mktemp -d)" \
+    --out crates/opentide-cli/tests/render          # --check: compare instead of writing
 ```

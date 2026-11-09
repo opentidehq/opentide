@@ -7,7 +7,9 @@
 //! ([`hoist`]), the JSON envelope and exit codes ([`envelope`]), usage errors
 //! and "did you mean" ([`usage`], [`suggest`]), logging on `tracing`
 //! ([`logging`]), the crash handler and its redaction ([`crash`],
-//! [`redact`]) and Ctrl-C ([`app::install_interrupt_handler`]). Commands are
+//! [`redact`]) and Ctrl-C ([`app::install_interrupt_handler`]); and the
+//! renderers of every result ([`render`], UC-3.4, #826): code frames, outcome
+//! lines, SARIF and Code Quality, CI sinks and progress. Commands are
 //! ported onto it one by one (UC-3.5, UC-3.6); until then a command with no
 //! Rust implementation is refused with `engine_not_ported`, exit 2.
 
@@ -21,6 +23,7 @@ pub mod json;
 pub mod logging;
 pub mod mode;
 pub mod redact;
+pub mod render;
 pub mod schemas;
 pub mod style;
 pub mod suggest;

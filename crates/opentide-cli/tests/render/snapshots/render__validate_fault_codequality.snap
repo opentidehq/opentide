@@ -1,0 +1,1510 @@
+---
+source: crates/opentide-cli/tests/render.rs
+expression: validate_fault_codequality
+---
+[
+  {
+    "type": "issue",
+    "check_name": "deployment_state_uuid_mismatch",
+    "description": "<WS>/.opentide/states/deployment/1fe3b71b-24be-4604-9b91-72cb32381bfc.json records object_uuid '00000000-0000-4000-8000-000000000001', but its file name is '1fe3b71b-24be-4604-9b91-72cb32381bfc'",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "40d0bb1ae39155ea9af4065f7c7276e6cae75e51b49bfab5f6562cc318f4ec74",
+    "location": {
+      "path": ".opentide/states/deployment/1fe3b71b-24be-4604-9b91-72cb32381bfc.json",
+      "lines": {
+        "begin": 1
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "deployment_state_shape",
+    "description": "<WS>/.opentide/states/deployment/8df3e0d3-8a3f-490c-9f31-b71df88f3562.json has no platforms object",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "dac798f09a8c98825c530d9ea4e13fc128563ab54aaeda85b305c8458754ca6e",
+    "location": {
+      "path": ".opentide/states/deployment/8df3e0d3-8a3f-490c-9f31-b71df88f3562.json",
+      "lines": {
+        "begin": 1
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "deployment_state_platform",
+    "description": "<WS>/.opentide/states/deployment/f2f28c1d-8323-4b4e-acba-c53ed9cb5271.json names platform 'splunk'; only crowdstrike, defender_for_endpoint, sentinel_one, sysdig store external ids",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "b8e87ca2df01b75068eaa894c325226087061df25b8182b2cefae8462e783dd3",
+    "location": {
+      "path": ".opentide/states/deployment/f2f28c1d-8323-4b4e-acba-c53ed9cb5271.json",
+      "lines": {
+        "begin": 1
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "invalid_ref",
+    "description": "Unknown threat reference '00000000-0000-4000-8000-00000000beef' (help: opentide info threats lists the ones that exist)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "3b9aa491200a98c5ac86875046f6673cc9d28c17ba236c9691d3a2b3d4cfb919",
+    "location": {
+      "path": "objects/objectives/elevated-exfiltration-objective-0002.yaml",
+      "lines": {
+        "begin": 54
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "vocab_unknown",
+    "description": "'Host::Gizmo' is not a signal entities value (help: did you mean 'Host::File'?)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "e73d761799768011d89e15e5fa92fea4a97bcfd06986fad06219b32606bfad52",
+    "location": {
+      "path": "objects/objectives/lateral-beacon-objective-0001.yaml",
+      "lines": {
+        "begin": 34
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "invalid_ref",
+    "description": "Unknown threat reference '00000000-0000-4000-8000-00000000beef' (help: opentide info threats lists the ones that exist)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "348dfe383cd7d29dd7086eb34dcd43a0816018215f7feea5b5bc3bf6e2298915",
+    "location": {
+      "path": "objects/objectives/rapid-tunnel-objective-0003.yaml",
+      "lines": {
+        "begin": 77
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "ecs_type_mismatch",
+    "description": "`process.pid` is a `long` field in ECS v9.5.0: Elasticsearch rejects the value `abc`, which is not a number, on it (help: the ECS field reference: https://www.elastic.co/docs/reference/ecs/ecs-field-reference)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "4fa4978919f10c4c8761e039df0a27d838a6a0b5fe8eedd19d4df035367554f0",
+    "location": {
+      "path": "objects/rules/covert-exfiltration-rule-0083.yaml",
+      "lines": {
+        "begin": 71
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "falco_value_type",
+    "description": "abc is not a valid number: `proc.pid` is a number (INT64) (help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "75e84eadcaa6fec4c07f4c50798eda90859988659b3d2288f23a3e260fd50e90",
+    "location": {
+      "path": "objects/rules/covert-implant-rule-0157.yaml",
+      "lines": {
+        "begin": 92
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "schema_validation",
+    "description": "configurations.sysdig: Value error, SysdigConfig validation failed with code(s): sysdig_tuning_keys (help: the template in .opentide/templates/ shows the field and its values)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "2b9d9fc0137eef6c611b55b171c124dee89c2781fdc35f2471fcc7cbcc628a94",
+    "location": {
+      "path": "objects/rules/covert-loader-rule-0261.yaml",
+      "lines": {
+        "begin": 32
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "kql_parse_error",
+    "description": "KQL syntax error (help: the KQL reference: https://learn.microsoft.com/kusto/query/)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "bdac965dfd374d0cc871564733e5987038d8df089f3f4c4cac47dcc443c000d7",
+    "location": {
+      "path": "objects/rules/covert-tunnel-rule-0088.yaml",
+      "lines": {
+        "begin": 62
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "eql_unsupported",
+    "description": "Elasticsearch EQL does not support the `unique` pipe; only `head` and `tail` (help: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "69fb3ba07f577a4d165091b5b7204655b86cd37be542824b5288c477b5a03f2e",
+    "location": {
+      "path": "objects/rules/elevated-downgrade-rule-0197.yaml",
+      "lines": {
+        "begin": 53
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "spl_unknown_datamodel",
+    "description": "`Endpointz` is not a CIM data model; did you mean `Endpoint`? (help: try: Endpoint)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "0fce6d7d3b8e9651880faf1491bdde3ecc5cb919a969f35f843bc673b82b5918",
+    "location": {
+      "path": "objects/rules/elevated-dropper-rule-0066.yaml",
+      "lines": {
+        "begin": 54
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "spl_unknown_datamodel_field",
+    "description": "`process_nam` is not a field of the CIM Endpoint.Processes dataset; did you mean `Processes.process_name`? (help: try: Processes.process_name)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "cc9c9fb7a2d98fa59893e445192f25022a29f237c537c7677db2d6b05ffd479a",
+    "location": {
+      "path": "objects/rules/elevated-injection-rule-0075.yaml",
+      "lines": {
+        "begin": 40
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "kql_unknown_table",
+    "description": "unknown table 'DeviceProcessEvnts'; if the workspace holds it, declare it for defender_for_endpoint in visibility.toml (help: did you mean 'DeviceProcessEvents'?)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "26dffb0928c576cc258fde6c650189495f649f7990987b43db21d75564323f45",
+    "location": {
+      "path": "objects/rules/elevated-pivot-rule-0038.yaml",
+      "lines": {
+        "begin": 59
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "vocab_unknown",
+    "description": "'whitish' is not a TLP value",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "2ff214567ffe75b04c815350362788741cb7c02f211b18208ba351728d6cbc7e",
+    "location": {
+      "path": "objects/rules/elevated-relay-rule-0034.yaml",
+      "lines": {
+        "begin": 9
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "kql_parse_error",
+    "description": "KQL syntax error (help: the KQL reference: https://learn.microsoft.com/kusto/query/)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "d66b4f4e2a9cc7be91fbee224915d9425764e41af7db180d2f016beb70d1a2b9",
+    "location": {
+      "path": "objects/rules/elevated-relay-rule-0034.yaml",
+      "lines": {
+        "begin": 64
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "kql_unknown_function",
+    "description": "unknown function 'tolowr' (help: did you mean 'tolower'?)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "7ff17021341c5600f569a7b85524d3325ee7d4c1d4d57de75911f384d09f0d35",
+    "location": {
+      "path": "objects/rules/elevated-relay-rule-0055.yaml",
+      "lines": {
+        "begin": 60
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "eql_maxspan_unit",
+    "description": "unrecognized time unit [w] in `maxspan`; use one of ms, s, m, h, d (help: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "72cfdad39fcbb411f15999c0fd241c0e03e2ca55d391dc1a4e2401f754db4b21",
+    "location": {
+      "path": "objects/rules/elevated-relay-rule-0107.yaml",
+      "lines": {
+        "begin": 54
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "kuery_parse_error",
+    "description": "Kibana ends an unquoted value at `not ` and rejects the query; quote the value (help: try: \"cannot run\")",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "821bab439e9d5359972814efa12dd41aa4d008758ce67f3949762aa3068215f8",
+    "location": {
+      "path": "objects/rules/elevated-tunnel-rule-0053.yaml",
+      "lines": {
+        "begin": 40
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "falco_operator_type",
+    "description": "'contains' operator not supported for numeric filters (`proc.pid` is a number (INT64)) (help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "1ac73cae8af549af346bc1370e34c130e6f6d9925ecd8d84a0bb4f6d088eaeb3",
+    "location": {
+      "path": "objects/rules/encoded-beacon-rule-0124.yaml",
+      "lines": {
+        "begin": 68
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "schema_validation",
+    "description": "configurations.sysdig: Value error, SysdigConfig validation failed with code(s): sysdig_definition_name (help: the template in .opentide/templates/ shows the field and its values)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "3026938ec667575dc296c5eeb5f3152649b15f472d1dac03c95281aa881dd4b9",
+    "location": {
+      "path": "objects/rules/encoded-downgrade-rule-0063.yaml",
+      "lines": {
+        "begin": 50
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "esql_unknown_type",
+    "description": "`foo` is not an ES|QL type Elasticsearch can cast to; use a type such as `keyword`, `long`, `double`, `ip`, or `datetime` (help: try: bool)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "f5731c9bbbc42335833541aaa291359d06eba8bea04174d6c53c3524097dcdb4",
+    "location": {
+      "path": "objects/rules/encoded-downgrade-rule-0170.yaml",
+      "lines": {
+        "begin": 53
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "spl_parse_error",
+    "description": "SPL syntax error: unexpected 'index' (help: the SPL reference: https://docs.splunk.com/Documentation/Splunk/latest/SearchReference)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "32a7ea4bbb4a4b709c653e039531e046b005107d8e141810c7f694fd0c06db27",
+    "location": {
+      "path": "objects/rules/encoded-dropper-rule-0057.yaml",
+      "lines": {
+        "begin": 55
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "schema_validation",
+    "description": "missing required field 'name' (help: the template in .opentide/templates/ shows the field and its values)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "a31eb44b983a87258c0c4bd92b14c9100889b1aa70d2cfc202961720f2219dc8",
+    "location": {
+      "path": "objects/rules/encoded-harvest-rule-0032.yaml",
+      "lines": {
+        "begin": 1
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "kql_parse_error",
+    "description": "KQL syntax error (help: the KQL reference: https://learn.microsoft.com/kusto/query/)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "296c53e568d693301c5031cc90dae87654495cfd485c69af5894dbbbc2041c02",
+    "location": {
+      "path": "objects/rules/encoded-loader-rule-0037.yaml",
+      "lines": {
+        "begin": 50
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "schema_validation",
+    "description": "missing required field 'description' (help: the template in .opentide/templates/ shows the field and its values)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "48fdd0fa0ea83638a1eb634c0b9d837c56c0360af18dd0e8cae5914fd0416c8a",
+    "location": {
+      "path": "objects/rules/encoded-pivot-rule-0008.yaml",
+      "lines": {
+        "begin": 1
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "schema_validation",
+    "description": "metadata.reviewed: Extra inputs are not permitted (help: the template in .opentide/templates/ shows the field and its values)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "b238b190042383295b5a00497e3131eb3eb3c36b890ec938a8506f394c3a4681",
+    "location": {
+      "path": "objects/rules/encoded-pivot-rule-0009.yaml",
+      "lines": {
+        "begin": 14
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "yaml_parse",
+    "description": "Could not parse object YAML: '2026-02-30' is not a valid date (day is out of range for month) (help: write the date as YYYY-MM-DD, with a month from 01 to 12)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "b8ea5b47fcb18a6f1eedf456ed42facefff6f0035a0e5cea3a92d1e1d3d2659a",
+    "location": {
+      "path": "objects/rules/encoded-relay-rule-0014.yaml",
+      "lines": {
+        "begin": 9
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "kql_unknown_column",
+    "description": "'EventIDD' is not a column of SecurityEvent (help: try: EventID)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "6dc22f7510936b91d26148abfac5005c1b82190ccc83753f63721ccc3102c306",
+    "location": {
+      "path": "objects/rules/encoded-relay-rule-0052.yaml",
+      "lines": {
+        "begin": 50
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "yaml_parse",
+    "description": "Could not parse object YAML: did not find expected ',' or ']' (help: look at the indentation, a missing ':' or an unclosed quote at or just before this position)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "82367a03a4370a08b7de1c35afac4cb53218221a9418c1a0b9426f8fa2365580",
+    "location": {
+      "path": "objects/rules/encoded-spray-rule-0023.yaml",
+      "lines": {
+        "begin": 53
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "vocab_unknown",
+    "description": "'clearr' is not a TLP value (help: did you mean 'clear'?)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "b82f460a2e8ffff824a771a706f45c3988024349486928e272825eaaf8d5c310",
+    "location": {
+      "path": "objects/rules/encoded-tunnel-rule-0011.yaml",
+      "lines": {
+        "begin": 9
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "schema_validation",
+    "description": "configurations.sysdig: Value error, SysdigConfig validation failed with code(s): sysdig_list_in_value (help: the template in .opentide/templates/ shows the field and its values)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "573f061e1fd56cde940d6162d793b62756ef8f5db2ec2c272cd87e4e6d977af8",
+    "location": {
+      "path": "objects/rules/hidden-beacon-rule-0090.yaml",
+      "lines": {
+        "begin": 44
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "schema_validation",
+    "description": "missing required field 'description' (help: the template in .opentide/templates/ shows the field and its values)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "288414374243b0250874fb886e33f772853e2ee239033ebba956fbc7ac108b08",
+    "location": {
+      "path": "objects/rules/hidden-harvest-rule-0026.yaml",
+      "lines": {
+        "begin": 1
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "invalid_uuid",
+    "description": "UUID 'bad-1' is not a valid UUIDv4 (help: replace it with a UUID v4: python -c \"import uuid; print(uuid.uuid4())\")",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "436706967d59d568ac60268c5b3dc8a334163b3914f618af97c499574cae0e89",
+    "location": {
+      "path": "objects/rules/hidden-harvest-rule-0026.yaml",
+      "lines": {
+        "begin": 4
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "schema_validation",
+    "description": "configurations.sysdig: Value error, SysdigConfig validation failed with code(s): sysdig_source (help: the template in .opentide/templates/ shows the field and its values)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "42683802637979fe369b2f2a3062064ca9f791fe3aa0886a5eedccda6d1a43c9",
+    "location": {
+      "path": "objects/rules/hidden-injection-rule-0027.yaml",
+      "lines": {
+        "begin": 32
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "schema_validation",
+    "description": "configurations.sysdig: Value error, SysdigConfig validation failed with code(s): sysdig_exception_shape (help: the template in .opentide/templates/ shows the field and its values)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "e9609ec06fcb2d58b9395d0e68df374e07e2bb68d7f221e03c6724090570abdc",
+    "location": {
+      "path": "objects/rules/hidden-relay-rule-0054.yaml",
+      "lines": {
+        "begin": 33
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "kql_type_mismatch",
+    "description": "`>` is not defined for `ResultType`, a string column; Kusto rejects the query (help: the KQL reference: https://learn.microsoft.com/kusto/query/)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "b8aad2b088fca5505de733d4cb457e7eaaac02733a024dc06314567191ceacb3",
+    "location": {
+      "path": "objects/rules/lateral-dropper-rule-0046.yaml",
+      "lines": {
+        "begin": 60
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "falco_field_argument",
+    "description": "`proc.name` takes no argument, but `[1]` is given (help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "6520efb873670de075cbd3598eaabe81985e819eb63ea71c0158e2f470431ed1",
+    "location": {
+      "path": "objects/rules/lateral-dropper-rule-0108.yaml",
+      "lines": {
+        "begin": 55
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "kql_control_command_unsupported",
+    "description": "KQL control command '.show' is not valid in detections (help: the KQL reference: https://learn.microsoft.com/kusto/query/)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "b2bf70a6c6f92c518115c587e7560875a1df6f20c2948d4326f170c2a7bae77c",
+    "location": {
+      "path": "objects/rules/lateral-harvest-rule-0043.yaml",
+      "lines": {
+        "begin": 55
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "falco_unknown_event",
+    "description": "unknown event type opne (help: did you mean 'open'?)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "1042a6544ff830f9bc60be49dddbf2618ecf77665a00448f96eda6bc4ff5c2b0",
+    "location": {
+      "path": "objects/rules/lateral-harvest-rule-0151.yaml",
+      "lines": {
+        "begin": 98
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "yaml_parse",
+    "description": "Could not parse object YAML: found character that cannot start any token (help: look at the indentation, a missing ':' or an unclosed quote at or just before this position)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "4842c63d7232883cca3fce9a2e972db170d7f72852c3e9b8ac5d29a73ff83a49",
+    "location": {
+      "path": "objects/rules/lateral-injection-rule-0024.yaml",
+      "lines": {
+        "begin": 68
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "falco_misplaced_list",
+    "description": "`corpus_shells_397` is a list, not a macro: use it in a value list, `in (corpus_shells_397)` (help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "cd37b6fcea554f5305b6707af90546b420a01f38f9f202f513d5ed2076543970",
+    "location": {
+      "path": "objects/rules/lateral-injection-rule-0162.yaml",
+      "lines": {
+        "begin": 54
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "eql_unknown_function",
+    "description": "unknown EQL function `startsWth` (help: did you mean 'startsWith'?)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "35f0b183b6583c92324ef5322aac2ad15c523d7fb3f90ff1d983d4e4d99c1287",
+    "location": {
+      "path": "objects/rules/lateral-loader-rule-0182.yaml",
+      "lines": {
+        "begin": 78
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "duplicate_id",
+    "description": "UUID not-a-uuid is also used by 'Encoded Exfiltration Rule 0005' (help: give one of them a fresh UUID v4; keep the UUID on the object that is deployed or referenced)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "96e5ae37a40c1dd7372ee4966c005551aaccaf6487b7183cbb98702fe7490b56",
+    "location": {
+      "path": "objects/rules/persistent-beacon-rule-0004.yaml",
+      "lines": {
+        "begin": 4
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "invalid_uuid",
+    "description": "UUID 'not-a-uuid' is not a valid UUIDv4 (help: replace it with a UUID v4: python -c \"import uuid; print(uuid.uuid4())\")",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "de49da99d52765147444fc283fe350397a2a2d917aefd7f8944165b6e6d86942",
+    "location": {
+      "path": "objects/rules/persistent-beacon-rule-0004.yaml",
+      "lines": {
+        "begin": 4
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "esql_unknown_function",
+    "description": "unknown ES|QL function `STARTSWITH` (help: did you mean 'STARTS_WITH'?)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "6196b0af2a1e0f1170cd82f0315e2273bf8fd2dcbcc8d3faaff88a6fd80da5c3",
+    "location": {
+      "path": "objects/rules/persistent-injection-rule-0155.yaml",
+      "lines": {
+        "begin": 60
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "eql_function_arity",
+    "description": "`length` takes 1 arguments, found 2 (help: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "027554350eb5bc9b47c09dec515f62c37911c19ccdaf192a43e37f6483b7d114",
+    "location": {
+      "path": "objects/rules/persistent-pivot-rule-0092.yaml",
+      "lines": {
+        "begin": 69
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "invalid_ref",
+    "description": "Unknown objective or signal reference '00000000-0000-4000-8000-0000deadbeef' (help: opentide info objectives lists the ones that exist)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "667280da03965ea09b974be421290a177979837365702f47611dd7bc924f2f89",
+    "location": {
+      "path": "objects/rules/persistent-relay-rule-0013.yaml",
+      "lines": {
+        "begin": 29
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "schema_missing",
+    "description": "missing metadata.schema on object",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "7828a82015cb62be28a56f52f49b0c46815de40726e994162e946f392d2a76e3",
+    "location": {
+      "path": "objects/rules/rapid-downgrade-rule-0007.yaml",
+      "lines": {
+        "begin": 3
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "eql_not_boolean",
+    "description": "integer `1` is not a condition: EQL needs a boolean here (a comparison, a predicate, `true` or `false`) (help: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "2f7f80fd86089c0bcbf82a0e9c194a84eb7b9c1e8ba17fa99f4bc17c20e856c8",
+    "location": {
+      "path": "objects/rules/rapid-dropper-rule-0137.yaml",
+      "lines": {
+        "begin": 82
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "falco_transformer",
+    "description": "can't add field transformer: type 'INT64' is not supported by 'tolower' transformer applied on field 'proc.pid' (help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "007467b4be2179f3ec044ac559b6c615b496d06ee1a1be9ec653f291ffdd1f4e",
+    "location": {
+      "path": "objects/rules/rapid-dropper-rule-0144.yaml",
+      "lines": {
+        "begin": 50
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "invalid_uuid",
+    "description": "UUID 'not-a-uuid-1' is not a valid UUIDv4 (help: replace it with a UUID v4: python -c \"import uuid; print(uuid.uuid4())\")",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "34a6a1cdf960ce56307f9244aaa483adf8b2b6e9481ff5037d67466933a31b0a",
+    "location": {
+      "path": "objects/rules/rapid-exfiltration-rule-0001.yaml",
+      "lines": {
+        "begin": 4
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "esql_parse_error",
+    "description": "ES|QL syntax error near `|` (help: the ES|QL reference: https://www.elastic.co/docs/reference/query-languages/esql)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "69c08178f6f2bec96115f4a3fa05a65f988b3729d8904b2b30bc68d30521bcb1",
+    "location": {
+      "path": "objects/rules/rapid-implant-rule-0080.yaml",
+      "lines": {
+        "begin": 37
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "falco_unknown_field",
+    "description": "`proc.name` is a field of the `syscall` source, not of `k8s_audit` (help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "3d4e331725e80ea95ff03e6abb262cef5d9f943575368c5be431c810c0c83a3f",
+    "location": {
+      "path": "objects/rules/rapid-implant-rule-0279.yaml",
+      "lines": {
+        "begin": 57
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "external_id_in_rule",
+    "description": "Vendor rule id key 'rule_id' is not allowed on the sentinel block; external ids live in .opentide/states/deployment/<uuid>.json (help: Run 'opentide deploy migrate-state' and commit the rule together with .opentide/states/deployment/)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "8d92f2fc0e998a10e0d225f86adf7c36598cfc18e2bba094495592d742a8b64c",
+    "location": {
+      "path": "objects/rules/rapid-injection-rule-0028.yaml",
+      "lines": {
+        "begin": 75
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "lucene_fuzzy",
+    "description": "Elasticsearch allows an edit distance of 0, 1, or 2, and rejects `~3`; use `~2` or `~AUTO` (help: the Lucene query string reference: https://www.elastic.co/docs/reference/query-languages/query-dsl/query-dsl-query-string-query)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "c021f48db1993de189546d16a90f529a4804ec583d3941b640e5e99f58a02bda",
+    "location": {
+      "path": "objects/rules/rapid-injection-rule-0056.yaml",
+      "lines": {
+        "begin": 68
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "kql_parse_error",
+    "description": "KQL syntax error (help: the KQL reference: https://learn.microsoft.com/kusto/query/)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "c8a0156d19476d2df4c857a8109cc0b702cce2a4b756d445e95e99671e03479c",
+    "location": {
+      "path": "objects/rules/rapid-injection-rule-0097.yaml",
+      "lines": {
+        "begin": 75
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "schema_validation",
+    "description": "configurations.sysdig: Value error, SysdigConfig validation failed with code(s): sysdig_priority (help: the template in .opentide/templates/ shows the field and its values)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "2da91f87c2b2a4ed2964c47167e94b4e99300730b84d9860650a5059bf01925a",
+    "location": {
+      "path": "objects/rules/remote-beacon-rule-0018.yaml",
+      "lines": {
+        "begin": 52
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "falco_append_condition",
+    "description": "a condition that starts with `and` or `or` only extends another rule's: set `append_to_rule`, or remove the leading operator (help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "791a4bcb450a7de5645e0cc674195ae9d61a64576bea3b5b596bb046681021cf",
+    "location": {
+      "path": "objects/rules/remote-beacon-rule-0099.yaml",
+      "lines": {
+        "begin": 37
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "schema_validation",
+    "description": "configurations.sysdig: Value error, SysdigConfig validation failed with code(s): sysdig_definition_duplicate (help: the template in .opentide/templates/ shows the field and its values)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "2c1087c0b3a32d68b2d84180a75b48248689fa0aed343da957755bb42a7f949b",
+    "location": {
+      "path": "objects/rules/remote-dropper-rule-0072.yaml",
+      "lines": {
+        "begin": 53
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "config_enum_unknown",
+    "description": "'Night Shift' is not a configured responder",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "04b10f4219cb8b5c1ff0c66be4bcf2215264f82a7c679ce8dc2fa0ee1339fc20",
+    "location": {
+      "path": "objects/rules/remote-relay-rule-0017.yaml",
+      "lines": {
+        "begin": 34
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "falco_invalid_regex",
+    "description": "invalid regex pattern: error: unclosed group (help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "5dd05e08d520042fd9434e518294ff223e96d42a4685ae383ae04ee513808d5d",
+    "location": {
+      "path": "objects/rules/remote-spray-rule-0117.yaml",
+      "lines": {
+        "begin": 42
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "eql_parse_error",
+    "description": "use double quotes [\"] for string literals, not single quotes ['] (help: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "173f0bd1797016cbaad968c9ea52f1dc504ac84848b6462781999b734cba1ede",
+    "location": {
+      "path": "objects/rules/rogue-dropper-rule-0152.yaml",
+      "lines": {
+        "begin": 36
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "duplicate_id",
+    "description": "UUID 53651415-1c05-4cfb-b1b2-39c888ab0f06 is also used by 'Lateral Pivot Rule 0002' (help: give one of them a fresh UUID v4; keep the UUID on the object that is deployed or referenced)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "3be1ff72f7eb58708b2a552f262e0d90b5a26a41d255fa9ea4caeb17674186bf",
+    "location": {
+      "path": "objects/rules/rogue-harvest-rule-0003.yaml",
+      "lines": {
+        "begin": 4
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "spl_empty_command",
+    "description": "`stats` with no arguments returns no results (help: the SPL reference: https://docs.splunk.com/Documentation/Splunk/latest/SearchReference)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "51acd30866a28696536e59e451cdc5616b83591ead329266c4e2572d42ee02b0",
+    "location": {
+      "path": "objects/rules/rogue-harvest-rule-0048.yaml",
+      "lines": {
+        "begin": 50
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "esql_pattern",
+    "description": "LIKE escapes only `*`, `?`, and `\\`; a backslash before `b` fails. Write `\\\\` for a literal backslash (help: the ES|QL reference: https://www.elastic.co/docs/reference/query-languages/esql)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "d52291fab9d9b2346a1c55bd296f5cf053d97b5a2bcee92bb3481eec1e4d0dee",
+    "location": {
+      "path": "objects/rules/rogue-implant-rule-0110.yaml",
+      "lines": {
+        "begin": 54
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "eql_field_comparison",
+    "description": "Elasticsearch EQL cannot compare a field with another field (`==`); one side must be a constant (help: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "08c1a3e349964bfe93b22ac462711dd1ac82d7073df4913c80a5f26485ab9fa8",
+    "location": {
+      "path": "objects/rules/rogue-injection-rule-0062.yaml",
+      "lines": {
+        "begin": 43
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "spl_command_without_pipe",
+    "description": "the search starts with the command name `stats` but no `|`; Splunk searches for the word `stats` instead of running the command (help: try: | stats)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "e5b4bbb3eb1c6233c95fe80a4951efca1cea5589adc02407f2c65cf6afc86ee1",
+    "location": {
+      "path": "objects/rules/rogue-loader-rule-0040.yaml",
+      "lines": {
+        "begin": 95
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "falco_parse_error",
+    "description": "expected a string value or a field with a valid transformer: 'val', 'tolower', 'toupper', 'b64', 'basename', 'len', 'join', 'concat', 'getopt' (libsinsp) (help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "25ecede2ba34eb53bcf41f3a16c0e77b5030f1d0b99e2eb78d4bfc7721fae1a0",
+    "location": {
+      "path": "objects/rules/rogue-loader-rule-0126.yaml",
+      "lines": {
+        "begin": 58
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "yaml_parse",
+    "description": "Could not parse object YAML: did not find expected ',' or ']' (help: look at the indentation, a missing ':' or an unclosed quote at or just before this position)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "3ffdeef200f6619426fdce614392bf2b7a1650aa760057c1832c3faaa70e243e",
+    "location": {
+      "path": "objects/rules/rogue-relay-rule-0035.yaml",
+      "lines": {
+        "begin": 59
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "eql_argument_type",
+    "description": "the first argument of `length` must be a string, found integer `1` (help: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "51eb66389cbf24e06a20472754e7a8ceb514b930b2a62ba825eaabc4fd8d9078",
+    "location": {
+      "path": "objects/rules/scheduled-beacon-rule-0047.yaml",
+      "lines": {
+        "begin": 76
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "falco_output_syntax",
+    "description": "invalid formatting syntax: formatting cannot end with a % (libsinsp) (help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "69695e1df2a7eaaaf816d6920fee32c7152de0426139b62c1a7dbf68b0db31f8",
+    "location": {
+      "path": "objects/rules/scheduled-beacon-rule-0171.yaml",
+      "lines": {
+        "begin": 59
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "schema_validation",
+    "description": "configurations.sysdig: Value error, SysdigConfig validation failed with code(s): sysdig_definition_order (help: the template in .opentide/templates/ shows the field and its values)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "541b837c37dcbf233647cefd5da4eba7cbcc36c3b710ea99578d6ee8fca2cb99",
+    "location": {
+      "path": "objects/rules/scheduled-exfiltration-rule-0081.yaml",
+      "lines": {
+        "begin": 50
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "spl_search_operator",
+    "description": "'==' is not a search operator: Splunk accepts it but the comparison never matches; use '=' (help: try: =)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "f2b193c87c22936f4d641bd829951102cd3dcacc47737bec2e3ea65446619d71",
+    "location": {
+      "path": "objects/rules/scheduled-implant-rule-0065.yaml",
+      "lines": {
+        "begin": 85
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "kql_unknown_operator",
+    "description": "unknown tabular operator 'frobnicate' (help: the KQL reference: https://learn.microsoft.com/kusto/query/)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "0dd78b324532de086fa1b99a2a0e0a5f8184312afcc7a2bfcc4895885ed32099",
+    "location": {
+      "path": "objects/rules/scheduled-injection-rule-0061.yaml",
+      "lines": {
+        "begin": 58
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "esql_unknown_command",
+    "description": "unknown ES|QL command `WEHRE`; Elasticsearch rejects it, and Kibana 9.4 and 9.5 run a non-aggregating rule without it (help: did you mean 'WHERE'?)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "f29d9eca65f88b74937aef810342eb37e7aae72e665d69aaa0ac25d3ee63dff6",
+    "location": {
+      "path": "objects/rules/scheduled-injection-rule-0125.yaml",
+      "lines": {
+        "begin": 52
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "falco_unknown_field",
+    "description": "`proc.nmae` is not a Falco field of the `syscall` source (help: try: proc.name)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "e4a5afa4e4127a38d99af4de44ac7be60220b20a590d7f4842191a7c2c33dd7f",
+    "location": {
+      "path": "objects/rules/scheduled-loader-rule-0153.yaml",
+      "lines": {
+        "begin": 42
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "lucene_parse_error",
+    "description": "Lucene syntax error: missing `)` (help: the Lucene query string reference: https://www.elastic.co/docs/reference/query-languages/query-dsl/query-dsl-query-string-query)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "a217154735b5c3d7b5f79cd48aa08b6a233e46981d2fff0c269871c1019974bf",
+    "location": {
+      "path": "objects/rules/scheduled-tunnel-rule-0071.yaml",
+      "lines": {
+        "begin": 48
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "falco_rhs_field",
+    "description": "field 'proc.name' has type 'a string (CHARBUF)' while the right-hand side field 'proc.pid' has incompatible type 'a number (INT64)' (help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "e00188fe09330b0b862818883f71efc332f59f3b1693a23d8f122bbf93e1d770",
+    "location": {
+      "path": "objects/rules/silent-beacon-rule-0135.yaml",
+      "lines": {
+        "begin": 57
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "invalid_ref",
+    "description": "Unknown objective or signal reference '00000000-0000-4000-8000-0000deadbeef' (help: opentide info objectives lists the ones that exist)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "37513b2939ebf47c2cc4dffd162799e43606753ec53b67116d50d3079078de51",
+    "location": {
+      "path": "objects/rules/silent-dropper-rule-0015.yaml",
+      "lines": {
+        "begin": 22
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "vocab_unknown",
+    "description": "'ambr' is not a TLP value (help: did you mean 'amber'?)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "a7e74814fdde04b5d6ac7b59576462b512474a06265b551e45a067b8be6e60b1",
+    "location": {
+      "path": "objects/rules/silent-dropper-rule-0039.yaml",
+      "lines": {
+        "begin": 9
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "config_enum_unknown",
+    "description": "'LIVE' is not a configured status",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "63ba06d5d06d327ada8b4458e16a85b2940f9b8238a065aededa510052d38cfb",
+    "location": {
+      "path": "objects/rules/silent-dropper-rule-0039.yaml",
+      "lines": {
+        "begin": 40
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "schema_validation",
+    "description": "configurations.sysdig: Value error, SysdigConfig validation failed with code(s): sysdig_tuning_keys (help: the template in .opentide/templates/ shows the field and its values)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "3ad8410f68c469f6db510a3acd054277d8406a3f35dd61bbb2888762996f2b28",
+    "location": {
+      "path": "objects/rules/staged-dropper-rule-0045.yaml",
+      "lines": {
+        "begin": 51
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "schema_validation",
+    "description": "metadata.reviewed: Value error, metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime (help: the template in .opentide/templates/ shows the field and its values)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "a7429d5d4adf96ef4abb974e4c46f0542b975af45600f732f378104d3e7bd20e",
+    "location": {
+      "path": "objects/rules/staged-harvest-rule-0010.yaml",
+      "lines": {
+        "begin": 9
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "missing_uuid",
+    "description": "Object YAML has no uuid: staged-implant-rule-0006.yaml (help: add metadata.uuid with a fresh UUID v4)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "bd6fedb670f8ec351df934228e544e5bf933fea3121ebc10c2c1a55b9bc36fbc",
+    "location": {
+      "path": "objects/rules/staged-implant-rule-0006.yaml",
+      "lines": {
+        "begin": 1
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "schema_validation",
+    "description": "configurations.sysdig: Value error, SysdigConfig validation failed with code(s): sysdig_rule_shape (help: the template in .opentide/templates/ shows the field and its values)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "fe331da41577ab6be2040789314357e904661247bc01a066564fe32cd1c1ebba",
+    "location": {
+      "path": "objects/rules/staged-implant-rule-0036.yaml",
+      "lines": {
+        "begin": 41
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "config_enum_unknown",
+    "description": "'NOPE' is not a configured status",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "d8608135cd4ded476733c460427de6ccb45e8831b64a3c08d906ac4aed019f58",
+    "location": {
+      "path": "objects/rules/staged-injection-rule-0019.yaml",
+      "lines": {
+        "begin": 51
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "kql_parse_error",
+    "description": "KQL syntax error (help: the KQL reference: https://learn.microsoft.com/kusto/query/)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "3ee94bcd0d56d967ee2bf68afd7a6d8810f79d789b2a669da30d7ca4fdf403ed",
+    "location": {
+      "path": "objects/rules/staged-injection-rule-0106.yaml",
+      "lines": {
+        "begin": 58
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "chaining_relation_unknown",
+    "description": "Unknown chaining relation 'sequence::succeds' (help: did you mean 'sequence::succeeds'?)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "e534b690703f539168bd03023a156f8de046756ca6bdb8df6868aa658a0dbb07",
+    "location": {
+      "path": "objects/threats/elevated-tunnel-threat-0003.yaml",
+      "lines": {
+        "begin": 44
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "yaml_parse",
+    "description": "Could not parse object YAML: expected a mapping at the top of the file, found an empty file (help: fill it in from a template with opentide new, or delete it)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "cdef39e30945b36b8f63aa0d0002fde952f335a548878b1b9392a913579dc3b6",
+    "location": {
+      "path": "objects/threats/encoded-exfiltration-threat-0030.yaml",
+      "lines": {
+        "begin": 1
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "schema_validation",
+    "description": "threat.impact: must be a YAML list of impact vocabulary names, not a single string (help: the template in .opentide/templates/ shows the field and its values)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "df5e92e84f29c82e5a7b53e5f5595656520bdd2c5fbdd1ff49e6b869fbd69735",
+    "location": {
+      "path": "objects/threats/remote-dropper-threat-0001.yaml",
+      "lines": {
+        "begin": 21
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "vocab_unknown",
+    "description": "'Big incident' is not a severity value (help: did you mean 'Substantial incident'?)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "67d55bb97c1e353b9f14ab59e7aaa28809a61a0071fef529f63fba50eb0b753f",
+    "location": {
+      "path": "objects/threats/rogue-downgrade-threat-0002.yaml",
+      "lines": {
+        "begin": 22
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "invalid_uuid",
+    "description": "UUID '1-not-a-uuid' is not a valid UUIDv4 (help: replace it with a UUID v4: python -c \"import uuid; print(uuid.uuid4())\")",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "e7f0068a88c125976fb541e0edc1d3c175e59aff7f09eb42697414b6523e6063",
+    "location": {
+      "path": "objects/threats/scheduled-loader-threat-0010.yaml",
+      "lines": {
+        "begin": 5
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "nested_object_file",
+    "description": "objects/rules/nested/hidden-harvest-rule-0020.yaml is in a subfolder of objects/rules and is not an object instance: it is not indexed, validated, shared, documented or deployed (opentide reads only files directly in objects/rules; see https://github.com/opentidehq/opentide/issues/584)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "e774cf1903a1b00ca0797e6b3675826700fd3075846ab02af4da2a4374010ae5",
+    "location": {
+      "path": "objects/rules/nested/hidden-harvest-rule-0020.yaml",
+      "lines": {
+        "begin": 1
+      }
+    }
+  }
+]

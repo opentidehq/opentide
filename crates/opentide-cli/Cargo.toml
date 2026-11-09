@@ -25,20 +25,27 @@ path = "src/main.rs"
 [dependencies]
 clap = { workspace = true, features = ["env", "string"] }
 ctrlc = "3.4"
+# The query lines of a code frame, coloured as the editor colours them.
+opentide-analysis.workspace = true
 form_urlencoded = "1.2"
 humantime = "2.4"
 regex.workspace = true
 url.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+# SARIF and Code Quality fingerprints (RustCrypto).
+sha2 = "0.10"
 shlex = "2.0"
 strsim = "0.11"
 terminal_size = "0.4"
 textwrap = { version = "0.16", default-features = false, features = ["unicode-width"] }
 toml.workspace = true
 tracing = "0.1"
+unicode-width = "0.2"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["registry", "std"] }
 
 [dev-dependencies]
 # The goldens' case.toml and outcome.toml (tests/framework_goldens.rs).
 
+# The renderers' snapshots, written by the oracle (tests/render.rs).
+insta.workspace = true
