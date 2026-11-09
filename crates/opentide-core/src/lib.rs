@@ -457,7 +457,6 @@ impl Diagnostic {
 }
 
 pub mod datasets;
-pub mod difflib;
 
 /// Well-known diagnostic codes. Extra query diagnostics are allowed.
 pub mod codes {
