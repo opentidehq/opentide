@@ -66,6 +66,20 @@ class CiPlatform(str, Enum):
     none = "none"
 
 
+class CiProvider(str, Enum):
+    """``setup ci`` providers: :class:`CiPlatform` without ``none``.
+
+    ``none`` stays on the wizard (``setup --ci none``), not on this argument.
+    An enum annotation is Typer's public way to declare choices, so help, shell
+    completion, the docs harness and the usage-error renderer all see
+    ``github``, ``gitlab`` and ``azure``.
+    """
+
+    github = "github"
+    gitlab = "gitlab"
+    azure = "azure"
+
+
 class McpHost(str, Enum):
     """MCP configuration targets for ``opentide setup mcp``."""
 
