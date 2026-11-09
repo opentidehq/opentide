@@ -277,6 +277,28 @@ mod tests {
     }
 
     #[test]
+    fn newest_is_the_highest_version_over_every_revision() {
+        // 1.10 is newer than 1.9: versions compare as numbers, not as text,
+        // and the order of the files and revisions does not matter.
+        let files = [
+            ("b.toml", "[\"b::1.0\"]\nf = \"x::1.10\"\ng = \"y::2.0\"\n"),
+            (
+                "a.toml",
+                "[\"a::1.0\"]\nf = \"x::1.9\"\n[\"a::1.1\"]\nf = \"x::1.0\"\n",
+            ),
+        ];
+        let table = PinTable::parse(files).unwrap();
+        assert_eq!(table.newest("x"), Some(Version::new(1, 10)));
+        assert_eq!(table.newest("y"), Some(Version::new(2, 0)));
+        let table = PinTable::parse([(
+            "x.toml",
+            "[\"x::1.0\"]\nf = \"x::1.0\"\n[\"x::1.1\"]\nf = \"x::1.1\"\n",
+        )])
+        .unwrap();
+        assert_eq!(table.newest("x"), Some(Version::new(1, 1)));
+    }
+
+    #[test]
     fn pin_file_errors() {
         let bad = PinTable::parse([("t.toml", "[\"t::1.0\"]\nx = 3\n")]).unwrap_err();
         assert!(matches!(bad, PinError::Contract { .. }), "{bad}");

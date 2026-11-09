@@ -314,4 +314,36 @@ name = "Industrial : Activate Firmware Update Mode"
         // Without a vocabulary the columns are the Enterprise tactics.
         assert_eq!(super::matrix(None, &IndexMap::new()).tactics.len(), 15);
     }
+
+    /// Two stages that name one tactic (`Defense Evasion` is Stealth's old
+    /// name) make one column, and a column lists its techniques by name, not
+    /// by id.
+    #[test]
+    fn one_column_per_tactic_and_techniques_by_name() {
+        let text = r#"
+name = "MITRE ATT&CK"
+field = "att&ck"
+key = "id"
+stages = ["Defense Evasion", "Stealth", "stealth", "Execution"]
+[[keys]]
+id = "T1001"
+name = "zeta"
+"tide.vocab.stages" = ["Stealth"]
+[[keys]]
+id = "T1002"
+name = "Alpha"
+"tide.vocab.stages" = ["Defense Evasion"]
+[[keys]]
+id = "T1003"
+name = "Mu"
+"tide.vocab.stages" = ["Stealth"]
+"#;
+        let attack = Vocabulary::parse(text, "att&ck").unwrap();
+        let entries = enterprise(&attack, None);
+        let matrix = matrix(Some(&attack), &entries);
+        let names: Vec<&str> = matrix.tactics.iter().map(|t| t.name.as_str()).collect();
+        assert_eq!(names, ["Stealth", "Execution"]);
+        // Alpha, Mu, zeta: by name without case, whatever the ids say.
+        assert_eq!(matrix.tactics[0].techniques, ["T1002", "T1003", "T1001"]);
+    }
 }

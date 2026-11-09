@@ -230,6 +230,14 @@ mod tests {
         assert_eq!(closest("dry-run", ["dry_run", "dry"]), Some("dry_run"));
     }
 
+    /// The same word ranks first even when another candidate is fewer edits
+    /// away: `a_b_c` is `abc` (two edits) before it is `a_b_x` (one).
+    #[test]
+    fn the_same_word_ranks_before_a_closer_spelling() {
+        assert_eq!(closest("a_b_c", ["a_b_x", "abc"]), Some("abc"));
+        assert_eq!(suggestions("a_b_c", ["abc", "a_b_x"], 2), ["abc", "a_b_x"]);
+    }
+
     #[test]
     fn one_edit_finds_the_value() {
         assert_eq!(closest("clearr", TLP), Some("clear"));
@@ -291,6 +299,27 @@ mod tests {
         assert_eq!(closest_within("T1234.567", ["T1059.001"], 1), None);
     }
 
+    /// The bound is inclusive and exact: a six-letter word takes two edits,
+    /// never three, over the whole value and over the part that differs.
+    #[test]
+    fn the_bound_is_exact() {
+        assert_eq!(max_edits("planet".len()), 2);
+        // p→g, t→s: two edits, no shared prefix or suffix.
+        assert_eq!(closest("planet", ["glanes"]), Some("glanes"));
+        // p→g, e→d, t→s: three.
+        assert_eq!(closest("planet", ["glands"]), None);
+        // In a phrase, the differing middle (`planet`, six letters) is bound
+        // to two edits, though the whole phrase would allow seven.
+        assert_eq!(
+            closest("Severe planet incident", ["Severe glanes incident"]),
+            Some("Severe glanes incident")
+        );
+        assert_eq!(
+            closest("Severe planet incident", ["Severe glands incident"]),
+            None
+        );
+    }
+
     #[test]
     fn ties_do_not_depend_on_the_order_of_the_candidates() {
         let forward = suggestions("bat", ["cat", "bad", "hat"], 3);
@@ -318,6 +347,11 @@ mod tests {
     #[test]
     fn counts_characters_not_bytes() {
         assert_eq!(closest("Zürch", ["Zürich", "Zug"]), Some("Zürich"));
+        // Five characters (one edit) in ten bytes (three): the candidate,
+        // two edits away, is out of reach.
+        assert_eq!("äöüßé".len(), 10);
+        assert_eq!(closest("äöüßé", ["xöüßéy"]), None);
+        assert_eq!(closest("äöüßé", ["xöüßé"]), Some("xöüßé"));
         assert_eq!(fold("Straße-Nord"), "straßenord");
     }
 }
