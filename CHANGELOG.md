@@ -9,12 +9,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 ### Upgrade
 
 - If your editor setup matches or suppresses `crowdstrike_unsupported`, match the `cql_*` codes too: the editor no longer reports it (`opentide explain cql_parse_error`).
+- If you deploy to CrowdStrike, run `opentide validate query --platform crowdstrike` and fix the `cql_*` errors it reports, so `opentide validate` keeps passing in CI.
+
+### Breaking
+
+- **`opentide validate` checks CrowdStrike queries, and fails a rule whose query Next-Gen SIEM would refuse** ([#790](https://github.com/opentidehq/opentide/issues/790)). `configurations.crowdstrike.query` and a hunt's query with `system: crowdstrike` were never checked by the CLI; `validate` and `validate query` now report their `cql_*` errors, and `lint` their `cql_*` warnings. `validate query --platform crowdstrike` checks offline where it reported `supported: false` and exited `1`; `--live` still reports `supported: false`, since opentide calls no CrowdStrike query check.
 
 ### Added
 
-- **The editor checks the CrowdStrike Query Language (CQL).** `opentide lsp start` and `opentide tui` check `configurations.crowdstrike.query` (a Next-Gen SIEM correlation rule), hunts with `system: crowdstrike` and `.cql` files against CrowdStrike's published grammar and function reference, with hover, completion and highlighting. `opentide validate` and `opentide lint` do not check CrowdStrike queries ([language-server 0.12.0](https://github.com/opentidehq/language-server/releases/tag/v0.12.0)).
+- **CrowdStrike Next-Gen SIEM queries are checked as CQL, offline and in the editor.** `opentide validate`, `validate query --platform crowdstrike`, `lint`, MCP `validate_query`, `opentide lsp start` and `opentide tui` check `configurations.crowdstrike.query` (a Next-Gen SIEM correlation rule), hunts with `system: crowdstrike` and `.cql` files against CrowdStrike's published grammar and function reference; the editor adds hover, completion and highlighting ([language-server 0.12.0](https://github.com/opentidehq/language-server/releases/tag/v0.12.0), [Platforms](docs/usage/concepts/platforms.md#crowdstrike-the-offline-cql-checks)). Fields, saved searches, lookup files and repositories live in the tenant and are never reported unknown.
   - 20 codes, each with an `opentide explain` page, an entry in `opentide explain`'s list and MCP `explain`, a rule in the SARIF rule catalogue of `lint` and `validate --format sarif`, and a section in [Diagnostic codes](docs/cli/diagnostics.md): `cql_parse_error`, `cql_unknown_function`, `cql_parameter_value`, `cql_unknown_event`, …
-  - Language id `cql`, aliases `opentide-cql`, `logscale` and `crowdstrike` ([opentide lsp](docs/cli/lsp.md#languages))
+  - Language id `cql`, aliases `opentide-cql`, `logscale` and `crowdstrike` ([opentide lsp](docs/cli/lsp.md#languages)); `validate query --file` takes a `.cql` file
 - **`OPENTIDE_ENGINE` chooses which implementation runs a command** ([#805](https://github.com/opentidehq/opentide/issues/805)). opentide is moving its commands from Python to Rust one at a time ([#790](https://github.com/opentidehq/opentide/issues/790)); until a command's default changes, Python runs it. `OPENTIDE_ENGINE=rust` runs the Rust implementation, and on a command without one exits `2` with the new `failure.code` `engine_not_ported`. `OPENTIDE_ENGINE=compare` runs both, each on its own copy of the workspace, compares exit code, stdout, stderr (JSON by data, key order, then bytes) and every file written, and either prints the Python result or exits `70` with the new `failure.code` `engine_mismatch`, naming a diff report in `$XDG_STATE_HOME/opentide/compare/`. `python`, empty or unset changes nothing. No command has a Rust implementation yet, so today `rust` refuses every command and `compare` runs Python alone. `opentide --json commands` lists the variable. See [Choosing the implementation](docs/cli/json-output.md#choosing-the-implementation).
 
 ### Changed
@@ -37,6 +42,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ### Fixed
 
+- **MCP `validate_query` suggests a live check only where there is one.** Its `next_actions` for a Sysdig query named `validate_query` with `live: true`, which Sysdig refuses with `supported: false`; for Sysdig and CrowdStrike it now names the finding's `explain` page only.
 - **A huge `Content-Length` no longer crashes `opentide lsp start`** ([#843](https://github.com/opentidehq/opentide/issues/843)). The language server allocated the length a message header named before its body arrived, so a header alone could exhaust memory and end the server. It reads the body as it arrives: a length longer than the input ends the session as a short body always did.
 
 ## [0.23.0] — 2026-11-06

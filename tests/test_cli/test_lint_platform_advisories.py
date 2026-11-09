@@ -23,7 +23,6 @@ def engine_reports(monkeypatch: pytest.MonkeyPatch) -> list[Finding]:
     monkeypatch.setattr(analysis, "install_workspace_visibility", lambda root: None)
     monkeypatch.setattr(analysis, "workspace", lambda root: object())
     monkeypatch.setattr(analysis, "check_file", lambda space, path, text: list(reported))
-    monkeypatch.setattr(analysis, "editor_only_queries", lambda space, text: frozenset())
     monkeypatch.setattr(
         "opentide.cli.ui.diagnostics.diagnostic_from_engine", lambda finding, **_: {}
     )
@@ -83,29 +82,29 @@ response:
 """
 
 
-@pytest.mark.parametrize("cql_has_a_reference", [False, True])
-def test_lint_leaves_cql_warnings_to_the_editor(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, cql_has_a_reference: bool
-) -> None:
-    """lint drops findings in a query whose language the CLI does not check offline.
+def test_lint_reports_cql_warnings(tmp_path: Path) -> None:
+    """lint reports the CQL warnings of a rule's block and of a hunt, as the editor does.
 
-    Not only because ``cql_*`` codes have no language reference: with one, as
-    when CrowdStrike gains a reference page, lint still reports none.
+    Until CrowdStrike became an offline platform, lint dropped them as the
+    editor's only; that was the intended behaviour then and this asserts the new one.
     """
-    if cql_has_a_reference:
-        from opentide.cli.ui import diagnostics
-
-        monkeypatch.setitem(
-            diagnostics.ENGINE_REFERENCES,
-            "cql_",
-            ("CQL", "https://library.humio.com/crowdstrike-query-language/"),
-        )
     rule = tmp_path / "crowdstrike-warnings.yaml"
     rule.write_text(CROWDSTRIKE_WARNINGS, encoding="utf-8")
     editor = analysis.check_file(analysis.workspace(tmp_path), rule, CROWDSTRIKE_WARNINGS)
     warned = [finding for finding in editor if finding.code.startswith("cql_")]
     assert {finding.field_path[0] for finding in warned} == {"configurations", "response"}
-    assert {finding.severity for finding in warned} == {"warning"}, "lint would keep them"
+    assert {finding.severity for finding in warned} == {"warning"}
     record = _ObjectRecord(path=rule, relative=rule.name, text=CROWDSTRIKE_WARNINGS)
     found = _query_findings(tmp_path, [record])
-    assert not [item for item in found if str(item["_code"]).startswith("cql_")]
+    cql = [item for item in found if str(item["_code"]).startswith("cql_")]
+    assert sorted((item["_code"], item["severity"]) for item in cql) == sorted(
+        (finding.code, "warning") for finding in warned
+    )
+
+
+def test_a_cql_code_has_a_page_that_names_validate_and_lint() -> None:
+    page = explain.load_page("cql_unknown_function")
+    assert page is not None
+    assert "CQL query" in page.markdown
+    assert "opentide validate query" in page.markdown
+    assert "https://library.humio.com/crowdstrike-query-language/" in page.markdown

@@ -81,10 +81,11 @@ def test_validate_scoped_by_uuid(invoke_cli, corpus_rule_uuids) -> None:
         ("splunk", 0),
         ("elastic", 0),
         ("carbon_black_cloud", 0),
+        # CQL is checked offline; CrowdStrike has no tenant check (--live).
+        ("crowdstrike", 0),
         # S1QL has no offline engine: the tenant check, and the refusal says so.
         ("sentinel_one", 2),
         # Never validated, never faked.
-        ("crowdstrike", 1),
         ("harfanglab", 1),
     ],
 )

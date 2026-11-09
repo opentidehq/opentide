@@ -25,7 +25,7 @@ from opentide.analysis import (
     reset_catalog,
 )
 from opentide.generation.lsp_catalog import CATALOG_DIR
-from opentide.validation.query_platforms import OFFLINE_LANGUAGES
+from opentide.validation.query_platforms import OFFLINE_QUERY_LANGUAGES
 
 TWO_PLATFORMS = """\
 name: Two Platforms
@@ -41,6 +41,9 @@ configurations:
     query: |
       index=main | statz count
   crowdstrike:
+    query: |
+      #event_simpleName=ProcessRollup2 | groupBi([aid])
+  harfanglab:
     query: |
       anything at all
 """
@@ -111,8 +114,12 @@ def test_every_query_of_a_file_is_checked_and_platforms_filter_them(tmp_path: Pa
     assert [(check.platform, check.language) for check in checks] == [
         ("sentinel", "kql"),
         ("splunk", "spl"),
-    ], "the CLI does not check CrowdStrike queries: the editor does"
-    sentinel, splunk = checks
+        ("crowdstrike", "cql"),
+    ], "HarfangLab is never validated, so it is never a query here"
+    sentinel, splunk, crowdstrike = checks
+    (unknown,) = crowdstrike.findings
+    assert unknown.code == "cql_unknown_function"
+    assert TWO_PLATFORMS.splitlines()[unknown.line - 1][unknown.column - 1 :].startswith("groupBi")
     assert sentinel.findings == () and sentinel.errors == 0
     assert splunk.errors == 1
     (finding,) = splunk.findings
@@ -139,16 +146,30 @@ response:
 """
 
 
-def test_cql_is_the_editors_until_crowdstrike_is_an_offline_platform(tmp_path: Path) -> None:
-    """The engine reads CrowdStrike queries as CQL; validate and lint do not check them."""
+def test_the_cli_checks_cql_as_the_editor_does(tmp_path: Path) -> None:
+    """validate checks CrowdStrike queries as CQL: the rule's block and the hunt.
+
+    Until #790's UC-0.2 follow-up this asserted the opposite (CQL was the
+    editor's only); CrowdStrike is now an offline platform, so the CLI reports
+    what the editor reports.
+    """
     rule = tmp_path / "crowdstrike-only.yaml"
     rule.write_text(CROWDSTRIKE_RULE_AND_HUNT, encoding="utf-8")
     editor = analysis.check_file(analysis.workspace(tmp_path), rule, CROWDSTRIKE_RULE_AND_HUNT)
     assert "cql_unknown_function" in {finding.code for finding in editor}
     assert "crowdstrike_unsupported" not in engine_codes()
-    assert "cql" not in OFFLINE_LANGUAGES
-    assert check_queries([rule], root=tmp_path).checks == []
-    assert check_queries([rule], root=tmp_path, platforms=["crowdstrike"]).checks == []
+    assert OFFLINE_QUERY_LANGUAGES["crowdstrike"] == ("cql",)
+    checks = check_queries([rule], root=tmp_path).checks
+    assert [(check.platform, check.language, check.field_path[0]) for check in checks] == [
+        ("crowdstrike", "cql", "configurations"),
+        (None, "cql", "response"),
+    ]
+    assert [[f.code for f in check.findings] for check in checks] == [
+        ["cql_unknown_function"],
+        ["cql_unknown_function"],
+    ]
+    only = check_queries([rule], root=tmp_path, platforms=["crowdstrike"]).checks
+    assert [check.platform for check in only] == ["crowdstrike"]
 
 
 def test_a_file_that_cannot_be_read_is_reported_not_skipped(tmp_path: Path) -> None:

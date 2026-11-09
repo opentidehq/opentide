@@ -867,8 +867,9 @@ def _validate_query_platform(
     ctx.apply_environment()
     from opentide.validation.query_platforms import OFFLINE_QUERY_PLATFORMS
 
-    # Sysdig has no tenant check but an offline one (the Falco engine): only
-    # --live is unsupported there. CrowdStrike and HarfangLab have neither.
+    # Sysdig and CrowdStrike have no tenant check but an offline one (the
+    # engine's Falco and CQL): only --live is unsupported there. HarfangLab has
+    # neither.
     if (
         platform is not None
         and platform not in QUERY_VALIDATION_PLATFORMS
