@@ -1,0 +1,161 @@
+# The plan section 11 benchmarks with their budgets (UC-0.8, #806): `cargo xtask bench`
+# (xtask/src/bench/) on the heavy workspace, held by `cargo xtask bench --check` to
+# tests/bench/budgets.toml and to the last development result.
+#
+# When: nightly on the default branch (development), on demand, and on a pull request
+# that carries the `perf` label (adding the label starts a run; every push then reruns
+# it). A run measures each command as fresh processes on one runner class,
+# ubuntu-24.04 (4 vCPU, the class the baseline in budgets.toml was recorded on):
+# numbers from another class are not comparable.
+#
+# The last development result: the bench-<engine> artifact of the newest run of this
+# workflow on development (a nightly or a manual run) whose job for that engine
+# succeeded on the same CPU model. A job that failed its check is never the reference,
+# so a regression stays red until it is fixed or the budgets are re-recorded on
+# purpose. Each run keeps its own results as the bench-<engine> artifact for 90 days.
+#
+# Safety: `pull_request`, never `pull_request_target`: a PR's code runs with a
+# read-only token and no secrets, and the label only decides whether the job runs.
+# The benchmarks reach no tenant: `deploy` runs with --dry-run, and every measured
+# process gets proxies that lead nowhere (xtask/src/bench/measure.rs).
+name: Benchmarks
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+
+permissions:
+  contents: read
+
+jobs:
+  bench:
+    name: Benchmarks (${{ matrix.engine }})
+    # A PR runs only with the `perf` label, and adding another label to it starts nothing.
+    if: >-
+      github.event_name != 'pull_request' || (
+        contains(github.event.pull_request.labels.*.name, 'perf') &&
+        (github.event.action != 'labeled' || github.event.label.name == 'perf'))
+    # On the job, not the workflow, so that a skipped run (another label) cancels
+    # nothing. A new push to a PR replaces its run; nightly and manual runs on
+    # development wait for each other instead.
+    concurrency:
+      group: bench-${{ github.ref }}-${{ matrix.engine }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      actions: read # gh run list and gh run download: the last development result
+    strategy:
+      fail-fast: false
+      matrix:
+        # python: the oracle, opentide 0.23.0 from PyPI. rust: what has a Rust
+        # implementation (today the language server); the rest reports "no Rust yet".
+        engine: [python, rust]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Rust
+        run: rustup toolchain install --profile minimal --no-self-update
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: bench-${{ matrix.engine }}
+          save-if: ${{ github.event_name != 'pull_request' }}
+
+      # One uv release: the oracle's Python (ORACLE_PYTHON in xtask/src/bench/oracle.rs) is
+      # a uv-managed download this release knows.
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          version: "0.11.32"
+          enable-cache: false
+
+      - name: Build xtask
+        run: cargo build --locked --package xtask
+
+      - name: Run the benchmarks
+        env:
+          ENGINE: ${{ matrix.engine }}
+        run: cargo xtask bench --engine "$ENGINE" --scale 1 --json --out bench.json > /dev/null
+
+      # The oracle's `deploy --dry-run` on the heavy workspace (which declares tenants for
+      # five platforms) under strace: it must open no network connection nor send a
+      # datagram to a network address (every network syscall traced: connect,
+      # sendto, sendmsg, sendmmsg).
+      - name: Prove that the dry run reaches no tenant
+        if: matrix.engine == 'python'
+        run: |
+          command -v strace >/dev/null || { sudo apt-get update -q && sudo apt-get install -y -q strace; }
+          heavy="$RUNNER_TEMP/heavy"
+          cargo xtask corpus generate --seed 20261107 --out "$heavy"
+          opentide="$GITHUB_WORKSPACE/target/xtask-bench/oracle/bin/opentide"
+          mkdir -p "$RUNNER_TEMP/home"
+          (cd "$heavy" && env -i PATH=/usr/bin:/bin HOME="$RUNNER_TEMP/home" LANG=C.UTF-8 \
+            strace -f -qq -e trace=%network -o "$RUNNER_TEMP/connect.txt" \
+            "$opentide" --json deploy --dry-run --all --strategy PREVIEW > "$RUNNER_TEMP/dry-run.json")
+          jq -e '.dry_run == true and .ok == true' "$RUNNER_TEMP/dry-run.json" > /dev/null
+          # Every network syscall is traced; a socket() alone (Python probes IPv6 support
+          # at import) reaches nothing, so only calls that name a destination count.
+          if grep -E '^[0-9]+ +(connect|sendto|sendmsg|sendmmsg)\(.*AF_INET6?' "$RUNNER_TEMP/connect.txt"; then
+            echo "::error::deploy --dry-run opened a network connection"
+            exit 1
+          fi
+          echo "deploy --dry-run planned $(jq '[.plan[] | length] | add' "$RUNNER_TEMP/dry-run.json") rule deployments and opened no network connection."
+
+      # The newest development run (nightly or manual) whose job for this engine
+      # succeeded and ran on this run's CPU: GitHub's runners of one class come on
+      # several CPU generations, and a 10% rule across two of them measures the
+      # hardware. Its bench-<engine> artifact is the reference.
+      - name: Find the last development result
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ENGINE: ${{ matrix.engine }}
+        run: |
+          job="Benchmarks ($ENGINE)"
+          cpu=$(jq -r '.host.cpu_model // ""' bench.json)
+          runs=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow bench.yml \
+            --branch development --limit 50 --json databaseId,event \
+            --jq '.[] | select(.event == "schedule" or .event == "workflow_dispatch") | .databaseId')
+          for run_id in $runs; do
+            conclusion=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/jobs" \
+              --jq ".jobs[] | select(.name == \"$job\") | .conclusion")
+            [ "$conclusion" = success ] || continue
+            rm -rf candidate
+            if ! gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --name "bench-$ENGINE" --dir candidate; then
+              echo "::warning::run $run_id kept no bench-$ENGINE artifact (expired?)"
+              continue
+            fi
+            if [ "$(jq -r '.host.cpu_model // ""' candidate/bench.json)" = "$cpu" ]; then
+              mv candidate previous
+              echo "Last development result on $cpu: run $run_id"
+              exit 0
+            fi
+          done
+          rm -rf candidate
+          echo "No successful development run on $cpu among the last 50: checking against the budgets alone."
+
+      - name: Check against the budgets
+        run: |
+          previous=()
+          if [ -f previous/bench.json ]; then
+            previous=(--previous previous/bench.json)
+          fi
+          # --require-reference: a command no baseline, target or previous result
+          # applies to fails, so an oracle bump or a changed default cannot turn the
+          # gate off silently (and that run never becomes the reference).
+          cargo xtask bench --check tests/bench/budgets.toml bench.json "${previous[@]}" \
+            --require-reference \
+            --summary "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() }}
+        with:
+          name: bench-${{ matrix.engine }}
+          path: bench.json
+          if-no-files-found: ignore
+          retention-days: 90

@@ -30,10 +30,6 @@ $ xtask codegen
 ? 1
 xtask codegen: not implemented yet; UC-1.8 (https://github.com/opentidehq/opentide/issues/814) implements it
 
-$ xtask bench
-? 1
-xtask bench: not implemented yet; UC-0.8 (https://github.com/opentidehq/opentide/issues/806) implements it
-
 $ xtask frobnicate
 ? 2
 xtask: unknown command `frobnicate`

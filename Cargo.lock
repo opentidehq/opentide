@@ -1607,6 +1607,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "wait4"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ce2d6eb47d02e051093f3c8106983ed385e5c07700370f14dde91d14864cf12f"
+dependencies = [
+ "libc",
+ "windows-sys",
+]
+
+[[package]]
 name = "walkdir"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1723,6 +1733,7 @@ dependencies = [
  "tempfile",
  "toml 0.8.23",
  "trycmd",
+ "wait4",
 ]
 
 [[package]]
