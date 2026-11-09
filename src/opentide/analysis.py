@@ -139,15 +139,27 @@ CompareRun = tuple[
 ]
 
 
-def compare_runs(command: str, oracle: CompareRun, candidate: CompareRun) -> str:
+def compare_runs(
+    command: str,
+    oracle: CompareRun,
+    candidate: CompareRun,
+    *,
+    rules: Sequence[str] = (),
+    known: Sequence[str] = (),
+    git_version: str | None = None,
+) -> str:
     """The comparator's report on two runs of *command*, as JSON (``OPENTIDE_ENGINE=compare``).
 
-    Each run is normalised first, as the goldens are, with its own literals and
-    dates; the comparison is the one ``cargo xtask compare`` makes
-    (``crates/opentide-compare``).
+    Each run is normalised first with the goldens' normaliser: its own literals
+    and dates, the command's *rules* (``fresh-uuids``, ``host-git``) with the
+    workspace's texts before the run (*known*) and the host's *git_version*.
+    Unlike a golden case, nothing is normalised per fixture. The comparison is
+    the one ``cargo xtask compare`` makes (``crates/opentide-compare``).
     Raises :class:`EngineUnavailableError`.
     """
-    return str(engine().compare_runs(command, oracle, candidate))
+    return str(
+        engine().compare_runs(command, oracle, candidate, list(rules), list(known), git_version)
+    )
 
 
 #: Engine sentences that promise a step opentide does not offer, and what opentide

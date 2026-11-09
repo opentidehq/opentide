@@ -108,4 +108,11 @@ CompareRun = tuple[
     Sequence[str],
 ]
 
-def compare_runs(command: str, oracle: CompareRun, candidate: CompareRun) -> str: ...
+def compare_runs(
+    command: str,
+    oracle: CompareRun,
+    candidate: CompareRun,
+    rules: Sequence[str] = ...,
+    known: Sequence[str] = ...,
+    git_version: str | None = None,
+) -> str: ...

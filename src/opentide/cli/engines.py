@@ -57,9 +57,18 @@ class RustCommand:
 
     The command's arguments follow *launch*. It runs with ``OPENTIDE_ENGINE``
     set to ``rust`` in its environment.
+
+    *rules* are the extra normalisation rules the command's golden cases opt
+    into (``fresh-uuids`` for a command that mints identifiers, ``host-git``
+    for one that prints the host's git version): ``compare`` applies them as
+    the goldens do. *side_effects* marks a command that reaches outside the
+    workspace (a tenant, MISP): ``compare`` refuses it, since both runs would
+    reach it and nothing would compare what they did there.
     """
 
     launch: tuple[str, ...]
+    rules: tuple[str, ...] = ()
+    side_effects: bool = False
 
 
 #: Command paths (``("validate",)``, ``("generate", "docs")``) that have a Rust
@@ -447,6 +456,17 @@ def _compare(cli_ctx: CliContext, path: str, args: Sequence[str], rust: RustComm
         USAGE_EXIT_CODE,
     )
 
+    if rust.side_effects:
+        _fail(
+            cli_ctx,
+            path,
+            f"{ENGINE_ENV}={COMPARE} cannot compare opentide {path}: it reaches outside the "
+            f"workspace (a tenant or a sharing destination), and both runs would. "
+            f"Use {PYTHON} or {RUST}.",
+            code=USAGE_ERROR,
+            exit_code=USAGE_EXIT_CODE,
+            argument=ENGINE_ENV,
+        )
     workspace = cli_ctx.repo.resolve()
     outside = (
         str(Path.cwd()) if not Path.cwd().resolve().is_relative_to(workspace) else None
@@ -476,7 +496,16 @@ def _compare(cli_ctx: CliContext, path: str, args: Sequence[str], rust: RustComm
                 exit_code=1,
             )
         try:
-            report: dict[str, Any] = json.loads(compare_runs(path, oracle.run, candidate.run))
+            report: dict[str, Any] = json.loads(
+                compare_runs(
+                    path,
+                    oracle.run,
+                    candidate.run,
+                    rules=rust.rules,
+                    known=_known_texts(workspace) if "fresh-uuids" in rust.rules else (),
+                    git_version=_git_version() if "host-git" in rust.rules else None,
+                )
+            )
         except EngineUnavailableError as exc:
             _fail(cli_ctx, path, str(exc), code=exc.code, exit_code=1)
         except UnicodeError as exc:
@@ -495,7 +524,8 @@ def _compare(cli_ctx: CliContext, path: str, args: Sequence[str], rust: RustComm
                     exit_code=1,
                 )
             _replay(back(oracle.run[1]), back(oracle.run[2]))
-            raise SystemExit(oracle.run[0])
+            code = oracle.run[0]
+            raise SystemExit(128 - code if code < 0 else code)
     written = _write_report(cli_ctx, path, args, report)
     count = len(report.get("differences", [])) + int(report.get("omitted", 0))
     message = (
@@ -503,6 +533,31 @@ def _compare(cli_ctx: CliContext, path: str, args: Sequence[str], rust: RustComm
         f"({count} difference{'' if count == 1 else 's'}); the report is {written}"
     )
     _fail(cli_ctx, path, message, code=ENGINE_MISMATCH, exit_code=ENGINE_MISMATCH_EXIT_CODE)
+
+
+def _known_texts(workspace: Path) -> list[str]:
+    """The UTF-8 texts of the workspace before the run: the UUIDs in them are not fresh."""
+    texts: list[str] = []
+    for _, path, info in _walk(workspace):
+        if not stat.S_ISREG(info.st_mode) or ".git" in path.relative_to(workspace).parts:
+            continue
+        try:
+            texts.append(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError):
+            continue
+    return texts
+
+
+def _git_version() -> str | None:
+    """``git --version``'s number, as the goldens normalise it for ``host-git``."""
+    try:
+        out = subprocess.run(
+            ["git", "--version"], capture_output=True, text=True, check=False, timeout=10
+        ).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+    words = out.split()
+    return words[2] if len(words) >= 3 else None
 
 
 def _back_to(copy: _Copy, workspace: Path) -> Callable[[bytes], bytes]:

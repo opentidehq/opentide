@@ -262,10 +262,12 @@ def test_changes_are_what_the_run_left_different(tmp_path: Path) -> None:
     (root / "deleted.txt").unlink()
     (root / "new").mkdir()
     (root / "new" / "file.json").write_bytes(b"{}")
+    (root / "same.txt").chmod(0o600)  # V854-S-7: a mode change alone is a change
     assert engines._changes(copy, before) == [
         ("changed.txt", (root / "changed.txt").stat().st_mode & 0o7777, b"other"),
         ("deleted.txt", None, None),
         ("new/file.json", (root / "new" / "file.json").stat().st_mode & 0o7777, b"{}"),
+        ("same.txt", 0o600, b"same.txt"),
     ]
 
 
@@ -274,15 +276,30 @@ def test_the_report_redacts_secret_arguments(
 ) -> None:
     from opentide.cli.context import CliContext
 
+    # V854-S-2: a difference's excerpts are redacted too: a secret from the
+    # environment and a tenant named in the workspace's configuration.
+    monkeypatch.setenv("SENTINEL_CLIENT_SECRET", "env-secret-value-0987654321")
+    platforms = workspace / ".opentide" / "configurations" / "platforms"
+    platforms.mkdir(parents=True, exist_ok=True)
+    (platforms / "sentinel.toml").write_text(
+        '[[tenants]]\nname = "contoso-prod-tenant"\n', encoding="utf-8"
+    )
     ctx = CliContext(repo=workspace)
+    difference = {
+        "target": "stdout",
+        "kind": "bytes",
+        "oracle": "token env-secret-value-0987654321 on contoso-prod-tenant",
+        "candidate": "tenant contoso-prod-tenant",
+    }
     written = engines._write_report(
         ctx,
         "share push",
         ["share", "push", "--api-key", "s3cr3t-value-1234567890"],
-        {"equal": False, "differences": [], "omitted": 0, "approved": []},
+        {"equal": False, "differences": [difference], "omitted": 0, "approved": []},
     )
     text = Path(written).read_text(encoding="utf-8")
-    assert "s3cr3t-value-1234567890" not in text
+    for secret in ("s3cr3t-value-1234567890", "env-secret-value-0987654321", "contoso-prod-tenant"):
+        assert secret not in text, secret
     assert json.loads(text)["argv"][:3] == ["share", "push", "--api-key"]
 
 
@@ -432,3 +449,92 @@ def test_engine_unavailable_keeps_exit_1_and_its_meaning(
     assert failure["message"].startswith("The opentide analysis engine does not load")
     page = Path(analysis.__file__).parent / "data" / "diagnostics" / "engine_unavailable.md"
     assert "OPENTIDE_ENGINE" not in page.read_text(encoding="utf-8")
+
+
+def test_an_agreeing_compare_shows_the_python_run(
+    workspace: Path, state: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """V854-S-1: equal after normalisation, different in every byte the user gets."""
+    monkeypatch.chdir(workspace)
+    monkeypatch.setattr(engines, "python_launch", lambda: (sys.executable, str(FAKE), "raw-python"))
+    monkeypatch.setitem(engines.RUST_COMMANDS, ("explain",), fake("raw"))
+    code, stdout, _ = invoke(["--json", "--repo", str(workspace), "explain", "internal"], "compare")
+    assert code == 0, stdout
+    assert document(stdout)["duration_ms"] == 1
+    assert (workspace / "marker.json").read_text(encoding="utf-8") == '{"duration_ms":1}\n'
+    assert not state.exists()
+
+
+def test_compare_normalises_the_week_before_the_run(
+    workspace: Path, state: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """V854-A-2: date-times of yesterday (a default window) are the clock, as in the goldens."""
+    monkeypatch.chdir(workspace)
+    monkeypatch.setattr(engines, "python_launch", lambda: (sys.executable, str(FAKE), "recent"))
+    monkeypatch.setitem(engines.RUST_COMMANDS, ("explain",), fake("recent"))
+    for _ in range(3):  # each run picks its own second: a pass is never luck
+        code, stdout, _ = invoke(
+            ["--no-color", "--repo", str(workspace), "explain", "internal"], "compare"
+        )
+        assert code == 0, stdout
+    assert not state.exists()
+
+
+def test_compare_applies_the_commands_rules(
+    workspace: Path, state: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """V854-I-3: a command that mints UUIDs compares equal with ``fresh-uuids``, not without."""
+    monkeypatch.chdir(workspace)
+    monkeypatch.setattr(engines, "python_launch", lambda: (sys.executable, str(FAKE), "uuid"))
+    args = ["--no-color", "--repo", str(workspace), "explain", "internal"]
+    monkeypatch.setitem(engines.RUST_COMMANDS, ("explain",), fake("uuid"))
+    assert invoke(args, "compare")[0] == 70
+    minting = RustCommand(launch=fake("uuid").launch, rules=("fresh-uuids",))
+    monkeypatch.setitem(engines.RUST_COMMANDS, ("explain",), minting)
+    assert invoke(args, "compare")[0] == 0
+
+
+def test_compare_refuses_a_command_with_side_effects(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """V854-I-5: a tenant would be reached twice, and nothing would compare it."""
+    monkeypatch.chdir(workspace)
+    reaching = RustCommand(launch=fake("same").launch, side_effects=True)
+    monkeypatch.setitem(engines.RUST_COMMANDS, ("explain",), reaching)
+    code, stdout, _ = invoke(["--json", "--repo", str(workspace), "explain", "internal"], "compare")
+    assert code == 2
+    failure = document(stdout)["failure"]
+    assert failure["code"] == "usage_error"
+    assert "reaches outside the workspace" in failure["message"]
+
+
+@pytest.mark.skipif(os.name != "posix", reason="file modes")
+def test_an_agreed_deletion_and_mode_change_reach_the_workspace(
+    workspace: Path, state: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """V854-S-6: what both runs did to existing files is done to the workspace."""
+    (workspace / "delete-me.txt").write_text("x", encoding="utf-8")
+    (workspace / "chmod-me.txt").write_text("y", encoding="utf-8")
+    (workspace / "chmod-me.txt").chmod(0o644)
+    monkeypatch.chdir(workspace)
+    monkeypatch.setattr(engines, "python_launch", lambda: (sys.executable, str(FAKE), "mutate"))
+    monkeypatch.setitem(engines.RUST_COMMANDS, ("explain",), fake("mutate"))
+    code, stdout, _ = invoke(
+        ["--no-color", "--repo", str(workspace), "explain", "internal"], "compare"
+    )
+    assert code == 0, stdout
+    assert not (workspace / "delete-me.txt").exists()
+    assert (workspace / "chmod-me.txt").stat().st_mode & 0o777 == 0o600
+    assert (workspace / "chmod-me.txt").read_text(encoding="utf-8") == "y"
+
+
+@pytest.mark.skipif(os.name != "posix", reason="signals")
+def test_an_agreed_signal_exit_is_128_plus_n(
+    workspace: Path, state: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """V854-I-7: both runs end on SIGTERM: the command exits 143, as a shell reports it."""
+    monkeypatch.chdir(workspace)
+    monkeypatch.setattr(engines, "python_launch", lambda: (sys.executable, str(FAKE), "sigterm"))
+    monkeypatch.setitem(engines.RUST_COMMANDS, ("explain",), fake("sigterm"))
+    code, _, _ = invoke(["--no-color", "--repo", str(workspace), "explain", "internal"], "compare")
+    assert code == 143

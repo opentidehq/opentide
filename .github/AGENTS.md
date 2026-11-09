@@ -18,6 +18,7 @@ whatever its base: a stacked PR targets the branch below it, not `development`.
 | `engine-wasm` | `scripts/engine/build-wasm.sh` (both WebAssembly artifacts, and `clippy` for the code only wasm32 compiles), the npm packages and the TypeScript client against the native, worker and WASI servers |
 | `test` | The Python matrix, **3.10–3.14** |
 | `cli-e2e`, `cli-windows-smoke`, `gitlab-ci-lint` | The sharded E2E suite, a Windows smoke run, the generated GitLab pipelines; none waits for `test` |
+| `golden-compare` | `cargo xtask golden check --engine compare` (UC-0.7): every golden case whose command has a Rust implementation, through this repository's CLI with `OPENTIDE_ENGINE=rust`, against the oracle's recording and `tests/golden/APPROVED_DIFFS.toml`; the `golden-compare` artifact holds the report |
 
 The Rust jobs of `ci.yml`, `engine-ci.yml`, `oracle.yml` and the parked `release.yml` (below)
 install the one release `rust-toolchain.toml` pins (`rustup toolchain install` with no name),
