@@ -23,6 +23,7 @@ from types import ModuleType
 from typing import TYPE_CHECKING, Literal
 
 from opentide.core.logging import get_logger
+from opentide.validation.query_platforms import OFFLINE_LANGUAGES
 from opentide.validation.query_platforms import (
     OFFLINE_QUERY_LANGUAGES as OFFLINE_QUERY_LANGUAGES,
 )
@@ -595,9 +596,11 @@ def check_queries(
     """The queries of each object file in *files*, checked offline.
 
     *platforms* keeps the queries of those ``configurations`` blocks only;
-    ``None`` keeps every query, hunts included. A file that is not UTF-8, or
-    not YAML, is listed in :attr:`QueryRun.unreadable` instead of passing
-    unchecked.
+    ``None`` keeps every query, hunts included. Either way only queries in a
+    language the CLI checks offline (:data:`OFFLINE_LANGUAGES`) are kept: the
+    engine also reads CrowdStrike's CQL, which only the editor reports. A file
+    that is not UTF-8, or not YAML, is listed in :attr:`QueryRun.unreadable`
+    instead of passing unchecked.
     """
     wanted = None if platforms is None else frozenset(platforms)
     install_workspace_visibility(root)
@@ -617,6 +620,8 @@ def check_queries(
             field_path = tuple(report.field_path)
             platform = field_path[1] if field_path[:1] == ("configurations",) else None
             if wanted is not None and platform not in wanted:
+                continue
+            if report.language not in OFFLINE_LANGUAGES:
                 continue
             checks.append(
                 QueryCheck(

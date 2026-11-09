@@ -25,6 +25,7 @@ from opentide.analysis import (
     reset_catalog,
 )
 from opentide.generation.lsp_catalog import CATALOG_DIR
+from opentide.validation.query_platforms import OFFLINE_LANGUAGES
 
 TWO_PLATFORMS = """\
 name: Two Platforms
@@ -110,7 +111,7 @@ def test_every_query_of_a_file_is_checked_and_platforms_filter_them(tmp_path: Pa
     assert [(check.platform, check.language) for check in checks] == [
         ("sentinel", "kql"),
         ("splunk", "spl"),
-    ], "CrowdStrike is never validated, so it is never a query here"
+    ], "the CLI does not check CrowdStrike queries: the editor does"
     sentinel, splunk = checks
     assert sentinel.findings == () and sentinel.errors == 0
     assert splunk.errors == 1
@@ -119,6 +120,35 @@ def test_every_query_of_a_file_is_checked_and_platforms_filter_them(tmp_path: Pa
     assert TWO_PLATFORMS.splitlines()[finding.line - 1][finding.column - 1 :].startswith("statz")
     only = check_queries([rule], root=tmp_path, platforms=["splunk"]).checks
     assert [check.platform for check in only] == ["splunk"]
+
+
+CROWDSTRIKE_RULE_AND_HUNT = """\
+name: CrowdStrike Only
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000002
+  schema: rule::1.0
+configurations:
+  crowdstrike:
+    query: |
+      #event_simpleName=ProcessRollup2 | groupBi(aid)
+response:
+  procedure:
+    searches:
+      - system: crowdstrike
+        query: '#event_simpleName=DnsRequest | groupBi(aid)'
+"""
+
+
+def test_cql_is_the_editors_until_crowdstrike_is_an_offline_platform(tmp_path: Path) -> None:
+    """The engine reads CrowdStrike queries as CQL; validate and lint do not check them."""
+    rule = tmp_path / "crowdstrike-only.yaml"
+    rule.write_text(CROWDSTRIKE_RULE_AND_HUNT, encoding="utf-8")
+    editor = analysis.check_file(analysis.workspace(tmp_path), rule, CROWDSTRIKE_RULE_AND_HUNT)
+    assert "cql_unknown_function" in {finding.code for finding in editor}
+    assert "crowdstrike_unsupported" not in engine_codes()
+    assert "cql" not in OFFLINE_LANGUAGES
+    assert check_queries([rule], root=tmp_path).checks == []
+    assert check_queries([rule], root=tmp_path, platforms=["crowdstrike"]).checks == []
 
 
 def test_a_file_that_cannot_be_read_is_reported_not_skipped(tmp_path: Path) -> None:
