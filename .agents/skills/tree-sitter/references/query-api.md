@@ -4,20 +4,26 @@ Crate: `tree-sitter` 0.25.10. Docs: <https://docs.rs/tree-sitter/0.25.10/tree_si
 
 ## Loading the language
 
-Published grammar crates export `LANGUAGE: LanguageFn` and callers write `parser.set_language(&tree_sitter_rust::LANGUAGE.into())`. This repo vendors `parser.c` and does not use `LanguageFn`.
+Published grammar crates export `LANGUAGE: LanguageFn` and callers write `parser.set_language(&tree_sitter_rust::LANGUAGE.into())`. This repo vendors `parser.c` and builds the same `LanguageFn` itself (`crates/opentide-syntax/src/lib.rs`), from `tree-sitter-language`:
 
 ```rust
+use tree_sitter_language::LanguageFn;
+
+// SAFETY: (on the extern block) the generated parser.c defines
+// `const TSLanguage *tree_sitter_opentide_kql(void)`: no argument, a static grammar.
 unsafe extern "C" {
     fn tree_sitter_opentide_kql() -> *const ();
 }
 
-fn from_raw(ptr: *const ()) -> tree_sitter::Language {
-    // from_raw expects *const TSLanguage and the pointer must be non-null.
-    unsafe { tree_sitter::Language::from_raw(ptr as usize as *const tree_sitter::ffi::TSLanguage) }
+// SAFETY: a tree-sitter-cli generated language function.
+const KQL: LanguageFn = unsafe { LanguageFn::from_raw(tree_sitter_opentide_kql) };
+
+pub fn kql_language() -> tree_sitter::Language {
+    tree_sitter::Language::new(KQL) // safe: calls the function
 }
 ```
 
-`Language::new` takes a `LanguageFn`, not a raw pointer. Do not pass the C function to `Language::new`. Do not use a pre-0.24 `from_raw` signature that accepted `*const ()` without the `TSLanguage` cast; 0.25's `from_raw` is `pub const unsafe fn from_raw(ptr: *const TSLanguage) -> Self`.
+Pass the C function itself to `LanguageFn::from_raw`, never a pointer it returned. Do not write a safe function that takes a raw pointer and calls `Language::from_raw` (`pub const unsafe fn from_raw(ptr: *const TSLanguage)`): its caller could pass any pointer, which is unsound. One unsafe operation per block (`clippy::multiple_unsafe_ops_per_block`); every site is listed in `docs/internal/unsafe.md`.
 
 `set_language` returns `Result<(), LanguageError>`. Map the error. Do not ignore it with `let _ =`.
 
@@ -58,7 +64,7 @@ Why this is not optional: the C cursor reuses the match buffer. Collecting `Quer
 
 | Old snippet | 0.25 in this repo |
 | --- | --- |
-| `Language::from_raw(tree_sitter_kql())` with `*const ()` | cast to `*const TSLanguage` |
+| `Language::from_raw(tree_sitter_kql())` with `*const ()` | `Language::new(LanguageFn::from_raw(tree_sitter_kql))` |
 | `parser.set_language(language).unwrap()` ignoring `Result` | `map_err` |
 | `.matches(...).collect()` | `StreamingIterator::next` and copy fields |
 | `use streaming_iterator::StreamingIterator` as a direct dependency | `use tree_sitter::StreamingIterator` |

@@ -29,7 +29,7 @@ CrowdStrike stays unsupported until its language is specified. SQL stays unsuppo
 1. Add a variant to `LanguageId` in `crates/opentide-core` (`as_str`, `parse`, `Display`, serde rename). Wire name is the public id (`kql`, `spl`, `opentide-yaml`), not a crate path.
 2. Add diagnostic codes to `opentide_core::codes`. Unknown constructs get a stable code, not a free-form message.
 3. Vendor `grammars/tree-sitter-opentide-<id>/` and compile `parser.c` from `crates/opentide-syntax/build.rs`. Follow `.agents/skills/tree-sitter/SKILL.md`. CI fails if `parser.c` drifts.
-4. Add the C symbol to the `unsafe extern` block and a `language()` arm. Use `Language::from_raw` on `*const TSLanguage`. Do not `.collect()` a `QueryCursor`.
+4. Add the C symbol to the `unsafe extern` block, a `LanguageFn` constant (`unsafe { LanguageFn::from_raw(tree_sitter_opentide_<id>) }` with its `// SAFETY:` comment) and a `language()` arm, and its row in `docs/internal/unsafe.md` (`xtask/tests/unsafe_listing.rs` counts them). Do not `.collect()` a `QueryCursor`.
 5. Add corpus files under `crates/testdata/corpus/<id>/` tagged `prod:<rule>`, a row in `docs/engine/LANGUAGE.md`, and the required list in `crates/opentide-syntax/tests/corpus_gate.rs`.
 6. Add `data/catalogs/<id>/` and a `Catalog::cached`-style `OnceLock`. Follow `.agents/skills/catalogs/SKILL.md`.
 7. Add `highlights/queries/<id>/highlights.scm`. Specific patterns come before `(identifier) @variable`. New captures are appended to `highlights/spec.toml` `legend`. Run `generate-highlights`.
