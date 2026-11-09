@@ -32,7 +32,7 @@ opentide deploy --platform sentinel --dry-run --strategy PREVIEW --all
 
 ## Platform coverage
 
-opentide supports **nine deployment platforms** and **six query validators**. CrowdStrike, HarfangLab and Sysdig deploy but do not support live query validation — opentide never fakes validation for those platforms.
+opentide supports **nine deployment platforms** and **six query validators**. CrowdStrike, HarfangLab and Sysdig deploy but do not support live query validation — opentide never fakes validation for those platforms. The offline engine checks CrowdStrike's CQL and Sysdig's Falco conditions without a tenant.
 
 See [Platforms](./usage/concepts/platforms.md) for the capability matrix.
 

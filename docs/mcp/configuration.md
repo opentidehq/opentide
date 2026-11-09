@@ -158,7 +158,7 @@ When the editor workspace is the **opentide package repo** but content lives els
 
 ## Query validation policy
 
-Agents must treat `validate_query` responses with `supported: false` as **not validated** for CrowdStrike, HarfangLab and Sysdig. Never infer a pass.
+Agents must treat `validate_query` responses with `supported: false` as **not validated**: HarfangLab always, and CrowdStrike and Sysdig with `live: true` (they are checked offline only). Never infer a pass.
 
 ## Deploy safety
 
