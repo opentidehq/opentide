@@ -387,7 +387,10 @@ jobs:
         with:
           python-version: "3.12"
       - run: python3 scripts/engine/release.py vendor
-      - run: cargo package --locked --workspace --exclude opentide-native --exclude xtask --exclude opentide-compare --allow-dirty
+      # opentide-schema (publish = false) depends on opentide-schema-derive,
+      # which is not on crates.io yet, so it cannot be packaged until both
+      # are published (crates/opentide-schema/Cargo.toml says when).
+      - run: cargo package --locked --workspace --exclude opentide-native --exclude xtask --exclude opentide-compare --exclude opentide-schema --allow-dirty
       - name: license scan (no oracle references)
         run: bash scripts/engine/license-scan.sh target/package/*.crate
 
