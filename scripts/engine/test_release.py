@@ -1,5 +1,7 @@
-"""Tests for scripts/engine/release.py's release-asset checksums and for the shape
-of .github/engine-workflows/release.yml (#196).
+"""Tests for scripts/engine/release.py (tags, the asset set, checksums) and for the
+shape of the engine's Release workflows, .github/workflows/engine-release.yml and
+the asset build it shares with ci.yml's dry run, engine-release-build.yml
+(language-server#196, opentide#801).
 
     python3 -m unittest discover -s scripts -p 'test_*.py'
 """
@@ -204,14 +206,16 @@ class PublishTest(unittest.TestCase):
             self.assertIn("--no-verify", command)
 
 
-WORKFLOW = Path(__file__).resolve().parents[2] / ".github" / "engine-workflows" / "release.yml"
+WORKFLOWS = Path(__file__).resolve().parents[2] / ".github" / "workflows"
+WORKFLOW = WORKFLOWS / "engine-release.yml"
+BUILD = WORKFLOWS / "engine-release-build.yml"
 
 
-def workflow_jobs() -> dict[str, str]:
-    """Each job of release.yml as its lines, comments left out: the job keys
+def workflow_jobs(path: Path = WORKFLOW) -> dict[str, str]:
+    """Each job of a workflow as its lines, comments left out: the job keys
     are the two-space-indented keys under `jobs:` (no YAML parser, which the
     CI Python lacks)."""
-    text = WORKFLOW.read_text(encoding="utf-8")
+    text = path.read_text(encoding="utf-8")
     jobs: dict[str, list[str]] = {}
     name = None
     for line in text.split("\njobs:\n", 1)[1].splitlines():
@@ -226,8 +230,170 @@ def workflow_jobs() -> dict[str, str]:
     return {job: "\n".join(lines) for job, lines in jobs.items()}
 
 
-def workflow_header() -> str:
-    return WORKFLOW.read_text(encoding="utf-8").split("\njobs:\n", 1)[0]
+def all_jobs() -> dict[str, str]:
+    """The jobs of both workflows; their names do not collide."""
+    release, build = workflow_jobs(WORKFLOW), workflow_jobs(BUILD)
+    assert not release.keys() & build.keys(), release.keys() & build.keys()
+    return {**release, **build}
+
+
+def workflow_header(path: Path = WORKFLOW) -> str:
+    return path.read_text(encoding="utf-8").split("\njobs:\n", 1)[0]
+
+
+# language-server v0.11.0's GitHub Release (its SHA256SUMS, and SHA256SUMS).
+V0_11_0_ASSETS = [
+    "LICENSE",
+    "NOTICE",
+    "SHA256SUMS",
+    "THIRD-PARTY-LICENSES.html",
+    "WASI-LIBC-LICENSES.txt",
+    "highlights-v0.11.0.zip",
+    "opentide-lsp-v0.11.0-aarch64-apple-darwin",
+    "opentide-lsp-v0.11.0-aarch64-pc-windows-msvc.exe",
+    "opentide-lsp-v0.11.0-aarch64-unknown-linux-gnu",
+    "opentide-lsp-v0.11.0-aarch64-unknown-linux-musl",
+    "opentide-lsp-v0.11.0-x86_64-apple-darwin",
+    "opentide-lsp-v0.11.0-x86_64-pc-windows-msvc.exe",
+    "opentide-lsp-v0.11.0-x86_64-unknown-linux-gnu",
+    "opentide-lsp-v0.11.0-x86_64-unknown-linux-musl",
+    "opentide-lsp-wasm32-wasip1.wasm",
+    "opentide-wasm-web-v0.11.0.zip",
+]
+
+# The SBOMs scripts/engine/sbom.py writes, each a release asset.
+SBOM_ASSETS = [
+    "opentide-lsp.cdx.json",
+    "opentide-wasm.cdx.json",
+    "opentide-lsp-client.cdx.json",
+    "opentide-lsp-worker.cdx.json",
+]
+
+
+class TagTest(unittest.TestCase):
+    def test_engine_tags_and_release_candidates(self) -> None:
+        self.assertEqual(release.parse_tag("engine-v0.11.0"), ("0.11.0", None))
+        self.assertEqual(release.parse_tag("engine-v0.11.1-rc.1"), ("0.11.1", 1))
+        self.assertEqual(release.parse_tag("engine-v1.2.3-rc.12"), ("1.2.3", 12))
+        self.assertEqual(release.asset_version("engine-v0.11.1-rc.1"), "v0.11.1-rc.1")
+
+    def test_an_opentide_tag_or_a_malformed_one_is_refused(self) -> None:
+        # `v*` tags are opentide's releases here.
+        for tag in [
+            "v0.11.0",
+            "engine-0.11.0",
+            "engine-v0.11",
+            "engine-v0.11.0-rc.0",
+            "engine-v0.11.0-beta.1",
+            "engine-v0.11.0-rc.1x",
+            "engine-v0.11.0\n",
+        ]:
+            with self.subTest(tag=tag), self.assertRaises(ValueError):
+                release.parse_tag(tag)
+
+    def test_the_asset_set_is_language_servers_last_with_the_version_substituted(self) -> None:
+        # language-server's assets keep their names (editors pin them); the
+        # SBOMs (#843) are the only additions.
+        self.assertEqual(
+            sorted(release.expected_assets("engine-v0.11.0")),
+            sorted(V0_11_0_ASSETS + SBOM_ASSETS),
+        )
+        rc = release.expected_assets("engine-v0.11.1-rc.1")
+        self.assertEqual(
+            sorted(rc),
+            sorted([a.replace("v0.11.0", "v0.11.1-rc.1") for a in V0_11_0_ASSETS] + SBOM_ASSETS),
+        )
+
+    def test_check_assets_names_what_is_missing_or_extra(self) -> None:
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp)
+        for name in release.expected_assets("engine-v1.0.0"):
+            (tmp / name).write_bytes(b"x")
+        self.assertEqual(release.check_assets(tmp, "engine-v1.0.0"), [])
+        # The same files are the wrong set for another version.
+        self.assertTrue(release.check_assets(tmp, "engine-v1.0.1"))
+        (tmp / "opentide-lsp-v1.0.0-x86_64-apple-darwin").unlink()
+        (tmp / "stray.txt").write_bytes(b"x")
+        self.assertEqual(
+            release.check_assets(tmp, "engine-v1.0.0"),
+            [
+                "missing asset: opentide-lsp-v1.0.0-x86_64-apple-darwin",
+                "unexpected asset: stray.txt",
+            ],
+        )
+
+    def test_check_matches_the_workspace_and_a_candidate_needs_no_section(self) -> None:
+        with (
+            mock.patch.object(release, "workspace_version", return_value="1.2.3"),
+            mock.patch.object(release, "internal_pins", return_value={"opentide-core": "=1.2.3"}),
+            mock.patch.object(release, "changelog_section", return_value=None),
+        ):
+            self.assertEqual(release.check("engine-v1.2.3-rc.1"), [])
+            self.assertEqual(
+                release.check("engine-v1.2.3"), ["CHANGELOG.md has no section for 1.2.3"]
+            )
+            self.assertEqual(
+                release.check("engine-v1.2.4-rc.1"),
+                ["tag engine-v1.2.4-rc.1 does not match workspace version 1.2.3"],
+            )
+            self.assertEqual(len(release.check("v1.2.3")), 1)
+
+    def test_a_candidates_notes_fall_back_to_unreleased(self) -> None:
+        sections = {"1.2.3": None, "Unreleased": "### Fixed\n\n- **A fix.**"}
+        with mock.patch.object(release, "changelog_section", side_effect=sections.get):
+            notes = release.notes("engine-v1.2.3-rc.2")
+        assert notes is not None
+        self.assertTrue(notes.startswith("Release candidate 2 of 1.2.3."))
+        self.assertIn("- **A fix.**", notes)
+        # An empty section of its own is no notes either.
+        sections["1.2.3"] = ""
+        with mock.patch.object(release, "changelog_section", side_effect=sections.get):
+            self.assertIn("- **A fix.**", release.notes("engine-v1.2.3-rc.2") or "")
+        with mock.patch.object(release, "changelog_section", return_value="body"):
+            self.assertEqual(release.notes("engine-v1.2.3"), "body")
+            self.assertEqual(release.notes("1.2.3"), "body")
+
+    def test_the_cli_prints_the_tag_and_whether_it_is_a_candidate(self) -> None:
+        script = str(Path(release.__file__))
+        run = [sys.executable, script]
+
+        def out(*args: str) -> str:
+            done = subprocess.run([*run, *args], capture_output=True, text=True, check=True)
+            return done.stdout.strip()
+
+        self.assertEqual(out("tag"), f"engine-v{release.workspace_version()}")
+        self.assertEqual(out("prerelease", "engine-v1.0.0"), "false")
+        self.assertEqual(out("prerelease", "engine-v1.0.0-rc.3"), "true")
+        self.assertEqual(out("asset-version", "engine-v1.0.0"), "v1.0.0")
+        bad = subprocess.run(
+            [*run, "prerelease", "v1.0.0"], capture_output=True, text=True, check=False
+        )
+        self.assertEqual(bad.returncode, 1)
+
+    def test_the_cli_fails_on_a_missing_or_an_extra_asset(self) -> None:
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp)
+        for name in release.expected_assets("engine-v1.0.0"):
+            (tmp / name).write_bytes(b"x")
+        run = [sys.executable, str(Path(release.__file__)), "check-assets", str(tmp)]
+        ok = subprocess.run([*run, "engine-v1.0.0"], capture_output=True, text=True, check=False)
+        self.assertEqual(ok.returncode, 0, ok.stderr)
+        (tmp / "stray.txt").write_bytes(b"x")
+        extra = subprocess.run([*run, "engine-v1.0.0"], capture_output=True, text=True, check=False)
+        self.assertEqual(extra.returncode, 1)
+        self.assertIn("unexpected asset: stray.txt", extra.stderr)
+        (tmp / "stray.txt").unlink()
+        (tmp / "NOTICE").unlink()
+        missing = subprocess.run(
+            [*run, "engine-v1.0.0"], capture_output=True, text=True, check=False
+        )
+        self.assertEqual(missing.returncode, 1)
+        self.assertIn("missing asset: NOTICE", missing.stderr)
+
+    def test_the_native_matrix_builds_every_target(self) -> None:
+        native = workflow_jobs(BUILD)["native"]
+        built = re.findall(r"^\s+target: (\S+)$", native, re.MULTILINE)
+        self.assertEqual(built, release.TARGETS)
 
 
 # A target: a name, or an expression such as `${{ matrix.target }}`.
@@ -256,7 +422,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
         )
 
     def test_only_attest_crates_and_npm_can_mint_an_oidc_token(self) -> None:
-        # crates.io and npm trust release.yml as a whole: a token from any job
+        # crates.io and npm trust engine-release.yml as a whole: a token from any job
         # of it publishes.
         jobs = workflow_jobs()
         minting = sorted(job for job, body in jobs.items() if "id-token: write" in body)
@@ -265,6 +431,9 @@ class ReleaseWorkflowTest(unittest.TestCase):
         for job in minting:
             # Every job states its permissions, so none inherits a token.
             self.assertIn("permissions:", jobs[job], job)
+        # The asset build, which ci.yml also runs on pull requests, holds none.
+        self.assertNotIn("id-token", BUILD.read_text(encoding="utf-8"))
+        self.assertRegex(jobs["build"], r"permissions:\n      contents: read\n")
 
     def test_every_rust_job_installs_the_pinned_release_with_the_targets_it_builds(
         self,
@@ -277,14 +446,16 @@ class ReleaseWorkflowTest(unittest.TestCase):
         # named adds it to the pinned release.
         install = "rustup toolchain install --profile minimal --no-self-update"
         target = r"--target (\$\{\{[^}]*\}\}|\S+)"
-        jobs = workflow_jobs()
+        jobs = all_jobs()
         built: dict[str, set[str]] = {}
         rust = sorted(
             job
             for job, body in jobs.items()
             if re.search(r"\bcargo\b|build-wasm\.sh|release\.py (?:vendor|publish)", body)
         )
-        self.assertEqual(rust, ["assets", "crates", "highlights", "native", "verify", "wasm"])
+        self.assertEqual(
+            rust, ["crates", "highlights", "licences", "native", "sbom", "verify", "wasm"]
+        )
         for job, body in jobs.items():
             self.assertNotIn("dtolnay/rust-toolchain", body, job)
             self.assertNotRegex(body, r"rustup (?:default|override)|cargo \+", job)
@@ -321,7 +492,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
         )
 
     def test_cargo_about_runs_without_an_oidc_token(self) -> None:
-        jobs = workflow_jobs()
+        jobs = all_jobs()
         builds = [job for job, body in jobs.items() if "cargo install" in body]
         self.assertTrue(builds)
         for job in builds:
@@ -345,6 +516,33 @@ class ReleaseWorkflowTest(unittest.TestCase):
         # The release job no longer checks: verify-assets does, for both paths.
         self.assertNotIn("gh attestation verify", jobs["release"])
 
+    def test_a_release_candidate_is_a_pre_release_and_publishes_no_package(self) -> None:
+        jobs = workflow_jobs()
+        for job in ["crates", "npm"]:
+            self.assertIn("needs.verify.outputs.prerelease == 'false'", jobs[job], job)
+        attach = jobs["release"]
+        self.assertIn("flags+=(--prerelease)", attach)
+        # opentide's release stays the repository's latest.
+        self.assertIn("flags=(--latest=false)", attach)
+        self.assertIn('"${flags[@]}"', attach)
+
+    def test_the_release_ships_the_set_the_asset_build_checked(self) -> None:
+        assets = workflow_jobs(BUILD)["assets"]
+        lines = [line.strip() for line in assets.splitlines()]
+        # Whole lines in a `set -euo pipefail` step: nothing turns a failure into a pass.
+        for gate in [
+            'python3 scripts/engine/release.py check-assets dist "${TAG}"',
+            "python3 scripts/engine/release.py verify-sums dist",
+        ]:
+            self.assertIn(gate, lines)
+        self.assertIn("set -euo pipefail", lines)
+        for job in [assets, workflow_jobs()["verify-assets"]]:
+            self.assertNotRegex(job, r"\|\|\s*(?:true|:)\b")
+        self.assertLess(assets.index("release.py sums dist"), assets.index("check-assets"))
+        self.assertIn("name: release-assets", assets)
+        for job in ["attest", "release"]:
+            self.assertIn("name: release-assets", workflow_jobs()[job], job)
+
     def test_a_released_tag_is_never_uploaded_again(self) -> None:
         jobs = workflow_jobs()
         # A re-run of a tag push stops before it builds anything.
@@ -362,6 +560,23 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertLess(guard, attach.index("gh release upload"))
         self.assertNotIn("--clobber", attach)
         self.assertNotIn("delete-asset", attach)
+
+    def test_run_workflow_releases_from_development_only(self) -> None:
+        verify = workflow_jobs()["verify"]
+        refuse = verify.index("Run the release from development, not")
+        self.assertLess(verify.index('"${GITHUB_REF}" != "refs/heads/development"'), refuse)
+        self.assertEqual(verify[refuse:].splitlines()[1].strip(), "exit 1")
+
+    def test_run_workflow_never_releases_a_version_already_tagged(self) -> None:
+        # A tag whose own run failed before its release: a dispatch would build
+        # another commit, attach it to the tag's and publish its crates.
+        verify = workflow_jobs()["verify"]
+        dispatch = verify[verify.index('if [ "${GITHUB_REF}" != "refs/heads/development" ]') :]
+        guard = 'git ls-remote --exit-code --tags origin "refs/tags/${tag}" >/dev/null || tagged=$?'
+        self.assertIn(guard, dispatch)
+        self.assertLess(dispatch.index("PUBLISH_ONLY"), dispatch.index(guard))
+        # Fail closed: only "no such ref" (2) lets the release go on.
+        self.assertIn('elif [ "${tagged}" != 2 ]; then', dispatch)
 
     def test_verify_assets_may_read_the_attestations_and_write_nothing(self) -> None:
         verify_assets = workflow_jobs()["verify-assets"]
@@ -390,7 +605,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
                 self.assertIn("--cert-identity-regex", check)
 
     @unittest.skipUnless(shutil.which("bash"), "bash is not installed")
-    def test_the_identity_is_release_yml_on_main_or_the_tag(self) -> None:
+    def test_the_identity_is_engine_release_yml_on_development_or_the_tag(self) -> None:
         lines = [
             line.strip()
             for line in workflow_jobs()["verify-assets"].splitlines()
@@ -398,7 +613,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
         ]
         self.assertEqual(len(lines), 3, lines)
         script = "\n".join([*lines, 'printf %s "$identity"'])
-        env = {"GITHUB_REPOSITORY": "opentidehq/language-server", "TAG": "v1.2.3"}
+        env = {"GITHUB_REPOSITORY": "opentidehq/opentide", "TAG": "engine-v1.2.3"}
         env["PATH"] = "/usr/bin:/bin"
         done = subprocess.run(
             ["bash", "-c", script], capture_output=True, text=True, env=env, check=True
@@ -410,17 +625,27 @@ class ReleaseWorkflowTest(unittest.TestCase):
         found = re.search(r"--cert-identity-regex '([^']+)'", readme)
         assert found is not None, "README.md documents the identity"
         documented = re.compile(found.group(1).replace(r"vX\.Y\.Z", r"v1\.2\.3"))
-        workflows = "https://github.com/opentidehq/language-server/.github/workflows"
-        workflow = f"{workflows}/release.yml"
+        workflows = "https://github.com/opentidehq/opentide/.github/workflows"
+        workflow = f"{workflows}/engine-release.yml"
         for pattern in [identity, documented]:
-            self.assertTrue(pattern.fullmatch(f"{workflow}@refs/heads/main"), pattern.pattern)
-            self.assertTrue(pattern.fullmatch(f"{workflow}@refs/tags/v1.2.3"), pattern.pattern)
+            self.assertTrue(
+                pattern.fullmatch(f"{workflow}@refs/heads/development"), pattern.pattern
+            )
+            self.assertTrue(
+                pattern.fullmatch(f"{workflow}@refs/tags/engine-v1.2.3"), pattern.pattern
+            )
             for other in [
+                f"{workflow}@refs/heads/main",
                 f"{workflow}@refs/heads/feature",
-                f"{workflow}@refs/tags/v1.2.4",
-                f"{workflow}@refs/tags/v1x2x3",
-                f"{workflows}/ci.yml@refs/heads/main",
-                workflow.replace("opentidehq", "someone") + "@refs/heads/main",
+                f"{workflow}@refs/tags/engine-v1.2.4",
+                f"{workflow}@refs/tags/v1.2.3",
+                f"{workflow}@refs/tags/engine-v1x2x3",
+                f"{workflows}/ci.yml@refs/heads/development",
+                f"{workflows}/engine-release-build.yml@refs/heads/development",
+                f"{workflows}/publish-pypi.yml@refs/tags/engine-v1.2.3",
+                workflow.replace("opentidehq", "someone") + "@refs/heads/development",
+                "https://github.com/opentidehq/language-server/.github/workflows/release.yml"
+                "@refs/heads/main",
             ]:
                 self.assertIsNone(pattern.fullmatch(other), (pattern.pattern, other))
 

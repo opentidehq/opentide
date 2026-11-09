@@ -2,15 +2,29 @@
 """Release helpers for the opentide language server.
 
     release.py version              print the workspace version
-    release.py check vX.Y.Z         the tag, every crate pin, and CHANGELOG.md agree
+    release.py tag                  print the release tag of the workspace version
+    release.py check TAG            the tag, every crate pin, and CHANGELOG.md agree
+    release.py prerelease TAG       print true for a release candidate tag, else false
+    release.py asset-version TAG    print the version the asset names carry (vX.Y.Z[-rc.N])
+    release.py assets TAG           print the name of every asset the tag's release carries
+    release.py check-assets DIR TAG DIR holds exactly the tag's assets
     release.py bump X.Y.Z           set the workspace version and the internal pins
-    release.py notes X.Y.Z          print the CHANGELOG.md section for a version
+    release.py notes TAG|X.Y.Z      print the CHANGELOG.md section for a version
     release.py vendor [--clean]     copy each crate's shared assets into crates/*/assets
     release.py publish              publish every crate to crates.io, dependencies first
     release.py trust WORKFLOW       register WORKFLOW as each crate's trusted publisher
     release.py sums DIR             write DIR/SHA256SUMS for every file in DIR
     release.py verify-sums DIR      DIR/SHA256SUMS lists exactly DIR's files, each digest right
-    release.py unpublished vX.Y.Z   fail when the tag's GitHub Release already has assets
+    release.py unpublished TAG      fail when the tag's GitHub Release already has assets
+
+An engine release is tagged `engine-vX.Y.Z` (or `engine-vX.Y.Z-rc.N`, a release
+candidate): opentide's own releases (PyPI) own the `v*` tags of this repository.
+The assets keep the names language-server gave them, `v` and the version
+(`highlights-v0.11.0.zip`), so an editor that pinned one finds the next by
+version. A release candidate checks the workspace version and the crate pins
+like a release; it needs no CHANGELOG.md section of its own (its notes fall back
+to `[Unreleased]`), and the Release workflow publishes it as a GitHub pre-release
+without crates.io or npm.
 
 Crates embed catalogs, grammars, and highlight queries from the repository root.
 Cargo packages only what sits inside a crate, so `vendor` copies the files each
@@ -24,7 +38,7 @@ every package, with no token). It can be re-run: it skips each crate whose versi
 crates.io already has, and waits out the rate limit crates.io puts on brand-new
 crates, so a first release that stops partway resumes where it stopped.
 
-`trust` registers this repository's WORKFLOW (e.g. release.yml) as the trusted
+`trust` registers this repository's WORKFLOW (engine-release.yml) as the trusted
 publisher of every published crate, with a crates.io token that has the
 trusted-publishing scope in CRATES_IO_TOKEN, so later releases publish with the
 workflow's OIDC identity instead of a stored token. Crates already registered are
@@ -72,6 +86,38 @@ ASSET_INCLUDE = re.compile(r'env!\("OPENTIDE_ASSETS"\),\s*"/([^"]+)"')
 # Shipped in every crate: the licence the manifests name, and the third-party notices.
 LEGAL = ["LICENSE", "NOTICE"]
 SUMS = "SHA256SUMS"
+TAG_PREFIX = "engine-"
+TAG = re.compile(r"engine-v(?P<version>\d+\.\d+\.\d+)(?:-rc\.(?P<rc>[1-9]\d*))?")
+# The targets the Release workflow builds opentide-lsp for (engine-release-build.yml,
+# job `native`): one binary each, `.exe` on Windows.
+TARGETS = [
+    "x86_64-unknown-linux-gnu",
+    "x86_64-unknown-linux-musl",
+    "aarch64-unknown-linux-gnu",
+    "aarch64-unknown-linux-musl",
+    "aarch64-apple-darwin",
+    "x86_64-apple-darwin",
+    "x86_64-pc-windows-msvc",
+    "aarch64-pc-windows-msvc",
+]
+# Every release carries these besides the binaries and the versioned zips.
+FIXED_ASSETS = [
+    "LICENSE",
+    "NOTICE",
+    "THIRD-PARTY-LICENSES.html",
+    "WASI-LIBC-LICENSES.txt",
+    "opentide-lsp-wasm32-wasip1.wasm",
+    SUMS,
+]
+# The CycloneDX SBOMs scripts/engine/sbom.py writes for the engine's artifacts
+# (#843): added to the set language-server's releases carried, which editors
+# pin by name. The wheel's SBOM is not an engine asset (engine-release-build.yml).
+SBOM_ASSETS = [
+    "opentide-lsp.cdx.json",
+    "opentide-wasm.cdx.json",
+    "opentide-lsp-client.cdx.json",
+    "opentide-lsp-worker.cdx.json",
+]
 
 
 def workspace_version() -> str:
@@ -97,17 +143,78 @@ def changelog_section(version: str) -> str | None:
     return match.group(1).strip() if match else None
 
 
+def parse_tag(tag: str) -> tuple[str, int | None]:
+    """The version of an engine tag and its release-candidate number (None for a
+    release). Anything but `engine-vX.Y.Z` or `engine-vX.Y.Z-rc.N` is an error:
+    `vX.Y.Z` is an opentide release here."""
+    match = TAG.fullmatch(tag)
+    if not match:
+        raise ValueError(f"{tag!r} is not an engine tag (engine-vX.Y.Z or engine-vX.Y.Z-rc.N)")
+    rc = match.group("rc")
+    return match.group("version"), int(rc) if rc else None
+
+
+def asset_version(tag: str) -> str:
+    """What the asset names carry: the tag without its prefix (`v0.11.0`, `v0.11.1-rc.1`)."""
+    parse_tag(tag)
+    return tag.removeprefix(TAG_PREFIX)
+
+
+def expected_assets(tag: str) -> list[str]:
+    """Every asset of the tag's GitHub Release, sorted: what language-server's
+    releases carried, with this tag's version in the versioned names, and the
+    SBOMs."""
+    v = asset_version(tag)
+    names = [*FIXED_ASSETS, *SBOM_ASSETS, f"highlights-{v}.zip", f"opentide-wasm-web-{v}.zip"]
+    for target in TARGETS:
+        ext = ".exe" if "windows" in target else ""
+        names.append(f"opentide-lsp-{v}-{target}{ext}")
+    return sorted(names)
+
+
+def check_assets(directory: Path, tag: str) -> list[str]:
+    """What differs between `directory`'s files and the tag's asset set."""
+    present = {entry.name for entry in directory.iterdir()}
+    expected = set(expected_assets(tag))
+    problems = [f"missing asset: {name}" for name in sorted(expected - present)]
+    problems += [f"unexpected asset: {name}" for name in sorted(present - expected)]
+    problems += [
+        f"{name} is not a file"
+        for name in sorted(present & expected)
+        if not (directory / name).is_file()
+    ]
+    return problems
+
+
 def check(tag: str) -> list[str]:
     version = workspace_version()
+    try:
+        tagged, rc = parse_tag(tag)
+    except ValueError as error:
+        return [str(error)]
     problems = []
-    if tag != f"v{version}":
+    if tagged != version:
         problems.append(f"tag {tag} does not match workspace version {version}")
     for name, pin in internal_pins().items():
         if pin != f"={version}":
             problems.append(f"{name} is pinned to {pin or 'no version'}, not ={version}")
-    if not changelog_section(version):
+    if rc is None and not changelog_section(version):
         problems.append(f"CHANGELOG.md has no section for {version}")
     return problems
+
+
+def notes(tag_or_version: str) -> str | None:
+    """The CHANGELOG.md section of a version, or of a tag's version; a release
+    candidate without a section of its own gets `[Unreleased]`."""
+    if tag_or_version.startswith(TAG_PREFIX):
+        version, rc = parse_tag(tag_or_version)
+    else:
+        version, rc = tag_or_version.removeprefix("v"), None
+    section = changelog_section(version)
+    if not section and rc is not None:
+        unreleased = changelog_section("Unreleased")
+        section = f"Release candidate {rc} of {version}.\n\n{unreleased or ''}".strip()
+    return section
 
 
 def bump(version: str) -> None:
@@ -430,6 +537,33 @@ def main(argv: list[str]) -> None:
     match argv:
         case ["version"]:
             print(workspace_version())
+        case ["tag"]:
+            print(f"{TAG_PREFIX}v{workspace_version()}")
+        case ["prerelease", tag]:
+            try:
+                print("false" if parse_tag(tag)[1] is None else "true")
+            except ValueError as error:
+                sys.exit(f"prerelease: {error}")
+        case ["asset-version", tag]:
+            try:
+                print(asset_version(tag))
+            except ValueError as error:
+                sys.exit(f"asset-version: {error}")
+        case ["assets", tag]:
+            try:
+                print("\n".join(expected_assets(tag)))
+            except ValueError as error:
+                sys.exit(f"assets: {error}")
+        case ["check-assets", directory, tag]:
+            try:
+                problems = check_assets(Path(directory), tag)
+            except (OSError, ValueError) as error:
+                sys.exit(f"check-assets: {error}")
+            for problem in problems:
+                print(f"error: {problem}", file=sys.stderr)
+            if problems:
+                sys.exit(1)
+            print(f"{directory} holds the {len(expected_assets(tag))} assets of {tag}")
         case ["check", tag]:
             problems = check(tag)
             for problem in problems:
@@ -440,7 +574,10 @@ def main(argv: list[str]) -> None:
         case ["bump", version]:
             bump(version)
         case ["notes", version]:
-            section = changelog_section(version.removeprefix("v"))
+            try:
+                section = notes(version)
+            except ValueError as error:
+                sys.exit(f"notes: {error}")
             if section is None:
                 sys.exit(f"CHANGELOG.md has no section for {version}")
             print(section)

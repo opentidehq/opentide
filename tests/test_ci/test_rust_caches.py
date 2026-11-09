@@ -1,19 +1,26 @@
-"""The Rust caches of the repository's workflows.
+"""The Rust caches of the repository's workflows: one strategy.
 
 GitHub keeps 10 GB of Actions caches per repository and evicts the oldest
-beyond that. engine-ci.yml's ``clients`` and ``elastic-sweep`` jobs build a
-subset of ci.yml's ``engine`` debug tree, so they read its cache (one
-``shared-key``, ``save-if: false``) instead of each saving a copy of their own,
-as they did in language-server's CI.
+beyond that, so a tree two jobs build is cached once: one job saves it, the
+others read it (``save-if: false``). ci.yml names every cache with a
+``shared-key`` (and a ``key`` where one job builds several trees, per OS or
+per target), and each name has exactly one producer.
 
 Swatinem/rust-cache hashes the job's ``CARGO*``, ``CC*``, ``CFLAGS*``,
-``CXX*``, ``CMAKE*`` and ``RUST*`` environment variables into the key (the
-"Environment considered" list in its log), so a reader whose environment
-differs from the producer's computes another key and never restores anything.
+``CXX*``, ``CMAKE*`` and ``RUST*`` environment variables, and the runner's
+toolchain, into the key (the "Environment considered" list in its log), so a
+reader whose environment or runner differs from the producer's computes another
+key and never restores anything. Its key does not hold the matrix: two cells of
+one job on the same runner share a cache unless ``key`` tells them apart.
+
+A release builds from nothing: engine-release.yml restores no cache, and the
+asset build it shares with ci.yml's dry run (engine-release-build.yml) restores
+one only under ``inputs.dry-run``.
 """
 
 from __future__ import annotations
 
+import re
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, NamedTuple
@@ -26,9 +33,17 @@ RUST_CACHE = "Swatinem/rust-cache@"
 # The variables rust-cache hashes into its key, by prefix.
 KEY_ENV_PREFIXES = ("CARGO", "CC", "CFLAGS", "CXX", "CMAKE", "RUST")
 DEFAULT_WORKSPACES = ". -> target"
+MATRIX = re.compile(r"\$\{\{\s*matrix\.([A-Za-z0-9_-]+)\s*\}\}")
+# `save-if: ${{ matrix.<axis> == env.<NAME> }}`: one cell of the matrix saves.
+SAVE_IF_CELL = re.compile(r"\$\{\{\s*matrix\.([A-Za-z0-9_-]+)\s*==\s*env\.([A-Za-z0-9_]+)\s*\}\}")
 
-ENGINE_DEBUG_PRODUCER = ("ci.yml", "engine")
-ENGINE_DEBUG_READERS = (("engine-ci.yml", "clients"), ("engine-ci.yml", "elastic-sweep"))
+# The engine's debug tree: engine-test's Linux cell saves it, the Linux jobs
+# that build a subset of it read it.
+ENGINE_DEBUG_PRODUCER = ("ci.yml", "engine-test", "ubuntu-latest")
+ENGINE_DEBUG_READERS = (("ci.yml", "clients"), ("ci.yml", "elastic-sweep"))
+# The Python jobs' `uv sync` build of the binding: test's 3.14 cell saves it.
+PYTHON_PRODUCER = ("ci.yml", "test")
+PYTHON_READERS = (("ci.yml", "lint"), ("ci.yml", "cli-e2e"), ("ci.yml", "gitlab-ci-lint"))
 
 
 class RustCache(NamedTuple):
@@ -36,7 +51,9 @@ class RustCache(NamedTuple):
     job: str
     runs_on: str
     shared_key: str | None
+    key: str | None
     saves: bool
+    condition: str | None
     workspaces: str
     key_env: dict[str, str]
 
@@ -45,53 +62,99 @@ def _env(block: dict[str, Any]) -> dict[str, str]:
     return {str(name): str(value) for name, value in (block.get("env") or {}).items()}
 
 
-def _rust_caches() -> dict[tuple[str, str], RustCache]:
-    caches: dict[tuple[str, str], RustCache] = {}
+def _cells(job: dict[str, Any]) -> list[dict[str, str]]:
+    """The job's matrix cells (one empty cell without a matrix): the product of
+    its axes, or its `include` entries when it has no axes."""
+    matrix = (job.get("strategy") or {}).get("matrix") or {}
+    if isinstance(matrix, str):
+        return [{}]
+    axes = {k: v for k, v in matrix.items() if k not in ("include", "exclude")}
+    cells: list[dict[str, str]] = [{}]
+    for name, values in axes.items():
+        cells = [{**cell, name: str(value)} for cell in cells for value in values]
+    if not axes and matrix.get("include"):
+        cells = [{str(k): str(v) for k, v in entry.items()} for entry in matrix["include"]]
+    return cells
+
+
+def _resolve(value: Any, cell: dict[str, str]) -> str | None:
+    if value is None:
+        return None
+    return MATRIX.sub(lambda m: cell.get(m.group(1), m.group(0)), str(value))
+
+
+def _saves(save_if: Any, cell: dict[str, str], env: dict[str, str]) -> bool:
+    """Whether a cell saves: `save-if` defaults to true, and an expression saves
+    on some events, except the one-cell comparison it can resolve."""
+    if save_if is False:
+        return False
+    match = SAVE_IF_CELL.fullmatch(str(save_if).strip())
+    if match:
+        return cell.get(match.group(1)) == env.get(match.group(2))
+    return True
+
+
+def _rust_caches() -> list[RustCache]:
+    caches: list[RustCache] = []
     for path in sorted(WORKFLOWS.glob("*.yml")):
         workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
         for job_id, job in (workflow.get("jobs") or {}).items():
-            for step in job.get("steps") or []:
-                if not str(step.get("uses", "")).startswith(RUST_CACHE):
-                    continue
+            steps = [
+                s for s in job.get("steps") or [] if str(s.get("uses", "")).startswith(RUST_CACHE)
+            ]
+            assert len(steps) <= 1, f"{path.name} {job_id}: two Rust caches"
+            for step in steps:
                 inputs = step.get("with") or {}
                 env = {**_env(workflow), **_env(job), **_env(step)}
-                assert (path.name, job_id) not in caches, f"{path.name} {job_id}: two Rust caches"
-                caches[(path.name, job_id)] = RustCache(
-                    workflow=path.name,
-                    job=job_id,
-                    runs_on=str(job.get("runs-on")),
-                    shared_key=inputs.get("shared-key"),
-                    # `save-if` defaults to true; an expression saves on some events.
-                    saves=inputs.get("save-if", True) is not False,
-                    workspaces=str(inputs.get("workspaces", DEFAULT_WORKSPACES)),
-                    key_env={k: v for k, v in env.items() if k.startswith(KEY_ENV_PREFIXES)},
-                )
+                for cell in _cells(job):
+                    caches.append(
+                        RustCache(
+                            workflow=path.name,
+                            job=job_id,
+                            runs_on=str(_resolve(job.get("runs-on"), cell)),
+                            shared_key=_resolve(inputs.get("shared-key"), cell),
+                            key=_resolve(inputs.get("key"), cell),
+                            saves=_saves(inputs.get("save-if", True), cell, env),
+                            condition=step.get("if"),
+                            workspaces=str(inputs.get("workspaces", DEFAULT_WORKSPACES)),
+                            key_env={
+                                k: v for k, v in env.items() if k.startswith(KEY_ENV_PREFIXES)
+                            },
+                        )
+                    )
     return caches
 
 
-def test_the_engine_debug_tree_is_cached_once() -> None:
-    caches = _rust_caches()
-    producer = caches[ENGINE_DEBUG_PRODUCER]
-    assert producer.shared_key, "ci.yml's engine job saves the shared engine debug cache"
-    assert producer.saves
-    for reader in ENGINE_DEBUG_READERS:
-        cache = caches[reader]
-        assert cache.shared_key == producer.shared_key, f"{reader} reads the engine job's cache"
-        assert not cache.saves, f"{reader} must not save a copy of the engine job's cache"
+def _in(workflow: str) -> list[RustCache]:
+    return [cache for cache in _rust_caches() if cache.workflow == workflow]
 
 
-def test_every_shared_rust_cache_has_one_producer_with_the_readers_key() -> None:
-    groups: dict[str, list[RustCache]] = defaultdict(list)
-    for cache in _rust_caches().values():
+def _name(cache: RustCache) -> tuple[str | None, str | None]:
+    return (cache.shared_key, cache.key)
+
+
+def test_every_ci_cache_is_named() -> None:
+    caches = _in("ci.yml")
+    assert caches
+    for cache in caches:
+        assert cache.shared_key, f"ci.yml {cache.job}: name its cache with shared-key"
+        # A matrix value must resolve; a step output (the nightly's version) names
+        # the toolchain at run time.
+        assert "${{ matrix." not in (cache.key or ""), f"ci.yml {cache.job}: key {cache.key}"
+
+
+def test_every_cache_name_has_one_producer_with_the_readers_key() -> None:
+    groups: dict[tuple[str | None, str | None], list[RustCache]] = defaultdict(list)
+    for cache in _rust_caches():
         if cache.shared_key:
-            groups[cache.shared_key].append(cache)
+            groups[_name(cache)].append(cache)
     assert groups
-    for key, caches in groups.items():
-        producers = [cache for cache in caches if cache.saves]
-        assert len(producers) == 1, f"shared-key {key}: one job saves it, not {producers}"
-        producer = producers[0]
+    for name, caches in groups.items():
+        producers = {(c.workflow, c.job) for c in caches if c.saves}
+        assert len(producers) == 1, f"cache {name}: one job saves it, not {sorted(producers)}"
+        producer = next(c for c in caches if c.saves)
         for cache in caches:
-            where = f"shared-key {key}: {cache.workflow} {cache.job}"
+            where = f"cache {name}: {cache.workflow} {cache.job}"
             assert cache.runs_on == producer.runs_on, where
             assert cache.workspaces == producer.workspaces, where
             # Otherwise rust-cache computes another key and the reader restores nothing.
@@ -99,3 +162,68 @@ def test_every_shared_rust_cache_has_one_producer_with_the_readers_key() -> None
                 f"{where} has {cache.key_env}, its producer "
                 f"{producer.workflow} {producer.job} {producer.key_env}"
             )
+
+
+def test_no_two_cells_on_one_runner_share_a_cache_they_both_save() -> None:
+    saved: dict[tuple[str, str | None, str | None, str], int] = defaultdict(int)
+    for cache in _rust_caches():
+        if cache.saves and cache.shared_key:
+            saved[(cache.workflow, cache.shared_key, cache.key, cache.runs_on)] += 1
+    # A matrix job whose cells build the same tree (fuzz-smoke) may share one.
+    shared_on_purpose = {
+        ("ci.yml", "fuzz", "${{ steps.nightly.outputs.version }}", "ubuntu-latest")
+    }
+    for name, count in saved.items():
+        assert count == 1 or name in shared_on_purpose, f"{name} is saved by {count} cells"
+
+
+def test_the_engine_debug_tree_is_cached_once() -> None:
+    caches = _rust_caches()
+    producer = next(c for c in caches if (c.workflow, c.job, c.runs_on) == ENGINE_DEBUG_PRODUCER)
+    assert producer.shared_key == "engine-dev"
+    assert producer.saves
+    for workflow, job in ENGINE_DEBUG_READERS:
+        reader = next(c for c in caches if (c.workflow, c.job) == (workflow, job))
+        assert _name(reader) == _name(producer), f"{job} reads engine-test's Linux cache"
+        assert not reader.saves, f"{job} must not save a copy of engine-test's cache"
+
+
+def test_the_python_jobs_build_the_binding_once() -> None:
+    caches = _rust_caches()
+    cells = [c for c in caches if (c.workflow, c.job) == PYTHON_PRODUCER]
+    assert {c.shared_key for c in cells} == {"python-engine"}
+    # The coverage cell (3.14) saves; the other four read.
+    assert [c.saves for c in cells].count(True) == 1
+    for workflow, job in PYTHON_READERS:
+        for reader in (c for c in caches if (c.workflow, c.job) == (workflow, job)):
+            assert reader.shared_key == "python-engine", job
+            assert not reader.saves, job
+
+
+def test_a_release_restores_no_cache() -> None:
+    assert not _in("engine-release.yml"), "the release builds from nothing"
+    build = _in("engine-release-build.yml")
+    assert build, "the dry run of the asset build is cached"
+    for cache in build:
+        assert cache.condition == "inputs.dry-run", (cache.job, cache.condition)
+
+
+def test_a_release_restores_no_other_cache() -> None:
+    """Nor any cache of another kind: actions/cache, or a setup action's own."""
+    for name in ("engine-release.yml", "engine-release-build.yml"):
+        workflow = yaml.safe_load((WORKFLOWS / name).read_text(encoding="utf-8"))
+        for job_id, job in workflow["jobs"].items():
+            for step in job.get("steps") or []:
+                uses = str(step.get("uses", ""))
+                inputs = step.get("with") or {}
+                assert not uses.startswith("actions/cache"), (name, job_id)
+                assert "cache" not in inputs, (name, job_id, uses)
+                if uses.startswith("astral-sh/setup-uv"):
+                    # Its default, "auto", caches on GitHub-hosted runners:
+                    # it must be turned off by name.
+                    assert inputs.get("enable-cache") is False, (name, job_id, uses)
+                else:
+                    assert "enable-cache" not in inputs, (name, job_id, uses)
+                if uses.startswith("actions/setup-node@"):
+                    # It may enable npm's cache by itself (a `packageManager` field).
+                    assert inputs.get("package-manager-cache") is False, (name, job_id)

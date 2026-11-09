@@ -1,9 +1,13 @@
 name: Engine fuzz
 
-# Each engine and the LSP host under cargo-fuzz for five minutes a night
-# (language-server#182), imported with the engine (#800). Informational: a crash
-# uploads its input and fails this run only. Fix it, then save the input under
-# fuzz/regressions/<target>/ (fuzz/README.md).
+# Every fuzz target (fuzz/fuzz_targets/) under cargo-fuzz for ten minutes a
+# night (#843; language-server#182). A crash or a timeout fails its cell and
+# uploads the input; fix it with a regression test, then save the input under
+# fuzz/regressions/<target>/ (fuzz/README.md), where the normal test run
+# replays it. The corpus each target learns is kept in the Actions cache from
+# night to night. Pull requests run every target for 60 s (ci.yml,
+# `fuzz-smoke`); tests/test_ci/test_supply_chain.py keeps both matrices
+# complete.
 on:
   schedule:
     - cron: "43 2 * * *"
@@ -11,7 +15,7 @@ on:
     inputs:
       seconds:
         description: seconds per target
-        default: "300"
+        default: "600"
 
 permissions:
   contents: read
@@ -20,18 +24,24 @@ jobs:
   fuzz:
     name: fuzz ${{ matrix.target }}
     runs-on: ubuntu-latest
+    # Ten minutes of fuzzing, the build and the cache: a hang past this is a
+    # failure too.
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
-        target: [kql, spl, esql, eql, kuery, lucene, falco, tide, protocol]
+        target: [kql, spl, esql, eql, kuery, lucene, falco, tide, protocol, config, framing]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # scripts/engine/fuzz.sh runs `cargo +nightly fuzz`.
+      # The dated nightly fuzz/NIGHTLY pins, which scripts/engine/fuzz.sh also reads.
       - name: Set up Rust (nightly)
-        run: rustup toolchain install nightly --profile minimal --no-self-update
-      - run: cargo +nightly install cargo-fuzz --locked
+        run: |
+          echo "FUZZ_TOOLCHAIN=$(cat fuzz/NIGHTLY)" >> "$GITHUB_ENV"
+          FUZZ_TOOLCHAIN="$(cat fuzz/NIGHTLY)"
+          rustup toolchain install "${FUZZ_TOOLCHAIN}" --profile minimal --no-self-update
+      - run: cargo +"${FUZZ_TOOLCHAIN}" install cargo-fuzz --locked --version 0.13.2
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: fuzz/corpus/${{ matrix.target }}
@@ -39,10 +49,13 @@ jobs:
           restore-keys: fuzz-corpus-${{ matrix.target }}-
       - name: fuzz ${{ matrix.target }}
         env:
-          SECONDS_PER_TARGET: ${{ inputs.seconds || '300' }}
-        run: bash scripts/engine/fuzz.sh "${{ matrix.target }}" "$SECONDS_PER_TARGET"
-      - if: failure()
+          SECONDS_PER_TARGET: ${{ inputs.seconds || '600' }}
+          TARGET: ${{ matrix.target }}
+        run: bash scripts/engine/fuzz.sh "${TARGET}" "${SECONDS_PER_TARGET}"
+      # A cell stopped by timeout-minutes is cancelled, not failed: upload then too.
+      - if: failure() || cancelled()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: fuzz-${{ matrix.target }}-artifacts
           path: fuzz/artifacts/${{ matrix.target }}
+          if-no-files-found: ignore

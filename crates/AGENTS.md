@@ -11,7 +11,7 @@ Before editing, read the one skill that matches the change. Skills follow the [A
 | `crates/opentide-lsp`, `editors/`, stdio tests | `.agents/skills/lsp-host/SKILL.md` |
 | `crates/opentide-wasm`, `packages/`, packaging | `.agents/skills/wasm-hosts/SKILL.md` |
 | A `crates/CHANGELOG.md` entry, or an engine release's notes | `.agents/skills/engine-release-notes/SKILL.md` |
-| An engine release: `scripts/engine/release.py`, `.github/engine-workflows/release.yml` | `.agents/skills/engine-release/SKILL.md` |
+| An engine release: `scripts/engine/release.py`, `.github/workflows/engine-release.yml` (`engine-v*` tags) | `.agents/skills/engine-release/SKILL.md` |
 | `data/catalogs/`, `highlights/spec.toml`, `crates/testdata/conformance`, `crates/testdata/oracles`, `scripts/engine/oracles`, schema sync | `.agents/skills/catalogs/SKILL.md` |
 | A new query language (S1QL, Sigma, YARA) | `.agents/skills/add-language/SKILL.md` (then the rows above) |
 
@@ -33,6 +33,7 @@ One workspace (root `Cargo.toml`, one `Cargo.lock`; `fuzz/` keeps its own). A cr
 | foundation 1 | [`opentide-syntax`](opentide-syntax/AGENTS.md), [`opentide-highlight`](opentide-highlight/AGENTS.md), [`opentide-ecs`](opentide-ecs/AGENTS.md) |
 | foundation 2 | [`opentide-kql`](opentide-kql/AGENTS.md), [`opentide-spl`](opentide-spl/AGENTS.md), [`opentide-kuery`](opentide-kuery/AGENTS.md), [`opentide-lucene`](opentide-lucene/AGENTS.md), [`opentide-falco`](opentide-falco/AGENTS.md) |
 | foundation 3 | [`opentide-esql`](opentide-esql/AGENTS.md), [`opentide-eql`](opentide-eql/AGENTS.md) |
+| foundation 4 | [`opentide-schema`](opentide-schema/AGENTS.md) |
 | domain 0, 1 | [`opentide-tide`](opentide-tide/AGENTS.md), then [`opentide-analysis`](opentide-analysis/AGENTS.md) |
 | application | [`opentide-lsp`](opentide-lsp/AGENTS.md) |
 | facade | none yet: the `opentide` crate (UC-5.1, #836) |
@@ -41,7 +42,7 @@ One workspace (root `Cargo.toml`, one `Cargo.lock`; `fuzz/` keeps its own). A cr
 
 ## Hard rules
 
-- No `std::fs` in `crates/opentide-{core,highlight,syntax,kql,spl,esql,eql,kuery,lucene,falco,ecs,tide,analysis}/src`. Tests may read the repo.
+- No `std::fs` in `crates/opentide-{core,highlight,syntax,kql,spl,esql,eql,kuery,lucene,falco,ecs,tide,analysis,schema}/src`. Tests may read the repo.
 - Do not rename a HighlightSpec capture. Adding one is a minor (`highlights/spec.toml` `[meta].version`).
 - Do not validate CrowdStrike. `configurations.crowdstrike.*` stays unsupported.
 - Control commands (`.show`, `.create`) parse so the engine can emit `kql_control_command_unsupported`. They are not valid detections.
@@ -61,7 +62,7 @@ The workspace's lints are in the root `Cargo.toml` (`[workspace.lints]`), each a
 
 - **One Rust, pinned.** `rust-toolchain.toml` names an exact release; CI installs that file's toolchain, so a new stable's lints cannot turn every PR red. Move to a newer release in a change of its own, as the file says: bump `channel`, then fix or allow (with a reason) what the new lints report.
 
-- **`unsafe_code` is forbidden** except in `opentide-syntax` (tree-sitter FFI) and `opentide-wasm` (wasm32 libc shims). Those two copy the workspace table with `unsafe_code = "deny"`, allow it per item with a reason, and comment every `unsafe` block with `// SAFETY:`. `xtask/tests/lint_policy.rs` fails when a copy drifts or another crate leaves the workspace table.
+- **`unsafe_code` is forbidden** except in `opentide-syntax` (tree-sitter FFI) and `opentide-wasm` (wasm32 libc shims). Those two copy the workspace table with `unsafe_code = "deny"`, allow it per item with a reason, and comment every `unsafe` block with `// SAFETY:` (`clippy::undocumented_unsafe_blocks`), one unsafe operation per block (`clippy::multiple_unsafe_ops_per_block`). `xtask/tests/lint_policy.rs` fails when a copy drifts or another crate leaves the workspace table; [`docs/internal/unsafe.md`](../docs/internal/unsafe.md) lists every site with its justification, and `xtask/tests/unsafe_listing.rs` fails when it misses one.
 - **No `unwrap`, `expect`, `dbg!`, `todo!` or `unimplemented!` outside tests.** A panic on user input is a bug: return a diagnostic or an error. Where a value cannot fail (a catalog compiled in with `include_str!`, a regex literal, a structural invariant), the item says why: `#[expect(clippy::expect_used, reason = "...")]`. An integration test file's helpers outside `#[test]` take the same `#![expect]` at the file's top.
 - **`missing_docs`** holds for `opentide-syntax`, `opentide-kuery`, `opentide-lsp`, `opentide-wasm`, `opentide-native` and `xtask`, and for every new crate. The eleven other crates, imported undocumented, opt out at their crate root (`#![expect(missing_docs, ...)]`); remove the opt-out once a crate is documented. Inaccurate docs are worse than none.
 - Prefer `#[expect(..., reason)]` to `#[allow]`: a stale expectation fails. Use `allow` only where an expectation cannot be fulfilled (clippy's glob-import lints; `dead_code` in a test module only some test binaries use up), and say so beside it.
@@ -95,7 +96,7 @@ cargo test --workspace
 cargo run -p opentide-lsp -- generate-highlights --check
 ```
 
-Grammar, catalog, and corpus edits can flip an oracle verdict. `bash scripts/engine/ci-oracle.sh` runs the Kusto.Language and Splunk oracles and skips a reference you do not have (`scripts/engine/oracles/README.md`). Grammar edits also need `bash scripts/engine/check-grammars.sh` from the repository root (CLI 0.25.10). The engine's CI jobs (`ci.yml`'s `engine` and `engine-wasm`, and `engine-ci.yml`) set `RUSTFLAGS=-Dwarnings`. Code under `cfg(target_arch = "wasm32")` or `cfg(target_os = "wasi")` is linted only for that target: `bash scripts/engine/build-wasm.sh clippy` (CI's `engine-wasm` job) runs clippy for `opentide-wasm` on wasm32-unknown-unknown and `opentide-lsp` on wasm32-wasip1 with the wasm C toolchain the grammars need. Code under `cfg(windows)` is built and tested by `engine-ci.yml`'s Windows job but not linted with clippy (UC-0.3, #801, adds the Windows and macOS Rust jobs).
+Grammar, catalog, and corpus edits can flip an oracle verdict. `bash scripts/engine/ci-oracle.sh` runs the Kusto.Language and Splunk oracles and skips a reference you do not have (`scripts/engine/oracles/README.md`). Grammar edits also need `bash scripts/engine/check-grammars.sh` from the repository root (CLI 0.25.10). The engine's CI jobs (`ci.yml`) set `RUSTFLAGS=-Dwarnings`. Code under `cfg(target_arch = "wasm32")` or `cfg(target_os = "wasi")` is linted only for that target: `bash scripts/engine/build-wasm.sh clippy` (CI's `engine-wasm` job) runs clippy for `opentide-wasm` on wasm32-unknown-unknown and `opentide-lsp` on wasm32-wasip1 with the wasm C toolchain the grammars need. Code under `cfg(windows)` is built and tested by `ci.yml`'s `engine-test` on Windows (nextest, as on Linux and macOS) but not linted with clippy.
 
 ## Upstream docs, not downloaded skills
 

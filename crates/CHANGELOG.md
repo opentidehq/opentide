@@ -6,6 +6,18 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ## [Unreleased]
 
+### Added
+
+- **Each release carries CycloneDX SBOMs** ([#843](https://github.com/opentidehq/opentide/issues/843)). `opentide-lsp.cdx.json` (the binaries and the WASI build), `opentide-wasm.cdx.json` (the browser build, with the wasi-libc it links), `opentide-lsp-client.cdx.json` and `opentide-lsp-worker.cdx.json` (the npm packages) are release assets, listed in `SHA256SUMS` and checked against the CycloneDX 1.5 schema before they ship. The other assets keep their names.
+
+### Changed
+
+- **Releases come from opentidehq/opentide, tagged `engine-vX.Y.Z`** ([opentide#801](https://github.com/opentidehq/opentide/issues/801)). The engine moved there with its history; its GitHub Releases carry the same assets under the same names (`highlights-vX.Y.Z.zip`, `opentide-wasm-web-vX.Y.Z.zip`, `opentide-lsp-vX.Y.Z-<target>`, the licences and `SHA256SUMS`), so an editor that pins them changes only the URL: `https://github.com/opentidehq/opentide/releases/download/engine-vX.Y.Z/<asset>`. Their build provenance is signed by `opentidehq/opentide/.github/workflows/engine-release.yml`: verify with `gh attestation verify <asset> --repo opentidehq/opentide` and the identity in `crates/opentide-lsp/README.md`. A release candidate (`engine-vX.Y.Z-rc.N`) is a GitHub pre-release with every asset and nothing on crates.io or npm. Releases up to 0.11.0 stay on opentidehq/language-server.
+
+### Fixed
+
+- **A huge `Content-Length` no longer crashes the server.** `serve`, `--stdio` and `--listen` allocated the length a header named before the body arrived (`lsp-server` sizes its buffer first), so one header could exhaust memory and abort; the body is read as it arrives, and a length longer than the input ends the session with the short-body error it always gave ([#843](https://github.com/opentidehq/opentide/issues/843), found by the new `framing` fuzz target).
+
 ## [0.11.0] - 2026-11-06
 
 Filename and metadata warnings now follow the workspace's `lint.toml` as `opentide lint` does, a `detection_model` naming a signal is no longer an `invalid_ref`, and hover and findings point at the exact value they are about.

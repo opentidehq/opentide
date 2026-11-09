@@ -189,17 +189,20 @@ def _publish_dry_run_rules() -> ModuleType:
     return module
 
 
-def test_no_active_workflow_publishes_the_engine() -> None:
-    """language-server's Release workflow (parked in .github/engine-workflows/) runs on
-    `v*.*.*` tags, which are opentide's release tags here: it must not run as it is.
+def test_only_the_engine_release_publishes_the_engine() -> None:
+    """The engine's crates and npm packages publish from engine-release.yml, which
+    runs on `engine-v*` tags (and Run workflow) only: `v*` tags are opentide's own
+    releases (tests/test_ci/test_one_ci.py checks every workflow's triggers).
 
-    No active workflow may run `cargo publish` or `npm publish` (in any spelling npm
-    accepts) unless it is a dry run: publish-dry-run.yml rehearses the publishes, and
+    Any other `cargo publish` or `npm publish` (in any spelling npm accepts) in an
+    active workflow is a dry run: publish-dry-run.yml rehearses the publishes, and
     its own tests (tests/test_ci/test_publish_dry_run_workflow.py) keep it unable to
     publish."""
     rules = _publish_dry_run_rules()
     seen = 0
     for workflow in sorted((ROOT / ".github" / "workflows").glob("*.yml")):
+        if workflow.name == "engine-release.yml":
+            continue
         data = yaml.safe_load(workflow.read_text(encoding="utf-8")) or {}
         for job in (data.get("jobs") or {}).values():
             for step in job.get("steps") or []:
@@ -207,3 +210,6 @@ def test_no_active_workflow_publishes_the_engine() -> None:
                     seen += 1
                     assert rules._is_dry_run(command), (workflow.name, " ".join(command))
     assert seen, "the dry-run workflow's rehearsals are found, so the check reads the commands"
+    release = (ROOT / ".github" / "workflows" / "engine-release.yml").read_text(encoding="utf-8")
+    assert re.search(r"release\.py publish|npm publish", release)
+    assert '  push:\n    tags:\n      - "engine-v*"\n  workflow_dispatch:' in release

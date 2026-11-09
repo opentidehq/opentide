@@ -100,23 +100,76 @@ fn counts_and_coverage_of_the_default_workspace() {
             .family(Family::Objective)
             .any(|o| o.has_tag("signal-parent"))
     );
-    // Three or more platforms with tenants, and no literal secret: every
-    // credential is a $VARIABLE reference.
+    // Five platforms with tenants, and no literal secret or real host.
     let configs: Vec<_> = workspace.family(Family::Config).collect();
     let with_tenants = configs.iter().filter(|c| c.has_tag("tenants")).count();
     assert!(with_tenants >= 5, "{with_tenants} platforms with tenants");
     for config in &configs {
-        for line in config.render().lines() {
-            let lower = line.to_ascii_lowercase();
-            if ["secret", "token", "api_key", "password"]
-                .iter()
-                .any(|k| lower.starts_with(k) || lower.starts_with(&format!("azure_client_{k}")))
-            {
-                let value = line.split_once('=').map(|(_, v)| v.trim()).unwrap_or("");
-                assert!(value.starts_with("\"$"), "{}: {line}", config.path);
+        let problems = credential_problems(&config.render());
+        assert!(problems.is_empty(), "{}: {problems:?}", config.path);
+    }
+}
+
+/// What in a configuration file is not a placeholder: a credential (a key
+/// that names a secret, token, key or password, or an `*_id` of a tenant's
+/// setup) whose value is not a `$VARIABLE` reference, or a `url`/`*_url`
+/// whose host is not on a reserved example domain.
+fn credential_problems(text: &str) -> Vec<String> {
+    fn walk(value: &toml::Value, path: &str, setup: bool, problems: &mut Vec<String>) {
+        match value {
+            toml::Value::Table(table) => {
+                for (key, value) in table {
+                    let here = format!("{path}.{key}");
+                    let lower = key.to_ascii_lowercase();
+                    if let toml::Value::String(text) = value {
+                        let credential = ["secret", "token", "key", "password"]
+                            .iter()
+                            .any(|word| lower.contains(word))
+                            || (setup && lower.ends_with("_id"));
+                        if credential && !text.starts_with('$') {
+                            problems.push(format!("{here} = {text:?} is not a $VARIABLE"));
+                        }
+                        if lower == "url" || lower.ends_with("_url") {
+                            let host = text
+                                .split("://")
+                                .nth(1)
+                                .and_then(|rest| rest.split(['/', ':']).next())
+                                .unwrap_or("");
+                            if !(host.ends_with(".example") || host.ends_with(".example.internal"))
+                            {
+                                problems.push(format!("{here} = {text:?} is not an example host"));
+                            }
+                        }
+                    }
+                    walk(value, &here, setup || key == "setup", problems);
+                }
             }
+            toml::Value::Array(items) => {
+                for (index, item) in items.iter().enumerate() {
+                    walk(item, &format!("{path}.{index}"), setup, problems);
+                }
+            }
+            _ => {}
         }
     }
+    let mut problems = Vec::new();
+    match toml::from_str::<toml::Table>(text) {
+        Ok(table) => walk(&toml::Value::Table(table), "", false, &mut problems),
+        Err(error) => problems.push(format!("does not parse: {error}")),
+    }
+    problems
+}
+
+#[test]
+fn the_credential_check_catches_literals_and_real_hosts() {
+    let bad = "[[tenants]]\nname = \"t\"\n[tenants.setup]\nclient_secret = \"hunter2\"\n\
+               api_token = \"abc\"\nclient_id = \"0000\"\nurl = \"https://soc.contoso.com:9200\"\n\
+               elasticsearch_url = \"https://es.example\"\n";
+    let problems = credential_problems(bad);
+    assert_eq!(problems.len(), 4, "{problems:?}");
+    let good = "[[tenants]]\nname = \"t\"\n[tenants.setup]\nclient_secret = \"$X_SECRET\"\n\
+                client_id = \"$X_ID\"\nurl = \"https://kibana.t.example\"\n";
+    assert!(credential_problems(good).is_empty());
 }
 
 #[test]

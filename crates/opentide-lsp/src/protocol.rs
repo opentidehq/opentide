@@ -40,14 +40,14 @@ pub(crate) enum Frame {
 /// message is a [`Frame::Invalid`], and the next frame can still be read; a
 /// broken header ends the session, since nothing after it can be framed.
 pub(crate) fn read_frame(reader: &mut dyn BufRead) -> io::Result<Option<Frame>> {
-    let mut recording = Recording {
-        inner: reader,
-        seen: Vec::new(),
-    };
-    match Message::read(&mut recording) {
+    // The frame's bytes, read once: `lsp-server` parses them from memory, and
+    // a frame it cannot parse is answered from the same bytes, which are
+    // exactly what it consumed.
+    let raw = read_raw_frame(reader)?;
+    match Message::read(&mut io::Cursor::new(&raw[..])) {
         // `lsp-server` reads `"id": null` as a notification; it is a request
         // whose id is not valid, and is answered with `id: null`.
-        Ok(Some(Message::Notification(n))) if recording.names_an_id() => Ok(Some(Frame::Invalid {
+        Ok(Some(Message::Notification(n))) if names_an_id(&raw) => Ok(Some(Frame::Invalid {
             id: Value::Null,
             code: ErrorCode::InvalidRequest as i32,
             message: format!(
@@ -57,12 +57,72 @@ pub(crate) fn read_frame(reader: &mut dyn BufRead) -> io::Result<Option<Frame>> 
         })),
         Ok(Some(message)) => Ok(Some(Frame::Message(message))),
         Ok(None) => Ok(None),
-        Err(err) if err.kind() == io::ErrorKind::InvalidData => match recording.body() {
+        Err(err) if err.kind() == io::ErrorKind::InvalidData => match frame_body(&raw) {
             Some(body) if !body.is_empty() => Ok(Some(classify(body))),
             _ => Err(err),
         },
         Err(err) => Err(err),
     }
+}
+
+/// The bytes of the next frame, header and body, read as `lsp-server`'s
+/// `Message::read` reads them, for it to parse from memory.
+///
+/// `lsp-server` sizes its buffer from `Content-Length` before it reads the
+/// body, so a header alone made the server allocate and zero whatever length
+/// it named (#843, found by the `framing` fuzz target). Here the body grows
+/// only as its bytes arrive: a length longer than the input ends the session
+/// with the error `lsp-server` gives a short body (`UnexpectedEof`) before
+/// anything is allocated for it. A header `lsp-server` would refuse (no line
+/// end, no `: `, a length that is not a number, no length at all, the end of
+/// input) is returned as read so far, and `lsp-server` refuses it from
+/// memory with its own error, as it did from the stream.
+fn read_raw_frame(reader: &mut dyn BufRead) -> io::Result<Vec<u8>> {
+    let mut raw = Vec::new();
+    let mut size = None;
+    loop {
+        let start = raw.len();
+        if reader.read_until(b'\n', &mut raw)? == 0 {
+            return Ok(raw);
+        }
+        let Some(line) = std::str::from_utf8(&raw[start..])
+            .ok()
+            .and_then(|line| line.strip_suffix("\r\n"))
+        else {
+            return Ok(raw);
+        };
+        if line.is_empty() {
+            break;
+        }
+        let mut parts = line.splitn(2, ": ");
+        let name = parts.next().unwrap_or_default();
+        let Some(value) = parts.next() else {
+            return Ok(raw);
+        };
+        if name.eq_ignore_ascii_case("Content-Length") {
+            match value.parse::<usize>() {
+                Ok(length) => size = Some(length),
+                Err(_) => return Ok(raw),
+            }
+        }
+    }
+    let Some(size) = size else {
+        return Ok(raw);
+    };
+    let header = raw.len();
+    // Room for a usual message up front; a longer body grows as it arrives.
+    raw.reserve(size.min(1 << 20));
+    reader
+        .take(u64::try_from(size).unwrap_or(u64::MAX))
+        .read_to_end(&mut raw)?;
+    if raw.len() - header < size {
+        // What `read_exact` reports, which `lsp-server` returned here.
+        return Err(io::Error::new(
+            io::ErrorKind::UnexpectedEof,
+            "failed to fill whole buffer",
+        ));
+    }
+    Ok(raw)
 }
 
 /// Why a framed body is not a message: not JSON (-32700), or JSON that is
@@ -114,56 +174,22 @@ fn classify(body: &[u8]) -> Frame {
     }
 }
 
-/// A reader that keeps what it handed out, so a frame `lsp-server` could not
-/// parse can still be answered from its body.
-struct Recording<'a> {
-    inner: &'a mut dyn BufRead,
-    seen: Vec<u8>,
+/// The body of a frame's bytes, after the blank line ending its header.
+fn frame_body(raw: &[u8]) -> Option<&[u8]> {
+    let end = raw.windows(4).position(|w| w == b"\r\n\r\n")?;
+    Some(&raw[end + 4..])
 }
 
-impl Recording<'_> {
-    /// The body of the frame read, after the blank line ending its header.
-    fn body(&self) -> Option<&[u8]> {
-        let end = self.seen.windows(4).position(|w| w == b"\r\n\r\n")?;
-        Some(&self.seen[end + 4..])
+/// Whether the frame's body has a top-level `id` member. Cheap for the usual
+/// notification, which never spells `"id"` at all.
+fn names_an_id(raw: &[u8]) -> bool {
+    let Some(body) = frame_body(raw) else {
+        return false;
+    };
+    if !body.windows(4).any(|w| w == b"\"id\"") {
+        return false;
     }
-}
-
-impl Recording<'_> {
-    /// Whether the body has a top-level `id` member. Cheap for the usual
-    /// notification, which never spells `"id"` at all.
-    fn names_an_id(&self) -> bool {
-        let Some(body) = self.body() else {
-            return false;
-        };
-        if !body.windows(4).any(|w| w == b"\"id\"") {
-            return false;
-        }
-        serde_json::from_slice::<Value>(body).is_ok_and(|v| v.get("id").is_some())
-    }
-}
-
-impl Read for Recording<'_> {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        let n = self.inner.read(buf)?;
-        self.seen.extend_from_slice(&buf[..n]);
-        Ok(n)
-    }
-}
-
-impl BufRead for Recording<'_> {
-    fn fill_buf(&mut self) -> io::Result<&[u8]> {
-        self.inner.fill_buf()
-    }
-
-    fn consume(&mut self, amt: usize) {
-        // The buffer `fill_buf` returned is still there: no read happens.
-        if let Ok(buf) = self.inner.fill_buf() {
-            let n = amt.min(buf.len());
-            self.seen.extend_from_slice(&buf[..n]);
-        }
-        self.inner.consume(amt);
-    }
+    serde_json::from_slice::<Value>(body).is_ok_and(|v| v.get("id").is_some())
 }
 
 /// Where the loop's batches come from.
@@ -629,6 +655,34 @@ mod tests {
         assert!(read_frame(&mut reader).is_err());
         let mut reader: &[u8] = b"X-Other: 1\r\n\r\n";
         assert!(read_frame(&mut reader).is_err());
+    }
+
+    #[test]
+    fn a_length_longer_than_the_input_ends_it_without_allocating_the_length() {
+        // The fuzzer's `framing` target (#843): lsp-server sizes its buffer
+        // from the header before reading, so one header made the server
+        // allocate (and zero) whatever it named, or abort.
+        for header in [
+            format!("Content-Length: {}\r\n\r\n{{}}", usize::MAX),
+            "Content-Length: 1099511627776\r\n\r\n{}".to_string(),
+        ] {
+            let mut reader = header.as_bytes();
+            let err = read_frame(&mut reader).err().expect("an error");
+            assert_eq!(err.kind(), io::ErrorKind::UnexpectedEof, "{header}");
+        }
+        // A body that arrives whole is read as before, however its length
+        // compares with the reader's buffer.
+        let body = format!(
+            r#"{{"jsonrpc":"2.0","method":"x","params":"{}"}}"#,
+            "a".repeat(100_000)
+        );
+        let input = framed(&body);
+        let mut reader = io::BufReader::with_capacity(16, &input[..]);
+        match read_frame(&mut reader).unwrap().unwrap() {
+            Frame::Message(Message::Notification(n)) => assert_eq!(n.method, "x"),
+            _ => panic!("the notification"),
+        }
+        assert!(read_frame(&mut reader).unwrap().is_none());
     }
 
     #[test]

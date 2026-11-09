@@ -83,7 +83,7 @@ The client is TypeScript ESM (`"type": "module"`). Do not add a compile step or 
 
 The engine's one Python binding is `analysis/` (PyO3), which `hatch_build.py` compiles into the `opentide` package; the `opentide` command wraps the server (`opentide lsp start`). Do not add another Python package, maturin, or PyO3 to the engine crates.
 
-The native binary ships on crates.io (`cargo install opentide-lsp`) and as per-target binaries on each GitHub Release. CI job `package` (`engine-ci.yml`) runs `scripts/engine/release.py vendor` and `cargo package --workspace --exclude opentide-native`, which builds every crate from its packaged sources. A crate that reads a file outside `OPENTIDE_ASSETS` fails that job.
+The native binary ships on crates.io (`cargo install opentide-lsp`) and as per-target binaries on each GitHub Release. CI job `engine-package` (`ci.yml`) runs `scripts/engine/release.py vendor` and `cargo package --workspace --exclude opentide-native`, which builds every crate from its packaged sources. A crate that reads a file outside `OPENTIDE_ASSETS` fails that job.
 
 Cutting a release, and the opentide pin PR that finishes one, is `.agents/skills/engine-release/SKILL.md`.
 

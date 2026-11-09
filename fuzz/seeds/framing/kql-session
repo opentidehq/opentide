@@ -1,0 +1,23 @@
+Content-Length: 75
+
+{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"capabilities":{}}}Content-Length: 52
+
+{"jsonrpc":"2.0","method":"initialized","params":{}}Content-Length: 200
+
+{"jsonrpc": "2.0", "method": "textDocument/didOpen", "params": {"textDocument": {"uri": "file:///w/q.kql", "languageId": "kql", "version": 1, "text": "SecurityEvent | wher EventID == 4688 | take 1"}}}Content-Length: 250
+
+{"jsonrpc": "2.0", "method": "textDocument/didChange", "params": {"textDocument": {"uri": "file:///w/q.kql", "version": 2}, "contentChanges": [{"range": {"start": {"line": 0, "character": 16}, "end": {"line": 0, "character": 20}}, "text": "where"}]}}Content-Length: 157
+
+{"jsonrpc": "2.0", "id": 1, "method": "textDocument/hover", "params": {"textDocument": {"uri": "file:///w/q.kql"}, "position": {"line": 0, "character": 18}}}Content-Length: 162
+
+{"jsonrpc": "2.0", "id": 2, "method": "textDocument/completion", "params": {"textDocument": {"uri": "file:///w/q.kql"}, "position": {"line": 0, "character": 40}}}Content-Length: 265
+
+{"jsonrpc": "2.0", "id": 3, "method": "textDocument/codeAction", "params": {"textDocument": {"uri": "file:///w/q.kql"}, "range": {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 40}}, "context": {"diagnostics": [], "only": ["source.fixAll"]}}}Content-Length: 68
+
+{"jsonrpc": "2.0", "method": "$/cancelRequest", "params": {"id": 2}}Content-Length: 129
+
+{"jsonrpc": "2.0", "id": 4, "method": "textDocument/semanticTokens/full", "params": {"textDocument": {"uri": "file:///w/q.kql"}}}Content-Length: 49
+
+{"jsonrpc":"2.0","id":999999,"method":"shutdown"}Content-Length: 33
+
+{"jsonrpc":"2.0","method":"exit"}

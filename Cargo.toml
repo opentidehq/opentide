@@ -19,6 +19,7 @@ members = [
     "crates/opentide-lucene",
     "crates/opentide-falco",
     "crates/opentide-ecs",
+    "crates/opentide-schema",
     "crates/opentide-tide",
     "crates/opentide-analysis",
     "crates/opentide-lsp",
@@ -48,6 +49,7 @@ opentide-kuery = { path = "crates/opentide-kuery", version = "=0.11.0" }
 opentide-lucene = { path = "crates/opentide-lucene", version = "=0.11.0" }
 opentide-falco = { path = "crates/opentide-falco", version = "=0.11.0" }
 opentide-ecs = { path = "crates/opentide-ecs", version = "=0.11.0" }
+opentide-schema = { path = "crates/opentide-schema", version = "=0.11.0" }
 opentide-tide = { path = "crates/opentide-tide", version = "=0.11.0" }
 opentide-analysis = { path = "crates/opentide-analysis", version = "=0.11.0" }
 opentide-lsp = { path = "crates/opentide-lsp", version = "=0.11.0" }
@@ -67,16 +69,27 @@ regex = "1"
 serde_yaml = "0.9"
 clap = { version = "4", features = ["derive"] }
 tree-sitter = "0.25"
+# `LanguageFn`, the type tree-sitter 0.25 builds a Language from (opentide-syntax).
+tree-sitter-language = "0.1"
 cc = "1"
 uuid = "1"
 wasm-bindgen = "0.2"
 js-sys = "0.3"
+# The Tide model as code (plan D-2, docs/internal/adr/0001-tide-model-as-rust-code.md):
+# JSON Schema 2020-12 from the structs, and their constraints. garde has no
+# default features; a model that needs one (`regex` for `pattern`) adds it then.
+schemars = "1.2"
+# PyO3, for analysis/ (opentide._native) and opentide-schema's `python` feature.
+pyo3 = "0.30.1"
+garde = { version = "0.23", features = ["derive"] }
 # Test tools, for dev-dependencies only. insta: snapshot assertions, reviewed
 # with `cargo insta review` and committed beside the test (tests/snapshots/);
 # without its `colors` feature, which only colours a failing diff. trycmd:
 # command-line cases (tests/cmd/*.trycmd). Conventions: crates/AGENTS.md.
 insta = { version = "1.49", default-features = false }
 trycmd = "1.2"
+# Compile-fail cases (tests/ui/*.rs with the expected .stderr beside them).
+trybuild = "1.0"
 # xtask only: `cargo xtask bench` reads each benchmarked process's peak RSS
 # from wait4(2), whose safe wrapper this is (the workspace forbids `unsafe`).
 wait4 = "0.2"
@@ -98,6 +111,9 @@ unsafe_code = "forbid"
 # opt out at their crate root with `#![expect(missing_docs, reason = ...)]`
 # until they are documented (crates/AGENTS.md, "Lints").
 missing_docs = "warn"
+# cargo-fuzz builds with `--cfg fuzzing` (opentide-lsp leaves its debug test
+# hooks out of fuzz builds).
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(fuzzing)"] }
 
 [workspace.lints.clippy]
 pedantic = { level = "warn", priority = -1 }
@@ -112,6 +128,9 @@ todo = "deny"
 unimplemented = "deny"
 # Every `unsafe` block states why it is sound in a `// SAFETY:` comment.
 undocumented_unsafe_blocks = "deny"
+# One unsafe operation per block, so each SAFETY comment answers for one
+# operation (docs/internal/unsafe.md lists every block).
+multiple_unsafe_ops_per_block = "deny"
 # The pedantic lints the workspace does not follow, each with its reason; the
 # rest of `pedantic` is enforced. The engine crates are published for the
 # facade's sake (plan D-5): their signatures do not change to satisfy a style

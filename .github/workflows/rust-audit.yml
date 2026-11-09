@@ -1,0 +1,103 @@
+name: Rust audit
+
+# RustSec advisories in every Rust lock file, every day (#843). cargo-deny gates
+# each pull request (ci.yml, `deny`); this run catches an advisory published
+# after a change merged, with nobody opening a pull request, and opens (or
+# comments on) one issue for the maintainers. Both read deny.toml's
+# `[advisories] ignore`, each exception with its reason there.
+#
+# The audit job installs and runs third-party code with a read-only token. The
+# issue job runs no checked-out code beyond reading the report artifact, and is
+# the only job here, or in any workflow, that may write issues
+# (tests/test_ci/test_supply_chain.py). It never runs on a pull request.
+on:
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rust-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    name: cargo audit
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      found: ${{ steps.audit.outputs.found }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The release rust-toolchain.toml pins (`rustup toolchain install` with no name).
+      - name: Set up Rust
+        run: rustup toolchain install --profile minimal --no-self-update
+      - run: cargo install --locked cargo-audit --version 0.22.2
+      # Vulnerabilities and every warning (unmaintained, unsound, yanked) count,
+      # as cargo-deny counts them. A report that is not cargo audit's JSON (the
+      # database could not be fetched, say) fails this run instead of opening
+      # an issue.
+      - name: audit every Cargo.lock
+        id: audit
+        run: |
+          set -uo pipefail
+          # deny.toml's exceptions; a failure here must not run the audit
+          # without them.
+          ignores_out="$(python3 scripts/engine/audit.py ignores)" || exit 1
+          ignores=()
+          if [ -n "${ignores_out}" ]; then
+            mapfile -t ignores <<<"${ignores_out}"
+          fi
+          found=false
+          mkdir -p audit
+          # Every Cargo.lock in the repository (the workspace, fuzz/, the
+          # publishing/ placeholder crate): a new one is audited without an edit.
+          locks_out="$(git ls-files -- ':(glob)**/Cargo.lock')" || exit 1
+          mapfile -t locks <<<"${locks_out}"
+          for lock in "${locks[@]}"; do
+            out="audit/$(echo "${lock}" | tr '/' '-').json"
+            if ! cargo audit --file "${lock}" --json --deny warnings "${ignores[@]}" > "${out}"; then
+              found=true
+            fi
+          done
+          python3 scripts/engine/audit.py report audit/*.json > audit/report.md || exit 1
+          echo "found=${found}" >> "$GITHUB_OUTPUT"
+          cat audit/report.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: rust-audit
+          path: audit/
+          if-no-files-found: error
+
+  issue:
+    name: Report the advisories
+    needs: audit
+    if: needs.audit.outputs.found == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: rust-audit
+          path: audit
+      # One open issue at a time: a later run comments on it.
+      - name: open or update the issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TITLE: "cargo audit: RustSec advisories in the Rust lock files"
+        run: |
+          set -euo pipefail
+          number="$(gh issue list --state open --limit 100 --json number,title \
+            --jq "map(select(.title == env.TITLE)) | .[0].number // empty")"
+          if [ -n "${number}" ]; then
+            gh issue comment "${number}" --body-file audit/report.md
+          else
+            gh issue create --title "${TITLE}" --body-file audit/report.md
+          fi
