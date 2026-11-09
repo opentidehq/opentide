@@ -133,10 +133,30 @@ def _drive(
     asyncio.run(main())
 
 
+#: How long a test waits for the app to finish a command: generous, since a
+#: loaded CI runner is slow, and only reached when something hangs.
+SETTLE_TIMEOUT = 60.0
+
+
 async def _settle(app: OpentideTui, pilot: Pilot[None]) -> None:
-    """Wait for the running worker and the messages it posted."""
+    """Wait for the running worker, the app's handling of its end, and the refresh after.
+
+    Each wait is on the app's own signal, never on a sleep: the worker's task,
+    then ``app.running`` going back to None (set when the app handles the
+    worker's end and shows its outcome), then a callback queued after the
+    refresh, which runs after those the app queued (the tree's cursor).
+    """
     with contextlib.suppress(WorkerFailed):  # the app reports it; the test checks how
         await app.workers.wait_for_complete()
+
+    async def finished() -> None:
+        while app.is_running and app.running is not None:
+            await pilot.pause()
+
+    await asyncio.wait_for(finished(), SETTLE_TIMEOUT)
+    refreshed = asyncio.Event()
+    if app.is_running and app.call_after_refresh(refreshed.set):
+        await asyncio.wait_for(refreshed.wait(), SETTLE_TIMEOUT)
     await pilot.pause()
     await pilot.pause()
 
@@ -243,6 +263,39 @@ def test_select_a_rule_run_validate_and_see_its_diagnostic(tutorial_repo: Path) 
         assert "--json" not in log
         await pilot.press("1", "up")
         assert "No diagnostics from the last validate run" in _text(app, "#diagnostics")
+
+    _drive(tutorial_repo, script)
+
+
+def test_the_cursor_stays_on_the_object_when_the_tree_is_laid_out_late(
+    tutorial_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The cursor goes back to the selected object even before the tree lays out its lines.
+
+    The screen runs callbacks queued after a refresh when it is idle, and may do
+    so before the rebuilt tree has laid out its lines; a node then has no line
+    yet. That moved the cursor to the first threat after a validate run, and
+    the rule's findings disappeared from the detail pane (flaky in CI).
+    Running the callback at once, as here, is that order every time.
+    """
+
+    def at_once(callback: Callable[..., object], *args: Any, **kwargs: Any) -> bool:
+        callback(*args, **kwargs)
+        return True
+
+    async def script(app: OpentideTui, pilot: Pilot[None]) -> None:
+        await pilot.press("down", "down")
+        assert app.selected == RULE
+        tree = app.query_one("#tree", Tree)
+        assert app.catalogue is not None
+        with monkeypatch.context() as patch:
+            patch.setattr(app, "call_after_refresh", at_once)
+            app._show_catalogue(app.catalogue)
+        assert tree.cursor_line == 2
+        assert tree.cursor_node is not None and tree.cursor_node.data == RULE
+        await _settle(app, pilot)
+        assert app.selected == RULE
+        assert "Sentinel KQL Rule" in _text(app, "#heading")
 
     _drive(tutorial_repo, script)
 
