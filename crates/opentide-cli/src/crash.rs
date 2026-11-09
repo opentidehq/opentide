@@ -44,7 +44,7 @@ pub struct Internal {
 
 impl Internal {
     /// An unexpected error from an error value and its sources.
-    pub fn from_error(error: &(dyn std::error::Error + 'static)) -> Internal {
+    pub fn from_error(error: &(dyn std::error::Error + Send + Sync + 'static)) -> Internal {
         let mut trace = String::new();
         let mut source = error.source();
         while let Some(cause) = source {
@@ -53,11 +53,19 @@ impl Internal {
             trace.push('\n');
             source = cause.source();
         }
-        let kind = std::any::type_name_of_val(error)
-            .rsplit("::")
-            .next()
-            .unwrap_or("Error")
-            .to_owned();
+        // A trait object's dynamic type has no name at run time: its
+        // `Debug` form starts with it (`Custom { kind: NotFound, .. }` aside),
+        // so the kind is that form's leading identifier when it is one.
+        let debug = format!("{error:?}");
+        let kind: String = debug
+            .chars()
+            .take_while(|c| c.is_alphanumeric() || *c == '_')
+            .collect();
+        let kind = if kind.is_empty() || kind == "Custom" || kind == "Os" || kind == "Simple" {
+            "Error".to_owned()
+        } else {
+            kind
+        };
         Internal {
             kind,
             message: error.to_string(),

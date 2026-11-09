@@ -307,8 +307,8 @@ fn redact_assignments(text: &str) -> String {
     while let Some(caps) = p.assignment_key.captures_at(text, search) {
         let whole = caps.get(0).map_or(0..0, |m| m.range());
         // The value is a lookahead in the oracle's pattern: the next search
-        // starts after the key and separator.
-        search = whole.end.max(search + 1);
+        // starts after the key and separator (never empty: the key is not).
+        search = whole.end;
         if whole.start < position || !is_secret_name(&caps["key"]) {
             continue;
         }

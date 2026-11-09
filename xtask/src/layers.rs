@@ -721,13 +721,14 @@ mod tests {
         // Appended, not in layer order, so the indexes the tests below use stay put.
         ("opentide-compare", &[]),
         ("opentide-schema", &[("opentide-core", None)]),
+        ("opentide-cli", &[]),
     ];
 
     #[test]
     fn the_repository_table_places_todays_workspace() {
         let report = check(&table(REPOSITORY_TABLE), &metadata(WORKSPACE));
         assert_eq!(report.violations, []);
-        assert_eq!(report.crates, 20);
+        assert_eq!(report.crates, 21);
     }
 
     #[test]

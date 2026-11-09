@@ -41,3 +41,17 @@
 # reason = "the Rust index counts nested rules"
 # issue = "https://github.com/opentidehq/opentide/issues/817"
 # changelog = "**Nested rules are counted**"
+#
+# Intended differences decided but not yet entered (UC-3.3, #825): no golden
+# case reaches them through `OPENTIDE_ENGINE=rust` until a command runs on
+# the Rust CLI, and an entry that applies to no case is stale and fails the
+# run. Each one is entered, with its rule, in the change that routes its
+# cases to Rust; the CHANGELOG already announces them under
+# "**The Rust command line's framework, `opentide-cli`**":
+#
+# - `--help` (every command, every mode): clap's layout instead of Typer's
+#   boxed panels (UC-3.8, when help leaves the Python launcher).
+# - "did you mean": strsim's Jaro similarity at clap's 0.7 threshold after
+#   the same first rules, instead of difflib's ratio at 0.6.
+# - the crash report: `build: rust (<target>)` for `python: ...` in the
+#   crash log and issue link; `error[internal]: panic: <message>`.
