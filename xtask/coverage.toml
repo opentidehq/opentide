@@ -14,8 +14,8 @@
 # an entry for a crate that is neither a member nor names the work item that
 # creates it. Python keeps its own gate (85%, `fail_under` in pyproject.toml).
 #
-# The four crates below do not exist yet. Each gate applies on its own as soon
-# as the work item that creates the crate adds it to the workspace: that change
+# Each gate below applies on its own as soon as the work item that creates the
+# crate adds it to the workspace (opentide-schema is one now): that change
 # must meet 90% (the `item` note can then go, in the same change or later).
 default_lines = 80
 

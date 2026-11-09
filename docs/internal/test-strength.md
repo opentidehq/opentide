@@ -31,7 +31,7 @@ its gate:
 
 | Crate | Gate | State |
 |-------|-----:|-------|
-| `opentide-schema` | 90% | pending: applies when UC-1.1 ([#807](https://github.com/opentidehq/opentide/issues/807)) adds the crate |
+| `opentide-schema` | 90% | enforced since UC-1.1 ([#807](https://github.com/opentidehq/opentide/issues/807)) added the crate |
 | `opentide-workspace` | 90% | pending: UC-2.1 ([#816](https://github.com/opentidehq/opentide/issues/816)) |
 | `opentide-compile` | 90% | pending: UC-3.1 ([#823](https://github.com/opentidehq/opentide/issues/823)) |
 | `opentide-cli` | 90% | pending: UC-3.3 ([#825](https://github.com/opentidehq/opentide/issues/825)) |
@@ -76,9 +76,9 @@ and runs the mutated crate's tests. A mutant is **caught** (a test failed), **mi
 passed: it survived), **timeout** (counted as detected) or **unviable** (it did not build; not
 counted). The **score** is detected (caught + timeout) over viable (caught + timeout + missed).
 
-The plan tracks the score of `opentide-schema` and `opentide-workspace`. Until they exist the job
-mutates the crates whose code becomes `opentide-workspace`: `opentide-analysis` and
-`opentide-tide`. The run is split into eight shards; the `report` job merges them, prints each
+The plan tracks the score of `opentide-schema` and `opentide-workspace`. The job mutates
+`opentide-schema`, and until `opentide-workspace` exists the crates whose code becomes it:
+`opentide-analysis` and `opentide-tide`. The run is split into eight shards; the `report` job merges them, prints each
 crate's score against the baseline in the job summary, and writes a candidate baseline into its
 artifact. On the schedule only, the `issues` job (the one job with a write permission, `issues:
 write`) opens or updates one issue per crate whose survivors exceed `issue_above`, listing them.

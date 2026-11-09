@@ -21,7 +21,7 @@ crate-type = ["cdylib"]
 # abi3: one wheel per platform serves CPython 3.10 and later. A free-threaded
 # interpreter (3.14t) has no stable ABI, so it builds from the sdist.
 # generate-import-lib: a Windows build needs no python3.lib on the machine.
-pyo3 = { version = "0.30.1", features = ["abi3-py310", "generate-import-lib"] }
+pyo3 = { workspace = true, features = ["abi3-py310", "generate-import-lib"] }
 # The engine and the server, from this workspace (crates/).
 opentide-analysis.workspace = true
 opentide-lsp.workspace = true

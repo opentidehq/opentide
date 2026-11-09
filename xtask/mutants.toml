@@ -3,9 +3,10 @@
 # `cargo xtask mutants report` against xtask/mutants-baseline.toml.
 #
 # The plan tracks the mutation score of opentide-schema and opentide-workspace.
-# Neither exists yet; each is mutated as soon as the work item that creates it
-# adds it to the workspace (`cargo xtask mutants crates` lists the members
-# only). Until then the job mutates the two crates whose code becomes
+# Each is mutated as soon as the work item that creates it adds it to the
+# workspace (`cargo xtask mutants crates` lists the members only); opentide-schema
+# is one now. Until opentide-workspace exists the job also mutates the two crates
+# whose code becomes
 # opentide-workspace (plan §4, "Crates": opentide-analysis and the checks of
 # opentide-tide), so that the job runs and the baseline means something today.
 # When opentide-workspace has absorbed them, their entries go.

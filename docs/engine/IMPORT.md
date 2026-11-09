@@ -108,7 +108,7 @@ Since UC-0.3 ([#801](https://github.com/opentidehq/opentide/issues/801)), each j
 | `ci.yml` | `grammars` | ci.yml `grammars` |
 | `ci.yml` | `wasm` | ci.yml `engine-wasm` |
 | `ci.yml` | `elastic-sweep` | ci.yml `elastic-sweep` |
-| `fuzz.yml` | `fuzz` | `engine-fuzz.yml` (nightly, five minutes), and ci.yml `fuzz-smoke` (60 s per target, every PR) |
+| `fuzz.yml` | `fuzz` | `engine-fuzz.yml` (nightly, ten minutes per target), and ci.yml `fuzz-smoke` (60 s per target, every PR) |
 | `oracle.yml` | every job | `oracle.yml`, its tag trigger `engine-v*` instead of `v*.*.*` |
 | `release.yml` | every job | `engine-release.yml` (`git mv`); `native`, `wasm`, `highlights` and the licences of `assets` moved to `engine-release-build.yml`, which ci.yml also runs as a dry run |
 | `backfill-releases.yml` | `backfill` | dropped: a one-off for language-server's tags before 0.5 |

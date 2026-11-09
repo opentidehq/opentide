@@ -33,6 +33,7 @@ One workspace (root `Cargo.toml`, one `Cargo.lock`; `fuzz/` keeps its own). A cr
 | foundation 1 | [`opentide-syntax`](opentide-syntax/AGENTS.md), [`opentide-highlight`](opentide-highlight/AGENTS.md), [`opentide-ecs`](opentide-ecs/AGENTS.md) |
 | foundation 2 | [`opentide-kql`](opentide-kql/AGENTS.md), [`opentide-spl`](opentide-spl/AGENTS.md), [`opentide-kuery`](opentide-kuery/AGENTS.md), [`opentide-lucene`](opentide-lucene/AGENTS.md), [`opentide-falco`](opentide-falco/AGENTS.md) |
 | foundation 3 | [`opentide-esql`](opentide-esql/AGENTS.md), [`opentide-eql`](opentide-eql/AGENTS.md) |
+| foundation 4 | [`opentide-schema`](opentide-schema/AGENTS.md) |
 | domain 0, 1 | [`opentide-tide`](opentide-tide/AGENTS.md), then [`opentide-analysis`](opentide-analysis/AGENTS.md) |
 | application | [`opentide-lsp`](opentide-lsp/AGENTS.md) |
 | facade | none yet: the `opentide` crate (UC-5.1, #836) |
@@ -41,7 +42,7 @@ One workspace (root `Cargo.toml`, one `Cargo.lock`; `fuzz/` keeps its own). A cr
 
 ## Hard rules
 
-- No `std::fs` in `crates/opentide-{core,highlight,syntax,kql,spl,esql,eql,kuery,lucene,falco,ecs,tide,analysis,compare}/src`. Tests may read the repo.
+- No `std::fs` in `crates/opentide-{core,highlight,syntax,kql,spl,esql,eql,kuery,lucene,falco,ecs,tide,analysis,compare,schema}/src`. Tests may read the repo.
 - Do not rename a HighlightSpec capture. Adding one is a minor (`highlights/spec.toml` `[meta].version`).
 - Do not validate CrowdStrike. `configurations.crowdstrike.*` stays unsupported.
 - Control commands (`.show`, `.create`) parse so the engine can emit `kql_control_command_unsupported`. They are not valid detections.
@@ -61,7 +62,7 @@ The workspace's lints are in the root `Cargo.toml` (`[workspace.lints]`), each a
 
 - **One Rust, pinned.** `rust-toolchain.toml` names an exact release; CI installs that file's toolchain, so a new stable's lints cannot turn every PR red. Move to a newer release in a change of its own, as the file says: bump `channel`, then fix or allow (with a reason) what the new lints report.
 
-- **`unsafe_code` is forbidden** except in `opentide-syntax` (tree-sitter FFI) and `opentide-wasm` (wasm32 libc shims). Those two copy the workspace table with `unsafe_code = "deny"`, allow it per item with a reason, and comment every `unsafe` block with `// SAFETY:`. `xtask/tests/lint_policy.rs` fails when a copy drifts or another crate leaves the workspace table.
+- **`unsafe_code` is forbidden** except in `opentide-syntax` (tree-sitter FFI) and `opentide-wasm` (wasm32 libc shims). Those two copy the workspace table with `unsafe_code = "deny"`, allow it per item with a reason, and comment every `unsafe` block with `// SAFETY:` (`clippy::undocumented_unsafe_blocks`), one unsafe operation per block (`clippy::multiple_unsafe_ops_per_block`). `xtask/tests/lint_policy.rs` fails when a copy drifts or another crate leaves the workspace table; [`docs/internal/unsafe.md`](../docs/internal/unsafe.md) lists every site with its justification, and `xtask/tests/unsafe_listing.rs` fails when it misses one.
 - **No `unwrap`, `expect`, `dbg!`, `todo!` or `unimplemented!` outside tests.** A panic on user input is a bug: return a diagnostic or an error. Where a value cannot fail (a catalog compiled in with `include_str!`, a regex literal, a structural invariant), the item says why: `#[expect(clippy::expect_used, reason = "...")]`. An integration test file's helpers outside `#[test]` take the same `#![expect]` at the file's top.
 - **`missing_docs`** holds for `opentide-syntax`, `opentide-kuery`, `opentide-lsp`, `opentide-wasm`, `opentide-native`, `opentide-compare` and `xtask`, and for every new crate. The eleven other crates, imported undocumented, opt out at their crate root (`#![expect(missing_docs, ...)]`); remove the opt-out once a crate is documented. Inaccurate docs are worse than none.
 - Prefer `#[expect(..., reason)]` to `#[allow]`: a stale expectation fails. Use `allow` only where an expectation cannot be fulfilled (clippy's glob-import lints; `dead_code` in a test module only some test binaries use up), and say so beside it.
