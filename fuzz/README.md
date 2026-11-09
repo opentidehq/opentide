@@ -15,9 +15,9 @@ through `opentide_lsp::serve`. A panic, or an input that runs past
 | `protocol` | `fuzz/seeds/protocol/` |
 
 ```bash
-rustup toolchain install nightly
+rustup toolchain install "$(cat fuzz/NIGHTLY)"   # the dated nightly CI fuzzes with
 cargo install cargo-fuzz
-cargo +nightly fuzz run kql fuzz/corpus/kql crates/testdata/corpus/kql -- -timeout=10 -max_total_time=300
+cargo +"$(cat fuzz/NIGHTLY)" fuzz run kql fuzz/corpus/kql crates/testdata/corpus/kql -- -timeout=10 -max_total_time=300
 ```
 
 The first corpus directory is where libFuzzer keeps what it learns

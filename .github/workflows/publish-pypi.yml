@@ -78,6 +78,9 @@ jobs:
   # merged).
   guard:
     name: Release guard
+    # A GitHub Release of the engine (engine-v*, engine-release.yml) published
+    # by hand is not opentide's: nothing runs for it.
+    if: github.event_name != 'release' || startsWith(github.event.release.tag_name, 'v')
     runs-on: ubuntu-latest
     env:
       # Run workflow without a checkout_ref: release development.

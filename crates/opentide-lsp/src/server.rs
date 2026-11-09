@@ -1,6 +1,6 @@
 //! The server's entry points: one client over stdio, a socket, or the
-//! host's own streams. The protocol loop is [`crate::protocol`], the state
-//! [`crate::session`], and the methods [`crate::handlers`].
+//! host's own streams. The protocol loop is `crate::protocol`, the state
+//! `crate::session`, and the methods `crate::handlers`.
 
 use crate::protocol::{self, Direct};
 use crate::session::Session;
