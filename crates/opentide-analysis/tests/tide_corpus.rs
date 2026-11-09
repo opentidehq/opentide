@@ -260,16 +260,46 @@ fn pydantic_object_issues_are_subset_of_lsp() {
                 && issue.field_path == ["threat", "impact"]),
         "scalar impact fixture must be rejected by pydantic"
     );
-    // opentide#745 retired `meta:` and the splunk::2.x `advanced` table: they are
-    // unknown keys, no longer deprecations, in Pydantic and in the catalog alike.
-    for path in [vec!["meta"], vec!["configurations", "splunk", "advanced"]] {
-        assert!(
-            shaped
-                .iter()
-                .any(|issue| issue.code == "schema_validation" && issue.field_path == path),
-            "legacy meta fixture: pydantic must reject {path:?} as an unknown key"
-        );
-    }
+    // opentide#745 retired `meta:`: it is an unknown key, no longer a deprecation,
+    // in Pydantic and in the catalog alike.
+    assert!(
+        shaped
+            .iter()
+            .any(|issue| issue.code == "schema_validation" && issue.field_path == ["meta"]),
+        "legacy meta fixture: pydantic must reject [\"meta\"] as an unknown key"
+    );
+    // Splunk's `advanced` table of raw savedsearches.conf keys was retired with it
+    // by mistake; opentide accepts it again, and so must the catalog.
+    let advanced = ["configurations", "splunk", "advanced"];
+    assert!(
+        !shaped
+            .iter()
+            .any(|issue| issue.field_path.starts_with(&advanced.map(String::from))),
+        "legacy meta fixture: pydantic must accept a Splunk `advanced` mapping"
+    );
+    let host = load_workspace("testdata/conformance/pydantic");
+    let (uri, text) = host
+        .files
+        .iter()
+        .find(|(path, _)| path.ends_with("legacy-meta.yaml"))
+        .cloned()
+        .expect("legacy-meta.yaml");
+    let response = analyze(
+        &host,
+        AnalyzeRequest {
+            uri,
+            language: LanguageId::TideYaml,
+            text,
+        },
+    );
+    assert!(
+        !response.diagnostics.iter().any(|diag| diag
+            .field_path
+            .as_deref()
+            .is_some_and(|path| path.starts_with(&advanced.map(String::from)))),
+        "the catalog must accept a Splunk `advanced` mapping; have {:?}",
+        response.diagnostics
+    );
     assert!(
         !shaped.iter().any(|issue| issue.code == "deprecated_field"),
         "a retired spelling is not a deprecation"
@@ -280,8 +310,7 @@ fn pydantic_object_issues_are_subset_of_lsp() {
             issue.code == "schema_validation"
                 && (issue.field_path == ["threat", "impact"]
                     || issue.field_path == ["meta"]
-                    || issue.field_path == ["metadata"]
-                    || issue.field_path == ["configurations", "splunk", "advanced"])
+                    || issue.field_path == ["metadata"])
         })
         .collect();
     lsp_covers("testdata/conformance/pydantic", &claimed);

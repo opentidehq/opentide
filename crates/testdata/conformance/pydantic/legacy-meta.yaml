@@ -11,4 +11,6 @@ response:
   alert_severity: High
 configurations:
   splunk:
-    advanced: leftover
+    advanced:
+      action.misp_alert_create_event.param.title: Canary token triggered
+      action.misp_alert_create_event.param.distribution: 0
