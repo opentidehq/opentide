@@ -34,6 +34,8 @@ fn run(code: &str, sample: Sample) {
             .getattr("modules")?
             .set_item("opentide_schema", &module)?;
         let globals = PyDict::new(py);
+        // `twin` is a second object equal to `sample`, not the same one.
+        globals.set_item("twin", Py::new(py, sample.clone())?)?;
         globals.set_item("sample", Py::new(py, sample)?)?;
         let code = CString::new(code)
             .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))?;
@@ -65,7 +67,8 @@ assert example.link == "https://example.org/plain"
 assert example.language is None
 assert sample.examples[0] == sample.examples[0]
 # Hashable by value, as a frozen Pydantic model is.
-assert hash(sample) == hash(sample) and len({sample, sample}) == 1
+assert twin is not sample and twin == sample
+assert hash(twin) == hash(sample) and len({sample, twin}) == 1
 assert len({sample.examples[0], sample.examples[1]}) == 2
 
 for target, name in ((sample, "name"), (sample, "tags"), (example, "language")):

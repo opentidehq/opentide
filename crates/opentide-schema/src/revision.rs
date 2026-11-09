@@ -93,3 +93,50 @@ macro_rules! revision_struct {
 
 pub(crate) use revision_struct;
 pub(crate) use revisions;
+
+#[cfg(test)]
+mod tests {
+    use serde::Serialize;
+
+    revisions! {
+        shared [
+            { pub a: u8, }
+            { pub b: u8, }
+            { pub c: u8, }
+            { pub d: u8, }
+        ]
+        #[derive(Serialize)]
+        pub struct Four { @0, pub x: u8, @1, @2, pub y: u8, @3, }
+        #[derive(Serialize)]
+        pub struct Reversed { @3, @2, @1, @0, }
+    }
+
+    fn keys(value: &impl Serialize) -> Vec<String> {
+        let json = serde_json::to_value(value).unwrap();
+        // serde_json's map is sorted; the order is in the serialised text.
+        let text = serde_json::to_string(value).unwrap();
+        let mut keys: Vec<String> = json.as_object().unwrap().keys().cloned().collect();
+        keys.sort_by_key(|key| text.find(&format!("\"{key}\"")).unwrap());
+        keys
+    }
+
+    #[test]
+    fn every_group_is_spliced_where_its_marker_is() {
+        let four = Four {
+            a: 1,
+            x: 2,
+            b: 3,
+            c: 4,
+            y: 5,
+            d: 6,
+        };
+        assert_eq!(keys(&four), ["a", "x", "b", "c", "y", "d"]);
+        let reversed = Reversed {
+            d: 1,
+            c: 2,
+            b: 3,
+            a: 4,
+        };
+        assert_eq!(keys(&reversed), ["d", "c", "b", "a"]);
+    }
+}
