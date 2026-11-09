@@ -11,6 +11,15 @@ commands:
                  down the layer table (xtask/layers.toml, plan section 4).
                  --metadata reads `cargo metadata --format-version 1` output
                  from FILE instead of running cargo; --layers reads another table
+  compare --oracle DIR --candidate DIR --command PATH [--case ID]
+          [--ledger FILE] [--report FILE]
+                 compare a candidate's run with the oracle's, applying the
+                 approved-diffs ledger (tests/golden/APPROVED_DIFFS.toml); a
+                 run is a folder with exit_code, stdout, stderr, files/ and
+                 deleted. --report writes the JSON report to FILE
+  compare --check-ledger [--ledger FILE] [--changelog FILE]
+                 check the ledger's schema, and that CHANGELOG.md holds each
+                 entry's changelog reference
   corpus <command>
                  generate the heavy workspace, run the fault catalogue
                  against the oracle, report coverage (UC-0.6, #804);

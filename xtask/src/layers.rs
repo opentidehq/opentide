@@ -711,10 +711,15 @@ mod tests {
         ),
         (
             "opentide-native",
-            &[("opentide-analysis", None), ("opentide-lsp", None)],
+            &[
+                ("opentide-analysis", None),
+                ("opentide-lsp", None),
+                ("opentide-compare", None),
+            ],
         ),
-        ("xtask", &[]),
+        ("xtask", &[("opentide-compare", None)]),
         // Appended, not in layer order, so the indexes the tests below use stay put.
+        ("opentide-compare", &[]),
         ("opentide-schema", &[("opentide-core", None)]),
     ];
 
@@ -722,7 +727,7 @@ mod tests {
     fn the_repository_table_places_todays_workspace() {
         let report = check(&table(REPOSITORY_TABLE), &metadata(WORKSPACE));
         assert_eq!(report.violations, []);
-        assert_eq!(report.crates, 19);
+        assert_eq!(report.crates, 20);
     }
 
     #[test]

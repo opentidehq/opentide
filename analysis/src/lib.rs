@@ -1,5 +1,6 @@
-//! Python bindings for the opentide engine (the `opentide-analysis` crate) and
-//! its language server (`opentide-lsp`), compiled into the opentide package as
+//! Python bindings for the opentide engine (the `opentide-analysis` crate),
+//! its language server (`opentide-lsp`) and the differential comparator
+//! (`opentide-compare`), compiled into the opentide package as
 //! `opentide._native` (hatch_build.py).
 //!
 //! Positions follow the `opentide` CLI, not LSP: lines and columns are
@@ -13,6 +14,7 @@ use opentide_analysis::{
 };
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
+use pyo3::types::PyBytes;
 
 /// One finding, in the CLI's coordinates.
 #[pyclass(frozen, get_all, module = "opentide._native")]
@@ -434,6 +436,103 @@ fn serve_stdio(py: Python<'_>) -> PyResult<bool> {
         .map_err(|err| PyRuntimeError::new_err(format!("{err:#}")))
 }
 
+/// One side of a comparison, as `compare_runs` takes it: the exit code,
+/// stdout, stderr, the files the run left different (`(path, mode, bytes)`,
+/// `mode` and `bytes` `None` for a deleted file), the literal texts that
+/// normalise it with their placeholders (its workspace copy's path to `<WS>`),
+/// the dates (`YYYY-MM-DD`, UTC) it ran on, and the week before them, whose
+/// date-times a command's default window reaches back to.
+type RunArgs = (
+    i32,
+    Py<PyBytes>,
+    Py<PyBytes>,
+    Vec<(String, Option<u32>, Option<Py<PyBytes>>)>,
+    Vec<(String, String)>,
+    Vec<String>,
+    Vec<String>,
+);
+
+fn run_of(
+    py: Python<'_>,
+    args: RunArgs,
+) -> (opentide_compare::Run, opentide_compare::normalise::Volatile) {
+    let (exit_code, stdout, stderr, files, literals, dates, recent_dates) = args;
+    let bytes = |value: &Py<PyBytes>| value.as_bytes(py).to_vec();
+    let files = files
+        .iter()
+        .map(|(path, mode, contents)| {
+            let state = match (mode, contents) {
+                (Some(mode), Some(contents)) => opentide_compare::FileState::Written {
+                    mode: *mode,
+                    bytes: bytes(contents),
+                },
+                _ => opentide_compare::FileState::Deleted,
+            };
+            (path.clone(), state)
+        })
+        .collect();
+    let run = opentide_compare::Run {
+        exit_code,
+        stdout: bytes(&stdout),
+        stderr: bytes(&stderr),
+        files,
+    };
+    let volatile = opentide_compare::normalise::Volatile {
+        literals,
+        dates,
+        recent_dates,
+        git_version: None,
+        // The workspace's texts (`known`) seed the UUIDs that are not fresh.
+        known_uuids: std::collections::BTreeSet::new(),
+    };
+    (run, volatile)
+}
+
+/// The comparison of one run of `command` by the oracle and by the
+/// candidate, each normalised first with the command's `rules` (`fresh-uuids`,
+/// `host-git`), the workspace's texts before the run (`known`) and the host's
+/// git version, as the JSON of `opentide-compare`'s `CaseReport`.
+#[pyfunction]
+#[pyo3(signature = (command, oracle, candidate, rules = Vec::new(), known = Vec::new(), git_version = None))]
+fn compare_runs(
+    py: Python<'_>,
+    command: &str,
+    oracle: RunArgs,
+    candidate: RunArgs,
+    rules: Vec<String>,
+    known: Vec<String>,
+    git_version: Option<String>,
+) -> PyResult<String> {
+    let rules = rules
+        .iter()
+        .map(|rule| match rule.as_str() {
+            "fresh-uuids" => Ok(opentide_compare::normalise::Rule::FreshUuids),
+            "host-git" => Ok(opentide_compare::normalise::Rule::HostGit),
+            other => Err(PyValueError::new_err(format!(
+                "unknown normalisation rule: {other}"
+            ))),
+        })
+        .collect::<PyResult<Vec<_>>>()?;
+    let (mut oracle, mut candidate) = (run_of(py, oracle), run_of(py, candidate));
+    oracle.1.git_version.clone_from(&git_version);
+    candidate.1.git_version = git_version;
+    let report = py.detach(|| {
+        opentide_compare::compare_normalised(
+            opentide_compare::Case { command, id: "" },
+            (oracle.0, &oracle.1),
+            (candidate.0, &candidate.1),
+            opentide_compare::Normalisation {
+                rules: &rules,
+                known: &known,
+            },
+            &opentide_compare::ledger::Ledger::default(),
+        )
+    });
+    report
+        .to_json()
+        .map_err(|err| PyRuntimeError::new_err(err.to_string()))
+}
+
 fn parse_language(name: &str) -> PyResult<LanguageId> {
     LanguageId::parse(name).ok_or_else(|| {
         PyValueError::new_err(format!(
@@ -554,7 +653,7 @@ mod _native {
     #[pymodule_export]
     use super::{
         Diagnostic, QueryReport, Workspace, analyze_query, bundled_catalog, catalog_is_workspace,
-        catalog_version, dataset_status, describe_code, highlight, install_catalog,
+        catalog_version, compare_runs, dataset_status, describe_code, highlight, install_catalog,
         install_configuration_schemas, install_lint, install_visibility, language_for_path,
         serve_stdio, set_configuration_checker, set_default_catalog, set_host_info,
         use_host_catalogs,

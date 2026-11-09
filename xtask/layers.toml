@@ -24,6 +24,11 @@
 # - xtask is Tooling, the top layer: it may read any crate, and no crate may
 #   depend on it.
 # - analysis/ is the package `opentide-native` (bindings/python in the plan).
+# - opentide-compare (UC-0.7, #805) is foundation tier 0: the differential
+#   comparator depends on no workspace crate, and both xtask (`compare`,
+#   `golden check --engine compare`) and opentide-native (the CLI's
+#   `OPENTIDE_ENGINE=compare`) use it. It is not in the plan's table: it
+#   serves the migration and goes when compare mode does (UC-6.2, #841).
 # - opentide-schema (UC-1.1, #807) is the top foundation tier: the plan's
 #   table puts it in the row above core, syntax, highlight and the query
 #   crates, so it may build on any of them (spans, UC-1.2) and none of them
@@ -32,7 +37,7 @@
 [[layer]]
 name = "foundation"
 tiers = [
-    ["opentide-core"],
+    ["opentide-core", "opentide-compare"],
     ["opentide-syntax", "opentide-highlight", "opentide-ecs"],
     ["opentide-kql", "opentide-spl", "opentide-kuery", "opentide-lucene", "opentide-falco", "opentide-cql"],
     ["opentide-esql", "opentide-eql"],

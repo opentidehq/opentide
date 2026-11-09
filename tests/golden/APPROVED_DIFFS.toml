@@ -1,0 +1,43 @@
+# The approved-diffs ledger (plan §5.2, #805): every intended difference
+# between the oracle (the Python CLI at the tag in ORACLE) and a candidate
+# (today's Python against its recordings, or a Rust implementation in
+# `OPENTIDE_ENGINE=compare`). Anything that differs and is not here is a bug.
+#
+# The comparator (crates/opentide-compare) reads this file through
+# `cargo xtask compare` and `cargo xtask golden check`. `cargo xtask compare
+# --check-ledger` checks it, and xtask/tests/ledger.rs runs that check in CI.
+#
+# Each entry is a [[diff]] table, and every field is required:
+#
+#   command    the command path, words one space apart: "generate docs rules"
+#   case       a glob over case ids: `*` any run of characters, `?` one
+#   target     stdout | stderr | exit_code | file:<path relative to the workspace>
+#   rule       json:<JSON pointer> (the value there in the target's JSON
+#              document; "json:" alone is the whole document) or text
+#   oracle     a json: rule: the oracle's value there, as JSON, or (absent);
+#              a text rule: one whole line of the oracle's target, without
+#              its line ending;
+#              exit_code: the oracle's code
+#   candidate  the same, for the candidate
+#   reason     why the difference is intended
+#   issue      https://github.com/opentidehq/<repository>/issues/<number>
+#   changelog  text of the CHANGELOG.md entry that announces it (its bold lead)
+#
+# An entry applies only where both values are found as written, and only for
+# its command, case glob and target: every other difference is still
+# reported. A text rule is one whole line on each side, approved where the
+# oracle and candidate lines match it at the same line number; part of a line
+# approves nothing. An entry that applies to no case in a complete run is stale,
+# and fails the run: remove it in the change that makes it stale. Differences
+# in a file's presence, mode or deletion have no rule: fix them instead.
+#
+# [[diff]]
+# command = "info"
+# case = "json/*"
+# target = "stdout"
+# rule = "json:/summary/rules"
+# oracle = "3"
+# candidate = "4"
+# reason = "the Rust index counts nested rules"
+# issue = "https://github.com/opentidehq/opentide/issues/817"
+# changelog = "**Nested rules are counted**"

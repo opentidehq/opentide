@@ -38,11 +38,29 @@
 //!    fixture does not contain, numbered by first appearance.
 //!
 //! ANSI escape codes are kept: they are part of what human mode prints.
+//!
+//! Written for `cargo xtask golden` (UC-0.5, #803) and moved here (UC-0.7,
+//! #805) so that `OPENTIDE_ENGINE=compare` in the CLI normalises as the
+//! goldens do; `xtask::golden::normalise` re-exports it.
 
-use crate::golden::case::Rule;
+use crate::{FileState, Run};
 use regex::{Captures, Regex};
+use serde::{Deserialize, Serialize};
 use std::collections::{BTreeSet, HashMap};
 use std::sync::OnceLock;
+
+/// An extra normalisation rule a case opts into (`normalise` in `cases.toml`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Rule {
+    /// UUIDs that the fixture does not contain become `<UUID-1>`, `<UUID-2>`, …
+    /// in order of first appearance: for commands that mint identifiers.
+    FreshUuids,
+    /// `git <version>` becomes `git <GIT_VERSION>`, for the host's git that
+    /// `opentide doctor` reports. Not global: opentide's own help text
+    /// carries a literal example (`✓ git 2.43.0 · git`) that must stay.
+    HostGit,
+}
 
 /// Values that are only known once a case has run.
 #[derive(Clone, Debug, Default)]
@@ -178,6 +196,18 @@ impl Normaliser {
                 .clone()
                 .filter(|_| rules.contains(&Rule::HostGit)),
             fresh_uuids,
+        }
+    }
+
+    /// Normalises a run as a recording is: stdout, stderr, then each written
+    /// file in path order (a [`Run`]'s files are kept in path order).
+    pub fn run(&mut self, run: &mut Run) {
+        run.stdout = self.bytes(&run.stdout);
+        run.stderr = self.bytes(&run.stderr);
+        for state in run.files.values_mut() {
+            if let FileState::Written { bytes, .. } = state {
+                *bytes = self.bytes(bytes);
+            }
         }
     }
 

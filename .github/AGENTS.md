@@ -26,6 +26,7 @@ merge first; CodeQL and the oracles run there too). Jobs run in parallel; a new 
 | `engine-release-consumers` | opentidehq/vscode-extension's own grammar and engine scripts (a pinned commit) accept the dry run's assets as this repository's release (`scripts/engine/check-vscode-extension.mjs`) |
 | `test` | The Python matrix, **3.10–3.14**, coverage gate on 3.14 |
 | `cli-e2e`, `cli-windows-smoke`, `gitlab-ci-lint` | The sharded E2E suite, a Windows smoke run, the generated GitLab pipelines; none waits for `test` |
+| `golden-compare` | `cargo xtask golden check --engine compare` (UC-0.7): every golden case whose command has a Rust implementation, through this repository's CLI with `OPENTIDE_ENGINE=rust`, against the oracle's recording and `tests/golden/APPROVED_DIFFS.toml`; the `golden-compare` artifact holds the report |
 | `corpus` | The corpora of UC-0.6 against opentide 0.23.0 from PyPI, hash-pinned in its own venv: the heavy workspace has no finding, `cargo xtask corpus faults --check` (every fault kind reports exactly its codes), the code inventory and `COVERAGE.md` are current ([`tests/corpora/README.md`](../tests/corpora/README.md)) |
 | `clients`, `bench` | Informational (`continue-on-error`): real LSP clients (pytest-lsp, Neovim) and `cargo bench`; never required |
 
@@ -80,6 +81,7 @@ Engine WebAssembly and npm packages
 Engine crates package and licence scan
 Grammars regenerate
 TextMate grammars (vscode-textmate)
+Golden compare
 Elastic detection-rules sweep
 Fuzz smoke (kql spl esql)
 Fuzz smoke (eql kuery lucene)

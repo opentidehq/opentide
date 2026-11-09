@@ -9,6 +9,8 @@ xtask --`): the repository's Rust tooling, as a workspace member that is never p
 | `corpus generate\|faults\|clean\|codes\|coverage` | The corpora of UC-0.6 (#804): the seeded heavy workspace, the fault catalogue run against the oracle, the code inventory and coverage report ([`tests/corpora/README.md`](../tests/corpora/README.md)) |
 | `codegen` | Not implemented: UC-1.8 (#814) generates schemas, stubs, types and references with it |
 | `golden record [--check-determinism]`, `check`, `diff`, `lock`, `coverage` | Records what the frozen Python CLI (the oracle, `tests/golden/ORACLE`) does for every case of `tests/golden/cases.toml`, and checks an engine against the recordings: [`tests/golden/README.md`](../tests/golden/README.md) |
+| `golden check --engine compare [--report FILE]` | Runs every case whose command has a Rust implementation (`opentide.cli.engines.RUST_COMMANDS`) through this repository's CLI with `OPENTIDE_ENGINE=rust`, and compares it with the recording through `opentide-compare` and `tests/golden/APPROVED_DIFFS.toml`; a stale ledger entry fails it (UC-0.7, #805; CI job `Golden compare`) |
+| `compare --oracle DIR --candidate DIR --command PATH`, `compare --check-ledger` | Two runs on disk through the comparator; the ledger's schema and changelog references (`src/compare.rs`, `crates/opentide-compare/AGENTS.md`) |
 | `bench [--engine python\|rust] [--scale 1\|10] [--json]`, `bench --check BUDGETS BENCH.json [--previous FILE]` | Runs the plan section 11 benchmarks on the heavy workspace and holds the result to [`tests/bench/budgets.toml`](../tests/bench/budgets.toml) and the last `development` result (below) |
 | `help` | The usage |
 
@@ -81,7 +83,8 @@ of it): a command that failed early would measure nothing, so the bench stops wi
   clock, environment or file); `tests/corpus_generate.rs` records its digests.
 - `golden` is its own module, `src/golden/`, a library the comparator (UC-0.7) reuses: the case
   model (`case.rs`), fixtures (`fixture.rs`), the oracle's install (`oracle.rs`), the runner
-  (`run.rs`, `pty.rs`), the normaliser (`normalise.rs`), recordings and their differences
+  (`run.rs`, `pty.rs`), the normaliser (in `crates/opentide-compare/src/normalise.rs`, re-exported
+  as `golden::normalise`, so the CLI's compare mode shares it), recordings and their differences
   (`recording.rs`, `snapshot.rs`, `blob.rs`) and the coverage report (`coverage.rs`). `main.rs`
   only dispatches to `golden::main`. A normalisation rule changes with its unit test and a
   re-record in the same PR.

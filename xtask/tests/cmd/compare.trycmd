@@ -1,0 +1,43 @@
+The comparator over runs on disk (compare.in/): a run equal to the oracle's,
+and a deliberately divergent fake Rust run, which fails even with its one
+approved difference applied. The ledger check fails on a missing field and
+on a changelog reference CHANGELOG.md does not hold.
+
+```console
+$ xtask compare --oracle oracle --candidate same --command validate --ledger ledger.toml --changelog CHANGELOG.md
+compare: `validate` is equal (0 approved difference(s))
+
+$ xtask compare --oracle oracle --candidate fake-rust --command validate --case json/x --ledger ledger.toml --changelog CHANGELOG.md
+? 1
+error: stdout json_key_order at /summary
+  oracle:    errors, files
+  candidate: files, errors
+error: file:docs/old.md file_extra
+  oracle:    (absent)
+  candidate: deleted
+error: file:docs/rule.md bytes, line 1, byte 2
+  oracle:    # Rule
+  candidate: # rule
+compare: `validate` differs: 3 difference(s), 1 approved
+
+$ xtask compare --check-ledger --ledger ledger.toml --changelog CHANGELOG.md
+compare: ledger.toml holds 1 approved difference(s), each with every field
+
+$ xtask compare --check-ledger --ledger no-issue.toml --changelog CHANGELOG.md
+? 1
+error: no-issue.toml:
+missing field `issue` (line 1)
+
+$ xtask compare --check-ledger --ledger unknown-changelog.toml --changelog CHANGELOG.md
+? 1
+error: unknown-changelog.toml:
+entry 1: changelog "**Not in the changelog**" begins no entry (`- **Not in the changelog** …`) of CHANGELOG.md
+
+$ xtask compare --oracle oracle --command validate --ledger ledger.toml --changelog CHANGELOG.md
+? 2
+xtask compare: --candidate is required
+
+usage: cargo xtask <command> [options]
+...
+
+```

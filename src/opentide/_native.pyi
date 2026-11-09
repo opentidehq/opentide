@@ -92,3 +92,27 @@ def catalog_is_workspace() -> bool: ...
 def describe_code(code: str) -> str | None: ...
 def language_for_path(path: str) -> Language | None: ...
 def serve_stdio() -> bool: ...
+
+#: One side of ``compare_runs``: exit code, stdout, stderr, the files the run
+#: left different (``(path, mode, bytes)``, ``mode`` and ``bytes`` ``None`` for
+#: a deleted file), the literals that normalise it with their placeholders, and
+#: the dates (``YYYY-MM-DD``, UTC) it ran on, and the week
+#: before them (a command's default window reaches back into it).
+CompareRun = tuple[
+    int,
+    bytes,
+    bytes,
+    Sequence[tuple[str, int | None, bytes | None]],
+    Sequence[tuple[str, str]],
+    Sequence[str],
+    Sequence[str],
+]
+
+def compare_runs(
+    command: str,
+    oracle: CompareRun,
+    candidate: CompareRun,
+    rules: Sequence[str] = ...,
+    known: Sequence[str] = ...,
+    git_version: str | None = None,
+) -> str: ...

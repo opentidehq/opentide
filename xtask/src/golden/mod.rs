@@ -18,7 +18,8 @@ pub mod blob;
 pub mod case;
 pub mod coverage;
 pub mod fixture;
-pub mod normalise;
+/// The normaliser, in `opentide-compare` so that the CLI's compare mode shares it.
+pub use opentide_compare::normalise;
 pub mod oracle;
 #[cfg(unix)]
 mod pty;
@@ -58,8 +59,12 @@ commands:
   coverage   rewrite COVERAGE.md from cases.toml and the recordings
 
 --filter GLOB  only the cases whose id (<command>/<mode>/<fixture>/<variant>) matches
---engine       python (the oracle, the default); rust (UC-3) and compare (UC-0.7) come
-               later: until then they cannot start (exit status 2)
+--engine       python (the oracle, the default); compare: this repository's CLI with
+               OPENTIDE_ENGINE=rust against the recordings, through the comparator
+               and tests/golden/APPROVED_DIFFS.toml, for every case whose command
+               has a Rust implementation (UC-0.7); rust comes with UC-3
+               and cannot start until then (exit status 2)
+--report FILE  with --engine compare: write the JSON report (opentide-compare's RunReport)
 
 exit status: 0 passed, 1 a difference or a failed case, 2 usage error or the run could not start
 ";
@@ -93,6 +98,7 @@ struct Command {
     filter: Option<String>,
     determinism: bool,
     jobs: Option<usize>,
+    report: Option<PathBuf>,
 }
 
 fn parse(args: &[String]) -> Result<Command> {
@@ -114,6 +120,7 @@ fn parse(args: &[String]) -> Result<Command> {
         filter: None,
         determinism: false,
         jobs: None,
+        report: None,
     };
     let mut rest = rest.iter();
     while let Some(arg) = rest.next() {
@@ -125,6 +132,9 @@ fn parse(args: &[String]) -> Result<Command> {
         match arg.as_str() {
             "--filter" => command.filter = Some(value()?),
             "--engine" => command.engine = value()?,
+            "--report" if command.verb != Verb::Record => {
+                command.report = Some(PathBuf::from(value()?));
+            }
             "--jobs" => {
                 let jobs: usize = value()?.parse().context("--jobs needs a number")?;
                 command.jobs = Some(jobs.max(1));
@@ -216,10 +226,10 @@ impl Command {
             "python" => oracle.provision(&layout.golden, &oracle::cache_dir(&layout.target))?,
             // The run cannot start: exit status 2, as the usage says.
             "rust" => bail!("--engine rust is not implemented yet; the Rust CLI arrives with UC-3"),
-            "compare" => bail!(
-                "--engine compare is not implemented yet; UC-0.7 \
-                 (https://github.com/opentidehq/opentide/issues/805) implements it"
-            ),
+            "compare" if self.verb == Verb::Record => {
+                bail!("golden record records the oracle: --engine compare is for check and diff")
+            }
+            "compare" => crate::compare::candidate(&layout.repo)?,
             other => bail!("unknown engine `{other}`: python, rust or compare"),
         };
         self.run_with(&layout, &oracle, engine)
@@ -249,6 +259,24 @@ impl Command {
             .unwrap_or_else(|| std::thread::available_parallelism().map_or(2, |n| n.get()));
         match self.verb {
             Verb::Record => self.record(layout, oracle, &all, &selected, &ctx, jobs),
+            _ if self.engine == "compare" => {
+                // Only the commands with a Rust implementation have anything to compare.
+                let rust = crate::compare::rust_commands(&layout.repo)?;
+                let (ported, python_only): (Vec<Case>, Vec<Case>) = selected
+                    .iter()
+                    .cloned()
+                    .partition(|case| rust.contains(&case.command));
+                crate::compare::golden(
+                    &layout.repo,
+                    &layout.cases(),
+                    &layout.blobs(),
+                    &run_all(&ported, &ctx, jobs, "compare"),
+                    python_only.len(),
+                    self.filter.is_none(),
+                    self.report.as_deref(),
+                    self.verb == Verb::Diff,
+                )
+            }
             _ => self.check(layout, oracle, &all, &selected, &ctx, jobs),
         }
     }
@@ -756,6 +784,7 @@ fixtures = ["none", "empty"]
             bin_dir: bin,
             install_dir: install,
             host_paths: Vec::new(),
+            env: std::collections::BTreeMap::new(),
             known_uuids: std::sync::Arc::default(),
         };
         (dir, layout, oracle, engine)
@@ -769,6 +798,7 @@ fixtures = ["none", "empty"]
             filter: None,
             determinism,
             jobs: Some(2),
+            report: None,
         }
     }
 

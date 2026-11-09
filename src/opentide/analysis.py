@@ -124,6 +124,45 @@ def engine_versions() -> dict[str, str]:
     return {"engine": str(engine().ENGINE_VERSION)}
 
 
+#: One side of :func:`compare_runs`: exit code, stdout, stderr, the files the
+#: run left different (``(path, mode, bytes)``, ``mode`` and ``bytes`` ``None``
+#: for a deleted file), the literals that normalise it with their placeholders,
+#: and the dates (``YYYY-MM-DD``, UTC) it ran on, and the week
+#: before them (a command's default window reaches back into it).
+CompareRun = tuple[
+    int,
+    bytes,
+    bytes,
+    Sequence[tuple[str, int | None, bytes | None]],
+    Sequence[tuple[str, str]],
+    Sequence[str],
+    Sequence[str],
+]
+
+
+def compare_runs(
+    command: str,
+    oracle: CompareRun,
+    candidate: CompareRun,
+    *,
+    rules: Sequence[str] = (),
+    known: Sequence[str] = (),
+    git_version: str | None = None,
+) -> str:
+    """The comparator's report on two runs of *command*, as JSON (``OPENTIDE_ENGINE=compare``).
+
+    Each run is normalised first with the goldens' normaliser: its own literals
+    and dates, the command's *rules* (``fresh-uuids``, ``host-git``) with the
+    workspace's texts before the run (*known*) and the host's *git_version*.
+    Unlike a golden case, nothing is normalised per fixture. The comparison is
+    the one ``cargo xtask compare`` makes (``crates/opentide-compare``).
+    Raises :class:`EngineUnavailableError`.
+    """
+    return str(
+        engine().compare_runs(command, oracle, candidate, list(rules), list(known), git_version)
+    )
+
+
 #: Engine sentences that promise a step opentide does not offer, and what opentide
 #: says instead: ``(code, engine text, replacement)``. language-server 0.8.0 asks to
 #: "declare" an SPL command an app provides, and no configuration declares one.

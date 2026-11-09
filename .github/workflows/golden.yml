@@ -12,6 +12,10 @@ name: Golden
 #   --check-determinism` runs every case twice and fails unless both runs
 #   agree byte for byte, and the recordings it wrote must be the committed ones.
 #
+# `cargo xtask golden check --engine compare` (UC-0.7) runs in ci.yml's
+# `golden-compare` job instead: it checks this repository's code, so it runs
+# on every pull request, not only on the paths below.
+#
 # Nothing here publishes or writes to the repository.
 
 on:

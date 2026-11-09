@@ -45,8 +45,21 @@ INTERRUPTED = "interrupted"
 #: also the code of the diagnostic that points at the file.
 CONFIG_PARSE = "config_parse"
 
+#: ``failure.code`` when ``OPENTIDE_ENGINE=rust`` names a command that has no
+#: Rust implementation yet: a usage error, exit 2 (``opentide.cli.engines``).
+#: Not ``engine_unavailable``, which means the compiled engine does not load.
+ENGINE_NOT_PORTED = "engine_not_ported"
+
+#: ``failure.code`` when ``OPENTIDE_ENGINE=compare`` ran a command's Python and
+#: Rust implementations and their results differ. Exits 70; the message names
+#: the diff report (``opentide.cli.engines``).
+ENGINE_MISMATCH = "engine_mismatch"
+
 #: Exit code of every usage error.
 USAGE_EXIT_CODE = 2
+
+#: Exit code of an ``engine_mismatch`` (``EX_SOFTWARE`` in sysexits.h).
+ENGINE_MISMATCH_EXIT_CODE = 70
 
 #: Exit code of a run stopped by Ctrl-C (128 + SIGINT), as shells report it.
 INTERRUPTED_EXIT_CODE = 130

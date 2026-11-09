@@ -170,6 +170,7 @@ impl Oracle {
             name: "python".into(),
             bin_dir,
             install_dir: dir,
+            env: std::collections::BTreeMap::new(),
             host_paths,
             known_uuids,
         })
@@ -275,7 +276,11 @@ fn installed_uuids(venv: &Path, package: &str) -> Result<std::collections::BTree
     Ok(out)
 }
 
-fn collect_uuids(dir: &Path, out: &mut std::collections::BTreeSet<String>) -> Result<()> {
+/// Every UUID in the text files under `dir`, into `out`.
+pub(crate) fn collect_uuids(
+    dir: &Path,
+    out: &mut std::collections::BTreeSet<String>,
+) -> Result<()> {
     for entry in fs::read_dir(dir).with_context(|| format!("read {}", dir.display()))? {
         let entry = entry.with_context(|| format!("read {}", dir.display()))?;
         let kind = entry

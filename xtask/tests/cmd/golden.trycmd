@@ -21,8 +21,12 @@ commands:
   coverage   rewrite COVERAGE.md from cases.toml and the recordings
 
 --filter GLOB  only the cases whose id (<command>/<mode>/<fixture>/<variant>) matches
---engine       python (the oracle, the default); rust (UC-3) and compare (UC-0.7) come
-               later: until then they cannot start (exit status 2)
+--engine       python (the oracle, the default); compare: this repository's CLI with
+               OPENTIDE_ENGINE=rust against the recordings, through the comparator
+               and tests/golden/APPROVED_DIFFS.toml, for every case whose command
+               has a Rust implementation (UC-0.7); rust comes with UC-3
+               and cannot start until then (exit status 2)
+--report FILE  with --engine compare: write the JSON report (opentide-compare's RunReport)
 
 exit status: 0 passed, 1 a difference or a failed case, 2 usage error or the run could not start
 

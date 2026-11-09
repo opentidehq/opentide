@@ -154,6 +154,7 @@ jobs:
   #   fuzz            `fuzz-smoke` (fuzz/NIGHTLY's nightly, fuzz/target)
   #   python-engine   the Python jobs' `uv sync` build of the binding: `test`
   #                   (3.14) saves it, the other Linux Python jobs read it
+  #   golden-compare  `golden-compare` (the binding and xtask, -Dwarnings)
   #   engine-release  the release dry run (engine-release-build.yml), per target
   # ---------------------------------------------------------------------------
 
@@ -360,8 +361,9 @@ jobs:
 
   # Every engine crate builds from its packaged sources, as it will from
   # crates.io: a crate that reads a file outside OPENTIDE_ASSETS fails here, not
-  # at release. The binding (analysis/, opentide-native) is not a crate to
-  # publish. The packages carry the embedded catalogs, so the licence scan
+  # at release. The binding (analysis/, opentide-native), the tooling (xtask)
+  # and the differential comparator (opentide-compare, which only they use)
+  # are not crates to publish. The packages carry the embedded catalogs, so the licence scan
   # catches an oracle reference here rather than at release time.
   engine-package:
     name: Engine crates package and licence scan
@@ -384,7 +386,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: python3 scripts/engine/release.py vendor
-      - run: cargo package --locked --workspace --exclude opentide-native --allow-dirty
+      - run: cargo package --locked --workspace --exclude opentide-native --exclude xtask --exclude opentide-compare --allow-dirty
       - name: license scan (no oracle references)
         run: bash scripts/engine/license-scan.sh target/package/*.crate
 
@@ -959,6 +961,59 @@ jobs:
         run: uv run pytest tests/test_ci/test_gitlab_pipeline_lint.py -m gitlab_ci_lint -q --no-cov
         env:
           OPENTIDE_GITLAB_CI_LINT: "1"
+
+
+  # UC-0.7 (#805): every golden case whose command has a Rust implementation
+  # (opentide.cli.engines.RUST_COMMANDS), run through this repository's CLI
+  # with OPENTIDE_ENGINE=rust and compared with the oracle's recording
+  # (crates/opentide-compare, tests/golden/APPROVED_DIFFS.toml); a stale ledger
+  # entry fails it. Here, not in golden.yml, so that it runs on every pull
+  # request: a change anywhere in crates/, analysis/ or src/ can change a port.
+  golden-compare:
+    name: Golden compare
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      RUSTFLAGS: -Dwarnings
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ env.COVERAGE_PYTHON }}
+
+      # rustup installs the toolchain rust-toolchain.toml pins.
+      - name: Set up Rust
+        run: rustup toolchain install --profile minimal --no-self-update
+
+      # Its own cache: RUSTFLAGS is part of rust-cache's key, so this job
+      # cannot read `test`'s `python-engine` (built without it).
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: golden-compare
+
+      # The candidate is this repository's CLI, with the engine compiled in.
+      - name: Install this repository's CLI
+        run: uv sync --group dev
+
+      - name: Compare every ported command with the recordings
+        run: cargo xtask golden check --engine compare --report golden-compare.json
+
+      - name: Upload the report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: golden-compare
+          path: golden-compare.json
+          if-no-files-found: ignore
 
   cli-windows-smoke:
     name: CLI Windows smoke

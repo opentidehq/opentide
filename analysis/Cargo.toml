@@ -7,7 +7,7 @@ edition = "2024"
 rust-version = "1.85"
 license = "EUPL-1.2"
 publish = false
-description = "The analysis engine and language server, compiled into the opentide Python package"
+description = "The analysis engine, the language server and the differential comparator, compiled into the opentide Python package"
 repository = "https://github.com/opentidehq/opentide"
 
 [lints]
@@ -25,6 +25,8 @@ pyo3 = { workspace = true, features = ["abi3-py310", "generate-import-lib"] }
 # The engine and the server, from this workspace (crates/).
 opentide-analysis.workspace = true
 opentide-lsp.workspace = true
+# The differential comparator, for OPENTIDE_ENGINE=compare (UC-0.7, #805).
+opentide-compare.workspace = true
 
 [build-dependencies]
 pyo3-build-config = "0.30.1"

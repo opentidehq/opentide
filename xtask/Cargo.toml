@@ -8,13 +8,14 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 publish = false
-description = "The repository's Rust tooling: cargo xtask check-layers, golden and bench, and the codegen command to come"
+description = "The repository's Rust tooling: cargo xtask check-layers, compare, golden and bench, and the codegen command to come"
 
 [lints]
 workspace = true
 
 [dependencies]
 anyhow.workspace = true
+opentide-compare.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 toml.workspace = true
