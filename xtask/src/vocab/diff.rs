@@ -15,6 +15,12 @@
 //!   a corpus value whose suggestion differs must be listed in
 //!   `tests/golden/vocab/APPROVED.toml`, and an entry that matches nothing is
 //!   stale; differences on generated misspellings are counted and reported.
+//!
+//! And every `vocab_unknown` finding the oracle's `validate --json` reports on
+//! a corpus: its `message` must equal, byte for byte, the one
+//! `opentide_schema::vocab::Unknown` gives for the same value of the same
+//! field, and its `help` too, unless the suggestion difference it carries is
+//! approved.
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
@@ -25,7 +31,7 @@ use std::process::Command;
 use anyhow::{Context, Result, bail, ensure};
 use indexmap::IndexMap;
 use opentide_schema::vocab::{
-    Entry, KeyKind, Metadata, Selector, Version, VocabRef, Vocabularies, Vocabulary,
+    Entry, KeyKind, Metadata, Selector, Unknown, Version, VocabRef, Vocabularies, Vocabulary,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -144,6 +150,17 @@ struct ProbeResult {
     corpus: Vec<CorpusField>,
     results: Vec<FieldResult>,
     models: BTreeMap<String, Model>,
+    #[serde(default)]
+    findings: Vec<Finding>,
+}
+
+/// A `vocab_unknown` finding of the oracle's `validate --json` report.
+#[derive(Debug, Clone, Deserialize)]
+struct Finding {
+    vocab: String,
+    value: String,
+    message: String,
+    help: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -302,6 +319,16 @@ pub struct Outcome {
     pub generated_oracle_only: usize,
     /// Of those, where only the candidate suggests something.
     pub generated_candidate_only: usize,
+    /// The oracle's `vocab_unknown` findings compared.
+    pub findings: usize,
+    /// Of those, the ones whose message and help are byte-identical.
+    pub identical_findings: usize,
+    /// Findings whose message differs, or that the candidate does not report:
+    /// always a failure.
+    pub finding_mismatches: Vec<String>,
+    /// Findings whose help differs: (vocab, value, oracle, candidate), each
+    /// help or "" for none. Approved only with the suggestion difference.
+    pub finding_helps: Vec<(String, String, String, String)>,
 }
 
 /// Compares the probe's `result` with `opentide_schema::vocab`.
@@ -395,7 +422,81 @@ fn compare(fixture: &str, result: &ProbeResult) -> Result<Outcome> {
             }
         }
     }
+    compare_findings(&vocabularies, &corpus, &result.findings, &mut outcome)?;
     Ok(outcome)
+}
+
+/// Compares each of the oracle's `vocab_unknown` findings with the candidate's
+/// for the field of the corpus that holds its value.
+fn compare_findings(
+    vocabularies: &Vocabularies,
+    corpus: &BTreeMap<Field, Vec<&String>>,
+    findings: &[Finding],
+    outcome: &mut Outcome,
+) -> Result<()> {
+    for finding in findings {
+        outcome.findings += 1;
+        let mut unknown = None;
+        for (field, values) in corpus {
+            if field.vocab == finding.vocab && values.contains(&&finding.value) {
+                unknown = vocabularies.check(&finding.value, &field.selector()?);
+                if unknown.is_some() {
+                    break;
+                }
+            }
+        }
+        let Some(unknown) = unknown else {
+            outcome.finding_mismatches.push(format!(
+                "{} {:?}: the oracle reports vocab_unknown, the candidate accepts it",
+                finding.vocab, finding.value
+            ));
+            continue;
+        };
+        let message = unknown.message();
+        if message != finding.message {
+            outcome.finding_mismatches.push(format!(
+                "{} {:?}: message {:?}, the oracle's {:?}",
+                finding.vocab, finding.value, message, finding.message
+            ));
+            continue;
+        }
+        let help = unknown.help();
+        if help == finding.help {
+            outcome.identical_findings += 1;
+        } else {
+            outcome.finding_helps.push((
+                finding.vocab.clone(),
+                finding.value.clone(),
+                finding.help.clone().unwrap_or_default(),
+                help.unwrap_or_default(),
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Whether `entry` approves a finding's `help` difference: the helps are the
+/// ones its two suggestions give.
+fn approves_help(
+    entry: &Approved,
+    vocab: &str,
+    value: &str,
+    oracle: &str,
+    candidate: &str,
+) -> bool {
+    let help = |suggestion: &str| {
+        Unknown {
+            vocab: vocab.to_owned(),
+            value: value.to_owned(),
+            suggestion: (!suggestion.is_empty()).then(|| suggestion.to_owned()),
+        }
+        .help()
+        .unwrap_or_default()
+    };
+    entry.vocab == vocab
+        && entry.value == value
+        && help(&entry.oracle) == oracle
+        && help(&entry.candidate) == candidate
 }
 
 /// The repository root and the target directory, from `cargo metadata`.
@@ -520,7 +621,22 @@ pub fn run(options: &Options) -> Result<bool> {
     let mut passed = true;
     let mut used = vec![false; approved.len()];
     for outcome in &outcomes {
-        passed &= outcome.allowed_mismatches.is_empty() && outcome.validity_mismatches.is_empty();
+        passed &= outcome.allowed_mismatches.is_empty()
+            && outcome.validity_mismatches.is_empty()
+            && outcome.finding_mismatches.is_empty();
+        for (vocab, value, oracle, candidate) in &outcome.finding_helps {
+            if !approved
+                .iter()
+                .any(|a| approves_help(a, vocab, value, oracle, candidate))
+            {
+                passed = false;
+                eprintln!(
+                    "error: {}: the vocab_unknown help of {vocab} {value:?} is {candidate:?}, the \
+                     oracle's {oracle:?}, and {APPROVED} does not approve the suggestion",
+                    outcome.fixture
+                );
+            }
+        }
         for (vocab, value, oracle, candidate) in &outcome.corpus_suggestions {
             match approved.iter().position(|a| {
                 &a.vocab == vocab
@@ -570,7 +686,8 @@ fn describe(outcome: &Outcome) -> String {
         out,
         "{}: {} fields, {} corpus values, {} generated values; {} accepted-value and {} validity \
          mismatches; {} invalid values suggest the same, {} corpus and {} generated suggest \
-         otherwise ({} only the oracle suggests, {} only the candidate)",
+         otherwise ({} only the oracle suggests, {} only the candidate); {} of {} vocab_unknown \
+         findings byte-identical",
         outcome.fixture,
         outcome.fields,
         outcome.corpus_values,
@@ -582,11 +699,14 @@ fn describe(outcome: &Outcome) -> String {
         outcome.generated_suggestions,
         outcome.generated_oracle_only,
         outcome.generated_candidate_only,
+        outcome.identical_findings,
+        outcome.findings,
     );
     for line in outcome
         .allowed_mismatches
         .iter()
         .chain(&outcome.validity_mismatches)
+        .chain(&outcome.finding_mismatches)
     {
         let _ = writeln!(out, "  mismatch: {line}");
     }
@@ -594,6 +714,12 @@ fn describe(outcome: &Outcome) -> String {
         let _ = writeln!(
             out,
             "  suggestion: {vocab} {value:?}: oracle {oracle:?}, candidate {candidate:?}"
+        );
+    }
+    for (vocab, value, oracle, candidate) in &outcome.finding_helps {
+        let _ = writeln!(
+            out,
+            "  help: {vocab} {value:?}: oracle {oracle:?}, candidate {candidate:?}"
         );
     }
     out
@@ -699,8 +825,46 @@ mod tests {
                 ],
             }],
             models: BTreeMap::new(),
+            findings: vec![
+                Finding {
+                    vocab: "tlp::1.0".into(),
+                    value: "ambr".into(),
+                    message: "Value 'ambr' is not a valid 'tlp::1.0' vocabulary entry".into(),
+                    help: Some("did you mean 'amber'?".into()),
+                },
+                Finding {
+                    vocab: "tlp::1.0".into(),
+                    value: "whitish".into(),
+                    message: "Value 'whitish' is not a valid 'tlp::1.0' vocabulary entry".into(),
+                    help: Some("did you mean 'clear'?".into()),
+                },
+                Finding {
+                    vocab: "tlp::1.0".into(),
+                    value: "ambr".into(),
+                    message: "Value \"ambr\" is not a valid 'tlp::1.0' vocabulary entry".into(),
+                    help: None,
+                },
+                Finding {
+                    vocab: "tlp::1.0".into(),
+                    value: "amber".into(),
+                    message: "Value 'amber' is not a valid 'tlp::1.0' vocabulary entry".into(),
+                    help: None,
+                },
+            ],
         };
         let outcome = compare("x", &result).unwrap();
+        assert_eq!(outcome.findings, 4);
+        assert_eq!(outcome.identical_findings, 1);
+        assert_eq!(outcome.finding_mismatches.len(), 2, "{outcome:?}");
+        assert_eq!(
+            outcome.finding_helps,
+            [(
+                "tlp::1.0".into(),
+                "whitish".into(),
+                "did you mean 'clear'?".into(),
+                String::new()
+            )]
+        );
         assert!(outcome.allowed_mismatches.is_empty());
         assert_eq!(outcome.validity_mismatches.len(), 1, "{outcome:?}");
         assert_eq!(outcome.same_suggestions, 1);
@@ -715,6 +879,37 @@ mod tests {
         );
         assert_eq!(outcome.corpus_values, 2);
         assert_eq!(outcome.generated_values, 2);
+    }
+
+    #[test]
+    fn a_help_difference_is_approved_only_with_its_suggestion() {
+        let entry = Approved {
+            vocab: "tlp::1.0".into(),
+            value: "whitish".into(),
+            oracle: "clear".into(),
+            candidate: String::new(),
+            reason: "r".into(),
+            issue: "https://github.com/opentidehq/opentide/issues/812".into(),
+            changelog: "c".into(),
+        };
+        let approves = |vocab: &str, value: &str, oracle: &str, candidate: &str| {
+            approves_help(&entry, vocab, value, oracle, candidate)
+        };
+        assert!(approves("tlp::1.0", "whitish", "did you mean 'clear'?", ""));
+        assert!(!approves("tlp::1.0", "whitish", "did you mean 'red'?", ""));
+        assert!(!approves(
+            "tlp::1.0",
+            "whitish",
+            "did you mean 'clear'?",
+            "did you mean 'red'?"
+        ));
+        assert!(!approves("tlp::1.0", "whitis", "did you mean 'clear'?", ""));
+        assert!(!approves(
+            "severity::1.0",
+            "whitish",
+            "did you mean 'clear'?",
+            ""
+        ));
     }
 
     #[test]

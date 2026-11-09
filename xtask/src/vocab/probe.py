@@ -13,7 +13,9 @@ REQUEST is JSON: {"repo": DIR, "selectors": [{"vocab", "scoped", "stages",
    oracle accepts (the enum before editor search hints), and for every value
    (the request's and the corpus's) whether it is valid and its suggestion;
 3. writes the workspace's object vocabularies (`threat`, `objective`, `rule`),
-   which the Rust side has no indexer for yet.
+   which the Rust side has no indexer for yet;
+4. writes every `vocab_unknown` finding of that `validate --json` report: its
+   vocabulary and value, and its `message` and `help` as the CLI prints them.
 
 Standard library and the oracle only; no output on stdout is relied on.
 """
@@ -37,7 +39,7 @@ def main() -> int:
     seen: dict[tuple[str, str, bool], list[str]] = {}
     original = vocab_resolver.RuntimeEnumResolver.is_valid
 
-    def is_valid(self, value, vocab, *, stages=None, scoped=False, no_wrap=False):  # noqa: ANN001, ANN202
+    def is_valid(self, value, vocab, *, stages=None, scoped=False, no_wrap=False):
         key = (vocab, json.dumps(_stages(stages)), bool(scoped))
         values = seen.setdefault(key, [])
         if value not in values:
@@ -57,6 +59,7 @@ def main() -> int:
         except SystemExit as stop:
             exit_code = stop.code
     vocab_resolver.RuntimeEnumResolver.is_valid = original  # type: ignore[method-assign]
+    findings = _vocab_unknown(out.getvalue())
 
     from opentide.core.registry import Opentide
     from opentide.models.object_types import CORE_OBJECT_TYPES
@@ -70,13 +73,15 @@ def main() -> int:
         selectors.setdefault(key, []).extend(item["values"])
     corpus = []
     for key, values in seen.items():
-        corpus.append({"vocab": key[0], "stages": json.loads(key[1]), "scoped": key[2], "values": values})
+        corpus.append(
+            {"vocab": key[0], "stages": json.loads(key[1]), "scoped": key[2], "values": values}
+        )
         selectors.setdefault(key, []).extend(values)
 
     results = []
     for (vocab, stages_json, scoped), values in selectors.items():
         stages = json.loads(stages_json)
-        builder = vocab_resolver._VocabEnumBuilder(  # noqa: SLF001 - the enum before search hints
+        builder = vocab_resolver._VocabEnumBuilder(
             vocab,
             index,
             object_types=CORE_OBJECT_TYPES,
@@ -84,15 +89,23 @@ def main() -> int:
             stages=stages,
             scoped=scoped,
         )
-        builder._ingest(index.get(builder._field_name))  # noqa: SLF001
+        builder._ingest(index.get(builder._field_name))
         allowed = [value for value in builder.enum if value]
         checked = []
         for value in dict.fromkeys(values):
             valid = resolver.is_valid(value, vocab, stages=stages, scoped=scoped)
-            suggestion = None if valid else resolver.suggest(value, vocab, stages=stages, scoped=scoped)
+            suggestion = (
+                None if valid else resolver.suggest(value, vocab, stages=stages, scoped=scoped)
+            )
             checked.append([value, valid, suggestion])
         results.append(
-            {"vocab": vocab, "stages": stages, "scoped": scoped, "allowed": allowed, "checked": checked}
+            {
+                "vocab": vocab,
+                "stages": stages,
+                "scoped": scoped,
+                "allowed": allowed,
+                "checked": checked,
+            }
         )
 
     models = {}
@@ -116,10 +129,46 @@ def main() -> int:
 
     with open(result_path, "w", encoding="utf-8") as handle:
         json.dump(
-            {"exit_code": exit_code, "corpus": corpus, "results": results, "models": models},
+            {
+                "exit_code": exit_code,
+                "corpus": corpus,
+                "results": results,
+                "models": models,
+                "findings": findings,
+            },
             handle,
         )
     return 0
+
+
+def _vocab_unknown(report: str) -> list[dict[str, object]]:
+    """Every `vocab_unknown` finding of a `--json` report, once each, in order."""
+    try:
+        document = json.loads(report)
+    except ValueError:
+        return []
+    found: list[dict[str, object]] = []
+    stack = [document]
+    while stack:
+        node = stack.pop(0)
+        if isinstance(node, list):
+            stack[:0] = node
+            continue
+        if not isinstance(node, dict):
+            continue
+        context = node.get("context")
+        if node.get("code") == "vocab_unknown" and "message" in node and isinstance(context, dict):
+            finding = {
+                "vocab": context.get("vocab"),
+                "value": context.get("value"),
+                "message": node.get("message"),
+                "help": node.get("help"),
+            }
+            if finding not in found:
+                found.append(finding)
+            continue
+        stack[:0] = list(node.values())
+    return found
 
 
 def _stages(stages: object) -> list[str] | None:
