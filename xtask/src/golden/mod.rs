@@ -144,6 +144,8 @@ struct Layout {
     repo: PathBuf,
     golden: PathBuf,
     target: PathBuf,
+    /// The size budget of the recordings (`coverage::BUDGET_BYTES`; the tests set their own).
+    budget_bytes: u64,
 }
 
 impl Layout {
@@ -177,6 +179,7 @@ impl Layout {
             golden: repo.join("tests/golden"),
             repo,
             target,
+            budget_bytes: coverage::BUDGET_BYTES,
         })
     }
 
@@ -575,7 +578,7 @@ fn coverage_report(layout: &Layout, oracle: &Oracle, all: &[Case]) -> Result<(St
         files: cases.files + blobs.files,
         bytes: cases.bytes + blobs.bytes,
     };
-    let report = coverage::report(oracle, &paths, all, size);
+    let report = coverage::report(oracle, &paths, all, size, layout.budget_bytes);
     let mut complete = true;
     for (command, mode) in &report.missing {
         complete = false;
@@ -587,12 +590,11 @@ fn coverage_report(layout: &Layout, oracle: &Oracle, all: &[Case]) -> Result<(St
             "coverage: cases.toml names `{command}`, which `opentide --json commands` does not list"
         );
     }
-    if size.bytes > coverage::BUDGET_BYTES {
+    if size.bytes > layout.budget_bytes {
         complete = false;
         eprintln!(
             "coverage: the recordings take {} bytes, over the {} byte budget",
-            size.bytes,
-            coverage::BUDGET_BYTES
+            size.bytes, layout.budget_bytes
         );
     }
     Ok((report.markdown, complete))
@@ -735,6 +737,7 @@ fixtures = ["none", "empty"]
             golden,
             target: repo.join("target"),
             repo,
+            budget_bytes: coverage::BUDGET_BYTES,
         };
         let oracle = Oracle {
             tag: "v0.0.0".into(),
@@ -753,6 +756,7 @@ fixtures = ["none", "empty"]
             bin_dir: bin,
             install_dir: install,
             host_paths: Vec::new(),
+            known_uuids: std::sync::Arc::default(),
         };
         (dir, layout, oracle, engine)
     }
@@ -864,6 +868,69 @@ fixtures = ["none", "empty"]
                 .run_with(&layout, &oracle, engine)
                 .unwrap()
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn check_fails_on_a_missing_recording_an_unused_blob_an_edited_case_and_the_budget() {
+        let (_dir, mut layout, oracle, engine) = fake_repository();
+        let record = command(Verb::Record, false);
+        let check = |layout: &Layout| {
+            command(Verb::Check, false)
+                .run_with(layout, &oracle, engine.clone())
+                .unwrap()
+        };
+        assert!(record.run_with(&layout, &oracle, engine.clone()).unwrap());
+        assert!(check(&layout));
+
+        // A case whose recording directory is gone.
+        let gone = layout.cases().join("validate/json/empty/default");
+        std::fs::remove_dir_all(&gone).unwrap();
+        assert!(!check(&layout));
+        assert!(record.run_with(&layout, &oracle, engine.clone()).unwrap());
+        assert!(gone.join("case.toml").is_file());
+
+        // A blob no recording names.
+        let stray = blob::put(&layout.blobs(), b"no recording names this\n").unwrap();
+        assert!(layout.blobs().join(&stray).is_file());
+        assert!(!check(&layout));
+        assert!(record.run_with(&layout, &oracle, engine.clone()).unwrap());
+        assert!(!layout.blobs().join(&stray).exists());
+
+        // A case.toml whose recorded environment was edited.
+        let case_toml = layout.cases().join("validate/plain/none/default/case.toml");
+        let text = std::fs::read_to_string(&case_toml).unwrap();
+        assert!(text.contains("[env]"), "{text}");
+        std::fs::write(
+            &case_toml,
+            text.replacen("[env]\n", "[env]\nEDITED = \"1\"\n", 1),
+        )
+        .unwrap();
+        assert!(!check(&layout));
+        assert!(record.run_with(&layout, &oracle, engine.clone()).unwrap());
+        assert!(check(&layout));
+
+        // Recordings over the budget: record and check both fail.
+        layout.budget_bytes = 16;
+        assert!(!check(&layout));
+        assert!(!record.run_with(&layout, &oracle, engine.clone()).unwrap());
+        let coverage = std::fs::read_to_string(layout.golden.join("COVERAGE.md")).unwrap();
+        assert!(coverage.contains("of a 0 MiB budget"), "{coverage}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_nondeterministic_engine_fails_the_determinism_check_and_nothing_is_written() {
+        let (_dir, layout, oracle, engine) = fake_repository();
+        std::fs::write(
+            engine.bin_dir.join("opentide"),
+            "#!/bin/sh\nod -An -N8 -tx1 /dev/urandom\n",
+        )
+        .unwrap();
+        let mut record = command(Verb::Record, true);
+        record.filter = Some("validate/plain/*/*".into());
+        assert!(!record.run_with(&layout, &oracle, engine).unwrap());
+        assert!(!layout.cases().exists());
     }
 
     #[cfg(unix)]

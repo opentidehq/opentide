@@ -35,6 +35,9 @@ pub struct Engine {
     /// the Python a virtual environment links to (`<PYTHON>`), whose standard
     /// library shows in a traceback.
     pub host_paths: Vec<(PathBuf, String)>,
+    /// The UUIDs in its own installed files (bundled vocabularies, data):
+    /// deterministic, never fresh.
+    pub known_uuids: std::sync::Arc<std::collections::BTreeSet<String>>,
 }
 
 /// What every case of a run shares.
@@ -115,6 +118,9 @@ pub fn run_case(case: &Case, ctx: &RunContext) -> Result<Recording> {
             .map(|days| utc_date(started - Duration::from_secs(days * 86_400)))
             .collect(),
         git_version: ctx.git_version.clone(),
+        known_uuids: case_uuids(case)
+            .chain(ctx.engine.known_uuids.iter().cloned())
+            .collect(),
     };
     let mut normaliser = Normaliser::new(&volatile, &case.normalise, before.texts());
     Ok(Recording::new(
@@ -341,6 +347,15 @@ fn kill_session(child: &Child) {
 
 #[cfg(not(unix))]
 fn kill_session(_child: &Child) {}
+
+/// The UUIDs a case passes in: argv, environment and stdin.
+fn case_uuids(case: &Case) -> impl Iterator<Item = String> + '_ {
+    case.argv
+        .iter()
+        .chain(case.env.values())
+        .chain(std::iter::once(&case.stdin.input))
+        .flat_map(|text| crate::golden::normalise::uuids_in(text).collect::<Vec<_>>())
+}
 
 /// The kernel release of this host (`uname -r`), on Linux.
 pub fn kernel_release() -> Option<String> {

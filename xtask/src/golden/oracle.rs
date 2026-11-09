@@ -165,11 +165,13 @@ impl Oracle {
         let host_paths = python_home(&dir)
             .map(|home| vec![(home, "<PYTHON>".to_owned())])
             .unwrap_or_default();
+        let known_uuids = std::sync::Arc::new(installed_uuids(&dir, &self.package)?);
         Ok(Engine {
             name: "python".into(),
             bin_dir,
             install_dir: dir,
             host_paths,
+            known_uuids,
         })
     }
 
@@ -249,6 +251,45 @@ fn narrow(text: &str, pin: &str, sha: &str) -> Result<String> {
         "PyPI does not list the ORACLE wheel's hash for {pin}"
     );
     Ok(out)
+}
+
+/// Every UUID in the text files of the installed `package` under `venv`
+/// (`lib/python*/site-packages/<package>/`): its bundled vocabularies and
+/// data, which a case's output may quote and which are not fresh.
+fn installed_uuids(venv: &Path, package: &str) -> Result<std::collections::BTreeSet<String>> {
+    let mut out = std::collections::BTreeSet::new();
+    let lib = venv.join("lib");
+    let Ok(pythons) = fs::read_dir(&lib) else {
+        return Ok(out);
+    };
+    for python in pythons {
+        let root = python
+            .with_context(|| format!("read {}", lib.display()))?
+            .path()
+            .join("site-packages")
+            .join(package);
+        if root.is_dir() {
+            collect_uuids(&root, &mut out)?;
+        }
+    }
+    Ok(out)
+}
+
+fn collect_uuids(dir: &Path, out: &mut std::collections::BTreeSet<String>) -> Result<()> {
+    for entry in fs::read_dir(dir).with_context(|| format!("read {}", dir.display()))? {
+        let entry = entry.with_context(|| format!("read {}", dir.display()))?;
+        let kind = entry
+            .file_type()
+            .with_context(|| format!("stat {}", entry.path().display()))?;
+        if kind.is_dir() {
+            collect_uuids(&entry.path(), out)?;
+        } else if kind.is_file()
+            && let Ok(text) = fs::read_to_string(entry.path())
+        {
+            out.extend(crate::golden::normalise::uuids_in(&text));
+        }
+    }
+    Ok(())
 }
 
 /// The installation the virtual environment `venv` links to: the parent of
@@ -366,6 +407,47 @@ requirements = "oracle-requirements.txt"
                 .to_string()
                 .contains("release number")
         );
+    }
+
+    #[test]
+    fn collects_the_uuids_of_the_installed_package_only() {
+        let venv = tempfile::tempdir().unwrap();
+        let data = venv
+            .path()
+            .join("lib/python3.13/site-packages/opentide/data");
+        fs::create_dir_all(&data).unwrap();
+        fs::write(
+            data.join("vocab.toml"),
+            "id = \"4D3C2B1A-0F9E-4D8C-B7A6-958473625140\"\n",
+        )
+        .unwrap();
+        fs::write(data.join("blob.bin"), [0xff, 0xfe]).unwrap();
+        let other = venv.path().join("lib/python3.13/site-packages/rich");
+        fs::create_dir_all(&other).unwrap();
+        fs::write(other.join("x.py"), "11111111-2222-4333-8444-555566667777").unwrap();
+        let found = installed_uuids(venv.path(), "opentide").unwrap();
+        assert_eq!(
+            found.into_iter().collect::<Vec<_>>(),
+            ["4d3c2b1a-0f9e-4d8c-b7a6-958473625140"]
+        );
+        assert!(
+            installed_uuids(&venv.path().join("none"), "opentide")
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn installs_by_hash_only_wheels_and_no_host_configuration() {
+        // V857-S-6: the flags that make the install the ORACLE wheel and nothing else.
+        for flag in ["--require-hashes", "--no-deps", "--no-config"] {
+            assert!(INSTALL_FLAGS.contains(&flag), "{flag}");
+        }
+        let only = INSTALL_FLAGS
+            .iter()
+            .position(|f| *f == "--only-binary")
+            .unwrap();
+        assert_eq!(INSTALL_FLAGS[only + 1], ":all:");
     }
 
     #[test]

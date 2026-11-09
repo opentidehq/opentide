@@ -7,15 +7,17 @@ name: Golden
 #
 # - check: `cargo xtask golden check --engine python`, the recordings against
 #   a fresh run, plus COVERAGE.md and no missing or orphaned recording.
-# - determinism: `cargo xtask golden record --check-determinism` runs every
-#   case twice and fails unless both runs agree byte for byte; then the
-#   recordings it wrote must be the committed ones.
+# - determinism: `cargo xtask golden lock` must reproduce the committed
+#   oracle-requirements.txt; then `cargo xtask golden record
+#   --check-determinism` runs every case twice and fails unless both runs
+#   agree byte for byte, and the recordings it wrote must be the committed ones.
 #
 # Nothing here publishes or writes to the repository.
 
 on:
   push:
-    branches: [development]
+    # integration/unified-core collects the unified-core work (epic #790) before development.
+    branches: [development, integration/unified-core]
   pull_request:
     # All base branches: a stacked PR targets the branch below it, not development.
     paths:
@@ -31,6 +33,7 @@ on:
       - ".github/workflows/golden.yml"
   schedule:
     # Weekly, so a change outside the repository (PyPI, the runner image) shows.
+    # GitHub runs a schedule on the default branch only.
     - cron: "17 4 * * 1"
   workflow_dispatch:
 
@@ -53,6 +56,8 @@ jobs:
 
       - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
         with:
+          # The uv that wrote oracle-requirements.txt (`golden lock` must reproduce it).
+          version: "0.11.32"
           enable-cache: true
           cache-dependency-glob: tests/golden/oracle-requirements.txt
 
@@ -77,6 +82,8 @@ jobs:
 
       - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
         with:
+          # The uv that wrote oracle-requirements.txt (`golden lock` must reproduce it).
+          version: "0.11.32"
           enable-cache: true
           cache-dependency-glob: tests/golden/oracle-requirements.txt
 
@@ -86,6 +93,15 @@ jobs:
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: . -> target
+
+      - name: The oracle's lock file is the one golden lock writes
+        run: |
+          set -euo pipefail
+          cargo xtask golden lock
+          if ! git diff --exit-code -- tests/golden/oracle-requirements.txt; then
+            echo "::error::cargo xtask golden lock changed tests/golden/oracle-requirements.txt: run it and commit the result"
+            exit 1
+          fi
 
       - name: Record every case twice
         run: cargo xtask golden record --check-determinism

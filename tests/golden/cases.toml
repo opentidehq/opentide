@@ -558,6 +558,13 @@ variant = "uuid"
 args = ["validate", "--uuid", "{rule}"]
 fixtures = ["tide-corpus", "vscode"]
 
+# docs/cli/validate.md: --uuid repeated.
+[[case]]
+command = "validate"
+variant = "uuid-twice"
+args = ["validate", "--uuid", "{rule}", "--uuid", "{objective}"]
+fixtures = ["tide-corpus", "vscode"]
+
 [[case]]
 command = "validate"
 variant = "queries-warn"
@@ -683,6 +690,19 @@ fixtures = ["none", "tide-corpus"]
 command = "query"
 variant = "rule"
 args = ["query", "--platform", "splunk", "--rule", "00000000-0000-4000-8003-000000000003"]
+fixtures = ["tide-corpus"]
+
+# docs/cli/query.md, as written.
+[[case]]
+command = "query"
+variant = "example-docs"
+args = ["query", "--platform", "sentinel", "SecurityEvent | where EventID == 4688 | take 20"]
+fixtures = ["none", "tide-corpus"]
+
+[[case]]
+command = "query"
+variant = "rule-tenant-all-since"
+args = ["query", "--platform", "splunk", "--rule", "00000000-0000-4000-8003-000000000003", "--tenant", "all", "--since", "7d"]
 fixtures = ["tide-corpus"]
 
 # A missing required option.
@@ -1336,6 +1356,13 @@ variant = "schemas"
 args = ["generate", "schemas"]
 fixtures = ["tide-corpus"]
 
+# docs/cli/generate.md: several phases at once (unknown to 0.23.0 likewise).
+[[case]]
+command = "generate"
+variant = "schemas-templates-vocabs-snippets"
+args = ["generate", "schemas", "templates", "vocabs", "snippets"]
+fixtures = ["tide-corpus"]
+
 [[case]]
 command = "generate docs"
 variant = "output"
@@ -1409,6 +1436,13 @@ fixtures = ["tide-corpus"]
 command = "share push"
 variant = "changed"
 args = ["share", "push", "--changed"]
+fixtures = ["tide-corpus"]
+
+# docs/cli/share.md: --since names the start, so it runs outside CI; no git repository.
+[[case]]
+command = "share push"
+variant = "changed-since"
+args = ["share", "push", "--changed", "--since", "0123456789abcdef0123456789abcdef01234567"]
 fixtures = ["tide-corpus"]
 
 # Retract without --uuid may prompt: human mode is left out (interactive prompt).
