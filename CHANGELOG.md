@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Fixed
+
+- **`pip install opentide` no longer installs a Typer that crashes it.** Typer 0.29.0 removed private modules and options opentide's CLI is built on, so `opentide setup` failed with `No module named 'typer._types'` and `opentide commands` crashed. opentide now requires `typer>=0.27.0,<0.29`, and `setup ci` declares its providers with Typer's public API. An invalid provider names the valid ones and suggests the closest.
+
 ## [0.24.0] — 2026-11-09
 
 A Splunk block's `advanced` table validates and deploys again, so catalogues whose rules set a custom alert action's parameters, such as MISP's, pass `validate`. The editor and `opentide tui` check CrowdStrike queries as CQL.

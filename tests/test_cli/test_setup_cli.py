@@ -585,7 +585,8 @@ def test_setup_ci_none_is_rejected(tmp_path: Path) -> None:
         ["setup", "ci", "none", "--yes", "--path", str(tmp_path)],
     )
     assert result.exit_code == 2
-    assert "Choose github, gitlab, or azure" in result.stdout + result.stderr
+    output = result.stdout + result.stderr
+    assert "'none' is not one of 'github', 'gitlab', 'azure'" in output
     assert not (tmp_path / ".github").exists()
 
 
