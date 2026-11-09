@@ -1,0 +1,1 @@
+{"error":"Got unexpected extra argument(s) (extra)","ok":false,"status":"failed","message":"Got unexpected extra argument(s) (extra)","schema_version":1,"command":"commands","duration_ms":0,"exit_code":2,"summary":{},"next_actions":[],"failure":{"code":"usage_error","message":"Got unexpected extra argument(s) (extra)","argument":null,"suggestion":null,"crash_log":null}}

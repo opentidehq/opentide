@@ -89,6 +89,7 @@ Fuzz smoke (falco tide protocol)
 Fuzz smoke (config framing)
 Supply chain (cargo deny)
 Fuzz smoke (cql)
+Fuzz smoke (cli)
 Fuzz smoke (from_node)
 Engine release (dry run) / Release tag
 Engine release (dry run) / opentide-lsp x86_64-unknown-linux-gnu

@@ -1294,6 +1294,62 @@ variant = "default"
 args = ["commands"]
 fixtures = ["none"]
 
+# ---- the CLI framework (UC-3.3, #825): hoisting, DEBUG, indentation, on the command it ports ----
+
+# --json after the command: hoisted to the root.
+[[case]]
+command = "commands"
+variant = "json-after"
+args = ["commands", "--json"]
+modes = ["plain", "agent"]
+fixtures = ["none"]
+
+# The other hoisted flags after the command.
+[[case]]
+command = "commands"
+variant = "hoist-flags"
+args = ["commands", "--quiet", "--no-color"]
+fixtures = ["none"]
+
+# DEBUG='*' (Node tooling) is not a boolean: ignored, not an error.
+[[case]]
+command = "commands"
+variant = "debug-star"
+args = ["commands"]
+fixtures = ["none"]
+env = { DEBUG = "*" }
+
+# OPENTIDE_JSON_INDENT=2: indented although stdout is a pipe.
+[[case]]
+command = "commands"
+variant = "indent-2"
+args = ["commands"]
+modes = ["json"]
+fixtures = ["none"]
+env = { OPENTIDE_JSON_INDENT = "2" }
+
+# OPENTIDE_JSON_INDENT=0: one line although stdout is a terminal.
+[[case]]
+command = "commands"
+variant = "indent-0"
+args = ["--json", "commands"]
+modes = ["human"]
+fixtures = ["none"]
+env = { OPENTIDE_JSON_INDENT = "0" }
+
+# A typo in an option of the command, and an extra argument.
+[[case]]
+command = "commands"
+variant = "typo-option"
+args = ["commands", "--jsno"]
+fixtures = ["none"]
+
+[[case]]
+command = "commands"
+variant = "extra-argument"
+args = ["commands", "extra"]
+fixtures = ["none"]
+
 # ---- protocol commands (mcp mode in every mode): the MCP server is UC-3.7, the language server has its own tests ----
 
 # One JSON-RPC session: initialize, two runs, a refused run, protocol errors, shutdown, exit.
