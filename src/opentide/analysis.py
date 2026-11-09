@@ -637,6 +637,21 @@ def check_queries(
     return QueryRun(checks=checks, unreadable=unreadable)
 
 
+def editor_only_queries(space: Workspace, text: str) -> frozenset[tuple[str, ...]]:
+    """The field paths of the queries in *text* that only the editor reports.
+
+    Those in a language the CLI does not check offline (not in
+    :data:`OFFLINE_LANGUAGES`): CrowdStrike's CQL until CrowdStrike is an
+    offline platform. ``opentide lint`` drops the engine's findings under
+    them, as :func:`check_queries` drops their reports for ``opentide validate``.
+    """
+    return frozenset(
+        tuple(report.field_path)
+        for report in space.analyze_queries(text)
+        if report.language not in OFFLINE_LANGUAGES
+    )
+
+
 def check_query(
     text: str, *, language: str, platform: str | None = None, stack: str | None = None
 ) -> list[Finding]:
