@@ -45,7 +45,8 @@ pub fn pinned_version(requirements: &str) -> Result<String> {
 /// Whether every line of the requirements that pins a package carries a hash
 /// (what `--require-hashes` needs, checked here for a clearer message).
 pub fn every_pin_is_hashed(requirements: &str) -> Result<()> {
-    let joined = requirements.replace("\\\n", " ");
+    // A checkout with CRLF line endings (Windows) must read the same.
+    let joined = requirements.replace("\r\n", "\n").replace("\\\n", " ");
     for line in joined.lines() {
         let line = line.trim();
         if line.is_empty() || line.starts_with('#') {
@@ -204,6 +205,13 @@ opentide==0.23.0 \\
     fn the_pinned_version_is_read_from_the_requirements() {
         assert_eq!(pinned_version(REQUIREMENTS).unwrap(), "0.23.0");
         assert!(pinned_version("annotated-types==0.7.0\n").is_err());
+    }
+
+    #[test]
+    fn crlf_line_endings_read_the_same() {
+        let crlf = REQUIREMENTS.replace('\n', "\r\n");
+        assert_eq!(pinned_version(&crlf).unwrap(), "0.23.0");
+        every_pin_is_hashed(&crlf).unwrap();
     }
 
     #[test]

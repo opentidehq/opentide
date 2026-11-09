@@ -24,6 +24,27 @@ use wait4::Wait4;
 /// report of a run with it set says so in its notes.
 pub const INJECT_SLEEP_ENV: &str = "XTASK_BENCH_INJECT_SLEEP_MS";
 
+/// `XTASK_BENCH_TEST_BALLAST_MIB`: test-only. xtask holds this many MiB,
+/// touched, for the whole run, which sets its own resident memory (and so
+/// the floor [`distinct_from_own`] guards) to a known size whatever the
+/// runner's memory layout. The tests use it to prove that a command peaking
+/// below xtask's own memory is refused; nothing else sets it.
+pub const TEST_BALLAST_ENV: &str = "XTASK_BENCH_TEST_BALLAST_MIB";
+
+/// The ballast [`TEST_BALLAST_ENV`] asks for, allocated and touched.
+pub fn test_ballast() -> Result<Option<Vec<u8>>> {
+    match std::env::var(TEST_BALLAST_ENV) {
+        Ok(text) if !text.trim().is_empty() => {
+            let mib: usize = text
+                .trim()
+                .parse()
+                .with_context(|| format!("{TEST_BALLAST_ENV}={text} is not MiB"))?;
+            Ok(Some(vec![1u8; mib << 20]))
+        }
+        _ => Ok(None),
+    }
+}
+
 /// An address no proxy listens on: a command that tries the network fails
 /// at once instead of reaching a tenant (`deploy --dry-run` must not).
 pub const DEAD_PROXY: &str = "http://127.0.0.1:9";
@@ -290,6 +311,8 @@ mod tests {
         std::fs::remove_dir_all(root).unwrap();
     }
 
+    // Reads /proc (VmHWM, clear_refs) and Linux's ru_maxrss semantics.
+    #[cfg(target_os = "linux")]
     #[test]
     fn the_peak_rss_is_the_child_not_this_process() {
         // A child that touches 64 MiB more than this process holds has a
@@ -312,6 +335,8 @@ mod tests {
         std::fs::remove_dir_all(root).unwrap();
     }
 
+    // Reads /proc (VmHWM, clear_refs) and Linux's ru_maxrss semantics.
+    #[cfg(target_os = "linux")]
     #[test]
     fn a_peak_rss_under_xtasks_own_is_reported_as_such() {
         // `sh -c true` peaks far below this test process: what wait4 reports
@@ -367,6 +392,8 @@ mod tests {
         std::fs::remove_dir_all(root).unwrap();
     }
 
+    // Reads /proc (VmHWM, clear_refs) and Linux's ru_maxrss semantics.
+    #[cfg(target_os = "linux")]
     #[test]
     fn memory_xtask_freed_before_the_spawn_does_not_raise_the_floor() {
         // 256 MiB touched and freed: without the reset of VmHWM before the

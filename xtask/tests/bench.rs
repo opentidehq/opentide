@@ -45,11 +45,27 @@ fn fake_opentide(dir: &Path) -> PathBuf {
 
 fn xtask(args: &[&str], inject_ms: Option<u64>) -> Output {
     let mut command = Command::new(env!("CARGO_BIN_EXE_xtask"));
-    command.args(args).env_remove("XTASK_BENCH_INJECT_SLEEP_MS");
+    command
+        .args(args)
+        .env_remove("XTASK_BENCH_INJECT_SLEEP_MS")
+        .env_remove("XTASK_BENCH_TEST_BALLAST_MIB");
     if let Some(ms) = inject_ms {
         command.env("XTASK_BENCH_INJECT_SLEEP_MS", ms.to_string());
     }
     command.output().expect("run xtask")
+}
+
+/// `xtask` holding 64 MiB of ballast (`XTASK_BENCH_TEST_BALLAST_MIB`): its
+/// own resident memory, the floor the RSS guard enforces, is then above any
+/// small stand-in's peak on every runner.
+#[cfg(target_os = "linux")]
+fn xtask_with_ballast(args: &[&str]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_xtask"))
+        .args(args)
+        .env_remove("XTASK_BENCH_INJECT_SLEEP_MS")
+        .env("XTASK_BENCH_TEST_BALLAST_MIB", "64")
+        .output()
+        .expect("run xtask")
 }
 
 fn bench(opentide: &Path, out: &Path, inject_ms: Option<u64>) -> serde_json::Value {
@@ -93,9 +109,11 @@ fn budgets_from(report: &serde_json::Value, path: &Path) {
     let digest = report["workspace_digest"]
         .as_str()
         .expect("a workspace digest");
-    // On a machine without /proc/cpuinfo the CPU is unknown, and no
-    // baseline applies; the test's machines have one.
-    let cpu = report["host"]["cpu_model"].as_str().expect("a CPU model");
+    // Where the CPU model is unknown, the baseline's CPU is another one: the
+    // slowdown must still fail, against the cross-CPU ceiling.
+    let cpu = report["host"]["cpu_model"]
+        .as_str()
+        .unwrap_or("an unknown CPU");
     #[expect(clippy::cast_precision_loss, reason = "a test RSS")]
     let rss_mib = explain["peak_rss_bytes"].as_u64().unwrap() as f64 / (1024.0 * 1024.0);
     std::fs::write(
@@ -257,10 +275,13 @@ fn a_relative_opentide_path_is_resolved_against_the_working_directory() {
     std::fs::remove_dir_all(dir).unwrap();
 }
 
+// The floor and its guard read /proc (VmHWM, clear_refs): Linux only.
+#[cfg(target_os = "linux")]
 #[test]
 fn a_command_whose_peak_rss_cannot_be_told_from_xtasks_is_refused() {
-    // A stand-in `opentide` without ballast peaks below xtask's own RSS:
-    // what wait4 reports may be xtask's, so the run stops (exit 2).
+    // A stand-in `opentide` without ballast peaks below xtask's own RSS
+    // (64 MiB of test ballast): what wait4 reports may be xtask's, so the
+    // run stops (exit 2).
     let dir = scratch("floor-cli");
     let opentide = dir.join("opentide");
     std::fs::write(
@@ -269,20 +290,17 @@ fn a_command_whose_peak_rss_cannot_be_told_from_xtasks_is_refused() {
     )
     .unwrap();
     std::fs::set_permissions(&opentide, std::fs::Permissions::from_mode(0o755)).unwrap();
-    let output = xtask(
-        &[
-            "bench",
-            "--only",
-            "explain",
-            "--opentide",
-            opentide.to_str().unwrap(),
-            "--runs",
-            "1",
-            "--warmup",
-            "0",
-        ],
-        None,
-    );
+    let output = xtask_with_ballast(&[
+        "bench",
+        "--only",
+        "explain",
+        "--opentide",
+        opentide.to_str().unwrap(),
+        "--runs",
+        "1",
+        "--warmup",
+        "0",
+    ]);
     assert_eq!(output.status.code(), Some(2));
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("does not exceed xtask's own"), "{stderr}");
@@ -314,10 +332,13 @@ while :; do
 done
 "#;
 
+// The floor and its guard read /proc (VmHWM, clear_refs): Linux only.
+#[cfg(target_os = "linux")]
 #[test]
 fn a_language_server_whose_peak_rss_cannot_be_told_from_xtasks_is_refused() {
-    // The stub completes the session (first diagnostics, shutdown, exit 0),
-    // so the only thing that can stop the run is the RSS guard.
+    // The stub completes the session (first diagnostics, shutdown, exit 0)
+    // and peaks below xtask's 64 MiB of test ballast, so the only thing that
+    // can stop the run is the RSS guard.
     let dir = scratch("floor-lsp");
     let server = dir.join("server");
     std::fs::write(&server, STUB_SERVER).unwrap();
@@ -325,24 +346,21 @@ fn a_language_server_whose_peak_rss_cannot_be_told_from_xtasks_is_refused() {
     let workspace = dir.join("workspace");
     std::fs::create_dir_all(workspace.join("objects/rules")).unwrap();
     std::fs::write(workspace.join("objects/rules/a.yaml"), "name: a\n").unwrap();
-    let output = xtask(
-        &[
-            "bench",
-            "--engine",
-            "rust",
-            "--only",
-            "lsp_first_diagnostics",
-            "--lsp",
-            server.to_str().unwrap(),
-            "--workspace",
-            workspace.to_str().unwrap(),
-            "--runs",
-            "1",
-            "--warmup",
-            "0",
-        ],
-        None,
-    );
+    let output = xtask_with_ballast(&[
+        "bench",
+        "--engine",
+        "rust",
+        "--only",
+        "lsp_first_diagnostics",
+        "--lsp",
+        server.to_str().unwrap(),
+        "--workspace",
+        workspace.to_str().unwrap(),
+        "--runs",
+        "1",
+        "--warmup",
+        "0",
+    ]);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert_eq!(output.status.code(), Some(2), "{stderr}");
     assert!(stderr.contains("does not exceed xtask's own"), "{stderr}");

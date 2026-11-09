@@ -637,6 +637,16 @@ fn display(program: &Path, args: &[OsString]) -> String {
 }
 
 fn run(options: &Options) -> Result<()> {
+    // Held, touched, until the run ends (test-only, measure::TEST_BALLAST_ENV).
+    let ballast = measure::test_ballast()?;
+    if let Some(ballast) = &ballast {
+        std::hint::black_box(ballast);
+        eprintln!(
+            "bench: {} is set: xtask holds {} MiB (test-only)",
+            measure::TEST_BALLAST_ENV,
+            ballast.len() >> 20
+        );
+    }
     let (root, target) = cargo_paths()?;
     let base = target.join("xtask-bench");
     // One work directory per process: two runs at once never share a copy.
@@ -647,6 +657,7 @@ fn run(options: &Options) -> Result<()> {
         std::process::id()
     ));
     let outcome = run_in(options, &root, &base, &work);
+    drop(ballast);
     if work.exists()
         && let Err(err) = std::fs::remove_dir_all(&work)
     {
@@ -1034,7 +1045,8 @@ fn host() -> Host {
         .lines()
         .find_map(|line| line.strip_prefix("model name"))
         .and_then(|rest| rest.split_once(':'))
-        .map(|(_, model)| model.trim().to_owned());
+        .map(|(_, model)| model.trim().to_owned())
+        .or_else(sysctl_cpu_model);
     let meminfo = std::fs::read_to_string("/proc/meminfo").unwrap_or_default();
     let memory_bytes = meminfo
         .lines()
@@ -1054,6 +1066,16 @@ fn host() -> Host {
         memory_bytes,
         runner_image,
     }
+}
+
+/// The CPU model where there is no `/proc/cpuinfo` (macOS).
+fn sysctl_cpu_model() -> Option<String> {
+    let output = std::process::Command::new("sysctl")
+        .args(["-n", "machdep.cpu.brand_string"])
+        .output()
+        .ok()?;
+    let model = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+    (output.status.success() && !model.is_empty()).then_some(model)
 }
 
 fn git_sha(root: &Path) -> Option<String> {
