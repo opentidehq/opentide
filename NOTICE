@@ -62,7 +62,9 @@ CrowdStrike FLTR content, cs-shadowbq/CQL-Queries, ByteRay-Labs/Query-Hub and
 Microsoft Azure-Sentinel (MIT, data/catalogs/cql/LICENSE-MIT.txt), the Elastic
 Common Schema (Apache-2.0, data/catalogs/cql/LICENSE-Apache-2.0.txt) and
 pySigma-backend-crowdstrike (LGPL-2.1, names only). The conformance queries
-are unmodified public-domain (Unlicense) queries.
+are public-domain (Unlicense) queries, each kept unmodified; each
+`.broken.cql` twin is a modified copy with one injected fault
+(crates/testdata/conformance/external/SOURCES.md).
 
 libsinsp and the Falco rule loader (crates/opentide-falco/src/parser.rs ports
 libsinsp's filter parser and escaping, falcosecurity/libs

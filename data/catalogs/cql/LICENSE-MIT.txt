@@ -1,4 +1,4 @@
-MIT License notices of the MIT-licensed sources of catalogs/cql (see NOTICE).
+MIT License notices of the MIT-licensed sources of data/catalogs/cql (see NOTICE).
 
 ------------------------------------------------------------------------------
 CrowdStrike/logscale-community-content, Log-Sources/CrowdStrike/FLTR/
