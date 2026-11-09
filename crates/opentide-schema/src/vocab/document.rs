@@ -235,6 +235,21 @@ fn text_of(value: &Value) -> Option<String> {
     }
 }
 
+/// An entry's `version` or `removed`: `M.m`, written as a string. A TOML
+/// float is refused, since it keeps no trailing zero (`1.10` reads as `1.1`,
+/// another version).
+fn version_of(key: &str, value: &Value) -> Result<Version, String> {
+    match value {
+        Value::Float(number) => Err(format!(
+            "`{key}` {number} is a number, which drops trailing zeros (1.10 reads as 1.1): \
+             write it as a string, \"M.m\""
+        )),
+        value => text_of(value)
+            .and_then(|text| text.parse().ok())
+            .ok_or_else(|| format!("`{key}` {value} is not M.m")),
+    }
+}
+
 fn take_text(table: &mut Table, key: &str) -> Result<String, ()> {
     match table.remove(key) {
         None => Ok(String::new()),
@@ -280,19 +295,18 @@ fn entry_of(raw: Value, key: KeyKind) -> Result<Entry, String> {
     }
     let version = match table.remove("version") {
         None => Version::new(1, 0),
-        Some(value) => text_of(&value)
-            .and_then(|text| text.parse().ok())
-            .ok_or_else(|| format!("`version` {value} is not M.m"))?,
+        Some(value) => version_of("version", &value)?,
     };
     let removed = match table.remove("removed") {
         None | Some(Value::Boolean(false)) => None,
         Some(Value::String(text)) if text.is_empty() => None,
-        Some(value) => Some(
-            text_of(&value)
-                .and_then(|text| text.parse().ok())
-                .ok_or_else(|| format!("`removed` {value} is not M.m"))?,
-        ),
+        Some(value) => Some(version_of("removed", &value)?),
     };
+    if let Some(removed) = removed.filter(|removed| *removed <= version) {
+        return Err(format!(
+            "`removed` {removed} is not later than `version` {version}: the entry is never active"
+        ));
+    }
     let mut stages_raw = table.remove("tide.vocab.stages");
     if stages_raw.is_none() {
         stages_raw = table
@@ -446,6 +460,91 @@ tide = { vocab = { stages = ["OS"] } }
             Vocabulary::parse("name = [", "t").unwrap_err(),
             VocabError::Toml { .. }
         ));
+    }
+
+    fn entries(keys: &str) -> Vocabulary {
+        Vocabulary::parse(&format!("name = \"T\"\nfield = \"t\"\n{keys}"), "t").unwrap()
+    }
+
+    #[test]
+    fn removed_false_or_empty_means_never_removed() {
+        let set = entries(
+            "[[keys]]\nname = \"a\"\nremoved = false\n[[keys]]\nname = \"b\"\nremoved = \"\"\n\
+             [[keys]]\nname = \"c\"\nremoved = true\n",
+        );
+        assert_eq!(set.entries["a"].removed, None);
+        assert_eq!(set.entries["b"].removed, None);
+        assert!(set.entries["a"].active_at(Version::new(99, 0)));
+        assert!(set.entries["b"].active_at(Version::new(99, 0)));
+        // `true` is no version: the entry is skipped, not kept as never removed.
+        assert!(!set.entries.contains_key("c"));
+        assert_eq!(set.skipped, ["entry 2: `removed` true is not M.m"]);
+    }
+
+    #[test]
+    fn an_empty_key_is_skipped() {
+        let names = entries("[[keys]]\nname = \"\"\n[[keys]]\nname = \"x\"\n");
+        assert_eq!(names.entries.keys().collect::<Vec<_>>(), ["x"]);
+        assert_eq!(names.skipped, ["entry 0: an empty key"]);
+        let ids = Vocabulary::parse(
+            "name = \"T\"\nfield = \"t\"\nkey = \"id\"\n[[keys]]\nname = \"x\"\nid = \"\"\n",
+            "t",
+        )
+        .unwrap();
+        assert!(ids.entries.is_empty());
+        assert_eq!(ids.skipped, ["entry 0: an empty key"]);
+    }
+
+    #[test]
+    fn search_hints_are_on_unless_set_to_false() {
+        assert!(entries("").search_hints());
+        assert!(entries("\"vocab.search_hints\" = true\n").search_hints());
+        assert!(!entries("\"vocab.search_hints\" = false\n").search_hints());
+        // Anything but the boolean false leaves them on.
+        assert!(entries("\"vocab.search_hints\" = \"false\"\n").search_hints());
+    }
+
+    /// A TOML float keeps no trailing zero, so `version = 1.10` would read as
+    /// 1.1: refused, with what to write instead. A string or an integer reads.
+    #[test]
+    fn a_float_version_is_refused() {
+        let set = entries(
+            "[[keys]]\nname = \"a\"\nversion = 1.10\n[[keys]]\nname = \"b\"\nremoved = 2.0\n\
+             [[keys]]\nname = \"c\"\nversion = \"1.10\"\n[[keys]]\nname = \"d\"\nversion = 2\n",
+        );
+        assert_eq!(set.entries.keys().collect::<Vec<_>>(), ["c", "d"]);
+        assert_eq!(set.entries["c"].version, Version::new(1, 10));
+        assert_eq!(set.entries["d"].version, Version::new(2, 0));
+        assert_eq!(set.skipped.len(), 2, "{:?}", set.skipped);
+        assert!(
+            set.skipped[0]
+                .starts_with("entry 0: `version` 1.1 is a number, which drops trailing zeros"),
+            "{}",
+            set.skipped[0]
+        );
+        assert!(set.skipped[0].ends_with("write it as a string, \"M.m\""));
+        assert!(
+            set.skipped[1].starts_with("entry 1: `removed` 2 is a number"),
+            "{}",
+            set.skipped[1]
+        );
+    }
+
+    #[test]
+    fn an_entry_removed_before_it_was_added_is_refused() {
+        let set = entries(
+            "[[keys]]\nname = \"a\"\nversion = \"1.2\"\nremoved = \"1.2\"\n\
+             [[keys]]\nname = \"b\"\nversion = \"1.2\"\nremoved = \"1.1\"\n\
+             [[keys]]\nname = \"c\"\nversion = \"1.2\"\nremoved = \"1.3\"\n",
+        );
+        assert_eq!(set.entries.keys().collect::<Vec<_>>(), ["c"]);
+        assert_eq!(
+            set.skipped,
+            [
+                "entry 0: `removed` 1.2 is not later than `version` 1.2: the entry is never active",
+                "entry 1: `removed` 1.1 is not later than `version` 1.2: the entry is never active",
+            ]
+        );
     }
 
     #[test]
