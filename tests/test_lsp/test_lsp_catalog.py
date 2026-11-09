@@ -78,11 +78,19 @@ def test_vocabulary_fields_list_their_values(fields: dict) -> None:
 
 
 def test_retired_spellings_are_unknown_keys_not_deprecations() -> None:
-    """`meta:` and Splunk's `advanced` are refused like any unknown key, so the
-    language server reports them as validation does, not as a deprecation."""
+    """`meta:` is refused like any unknown key, so the language server reports it as
+    validation does, not as a deprecation."""
     rows = {(row["schema"], row["path"]) for row in deprecations_catalog("1.2.3")["fields"]}
     assert ("rule", "meta") not in rows
+
+
+def test_splunk_advanced_is_a_field_not_a_deprecation(fields: dict) -> None:
+    """Splunk's `advanced` is part of the layout: the editor accepts it, as validation
+    does, without marking it deprecated."""
+    rows = {(row["schema"], row["path"]) for row in deprecations_catalog("1.2.3")["fields"]}
     assert ("rule", "configurations.splunk.advanced") not in rows
+    for revision in ("rule::1.0", "rule::1.1"):
+        assert _field(fields, revision, "configurations.splunk.advanced")
 
 
 @pytest.fixture

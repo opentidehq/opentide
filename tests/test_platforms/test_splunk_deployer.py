@@ -447,3 +447,58 @@ def test_a_rule_without_a_splunk_block_names_the_block() -> None:
         _deployer().config_mdr(rule, _tenant().setup)
     with pytest.raises(ValueError, match=r"^The rule has no configurations\.splunk\.query$"):
         create_query(rule)
+
+
+#: A custom alert action opentide has no block for, as a production rule carries it.
+MISP_ADVANCED = {
+    "action.misp_alert_create_event.param.title": "Canary token triggered",
+    "action.misp_alert_create_event.param.distribution": 0,
+    "action.misp_alert_create_event.param.publish_on_creation": False,
+    "action.misp_alert_create_event.param.tags": None,
+}
+
+
+@patch("opentide.platforms.splunk.deployer.create_query", return_value="index=main")
+@patch("opentide.platforms.splunk.deployer.techniques_resolver", return_value=[])
+def test_advanced_keys_reach_the_saved_search_and_trigger_their_action(
+    _mock_techniques: object,
+    _mock_query: object,
+    splunk_rule_payload: dict,
+) -> None:
+    """0.21.0 refused `advanced` and dropped it from deploy: a custom alert action's
+    parameters had no other place in a rule."""
+    splunk_rule_payload["configurations"]["splunk"]["advanced"] = MISP_ADVANCED
+    deployer = _deployer()
+    deployer.SPLUNK_ACTIONS = ["notable", "misp_alert_create_event"]
+    service = MagicMock()
+    service.saved_searches.__getitem__.side_effect = KeyError("missing")
+    created = MagicMock()
+    service.saved_searches.create.return_value = created
+
+    deployer.deploy_mdr(
+        data=load_rule_from_dict(splunk_rule_payload), service=service, tenant_config=_tenant()
+    )
+
+    first, second = (call.kwargs for call in created.update.call_args_list)
+    assert {key: first[key] for key in MISP_ADVANCED} == {
+        "action.misp_alert_create_event.param.title": "Canary token triggered",
+        "action.misp_alert_create_event.param.distribution": "0",
+        "action.misp_alert_create_event.param.publish_on_creation": "0",
+        "action.misp_alert_create_event.param.tags": "",
+    }
+    assert first["action.misp_alert_create_event"] == 1
+    assert second["actions"] == "notable, misp_alert_create_event"
+
+
+@patch("opentide.platforms.splunk.deployer.techniques_resolver", return_value=[])
+def test_an_advanced_key_overrides_the_value_the_block_sets(
+    _mock_techniques: object, splunk_rule_payload: dict
+) -> None:
+    splunk_rule_payload["configurations"]["splunk"]["advanced"] = {
+        "alert_threshold": 10,
+        "alert.track": True,
+    }
+    config = _deployer().config_mdr(load_rule_from_dict(splunk_rule_payload), _tenant().setup)
+    assert config["alert_threshold"] == "10"
+    assert config["alert.track"] == "1"
+    assert config["description"] == "Detect suspicious activity"

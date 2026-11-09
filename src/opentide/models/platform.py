@@ -76,6 +76,19 @@ def _query_not_blank(value: str) -> str:
 QueryText = Annotated[str, AfterValidator(_query_not_blank)]
 
 
+def _key_not_blank(value: str) -> str:
+    if not value.strip():
+        raise ValueError("a savedsearches.conf key must not be empty")
+    return value
+
+
+#: A `savedsearches.conf` key in a Splunk block's `advanced` table.
+SavedSearchKey = Annotated[str, AfterValidator(_key_not_blank)]
+#: A `savedsearches.conf` value: Splunk stores every value as text, so a list or a
+#: table has no meaning there.
+SavedSearchValue = str | int | float | bool | None
+
+
 class PlatformConfigBase(TideModel):
     """Shared platform block on detection rules."""
 
@@ -185,6 +198,14 @@ class SplunkConfig(PlatformConfigBase):
     correlation_search: bool | None = None
     """Force the Enterprise Security correlation-search action on or off. `null` follows the
     tenant."""
+    # Raw keys are an escape hatch: kept out of templates and editor completion, but
+    # accepted everywhere, as validation accepts them.
+    advanced: dict[SavedSearchKey, SavedSearchValue] | None = TideField(
+        None, schema_extra={"tide.template.hide": True}
+    )
+    """`savedsearches.conf` keys no other field sets, sent as written at deploy: a custom alert
+    action's `action.<name>.param.*`, for instance. A value is a string, number, boolean
+    (`1` or `0`) or `null` (empty). A key the block also sets takes this value."""
 
 
 class SentinelOneConfig(PlatformConfigBase):

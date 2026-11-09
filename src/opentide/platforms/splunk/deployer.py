@@ -14,6 +14,7 @@ from opentide.deployment import TideDeployment, check_status
 from opentide.deployment.external_ids import without_legacy_external_ids
 from opentide.generation.framework import get_type, techniques_resolver
 from opentide.models.deployment_enums import RunStrategies, StatusStrategy
+from opentide.models.platform import SavedSearchValue
 from opentide.models.rule import DetectionRule
 from opentide.models.system_config import ConfigurationModels, batch_tenant
 from opentide.platforms.plugins import RuleDeployer
@@ -26,6 +27,19 @@ from opentide.platforms.splunk.client import (
 )
 
 logger = structlog.get_logger(__name__)
+
+
+def saved_search_value(value: SavedSearchValue) -> str:
+    """A Splunk block's ``advanced`` value as ``savedsearches.conf`` text.
+
+    ``null`` is the empty value (``key =``), not ``None``; a boolean is ``1`` or ``0``,
+    as the deployer writes every other boolean.
+    """
+    if value is None:
+        return ""
+    if isinstance(value, bool):
+        return "1" if value else "0"
+    return str(value)
 
 
 class SplunkDeploy(SplunkConnection, RuleDeployer):
@@ -225,6 +239,10 @@ class SplunkDeploy(SplunkConnection, RuleDeployer):
                         config["action.email.include.trigger_time"] = 1 if inc.trigger_time else 0
 
         config["alert.managedBy"] = resolve_responders(data.response)
+        if splunk_config.advanced:
+            config.update(
+                {key: saved_search_value(value) for key, value in splunk_config.advanced.items()}
+            )
         config["description"] = data.description or ""
         return config
 

@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Changed
+
+- **The analysis engine is language-server [0.11.1](https://github.com/opentidehq/language-server/releases/tag/v0.11.1)**, whose Tide catalog accepts a Splunk block's `advanced` table, so `opentide-lsp` run on its own agrees with `opentide validate` (see Fixed).
+
+### Fixed
+
+- **A Splunk block's `advanced` table validates and deploys again.** 0.21.0 refused it as a `splunk::2.x` key, which it never was: it is the only place a rule sets `savedsearches.conf` keys no other field sets, such as a custom alert action's `action.<name>.param.*`, so `validate` failed every catalogue with such a rule. Each key is sent as written, over a value the block sets and under the tenant's modifiers; a `null` value is sent empty (it was `None`), a boolean as `1` or `0`, and a list or table is refused. The editor schema and `opentide lsp start` accept it without marking it deprecated, and leave it out of completion, as 0.20.1 did. See [The `advanced` table](docs/usage/concepts/platforms.md#splunks-advanced-table).
+
 ## [0.23.0] — 2026-11-06
 
 `opentide tui` shows each object as a page with its findings in place, and gains Visibility, Configuration and Chains tabs. Coverage counts the techniques rules inherit, and `generate explorer` can export visibility, opt-in.
