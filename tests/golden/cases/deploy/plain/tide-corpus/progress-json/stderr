@@ -1,0 +1,17 @@
+{"event":"progress","step":"sentinel","done":1,"total":9}
+{"event":"progress","step":"defender_for_endpoint","done":2,"total":9}
+{"event":"progress","step":"splunk","done":3,"total":9}
+{"event":"progress","step":"sentinel_one","done":4,"total":9}
+{"event":"progress","step":"carbon_black_cloud","done":5,"total":9}
+{"event":"progress","step":"crowdstrike","done":6,"total":9}
+{"event":"progress","step":"harfanglab","done":7,"total":9}
+{"event":"progress","step":"elastic","done":8,"total":9}
+{"event":"progress","step":"sysdig","done":9,"total":9}
+warning: a real deploy would need $ELASTIC_API_KEY and $SYSDIG_SECURE_API_TOKEN, which are unset
+warning: sentinel has no tenants configured in .opentide/configurations/platforms/sentinel.toml, so a real deploy would stop
+warning: defender_for_endpoint has no tenants configured in .opentide/configurations/platforms/defender_for_endpoint.toml, so a real deploy would stop
+warning: splunk has no tenants configured in .opentide/configurations/platforms/splunk.toml, so a real deploy would stop
+warning: sentinel_one has no tenants configured in .opentide/configurations/platforms/sentinel_one.toml, so a real deploy would stop
+warning: carbon_black_cloud has no tenants configured in .opentide/configurations/platforms/carbon_black_cloud.toml, so a real deploy would stop
+warning: crowdstrike has no tenants configured in .opentide/configurations/platforms/crowdstrike.toml, so a real deploy would stop
+warning: harfanglab has no tenants configured in .opentide/configurations/platforms/harfanglab.toml, so a real deploy would stop

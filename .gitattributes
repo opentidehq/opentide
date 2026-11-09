@@ -5,3 +5,5 @@ tests/golden/blobs/** -text linguist-generated
 tests/golden/COVERAGE.md linguist-generated
 tests/golden/oracle-requirements.txt linguist-generated
 tests/golden/fixtures/** -text
+# The renderers' oracle files (crates/opentide-cli/AGENTS.md): compared byte for byte too.
+crates/opentide-cli/tests/render/** -text linguist-generated

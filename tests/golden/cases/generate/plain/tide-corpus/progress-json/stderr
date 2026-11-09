@@ -1,0 +1,12 @@
+{"event":"progress","step":"docs","done":1,"total":6}
+✓ docs · 16 files · <SECONDS> · docs/
+{"event":"progress","step":"exports","done":2,"total":6}
+✓ exports · 3 files · <SECONDS> · .opentide/exports/
+{"event":"progress","step":"vocabularies","done":3,"total":6}
+✓ vocabularies · 0 files · <SECONDS>
+{"event":"progress","step":"templates","done":4,"total":6}
+✓ templates · 13 files · <SECONDS> · .opentide/templates/
+{"event":"progress","step":"schemas","done":5,"total":6}
+✓ schemas · 8 files · <SECONDS> · .opentide/
+{"event":"progress","step":"snippets","done":6,"total":6}
+✓ snippets · 1 file · <SECONDS> · .vscode/

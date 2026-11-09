@@ -643,6 +643,62 @@ modes = ["plain", "agent"]
 fixtures = ["vscode"]
 env = { GITHUB_ACTIONS = "true" }
 
+# UC-3.4 (#826): a report printed whole on stdout, without --output. The
+# fault workspace's validate reports are not recorded: its deployment-state
+# findings name the workspace's absolute path, which differs between two runs
+# and so does their fingerprint. lint's are (below); the renderer tests
+# compare validate's (crates/opentide-cli/tests/render.rs).
+[[case]]
+command = "validate"
+variant = "sarif-stdout"
+args = ["validate", "--format", "sarif"]
+modes = ["plain"]
+fixtures = ["tide-corpus"]
+
+# The report options' usage errors (exit 2).
+[[case]]
+command = "validate"
+variant = "output-without-format"
+args = ["validate", "--output", "report.sarif"]
+fixtures = ["tide-corpus"]
+
+# UC-3.4 (#826): the CI sinks of each provider, with its variables set and its
+# summary file captured. Annotations go to stdout; json mode has no sinks.
+[[case]]
+command = "validate"
+variant = "ci-sink-github"
+args = ["validate"]
+modes = ["plain", "agent", "json"]
+fixtures = ["fault"]
+env = { GITHUB_ACTIONS = "true", GITHUB_WORKSPACE = "<WS>", GITHUB_STEP_SUMMARY = "<TMP>/tmp/github-step-summary.md" }
+
+[[case]]
+command = "validate"
+variant = "ci-sink-gitlab"
+args = ["validate"]
+modes = ["plain", "agent", "json"]
+fixtures = ["fault"]
+env = { GITLAB_CI = "true", CI_PROJECT_DIR = "<WS>" }
+
+[[case]]
+command = "validate"
+variant = "ci-sink-azure"
+args = ["validate"]
+modes = ["plain", "agent", "json"]
+fixtures = ["fault"]
+env = { TF_BUILD = "True", BUILD_SOURCESDIRECTORY = "<WS>", AGENT_TEMPDIRECTORY = "<TMP>/tmp/agent" }
+
+# UC-3.4 (#826): progress events, NDJSON on stderr (vscode-extension CONTRACTS.md).
+# Not on the fault workspace: its vocabulary warnings come from worker threads,
+# between the events at a different place each run.
+[[case]]
+command = "validate"
+variant = "progress-json"
+args = ["validate"]
+modes = ["json", "plain"]
+fixtures = ["tide-corpus"]
+env = { OPENTIDE_PROGRESS = "json" }
+
 # ---- validate query ----
 
 [[case]]
@@ -685,6 +741,16 @@ command = "query"
 variant = "example"
 args = ["query", "--platform", "sentinel", "SecurityEvent | take 10"]
 fixtures = ["none", "tide-corpus"]
+
+# UC-3.4 (#826): a query's tenant events without tenants (the recorded
+# success paths are UC-4.1's cassettes).
+[[case]]
+command = "query"
+variant = "progress-json"
+args = ["query", "--platform", "sentinel", "SecurityEvent | take 10"]
+modes = ["json"]
+fixtures = ["tide-corpus"]
+env = { OPENTIDE_PROGRESS = "json" }
 
 [[case]]
 command = "query"
@@ -731,6 +797,35 @@ command = "lint"
 variant = "strict"
 args = ["lint", "--strict"]
 fixtures = ["tide-corpus", "vscode", "fault"]
+
+# UC-3.4 (#826): lint's report files and CI sinks on the fault workspace.
+[[case]]
+command = "lint"
+variant = "sarif-fault"
+args = ["lint", "--format", "sarif", "--output", "opentide-reports/lint.sarif"]
+fixtures = ["fault"]
+
+[[case]]
+command = "lint"
+variant = "codequality-fault"
+args = ["lint", "--format", "codequality", "--output", "opentide-reports/lint.codequality.json"]
+fixtures = ["fault"]
+
+[[case]]
+command = "lint"
+variant = "ci-sink-github"
+args = ["lint"]
+modes = ["plain", "agent"]
+fixtures = ["fault"]
+env = { GITHUB_ACTIONS = "true", GITHUB_WORKSPACE = "<WS>", GITHUB_STEP_SUMMARY = "<TMP>/tmp/github-step-summary.md" }
+
+[[case]]
+command = "lint"
+variant = "ci-sink-azure"
+args = ["lint"]
+modes = ["plain"]
+fixtures = ["fault"]
+env = { TF_BUILD = "True", BUILD_SOURCESDIRECTORY = "<WS>", AGENT_TEMPDIRECTORY = "<TMP>/tmp/agent" }
 
 [[case]]
 command = "lint"
@@ -884,6 +979,15 @@ command = "generate"
 variant = "default"
 args = ["generate"]
 fixtures = ["tide-corpus", "vscode"]
+
+# UC-3.4 (#826): generate's steps as progress events and as the step checklist.
+[[case]]
+command = "generate"
+variant = "progress-json"
+args = ["generate"]
+modes = ["json", "plain"]
+fixtures = ["tide-corpus"]
+env = { OPENTIDE_PROGRESS = "json" }
 normalise = ["fresh-uuids"]
 
 [[case]]
@@ -1024,6 +1128,31 @@ command = "deploy"
 variant = "dry-run"
 args = ["deploy", "--strategy", "PREVIEW", "--all", "--dry-run"]
 fixtures = ["tide-corpus", "vscode", "fault"]
+
+# UC-3.4 (#826): the deploy plan's CI summary, and its progress events.
+[[case]]
+command = "deploy"
+variant = "ci-sink-github"
+args = ["deploy", "--strategy", "PREVIEW", "--all", "--dry-run"]
+modes = ["plain"]
+fixtures = ["tide-corpus", "fault"]
+env = { GITHUB_ACTIONS = "true", GITHUB_WORKSPACE = "<WS>", GITHUB_STEP_SUMMARY = "<TMP>/tmp/github-step-summary.md" }
+
+[[case]]
+command = "deploy"
+variant = "ci-sink-gitlab"
+args = ["deploy", "--strategy", "PREVIEW", "--all", "--dry-run"]
+modes = ["plain"]
+fixtures = ["tide-corpus", "fault"]
+env = { GITLAB_CI = "true", CI_PROJECT_DIR = "<WS>" }
+
+[[case]]
+command = "deploy"
+variant = "progress-json"
+args = ["deploy", "--strategy", "PREVIEW", "--all", "--dry-run"]
+modes = ["json", "plain"]
+fixtures = ["tide-corpus", "fault"]
+env = { OPENTIDE_PROGRESS = "json" }
 
 [[case]]
 command = "deploy"

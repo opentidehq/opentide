@@ -58,5 +58,24 @@
 #   log's `arguments:` quoted by the shlex crate (`'--x=1'`, `"it's"`).
 # - a bare `mcp`, `lsp` or `new` in plain and human mode: clap's help of the
 #   group on stdout, exit 2 as before (the `--help` difference above).
+#
+# Decided by UC-3.4 (#826), the renderers; entered when `validate`, `lint`
+# and the other commands route their cases to Rust (UC-3.5). The CHANGELOG
+# announces them under "**The Rust command line's renderers**":
+#
+# - glyphs and frame characters on a stream that cannot encode them: the
+#   Rust CLI writes UTF-8 everywhere, with no ASCII fallback (`ok`, `-->`,
+#   `|`, `^`) and no `?` for other characters. No golden case runs on such a
+#   stream (every case is UTF-8), so no entry may be needed.
+# - terminal cell widths from the `unicode-width` crate instead of Rich's
+#   tables: a character the two measure differently can move an underline or
+#   a wrap point by one cell in `human` mode (a terminal of 100 columns).
+#   The fault workspace and every code's frame measure the same today
+#   (crates/opentide-cli/tests/render.rs).
+# - SARIF rules: the oracle (0.23.0) predates retired codes and the `cql_`
+#   reference; development tags `crowdstrike_unsupported` `retired`
+#   (#800) and lists the CQL codes, and the Rust catalogue follows
+#   development, so `validate --format sarif` and `lint --format sarif`
+#   differ from the oracle's recordings there.
 # - `-h` (and `-Vh`): clap's short help flag shows the help, exit 0, where the
 #   oracle had no `-h` (`No such option: -h`, exit 2).
