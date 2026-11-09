@@ -14,7 +14,19 @@ name: Golden
 #
 # `cargo xtask golden check --engine compare` (UC-0.7) runs in ci.yml's
 # `golden-compare` job instead: it checks this repository's code, so it runs
-# on every pull request, not only on the paths below.
+# on every pull request.
+#
+# When each job runs on a pull request (tests/test_ci/test_golden_workflow.py).
+# The pull_request trigger has no path filter, so that the checks can be
+# required on integration/unified-core; the `changes` job filters by path
+# instead, and a job skipped by its `if` reports success to branch protection:
+#
+# - check (about 8 minutes) runs on every pull request into
+#   integration/unified-core, and on other bases when GOLDEN_PATHS changed.
+# - determinism (recording twice, about 26 minutes, past the 15-minute PR
+#   budget) runs when GOLDEN_PATHS changed, whatever the base; every push to
+#   integration/unified-core and development runs it after the merge.
+# - Both run when `changes` did not succeed: the filter fails open.
 #
 # Nothing here publishes or writes to the repository.
 
@@ -23,18 +35,8 @@ on:
     # integration/unified-core collects the unified-core work (epic #790) before development.
     branches: [development, integration/unified-core]
   pull_request:
-    # All base branches: a stacked PR targets the branch below it, not development.
-    paths:
-      - "tests/golden/**"
-      - "tests/fixtures/tide_corpus/**"
-      - "tests/corpora/**"
-      - "xtask/**"
-      - ".cargo/**"
-      - ".gitattributes"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "rust-toolchain.toml"
-      - ".github/workflows/golden.yml"
+    # All base branches and all paths: the `changes` job below holds the path
+    # filter, so that integration/unified-core can require the checks.
   schedule:
     # Weekly, so a change outside the repository (PyPI, the runner image) shows.
     # GitHub runs a schedule on the default branch only.
@@ -49,8 +51,69 @@ permissions:
   contents: read
 
 jobs:
+  # Whether the pull request changes a path the goldens depend on. Bash
+  # patterns, one a line; `*` matches `/` too. Anything but a pull request,
+  # and a checkout that is not the pull request's merge commit, counts as a
+  # change.
+  changes:
+    name: Golden paths
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      golden: ${{ steps.paths.outputs.golden }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The merge commit and its first parent, the base branch's tip.
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Detect changes to the goldens' inputs
+        id: paths
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          GOLDEN_PATHS: |
+            tests/golden/*
+            tests/fixtures/tide_corpus/*
+            tests/corpora/*
+            xtask/*
+            .cargo/*
+            .gitattributes
+            Cargo.toml
+            Cargo.lock
+            rust-toolchain.toml
+            .github/workflows/golden.yml
+        run: |
+          set -euo pipefail
+          if [[ "${EVENT_NAME}" != "pull_request" ]] || ! git rev-parse --verify --quiet HEAD^2 >/dev/null; then
+            echo "golden=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed="$(git diff --no-renames --name-only HEAD^1 HEAD)"
+          golden=false
+          while IFS= read -r file; do
+            [[ -n "${file}" ]] || continue
+            while IFS= read -r pattern; do
+              # Unquoted on the right: a pattern, not a string.
+              if [[ -n "${pattern}" && "${file}" == ${pattern} ]]; then
+                echo "Golden input changed: ${file}"
+                golden=true
+              fi
+            done <<<"${GOLDEN_PATHS}"
+          done <<<"${changed}"
+          echo "golden=${golden}" >> "$GITHUB_OUTPUT"
+
   check:
     name: Golden check (python)
+    needs: changes
+    # Every pull request into integration/unified-core, so it can be required there.
+    if: >-
+      !cancelled() && (
+        github.event_name != 'pull_request'
+        || github.base_ref == 'integration/unified-core'
+        || needs.changes.result != 'success'
+        || needs.changes.outputs.golden == 'true'
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -77,6 +140,14 @@ jobs:
 
   determinism:
     name: Golden determinism
+    needs: changes
+    # Path-filtered on every base: recording twice takes about 26 minutes.
+    if: >-
+      !cancelled() && (
+        github.event_name != 'pull_request'
+        || needs.changes.result != 'success'
+        || needs.changes.outputs.golden == 'true'
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
