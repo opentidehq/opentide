@@ -182,6 +182,7 @@ pub fn fix_modes(dir: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Without Unix permission bits there is nothing to set.
 #[cfg(not(unix))]
 pub fn fix_modes(_dir: &Path) -> Result<()> {
     Ok(())

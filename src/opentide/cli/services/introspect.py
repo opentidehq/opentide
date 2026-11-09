@@ -96,13 +96,6 @@ def environment() -> list[dict[str, str]]:
             ),
         },
         {
-            "name": "OPENTIDE_ENGINE",
-            "meaning": (
-                "Implementation that runs a command: python (default), rust, or compare "
-                "(both, failing with exit 70 when they differ)"
-            ),
-        },
-        {
             "name": "OPENTIDE_CACHE_DIR",
             "meaning": "Where opentide caches the language-server catalogs it generates",
         },
@@ -110,6 +103,15 @@ def environment() -> list[dict[str, str]]:
             {"name": name, "meaning": "Set by a coding agent: selects agent output mode"}
             for name in AGENT_VARIABLES
         ),
+        # Last, so the oracle's list (v0.23.0) is a prefix of this one: its
+        # golden difference is one addition at the end (UC-0.7, #805).
+        {
+            "name": "OPENTIDE_ENGINE",
+            "meaning": (
+                "Implementation that runs a command: python (default), rust, or compare "
+                "(both, failing with exit 70 when they differ)"
+            ),
+        },
     ]
 
 

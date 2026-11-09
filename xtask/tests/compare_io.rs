@@ -95,7 +95,7 @@ fn the_ledger_is_read_and_checked_against_the_changelog() {
          issue = \"https://github.com/opentidehq/opentide/issues/805\"\nchangelog = \"**Lead**\"\n",
     );
     let error = format!("{:#}", read_ledger(&path, "nothing").unwrap_err());
-    assert!(error.contains("is not in CHANGELOG.md"), "{error}");
+    assert!(error.contains("begins no entry"), "{error}");
     assert_eq!(
         read_ledger(&path, "- **Lead** here").unwrap().entries.len(),
         1

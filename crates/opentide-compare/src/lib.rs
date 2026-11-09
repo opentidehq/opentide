@@ -208,18 +208,32 @@ pub fn compare(
     }
 }
 
+/// How one CLI run of each side is normalised before it is compared: the
+/// command's extra rules (as its golden cases opt into them) and the texts
+/// that were there before the run (whose UUIDs are not fresh).
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Normalisation<'a> {
+    /// The command's extra rules: `fresh-uuids`, `host-git`.
+    pub rules: &'a [normalise::Rule],
+    /// The texts of the workspace before the run.
+    pub known: &'a [String],
+}
+
 /// One CLI run of each side compared, each normalised first with its own
-/// volatile values (each ran in its own copy of the workspace), as the goldens
-/// are, applying `ledger` without checking it for stale entries.
-/// `OPENTIDE_ENGINE=compare` calls it through `opentide._native.compare_runs`.
+/// volatile values (each ran in its own copy of the workspace) and the
+/// command's rules, as a golden case of the command is, applying `ledger`
+/// without checking it for stale entries. `OPENTIDE_ENGINE=compare` calls it
+/// through `opentide._native.compare_runs`.
 pub fn compare_normalised(
     case: Case,
     (mut oracle, oracle_volatile): (Run, &normalise::Volatile),
     (mut candidate, candidate_volatile): (Run, &normalise::Volatile),
+    normalisation: Normalisation,
     ledger: &Ledger,
 ) -> CaseReport {
-    Normaliser::new(oracle_volatile, &[], []).run(&mut oracle);
-    Normaliser::new(candidate_volatile, &[], []).run(&mut candidate);
+    let known = || normalisation.known.iter().map(String::as_str);
+    Normaliser::new(oracle_volatile, normalisation.rules, known()).run(&mut oracle);
+    Normaliser::new(candidate_volatile, normalisation.rules, known()).run(&mut candidate);
     compare(case, &oracle, &candidate, ledger, &mut Usage::default())
 }
 
@@ -372,38 +386,50 @@ impl Comparison<'_> {
     }
 
     fn text_content(&mut self, target: &Target, oracle: &[u8], candidate: &[u8]) {
-        let mut rewritten = oracle.to_vec();
-        let mut applied = Vec::new();
-        for (index, entry) in self
+        let rules: Vec<(usize, Vec<u8>, Vec<u8>)> = self
             .ledger
             .entries_for(self.case.command, self.case.id, target)
-        {
-            let Rule::Text {
-                oracle: expected_oracle,
-                candidate: expected_candidate,
-            } = &entry.rule
-            else {
+            .filter_map(|(index, entry)| match &entry.rule {
+                Rule::Text {
+                    oracle: expected_oracle,
+                    candidate: expected_candidate,
+                } => Some((
+                    index,
+                    expected_oracle.as_bytes().to_vec(),
+                    expected_candidate.as_bytes().to_vec(),
+                )),
+                _ => None,
+            })
+            .collect();
+        // Narrow, line by line: on line N, every entry whose oracle text is on
+        // the oracle's line N and whose candidate text is on the candidate's
+        // rewrites that line; the line is approved only if it then reads as
+        // the candidate's line exactly. Every other line is compared as it is.
+        let oracle_lines: Vec<&[u8]> = oracle.split_inclusive(|b| *b == b'\n').collect();
+        let candidate_lines: Vec<&[u8]> = candidate.split_inclusive(|b| *b == b'\n').collect();
+        let mut rewritten: Vec<Vec<u8>> = oracle_lines.iter().map(|line| line.to_vec()).collect();
+        let mut applied = std::collections::BTreeSet::new();
+        for (number, line) in oracle_lines.iter().enumerate() {
+            let Some(other) = candidate_lines.get(number) else {
                 continue;
             };
-            // Narrow: on one line the two sides share, the oracle has its
-            // text and the candidate has its own.
-            if same_line(
-                oracle,
-                candidate,
-                expected_oracle.as_bytes(),
-                expected_candidate.as_bytes(),
-            ) {
-                rewritten = replace(
-                    &rewritten,
-                    expected_oracle.as_bytes(),
-                    expected_candidate.as_bytes(),
-                );
-                applied.push(index);
+            let mut text = line.to_vec();
+            let mut here = Vec::new();
+            for (index, from, to) in &rules {
+                if contains(line, from) && contains(other, to) {
+                    text = replace(&text, from, to);
+                    here.push(*index);
+                }
+            }
+            if !here.is_empty() && text == *other {
+                rewritten[number] = text;
+                applied.extend(here);
             }
         }
         for index in applied {
             self.approve(target, index);
         }
+        let rewritten = rewritten.concat();
         if rewritten != candidate {
             let (line, oracle_line, candidate_line) = first_different_line(&rewritten, candidate);
             self.differ(vec![Difference {
@@ -553,27 +579,11 @@ fn excerpt(text: &str) -> String {
     out
 }
 
-/// Whether some line N holds `oracle_text` in `oracle` and `candidate_text`
-/// in `candidate`. A text spanning lines is matched at the line it starts on.
-fn same_line(oracle: &[u8], candidate: &[u8], oracle_text: &[u8], candidate_text: &[u8]) -> bool {
-    // The line each match starts on, counting newlines once, left to right.
-    let lines = |bytes: &[u8], text: &[u8]| -> std::collections::BTreeSet<usize> {
-        let mut found = std::collections::BTreeSet::new();
-        if text.is_empty() || bytes.len() < text.len() {
-            return found;
-        }
-        let mut line = 0;
-        for at in 0..=bytes.len() - text.len() {
-            if bytes[at..].starts_with(text) {
-                found.insert(line);
-            }
-            if bytes[at] == b'\n' {
-                line += 1;
-            }
-        }
-        found
-    };
-    !lines(oracle, oracle_text).is_disjoint(&lines(candidate, candidate_text))
+fn contains(haystack: &[u8], needle: &[u8]) -> bool {
+    !needle.is_empty()
+        && haystack
+            .windows(needle.len())
+            .any(|window| window == needle)
 }
 
 /// `bytes` with every occurrence of `from` replaced by `to`, left to right.

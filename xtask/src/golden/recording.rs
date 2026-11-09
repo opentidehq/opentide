@@ -599,12 +599,15 @@ mod tests {
             escape("ws/COM10/console/x."),
             PathBuf::from("ws/COM10/console/~x.")
         );
+        // Each stored name, not the joined path: Windows joins with `\\`.
         for path in ["a/b:c", "x|y?z*", "q\"r\\s"] {
-            let stored = escape(path).to_string_lossy().into_owned();
-            assert!(
-                !stored.contains(['<', '>', ':', '"', '|', '?', '*', '\\']),
-                "{stored}"
-            );
+            for part in &escape(path) {
+                let part = part.to_string_lossy();
+                assert!(
+                    !part.contains(['<', '>', ':', '"', '|', '?', '*', '\\']),
+                    "{part}"
+                );
+            }
         }
     }
 

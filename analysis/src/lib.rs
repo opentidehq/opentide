@@ -487,21 +487,42 @@ fn run_of(
 }
 
 /// The comparison of one run of `command` by the oracle and by the
-/// candidate, each normalised first, as the JSON of `opentide-compare`'s
-/// `CaseReport`.
+/// candidate, each normalised first with the command's `rules` (`fresh-uuids`,
+/// `host-git`), the workspace's texts before the run (`known`) and the host's
+/// git version, as the JSON of `opentide-compare`'s `CaseReport`.
 #[pyfunction]
+#[pyo3(signature = (command, oracle, candidate, rules = Vec::new(), known = Vec::new(), git_version = None))]
 fn compare_runs(
     py: Python<'_>,
     command: &str,
     oracle: RunArgs,
     candidate: RunArgs,
+    rules: Vec<String>,
+    known: Vec<String>,
+    git_version: Option<String>,
 ) -> PyResult<String> {
-    let (oracle, candidate) = (run_of(py, oracle), run_of(py, candidate));
+    let rules = rules
+        .iter()
+        .map(|rule| match rule.as_str() {
+            "fresh-uuids" => Ok(opentide_compare::normalise::Rule::FreshUuids),
+            "host-git" => Ok(opentide_compare::normalise::Rule::HostGit),
+            other => Err(PyValueError::new_err(format!(
+                "unknown normalisation rule: {other}"
+            ))),
+        })
+        .collect::<PyResult<Vec<_>>>()?;
+    let (mut oracle, mut candidate) = (run_of(py, oracle), run_of(py, candidate));
+    oracle.1.git_version.clone_from(&git_version);
+    candidate.1.git_version = git_version;
     let report = py.detach(|| {
         opentide_compare::compare_normalised(
             opentide_compare::Case { command, id: "" },
             (oracle.0, &oracle.1),
             (candidate.0, &candidate.1),
+            opentide_compare::Normalisation {
+                rules: &rules,
+                known: &known,
+            },
             &opentide_compare::ledger::Ledger::default(),
         )
     });

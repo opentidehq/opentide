@@ -110,3 +110,26 @@ fn comparator_golden_applies_the_ledger_and_fails_a_stale_entry() {
     assert!(!passed);
     assert_eq!(report["stale"][0]["entry"], 1);
 }
+
+#[test]
+fn comparator_golden_fails_a_listed_command_the_cli_refuses() {
+    // V854-S-8: the dispatch table names the command, the CLI refuses it.
+    let dir = tempfile::tempdir().unwrap();
+    repo(dir.path(), "");
+    let golden = dir.path().join("tests/golden");
+    let mut refused = recording("");
+    refused.exit_code = 2;
+    refused.stderr = format!("error: opentide info {}\n", xtask::compare::NO_RUST).into_bytes();
+    let passed = xtask::compare::golden(
+        dir.path(),
+        &golden.join("cases"),
+        &golden.join("blobs"),
+        &[Ok(refused)],
+        0,
+        true,
+        None,
+        false,
+    )
+    .unwrap();
+    assert!(!passed);
+}

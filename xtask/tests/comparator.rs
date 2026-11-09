@@ -364,6 +364,51 @@ mod comparator {
     }
 
     #[test]
+    fn a_text_rule_does_not_approve_its_text_on_another_line() {
+        // V854-I-1: the rule explains line 1; line 3 holds the same texts
+        // but differs beyond them, and stays a difference.
+        let ledger = Ledger::parse(&entry("*", "stdout", "text", ": 1", ": 2")).expect("valid");
+        let oracle = run(0, "rules: 1\nok\nerrors: 1 found\n", "");
+        let candidate = run(0, "rules: 2\nok\nerrors: 2 seen\n", "");
+        let (report, usage) = check(&oracle, &candidate, &ledger);
+        assert!(!report.equal, "{report:?}");
+        assert_eq!(report.differences[0].at.as_deref(), Some("line 3, byte 20"));
+        assert!(usage.is_used(0), "line 1 is still approved");
+
+        // A second occurrence on another line with nothing else different is
+        // approved there too, line by line, and nothing else is.
+        let oracle = run(0, "rules: 1\nok\nerrors: 1\n", "");
+        let candidate = run(0, "rules: 2\nok\nerrors: 2\n", "");
+        assert!(check(&oracle, &candidate, &ledger).0.equal);
+        let shifted = run(0, "rules: 2\nerrors: 2\nok\n", "");
+        assert!(!check(&oracle, &shifted, &ledger).0.equal);
+    }
+
+    #[test]
+    fn a_json_rule_needs_the_oracle_value_too() {
+        // V854-S-3: the oracle holds 7, not the 3 the entry expects.
+        let ledger =
+            Ledger::parse(&entry("*", "stdout", "json:/summary/rules", "3", "4")).expect("valid");
+        let oracle = run(0, &DOCUMENT.replace("\"rules\":3", "\"rules\":7"), "");
+        let candidate = run(0, &DOCUMENT.replace("\"rules\":3", "\"rules\":4"), "");
+        let (report, usage) = check(&oracle, &candidate, &ledger);
+        assert!(!report.equal);
+        assert!(!usage.is_used(0));
+    }
+
+    #[test]
+    fn an_exit_code_entry_approves_its_two_codes_only() {
+        // V854-S-4.
+        let ledger = Ledger::parse(&entry("*", "exit_code", "text", "1", "2")).expect("valid");
+        for (oracle, candidate) in [(0, 1), (1, 3), (2, 1)] {
+            let (report, usage) = check(&run(oracle, "", ""), &run(candidate, "", ""), &ledger);
+            assert!(!report.equal, "{oracle} -> {candidate}");
+            assert!(!usage.is_used(0), "{oracle} -> {candidate}");
+        }
+        assert!(check(&run(1, "", ""), &run(2, "", ""), &ledger).0.equal);
+    }
+
+    #[test]
     fn a_stale_ledger_entry_fails_the_run() {
         let ledger = Ledger::parse(&format!(
             "{}{}",
@@ -419,6 +464,7 @@ mod comparator {
             },
             (oracle.clone(), &volatile("/tmp/a/ws")),
             (candidate.clone(), &volatile("/tmp/b/ws")),
+            opentide_compare::Normalisation::default(),
             &Ledger::default(),
         );
         assert!(report.equal, "{report:?}");

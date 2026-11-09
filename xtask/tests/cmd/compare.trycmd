@@ -31,7 +31,7 @@ missing field `issue` (line 1)
 $ xtask compare --check-ledger --ledger unknown-changelog.toml --changelog CHANGELOG.md
 ? 1
 error: unknown-changelog.toml:
-entry 1: changelog "**Not in the changelog**" is not in CHANGELOG.md
+entry 1: changelog "**Not in the changelog**" begins no entry (`- **Not in the changelog** …`) of CHANGELOG.md
 
 $ xtask compare --oracle oracle --command validate --ledger ledger.toml --changelog CHANGELOG.md
 ? 2

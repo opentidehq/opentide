@@ -62,7 +62,7 @@ cargo xtask corpus clean --engine python --repo /tmp/heavy           # validate 
   `detection/`, docs under `documentation/`). See `KNOWN_GAPS.md` KG-07: `opentide lint` ignores
   `paths.toml`.
 - **Clean.** Seed 1 (30/30/50) and seed 20261107 (300/300/500) have zero findings in the
-  oracle's `validate` and `lint`; the `Corpus` workflow checks the heavy one.
+  oracle's `validate` and `lint`; ci.yml's `corpus` job checks the heavy one.
 
 Consumers: `xtask golden` (UC-0.5) records the small workspace (seed 1, 30/30/50) and the fault
 workspace as fixtures; `xtask bench` (UC-0.8) generates seed 20261107 with `--scale`. The library
