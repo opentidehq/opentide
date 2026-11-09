@@ -52,6 +52,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`cql_unknown_parameter`](#cql_unknown_parameter) | The CQL function has no parameter with this name. |
 | [`cql_unnamed_argument`](#cql_unnamed_argument) | A CQL function gets an argument without a name that it cannot take: a second one, or one when every parameter needs its name. |
 | [`credentials`](#credentials) | Per configured tenant, whether every `$VARIABLE` its setup names is set. |
+| [`crowdstrike_unsupported`](#crowdstrike_unsupported) | Retired in engine 0.12.0; CrowdStrike queries are now checked as CQL: see the `cql_*` codes. |
 | [`cve_lookup_unavailable`](#cve_lookup_unavailable) | A threat lists CVE identifiers, but Vulnerability-Lookup could not be reached to check them. |
 | [`defender_output_columns`](#defender_output_columns) | A Defender custom detection must return the columns Defender requires. |
 | [`deployment_state_platform`](#deployment_state_platform) | A deployment state shard names a platform that stores no external ids. |
@@ -922,6 +923,24 @@ Reported by `opentide doctor`. Warns when a variable is unset or empty, with `su
 ### How to fix
 
 Set the variables it names in the environment the deploy runs in (a CI secret, or a `.env` file you load). Never write the value into the TOML.
+
+## crowdstrike_unsupported
+
+Retired in engine 0.12.0; CrowdStrike queries are now checked as CQL: see the `cql_*` codes.
+
+Severity: warning, while it was reported. CrowdStrike queries were not validated, and the engine said so rather than fake it.
+
+Until engine 0.12.0, the analysis engine reported it as a warning on a CrowdStrike rule's `crowdstrike` block: an editor running `opentide lsp start` and `opentide tui` showed it. Engine 0.12.0 checks the query as the CrowdStrike Query Language (CQL) instead, and reports what it finds with the `cql_*` codes (`opentide explain` lists them). No command reports `crowdstrike_unsupported` now.
+
+### Example
+
+```text
+opentide explain cql_unknown_function
+```
+
+### How to fix
+
+Nothing to fix: no command reports this code any more. A suppression list or SARIF baseline that names it can drop it.
 
 ## cve_lookup_unavailable
 
