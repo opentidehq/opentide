@@ -36,11 +36,16 @@ export OPENTIDE_SPECIFICATIONS_ROOT="/absolute/path/to/specifications"
 
 ```bash
 # Synchronize bundled vocabularies and pins, and rewrite the lockfile
-uv run python scripts/build/sync_vocabularies.py
+cargo xtask vocab sync
 
-# Verification mode: report drift and exit 1
-uv run python scripts/build/sync_vocabularies.py --check
+# Verification mode: report drift and exit 1 (what CI runs)
+cargo xtask vocab sync --check
 ```
+
+`cargo xtask vocab sync` (`xtask/src/vocab/sync.rs`) and `sync_vocabularies.py`
+compute the same lockfile: the Python script stays for the vocab-upstream
+workflow and `opentide.vocabulary.sync_upstream`, which run it after an ingest,
+until that pipeline moves to Rust.
 
 If the specifications repository is not available locally, sync mode writes a
 baseline lockfile from the currently bundled vocabularies and pins, and
@@ -48,8 +53,8 @@ baseline lockfile from the currently bundled vocabularies and pins, and
 check cannot tell a synced bundle from a hand edit with a refreshed lockfile.
 
 CI therefore checks out `opentidehq/specifications` at `main` and runs
-`--check` against it whenever bundled vocabularies, pins, the lockfile or this
-script change. A bundle that differs from specifications fails, whatever the
+`cargo xtask vocab sync --check` against it whenever bundled vocabularies, pins,
+the lockfile or `xtask/src/vocab/sync.rs` change. A bundle that differs from specifications fails, whatever the
 lockfile says. Merge the specifications change first, then re-run the opentide
 PR's CI. A change made only in specifications reaches opentide through the
 weekly vocab-upstream workflow, which syncs from specifications `main` and opens
@@ -57,6 +62,14 @@ the opentide PR. The lockfile's `specifications_git_sha` records which
 specifications commit was synced. It is provenance only and `--check` does not
 compare it, so the check still passes after specifications `main` moves on
 without a vocabulary or pin change.
+
+## Sentinel's ATT&CK v18 list
+
+`cargo xtask vocab sentinel-attack` writes `src/opentide/data/sentinel/attack-v18.json`
+from MITRE's STIX bundles of ATT&CK 18.1 and of the release the `att&ck`
+vocabulary was built from (its `source_version`); `--check` exits 1 when the
+file would change, and `--stix-dir DIR` reads an attack-stix-data checkout
+instead of downloading.
 
 ## Diagnostic code reference
 

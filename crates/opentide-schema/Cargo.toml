@@ -13,6 +13,9 @@ readme = "../COMPONENT.md"
 # every member without `publish = false`. The first change that makes a
 # published crate depend on it (UC-1.3, #809, or the facade, UC-5.1, #836)
 # removes this line, and a maintainer publishes the new name (NEW_CRATE_TOKEN).
+# Until then `cargo package` leaves it out (ci.yml, engine-release.yml): the
+# vocabularies it compiles in come from src/opentide/data (build.rs,
+# OPENTIDE_ASSETS), which `release.py vendor` copies only into a published crate.
 publish = false
 
 [lints]
@@ -33,6 +36,13 @@ serde.workspace = true
 schemars.workspace = true
 garde.workspace = true
 thiserror.workspace = true
+# Vocabularies (`vocab`): the documents, pin files and Sentinel's ATT&CK list.
+toml.workspace = true
+serde_json.workspace = true
+# Entries in document order, looked up by key. The version Cargo.lock holds.
+indexmap = { version = "2", features = ["serde"] }
+# Which characters a quoted value escapes (`vocab::quote`).
+unicode-properties.workspace = true
 saphyr.workspace = true
 saphyr-parser.workspace = true
 serde-saphyr.workspace = true
@@ -41,8 +51,7 @@ pyo3 = { workspace = true, features = ["abi3-py310"], optional = true }
 
 [dev-dependencies]
 insta.workspace = true
-serde_json.workspace = true
+strsim.workspace = true
 serde_yaml.workspace = true
 trybuild.workspace = true
 proptest.workspace = true
-toml.workspace = true

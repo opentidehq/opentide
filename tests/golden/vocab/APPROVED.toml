@@ -1,0 +1,37 @@
+# Approved "did you mean" differences on corpus values (UC-1.6, #812), read by
+# `cargo xtask vocab diff --against python` (xtask/src/vocab/diff.rs).
+#
+# Suggestions come from opentide_core::suggest (strsim's edit distance), not
+# from Python's difflib: the same word without case or -/_ wins outright,
+# otherwise the value with the fewest edits, within a third of the length of
+# both the value and the part that differs. A ratio of shared letters also
+# suggests unrelated words; an edit distance suggests what a typo meant. Every
+# corpus value whose suggestion differs from the oracle's is listed here, and
+# an entry that matches no corpus value is stale and fails the diff.
+#
+# These are not entries of tests/golden/APPROVED_DIFFS.toml yet: that ledger
+# applies to commands with a Rust implementation (`golden check --engine
+# compare`), and an entry no compared case uses is stale. When `validate` is
+# ported (UC-3), each entry here becomes a ledger entry on the `help` and
+# `suggestion` of the vocab_unknown findings it changes.
+#
+# Fields: vocab, value, oracle and candidate (the suggestions, "" for none),
+# reason, issue, changelog (the bold lead of the CHANGELOG.md entry).
+
+[[diff]]
+vocab = "severity::1.0"
+value = "Big incident"
+oracle = "Substantial incident"
+candidate = ""
+reason = "'Big' and 'Substantial' are different words; the two values share ' incident' and some letters, not a typo"
+issue = "https://github.com/opentidehq/opentide/issues/812"
+changelog = "**\"Did you mean\" suggests what a typo meant, not a word that shares letters**"
+
+[[diff]]
+vocab = "signal.entities::1.0"
+value = "Host::Gizmo"
+oracle = "Host::File"
+candidate = ""
+reason = "'Gizmo' is four edits from 'File' (five letters): another word under the same stage, not a typo"
+issue = "https://github.com/opentidehq/opentide/issues/812"
+changelog = "**\"Did you mean\" suggests what a typo meant, not a word that shares letters**"
