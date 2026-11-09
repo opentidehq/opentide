@@ -8,8 +8,6 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ### Added
 
-- **`opentide_core::difflib`: Python's `difflib.SequenceMatcher` and `get_close_matches`, bit for bit** ([#812](https://github.com/opentidehq/opentide/issues/812), [#825](https://github.com/opentidehq/opentide/issues/825)). "Did you mean" suggestions in Rust pick the same values, in the same order, as the opentide CLI's Python: the `autojunk` heuristic, `ratio`, `quick_ratio` and `real_quick_ratio` are CPython 3.13's, over Unicode scalar values. Over 3,000 cases recorded from Python (`scripts/build/gen_difflib_cases.py`) check it.
-
 - **Each release carries CycloneDX SBOMs** ([#843](https://github.com/opentidehq/opentide/issues/843)). `opentide-lsp.cdx.json` (the binaries and the WASI build), `opentide-wasm.cdx.json` (the browser build, with the wasi-libc it links), `opentide-lsp-client.cdx.json` and `opentide-lsp-worker.cdx.json` (the npm packages) are release assets, listed in `SHA256SUMS` and checked against the CycloneDX 1.5 schema before they ship. The other assets keep their names.
 
 ### Changed
