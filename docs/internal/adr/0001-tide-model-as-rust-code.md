@@ -138,30 +138,38 @@ Identifiers (`metadata.uuid`, `metadata.schema`, references, external ids) stay 
 
 ### Validators
 
-The 21 validators and their Rust form: 16 stay in the model (constraints, custom validators and lax deserializers), none disappears, 3 become named checks, and 2 are outside the object models but still reproduced. Plan §4 counts 14, 2 that disappear, 3 and 2: the two date validators do not disappear, because they turn any scalar into a string, not only a date (below). Each validator's observable behaviour is the oracle's; the item that ports it reproduces it exactly or records an approved diff.
+The 21 validators and their Rust form: 16 stay in the model (constraints, custom validators, deserializers and the structural conversion), none disappears, 3 become named checks, and 2 are outside the object models but still reproduced. Plan §4 counts 14, 2 that disappear, 3 and 2: the two date validators do not disappear, because they turn any scalar into a string, not only a date (below). Each validator's observable behaviour is the oracle's, including its Pydantic error type; the item that ports it reproduces it exactly or records an approved diff.
 
-| Validator | Where | Rust |
-|-----------|-------|------|
-| `_validate_schema_identifier`, `_validate_reviewed`, `_require_vocab_list`, `_registered_platform_schema`, `_name_not_empty`, `_unique_per_system`, `_no_legacy_keys`, `_only_connector_arrays` | `metadata.py`, `threat.py`, `platform.py`, `visibility.py`, `configuration/sharing.py` | garde constraints or `custom` validators with `Pins` (8) |
-| `_query_not_blank` (`QueryText`), `_single_vocab_name` (`VocabName`), `check_sentinel_technique` (`SentinelTechnique`) | `platform.py`, `threat.py`, `sentinel_attack.py` | garde `custom` on the field type (3) |
-| `_status_strategy` (`StatusStrategyName`), `_run_strategy` (`RunStrategyName`), the `FlavorName` lambda | `configuration/base.py`, `configuration/documentation.py` | serde `deserialize_with` on the enum (3) |
-| `_coerce_dates` (`created`, `modified`) | `metadata.py` | serde `deserialize_with` reproducing `str(value)` of the value PyYAML (YAML 1.1) loads (UC-1.3) |
-| `_coerce_reviewed` (`reviewed`) | `metadata.py` | serde `deserialize_with`: a YAML 1.1 date or timestamp becomes its `isoformat()`, anything else `str(value).strip()`, and an empty result `None` (UC-1.3) |
-| `_validate_raw_elastic_block`, `_validate_raw_sysdig_block`, `_columns_fit_system` | `platform.py`, `visibility.py` | named checks `elastic_rule_shape`, `sysdig_rule_shape`, `columns_fit_system` (3) |
-| `SchemaVersion._normalise_family` | `version.py` | the schema-identifier parser (UC-1.7): the family is stripped and lower-cased, and an empty one is an error |
-| `VocabularyEntry._coerce_stages` | `generation/vocabulary.py` | the vocabulary entry's `deserialize_with` (UC-1.6): `tide.vocab.stages` absent or `null` is `[]`, a string is a one-item list |
+A validator with `mode="before"` sees the raw input, before any typing. Its Rust form must run where it does, before serde's typing, so that the same input gets the same error. garde runs after deserialisation, so a `mode="before"` check cannot be a garde rule: serde would reject the value first, with a different error. An example is `impact: "a;b"`, which is Pydantic's `vocab_list_type`.
 
-The two date validators turn any scalar into a string, so values that are not dates pass too. On the oracle (PyYAML's loader, `core/io.py`, then Pydantic 2.14):
+| Validator | Where | Mode | Rust |
+|-----------|-------|------|------|
+| `_validate_schema_identifier`, `_validate_reviewed`, `_registered_platform_schema`, `_name_not_empty`, `_unique_per_system` | `metadata.py`, `platform.py`, `visibility.py` | after | garde constraints or `custom` validators with `Pins` (5) |
+| `_require_vocab_list` (`impact`, `leverage`), `_no_legacy_keys`, `_only_connector_arrays` | `threat.py`, `visibility.py`, `configuration/sharing.py` | before | the structural conversion from the YAML or TOML tree (UC-1.2) or a `deserialize_with`, either of which sees the raw value and reports Pydantic's error type (3) |
+| `_query_not_blank` (`QueryText`), `_single_vocab_name` (`VocabName`), `check_sentinel_technique` (`SentinelTechnique`) | `platform.py`, `threat.py`, `sentinel_attack.py` | after (`AfterValidator`) | garde `custom` on the field type (3) |
+| `_status_strategy` (`StatusStrategyName`), `_run_strategy` (`RunStrategyName`), the `FlavorName` lambda | `configuration/base.py`, `configuration/documentation.py` | before (`BeforeValidator`) | serde `deserialize_with` on the enum (3) |
+| `_coerce_dates` (`created`, `modified`) | `metadata.py` | before | serde `deserialize_with`: `str()` of the value the loader produced (table below) (UC-1.3) |
+| `_coerce_reviewed` (`reviewed`) | `metadata.py` | before | serde `deserialize_with`: `str(value).strip()`, and an empty result `None` (UC-1.3) |
+| `_validate_raw_elastic_block`, `_validate_raw_sysdig_block`, `_columns_fit_system` | `platform.py`, `visibility.py` | before, before, after | named checks `elastic_rule_shape`, `sysdig_rule_shape`, `columns_fit_system` (3) |
+| `SchemaVersion._normalise_family` | `version.py` | after | the schema-identifier parser (UC-1.7): the family is stripped and lower-cased, and an empty one is an error |
+| `VocabularyEntry._coerce_stages` | `generation/vocabulary.py` | before | the vocabulary entry's `deserialize_with` (UC-1.6): `tide.vocab.stages` absent or `null` is empty, and a string is one item. Pydantic stores a tuple, so a Rust `Vec` is the same sequence in another container |
+
+Two more preprocessing steps run outside the 21 validators. `from_yaml_dict` on `DetectionRule`, `DetectionObjective` and `ThreatVector` passes `references` through `ObjectReferences.coerce_public_keys`, which turns the keys of `references.public` into integers. UC-1.3 ports them with the models.
+
+**The dates.** The validate path reads YAML with `opentide.core.io.parse_yaml`. Its loader turns every YAML 1.1 date and timestamp into text while it builds the document (`_construct_timestamp_text`, `stringify_yaml_temporals`): `isoformat()`, with a `+00:00` offset written `Z`, so a space-separated timestamp comes out `T`-separated. A date that cannot exist is a YAML error. The validators therefore never see a date object, only that text or another scalar, which they turn into a string. Measured on the oracle with `parse_yaml`, then `load_object_for_validation(body, "rule")` on a `rule::1.1` object (Pydantic 2.14; the script is under [Evidence](#evidence)):
 
 | In the file | `created` / `modified` | `reviewed` |
 |---|---|---|
 | `2026-01-01` (a YAML 1.1 date) | `'2026-01-01'` | `'2026-01-01'` |
-| `2026-01-01T10:00:00Z` (a timestamp) | `'2026-01-01 10:00:00+00:00'` | `'2026-01-01T10:00:00+00:00'` |
-| `20260101`, `true`, `1.5` | `'20260101'`, `'True'`, `'1.5'` | the same text, then `_validate_reviewed` rejects it |
-| `null` or empty | `'None'` | `None` |
+| `2026-01-01T10:00:00Z` | `'2026-01-01T10:00:00Z'` | `'2026-01-01T10:00:00Z'` |
+| `2026-01-01T10:00:00+02:00` | `'2026-01-01T10:00:00+02:00'` | `'2026-01-01T10:00:00+02:00'` |
+| `2026-01-01 10:00:00` (space, no offset) | `'2026-01-01T10:00:00'` | rejected: `_validate_reviewed` wants an offset (`value_error`) |
+| `20260101`, `true`, `1.5` | `'20260101'`, `'True'`, `'1.5'` | rejected (`value_error`) |
+| `null` | `'None'` | `None` |
 | `''`, `'  2026-01-01  '` | `''`, `'  2026-01-01  '` | `None`, `'2026-01-01'` |
+| `2026-13-45` | a YAML error (`InvalidDateError`) | the same |
 
-A plain `String` field would reject `created: 20260101` and keep `2026-01-01T10:00:00Z` as written, which changes what `validate` accepts and what the object reads as (plan §3, invariant 6). UC-1.3 reproduces each row, which needs the YAML 1.1 date and timestamp forms and Python's `str()` of them, or records an approved diff.
+So a plain `String` field differs from the oracle in two places. It would reject `created: 20260101` and `true`, which the oracle accepts. And it would keep `2026-01-01 10:00:00` as written, where the oracle reads `2026-01-01T10:00:00`. A timestamp already in the `T` form with `Z` reads the same either way. UC-1.3 reproduces every row: the loader's temporal stringification, then `str()` (and `strip()` for `reviewed`). If it does not, it records an approved diff (plan §3, invariant 6).
 
 ## Consequences
 
@@ -211,6 +219,25 @@ A plain `String` field would reject `created: 20260101` and keep `2026-01-01T10:
   captures = {"tide.keyword", "tide.property", "tide.schema", "tide.uuid"}
   print(len(literals - modules_or_loggers - captures))                      # 23
   print(sum(len(re.findall(r"__schema_identifier__: ClassVar\[str\] = ", text)) for text in src))  # 15
+  ```
+
+- The date table, on the validate path (`uv run python`, from the repository root):
+
+  ```python
+  import re
+  from pathlib import Path
+  from opentide.core.io import parse_yaml
+  from opentide.loading.object_loader import load_object_for_validation
+  rule = Path("tests/fixtures/specifications/versioning/valid/rule-1.1.yaml").read_text(encoding="utf-8")
+  def read(field, value):
+      text = re.sub(rf"(?m)^(\s+){field}:.*$", rf"\g<1>{field}: {value}", rule)
+      try:
+          return repr(getattr(load_object_for_validation(parse_yaml(text), "rule").metadata, field))
+      except Exception as exc:
+          return type(exc).__name__
+  for value in ["2026-01-01", "2026-01-01T10:00:00Z", "2026-01-01T10:00:00+02:00", "2026-01-01 10:00:00",
+                "20260101", "true", "1.5", "null", "''", "'  2026-01-01  '", "2026-13-45"]:
+      print(f"{value:28} {read('created', value):30} {read('reviewed', value)}")
   ```
 
 - The skeleton's verification: `cargo build -p opentide-schema --features python`, `cargo build -p opentide-schema --target wasm32-unknown-unknown --features wasm` and `cargo nextest run -p opentide-schema --features python` run in the `schema` workflow (`.github/workflows/schema.yml`); `cargo xtask check-layers` and `scripts/engine/check-io-free.sh` run in `ci.yml`'s `engine` job.
