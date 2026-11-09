@@ -505,4 +505,37 @@ mod tests {
         assert_eq!(shorten("abcdef", 2, 4), "abc …");
         assert_eq!(fit("short\n", 10), "short\n");
     }
+
+    #[test]
+    fn code_pads_a_value_that_starts_or_ends_in_a_backtick() {
+        assert_eq!(code("a`"), "`` a` ``");
+        assert_eq!(code("`a"), "`` `a ``");
+        assert_eq!(code("a"), "`a`");
+    }
+
+    #[test]
+    fn tables_stop_at_max_rows() {
+        let findings = |count: usize| -> Vec<Diagnostic> {
+            (0..count)
+                .map(|at| {
+                    Diagnostic::new(
+                        "x",
+                        super::super::diagnostic::Severity::Error,
+                        &format!("m{at}"),
+                    )
+                })
+                .collect()
+        };
+        let rows = |text: &str| {
+            text.lines()
+                .filter(|line| line.starts_with("| error"))
+                .count()
+        };
+        let full = diagnostics_summary("t", "o", &findings(MAX_ROWS), "failed", None);
+        assert_eq!(rows(&full), MAX_ROWS);
+        assert!(!full.contains("more in the job log"));
+        let over = diagnostics_summary("t", "o", &findings(MAX_ROWS + 1), "failed", None);
+        assert_eq!(rows(&over), MAX_ROWS);
+        assert!(over.ends_with("\n… and 1 more in the job log.\n"), "{over}");
+    }
 }

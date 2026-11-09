@@ -57,10 +57,65 @@ fn oracle(name: &str) -> String {
         .to_owned()
 }
 
-/// `candidate` equals the oracle's `name` byte for byte, and its insta snapshot.
+/// The lines where the Rust renderers differ from the oracle by design:
+/// `(snapshot, oracle line, Rust line)`. Each is a difference UC-3.4 decided
+/// (`tests/golden/APPROVED_DIFFS.toml`, "Decided by UC-3.4"), announced in the
+/// CHANGELOG; [`check`] takes it back to the oracle's line where both sides
+/// are found at the same line number, and fails when an entry applies nowhere.
+const APPROVED: &[(&str, &str, &str)] = &[
+    // An underline under a tab covers the tab as the terminal expands it
+    // (the source starts at cell 5, so the tab reaches the stop at 8).
+    (
+        "validate_fault_frames_human",
+        "\u{1b}[34m   \u{1b}[0m\u{1b}[34m│\u{1b}[0m \u{1b}[1;31m━\u{1b}[0m",
+        "\u{1b}[34m   \u{1b}[0m\u{1b}[34m│\u{1b}[0m \u{1b}[1;31m━━━\u{1b}[0m",
+    ),
+    ("validate_fault_frames_plain", "   │ ━", "   │ ━━━"),
+    (
+        "lint_fault_frames_human",
+        "\u{1b}[34m   \u{1b}[0m\u{1b}[34m│\u{1b}[0m \u{1b}[1;31m━\u{1b}[0m",
+        "\u{1b}[34m   \u{1b}[0m\u{1b}[34m│\u{1b}[0m \u{1b}[1;31m━━━\u{1b}[0m",
+    ),
+    ("lint_fault_frames_plain", "   │ ━", "   │ ━━━"),
+];
+
+/// `candidate` equals the oracle's `name` byte for byte, but for the
+/// [`APPROVED`] lines, and its insta snapshot.
 fn check(name: &str, candidate: &str) {
     let expected = oracle(name);
+    let oracle_lines: Vec<&str> = expected.split('\n').collect();
+    let mut applied = vec![false; APPROVED.len()];
+    let candidate = candidate
+        .split('\n')
+        .enumerate()
+        .map(|(index, line)| {
+            for (entry, (snapshot, oracle_line, rust_line)) in APPROVED.iter().enumerate() {
+                if *snapshot == name
+                    && line == *rust_line
+                    && oracle_lines.get(index) == Some(oracle_line)
+                {
+                    applied[entry] = true;
+                    return *oracle_line;
+                }
+            }
+            line
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    for (entry, (snapshot, _, rust_line)) in APPROVED.iter().enumerate() {
+        assert!(
+            *snapshot != name || applied[entry],
+            "{name}: the approved difference {rust_line:?} applies nowhere: remove it"
+        );
+    }
     if candidate != expected {
+        let differing: Vec<usize> = candidate
+            .split('\n')
+            .zip(expected.split('\n'))
+            .enumerate()
+            .filter(|(_, (a, b))| a != b)
+            .map(|(index, _)| index + 1)
+            .collect();
         let line = candidate
             .split('\n')
             .zip(expected.split('\n'))
@@ -72,7 +127,7 @@ fn check(name: &str, candidate: &str) {
                     .min(expected.split('\n').count())
             });
         panic!(
-            "{name}: the Rust renderer differs from the oracle at line {}\n  oracle: {:?}\n  rust:   {:?}",
+            "{name}: the Rust renderer differs from the oracle at line {} (lines {differing:?})\n  oracle: {:?}\n  rust:   {:?}",
             line + 1,
             expected.split('\n').nth(line).unwrap_or("<end>"),
             candidate.split('\n').nth(line).unwrap_or("<end>"),

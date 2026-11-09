@@ -16,9 +16,26 @@ pub fn cell_len(text: &str) -> usize {
     text.chars().map(char_width).sum()
 }
 
-/// The cells one character takes; a control character none.
+/// The cells one character takes as a [`Text`] shows it: a control character
+/// it drops none, one it shows as a picture ([`shown`]) one.
 pub fn char_width(ch: char) -> usize {
-    ch.width().unwrap_or(0)
+    shown(ch).map_or(0, |ch| ch.width().unwrap_or(0))
+}
+
+/// How a [`Text`] holds `ch`: `None` for the controls a terminal would act on
+/// mid-line and the oracle dropped (bell, backspace, vertical tab, form feed,
+/// carriage return); the Unicode control picture (`␛`, `␀`, `␡`) for the other
+/// C0 controls but tab and newline and for DEL, and `�` for a C1 control, so
+/// text from a file never reaches the terminal as an escape sequence; else `ch`.
+pub fn shown(ch: char) -> Option<char> {
+    match ch {
+        '\u{7}' | '\u{8}' | '\u{b}' | '\u{c}' | '\r' => None,
+        '\t' | '\n' => Some(ch),
+        '\u{0}'..='\u{1f}' => char::from_u32(0x2400 + u32::from(ch)),
+        '\u{7f}' => Some('\u{2421}'),
+        '\u{80}'..='\u{9f}' => Some(char::REPLACEMENT_CHARACTER),
+        _ => Some(ch),
+    }
 }
 
 /// How much of a style a stream gets.
@@ -144,11 +161,9 @@ pub struct Text {
     spans: Vec<Span>,
 }
 
-/// The control characters a terminal would act on mid-line (bell, backspace,
-/// vertical tab, form feed, carriage return): dropped from any text added.
+/// `text` as a [`Text`] holds it: each character [`shown`].
 fn strip_control(text: &str) -> impl Iterator<Item = char> + '_ {
-    text.chars()
-        .filter(|ch| !matches!(*ch, '\u{7}' | '\u{8}' | '\u{b}' | '\u{c}' | '\r'))
+    text.chars().filter_map(shown)
 }
 
 impl Text {
@@ -249,6 +264,20 @@ impl Text {
                 })
                 .collect(),
         }
+    }
+
+    /// The text split at each newline, the spans with each part.
+    pub fn split_lines(&self) -> Vec<Text> {
+        let mut parts = Vec::new();
+        let mut start = 0;
+        for (index, ch) in self.chars.iter().enumerate() {
+            if *ch == '\n' {
+                parts.push(self.slice(start, index));
+                start = index + 1;
+            }
+        }
+        parts.push(self.slice(start, self.chars.len()));
+        parts
     }
 
     /// Removes trailing whitespace, and the parts of spans over it.
@@ -435,6 +464,23 @@ mod tests {
     #[test]
     fn control_characters_are_dropped_and_tabs_expand() {
         assert_eq!(Text::plain("a\r\nb\u{7}").as_plain(), "a\nb");
+        // Escape sequences and other controls are shown, never written raw.
+        let hostile = Text::styled(
+            "\u{1b}[2J\u{1b}]8;;x\u{7}\0\u{7f}\u{9b}",
+            &Style::new("red"),
+        );
+        assert_eq!(hostile.as_plain(), "␛[2J␛]8;;x␀␡\u{fffd}");
+        assert!(!hostile.render(Colour::None, false).contains('\u{1b}'));
+        assert_eq!(
+            hostile.render(Colour::Full, false),
+            "\u{1b}[31m␛[2J␛]8;;x␀␡\u{fffd}\u{1b}[0m"
+        );
+        assert_eq!(char_width('\u{1b}'), 1);
+        assert_eq!(char_width('\u{7}'), 0);
+        assert_eq!(cell_len("\u{1b}[1m"), 4);
+        let parts = Text::styled("a\nb", &Style::new("red")).split_lines();
+        assert_eq!(parts.len(), 2);
+        assert_eq!(parts[1].render(Colour::Full, false), "\u{1b}[31mb\u{1b}[0m");
         let mut text = Text::styled("ab", &Style::new("blue"));
         text.push_str("\tc\t");
         text.expand_tabs();
@@ -445,6 +491,35 @@ mod tests {
         let mut stop = Text::plain("1234567\tx");
         stop.expand_tabs();
         assert_eq!(stop.as_plain(), "1234567 x");
+    }
+
+    #[test]
+    fn the_last_colour_drawn_wins_and_attributes_add_up() {
+        let mut text = Text::styled("abc", &Style::new("bold red"));
+        text.stylize(&Style::new("blue"), 1, 2);
+        text.stylize(&Style::new("underline"), 2, 3);
+        assert_eq!(
+            text.render(Colour::Full, false),
+            "\u{1b}[1;31ma\u{1b}[0m\u{1b}[1;34mb\u{1b}[0m\u{1b}[1;4;31mc\u{1b}[0m"
+        );
+        assert_eq!(
+            text.render(Colour::Mono, false),
+            "\u{1b}[1ma\u{1b}[0m\u{1b}[1mb\u{1b}[0m\u{1b}[1;4mc\u{1b}[0m"
+        );
+    }
+
+    #[test]
+    fn truncate_pads_where_a_wide_character_no_longer_fits() {
+        let mut wide = Text::styled("名前名", &Style::new("red"));
+        wide.truncate_ellipsis(4);
+        assert_eq!(wide.as_plain(), "名 …");
+        assert_eq!(wide.cell_len(), 4);
+        let mut fits = Text::plain("名前");
+        fits.truncate_ellipsis(4);
+        assert_eq!(fits.as_plain(), "名前");
+        let mut ascii = Text::plain("abcdef");
+        ascii.truncate_ellipsis(4);
+        assert_eq!(ascii.as_plain(), "abc…");
     }
 
     #[test]

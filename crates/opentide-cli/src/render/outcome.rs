@@ -9,9 +9,9 @@
 //! whole; at a terminal narrower than a line it is broken between words, never
 //! inside one, and continued under its text.
 
-use super::codeframe::py_repr;
+use super::codeframe::quoted;
 use super::glyphs;
-use super::text::{Colour, Style, Text, cell_len};
+use super::text::{Colour, Style, Text, cell_len, char_width};
 use crate::envelope::NextAction;
 use crate::mode::Mode;
 
@@ -82,16 +82,29 @@ impl Console {
         out
     }
 
-    /// `line`, wrapped at words `hang` cells in when the terminal is narrower than it.
+    /// `line`, wrapped at words `hang` cells in when the terminal is narrower
+    /// than it. A line break inside it continues on a row `hang` cells in as
+    /// well, so no printed line starts with the text of a message.
     pub fn print_line(self, line: &Text, hang: usize) -> String {
         let width = self.width.unwrap_or(0);
-        if width == 0 || line.cell_len() <= width || hang >= width / 2 {
-            return self.line(line);
+        let mut out = String::new();
+        for (index, part) in line.split_lines().into_iter().enumerate() {
+            let part = if index == 0 {
+                part
+            } else {
+                let mut led = Text::plain(&" ".repeat(hang.max(1)));
+                led.append_text(&part);
+                led
+            };
+            if width == 0 || part.cell_len() <= width || hang >= width / 2 {
+                out.push_str(&self.line(&part));
+            } else {
+                for row in word_wrap(&part, width, hang) {
+                    out.push_str(&self.line(&row));
+                }
+            }
         }
-        word_wrap(line, width, hang)
-            .iter()
-            .map(|part| self.line(part))
-            .collect()
+        out
     }
 
     /// `label: message`, continued under the message when it wraps.
@@ -227,12 +240,43 @@ pub fn next_action_text(action: &NextAction) -> Text {
     line
 }
 
+/// One word of a line being wrapped: characters `start..end`, the spaces up
+/// to the next word after it, measured in terminal cells.
+#[derive(Debug)]
+struct Word {
+    start: usize,
+    end: usize,
+    cells: usize,
+    space: usize,
+}
+
+impl textwrap::core::Fragment for Word {
+    #[expect(clippy::cast_precision_loss, reason = "a line's cells, far below 2^52")]
+    fn width(&self) -> f64 {
+        self.cells as f64
+    }
+
+    #[expect(clippy::cast_precision_loss, reason = "a line's cells, far below 2^52")]
+    fn whitespace_width(&self) -> f64 {
+        self.space as f64
+    }
+
+    fn penalty_width(&self) -> f64 {
+        0.0
+    }
+}
+
 /// `line` broken at spaces into rows of `width` cells, rows after the first
-/// `hang` in. A word is never split, so a path or URL wider than a row stays
-/// whole; the first row keeps the label and the first word of the message together.
+/// `hang` in, by textwrap's first-fit algorithm.
+///
+/// A word is never split, so a path or URL wider than a row stays whole (the
+/// terminal wraps it and it can still be selected); the first row keeps the
+/// label and the first word of the message together, its indent with them.
 pub fn word_wrap(line: &Text, width: usize, hang: usize) -> Vec<Text> {
     let plain: Vec<char> = line.as_plain().chars().collect();
-    let mut words = Vec::new();
+    let cells = |a: usize, b: usize| -> usize { plain[a..b].iter().copied().map(char_width).sum() };
+    // The words, as runs of characters between whitespace.
+    let mut spans: Vec<(usize, usize)> = Vec::new();
     let mut index = 0;
     while index < plain.len() {
         if plain[index].is_whitespace() {
@@ -243,39 +287,50 @@ pub fn word_wrap(line: &Text, width: usize, hang: usize) -> Vec<Text> {
         while index < plain.len() && !plain[index].is_whitespace() {
             index += 1;
         }
-        words.push((start, index));
+        spans.push((start, index));
     }
-    let cells = |a: usize, b: usize| -> usize {
-        plain[a..b].iter().map(|ch| cell_len(&ch.to_string())).sum()
-    };
-    let mut rows: Vec<(usize, usize)> = Vec::new();
-    let (mut start, mut end, mut count) = (0usize, 0usize, 0usize);
-    for (word_start, word_end) in words {
-        let room = if rows.is_empty() {
-            width
-        } else {
-            width.saturating_sub(hang)
-        };
-        let too_wide = cells(start, word_end) > room;
-        if too_wide && count >= if rows.is_empty() { 2 } else { 1 } {
-            rows.push((start, end));
-            start = word_start;
-            count = 0;
-        }
-        end = word_end;
-        count += 1;
+    if spans.is_empty() {
+        return vec![line.clone()];
     }
-    rows.push((start, plain.len()));
+    // The first row starts with the line's indent, and its first two words
+    // (the label and the first word of the message) are one fragment.
+    let glued = spans.len().min(2);
+    let mut fragments = vec![(0, spans[glued - 1].1)];
+    fragments.extend_from_slice(&spans[glued..]);
+    let words: Vec<Word> = fragments
+        .iter()
+        .enumerate()
+        .map(|(at, &(start, end))| {
+            let next = fragments.get(at + 1).map_or(plain.len(), |next| next.0);
+            Word {
+                start,
+                end,
+                cells: cells(start, end),
+                space: cells(end, next),
+            }
+        })
+        .collect();
+    #[expect(clippy::cast_precision_loss, reason = "a terminal's columns")]
+    let widths = [width as f64, width.saturating_sub(hang) as f64];
+    let rows = textwrap::wrap_algorithms::wrap_first_fit(&words, &widths);
+    let count = rows.len();
     rows.into_iter()
         .enumerate()
-        .map(|(index, (a, b))| {
-            if index == 0 {
-                line.slice(a, b)
+        .filter_map(|(index, row)| {
+            let (first, last) = (row.first()?, row.last()?);
+            let start = if index == 0 { 0 } else { first.start };
+            let end = if index + 1 == count {
+                plain.len()
             } else {
-                let mut row = Text::plain(&" ".repeat(hang));
-                row.append_text(&line.slice(a, b));
-                row
-            }
+                last.end
+            };
+            Some(if index == 0 {
+                line.slice(start, end)
+            } else {
+                let mut led = Text::plain(&" ".repeat(hang));
+                led.append_text(&line.slice(start, end));
+                led
+            })
         })
         .collect()
 }
@@ -353,11 +408,11 @@ pub fn render_result(
     } else if kind == OutcomeKind::Failed {
         if let Some((_, Some(suggestion))) = &result.failure
             && !suggestion.is_empty()
-            && !result.message.contains(&py_repr(suggestion))
+            && !result.message.contains(&quoted(suggestion))
         {
             notes.push((
                 "help".to_owned(),
-                format!("did you mean {}?", py_repr(suggestion)),
+                format!("did you mean {}?", quoted(suggestion)),
             ));
         }
         err.push_str(&stderr.error(&result.message, &notes, mode, false));
@@ -386,6 +441,57 @@ mod tests {
         colour: Colour::None,
         width: None,
     };
+
+    fn rows(line: &str, width: usize, hang: usize) -> Vec<String> {
+        word_wrap(&Text::plain(line), width, hang)
+            .iter()
+            .map(Text::as_plain)
+            .collect()
+    }
+
+    #[test]
+    fn word_wrap_keeps_words_and_the_label_whole() {
+        // The label and the first word stay together, even wider than the row.
+        assert_eq!(
+            rows("error: averyveryverylongword next", 10, 7),
+            ["error: averyveryverylongword", "       next"]
+        );
+        // A word wider than a row has the row to itself, unsplit.
+        assert_eq!(
+            rows("✓ a b /a/very/long/path/to/a/file.yaml c", 12, 2),
+            ["✓ a b", "  /a/very/long/path/to/a/file.yaml", "  c"]
+        );
+        // The indent stays with the first row; the last row keeps its tail.
+        assert_eq!(
+            rows("  help: one two three ", 16, 8),
+            ["  help: one two", "        three "]
+        );
+        // Rows are measured in cells: two wide characters are four.
+        assert_eq!(rows("! 名前 名前 名前", 11, 2), ["! 名前 名前", "  名前"]);
+        assert_eq!(
+            rows("! 名前 名前 名前", 9, 2),
+            ["! 名前", "  名前", "  名前"]
+        );
+        assert_eq!(rows("x", 1, 0), ["x"]);
+        assert_eq!(rows("   ", 1, 0), ["   "]);
+    }
+
+    #[test]
+    fn a_line_break_in_a_message_continues_under_its_text() {
+        assert_eq!(
+            PIPE.labelled("warning", "a\n::error::x", 0),
+            "warning: a\n         ::error::x\n"
+        );
+        let console = Console {
+            colour: Colour::None,
+            width: Some(20),
+        };
+        assert_eq!(
+            console.outcome(OutcomeKind::Failed, "two\n::error::x and more words"),
+            "✗ two\n  ::error::x and\n  more words\n"
+        );
+        assert_eq!(console.labelled("error", "\u{1b}[2J", 0), "error: ␛[2J\n");
+    }
 
     #[test]
     fn kinds() {

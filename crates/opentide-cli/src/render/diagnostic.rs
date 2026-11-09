@@ -151,7 +151,7 @@ impl Diagnostic {
     /// its first character there.
     pub fn single_line_end(&self) -> Option<usize> {
         if self.multiline() {
-            self.column.map(|column| column + 1)
+            self.column.map(|column| column.saturating_add(1))
         } else {
             self.end_column
         }
@@ -332,6 +332,9 @@ mod tests {
         assert!(item.multiline());
         assert_eq!(item.single_line_end(), Some(3));
         assert_eq!(item.explain(), "opentide explain x");
+        // The last column there is does not overflow.
+        item.column = Some(usize::MAX);
+        assert_eq!(item.single_line_end(), Some(usize::MAX));
     }
 
     #[test]

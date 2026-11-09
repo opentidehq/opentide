@@ -852,6 +852,7 @@ dependencies = [
  "humantime",
  "insta",
  "opentide-analysis",
+ "percent-encoding",
  "regex",
  "serde",
  "serde_json",

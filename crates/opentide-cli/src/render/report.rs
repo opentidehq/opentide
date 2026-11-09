@@ -11,7 +11,7 @@
 //! code scanning and Code Quality both need a file; the job log and the
 //! summary still carry it.
 
-use super::codeframe::{py_repr, quote};
+use super::codeframe::{PATH_SAFE, quote, quoted};
 use super::diagnostic::{Diagnostic, Severity};
 use super::summary::{DIAGNOSTICS_DOCS_URL, explain_url, split_lines};
 use crate::envelope::{Failure, code};
@@ -112,31 +112,15 @@ static LINK: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"\[([^\]]*)\]\(([^)\s]*)\)").expect("valid regex")
 });
 
-/// `**x**` and `__x__` as `x`, leftmost first, as one regex with a back-reference would.
+/// `**x**` and `__x__`: Markdown's strong emphasis, leftmost first.
+static EMPHASIS: LazyLock<Regex> = LazyLock::new(|| {
+    #[expect(clippy::expect_used, reason = "a literal pattern")]
+    Regex::new(r"\*\*(.+?)\*\*|__(.+?)__").expect("valid regex")
+});
+
+/// `**x**` and `__x__` as `x`.
 fn drop_emphasis(line: &str) -> String {
-    let chars: Vec<char> = line.chars().collect();
-    let mut out = String::new();
-    let mut index = 0;
-    'outer: while index < chars.len() {
-        for delimiter in [['*', '*'], ['_', '_']] {
-            if chars[index..].starts_with(&delimiter) {
-                // `.+?`: at least one character, then the same delimiter.
-                let inner = index + 2;
-                let mut close = inner + 1;
-                while close + 2 <= chars.len() {
-                    if chars[close..close + 2] == delimiter {
-                        out.extend(&chars[inner..close]);
-                        index = close + 2;
-                        continue 'outer;
-                    }
-                    close += 1;
-                }
-            }
-        }
-        out.push(chars[index]);
-        index += 1;
-    }
-    out
+    EMPHASIS.replace_all(line, "$1$2").into_owned()
 }
 
 /// An explain page as the plain text SARIF wants in `help.text`: no heading
@@ -215,7 +199,7 @@ fn int(value: usize) -> Json {
 /// so a space, `#` or `%` is percent-encoded and `/` stays a separator.
 pub fn artifact_location(path: &str) -> Json {
     Json::object([
-        ("uri", Json::str(quote(path, "/"))),
+        ("uri", Json::str(quote(path, PATH_SAFE))),
         ("uriBaseId", Json::str(SRCROOT)),
     ])
 }
@@ -290,7 +274,7 @@ fn sarif_fixes(diagnostic: &Diagnostic, path: &str) -> Option<Json> {
     let values: Vec<String> = fix
         .edits
         .iter()
-        .map(|edit| py_repr(&edit.replacement))
+        .map(|edit| quoted(&edit.replacement))
         .collect();
     let mut description = format!("Replace with {}", values.join(", "));
     if fix.safe {
@@ -574,5 +558,82 @@ mod tests {
         let text = crate::json::document_text(&codequality_report(&[item], &own_path), false);
         assert!(text.contains("\"lines\":{\"begin\":1}"), "{text}");
         assert!(text.contains("\"severity\":\"info\""));
+    }
+
+    fn parsed(json: &Json) -> serde_json::Value {
+        serde_json::from_str(&crate::json::document_text(json, false)).unwrap_or_default()
+    }
+
+    #[test]
+    fn identical_findings_get_distinct_stable_fingerprints() {
+        let mut item = Diagnostic::new("vocab_unknown", Severity::Error, "m");
+        item.path = Some("a.yaml".into());
+        item.field_path = vec!["tlp".into()];
+        let items = [item.clone(), item];
+        let sarif = |items: &[Diagnostic]| -> Vec<String> {
+            let report = parsed(&sarif_report(
+                items,
+                "validate",
+                "1",
+                &RuleCatalogue::default(),
+                &own_path,
+            ));
+            report["runs"][0]["results"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .map(|result| result["partialFingerprints"]["opentide/v1"].to_string())
+                .collect()
+        };
+        let quality = |items: &[Diagnostic]| -> Vec<String> {
+            parsed(&codequality_report(items, &own_path))
+                .as_array()
+                .into_iter()
+                .flatten()
+                .map(|issue| issue["fingerprint"].to_string())
+                .collect()
+        };
+        for fingerprints in [sarif(&items), quality(&items)] {
+            assert_eq!(fingerprints.len(), 2);
+            assert_ne!(fingerprints[0], fingerprints[1]);
+        }
+        // The same input, the same pair: stable across runs.
+        assert_eq!(sarif(&items), sarif(&items));
+        assert_eq!(quality(&items), quality(&items));
+        // The first occurrence is the one a single finding gets.
+        assert_eq!(sarif(&items[..1])[0], sarif(&items)[0]);
+    }
+
+    #[test]
+    fn a_zero_width_region_has_no_end_column() {
+        let mut item = Diagnostic::new("x", Severity::Error, "m");
+        item.line = Some(3);
+        item.column = Some(5);
+        item.end_column = Some(5);
+        let shown = |item: &Diagnostic| {
+            crate::json::document_text(&region(item).unwrap_or(Json::Null), false)
+                .trim_end()
+                .to_owned()
+        };
+        assert_eq!(shown(&item), "{\"startLine\":3,\"startColumn\":5}");
+        item.end_column = Some(6);
+        assert_eq!(
+            shown(&item),
+            "{\"startLine\":3,\"startColumn\":5,\"endColumn\":6}"
+        );
+        item.end_column = Some(2);
+        item.end_line = Some(4);
+        assert_eq!(
+            shown(&item),
+            "{\"startLine\":3,\"endLine\":4,\"startColumn\":5,\"endColumn\":2}"
+        );
+    }
+
+    #[test]
+    fn emphasis_of_either_kind_is_dropped_leftmost_first() {
+        assert_eq!(drop_emphasis("__a__ and **b**"), "a and b");
+        assert_eq!(drop_emphasis("**a__b**__"), "a__b__");
+        assert_eq!(drop_emphasis("__**a**__"), "**a**");
+        assert_eq!(drop_emphasis("a__"), "a__");
     }
 }

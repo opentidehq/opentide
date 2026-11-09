@@ -25,7 +25,6 @@ pub mod mode;
 pub mod redact;
 pub mod render;
 pub mod schemas;
-pub mod style;
 pub mod suggest;
 pub mod tree;
 mod tree_meta;

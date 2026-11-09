@@ -17,10 +17,9 @@ with `engine_not_ported`, exit 2, as `OPENTIDE_ENGINE=rust` does.
 | `mode.rs`, `env.rs` | The output mode's resolution order, `OPENTIDE_JSON_INDENT`, `DEBUG` only as a boolean |
 | `envelope.rs`, `json.rs` | The JSON envelope, its key order, exit codes, `failure.code`s; an order-keeping JSON tree |
 | `usage.rs`, `suggest.rs` | clap's errors as the contract's usage errors, in the CLI's wording; "did you mean" (strsim, clap's measure) |
-| `style.rs` | `error:` / `help:` / `usage:` lines, `→` next actions, the agent tip; SGR in `human`, bold without colour for `--no-color` on a terminal; wrapping on a terminal only |
 | `logging.rs` | A `tracing` layer: levels per mode, stderr only, redacted |
 | `crash.rs`, `redact.rs` | `error[internal]`, the crash log in the state directory, the issue link; the redaction of secrets and tenant names |
-| `render/` | The renderers (UC-3.4, #826): `text.rs` styled text written as SGR runs and OSC 8 links, cells by `unicode-width`; `codeframe.rs` the `error[code]` frames (hand-drawn: `annotate-snippets` cannot draw this layout), `--fix`'s diff and `fixed:` lines; `outcome.rs` outcome, warning, error and next-step lines and a result's text; `report.rs` SARIF and Code Quality (`sha2` fingerprints); `ci.rs` and `summary.rs` the GitHub, GitLab and Azure sinks; `progress.rs` step lines, the checklist and `OPENTIDE_PROGRESS=json` events |
+| `render/` | The renderers (UC-3.4, #826): `text.rs` styled text written as SGR runs and OSC 8 links, cells by `unicode-width`; `codeframe.rs` the `error[code]` frames (hand-drawn: `annotate-snippets` cannot draw this layout), `--fix`'s diff and `fixed:` lines; `outcome.rs` outcome, warning, error and next-step lines and a result's text, the framework's usage errors and failures included (`Run::emit`): one renderer, wrapped by textwrap's first-fit algorithm at a terminal, never inside a word; `report.rs` SARIF and Code Quality (`sha2` fingerprints); `ci.rs` and `summary.rs` the GitHub, GitLab and Azure sinks; `progress.rs` step lines, the checklist and `OPENTIDE_PROGRESS=json` events |
 
 ## Place
 
