@@ -1,0 +1,7 @@
+{"jsonrpc":"2.0","id":null,"error":{"code":-32700,"message":"Parse error: Expecting value: line 1 column 1 (char 0)"}}
+{"jsonrpc":"2.0","id":1,"result":{"protocol":1,"version":"0.23.0","commands_digest":"536a2117f452a33a8a278c30a7a53b5ceed339309ec1090ed8e0bc8064ae474b"}}
+{"jsonrpc":"2.0","id":2,"result":{"document":{"error":"Interrupted","ok":false,"status":"failed","message":"Interrupted","schema_version":1,"command":"validate","duration_ms":0,"exit_code":130,"summary":{},"next_actions":[],"failure":{"code":"interrupted","message":"Interrupted","argument":null,"suggestion":null,"crash_log":null}},"exit_code":130}}
+{"jsonrpc":"2.0","id":3,"result":{"document":{"error":"Interrupted","ok":false,"status":"failed","message":"Interrupted","schema_version":1,"command":"info","duration_ms":0,"exit_code":130,"summary":{},"next_actions":[],"failure":{"code":"interrupted","message":"Interrupted","argument":null,"suggestion":null,"crash_log":null}},"exit_code":130}}
+{"jsonrpc":"2.0","id":4,"result":{"document":{"error":"Interrupted","ok":false,"status":"failed","message":"Interrupted","schema_version":1,"command":"tui","duration_ms":0,"exit_code":130,"summary":{},"next_actions":[],"failure":{"code":"interrupted","message":"Interrupted","argument":null,"suggestion":null,"crash_log":null}},"exit_code":130}}
+{"jsonrpc":"2.0","id":5,"error":{"code":-32601,"message":"Method not found: nope"}}
+{"jsonrpc":"2.0","id":6,"result":null}

@@ -1,0 +1,48 @@
+                                                                                
+ Usage: opentide validate [OPTIONS] COMMAND [ARGS]...                           
+                                                                                
+ Validate objects and queries                                                   
+                                                                                
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --check          CHECK                     Run one check only:               │
+│                                            id-uniqueness, uuid-format,       │
+│                                            schema, cve, sharing-config,      │
+│                                            configuration, queries            │
+│ --file           <str>                     Validate only this file           │
+│                                            (repeatable)                      │
+│ --uuid           <str>                     Validate only the object with     │
+│                                            this UUID (repeatable)            │
+│ --type           <str>                     Validate only this type: rule,    │
+│                                            threat or objective (repeatable)  │
+│ --strict                                   Fail on warnings too              │
+│ --queries        error|warn|off            How a query the platform would    │
+│                                            reject is reported: error (the    │
+│                                            default), warn (passes unless     │
+│                                            --strict) or off (queries are not │
+│                                            checked)                          │
+│ --fix                                      Apply every safe fix (vocabulary  │
+│                                            typos), then validate again       │
+│ --dry-run                                  With --fix: print the edits as a  │
+│                                            diff and change nothing           │
+│ --watch                                    Validate again each time an       │
+│                                            object file changes; Ctrl-C stops │
+│ --format         <text|sarif|codequality>  text: code frames. sarif: SARIF   │
+│                                            2.1.0 for code scanning.          │
+│                                            codequality: GitLab Code Quality  │
+│                                            (Code Climate JSON). A report     │
+│                                            goes to --output, or to stdout    │
+│                                            instead of the text               │
+│                                            [default: text]                   │
+│ --output         <path>                    Write the --format report to this │
+│                                            file and print the usual text     │
+│                                            output too                        │
+│ --help                                     Show this message and exit.       │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ query  Check rule queries offline, or on the tenants (--live)                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+ Examples
+   $ opentide validate
+   $ opentide validate --strict --type rule
+   $ opentide validate --queries warn

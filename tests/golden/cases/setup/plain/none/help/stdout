@@ -1,0 +1,135 @@
+                                                                                
+ Usage: opentide setup [OPTIONS] COMMAND [ARGS]...                              
+                                                                                
+ Set up a detection repository and its tooling                                  
+                                                                                
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --path              -C                         <str>     Repository path     │
+│                                                          [default: .]        │
+│ --name                                         <str>     Repository name,    │
+│                                                          used in the README  │
+│ --org                                          <str>     Organisation or     │
+│                                                          team, used in the   │
+│                                                          README              │
+│ --description                                  <str>     One-line            │
+│                                                          description, used   │
+│                                                          in the README       │
+│ --platform                                     PLATFORM  Enable a detection  │
+│                                                          platform            │
+│                                                          (repeatable):       │
+│                                                          sentinel, splunk,   │
+│                                                          crowdstrike,        │
+│                                                          defender_for_endpo… │
+│                                                          sentinel_one,       │
+│                                                          carbon_black_cloud, │
+│                                                          harfanglab,         │
+│                                                          elastic, sysdig     │
+│ --ci                                           PROVIDER  CI/CD pipeline to   │
+│                                                          write: github,      │
+│                                                          gitlab, azure or    │
+│                                                          none                │
+│ --staging               --no-staging                     Deploy to staging   │
+│                                                          tenants from pull   │
+│                                                          requests            │
+│                                                          [default: staging]  │
+│ --inflight              --no-inflight                    Update              │
+│                                                          .opentide/inflight/ │
+│                                                          preview shards on   │
+│                                                          pull requests       │
+│                                                          [default: inflight] │
+│ --sharing               --no-sharing                     Share changed       │
+│                                                          objects on the      │
+│                                                          default branch (off │
+│                                                          unless selected)    │
+│                                                          [default:           │
+│                                                          no-sharing]         │
+│ --lint-changed          --lint-all                       Gate lint on the    │
+│                                                          object files each   │
+│                                                          run changes, so a   │
+│                                                          catalogue with      │
+│                                                          inherited findings  │
+│                                                          can adopt it        │
+│                                                          (validate still     │
+│                                                          checks every file)  │
+│                                                          [default: lint-all] │
+│ --promotion             --no-promotion                   Write [promotion]   │
+│                                                          enabled in          │
+│                                                          deployment.toml.    │
+│                                                          Omit to keep the    │
+│                                                          repository's        │
+│                                                          setting.            │
+│ --promotion-target                             <str>     Status deploy       │
+│                                                          promotes rules to.  │
+│                                                          Omit to keep the    │
+│                                                          repository's        │
+│                                                          setting.            │
+│ --python-version                               <str>     Python version the  │
+│                                                          pipeline installs   │
+│                                                          [default: 3.12]     │
+│ --explorer-pages        --no-explorer-pages              Include GitHub      │
+│                                                          Pages explorer      │
+│                                                          build and deploy    │
+│                                                          jobs                │
+│                                                          [default:           │
+│                                                          no-explorer-pages]  │
+│ --default-branch                               <str>     Branch that deploys │
+│                                                          and receives        │
+│                                                          inflight shards     │
+│                                                          (default:           │
+│                                                          origin/HEAD, then   │
+│                                                          the checked-out     │
+│                                                          branch, then        │
+│                                                          init.defaultBranch, │
+│                                                          then main; GitLab   │
+│                                                          uses                │
+│                                                          $CI_DEFAULT_BRANCH) │
+│ --vscode-setup                                           Run deprecated      │
+│                                                          setup vscode: the   │
+│                                                          extension           │
+│                                                          recommendation and  │
+│                                                          snippets            │
+│ --mcp                                          HOST      Write MCP           │
+│                                                          configuration for   │
+│                                                          vscode, cursor,     │
+│                                                          claude-code or      │
+│                                                          generic             │
+│                                                          (repeatable)        │
+│ --skills                                       TARGET    Install agent       │
+│                                                          skills for          │
+│                                                          claude-code,        │
+│                                                          cursor,             │
+│                                                          github-copilot or   │
+│                                                          generic             │
+│                                                          (repeatable)        │
+│ --plugin                                                 Register the        │
+│                                                          opentidehq/skills   │
+│                                                          Agent Plugin for    │
+│                                                          Claude Code         │
+│                                                          (.claude/settings.… │
+│ --hooks                                                  Validate objects on │
+│                                                          every commit        │
+│ --env                                                    Write .env.example  │
+│                                                          and ignore .env     │
+│ --plan                                                   List the files each │
+│                                                          step would write,   │
+│                                                          and write nothing   │
+│ --yes               -y                                   Non-interactive     │
+│                                                          mode                │
+│ --help                                                   Show this message   │
+│                                                          and exit.           │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ repo       Scaffold a detection repository                                   │
+│ platforms  Enable platform configuration files                               │
+│ ci         Write CI/CD pipeline files                                        │
+│ env        Write .env.example and ignore .env                                │
+│ hooks      Validate objects on every commit                                  │
+│ mcp        Write MCP configuration for editors and agents                    │
+│ vscode     Write VS Code schemas and snippets (deprecated)                   │
+│ skills     Discover and install agent skills                                 │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+ Examples
+   $ opentide setup
+   $ opentide setup --yes --name "Detections" --platform sentinel --ci github
+   $ opentide setup --plan --platform sentinel --mcp vscode --hooks --env

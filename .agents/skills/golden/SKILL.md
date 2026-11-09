@@ -16,7 +16,7 @@ and the issues of the two items that build the tools.
 
 | Tool | Work item | State |
 |------|-----------|-------|
-| `cargo xtask golden`, `tests/golden/` (`ORACLE`, `cases.toml`, `cases/`, `blobs/`, `COVERAGE.md`, `README.md`) | UC-0.5, [#803](https://github.com/opentidehq/opentide/issues/803) | On its branch (`test/uc-0-5-golden-capture`). Until it merges, `cargo xtask golden` here prints "not implemented yet" and exits 1 |
+| `cargo xtask golden`, `tests/golden/` (`ORACLE`, `cases.toml`, `cases/`, `blobs/`, `COVERAGE.md`, `README.md`) | UC-0.5, [#803](https://github.com/opentidehq/opentide/issues/803) | Present: 1160 cases recorded from opentide 0.23.0; `.github/workflows/golden.yml` runs `check` and `record --check-determinism` |
 | `OPENTIDE_ENGINE`, the comparator, `tests/golden/APPROVED_DIFFS.toml` | UC-0.7, [#805](https://github.com/opentidehq/opentide/issues/805) | Not present |
 
 **`tests/golden/README.md` is the reference** for the commands, the case and recording layout,

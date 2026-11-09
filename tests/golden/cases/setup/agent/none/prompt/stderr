@@ -1,0 +1,2 @@
+error: Interactive setup does not prompt in a coding agent (golden). Run 'opentide setup' with --yes and explicit flags (--platform, --ci).
+tip: add --json for machine-readable output

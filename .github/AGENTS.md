@@ -157,6 +157,12 @@ together.
   `development`, on an `engine-v*` tag, on a pull request that changes `crates/`, `grammars/`,
   `Cargo.lock`, the query catalogs or the oracles, weekly (with the Carbon Black Cloud tenant) and
   on demand. Its own triggers and network-heavy references keep it out of ci.yml.
+- [`golden.yml`](workflows/golden.yml) runs `cargo xtask golden check --engine python` and
+  `golden record --check-determinism` against the committed recordings of the frozen Python CLI
+  (`tests/golden/README.md`): on a pull request that touches `tests/golden/`, `tests/corpora/`,
+  the tide corpus, `xtask/`, `.cargo/`, `Cargo.*` or `.gitattributes`, on every push to
+  `development`, weekly and on demand. Path-filtered, so not required; whether it becomes required
+  is the maintainer's call.
 - [`codeql.yml`](workflows/codeql.yml), [`docs.yml`](workflows/docs.yml),
   [`publish-pypi.yml`](workflows/publish-pypi.yml), [`stack-comment.yml`](workflows/stack-comment.yml),
   [`vocab-upstream.yml`](workflows/vocab-upstream.yml): below and in their own headers.

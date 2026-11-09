@@ -1,0 +1,16 @@
+[1m                                                                                                    [0m
+[1m [0m[1;33mUsage: [0m[1mopentide generate extract [OPTIONS] COMMAND [ARGS]...[0m[1m                                      [0m[1m [0m
+[1m                                                                                                    [0m
+ Import rules from external platforms                                                               
+                                                                                                    
+[2m╭─[0m[2m Options [0m[2m───────────────────────────────────────────────────────────────────────────────────────[0m[2m─╮[0m
+[2m│[0m [1;36m-[0m[1;36m-help[0m          Show this message and exit.                                                      [2m│[0m
+[2m╰──────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+[2m╭─[0m[2m Commands [0m[2m──────────────────────────────────────────────────────────────────────────────────────[0m[2m─╮[0m
+[2m│[0m [1;36msentinel[0m[1;36m [0m Import Sentinel analytics rules                                                        [2m│[0m
+[2m│[0m [1;36mdefender[0m[1;36m [0m Import Defender custom detections                                                      [2m│[0m
+[2m│[0m [1;36melastic [0m[1;36m [0m Import Elastic Security detection rules                                                [2m│[0m
+[2m╰──────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+
+[2m Examples[0m
+   [1m$ opentide generate extract sentinel[0m

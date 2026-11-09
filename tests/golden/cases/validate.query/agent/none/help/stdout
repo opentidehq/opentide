@@ -1,0 +1,48 @@
+                                                                                
+ Usage: opentide validate query [OPTIONS]                                       
+                                                                                
+ Check rule queries offline with the analysis engine, or on the tenants         
+ (--live).                                                                      
+                                                                                
+ Offline, the engine reports the queries the platform would reject, as          
+ `opentide validate` does; `opentide lint` reports their style.                 
+                                                                                
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --platform             PLATFORM    Check this platform's queries. Offline,   │
+│                                    default every platform the engine parses: │
+│                                    carbon_black_cloud,                       │
+│                                    defender_for_endpoint, elastic, sentinel, │
+│                                    splunk, sysdig. --live needs one of:      │
+│                                    carbon_black_cloud,                       │
+│                                    defender_for_endpoint, elastic, sentinel, │
+│                                    sentinel_one, splunk                      │
+│ --strategy             <str>       Check only rules a run with this strategy │
+│                                    deploys (repeatable), on the tenants that │
+│                                    accept it. Default: PREVIEW and RELEASE   │
+│ --wide                             Check every status strategy but           │
+│                                    DISABLEMENT and DELETION (--live)         │
+│ --live                             Check the queries on the platform's       │
+│                                    tenants (needs credentials)               │
+│ --changed                          Check only the rule files this run        │
+│                                    changed: the pull or merge request, the   │
+│                                    push, or outside CI the last commit (the  │
+│                                    files deploy reads)                       │
+│ --file                 <str>       Check only this rule file, or this query  │
+│                                    file (.kql, .spl, .esql, .eql, .kuery,    │
+│                                    .lucene, .falco) offline (repeatable)     │
+│ --uuid                 <str>       Check only the rule with this UUID        │
+│                                    (repeatable)                              │
+│ --strict                           Fail on warnings too                      │
+│ --queries              error|warn  How a rejected query is reported offline: │
+│                                    error (the default) or warn               │
+│ --check-timeout        SECONDS     Seconds each query may take on a tenant   │
+│                                    before its check fails (--live; default:  │
+│                                    OPENTIDE_QUERY_CHECK_TIMEOUT, else 120)   │
+│ --help                             Show this message and exit.               │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+ Examples
+   $ opentide validate query
+   $ opentide validate query --platform splunk --changed
+   $ opentide validate query --file hunting/lsass.kql
+   $ opentide validate query --platform sentinel --live

@@ -1,0 +1,30 @@
+                                                                                
+ Usage: opentide generate docs [OPTIONS] COMMAND [ARGS]...                      
+                                                                                
+ Generate markdown documentation for detection objects                          
+                                                                                
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --output            <str>  Write the pages here instead of the configured    │
+│                            docs folder                                       │
+│ --flavor            <str>  Markdown flavour: github, gitlab, azure_devops or │
+│                            generic                                           │
+│ --rules                    Only rule pages; combine with --threats,          │
+│                            --objectives                                      │
+│ --threats                  Only threat pages; combine with --rules,          │
+│                            --objectives                                      │
+│ --objectives               Only objective pages; combine with --rules,       │
+│                            --threats                                         │
+│ --changed                  Regenerate only the pages of objects git reports  │
+│                            as changed                                        │
+│ --help                     Show this message and exit.                       │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ rules       Generate rule documentation                                      │
+│ objectives  Generate objective documentation                                 │
+│ threats     Generate threat documentation                                    │
+│ index       Generate the documentation index pages                           │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+ Examples
+   $ opentide generate docs
+   $ opentide generate docs --changed

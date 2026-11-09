@@ -1,0 +1,5 @@
+✗ 1 error in 1 file · 1 fixable with --fix · 12 objects checked · 7 queries · <SECONDS>
+→ opentide validate --fix · apply 1 safe fix
+→ opentide explain vocab_unknown · how to fix it
+→ opentide validate · check again
+tip: add --json for machine-readable output

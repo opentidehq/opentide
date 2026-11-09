@@ -1,0 +1,57 @@
+                                                                                
+ Usage: opentide query [OPTIONS] [query]                                        
+                                                                                
+ Run a read-only query on platform tenants and show rows                        
+                                                                                
+ Sends the query, or a rule's query, to each selected tenant over the           
+ window and prints at most --limit rows per tenant. No search or rule is        
+ saved on the tenant.                                                           
+                                                                                
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│   query      <str>  The query, in the platform's language. '-' reads it from │
+│                     stdin                                                    │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --platform          PLATFORM           Detection platform: sentinel,      │
+│                                           splunk, crowdstrike,               │
+│                                           defender_for_endpoint,             │
+│                                           sentinel_one, carbon_black_cloud,  │
+│                                           harfanglab, elastic, sysdig        │
+│                                           [required]                         │
+│    --tenant            <str>              Run on this tenant (repeatable),   │
+│                                           or 'all'. Default: the only tenant │
+│                                           configured                         │
+│    --rule              <str>              Run the query this rule (by UUID)  │
+│                                           deploys to the platform            │
+│    --file              <str>              Run the query of the rule in this  │
+│                                           file                               │
+│    --query-file        <str>              Read the query from this file      │
+│    --since             <str>              Look back this far from --to or    │
+│                                           now: 15m, 24h, 7d, PT1H. Default:  │
+│                                           24h                                │
+│    --from              <str>              Start of the window, ISO-8601 (UTC │
+│                                           unless it names an offset)         │
+│    --to                <str>              End of the window, ISO-8601.       │
+│                                           Default: now                       │
+│    --limit             <int>              Rows per tenant, at most 5000      │
+│                                           [default: 100]                     │
+│    --language          <str>              Elastic only: esql (default), eql, │
+│                                           lucene or kuery                    │
+│    --index             <str>              Elastic index pattern or           │
+│                                           CrowdStrike repository             │
+│                                           (repeatable)                       │
+│    --timeout           <float>            Seconds to wait for a search to    │
+│                                           finish                             │
+│                                           [default: 120.0]                   │
+│    --columns           <str>              Comma-separated columns the table  │
+│                                           shows                              │
+│    --format            <table|jsonl|csv>  table, jsonl or csv (--json prints │
+│                                           the envelope)                      │
+│                                           [default: table]                   │
+│    --help                                 Show this message and exit.        │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+ Examples
+   $ opentide query --platform sentinel 'SecurityEvent | take 10'
+   $ opentide query --platform splunk --rule <rule-uuid> --tenant all --since 7d
+   $ opentide query --platform elastic --language eql --index 'logs-*' --format jsonl 'process where process.name == "cmd.exe"'

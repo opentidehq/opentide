@@ -1,0 +1,2 @@
+error: deploy reads the rule files the last commit, push or pull request changed, which needs a git checkout; no .git was found from <WS>. Run inside the repository, or pass --all to read every rule file.
+tip: add --json for machine-readable output

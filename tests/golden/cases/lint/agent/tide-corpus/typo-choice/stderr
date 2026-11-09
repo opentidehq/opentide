@@ -1,0 +1,5 @@
+error: Invalid value for '--check': 'filenamez' is not one of 'filenames', 'metadata', 'placeholders', 'queries'.
+  help: did you mean 'filenames'?
+  usage: opentide lint [OPTIONS]
+  help: run 'opentide lint --help'
+tip: add --json for machine-readable output

@@ -1,0 +1,833 @@
+[3m                                            Rules (592)                                             [0m
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃[1m [0m[1mUUID                                [0m[1m [0m┃[1m [0m[1mName                       [0m[1m [0m┃[1m [0m[1mPlatforms                  [0m[1m [0m┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ 5f7ce3e1-490e-44cb-9534-7a55cdf589ef │ Covert Beacon Rule 0134     │ carbon_black_cloud, elastic │
+│ 3619eda3-a6ca-43c3-b079-972f387190c8 │ Covert Beacon Rule 0185     │ carbon_black_cloud,         │
+│                                      │                             │ defender_for_endpoint,      │
+│                                      │                             │ elastic                     │
+│ dfdb7b2b-abc2-4832-a860-83e064439dfb │ Covert Beacon Rule 0248     │ carbon_black_cloud,         │
+│                                      │                             │ defender_for_endpoint       │
+│ 28cfd57b-f91d-4bbc-beeb-19394fa8c4c9 │ Covert Beacon Rule 0338     │ carbon_black_cloud,         │
+│                                      │                             │ defender_for_endpoint       │
+│ cc4e9220-1565-4bef-9c0d-3bf599d3bb5a │ Covert Beacon Rule 0546     │ crowdstrike, sentinel       │
+│ 394eb1b3-0af3-4dfc-9488-a9bf4ce126a4 │ Covert Downgrade Rule 0095  │ carbon_black_cloud,         │
+│                                      │                             │ defender_for_endpoint       │
+│ 4c9f8716-eccc-4887-9748-90e28779cff4 │ Covert Downgrade Rule 0128  │ defender_for_endpoint,      │
+│                                      │                             │ elastic                     │
+│ 0c47fb95-c8a2-40f6-a9ce-929035473183 │ Covert Downgrade Rule 0301  │ harfanglab, sentinel_one    │
+│ 0d9e6475-59cc-4e13-a876-4aeda8188e39 │ Covert Downgrade Rule 0436  │ harfanglab, sentinel_one    │
+│ 9d2875a2-947f-406a-95f3-9afd8af4d3bc │ Covert Downgrade Rule 0541  │ sentinel, sentinel_one      │
+│ ccdc268e-ceb8-4ac3-bb69-ce43b0b33f89 │ Covert Dropper Rule 0176    │ carbon_black_cloud,         │
+│                                      │                             │ defender_for_endpoint       │
+│ 688efbfd-371a-421b-a6ff-eeb1b1d26e81 │ Covert Dropper Rule 0249    │ crowdstrike                 │
+│ d3824764-ed91-47b2-99d4-8f05f0fa71a0 │ Covert Dropper Rule 0282    │ splunk                      │
+│ 1e352062-ffa8-4df5-8a26-a21e4d3cd8b3 │ Covert Dropper Rule 0543    │ splunk                      │
+│ 0982e504-d1b0-4624-87de-5d03192f85d7 │ Covert Exfiltration Rule    │ defender_for_endpoint,      │
+│                                      │ 0083                        │ elastic                     │
+│ 7e3599fb-f2cc-46e9-86f1-e82bbf62a6ee │ Covert Exfiltration Rule    │ sentinel, sentinel_one      │
+│                                      │ 0154                        │                             │
+│ 3e26413d-234d-4b84-9e00-4a293c7ade0c │ Covert Exfiltration Rule    │ harfanglab, sentinel        │
+│                                      │ 0169                        │                             │
+│ 022f83f1-38f7-4e03-b201-8f0bfdce186d │ Covert Exfiltration Rule    │ splunk                      │
+│                                      │ 0435                        │                             │
+│ 0ee22b36-1956-4545-a4fe-4e98f909fe85 │ Covert Exfiltration Rule    │ harfanglab, sentinel_one    │
+│                                      │ 0517                        │                             │
+│ 58f2816e-30a8-4a92-a365-acc69e970abe │ Covert Exfiltration Rule    │ carbon_black_cloud,         │
+│                                      │ 0532                        │ sentinel, sentinel_one      │
+│ b0c8f059-d3d7-44e1-b251-fbf81deb6ad2 │ Covert Harvest Rule 0356    │ carbon_black_cloud,         │
+│                                      │                             │ defender_for_endpoint       │
+│ fd3dcefc-f2b7-4c0a-9edc-abe2fbbdd63e │ Covert Harvest Rule 0438    │ crowdstrike, splunk         │
+│ 340480d6-df84-4dd6-b623-bdc4f6e82891 │ Covert Harvest Rule 0446    │ carbon_black_cloud,         │
+│                                      │                             │ defender_for_endpoint       │
+│ 1f878e9d-294c-466e-9509-f9f6a2b29c3f │ Covert Implant Rule 0157    │ harfanglab, sentinel_one,   │
+│                                      │                             │ sysdig                      │
+│ 6fb1c001-4e6c-4cba-8800-3f679067f9ab │ Covert Implant Rule 0281    │ defender_for_endpoint,      │
+│                                      │                             │ elastic, sentinel           │
+│ c0591889-7745-48d0-81d6-86b26977a340 │ Covert Implant Rule 0505    │ sentinel, sentinel_one      │
+│ b7fe3b6b-46eb-4503-b1e0-795d8b2fe992 │ Covert Implant Rule 0565    │ harfanglab, sentinel        │
+│ 120b27f2-09fe-4291-a7a4-700ee55a8f60 │ Covert Injection Rule 0073  │ sentinel, sentinel_one      │
+│ 265c2386-b658-4e39-91ec-6712af4d01c0 │ Covert Injection Rule 0150  │ crowdstrike                 │
+│ f2c93133-8dc8-4a22-9836-420a4287cdfb │ Covert Injection Rule 0165  │ splunk                      │
+│ ce8e835d-2be8-4d08-b551-7e3d2fbd5338 │ Covert Injection Rule 0222  │ crowdstrike                 │
+│ 30753f8c-e9ee-4af4-b53e-5b734824d7af │ Covert Injection Rule 0287  │ carbon_black_cloud, elastic │
+│ 0db55795-280d-4e64-a03a-38ce29c4ae41 │ Covert Injection Rule 0321  │ crowdstrike                 │
+│ 5876569f-763b-424a-ab92-344a9ff0ff00 │ Covert Injection Rule 0574  │ harfanglab, sentinel        │
+│ 7c89b9b7-d33e-41ee-aa97-394c2c28bde1 │ Covert Loader Rule 0229     │ harfanglab, sentinel_one    │
+│ eb5f85df-0602-4803-ab51-4d9a7bd6e74e │ Covert Loader Rule 0261     │ splunk, sysdig              │
+│ 0e6a0fb8-83d8-4227-806d-9369daae1360 │ Covert Loader Rule 0415     │ sentinel, sentinel_one      │
+│ 6ec70920-6e90-4165-88f9-661497f6c06b │ Covert Pivot Rule 0044      │ carbon_black_cloud, elastic │
+│ b01c7d9b-3f22-40a5-9c0e-9219acab2d4b │ Covert Pivot Rule 0233      │ carbon_black_cloud, elastic │
+│ f9bdce6d-766f-4a52-8128-1bef75ce0cd2 │ Covert Pivot Rule 0492      │ crowdstrike                 │
+│ a0c8572f-7d88-4c75-82fc-09a958bb8442 │ Covert Pivot Rule 0510      │ crowdstrike, sentinel       │
+│ 3ad9991e-2f1a-46e4-9afd-41f88674fd67 │ Covert Pivot Rule 0560      │ defender_for_endpoint,      │
+│                                      │                             │ elastic                     │
+│ 546a4990-33b5-4145-aa46-ae2f8f19adb9 │ Covert Relay Rule 0147      │ splunk                      │
+│ 5fad3b5e-dfde-4b6f-9434-98fb4d2cf9e6 │ Covert Relay Rule 0314      │ carbon_black_cloud, elastic │
+│ 5f25cfd5-b300-41b3-9709-841d5149c060 │ Covert Relay Rule 0350      │ carbon_black_cloud, elastic │
+│ 6bde153b-3275-4213-b4b0-27e916b44edf │ Covert Spray Rule 0242      │ carbon_black_cloud, elastic │
+│ 78937ddb-822a-4fff-975c-372536b52724 │ Covert Spray Rule 0335      │ defender_for_endpoint,      │
+│                                      │                             │ elastic                     │
+│ 9b4ff8e3-b188-48e4-bd7c-e10b095df601 │ Covert Spray Rule 0432      │ sysdig                      │
+│ d4aecbdd-2ca2-4591-bce6-65934f2df49f │ Covert Tunnel Rule 0058     │ harfanglab, sentinel_one    │
+│ 42bb52d0-8cca-4e6f-b580-b73aed787af5 │ Covert Tunnel Rule 0088     │ harfanglab, sentinel        │
+│ 3523a608-a6d4-443d-aaac-1e86ab1197a5 │ Covert Tunnel Rule 0285     │ crowdstrike                 │
+│ aee8531c-242d-43bb-9a0b-9d2530a5b231 │ Covert Tunnel Rule 0449     │ carbon_black_cloud,         │
+│                                      │                             │ elastic, sentinel           │
+│ 132fb138-c0c8-43ea-8e8a-53952395c86b │ Elevated Beacon Rule 0200   │ defender_for_endpoint,      │
+│                                      │                             │ elastic                     │
+│ 17471dec-3a00-4551-8369-a3b5e7f9912e │ Elevated Downgrade Rule     │ carbon_black_cloud,         │
+│                                      │ 0172                        │ sentinel, sentinel_one      │
+│ 7ffbb8be-e73c-499b-b215-fc4ef6d22ea4 │ Elevated Downgrade Rule     │ carbon_black_cloud, elastic │
+│                                      │ 0197                        │                             │
+│ 47894819-0f61-4a8b-a957-0d77b661fac6 │ Elevated Downgrade Rule     │ carbon_black_cloud,         │
+│                                      │ 0251                        │ elastic, splunk             │
+│ e2937a1b-0528-45ec-8dc5-48b5e80d9388 │ Elevated Downgrade Rule     │ sentinel, sentinel_one      │
+│                                      │ 0280                        │                             │
+│ 99702dad-1bb5-49d3-8146-9d0531ec3061 │ Elevated Downgrade Rule     │ defender_for_endpoint,      │
+│                                      │ 0317                        │ elastic                     │
+│ c2117073-cfa3-43b5-9f2e-e11df441c7b8 │ Elevated Downgrade Rule     │ harfanglab, sentinel_one    │
+│                                      │ 0346                        │                             │
+│ 09b99523-c505-42fd-a4e8-3cebd1f64152 │ Elevated Downgrade Rule     │ splunk                      │
+│                                      │ 0399                        │                             │
+│ ecefab8a-ec48-4c21-83b3-8639cb7dd330 │ Elevated Downgrade Rule     │ splunk                      │
+│                                      │ 0507                        │                             │
+│ 30ec2452-1972-4ea1-82f6-cf8e49e27956 │ Elevated Dropper Rule 0066  │ splunk                      │
+│ 3ebfe05a-ae7b-4c7e-8686-25268ff386b0 │ Elevated Dropper Rule 0542  │ defender_for_endpoint,      │
+│                                      │                             │ elastic                     │
+│ dc38f214-0709-49d0-850b-ddd155a5708f │ Elevated Dropper Rule 0578  │ defender_for_endpoint,      │
+│                                      │                             │ elastic                     │
+│ b3e01c82-1056-4347-8359-329c21b72357 │ Elevated Exfiltration Rule  │ harfanglab, sentinel_one    │
+│                                      │ 0130                        │                             │
+│ 0ee091b8-eb82-423c-8437-05c2fe9bc1f8 │ Elevated Exfiltration Rule  │ carbon_black_cloud,         │
+│                                      │ 0581                        │ defender_for_endpoint       │
+│ 972aa027-6e12-4ff5-a707-22d32eef716a │ Elevated Harvest Rule 0362  │ defender_for_endpoint,      │
+│                                      │                             │ elastic, sentinel           │
+│ 1053c238-0e2e-4152-9834-73254a26db4b │ Elevated Harvest Rule 0423  │ sysdig                      │
+│ 0e39d3f4-5de1-4d42-a6f8-b573ff607ec4 │ Elevated Harvest Rule 0500  │ carbon_black_cloud,         │
+│                                      │                             │ defender_for_endpoint       │
+│ 4872a297-6af9-4ed3-8069-1de0faf4ebea │ Elevated Harvest Rule 0512  │ carbon_black_cloud,         │
+│                                      │                             │ elastic, harfanglab         │
+│ a454b7bf-5757-4bc6-9e69-849a3ff94212 │ Elevated Implant Rule 0016  │ harfanglab, sentinel        │
+│ 0757d458-66cb-4ac5-b272-cd5179206006 │ Elevated Implant Rule 0060  │ crowdstrike                 │
+│ 51ea602a-a83e-4ce7-8ec9-800f6434ad47 │ Elevated Implant Rule 0069  │ crowdstrike                 │
+│ 1d53c98c-22d7-4f3f-94fd-6f1a7657ec64 │ Elevated Implant Rule 0332  │ carbon_black_cloud, elastic │
+│ fafe3967-b2a4-4f72-bc1c-1a641a0c790e │ Elevated Implant Rule 0589  │ harfanglab, sentinel_one    │
+│ e66674f4-fc84-476a-a2eb-410e0885f356 │ Elevated Injection Rule     │ splunk                      │
+│                                      │ 0075                        │                             │
+│ 93b85bc6-f869-4a9a-9941-d54c937ef26d │ Elevated Injection Rule     │ crowdstrike                 │
+│                                      │ 0231                        │                             │
+│ 4404472f-3adf-4e4d-99a4-adba9ce35508 │ Elevated Injection Rule     │ splunk                      │
+│                                      │ 0390                        │                             │
+│ e3082387-c2e3-4e9e-98a4-2d3decd2447d │ Elevated Injection Rule     │ splunk                      │
+│                                      │ 0417                        │                             │
+│ 1aa1f05d-5e1d-4d5d-88c3-6c8560c8317e │ Elevated Injection Rule     │ carbon_black_cloud,         │
+│                                      │ 0475                        │ harfanglab, sentinel        │
+│ 451e51e5-5d3a-4318-b8a2-476c73d3934c │ Elevated Loader Rule 0079   │ harfanglab, sentinel        │
+│ feab778c-a2a7-4ec7-bc51-d6950ef4f13d │ Elevated Loader Rule 0136   │ sentinel, sentinel_one      │
+│ d37650de-d652-49b9-bf9c-53f0c1d7d561 │ Elevated Loader Rule 0322   │ harfanglab, sentinel        │
+│ 6ebf401f-7f92-43fb-aabf-93ba8c8e79a9 │ Elevated Loader Rule 0430   │ harfanglab, sentinel        │
+│ 843cda04-e233-4830-8ea9-c8ea239c684f │ Elevated Loader Rule 0479   │ defender_for_endpoint,      │
+│                                      │                             │ elastic                     │
+│ 82f15df0-5911-4181-bade-e2a7dca6f292 │ Elevated Loader Rule 0516   │ crowdstrike, splunk         │
+│ bccbbfc9-e53d-4881-90a3-6a3979f60981 │ Elevated Loader Rule 0536   │ carbon_black_cloud,         │
+│                                      │                             │ defender_for_endpoint       │
+│ 5009aa74-adbc-4f82-bde9-3ef0dc3a9006 │ Elevated Loader Rule 0540   │ sysdig                      │
+│ 60a65881-0d7f-4e32-8141-a1c72628976d │ Elevated Pivot Rule 0038    │ defender_for_endpoint,      │
+│                                      │                             │ elastic                     │
+│ 9d9f853a-8aab-4683-9722-feb8fb43b6bd │ Elevated Pivot Rule 0051    │ crowdstrike,                │
+│                                      │                             │ defender_for_endpoint       │
+│ 47113c50-927f-48ab-9654-8cc5b47d928c │ Elevated Pivot Rule 0305    │ carbon_black_cloud, elastic │
+│ 2d14c927-7a35-4165-b404-abf84bf0c193 │ Elevated Pivot Rule 0454    │ harfanglab, sentinel_one    │
+│ 7b0df62e-8942-48ba-add6-cd22ced6e4a0 │ Elevated Pivot Rule 0555    │ crowdstrike                 │
+│ 0c8da639-ac60-41ab-bef4-f66dea8bb02d │ Elevated Relay Rule 0025    │ harfanglab, sentinel        │
+│ 83860296-6bb6-4537-a52d-20c465bac655 │ Elevated Relay Rule 0034    │ harfanglab, sentinel        │
+│ 93d82383-9c09-422f-890b-673db62a0466 │ Elevated Relay Rule 0055    │ sentinel, sentinel_one      │
+│ e219b1dc-db66-4537-806d-585314a9206a │ Elevated Relay Rule 0107    │ carbon_black_cloud, elastic │
+│ 7cdafe78-e8a0-4cb9-9030-0315428f7a9d │ Elevated Relay Rule 0164    │ defender_for_endpoint,      │
+│                                      │                             │ elastic                     │
+│ dd8351d8-4c18-4787-9d2d-7ce8a6521659 │ Elevated Relay Rule 0204    │ crowdstrike                 │
+│ f041cc84-f514-46d1-950c-1460a26ef9aa │ Elevated Relay Rule 0253    │ sentinel, sentinel_one      │
+│ f9d729b5-5be0-4cd3-9c5e-10b6aacba247 │ Elevated Relay Rule 0425    │ defender_for_endpoint,      │
+│                                      │                             │ elastic                     │
+│ 436dca58-b313-44e9-b8fa-49979c9947e6 │ Elevated Relay Rule 0443    │ crowdstrike,                │
+│                                      │                             │ defender_for_endpoint,      │
+│                                      │                             │ elastic                     │
+│ 1810c6c3-ea7e-487c-9a81-c4b12bababa8 │ Elevated Spray Rule 0383    │ carbon_black_cloud,         │
+│                                      │                             │ defender_for_endpoint       │
+│ f251b021-4f67-4281-8a7a-691e9a74f663 │ Elevated Spray Rule 0515    │ defender_for_endpoint,      │
+│                                      │                             │ elastic                     │
+│ d2c15ee4-df09-4564-953a-33e7804b836b │ Elevated Spray Rule 0562    │ harfanglab, sentinel_one    │
+│ 75f7e494-1a37-469d-8a64-55b7aff38e32 │ Elevated Tunnel Rule 0053   │ carbon_black_cloud, elastic │
+│ 17d33af7-b27f-4378-976b-46cb1d3d1458 │ Elevated Tunnel Rule 0115   │ harfanglab, sentinel        │
+│ 99fab7bc-79a0-424b-ab78-817f9cd7c837 │ Elevated Tunnel Rule 0232   │ harfanglab, sentinel        │
+│ 001d5732-9d30-441b-b69a-1d47a6fd564d │ Elevated Tunnel Rule 0325   │ sentinel, sentinel_one      │
+│ fd68ebba-24c0-4dc4-b9c2-8aa7fd08d0a5 │ Elevated Tunnel Rule 0408   │ splunk                      │
+│ bc6f2563-a66c-45d9-a732-0337d47ead49 │ Elevated Tunnel Rule 0444   │ splunk                      │
+│ 5c41cd9a-483b-44c6-932b-f31633ea707c │ Elevated Tunnel Rule 0459   │ sysdig                      │
+│ fcd0e5b0-0a67-4bc8-ab14-cfa99a7bd4e5 │ Elevated Tunnel Rule 0518   │ carbon_black_cloud,         │
+│                                      │                             │ defender_for_endpoint       │
+│ 3cfe4712-61df-4b2b-a867-e2e78ec470ec │ Encoded Beacon Rule 0050    │ carbon_black_cloud,         │
+│                                      │                             │ defender_for_endpoint       │
+│ e575b299-e0cd-442d-90fa-6929aababc65 │ Encoded Beacon Rule 0124    │ harfanglab, sentinel,       │
+│                                      │                             │ sysdig                      │
+│ fee6d04a-af1c-4882-ad1c-4dfdb2019da8 │ Encoded Beacon Rule 0205    │ harfanglab, sentinel        │
+│ 502ea1c9-c6f7-41e5-a861-7aa3665a5bf4 │ Encoded Beacon Rule 0421    │ harfanglab, sentinel        │
+│ e09722b9-6fdb-4418-8f68-b6ce5611eae5 │ Encoded Beacon Rule 0470    │ defender_for_endpoint,      │
+│                                      │                             │ elastic                     │
+│ a9ff39f2-2370-4820-aa6b-2c5c12d1c436 │ Encoded Beacon Rule 0486    │ sysdig                      │
+│ 7afd04cc-b71d-461d-b904-8acbadefb3fe │ Encoded Beacon Rule 0561    │ splunk                      │
+│ d7657bcf-51e7-472e-a9df-a1751a7709b7 │ Encoded Beacon Rule 0591    │ crowdstrike                 │
+│ 1620b932-d1ec-4abe-a6f8-a353d4dfb8e7 │ Encoded Downgrade Rule 0063 │ sysdig                      │
+│ a6e6ff34-eae7-419a-8f5c-265d897cad6b │ Encoded Downgrade Rule 0096 │ crowdstrike                 │
+│ c0c093dd-d35c-4449-add8-c5d25811513f │ Encoded Downgrade Rule 0170 │ carbon_black_cloud, elastic │
+│ 14593ba2-b899-450e-aa9e-6aad25393252 │ Encoded Downgrade Rule 0244 │ sentinel, sentinel_one      │
+│ 9381818d-bce3-4c9e-9f93-cf5453b9d413 │ Encoded Downgrade Rule 0263 │ defender_for_endpoint,      │
+│                                      │                             │ elastic                     │
+│ fc84731e-5a17-473a-96f2-ed87dc60d40f │ Encoded Downgrade Rule 0374 │ carbon_black_cloud,         │
+│                                      │                             │ defender_for_endpoint       │
+│ 027c1df9-0dbe-4295-b088-1b4942a5bcea │ Encoded Downgrade Rule 0527 │ carbon_black_cloud,         │
+│                                      │                             │ defender_for_endpoint       │
+│ 5f2d5d19-1cb3-43c2-852a-16e0af9cad5b │ Encoded Dropper Rule 0057   │ splunk                      │
+│ 980d15ea-a65e-460d-8253-6ed9c09cdd45 │ Encoded Dropper Rule 0122   │ carbon_black_cloud,         │
+│                                      │                             │ defender_for_endpoint       │
+│ 921756bf-079f-4b90-b996-0f947831a285 │ Encoded Dropper Rule 0161   │ carbon_black_cloud, elastic │
+│ 9b623ddb-df94-4edc-b9fa-c40a5adae6bd │ Encoded Dropper Rule 0318   │ splunk                      │
+│ c0521dd2-5822-4ead-9b8b-85c3b09c9dcf │ Encoded Dropper Rule 0477   │ sysdig                      │
+│ c07824fa-105e-4697-b66a-a6627371da6e │ Encoded Dropper Rule 0539   │ carbon_black_cloud, elastic │
+│ not-a-uuid                           │ Persistent Beacon Rule 0004 │ harfanglab, sentinel_one    │
+│ b2c117ec-5fc1-4f8b-8f23-9eb405b01f35 │ Encoded Exfiltration Rule   │ carbon_black_cloud,         │
+│                                      │ 0068                        │ defender_for_endpoint       │
+│ 2ce882df-8818-44bd-86c6-ae85b8585a07 │ Encoded Exfiltration Rule   │ crowdstrike                 │
+│                                      │ 0078                        │                             │
+│ 5d77489d-70d5-4949-b3c5-a94820675629 │ Encoded Exfiltration Rule   │ harfanglab, sentinel_one    │
+│                                      │ 0256                        │                             │
+│ a8835d5d-d127-482d-a382-2643afe3a748 │ Encoded Exfiltration Rule   │ defender_for_endpoint,      │
+│                                      │ 0290                        │ elastic                     │
+│ 9f1cebd1-8514-4298-9451-bc9166242fe7 │ Encoded Exfiltration Rule   │ sysdig                      │
+│                                      │ 0414                        │                             │
+│ 5db25c45-df62-42fb-8410-05d99beb577c │ Encoded Exfiltration Rule   │ crowdstrike                 │
+│                                      │ 0537                        │                             │
+│ 6f83b9ba-c935-4169-859d-8c868908468c │                             │ carbon_black_cloud,         │
+│                                      │                             │ defender_for_endpoint       │
+│ ee2bd735-8431-4a73-9d20-5856a5ac0d76 │ Encoded Harvest Rule 0236   │ defender_for_endpoint,      │
+│                                      │                             │ elastic                     │
+│ 24cd8709-ab52-4ee0-99bc-fe58d9cb73b4 │ Encoded Harvest Rule 0258   │ crowdstrike                 │
+│ 159f54f0-7fa3-419c-b107-573c374a0527 │ Encoded Harvest Rule 0422   │ carbon_black_cloud, elastic │
+│ 341b53c4-1206-44cf-96d4-3d493965bc15 │ Encoded Harvest Rule 0501   │ crowdstrike                 │
+│ c8a5998d-2453-4510-8338-3059b6b353f4 │ Encoded Implant Rule 0086   │ carbon_black_cloud,         │
+│                                      │                             │ defender_for_endpoint       │
+│ eb74cb5f-925e-446a-b689-ca7adaf6a979 │ Encoded Implant Rule 0105   │ crowdstrike                 │
+│ d9f0d173-d618-417b-91c8-c9c40406f525 │ Encoded Implant Rule 0304   │ harfanglab, sentinel        │
+│ 124dabaa-12ce-477e-9390-2c62fca75191 │ Encoded Implant Rule 0439   │ harfanglab, sentinel        │
+│ baf40042-5dcc-4e8b-b1ab-b3e13483566d │ Encoded Implant Rule 0520   │ harfanglab, sentinel        │
+│ 8618807f-cbd5-4ea8-94cf-ec750dfc7d98 │ Encoded Injection Rule 0102 │ splunk                      │
+│ 16d5a001-61fa-4ded-8594-92c0183056d3 │ Encoded Injection Rule 0109 │ sentinel, sentinel_one      │
+│ da18458f-404f-4038-976e-93fa66bffec8 │ Encoded Injection Rule 0206 │ carbon_black_cloud, elastic │
+│ 65e8ce02-9523-4af4-a35d-d6d9ff7b088a │ Encoded Injection Rule 0264 │ splunk                      │
+│ 9f8790d0-5dcb-4ea0-be9c-bdf66fd3b4e3 │ Encoded Injection Rule 0268 │ harfanglab, sentinel        │
+│ dc562c55-5268-4bc9-b686-51b4193a9d8d │ Encoded Injection Rule 0410 │ carbon_black_cloud,         │
+│                                      │                             │ defender_for_endpoint,      │
+│                                      │                             │ elastic                     │
+│ a2a9fbf9-c281-4026-b99f-2bf32f39c1fe │ Encoded Injection Rule 0480 │ splunk                      │
+│ 5a3a5392-8ffe-42fe-b8bc-644dafaafac7 │ Encoded Injection Rule 0494 │ carbon_black_cloud, elastic │
+│ c7a53612-66ef-49e1-b184-09a1c7c50802 │ Encoded Loader Rule 0037    │ sentinel, sentinel_one      │
+│ 7c0140f5-0571-4ded-a73f-cfb285c6a73c │ Encoded Loader Rule 0138    │ splunk                      │
+│ 056798ab-5534-4294-b0b5-4a22613fdc44 │ Encoded Loader Rule 0333    │ sysdig                      │
+│ 759d01ac-9820-46a5-b636-6be80bf1e07c │ Encoded Loader Rule 0339    │ crowdstrike                 │
+│ 9a3af0a2-3323-406f-9b3a-cb6ac6ad0e77 │ Encoded Loader Rule 0472    │ harfanglab, sentinel_one    │
+│ 55158c3b-036c-467f-b516-d3de52709325 │ Encoded Loader Rule 0556    │ harfanglab, sentinel        │
+│ 593beb91-948d-4357-85bc-e27cf674c0ed │ Encoded Pivot Rule 0008     │ carbon_black_cloud, elastic │
+│ 1e8ee71f-fd51-4bdf-b842-966bb9c96f64 │ Encoded Pivot Rule 0009     │ sysdig                      │
+│ 724c6642-58ea-4e18-ba8f-3cfe039bef44 │ Encoded Pivot Rule 0381     │ sentinel, splunk            │
+│ 536104be-8ecf-4cf2-bee1-f5e14050c1a3 │ Encoded Pivot Rule 0471     │ sentinel_one, splunk        │
+│ 942be89d-7795-43fa-bd94-5e62a4a044ff │ Encoded Relay Rule 0052     │ harfanglab, sentinel        │
+│ 624c1c38-7657-4174-ace7-be972919ea79 │ Encoded Relay Rule 0059     │ carbon_black_cloud,         │
+│                                      │                             │ defender_for_endpoint       │
+│ 80abd815-2b2f-4502-86a3-d66b2372ba44 │ Encoded Relay Rule 0190     │ crowdstrike, sentinel,      │
+│                                      │                             │ sentinel_one                │
+│ 8ce7ff30-4e06-434f-862f-d77ee68a6b25 │ Encoded Relay Rule 0221     │ carbon_black_cloud,         │
+│                                      │                             │ defender_for_endpoint       │
+│ fc76ac97-4b8f-41fe-876b-c92e13f28d43 │ Encoded Relay Rule 0312     │ crowdstrike                 │
+│ 5c8c2d75-3895-4723-b914-4ffb8b297833 │ Encoded Relay Rule 0437     │ carbon_black_cloud,         │
+│                                      │                             │ defender_for_endpoint       │
+│ 1b5bcea6-4bb2-48d8-a68f-83516a854242 │ Encoded Relay Rule 0564     │ crowdstrike                 │
+│ ca9e09b0-a89f-4625-886e-f81ccb4ecf60 │ Encoded Relay Rule 0576     │ sysdig                      │
+│ 1fb37595-5bec-4612-9053-f4ec83a55aac │ Encoded Relay Rule 0582     │ crowdstrike                 │
+│ 78e81e0b-1254-4afa-80f8-aa751378d156 │ Encoded Spray Rule 0327     │ splunk                      │
+│ f231e765-d951-4f50-a4dd-268abd67de46 │ Encoded Spray Rule 0499     │ harfanglab, sentinel_one    │
+│ 2570b64f-7b27-44e3-aea1-b425fefbd7ce │ Encoded Tunnel Rule 0011    │ defender_for_endpoint,      │
+│                                      │                             │ elastic                     │
+│ f2f28c1d-8323-4b4e-acba-c53ed9cb5271 │ Encoded Tunnel Rule 0030    │ splunk                      │
+│ b59ac61f-e8f6-4e65-a5ff-d282dc362f2e │ Encoded Tunnel Rule 0363    │ splunk                      │
+│ 35b7d532-4612-4399-bd90-0ecc1123f880 │ Hidden Beacon Rule 0090     │ sysdig                      │
+│ d0e21b3a-5a26-44f6-b978-29e142d5568b │ Hidden Beacon Rule 0401     │ carbon_black_cloud,         │
+│                                      │                             │ crowdstrike,                │
+│                                      │                             │ defender_for_endpoint       │
+│ 72b85f93-ab07-4557-82b4-338dc1b1f072 │ Hidden Beacon Rule 0442     │ sentinel, sentinel_one      │
+│ 4ebbbc7b-c938-4b99-be44-45fcdf18e397 │ Hidden Beacon Rule 0563     │ carbon_black_cloud,         │
+│                                      │                             │ defender_for_endpoint       │
+│ 48c00730-c5b5-48e7-b061-053f51bdce39 │ Hidden Downgrade Rule 0234  │ sysdig                      │
+│ e8e329bf-113e-4cd5-ada5-93fe0fe3d95e │ Hidden Downgrade Rule 0266  │ carbon_black_cloud,         │
+│                                      │                             │ defender_for_endpoint       │
+│ 5819b13e-f2b3-467f-a68f-5100ac88d1c2 │ Hidden Downgrade Rule 0544  │ harfanglab, sentinel_one    │
+│ 92be5ace-1c47-418a-909d-973c000f6c60 │ Hidden Downgrade Rule 0594  │ elastic, sysdig             │
+│ b46ee599-20c8-475b-a911-df85187ea6dc │ Hidden Dropper Rule 0120    │ splunk                      │
+│ c8d35844-dcc1-432f-80d2-7597f096bf82 │ Hidden Dropper Rule 0478    │ sentinel, sentinel_one      │
+│ 3fdc1053-8581-43cf-932f-099087cb27d8 │ Hidden Exfiltration Rule    │ harfanglab, sentinel_one    │
+│                                      │ 0202                        │                             │
+│ 89b5461d-5b07-4328-9656-466c241d3d87 │ Hidden Exfiltration Rule    │ sysdig                      │
+│                                      │ 0369                        │                             │
+│ 563de101-d3fc-46e7-ba54-4d3ee2f3c0ac │ Hidden Exfiltration Rule    │ carbon_black_cloud, elastic │
+│                                      │ 0404                        │                             │
+│ bad-1                                │ Hidden Harvest Rule 0026    │ carbon_black_cloud, elastic │
+│ 7d0f8ee8-6494-4f56-a821-b1b7b65fe124 │ Hidden Harvest Rule 0469    │ sentinel, sentinel_one      │
+│ c0c5b041-84a1-4834-9a7a-9a4e33cb87df │ Hidden Implant Rule 0493    │ harfanglab, sentinel        │
+│ 13e9cb4e-cd54-4798-9389-69cbdb0f527d │ Hidden Implant Rule 0580    │ harfanglab, sentinel_one    │
+│ ccd721f9-1c88-4cb6-8015-28decbb25223 │ Hidden Injection Rule 0027  │ sysdig                      │
+│ bf162d96-74e9-4d9a-a5ee-cd7c436503d9 │ Hidden Injection Rule 0235  │ sentinel, sentinel_one      │
+│ b8d1f778-441a-430a-b856-4e754e4ba3aa │ Hidden Injection Rule 0354  │ splunk                      │
+│ 84dff501-2d13-40ec-9f8a-e5b1bef77a7b │ Hidden Injection Rule 0416  │ defender_for_endpoint,      │
+│                                      │                             │ elastic                     │
+│ f2a2df93-f6d3-4fca-99a0-3b816d444069 │ Hidden Injection Rule 0426  │ splunk                      │
+│ ee5d5095-622c-4dab-89f4-e66f34a39ffe │ Hidden Injection Rule 0548  │ carbon_black_cloud, elastic │
+│ ac5b8384-de4c-4cd9-9f02-31e811757f87 │ Hidden Loader Rule 0203     │ carbon_black_cloud,         │
+│                                      │                             │ defender_for_endpoint       │
+│ fdbdbf71-046a-4f3e-a5be-b0cbbfecd595 │ Hidden Loader Rule 0570     │ splunk                      │
+│ 62844812-ec87-49aa-b614-218aa447a8bb │ Hidden Pivot Rule 0283      │ harfanglab, sentinel_one    │
+│ 3aaf74c8-a930-444b-83a9-92fb3ee08c57 │ Hidden Pivot Rule 0349      │ harfanglab, sentinel        │
+│ 256fb738-ad1a-420d-8040-77d8961d1a1c │ Hidden Pivot Rule 0586      │ carbon_black_cloud,         │
+│                                      │                             │ sentinel, sentinel_one      │
+│ 3e70a443-cf94-457c-a65b-661e517131bf │ Hidden Relay Rule 0054      │ sysdig                      │
+│ e2c16231-e2dd-49dc-837e-8267fd065588 │ Hidden Relay Rule 0070      │ harfanglab, sentinel        │
+│ 505b0dd3-6661-475d-a5ae-2815428e7f06 │ Hidden Relay Rule 0240      │ crowdstrike                 │
+│ bc0dac47-d6db-4a4c-8f3e-10a210c424cf │ Hidden Relay Rule 0461      │ defender_for_endpoint,      │
+│                                      │                             │ elastic                     │
+│ aa9d6010-3dae-4452-ae53-bee7402298b8 │ Hidden Spray Rule 0163      │ sentinel, sentinel_one      │
+│ 695c0c2c-6508-4887-95c5-c19101aba67b │ Hidden Spray Rule 0273      │ splunk                      │
+│ f902eb8b-1f4c-466d-bdba-bb212740eca4 │ Hidden Spray Rule 0572      │ carbon_black_cloud,         │
+│                                      │                             │ defender_for_endpoint       │
+│ ef06cdd0-4ac7-40c1-9ba1-6a729f0ac00b │ Hidden Tunnel Rule 0270     │ sysdig                      │
+│ 58a93113-983e-4052-8c5c-f313f48dd88c │ Hidden Tunnel Rule 0272     │ defender_for_endpoint,      │
+│                                      │                             │ elastic                     │
+│ 675194a4-3fef-4ea5-becd-3a552746b5f0 │ Hidden Tunnel Rule 0296     │ carbon_black_cloud, elastic │
+│ efb947f6-8294-43ea-a8d7-7373ccd38bd4 │ Hidden Tunnel Rule 0553     │ harfanglab, sentinel_one    │
+│ 8710bcd0-da90-4615-8056-464a52b21f68 │ Lateral Beacon Rule 0184    │ harfanglab, sentinel_one    │
+│ 65c13b91-8388-492e-a8ee-fe44a111093f │ Lateral Beacon Rule 0355    │ harfanglab, sentinel_one    │
+│ 85c1a4a4-0463-46b3-a298-6a828d34b0be │ Lateral Beacon Rule 0398    │ defender_for_endpoint,      │
+│                                      │                             │ elastic                     │
+│ 636fb422-3291-43a8-94e9-be3c1ef9fae3 │ Lateral Beacon Rule 0451    │ sentinel, sentinel_one      │
+│ 5804c196-0889-4ae5-8819-7aed3c46d136 │ Lateral Beacon Rule 0597    │ splunk                      │
+│ d1b2c94b-c0cf-42b2-a854-e46c5ada5440 │ Lateral Dropper Rule 0046   │ sentinel, sentinel_one      │
+│ d4f37131-4f67-47b7-8d43-782bb490b96b │ Lateral Dropper Rule 0108   │ sysdig                      │
+│ d20619ce-e856-465e-b577-c138865d20c4 │ Lateral Dropper Rule 0226   │ sentinel, sentinel_one      │
+│ 52d2758d-258a-426f-92f8-1218a7244a13 │ Lateral Dropper Rule 0491   │ carbon_black_cloud,         │
+│                                      │                             │ defender_for_endpoint       │
+│ 1b404f44-5831-49b0-8768-2b7b58737ea9 │ Lateral Dropper Rule 0552   │ splunk                      │
+│ 8cf830d0-9119-4bdb-acec-ee88250b63e3 │ Lateral Exfiltration Rule   │ carbon_black_cloud, elastic │
+│                                      │ 0269                        │                             │
+│ 32fb4319-f625-49b9-8f16-2c05f1aa09d2 │ Lateral Harvest Rule 0043   │ harfanglab, sentinel        │
+│ 7662e5e2-a4ec-43a1-8454-90a82a05ce4d │ Lateral Harvest Rule 0151   │ harfanglab, sentinel,       │
+│                                      │                             │ sysdig                      │
+│ fb010d50-308e-483c-865c-0621ca7a1286 │ Lateral Implant Rule 0146   │ defender_for_endpoint,      │
+│                                      │                             │ elastic                     │
+│ 0dd4a8a9-79f0-4faa-bedb-e07ba79482d4 │ Lateral Implant Rule 0254   │ defender_for_endpoint,      │
+│                                      │                             │ elastic                     │
+│ d8e44e5e-c196-4626-90b3-9e403ebeb7ba │ Lateral Implant Rule 0506   │ defender_for_endpoint,      │
+│                                      │                             │ elastic                     │
+│ 47afee76-0199-4db5-ab5f-7b34a44ff4bd │ Lateral Injection Rule 0162 │ sysdig                      │
+│ 489defe5-5f98-4a07-9a31-a69b32f030f1 │ Lateral Injection Rule 0181 │ sentinel, sentinel_one      │
+│ 6b8ac34b-e7db-4e66-8861-b1b9454c9c2e │ Lateral Injection Rule 0330 │ crowdstrike                 │
+│ d539430d-b7ef-4e64-b554-5741b5aa7277 │ Lateral Injection Rule 0567 │ sentinel_one, sysdig        │
+│ 7975c9ea-03be-4bee-8d54-a0cbb5bcc1c2 │ Lateral Loader Rule 0182    │ defender_for_endpoint,      │
+│                                      │                             │ elastic                     │
+│ 8052ef67-18c2-4781-97ae-81b9aeaf1b5d │ Lateral Loader Rule 0341    │ carbon_black_cloud,         │
+│                                      │                             │ elastic, sentinel_one       │
+│ 16d0b3d8-5264-4fd1-ba68-67cf2e30ac6b │ Lateral Loader Rule 0481    │ harfanglab, sentinel_one    │
+│ 2744ff24-11d7-4430-a141-ea41a95c0735 │ Lateral Loader Rule 0557    │ carbon_black_cloud, elastic │
+│ 53651415-1c05-4cfb-b1b2-39c888ab0f06 │ Rogue Harvest Rule 0003     │ splunk                      │
+│ 4abb9b2f-1c59-48fd-a870-cd8e0f72efec │ Lateral Pivot Rule 0445     │ harfanglab, sentinel_one    │
+│ 407e06a4-cdba-4799-bb4e-f3dc4619c382 │ Lateral Pivot Rule 0551     │ crowdstrike,                │
+│                                      │                             │ defender_for_endpoint,      │
+│                                      │                             │ elastic                     │
+│ ba7fd713-17b9-43ba-85bc-cb51806056a7 │ Lateral Pivot Rule 0573     │ carbon_black_cloud,         │
+│                                      │                             │ crowdstrike                 │
+│ 6a419a8a-7c32-4041-9e04-8dda2fd17142 │ Lateral Spray Rule 0427     │ harfanglab, sentinel_one    │
+│ 5a4e54dd-8b0b-4407-85fc-e6c76a3852fd │ Lateral Tunnel Rule 0194    │ carbon_black_cloud,         │
+│                                      │                             │ defender_for_endpoint       │
+│ aa734948-b08e-49c3-86bd-0d29b5010b30 │ Lateral Tunnel Rule 0344    │ defender_for_endpoint,      │
+│                                      │                             │ elastic                     │
+│ c33bb688-800c-4cab-93fa-ad7cfe0a665e │ Lateral Tunnel Rule 0375    │ crowdstrike                 │
+│ 0e05e6cf-f111-4ff9-a94e-7fcb6ba59738 │ Lateral Tunnel Rule 0525    │ splunk                      │
+│ 8a5e86d1-0826-4cc2-a2f7-11061937f83f │ Persistent Beacon Rule 0526 │ harfanglab, sentinel_one    │
+│ 0cf448c6-8105-4d76-9b89-bccd70e97ff2 │ Persistent Downgrade Rule   │ harfanglab, sentinel_one    │
+│                                      │ 0067                        │                             │
+│ 958726f4-04e5-4725-8611-17884165bfd8 │ Persistent Downgrade Rule   │ carbon_black_cloud,         │
+│                                      │ 0113                        │ defender_for_endpoint,      │
+│                                      │                             │ sentinel_one                │
+│ e8015058-18ca-4d23-98ff-002a263db119 │ Persistent Downgrade Rule   │ carbon_black_cloud,         │
+│                                      │ 0284                        │ defender_for_endpoint,      │
+│                                      │                             │ sentinel                    │
+│ 35ccd016-2cb9-474b-9b64-7465b9caf2df │ Persistent Downgrade Rule   │ harfanglab, sentinel_one    │
+│                                      │ 0364                        │                             │
+│ 27505ad0-ef26-475c-a724-f6421724604f │ Persistent Downgrade Rule   │ harfanglab, sentinel        │
+│                                      │ 0394                        │                             │
+│ e2f57ae9-7c44-487e-bf16-a37496c6e4f5 │ Persistent Downgrade Rule   │ sentinel, sentinel_one      │
+│                                      │ 0595                        │                             │
+│ 5d1bebf3-9ee2-4fb9-b915-f0bd6ae634b7 │ Persistent Downgrade Rule   │ crowdstrike                 │
+│                                      │ 0600                        │                             │
+│ 03d23ec6-fafa-4305-bd36-b6eeb5ac8836 │ Persistent Dropper Rule     │ defender_for_endpoint,      │
+│                                      │ 0119                        │ elastic                     │
+│ 3e4a00b8-45cb-428e-806e-11af42a4ab50 │ Persistent Dropper Rule     │ harfanglab, sentinel_one    │
+│                                      │ 0598                        │                             │
+│ 04ba823d-8c4c-4af1-98ff-350b90dda4da │ Persistent Exfiltration     │ sysdig                      │
+│                                      │ Rule 0531                   │                             │
+│ bab76440-b7ad-481f-b9dc-bbaf63b7dc94 │ Persistent Exfiltration     │ defender_for_endpoint,      │
+│                                      │ Rule 0587                   │ elastic, sentinel_one       │
+│ be22ed9a-8425-42e4-abd6-5c73a374bd64 │ Persistent Harvest Rule     │ crowdstrike                 │
+│                                      │ 0168                        │                             │
+│ 014b60c5-a851-4c37-be4a-6087c4c29f00 │ Persistent Harvest Rule     │ carbon_black_cloud, elastic │
+│                                      │ 0224                        │                             │
+│ aa64df4d-2773-49a5-8ac4-18f6c63dba86 │ Persistent Harvest Rule     │ harfanglab, sentinel        │
+│                                      │ 0250                        │                             │
+│ c80e6480-a62f-4822-8765-d289b2185b22 │ Persistent Harvest Rule     │ splunk                      │
+│                                      │ 0345                        │                             │
+│ 6d28b6b5-6948-4b15-9d01-117aef2e1e24 │ Persistent Harvest Rule     │ sentinel, sentinel_one      │
+│                                      │ 0514                        │                             │
+│ 6a68a62a-ca94-4549-8d59-41ca48407a6c │ Persistent Implant Rule     │ sysdig                      │
+│                                      │ 0252                        │                             │
+│ 3d9438fc-4247-4d3c-9290-9aaa61b267c4 │ Persistent Implant Rule     │ harfanglab, sentinel_one    │
+│                                      │ 0400                        │                             │
+│ bc982260-e048-4f77-97a4-d47357b0c7a9 │ Persistent Injection Rule   │ defender_for_endpoint,      │
+│                                      │ 0155                        │ elastic                     │
+│ 46804e8e-5af8-41f2-a055-184e65ecd60e │ Persistent Injection Rule   │ defender_for_endpoint,      │
+│                                      │ 0227                        │ elastic                     │
+│ fbee266d-fc09-4806-add4-02259512fedf │ Persistent Injection Rule   │ splunk                      │
+│                                      │ 0372                        │                             │
+│ 6d0014cc-5c23-4129-91bf-ecfef64c0168 │ Persistent Injection Rule   │ carbon_black_cloud,         │
+│                                      │ 0464                        │ defender_for_endpoint       │
+│ d990e827-b2b3-498c-809a-dc46304bc629 │ Persistent Injection Rule   │ carbon_black_cloud, elastic │
+│                                      │ 0485                        │                             │
+│ 366d6030-ee3d-4c78-954f-ad638e69f907 │ Persistent Loader Rule 0085 │ harfanglab, sentinel_one    │
+│ e489501a-871d-4cde-8d7b-9516576f07b3 │ Persistent Loader Rule 0112 │ harfanglab, sentinel_one    │
+│ ae615cb6-0742-46ba-bae2-c38647662942 │ Persistent Loader Rule 0228 │ splunk                      │
+│ 23117a3c-0e95-4e69-9351-21dafc0bb0af │ Persistent Loader Rule 0259 │ harfanglab, sentinel,       │
+│                                      │                             │ splunk                      │
+│ 1a94b33e-70b1-4c72-94c3-aebca80d6dd5 │ Persistent Loader Rule 0299 │ defender_for_endpoint,      │
+│                                      │                             │ elastic                     │
+│ 0d0cbd5c-71fd-4a58-b7e7-4c0feda8ca81 │ Persistent Loader Rule 0412 │ harfanglab, sentinel        │
+│ c78ae0fb-0bc1-4447-b77c-c92bc6e71e24 │ Persistent Pivot Rule 0082  │ sentinel, sentinel_one      │
+│ 35ed7edf-ab5e-4950-8aec-47be3cd78601 │ Persistent Pivot Rule 0092  │ defender_for_endpoint,      │
+│                                      │                             │ elastic                     │
+│ 58e7ad50-5497-415a-8fba-cc44767b8f7c │ Persistent Pivot Rule 0295  │ harfanglab, sentinel        │
+│ 9ff55604-b9d2-480b-baf4-dbe9654824aa │ Persistent Pivot Rule 0370  │ sentinel, sentinel_one      │
+│ a49c46f9-6a6e-4e9f-82c1-a2977857b969 │ Persistent Relay Rule 0013  │ harfanglab, sentinel_one    │
+│ d640c54a-d3fa-4ed7-bda3-987bedfc943e │ Persistent Relay Rule 0091  │ sentinel, sentinel_one      │
+│ 1fce0c79-0086-45f8-a949-100d898e9d55 │ Persistent Relay Rule 0104  │ carbon_black_cloud,         │
+│                                      │                             │ defender_for_endpoint       │
+│ 8434b745-e7a2-4ae7-931f-b8ff8b58a4d0 │ Persistent Relay Rule 0132  │ crowdstrike                 │
+│ 663509a7-3e9c-4fc5-a250-067658e4874e │ Persistent Relay Rule 0409  │ harfanglab, sentinel_one    │
+│ f56b31e1-5e4c-43d4-9d37-78ef09ae4daf │ Persistent Spray Rule 0076  │ harfanglab, sentinel_one    │
+│ b91109eb-5151-42a7-a67f-5dfc15f5bc6e │ Persistent Spray Rule 0210  │ splunk                      │
+│ fea348e1-601a-497d-a606-90aad27b3e9b │ Persistent Tunnel Rule 0219 │ splunk                      │
+│ 7f43279c-35f3-405d-af10-5c315a3371d0 │ Persistent Tunnel Rule 0336 │ splunk                      │
+│ 221a2fbd-3fb4-442c-bfda-5b0c697e0ddf │ Rapid Beacon Rule 0118      │ sentinel, sentinel_one      │
+│ 6a759229-1e21-41c7-9873-edaf8e8b95bf │ Rapid Beacon Rule 0187      │ harfanglab, sentinel        │
+│ ca410921-360a-4988-95db-ca7906dbc722 │ Rapid Beacon Rule 0455      │ carbon_black_cloud,         │
+│                                      │                             │ defender_for_endpoint       │
+│ 05824ceb-0572-42f0-8e16-423475f0be78 │ Rapid Beacon Rule 0462      │ crowdstrike, splunk         │
+│ a8332bec-420b-4bc6-a9e7-45ea9ade0e17 │ Rapid Beacon Rule 0498      │ splunk                      │
+│ 1839e2f1-b0a8-4523-a64f-fc74ed261ad5 │ Rapid Downgrade Rule 0007   │ harfanglab, sentinel        │
+│ fc747f3a-a640-4637-9acc-a646a98837eb │ Rapid Downgrade Rule 0012   │ splunk                      │
+│ d88cf3e4-c5a3-42ca-8c5c-914db62c5a8a │ Rapid Downgrade Rule 0178   │ harfanglab, sentinel        │
+│ 38795513-f426-4be7-b357-b1c53c6b255f │ Rapid Downgrade Rule 0275   │ carbon_black_cloud,         │
+│                                      │                             │ defender_for_endpoint       │
+│ cad00b12-be58-4d49-86b8-86a6fd0c28b4 │ Rapid Downgrade Rule 0378   │ sysdig                      │
+│ bc1ed036-e172-4f02-8ce6-1ff08a7f4287 │ Rapid Downgrade Rule 0588   │ splunk                      │
+│ f2dfd8a7-0f23-47a7-afcf-f16d1bf56360 │ Rapid Dropper Rule 0137     │ defender_for_endpoint,      │
+│                                      │                             │ elastic                     │
+│ 08d32ab2-b79d-4d21-b5d0-d4448fffae33 │ Rapid Dropper Rule 0144     │ crowdstrike, sysdig         │
+│ 5399063b-7627-4464-8232-871393b0aee2 │ Rapid Dropper Rule 0180     │ sysdig                      │
+│ 050de452-00b5-4fa5-b745-1eebaecf9289 │ Rapid Dropper Rule 0215     │ carbon_black_cloud, elastic │
+│ 57c7b809-2212-426b-bbde-7ba94b7096b8 │ Rapid Dropper Rule 0216     │ sysdig                      │
+│ d19b9e0e-2501-465b-8c68-557bbfbe9d17 │ Rapid Dropper Rule 0434     │ defender_for_endpoint,      │
+│                                      │                             │ elastic                     │
+│ not-a-uuid-1                         │ Rapid Exfiltration Rule     │ sentinel, sentinel_one      │
+│                                      │ 0001                        │                             │
+│ c1b88f4e-db80-4600-b806-11020a0df8d9 │ Rapid Exfiltration Rule     │ harfanglab, sentinel        │
+│                                      │ 0142                        │                             │
+│ ded9e5f0-3a13-497d-851e-4c718264d6bc │ Rapid Exfiltration Rule     │ splunk                      │
+│                                      │ 0201                        │                             │
+│ 3ed72626-3b9a-4f8b-857e-7d3f123c119b │ Rapid Exfiltration Rule     │ sentinel, sentinel_one      │
+│                                      │ 0523                        │                             │
+│ a9c5d538-40d8-4873-a1d0-068046058270 │ Rapid Exfiltration Rule     │ sentinel, sentinel_one      │
+│                                      │ 0559                        │                             │
+│ 0e6410b2-4943-44eb-8075-2eadf2902187 │ Rapid Exfiltration Rule     │ harfanglab, sentinel        │
+│                                      │ 0592                        │                             │
+│ 53d3e87b-9603-42d1-9f9f-45dbb6ade8c6 │ Rapid Harvest Rule 0175     │ harfanglab, sentinel_one    │
+│ 804af833-e21b-4e1f-b3df-d6039eaff93b │ Rapid Harvest Rule 0199     │ sentinel, sentinel_one      │
+│ 070a048a-6ea2-4c44-bf8b-646119a41018 │ Rapid Implant Rule 0080     │ carbon_black_cloud, elastic │
+│ 2576591d-4b47-48de-8573-47e3568bdcb8 │ Rapid Implant Rule 0279     │ sysdig                      │
+│ 5cefff0b-41f6-4d36-ad53-23dc842534fd │ Rapid Injection Rule 0028   │ sentinel, sentinel_one      │
+│ d337ae0d-31f1-442a-96ee-31a3ee70331d │ Rapid Injection Rule 0056   │ defender_for_endpoint,      │
+│                                      │                             │ elastic                     │
+│ 78986732-a4e8-4b6f-971b-1a5933088565 │ Rapid Injection Rule 0097   │ harfanglab, sentinel        │
+│ 440c13c6-050e-4063-ac65-4775babfb573 │ Rapid Injection Rule 0131   │ carbon_black_cloud,         │
+│                                      │                             │ defender_for_endpoint       │
+│ 486dd087-c6c0-4cf5-a9a3-47b20b34fbc7 │ Rapid Injection Rule 0191   │ defender_for_endpoint,      │
+│                                      │                             │ elastic                     │
+│ 2d01c152-ccac-4728-bcba-fe823589f496 │ Rapid Injection Rule 0352   │ sentinel, sentinel_one      │
+│ d81961f9-3aba-453e-9a4c-b5c31605e48d │ Rapid Injection Rule 0393   │ crowdstrike                 │
+│ 01cf2e70-7922-4482-ad71-6b4da80bc59d │ Rapid Injection Rule 0524   │ defender_for_endpoint,      │
+│                                      │                             │ elastic                     │
+│ 11bf3b6f-bdd3-4436-a945-6c411a05239e │ Rapid Loader Rule 0245      │ defender_for_endpoint,      │
+│                                      │                             │ elastic                     │
+│ 5f350b87-e161-4212-a5fb-6adc38f76f80 │ Rapid Loader Rule 0247      │ harfanglab, sentinel_one    │
+│ 5040d65d-7c68-4cb0-9bf8-b83dfb951d79 │ Rapid Loader Rule 0297      │ sysdig                      │
+│ 71a06625-6919-4c05-8910-0aee41fca43d │ Rapid Loader Rule 0371      │ defender_for_endpoint,      │
+│                                      │                             │ elastic, sentinel           │
+│ 1fe3b71b-24be-4604-9b91-72cb32381bfc │ Rapid Pivot Rule 0022       │ harfanglab, sentinel_one    │
+│ 05c8a98d-0c7b-48bd-8149-5d61d0c9888c │ Rapid Pivot Rule 0584       │ carbon_black_cloud, elastic │
+│ 604ecfc8-1963-483b-9007-40cb3a4192a3 │ Rapid Relay Rule 0123       │ crowdstrike                 │
+│ a1c2f3ef-6ab0-4d26-80ff-aad206a3594a │ Rapid Relay Rule 0309       │ splunk                      │
+│ 7bb48d35-2c70-47bd-a1e8-1b733e3a2ff1 │ Rapid Relay Rule 0474       │ crowdstrike                 │
+│ c2d43d05-a95e-4afe-a13f-89b29839a4e3 │ Rapid Relay Rule 0519       │ crowdstrike                 │
+│ 5258d089-2e48-4ec6-bd74-988b0bb107b8 │ Rapid Spray Rule 0141       │ crowdstrike                 │
+│ 84e9e240-6338-4deb-a600-e841aadc5ea8 │ Rapid Spray Rule 0303       │ crowdstrike                 │
+│ 08636a3a-0ef0-4ddf-a7a8-4f2fb2c1859f │ Rapid Spray Rule 0403       │ elastic, harfanglab,        │
+│                                      │                             │ sentinel                    │
+│ 970233c6-35c6-42cb-9be2-97e6fc9480ca │ Rapid Spray Rule 0534       │ splunk                      │
+│ 0d73eb2f-c9d2-4356-a4ea-e16c4f963ce7 │ Rapid Tunnel Rule 0143      │ carbon_black_cloud, elastic │
+│ c889c9fa-0708-40ba-9d56-54dd65d80361 │ Rapid Tunnel Rule 0585      │ sysdig                      │
+│ 49d2f738-cb8f-4ee3-912f-dcac1be5f6df │ Remote Beacon Rule 0018     │ sysdig                      │
+│ 8df3e0d3-8a3f-490c-9f31-b71df88f3562 │ Remote Beacon Rule 0021     │ splunk                      │
+│ f5a46c0a-ebb9-45e9-bf63-d93acbc2d3e8 │ Remote Beacon Rule 0099     │ sysdig                      │
+│ dca278bd-ca9f-41b7-a328-e2fb6342c184 │ Remote Beacon Rule 0386     │ carbon_black_cloud, elastic │
+│ 0e0954dd-c3c0-4327-b997-a9219fbe87e2 │ Remote Beacon Rule 0420     │ crowdstrike                 │
+│ f67caf37-36fa-4768-9697-19028cdc53d9 │ Remote Beacon Rule 0484     │ carbon_black_cloud,         │
+│                                      │                             │ harfanglab, sentinel        │
+│ 0ba8d466-f79f-460b-aad5-dddfa30139d8 │ Remote Beacon Rule 0490     │ harfanglab, sentinel_one    │
+│ 352078c5-ce80-484b-a0a9-19e8d4e03c60 │ Remote Downgrade Rule 0288  │ sysdig                      │
+│ 72444a6c-a2a3-4507-9a24-c9212da89c2e │ Remote Dropper Rule 0049    │ harfanglab, sentinel_one    │
+│ cb49ef7b-890b-4dba-bff5-a9876c0c1f25 │ Remote Dropper Rule 0072    │ sysdig                      │
+│ 6e514ac0-e64f-4b35-9842-d5faff82f6f7 │ Remote Dropper Rule 0529    │ harfanglab, sentinel        │
+│ b96801ec-c9cb-43ee-bf9f-805804f337cc │ Remote Exfiltration Rule    │ harfanglab, sentinel_one    │
+│                                      │ 0139                        │                             │
+│ 1fe1f967-ba2d-45e8-919c-d9010678df9d │ Remote Exfiltration Rule    │ carbon_black_cloud,         │
+│                                      │ 0167                        │ defender_for_endpoint       │
+│ a20b3e5f-c0f4-4135-8602-de62de9faecc │ Remote Harvest Rule 0267    │ crowdstrike,                │
+│                                      │                             │ defender_for_endpoint       │
+│ e6227b90-5543-4f1d-b8c6-5bb585808c7e │ Remote Harvest Rule 0323    │ carbon_black_cloud,         │
+│                                      │                             │ elastic, sentinel_one       │
+│ e3826d7c-46c4-4990-bcec-f90cbadfb6f3 │ Remote Harvest Rule 0340    │ harfanglab, sentinel        │
+│ 27adbc0e-29ed-49b2-b24b-02b8470ef5be │ Remote Harvest Rule 0428    │ carbon_black_cloud,         │
+│                                      │                             │ defender_for_endpoint       │
+│ 3de480bb-67a2-40fb-9117-cda532620e39 │ Remote Harvest Rule 0456    │ crowdstrike                 │
+│ d3c7e419-b940-4d74-9a36-9134975b35a6 │ Remote Harvest Rule 0457    │ harfanglab, sentinel        │
+│ a42b84ed-4826-474e-bfde-38ff312ccb30 │ Remote Implant Rule 0121    │ harfanglab, sentinel_one    │
+│ e1ca0fd6-1c8f-4c0c-9f61-6ca18e6fafd5 │ Remote Implant Rule 0306    │ sysdig                      │
+│ bb11f581-f306-45d2-9213-069143ef219d │ Remote Implant Rule 0460    │ sentinel, sentinel_one      │
+│ 80c329df-20c7-4e1d-a905-e0b37c22312e │ Remote Injection Rule 0450  │ sentinel, sysdig            │
+│ c7cf3ba7-b974-401f-99c8-5447eba444fe │ Remote Loader Rule 0100     │ sentinel, sentinel_one      │
+│ 768c5d65-1cec-483b-bbae-ad184a13c099 │ Remote Loader Rule 0101     │ defender_for_endpoint,      │
+│                                      │                             │ elastic                     │
+│ f6f88c3d-126b-47c2-aed6-5c6717ac4001 │ Remote Loader Rule 0158     │ carbon_black_cloud,         │
+│                                      │                             │ defender_for_endpoint       │
+│ 0080b602-6255-4b11-a9a7-7e479c6e6f40 │ Remote Loader Rule 0160     │ harfanglab, sentinel        │
+│ 47ed284b-427e-4c91-9462-eb644c351bbd │ Remote Loader Rule 0220     │ harfanglab, sentinel_one    │
+│ 405faca7-6610-47a4-a4e4-55df6c5ccf49 │ Remote Loader Rule 0373     │ carbon_black_cloud,         │
+│                                      │                             │ harfanglab, sentinel_one    │
+│ 55076bc8-16a1-40ec-953e-fbfc98865332 │ Remote Loader Rule 0448     │ harfanglab, sentinel        │
+│ 545b0f26-2bad-480d-83bf-dd2c0be68485 │ Remote Loader Rule 0577     │ sentinel, sentinel_one      │
+│ cbda99c5-165c-4880-a5da-d8f9ce868d28 │ Remote Pivot Rule 0033      │ carbon_black_cloud,         │
+│                                      │                             │ crowdstrike                 │
+│ c71c2e23-bb99-45e2-88ee-8c2c5850338f │ Remote Pivot Rule 0419      │ carbon_black_cloud,         │
+│                                      │                             │ defender_for_endpoint       │
+│ 2bfb06fe-7483-4c1f-94e3-5ea647615b0f │ Remote Relay Rule 0017      │ carbon_black_cloud,         │
+│                                      │                             │ elastic, harfanglab         │
+│ 1de478d9-b988-468a-935d-0caed7f9e79b │ Remote Relay Rule 0103      │ harfanglab, sentinel_one    │
+│ 555d9b62-a0e7-4acd-b89c-137a7e2ea879 │ Remote Relay Rule 0260      │ carbon_black_cloud, elastic │
+│ 9bc37ca9-f400-4574-ba48-8867f17970fd │ Remote Relay Rule 0389      │ defender_for_endpoint,      │
+│                                      │                             │ elastic                     │
+│ 83b6dabb-d2e4-4b55-b2f9-3adc0ebddb6a │ Remote Relay Rule 0413      │ carbon_black_cloud, elastic │
+│ 90ab23a2-2500-4f42-8867-d9cd1587663d │ Remote Relay Rule 0489      │ splunk                      │
+│ 66da15e1-b7a3-4636-a36c-fac98f758285 │ Remote Relay Rule 0554      │ carbon_black_cloud,         │
+│                                      │                             │ defender_for_endpoint       │
+│ af93bc0f-8bd9-4fb5-8a49-862c231d0aac │ Remote Spray Rule 0117      │ sysdig                      │
+│ ff4befed-ba42-479e-872d-a3bc449146c2 │ Remote Spray Rule 0159      │ crowdstrike                 │
+│ 3369b950-67d4-4849-a7b1-c25e37bde75b │ Remote Spray Rule 0196      │ defender_for_endpoint,      │
+│                                      │                             │ harfanglab, sentinel        │
+│ bad4397f-c3a8-4bc6-b707-128395e032d9 │ Remote Spray Rule 0262      │ sentinel, sentinel_one      │
+│ a59692df-9726-4123-83d0-18cf733aa0c3 │ Remote Spray Rule 0316      │ sentinel, sentinel_one      │
+│ f9c58132-51f7-4282-9d5a-aed8e7e3f7e5 │ Remote Spray Rule 0509      │ carbon_black_cloud,         │
+│                                      │                             │ defender_for_endpoint       │
+│ 598b304b-7ff9-43b5-a615-6dae418b48c7 │ Remote Spray Rule 0575      │ carbon_black_cloud, elastic │
+│ 03ef08b2-b94f-4eb5-9c46-d6a630ee5b24 │ Remote Tunnel Rule 0243     │ sysdig                      │
+│ be454a8b-e978-4367-8ee8-6c77ee8fc04a │ Remote Tunnel Rule 0429     │ crowdstrike                 │
+│ e0f31b35-71b0-42e3-905b-c79c642f12ec │ Scheduled Injection Rule    │ defender_for_endpoint,      │
+│                                      │ 0029                        │ elastic                     │
+│ 9c4c4795-3c6b-4ed2-ac9e-32a88af069c8 │ Rogue Beacon Rule 0129      │ splunk                      │
+│ eb8f3d68-8fa4-4ab6-a195-e2ccc6b48fc2 │ Rogue Beacon Rule 0300      │ splunk                      │
+│ e1d130ee-842d-443e-b4d7-2213bb109125 │ Rogue Beacon Rule 0550      │ sentinel, sentinel_one      │
+│ 4bcd8581-c0b5-44bf-a6e3-ed49f7502824 │ Rogue Downgrade Rule 0208   │ sentinel, sentinel_one      │
+│ 387160b2-746a-4609-83a2-a02e4f54c8e9 │ Rogue Downgrade Rule 0360   │ sysdig                      │
+│ df737f00-3228-4aec-bda9-a7374bb4ae07 │ Rogue Downgrade Rule 0396   │ sysdig                      │
+│ 0501b5a6-a5d9-4d1e-b8aa-cdb17fce39a8 │ Rogue Downgrade Rule 0496   │ sentinel, sentinel_one      │
+│ a8317819-a2c1-4bac-ae9a-2498b76bcb1c │ Rogue Dropper Rule 0152     │ carbon_black_cloud, elastic │
+│ 15c82102-ba39-4169-83ee-47b1c2ff2bad │ Rogue Exfiltration Rule     │ sentinel_one, splunk        │
+│                                      │ 0237                        │                             │
+│ c7755617-f963-48b3-86da-133db61f52a5 │ Rogue Exfiltration Rule     │ harfanglab, sentinel        │
+│                                      │ 0385                        │                             │
+│ 9c776706-f0f3-4fbe-961f-f9c819c9293e │ Rogue Harvest Rule 0048     │ splunk                      │
+│ 6981ef92-c03d-445d-b105-15ba724db41d │ Rogue Harvest Rule 0298     │ sentinel, sentinel_one      │
+│ 32bc6b77-7aae-4bb1-aba3-c70bb0234a5c │ Rogue Harvest Rule 0476     │ carbon_black_cloud, elastic │
+│ b8a8f7c5-7a7f-4077-8bc2-6704e074e736 │ Rogue Implant Rule 0110     │ defender_for_endpoint,      │
+│                                      │                             │ elastic                     │
+│ d511d7c8-be72-44bb-b5c1-2c381a7ffb31 │ Rogue Implant Rule 0326     │ defender_for_endpoint,      │
+│                                      │                             │ elastic                     │
+│ 4a3d4bee-99e3-4a29-9d4b-a3ca1e78c856 │ Rogue Injection Rule 0062   │ carbon_black_cloud, elastic │
+│ 5120f979-686c-43fb-af3d-890906d04c41 │ Rogue Injection Rule 0084   │ splunk                      │
+│ 225dbe79-0133-40d0-be67-cfa56c9bd9a8 │ Rogue Injection Rule 0179   │ carbon_black_cloud, elastic │
+│ 6f5ee21f-3e45-45a7-b4e0-98cc1462f7d6 │ Rogue Injection Rule 0308   │ defender_for_endpoint,      │
+│                                      │                             │ elastic                     │
+│ 0939b6a2-fc7e-4862-862e-f305b6b4525f │ Rogue Injection Rule 0313   │ harfanglab, sentinel        │
+│ a5353b1f-f588-43aa-8883-e11aa8144a88 │ Rogue Injection Rule 0522   │ sysdig                      │
+│ 848b1cdd-4ff5-44a4-b33a-6734df1a7455 │ Rogue Loader Rule 0040      │ harfanglab, sentinel_one,   │
+│                                      │                             │ splunk                      │
+│ 480fa0a6-88f2-4c7a-814c-24edeada71e1 │ Rogue Loader Rule 0126      │ sysdig                      │
+│ 7cb239c2-d35d-4454-bbaa-5c86724d80ba │ Rogue Loader Rule 0127      │ sentinel, sentinel_one      │
+│ b8a8e9fa-47bd-4c09-a172-db23e36330f9 │ Rogue Loader Rule 0192      │ splunk                      │
+│ b009e091-7c6f-49da-a5b7-9d5f72d5e995 │ Rogue Loader Rule 0319      │ harfanglab, sentinel_one    │
+│ 9a1adfd8-c4c5-4654-a3a1-b4acd833bd22 │ Rogue Loader Rule 0379      │ sentinel, sentinel_one      │
+│ 20ec0837-796f-480b-9043-dedf9d843517 │ Rogue Loader Rule 0395      │ carbon_black_cloud,         │
+│                                      │                             │ elastic, sysdig             │
+│ 63440087-3b87-4152-ac78-25610ec58482 │ Rogue Loader Rule 0521      │ carbon_black_cloud, elastic │
+│ aace5daf-aee6-4c21-a2b3-d69881549a5e │ Rogue Loader Rule 0593      │ carbon_black_cloud, elastic │
+│ c74aa67f-1332-4cfb-b26a-673fdfd07cf9 │ Rogue Pivot Rule 0368       │ carbon_black_cloud,         │
+│                                      │                             │ defender_for_endpoint,      │
+│                                      │                             │ elastic                     │
+│ 08af5a89-a471-43ae-8b55-d4463bfd149e │ Rogue Pivot Rule 0387       │ sysdig                      │
+│ 01b02da1-c05b-44ec-af64-5c244835cf76 │ Rogue Relay Rule 0342       │ sysdig                      │
+│ 58cb37cc-26a8-45f4-b9d7-3aed495e3038 │ Rogue Relay Rule 0380       │ defender_for_endpoint,      │
+│                                      │                             │ elastic                     │
+│ 9fb467f1-4b0a-4106-976d-5913011b4453 │ Rogue Relay Rule 0453       │ splunk                      │
+│ 4abe6de8-a455-48fe-8f5f-7eddd43f368c │ Rogue Relay Rule 0533       │ defender_for_endpoint,      │
+│                                      │                             │ elastic                     │
+│ 6ebd1f13-65cc-4660-a67e-239301be08cf │ Rogue Spray Rule 0246       │ splunk                      │
+│ 8088baaa-92d4-43f3-8e55-10cf3d214f85 │ Rogue Spray Rule 0382       │ harfanglab, sentinel_one    │
+│ 678d19fe-3788-4841-a672-7785a36142c8 │ Rogue Tunnel Rule 0278      │ carbon_black_cloud,         │
+│                                      │                             │ elastic, sysdig             │
+│ 0cb05cd2-220c-48ae-a092-e73f289fb5f1 │ Rogue Tunnel Rule 0377      │ carbon_black_cloud, elastic │
+│ 3ce66e57-8528-465c-a03d-59bb6b8cbbc5 │ Rogue Tunnel Rule 0431      │ carbon_black_cloud, elastic │
+│ 16252a8c-2750-4430-8f8f-147e583a4ce7 │ Rogue Tunnel Rule 0599      │ carbon_black_cloud,         │
+│                                      │                             │ defender_for_endpoint       │
+│ 335522b9-1cb1-4ff0-8228-c5db778981dc │ Scheduled Beacon Rule 0047  │ defender_for_endpoint,      │
+│                                      │                             │ elastic                     │
+│ e1ce8771-70ec-48da-a573-081ac28cdf33 │ Scheduled Beacon Rule 0171  │ harfanglab, sysdig          │
+│ 7465616d-d1c5-48e4-8507-fb1443ee583f │ Scheduled Beacon Rule 0223  │ harfanglab, sentinel        │
+│ 2feee6db-d6cc-49bc-9e0d-e67a1cae8ed6 │ Scheduled Beacon Rule 0320  │ carbon_black_cloud,         │
+│                                      │                             │ defender_for_endpoint       │
+│ bae8a371-e9da-4194-b0ea-04e92c379d6c │ Scheduled Beacon Rule 0440  │ carbon_black_cloud, elastic │
+│ 1fffc22e-e7a8-4157-82ac-ff464b082709 │ Scheduled Beacon Rule 0483  │ crowdstrike, sentinel_one   │
+│ cfe12157-1490-4176-bb81-aedb9c82f5b7 │ Scheduled Beacon Rule 0502  │ harfanglab, sentinel        │
+│ 3c144731-d98d-4364-ba60-b5b8010737ed │ Scheduled Beacon Rule 0558  │ sysdig                      │
+│ 3faa2bf9-7715-4e45-8e02-d46806d3dfef │ Scheduled Downgrade Rule    │ carbon_black_cloud,         │
+│                                      │ 0041                        │ defender_for_endpoint       │
+│ 6a805539-ac72-41c4-822e-f4420e034399 │ Scheduled Downgrade Rule    │ carbon_black_cloud,         │
+│                                      │ 0239                        │ defender_for_endpoint       │
+│ 85c433ab-9602-4738-96ac-a0aa0712d990 │ Scheduled Downgrade Rule    │ crowdstrike, splunk         │
+│                                      │ 0255                        │                             │
+│ 381a0169-2eb2-4f70-b30e-e4a362a0a8a5 │ Scheduled Downgrade Rule    │ crowdstrike                 │
+│                                      │ 0402                        │                             │
+│ 1ec8854c-332a-4313-a174-555232f68704 │ Scheduled Downgrade Rule    │ carbon_black_cloud, elastic │
+│                                      │ 0566                        │                             │
+│ f3b1b117-1de0-48ee-a966-10354f4be3d2 │ Scheduled Dropper Rule 0292 │ harfanglab, sentinel_one    │
+│ 666ddd5a-0819-4a54-bb34-04c56d63c98c │ Scheduled Dropper Rule 0392 │ carbon_black_cloud,         │
+│                                      │                             │ defender_for_endpoint       │
+│ c30bd2b4-e12c-44ad-a219-410cdb08245e │ Scheduled Exfiltration Rule │ sysdig                      │
+│                                      │ 0081                        │                             │
+│ 9829a601-8a77-4e56-bf3d-4e9889174aac │ Scheduled Exfiltration Rule │ defender_for_endpoint,      │
+│                                      │ 0209                        │ elastic                     │
+│ 390f2a6f-7e21-41b6-b220-dfb30b0c4d32 │ Scheduled Exfiltration Rule │ crowdstrike                 │
+│                                      │ 0366                        │                             │
+│ b71a49a0-bdf1-46b7-b2ea-79121d1715f6 │ Scheduled Harvest Rule 0064 │ sentinel, sentinel_one      │
+│ 55983d7e-9075-42a0-9e1f-ddb088d12cac │ Scheduled Harvest Rule 0217 │ carbon_black_cloud,         │
+│                                      │                             │ sentinel, sentinel_one      │
+│ 10127bb9-ed37-41e7-b94c-c653015755a8 │ Scheduled Harvest Rule 0302 │ carbon_black_cloud,         │
+│                                      │                             │ defender_for_endpoint       │
+│ 64590bdc-bb4a-49c8-aba1-c47e57b31fcf │ Scheduled Harvest Rule 0463 │ harfanglab, sentinel_one    │
+│ cff7f3eb-a5d5-4718-afb7-f841a815086e │ Scheduled Harvest Rule 0545 │ carbon_black_cloud,         │
+│                                      │                             │ defender_for_endpoint       │
+│ adf15390-4094-413c-a82d-9c630f52ccc0 │ Scheduled Implant Rule 0065 │ defender_for_endpoint,      │
+│                                      │                             │ elastic, splunk             │
+│ bbbd7500-dc2c-44ba-94bb-7b71f81299b8 │ Scheduled Implant Rule 0148 │ defender_for_endpoint,      │
+│                                      │                             │ harfanglab, sentinel_one    │
+│ 0eb0cf21-bc79-433a-973b-e87724fe5bdc │ Scheduled Implant Rule 0214 │ harfanglab, sentinel        │
+│ 90642abb-3443-4679-85ee-0817f28662f8 │ Scheduled Implant Rule 0315 │ sysdig                      │
+│ 4e606eea-b34a-44c4-bbd8-d3653b85844d │ Scheduled Implant Rule 0406 │ sentinel, sentinel_one      │
+│ 7da5845f-36f3-46ba-b4a0-97886dd0e49a │ Scheduled Implant Rule 0433 │ sentinel, sentinel_one      │
+│ ff442ebb-9a0d-443f-ad07-be6612d5d69d │ Scheduled Implant Rule 0571 │ harfanglab, sentinel_one    │
+│ 43ee5b6f-8b61-4d11-aae2-487347b5a660 │ Scheduled Injection Rule    │ harfanglab, sentinel        │
+│                                      │ 0061                        │                             │
+│ 36bae939-c024-46b6-9323-7a724fb72741 │ Scheduled Injection Rule    │ carbon_black_cloud, elastic │
+│                                      │ 0098                        │                             │
+│ d9005f9e-749e-474a-91ea-94cf02b49ac2 │ Scheduled Injection Rule    │ carbon_black_cloud, elastic │
+│                                      │ 0125                        │                             │
+│ a56f963a-25df-4e72-9811-c509821b6624 │ Scheduled Loader Rule 0111  │ splunk                      │
+│ 392d7297-eec2-4853-8c9c-33f0f4102b8e │ Scheduled Loader Rule 0133  │ harfanglab, sentinel        │
+│ 9c9acc0b-1bb2-4614-8e33-c70e7ac6d1c1 │ Scheduled Loader Rule 0153  │ sysdig                      │
+│ b2cbcfa5-ab99-4173-bfbf-0100f94b5c81 │ Scheduled Loader Rule 0328  │ harfanglab, sentinel_one    │
+│ 09f0c412-c9f8-4911-a8c3-abb987df15e8 │ Scheduled Loader Rule 0348  │ crowdstrike                 │
+│ a5b505d1-717a-4410-83f9-af40f0d1d882 │ Scheduled Loader Rule 0418  │ harfanglab, sentinel_one    │
+│ 3f5758a1-ab3f-4916-b1a5-48b8582a3c4e │ Scheduled Loader Rule 0441  │ sysdig                      │
+│ f30ec314-8823-4268-9f51-a2399b45c385 │ Scheduled Loader Rule 0549  │ sysdig                      │
+│ 865586ab-b172-4d1d-9444-fae380c1a60d │ Scheduled Pivot Rule 0089   │ carbon_black_cloud, elastic │
+│ 9199ecf3-b312-492c-9d06-2440ffea4259 │ Scheduled Pivot Rule 0177   │ crowdstrike                 │
+│ 9bc01453-5e7f-49b8-81ab-738bb7bf6f7f │ Scheduled Pivot Rule 0183   │ splunk                      │
+│ 2d9dbdbf-e702-4afc-9a83-d3a73725b0c7 │ Scheduled Pivot Rule 0310   │ harfanglab, sentinel_one    │
+│ 269a52d6-460d-48ae-900d-91afaf1c5f55 │ Scheduled Pivot Rule 0365   │ carbon_black_cloud,         │
+│                                      │                             │ defender_for_endpoint       │
+│ 24f30616-6590-4907-bd9f-d176932bf181 │ Scheduled Pivot Rule 0447   │ crowdstrike                 │
+│ c9f09525-3bec-47cf-b7b7-7ceeca570fa4 │ Scheduled Pivot Rule 0535   │ harfanglab, sentinel_one    │
+│ c8158e69-1167-4b76-a84e-9ed5efa56b16 │ Scheduled Relay Rule 0173   │ defender_for_endpoint,      │
+│                                      │                             │ elastic                     │
+│ f7b0308a-bafe-40c4-976f-3ed9355ba3fe │ Scheduled Relay Rule 0488   │ defender_for_endpoint,      │
+│                                      │                             │ elastic                     │
+│ 658c8e86-15ab-437d-a62d-21f81ffddcb1 │ Scheduled Spray Rule 0074   │ defender_for_endpoint,      │
+│                                      │                             │ elastic                     │
+│ 27b02eb6-d438-40aa-9c83-0adaa8772beb │ Scheduled Spray Rule 0334   │ sentinel, sentinel_one      │
+│ be053763-0941-46a0-82bd-2b7944925b18 │ Scheduled Tunnel Rule 0071  │ carbon_black_cloud, elastic │
+│ eaa55ab9-e0bd-46f8-9744-5d77681dcf69 │ Scheduled Tunnel Rule 0211  │ harfanglab, sentinel,       │
+│                                      │                             │ sentinel_one                │
+│ 8f94b393-8441-4714-a1ed-c58faf3fb5b2 │ Scheduled Tunnel Rule 0212  │ carbon_black_cloud,         │
+│                                      │                             │ defender_for_endpoint       │
+│ 6b856654-a62b-4644-afb7-f0188fbc13ef │ Scheduled Tunnel Rule 0405  │ sysdig                      │
+│ 3a4301cb-2602-4e43-82c5-fa6187c2724b │ Scheduled Tunnel Rule 0569  │ defender_for_endpoint,      │
+│                                      │                             │ elastic                     │
+│ 96a63fca-dfb6-4acf-9763-9bdfa691f423 │ Scheduled Tunnel Rule 0579  │ splunk                      │
+│ 07b2b264-ef95-453e-bd77-c6522fc20511 │ Silent Beacon Rule 0031     │ defender_for_endpoint,      │
+│                                      │                             │ harfanglab, sentinel_one    │
+│ 0eb792b2-e4bc-4358-9aa4-97148807981d │ Silent Beacon Rule 0135     │ sysdig                      │
+│ 91bb6bb4-01b6-45fb-b82b-95f6800efc5c │ Silent Beacon Rule 0193     │ harfanglab, sentinel_one    │
+│ fb46a28e-b210-4374-9483-d1a3998166eb │ Silent Beacon Rule 0207     │ defender_for_endpoint,      │
+│                                      │                             │ sysdig                      │
+│ 739e3588-8fe6-418e-a6cc-f8d8e5027008 │ Silent Beacon Rule 0583     │ harfanglab, sentinel        │
+│ caaad994-d8c1-4479-8eae-d187bee6dfb2 │ Silent Downgrade Rule 0042  │ crowdstrike                 │
+│ d809f2ee-2c47-4732-bbd8-498edfe803e7 │ Silent Downgrade Rule 0140  │ carbon_black_cloud,         │
+│                                      │                             │ defender_for_endpoint       │
+│ 23660dc2-2f39-4a7f-8dd3-210472bd91fd │ Silent Downgrade Rule 0324  │ sysdig                      │
+│ 42dafb05-2af3-4916-8862-7838322a550a │ Silent Downgrade Rule 0487  │ sentinel, sentinel_one      │
+│ acdd434c-bf98-45f3-b4b9-4f6a4ddea3f3 │ Silent Downgrade Rule 0495  │ carbon_black_cloud, sysdig  │
+│ ea491128-f607-4653-bc50-433c9ac41cdc │ Silent Downgrade Rule 0538  │ harfanglab, sentinel        │
+│ fd099b6f-f6c9-437f-af73-f6c3f90430d0 │ Silent Dropper Rule 0015    │ crowdstrike                 │
+│ 81aecf80-ca22-4c34-b422-4d4177d7bbcf │ Silent Dropper Rule 0039    │ splunk                      │
+│ 7d425955-2cf9-45ec-94a6-472ea0350e7c │ Silent Dropper Rule 0230    │ carbon_black_cloud,         │
+│                                      │                             │ defender_for_endpoint       │
+│ c26b2e91-4977-4360-8e79-244c97ee4b24 │ Silent Exfiltration Rule    │ sentinel, sentinel_one      │
+│                                      │ 0289                        │                             │
+│ 2f351e47-07a5-4e3f-a63a-ad4cf0150a1a │ Silent Exfiltration Rule    │ splunk                      │
+│                                      │ 0291                        │                             │
+│ c98bc4e5-c90b-4c74-9c96-846e6d6b8641 │ Silent Exfiltration Rule    │ defender_for_endpoint,      │
+│                                      │ 0353                        │ elastic                     │
+│ 60971380-c16c-4575-8afe-35d537ca9ccc │ Silent Exfiltration Rule    │ defender_for_endpoint,      │
+│                                      │ 0407                        │ elastic                     │
+│ 2221b135-1707-4250-944e-e51fccbf3f3c │ Silent Harvest Rule 0343    │ sentinel, sentinel_one      │
+│ 3cfe93c5-e4b7-4ee4-97de-6d97c9e630a2 │ Silent Harvest Rule 0359    │ carbon_black_cloud, elastic │
+│ ddf9fab8-90b5-4e1a-8a53-085efad70748 │ Silent Harvest Rule 0376    │ harfanglab, sentinel        │
+│ 0d8a3135-511f-4577-9253-681c5afcac34 │ Silent Implant Rule 0468    │ sysdig                      │
+│ 213e3185-5bdf-4949-ae66-a80bab9dcf01 │ Silent Implant Rule 0511    │ harfanglab, sentinel        │
+│ 9c6447cd-b23f-4ea1-bfe9-4fc0255cef9a │ Silent Injection Rule 0198  │ crowdstrike, sysdig         │
+│ 4da61ddb-6d55-4ed0-80b5-cc11bee444b7 │ Silent Injection Rule 0218  │ defender_for_endpoint,      │
+│                                      │                             │ elastic, sentinel           │
+│ 1196769d-7f4f-4729-ac60-3a53c1293b25 │ Silent Injection Rule 0265  │ harfanglab, sentinel_one    │
+│ cad9240f-f823-4bcb-90fc-4d5a84e87163 │ Silent Loader Rule 0087     │ crowdstrike, harfanglab     │
+│ e421f770-72d0-491a-8751-0ed0737d05b4 │ Silent Loader Rule 0274     │ crowdstrike, harfanglab,    │
+│                                      │                             │ sentinel_one                │
+│ db36a88d-158a-4840-a21d-12b3b404205c │ Silent Loader Rule 0530     │ carbon_black_cloud, elastic │
+│ 4adff6e7-5e5d-47a9-a84f-1a5799373de4 │ Silent Pivot Rule 0166      │ harfanglab, sentinel_one    │
+│ 6b714b1d-6a5a-4646-b891-e7d23f8aead1 │ Silent Pivot Rule 0195      │ crowdstrike                 │
+│ 152825b0-8c92-4513-abfd-52e6c093fe94 │ Silent Pivot Rule 0241      │ harfanglab, sentinel        │
+│ 8e306ea8-d0a7-421b-be4d-f538f77a81c5 │ Silent Pivot Rule 0331      │ defender_for_endpoint,      │
+│                                      │                             │ harfanglab, sentinel        │
+│ f69c82a8-a84c-4ae0-afd8-ef367d544a97 │ Silent Pivot Rule 0384      │ crowdstrike                 │
+│ 45f2cfb6-c0d0-48b9-b17a-1918d9603cf7 │ Silent Pivot Rule 0568      │ sentinel, sentinel_one      │
+│ ee9bb617-8658-4cda-a53a-911efb0b4d92 │ Silent Relay Rule 0189      │ sysdig                      │
+│ 402e95ca-05c8-4090-912f-0ba28933196d │ Silent Relay Rule 0277      │ harfanglab, sentinel        │
+│ 5a90ea37-e678-4fda-a925-abd0347169d9 │ Silent Relay Rule 0358      │ harfanglab, sentinel        │
+│ a110b912-192a-4a7b-8243-7319dada53bd │ Silent Relay Rule 0497      │ defender_for_endpoint,      │
+│                                      │                             │ elastic, sysdig             │
+│ a82cfc98-b26c-4d94-b697-c21b6f58265f │ Silent Relay Rule 0504      │ sysdig                      │
+│ 7a336420-e569-40fe-96fc-185ec978a60f │ Silent Spray Rule 0174      │ splunk                      │
+│ f62df116-bf9a-408d-b73c-d1db739c3dd5 │ Silent Spray Rule 0482      │ carbon_black_cloud,         │
+│                                      │                             │ defender_for_endpoint       │
+│ a3ce8b9c-a5ab-473b-bc92-5ffe06435419 │ Silent Spray Rule 0503      │ carbon_black_cloud, elastic │
+│ 965f255f-a0d5-412d-96a7-c90fb126c470 │ Silent Tunnel Rule 0093     │ splunk                      │
+│ 47a2b669-6994-4aa5-a181-026bcf766d99 │ Silent Tunnel Rule 0391     │ harfanglab, sentinel_one    │
+│ a83d84a4-20c4-4604-a007-933af203d1f4 │ Silent Tunnel Rule 0411     │ crowdstrike                 │
+│ c706df29-fa9e-4666-b190-f38197ba24f1 │ Staged Beacon Rule 0156     │ sentinel_one, splunk        │
+│ b19d3571-8990-4663-af0e-374f288b0300 │ Staged Beacon Rule 0188     │ carbon_black_cloud, elastic │
+│ 327fc1a1-0f01-4639-af60-df20adde7fa1 │ Staged Beacon Rule 0293     │ carbon_black_cloud,         │
+│                                      │                             │ defender_for_endpoint       │
+│ b4e84550-8b2a-4e49-8789-6d0953a1468a │ Staged Beacon Rule 0528     │ crowdstrike                 │
+│ 8724acdd-85cd-41a5-832e-e0d88290300d │ Staged Beacon Rule 0590     │ carbon_black_cloud,         │
+│                                      │                             │ defender_for_endpoint       │
+│ 2139cc8d-06bd-494b-bf5c-00f39db80501 │ Staged Downgrade Rule 0238  │ harfanglab, sentinel_one    │
+│ 0c7a95fe-ce71-4f55-8e10-be83c0bd12d7 │ Staged Downgrade Rule 0467  │ carbon_black_cloud, elastic │
+│ 5915d2ca-eace-4a75-b725-be2ac51a3159 │ Staged Downgrade Rule 0508  │ harfanglab, sentinel_one    │
+│ 48e0192b-7807-46fb-9a59-6e887cc0aa79 │ Staged Dropper Rule 0045    │ sysdig                      │
+│ d5058d7f-d862-47cf-acf0-8b2f6476e7cb │ Staged Dropper Rule 0149    │ carbon_black_cloud,         │
+│                                      │                             │ defender_for_endpoint       │
+│ 01ae28ce-0ccb-4e4a-874e-a48d1c55f4b4 │ Staged Dropper Rule 0361    │ sentinel, sentinel_one      │
+│ 754c82c9-0182-4cf7-897c-88ee3335e01a │ Staged Exfiltration Rule    │ crowdstrike                 │
+│                                      │ 0114                        │                             │
+│ 9a9dda88-ba34-4afb-86c3-9c5348e55d57 │ Staged Exfiltration Rule    │ carbon_black_cloud,         │
+│                                      │ 0257                        │ defender_for_endpoint       │
+│ d7869cdb-2ec6-43f3-8652-818e28741870 │ Staged Exfiltration Rule    │ harfanglab, sentinel        │
+│                                      │ 0286                        │                             │
+│ 0fcb46b1-7447-41ff-aa49-f0a69c34762e │ Staged Exfiltration Rule    │ carbon_black_cloud, elastic │
+│                                      │ 0458                        │                             │
+│ a7a44dd6-9ec4-4e23-b683-62df9036ba73 │ Staged Exfiltration Rule    │ crowdstrike, sentinel_one   │
+│                                      │ 0465                        │                             │
+│ 6ec3963c-5c4b-4de4-8043-cfdb3a37d971 │ Staged Harvest Rule 0010    │ sentinel, sentinel_one      │
+│ b11860d1-8f69-49ac-9c10-e2aad1ac6209 │ Staged Harvest Rule 0276    │ crowdstrike                 │
+│ 0d17f5f3-b877-468d-95b1-1ed29f19ae00 │ Staged Harvest Rule 0329    │ carbon_black_cloud,         │
+│                                      │                             │ defender_for_endpoint       │
+│ 92f4983b-09c7-41f8-bf7d-a478d9ebe3cb │ Staged Harvest Rule 0337    │ harfanglab, sentinel_one    │
+│ da5e8fa7-4cad-4a35-8a26-d777ec75bb11 │ Staged Implant Rule 0036    │ sysdig                      │
+│ da38c038-b27e-4ac1-9f00-8ad2156822c1 │ Staged Implant Rule 0271    │ harfanglab, sentinel,       │
+│                                      │                             │ sentinel_one                │
+│ 377d2969-b4ec-4828-8339-490b2fc703d1 │ Staged Implant Rule 0294    │ crowdstrike                 │
+│ 7d86b85e-ea93-42f8-b0c0-d18d9addfc4e │ Staged Implant Rule 0388    │ sentinel, sentinel_one      │
+│ f01f9959-9d79-49ed-bfa1-5a9edf6cb2e0 │ Staged Injection Rule 0019  │ sentinel, sentinel_one      │
+│ fdd37b49-b2e8-44ca-830a-510ae49717e0 │ Staged Injection Rule 0077  │ carbon_black_cloud,         │
+│                                      │                             │ defender_for_endpoint       │
+│ d3f34507-e6be-4c31-bbd5-2904239530d8 │ Staged Injection Rule 0106  │ harfanglab, sentinel        │
+│ be10a2ad-ed59-4a0c-9f10-791d91a349e0 │ Staged Injection Rule 0347  │ carbon_black_cloud,         │
+│                                      │                             │ defender_for_endpoint       │
+│ 366b2bab-ca94-420f-ab6a-41c107fa4d3c │ Staged Injection Rule 0397  │ sentinel, sentinel_one      │
+│ 425d3f8b-c37f-45ab-895f-bc7d8d17a803 │ Staged Injection Rule 0596  │ defender_for_endpoint,      │
+│                                      │                             │ elastic                     │
+│ 024111ba-5690-49d2-b252-ad376a761de8 │ Staged Loader Rule 0145     │ sentinel, sentinel_one      │
+│ c8397b0d-5ad3-4b66-b327-dd762844cadd │ Staged Loader Rule 0213     │ crowdstrike                 │
+│ 37010cef-4887-4ce9-9b5a-0b1ad4178ccf │ Staged Loader Rule 0367     │ harfanglab, sentinel        │
+│ e4cc582c-0613-4616-800f-6c7493cb476f │ Staged Pivot Rule 0351      │ sysdig                      │
+│ e2aa17ac-3b2d-4502-8568-43fa06793a24 │ Staged Relay Rule 0094      │ harfanglab, sentinel_one    │
+│ afbd6950-940f-46eb-85f5-9e4297e4464c │ Staged Relay Rule 0186      │ carbon_black_cloud,         │
+│                                      │                             │ crowdstrike                 │
+│ 5ec0e192-a041-40ce-9843-4149e89c6c23 │ Staged Relay Rule 0357      │ crowdstrike                 │
+│ 96331298-cfe2-43e6-bf0d-aca4a5241d54 │ Staged Relay Rule 0452      │ defender_for_endpoint,      │
+│                                      │                             │ elastic                     │
+│ 4bc8fa1c-33f5-4fba-a957-1d6b7e99e899 │ Staged Spray Rule 0116      │ carbon_black_cloud, elastic │
+│ bc11e3bc-602a-4042-8808-7f1116d23ca1 │ Staged Spray Rule 0225      │ sysdig                      │
+│ 99f7b5ca-70f1-4cfb-b2af-d225dd8f0df7 │ Staged Spray Rule 0311      │ carbon_black_cloud,         │
+│                                      │                             │ defender_for_endpoint       │
+│ e3c5d96e-2c87-49c1-9783-2f65bee61cce │ Staged Spray Rule 0466      │ harfanglab, sentinel        │
+│ 38045acc-6aca-4897-976e-3967fcb1d2ca │ Staged Spray Rule 0473      │ carbon_black_cloud,         │
+│                                      │                             │ defender_for_endpoint       │
+│ 431b3b2c-2792-4c30-b833-a1fdfb82e703 │ Staged Spray Rule 0513      │ sysdig                      │
+│ 2693f2e2-774f-400e-94c6-3193f97fc29f │ Staged Tunnel Rule 0307     │ sentinel, sentinel_one      │
+│ e1649813-db8d-4a0a-9504-2f1712477adf │ Staged Tunnel Rule 0424     │ sentinel, sentinel_one      │
+│ 13a6b2c3-4f48-4be0-8be4-40f920ed0a0a │ Staged Tunnel Rule 0547     │ harfanglab, sentinel        │
+└──────────────────────────────────────┴─────────────────────────────┴─────────────────────────────┘
+[1;33m![0m 592 rules · 119 threats · 60 objectives · 8 load errors
+[1;36m→[0m [1mopentide validate[0m[2m · [0m[2mshow where each object failed to load[0m

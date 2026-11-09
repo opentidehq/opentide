@@ -1,0 +1,16 @@
+[1;33mwarning[filename_mismatch][0m[1m: [0m[1mFilename 'rule-0001-sentinel-kql.yaml' does not match[0m
+  [1mslugify(name)='sentinel-kql-rule'[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rule-0001-sentinel-kql.yaml\objects/rules/rule-0001-sentinel-kql.yaml]8;;\
+  [34m╰─[0m [1;36mhelp:[0m rename it to objects/rules/sentinel-kql-rule.yaml
+
+[1;34mnote[metadata_recommended][0m[1m: [0m[1mRecommended metadata missing: author, organisation[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rule-0001-sentinel-kql.yaml\objects/rules/rule-0001-sentinel-kql.yaml:3:1]8;;\
+[34m  [0m[34m│[0m
+[34m3 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m [1;34m━━━━━━━━[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m add the missing keys under metadata
+
+[1;33m![0m 2 findings in 1 file · 1 warning, 1 note
+[1;36m→[0m [1mopentide lint --fix --file objects/rules/rule-0001-sentinel-kql.yaml[0m[2m · [0m[2mrename 1 file to match[0m
+  [2mtheir names[0m

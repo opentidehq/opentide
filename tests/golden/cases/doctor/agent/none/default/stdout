@@ -1,0 +1,26 @@
+✓ Python 3.13.14 · python_version
+✓ opentide 0.23.0 · opentide_version
+! Could not ask PyPI for the latest release (ProxyError) · opentide_latest
+  → check the network or --proxy, or pass --offline to skip network checks
+✗ No workspace at ./: no .opentide/ or objects/ there or above it · workspace
+  → opentide setup --path ./, or run from inside a workspace
+✓ git <GIT_VERSION> · git
+! ./ is not in a git repository · git_repository
+  → git init ./
+✓ No workspace configuration: the defaults apply · configuration
+! 4 template(s) missing: objective.1.0.template.yaml, rule.1.0.template.yaml, rule.1.1.template.yaml, threat.1.0.template.yaml · templates_fresh
+  → opentide generate templates schemas snippets
+! 6 schema(s) this version generates are missing: objective.1.0.schema.json, rule.1.0.schema.json, rule.1.1.schema.json, threat.1.0.schema.json, opentide.schema.json, visibility.1.0.schema.json · schemas_fresh
+  → opentide generate schemas
+○ Not checked: no workspace · lsp_catalog
+! No platform is enabled; rules validate but nothing deploys · platforms_enabled
+  → opentide setup platforms --sentinel (or another platform)
+✓ The analysis engine (language server 0.11.0) loads · analysis_engine
+✗ Cannot connect to proxy http://127.0.0.1:9 (ConnectionRefusedError) · proxy
+  → check --proxy, OPENTIDE_PROXY or HTTPS_PROXY, and that the proxy is up
+○ No .vscode/extensions.json: VS Code does not suggest opentidehq.opentide · vscode_settings
+  → opentide setup vscode
+○ No snippets at .vscode/model-templates.code-snippets · vscode_snippets
+  → opentide generate snippets
+○ No MCP configuration: agents in editors cannot call opentide tools · mcp_config
+  → opentide setup mcp --vscode (or --cursor, --claude-code, --generic)

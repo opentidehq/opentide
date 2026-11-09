@@ -1,0 +1,11 @@
+                                                                                
+ Usage: opentide share targets [OPTIONS]                                        
+                                                                                
+ List sharing destinations. The API key is never printed.                       
+                                                                                
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+ Examples
+   $ opentide share targets

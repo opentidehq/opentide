@@ -1,0 +1,37 @@
+                                                                                
+ Usage: opentide setup skills [OPTIONS] COMMAND [ARGS]...                       
+                                                                                
+ Agent skills discovery and installation                                        
+                                                                                
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --path            -C      <str>  Repository path [default: .]                │
+│ --cursor                         Copy the skills to .cursor/skills/          │
+│ --claude-code                    Write CLAUDE.md and copy the skills to      │
+│                                  .claude/skills/                             │
+│ --generic                        Write AGENTS.md for any agent that reads    │
+│                                  .agents/skills/                             │
+│ --github-copilot                 Write .github/copilot-instructions.md, and  │
+│                                  AGENTS.md as --generic does                 │
+│ --install                 <str>  Skill slug to install (repeatable);         │
+│                                  default: the rule and engineering skills    │
+│ --all                            Install every skill in the catalogue        │
+│ --plugin                         Register the opentidehq/skills Agent Plugin │
+│                                  (skills and MCP server) for Claude Code in  │
+│                                  .claude/settings.json                       │
+│ --name                    <str>  Heading of the agent files; default: the    │
+│                                  folder name                                 │
+│ --org                     <str>  Organisation named in the agent files       │
+│ --description             <str>  One paragraph under the heading of the      │
+│                                  agent files                                 │
+│ --plan                           List the files each step would write, and   │
+│                                  write nothing                               │
+│ --yes             -y             Install without asking                      │
+│ --help                           Show this message and exit.                 │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ discover  List the skills in the opentidehq/skills catalogue                 │
+│ show      Show one skill from the catalogue                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+ Examples
+   $ opentide setup skills --claude-code --yes

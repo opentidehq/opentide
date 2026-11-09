@@ -1,0 +1,58 @@
+`xtask golden`'s usage errors, which stop before it reads the repository or
+installs the oracle (exit status 2). `tests/golden/README.md` describes the
+commands; the library's unit tests cover their parts.
+
+```console
+$ xtask golden help
+usage: cargo xtask golden <command> [options]
+
+commands:
+  record [--check-determinism] [--filter GLOB] [--jobs N]
+             run every case through the oracle and write tests/golden/cases/
+             and COVERAGE.md. --check-determinism runs every case twice and
+             fails, writing nothing, unless both runs agree byte for byte
+  check [--engine python|rust|compare] [--filter GLOB] [--jobs N]
+             run every case through the engine and compare with the
+             recordings; also checks COVERAGE.md and that no recording is
+             missing or orphaned
+  diff [--engine ...] [--filter GLOB] [--jobs N]
+             check, printing every difference in full
+  lock       rewrite tests/golden/oracle-requirements.txt from ORACLE (uv pip compile)
+  coverage   rewrite COVERAGE.md from cases.toml and the recordings
+
+--filter GLOB  only the cases whose id (<command>/<mode>/<fixture>/<variant>) matches
+--engine       python (the oracle, the default); rust (UC-3) and compare (UC-0.7) come
+               later: until then they cannot start (exit status 2)
+
+exit status: 0 passed, 1 a difference or a failed case, 2 usage error or the run could not start
+
+$ xtask golden
+? 2
+xtask golden: missing command
+
+usage: cargo xtask golden <command> [options]
+...
+
+$ xtask golden frobnicate
+? 2
+xtask golden: unknown command `frobnicate`
+
+usage: cargo xtask golden <command> [options]
+...
+
+$ xtask golden record --engine rust
+? 2
+xtask golden: only the oracle records: `record` takes no --engine
+
+$ xtask golden check --check-determinism
+? 2
+xtask golden: unknown option `--check-determinism` for this command
+
+usage: cargo xtask golden <command> [options]
+...
+
+$ xtask golden check --jobs many
+? 2
+xtask golden: --jobs needs a number: invalid digit found in string
+
+```

@@ -1,0 +1,64 @@
+[platform]
+enabled = true
+name = "Splunk Enterprise"
+description = """Splunk Enterprise enables you to search, analyze and
+visualize your data to quickly act on insights from across your technology landscape."""
+
+# [[tenants]]
+# name = "Default"
+# description = "Default Splunk deployment target"
+# strategies = ["PREVIEW", "RELEASE"]  # status strategies this tenant accepts; omit for both
+# [tenants.setup]
+# ssl = false
+# url = "$SPLUNK_URL"
+# port = "$SPLUNK_PORT"
+# token = "$SPLUNK_TOKEN"
+# app = "$SPLUNK_APP"
+# correlation_searches = true
+# enterprise_security = true
+# allow_skew = "20%"
+# schedule_offset = 5
+# frequency_scheduling = "random"
+# actions_enabled = ["notable"]
+# default_actions = ["notable"]
+
+# [[modifiers]]
+# name = "Example Modifier"
+# description = "Example deployment modifier"
+# [modifiers.conditions]
+# status = ["DEVELOPMENT"]
+# [modifiers.modifications]
+# allowed_actions = false
+# "alert.severity" = 1
+
+# [[modifiers]]
+# name = "Platform Defaults"
+# description = "Default Splunk parameters applied to all rules"
+# [modifiers.conditions]
+# default = true
+# [modifiers.modifications]
+# "request.ui_dispatch_app" = "SplunkEnterpriseSecuritySuite"
+# "dispatch.latest_time" = "-5m@m"
+# "dispatch.index_latest" = ""
+# disabled = "false"
+# description = "Default description for an alert"
+# cron_schedule = "0 * * * *"
+# "alert.severity" = "3"
+# "alert.suppress.fields" = ""
+# is_scheduled = "true"
+# "action.customsearchbuilder.spec" = "{}"
+# "action.notable.param.verbose" = "0"
+# "action.notable.param.security_domain" = "threat"
+# "alert.digest_mode" = "1"
+# "alert.expires" = "2h"
+# "alert.suppress" = "0"
+# "alert.track" = "1"
+# alert_comparator = "greater than"
+# alert_threshold = "0"
+# alert_type = "number of events"
+# realtime_schedule = "0"
+# "request.ui_dispatch_view" = "search"
+# schedule_window = "auto"
+# schedule_priority = "default"
+# "dispatch.earliest_time" = ""
+# "dispatch.index_earliest" = ""

@@ -1,0 +1,12 @@
+error: Environment variable missing · detail: Unset configuration variables: $ELASTIC_API_KEY · advice: Set those environment variables before a live check.
+Deploy plan · strategy PREVIEW · 1 platform, 1 tenant
+Plan: 0 to create, 0 to update, 1 to create or update, 0 to disable, 0 to delete
+warning: Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError("HTTPSConnection(host='127.0.0.1', port=9): Failed to establish a new connection: [Errno 111] Connection refused")': /s/staging/api/detection_engine/rules?rule_id=00000000-0000-4000-8003-000000000009
+warning: Retrying (Retry(total=1, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError("HTTPSConnection(host='127.0.0.1', port=9): Failed to establish a new connection: [Errno 111] Connection refused")': /s/staging/api/detection_engine/rules?rule_id=00000000-0000-4000-8003-000000000009
+warning: Retrying (Retry(total=0, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError("HTTPSConnection(host='127.0.0.1', port=9): Failed to establish a new connection: [Errno 111] Connection refused")': /s/staging/api/detection_engine/rules?rule_id=00000000-0000-4000-8003-000000000009
+error: Get elastic rule failed · rule_id: 00000000-0000-4000-8003-000000000009 · error: HTTPSConnectionPool(host='kibana.staging.example', port=443): Max retries exceeded with url: /s/staging/api/detection_engine/rules?rule_id=00000000-0000-4000-8003-000000000009 (Caused by ProxyError('Unable to connect to proxy', NewConnectionError("HTTPSConnection(host='127.0.0.1', port=9): Failed to establish a new connection: [Errno 111] Connection refused")))
+
+Deploying to elastic / staging · 1 rule
+  [1/1] ✗ failed    Elastic KQL Rule  HTTPSConnectionPool(host='kibana.staging.example', port=443): Max retries exceeded with url: /s/staging/api/detection_engine/rules?rule_id=00000000-0000-4000-8003-000000000009 (Caused by ProxyError('Unable to connect to proxy', NewConnectionError("HTTPSConnection(host='127.0.0.1', port=9): Failed to establish a new connection: [Errno 111] Connection refused")))
+✗ elastic · 0 deployed, 1 failed, 0 not attempted · <SECONDS>
+✗ Deployment failed · 1 failed, 0 not attempted · <SECONDS>

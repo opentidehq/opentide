@@ -1,0 +1,14 @@
+                                                                                
+ Usage: opentide rules [OPTIONS] COMMAND [ARGS]...                              
+                                                                                
+ Detection rule maintenance                                                     
+                                                                                
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ unreviewed  List rules not reviewed within a window                          │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+ Examples
+   $ opentide rules unreviewed --older-than 90d

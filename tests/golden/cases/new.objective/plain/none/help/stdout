@@ -1,0 +1,16 @@
+                                                                                
+ Usage: opentide new objective [OPTIONS]                                        
+                                                                                
+ Scaffold a detection objective.                                                
+                                                                                
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --name          <str>  Object name; the filename is its slug                 │
+│ --threat        <str>  UUID of a threat this objective addresses             │
+│                        (repeatable)                                          │
+│ --path          <str>  File to write, or a folder to write it in (default:   │
+│                        the family's objects folder)                          │
+│ --help                 Show this message and exit.                           │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+ Examples
+   $ opentide new objective --name "Detect Credential Dumping" --threat <threat-uuid>

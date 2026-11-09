@@ -1,0 +1,4 @@
+✓ templates · 13 files · <SECONDS> · .opentide/templates/
+✓ schemas · 8 files · <SECONDS> · .opentide/
+error: No threat in Objects/Threat Vectors has uuid 00000000-0000-4000-8000-000000000000
+tip: add --json for machine-readable output

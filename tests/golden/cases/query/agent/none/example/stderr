@@ -1,0 +1,2 @@
+error: sentinel has no tenants configured: add a [[tenants]] entry in .opentide/configurations/platforms/sentinel.toml
+tip: add --json for machine-readable output

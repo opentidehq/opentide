@@ -1,0 +1,2 @@
+[?25l<LIVE>  [1;36m<SPIN>[0m  [1;36mexports objects[0m[1m  [0m[2m [0m[2m<SECONDS>[0m[2m [0m</LIVE>[?25h[1A[2K  [1;31m✗[0m  [1mexports objects[0m [2m<SECONDS>[0m
+[1;31merror:[0m exports: KeyError: 'version' while rendering 04149254-2a5b-4c1e-9f0e-3c1d2b5a6e7f

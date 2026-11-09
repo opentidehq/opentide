@@ -1,0 +1,19 @@
+                                           [1;4mvocab_unknown[0m                                            
+
+A value is not in the vocabulary its field uses.                                                    
+
+Severity: error. Reported by [1;36;40mopentide validate[0m (schema check).                                      
+
+[4;35mExample[0m                                                                                             
+
+[48;5;235m                                                                                                    [0m
+[48;5;235m [0m[38;5;204;48;5;235mmetadata[0m[38;5;231;48;5;235m:[0m[48;5;235m                                                                                         [0m[48;5;235m [0m
+[48;5;235m [0m[38;5;231;48;5;235m  [0m[38;5;204;48;5;235mtlp[0m[38;5;231;48;5;235m:[0m[38;5;231;48;5;235m [0m[48;5;235mclearr[0m[38;5;231;48;5;235m          [0m[38;5;244;48;5;235m# tlp::1.0 has clear, green, amber, amber+strict, red[0m[48;5;235m                      [0m[48;5;235m [0m
+[48;5;235m                                                                                                    [0m
+
+[4;35mHow to fix[0m                                                                                          
+
+Use a value from the vocabulary the label names. When a close value exists, [1;36;40mhelp[0m names it and [1;36;40mfix[0m   
+carries the edit; the edit is marked [1;36;40msafe[0m only when the two spell the same word (they differ in     
+case, spaces, [1;36;40m-[0m or [1;36;40m_[0m) and hold no digit, so an ATT&CK id is never replaced unreviewed. The opentide 
+VS Code extension completes vocabulary values ([1;36;40mopentide setup vscode[0m recommends it).                

@@ -1,0 +1,39 @@
+                                                                                
+ Usage: opentide lint [OPTIONS]                                                 
+                                                                                
+ Check file names and recommended metadata                                      
+                                                                                
+ Catalogue hygiene: filename slugs and recommended metadata, not schema         
+ validation.                                                                    
+                                                                                
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --fix                                      Apply safe filename renames       │
+│ --strict                                   Exit non-zero when findings exist │
+│                                            (CI gate)                         │
+│ --check          CHECK                     Limit to one check: filenames,    │
+│                                            metadata, placeholders or queries │
+│                                            (repeatable). Runs it even when   │
+│                                            lint.toml disables it             │
+│ --changed                                  Lint only the object files this   │
+│                                            run changed: the pull or merge    │
+│                                            request, the push, or outside CI  │
+│                                            the last commit (the diff deploy  │
+│                                            reads)                            │
+│ --file           <str>                     Lint only this object file        │
+│                                            (repeatable)                      │
+│ --format         <text|sarif|codequality>  text: code frames. sarif: SARIF   │
+│                                            2.1.0 for code scanning.          │
+│                                            codequality: GitLab Code Quality  │
+│                                            (Code Climate JSON). A report     │
+│                                            goes to --output, or to stdout    │
+│                                            instead of the text               │
+│                                            [default: text]                   │
+│ --output         <path>                    Write the --format report to this │
+│                                            file and print the usual text     │
+│                                            output too                        │
+│ --help                                     Show this message and exit.       │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+ Examples
+   $ opentide lint
+   $ opentide lint --fix

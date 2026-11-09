@@ -1,0 +1,1 @@
+{"error":"No such command 'valdiate'.","ok":false,"status":"failed","message":"No such command 'valdiate'.","schema_version":1,"command":"","duration_ms":0,"exit_code":2,"summary":{},"next_actions":[],"failure":{"code":"usage_unknown_command","message":"No such command 'valdiate'.","argument":"valdiate","suggestion":"validate","crash_log":null}}

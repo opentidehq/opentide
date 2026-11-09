@@ -1,0 +1,13 @@
+# The oracle the goldens are recorded from (plan §5.1, tests/golden/README.md).
+# Re-recording against another release is an explicit, reviewed PR: change
+# this file, run `cargo xtask golden lock` and `cargo xtask golden record`.
+tag = "v0.23.0"
+commit = "f41fe5e5c5a8631b3cc3ab5f80aba39b4e65f2d7"
+package = "opentide"
+version = "0.23.0"
+wheel = "opentide-0.23.0-cp310-abi3-manylinux_2_28_x86_64.whl"
+wheel_sha256 = "de12c30f53327c4790fff5996c20b7d14508b4fd96ac73c81db20a02993211bc"
+python = "3.13.14"
+platform = "linux-x86_64"
+exclude_newer = "2026-11-08T00:00:00Z"
+requirements = "oracle-requirements.txt"

@@ -1,0 +1,117 @@
+name: Golden
+
+# The goldens of the frozen Python CLI, the oracle every Rust port is checked
+# against (tests/golden/README.md, plan §5.1, UC-0.5). Both jobs install the
+# oracle from PyPI by its wheel's SHA-256 (tests/golden/ORACLE) and run every
+# case of tests/golden/cases.toml through it:
+#
+# - check: `cargo xtask golden check --engine python`, the recordings against
+#   a fresh run, plus COVERAGE.md and no missing or orphaned recording.
+# - determinism: `cargo xtask golden lock` must reproduce the committed
+#   oracle-requirements.txt; then `cargo xtask golden record
+#   --check-determinism` runs every case twice and fails unless both runs
+#   agree byte for byte, and the recordings it wrote must be the committed ones.
+#
+# Nothing here publishes or writes to the repository.
+
+on:
+  push:
+    # integration/unified-core collects the unified-core work (epic #790) before development.
+    branches: [development, integration/unified-core]
+  pull_request:
+    # All base branches: a stacked PR targets the branch below it, not development.
+    paths:
+      - "tests/golden/**"
+      - "tests/fixtures/tide_corpus/**"
+      - "tests/corpora/**"
+      - "xtask/**"
+      - ".cargo/**"
+      - ".gitattributes"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - ".github/workflows/golden.yml"
+  schedule:
+    # Weekly, so a change outside the repository (PyPI, the runner image) shows.
+    # GitHub runs a schedule on the default branch only.
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: golden-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Golden check (python)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          # The uv that wrote oracle-requirements.txt (`golden lock` must reproduce it).
+          version: "0.11.32"
+          enable-cache: true
+          cache-dependency-glob: tests/golden/oracle-requirements.txt
+
+      - name: Set up Rust
+        run: rustup toolchain install --profile minimal --no-self-update
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: . -> target
+
+      - name: Check the goldens against the oracle
+        run: cargo xtask golden check --engine python
+
+  determinism:
+    name: Golden determinism
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          # The uv that wrote oracle-requirements.txt (`golden lock` must reproduce it).
+          version: "0.11.32"
+          enable-cache: true
+          cache-dependency-glob: tests/golden/oracle-requirements.txt
+
+      - name: Set up Rust
+        run: rustup toolchain install --profile minimal --no-self-update
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: . -> target
+
+      - name: The oracle's lock file is the one golden lock writes
+        run: |
+          set -euo pipefail
+          cargo xtask golden lock
+          if ! git diff --exit-code -- tests/golden/oracle-requirements.txt; then
+            echo "::error::cargo xtask golden lock changed tests/golden/oracle-requirements.txt: run it and commit the result"
+            exit 1
+          fi
+
+      - name: Record every case twice
+        run: cargo xtask golden record --check-determinism
+
+      - name: The recordings are the committed ones
+        run: |
+          set -euo pipefail
+          git add --intent-to-add tests/golden
+          if ! git diff --quiet -- tests/golden; then
+            git diff --stat -- tests/golden
+            echo "::error::recording again changed tests/golden: run cargo xtask golden record and review the diff"
+            exit 1
+          fi

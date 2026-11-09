@@ -1,0 +1,5 @@
+[?25l<LIVE>[1;36m<SPIN>[0m Validating objects</LIVE>[1;33mwarning: [0mVocabulary not found · vocab: reviewed
+[1;33mwarning: [0mVocabulary not found · vocab: rule_id
+[?25h[1A[2K[1;31m✗[0m 40 errors in 39 files · 771 objects checked · <SECONDS>
+[1;36m→[0m [1mopentide explain deployment_state_uuid_mismatch[0m[2m · [0m[2mhow to fix it[0m
+[1;36m→[0m [1mopentide validate[0m[2m · [0m[2mcheck again[0m

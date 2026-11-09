@@ -1,0 +1,41 @@
+[3m                           Vocabularies (35)                            [0m
+┏━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━━━━━━━━┳━━━━━━━━┓
+┃[1m [0m[1mName                 [0m[1m [0m┃[1m [0m[1mEntries[0m[1m [0m┃[1m [0m[1mRemoved[0m[1m [0m┃[1m [0m[1mLatest revision[0m[1m [0m┃[1m [0m[1mStaged[0m[1m [0m┃
+┡━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━━━━━━━━╇━━━━━━━━┩
+│ actors                │    1309 │       0 │ 1.2             │ yes    │
+│ alert_severity        │       5 │       0 │ 1.0             │ no     │
+│ att&ck                │     962 │      27 │ 2.0             │ yes    │
+│ att&ck.groups         │     191 │       0 │ 1.2             │ no     │
+│ chaining_relations    │       7 │       0 │ 1.0             │ yes    │
+│ collection            │      75 │       0 │ 1.0             │ no     │
+│ criticality           │       7 │       0 │ 1.0             │ no     │
+│ datasources           │     147 │       0 │ 1.1             │ no     │
+│ detection.composition │       6 │       0 │ 1.0             │ no     │
+│ detection.methodology │      10 │       0 │ 1.0             │ no     │
+│ detection.types       │       4 │       0 │ 1.0             │ no     │
+│ efforts               │       4 │       0 │ 1.0             │ no     │
+│ feasibility           │       7 │       0 │ 1.0             │ no     │
+│ impact                │      19 │       0 │ 1.0             │ no     │
+│ killchain             │      18 │       0 │ 1.0             │ yes    │
+│ level                 │       6 │       0 │ 1.0             │ no     │
+│ leverage              │      20 │       0 │ 1.0             │ no     │
+│ malapi                │     368 │       0 │ 1.0             │ yes    │
+│ maturity              │       9 │       0 │ 1.0             │ no     │
+│ mitigations           │     110 │       0 │ 1.1             │ no     │
+│ objectives            │      14 │       0 │ 1.0             │ no     │
+│ pap                   │       4 │       0 │ 1.0             │ no     │
+│ resources             │       7 │       0 │ 1.0             │ no     │
+│ rsit                  │      39 │       0 │ 1.0             │ no     │
+│ scheduling            │      22 │       0 │ 1.0             │ no     │
+│ sectors               │      36 │       0 │ 1.0             │ no     │
+│ severity              │       6 │       0 │ 1.0             │ no     │
+│ signal.entities       │      28 │       0 │ 1.0             │ yes    │
+│ sophistication        │       7 │       0 │ 1.0             │ no     │
+│ stakeholders          │      10 │       0 │ 1.0             │ no     │
+│ surface               │     895 │       0 │ 1.0             │ yes    │
+│ tier                  │       7 │       0 │ 1.0             │ no     │
+│ tlp                   │       5 │       0 │ 1.0             │ no     │
+│ viability             │       8 │       0 │ 1.0             │ no     │
+│ violation             │       9 │       0 │ 1.0             │ no     │
+└───────────────────────┴─────────┴─────────┴─────────────────┴────────┘
+[1;32m✓[0m 10 rules · 1 threat · 1 objective · 0 load errors

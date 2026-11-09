@@ -1,0 +1,15 @@
+[1m                                                                                                    [0m
+[1m [0m[1;33mUsage: [0m[1mopentide setup skills discover [OPTIONS] [path][0m[1m                                            [0m[1m [0m
+[1m                                                                                                    [0m
+ List skills from the opentidehq/skills catalogue.                                                  
+                                                                                                    
+[2m╭─[0m[2m Options [0m[2m───────────────────────────────────────────────────────────────────────────────────────[0m[2m─╮[0m
+[2m│[0m [1;36m-[0m[1;36m-path[0m       [1;32m-C[0m      [1;2;33m<[0m[1;33mstr[0m[1;2;33m>[0m  Repository path [2m[default: .][0m                                         [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-query[0m      [1;32m-q[0m      [1;2;33m<[0m[1;33mstr[0m[1;2;33m>[0m  Keep skills whose name, slug or description holds this text          [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-installed[0m          [1;33m     [0m  Keep only the skills installed in .agents/skills/                    [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-refresh[0m            [1;33m     [0m  Fetch the catalogue again, not the in-process copy of the last 30s   [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-help[0m               [1;33m     [0m  Show this message and exit.                                          [2m│[0m
+[2m╰──────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+
+[2m Examples[0m
+   [1m$ opentide setup skills discover --query sigma[0m

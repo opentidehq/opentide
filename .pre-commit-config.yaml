@@ -18,12 +18,19 @@ repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
+      # The golden recordings and vendored fixtures are bytes the oracle wrote
+      # or a repository shipped (tests/golden/README.md): the hooks that rewrite
+      # or parse files leave them alone; detect-private-key and
+      # check-merge-conflict still read them.
       - id: trailing-whitespace
-        exclude: '\.ambr$'
+        exclude: '\.ambr$|^tests/golden/(cases|blobs|fixtures)/'
       - id: end-of-file-fixer
+        exclude: '^tests/golden/(cases|blobs|fixtures)/'
       - id: check-yaml
         args: [--unsafe]  # allow custom YAML tags in GitHub Actions
+        exclude: '^tests/golden/(cases|blobs|fixtures)/'
       - id: check-toml
+        exclude: '^tests/golden/(cases|blobs|fixtures)/'
       - id: check-merge-conflict
       - id: detect-private-key
 

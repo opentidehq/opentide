@@ -1,0 +1,17 @@
+                                                                                
+ Usage: opentide setup skills show [OPTIONS] {name}                             
+                                                                                
+ Show details for one skill from the catalogue.                                 
+                                                                                
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    name      <str>  Skill slug or name [required]                          │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --path     -C      <str>  Repository path [default: .]                       │
+│ --refresh                 Fetch the catalogue again, not the in-process copy │
+│                           of the last 30s                                    │
+│ --help                    Show this message and exit.                        │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+ Examples
+   $ opentide setup skills show <slug>

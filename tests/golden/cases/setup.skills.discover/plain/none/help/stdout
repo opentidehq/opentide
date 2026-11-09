@@ -1,0 +1,18 @@
+                                                                                
+ Usage: opentide setup skills discover [OPTIONS] [path]                         
+                                                                                
+ List skills from the opentidehq/skills catalogue.                              
+                                                                                
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --path       -C      <str>  Repository path [default: .]                     │
+│ --query      -q      <str>  Keep skills whose name, slug or description      │
+│                             holds this text                                  │
+│ --installed                 Keep only the skills installed in                │
+│                             .agents/skills/                                  │
+│ --refresh                   Fetch the catalogue again, not the in-process    │
+│                             copy of the last 30s                             │
+│ --help                      Show this message and exit.                      │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+ Examples
+   $ opentide setup skills discover --query sigma

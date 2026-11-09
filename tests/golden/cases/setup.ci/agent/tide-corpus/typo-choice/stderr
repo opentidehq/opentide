@@ -1,0 +1,4 @@
+error: Invalid value for 'ci_platform': Choose github, gitlab, or azure
+  usage: opentide setup ci [OPTIONS] {ci_platform}:<github|gitlab|azure>
+  help: run 'opentide setup ci --help'
+tip: add --json for machine-readable output

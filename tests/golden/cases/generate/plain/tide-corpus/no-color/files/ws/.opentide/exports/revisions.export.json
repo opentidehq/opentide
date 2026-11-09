@@ -1,0 +1,158 @@
+{
+  "00000000-0000-4000-8001-000000000001": {
+    "description": "Simulated threat actor for CLI E2E corpus",
+    "name": "Simulated Actor",
+    "object": "Threat Vectors",
+    "versions": {
+      "1": {
+        "author": null,
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "threat::1.0"
+      }
+    }
+  },
+  "00000000-0000-4000-8002-000000000001": {
+    "description": "Detect credential access techniques",
+    "name": "Credential Access Objective",
+    "object": "Detection Objectives",
+    "versions": {
+      "1": {
+        "author": null,
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "objective::1.0"
+      }
+    }
+  },
+  "00000000-0000-4000-8003-000000000001": {
+    "description": "Simulated Sentinel rule for CLI E2E corpus.\n",
+    "name": "Sentinel KQL Rule",
+    "object": "Detection Rules",
+    "versions": {
+      "1": {
+        "author": null,
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.0"
+      }
+    }
+  },
+  "00000000-0000-4000-8003-000000000002": {
+    "description": "Simulated Defender rule for CLI E2E corpus.\n",
+    "name": "Defender KQL Rule",
+    "object": "Detection Rules",
+    "versions": {
+      "1": {
+        "author": null,
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.0"
+      }
+    }
+  },
+  "00000000-0000-4000-8003-000000000003": {
+    "description": "Simulated Splunk rule for CLI E2E corpus.\n",
+    "name": "Splunk SPL Rule",
+    "object": "Detection Rules",
+    "versions": {
+      "1": {
+        "author": null,
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.0"
+      }
+    }
+  },
+  "00000000-0000-4000-8003-000000000004": {
+    "description": "Simulated SentinelOne rule for CLI E2E corpus.\n",
+    "name": "SentinelOne S1QL Rule",
+    "object": "Detection Rules",
+    "versions": {
+      "1": {
+        "author": null,
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.0"
+      }
+    }
+  },
+  "00000000-0000-4000-8003-000000000005": {
+    "description": "Simulated Carbon Black rule for CLI E2E corpus.\n",
+    "name": "Carbon Black Lucene Rule",
+    "object": "Detection Rules",
+    "versions": {
+      "1": {
+        "author": null,
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.0"
+      }
+    }
+  },
+  "00000000-0000-4000-8003-000000000006": {
+    "description": "Simulated CrowdStrike rule for CLI E2E corpus (deploy-only).\n",
+    "name": "CrowdStrike Deploy Rule",
+    "object": "Detection Rules",
+    "versions": {
+      "1": {
+        "author": null,
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.0"
+      }
+    }
+  },
+  "00000000-0000-4000-8003-000000000007": {
+    "description": "Simulated HarfangLab rule for CLI E2E corpus (deploy-only).\n",
+    "name": "HarfangLab Deploy Rule",
+    "object": "Detection Rules",
+    "versions": {
+      "1": {
+        "author": null,
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.0"
+      }
+    }
+  },
+  "00000000-0000-4000-8003-000000000008": {
+    "description": "Rule with higher metadata.version for mutate/promote E2E tests.\n",
+    "name": "Staging Promote Rule",
+    "object": "Detection Rules",
+    "versions": {
+      "2": {
+        "author": null,
+        "created": "2026-01-01",
+        "modified": "2026-01-03",
+        "schema": "rule::1.0"
+      }
+    }
+  },
+  "00000000-0000-4000-8003-000000000009": {
+    "description": "Simulated Elastic rule for CLI E2E corpus.\n",
+    "name": "Elastic KQL Rule",
+    "object": "Detection Rules",
+    "versions": {
+      "1": {
+        "author": null,
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.0"
+      }
+    }
+  },
+  "00000000-0000-4000-8003-0000005d1a90": {
+    "description": "Simulated Sysdig Secure Falco rule for CLI E2E corpus: a shell spawned in\na container.\n",
+    "name": "Sysdig Falco Rule",
+    "object": "Detection Rules",
+    "versions": {
+      "1": {
+        "author": null,
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.0"
+      }
+    }
+  }
+}

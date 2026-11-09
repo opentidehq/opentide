@@ -1,0 +1,25 @@
+                                                                                
+ Usage: opentide share push [OPTIONS]                                           
+                                                                                
+ Create or update one MISP Event per selected Tide object.                      
+                                                                                
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --target                     <str>   Destination block name. Repeatable.     │
+│ --uuid                       <str>   Limit to these object UUIDs.            │
+│ --type                       <str>   Limit to threat, objective, or rule.    │
+│ --file                       <str>   Limit to these object files.            │
+│ --dry-run                            Resolve the run locally and make no     │
+│                                      request.                                │
+│ --publish    --no-publish            Override the block publish flag.        │
+│ --workers                    <int>   Parallel object workers for one         │
+│                                      destination.                            │
+│                                      [default: 1]                            │
+│ --changed                            Share only objects the default-branch   │
+│                                      CI diff changed.                        │
+│ --since                      COMMIT  With --changed: diff from this commit   │
+│                                      SHA or ref to HEAD.                     │
+│ --help                               Show this message and exit.             │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+ Examples
+   $ opentide share push --target misp-prod

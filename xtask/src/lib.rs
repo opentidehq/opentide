@@ -6,4 +6,5 @@
 
 pub mod bench;
 pub mod corpus;
+pub mod golden;
 pub mod layers;

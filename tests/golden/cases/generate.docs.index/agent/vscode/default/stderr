@@ -1,0 +1,3 @@
+✗ docs · <SECONDS>
+error: docs: an object does not validate: status: field required (and 2 more); opentide validate shows each finding
+tip: add --json for machine-readable output

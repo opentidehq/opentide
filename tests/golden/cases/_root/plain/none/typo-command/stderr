@@ -1,0 +1,4 @@
+error: No such command 'valdiate'.
+  help: did you mean 'validate'?
+  usage: opentide [OPTIONS] COMMAND [ARGS]...
+  help: run 'opentide --help'

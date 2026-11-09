@@ -1,0 +1,4 @@
+error: Missing command: choose from start.
+  usage: opentide mcp [OPTIONS] COMMAND [ARGS]...
+  help: run 'opentide mcp --help'
+tip: add --json for machine-readable output

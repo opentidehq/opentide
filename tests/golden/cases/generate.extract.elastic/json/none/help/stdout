@@ -1,0 +1,17 @@
+                                                                                
+ Usage: opentide generate extract elastic [OPTIONS]                             
+                                                                                
+ Import Elastic Security detection rules (needs tenant credentials).            
+                                                                                
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --space                                <str>  Kibana space ID                │
+│                                               [default: default]             │
+│ --include-prebuilt    --custom-only           Include prebuilt rules         │
+│                                               converted to custom rules with │
+│                                               derived UUIDs                  │
+│                                               [default: custom-only]         │
+│ --help                                        Show this message and exit.    │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+ Examples
+   $ opentide generate extract elastic --space default

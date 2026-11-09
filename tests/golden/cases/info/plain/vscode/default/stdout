@@ -1,0 +1,11 @@
+  version  0.23.0
+platforms  Carbon Black Cloud               disabled · deploy, validate, query
+           CrowdStrike Falcon               disabled · deploy, query
+           Microsoft Defender for Endpoint  disabled · deploy, validate, query
+           Elastic Security                 disabled · deploy, validate, query
+           HarfangLab                       disabled · deploy, query
+           Microsoft Sentinel               disabled · deploy, validate, query
+           SentinelOne                      disabled · deploy, validate, query
+           Splunk Enterprise Security       disabled · deploy, validate, query
+           Sysdig Secure                    disabled · deploy
+✓ 2 rules · 0 threats · 1 objective · 0 load errors

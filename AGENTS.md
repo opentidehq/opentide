@@ -12,6 +12,7 @@
 |------|------------|------------|
 | `src/opentide/` | The PyPI package: models, CLI, MCP, platforms, bundled data (`src/opentide/data/`) | [`src/AGENTS.md`](src/AGENTS.md) |
 | `tests/` | The Python suite: unit, CLI E2E (sharded), MCP, docs and CI contracts | the testing skills below |
+| `tests/golden/` | The goldens of the frozen Python CLI (the oracle): `cargo xtask golden record\|check` | [`tests/golden/README.md`](tests/golden/README.md) |
 | `Cargo.toml`, `Cargo.lock` | One Cargo workspace: lints, shared dependencies, profiles | [`crates/AGENTS.md`](crates/AGENTS.md) |
 | `crates/opentide-*/` | The engine and language server crates, one guide each | `crates/<crate>/AGENTS.md` |
 | `analysis/` | The PyO3 binding compiled into the package as `opentide._native` | [`analysis/AGENTS.md`](analysis/AGENTS.md) |

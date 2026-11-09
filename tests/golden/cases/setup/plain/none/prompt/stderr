@@ -1,0 +1,1 @@
+error: Interactive setup requires a terminal. Run 'opentide setup' with --yes and explicit flags (--platform, --ci).

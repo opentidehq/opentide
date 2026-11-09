@@ -1,0 +1,3 @@
+[1;31merror:[0m Missing command.
+  [1musage:[0m opentide migrate [OPTIONS] COMMAND [ARGS]...
+  [1;36mhelp:[0m run 'opentide migrate --help'

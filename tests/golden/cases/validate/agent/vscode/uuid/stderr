@@ -1,0 +1,4 @@
+✗ 7 errors in 1 file · 1 object checked · 1 query · <SECONDS>
+→ opentide explain schema_validation · how to fix it
+→ opentide validate · check again
+tip: add --json for machine-readable output

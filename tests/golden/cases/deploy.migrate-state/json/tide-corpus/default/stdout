@@ -1,0 +1,1 @@
+{"migrated":[],"unused":[],"errors":[],"shards_written":0,"rules_edited":0,"ok":true,"status":"completed","message":"No vendor rule ids left on rules","schema_version":1,"command":"deploy migrate-state","duration_ms":0,"exit_code":0,"summary":{"ids":0,"rules":0,"shards":0},"next_actions":[],"failure":null}

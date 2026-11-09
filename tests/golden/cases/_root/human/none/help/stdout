@@ -1,0 +1,52 @@
+[1m                                                                                                    [0m
+[1m [0m[1;33mUsage: [0m[1mopentide [OPTIONS] COMMAND [ARGS]...[0m[1m                                                       [0m[1m [0m
+[1m                                                                                                    [0m
+ Spec-driven development for agentic detection engineering                                          
+                                                                                                    
+[2m╭─[0m[2m Options [0m[2m───────────────────────────────────────────────────────────────────────────────────────[0m[2m─╮[0m
+[2m│[0m [1;36m-[0m[1;36m-repo[0m                        [1;2;33m<[0m[1;33mstr[0m[1;2;33m>[0m  Repository root [2;33m[env var: OPENTIDE_REPO_ROOT][0m               [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-data[0m                        [1;2;33m<[0m[1;33mstr[0m[1;2;33m>[0m  Bundled data root [2;33m[env var: OPENTIDE_DATA_ROOT][0m             [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-debug[0m                       [1;33m     [0m  Enable debug logging. Also OPENTIDE_DEBUG=1                 [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-quiet[0m                       [1;33m     [0m  Print only the outcome line and errors                      [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-no[0m[1;36m-color[0m                    [1;33m     [0m  Disable colour                                              [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-json[0m                        [1;33m     [0m  Machine-readable output: one JSON object on stdout          [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-proxy[0m                       [1;2;33m<[0m[1;33mstr[0m[1;2;33m>[0m  HTTP(S) proxy URL (http://[user:pass@]host:port) for        [2m│[0m
+[2m│[0m                                      platform and lookup calls. Overrides HTTP_PROXY and         [2m│[0m
+[2m│[0m                                      HTTPS_PROXY; hosts in NO_PROXY are still reached directly.  [2m│[0m
+[2m│[0m                                      [2;33m[env var: OPENTIDE_PROXY]                                  [0m [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-version[0m             [1;32m-V[0m      [1;33m     [0m  Print the installed opentide version and exit               [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-install[0m[1;36m-completion[0m          [1;33m     [0m  Install completion; name a shell after it to pick one       [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-show[0m[1;36m-completion[0m             [1;33m     [0m  Print the script instead; name a shell after it to pick one [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-help[0m                        [1;33m     [0m  Show this message and exit.                                 [2m│[0m
+[2m╰──────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+[2m╭─[0m[2m Author [0m[2m────────────────────────────────────────────────────────────────────────────────────────[0m[2m─╮[0m
+[2m│[0m [1;36mvalidate[0m[1;36m [0m Validate objects and queries                                                           [2m│[0m
+[2m│[0m [1;36mquery   [0m[1;36m [0m Run a read-only query on platform tenants and show rows                                [2m│[0m
+[2m│[0m [1;36mlint    [0m[1;36m [0m Check file names and recommended metadata                                              [2m│[0m
+[2m│[0m [1;36minfo    [0m[1;36m [0m Show repository and platform information                                               [2m│[0m
+[2m│[0m [1;36mnew     [0m[1;36m [0m Scaffold a threat, objective or rule from its template                                 [2m│[0m
+[2m│[0m [1;36mgenerate[0m[1;36m [0m Generate schemas, templates, docs and exports                                          [2m│[0m
+[2m│[0m [1;36mrules   [0m[1;36m [0m Detection rule maintenance                                                             [2m│[0m
+[2m╰──────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+[2m╭─[0m[2m Ship [0m[2m──────────────────────────────────────────────────────────────────────────────────────────[0m[2m─╮[0m
+[2m│[0m [1;36mdeploy  [0m[1;36m [0m Deploy rules to platform tenants                                                       [2m│[0m
+[2m│[0m [1;36mshare   [0m[1;36m [0m Publish objects to intelligence platforms                                              [2m│[0m
+[2m╰──────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+[2m╭─[0m[2m Workspace [0m[2m─────────────────────────────────────────────────────────────────────────────────────[0m[2m─╮[0m
+[2m│[0m [1;36msetup   [0m[1;36m [0m Set up a detection repository and its tooling                                          [2m│[0m
+[2m│[0m [1;36mdoctor  [0m[1;36m [0m Check the installation, the workspace and its integrations                             [2m│[0m
+[2m│[0m [1;36mmigrate [0m[1;36m [0m Rewrite objects for a newer opentide model                                             [2m│[0m
+[2m│[0m [1;36mtui     [0m[1;36m [0m Browse the catalogue and its diagnostics in a terminal UI                              [2m│[0m
+[2m╰──────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+[2m╭─[0m[2m Agents and integrations [0m[2m───────────────────────────────────────────────────────────────────────[0m[2m─╮[0m
+[2m│[0m [1;36mexplain [0m[1;36m [0m Explain a diagnostic code and how to fix it                                            [2m│[0m
+[2m│[0m [1;36mcommands[0m[1;36m [0m List every command and option, for agents                                              [2m│[0m
+[2m│[0m [1;36mmcp     [0m[1;36m [0m Run the opentide MCP server for editors and agents                                     [2m│[0m
+[2m│[0m [1;36mlsp     [0m[1;36m [0m Serve the language server for editors                                                  [2m│[0m
+[2m│[0m [1;36mserve   [0m[1;36m [0m Run CLI commands in one warm process, for editors                                      [2m│[0m
+[2m╰──────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+
+[2m Examples[0m
+   [1m$ opentide setup[0m
+   [1m$ opentide validate[0m
+   [1m$ opentide --json validate[0m

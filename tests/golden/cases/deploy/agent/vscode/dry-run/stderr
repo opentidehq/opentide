@@ -1,0 +1,3 @@
+error: Platform status missing · detail: Rule 'Suspicious LSASS Access' (ff8bf67e-64dc-460d-b5df-48db643f3560) has no 'status' in its sentinel configuration block. Add a status, e.g. 'status: STAGING', then re-run 'opentide validate'. · system: sentinel · rule: Suspicious LSASS Access · uuid: ff8bf67e-64dc-460d-b5df-48db643f3560
+error: "'Suspicious LSASS Access' (ff8bf67e-64dc-460d-b5df-48db643f3560): configurations.sentinel.status is required for deployment"
+tip: add --json for machine-readable output

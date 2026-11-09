@@ -1,0 +1,15 @@
+[1m                                                                                                    [0m
+[1m [0m[1;33mUsage: [0m[1mopentide new objective [OPTIONS][0m[1m                                                           [0m[1m [0m
+[1m                                                                                                    [0m
+ Scaffold a detection objective.                                                                    
+                                                                                                    
+[2m╭─[0m[2m Options [0m[2m───────────────────────────────────────────────────────────────────────────────────────[0m[2m─╮[0m
+[2m│[0m [1;36m-[0m[1;36m-name[0m          [1;2;33m<[0m[1;33mstr[0m[1;2;33m>[0m  Object name; the filename is its slug                                     [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-threat[0m        [1;2;33m<[0m[1;33mstr[0m[1;2;33m>[0m  UUID of a threat this objective addresses (repeatable)                    [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-path[0m          [1;2;33m<[0m[1;33mstr[0m[1;2;33m>[0m  File to write, or a folder to write it in (default: the family's objects  [2m│[0m
+[2m│[0m                        folder)                                                                   [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-help[0m          [1;33m     [0m  Show this message and exit.                                               [2m│[0m
+[2m╰──────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+
+[2m Examples[0m
+   [1m$ opentide new objective --name "Detect Credential Dumping" --threat <threat-uuid>[0m

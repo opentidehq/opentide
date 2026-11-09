@@ -1,0 +1,4 @@
+✓ templates · 4 files · <SECONDS> · .opentide/templates/
+✓ schemas · 8 files · <SECONDS> · .opentide/
+warning: sentinel is not enabled in this workspace, so this block will not deploy; enable it with 'opentide setup platforms --sentinel'
+warning: metadata.author and metadata.organisation left out: no git user.name is set; no catalogue object names one
