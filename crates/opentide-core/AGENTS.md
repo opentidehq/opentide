@@ -2,8 +2,9 @@
 
 Shared, I/O-free types every engine crate uses: `LanguageId`, positions, ranges and spans
 (`ByteSpan`, `Range`, `position_to_offset`, `span_to_range`), `Diagnostic`, `Severity`,
-`CompletionItem`, the diagnostic codes (`codes`), and the declared datasets of a workspace's
-`visibility.toml` (`datasets`).
+`CompletionItem`, the diagnostic codes (`codes`), the declared datasets of a workspace's
+`visibility.toml` (`datasets`), and a bit-exact port of Python's `difflib.SequenceMatcher` and
+`get_close_matches` for "did you mean" suggestions (`difflib`).
 
 ## Place
 
@@ -16,6 +17,9 @@ crate depends on it.
 - LSP `character` counts UTF-16 code units. Ranges sent to a client go through `span_to_range` / `offset_to_position`; inbound positions through `position_to_offset`, which returns a char boundary. Do not add another converter.
 - A diagnostic code is a constant in `codes`, listed in `codes::ALL`, with a sentence in `codes::describe` and a section in `docs/cli/diagnostics.md` (`tests/diagnostics_docs.rs`). Never a second string at the call site.
 - `LanguageId` changes `as_str`, `parse` and `Display` together; a new language follows the add-language skill.
+- `difflib` returns what CPython 3.13's `difflib` returns, bit for bit: `tests/difflib_cases.rs`
+  checks every case of `tests/data/difflib_cases.json`. That file is generated, never hand-edited:
+  `python3 scripts/build/gen_difflib_cases.py` (CI's engine job runs it with `--check`).
 - Codes, severities, field paths and position rules are invariant 3 of the plan: a change is a recorded decision, not a refactor.
 
 ## Test
