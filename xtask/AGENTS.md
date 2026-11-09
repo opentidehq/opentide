@@ -69,7 +69,13 @@ of it): a command that failed early would measure nothing, so the bench stops wi
 - Peak RSS has a floor: on Linux `exec` records the high-water mark of the memory a child shared
   with xtask until then, so a child's `ru_maxrss` is at least xtask's mark at the spawn. xtask
   resets its own mark to its current RSS before each spawn (`/proc/self/clear_refs`), generates
-  the workspace in a child process, and refuses a sample at or under its mark.
+  the workspace in a child process, and refuses a sample at or under its mark, read as soon as
+  the spawn returns (`VmHWM`; `measure::spawn`, the one spawn both the commands and the language
+  server go through): a page xtask touches between the reset and the exec (the spawn's own
+  allocations) is in the child's floor too, so a mark read before the spawn let xtask's peak
+  pass for the command's now and then (more often under load and coverage instrumentation).
+  What xtask touches after the exec (the language server's reader thread and messages) is not
+  in the child's floor, so the read does not wait for the reap.
 - `XTASK_BENCH_INJECT_SLEEP_MS` is test-only: a sleep inside every measured run's timed window.
   `tests/bench.rs` proves that it makes the check fail.
 - CI: [`bench.yml`](../.github/workflows/bench.yml). Re-record the baseline only from a CI run on
