@@ -848,8 +848,10 @@ mod tests {
             render_diff("--- a\n+x\n y", Colour::Full),
             "\u{1b}[1m--- a\u{1b}[0m\n\u{1b}[32m+x\u{1b}[0m\n y\n\n"
         );
+        // Absolute on every platform (`/ws` is not on Windows).
+        let base = std::env::temp_dir();
         let change = FixedValue {
-            file_path: PathBuf::from("/ws/objects/x.yaml"),
+            file_path: base.join("ws").join("objects").join("x.yaml"),
             path: "objects/x.yaml".into(),
             line: 8,
             column: 8,
@@ -859,13 +861,14 @@ mod tests {
         assert_eq!(
             render_fixed(
                 std::slice::from_ref(&change),
-                Path::new("/ws"),
+                &base.join("ws"),
                 Colour::None
             ),
             "fixed: objects/x.yaml:8:8 'clearr' → 'clear'\n\n"
         );
+        // Outside the current directory: the workspace path.
         assert_eq!(
-            render_fixed(&[change], Path::new("/elsewhere"), Colour::None),
+            render_fixed(&[change], &base.join("elsewhere"), Colour::None),
             "fixed: objects/x.yaml:8:8 'clearr' → 'clear'\n\n"
         );
         assert_eq!(render_fixed(&[], Path::new("/"), Colour::None), "");

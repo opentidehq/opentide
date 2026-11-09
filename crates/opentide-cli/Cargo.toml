@@ -9,6 +9,10 @@ homepage.workspace = true
 authors.workspace = true
 # Published with content, once commands run on it (docs/internal/publishing.md).
 publish = false
+# The renderers' oracle data (tests/render.rs) is CI-only, like the vendor
+# oracles: the explain pages it holds quote vendor SDK names the licence scan
+# keeps out of release artifacts (scripts/engine/license-scan.sh).
+exclude = ["tests/render/", "tests/render.rs"]
 description = "The opentide command line: command tree, output modes, JSON envelope, exit codes, crash handler"
 
 [lints]
