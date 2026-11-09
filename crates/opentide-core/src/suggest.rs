@@ -352,6 +352,9 @@ mod tests {
         assert_eq!("äöüßé".len(), 10);
         assert_eq!(closest("äöüßé", ["xöüßéy"]), None);
         assert_eq!(closest("äöüßé", ["xöüßé"]), Some("xöüßé"));
+        // The same through the prepared candidates vocabularies suggest from.
+        assert_eq!(Candidates::new(["xöüßéy"]).closest("äöüßé"), None);
+        assert_eq!(Candidates::new(["xöüßé"]).closest("äöüßé"), Some(0));
         assert_eq!(fold("Straße-Nord"), "straßenord");
     }
 }
