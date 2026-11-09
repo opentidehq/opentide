@@ -1,0 +1,17 @@
+Content-Length: 75
+
+{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"capabilities":{}}}Content-Length: 52
+
+{"jsonrpc":"2.0","method":"initialized","params":{}}Content-Length: 277
+
+{"jsonrpc": "2.0", "method": "textDocument/didOpen", "params": {"textDocument": {"uri": "file:///w/.opentide/configurations/visibility.toml", "languageId": "toml", "version": 1, "text": "[[logsources]]\nname = \"SecurityEvent\"\ndescription = \"x\"\nsystem = \"sentinel\"\n"}}}Content-Length: 142
+
+{"jsonrpc": "2.0", "method": "workspace/didChangeWatchedFiles", "params": {"changes": [{"uri": "file:///w/objects/rules/r.yaml", "type": 3}]}}Content-Length: 184
+
+{"jsonrpc": "2.0", "method": "workspace/didChangeWorkspaceFolders", "params": {"event": {"added": [{"uri": "file:///v", "name": "v"}], "removed": [{"uri": "file:///w", "name": "w"}]}}}Content-Length: 83
+
+{"jsonrpc": "2.0", "id": 1, "method": "workspace/symbol", "params": {"query": "R"}}Content-Length: 49
+
+{"jsonrpc":"2.0","id":999999,"method":"shutdown"}Content-Length: 33
+
+{"jsonrpc":"2.0","method":"exit"}

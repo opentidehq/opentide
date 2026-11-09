@@ -16,7 +16,7 @@ use toml::{Table, Value};
 const UNSAFE_CRATES: &[(&str, &str)] = &[
     (
         "crates/opentide-syntax",
-        "the tree-sitter FFI: each grammar's C entry point and Language::from_raw",
+        "the tree-sitter FFI: each grammar's C entry point and LanguageFn::from_raw",
     ),
     (
         "crates/opentide-wasm",
@@ -77,6 +77,28 @@ fn the_workspace_forbids_unsafe_code() -> TestResult {
         rust.get("unsafe_code"),
         Some(&Value::String("forbid".into()))
     );
+    Ok(())
+}
+
+#[test]
+fn every_unsafe_block_is_documented_and_does_one_thing() -> TestResult {
+    // The policy docs/internal/unsafe.md states: a `// SAFETY:` comment on
+    // each block, one unsafe operation per block.
+    let workspace = workspace()?;
+    let clippy = workspace
+        .get("lints")
+        .and_then(|lints| lints.get("clippy"))
+        .ok_or("no [workspace.lints.clippy]")?;
+    for lint in [
+        "undocumented_unsafe_blocks",
+        "multiple_unsafe_ops_per_block",
+    ] {
+        assert_eq!(
+            clippy.get(lint),
+            Some(&Value::String("deny".into())),
+            "clippy::{lint} must be denied"
+        );
+    }
     Ok(())
 }
 
