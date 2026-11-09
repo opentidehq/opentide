@@ -366,6 +366,19 @@ ops = [
 ]
 
 [[kind]]
+id = "external-id-shape-migrate-state"
+codes = ["external_id_shape"]
+severity = "error"
+command = ["deploy", "migrate-state"]
+target = { family = "rule", platform = "sentinel" }
+ops = [
+    { op = "set", path = "configurations.sentinel.rule_id", value = "" },
+]
+counts = { external_id_shape = 5 }
+isolated = true
+note = "a legacy rule_id that is not a mapping of tenant to id; migrate-state reports it in `errors` (it writes shards: each kind runs on its own copy)"
+
+[[kind]]
 id = "nested-object-file"
 codes = ["nested_object_file"]
 severity = "warning"
@@ -428,6 +441,7 @@ ops = []
 baseline = false
 per_target = false
 note = "a scope that matches no file; any workspace"
+counts = { scope_no_match = 1 }
 
 [[kind]]
 id = "yaml-parse-rule"
@@ -607,6 +621,7 @@ ops = [
 per_target = false
 gap = "KG-12"
 note = "deployment.toml is one file"
+counts = { promotion_target_unknown = 1 }
 
 [[kind]]
 id = "config-unknown-key-deployment"
@@ -638,6 +653,7 @@ per_target = false
 isolated = true
 gap = "KG-06"
 note = "every command stops before validating; the finding is in the failure's diagnostics"
+counts = { retired_configuration_file = 1 }
 
 [[kind]]
 id = "config-parse-visibility"
@@ -652,6 +668,7 @@ per_target = false
 isolated = true
 gap = "KG-06"
 note = "the run stops; the finding is in the failure's diagnostics"
+counts = { config_parse = 1 }
 
 [[kind]]
 id = "gap-extra-configuration-file"
@@ -677,6 +694,7 @@ ops = [
 ]
 per_target = false
 note = "five log sources in the one visibility.toml"
+counts = { asset_unknown = 5 }
 
 [[kind]]
 id = "sharing-api-key-literal"
@@ -690,6 +708,7 @@ ops = [
 ]
 per_target = false
 isolated = true
+counts = { api_key_literal = 5 }
 
 [[kind]]
 id = "sharing-duplicate-name"
@@ -703,6 +722,7 @@ ops = [
 ]
 per_target = false
 isolated = true
+counts = { duplicate_name = 5 }
 
 [[kind]]
 id = "sharing-name-invalid"
@@ -716,6 +736,7 @@ ops = [
 ]
 per_target = false
 isolated = true
+counts = { name_invalid = 5 }
 
 [[kind]]
 id = "sharing-max-tlp-unknown"
@@ -729,6 +750,7 @@ ops = [
 ]
 per_target = false
 isolated = true
+counts = { max_tlp_unknown = 5 }
 
 [[kind]]
 id = "sharing-url-invalid"
@@ -742,6 +764,7 @@ ops = [
 ]
 per_target = false
 isolated = true
+counts = { url_invalid = 5 }
 
 [[kind]]
 id = "sharing-invalid-value"
@@ -755,6 +778,7 @@ ops = [
 ]
 per_target = false
 isolated = true
+counts = { invalid_value = 5 }
 
 [[kind]]
 id = "sharing-object-type-unknown"
@@ -768,6 +792,7 @@ ops = [
 ]
 per_target = false
 isolated = true
+counts = { object_type_unknown = 5 }
 
 [[kind]]
 id = "sharing-organisation-uuid-invalid"
@@ -781,6 +806,7 @@ ops = [
 ]
 per_target = false
 isolated = true
+counts = { organisation_uuid_invalid = 5 }
 
 [[kind]]
 id = "sharing-rule-status-unknown"
@@ -794,6 +820,7 @@ ops = [
 ]
 per_target = false
 isolated = true
+counts = { rule_status_unknown = 5 }
 
 [[kind]]
 id = "sharing-unknown-key"
@@ -807,6 +834,7 @@ ops = [
 ]
 per_target = false
 isolated = true
+counts = { unknown_key = 5 }
 
 [[kind]]
 id = "sharing-missing-field"
@@ -820,6 +848,7 @@ ops = [
 ]
 per_target = false
 isolated = true
+counts = { missing_field = 5 }
 
 [[kind]]
 id = "sharing-unknown-connector"
@@ -833,6 +862,7 @@ ops = [
 ]
 per_target = false
 isolated = true
+counts = { unknown_connector = 1 }
 
 [[kind]]
 id = "gap-sharing-dollar-variable"
@@ -848,6 +878,7 @@ per_target = false
 isolated = true
 gap = "KG-13"
 note = "$VAR, the form platform tenants use, counts as a literal key in sharing.toml; ${VAR} does not"
+counts = { api_key_literal = 5 }
 
 [[kind]]
 id = "sharing-config-parse"
@@ -861,6 +892,7 @@ ops = [
 ]
 per_target = false
 isolated = true
+counts = { config_parse = 1 }
 
 [[kind]]
 id = "sharing-directory"
@@ -874,6 +906,7 @@ ops = [
 ]
 per_target = false
 isolated = true
+counts = { sharing_directory = 1 }
 
 [[kind]]
 id = "lint-filename-mismatch"
@@ -2064,8 +2097,9 @@ ops = [
     { op = "copy_path", path = "configurations.sysdig.lists.0.items.0", from_path = "configurations.sysdig.lists.0.name" },
 ]
 
-# Codes in scope that no workspace can produce through `validate` or `lint`,
-# each with the evidence (where it is emitted, and why the CLI never reports it).
+# Codes in scope no fault kind can produce: no workspace mutation makes the
+# commands the runner uses offline (validate, lint, deploy migrate-state)
+# report them. Each has the evidence; invalid_cve needs the network.
 
 [[unreachable]]
 code = "cbc_unknown_field"
@@ -2090,10 +2124,6 @@ reason = "needs a `tide.meta.deprecation` marker in a metaschema; no field of 0.
 [[unreachable]]
 code = "engine_unavailable"
 reason = "raised only when opentide._native fails to import (a damaged installation), not by any workspace"
-
-[[unreachable]]
-code = "external_id_shape"
-reason = "raised by deploy and deploy migrate-state; validate wraps a bad id inside a state shard into deployment_state_shape"
 
 [[unreachable]]
 code = "filename_slug"

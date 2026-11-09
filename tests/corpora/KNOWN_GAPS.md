@@ -24,7 +24,7 @@ A kind with `codes = []` pins a silence: the oracle reports nothing for that fau
 | KG-11 | A rule block naming an undeclared tenant | `gap-unknown-block-tenant` |
 | KG-12 | Configuration findings carry no file or position | `config-*` kinds (`per_target = false`) |
 | KG-13 | `sharing.toml` treats `$VAR` as a literal key | `gap-sharing-dollar-variable` |
-| KG-14 | An unknown key in `paths.toml` crashes `validate` | none: the run fails with `internal` (below) |
+| KG-14 | An unknown key in `paths.toml` crashes `validate` | none: the run's only result is `failure.code: internal` (below) |
 | KG-15 | The rule-level `status` is never checked | `gap-rule-status-unchecked` |
 
 ## KG-01: Sentinel `frequency`
@@ -156,8 +156,11 @@ in both places.
 
 An unknown key in `paths.toml` makes `validate` fail with `failure.code: internal` (a
 ConfigurationError and a crash log), where the same mistake in another configuration file is a
-clean `unknown_key` finding. No kind: the runner needs a JSON report to compare, and the crash
-gives none. Options: an `unknown_key` finding.
+clean `unknown_key` finding. The oracle prints a JSON envelope (`exit_code: 1`, `failure.code:
+internal`) with no `report`, `findings` or `diagnostics`, so there is no finding for a kind to
+expect; the runner counts such a run as one that could not run. Reproduce: add `[paths]` with
+`colour = "blue"` to a generated workspace's `paths.toml` and run `opentide --json --repo DIR
+validate`. Options: an `unknown_key` finding.
 
 ## KG-15: The rule-level `status` is never checked
 
