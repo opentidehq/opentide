@@ -17,7 +17,7 @@ foundation, tier 2: depends on opentide-core, -syntax, -highlight. Used by opent
 - CQL findings are `opentide_core::Diagnostic`s with `cql_*` codes from `opentide_core::codes`; no error enum of its own.
 - Errors are what LogScale refuses to compile; a field, saved search, lookup file or repository is never reported unknown: they live in the tenant.
 - A correlation rule (`Context::CORRELATION_RULE`) adds `cql_correlate_aggregate`; a hunt or a `.cql` file does not.
-- opentide's `validate` and `lint` do not report CQL until CrowdStrike is in `OFFLINE_QUERY_LANGUAGES` (`src/opentide/validation/query_platforms.py`): only the editor and `opentide tui` show these findings.
+- CrowdStrike is in `OFFLINE_QUERY_LANGUAGES` (`src/opentide/validation/query_platforms.py`), so `opentide validate`, `opentide validate query --platform crowdstrike`, `opentide lint` and MCP `validate_query` report the `cql_*` codes offline, as the editor and `opentide tui` do. `--live` stays `supported: false` for CrowdStrike: there is no live validation.
 
 ## Test
 
