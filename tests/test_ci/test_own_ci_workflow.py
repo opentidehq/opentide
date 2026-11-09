@@ -241,12 +241,12 @@ LOCAL_CI = ROOT / "scripts" / "ci-local.sh"
 
 
 def _package_and_scan(text: str) -> tuple[set[str], str]:
-    """The crates a ``cargo package`` command excludes, and the licence scan command."""
+    """The crates a ``cargo package`` command excludes, and the licence scan commands."""
     packages = [line for line in text.splitlines() if "cargo package" in line]
     scans = [line for line in text.splitlines() if "license-scan.sh" in line and "bash" in line]
     assert len(packages) == 1, packages
-    assert len(scans) == 1, scans
-    return set(re.findall(r"--exclude\s+(\S+)", packages[0])), scans[0]
+    assert scans, text
+    return set(re.findall(r"--exclude\s+(\S+)", packages[0])), " ".join(scans)
 
 
 def _engine_package_text(workflow: dict[str, Any]) -> str:
