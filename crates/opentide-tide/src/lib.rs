@@ -67,7 +67,7 @@ const THREAT_TEMPLATE: &str = include_str!(concat!(
 ));
 
 /// Map a `configurations` field path to an injected query language.
-/// CrowdStrike is unsupported — never fake validation. Elastic is not a
+/// CrowdStrike Next-Gen SIEM correlation rules are CQL. Elastic is not a
 /// path: its language comes from the block's `type` and `language`
 /// ([`elastic_query_language`]). A hunt's query
 /// (`response.procedure.searches.<n>.query`) takes the language its `system`
@@ -79,7 +79,7 @@ pub fn language_for_field_path(path: &[&str]) -> Option<LanguageId> {
         ["configurations", "splunk", "query" | "search"] => Some(LanguageId::Spl),
         ["configurations", "carbon_black_cloud", "query"] => Some(LanguageId::Lucene),
         ["configurations", "sysdig", "condition"] => Some(LanguageId::Falco),
-        ["configurations", "crowdstrike", ..] => None,
+        ["configurations", "crowdstrike", "query"] => Some(LanguageId::Cql),
         _ => None,
     }
 }
@@ -772,20 +772,6 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
         }
     }
 
-    // CrowdStrike: never fake validation
-    if object
-        .configurations
-        .as_ref()
-        .and_then(|c| c.get("crowdstrike"))
-        .is_some()
-    {
-        diagnostics.push(Diagnostic::warning(
-            codes::CROWDSTRIKE_UNSUPPORTED,
-            "CrowdStrike query validation is unsupported; not faked",
-            key_range(input.source, "crowdstrike"),
-        ));
-    }
-
     // Filenames, as `[filenames]` in lint.toml asks (#214).
     if lint.filenames_enabled {
         diagnose_filename(
@@ -985,6 +971,17 @@ fn analyze_injections(
                 } else {
                     opentide_falco::analyze_with(&inj.inner, &ctx)
                 };
+                (r.diagnostics, r.tokens)
+            }
+            LanguageId::Cql => {
+                // The rule block is a Next-Gen SIEM correlation rule; a hunt
+                // search is not.
+                let ctx = if inj.field_path.first().map(String::as_str) == Some("configurations") {
+                    opentide_cql::Context::CORRELATION_RULE
+                } else {
+                    opentide_cql::Context::default()
+                };
+                let r = opentide_cql::analyze_with(&inj.inner, &ctx);
                 (r.diagnostics, r.tokens)
             }
             LanguageId::TideYaml | LanguageId::Config => (Vec::new(), Vec::new()),
@@ -2765,6 +2762,10 @@ threat:
         );
         assert_eq!(
             language_for_field_path(&["configurations", "crowdstrike", "query"]),
+            Some(LanguageId::Cql)
+        );
+        assert_eq!(
+            language_for_field_path(&["configurations", "crowdstrike", "details"]),
             None
         );
         assert_eq!(
@@ -3300,10 +3301,13 @@ configurations:
         );
         let purpose_keys = token_text(src, &r.tokens, "tide.property");
         assert!(purpose_keys.contains(&"purpose"), "{purpose_keys:?}");
+        // The CrowdStrike block's query is CQL: `index` is a field.
         assert!(
-            r.diagnostics
+            r.tokens
                 .iter()
-                .any(|d| d.code == codes::CROWDSTRIKE_UNSUPPORTED)
+                .any(|t| t.capture == "property" && &src[t.span.start..t.span.end] == "index"),
+            "{:?}",
+            r.tokens
         );
     }
 
@@ -3358,18 +3362,52 @@ threat:
     }
 
     #[test]
-    fn crowdstrike_never_faked() {
-        let src = "name: X\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000099\n  schema: rule::1.0\nconfigurations:\n  crowdstrike:\n    query: index=main\n";
-        let r = analyze(AnalyzeInput {
-            path: "objects/rules/x.yaml",
-            source: src,
-            workspace: &[],
-            elastic_tenants: &[],
-        });
+    fn crowdstrike_query_is_cql() {
+        let rule = |query: &str| {
+            format!(
+                "name: X\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000099\n  schema: rule::1.0\nconfigurations:\n  crowdstrike:\n    query: |\n      {query}\n"
+            )
+        };
+        let found = |src: &str| {
+            analyze(AnalyzeInput {
+                path: "objects/rules/x.yaml",
+                source: src,
+                workspace: &[],
+                elastic_tenants: &[],
+            })
+            .diagnostics
+            .into_iter()
+            .filter(|d| d.code.starts_with("cql_"))
+            .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            found(&rule("#event_simpleName=ProcessRollup2 | groupBy(aid)")),
+            vec![]
+        );
+        let src = rule("#event_simpleName=ProcessRollup2 | groupBi(aid)");
+        let d = found(&src);
+        assert_eq!(d.len(), 1, "{d:#?}");
+        assert_eq!(d[0].code, codes::CQL_UNKNOWN_FUNCTION);
+        assert_eq!(
+            d[0].field_path.as_deref(),
+            Some(
+                &[
+                    "configurations".to_string(),
+                    "crowdstrike".into(),
+                    "query".into()
+                ][..]
+            )
+        );
+        // Placed on the YAML, where `groupBi` is written.
+        let start = opentide_core::position_to_offset(&src, d[0].range.start);
+        assert!(src[start..].starts_with("groupBi"), "{:?}", &src[start..]);
+        // The rule block is a correlation rule: correlate() takes no other aggregate.
+        let d = found(&rule(
+            "correlate(A: { a=1 }, B: { b=1 | aid <=> A.aid }, within=5m) | count()",
+        ));
         assert!(
-            r.diagnostics
-                .iter()
-                .any(|d| d.code == codes::CROWDSTRIKE_UNSUPPORTED)
+            d.iter().any(|d| d.code == codes::CQL_CORRELATE_AGGREGATE),
+            "{d:#?}"
         );
     }
 

@@ -31,16 +31,16 @@ path = "ws/.opentide/lsp/catalogs/generated/fields.json"
 change = "created"
 kind = "file"
 mode = "0644"
-size = 944449
-blob = "c58b89e57dffcaef3e764a8508c9467da1d6c0cb4f7e862be6e8207609811451"
+size = 999657
+blob = "49e1a8b3afaceee0f2ec2573a5c8e8d537603c9f8543c188fe23bdf203250969"
 
 [[files]]
 path = "ws/.opentide/schemas/objective.1.0.schema.json"
 change = "created"
 kind = "file"
 mode = "0644"
-size = 3947451
-blob = "f93e9a7e11165cd6251bc3865cb46c81015eae088713423cec436cf5884fde07"
+size = 3948826
+blob = "cdc8edb0c91393081b74541c2c35b2d39269643a980f0dc8157629a2e197cb57"
 
 [[files]]
 path = "ws/.opentide/schemas/opentide.schema.json"
@@ -70,8 +70,8 @@ path = "ws/.opentide/schemas/threat.1.0.schema.json"
 change = "created"
 kind = "file"
 mode = "0644"
-size = 7412867
-blob = "b4b05b41b22ede0595ca1030040c8b39507861086d4ace8d751a36ab16df3cf1"
+size = 7523283
+blob = "493e6868ec1d8ea492acbc21ad9676819ec21c6852bf1df6fc11a3256bda653c"
 
 [[files]]
 path = "ws/.opentide/schemas/visibility.1.0.schema.json"
@@ -182,4 +182,4 @@ path = "ws/Objects/Detection Objectives/detect-credential-dumping.yaml"
 change = "created"
 kind = "file"
 mode = "0644"
-size = 1414
+size = 1411

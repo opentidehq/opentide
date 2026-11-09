@@ -442,3 +442,26 @@ fn falco_corpus_gate() {
         ],
     });
 }
+
+#[test]
+fn cql_corpus_gate() {
+    check_gate(&ElasticGate {
+        language: LanguageId::Cql,
+        id: "cql",
+        // Keywords and leaf tokens: every fixture that tags a production contains
+        // them, so they need no fixture of their own.
+        structural: &[
+            "source_file",
+            "and",
+            "or",
+            "not",
+            "boolean",
+            "number",
+            "tag",
+            "regex_pattern",
+            "regex_flags",
+            "saved_query_name",
+            "argument_list",
+        ],
+    });
+}

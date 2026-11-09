@@ -8,6 +8,7 @@
     "OBJECTS",
     "EDITORS",
     "FALCO",
+    "CQL",
     "highlight-debug",
     "kql",
     "spl"

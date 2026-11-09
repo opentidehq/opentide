@@ -1,4 +1,4 @@
-[?25l<LIVE>[?25h[1A[2K[1;31m✗[0m 1 error in 1 file · 1 fixable with --fix · 12 objects checked · 7 queries · <SECONDS>
+[?25l<LIVE>[1;36m<SPIN>[0m Validating objects</LIVE>[?25h[1A[2K[1;31m✗[0m 1 error in 1 file · 1 fixable with --fix · 12 objects checked · 7 queries · <SECONDS>
 [1;36m→[0m [1mopentide validate --fix[0m[2m · [0m[2mapply 1 safe fix[0m
 [1;36m→[0m [1mopentide explain vocab_unknown[0m[2m · [0m[2mhow to fix it[0m
 [1;36m→[0m [1mopentide validate[0m[2m · [0m[2mcheck again[0m

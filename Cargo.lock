@@ -623,10 +623,11 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
 name = "opentide-analysis"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "insta",
  "opentide-core",
+ "opentide-cql",
  "opentide-ecs",
  "opentide-eql",
  "opentide-esql",
@@ -646,7 +647,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-compare"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "regex",
  "serde",
@@ -656,7 +657,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-core"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "serde",
  "thiserror",
@@ -664,8 +665,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "opentide-cql"
+version = "0.12.0"
+dependencies = [
+ "opentide-core",
+ "opentide-highlight",
+ "opentide-syntax",
+ "serde",
+ "serde_json",
+ "toml 0.8.23",
+ "tree-sitter",
+]
+
+[[package]]
 name = "opentide-ecs"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "opentide-core",
  "serde",
@@ -674,7 +688,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-eql"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "opentide-core",
  "opentide-ecs",
@@ -688,7 +702,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-esql"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "opentide-core",
  "opentide-ecs",
@@ -702,7 +716,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-falco"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "opentide-core",
  "opentide-highlight",
@@ -716,7 +730,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-highlight"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "opentide-core",
  "regex",
@@ -728,7 +742,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-kql"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "opentide-core",
  "opentide-highlight",
@@ -741,7 +755,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-kuery"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "opentide-core",
  "opentide-ecs",
@@ -753,7 +767,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-lsp"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -775,7 +789,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-lucene"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "opentide-core",
  "opentide-ecs",
@@ -799,7 +813,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-schema"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "garde",
  "insta",
@@ -815,7 +829,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-spl"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "opentide-core",
  "opentide-highlight",
@@ -827,7 +841,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-syntax"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "cc",
  "opentide-core",
@@ -838,9 +852,10 @@ dependencies = [
 
 [[package]]
 name = "opentide-tide"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "opentide-core",
+ "opentide-cql",
  "opentide-ecs",
  "opentide-eql",
  "opentide-esql",
@@ -860,7 +875,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-wasm"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "js-sys",
  "opentide-analysis",
@@ -1618,6 +1633,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "wait4"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ce2d6eb47d02e051093f3c8106983ed385e5c07700370f14dde91d14864cf12f"
+dependencies = [
+ "libc",
+ "windows-sys",
+]
+
+[[package]]
 name = "walkdir"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1735,6 +1760,7 @@ dependencies = [
  "tempfile",
  "toml 0.8.23",
  "trycmd",
+ "wait4",
 ]
 
 [[package]]

@@ -14,7 +14,7 @@ xtask --`): the repository's Rust tooling, as a workspace member that is never p
 | `golden record [--check-determinism]`, `check`, `diff`, `lock`, `coverage` | Records what the frozen Python CLI (the oracle, `tests/golden/ORACLE`) does for every case of `tests/golden/cases.toml`, and checks an engine against the recordings: [`tests/golden/README.md`](../tests/golden/README.md) |
 | `golden check --engine compare [--report FILE]` | Runs every case whose command has a Rust implementation (`opentide.cli.engines.RUST_COMMANDS`) through this repository's CLI with `OPENTIDE_ENGINE=rust`, and compares it with the recording through `opentide-compare` and `tests/golden/APPROVED_DIFFS.toml`; a stale ledger entry fails it (UC-0.7, #805; CI job `Golden compare`) |
 | `compare --oracle DIR --candidate DIR --command PATH`, `compare --check-ledger` | Two runs on disk through the comparator; the ledger's schema and changelog references (`src/compare.rs`, `crates/opentide-compare/AGENTS.md`) |
-| `bench` | Not implemented: UC-0.8 (#806) runs the benchmarks against their budgets with it |
+| `bench [--engine python\|rust] [--scale 1\|10] [--json]`, `bench --check BUDGETS BENCH.json [--previous FILE]` | Runs the plan section 11 benchmarks on the heavy workspace and holds the result to [`tests/bench/budgets.toml`](../tests/bench/budgets.toml) and the last `development` result (below) |
 | `help` | The usage |
 
 Exit status: 0 passed; 1 a check failed, or the command is not implemented yet (so no script
@@ -33,13 +33,55 @@ tier, a workspace member the table does not place, a placed crate that is not a 
 crate placed twice all fail. To add a crate, place it in the table in the same change and say why;
 moving a crate between layers is a design decision for the maintainer, not a fix for a red check.
 
+## bench
+
+`cargo xtask bench` (`src/bench/`) measures each command of `SCENARIOS` (`src/bench/mod.rs`) as
+fresh processes: one warm-up, then `--runs` (5) measured runs, each in a fresh copy of the
+workspace, with a home, environment and dead proxies of its own (`src/bench/measure.rs`). Time is
+wall time around spawn and `wait4(2)`; memory is the peak RSS `wait4` reports (the `wait4` crate,
+since the workspace forbids `unsafe`); a report holds the medians and every sample. A run counts
+only when the command ended as it should (exit code, one JSON document, what the scenario expects
+of it): a command that failed early would measure nothing, so the bench stops with status 2.
+
+- `--engine python` runs the oracle, opentide 0.23.0 from its PyPI wheel, installed with uv into
+  `<target>/xtask-bench/oracle` from [`tests/bench/oracle-requirements.txt`](../tests/bench/oracle-requirements.txt)
+  (every file's SHA-256 pinned) on a uv-managed CPython (`ORACLE_PYTHON`), bytecode compiled at
+  install. `--engine rust` builds `opentide-lsp --release` for the language server and reports
+  "no Rust yet" for every command without a Rust implementation.
+- The language server's number is spawn to the first `publishDiagnostics` for the opened rule
+  (`src/bench/lsp.rs`), with the workspace as its root.
+- `--check` (`src/bench/check.rs`) fails a median or peak RSS more than `policy.regression` (10%)
+  over the last `development` result (`--previous`) or over the oracle baseline in the budgets
+  (`python`), and a rust result over the absolute plan section 11 target (or, where a
+  `target_waiver` names the work item that will meet it, more than 10% over the Rust baseline);
+  differences within the noise floor (20 ms, 2 MiB) never fail. With `--require-reference`
+  (CI), a measured command that no baseline, target or comparable previous result applies to
+  fails, and so does a report without a CPU model. It prints, and with `--summary` appends, a
+  Markdown table per command.
+- Comparability: a report is held to the oracle baseline only with the same oracle, workspace and
+  run count as recorded in the budgets. Times are kept per CPU model (`[baseline]` and
+  `[[cpu_baseline]]`: GitHub's runners of one class span CPUs up to 1.8x apart); on a CPU with
+  no entry, times get the slowest recorded + `cross_cpu_regression` (20%). RSS keeps 10%. The
+  workspace digest in the report must equal `[baseline] digest`. A previous result counts only with the same engine,
+  oracle, workspace, run count and CPU model; GitHub's `ubuntu-24.04` runners come on several
+  CPUs, so CI looks for the newest successful development run on the same CPU.
+- Peak RSS has a floor: on Linux `exec` records the high-water mark of the memory a child shared
+  with xtask until then, so a child's `ru_maxrss` is at least xtask's mark at the spawn. xtask
+  resets its own mark to its current RSS before each spawn (`/proc/self/clear_refs`), generates
+  the workspace in a child process, and refuses a sample at or under its mark.
+- `XTASK_BENCH_INJECT_SLEEP_MS` is test-only: a sleep inside every measured run's timed window.
+  `tests/bench.rs` proves that it makes the check fail.
+- CI: [`bench.yml`](../.github/workflows/bench.yml). Re-record the baseline only from a CI run on
+  its runner class, in a change of its own.
+
 ## Invariants
 
 - The library (`src/lib.rs`, `src/layers.rs`) computes; `src/main.rs` reads files, runs cargo and
   prints. `src/corpus/` follows the same split inside its module: `generate`, `yaml`, `rng`,
   `workspace`, `faults` and `coverage` compute; `corpus/cli.rs` writes workspaces, runs the oracle
-  and prints (main.rs only dispatches to it). Tests drive the library with synthetic metadata, no
-  workspace needed.
+  and prints (main.rs only dispatches to it). `bench` keeps the same split inside `src/bench/`:
+  `report` and `check` compute, the other modules run processes. Tests drive the library with
+  synthetic metadata, no workspace needed.
 - The corpus generator's output is a function of its options alone (own PRNG and YAML emitter, no
   clock, environment or file); `tests/corpus_generate.rs` records its digests.
 - `golden` is its own module, `src/golden/`, a library the comparator (UC-0.7) reuses: the case
@@ -83,6 +125,8 @@ cargo xtask check-layers
   The oracle runs only in `cargo xtask corpus faults --check` (ci.yml's `corpus` job).
 - `tests/corpus_runner.rs`: the runner's pass/fail guards (a mismatch, a dirty base, a silence
   that checked nothing, `clean`, `coverage --check`) through a fake oracle script (Unix only).
+- `tests/bench.rs`: `bench` end to end on a stand-in `opentide`: a measured run, then an injected
+  slowdown that `--check` must fail; `tests/cmd/bench.trycmd` holds `--check` to fixed reports.
 - `tests/lint_policy.rs`: every member inherits `[workspace.lints]`, except the crates allowed
   `unsafe` (`UNSAFE_CRATES`), whose copies must equal the workspace table with
   `unsafe_code = "deny"`.

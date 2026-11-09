@@ -492,6 +492,7 @@ mod comparator {
             dates: vec!["2026-11-08".to_owned()],
             recent_dates: Vec::new(),
             git_version: None,
+            known_uuids: std::collections::BTreeSet::new(),
         };
         let report = opentide_compare::compare_normalised(
             Case {

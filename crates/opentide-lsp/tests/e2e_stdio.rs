@@ -669,6 +669,133 @@ configurations:
     );
 }
 
+#[test]
+fn cql_over_stdio() {
+    let mut lsp = Lsp::spawn();
+    lsp.request("initialize", json!({ "capabilities": {} }));
+    lsp.notify("initialized", json!({}));
+    // The `.cql` suffix selects the engine when the client reports no known id.
+    let broken = "#event_simpleName=ProcessRollup2\n| groupBi([aid], function=count())\n";
+    let codes = published_codes(&mut lsp, "file:///tmp/r.cql", "plaintext", broken);
+    assert_eq!(codes, vec!["cql_unknown_function"], "raw .cql file");
+    // The near match comes back as a quick fix on `groupBi`.
+    let actions = lsp.request(
+        "textDocument/codeAction",
+        json!({
+            "textDocument": { "uri": "file:///tmp/r.cql" },
+            "range": {
+                "start": { "line": 1, "character": 2 },
+                "end": { "line": 1, "character": 9 }
+            },
+            "context": { "diagnostics": [] }
+        }),
+    );
+    let fix = &actions["result"][0];
+    assert_eq!(fix["title"], "Apply suggestion: groupBy", "{actions}");
+    assert_eq!(
+        fix["edit"]["changes"]["file:///tmp/r.cql"][0]["newText"], "groupBy",
+        "{actions}"
+    );
+
+    // The `cql` id, on a query that is clean.
+    let uri = "file:///tmp/h.cql";
+    let text = "#event_simpleName=ProcessRollup2 ImageFileName=/\\\\whoami\\.exe$/i\n| groupBy([aid, ComputerName], function=count())\n";
+    let codes = published_codes(&mut lsp, uri, "cql", text);
+    assert!(codes.is_empty(), "{codes:?}");
+    let at = |line: u32, character: usize| {
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": line, "character": character }
+        })
+    };
+    let hover = lsp.request("textDocument/hover", at(1, 4));
+    let value = hover["result"]["contents"]["value"]
+        .as_str()
+        .unwrap_or_default();
+    assert!(
+        value.contains("groupBy(field, [function], [limit])")
+            && value.contains("library.humio.com"),
+        "{hover}"
+    );
+    // Inside `groupBy([aid, ...`: the omittable `field` parameter is active.
+    let sig = lsp.request("textDocument/signatureHelp", at(1, 11));
+    assert_eq!(
+        sig["result"]["signatures"][0]["label"], "groupBy(field, [function], [limit])",
+        "{sig}"
+    );
+    assert_eq!(sig["result"]["activeParameter"], 0, "{sig}");
+    let tokens = lsp.request(
+        "textDocument/semanticTokens/full",
+        json!({ "textDocument": { "uri": uri } }),
+    );
+    let data = tokens["result"]["data"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    assert!(data.len() >= 20, "semantic tokens for .cql: {tokens}");
+
+    // Completion: Falcon events after `#event_simpleName=`, replacing the
+    // prefix typed; the parameters not given yet inside a call.
+    let text = "#event_simpleName=Process";
+    published_codes(&mut lsp, "file:///tmp/c1.cql", "cql", text);
+    let items = lsp.request(
+        "textDocument/completion",
+        json!({
+            "textDocument": { "uri": "file:///tmp/c1.cql" },
+            "position": { "line": 0, "character": text.len() }
+        }),
+    );
+    let item = items["result"]
+        .as_array()
+        .and_then(|a| a.iter().find(|i| i["label"] == "ProcessRollup2"))
+        .cloned()
+        .unwrap_or_else(|| panic!("Falcon event completion: {items}"));
+    assert_eq!(
+        item["textEdit"]["range"]["start"]["character"],
+        "#event_simpleName=".len(),
+        "{item}"
+    );
+    let text = "groupBy([aid], ";
+    published_codes(&mut lsp, "file:///tmp/c2.cql", "cql", text);
+    let items = lsp.request(
+        "textDocument/completion",
+        json!({
+            "textDocument": { "uri": "file:///tmp/c2.cql" },
+            "position": { "line": 0, "character": text.len() }
+        }),
+    );
+    let l = labels(items["result"].as_array().map_or(&[][..], |a| a.as_slice()));
+    assert!(
+        l.contains(&"function".to_string()) && l.contains(&"limit".to_string()),
+        "{l:?}"
+    );
+    assert!(!l.contains(&"field".to_string()), "`field` is given: {l:?}");
+
+    // configurations.crowdstrike.query in a Tide rule is CQL.
+    let rule = "\
+name: CrowdStrike whoami
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000081
+  schema: rule::1.0
+configurations:
+  crowdstrike:
+    status: STAGING
+    query: |
+      #event_simpleName=ProcessRollup2
+      | groupBi([aid], function=count())
+";
+    let codes = published_codes(
+        &mut lsp,
+        "file:///tmp/objects/rules/crowdstrike-whoami.yaml",
+        "yaml",
+        rule,
+    );
+    assert!(
+        codes.iter().any(|c| c == "cql_unknown_function"),
+        "the CrowdStrike block's query is analysed: {codes:?}"
+    );
+}
+
 /// A Sysdig rule whose `condition` (line 7) and `output` (line 8) are given.
 fn sysdig_rule(condition: &str, output: &str) -> String {
     format!(

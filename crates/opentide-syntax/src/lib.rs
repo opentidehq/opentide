@@ -30,6 +30,7 @@ unsafe extern "C" {
     fn tree_sitter_opentide_kuery() -> *const ();
     fn tree_sitter_opentide_lucene() -> *const ();
     fn tree_sitter_opentide_falco() -> *const ();
+    fn tree_sitter_opentide_cql() -> *const ();
 }
 
 // `LanguageFn::from_raw` requires a language function generated from a
@@ -61,6 +62,9 @@ const LUCENE: LanguageFn = unsafe { LanguageFn::from_raw(tree_sitter_opentide_lu
 #[expect(unsafe_code, reason = "wraps a grammar's C entry point")]
 // SAFETY: a tree-sitter-cli generated language function (see above).
 const FALCO: LanguageFn = unsafe { LanguageFn::from_raw(tree_sitter_opentide_falco) };
+#[expect(unsafe_code, reason = "wraps a grammar's C entry point")]
+// SAFETY: a tree-sitter-cli generated language function (see above).
+const CQL: LanguageFn = unsafe { LanguageFn::from_raw(tree_sitter_opentide_cql) };
 
 /// The tree-sitter language of a query language, or `None` for Tide YAML and
 /// configuration TOML, which are not parsed by tree-sitter.
@@ -73,6 +77,7 @@ pub fn language(id: LanguageId) -> Option<Language> {
         LanguageId::Kuery => KUERY,
         LanguageId::Lucene => LUCENE,
         LanguageId::Falco => FALCO,
+        LanguageId::Cql => CQL,
         // Tide YAML has its own parser; configuration TOML is the host's.
         LanguageId::TideYaml | LanguageId::Config => return None,
     };
@@ -228,12 +233,23 @@ pub fn query_captures(
     scm: &str,
 ) -> Result<Vec<(ByteSpan, String)>, String> {
     let language = language(id).ok_or_else(|| format!("no tree-sitter grammar for {id}"))?;
-    let query = compiled_query(id, &language, scm)?;
     let mut parser = Parser::new();
     parser.set_language(&language).map_err(|e| e.to_string())?;
     let tree = parser
         .parse(source, None)
         .ok_or_else(|| "parse failed".to_string())?;
+    query_captures_in(id, &tree, source, scm)
+}
+
+/// [`query_captures`] on a tree the caller already parsed from `source`.
+pub fn query_captures_in(
+    id: LanguageId,
+    tree: &Tree,
+    source: &str,
+    scm: &str,
+) -> Result<Vec<(ByteSpan, String)>, String> {
+    let language = language(id).ok_or_else(|| format!("no tree-sitter grammar for {id}"))?;
+    let query = compiled_query(id, &language, scm)?;
     let mut cursor = QueryCursor::new();
     // `captures` is the highlighting iterator: earliest start wins, then
     // earliest pattern in the .scm file. Nested overlapping spans are

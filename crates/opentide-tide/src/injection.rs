@@ -323,13 +323,32 @@ configurations:
         query: SecurityEvent | take 1
       - purpose: no system
         query: SecurityEvent | take 1
-      - system: crowdstrike
-        query: anything
       - system: elastic
         query: process.name:cmd.exe
 "
         );
         assert_eq!(queries(&source), vec![]);
+    }
+
+    #[test]
+    fn a_crowdstrike_hunt_is_cql() {
+        let source = format!(
+            "{HEAD}response:
+  procedure:
+    searches:
+      - system: crowdstrike
+        query: '#event_simpleName=DnsRequest'
+"
+        );
+        assert_eq!(
+            queries(&source),
+            vec![row(
+                "response.procedure.searches.0.query",
+                LanguageId::Cql,
+                "crowdstrike",
+                "#event_simpleName=DnsRequest"
+            )]
+        );
     }
 
     #[test]

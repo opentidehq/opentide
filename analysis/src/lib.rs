@@ -482,6 +482,8 @@ fn run_of(
         dates,
         recent_dates,
         git_version: None,
+        // The workspace's texts (`known`) seed the UUIDs that are not fresh.
+        known_uuids: std::collections::BTreeSet::new(),
     };
     (run, volatile)
 }

@@ -106,9 +106,13 @@ def _rule_name(code: str) -> str:
 def sarif_rule(code: str) -> dict[str, Any]:
     """A ``reportingDescriptor`` built from the ``opentide explain`` page for *code*."""
     from opentide.cli.services.explain import load_page
+    from opentide.cli.services.retired_codes import RETIRED_CODES
 
     page = load_page(code)
     rule: dict[str, Any] = {"id": code, "name": _rule_name(code), "helpUri": explain_url(code)}
+    if code in RETIRED_CODES:
+        # Kept so a baseline or suppression that names it still resolves (plan §3).
+        rule["properties"] = {"tags": ["retired"]}
     if page is None:
         return rule
     rule["shortDescription"] = {"text": page.summary}
@@ -164,7 +168,10 @@ def _sarif_fixes(diagnostic: Diagnostic, path: str) -> list[dict[str, Any]]:
 
 
 def rule_codes() -> list[str]:
-    """Every code validation and lint can emit, and every code with an explain page."""
+    """Every code validation and lint can emit, and every code with an explain page.
+
+    The retired codes are among the latter (:mod:`opentide.cli.services.retired_codes`).
+    """
     from opentide.cli.services.explain import diagnostic_codes
     from opentide.cli.services.validation import VALIDATION_CODES
 

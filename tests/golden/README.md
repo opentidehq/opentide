@@ -89,6 +89,11 @@ language server's own stdio tests), recorded as `--help`; `opentide --debug gene
 log names each phase's time and the slowest phase, so it is recorded as `--no-color generate`).
 Examples with a placeholder (`<uuid>`) run with a fixture's real identifier.
 
+A path that `COVERAGE.md` marks "`--help` or bare only" is a group that does nothing alone (run
+bare, it prints its usage) or one of the two protocol servers above, `mcp start` and `lsp start`.
+`opentide serve` is recorded in plain mode only: it speaks JSON-RPC on stdio, and its replies are
+the same with `--json` or `AI_AGENT` set; a terminal adds nothing but the echo of its input.
+
 ## Fixtures
 
 | Name | What |
@@ -145,6 +150,7 @@ determinism failure, never as a silent pass.
 
 ## Size
 
-`COVERAGE.md` reports the size of `cases/` and `blobs/` on disk against a budget of 128 MiB
-(`BUDGET_BYTES` in `xtask/src/golden/coverage.rs`). Git stores them far smaller: the schemas of one
+`COVERAGE.md` reports the size of `cases/` and `blobs/` in bytes (apparent size: the sum of the
+files' lengths, not the blocks they take on disk) against a budget of 128 MiB (`BUDGET_BYTES` in
+`xtask/src/golden/coverage.rs`); `record` and `check` fail over it. Git stores them far smaller: the schemas of one
 fixture differ from another's in a few lines, and pack deltas keep one copy.
