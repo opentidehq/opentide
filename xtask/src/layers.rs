@@ -708,8 +708,8 @@ mod tests {
             ],
         ),
         ("xtask", &[("opentide-compare", None)]),
-        ("opentide-compare", &[]),
         // Appended, not in layer order, so the indexes the tests below use stay put.
+        ("opentide-compare", &[]),
         ("opentide-schema", &[("opentide-core", None)]),
     ];
 

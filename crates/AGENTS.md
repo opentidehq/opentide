@@ -42,7 +42,7 @@ One workspace (root `Cargo.toml`, one `Cargo.lock`; `fuzz/` keeps its own). A cr
 
 ## Hard rules
 
-- No `std::fs` in `crates/opentide-{core,highlight,syntax,kql,spl,esql,eql,kuery,lucene,falco,ecs,tide,analysis,compare,schema}/src`. Tests may read the repo.
+- No `std::fs` in `crates/opentide-{core,highlight,syntax,kql,spl,esql,eql,kuery,lucene,falco,ecs,tide,analysis,schema,compare}/src`. Tests may read the repo.
 - Do not rename a HighlightSpec capture. Adding one is a minor (`highlights/spec.toml` `[meta].version`).
 - Do not validate CrowdStrike. `configurations.crowdstrike.*` stays unsupported.
 - Control commands (`.show`, `.create`) parse so the engine can emit `kql_control_command_unsupported`. They are not valid detections.
