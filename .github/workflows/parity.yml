@@ -1,25 +1,30 @@
 # The parity dashboard (plan §5.4 "Strength", UC-X.2 #844): `cargo xtask parity
 # dashboard` renders each command × corpus × mode against the Python oracle,
-# the approved diffs and the fault catalogue's coverage. Every run puts the page
-# in the job summary; a push to `development` or `integration/unified-core`
-# also commits it on that branch as docs/internal/parity.md when it changed.
+# the approved diffs and the fault catalogue's coverage.
 #
-# Why a bot commit, and how it is kept safe:
-# - The page is generated, never hand-edited, and changes only when the
-#   migration does, so a commit per change is small and reviewable in history.
-#   A pull request per change would need a human to merge a generated file, and
-#   a PR opened with GITHUB_TOKEN starts no workflow, so its required checks
-#   would never report.
-# - Only the `commit` job can write, and only on a push to one of those two
-#   branches (never on a pull request; `pull_request` runs carry a read-only token).
-#   It runs no code from the repository: it checks out the pushed commit,
-#   copies in the page the read-only `dashboard` job rendered, and pushes one
-#   commit that changes that one file. A push made with GITHUB_TOKEN starts no
-#   workflow, so the commit cannot loop.
-# - It never forces: when the branch has moved on, the push is refused and
-#   the run on the newer commit writes the page.
-# - Branch protection on both branches must let github-actions[bot] push this
-#   commit (a maintainer's setting); otherwise the job fails and says so.
+# By default nothing is pushed. Every run (pull requests, pushes to
+# `development` and `integration/unified-core`, the daily schedule, a manual
+# run) puts the page in the job summary and in the `parity-dashboard`
+# artifact, read-only. That alone shows the migration's state on every change.
+#
+# Keeping docs/internal/parity.md current on the branch is a maintainer option:
+# set the repository variable PARITY_COMMIT to `true`. The `commit` job then:
+# - runs only on the schedule (the default branch, development) or on a manual
+#   run of development or integration/unified-core: never on a pull request,
+#   never on a push, never on code from a fork;
+# - holds `contents: write` and no other token or secret; the rest of the
+#   workflow is `contents: read`;
+# - writes exactly one path, docs/internal/parity.md (`git commit --only`),
+#   from the page the read-only `dashboard` job rendered, and runs no code from
+#   the repository;
+# - never force-pushes: when the branch has moved on, the push is refused and
+#   the next run writes the page. A push made with GITHUB_TOKEN starts no
+#   workflow, so it cannot loop.
+# Why a commit at all: a generated page in the repository is readable from the
+# docs site and the epic without opening a run. A pull request per change is
+# the other no-bypass route, but a PR opened with GITHUB_TOKEN starts no
+# workflow, so its required checks never report and a human merges a generated
+# file. Branch protection must let github-actions[bot] push the commit.
 name: Parity
 
 on:
@@ -28,6 +33,9 @@ on:
     # reaches development (the maintainer's merge flow).
     branches: [development, integration/unified-core]
   pull_request:
+  schedule:
+    # Daily at 05:23 UTC on the default branch: the page a commit would write.
+    - cron: "23 5 * * *"
   workflow_dispatch:
 
 permissions:
@@ -76,8 +84,11 @@ jobs:
   commit:
     name: Commit the dashboard
     needs: dashboard
+    # Off unless a maintainer sets PARITY_COMMIT; then only on the schedule or
+    # a manual run, and only on these two branches (see the header).
     if: >-
-      github.event_name == 'push' &&
+      vars.PARITY_COMMIT == 'true' &&
+      (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') &&
       (github.ref == 'refs/heads/development' || github.ref == 'refs/heads/integration/unified-core')
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -85,7 +96,7 @@ jobs:
       contents: write
     steps:
       # The commit the dashboard was rendered from; the credentials stay for
-      # the one push below.
+      # the one push below (contents: write, this job only).
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}

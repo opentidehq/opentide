@@ -78,9 +78,11 @@ when the committed one differs, until UC-1.8 generates it in Rust.
   `xtask/mutants.toml` in eight shards, a report against `xtask/mutants-baseline.toml`, and on the
   schedule only a job with `issues: write` (no checkout, no repository code) that opens or updates
   one issue per crate above its threshold.
-- [`parity.yml`](workflows/parity.yml), on every pull request and push: `cargo xtask parity
-  dashboard` into the job summary; on a push to `development` or `integration/unified-core` only, a job with `contents: write`
-  (no repository code, never forces) commits `docs/internal/parity.md` when it changed.
+- [`parity.yml`](workflows/parity.yml), on every pull request, push, daily schedule and manual run:
+  `cargo xtask parity dashboard` into the job summary and an artifact, read-only. Committing
+  `docs/internal/parity.md` is off unless the repository variable `PARITY_COMMIT` is `true`; then
+  only on the schedule or a manual run of `development` or `integration/unified-core`, a job with
+  `contents: write` (no repository code, one path, never forces) commits it when it changed.
 
 The nextest profiles CI and agents use are in [`.config/nextest.toml`](../.config/nextest.toml):
 `ci` (everything, no retries, no fail-fast, JUnit at `target/nextest/ci/junit.xml`) and `fast`

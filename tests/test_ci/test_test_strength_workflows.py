@@ -61,11 +61,14 @@ def test_no_writer_runs_on_a_pull_request() -> None:
 
     parity = _load("parity.yml")
     condition = parity["jobs"]["commit"]["if"]
+    # Off by default; then only the schedule or a manual run, on two branches.
     assert condition == (
-        "github.event_name == 'push' && (github.ref == 'refs/heads/development' || "
+        "vars.PARITY_COMMIT == 'true' && "
+        "(github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && "
+        "(github.ref == 'refs/heads/development' || "
         "github.ref == 'refs/heads/integration/unified-core')"
     )
-    assert _triggers(parity)["push"] == {"branches": ["development", "integration/unified-core"]}
+    assert "pull_request" not in condition and "'push'" not in condition
 
 
 @pytest.mark.parametrize(("name", "job_id"), sorted(WRITERS))

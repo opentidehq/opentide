@@ -118,9 +118,15 @@ cargo mutants -p opentide-analysis --in-diff /tmp/change.diff
 | Fault catalogue | `tests/corpora/codes.toml` (every diagnostic code, generated from the oracle) and `tests/corpora/faults.toml` (each kind's `codes`) | read once both exist: UC-0.6 ([#804](https://github.com/opentidehq/opentide/issues/804)) adds them |
 
 The [`parity`](https://github.com/opentidehq/opentide/blob/development/.github/workflows/parity.yml)
-workflow renders it on every pull request and push (job summary) and, on a push to
-`development` or `integration/unified-core`, commits it on that branch when it changed. The page carries no date or commit, so it changes only
-when the migration does.
+workflow renders it on every pull request, push, daily schedule and manual run, into the job
+summary and the `parity-dashboard` artifact, with a read-only token. By default nothing is pushed.
+
+Committing the page to the branch is a maintainer option: set the repository variable
+`PARITY_COMMIT` to `true`, and let `github-actions[bot]` push to the branch. The `commit` job then
+runs only on the schedule (development) or a manual run of `development` or
+`integration/unified-core`, never on a pull request, a push or fork code. It holds `contents: write`
+and no other token, writes exactly `docs/internal/parity.md`, runs no code from the repository and
+never force-pushes. The page carries no date or commit, so it changes only when the migration does.
 
 Two things stop the dashboard job, on purpose: a ledger that fails `opentide-compare`'s checks, and
 a compare result for a recording that does not exist. A command with a Rust implementation and no
