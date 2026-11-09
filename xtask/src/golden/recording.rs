@@ -432,6 +432,7 @@ mod tests {
             literals: vec![("/tmp/g/ws".into(), "<WS>".into())],
             dates: vec![],
             recent_dates: vec![],
+            known_uuids: std::collections::BTreeSet::new(),
             git_version: None,
         };
         let mut normaliser = Normaliser::new(&volatile, &[], []);
@@ -528,6 +529,7 @@ mod tests {
         let rec = sample();
         let mut other = rec.clone();
         other.stdout = b"ok elsewhere\n".to_vec();
+        other.stderr = b"warning: elsewhere\n".to_vec();
         other.exit_code = 0;
         other.files[1].contents = Some(b"path: y\n".to_vec());
         other.files[1].size = Some(8);
@@ -536,11 +538,20 @@ mod tests {
             .into_iter()
             .map(|d| d.part)
             .collect();
-        assert_eq!(parts, ["exit_code", "stdout", "files", "files/ws/a.yaml"]);
-        let diff = &rec.differences(&other)[1].detail;
+        assert_eq!(
+            parts,
+            ["exit_code", "stdout", "stderr", "files", "files/ws/a.yaml"]
+        );
+        let differences = rec.differences(&other);
+        let diff = &differences[1].detail;
         assert!(
             diff.contains("-ok <WS>") && diff.contains("+ok elsewhere"),
             "{diff}"
+        );
+        assert!(
+            differences[2].detail.contains("+warning: elsewhere"),
+            "{}",
+            differences[2].detail
         );
     }
 

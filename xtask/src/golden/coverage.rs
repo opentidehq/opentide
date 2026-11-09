@@ -74,10 +74,21 @@ pub struct Report {
 }
 
 /// Builds the report.
-pub fn report(oracle: &Oracle, paths: &[String], cases: &[Case], size: Size) -> Report {
+pub fn report(
+    oracle: &Oracle,
+    paths: &[String],
+    cases: &[Case],
+    size: Size,
+    budget: u64,
+) -> Report {
     let mut counts: BTreeMap<(&str, Mode), usize> = BTreeMap::new();
     let mut fixtures: BTreeMap<&str, BTreeSet<&str>> = BTreeMap::new();
+    let mut variants: BTreeMap<&str, BTreeSet<&str>> = BTreeMap::new();
     for case in cases {
+        variants
+            .entry(case.command.as_str())
+            .or_default()
+            .insert(case.variant.as_str());
         *counts
             .entry((case.command.as_str(), case.mode))
             .or_default() += 1;
@@ -148,11 +159,11 @@ pub fn report(oracle: &Oracle, paths: &[String], cases: &[Case], size: Size) -> 
     );
     let _ = writeln!(
         md,
-        "- Recordings (`cases/` and `blobs/`): {} files, {} bytes ({:.1} MiB) of a {} MiB budget",
+        "- Recordings (`cases/` and `blobs/`): {} files, {} bytes, apparent size ({:.1} MiB), of a {} MiB budget",
         size.files,
         size.bytes,
         mib(size.bytes),
-        BUDGET_BYTES / (1024 * 1024)
+        budget / (1024 * 1024)
     );
     let _ = writeln!(
         md,
@@ -162,6 +173,12 @@ pub fn report(oracle: &Oracle, paths: &[String], cases: &[Case], size: Size) -> 
         } else {
             missing.len().to_string()
         }
+    );
+    let _ = writeln!(
+        md,
+        "A path marked `--help` or bare only is a group that does nothing alone, or a protocol \
+         server (`mcp start` is UC-3.7's; `lsp start` has its own stdio tests): \
+         `tests/golden/README.md`, \"Cases\", says why.\n"
     );
     let _ = writeln!(
         md,
@@ -184,10 +201,16 @@ pub fn report(oracle: &Oracle, paths: &[String], cases: &[Case], size: Size) -> 
                 None => "**0**".to_owned(),
             })
             .collect();
-        let used = fixtures
+        let mut used = fixtures
             .get(path)
             .map(|f| f.iter().copied().collect::<Vec<_>>().join(", "))
             .unwrap_or_default();
+        if variants
+            .get(path)
+            .is_some_and(|v| v.iter().all(|v| matches!(*v, "help" | "bare")))
+        {
+            used.push_str(" (`--help` or bare only: see the README)");
+        }
         let _ = writeln!(md, "| {name} | {} | {used} |", cells.join(" | "));
     }
     Report {
@@ -261,6 +284,7 @@ args = ["valdate"]
                 files: 3,
                 bytes: 2048,
             },
+            BUDGET_BYTES,
         );
         assert_eq!(
             r.missing,

@@ -1,4 +1,4 @@
-[?25l<LIVE>[1;31merror: [0mDefender tenants not configured · detail: You must first have Defender for Endpoint tenants 
+[?25l<LIVE>  [1;36m<SPIN>[0m  [1;36mimport from defender[0m[1m  [0m[2m [0m[2m<SECONDS>[0m[2m [0m</LIVE>[1;31merror: [0mDefender tenants not configured · detail: You must first have Defender for Endpoint tenants 
 configured to initiate the import · advice: run 'opentide setup platforms --defender-for-endpoint'
 [?25h[1A[2K  [1;31m✗[0m  [1mimport from defender[0m [2m<SECONDS>[0m
 [1;31merror:[0m No Defender for Endpoint tenants are configured

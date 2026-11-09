@@ -144,7 +144,20 @@ pub fn candidate(repo: &Path) -> Result<crate::golden::run::Engine> {
         install_dir,
         env: BTreeMap::from([("OPENTIDE_ENGINE".to_owned(), "rust".to_owned())]),
         host_paths: Vec::new(),
+        known_uuids: std::sync::Arc::new(package_uuids(repo)?),
     })
+}
+
+/// The UUIDs in this repository's package (`src/opentide`: its bundled
+/// vocabularies and data), which the editable install in `.venv` runs from;
+/// the oracle's are those of its installed wheel.
+fn package_uuids(repo: &Path) -> Result<std::collections::BTreeSet<String>> {
+    let mut out = std::collections::BTreeSet::new();
+    let package = repo.join("src").join("opentide");
+    if package.is_dir() {
+        crate::golden::oracle::collect_uuids(&package, &mut out)?;
+    }
+    Ok(out)
 }
 
 /// The command paths with a Rust implementation: the CLI's dispatch table,

@@ -52,16 +52,16 @@ path = "ws/.opentide/lsp/catalogs/generated/fields.json"
 change = "created"
 kind = "file"
 mode = "0644"
-size = 944443
-blob = "2a7a9e49aa46bc992b94d7c54562edccdd343a31ded9f0474a2a0ca4208f2884"
+size = 999657
+blob = "49e1a8b3afaceee0f2ec2573a5c8e8d537603c9f8543c188fe23bdf203250969"
 
 [[files]]
 path = "ws/.opentide/schemas/objective.1.0.schema.json"
 change = "created"
 kind = "file"
 mode = "0644"
-size = 3947451
-blob = "b5301b9986a35f3bd6a87abcc1cea599ab6d72fd33dc46c82eb4dccc730f5a71"
+size = 3948826
+blob = "cdc8edb0c91393081b74541c2c35b2d39269643a980f0dc8157629a2e197cb57"
 
 [[files]]
 path = "ws/.opentide/schemas/opentide.schema.json"
@@ -91,8 +91,8 @@ path = "ws/.opentide/schemas/threat.1.0.schema.json"
 change = "created"
 kind = "file"
 mode = "0644"
-size = 7412855
-blob = "ffb860d54f22120bbcd3501be5b8b702a134d2a3b068ed9cfc6602d27596ee4d"
+size = 7523283
+blob = "493e6868ec1d8ea492acbc21ad9676819ec21c6852bf1df6fc11a3256bda653c"
 
 [[files]]
 path = "ws/.opentide/schemas/visibility.1.0.schema.json"

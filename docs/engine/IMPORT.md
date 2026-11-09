@@ -17,6 +17,14 @@ The engine crates, their grammars, catalogs, editors, npm packages, fuzz targets
 
 No language-server tag was imported: its tags are `vX.Y.Z`, the form of opentide's release tags.
 
+### Imports since
+
+| Source | Date | Filtered tip | Merge | New commits |
+|---|---|---|---|---|
+| `main` at `b92fa305296d0866d99e68081d9138313a535216`, release 0.12.0 (CQL), 308 commits | 2026-11-09 | `f0c19938dd45a2c74a32c43423d9cd5bee06f6f1` | `3833048b`, `git merge --no-ff` on a branch from `integration/unified-core` at `96ef1424` | 12: [language-server#221](https://github.com/opentidehq/language-server/pull/221) (the `opentide-cql` crate, its grammar, catalogs, corpus and editors) and the 0.12.0 release ([language-server#224](https://github.com/opentidehq/language-server/pull/224)) |
+
+The 0.12.0 run used the invocation below with only `sha` changed. Its filtered history up to `6f2ad70` was the 296 commits already merged, ending at `86ac6b88`, so the merge brought in the 12 new commits and nothing else. The commits after it follow the paths and lints of this repository ([Repeating it at a later commit](#repeating-it-at-a-later-commit)): `opentide-cql` reads `data/catalogs/cql/`, takes the workspace lints and a place in `xtask/layers.toml`, its `fuzz.yml` target went to `engine-fuzz.yml` and the fuzz smoke, and `NOTICE`'s CQL licences ship with the package. `opentide validate` and `opentide lint` do not report its `cql_*` codes until CrowdStrike is in `OFFLINE_QUERY_LANGUAGES`; the editor and `opentide tui` do.
+
 ## Path mapping
 
 | language-server | Here |
@@ -93,7 +101,7 @@ The commits after the merge make the imported tree build and test here:
 
 ## Repeating it at a later commit
 
-If language-server `main` moves after this import, run the invocation above with the new commit in `sha`. git-filter-repo rewrites a commit to the same hash when its content, parents and message are the same, so the filtered history up to `6f2ad70` is the history already merged here, ending at `86ac6b88`, and the new commits follow it. Merge the new filtered tip into a branch of this repository: only the new commits come in. Paths in their changes need the same follow-up as above.
+If language-server `main` moves after this import, run the invocation above with the new commit in `sha`, cloning from GitHub (a local clone's `main` may be behind its `origin/main`). git-filter-repo rewrites a commit to the same hash when its content, parents and message are the same, so the filtered history up to `6f2ad70` is the history already merged here, ending at `86ac6b88`, and the new commits follow it. Merge the new filtered tip into a branch of this repository with a merge commit, never a rebase: only the new commits come in. Check first that the filtered history holds the merged tip (`git merge-base --is-ancestor 86ac6b88 <filtered tip>`) and that `git rev-list <filtered tip> ^HEAD` lists only the new commits; a different hash would duplicate the history. Paths in their changes need the same follow-up as above, and a change to a workflow lands in `.github/engine-workflows/`, which no longer exists: apply it to the job's home in [Where the workflows went](#where-the-workflows-went).
 
 ## Where the workflows went
 

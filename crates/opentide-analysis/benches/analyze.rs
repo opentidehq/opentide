@@ -77,6 +77,7 @@ fn main() {
         ("kuery", LanguageId::Kuery),
         ("lucene", LanguageId::Lucene),
         ("falco", LanguageId::Falco),
+        ("cql", LanguageId::Cql),
     ] {
         let texts = corpus(name);
         if texts.is_empty() {

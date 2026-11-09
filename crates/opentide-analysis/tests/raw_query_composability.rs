@@ -187,3 +187,36 @@ fn standalone_falco_matches_tide_condition_unknown_field() {
         )
     );
 }
+
+#[test]
+fn standalone_cql_matches_tide_crowdstrike_query_unknown_function() {
+    let query = "#event_simpleName=ProcessRollup2\n| groupBi([aid, ComputerName])";
+    let raw = analyze_raw("queries/broken.cql", LanguageId::Cql, query);
+    let raw_op = operator(&raw.diagnostics, codes::CQL_UNKNOWN_FUNCTION);
+    assert!(raw_op.message.contains("groupBi"), "{}", raw_op.message);
+    assert!(raw.diagnostics.iter().all(|d| d.code.starts_with("cql_")));
+
+    let yaml = tide_rule("crowdstrike", "query", query);
+    let host = MemoryWorkspace {
+        files: vec![("objects/rules/composability-cql.yaml".into(), yaml.clone())],
+    };
+    let embedded = analyze_doc(
+        "objects/rules/composability-cql.yaml",
+        LanguageId::TideYaml,
+        &yaml,
+        &host,
+    );
+    let embedded_op = operator(&embedded.diagnostics, codes::CQL_UNKNOWN_FUNCTION);
+    assert_same_operator(raw_op, embedded_op);
+    assert_eq!(
+        embedded_op.field_path.as_deref(),
+        Some(
+            [
+                "configurations".to_string(),
+                "crowdstrike".to_string(),
+                "query".to_string(),
+            ]
+            .as_slice()
+        )
+    );
+}

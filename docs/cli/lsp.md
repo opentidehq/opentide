@@ -42,7 +42,7 @@ The server picks each document's language once, when the editor opens it:
 
 1. A `.toml` file under `.opentide/configurations/` is `opentide-config`, whatever id the editor sends. No other `.toml` is read.
 2. Otherwise the editor's language id, when it is one of the ids below or an alias.
-3. Otherwise the file's extension: `.kql`, `.spl`, `.esql`, `.eql`, `.kuery`, `.lucene`, `.falco`.
+3. Otherwise the file's extension: `.kql`, `.spl`, `.esql`, `.eql`, `.kuery`, `.lucene`, `.falco`, `.cql`.
 4. Otherwise Tide YAML. A YAML document is analysed only when the editor sends `opentide-yaml`, the file is under an `objects/` folder, or it names a Tide schema (`metadata.schema: rule::1.0`), so CI workflows and other YAML files get no findings.
 
 | Language id | Aliases | Files |
@@ -55,9 +55,10 @@ The server picks each document's language once, when the editor opens it:
 | `kuery` | `kibana-kql`, `opentide-kuery` | `.kuery`: Kibana KQL, never confused with Microsoft KQL |
 | `lucene` | `opentide-lucene` | `.lucene` |
 | `falco` | `opentide-falco` | `.falco`: Falco conditions (Sysdig Secure) |
+| `cql` | `opentide-cql`, `logscale`, `crowdstrike` | `.cql`: the CrowdStrike Query Language (Falcon LogScale and Next-Gen SIEM) |
 | `opentide-config` | — | `.opentide/configurations/**/*.toml` |
 
-There is no `sql` language. Inside a rule, each query is analysed in the language of its block: `configurations.sentinel.query` and `configurations.defender_for_endpoint.query` as KQL, `configurations.splunk.query` as SPL, `configurations.carbon_black_cloud.query` as Lucene, `configurations.sysdig.condition` as Falco, and an Elastic query by the block's `type` and `language`.
+There is no `sql` language. Inside a rule, each query is analysed in the language of its block: `configurations.sentinel.query` and `configurations.defender_for_endpoint.query` as KQL, `configurations.splunk.query` as SPL, `configurations.carbon_black_cloud.query` as Lucene, `configurations.sysdig.condition` as Falco, `configurations.crowdstrike.query` as CQL (a Next-Gen SIEM correlation rule), and an Elastic query by the block's `type` and `language`. A hunt's search takes the language of its `system`.
 
 ### Diagnostics
 
@@ -131,14 +132,14 @@ Only `opentide lsp start` checks configuration files. The `opentide-lsp` binary 
 
 ### Configuring an editor
 
-Run `opentide lsp start` as the server command, for YAML files under `objects/`, for query files (`.kql`, `.spl`, `.esql`, `.eql`, `.kuery`, `.lucene`, `.falco`), and for `.opentide/configurations/**/*.toml`. The completion triggers are `|`, space, `:`, `.`, `(`, `,`, `` ` `` and `=`; signature help opens on `(`, `,`, `=` and `` ` ``. The server reads a TOML file under `.opentide/configurations/` as language `opentide-config`, whatever id the editor sends, and no other `.toml`. Turn off other YAML language servers for `objects/**`, and other TOML language servers (Taplo, Even Better TOML) for `.opentide/configurations/**`: opentide reports those files' diagnostics itself.
+Run `opentide lsp start` as the server command, for YAML files under `objects/`, for query files (`.kql`, `.spl`, `.esql`, `.eql`, `.kuery`, `.lucene`, `.falco`, `.cql`), and for `.opentide/configurations/**/*.toml`. The completion triggers are `|`, space, `:`, `.`, `(`, `,`, `` ` `` and `=`; signature help opens on `(`, `,`, `=` and `` ` ``. The server reads a TOML file under `.opentide/configurations/` as language `opentide-config`, whatever id the editor sends, and no other `.toml`. Turn off other YAML language servers for `objects/**`, and other TOML language servers (Taplo, Even Better TOML) for `.opentide/configurations/**`: opentide reports those files' diagnostics itself.
 
 Neovim (0.11 or later):
 
 ```lua
 vim.lsp.config("opentide", {
   cmd = { "opentide", "lsp", "start" },
-  filetypes = { "yaml", "kql", "spl", "esql", "eql", "kuery", "lucene", "falco" },
+  filetypes = { "yaml", "kql", "spl", "esql", "eql", "kuery", "lucene", "falco", "cql" },
   root_markers = { ".opentide" },
 })
 vim.lsp.enable("opentide")
@@ -165,7 +166,8 @@ Then add `opentide` to the `language-servers` of the languages you edit. Zed tak
 | Carbon Black Cloud | Lucene (Carbon Black dialect) | ✅ |
 | Sysdig Secure | Falco (the block's `condition`, exceptions, macros and lists) | ✅ |
 | SentinelOne | S1QL | ❌ tenant only: `opentide validate query --platform sentinel_one --live` |
-| CrowdStrike, HarfangLab | — | ❌ never validated |
+| CrowdStrike | CQL (the block's `query`, a correlation rule; a hunt with `system: crowdstrike`) | ✅ in the editor only: `opentide validate` and `opentide lint` do not check CrowdStrike queries |
+| HarfangLab | — | ❌ never validated |
 
 ## opentide lsp start and opentide-lsp
 

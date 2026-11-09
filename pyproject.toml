@@ -18,6 +18,10 @@ license-files = [
     "data/catalogs/falco/LICENSE.txt",
     "data/catalogs/falco/LICENSE-MIT.txt",
     "data/catalogs/falco/NOTICE",
+    "data/catalogs/cql/LICENSE-Apache-2.0.txt",
+    "data/catalogs/cql/LICENSE-MIT.txt",
+    "data/catalogs/cql/LICENSE-Unlicense.txt",
+    "data/catalogs/cql/NOTICE",
 ]
 authors = [
     { name = "opentide", email = "digit-ec-opentide@ec.europa.eu" },

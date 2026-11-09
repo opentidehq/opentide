@@ -39,7 +39,7 @@ name = "foundation"
 tiers = [
     ["opentide-core", "opentide-compare"],
     ["opentide-syntax", "opentide-highlight", "opentide-ecs"],
-    ["opentide-kql", "opentide-spl", "opentide-kuery", "opentide-lucene", "opentide-falco"],
+    ["opentide-kql", "opentide-spl", "opentide-kuery", "opentide-lucene", "opentide-falco", "opentide-cql"],
     ["opentide-esql", "opentide-eql"],
     ["opentide-schema"],
 ]

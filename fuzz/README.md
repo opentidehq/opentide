@@ -15,7 +15,7 @@ past `-timeout`, is a failure.
 
 | Target | Seeds |
 | --- | --- |
-| `kql`, `spl`, `esql`, `eql`, `kuery`, `lucene`, `falco` | `crates/testdata/corpus/<lang>/`, `crates/testdata/conformance/external/<lang>/` |
+| `kql`, `spl`, `esql`, `eql`, `kuery`, `lucene`, `falco`, `cql` | `crates/testdata/corpus/<lang>/`, `crates/testdata/conformance/external/<lang>/` |
 | `tide` | `crates/testdata/objects/`, `crates/testdata/workspaces/tide_corpus/objects/` |
 | `protocol` | `fuzz/seeds/protocol/` |
 | `framing` | `fuzz/seeds/framing/` (the protocol seeds, framed) |

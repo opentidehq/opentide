@@ -57,6 +57,10 @@ pub const FALCO_HIGHLIGHTS_SCM: &str = include_str!(concat!(
     env!("OPENTIDE_ASSETS"),
     "/highlights/queries/falco/highlights.scm"
 ));
+pub const CQL_HIGHLIGHTS_SCM: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/highlights/queries/cql/highlights.scm"
+));
 
 /// The tree-sitter highlight query for a language. Configuration TOML has
 /// none: the editor's TOML grammar highlights it.
@@ -71,6 +75,7 @@ pub fn highlights_scm(language: LanguageId) -> &'static str {
         LanguageId::Lucene => LUCENE_HIGHLIGHTS_SCM,
         LanguageId::Config => "",
         LanguageId::Falco => FALCO_HIGHLIGHTS_SCM,
+        LanguageId::Cql => CQL_HIGHLIGHTS_SCM,
     }
 }
 
@@ -790,11 +795,14 @@ pub fn tokens_from_spans(
 /// ES|QL extension, which registers the same `esql` language id, and two
 /// grammars with one scope replace each other. The other grammars keep
 /// `source.<id>`: no known extension owns those scopes (`docs/engine/EDITORS.md`).
+/// CQL is `source.opentide.cql` for the same reason: Cassandra's CQL
+/// extensions own `source.cql`.
 /// This is not a HighlightSpec capture, so the rename does not bump
 /// `highlights/spec.toml`.
 pub fn tm_scope_name(language: LanguageId) -> String {
     match language {
         LanguageId::Esql => "source.opentide.esql".to_string(),
+        LanguageId::Cql => "source.opentide.cql".to_string(),
         other => format!("source.{}", other.as_str()),
     }
 }
@@ -826,6 +834,8 @@ pub fn generate_tm_language(language: LanguageId, spec: &HighlightSpec) -> serde
         LanguageId::TideYaml => Some("(?m)^\\s*#.*$"),
         LanguageId::Kql | LanguageId::Esql | LanguageId::Eql => Some("//.*$|/\\*[\\s\\S]*?\\*/"),
         LanguageId::Spl => Some("```[^`]*```"),
+        // A CQL comment starts only where a token may: `https://x` is one pattern.
+        LanguageId::Cql => Some("(?:^|(?<=[\\s|(\\[{,;]))//.*$|/\\*[\\s\\S]*?\\*/"),
         // Kibana KQL, Lucene, and Falco conditions have no comment syntax.
         LanguageId::Kuery | LanguageId::Lucene | LanguageId::Falco => None,
         LanguageId::Config => Some("(?m)^\\s*#.*$"),
@@ -986,6 +996,7 @@ pub const EMBEDDED_QUERIES: &[(&[&str], &[&str], LanguageId)] = &[
     // The rule's condition; a macro's (`macros[].condition`) is a level
     // deeper and is left to semantic tokens.
     (&["sysdig"], &["condition"], LanguageId::Falco),
+    (&["crowdstrike"], &["query"], LanguageId::Cql),
 ];
 
 /// The embedded region a query of `language` gets: `meta.embedded.block.<id>`.
@@ -1241,6 +1252,13 @@ mod tests {
                     "/grammars/tree-sitter-opentide-falco/queries/highlights.scm"
                 )),
             ),
+            (
+                LanguageId::Cql,
+                include_str!(concat!(
+                    env!("OPENTIDE_ASSETS"),
+                    "/grammars/tree-sitter-opentide-cql/queries/highlights.scm"
+                )),
+            ),
         ];
         for (language, copy) in copies {
             assert_eq!(
@@ -1464,6 +1482,18 @@ mod tm_language_stub_bug {
         assert_eq!(embedded["meta.embedded.block.spl"], "spl");
         assert_eq!(embedded["meta.embedded.block.lucene"], "lucene");
         assert_eq!(embedded["meta.embedded.block.falco"], "falco");
+        assert_eq!(embedded["meta.embedded.block.cql"], "cql");
+    }
+
+    /// CQL's grammar must not take Cassandra's `source.cql` scope, and its
+    /// comment pattern must not start inside `https://...`.
+    #[test]
+    fn cql_grammar_scope_and_comments() {
+        let spec = crate::HighlightSpec::load().unwrap();
+        let tm = crate::generate_tm_language(opentide_core::LanguageId::Cql, &spec);
+        assert_eq!(tm["scopeName"], "source.opentide.cql");
+        let comment = tm["patterns"][0]["match"].as_str().unwrap();
+        assert!(comment.starts_with("(?:^|(?<=[\\s|"), "{comment}");
     }
 
     /// #195: ES|QL's grammar must not take Elastic's `source.esql` scope.

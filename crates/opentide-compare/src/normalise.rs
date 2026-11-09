@@ -3,12 +3,15 @@
 //!
 //! The rules, in the order they apply:
 //!
-//! 1. **Live regions** (`<LIVE>`): a Rich live display (spinner, progress)
-//!    redraws itself as often as the clock allows, between hiding the cursor
-//!    (`ESC[?25l`) and showing it again (`ESC[?25h`). Its frames are dropped;
-//!    what was printed above it during the region is kept, in order. A region
-//!    erased when it stops (transient) loses its last frame too; otherwise the
-//!    last frame stays, as on screen.
+//! 1. **Live regions** (`<LIVE>…</LIVE>`): a Rich live display (spinner,
+//!    progress) redraws itself as often as the clock allows, between hiding
+//!    the cursor (`ESC[?25l`) and showing it again (`ESC[?25h`). Its first
+//!    frame is kept between the markers, with the spinner glyph as `<SPIN>`
+//!    (Live renders it before any work, so its label is compared); the later
+//!    frames, and how many there were, are dropped. What was printed above it
+//!    during the region is kept, in order. A region erased when it stops
+//!    (transient) loses its last frame too; otherwise the last frame stays,
+//!    as on screen.
 //! 2. **Paths** (`<WS>`, `<HOME>`, `<TMP>`, `<ENGINE_BIN>`, `<ENGINE>`): the
 //!    case's directories and the engine's installation, longest first.
 //! 3. **Crash logs** (`crash-<TIMESTAMP>-<PID>.log`): the name the crash
@@ -71,6 +74,10 @@ pub struct Volatile {
     pub recent_dates: Vec<String>,
     /// `git --version`'s number on this host, when git is installed.
     pub git_version: Option<String>,
+    /// UUIDs that are never fresh, beyond the fixture's: those in the case's
+    /// argv, environment and stdin, and in the engine's bundled data. Only a
+    /// UUID the run minted becomes `<UUID-n>`.
+    pub known_uuids: BTreeSet<String>,
 }
 
 /// Normalises the outputs of one case: stdout, then stderr, then each file in
@@ -121,7 +128,7 @@ regex!(position_cursor, r"\r\x1b\[2K((?:\x1b\[1A\x1b\[2K)*)");
 regex!(transient_erase, r"^\r((?:\x1b\[1A\x1b\[2K)+)");
 regex!(
     log_clock,
-    r"(?m)^((?:\x1b\[\?25l<LIVE>)?(?:\x1b\[[0-9;]*m)*)(\d{2}:\d{2}:\d{2}(?:[.,]\d+)?)((?:\x1b\[[0-9;]*m)* (?:\x1b\[[0-9;]*m)*(?:debug|info|warning|error|critical)\b)"
+    r"(?m)^((?:\x1b\[\?25l<LIVE>[^\n]*?</LIVE>)?(?:\x1b\[[0-9;]*m)*)(\d{2}:\d{2}:\d{2}(?:[.,]\d+)?)((?:\x1b\[[0-9;]*m)* (?:\x1b\[[0-9;]*m)*(?:debug|info|warning|error|critical)\b)"
 );
 regex!(catalog_fingerprint, r"(lsp-catalogs[/\\])[0-9a-f]{32}\b");
 regex!(crash_log, r"crash-\d{8}T\d{6}\d*Z-\d+\.log");
@@ -175,11 +182,8 @@ impl Normaliser {
         let fresh_uuids = rules.contains(&Rule::FreshUuids).then(|| FreshUuids {
             known: fixture_text
                 .into_iter()
-                .flat_map(|text| {
-                    uuid()
-                        .find_iter(text)
-                        .map(|m| m.as_str().to_ascii_lowercase())
-                })
+                .flat_map(uuids_in)
+                .chain(volatile.known_uuids.iter().cloned())
                 .collect(),
             seen: HashMap::new(),
         });
@@ -322,6 +326,13 @@ fn zero_digits(text: &str) -> String {
         .collect()
 }
 
+/// Every UUID in `text`, lower-cased.
+pub fn uuids_in(text: &str) -> impl Iterator<Item = String> + '_ {
+    uuid()
+        .find_iter(text)
+        .map(|m| m.as_str().to_ascii_lowercase())
+}
+
 const HIDE_CURSOR: &str = "\x1b[?25l";
 const SHOW_CURSOR: &str = "\x1b[?25h";
 
@@ -338,11 +349,14 @@ pub fn live_regions(text: &str) -> String {
         let after = &rest[body_start + len + SHOW_CURSOR.len()..];
         out.push_str(&rest[..start]);
         out.push_str(HIDE_CURSOR);
-        out.push_str("<LIVE>");
         let transient = transient_erase()
             .captures(after)
             .map(|caps| caps[1].matches("\x1b[1A").count());
-        out.push_str(&printed_in_region(body, transient));
+        let (printed, first) = printed_in_region(body, transient);
+        out.push_str("<LIVE>");
+        out.push_str(&mask_spinner(first));
+        out.push_str("</LIVE>");
+        out.push_str(&printed);
         out.push_str(SHOW_CURSOR);
         rest = after;
     }
@@ -350,29 +364,52 @@ pub fn live_regions(text: &str) -> String {
     out
 }
 
-/// What a live region printed above its frames. Rich redraws a frame of
-/// height `h` by moving to its start, `\r ESC[2K (ESC[1A ESC[2K){h-1}`, and
-/// prints anything else right before the next frame; so the text before each
-/// redraw ends with the frame it erases. The last frame is dropped when the
-/// region is erased on stop (`transient` holds its height), kept otherwise.
-fn printed_in_region(body: &str, transient: Option<usize>) -> String {
+/// What a live region printed above its frames, and its first frame. Rich
+/// redraws a frame of height `h` by moving to its start,
+/// `\r ESC[2K (ESC[1A ESC[2K){h-1}`, and prints anything else right before
+/// the next frame; so the text before each redraw ends with the frame it
+/// erases. Live starts with a render, so the first frame is drawn before any
+/// work and is the same on every run; the later frames follow the clock. The
+/// last frame is dropped when the region is erased on stop (`transient` holds
+/// its height), kept otherwise.
+fn printed_in_region(body: &str, transient: Option<usize>) -> (String, &str) {
     let mut printed = String::new();
+    let mut first: Option<&str> = None;
     let mut last = 0;
     for caps in position_cursor().captures_iter(body) {
         let Some(whole) = caps.get(0) else { continue };
         let height = caps[1].matches("\x1b[1A").count() + 1;
-        printed.push_str(drop_last_lines(&body[last..whole.start()], height));
+        let chunk = &body[last..whole.start()];
+        let before = drop_last_lines(chunk, height);
+        first.get_or_insert(&chunk[before.len()..]);
+        printed.push_str(before);
         last = whole.end();
     }
     let tail = &body[last..];
     match transient {
         Some(height) => {
             let frame = tail.strip_suffix('\n').unwrap_or(tail);
-            printed.push_str(drop_last_lines(frame, height));
+            let before = drop_last_lines(frame, height);
+            first.get_or_insert(&frame[before.len()..]);
+            printed.push_str(before);
         }
         None => printed.push_str(tail),
     }
-    printed
+    (printed, first.unwrap_or(""))
+}
+
+/// A frame with its spinner glyphs (the Braille block Rich's spinners draw
+/// from) as `<SPIN>`: which glyph shows first depends on the clock.
+fn mask_spinner(frame: &str) -> String {
+    let mut out = String::with_capacity(frame.len());
+    for c in frame.chars() {
+        if ('\u{2800}'..='\u{28ff}').contains(&c) {
+            out.push_str("<SPIN>");
+        } else {
+            out.push(c);
+        }
+    }
+    out
 }
 
 /// `chunk` without its last `lines` lines (the frame, which has no final newline).
@@ -413,14 +450,17 @@ mod tests {
 
     fn volatile() -> Volatile {
         Volatile {
+            // The shortest first: `paths_longest_first` fails unless the
+            // normaliser sorts them.
             literals: vec![
+                ("/tmp/golden-abc123".into(), "<TMP>".into()),
                 ("/tmp/golden-abc123/ws".into(), "<WS>".into()),
                 ("/tmp/golden-abc123/home".into(), "<HOME>".into()),
-                ("/tmp/golden-abc123".into(), "<TMP>".into()),
             ],
             dates: vec!["2026-11-08".into()],
             recent_dates: vec!["2026-11-07".into()],
             git_version: Some("2.43.0".into()),
+            known_uuids: BTreeSet::new(),
         }
     }
 
@@ -451,8 +491,10 @@ mod tests {
             "{\n  \"ok\": true,\n  \"duration_ms\": 0,\n  \"x\": {\"elapsed_ms\":0, \"wall_ms\": 0.0, \"seconds\": 0.0}\n}"
         );
         serde_json::from_str::<serde_json::Value>(&out).unwrap();
-        // A count is not a duration.
-        assert_eq!(norm("\"rows\": 120"), "\"rows\": 120");
+        // A count, a timeout and a time to live are not durations.
+        for kept in ["\"rows\": 120", "\"timeout_ms\": 30", "\"ttl_seconds\": 5"] {
+            assert_eq!(norm(kept), kept);
+        }
     }
 
     #[test]
@@ -519,8 +561,10 @@ mod tests {
         );
         // The first line printed during a live region follows its marker.
         assert_eq!(
-            norm("\x1b[?25l<LIVE>\x1b[2m18:41:29 \x1b[0m\x1b[2;35mdebug: \x1b[0mResolving\n"),
-            "\x1b[?25l<LIVE>\x1b[2m00:00:00 \x1b[0m\x1b[2;35mdebug: \x1b[0mResolving\n"
+            norm(
+                "\x1b[?25l<LIVE>\x1b[1;36m⠋\x1b[0m Validating objects</LIVE>\x1b[2m18:41:29 \x1b[0m\x1b[2;35mdebug: \x1b[0mResolving\n"
+            ),
+            "\x1b[?25l<LIVE>\x1b[1;36m⠋\x1b[0m Validating objects</LIVE>\x1b[2m00:00:00 \x1b[0m\x1b[2;35mdebug: \x1b[0mResolving\n"
         );
         // Only at the start of a line, and only before a log level.
         assert_eq!(norm("at 18:22:33 today"), "at 18:22:33 today");
@@ -535,6 +579,10 @@ mod tests {
             ),
             "log: <HOME>/.local/state/opentide/crash-<TIMESTAMP>-<PID>.log"
         );
+        // Only the timestamped name is masked.
+        for kept in ["crash-handler.log", "crash-2026.log"] {
+            assert_eq!(norm(kept), kept);
+        }
     }
 
     #[test]
@@ -594,7 +642,32 @@ mod tests {
     }
 
     #[test]
-    fn live_region_frames_are_dropped_transient() {
+    fn uuids_from_the_argv_and_the_bundled_data_stay_literal() {
+        // `new objective --threat <uuid>` echoes the argv's UUID; a bundled
+        // vocabulary's UUIDs are the engine's data: neither was minted.
+        let argv = "00000000-0000-4000-8000-000000000000";
+        let bundled = "4d3c2b1a-0f9e-4d8c-b7a6-958473625140";
+        let minted = "9f1c2b3a-1111-4222-8333-444455556666";
+        let volatile = Volatile {
+            known_uuids: [argv.to_owned(), bundled.to_owned()].into_iter().collect(),
+            ..volatile()
+        };
+        let mut n = Normaliser::new(&volatile, &[Rule::FreshUuids], []);
+        assert_eq!(
+            n.text(&format!(
+                "threat {argv} not found; tactic {bundled}; created {minted}"
+            )),
+            format!("threat {argv} not found; tactic {bundled}; created <UUID-1>")
+        );
+        // A different UUID in the output is not hidden behind the argv's.
+        assert_ne!(
+            n.text("threat 00000000-0000-4000-8000-0000000000ff not found"),
+            format!("threat {argv} not found")
+        );
+    }
+
+    #[test]
+    fn live_region_keeps_its_first_frame_and_drops_the_rest_transient() {
         // As recorded from `opentide validate` on a pseudo-terminal.
         let spin = |c: &str| format!("\x1b[1;36m{c}\x1b[0m Validating objects");
         let mut stream = String::from(HIDE_CURSOR);
@@ -607,9 +680,17 @@ mod tests {
         stream.push_str(SHOW_CURSOR);
         stream.push_str("\r\x1b[1A\x1b[2K");
         let fewer = format!("{HIDE_CURSOR}{}\n{SHOW_CURSOR}\r\x1b[1A\x1b[2K", spin("⠋"));
-        let expected = format!("{HIDE_CURSOR}<LIVE>{SHOW_CURSOR}\r\x1b[1A\x1b[2K");
+        let expected = format!(
+            "{HIDE_CURSOR}<LIVE>\x1b[1;36m<SPIN>\x1b[0m Validating objects</LIVE>{SHOW_CURSOR}\r\x1b[1A\x1b[2K"
+        );
         assert_eq!(live_regions(&stream), expected);
         assert_eq!(live_regions(&fewer), expected);
+        // V857-I-3: a port with another label differs.
+        let other = format!(
+            "{HIDE_CURSOR}{}\n{SHOW_CURSOR}\r\x1b[1A\x1b[2K",
+            spin("⠋").replace("Validating", "Checking")
+        );
+        assert_ne!(live_regions(&other), expected);
     }
 
     #[test]
@@ -626,7 +707,8 @@ mod tests {
         assert_eq!(
             live_regions(&stream),
             format!(
-                "before\n{HIDE_CURSOR}<LIVE>warning: x\n{}\n{SHOW_CURSOR}after\n",
+                "before\n{HIDE_CURSOR}<LIVE>{}</LIVE>warning: x\n{}\n{SHOW_CURSOR}after\n",
+                frame(1),
                 frame(2)
             )
         );

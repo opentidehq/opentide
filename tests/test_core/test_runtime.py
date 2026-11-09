@@ -86,14 +86,24 @@ def test_b_does_not_inherit_it():
 """
 
 
-def test_a_cached_root_does_not_outlive_the_test_that_set_it(tmp_path: Path) -> None:
+def test_a_cached_root_does_not_outlive_the_test_that_set_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """A test that points ``OPENTIDE_REPO_ROOT`` at its ``tmp_path`` must not leave
     the cached root behind: the next test in the worker would resolve the repository
     to a deleted directory (the order-dependent ``test_repo_root_is_path`` failure)."""
+    # A caller's PYTEST_ADDOPTS must not reach the child: with --basetemp it would
+    # point the child at a directory it then clears.
+    outer = tmp_path / "outer"
+    outer.mkdir()
+    (outer / "keep").write_text("", encoding="utf-8")
+    monkeypatch.setenv("PYTEST_ADDOPTS", f"--basetemp={outer}")
     probe = tmp_path / "test_probe.py"
     probe.write_text(_LEAK_PROBE, encoding="utf-8")
     root = Path(__file__).resolve().parents[2]
-    env = {k: v for k, v in os.environ.items() if k != "OPENTIDE_REPO_ROOT"}
+    # The child runs its own session: a PYTEST_ADDOPTS from the caller (say a --basetemp)
+    # would point it at the parent's temporary root, which it then clears.
+    env = {k: v for k, v in os.environ.items() if k not in {"OPENTIDE_REPO_ROOT", "PYTEST_ADDOPTS"}}
     run = subprocess.run(
         [
             sys.executable,
@@ -124,3 +134,4 @@ def test_a_cached_root_does_not_outlive_the_test_that_set_it(tmp_path: Path) -> 
     )
     assert run.returncode == 0, run.stdout + run.stderr
     assert "2 passed" in run.stdout
+    assert (outer / "keep").is_file(), "the child took the caller's --basetemp"
