@@ -338,7 +338,10 @@ fn every_case_is_compared_with_the_oracle_and_every_difference_is_explained() {
     if std::env::var_os("UPDATE_YAML_TABLE").is_some() {
         std::fs::write(&path, &doc).unwrap();
     } else {
-        let committed = std::fs::read_to_string(&path).unwrap_or_default();
+        // A Windows checkout may have turned the file's line feeds into CRLF.
+        let committed = std::fs::read_to_string(&path)
+            .unwrap_or_default()
+            .replace("\r\n", "\n");
         assert!(
             committed == doc,
             "{} is not current: UPDATE_YAML_TABLE=1 cargo test -p opentide-schema --test yaml_table",
