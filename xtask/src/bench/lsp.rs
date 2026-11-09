@@ -107,7 +107,7 @@ pub fn first_diagnostics(
     let root_uri = file_uri(&root);
     let uri = file_uri(&path);
 
-    let floor = measure::own_peak_rss();
+    measure::reset_own_peak_rss();
     let start = Instant::now();
     let mut child = command
         .spawn()
@@ -143,6 +143,9 @@ pub fn first_diagnostics(
     // open would block it; it ends when the pipe closes.
     let deadline = Instant::now() + EXIT_TIMEOUT;
     let reaped = measure::reap_by(child, deadline);
+    // After the reap: the floor includes what xtask touched up to the spawn
+    // (`measure::own_peak_rss`).
+    let floor = measure::own_peak_rss();
     drop(reader);
     let (peak_rss_bytes, exit_code) = reaped.with_context(|| {
         format!(
