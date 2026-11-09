@@ -1,0 +1,3048 @@
+{
+ "oracle": "0.23.0",
+ "pyyaml": "6.0.3",
+ "loader": "CSafeLoader",
+ "cases": [
+  {
+   "id": "bool-words",
+   "group": "bool",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "a"
+      },
+      {
+       "bool": true
+      }
+     ],
+     [
+      {
+       "str": "b"
+      },
+      {
+       "bool": true
+      }
+     ],
+     [
+      {
+       "str": "c"
+      },
+      {
+       "bool": true
+      }
+     ],
+     [
+      {
+       "str": "d"
+      },
+      {
+       "bool": false
+      }
+     ],
+     [
+      {
+       "str": "e"
+      },
+      {
+       "bool": false
+      }
+     ],
+     [
+      {
+       "str": "f"
+      },
+      {
+       "bool": false
+      }
+     ],
+     [
+      {
+       "str": "g"
+      },
+      {
+       "bool": true
+      }
+     ],
+     [
+      {
+       "str": "h"
+      },
+      {
+       "bool": true
+      }
+     ],
+     [
+      {
+       "str": "i"
+      },
+      {
+       "bool": true
+      }
+     ],
+     [
+      {
+       "str": "j"
+      },
+      {
+       "bool": false
+      }
+     ],
+     [
+      {
+       "str": "k"
+      },
+      {
+       "bool": false
+      }
+     ],
+     [
+      {
+       "str": "l"
+      },
+      {
+       "bool": false
+      }
+     ],
+     [
+      {
+       "str": "m"
+      },
+      {
+       "bool": true
+      }
+     ],
+     [
+      {
+       "str": "n"
+      },
+      {
+       "bool": true
+      }
+     ],
+     [
+      {
+       "str": "o"
+      },
+      {
+       "bool": true
+      }
+     ],
+     [
+      {
+       "str": "p"
+      },
+      {
+       "bool": false
+      }
+     ],
+     [
+      {
+       "str": "q"
+      },
+      {
+       "bool": false
+      }
+     ],
+     [
+      {
+       "str": "r"
+      },
+      {
+       "bool": false
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "bool-not-words",
+   "group": "bool",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "a"
+      },
+      {
+       "str": "y"
+      }
+     ],
+     [
+      {
+       "str": "b"
+      },
+      {
+       "str": "n"
+      }
+     ],
+     [
+      {
+       "str": "c"
+      },
+      {
+       "str": "Y"
+      }
+     ],
+     [
+      {
+       "str": "d"
+      },
+      {
+       "str": "N"
+      }
+     ],
+     [
+      {
+       "str": "e"
+      },
+      {
+       "str": "yEs"
+      }
+     ],
+     [
+      {
+       "str": "f"
+      },
+      {
+       "str": "tRUE"
+      }
+     ],
+     [
+      {
+       "str": "g"
+      },
+      {
+       "str": "oN"
+      }
+     ],
+     [
+      {
+       "str": "h"
+      },
+      {
+       "str": "yes"
+      }
+     ],
+     [
+      {
+       "str": "i"
+      },
+      {
+       "str": "no"
+      }
+     ],
+     [
+      {
+       "str": "j"
+      },
+      {
+       "str": "on"
+      }
+     ],
+     [
+      {
+       "str": "k"
+      },
+      {
+       "str": "t"
+      }
+     ],
+     [
+      {
+       "str": "l"
+      },
+      {
+       "str": "f"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "bool-keys",
+   "group": "bool",
+   "value": {
+    "map": [
+     [
+      {
+       "bool": true
+      },
+      {
+       "int": "1"
+      }
+     ],
+     [
+      {
+       "bool": false
+      },
+      {
+       "int": "2"
+      }
+     ],
+     [
+      {
+       "str": "y"
+      },
+      {
+       "int": "3"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "bool-explicit-tag",
+   "group": "bool",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "a"
+      },
+      {
+       "bool": true
+      }
+     ],
+     [
+      {
+       "str": "b"
+      },
+      {
+       "bool": false
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "null-forms",
+   "group": "null",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "a"
+      },
+      {
+       "null": null
+      }
+     ],
+     [
+      {
+       "str": "b"
+      },
+      {
+       "null": null
+      }
+     ],
+     [
+      {
+       "str": "c"
+      },
+      {
+       "null": null
+      }
+     ],
+     [
+      {
+       "str": "d"
+      },
+      {
+       "null": null
+      }
+     ],
+     [
+      {
+       "str": "e"
+      },
+      {
+       "null": null
+      }
+     ],
+     [
+      {
+       "str": "f"
+      },
+      {
+       "str": "nULL"
+      }
+     ],
+     [
+      {
+       "str": "g"
+      },
+      {
+       "str": "null"
+      }
+     ],
+     [
+      {
+       "str": "h"
+      },
+      {
+       "str": "~"
+      }
+     ],
+     [
+      {
+       "str": "i"
+      },
+      {
+       "null": null
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "null-in-flow",
+   "group": "null",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "a"
+      },
+      {
+       "seq": [
+        {
+         "null": null
+        },
+        {
+         "null": null
+        }
+       ]
+      }
+     ],
+     [
+      {
+       "str": "b"
+      },
+      {
+       "map": [
+        [
+         {
+          "str": "x"
+         },
+         {
+          "null": null
+         }
+        ],
+        [
+         {
+          "str": "y"
+         },
+         {
+          "null": null
+         }
+        ]
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "null-flow-empty-entry",
+   "group": "null",
+   "error": "yaml",
+   "detail": "while parsing a flow node"
+  },
+  {
+   "id": "null-key",
+   "group": "null",
+   "value": {
+    "map": [
+     [
+      {
+       "null": null
+      },
+      {
+       "str": "b"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "date",
+   "group": "timestamp",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "a"
+      },
+      {
+       "str": "2026-01-01"
+      }
+     ],
+     [
+      {
+       "str": "b"
+      },
+      {
+       "str": "2026-01-01"
+      }
+     ],
+     [
+      {
+       "str": "c"
+      },
+      {
+       "str": "2026-1-1"
+      }
+     ],
+     [
+      {
+       "str": "d"
+      },
+      {
+       "int": "20260101"
+      }
+     ],
+     [
+      {
+       "str": "e"
+      },
+      {
+       "str": "2026-01-01T10:00:00Z"
+      }
+     ],
+     [
+      {
+       "str": "f"
+      },
+      {
+       "str": "2026-01-01T10:00:00+02:00"
+      }
+     ],
+     [
+      {
+       "str": "g"
+      },
+      {
+       "str": "2026-01-01T10:00:00"
+      }
+     ],
+     [
+      {
+       "str": "h"
+      },
+      {
+       "str": "2026-01-01t10:00:00z"
+      }
+     ],
+     [
+      {
+       "str": "i"
+      },
+      {
+       "str": "2026-01-01T10:00:00.500000Z"
+      }
+     ],
+     [
+      {
+       "str": "j"
+      },
+      {
+       "str": "2026-01-01T10:00:00.123456-05:30"
+      }
+     ],
+     [
+      {
+       "str": "k"
+      },
+      {
+       "str": "2026-01-01T10:00:00+02:00"
+      }
+     ],
+     [
+      {
+       "str": "l"
+      },
+      {
+       "str": "2026-01-01T01:00:00"
+      }
+     ],
+     [
+      {
+       "str": "m"
+      },
+      {
+       "str": "2026-01-01T10:00:00Z"
+      }
+     ],
+     [
+      {
+       "str": "n"
+      },
+      {
+       "str": "2026-01-01T10:00:00Z"
+      }
+     ],
+     [
+      {
+       "str": "o"
+      },
+      {
+       "str": "2026-01-01T10:00:00"
+      }
+     ],
+     [
+      {
+       "str": "p"
+      },
+      {
+       "str": "2026-01-01T10:00:00Z"
+      }
+     ],
+     [
+      {
+       "str": "q"
+      },
+      {
+       "str": "2026-01-01"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "date-impossible",
+   "group": "timestamp",
+   "error": "yaml",
+   "detail": "'2026-02-30' is not a valid date (day is out of range for month)"
+  },
+  {
+   "id": "date-month-13",
+   "group": "timestamp",
+   "error": "yaml",
+   "detail": "'2026-13-01' is not a valid date (month must be in 1..12)"
+  },
+  {
+   "id": "timestamp-hour-25",
+   "group": "timestamp",
+   "error": "yaml",
+   "detail": "'2026-01-01T25:00:00' is not a valid date (hour must be in 0..23)"
+  },
+  {
+   "id": "timestamp-offset-99",
+   "group": "timestamp",
+   "error": "yaml",
+   "detail": "'2026-01-01T10:00:00+99' is not a valid date (offset must be a timedelta strictly between -timedelta(hours=24) and timedelta(hours=24), not datetime.timedelta(days=4, seconds=10800).)"
+  },
+  {
+   "id": "date-year-zero",
+   "group": "timestamp",
+   "error": "yaml",
+   "detail": "'0000-01-01' is not a valid date (year 0 is out of range)"
+  },
+  {
+   "id": "date-leap-day",
+   "group": "timestamp",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "a"
+      },
+      {
+       "str": "2024-02-29"
+      }
+     ],
+     [
+      {
+       "str": "b"
+      },
+      {
+       "str": "2000-02-29"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "date-not-leap",
+   "group": "timestamp",
+   "error": "yaml",
+   "detail": "'1900-02-29' is not a valid date (day is out of range for month)"
+  },
+  {
+   "id": "date-key",
+   "group": "timestamp",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "2026-01-01"
+      },
+      {
+       "str": "a"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "int-bases",
+   "group": "int",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "a"
+      },
+      {
+       "str": "0o17"
+      }
+     ],
+     [
+      {
+       "str": "b"
+      },
+      {
+       "int": "15"
+      }
+     ],
+     [
+      {
+       "str": "c"
+      },
+      {
+       "int": "31"
+      }
+     ],
+     [
+      {
+       "str": "d"
+      },
+      {
+       "str": "0X1F"
+      }
+     ],
+     [
+      {
+       "str": "e"
+      },
+      {
+       "int": "5"
+      }
+     ],
+     [
+      {
+       "str": "f"
+      },
+      {
+       "str": "0B101"
+      }
+     ],
+     [
+      {
+       "str": "g"
+      },
+      {
+       "int": "-15"
+      }
+     ],
+     [
+      {
+       "str": "h"
+      },
+      {
+       "int": "31"
+      }
+     ],
+     [
+      {
+       "str": "i"
+      },
+      {
+       "str": "08"
+      }
+     ],
+     [
+      {
+       "str": "j"
+      },
+      {
+       "int": "0"
+      }
+     ],
+     [
+      {
+       "str": "k"
+      },
+      {
+       "int": "0"
+      }
+     ],
+     [
+      {
+       "str": "l"
+      },
+      {
+       "int": "12"
+      }
+     ],
+     [
+      {
+       "str": "m"
+      },
+      {
+       "int": "2739128"
+      }
+     ],
+     [
+      {
+       "str": "n"
+      },
+      {
+       "str": "0x"
+      }
+     ],
+     [
+      {
+       "str": "o"
+      },
+      {
+       "str": "0b2"
+      }
+     ],
+     [
+      {
+       "str": "p"
+      },
+      {
+       "int": "0"
+      }
+     ],
+     [
+      {
+       "str": "q"
+      },
+      {
+       "int": "7"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "int-big",
+   "group": "int",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "a"
+      },
+      {
+       "int": "123456789012345678901234567890"
+      }
+     ],
+     [
+      {
+       "str": "b"
+      },
+      {
+       "int": "-9223372036854775809"
+      }
+     ],
+     [
+      {
+       "str": "c"
+      },
+      {
+       "int": "9223372036854775807"
+      }
+     ],
+     [
+      {
+       "str": "d"
+      },
+      {
+       "int": "1208925819614629174706175"
+      }
+     ],
+     [
+      {
+       "str": "e"
+      },
+      {
+       "int": "2417851639229258349412351"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "int-explicit-tag",
+   "group": "int",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "a"
+      },
+      {
+       "int": "42"
+      }
+     ],
+     [
+      {
+       "str": "b"
+      },
+      {
+       "int": "16"
+      }
+     ],
+     [
+      {
+       "str": "c"
+      },
+      {
+       "str": "42"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "int-key",
+   "group": "int",
+   "error": "yaml",
+   "detail": "duplicate key '1' at line 3"
+  },
+  {
+   "id": "int-binary-empty",
+   "group": "int",
+   "error": "python",
+   "detail": "ValueError: invalid literal for int() with base 2: ''"
+  },
+  {
+   "id": "int-hex-empty",
+   "group": "int",
+   "error": "python",
+   "detail": "ValueError: invalid literal for int() with base 16: ''"
+  },
+  {
+   "id": "underscore",
+   "group": "underscore",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "a"
+      },
+      {
+       "int": "1000"
+      }
+     ],
+     [
+      {
+       "str": "b"
+      },
+      {
+       "float": "1000.5"
+      }
+     ],
+     [
+      {
+       "str": "c"
+      },
+      {
+       "int": "2"
+      }
+     ],
+     [
+      {
+       "str": "d"
+      },
+      {
+       "int": "255"
+      }
+     ],
+     [
+      {
+       "str": "e"
+      },
+      {
+       "int": "10"
+      }
+     ],
+     [
+      {
+       "str": "f"
+      },
+      {
+       "str": "_1"
+      }
+     ],
+     [
+      {
+       "str": "g"
+      },
+      {
+       "int": "1"
+      }
+     ],
+     [
+      {
+       "str": "h"
+      },
+      {
+       "float": "1.5"
+      }
+     ],
+     [
+      {
+       "str": "i"
+      },
+      {
+       "int": "15"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "sexagesimal",
+   "group": "sexagesimal",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "a"
+      },
+      {
+       "int": "685230"
+      }
+     ],
+     [
+      {
+       "str": "b"
+      },
+      {
+       "int": "80"
+      }
+     ],
+     [
+      {
+       "str": "c"
+      },
+      {
+       "int": "-90"
+      }
+     ],
+     [
+      {
+       "str": "d"
+      },
+      {
+       "float": "685230.15"
+      }
+     ],
+     [
+      {
+       "str": "e"
+      },
+      {
+       "str": "1:60"
+      }
+     ],
+     [
+      {
+       "str": "f"
+      },
+      {
+       "str": "01:20"
+      }
+     ],
+     [
+      {
+       "str": "g"
+      },
+      {
+       "int": "3723"
+      }
+     ],
+     [
+      {
+       "str": "h"
+      },
+      {
+       "int": "45000"
+      }
+     ],
+     [
+      {
+       "str": "i"
+      },
+      {
+       "int": "65"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "float-special",
+   "group": "float",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "a"
+      },
+      {
+       "float": "inf"
+      }
+     ],
+     [
+      {
+       "str": "b"
+      },
+      {
+       "float": "-inf"
+      }
+     ],
+     [
+      {
+       "str": "c"
+      },
+      {
+       "float": "inf"
+      }
+     ],
+     [
+      {
+       "str": "d"
+      },
+      {
+       "float": "inf"
+      }
+     ],
+     [
+      {
+       "str": "e"
+      },
+      {
+       "float": "nan"
+      }
+     ],
+     [
+      {
+       "str": "f"
+      },
+      {
+       "float": "nan"
+      }
+     ],
+     [
+      {
+       "str": "g"
+      },
+      {
+       "float": "nan"
+      }
+     ],
+     [
+      {
+       "str": "h"
+      },
+      {
+       "str": "inf"
+      }
+     ],
+     [
+      {
+       "str": "i"
+      },
+      {
+       "str": "nan"
+      }
+     ],
+     [
+      {
+       "str": "j"
+      },
+      {
+       "str": "-.nan"
+      }
+     ],
+     [
+      {
+       "str": "k"
+      },
+      {
+       "str": ".iNf"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "float-forms",
+   "group": "float",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "a"
+      },
+      {
+       "float": "1.0"
+      }
+     ],
+     [
+      {
+       "str": "b"
+      },
+      {
+       "float": "1.0"
+      }
+     ],
+     [
+      {
+       "str": "c"
+      },
+      {
+       "float": "0.5"
+      }
+     ],
+     [
+      {
+       "str": "d"
+      },
+      {
+       "str": "1e3"
+      }
+     ],
+     [
+      {
+       "str": "e"
+      },
+      {
+       "str": "1.0e3"
+      }
+     ],
+     [
+      {
+       "str": "f"
+      },
+      {
+       "float": "1000.0"
+      }
+     ],
+     [
+      {
+       "str": "g"
+      },
+      {
+       "float": "0.001"
+      }
+     ],
+     [
+      {
+       "str": "h"
+      },
+      {
+       "float": "-1.5"
+      }
+     ],
+     [
+      {
+       "str": "i"
+      },
+      {
+       "float": "1.5"
+      }
+     ],
+     [
+      {
+       "str": "j"
+      },
+      {
+       "float": "inf"
+      }
+     ],
+     [
+      {
+       "str": "k"
+      },
+      {
+       "float": "0.1"
+      }
+     ],
+     [
+      {
+       "str": "l"
+      },
+      {
+       "float": "1.5e+16"
+      }
+     ],
+     [
+      {
+       "str": "m"
+      },
+      {
+       "float": "1e-05"
+      }
+     ],
+     [
+      {
+       "str": "n"
+      },
+      {
+       "float": "123456789.12345679"
+      }
+     ],
+     [
+      {
+       "str": "o"
+      },
+      {
+       "str": "1e+3"
+      }
+     ],
+     [
+      {
+       "str": "p"
+      },
+      {
+       "float": "0.0001"
+      }
+     ],
+     [
+      {
+       "str": "q"
+      },
+      {
+       "float": "1e+16"
+      }
+     ],
+     [
+      {
+       "str": "r"
+      },
+      {
+       "float": "1e+17"
+      }
+     ],
+     [
+      {
+       "str": "s"
+      },
+      {
+       "float": "-0.0"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "float-key",
+   "group": "float",
+   "value": {
+    "map": [
+     [
+      {
+       "float": "1.5"
+      },
+      {
+       "str": "a"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "duplicate-key",
+   "group": "duplicate",
+   "error": "yaml",
+   "detail": "duplicate key 'a' at line 3"
+  },
+  {
+   "id": "duplicate-key-nested",
+   "group": "duplicate",
+   "error": "yaml",
+   "detail": "duplicate key 'x' at line 3"
+  },
+  {
+   "id": "duplicate-key-int-and-str",
+   "group": "duplicate",
+   "error": "yaml",
+   "detail": "duplicate key '1' at line 2"
+  },
+  {
+   "id": "duplicate-key-bool-spellings",
+   "group": "duplicate",
+   "value": {
+    "map": [
+     [
+      {
+       "bool": true
+      },
+      {
+       "str": "b"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "duplicate-key-in-flow",
+   "group": "duplicate",
+   "error": "yaml",
+   "detail": "duplicate key 'x' at line 1"
+  },
+  {
+   "id": "alias",
+   "group": "alias",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "base"
+      },
+      {
+       "map": [
+        [
+         {
+          "str": "x"
+         },
+         {
+          "int": "1"
+         }
+        ],
+        [
+         {
+          "str": "y"
+         },
+         {
+          "seq": [
+           {
+            "int": "1"
+           },
+           {
+            "int": "2"
+           }
+          ]
+         }
+        ]
+       ]
+      }
+     ],
+     [
+      {
+       "str": "copy"
+      },
+      {
+       "map": [
+        [
+         {
+          "str": "x"
+         },
+         {
+          "int": "1"
+         }
+        ],
+        [
+         {
+          "str": "y"
+         },
+         {
+          "seq": [
+           {
+            "int": "1"
+           },
+           {
+            "int": "2"
+           }
+          ]
+         }
+        ]
+       ]
+      }
+     ],
+     [
+      {
+       "str": "item"
+      },
+      {
+       "str": "hello"
+      }
+     ],
+     [
+      {
+       "str": "again"
+      },
+      {
+       "str": "hello"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "alias-undefined",
+   "group": "alias",
+   "error": "yaml",
+   "detail": "found undefined alias"
+  },
+  {
+   "id": "alias-recursive",
+   "group": "alias",
+   "error": "yaml",
+   "detail": "recursive alias at line 1"
+  },
+  {
+   "id": "alias-redefined",
+   "group": "alias",
+   "error": "yaml",
+   "detail": "found duplicate anchor; first occurrence"
+  },
+  {
+   "id": "alias-as-key",
+   "group": "alias",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "k"
+      },
+      {
+       "str": "name"
+      }
+     ],
+     [
+      {
+       "str": "name"
+      },
+      {
+       "str": "value"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "alias-nested-laughs",
+   "group": "alias",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "a"
+      },
+      {
+       "seq": [
+        {
+         "str": "x"
+        },
+        {
+         "str": "x"
+        }
+       ]
+      }
+     ],
+     [
+      {
+       "str": "b"
+      },
+      {
+       "seq": [
+        {
+         "seq": [
+          {
+           "str": "x"
+          },
+          {
+           "str": "x"
+          }
+         ]
+        },
+        {
+         "seq": [
+          {
+           "str": "x"
+          },
+          {
+           "str": "x"
+          }
+         ]
+        }
+       ]
+      }
+     ],
+     [
+      {
+       "str": "c"
+      },
+      {
+       "seq": [
+        {
+         "seq": [
+          {
+           "seq": [
+            {
+             "str": "x"
+            },
+            {
+             "str": "x"
+            }
+           ]
+          },
+          {
+           "seq": [
+            {
+             "str": "x"
+            },
+            {
+             "str": "x"
+            }
+           ]
+          }
+         ]
+        },
+        {
+         "seq": [
+          {
+           "seq": [
+            {
+             "str": "x"
+            },
+            {
+             "str": "x"
+            }
+           ]
+          },
+          {
+           "seq": [
+            {
+             "str": "x"
+            },
+            {
+             "str": "x"
+            }
+           ]
+          }
+         ]
+        }
+       ]
+      }
+     ],
+     [
+      {
+       "str": "d"
+      },
+      {
+       "seq": [
+        {
+         "seq": [
+          {
+           "seq": [
+            {
+             "seq": [
+              {
+               "str": "x"
+              },
+              {
+               "str": "x"
+              }
+             ]
+            },
+            {
+             "seq": [
+              {
+               "str": "x"
+              },
+              {
+               "str": "x"
+              }
+             ]
+            }
+           ]
+          },
+          {
+           "seq": [
+            {
+             "seq": [
+              {
+               "str": "x"
+              },
+              {
+               "str": "x"
+              }
+             ]
+            },
+            {
+             "seq": [
+              {
+               "str": "x"
+              },
+              {
+               "str": "x"
+              }
+             ]
+            }
+           ]
+          }
+         ]
+        },
+        {
+         "seq": [
+          {
+           "seq": [
+            {
+             "seq": [
+              {
+               "str": "x"
+              },
+              {
+               "str": "x"
+              }
+             ]
+            },
+            {
+             "seq": [
+              {
+               "str": "x"
+              },
+              {
+               "str": "x"
+              }
+             ]
+            }
+           ]
+          },
+          {
+           "seq": [
+            {
+             "seq": [
+              {
+               "str": "x"
+              },
+              {
+               "str": "x"
+              }
+             ]
+            },
+            {
+             "seq": [
+              {
+               "str": "x"
+              },
+              {
+               "str": "x"
+              }
+             ]
+            }
+           ]
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "merge",
+   "group": "merge",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "base"
+      },
+      {
+       "map": [
+        [
+         {
+          "str": "x"
+         },
+         {
+          "int": "1"
+         }
+        ],
+        [
+         {
+          "str": "y"
+         },
+         {
+          "int": "2"
+         }
+        ]
+       ]
+      }
+     ],
+     [
+      {
+       "str": "item"
+      },
+      {
+       "map": [
+        [
+         {
+          "str": "x"
+         },
+         {
+          "int": "1"
+         }
+        ],
+        [
+         {
+          "str": "y"
+         },
+         {
+          "int": "3"
+         }
+        ],
+        [
+         {
+          "str": "z"
+         },
+         {
+          "int": "4"
+         }
+        ]
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "merge-list",
+   "group": "merge",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "one"
+      },
+      {
+       "map": [
+        [
+         {
+          "str": "a"
+         },
+         {
+          "int": "1"
+         }
+        ],
+        [
+         {
+          "str": "b"
+         },
+         {
+          "int": "1"
+         }
+        ]
+       ]
+      }
+     ],
+     [
+      {
+       "str": "two"
+      },
+      {
+       "map": [
+        [
+         {
+          "str": "b"
+         },
+         {
+          "int": "2"
+         }
+        ],
+        [
+         {
+          "str": "c"
+         },
+         {
+          "int": "2"
+         }
+        ]
+       ]
+      }
+     ],
+     [
+      {
+       "str": "item"
+      },
+      {
+       "map": [
+        [
+         {
+          "str": "b"
+         },
+         {
+          "int": "1"
+         }
+        ],
+        [
+         {
+          "str": "c"
+         },
+         {
+          "int": "2"
+         }
+        ],
+        [
+         {
+          "str": "a"
+         },
+         {
+          "int": "1"
+         }
+        ],
+        [
+         {
+          "str": "d"
+         },
+         {
+          "int": "4"
+         }
+        ]
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "merge-own-key-first",
+   "group": "merge",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "base"
+      },
+      {
+       "map": [
+        [
+         {
+          "str": "x"
+         },
+         {
+          "int": "1"
+         }
+        ]
+       ]
+      }
+     ],
+     [
+      {
+       "str": "item"
+      },
+      {
+       "map": [
+        [
+         {
+          "str": "x"
+         },
+         {
+          "int": "0"
+         }
+        ]
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "merge-inline",
+   "group": "merge",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "item"
+      },
+      {
+       "map": [
+        [
+         {
+          "str": "x"
+         },
+         {
+          "int": "1"
+         }
+        ],
+        [
+         {
+          "str": "y"
+         },
+         {
+          "int": "2"
+         }
+        ]
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "merge-scalar",
+   "group": "merge",
+   "error": "yaml",
+   "detail": "while constructing a mapping"
+  },
+  {
+   "id": "merge-quoted-key",
+   "group": "merge",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "item"
+      },
+      {
+       "map": [
+        [
+         {
+          "str": "<<"
+         },
+         {
+          "map": [
+           [
+            {
+             "str": "x"
+            },
+            {
+             "int": "1"
+            }
+           ]
+          ]
+         }
+        ]
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "merge-nested",
+   "group": "merge",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "a"
+      },
+      {
+       "map": [
+        [
+         {
+          "str": "x"
+         },
+         {
+          "int": "1"
+         }
+        ]
+       ]
+      }
+     ],
+     [
+      {
+       "str": "b"
+      },
+      {
+       "map": [
+        [
+         {
+          "str": "x"
+         },
+         {
+          "int": "1"
+         }
+        ],
+        [
+         {
+          "str": "y"
+         },
+         {
+          "int": "2"
+         }
+        ]
+       ]
+      }
+     ],
+     [
+      {
+       "str": "c"
+      },
+      {
+       "map": [
+        [
+         {
+          "str": "x"
+         },
+         {
+          "int": "1"
+         }
+        ],
+        [
+         {
+          "str": "y"
+         },
+         {
+          "int": "2"
+         }
+        ],
+        [
+         {
+          "str": "z"
+         },
+         {
+          "int": "3"
+         }
+        ]
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "merge-twice",
+   "group": "merge",
+   "error": "yaml",
+   "detail": "duplicate key '<<' at line 4"
+  },
+  {
+   "id": "documents-two",
+   "group": "documents",
+   "error": "yaml",
+   "detail": "expected a single document in the stream"
+  },
+  {
+   "id": "documents-explicit-one",
+   "group": "documents",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "a"
+      },
+      {
+       "int": "1"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "documents-start-only",
+   "group": "documents",
+   "value": {
+    "null": null
+   }
+  },
+  {
+   "id": "documents-empty",
+   "group": "documents",
+   "value": {
+    "null": null
+   }
+  },
+  {
+   "id": "documents-comment-only",
+   "group": "documents",
+   "value": {
+    "null": null
+   }
+  },
+  {
+   "id": "documents-end-then-more",
+   "group": "documents",
+   "error": "yaml",
+   "detail": "expected a single document in the stream"
+  },
+  {
+   "id": "documents-yaml-directive",
+   "group": "documents",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "a"
+      },
+      {
+       "int": "1"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "documents-yaml-directive-1-2",
+   "group": "documents",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "a"
+      },
+      {
+       "int": "1"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "bom-leading",
+   "group": "bom",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "a"
+      },
+      {
+       "int": "1"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "bom-twice",
+   "group": "bom",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "a"
+      },
+      {
+       "int": "1"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "bom-in-value",
+   "group": "bom",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "a"
+      },
+      {
+       "str": "x﻿y"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "tab-indent",
+   "group": "tabs",
+   "error": "yaml",
+   "detail": "while scanning for the next token"
+  },
+  {
+   "id": "tab-after-colon",
+   "group": "tabs",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "a"
+      },
+      {
+       "int": "1"
+      }
+     ],
+     [
+      {
+       "str": "b"
+      },
+      {
+       "str": "x"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "tab-in-value",
+   "group": "tabs",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "a"
+      },
+      {
+       "str": "x\ty"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "tab-appended-key",
+   "group": "tabs",
+   "error": "yaml",
+   "detail": "while scanning a plain scalar"
+  },
+  {
+   "id": "tab-in-flow",
+   "group": "tabs",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "a"
+      },
+      {
+       "seq": [
+        {
+         "int": "1"
+        },
+        {
+         "int": "2"
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "tab-in-block-scalar",
+   "group": "tabs",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "a"
+      },
+      {
+       "str": "x\ty\n"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "tab-before-comment",
+   "group": "tabs",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "a"
+      },
+      {
+       "int": "1"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "crlf",
+   "group": "crlf",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "a"
+      },
+      {
+       "int": "1"
+      }
+     ],
+     [
+      {
+       "str": "b"
+      },
+      {
+       "str": "x\ny\n"
+      }
+     ],
+     [
+      {
+       "str": "c"
+      },
+      {
+       "str": "p q"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "cr-only",
+   "group": "crlf",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "a"
+      },
+      {
+       "int": "1"
+      }
+     ],
+     [
+      {
+       "str": "b"
+      },
+      {
+       "int": "2"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "string-styles",
+   "group": "string",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "a"
+      },
+      {
+       "str": "plain text"
+      }
+     ],
+     [
+      {
+       "str": "b"
+      },
+      {
+       "str": "single 'quoted'"
+      }
+     ],
+     [
+      {
+       "str": "c"
+      },
+      {
+       "str": "double \"quoted\" \t é A"
+      }
+     ],
+     [
+      {
+       "str": "d"
+      },
+      {
+       "str": "literal\nblock\n"
+      }
+     ],
+     [
+      {
+       "str": "e"
+      },
+      {
+       "str": "folded block\n"
+      }
+     ],
+     [
+      {
+       "str": "f"
+      },
+      {
+       "str": "strip"
+      }
+     ],
+     [
+      {
+       "str": "g"
+      },
+      {
+       "str": "keep\n\n"
+      }
+     ],
+     [
+      {
+       "str": "h"
+      },
+      {
+       "str": "multi line plain"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "string-value-tag",
+   "group": "string",
+   "error": "yaml",
+   "detail": "could not determine a constructor for the tag 'tag:yaml.org,2002:value'"
+  },
+  {
+   "id": "string-unicode",
+   "group": "string",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "a"
+      },
+      {
+       "str": "日本 🔥 é"
+      }
+     ],
+     [
+      {
+       "str": "b"
+      },
+      {
+       "str": "🔥"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "string-escapes-1-2",
+   "group": "string",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "a"
+      },
+      {
+       "str": "/"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "string-nel-and-ls",
+   "group": "string",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "a"
+      },
+      {
+       "str": "xy z w v"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "tag-unknown",
+   "group": "tags",
+   "error": "yaml",
+   "detail": "could not determine a constructor for the tag '!custom'"
+  },
+  {
+   "id": "tag-python",
+   "group": "tags",
+   "error": "yaml",
+   "detail": "could not determine a constructor for the tag 'tag:yaml.org,2002:python/name:os.system'"
+  },
+  {
+   "id": "tag-non-specific",
+   "group": "tags",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "a"
+      },
+      {
+       "int": "12"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "tag-str-on-map",
+   "group": "tags",
+   "error": "yaml",
+   "detail": "expected a scalar node, but found mapping"
+  },
+  {
+   "id": "tag-map-seq",
+   "group": "tags",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "a"
+      },
+      {
+       "map": [
+        [
+         {
+          "str": "x"
+         },
+         {
+          "int": "1"
+         }
+        ]
+       ]
+      }
+     ],
+     [
+      {
+       "str": "b"
+      },
+      {
+       "seq": [
+        {
+         "int": "1"
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "tag-verbatim",
+   "group": "tags",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "a"
+      },
+      {
+       "str": "12"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "tag-directive",
+   "group": "tags",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "a"
+      },
+      {
+       "str": "12"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "key-complex-seq",
+   "group": "keys",
+   "error": "yaml",
+   "detail": "while constructing a mapping"
+  },
+  {
+   "id": "key-complex-map",
+   "group": "keys",
+   "error": "yaml",
+   "detail": "while constructing a mapping"
+  },
+  {
+   "id": "key-explicit-scalar",
+   "group": "keys",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "a"
+      },
+      {
+       "int": "1"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "key-empty",
+   "group": "keys",
+   "error": "yaml",
+   "detail": "while parsing a block mapping"
+  },
+  {
+   "id": "root-scalar",
+   "group": "structure",
+   "value": {
+    "str": "just text"
+   }
+  },
+  {
+   "id": "root-sequence",
+   "group": "structure",
+   "value": {
+    "seq": [
+     {
+      "str": "a"
+     },
+     {
+      "str": "b"
+     }
+    ]
+   }
+  },
+  {
+   "id": "unclosed-flow",
+   "group": "structure",
+   "error": "yaml",
+   "detail": "while parsing a flow sequence"
+  },
+  {
+   "id": "bad-indent",
+   "group": "structure",
+   "error": "yaml",
+   "detail": "while parsing a block mapping"
+  },
+  {
+   "id": "colon-in-plain",
+   "group": "structure",
+   "error": "yaml",
+   "detail": "mapping values are not allowed in this context"
+  },
+  {
+   "id": "nested-flow",
+   "group": "structure",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "a"
+      },
+      {
+       "map": [
+        [
+         {
+          "str": "b"
+         },
+         {
+          "seq": [
+           {
+            "int": "1"
+           },
+           {
+            "map": [
+             [
+              {
+               "str": "c"
+              },
+              {
+               "str": "d"
+              }
+             ]
+            ]
+           }
+          ]
+         }
+        ],
+        [
+         {
+          "str": "e"
+         },
+         {
+          "str": "f"
+         }
+        ]
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "control-character",
+   "group": "structure",
+   "error": "yaml",
+   "detail": "unacceptable character #x0001: control characters are not allowed"
+  },
+  {
+   "id": "not-utf8",
+   "group": "structure",
+   "error": "not_utf8"
+  },
+  {
+   "id": "plain-with-hash",
+   "group": "structure",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "a"
+      },
+      {
+       "str": "x#y"
+      }
+     ],
+     [
+      {
+       "str": "b"
+      },
+      {
+       "str": "x"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "empty-flow",
+   "group": "structure",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "a"
+      },
+      {
+       "seq": []
+      }
+     ],
+     [
+      {
+       "str": "b"
+      },
+      {
+       "map": []
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "tag-explicit-errors-bool",
+   "group": "tags",
+   "error": "python",
+   "detail": "KeyError: 'maybe'"
+  },
+  {
+   "id": "tag-explicit-errors-int",
+   "group": "tags",
+   "error": "python",
+   "detail": "ValueError: invalid literal for int() with base 10: '1.5'"
+  },
+  {
+   "id": "tag-explicit-errors-float",
+   "group": "tags",
+   "error": "python",
+   "detail": "ValueError: could not convert string to float: 'abc'"
+  },
+  {
+   "id": "tag-explicit-errors-timestamp",
+   "group": "tags",
+   "error": "python",
+   "detail": "AttributeError: 'NoneType' object has no attribute 'groupdict'"
+  },
+  {
+   "id": "tag-explicit-null-text",
+   "group": "tags",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "a"
+      },
+      {
+       "null": null
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "tag-explicit-float-forms",
+   "group": "tags",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "a"
+      },
+      {
+       "float": "1.0"
+      }
+     ],
+     [
+      {
+       "str": "b"
+      },
+      {
+       "float": "inf"
+      }
+     ],
+     [
+      {
+       "str": "c"
+      },
+      {
+       "float": "2.5"
+      }
+     ],
+     [
+      {
+       "str": "d"
+      },
+      {
+       "float": "90.0"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "tag-quoted-non-specific",
+   "group": "tags",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "a"
+      },
+      {
+       "int": "12"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "tag-merge-as-value",
+   "group": "tags",
+   "error": "yaml",
+   "detail": "could not determine a constructor for the tag 'tag:yaml.org,2002:merge'"
+  },
+  {
+   "id": "tag-value-as-key",
+   "group": "tags",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "="
+      },
+      {
+       "int": "1"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "tag-binary",
+   "group": "unsupported",
+   "unsupported": "{'a': b'hello'}"
+  },
+  {
+   "id": "tag-set",
+   "group": "unsupported",
+   "unsupported": "{'a': {'x', 'y'}}"
+  },
+  {
+   "id": "tag-omap",
+   "group": "unsupported",
+   "unsupported": "{'a': [('x', 1)]}"
+  },
+  {
+   "id": "tag-pairs",
+   "group": "unsupported",
+   "unsupported": "{'a': [('x', 1)]}"
+  },
+  {
+   "id": "deep-nesting",
+   "group": "structure",
+   "error": "yaml",
+   "detail": "while parsing a flow sequence"
+  },
+  {
+   "id": "nel-in-plain",
+   "group": "structure",
+   "error": "yaml",
+   "detail": "while scanning a simple key"
+  },
+  {
+   "id": "line-separator",
+   "group": "structure",
+   "error": "yaml",
+   "detail": "while scanning a simple key"
+  },
+  {
+   "id": "key-int-float-bool-merge",
+   "group": "keys",
+   "value": {
+    "map": [
+     [
+      {
+       "int": "1"
+      },
+      {
+       "str": "b"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "merge-overrides-int-key",
+   "group": "merge",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "base"
+      },
+      {
+       "map": [
+        [
+         {
+          "int": "1"
+         },
+         {
+          "str": "x"
+         }
+        ]
+       ]
+      }
+     ],
+     [
+      {
+       "str": "item"
+      },
+      {
+       "map": [
+        [
+         {
+          "int": "1"
+         },
+         {
+          "str": "y"
+         }
+        ]
+       ]
+      }
+     ]
+    ]
+   }
+  }
+ ]
+}

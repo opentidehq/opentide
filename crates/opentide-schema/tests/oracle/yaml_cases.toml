@@ -1,0 +1,826 @@
+# The YAML 1.1 resolution table (UC-1.2, #808): every case is a document the
+# oracle's loader (`opentide.core.io.parse_yaml`, PyYAML's CSafeLoader with
+# opentide's timestamp and duplicate-key handling) reads. `yaml_table.py`
+# runs each through the oracle and writes `yaml_table.json`, the expectations
+# `tests/yaml_table.rs` holds the Rust loader (`opentide_schema::node`) to.
+#
+#   <oracle python> crates/opentide-schema/tests/oracle/yaml_table.py
+#
+# A case is `[[case]]` with an `id`, the document as `yaml` (or `bytes_hex`
+# for bytes that TOML cannot hold, such as a BOM) and the `group` of the
+# issue's list it belongs to.
+
+# --- yes, no, on, off, y, n -------------------------------------------------
+[[case]]
+group = "bool"
+id = "bool-words"
+yaml = """
+a: yes
+b: Yes
+c: YES
+d: no
+e: No
+f: NO
+g: on
+h: On
+i: ON
+j: off
+k: Off
+l: OFF
+m: true
+n: True
+o: TRUE
+p: false
+q: False
+r: FALSE
+"""
+
+[[case]]
+group = "bool"
+id = "bool-not-words"
+yaml = """
+a: y
+b: n
+c: Y
+d: N
+e: yEs
+f: tRUE
+g: oN
+h: 'yes'
+i: "no"
+j: !!str on
+k: t
+l: f
+"""
+
+[[case]]
+group = "bool"
+id = "bool-keys"
+yaml = """
+yes: 1
+off: 2
+y: 3
+"""
+
+[[case]]
+group = "bool"
+id = "bool-explicit-tag"
+yaml = """
+a: !!bool yes
+b: !!bool false
+"""
+
+# --- ~ and null ---------------------------------------------------------------
+[[case]]
+group = "null"
+id = "null-forms"
+yaml = """
+a: ~
+b: null
+c: Null
+d: NULL
+e:
+f: nULL
+g: 'null'
+h: "~"
+i: !!null ''
+"""
+
+[[case]]
+group = "null"
+id = "null-in-flow"
+yaml = "a: [~, null]\nb: {x: , y: ~}\n"
+
+[[case]]
+group = "null"
+id = "null-flow-empty-entry"
+yaml = "a: [~, , ]\n"
+
+[[case]]
+group = "null"
+id = "null-key"
+yaml = """
+~: a
+null: b
+"""
+
+# --- dates and timestamps --------------------------------------------------
+[[case]]
+group = "timestamp"
+id = "date"
+yaml = """
+a: 2026-01-01
+b: '2026-01-01'
+c: 2026-1-1
+d: 20260101
+e: 2026-01-01T10:00:00Z
+f: 2026-01-01T10:00:00+02:00
+g: 2026-01-01 10:00:00
+h: 2026-01-01t10:00:00z
+i: 2026-01-01T10:00:00.5Z
+j: 2026-01-01T10:00:00.1234567-05:30
+k: 2026-01-01 10:00:00 +02
+l: 2026-1-1T1:00:00
+m: 2026-01-01T10:00:00-00:00
+n: 2026-01-01T10:00:00.000000Z
+o: 2026-01-01T10:00:00.
+p: 2026-01-01  	10:00:00Z
+q: !!timestamp 2026-01-01
+"""
+
+[[case]]
+group = "timestamp"
+id = "date-impossible"
+yaml = "a: 2026-02-30\n"
+
+[[case]]
+group = "timestamp"
+id = "date-month-13"
+yaml = "a: 2026-13-01\n"
+
+[[case]]
+group = "timestamp"
+id = "timestamp-hour-25"
+yaml = "a: 2026-01-01T25:00:00\n"
+
+[[case]]
+group = "timestamp"
+id = "timestamp-offset-99"
+yaml = "a: 2026-01-01T10:00:00+99\n"
+
+[[case]]
+group = "timestamp"
+id = "date-year-zero"
+yaml = "a: 0000-01-01\n"
+
+[[case]]
+group = "timestamp"
+id = "date-leap-day"
+yaml = "a: 2024-02-29\nb: 2000-02-29\n"
+
+[[case]]
+group = "timestamp"
+id = "date-not-leap"
+yaml = "a: 1900-02-29\n"
+
+[[case]]
+group = "timestamp"
+id = "date-key"
+yaml = "2026-01-01: a\n"
+
+# --- octal and hex -----------------------------------------------------------
+[[case]]
+group = "int"
+id = "int-bases"
+yaml = """
+a: 0o17
+b: 017
+c: 0x1F
+d: 0X1F
+e: 0b101
+f: 0B101
+g: -017
+h: +0x_1f
+i: 08
+j: 0
+k: -0
+l: +12
+m: 012345670
+n: 0x
+o: 0b2
+p: 00
+q: 0_7
+"""
+
+[[case]]
+group = "int"
+id = "int-big"
+yaml = """
+a: 123456789012345678901234567890
+b: -9223372036854775809
+c: 9223372036854775807
+d: 0xFFFFFFFFFFFFFFFFFFFF
+e: 0777777777777777777777777777
+"""
+
+[[case]]
+group = "int"
+id = "int-explicit-tag"
+yaml = """
+a: !!int "42"
+b: !!int 0x10
+c: !!str 42
+"""
+
+[[case]]
+group = "int"
+id = "int-key"
+yaml = """
+1: a
+0x10: b
+"1": c
+"""
+
+[[case]]
+group = "int"
+id = "int-binary-empty"
+yaml = "a: 0b_\n"
+
+[[case]]
+group = "int"
+id = "int-hex-empty"
+yaml = "a: 0x_\n"
+
+# --- numbers with _ ---------------------------------------------------------
+[[case]]
+group = "underscore"
+id = "underscore"
+yaml = """
+a: 1_000
+b: 1_000.5
+c: 0b1_0
+d: 0x_FF
+e: 1__0
+f: _1
+g: 1_
+h: 1_.5
+i: 0_17
+"""
+
+# --- sexagesimal -------------------------------------------------------------
+[[case]]
+group = "sexagesimal"
+id = "sexagesimal"
+yaml = """
+a: 190:20:30
+b: 1:20
+c: -1:30
+d: 190:20:30.15
+e: 1:60
+f: 01:20
+g: 1:2:3
+h: 12:30:00
+i: 1:5
+"""
+
+# --- .inf and .nan; other floats ---------------------------------------------
+[[case]]
+group = "float"
+id = "float-special"
+yaml = """
+a: .inf
+b: -.inf
+c: +.Inf
+d: .INF
+e: .nan
+f: .NaN
+g: .NAN
+h: inf
+i: nan
+j: -.nan
+k: .iNf
+"""
+
+[[case]]
+group = "float"
+id = "float-forms"
+yaml = """
+a: 1.0
+b: 1.
+c: .5
+d: 1e3
+e: 1.0e3
+f: 1.0e+3
+g: 1.0E-3
+h: -1.5
+i: +1.5
+j: 1.0e+400
+k: 0.1
+l: 1.5e+16
+m: 1.0e-5
+n: 123456789.123456789
+o: 1e+3
+p: 0.0001
+q: 1.0e+16
+r: 100000000000000000.0
+s: -0.0
+"""
+
+[[case]]
+group = "float"
+id = "float-key"
+yaml = "1.5: a\n"
+
+# --- duplicate keys ----------------------------------------------------------
+[[case]]
+group = "duplicate"
+id = "duplicate-key"
+yaml = """
+a: 1
+b: 2
+a: 3
+"""
+
+[[case]]
+group = "duplicate"
+id = "duplicate-key-nested"
+yaml = """
+a:
+  x: 1
+  x: 2
+"""
+
+[[case]]
+group = "duplicate"
+id = "duplicate-key-int-and-str"
+yaml = """
+1: a
+'1': b
+"""
+
+[[case]]
+group = "duplicate"
+id = "duplicate-key-bool-spellings"
+yaml = """
+yes: a
+true: b
+"""
+
+[[case]]
+group = "duplicate"
+id = "duplicate-key-in-flow"
+yaml = "a: {x: 1, x: 2}\n"
+
+# --- anchors and aliases ---------------------------------------------------------
+[[case]]
+group = "alias"
+id = "alias"
+yaml = """
+base: &b
+  x: 1
+  y: [1, 2]
+copy: *b
+item: &s hello
+again: *s
+"""
+
+[[case]]
+group = "alias"
+id = "alias-undefined"
+yaml = "a: *nothing\n"
+
+[[case]]
+group = "alias"
+id = "alias-recursive"
+yaml = "a: &x\n  b: *x\n"
+
+[[case]]
+group = "alias"
+id = "alias-redefined"
+yaml = """
+a: &x 1
+b: *x
+c: &x 2
+d: *x
+"""
+
+[[case]]
+group = "alias"
+id = "alias-as-key"
+yaml = """
+k: &k name
+*k : value
+"""
+
+[[case]]
+group = "alias"
+id = "alias-nested-laughs"
+yaml = """
+a: &a [x, x]
+b: &b [*a, *a]
+c: &c [*b, *b]
+d: [*c, *c]
+"""
+
+# --- merge keys (<<) ---------------------------------------------------------
+[[case]]
+group = "merge"
+id = "merge"
+yaml = """
+base: &b
+  x: 1
+  y: 2
+item:
+  <<: *b
+  y: 3
+  z: 4
+"""
+
+[[case]]
+group = "merge"
+id = "merge-list"
+yaml = """
+one: &one {a: 1, b: 1}
+two: &two {b: 2, c: 2}
+item:
+  <<: [*one, *two]
+  d: 4
+"""
+
+[[case]]
+group = "merge"
+id = "merge-own-key-first"
+yaml = """
+base: &b {x: 1}
+item:
+  x: 0
+  <<: *b
+"""
+
+[[case]]
+group = "merge"
+id = "merge-inline"
+yaml = """
+item:
+  <<: {x: 1}
+  y: 2
+"""
+
+[[case]]
+group = "merge"
+id = "merge-scalar"
+yaml = """
+item:
+  <<: 1
+"""
+
+[[case]]
+group = "merge"
+id = "merge-quoted-key"
+yaml = """
+item:
+  '<<': {x: 1}
+"""
+
+[[case]]
+group = "merge"
+id = "merge-nested"
+yaml = """
+a: &a {x: 1}
+b: &b {<<: *a, y: 2}
+c:
+  <<: *b
+  z: 3
+"""
+
+[[case]]
+group = "merge"
+id = "merge-twice"
+yaml = """
+a: &a {x: 1}
+item:
+  <<: *a
+  <<: *a
+"""
+
+# --- multiple documents ------------------------------------------------------
+[[case]]
+group = "documents"
+id = "documents-two"
+yaml = "a: 1\n---\nb: 2\n"
+
+[[case]]
+group = "documents"
+id = "documents-explicit-one"
+yaml = "---\na: 1\n...\n"
+
+[[case]]
+group = "documents"
+id = "documents-start-only"
+yaml = "---\n"
+
+[[case]]
+group = "documents"
+id = "documents-empty"
+yaml = ""
+
+[[case]]
+group = "documents"
+id = "documents-comment-only"
+yaml = "# nothing\n"
+
+[[case]]
+group = "documents"
+id = "documents-end-then-more"
+yaml = "a: 1\n...\n---\nb: 2\n"
+
+[[case]]
+group = "documents"
+id = "documents-yaml-directive"
+yaml = "%YAML 1.1\n---\na: 1\n"
+
+[[case]]
+group = "documents"
+id = "documents-yaml-directive-1-2"
+yaml = "%YAML 1.2\n---\na: 1\n"
+
+# --- a BOM -----------------------------------------------------------------
+[[case]]
+group = "bom"
+id = "bom-leading"
+bytes_hex = "efbbbf613a20310a"
+
+[[case]]
+group = "bom"
+id = "bom-twice"
+bytes_hex = "efbbbfefbbbf613a20310a"
+
+[[case]]
+group = "bom"
+id = "bom-in-value"
+bytes_hex = "613a2078efbbbf790a"
+
+# --- tabs ---------------------------------------------------------------------
+[[case]]
+group = "tabs"
+id = "tab-indent"
+yaml = "a:\n\tb: 1\n"
+
+[[case]]
+group = "tabs"
+id = "tab-after-colon"
+yaml = "a:\t1\nb: \tx\n"
+
+[[case]]
+group = "tabs"
+id = "tab-in-value"
+yaml = "a: x\ty\n"
+
+[[case]]
+group = "tabs"
+id = "tab-appended-key"
+yaml = "a: 1\n\tindent: tab\n"
+
+[[case]]
+group = "tabs"
+id = "tab-in-flow"
+yaml = "a: [1,\t2]\n"
+
+[[case]]
+group = "tabs"
+id = "tab-in-block-scalar"
+yaml = "a: |\n  x\ty\n"
+
+[[case]]
+group = "tabs"
+id = "tab-before-comment"
+yaml = "a: 1\t# c\n"
+
+# --- CRLF ------------------------------------------------------------------
+[[case]]
+group = "crlf"
+id = "crlf"
+yaml = "a: 1\r\nb: |\r\n  x\r\n  y\r\nc: \"p\r\n  q\"\r\n"
+
+[[case]]
+group = "crlf"
+id = "cr-only"
+yaml = "a: 1\rb: 2\r"
+
+# --- strings and other scalars ------------------------------------------------------
+[[case]]
+group = "string"
+id = "string-styles"
+yaml = """
+a: plain text
+b: 'single ''quoted'''
+c: "double \\"quoted\\" \\t \\u00e9 \\x41"
+d: |
+  literal
+  block
+e: >
+  folded
+  block
+f: |-
+  strip
+g: |+
+  keep
+
+h: multi
+  line plain
+"""
+
+[[case]]
+group = "string"
+id = "string-value-tag"
+yaml = "a: =\n"
+
+[[case]]
+group = "string"
+id = "string-unicode"
+yaml = "a: \"日本 🔥 é\"\nb: 🔥\n"
+
+[[case]]
+group = "string"
+id = "string-escapes-1-2"
+yaml = "a: \"\\/\"\n"
+
+[[case]]
+group = "string"
+id = "string-nel-and-ls"
+yaml = "a: \"x\\Ny\\Lz\\Pw\\_v\"\n"
+
+[[case]]
+group = "tags"
+id = "tag-unknown"
+yaml = "a: !custom x\n"
+
+[[case]]
+group = "tags"
+id = "tag-python"
+yaml = "a: !!python/name:os.system ''\n"
+
+[[case]]
+group = "tags"
+id = "tag-non-specific"
+yaml = "a: ! 12\n"
+
+[[case]]
+group = "tags"
+id = "tag-str-on-map"
+yaml = "a: !!str {x: 1}\n"
+
+[[case]]
+group = "tags"
+id = "tag-map-seq"
+yaml = "a: !!map {x: 1}\nb: !!seq [1]\n"
+
+[[case]]
+group = "tags"
+id = "tag-verbatim"
+yaml = "a: !<tag:yaml.org,2002:str> 12\n"
+
+[[case]]
+group = "tags"
+id = "tag-directive"
+yaml = "%TAG !e! tag:yaml.org,2002:\n---\na: !e!str 12\n"
+
+[[case]]
+group = "keys"
+id = "key-complex-seq"
+yaml = "? [a, b]\n: 1\n"
+
+[[case]]
+group = "keys"
+id = "key-complex-map"
+yaml = "? {a: 1}\n: 1\n"
+
+[[case]]
+group = "keys"
+id = "key-explicit-scalar"
+yaml = "? a\n: 1\n"
+
+[[case]]
+group = "keys"
+id = "key-empty"
+yaml = ": 1\n"
+
+[[case]]
+group = "structure"
+id = "root-scalar"
+yaml = "just text\n"
+
+[[case]]
+group = "structure"
+id = "root-sequence"
+yaml = "- a\n- b\n"
+
+[[case]]
+group = "structure"
+id = "unclosed-flow"
+yaml = "a: 1\nbroken: [unclosed\n"
+
+[[case]]
+group = "structure"
+id = "bad-indent"
+yaml = "a:\n  b: 1\n c: 2\n"
+
+[[case]]
+group = "structure"
+id = "colon-in-plain"
+yaml = "a: b: c\n"
+
+[[case]]
+group = "structure"
+id = "nested-flow"
+yaml = "a: {b: [1, {c: d}], e: f}\n"
+
+[[case]]
+group = "structure"
+id = "control-character"
+bytes_hex = "613a2078017a0a"
+
+[[case]]
+group = "structure"
+id = "not-utf8"
+bytes_hex = "613a20ff0a"
+
+[[case]]
+group = "structure"
+id = "plain-with-hash"
+yaml = "a: x#y\nb: x #y\n"
+
+[[case]]
+group = "structure"
+id = "empty-flow"
+yaml = "a: []\nb: {}\n"
+
+[[case]]
+group = "tags"
+id = "tag-explicit-errors-bool"
+yaml = "a: !!bool maybe\n"
+
+[[case]]
+group = "tags"
+id = "tag-explicit-errors-int"
+yaml = "a: !!int 1.5\n"
+
+[[case]]
+group = "tags"
+id = "tag-explicit-errors-float"
+yaml = "a: !!float abc\n"
+
+[[case]]
+group = "tags"
+id = "tag-explicit-errors-timestamp"
+yaml = "a: !!timestamp yesterday\n"
+
+[[case]]
+group = "tags"
+id = "tag-explicit-null-text"
+yaml = "a: !!null text\n"
+
+[[case]]
+group = "tags"
+id = "tag-explicit-float-forms"
+yaml = "a: !!float 1\nb: !!float infinity\nc: !!float ' 2.5 '\nd: !!float 1:30\n"
+
+[[case]]
+group = "tags"
+id = "tag-quoted-non-specific"
+yaml = "a: ! '12'\n"
+
+[[case]]
+group = "tags"
+id = "tag-merge-as-value"
+yaml = "a: <<\n"
+
+[[case]]
+group = "tags"
+id = "tag-value-as-key"
+yaml = "=: 1\n"
+
+[[case]]
+group = "unsupported"
+id = "tag-binary"
+yaml = "a: !!binary aGVsbG8=\n"
+
+[[case]]
+group = "unsupported"
+id = "tag-set"
+yaml = "a: !!set {x, y}\n"
+
+[[case]]
+group = "unsupported"
+id = "tag-omap"
+yaml = "a: !!omap [x: 1]\n"
+
+[[case]]
+group = "unsupported"
+id = "tag-pairs"
+yaml = "a: !!pairs [x: 1]\n"
+
+[[case]]
+group = "structure"
+id = "deep-nesting"
+yaml = "a: [[[[[[[[[[[[[[[[[[[[1]]]]]]]]]]]]]]]]]]]\n"
+
+[[case]]
+group = "structure"
+id = "nel-in-plain"
+yaml = "a: x\u0085y\nb: 1\n"
+
+[[case]]
+group = "structure"
+id = "line-separator"
+yaml = "a: x\u2028y\n"
+
+[[case]]
+group = "keys"
+id = "key-int-float-bool-merge"
+yaml = "1: a\n1.0: b\n"
+
+[[case]]
+group = "merge"
+id = "merge-overrides-int-key"
+yaml = "base: &b {1: x}\nitem:\n  <<: *b\n  True: y\n"

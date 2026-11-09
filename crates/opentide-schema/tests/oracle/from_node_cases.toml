@@ -1,0 +1,582 @@
+# The structural conversion's table (UC-1.2, #808): documents checked against
+# the models of `from_node_table.py` (Pydantic, the oracle) and of
+# `tests/from_node_table.rs` (the Rust derive). `from_node_table.py` writes
+# what the oracle reports into `from_node_table.json`.
+
+[[case]]
+id = "valid-minimal"
+model = "Probe"
+yaml = "text: hello\n"
+
+[[case]]
+id = "valid-everything"
+model = "Probe"
+yaml = """
+text: hello
+number: 7
+ratio: 1.5
+flag: false
+items: [a, b]
+inners:
+  - label: x
+    count: 1
+  - label: y
+inner: {label: z}
+mapping: {a: 1, b: 2}
+choice: two
+kind: beta
+either: 3
+some: [p, q]
+schema: s
+vocab: [v]
+"""
+
+[[case]]
+id = "missing-required-top"
+model = "Probe"
+yaml = "number: 1\nflag: true\n"
+
+[[case]]
+id = "missing-required-nested"
+model = "Probe"
+yaml = """
+text: t
+inner:
+  count: 2
+"""
+
+[[case]]
+id = "missing-in-list-item"
+model = "Probe"
+yaml = """
+text: t
+inners:
+  - label: a
+  - count: 3
+  - {}
+"""
+
+[[case]]
+id = "extra-top"
+model = "Probe"
+yaml = """
+text: t
+colour: blue
+size: 3
+"""
+
+[[case]]
+id = "extra-nested-block"
+model = "Probe"
+yaml = """
+text: t
+inner:
+  label: a
+  extra:
+    deep: 1
+"""
+
+[[case]]
+id = "extra-and-missing-order"
+model = "Probe"
+yaml = """
+zeta: 1
+number: x
+alpha: 2
+"""
+
+[[case]]
+id = "string-wrong-types"
+model = "Probe"
+yaml = """
+text: 12
+items: [1, true, null, 1.5, [x], {a: b}, ok]
+"""
+
+[[case]]
+id = "string-null"
+model = "Probe"
+yaml = "text: ~\n"
+
+[[case]]
+id = "string-empty-value"
+model = "Probe"
+yaml = "text:\nnumber: 1\n"
+
+[[case]]
+id = "string-date-text"
+model = "Probe"
+yaml = "text: 2026-01-01\nitems: [2026-01-01T10:00:00Z]\n"
+
+[[case]]
+id = "int-lax"
+model = "Probe"
+yaml = """
+text: t
+number: '42'
+inners:
+  - {label: a, count: true}
+  - {label: b, count: 3.0}
+  - {label: c, count: ' 7 '}
+  - {label: d, count: '3.0'}
+  - {label: e, count: '-0'}
+  - {label: f, count: '+5'}
+  - {label: g, count: '1_000'}
+"""
+
+[[case]]
+id = "int-errors"
+model = "Probe"
+yaml = """
+text: t
+number: abc
+inners:
+  - {label: a, count: 3.5}
+  - {label: b, count: .inf}
+  - {label: c, count: [1]}
+  - {label: d, count: {}}
+  - {label: e, count: '3.5'}
+  - {label: f, count: ''}
+  - {label: g, count: .nan}
+  - {label: h, count: '0x10'}
+"""
+
+[[case]]
+id = "int-null-on-defaulted"
+model = "Probe"
+yaml = "text: t\nnumber: ~\n"
+
+[[case]]
+id = "float-lax"
+model = "Probe"
+yaml = """
+text: t
+ratio: 2
+"""
+
+[[case]]
+id = "float-from-string"
+model = "Probe"
+yaml = "text: t\nratio: '2.5'\n"
+
+[[case]]
+id = "float-from-bool"
+model = "Probe"
+yaml = "text: t\nratio: true\n"
+
+[[case]]
+id = "float-errors"
+model = "Probe"
+yaml = "text: t\nratio: abc\n"
+
+[[case]]
+id = "float-list"
+model = "Probe"
+yaml = "text: t\nratio: [1]\n"
+
+[[case]]
+id = "float-inf"
+model = "Probe"
+yaml = "text: t\nratio: .inf\n"
+
+[[case]]
+id = "bool-lax-words"
+model = "Probe"
+yaml = "text: t\nflag: 'yes'\n"
+
+[[case]]
+id = "bool-lax-y"
+model = "Probe"
+yaml = "text: t\nflag: y\n"
+
+[[case]]
+id = "bool-lax-off-string"
+model = "Probe"
+yaml = "text: t\nflag: 'OFF'\n"
+
+[[case]]
+id = "bool-lax-int-1"
+model = "Probe"
+yaml = "text: t\nflag: 1\n"
+
+[[case]]
+id = "bool-lax-float-0"
+model = "Probe"
+yaml = "text: t\nflag: 0.0\n"
+
+[[case]]
+id = "bool-errors-int"
+model = "Probe"
+yaml = "text: t\nflag: 2\n"
+
+[[case]]
+id = "bool-errors-string"
+model = "Probe"
+yaml = "text: t\nflag: maybe\n"
+
+[[case]]
+id = "bool-errors-null"
+model = "Probe"
+yaml = "text: t\nflag: ~\n"
+
+[[case]]
+id = "bool-errors-list"
+model = "Probe"
+yaml = "text: t\nflag: []\n"
+
+[[case]]
+id = "bool-errors-float"
+model = "Probe"
+yaml = "text: t\nflag: 0.5\n"
+
+[[case]]
+id = "list-errors"
+model = "Probe"
+yaml = """
+text: t
+items: one
+inners: {label: x}
+"""
+
+[[case]]
+id = "list-null-optional"
+model = "Probe"
+yaml = "text: t\nitems: ~\ninners:\n"
+
+[[case]]
+id = "model-errors"
+model = "Probe"
+yaml = """
+text: t
+inner: [a]
+inners: [x, 1, ~]
+"""
+
+[[case]]
+id = "model-from-string"
+model = "Probe"
+yaml = "text: t\ninner: label\n"
+
+[[case]]
+id = "dict-errors"
+model = "Probe"
+yaml = """
+text: t
+mapping:
+  a: x
+  1: 2
+  b: [1]
+"""
+
+[[case]]
+id = "dict-not-a-dict"
+model = "Probe"
+yaml = "text: t\nmapping: [a]\n"
+
+[[case]]
+id = "literal-errors"
+model = "Probe"
+yaml = "text: t\nchoice: three\n"
+
+[[case]]
+id = "literal-int"
+model = "Probe"
+yaml = "text: t\nchoice: 1\n"
+
+[[case]]
+id = "enum-errors"
+model = "Probe"
+yaml = "text: t\nkind: delta\n"
+
+[[case]]
+id = "enum-case"
+model = "Probe"
+yaml = "text: t\nkind: ALPHA\n"
+
+[[case]]
+id = "enum-int"
+model = "Probe"
+yaml = "text: t\nkind: 3\n"
+
+[[case]]
+id = "union-str-int"
+model = "Probe"
+yaml = "text: t\neither: '5'\nsome: x\n"
+
+[[case]]
+id = "union-int"
+model = "Probe"
+yaml = "text: t\neither: 5\n"
+
+[[case]]
+id = "union-bool"
+model = "Probe"
+yaml = "text: t\neither: true\n"
+
+[[case]]
+id = "union-float"
+model = "Probe"
+yaml = "text: t\neither: 1.5\n"
+
+[[case]]
+id = "union-errors"
+model = "Probe"
+yaml = "text: t\neither: [1]\nsome: {a: 1}\n"
+
+[[case]]
+id = "union-list-inner-error"
+model = "Probe"
+yaml = "text: t\nsome: [a, 1]\n"
+
+[[case]]
+id = "union-float-whole"
+model = "Probe"
+yaml = "text: t\neither: 2.0\n"
+
+[[case]]
+id = "alias-and-name"
+model = "Probe"
+yaml = "text: t\nschema: a\nschema_id: b\n"
+
+[[case]]
+id = "name-only"
+model = "Probe"
+yaml = "text: t\nschema_id: b\n"
+
+[[case]]
+id = "alias-wrong-type"
+model = "Probe"
+yaml = "text: t\nschema: [1]\n"
+
+[[case]]
+id = "name-wrong-type"
+model = "Probe"
+yaml = "text: t\nschema_id: 3\n"
+
+[[case]]
+id = "key-not-string"
+model = "Probe"
+yaml = "text: t\n1: x\nyes: y\n~: z\n"
+
+[[case]]
+id = "key-not-string-nested"
+model = "Probe"
+yaml = "text: t\ninner:\n  label: x\n  2: y\n"
+
+[[case]]
+id = "vocab-single-string"
+model = "Probe"
+yaml = "text: t\nvocab: Data Breach\n"
+
+[[case]]
+id = "vocab-packed"
+model = "Probe"
+yaml = "text: t\nvocab: 'a;b'\n"
+
+[[case]]
+id = "vocab-list-wrong-items"
+model = "Probe"
+yaml = "text: t\nvocab: [1, x]\n"
+
+[[case]]
+id = "vocab-not-a-list"
+model = "Probe"
+yaml = "text: t\nvocab: 3\n"
+
+[[case]]
+id = "root-not-a-mapping"
+model = "Probe"
+yaml = "- a\n- b\n"
+
+[[case]]
+id = "root-scalar"
+model = "Probe"
+yaml = "hello\n"
+
+[[case]]
+id = "root-null"
+model = "Probe"
+yaml = "~\n"
+
+[[case]]
+id = "before-model-validator"
+model = "Guarded"
+yaml = "name: n\nlegacy: 1\nother: 3\n"
+
+[[case]]
+id = "before-model-validator-passes"
+model = "Guarded"
+yaml = "other: 3\n"
+
+[[case]]
+id = "quoted-values-span"
+model = "Probe"
+yaml = "text: \"x\"\nitems: ['a', 2, \"b\"]\nnumber: 'z'\n"
+
+[[case]]
+id = "flow-values-span"
+model = "Probe"
+yaml = "text: t\ninner: {label: 1, count: x}\n"
+
+[[case]]
+id = "comment-after-value"
+model = "Probe"
+yaml = "text: 5 # a comment\nnumber: x  # another\n"
+
+[[case]]
+id = "block-scalar-value"
+model = "Probe"
+yaml = "text: t\nnumber: |\n  abc\n"
+
+[[case]]
+id = "multiline-plain-value"
+model = "Probe"
+yaml = "text: t\nnumber: abc\n  def\n"
+
+[[case]]
+id = "unicode-columns"
+model = "Probe"
+yaml = "text: \"日本🔥\"\nitems: [é, 1]\nnumber: 日本\n"
+
+[[case]]
+id = "anchor-alias-values"
+model = "Probe"
+yaml = "text: &t 5\nitems: [*t]\n"
+
+[[case]]
+id = "merge-key-values"
+model = "Probe"
+yaml = "base: &b\n  label: 1\ntext: t\ninner:\n  <<: *b\n  count: x\n"
+
+[[case]]
+id = "crlf"
+model = "Probe"
+yaml = "text: t\r\nnumber: x\r\ninner:\r\n  label: 3\r\n"
+
+[[case]]
+id = "key-quoted"
+model = "Probe"
+yaml = "\"text\": t\n'number': x\n"
+
+[[case]]
+id = "key-quoted-extra"
+model = "Probe"
+yaml = "text: t\n\"odd key\": 1\n"
+
+[[case]]
+id = "duplicate-error-at-two-items"
+model = "Probe"
+yaml = "text: t\nitems: [1, 1]\n"
+
+[[case]]
+id = "explicit-key"
+model = "Probe"
+yaml = "? text\n: 5\n"
+
+[[case]]
+id = "sample-valid"
+model = "SampleV1_1"
+yaml = """
+name: n
+uuid: u
+schema: sample::1.1
+description: d
+severity: Low
+effort: 3
+examples:
+  - description: e
+    link: https://example.org
+tags: [a]
+"""
+
+[[case]]
+id = "sample-everything-wrong"
+model = "SampleV1_1"
+yaml = """
+name: [n]
+schema_id: 1
+description: ~
+severity:
+effort: lots
+enabled: perhaps
+examples:
+  - description: e
+  - link: 3
+    language: rust
+    extra: 1
+  - not an example
+tags: a
+unknown: 1
+"""
+
+[[case]]
+id = "sample-empty-mapping"
+model = "SampleV1_1"
+yaml = "{}\n"
+
+# Where the CLI points for an empty value: ruamel marks it at the next token
+# (the next key, or the end of the block), unless a comment follows the colon.
+[[case]]
+id = "empty-value-trailing-comment"
+model = "Probe"
+yaml = "text: t\nnumber: # c\nflag: true\n"
+
+[[case]]
+id = "empty-value-comment-line"
+model = "Probe"
+yaml = "text: t\nnumber:\n# c\nflag: true\n"
+
+[[case]]
+id = "empty-value-blank-line"
+model = "Probe"
+yaml = "text: t\nnumber:\n\nflag: true\n"
+
+[[case]]
+id = "empty-value-last"
+model = "Probe"
+yaml = "text: t\nnumber:\n"
+
+[[case]]
+id = "empty-value-dedent"
+model = "Probe"
+yaml = "text: t\ninner:\n  label:\nnumber: 1\n"
+
+[[case]]
+id = "empty-value-in-list-item"
+model = "Probe"
+yaml = "text: t\ninners:\n  - label:\n  - label: x\n"
+
+[[case]]
+id = "empty-value-flow"
+model = "Probe"
+yaml = "text: t\ninner: {label: , count: 1}\n"
+
+[[case]]
+id = "empty-sequence-item"
+model = "Probe"
+yaml = "text: t\nitems:\n  -\n  - b\n"
+
+[[case]]
+id = "empty-value-anchor"
+model = "Probe"
+yaml = "text: t\nnumber: &a\nflag: true\n"
+
+[[case]]
+id = "int-from-float-too-large"
+model = "Probe"
+yaml = "text: t\nnumber: 1.0e+20\n"
+
+[[case]]
+id = "int-beyond-i64"
+model = "Probe"
+yaml = "text: t\nnumber: 123456789012345678901234567890\n"
+
+[[case]]
+id = "missing-top-with-int-first-key"
+model = "Probe"
+yaml = "1: x\nnumber: 2\n"
+
+[[case]]
+id = "extra-in-merge"
+model = "Probe"
+yaml = "base: &b {odd: 1}\ntext: t\ninner:\n  <<: *b\n  label: x\n"
