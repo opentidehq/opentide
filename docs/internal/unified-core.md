@@ -24,7 +24,7 @@ Backlog: epic [#790](https://github.com/opentidehq/opentide/issues/790), with on
 | UC-4 `opentide-connectors` | #795 | not started |
 | UC-5 SDKs and distribution | #796 | not started |
 | UC-6 Adoption and decommission | #797 | not started |
-| UC-X Quality gates | #798 | UC-X.1 and UC-X.3 done on `integration/unified-core`; UC-X.2 in review (#855) |
+| UC-X Quality gates | #798 | UC-X.1, UC-X.2 and UC-X.3 done on `integration/unified-core` |
 
 ### Phase 0 on `integration/unified-core`
 
