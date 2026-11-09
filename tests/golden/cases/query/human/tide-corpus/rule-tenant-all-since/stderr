@@ -1,0 +1,2 @@
+[1;31merror:[0m splunk has no tenants configured: add a [[tenants]] entry in
+       .opentide/configurations/platforms/splunk.toml

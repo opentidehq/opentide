@@ -1,3 +1,3 @@
-[?25l<LIVE>[?25h[1A[2K[1;31m✗[0m 7 errors in 1 file · 1 object checked · 1 query · <SECONDS>
+[?25l<LIVE>[1;36m<SPIN>[0m Validating objects</LIVE>[?25h[1A[2K[1;31m✗[0m 7 errors in 1 file · 1 object checked · 1 query · <SECONDS>
 [1;36m→[0m [1mopentide explain schema_validation[0m[2m · [0m[2mhow to fix it[0m
 [1;36m→[0m [1mopentide validate[0m[2m · [0m[2mcheck again[0m

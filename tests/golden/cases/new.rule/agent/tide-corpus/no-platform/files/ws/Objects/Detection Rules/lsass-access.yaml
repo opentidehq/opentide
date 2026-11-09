@@ -1,7 +1,7 @@
 name: LSASS Access
 
 metadata:
-  uuid: <UUID-1108>
+  uuid: <UUID-1>
   schema: rule::1.1
   version: 1
   created: <TODAY>
