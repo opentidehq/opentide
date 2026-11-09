@@ -31,8 +31,27 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`config_enum_unknown`](#config_enum_unknown) | A value is not one of those your deployment configuration declares. |
 | [`config_parse`](#config_parse) | A configuration file could not be read as TOML. |
 | [`configuration`](#configuration) | The workspace configuration files under `.opentide/configurations/` load. |
+| [`cql_assignment_as`](#cql_assignment_as) | A CQL assignment names the output field and the function's as= parameter names it again. |
+| [`cql_correlate_aggregate`](#cql_correlate_aggregate) | A Next-Gen SIEM correlation rule combines correlate() with another aggregate function, which CrowdStrike does not allow. |
+| [`cql_correlate_placement`](#cql_correlate_placement) | CQL correlate() stands where its reference forbids: after an aggregate or a source function, inside another function's arguments, or with an aggregate in its queries. |
+| [`cql_deprecated_function`](#cql_deprecated_function) | CrowdStrike's reference marks the CQL function deprecated. |
+| [`cql_duplicate_parameter`](#cql_duplicate_parameter) | A CQL function parameter is given more than once. |
+| [`cql_event_function_after_aggregate`](#cql_event_function_after_aggregate) | A CQL eventSize(), eventInternals() or eventFieldCount() call comes after the first aggregate function, which LogScale refuses since 1.190. |
+| [`cql_free_text_after_aggregate`](#cql_free_text_after_aggregate) | A CQL free-text filter comes after the first aggregate function, which LogScale refuses since 1.190. |
+| [`cql_link_outside_correlate`](#cql_link_outside_correlate) | The CQL link operator <=> appears outside the queries of correlate(), the only place it links fields. |
+| [`cql_match_guard`](#cql_match_guard) | A CQL match guard is an aggregate function; a guard must be a filter. |
+| [`cql_missing_parameter`](#cql_missing_parameter) | A CQL function call leaves out a required parameter. |
+| [`cql_parameter_value`](#cql_parameter_value) | A literal CQL argument is not one of the parameter's allowed values, or is outside its bounds. |
+| [`cql_parse_error`](#cql_parse_error) | The CrowdStrike Query Language (CQL) query does not parse. |
+| [`cql_regex_flag`](#cql_regex_flag) | A CQL regex literal has a flag other than d, g, i, m or F. |
+| [`cql_regex_group_under_or`](#cql_regex_group_under_or) | A CQL regex with named groups is an operand of or, where LogScale extracts none of its fields. |
+| [`cql_removed_function`](#cql_removed_function) | The CQL function was removed from LogScale and Next-Gen SIEM no longer runs it. |
+| [`cql_string_escape`](#cql_string_escape) | A CQL string has an escape LogScale does not translate; it keeps the backslash and the character. |
+| [`cql_unknown_event`](#cql_unknown_event) | The #event_simpleName value is not a Falcon sensor event the engine knows. |
+| [`cql_unknown_function`](#cql_unknown_function) | No CQL function has this name; function names are matched without regard to case. |
+| [`cql_unknown_parameter`](#cql_unknown_parameter) | The CQL function has no parameter with this name. |
+| [`cql_unnamed_argument`](#cql_unnamed_argument) | A CQL function gets an argument without a name that it cannot take: a second one, or one when every parameter needs its name. |
 | [`credentials`](#credentials) | Per configured tenant, whether every `$VARIABLE` its setup names is set. |
-| [`crowdstrike_unsupported`](#crowdstrike_unsupported) | CrowdStrike queries are not validated; the engine never fakes it. |
 | [`cve_lookup_unavailable`](#cve_lookup_unavailable) | A threat lists CVE identifiers, but Vulnerability-Lookup could not be reached to check them. |
 | [`defender_output_columns`](#defender_output_columns) | A Defender custom detection must return the columns Defender requires. |
 | [`deployment_state_platform`](#deployment_state_platform) | A deployment state shard names a platform that stores no external ids. |
@@ -567,6 +586,326 @@ Reported by `opentide doctor`. Fails when one does not parse; the message names 
 
 Fix the TOML at the line it names. `opentide explain config_parse` shows the common mistakes.
 
+## cql_assignment_as
+
+A CQL assignment names the output field and the function's as= parameter names it again.
+
+Reported by the analysis engine in a CQL query, the CrowdStrike Query Language of Falcon LogScale and Next-Gen SIEM, at the place in the query: an editor running `opentide lsp start` shows it in a CrowdStrike rule's `configurations.crowdstrike.query`, a hunt search with `system: crowdstrike` and a `.cql` file, and `opentide tui` in the objects. `opentide validate` and `opentide lint` do not check CrowdStrike queries.
+
+### Example
+
+```text
+opentide lsp start
+```
+
+### How to fix
+
+Change the query where the editor points. CrowdStrike's [CQL reference](https://library.humio.com/crowdstrike-query-language/) describes the syntax and the functions the engine checks against.
+
+## cql_correlate_aggregate
+
+A Next-Gen SIEM correlation rule combines correlate() with another aggregate function, which CrowdStrike does not allow.
+
+Reported by the analysis engine in a CQL query, the CrowdStrike Query Language of Falcon LogScale and Next-Gen SIEM, at the place in the query: an editor running `opentide lsp start` shows it in a CrowdStrike rule's `configurations.crowdstrike.query`, a hunt search with `system: crowdstrike` and a `.cql` file, and `opentide tui` in the objects. `opentide validate` and `opentide lint` do not check CrowdStrike queries.
+
+### Example
+
+```text
+opentide lsp start
+```
+
+### How to fix
+
+Change the query where the editor points. CrowdStrike's [CQL reference](https://library.humio.com/crowdstrike-query-language/) describes the syntax and the functions the engine checks against.
+
+## cql_correlate_placement
+
+CQL correlate() stands where its reference forbids: after an aggregate or a source function, inside another function's arguments, or with an aggregate in its queries.
+
+Reported by the analysis engine in a CQL query, the CrowdStrike Query Language of Falcon LogScale and Next-Gen SIEM, at the place in the query: an editor running `opentide lsp start` shows it in a CrowdStrike rule's `configurations.crowdstrike.query`, a hunt search with `system: crowdstrike` and a `.cql` file, and `opentide tui` in the objects. `opentide validate` and `opentide lint` do not check CrowdStrike queries.
+
+### Example
+
+```text
+opentide lsp start
+```
+
+### How to fix
+
+Change the query where the editor points. CrowdStrike's [CQL reference](https://library.humio.com/crowdstrike-query-language/) describes the syntax and the functions the engine checks against.
+
+## cql_deprecated_function
+
+CrowdStrike's reference marks the CQL function deprecated.
+
+Reported by the analysis engine in a CQL query, the CrowdStrike Query Language of Falcon LogScale and Next-Gen SIEM, at the place in the query: an editor running `opentide lsp start` shows it in a CrowdStrike rule's `configurations.crowdstrike.query`, a hunt search with `system: crowdstrike` and a `.cql` file, and `opentide tui` in the objects. `opentide validate` and `opentide lint` do not check CrowdStrike queries.
+
+### Example
+
+```text
+opentide lsp start
+```
+
+### How to fix
+
+Change the query where the editor points. CrowdStrike's [CQL reference](https://library.humio.com/crowdstrike-query-language/) describes the syntax and the functions the engine checks against.
+
+## cql_duplicate_parameter
+
+A CQL function parameter is given more than once.
+
+Reported by the analysis engine in a CQL query, the CrowdStrike Query Language of Falcon LogScale and Next-Gen SIEM, at the place in the query: an editor running `opentide lsp start` shows it in a CrowdStrike rule's `configurations.crowdstrike.query`, a hunt search with `system: crowdstrike` and a `.cql` file, and `opentide tui` in the objects. `opentide validate` and `opentide lint` do not check CrowdStrike queries.
+
+### Example
+
+```text
+opentide lsp start
+```
+
+### How to fix
+
+Change the query where the editor points. CrowdStrike's [CQL reference](https://library.humio.com/crowdstrike-query-language/) describes the syntax and the functions the engine checks against.
+
+## cql_event_function_after_aggregate
+
+A CQL eventSize(), eventInternals() or eventFieldCount() call comes after the first aggregate function, which LogScale refuses since 1.190.
+
+Reported by the analysis engine in a CQL query, the CrowdStrike Query Language of Falcon LogScale and Next-Gen SIEM, at the place in the query: an editor running `opentide lsp start` shows it in a CrowdStrike rule's `configurations.crowdstrike.query`, a hunt search with `system: crowdstrike` and a `.cql` file, and `opentide tui` in the objects. `opentide validate` and `opentide lint` do not check CrowdStrike queries.
+
+### Example
+
+```text
+opentide lsp start
+```
+
+### How to fix
+
+Change the query where the editor points. CrowdStrike's [CQL reference](https://library.humio.com/crowdstrike-query-language/) describes the syntax and the functions the engine checks against.
+
+## cql_free_text_after_aggregate
+
+A CQL free-text filter comes after the first aggregate function, which LogScale refuses since 1.190.
+
+Reported by the analysis engine in a CQL query, the CrowdStrike Query Language of Falcon LogScale and Next-Gen SIEM, at the place in the query: an editor running `opentide lsp start` shows it in a CrowdStrike rule's `configurations.crowdstrike.query`, a hunt search with `system: crowdstrike` and a `.cql` file, and `opentide tui` in the objects. `opentide validate` and `opentide lint` do not check CrowdStrike queries.
+
+### Example
+
+```text
+opentide lsp start
+```
+
+### How to fix
+
+Change the query where the editor points. CrowdStrike's [CQL reference](https://library.humio.com/crowdstrike-query-language/) describes the syntax and the functions the engine checks against.
+
+## cql_link_outside_correlate
+
+The CQL link operator <=> appears outside the queries of correlate(), the only place it links fields.
+
+Reported by the analysis engine in a CQL query, the CrowdStrike Query Language of Falcon LogScale and Next-Gen SIEM, at the place in the query: an editor running `opentide lsp start` shows it in a CrowdStrike rule's `configurations.crowdstrike.query`, a hunt search with `system: crowdstrike` and a `.cql` file, and `opentide tui` in the objects. `opentide validate` and `opentide lint` do not check CrowdStrike queries.
+
+### Example
+
+```text
+opentide lsp start
+```
+
+### How to fix
+
+Change the query where the editor points. CrowdStrike's [CQL reference](https://library.humio.com/crowdstrike-query-language/) describes the syntax and the functions the engine checks against.
+
+## cql_match_guard
+
+A CQL match guard is an aggregate function; a guard must be a filter.
+
+Reported by the analysis engine in a CQL query, the CrowdStrike Query Language of Falcon LogScale and Next-Gen SIEM, at the place in the query: an editor running `opentide lsp start` shows it in a CrowdStrike rule's `configurations.crowdstrike.query`, a hunt search with `system: crowdstrike` and a `.cql` file, and `opentide tui` in the objects. `opentide validate` and `opentide lint` do not check CrowdStrike queries.
+
+### Example
+
+```text
+opentide lsp start
+```
+
+### How to fix
+
+Change the query where the editor points. CrowdStrike's [CQL reference](https://library.humio.com/crowdstrike-query-language/) describes the syntax and the functions the engine checks against.
+
+## cql_missing_parameter
+
+A CQL function call leaves out a required parameter.
+
+Reported by the analysis engine in a CQL query, the CrowdStrike Query Language of Falcon LogScale and Next-Gen SIEM, at the place in the query: an editor running `opentide lsp start` shows it in a CrowdStrike rule's `configurations.crowdstrike.query`, a hunt search with `system: crowdstrike` and a `.cql` file, and `opentide tui` in the objects. `opentide validate` and `opentide lint` do not check CrowdStrike queries.
+
+### Example
+
+```text
+opentide lsp start
+```
+
+### How to fix
+
+Change the query where the editor points. CrowdStrike's [CQL reference](https://library.humio.com/crowdstrike-query-language/) describes the syntax and the functions the engine checks against.
+
+## cql_parameter_value
+
+A literal CQL argument is not one of the parameter's allowed values, or is outside its bounds.
+
+Reported by the analysis engine in a CQL query, the CrowdStrike Query Language of Falcon LogScale and Next-Gen SIEM, at the place in the query: an editor running `opentide lsp start` shows it in a CrowdStrike rule's `configurations.crowdstrike.query`, a hunt search with `system: crowdstrike` and a `.cql` file, and `opentide tui` in the objects. `opentide validate` and `opentide lint` do not check CrowdStrike queries.
+
+### Example
+
+```text
+opentide lsp start
+```
+
+### How to fix
+
+Change the query where the editor points. CrowdStrike's [CQL reference](https://library.humio.com/crowdstrike-query-language/) describes the syntax and the functions the engine checks against.
+
+## cql_parse_error
+
+The CrowdStrike Query Language (CQL) query does not parse.
+
+Reported by the analysis engine in a CQL query, the CrowdStrike Query Language of Falcon LogScale and Next-Gen SIEM, at the place in the query: an editor running `opentide lsp start` shows it in a CrowdStrike rule's `configurations.crowdstrike.query`, a hunt search with `system: crowdstrike` and a `.cql` file, and `opentide tui` in the objects. `opentide validate` and `opentide lint` do not check CrowdStrike queries.
+
+### Example
+
+```text
+opentide lsp start
+```
+
+### How to fix
+
+Change the query where the editor points. CrowdStrike's [CQL reference](https://library.humio.com/crowdstrike-query-language/) describes the syntax and the functions the engine checks against.
+
+## cql_regex_flag
+
+A CQL regex literal has a flag other than d, g, i, m or F.
+
+Reported by the analysis engine in a CQL query, the CrowdStrike Query Language of Falcon LogScale and Next-Gen SIEM, at the place in the query: an editor running `opentide lsp start` shows it in a CrowdStrike rule's `configurations.crowdstrike.query`, a hunt search with `system: crowdstrike` and a `.cql` file, and `opentide tui` in the objects. `opentide validate` and `opentide lint` do not check CrowdStrike queries.
+
+### Example
+
+```text
+opentide lsp start
+```
+
+### How to fix
+
+Change the query where the editor points. CrowdStrike's [CQL reference](https://library.humio.com/crowdstrike-query-language/) describes the syntax and the functions the engine checks against.
+
+## cql_regex_group_under_or
+
+A CQL regex with named groups is an operand of or, where LogScale extracts none of its fields.
+
+Reported by the analysis engine in a CQL query, the CrowdStrike Query Language of Falcon LogScale and Next-Gen SIEM, at the place in the query: an editor running `opentide lsp start` shows it in a CrowdStrike rule's `configurations.crowdstrike.query`, a hunt search with `system: crowdstrike` and a `.cql` file, and `opentide tui` in the objects. `opentide validate` and `opentide lint` do not check CrowdStrike queries.
+
+### Example
+
+```text
+opentide lsp start
+```
+
+### How to fix
+
+Change the query where the editor points. CrowdStrike's [CQL reference](https://library.humio.com/crowdstrike-query-language/) describes the syntax and the functions the engine checks against.
+
+## cql_removed_function
+
+The CQL function was removed from LogScale and Next-Gen SIEM no longer runs it.
+
+Reported by the analysis engine in a CQL query, the CrowdStrike Query Language of Falcon LogScale and Next-Gen SIEM, at the place in the query: an editor running `opentide lsp start` shows it in a CrowdStrike rule's `configurations.crowdstrike.query`, a hunt search with `system: crowdstrike` and a `.cql` file, and `opentide tui` in the objects. `opentide validate` and `opentide lint` do not check CrowdStrike queries.
+
+### Example
+
+```text
+opentide lsp start
+```
+
+### How to fix
+
+Change the query where the editor points. CrowdStrike's [CQL reference](https://library.humio.com/crowdstrike-query-language/) describes the syntax and the functions the engine checks against.
+
+## cql_string_escape
+
+A CQL string has an escape LogScale does not translate; it keeps the backslash and the character.
+
+Reported by the analysis engine in a CQL query, the CrowdStrike Query Language of Falcon LogScale and Next-Gen SIEM, at the place in the query: an editor running `opentide lsp start` shows it in a CrowdStrike rule's `configurations.crowdstrike.query`, a hunt search with `system: crowdstrike` and a `.cql` file, and `opentide tui` in the objects. `opentide validate` and `opentide lint` do not check CrowdStrike queries.
+
+### Example
+
+```text
+opentide lsp start
+```
+
+### How to fix
+
+Change the query where the editor points. CrowdStrike's [CQL reference](https://library.humio.com/crowdstrike-query-language/) describes the syntax and the functions the engine checks against.
+
+## cql_unknown_event
+
+The #event_simpleName value is not a Falcon sensor event the engine knows.
+
+Reported by the analysis engine in a CQL query, the CrowdStrike Query Language of Falcon LogScale and Next-Gen SIEM, at the place in the query: an editor running `opentide lsp start` shows it in a CrowdStrike rule's `configurations.crowdstrike.query`, a hunt search with `system: crowdstrike` and a `.cql` file, and `opentide tui` in the objects. `opentide validate` and `opentide lint` do not check CrowdStrike queries.
+
+### Example
+
+```text
+opentide lsp start
+```
+
+### How to fix
+
+Change the query where the editor points. CrowdStrike's [CQL reference](https://library.humio.com/crowdstrike-query-language/) describes the syntax and the functions the engine checks against.
+
+## cql_unknown_function
+
+No CQL function has this name; function names are matched without regard to case.
+
+Reported by the analysis engine in a CQL query, the CrowdStrike Query Language of Falcon LogScale and Next-Gen SIEM, at the place in the query: an editor running `opentide lsp start` shows it in a CrowdStrike rule's `configurations.crowdstrike.query`, a hunt search with `system: crowdstrike` and a `.cql` file, and `opentide tui` in the objects. `opentide validate` and `opentide lint` do not check CrowdStrike queries.
+
+### Example
+
+```text
+opentide lsp start
+```
+
+### How to fix
+
+Change the query where the editor points. CrowdStrike's [CQL reference](https://library.humio.com/crowdstrike-query-language/) describes the syntax and the functions the engine checks against.
+
+## cql_unknown_parameter
+
+The CQL function has no parameter with this name.
+
+Reported by the analysis engine in a CQL query, the CrowdStrike Query Language of Falcon LogScale and Next-Gen SIEM, at the place in the query: an editor running `opentide lsp start` shows it in a CrowdStrike rule's `configurations.crowdstrike.query`, a hunt search with `system: crowdstrike` and a `.cql` file, and `opentide tui` in the objects. `opentide validate` and `opentide lint` do not check CrowdStrike queries.
+
+### Example
+
+```text
+opentide lsp start
+```
+
+### How to fix
+
+Change the query where the editor points. CrowdStrike's [CQL reference](https://library.humio.com/crowdstrike-query-language/) describes the syntax and the functions the engine checks against.
+
+## cql_unnamed_argument
+
+A CQL function gets an argument without a name that it cannot take: a second one, or one when every parameter needs its name.
+
+Reported by the analysis engine in a CQL query, the CrowdStrike Query Language of Falcon LogScale and Next-Gen SIEM, at the place in the query: an editor running `opentide lsp start` shows it in a CrowdStrike rule's `configurations.crowdstrike.query`, a hunt search with `system: crowdstrike` and a `.cql` file, and `opentide tui` in the objects. `opentide validate` and `opentide lint` do not check CrowdStrike queries.
+
+### Example
+
+```text
+opentide lsp start
+```
+
+### How to fix
+
+Change the query where the editor points. CrowdStrike's [CQL reference](https://library.humio.com/crowdstrike-query-language/) describes the syntax and the functions the engine checks against.
+
 ## credentials
 
 Per configured tenant, whether every `$VARIABLE` its setup names is set.
@@ -583,22 +922,6 @@ Reported by `opentide doctor`. Warns when a variable is unset or empty, with `su
 ### How to fix
 
 Set the variables it names in the environment the deploy runs in (a CI secret, or a `.env` file you load). Never write the value into the TOML.
-
-## crowdstrike_unsupported
-
-CrowdStrike queries are not validated; the engine never fakes it.
-
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
-
-### Example
-
-```text
-opentide validate
-```
-
-### How to fix
-
-Change the file where the frame points, then run `opentide validate` again.
 
 ## cve_lookup_unavailable
 

@@ -60,6 +60,12 @@ _OBJECT_CODES = frozenset(
     {"filename_slug", "filename_pattern", "missing_author", "missing_organisation"}
 )
 
+#: The engine's codes for a CrowdStrike Query Language (CQL) query. Only the
+#: editor reports them: CrowdStrike is not in ``OFFLINE_QUERY_LANGUAGES``, so
+#: ``opentide validate`` and ``opentide lint`` do not check CrowdStrike queries.
+_EDITOR_ONLY_QUERY_PREFIX = "cql_"
+_CQL_REFERENCE = "https://library.humio.com/crowdstrike-query-language/"
+
 
 def engine_page(code: str) -> ExplainPage | None:
     """A page for an analysis-engine code, from the engine's sentence; ``None`` for another code."""
@@ -86,6 +92,21 @@ def engine_page(code: str) -> ExplainPage | None:
             "Change the query where the frame points, then run `opentide validate query` "
             "(`--file` for one rule or query file) or `opentide lint --check queries` again. "
             f"The [{language} reference]({url}) describes the syntax and the commands the "
+            "engine checks against."
+        )
+    elif code.startswith(_EDITOR_ONLY_QUERY_PREFIX):
+        where = (
+            "Reported by the analysis engine in a CQL query, the CrowdStrike Query Language of "
+            "Falcon LogScale and Next-Gen SIEM, at the place in the query: an editor running "
+            "`opentide lsp start` shows it in a CrowdStrike rule's "
+            "`configurations.crowdstrike.query`, a hunt search with `system: crowdstrike` and a "
+            "`.cql` file, and `opentide tui` in the objects. `opentide validate` and "
+            "`opentide lint` do not check CrowdStrike queries."
+        )
+        example = "opentide lsp start"
+        fix = (
+            "Change the query where the editor points. CrowdStrike's "
+            f"[CQL reference]({_CQL_REFERENCE}) describes the syntax and the functions the "
             "engine checks against."
         )
     elif code in ELASTIC_ADVISORY_CODES:
