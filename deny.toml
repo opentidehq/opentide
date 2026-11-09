@@ -92,7 +92,9 @@ deny = [
 # out, cargo-deny's default: test tools never leave a checkout; the ones they
 # duplicate are listed in docs/internal/supply-chain.md). A second version
 # fails the check until it is removed, or skipped here with its reason.
-skip = []
+skip = [
+  { crate = "syn@2.0.119", reason = "garde_derive 0.23 (opentide-schema's validation derive, plan D-2) depends on syn 2 and no garde release uses syn 3 yet; every other proc macro uses syn 3. Drop this when garde moves" },
+]
 
 # Every crate comes from crates.io. A git or another registry's crate fails
 # until it is named here with its reason.
