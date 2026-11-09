@@ -60,7 +60,7 @@ cargo xtask check-layers
 - `tests/corpus_generate.rs`: the generator's recorded digests, counts, coverage of platforms and
   features, layouts, slug file names, no literal secret. `src/corpus/*` unit tests: the YAML
   emitter, the PRNG's reference values, the catalogue's parser, selectors, operations and verdicts.
-  The oracle runs only in `cargo xtask corpus faults --check` (the `Corpus` workflow).
+  The oracle runs only in `cargo xtask corpus faults --check` (ci.yml's `corpus` job).
 - `tests/corpus_runner.rs`: the runner's pass/fail guards (a mismatch, a dirty base, a silence
   that checked nothing, `clean`, `coverage --check`) through a fake oracle script (Unix only).
 - `tests/lint_policy.rs`: every member inherits `[workspace.lints]`, except the crates allowed
@@ -74,6 +74,7 @@ cargo xtask check-layers
 
 ## Work items that change this crate
 
-UC-0.4 (#802) check-layers; UC-0.6 (#804) corpus; UC-1.8 (#814) codegen; UC-0.5 (#803) golden; UC-0.8 (#806) bench;
-UC-1.6 (#812) the `sync_vocabularies --check` equivalent; UC-0.3 (#801) wires the checks into one
+UC-0.4 (#802) check-layers; UC-0.6 (#804) corpus; UC-1.8 (#814) codegen; UC-0.5 (#803) golden;
+UC-0.8 (#806) bench; UC-1.6 (#812) the `sync_vocabularies --check` equivalent; UC-0.3 (#801) wired
+the checks into one
 CI. Lints and tests: [`crates/AGENTS.md`](../crates/AGENTS.md).

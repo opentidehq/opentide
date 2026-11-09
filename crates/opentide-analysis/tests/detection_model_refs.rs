@@ -45,7 +45,9 @@ fn invalid_refs(file: &str) -> Vec<opentide_core::Diagnostic> {
     let (uri, text) = host
         .files
         .iter()
-        .find(|(path, _)| path.ends_with(file))
+        // Path::ends_with compares components: `rules/x.yaml` matches a
+        // Windows path spelled with `\`, which a string suffix would not.
+        .find(|(path, _)| std::path::Path::new(path).ends_with(file))
         .cloned()
         .unwrap_or_else(|| panic!("missing {file}"));
     analyze(

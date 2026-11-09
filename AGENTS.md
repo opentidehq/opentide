@@ -2,7 +2,7 @@
 
 **opentide** (`opentide`) — spec-driven development for agentic detection engineering. A versioned Python package on PyPI for detection-as-code: validate, index, generate schemas, deploy, and document rules across nine security platforms, with a Rust engine (query languages, Tide YAML, the language server) compiled in.
 
-**Entry point:** this file is the map. Read the guide of the area you change (below), then the skill that matches the task.
+**Entry point:** this file is the map; people start at [`CONTRIBUTING.md`](CONTRIBUTING.md). Read the guide of the area you change (below), then the skill that matches the task.
 
 **Repository:** [opentidehq/opentide](https://github.com/opentidehq/opentide). Trunk: `development`. The plan that is moving every implementation into one Rust workspace: [`docs/internal/unified-core.md`](https://github.com/opentidehq/opentide/blob/docs/unified-core-plan/docs/internal/unified-core.md) (epic [#790](https://github.com/opentidehq/opentide/issues/790)).
 
@@ -17,7 +17,7 @@
 | `analysis/` | The PyO3 binding compiled into the package as `opentide._native` | [`analysis/AGENTS.md`](analysis/AGENTS.md) |
 | `xtask/` | `cargo xtask`: the layer check (`xtask/layers.toml`), codegen, golden and bench to come | [`xtask/AGENTS.md`](xtask/AGENTS.md) |
 | `grammars/`, `highlights/`, `data/catalogs/`, `editors/`, `packages/`, `fuzz/`, `crates/testdata/`, `scripts/engine/` | What the engine compiles in, its hosts, fuzzing and tooling | [`crates/AGENTS.md`](crates/AGENTS.md) |
-| `docs/` | The site's four tabs (Usage, CLI, MCP, SDK); `docs/internal/` and `docs/engine/` for maintainers | [`docs/README.md`](docs/README.md) |
+| `docs/` | The site's four tabs (Usage, CLI, MCP, SDK); `docs/internal/` (with the ADRs, `docs/internal/adr/`) and `docs/engine/` for maintainers | [`docs/README.md`](docs/README.md) |
 | `.github/` | CI, CodeQL, release and Dependabot workflows | [`.github/AGENTS.md`](.github/AGENTS.md) |
 | `scripts/` | `ci-local.sh`, `codeql-local.sh`, `validate-docs.sh`, `ast_equivalence.py`, `build/` | this file, "Checks" |
 | `.agents/skills/` | The skills below; `.claude/skills` links to them | the table below |
@@ -41,6 +41,8 @@
 | Documentation pages, Fumadocs structure, doc/code sync | [`.agents/skills/docs-maintenance/SKILL.md`](.agents/skills/docs-maintenance/SKILL.md) |
 | Changelog entries and release notes: summary, Upgrade, Breaking, categories | [`.agents/skills/release-notes/SKILL.md`](.agents/skills/release-notes/SKILL.md) |
 | PyPI release, `v*` tag, install pins | [`.agents/skills/release-management/SKILL.md`](.agents/skills/release-management/SKILL.md) |
+| Building, linting, testing any Rust crate: toolchain, clippy, nextest, insta, trycmd, xtask, worktrees and target pools | [`.agents/skills/rust/SKILL.md`](.agents/skills/rust/SKILL.md) |
+| Porting to Rust against the Python oracle: goldens, `OPENTIDE_ENGINE=compare`, the approved-diffs ledger | [`.agents/skills/golden/SKILL.md`](.agents/skills/golden/SKILL.md) |
 | The engine's Rust crates, `Cargo.toml`, `Cargo.lock` | [`.agents/skills/rust-engine/SKILL.md`](.agents/skills/rust-engine/SKILL.md) |
 | Grammars, `crates/opentide-syntax`, highlight queries | [`.agents/skills/tree-sitter/SKILL.md`](.agents/skills/tree-sitter/SKILL.md) |
 | The language server host (`crates/opentide-lsp`), `editors/` | [`.agents/skills/lsp-host/SKILL.md`](.agents/skills/lsp-host/SKILL.md) |
@@ -48,7 +50,7 @@
 | `data/catalogs/`, HighlightSpec, conformance corpora, the vendor-parser oracles | [`.agents/skills/catalogs/SKILL.md`](.agents/skills/catalogs/SKILL.md) |
 | A new query language in the engine | [`.agents/skills/add-language/SKILL.md`](.agents/skills/add-language/SKILL.md) |
 | `crates/CHANGELOG.md`, the engine crates' release notes | [`.agents/skills/engine-release-notes/SKILL.md`](.agents/skills/engine-release-notes/SKILL.md) |
-| Releasing the engine crates (parked until UC-0.3) | [`.agents/skills/engine-release/SKILL.md`](.agents/skills/engine-release/SKILL.md) |
+| Releasing the engine crates (`engine-v*` tags, `engine-release.yml`) | [`.agents/skills/engine-release/SKILL.md`](.agents/skills/engine-release/SKILL.md) |
 
 The engine's skills (the last eight rows) came from opentidehq/language-server; their own index, with
 the engine's hard rules, is [`crates/AGENTS.md`](crates/AGENTS.md). Claude Code discovers the skills
@@ -124,7 +126,7 @@ uv sync --group dev                             # this worktree's .venv; _native
 - A compiler cache does not bridge pools as this recipe stands: sccache (0.19) keys each crate on
   every `CARGO_*` variable, `CARGO_TARGET_DIR` included, so two pools never share an entry.
 - Size pools to the disk (a warm pool is several GB). Keep each pool's environment the same
-  (`RUSTFLAGS`, `CARGO_PROFILE_*`): a change rebuilds the workspace crates. CI's `engine` job sets
+  (`RUSTFLAGS`, `CARGO_PROFILE_*`): a change rebuilds the workspace crates. CI's Rust jobs set
   `CARGO_PROFILE_DEV_DEBUG=line-tables-only`.
 - nextest keeps its JUnit report under the worktree's own `target/nextest/` (gitignored), whatever
   `CARGO_TARGET_DIR` says.
@@ -139,7 +141,7 @@ uv sync --group dev                             # this worktree's .venv; _native
 | Rust, everything | `cargo nextest run --workspace --profile ci` and `cargo test --workspace --doc` (nextest runs no doctests), or `cargo test --workspace` |
 | Python, while editing | `uv run pytest tests/<area> -q --no-cov` |
 | Lint and types | `scripts/ci-local.sh --quick` (ruff, ty, cargo fmt, clippy, layers, engine checks, `uv build`) |
-| Before a push | `scripts/ci-local.sh --full` (adds cargo test, pytest with the coverage gate, the E2E suite, GitLab CI lint) |
+| Before a push | `scripts/ci-local.sh --full` (adds nextest `ci`, doctests, rustdoc, the crates' package and licence scan, pytest with the coverage gate, the E2E suite, GitLab CI lint; WebAssembly, grammars and fuzz smoke when their tools are installed) |
 
 The test profiles are in [`.config/nextest.toml`](.config/nextest.toml); CI's jobs are in
 [`.github/AGENTS.md`](.github/AGENTS.md).
