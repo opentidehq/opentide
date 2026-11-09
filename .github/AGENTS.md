@@ -134,6 +134,15 @@ together.
 - [`engine-release.yml`](workflows/engine-release.yml): the engine's release (below).
 - [`engine-fuzz.yml`](workflows/engine-fuzz.yml) fuzzes every target for ten minutes a night with
   the corpus it keeps, and uploads what crashed; a schedule of its own, so not part of ci.yml.
+- [`bench.yml`](workflows/bench.yml), nightly on `development`, on demand and on a pull request
+  labelled `perf`: `cargo xtask bench` for the `python` (the oracle, opentide 0.23.0 from PyPI)
+  and `rust` engines on `ubuntu-24.04`, then `cargo xtask bench --check --require-reference`
+  against `tests/bench/budgets.toml` and the last successful `development` run's
+  `bench-<engine>` artifact on the same CPU (a command compared with nothing fails). The rules
+  (10% over the last development result or the oracle baseline of the runner's CPU, the absolute
+  plan section 11 target for `rust`, the noise floor, the ceiling on an unrecorded CPU, the
+  waiver) are in [`xtask/AGENTS.md`](../xtask/AGENTS.md), "bench"; the table lands in the job
+  summary. Never required: it runs on demand and its numbers depend on the runner's CPU.
 - [`rust-audit.yml`](workflows/rust-audit.yml) runs `cargo audit` on every Rust lock file
   (`git ls-files`) every day, with deny.toml's exceptions, and opens or comments on one issue when it finds an advisory.
   Its issue job is the only job in any workflow with `issues: write`, and it never runs on a pull

@@ -92,6 +92,9 @@ insta = { version = "1.49", default-features = false }
 trycmd = "1.2"
 # Compile-fail cases (tests/ui/*.rs with the expected .stderr beside them).
 trybuild = "1.0"
+# xtask only: `cargo xtask bench` reads each benchmarked process's peak RSS
+# from wait4(2), whose safe wrapper this is (the workspace forbids `unsafe`).
+wait4 = "0.2"
 
 # Lints for every member: each one sets `[lints] workspace = true`, except the
 # two that contain `unsafe` (crates/opentide-syntax: tree-sitter FFI;

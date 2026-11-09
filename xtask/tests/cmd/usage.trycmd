@@ -31,10 +31,6 @@ $ xtask golden
 ? 1
 xtask golden: not implemented yet; UC-0.5 (https://github.com/opentidehq/opentide/issues/803) implements it
 
-$ xtask bench
-? 1
-xtask bench: not implemented yet; UC-0.8 (https://github.com/opentidehq/opentide/issues/806) implements it
-
 $ xtask frobnicate
 ? 2
 xtask: unknown command `frobnicate`
