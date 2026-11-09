@@ -8,7 +8,7 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ### Added
 
-- **`opentide_core::suggest`: one "did you mean" rule for the engine** ([#812](https://github.com/opentidehq/opentide/issues/812)). The same word without case, whitespace, `-` or `_` wins outright; otherwise the candidate with the fewest edits (strsim's optimal string alignment distance: a transposition is one edit), within a third of the value's length. It replaces `opentide_core::difflib`, which is gone: an edit distance suggests what a typo meant, where a ratio of shared letters also suggests unrelated words.
+- **`opentide_core::suggest`: one "did you mean" rule for the engine** ([#812](https://github.com/opentidehq/opentide/issues/812)). The same word without case, whitespace, `-` or `_` wins outright; otherwise the candidate with the fewest edits (strsim's optimal string alignment distance: a transposition is one edit), within a third of the value's length. It uses an edit distance rather than a port of Python's `difflib`: an edit distance suggests what a typo meant, where a ratio of shared letters also suggests unrelated words.
 
 - **Each release carries CycloneDX SBOMs** ([#843](https://github.com/opentidehq/opentide/issues/843)). `opentide-lsp.cdx.json` (the binaries and the WASI build), `opentide-wasm.cdx.json` (the browser build, with the wasi-libc it links), `opentide-lsp-client.cdx.json` and `opentide-lsp-worker.cdx.json` (the npm packages) are release assets, listed in `SHA256SUMS` and checked against the CycloneDX 1.5 schema before they ship. The other assets keep their names.
 
