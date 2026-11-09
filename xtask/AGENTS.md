@@ -46,18 +46,24 @@ of it): a command that failed early would measure nothing, so the bench stops wi
 - The language server's number is spawn to the first `publishDiagnostics` for the opened rule
   (`src/bench/lsp.rs`), with the workspace as its root.
 - `--check` (`src/bench/check.rs`) fails a median or peak RSS more than `policy.regression` (10%)
-  over the last `development` result (`--previous`), over the oracle baseline in the budgets
-  (`python`), or over the plan section 11 target (`rust`); differences within the noise floor
-  never fail. It prints, and with `--summary` appends, a Markdown table per command.
+  over the last `development` result (`--previous`) or over the oracle baseline in the budgets
+  (`python`), and a rust result over the absolute plan section 11 target (or, where a
+  `target_waiver` names the work item that will meet it, more than 10% over the Rust baseline);
+  differences within the noise floor (20 ms, 2 MiB) never fail. With `--require-reference`
+  (CI), a measured command that no baseline, target or comparable previous result applies to
+  fails, and so does a report without a CPU model. It prints, and with `--summary` appends, a
+  Markdown table per command.
 - Comparability: a report is held to the oracle baseline only with the same oracle, workspace and
   run count as recorded in the budgets. Times are kept per CPU model (`[baseline]` and
   `[[cpu_baseline]]`: GitHub's runners of one class span CPUs up to 1.8x apart); on a CPU with
-  no entry, times get the slowest recorded + `cross_cpu_regression` (50%). RSS keeps 10%. A previous result counts only with the same engine,
+  no entry, times get the slowest recorded + `cross_cpu_regression` (20%). RSS keeps 10%. The
+  workspace digest in the report must equal `[baseline] digest`. A previous result counts only with the same engine,
   oracle, workspace, run count and CPU model; GitHub's `ubuntu-24.04` runners come on several
   CPUs, so CI looks for the newest successful development run on the same CPU.
-- Peak RSS has a floor: on Linux a child's `ru_maxrss` is the larger of its own peak and xtask's
-  high-water mark at the spawn. xtask resets its mark before each spawn (`/proc/self/clear_refs`)
-  and refuses a sample at or under it, never reporting it.
+- Peak RSS has a floor: on Linux `exec` records the high-water mark of the memory a child shared
+  with xtask until then, so a child's `ru_maxrss` is at least xtask's mark at the spawn. xtask
+  resets its own mark to its current RSS before each spawn (`/proc/self/clear_refs`), generates
+  the workspace in a child process, and refuses a sample at or under its mark.
 - `XTASK_BENCH_INJECT_SLEEP_MS` is test-only: a sleep inside every measured run's timed window.
   `tests/bench.rs` proves that it makes the check fail.
 - CI: [`bench.yml`](../.github/workflows/bench.yml). Re-record the baseline only from a CI run on

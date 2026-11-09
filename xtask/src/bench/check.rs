@@ -154,11 +154,13 @@ pub struct Baseline {
     pub runs: u32,
     /// Warm-up runs per command.
     pub warmup: u32,
+    /// The heavy workspace's digest the baselines were measured on: a report
+    /// of another generator output is not held to them.
+    pub digest: String,
     /// The runner class: `ubuntu-24.04, 4 vCPU`.
     pub runner: String,
-    /// The CPU the oracle baseline was measured on (`model name`): GitHub's
-    /// runners of one class come on several CPU generations, and a report
-    /// from another CPU is not held to the baseline (a note says so).
+    /// The CPU the commands' `baseline_s` were measured on (`model name`);
+    /// `[[cpu_baseline]]` holds the medians on more CPU models.
     pub cpu_model: String,
     /// The CPU the `rust_baseline_s` numbers were measured on.
     pub rust_cpu_model: Option<String>,
@@ -395,6 +397,13 @@ fn incomparable(report: &Report, previous: &Report) -> Option<String> {
             workspace_name(report.seed)
         ));
     }
+    if previous.workspace_digest != report.workspace_digest {
+        return Some(format!(
+            "workspace digest {} != {}",
+            previous.workspace_digest.as_deref().unwrap_or("none"),
+            report.workspace_digest.as_deref().unwrap_or("none")
+        ));
+    }
     if previous.oracle != report.oracle {
         return Some(format!(
             "oracle {} != {}",
@@ -423,6 +432,42 @@ fn incomparable(report: &Report, previous: &Report) -> Option<String> {
 /// Checks `report` against `budgets` and, when given, the last `development`
 /// result.
 pub fn check(budgets: &Budgets, report: &Report, previous: Option<&Report>) -> Outcome {
+    check_with(budgets, report, previous, false)
+}
+
+/// [`check`], and with `require_reference` (CI) a failure for every measured
+/// command that no reference applies to (no baseline, no target, no
+/// comparable previous result), and for a report that names no CPU: a gate
+/// that compares with nothing must not pass.
+pub fn check_with(
+    budgets: &Budgets,
+    report: &Report,
+    previous: Option<&Report>,
+    require_reference: bool,
+) -> Outcome {
+    let mut outcome = check_against(budgets, report, previous);
+    if require_reference {
+        if report.host.cpu_model.is_none() {
+            outcome
+                .failures
+                .push("the report names no CPU model: no time baseline can apply to it".to_owned());
+        }
+        for row in &mut outcome.rows {
+            let measured = row.median_s.is_some();
+            if measured && row.budget_s.is_none() && row.delta_previous.is_none() {
+                let why = "no reference applies (no baseline, target or comparable previous \
+                           result): see the notes"
+                    .to_owned();
+                outcome.failures.push(format!("{}: {why}", row.id));
+                row.reasons.push(why);
+                row.verdict = Verdict::Fail;
+            }
+        }
+    }
+    outcome
+}
+
+fn check_against(budgets: &Budgets, report: &Report, previous: Option<&Report>) -> Outcome {
     let policy = &budgets.policy;
     let mut notes = Vec::new();
     let mut failures = Vec::new();
@@ -431,7 +476,8 @@ pub fn check(budgets: &Budgets, report: &Report, previous: Option<&Report>) -> O
         && report.scale == budgets.baseline.scale
         && report.seed == Some(budgets.baseline.seed)
         && report.oracle.as_deref() == Some(budgets.baseline.oracle.as_str())
-        && (report.runs, report.warmup) == (budgets.baseline.runs, budgets.baseline.warmup);
+        && (report.runs, report.warmup) == (budgets.baseline.runs, budgets.baseline.warmup)
+        && report.workspace_digest.as_deref() == Some(budgets.baseline.digest.as_str());
     let cpu = report.host.cpu_model.as_deref();
     let other_cpu = !budgets.knows_cpu(&report.engine, cpu);
     if other_cpu && (baseline_applies || report.engine == "rust") {
@@ -908,6 +954,7 @@ pub fn check_files(
     budgets_path: &std::path::Path,
     report_path: &std::path::Path,
     previous_path: Option<&std::path::Path>,
+    require_reference: bool,
 ) -> Result<(Outcome, Report)> {
     let read = |path: &std::path::Path| {
         std::fs::read_to_string(path).with_context(|| format!("read {}", path.display()))
@@ -922,7 +969,7 @@ pub fn check_files(
         }
         None => None,
     };
-    let outcome = check(&budgets, &report, previous.as_ref());
+    let outcome = check_with(&budgets, &report, previous.as_ref(), require_reference);
     Ok((outcome, report))
 }
 
@@ -947,6 +994,7 @@ scale = 1
 seed = 20261107
 runs = 5
 warmup = 1
+digest = "5978a2ab7c093587"
 runner = "ubuntu-24.04, 4 vCPU"
 cpu_model = "AMD EPYC 9V45 96-Core Processor"
 rust_cpu_model = "AMD EPYC 9V45 96-Core Processor"
@@ -1000,6 +1048,7 @@ target_s = 0.03
                 cpu_model: Some("AMD EPYC 9V45 96-Core Processor".into()),
                 ..Host::default()
             },
+            workspace_digest: Some("5978a2ab7c093587".into()),
             git_sha: Some("0123456789abcdef".into()),
             created_unix: 0,
             results,
@@ -1282,6 +1331,84 @@ target_s = 0.03
             "{text}\n[[cpu_baseline]]\nengine = \"python\"\ncpu_model = \"AMD EPYC 7763\"\nsource = \"x\"\nmedian_s = {{}}\n"
         );
         assert!(Budgets::parse(&twice).is_err());
+    }
+
+    #[test]
+    fn with_require_reference_a_report_compared_with_nothing_fails() {
+        // Another oracle: no baseline, and no previous result.
+        let mut r = report(
+            "python",
+            vec![
+                measured("validate_clean", 9.0, 170.0),
+                measured("explain", 0.2, 33.0),
+            ],
+        );
+        r.oracle = Some("opentide 0.24.0".into());
+        assert!(check(&budgets(), &r, None).passed(), "locally it is a note");
+        let outcome = check_with(&budgets(), &r, None, true);
+        assert_eq!(outcome.failures.len(), 2, "{:?}", outcome.failures);
+        assert!(
+            outcome.failures[0].contains("no reference applies"),
+            "{:?}",
+            outcome.failures
+        );
+        // Another run count, another seed: the same.
+        for edit in [
+            |r: &mut Report| r.runs = 3,
+            |r: &mut Report| r.seed = None,
+            |r: &mut Report| r.workspace_digest = Some("0000".into()),
+        ] {
+            let mut r = report("python", vec![measured("validate_clean", 9.0, 170.0)]);
+            edit(&mut r);
+            assert!(!check_with(&budgets(), &r, None, true).passed());
+        }
+        // A comparable previous result is a reference.
+        let mut r = report("python", vec![measured("validate_clean", 3.0, 170.0)]);
+        r.oracle = Some("opentide 0.24.0".into());
+        let previous = r.clone();
+        let outcome = check_with(&budgets(), &r, Some(&previous), true);
+        assert!(
+            !outcome.failures.iter().any(|f| f.contains("no reference")),
+            "{:?}",
+            outcome.failures
+        );
+        // No CPU model fails on CI; the baseline report itself passes.
+        let mut r = report(
+            "python",
+            vec![
+                measured("validate_clean", 3.0, 170.0),
+                measured("explain", 0.2, 33.0),
+            ],
+        );
+        assert!(check_with(&budgets(), &r, None, true).passed());
+        r.host.cpu_model = None;
+        let outcome = check_with(&budgets(), &r, None, true);
+        assert!(
+            outcome.failures.iter().any(|f| f.contains("no CPU model")),
+            "{:?}",
+            outcome.failures
+        );
+    }
+
+    #[test]
+    fn another_workspace_digest_is_held_to_neither_baseline_nor_previous() {
+        let previous = report("python", vec![measured("validate_clean", 2.0, 170.0)]);
+        let mut r = report("python", vec![measured("validate_clean", 9.0, 170.0)]);
+        r.workspace_digest = Some("ffffffffffffffff".into());
+        let outcome = check(&budgets(), &r, Some(&previous));
+        assert!(
+            outcome.notes.iter().any(|n| n.contains("workspace digest")),
+            "{:?}",
+            outcome.notes
+        );
+        assert!(
+            outcome
+                .failures
+                .iter()
+                .all(|f| !f.contains("validate_clean: median")),
+            "{:?}",
+            outcome.failures
+        );
     }
 
     #[test]

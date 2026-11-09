@@ -28,14 +28,18 @@ schema_version = 1
 [policy]
 # A median or peak RSS more than 10% above its reference fails (issue #806).
 regression = 0.10
-# ...and only when the difference is also above these: on CI's runners two runs of a
-# 0.2 s command differ by up to ~20 ms (process start, page cache, scheduling), and the
-# RSS of one Python process by about 1 MiB (allocator arenas).
-noise_floor_s = 0.03
+# ...and only when the difference is also above these. The medians of 5 runs of the
+# shortest command (explain, about 0.2 s) differ by up to about 15 ms between runs on one
+# machine (single samples by up to 35 ms: process start, page cache, scheduling); 20 ms
+# lets explain regress 15% at most on the fastest CPU (0.136 s) before it fails. The RSS
+# of one Python process moves by about 1 MiB (allocator arenas).
+noise_floor_s = 0.02
 noise_floor_rss_mib = 2.0
-# Against a baseline from another CPU model than the runner's (GitHub mixes CPU
-# generations in one runner class) a time may be 50% over before it fails; RSS keeps 10%.
-cross_cpu_regression = 0.50
+# On a CPU model with no recorded medians ([baseline] and [[cpu_baseline]] below), a time
+# is held to the slowest recorded CPU's median + 20%: an effective ceiling of up to 2.1x
+# the fastest recorded median (the 7763 is 1.78x slower than the 9V45 on validate). RSS
+# keeps 10% on every CPU. CI (--require-reference) also fails a report with no CPU model.
+cross_cpu_regression = 0.20
 
 [baseline]
 engine = "python"
@@ -45,10 +49,15 @@ seed = 20261107
 # The run count of the baseline: a report of another count is not compared with it.
 runs = 5
 warmup = 1
+# The heavy workspace's digest (cargo xtask corpus generate --seed 20261107 --digest): a
+# report of another generator output is not held to these numbers.
+digest = "5978a2ab7c093587"
 runner = "ubuntu-24.04 (GitHub-hosted, 4 vCPU, image 20261101.360.1)"
-# GitHub's runners of this class come on several CPUs (seen: AMD EPYC 9V45, AMD EPYC
-# 9V74, Intel Xeon Platinum 8573C); a report from another CPU is not held to the
-# baseline, only to the last development result on its own CPU.
+# GitHub's runners of this class come on several CPUs (seen: AMD EPYC 9V45, 9V74 and 7763,
+# Intel Xeon Platinum 8573C). The commands' baseline_s are the medians on cpu_model,
+# rust_baseline_s on rust_cpu_model; [[cpu_baseline]] holds the medians on more CPUs. A
+# report is held to the medians of its own CPU at policy.regression, or on a CPU recorded
+# nowhere to the slowest recorded + policy.cross_cpu_regression.
 cpu_model = "AMD EPYC 9V45 96-Core Processor"
 rust_cpu_model = "INTEL(R) XEON(R) PLATINUM 8573C"
 # Run 42510209388 (commit 078ca8d, heavy workspace digest 5978a2ab7c093587): the
@@ -62,7 +71,8 @@ plan_rss_mib = 171.0
 baseline_s = 2.443
 baseline_rss_mib = 190.1
 target_s = 0.7
-target_rss_mib = 100.0
+# Plan section 11: <= 100 MB, enforced as MiB (100e6 bytes).
+target_rss_mib = 95.4
 
 [commands.validate_warnings]
 label = "validate, platforms disabled (a warning per platform block)"
@@ -142,8 +152,9 @@ target_s = 0.1
 # the target; UC-2.6 rebuilds it on opentide-workspace.
 target_waiver = "UC-2.6 (#821) rebuilds the server on opentide-workspace"
 rust_baseline_s = 0.154
-# Plan section 11: editor memory per window (language server and backend) <= 150 MB.
-target_rss_mib = 150.0
+# Plan section 11: editor memory per window (language server and backend) <= 150 MB,
+# enforced as MiB (150e6 bytes).
+target_rss_mib = 143.1
 
 # The medians on more CPU models of the runner class, each from one CI run of the
 # workflow (same oracle, workspace and run count as [baseline]). A report on one of
@@ -206,3 +217,31 @@ source = "https://github.com/opentidehq/opentide/actions/runs/42514414249"
 
 [cpu_baseline.median_s]
 lsp_first_diagnostics = 0.165
+
+[[cpu_baseline]]
+engine = "python"
+cpu_model = "INTEL(R) XEON(R) PLATINUM 8573C"
+source = "https://github.com/opentidehq/opentide/actions/runs/42534909670"
+
+[cpu_baseline.median_s]
+validate_clean = 4.237
+validate_warnings = 16.869
+validate_file = 2.089
+lint = 4.952
+lint_file = 0.954
+info = 1.459
+info_catalog = 1.686
+deploy_dry_run = 3.140
+generate_docs = 18.290
+generate_exports_navigator = 1.342
+rules_unreviewed = 0.580
+explain = 0.210
+lsp_first_diagnostics = 2.372
+
+[[cpu_baseline]]
+engine = "rust"
+cpu_model = "AMD EPYC 9V45 96-Core Processor"
+source = "https://github.com/opentidehq/opentide/actions/runs/42515106569"
+
+[cpu_baseline.median_s]
+lsp_first_diagnostics = 0.114

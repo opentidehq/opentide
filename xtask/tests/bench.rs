@@ -90,6 +90,9 @@ fn budgets_from(report: &serde_json::Value, path: &Path) {
     assert_eq!(explain["status"], "measured");
     let median = explain["median_s"].as_f64().unwrap();
     let oracle = report["oracle"].as_str().unwrap();
+    let digest = report["workspace_digest"]
+        .as_str()
+        .expect("a workspace digest");
     // On a machine without /proc/cpuinfo the CPU is unknown, and no
     // baseline applies; the test's machines have one.
     let cpu = report["host"]["cpu_model"].as_str().expect("a CPU model");
@@ -101,7 +104,7 @@ fn budgets_from(report: &serde_json::Value, path: &Path) {
             "schema_version = 1\n\n\
              [policy]\nregression = 0.10\nnoise_floor_s = 0.03\nnoise_floor_rss_mib = 2.0\ncross_cpu_regression = 0.5\n\n\
              [baseline]\nengine = \"python\"\noracle = \"{oracle}\"\nscale = 1\nseed = 20261107\n\
-             runs = 3\nwarmup = 0\n\
+             runs = 3\nwarmup = 0\ndigest = \"{digest}\"\n\
              runner = \"this machine\"\ncpu_model = \"{cpu}\"\nsource = \"tests/bench.rs\"\n\n\
              [commands.explain]\nlabel = \"explain\"\nbaseline_s = {median}\n\
              baseline_rss_mib = {rss_mib}\ntarget_s = 0.03\n"
@@ -251,5 +254,97 @@ fn a_relative_opentide_path_is_resolved_against_the_working_directory() {
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn a_command_whose_peak_rss_cannot_be_told_from_xtasks_is_refused() {
+    // A stand-in `opentide` without ballast peaks below xtask's own RSS:
+    // what wait4 reports may be xtask's, so the run stops (exit 2).
+    let dir = scratch("floor-cli");
+    let opentide = dir.join("opentide");
+    std::fs::write(
+        &opentide,
+        "#!/bin/sh\nprintf '%s\\n' '{\"code\":\"vocab_unknown\",\"ok\":true,\"exit_code\":0}'\n",
+    )
+    .unwrap();
+    std::fs::set_permissions(&opentide, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let output = xtask(
+        &[
+            "bench",
+            "--only",
+            "explain",
+            "--opentide",
+            opentide.to_str().unwrap(),
+            "--runs",
+            "1",
+            "--warmup",
+            "0",
+        ],
+        None,
+    );
+    assert_eq!(output.status.code(), Some(2));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("does not exceed xtask's own"), "{stderr}");
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+/// A language server in `sh` that answers just enough: `initialize`, the
+/// first diagnostics for the opened document, `shutdown` and `exit`. A shell
+/// (with its `dd`, `tr` and `sed` children) peaks far below xtask's own RSS.
+const STUB_SERVER: &str = r#"#!/bin/sh
+send() { printf 'Content-Length: %d\r\n\r\n%s' "${#1}" "$1"; }
+while :; do
+  len=
+  while IFS= read -r line; do
+    line=$(printf '%s' "$line" | tr -d '\r')
+    [ -z "$line" ] && break
+    case $line in Content-Length:*) len=${line#Content-Length: } ;; esac
+  done
+  [ -z "$len" ] && exit 0
+  body=$(dd bs=1 count="$len" 2>/dev/null)
+  case $body in
+    *'"method":"initialize"'*) send '{"jsonrpc":"2.0","id":1,"result":{"capabilities":{}}}' ;;
+    *'"method":"textDocument/didOpen"'*)
+      uri=$(printf '%s' "$body" | sed 's/.*"uri":"\([^"]*\)".*/\1/')
+      send "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/publishDiagnostics\",\"params\":{\"uri\":\"$uri\",\"diagnostics\":[]}}" ;;
+    *'"method":"shutdown"'*) send '{"jsonrpc":"2.0","id":2,"result":null}' ;;
+    *'"method":"exit"'*) exit 0 ;;
+  esac
+done
+"#;
+
+#[test]
+fn a_language_server_whose_peak_rss_cannot_be_told_from_xtasks_is_refused() {
+    // The stub completes the session (first diagnostics, shutdown, exit 0),
+    // so the only thing that can stop the run is the RSS guard.
+    let dir = scratch("floor-lsp");
+    let server = dir.join("server");
+    std::fs::write(&server, STUB_SERVER).unwrap();
+    std::fs::set_permissions(&server, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let workspace = dir.join("workspace");
+    std::fs::create_dir_all(workspace.join("objects/rules")).unwrap();
+    std::fs::write(workspace.join("objects/rules/a.yaml"), "name: a\n").unwrap();
+    let output = xtask(
+        &[
+            "bench",
+            "--engine",
+            "rust",
+            "--only",
+            "lsp_first_diagnostics",
+            "--lsp",
+            server.to_str().unwrap(),
+            "--workspace",
+            workspace.to_str().unwrap(),
+            "--runs",
+            "1",
+            "--warmup",
+            "0",
+        ],
+        None,
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(2), "{stderr}");
+    assert!(stderr.contains("does not exceed xtask's own"), "{stderr}");
     std::fs::remove_dir_all(dir).unwrap();
 }

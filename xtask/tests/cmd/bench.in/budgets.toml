@@ -14,6 +14,7 @@ seed = 20261107
 # The run count of the baseline: a report of another count is not compared with it.
 runs = 5
 warmup = 1
+digest = "5978a2ab7c093587"
 runner = "ubuntu-24.04, 4 vCPU"
 cpu_model = "AMD EPYC 7763 64-Core Processor"
 source = "bench.trycmd"

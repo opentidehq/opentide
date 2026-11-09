@@ -368,6 +368,35 @@ mod tests {
     }
 
     #[test]
+    fn memory_xtask_freed_before_the_spawn_does_not_raise_the_floor() {
+        // 256 MiB touched and freed: without the reset of VmHWM before the
+        // spawn, a 64 MiB child would report this process's 256 MiB peak,
+        // and the guard would refuse it.
+        let root = scratch("freed");
+        let run_dir = RunDir::prepare(&root, None).unwrap();
+        let buffer = vec![1u8; 256 << 20];
+        std::hint::black_box(&buffer);
+        drop(buffer);
+        let mut child = command(
+            Path::new("sh"),
+            &[
+                "-c".into(),
+                "dd if=/dev/zero of=/dev/null bs=64M count=1 2>/dev/null".into(),
+            ],
+            &run_dir,
+        )
+        .unwrap();
+        let measured = run(&mut child, None).unwrap();
+        let peak = measured.sample.peak_rss_bytes;
+        assert!(
+            peak < 200 << 20,
+            "the child reported {peak} bytes: the parent's freed peak"
+        );
+        distinct_from_own(peak, measured.own_peak_rss).unwrap();
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn a_child_that_outlives_its_deadline_is_killed_not_awaited() {
         let root = scratch("deadline");
         let run_dir = RunDir::prepare(&root, None).unwrap();

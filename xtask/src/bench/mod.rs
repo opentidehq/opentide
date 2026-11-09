@@ -317,6 +317,8 @@ pub struct CheckOptions {
     pub previous: Option<PathBuf>,
     /// A file to append the Markdown summary to (`$GITHUB_STEP_SUMMARY`).
     pub summary: Option<PathBuf>,
+    /// Fail every measured command no reference applies to (CI).
+    pub require_reference: bool,
 }
 
 /// What the arguments ask for.
@@ -353,6 +355,7 @@ pub fn parse_args(args: &[String]) -> Result<Mode> {
     let mut check: Option<(PathBuf, PathBuf)> = None;
     let mut previous = None;
     let mut summary = None;
+    let mut require_reference = false;
     let mut run_only = false;
     let mut args = args.iter();
     while let Some(arg) = args.next() {
@@ -370,6 +373,7 @@ pub fn parse_args(args: &[String]) -> Result<Mode> {
             }
             "--previous" => previous = Some(PathBuf::from(value()?)),
             "--summary" => summary = Some(PathBuf::from(value()?)),
+            "--require-reference" => require_reference = true,
             "--engine" => {
                 options.engine = match value()?.as_str() {
                     "python" => Engine::Python,
@@ -441,18 +445,19 @@ pub fn parse_args(args: &[String]) -> Result<Mode> {
     match check {
         Some((budgets, report)) => {
             if run_only {
-                bail!("--check takes only --previous and --summary");
+                bail!("--check takes only --previous, --summary and --require-reference");
             }
             Ok(Mode::Check(CheckOptions {
                 budgets,
                 report,
                 previous,
                 summary,
+                require_reference,
             }))
         }
         None => {
-            if previous.is_some() || summary.is_some() {
-                bail!("--previous and --summary go with --check");
+            if previous.is_some() || summary.is_some() || require_reference {
+                bail!("--previous, --summary and --require-reference go with --check");
             }
             Ok(Mode::Run(options))
         }
@@ -467,10 +472,10 @@ pub fn main(args: &[String]) -> ExitCode {
         let outcome = scale
             .parse::<u32>()
             .context("scale")
-            .and_then(|scale| generate_here(scale, Path::new(dir)));
+            .and_then(|scale| generate_here(scale, (dir != "-").then(|| Path::new(dir))));
         return match outcome {
-            Ok(blocks) => {
-                println!("{blocks}");
+            Ok(generated) => {
+                println!("{} {}", generated.blocks, generated.digest);
                 ExitCode::SUCCESS
             }
             Err(err) => {
@@ -514,6 +519,7 @@ fn run_check(options: &CheckOptions) -> Result<bool> {
         &options.budgets,
         &options.report,
         options.previous.as_deref(),
+        options.require_reference,
     )?;
     let summary = check::summary_markdown(&outcome, &report);
     print!("{summary}");
@@ -690,12 +696,16 @@ fn run_in(options: &Options, root: &Path, base: &Path, work: &Path) -> Result<()
         _ => None,
     };
 
+    // The generator's digest names the workspace in the report, also when no
+    // selected command reads it (then nothing is written).
+    let mut digest = None;
     let workspaces = if needs_workspace {
         let (source, expected_warnings) = match &options.workspace {
             Some(dir) => (dir.clone(), None),
             None => {
-                let (dir, blocks) = generate(options.scale, work)?;
-                (dir, Some(blocks))
+                let generated = generate(options.scale, Some(&work.join("generated")))?;
+                digest = Some(generated.digest);
+                (work.join("generated"), Some(generated.blocks))
             }
         };
         let with_warnings = selected
@@ -758,6 +768,11 @@ fn run_in(options: &Options, root: &Path, base: &Path, work: &Path) -> Result<()
         engine: options.engine.name().to_owned(),
         scale: options.scale,
         seed: options.workspace.is_none().then_some(workspace::SEED),
+        workspace_digest: match (&options.workspace, digest) {
+            (Some(_), _) => None,
+            (None, Some(digest)) => Some(digest),
+            (None, None) => Some(generate(options.scale, None)?.digest),
+        },
         runs: options.runs,
         warmup: options.warmup,
         oracle,
@@ -780,23 +795,22 @@ fn run_in(options: &Options, root: &Path, base: &Path, work: &Path) -> Result<()
     Ok(())
 }
 
-/// Generates the heavy workspace under `work` with UC-0.6's generator
-/// (`cargo xtask corpus generate --seed 20261107 [--scale 10]`, the same code
-/// in process) and returns it with the number of platform blocks its rules
-/// hold.
+/// Generates the heavy workspace into `dir` with UC-0.6's generator (`cargo
+/// xtask corpus generate --seed 20261107 [--scale 10]`, the same code), or
+/// with `None` only computes it, and returns the number of platform blocks
+/// its rules hold and its digest.
 ///
 /// The generator runs in a child xtask (`bench --internal-generate`): the
 /// corpus it builds in memory (about 110 MiB at scale 10) would otherwise
 /// stay in this process, whose high-water mark is the floor under every
 /// measured peak RSS (`measure::own_peak_rss`).
-fn generate(scale: u32, work: &Path) -> Result<(PathBuf, usize)> {
-    let dir = work.join("generated");
+fn generate(scale: u32, dir: Option<&Path>) -> Result<Generated> {
     let exe = std::env::current_exe().context("find this xtask")?;
     let output = std::process::Command::new(&exe)
         .arg("bench")
         .arg(INTERNAL_GENERATE)
         .arg(scale.to_string())
-        .arg(&dir)
+        .arg(dir.map_or_else(|| OsString::from("-"), |d| d.as_os_str().to_owned()))
         .stderr(std::process::Stdio::inherit())
         .output()
         .with_context(|| format!("run {} bench {INTERNAL_GENERATE}", exe.display()))?;
@@ -804,16 +818,32 @@ fn generate(scale: u32, work: &Path) -> Result<(PathBuf, usize)> {
         bail!("generating the heavy workspace failed ({})", output.status);
     }
     let text = String::from_utf8_lossy(&output.stdout);
-    let blocks = text
-        .trim()
-        .parse()
-        .with_context(|| format!("the generator printed {text:?}, not a block count"))?;
-    Ok((dir, blocks))
+    Generated::parse(&text)
+        .with_context(|| format!("the generator printed {text:?}, not `<blocks> <digest>`"))
 }
 
-/// `bench --internal-generate SCALE DIR`: writes the heavy workspace to DIR
-/// and prints the number of platform blocks its rules hold.
-fn generate_here(scale: u32, dir: &Path) -> Result<usize> {
+/// What the generator child reports: the platform blocks of its rules and
+/// the workspace's digest.
+#[derive(Debug, PartialEq, Eq)]
+struct Generated {
+    blocks: usize,
+    digest: String,
+}
+
+impl Generated {
+    fn parse(text: &str) -> Option<Self> {
+        let (blocks, digest) = text.trim().split_once(' ')?;
+        Some(Self {
+            blocks: blocks.parse().ok()?,
+            digest: digest.to_owned(),
+        })
+    }
+}
+
+/// `bench --internal-generate SCALE DIR|-`: writes the heavy workspace to
+/// DIR (nothing for `-`) and prints the number of platform blocks its rules
+/// hold and its digest.
+fn generate_here(scale: u32, dir: Option<&Path>) -> Result<Generated> {
     let counts = crate::corpus::generate::Counts::scaled(f64::from(scale))
         .with_context(|| format!("scale {scale}"))?;
     let options = crate::corpus::generate::Options {
@@ -821,10 +851,12 @@ fn generate_here(scale: u32, dir: &Path) -> Result<usize> {
         ..crate::corpus::generate::Options::new(workspace::SEED)
     };
     let generated = crate::corpus::generate::generate(&options);
-    if dir.exists() {
-        std::fs::remove_dir_all(dir).with_context(|| format!("remove {}", dir.display()))?;
+    if let Some(dir) = dir {
+        if dir.exists() {
+            std::fs::remove_dir_all(dir).with_context(|| format!("remove {}", dir.display()))?;
+        }
+        crate::corpus::cli::write_workspace(&generated, dir)?;
     }
-    crate::corpus::cli::write_workspace(&generated, dir)?;
     let blocks = generated
         .family(crate::corpus::workspace::Family::Rule)
         .map(|rule| rule.platforms.len())
@@ -835,7 +867,10 @@ fn generate_here(scale: u32, dir: &Path) -> Result<usize> {
         generated.summary(),
         generated.digest()
     );
-    Ok(blocks)
+    Ok(Generated {
+        blocks,
+        digest: generated.digest(),
+    })
 }
 
 fn measure_scenario(
@@ -1104,6 +1139,73 @@ mod tests {
                 (kind, _) => panic!("{}: {kind:?}", scenario.id),
             }
         }
+    }
+
+    #[test]
+    fn the_budgets_baseline_matches_what_a_default_run_reports() {
+        // A default `cargo xtask bench` must be held to the recorded baseline:
+        // an oracle pin, seed, run count or scale that drifts from it would
+        // silently turn the baseline check off.
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        let budgets = check::Budgets::parse(
+            &std::fs::read_to_string(root.join("tests/bench/budgets.toml")).unwrap(),
+        )
+        .unwrap();
+        let requirements = std::fs::read_to_string(root.join(oracle::ORACLE_REQUIREMENTS)).unwrap();
+        let version = oracle::pinned_version(&requirements).unwrap();
+        assert_eq!(budgets.baseline.oracle, format!("opentide {version}"));
+        assert_eq!(budgets.baseline.engine, "python");
+        assert_eq!(budgets.baseline.seed, workspace::SEED);
+        let Mode::Run(defaults) = parse_args(&[]).unwrap() else {
+            panic!("not a run");
+        };
+        assert_eq!(
+            (
+                budgets.baseline.runs,
+                budgets.baseline.warmup,
+                budgets.baseline.scale
+            ),
+            (defaults.runs, defaults.warmup, defaults.scale)
+        );
+        // The digest of the workspace a default run generates.
+        let options = crate::corpus::generate::Options::new(workspace::SEED);
+        assert_eq!(
+            budgets.baseline.digest,
+            crate::corpus::generate::generate(&options).digest()
+        );
+    }
+
+    #[test]
+    fn the_deploy_scenario_stays_a_dry_run() {
+        let scenario = SCENARIOS.iter().find(|s| s.id == "deploy_dry_run").unwrap();
+        assert!(scenario.args.contains(&"--dry-run"), "{:?}", scenario.args);
+        let ws = workspace::Workspaces {
+            clean: PathBuf::new(),
+            warnings: PathBuf::new(),
+            rule: PathBuf::new(),
+            rules: 0,
+            disabled_platforms: 0,
+            expected_warnings: None,
+        };
+        let refused = (scenario.expect)(&serde_json::json!({"dry_run": false, "ok": true}), &ws);
+        assert!(refused.is_some());
+        assert_eq!(
+            (scenario.expect)(&serde_json::json!({"dry_run": true, "ok": true}), &ws),
+            None
+        );
+    }
+
+    #[test]
+    fn the_generator_child_reports_blocks_and_digest() {
+        assert_eq!(
+            Generated::parse("905 5978a2ab7c093587\n"),
+            Some(Generated {
+                blocks: 905,
+                digest: "5978a2ab7c093587".into()
+            })
+        );
+        assert_eq!(Generated::parse("905"), None);
+        assert_eq!(Generated::parse("x 5978"), None);
     }
 
     #[test]

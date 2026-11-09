@@ -33,6 +33,11 @@ pub struct Report {
     pub oracle: Option<String>,
     /// The machine.
     pub host: Host,
+    /// The heavy workspace's digest (`cargo xtask corpus generate --digest`):
+    /// the generator's output, which a seed alone does not pin once the
+    /// generator changes. `None` for a workspace of one's own.
+    #[serde(default)]
+    pub workspace_digest: Option<String>,
     /// The commit benchmarked, when git could say.
     pub git_sha: Option<String>,
     /// When the run finished, in seconds since the Unix epoch.
@@ -219,6 +224,7 @@ mod tests {
             warmup: 1,
             oracle: None,
             host: Host::default(),
+            workspace_digest: None,
             git_sha: None,
             created_unix: 0,
             results: vec![CommandResult::not_implemented(

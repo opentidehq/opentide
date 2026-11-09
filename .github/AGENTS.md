@@ -60,8 +60,11 @@ when the committed one differs, until UC-1.8 generates it in Rust.
   labelled `perf`: `cargo xtask bench` for the `python` (the oracle, opentide 0.23.0 from PyPI)
   and `rust` engines on `ubuntu-24.04`, then `cargo xtask bench --check` against
   `tests/bench/budgets.toml` and the last successful `development` run's `bench-<engine>`
-  artifact; a median or peak RSS more than 10% over either fails. The table lands in the job
-  summary ([`xtask/AGENTS.md`](../xtask/AGENTS.md), "bench").
+  artifact, with `--require-reference` (a command compared with nothing fails). The rules (10%
+  over the last development result or the oracle baseline of the runner's CPU, the absolute
+  plan section 11 target for `rust`, the noise floor, the ceiling on an unrecorded CPU, the
+  waiver) are in [`xtask/AGENTS.md`](../xtask/AGENTS.md), "bench"; the table lands in the job
+  summary.
 - [`oracle.yml`](workflows/oracle.yml) checks the query parsers against Kusto.Language,
   Splunk, Elasticsearch, Lucene, Kibana and Falco on every push to `development`, on a pull
   request that changes `crates/`, `grammars/`, `Cargo.lock`, the query catalogs or the oracles,

@@ -85,7 +85,8 @@ jobs:
 
       # The oracle's `deploy --dry-run` on the heavy workspace (which declares tenants for
       # five platforms) under strace: it must open no network connection nor send a
-      # datagram to a network address.
+      # datagram to a network address (every network syscall traced: connect,
+      # sendto, sendmsg, sendmmsg).
       - name: Prove that the dry run reaches no tenant
         if: matrix.engine == 'python'
         run: |
@@ -95,10 +96,12 @@ jobs:
           opentide="$GITHUB_WORKSPACE/target/xtask-bench/oracle/bin/opentide"
           mkdir -p "$RUNNER_TEMP/home"
           (cd "$heavy" && env -i PATH=/usr/bin:/bin HOME="$RUNNER_TEMP/home" LANG=C.UTF-8 \
-            strace -f -qq -e trace=connect,sendto,sendmsg -o "$RUNNER_TEMP/connect.txt" \
+            strace -f -qq -e trace=%network -o "$RUNNER_TEMP/connect.txt" \
             "$opentide" --json deploy --dry-run --all --strategy PREVIEW > "$RUNNER_TEMP/dry-run.json")
           jq -e '.dry_run == true and .ok == true' "$RUNNER_TEMP/dry-run.json" > /dev/null
-          if grep -E 'AF_INET6?' "$RUNNER_TEMP/connect.txt"; then
+          # Every network syscall is traced; a socket() alone (Python probes IPv6 support
+          # at import) reaches nothing, so only calls that name a destination count.
+          if grep -E '^[0-9]+ +(connect|sendto|sendmsg|sendmmsg)\(.*AF_INET6?' "$RUNNER_TEMP/connect.txt"; then
             echo "::error::deploy --dry-run opened a network connection"
             exit 1
           fi
@@ -142,7 +145,11 @@ jobs:
           if [ -f previous/bench.json ]; then
             previous=(--previous previous/bench.json)
           fi
+          # --require-reference: a command no baseline, target or previous result
+          # applies to fails, so an oracle bump or a changed default cannot turn the
+          # gate off silently (and that run never becomes the reference).
           cargo xtask bench --check tests/bench/budgets.toml bench.json "${previous[@]}" \
+            --require-reference \
             --summary "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
