@@ -6,9 +6,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Added
+
+- **The editor and `opentide tui` check CrowdStrike queries as CQL**, the query language of Falcon LogScale and Next-Gen SIEM. `opentide lsp start` adds hover, completion and highlighting. `configurations.crowdstrike.query` and hunts with `system: crowdstrike` get the `cql_*` diagnostics where they got one `crowdstrike_unsupported` warning. `opentide validate`, `lint` and MCP `validate_query` still do not check CrowdStrike queries, so no pipeline fails on them. See [Diagnostics](docs/cli/diagnostics.md#cql_parse_error).
+
 ### Changed
 
-- **The analysis engine is language-server [0.11.1](https://github.com/opentidehq/language-server/releases/tag/v0.11.1)**, whose Tide catalog accepts a Splunk block's `advanced` table, so `opentide-lsp` run on its own agrees with `opentide validate` (see Fixed).
+- **The analysis engine is language-server [0.12.1](https://github.com/opentidehq/language-server/releases/tag/v0.12.1)**: the CQL language (see Added), and a Tide catalog that accepts a Splunk block's `advanced` table, so `opentide-lsp` run on its own agrees with `opentide validate` (see Fixed). `crowdstrike_unsupported` is no longer reported.
 
 ### Fixed
 

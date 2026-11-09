@@ -838,3 +838,18 @@ def test_a_byte_order_mark_moves_no_finding_in_a_query_file(invoke_cli, tutorial
         return found["code"], found["line"], found["column"], found["end_column"]
 
     assert finding(BOM) == finding(b"") == ("kql_unknown_operator", 1, 17, 37)
+
+
+def test_validate_does_not_check_crowdstrike_queries(invoke_cli, tide_corpus_repo: Path) -> None:
+    """The engine reads CrowdStrike's CQL since language-server 0.12.0, but opentide does not
+    check CrowdStrike queries: a query CQL refuses must not fail `validate`."""
+    rule = (
+        tide_corpus_repo / "Objects" / "Detection Rules" / "rule-0006-crowdstrike-deploy-only.yaml"
+    )
+    text = rule.read_text(encoding="utf-8")
+    assert "    query: index=main\n" in text
+    rule.write_text(text.replace("query: index=main", "query: notAFunction()"), encoding="utf-8")
+    payload = assert_json_ok(invoke_cli("validate", "--file", rule.name))
+    assert "cql_" not in json.dumps(payload)
+    linted = invoke_cli("lint", "--check", "queries", "--strict")
+    assert linted.exit_code == 0, linted.output

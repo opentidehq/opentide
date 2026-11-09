@@ -586,6 +586,25 @@ def _unreadable(path: Path, text: str | None) -> UnreadableFile | None:
     return None
 
 
+#: Every language opentide checks offline, on any platform.
+_OFFLINE_LANGUAGES = frozenset(
+    language for languages in OFFLINE_QUERY_LANGUAGES.values() for language in languages
+)
+
+
+def _offline_checked(platform: str | None, language: str) -> bool:
+    """Whether opentide checks a query of *language* in *platform*'s block offline.
+
+    The engine analyses more than opentide checks (CrowdStrike's CQL since
+    language-server 0.12.0): a platform outside ``OFFLINE_QUERY_LANGUAGES`` is
+    never validated, so its queries are not handed on. A hunt (no platform)
+    is checked in any language some platform is checked in.
+    """
+    if platform is None:
+        return language in _OFFLINE_LANGUAGES
+    return language in OFFLINE_QUERY_LANGUAGES.get(platform, ())
+
+
 def check_queries(
     files: Iterable[Path],
     *,
@@ -617,6 +636,8 @@ def check_queries(
             field_path = tuple(report.field_path)
             platform = field_path[1] if field_path[:1] == ("configurations",) else None
             if wanted is not None and platform not in wanted:
+                continue
+            if not _offline_checked(platform, report.language):
                 continue
             checks.append(
                 QueryCheck(
