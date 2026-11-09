@@ -18,7 +18,7 @@ cargo install opentide-lsp          # or build it from crates.io
 opentide-lsp --version
 ```
 
-Each engine [GitHub Release](https://github.com/opentidehq/opentide/releases) (tagged `engine-vX.Y.Z`; releases up to 0.11.0 are [language-server's](https://github.com/opentidehq/language-server/releases)) also carries a prebuilt binary per target (`opentide-lsp-vX.Y.Z-<target>`), the browser WASM build, and the highlights zip. The `opentide` Python package, built from the same repository, compiles the engine in and serves it as `opentide lsp start`.
+Each engine [GitHub Release](https://github.com/opentidehq/opentide/releases) (tagged `engine-vX.Y.Z`; releases up to 0.12.0 are [language-server's](https://github.com/opentidehq/language-server/releases)) also carries a prebuilt binary per target (`opentide-lsp-vX.Y.Z-<target>`), the browser WASM build, and the highlights zip. The `opentide` Python package, built from the same repository, compiles the engine in and serves it as `opentide lsp start`.
 
 ## Releases
 
@@ -39,7 +39,7 @@ gh attestation verify highlights-vX.Y.Z.zip --repo opentidehq/opentide \
   --cert-identity-regex '^https://github\.com/opentidehq/opentide/\.github/workflows/engine-release\.yml@refs/(heads/development|tags/engine-vX\.Y\.Z)$'
 ```
 
-`--repo` alone accepts an attestation that any workflow of the repository signed, from any branch; `--cert-identity-regex` requires the Engine release workflow, run from `development` or from the version's tag. language-server's releases (0.11.0 and earlier) verify with `--repo opentidehq/language-server` and its `release.yml` on `main` or `vX.Y.Z`.
+`--repo` alone accepts an attestation that any workflow of the repository signed, from any branch; `--cert-identity-regex` requires the Engine release workflow, run from `development` or from the version's tag. language-server's releases (0.12.0 and earlier) verify with `--repo opentidehq/language-server` and its `release.yml` on `main` or `vX.Y.Z`.
 
 The workflow runs both on the published assets before it publishes the crates.
 

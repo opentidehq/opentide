@@ -629,6 +629,14 @@ mod tests {
             ],
         ),
         (
+            "opentide-cql",
+            &[
+                ("opentide-core", None),
+                ("opentide-syntax", None),
+                ("opentide-highlight", None),
+            ],
+        ),
+        (
             "opentide-esql",
             &[
                 ("opentide-core", None),
@@ -660,6 +668,7 @@ mod tests {
                 ("opentide-kuery", None),
                 ("opentide-lucene", None),
                 ("opentide-falco", None),
+                ("opentide-cql", None),
                 ("opentide-highlight", None),
             ],
         ),
@@ -675,6 +684,7 @@ mod tests {
                 ("opentide-kuery", None),
                 ("opentide-lucene", None),
                 ("opentide-falco", None),
+                ("opentide-cql", None),
                 ("opentide-ecs", None),
                 ("opentide-tide", None),
             ],
@@ -710,7 +720,7 @@ mod tests {
     fn the_repository_table_places_todays_workspace() {
         let report = check(&table(REPOSITORY_TABLE), &metadata(WORKSPACE));
         assert_eq!(report.violations, []);
-        assert_eq!(report.crates, 17);
+        assert_eq!(report.crates, 18);
     }
 
     #[test]
@@ -745,8 +755,8 @@ mod tests {
         // opentide-lsp (application) on opentide-wasm (bindings), as a dev
         // dependency; opentide-analysis (domain) on xtask (tooling), as a build one.
         let mut crates = WORKSPACE.to_vec();
-        crates[13] = ("opentide-lsp", &[("opentide-wasm", Some("dev"))]);
-        crates[12] = ("opentide-analysis", &[("xtask", Some("build"))]);
+        crates[14] = ("opentide-lsp", &[("opentide-wasm", Some("dev"))]);
+        crates[13] = ("opentide-analysis", &[("xtask", Some("build"))]);
         let report = check(&table(REPOSITORY_TABLE), &metadata(&crates));
         let edges: Vec<_> = report
             .violations
