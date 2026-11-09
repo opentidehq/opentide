@@ -26,6 +26,7 @@ members = [
     "crates/opentide-lsp",
     "crates/opentide-wasm",
     "crates/opentide-compare",
+    "crates/opentide-cli",
     "analysis",
     "xtask",
 ]

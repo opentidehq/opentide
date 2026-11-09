@@ -1,0 +1,59 @@
+[1mvalidate         Validate objects and queries[0m
+[1m  query          Check rule queries offline, or on the tenants (--live)[0m
+[1mquery            Run a read-only query on platform tenants and show rows[0m
+[1mlint             Check file names and recommended metadata[0m
+[1minfo             Show repository and platform information[0m
+[1mnew              Scaffold a threat, objective or rule from its template[0m
+[1m  threat         Scaffold a threat[0m
+[1m  objective      Scaffold a detection objective[0m
+[1m  rule           Scaffold a detection rule[0m
+[1mgenerate         Generate schemas, templates, docs and exports[0m
+[1m  explorer       Write the explorer bundle and search index[0m
+[1m  docs           Generate markdown documentation for detection objects[0m
+[1m    rules        Generate rule documentation[0m
+[1m    objectives   Generate objective documentation[0m
+[1m    threats      Generate threat documentation[0m
+[1m    index        Generate the documentation index pages[0m
+[1m  exports        Export catalogue artefacts[0m
+[1m    navigator    Export the ATT&CK Navigator layer[0m
+[1m    objects      Export every object as one JSON file[0m
+[1m    revisions    Export the revisions snapshot[0m
+[1m  extract        Import rules from external platforms[0m
+[1m    sentinel     Import Sentinel analytics rules[0m
+[1m    defender     Import Defender custom detections[0m
+[1m    elastic      Import Elastic Security detection rules[0m
+[1m  inflight       Inflight preview shard generation and prune[0m
+[1m    prune        Remove inflight shards already on the default branch[0m
+[1mrules            Detection rule maintenance[0m
+[1m  unreviewed     List rules not reviewed within a window[0m
+[1mdeploy           Deploy rules to platform tenants[0m
+[1m  migrate-state  Move vendor ids from rules into deployment state[0m
+[1mshare            Publish objects to intelligence platforms[0m
+[1m  push           Create or update one MISP event per selected object[0m
+[1m  preview        Show what push would do, without a request[0m
+[1m  status         Compare the local ledger with object versions[0m
+[1m  retract        Unpublish or delete a shared event[0m
+[1m  targets        List sharing destinations, never their API keys[0m
+[1msetup            Set up a detection repository and its tooling[0m
+[1m  repo           Scaffold a detection repository[0m
+[1m  platforms      Enable platform configuration files[0m
+[1m  ci             Write CI/CD pipeline files[0m
+[1m  env            Write .env.example and ignore .env[0m
+[1m  hooks          Validate objects on every commit[0m
+[1m  mcp            Write MCP configuration for editors and agents[0m
+[1m  vscode         Write VS Code schemas and snippets (deprecated)[0m
+[1m  skills         Discover and install agent skills[0m
+[1m    discover     List the skills in the opentidehq/skills catalogue[0m
+[1m    show         Show one skill from the catalogue[0m
+[1mdoctor           Check the installation, the workspace and its integrations[0m
+[1mmigrate          Rewrite objects for a newer opentide model[0m
+[1m  vocab-scope    Re-prefix stage-scoped vocabulary values[0m
+[1mtui              Browse the catalogue and its diagnostics in a terminal UI[0m
+[1mexplain          Explain a diagnostic code and how to fix it[0m
+[1mcommands         List every command and option, for agents[0m
+[1mmcp              Run the opentide MCP server for editors and agents[0m
+[1m  start          Serve MCP on stdio until the host closes stdin[0m
+[1mlsp              Serve the language server for editors[0m
+[1m  start          Serve LSP on stdio until the editor closes stdin[0m
+[1mserve            Run CLI commands in one warm process, for editors[0m
+[1m✓[0m 58 commands
