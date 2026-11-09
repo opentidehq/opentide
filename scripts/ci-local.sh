@@ -30,7 +30,7 @@ Run local checks that mirror GitHub CI. Faster than waiting on remote runners.
 
 Options:
   --quick       Lint + type-check + package build (ruff, ty, cargo fmt and clippy,
-                cargo xtask check-layers, engine checks, uv build)
+                cargo xtask check-layers, engine checks, docs structure, uv build)
   --test        Lint + cargo test + unit pytest (excludes cli_e2e/cli_smoke) — default
   --full        Lint + cargo test + unit pytest + coverage gate + CLI E2E +
                 GitLab CI lint, and ci.yml's Rust jobs: cargo nextest (profile
@@ -175,6 +175,9 @@ bash scripts/engine/check-io-free.sh
 bash scripts/engine/check-names.sh
 bash scripts/engine/validate-skills.sh
 cargo run --quiet --locked -p opentide-lsp -- generate-highlights --check
+
+echo "==> Docs structure (validate-docs.sh, as docs.yml runs it)"
+bash scripts/validate-docs.sh
 
 echo "==> The engine's bundled Tide catalog matches the models"
 uv run pytest tests/test_generation/test_bundled_tide_catalog.py --no-cov -q

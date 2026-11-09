@@ -1,3 +1,8 @@
+---
+title: "CrowdStrike Query Language (CQL)"
+description: "How the engine checks CQL: the grammar, the function, event and field catalogs, and the Next-Gen SIEM correlation-rule checks, with their sources."
+---
+
 # CrowdStrike Query Language (CQL)
 
 The CQL engine (`crates/opentide-cql`) checks CrowdStrike Falcon Next-Gen SIEM correlation rules (`configurations.crowdstrike.query`, `platform::crowdstrike::1.0`), CrowdStrike threat hunts (`system: crowdstrike`), and raw `.cql` files. CQL is the language of Falcon LogScale (formerly Humio, whose docs called it LQL); CrowdStrike now publishes it as the "CrowdStrike Query Language". One language serves self-hosted LogScale and Next-Gen SIEM: what differs between them is which functions, saved searches, lookup files and repositories a tenant offers, not the syntax.
