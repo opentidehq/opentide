@@ -248,3 +248,47 @@ pub fn configuration(data: &[u8]) {
         let _ = opentide_analysis::configuration_completions(&path, text, offset);
     }
 }
+
+/// A Tide object from arbitrary bytes (`from_node`, UC-1.2): read them as the
+/// oracle reads an object file, convert the tree into every model, and check
+/// what comes out. An error's span lies in the document; a value that
+/// converts is written back ([`opentide_schema::node::to_yaml`]) and reads
+/// back equal. `crates/opentide-schema/tests/fuzz_regressions.rs` keeps a
+/// copy of this function for the saved inputs.
+pub fn from_node(data: &[u8]) {
+    use opentide_schema::node;
+    use opentide_schema::sample::{SampleV1_0, SampleV1_1};
+    let Ok(document) = node::load_bytes(data) else {
+        return;
+    };
+    convert::<SampleV1_0>(&document);
+    convert::<SampleV1_1>(&document);
+}
+
+fn convert<T>(document: &opentide_schema::node::Document)
+where
+    T: opentide_schema::FromNode + serde::Serialize + PartialEq + std::fmt::Debug,
+{
+    use opentide_schema::from_node::from_document;
+    use opentide_schema::node;
+    match from_document::<T>(document) {
+        Ok(value) => {
+            let yaml = node::to_yaml(&value).expect("a converted model writes");
+            let again = node::load(&yaml).expect("what to_yaml writes reads back");
+            let back: T = from_document(&again).expect("what to_yaml writes converts");
+            assert_eq!(back, value, "{yaml}");
+        }
+        Err(errors) => {
+            assert!(!errors.is_empty());
+            // An upper bound on the CLI's lines (`\r\n` counts twice here).
+            let lines = document.source().split(['\r', '\n']).count();
+            for error in &errors {
+                assert!(!error.message.is_empty(), "{error:?}");
+                if let Some(span) = &error.span {
+                    assert!(span.line >= 1 && span.line <= lines + 1, "{error:?}");
+                    assert!(span.column >= 1 && span.end_column >= span.column, "{error:?}");
+                }
+            }
+        }
+    }
+}

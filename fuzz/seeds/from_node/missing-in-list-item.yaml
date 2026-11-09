@@ -1,0 +1,5 @@
+text: t
+inners:
+  - label: a
+  - count: 3
+  - {}

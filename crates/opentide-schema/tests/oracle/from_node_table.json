@@ -1,0 +1,3157 @@
+{
+ "oracle": "0.23.0",
+ "cases": [
+  {
+   "id": "valid-minimal",
+   "model": "Probe",
+   "yaml": "text: hello\n",
+   "value": {
+    "text": "hello",
+    "number": 0,
+    "ratio": null,
+    "flag": true,
+    "items": null,
+    "inners": null,
+    "inner": null,
+    "mapping": null,
+    "choice": null,
+    "kind": null,
+    "either": null,
+    "some": null,
+    "schema": null,
+    "vocab": null
+   }
+  },
+  {
+   "id": "valid-everything",
+   "model": "Probe",
+   "yaml": "text: hello\nnumber: 7\nratio: 1.5\nflag: false\nitems: [a, b]\ninners:\n  - label: x\n    count: 1\n  - label: y\ninner: {label: z}\nmapping: {a: 1, b: 2}\nchoice: two\nkind: beta\neither: 3\nsome: [p, q]\nschema: s\nvocab: [v]\n",
+   "value": {
+    "text": "hello",
+    "number": 7,
+    "ratio": 1.5,
+    "flag": false,
+    "items": [
+     "a",
+     "b"
+    ],
+    "inners": [
+     {
+      "label": "x",
+      "count": 1
+     },
+     {
+      "label": "y",
+      "count": null
+     }
+    ],
+    "inner": {
+     "label": "z",
+     "count": null
+    },
+    "mapping": {
+     "a": 1,
+     "b": 2
+    },
+    "choice": "two",
+    "kind": "beta",
+    "either": 3,
+    "some": [
+     "p",
+     "q"
+    ],
+    "schema": "s",
+    "vocab": [
+     "v"
+    ]
+   }
+  },
+  {
+   "id": "missing-required-top",
+   "model": "Probe",
+   "yaml": "number: 1\nflag: true\n",
+   "errors": [
+    {
+     "type": "missing",
+     "field_path": [
+      "text"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      1,
+      1,
+      7,
+      false
+     ],
+     "yaml_line": null
+    }
+   ]
+  },
+  {
+   "id": "missing-required-nested",
+   "model": "Probe",
+   "yaml": "text: t\ninner:\n  count: 2\n",
+   "errors": [
+    {
+     "type": "missing",
+     "field_path": [
+      "inner",
+      "label"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      2,
+      1,
+      6,
+      false
+     ],
+     "yaml_line": null
+    }
+   ]
+  },
+  {
+   "id": "missing-in-list-item",
+   "model": "Probe",
+   "yaml": "text: t\ninners:\n  - label: a\n  - count: 3\n  - {}\n",
+   "errors": [
+    {
+     "type": "missing",
+     "field_path": [
+      "inners",
+      "1",
+      "label"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      4,
+      5,
+      6,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "missing",
+     "field_path": [
+      "inners",
+      "2",
+      "label"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      5,
+      5,
+      6,
+      false
+     ],
+     "yaml_line": null
+    }
+   ]
+  },
+  {
+   "id": "extra-top",
+   "model": "Probe",
+   "yaml": "text: t\ncolour: blue\nsize: 3\n",
+   "errors": [
+    {
+     "type": "extra_forbidden",
+     "field_path": [
+      "colour"
+     ],
+     "msg": "Extra inputs are not permitted",
+     "input": "blue",
+     "ctx": {},
+     "span": [
+      2,
+      1,
+      7,
+      true
+     ],
+     "yaml_line": 1
+    },
+    {
+     "type": "extra_forbidden",
+     "field_path": [
+      "size"
+     ],
+     "msg": "Extra inputs are not permitted",
+     "input": null,
+     "ctx": {},
+     "span": [
+      3,
+      1,
+      5,
+      true
+     ],
+     "yaml_line": 2
+    }
+   ]
+  },
+  {
+   "id": "extra-nested-block",
+   "model": "Probe",
+   "yaml": "text: t\ninner:\n  label: a\n  extra:\n    deep: 1\n",
+   "errors": [
+    {
+     "type": "extra_forbidden",
+     "field_path": [
+      "inner",
+      "extra"
+     ],
+     "msg": "Extra inputs are not permitted",
+     "input": null,
+     "ctx": {},
+     "span": [
+      4,
+      3,
+      8,
+      true
+     ],
+     "yaml_line": 4
+    }
+   ]
+  },
+  {
+   "id": "extra-and-missing-order",
+   "model": "Probe",
+   "yaml": "zeta: 1\nnumber: x\nalpha: 2\n",
+   "errors": [
+    {
+     "type": "missing",
+     "field_path": [
+      "text"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      1,
+      1,
+      5,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "int_parsing",
+     "field_path": [
+      "number"
+     ],
+     "msg": "Input should be a valid integer, unable to parse string as an integer",
+     "input": "x",
+     "ctx": {},
+     "span": [
+      2,
+      9,
+      10,
+      true
+     ],
+     "yaml_line": 1
+    },
+    {
+     "type": "extra_forbidden",
+     "field_path": [
+      "zeta"
+     ],
+     "msg": "Extra inputs are not permitted",
+     "input": null,
+     "ctx": {},
+     "span": [
+      1,
+      1,
+      5,
+      true
+     ],
+     "yaml_line": 0
+    },
+    {
+     "type": "extra_forbidden",
+     "field_path": [
+      "alpha"
+     ],
+     "msg": "Extra inputs are not permitted",
+     "input": null,
+     "ctx": {},
+     "span": [
+      3,
+      1,
+      6,
+      true
+     ],
+     "yaml_line": 2
+    }
+   ]
+  },
+  {
+   "id": "string-wrong-types",
+   "model": "Probe",
+   "yaml": "text: 12\nitems: [1, true, null, 1.5, [x], {a: b}, ok]\n",
+   "errors": [
+    {
+     "type": "string_type",
+     "field_path": [
+      "text"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      1,
+      7,
+      9,
+      true
+     ],
+     "yaml_line": 0
+    },
+    {
+     "type": "string_type",
+     "field_path": [
+      "items",
+      "0"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      2,
+      9,
+      10,
+      true
+     ],
+     "yaml_line": 1
+    },
+    {
+     "type": "string_type",
+     "field_path": [
+      "items",
+      "1"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      2,
+      12,
+      16,
+      true
+     ],
+     "yaml_line": 1
+    },
+    {
+     "type": "string_type",
+     "field_path": [
+      "items",
+      "2"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      2,
+      18,
+      22,
+      true
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "string_type",
+     "field_path": [
+      "items",
+      "3"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      2,
+      24,
+      27,
+      true
+     ],
+     "yaml_line": 1
+    },
+    {
+     "type": "string_type",
+     "field_path": [
+      "items",
+      "4"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      2,
+      29,
+      30,
+      true
+     ],
+     "yaml_line": 1
+    },
+    {
+     "type": "string_type",
+     "field_path": [
+      "items",
+      "5"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      2,
+      34,
+      35,
+      true
+     ],
+     "yaml_line": 1
+    }
+   ]
+  },
+  {
+   "id": "string-null",
+   "model": "Probe",
+   "yaml": "text: ~\n",
+   "errors": [
+    {
+     "type": "string_type",
+     "field_path": [
+      "text"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      1,
+      7,
+      8,
+      true
+     ],
+     "yaml_line": null
+    }
+   ]
+  },
+  {
+   "id": "string-empty-value",
+   "model": "Probe",
+   "yaml": "text:\nnumber: 1\n",
+   "errors": [
+    {
+     "type": "string_type",
+     "field_path": [
+      "text"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      2,
+      1,
+      10,
+      true
+     ],
+     "yaml_line": null
+    }
+   ]
+  },
+  {
+   "id": "string-date-text",
+   "model": "Probe",
+   "yaml": "text: 2026-01-01\nitems: [2026-01-01T10:00:00Z]\n",
+   "value": {
+    "text": "2026-01-01",
+    "number": 0,
+    "ratio": null,
+    "flag": true,
+    "items": [
+     "2026-01-01T10:00:00Z"
+    ],
+    "inners": null,
+    "inner": null,
+    "mapping": null,
+    "choice": null,
+    "kind": null,
+    "either": null,
+    "some": null,
+    "schema": null,
+    "vocab": null
+   }
+  },
+  {
+   "id": "int-lax",
+   "model": "Probe",
+   "yaml": "text: t\nnumber: '42'\ninners:\n  - {label: a, count: true}\n  - {label: b, count: 3.0}\n  - {label: c, count: ' 7 '}\n  - {label: d, count: '3.0'}\n  - {label: e, count: '-0'}\n  - {label: f, count: '+5'}\n  - {label: g, count: '1_000'}\n",
+   "value": {
+    "text": "t",
+    "number": 42,
+    "ratio": null,
+    "flag": true,
+    "items": null,
+    "inners": [
+     {
+      "label": "a",
+      "count": 1
+     },
+     {
+      "label": "b",
+      "count": 3
+     },
+     {
+      "label": "c",
+      "count": 7
+     },
+     {
+      "label": "d",
+      "count": 3
+     },
+     {
+      "label": "e",
+      "count": 0
+     },
+     {
+      "label": "f",
+      "count": 5
+     },
+     {
+      "label": "g",
+      "count": 1000
+     }
+    ],
+    "inner": null,
+    "mapping": null,
+    "choice": null,
+    "kind": null,
+    "either": null,
+    "some": null,
+    "schema": null,
+    "vocab": null
+   }
+  },
+  {
+   "id": "int-errors",
+   "model": "Probe",
+   "yaml": "text: t\nnumber: abc\ninners:\n  - {label: a, count: 3.5}\n  - {label: b, count: .inf}\n  - {label: c, count: [1]}\n  - {label: d, count: {}}\n  - {label: e, count: '3.5'}\n  - {label: f, count: ''}\n  - {label: g, count: .nan}\n  - {label: h, count: '0x10'}\n",
+   "errors": [
+    {
+     "type": "int_parsing",
+     "field_path": [
+      "number"
+     ],
+     "msg": "Input should be a valid integer, unable to parse string as an integer",
+     "input": "abc",
+     "ctx": {},
+     "span": [
+      2,
+      9,
+      12,
+      true
+     ],
+     "yaml_line": 1
+    },
+    {
+     "type": "int_from_float",
+     "field_path": [
+      "inners",
+      "0",
+      "count"
+     ],
+     "msg": "Input should be a valid integer, got a number with a fractional part",
+     "input": null,
+     "ctx": {},
+     "span": [
+      4,
+      23,
+      26,
+      true
+     ],
+     "yaml_line": 3
+    },
+    {
+     "type": "finite_number",
+     "field_path": [
+      "inners",
+      "1",
+      "count"
+     ],
+     "msg": "Input should be a finite number",
+     "input": null,
+     "ctx": {},
+     "span": [
+      5,
+      23,
+      27,
+      true
+     ],
+     "yaml_line": 4
+    },
+    {
+     "type": "int_type",
+     "field_path": [
+      "inners",
+      "2",
+      "count"
+     ],
+     "msg": "Input should be a valid integer",
+     "input": null,
+     "ctx": {},
+     "span": [
+      6,
+      16,
+      21,
+      true
+     ],
+     "yaml_line": 5
+    },
+    {
+     "type": "int_type",
+     "field_path": [
+      "inners",
+      "3",
+      "count"
+     ],
+     "msg": "Input should be a valid integer",
+     "input": null,
+     "ctx": {},
+     "span": [
+      7,
+      16,
+      21,
+      true
+     ],
+     "yaml_line": 6
+    },
+    {
+     "type": "int_parsing",
+     "field_path": [
+      "inners",
+      "4",
+      "count"
+     ],
+     "msg": "Input should be a valid integer, unable to parse string as an integer",
+     "input": "3.5",
+     "ctx": {},
+     "span": [
+      8,
+      24,
+      27,
+      true
+     ],
+     "yaml_line": 7
+    },
+    {
+     "type": "int_parsing",
+     "field_path": [
+      "inners",
+      "5",
+      "count"
+     ],
+     "msg": "Input should be a valid integer, unable to parse string as an integer",
+     "input": "",
+     "ctx": {},
+     "span": [
+      9,
+      16,
+      21,
+      true
+     ],
+     "yaml_line": 8
+    },
+    {
+     "type": "finite_number",
+     "field_path": [
+      "inners",
+      "6",
+      "count"
+     ],
+     "msg": "Input should be a finite number",
+     "input": null,
+     "ctx": {},
+     "span": [
+      10,
+      23,
+      27,
+      true
+     ],
+     "yaml_line": 9
+    },
+    {
+     "type": "int_parsing",
+     "field_path": [
+      "inners",
+      "7",
+      "count"
+     ],
+     "msg": "Input should be a valid integer, unable to parse string as an integer",
+     "input": "0x10",
+     "ctx": {},
+     "span": [
+      11,
+      24,
+      28,
+      true
+     ],
+     "yaml_line": 10
+    }
+   ]
+  },
+  {
+   "id": "int-null-on-defaulted",
+   "model": "Probe",
+   "yaml": "text: t\nnumber: ~\n",
+   "errors": [
+    {
+     "type": "int_type",
+     "field_path": [
+      "number"
+     ],
+     "msg": "Input should be a valid integer",
+     "input": null,
+     "ctx": {},
+     "span": [
+      2,
+      9,
+      10,
+      true
+     ],
+     "yaml_line": null
+    }
+   ]
+  },
+  {
+   "id": "float-lax",
+   "model": "Probe",
+   "yaml": "text: t\nratio: 2\n",
+   "value": {
+    "text": "t",
+    "number": 0,
+    "ratio": 2.0,
+    "flag": true,
+    "items": null,
+    "inners": null,
+    "inner": null,
+    "mapping": null,
+    "choice": null,
+    "kind": null,
+    "either": null,
+    "some": null,
+    "schema": null,
+    "vocab": null
+   }
+  },
+  {
+   "id": "float-from-string",
+   "model": "Probe",
+   "yaml": "text: t\nratio: '2.5'\n",
+   "value": {
+    "text": "t",
+    "number": 0,
+    "ratio": 2.5,
+    "flag": true,
+    "items": null,
+    "inners": null,
+    "inner": null,
+    "mapping": null,
+    "choice": null,
+    "kind": null,
+    "either": null,
+    "some": null,
+    "schema": null,
+    "vocab": null
+   }
+  },
+  {
+   "id": "float-from-bool",
+   "model": "Probe",
+   "yaml": "text: t\nratio: true\n",
+   "value": {
+    "text": "t",
+    "number": 0,
+    "ratio": 1.0,
+    "flag": true,
+    "items": null,
+    "inners": null,
+    "inner": null,
+    "mapping": null,
+    "choice": null,
+    "kind": null,
+    "either": null,
+    "some": null,
+    "schema": null,
+    "vocab": null
+   }
+  },
+  {
+   "id": "float-errors",
+   "model": "Probe",
+   "yaml": "text: t\nratio: abc\n",
+   "errors": [
+    {
+     "type": "float_parsing",
+     "field_path": [
+      "ratio"
+     ],
+     "msg": "Input should be a valid number, unable to parse string as a number",
+     "input": "abc",
+     "ctx": {},
+     "span": [
+      2,
+      8,
+      11,
+      true
+     ],
+     "yaml_line": 1
+    }
+   ]
+  },
+  {
+   "id": "float-list",
+   "model": "Probe",
+   "yaml": "text: t\nratio: [1]\n",
+   "errors": [
+    {
+     "type": "float_type",
+     "field_path": [
+      "ratio"
+     ],
+     "msg": "Input should be a valid number",
+     "input": null,
+     "ctx": {},
+     "span": [
+      2,
+      1,
+      6,
+      true
+     ],
+     "yaml_line": 1
+    }
+   ]
+  },
+  {
+   "id": "float-inf",
+   "model": "Probe",
+   "yaml": "text: t\nratio: .inf\n",
+   "value": {
+    "text": "t",
+    "number": 0,
+    "ratio": "inf",
+    "flag": true,
+    "items": null,
+    "inners": null,
+    "inner": null,
+    "mapping": null,
+    "choice": null,
+    "kind": null,
+    "either": null,
+    "some": null,
+    "schema": null,
+    "vocab": null
+   }
+  },
+  {
+   "id": "bool-lax-words",
+   "model": "Probe",
+   "yaml": "text: t\nflag: 'yes'\n",
+   "value": {
+    "text": "t",
+    "number": 0,
+    "ratio": null,
+    "flag": true,
+    "items": null,
+    "inners": null,
+    "inner": null,
+    "mapping": null,
+    "choice": null,
+    "kind": null,
+    "either": null,
+    "some": null,
+    "schema": null,
+    "vocab": null
+   }
+  },
+  {
+   "id": "bool-lax-y",
+   "model": "Probe",
+   "yaml": "text: t\nflag: y\n",
+   "value": {
+    "text": "t",
+    "number": 0,
+    "ratio": null,
+    "flag": true,
+    "items": null,
+    "inners": null,
+    "inner": null,
+    "mapping": null,
+    "choice": null,
+    "kind": null,
+    "either": null,
+    "some": null,
+    "schema": null,
+    "vocab": null
+   }
+  },
+  {
+   "id": "bool-lax-off-string",
+   "model": "Probe",
+   "yaml": "text: t\nflag: 'OFF'\n",
+   "value": {
+    "text": "t",
+    "number": 0,
+    "ratio": null,
+    "flag": false,
+    "items": null,
+    "inners": null,
+    "inner": null,
+    "mapping": null,
+    "choice": null,
+    "kind": null,
+    "either": null,
+    "some": null,
+    "schema": null,
+    "vocab": null
+   }
+  },
+  {
+   "id": "bool-lax-int-1",
+   "model": "Probe",
+   "yaml": "text: t\nflag: 1\n",
+   "value": {
+    "text": "t",
+    "number": 0,
+    "ratio": null,
+    "flag": true,
+    "items": null,
+    "inners": null,
+    "inner": null,
+    "mapping": null,
+    "choice": null,
+    "kind": null,
+    "either": null,
+    "some": null,
+    "schema": null,
+    "vocab": null
+   }
+  },
+  {
+   "id": "bool-lax-float-0",
+   "model": "Probe",
+   "yaml": "text: t\nflag: 0.0\n",
+   "value": {
+    "text": "t",
+    "number": 0,
+    "ratio": null,
+    "flag": false,
+    "items": null,
+    "inners": null,
+    "inner": null,
+    "mapping": null,
+    "choice": null,
+    "kind": null,
+    "either": null,
+    "some": null,
+    "schema": null,
+    "vocab": null
+   }
+  },
+  {
+   "id": "bool-errors-int",
+   "model": "Probe",
+   "yaml": "text: t\nflag: 2\n",
+   "errors": [
+    {
+     "type": "bool_parsing",
+     "field_path": [
+      "flag"
+     ],
+     "msg": "Input should be a valid boolean, unable to interpret input",
+     "input": null,
+     "ctx": {},
+     "span": [
+      2,
+      7,
+      8,
+      true
+     ],
+     "yaml_line": 1
+    }
+   ]
+  },
+  {
+   "id": "bool-errors-string",
+   "model": "Probe",
+   "yaml": "text: t\nflag: maybe\n",
+   "errors": [
+    {
+     "type": "bool_parsing",
+     "field_path": [
+      "flag"
+     ],
+     "msg": "Input should be a valid boolean, unable to interpret input",
+     "input": "maybe",
+     "ctx": {},
+     "span": [
+      2,
+      7,
+      12,
+      true
+     ],
+     "yaml_line": 1
+    }
+   ]
+  },
+  {
+   "id": "bool-errors-null",
+   "model": "Probe",
+   "yaml": "text: t\nflag: ~\n",
+   "errors": [
+    {
+     "type": "bool_type",
+     "field_path": [
+      "flag"
+     ],
+     "msg": "Input should be a valid boolean",
+     "input": null,
+     "ctx": {},
+     "span": [
+      2,
+      7,
+      8,
+      true
+     ],
+     "yaml_line": null
+    }
+   ]
+  },
+  {
+   "id": "bool-errors-list",
+   "model": "Probe",
+   "yaml": "text: t\nflag: []\n",
+   "errors": [
+    {
+     "type": "bool_type",
+     "field_path": [
+      "flag"
+     ],
+     "msg": "Input should be a valid boolean",
+     "input": null,
+     "ctx": {},
+     "span": [
+      2,
+      1,
+      5,
+      true
+     ],
+     "yaml_line": 1
+    }
+   ]
+  },
+  {
+   "id": "bool-errors-float",
+   "model": "Probe",
+   "yaml": "text: t\nflag: 0.5\n",
+   "errors": [
+    {
+     "type": "bool_type",
+     "field_path": [
+      "flag"
+     ],
+     "msg": "Input should be a valid boolean",
+     "input": null,
+     "ctx": {},
+     "span": [
+      2,
+      7,
+      10,
+      true
+     ],
+     "yaml_line": 1
+    }
+   ]
+  },
+  {
+   "id": "list-errors",
+   "model": "Probe",
+   "yaml": "text: t\nitems: one\ninners: {label: x}\n",
+   "errors": [
+    {
+     "type": "list_type",
+     "field_path": [
+      "items"
+     ],
+     "msg": "Input should be a valid list",
+     "input": "one",
+     "ctx": {},
+     "span": [
+      2,
+      8,
+      11,
+      true
+     ],
+     "yaml_line": 1
+    },
+    {
+     "type": "list_type",
+     "field_path": [
+      "inners"
+     ],
+     "msg": "Input should be a valid list",
+     "input": null,
+     "ctx": {},
+     "span": [
+      3,
+      1,
+      7,
+      true
+     ],
+     "yaml_line": 2
+    }
+   ]
+  },
+  {
+   "id": "list-null-optional",
+   "model": "Probe",
+   "yaml": "text: t\nitems: ~\ninners:\n",
+   "value": {
+    "text": "t",
+    "number": 0,
+    "ratio": null,
+    "flag": true,
+    "items": null,
+    "inners": null,
+    "inner": null,
+    "mapping": null,
+    "choice": null,
+    "kind": null,
+    "either": null,
+    "some": null,
+    "schema": null,
+    "vocab": null
+   }
+  },
+  {
+   "id": "model-errors",
+   "model": "Probe",
+   "yaml": "text: t\ninner: [a]\ninners: [x, 1, ~]\n",
+   "errors": [
+    {
+     "type": "model_type",
+     "field_path": [
+      "inners",
+      "0"
+     ],
+     "msg": "Input should be a valid dictionary or instance of Inner",
+     "input": "x",
+     "ctx": {
+      "class_name": "Inner"
+     },
+     "span": [
+      3,
+      10,
+      11,
+      true
+     ],
+     "yaml_line": 2
+    },
+    {
+     "type": "model_type",
+     "field_path": [
+      "inners",
+      "1"
+     ],
+     "msg": "Input should be a valid dictionary or instance of Inner",
+     "input": null,
+     "ctx": {
+      "class_name": "Inner"
+     },
+     "span": [
+      3,
+      13,
+      14,
+      true
+     ],
+     "yaml_line": 2
+    },
+    {
+     "type": "model_type",
+     "field_path": [
+      "inners",
+      "2"
+     ],
+     "msg": "Input should be a valid dictionary or instance of Inner",
+     "input": null,
+     "ctx": {
+      "class_name": "Inner"
+     },
+     "span": [
+      3,
+      16,
+      17,
+      true
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "model_type",
+     "field_path": [
+      "inner"
+     ],
+     "msg": "Input should be a valid dictionary or instance of Inner",
+     "input": null,
+     "ctx": {
+      "class_name": "Inner"
+     },
+     "span": [
+      2,
+      1,
+      6,
+      true
+     ],
+     "yaml_line": 1
+    }
+   ]
+  },
+  {
+   "id": "model-from-string",
+   "model": "Probe",
+   "yaml": "text: t\ninner: label\n",
+   "errors": [
+    {
+     "type": "model_type",
+     "field_path": [
+      "inner"
+     ],
+     "msg": "Input should be a valid dictionary or instance of Inner",
+     "input": "label",
+     "ctx": {
+      "class_name": "Inner"
+     },
+     "span": [
+      2,
+      8,
+      13,
+      true
+     ],
+     "yaml_line": 1
+    }
+   ]
+  },
+  {
+   "id": "dict-errors",
+   "model": "Probe",
+   "yaml": "text: t\nmapping:\n  a: x\n  1: 2\n  b: [1]\n",
+   "errors": [
+    {
+     "type": "int_parsing",
+     "field_path": [
+      "mapping",
+      "a"
+     ],
+     "msg": "Input should be a valid integer, unable to parse string as an integer",
+     "input": "x",
+     "ctx": {},
+     "span": [
+      3,
+      6,
+      7,
+      true
+     ],
+     "yaml_line": 2
+    },
+    {
+     "type": "string_type",
+     "field_path": [
+      "mapping",
+      "1",
+      "[key]"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      2,
+      1,
+      8,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "int_type",
+     "field_path": [
+      "mapping",
+      "b"
+     ],
+     "msg": "Input should be a valid integer",
+     "input": null,
+     "ctx": {},
+     "span": [
+      5,
+      3,
+      4,
+      true
+     ],
+     "yaml_line": 4
+    }
+   ]
+  },
+  {
+   "id": "dict-not-a-dict",
+   "model": "Probe",
+   "yaml": "text: t\nmapping: [a]\n",
+   "errors": [
+    {
+     "type": "dict_type",
+     "field_path": [
+      "mapping"
+     ],
+     "msg": "Input should be a valid dictionary",
+     "input": null,
+     "ctx": {},
+     "span": [
+      2,
+      1,
+      8,
+      true
+     ],
+     "yaml_line": 1
+    }
+   ]
+  },
+  {
+   "id": "literal-errors",
+   "model": "Probe",
+   "yaml": "text: t\nchoice: three\n",
+   "errors": [
+    {
+     "type": "literal_error",
+     "field_path": [
+      "choice"
+     ],
+     "msg": "Input should be 'one' or 'two'",
+     "input": "three",
+     "ctx": {
+      "expected": "'one' or 'two'"
+     },
+     "span": [
+      2,
+      9,
+      14,
+      true
+     ],
+     "yaml_line": 1
+    }
+   ]
+  },
+  {
+   "id": "literal-int",
+   "model": "Probe",
+   "yaml": "text: t\nchoice: 1\n",
+   "errors": [
+    {
+     "type": "literal_error",
+     "field_path": [
+      "choice"
+     ],
+     "msg": "Input should be 'one' or 'two'",
+     "input": null,
+     "ctx": {
+      "expected": "'one' or 'two'"
+     },
+     "span": [
+      2,
+      9,
+      10,
+      true
+     ],
+     "yaml_line": 1
+    }
+   ]
+  },
+  {
+   "id": "enum-errors",
+   "model": "Probe",
+   "yaml": "text: t\nkind: delta\n",
+   "errors": [
+    {
+     "type": "enum",
+     "field_path": [
+      "kind"
+     ],
+     "msg": "Input should be 'alpha', 'beta' or 'gamma'",
+     "input": "delta",
+     "ctx": {
+      "expected": "'alpha', 'beta' or 'gamma'"
+     },
+     "span": [
+      2,
+      7,
+      12,
+      true
+     ],
+     "yaml_line": 1
+    }
+   ]
+  },
+  {
+   "id": "enum-case",
+   "model": "Probe",
+   "yaml": "text: t\nkind: ALPHA\n",
+   "errors": [
+    {
+     "type": "enum",
+     "field_path": [
+      "kind"
+     ],
+     "msg": "Input should be 'alpha', 'beta' or 'gamma'",
+     "input": "ALPHA",
+     "ctx": {
+      "expected": "'alpha', 'beta' or 'gamma'"
+     },
+     "span": [
+      2,
+      7,
+      12,
+      true
+     ],
+     "yaml_line": 1
+    }
+   ]
+  },
+  {
+   "id": "enum-int",
+   "model": "Probe",
+   "yaml": "text: t\nkind: 3\n",
+   "errors": [
+    {
+     "type": "enum",
+     "field_path": [
+      "kind"
+     ],
+     "msg": "Input should be 'alpha', 'beta' or 'gamma'",
+     "input": null,
+     "ctx": {
+      "expected": "'alpha', 'beta' or 'gamma'"
+     },
+     "span": [
+      2,
+      7,
+      8,
+      true
+     ],
+     "yaml_line": 1
+    }
+   ]
+  },
+  {
+   "id": "union-str-int",
+   "model": "Probe",
+   "yaml": "text: t\neither: '5'\nsome: x\n",
+   "value": {
+    "text": "t",
+    "number": 0,
+    "ratio": null,
+    "flag": true,
+    "items": null,
+    "inners": null,
+    "inner": null,
+    "mapping": null,
+    "choice": null,
+    "kind": null,
+    "either": "5",
+    "some": "x",
+    "schema": null,
+    "vocab": null
+   }
+  },
+  {
+   "id": "union-int",
+   "model": "Probe",
+   "yaml": "text: t\neither: 5\n",
+   "value": {
+    "text": "t",
+    "number": 0,
+    "ratio": null,
+    "flag": true,
+    "items": null,
+    "inners": null,
+    "inner": null,
+    "mapping": null,
+    "choice": null,
+    "kind": null,
+    "either": 5,
+    "some": null,
+    "schema": null,
+    "vocab": null
+   }
+  },
+  {
+   "id": "union-bool",
+   "model": "Probe",
+   "yaml": "text: t\neither: true\n",
+   "value": {
+    "text": "t",
+    "number": 0,
+    "ratio": null,
+    "flag": true,
+    "items": null,
+    "inners": null,
+    "inner": null,
+    "mapping": null,
+    "choice": null,
+    "kind": null,
+    "either": 1,
+    "some": null,
+    "schema": null,
+    "vocab": null
+   }
+  },
+  {
+   "id": "union-float",
+   "model": "Probe",
+   "yaml": "text: t\neither: 1.5\n",
+   "errors": [
+    {
+     "type": "string_type",
+     "field_path": [
+      "either",
+      "str"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      2,
+      1,
+      7,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "int_from_float",
+     "field_path": [
+      "either",
+      "int"
+     ],
+     "msg": "Input should be a valid integer, got a number with a fractional part",
+     "input": null,
+     "ctx": {},
+     "span": [
+      2,
+      1,
+      7,
+      false
+     ],
+     "yaml_line": null
+    }
+   ]
+  },
+  {
+   "id": "union-errors",
+   "model": "Probe",
+   "yaml": "text: t\neither: [1]\nsome: {a: 1}\n",
+   "errors": [
+    {
+     "type": "string_type",
+     "field_path": [
+      "either",
+      "str"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      2,
+      1,
+      7,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "int_type",
+     "field_path": [
+      "either",
+      "int"
+     ],
+     "msg": "Input should be a valid integer",
+     "input": null,
+     "ctx": {},
+     "span": [
+      2,
+      1,
+      7,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "string_type",
+     "field_path": [
+      "some",
+      "str"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      3,
+      1,
+      5,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "list_type",
+     "field_path": [
+      "some",
+      "list[str]"
+     ],
+     "msg": "Input should be a valid list",
+     "input": null,
+     "ctx": {},
+     "span": [
+      3,
+      1,
+      5,
+      false
+     ],
+     "yaml_line": null
+    }
+   ]
+  },
+  {
+   "id": "union-list-inner-error",
+   "model": "Probe",
+   "yaml": "text: t\nsome: [a, 1]\n",
+   "errors": [
+    {
+     "type": "string_type",
+     "field_path": [
+      "some",
+      "str"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      2,
+      1,
+      5,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "string_type",
+     "field_path": [
+      "some",
+      "list[str]",
+      "1"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      2,
+      1,
+      5,
+      false
+     ],
+     "yaml_line": null
+    }
+   ]
+  },
+  {
+   "id": "union-float-whole",
+   "model": "Probe",
+   "yaml": "text: t\neither: 2.0\n",
+   "value": {
+    "text": "t",
+    "number": 0,
+    "ratio": null,
+    "flag": true,
+    "items": null,
+    "inners": null,
+    "inner": null,
+    "mapping": null,
+    "choice": null,
+    "kind": null,
+    "either": 2,
+    "some": null,
+    "schema": null,
+    "vocab": null
+   }
+  },
+  {
+   "id": "alias-and-name",
+   "model": "Probe",
+   "yaml": "text: t\nschema: a\nschema_id: b\n",
+   "errors": [
+    {
+     "type": "extra_forbidden",
+     "field_path": [
+      "schema_id"
+     ],
+     "msg": "Extra inputs are not permitted",
+     "input": "b",
+     "ctx": {},
+     "span": [
+      3,
+      1,
+      10,
+      true
+     ],
+     "yaml_line": 2
+    }
+   ]
+  },
+  {
+   "id": "name-only",
+   "model": "Probe",
+   "yaml": "text: t\nschema_id: b\n",
+   "value": {
+    "text": "t",
+    "number": 0,
+    "ratio": null,
+    "flag": true,
+    "items": null,
+    "inners": null,
+    "inner": null,
+    "mapping": null,
+    "choice": null,
+    "kind": null,
+    "either": null,
+    "some": null,
+    "schema": "b",
+    "vocab": null
+   }
+  },
+  {
+   "id": "alias-wrong-type",
+   "model": "Probe",
+   "yaml": "text: t\nschema: [1]\n",
+   "errors": [
+    {
+     "type": "string_type",
+     "field_path": [
+      "schema"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      2,
+      1,
+      7,
+      true
+     ],
+     "yaml_line": 1
+    }
+   ]
+  },
+  {
+   "id": "name-wrong-type",
+   "model": "Probe",
+   "yaml": "text: t\nschema_id: 3\n",
+   "errors": [
+    {
+     "type": "string_type",
+     "field_path": [
+      "schema_id"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      2,
+      12,
+      13,
+      true
+     ],
+     "yaml_line": 1
+    }
+   ]
+  },
+  {
+   "id": "key-not-string",
+   "model": "Probe",
+   "yaml": "text: t\n1: x\nyes: y\n~: z\n",
+   "errors": [
+    {
+     "type": "invalid_key",
+     "field_path": [
+      "1"
+     ],
+     "msg": "Keys should be strings",
+     "input": null,
+     "ctx": {},
+     "span": [
+      1,
+      1,
+      5,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "invalid_key",
+     "field_path": [
+      "None"
+     ],
+     "msg": "Keys should be strings",
+     "input": null,
+     "ctx": {},
+     "span": [
+      1,
+      1,
+      5,
+      false
+     ],
+     "yaml_line": null
+    }
+   ]
+  },
+  {
+   "id": "key-not-string-nested",
+   "model": "Probe",
+   "yaml": "text: t\ninner:\n  label: x\n  2: y\n",
+   "errors": [
+    {
+     "type": "invalid_key",
+     "field_path": [
+      "inner",
+      "2"
+     ],
+     "msg": "Keys should be strings",
+     "input": null,
+     "ctx": {},
+     "span": [
+      2,
+      1,
+      6,
+      false
+     ],
+     "yaml_line": null
+    }
+   ]
+  },
+  {
+   "id": "vocab-single-string",
+   "model": "Probe",
+   "yaml": "text: t\nvocab: Data Breach\n",
+   "errors": [
+    {
+     "type": "vocab_list_type",
+     "field_path": [
+      "vocab"
+     ],
+     "msg": "must be a YAML list of vocab vocabulary names, not a single string",
+     "input": "Data Breach",
+     "ctx": {
+      "field": "vocab",
+      "value": "Data Breach"
+     },
+     "span": [
+      2,
+      8,
+      19,
+      true
+     ],
+     "yaml_line": 1
+    }
+   ]
+  },
+  {
+   "id": "vocab-packed",
+   "model": "Probe",
+   "yaml": "text: t\nvocab: 'a;b'\n",
+   "errors": [
+    {
+     "type": "vocab_list_type",
+     "field_path": [
+      "vocab"
+     ],
+     "msg": "must be a YAML list of vocab vocabulary names, not a single string; list each name in 'a;b' as its own item",
+     "input": "a;b",
+     "ctx": {
+      "field": "vocab",
+      "value": "a;b"
+     },
+     "span": [
+      2,
+      9,
+      12,
+      true
+     ],
+     "yaml_line": 1
+    }
+   ]
+  },
+  {
+   "id": "vocab-list-wrong-items",
+   "model": "Probe",
+   "yaml": "text: t\nvocab: [1, x]\n",
+   "errors": [
+    {
+     "type": "string_type",
+     "field_path": [
+      "vocab",
+      "0"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      2,
+      9,
+      10,
+      true
+     ],
+     "yaml_line": 1
+    }
+   ]
+  },
+  {
+   "id": "vocab-not-a-list",
+   "model": "Probe",
+   "yaml": "text: t\nvocab: 3\n",
+   "errors": [
+    {
+     "type": "list_type",
+     "field_path": [
+      "vocab"
+     ],
+     "msg": "Input should be a valid list",
+     "input": null,
+     "ctx": {},
+     "span": [
+      2,
+      8,
+      9,
+      true
+     ],
+     "yaml_line": 1
+    }
+   ]
+  },
+  {
+   "id": "root-not-a-mapping",
+   "model": "Probe",
+   "yaml": "- a\n- b\n",
+   "errors": [
+    {
+     "type": "model_type",
+     "field_path": [],
+     "msg": "Input should be a valid dictionary or instance of Probe",
+     "input": null,
+     "ctx": {
+      "class_name": "Probe"
+     },
+     "span": null,
+     "yaml_line": 0
+    }
+   ]
+  },
+  {
+   "id": "root-scalar",
+   "model": "Probe",
+   "yaml": "hello\n",
+   "errors": [
+    {
+     "type": "model_type",
+     "field_path": [],
+     "msg": "Input should be a valid dictionary or instance of Probe",
+     "input": "hello",
+     "ctx": {
+      "class_name": "Probe"
+     },
+     "span": null,
+     "yaml_line": null
+    }
+   ]
+  },
+  {
+   "id": "root-null",
+   "model": "Probe",
+   "yaml": "~\n",
+   "errors": [
+    {
+     "type": "model_type",
+     "field_path": [],
+     "msg": "Input should be a valid dictionary or instance of Probe",
+     "input": null,
+     "ctx": {
+      "class_name": "Probe"
+     },
+     "span": null,
+     "yaml_line": null
+    }
+   ]
+  },
+  {
+   "id": "before-model-validator",
+   "model": "Guarded",
+   "yaml": "name: n\nlegacy: 1\nother: 3\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [],
+     "msg": "Value error, legacy is not supported",
+     "input": null,
+     "ctx": {
+      "error": "legacy is not supported"
+     },
+     "span": null,
+     "yaml_line": 0
+    }
+   ]
+  },
+  {
+   "id": "before-model-validator-passes",
+   "model": "Guarded",
+   "yaml": "other: 3\n",
+   "errors": [
+    {
+     "type": "missing",
+     "field_path": [
+      "name"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      1,
+      1,
+      6,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "string_type",
+     "field_path": [
+      "other"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      1,
+      8,
+      9,
+      true
+     ],
+     "yaml_line": 0
+    }
+   ]
+  },
+  {
+   "id": "quoted-values-span",
+   "model": "Probe",
+   "yaml": "text: \"x\"\nitems: ['a', 2, \"b\"]\nnumber: 'z'\n",
+   "errors": [
+    {
+     "type": "int_parsing",
+     "field_path": [
+      "number"
+     ],
+     "msg": "Input should be a valid integer, unable to parse string as an integer",
+     "input": "z",
+     "ctx": {},
+     "span": [
+      3,
+      10,
+      11,
+      true
+     ],
+     "yaml_line": 2
+    },
+    {
+     "type": "string_type",
+     "field_path": [
+      "items",
+      "1"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      2,
+      14,
+      15,
+      true
+     ],
+     "yaml_line": 1
+    }
+   ]
+  },
+  {
+   "id": "flow-values-span",
+   "model": "Probe",
+   "yaml": "text: t\ninner: {label: 1, count: x}\n",
+   "errors": [
+    {
+     "type": "string_type",
+     "field_path": [
+      "inner",
+      "label"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      2,
+      16,
+      17,
+      true
+     ],
+     "yaml_line": 1
+    },
+    {
+     "type": "int_parsing",
+     "field_path": [
+      "inner",
+      "count"
+     ],
+     "msg": "Input should be a valid integer, unable to parse string as an integer",
+     "input": "x",
+     "ctx": {},
+     "span": [
+      2,
+      26,
+      27,
+      true
+     ],
+     "yaml_line": 1
+    }
+   ]
+  },
+  {
+   "id": "comment-after-value",
+   "model": "Probe",
+   "yaml": "text: 5 # a comment\nnumber: x  # another\n",
+   "errors": [
+    {
+     "type": "string_type",
+     "field_path": [
+      "text"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      1,
+      7,
+      8,
+      true
+     ],
+     "yaml_line": 0
+    },
+    {
+     "type": "int_parsing",
+     "field_path": [
+      "number"
+     ],
+     "msg": "Input should be a valid integer, unable to parse string as an integer",
+     "input": "x",
+     "ctx": {},
+     "span": [
+      2,
+      9,
+      10,
+      true
+     ],
+     "yaml_line": 1
+    }
+   ]
+  },
+  {
+   "id": "block-scalar-value",
+   "model": "Probe",
+   "yaml": "text: t\nnumber: |\n  abc\n",
+   "errors": [
+    {
+     "type": "int_parsing",
+     "field_path": [
+      "number"
+     ],
+     "msg": "Input should be a valid integer, unable to parse string as an integer",
+     "input": "abc\n",
+     "ctx": {},
+     "span": [
+      2,
+      9,
+      10,
+      true
+     ],
+     "yaml_line": 1
+    }
+   ]
+  },
+  {
+   "id": "multiline-plain-value",
+   "model": "Probe",
+   "yaml": "text: t\nnumber: abc\n  def\n",
+   "errors": [
+    {
+     "type": "int_parsing",
+     "field_path": [
+      "number"
+     ],
+     "msg": "Input should be a valid integer, unable to parse string as an integer",
+     "input": "abc def",
+     "ctx": {},
+     "span": [
+      2,
+      9,
+      12,
+      true
+     ],
+     "yaml_line": 1
+    }
+   ]
+  },
+  {
+   "id": "unicode-columns",
+   "model": "Probe",
+   "yaml": "text: \"日本🔥\"\nitems: [é, 1]\nnumber: 日本\n",
+   "errors": [
+    {
+     "type": "int_parsing",
+     "field_path": [
+      "number"
+     ],
+     "msg": "Input should be a valid integer, unable to parse string as an integer",
+     "input": "日本",
+     "ctx": {},
+     "span": [
+      3,
+      9,
+      11,
+      true
+     ],
+     "yaml_line": 2
+    },
+    {
+     "type": "string_type",
+     "field_path": [
+      "items",
+      "1"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      2,
+      12,
+      13,
+      true
+     ],
+     "yaml_line": 1
+    }
+   ]
+  },
+  {
+   "id": "anchor-alias-values",
+   "model": "Probe",
+   "yaml": "text: &t 5\nitems: [*t]\n",
+   "errors": [
+    {
+     "type": "string_type",
+     "field_path": [
+      "text"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      1,
+      7,
+      11,
+      true
+     ],
+     "yaml_line": 0
+    },
+    {
+     "type": "string_type",
+     "field_path": [
+      "items",
+      "0"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      1,
+      7,
+      11,
+      true
+     ],
+     "yaml_line": 0
+    }
+   ]
+  },
+  {
+   "id": "merge-key-values",
+   "model": "Probe",
+   "yaml": "base: &b\n  label: 1\ntext: t\ninner:\n  <<: *b\n  count: x\n",
+   "errors": [
+    {
+     "type": "string_type",
+     "field_path": [
+      "inner",
+      "label"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": null,
+     "yaml_line": {
+      "crash": "KeyError"
+     }
+    },
+    {
+     "type": "int_parsing",
+     "field_path": [
+      "inner",
+      "count"
+     ],
+     "msg": "Input should be a valid integer, unable to parse string as an integer",
+     "input": "x",
+     "ctx": {},
+     "span": [
+      6,
+      10,
+      11,
+      true
+     ],
+     "yaml_line": 5
+    },
+    {
+     "type": "extra_forbidden",
+     "field_path": [
+      "base"
+     ],
+     "msg": "Extra inputs are not permitted",
+     "input": null,
+     "ctx": {},
+     "span": [
+      1,
+      1,
+      5,
+      true
+     ],
+     "yaml_line": 0
+    }
+   ]
+  },
+  {
+   "id": "crlf",
+   "model": "Probe",
+   "yaml": "text: t\r\nnumber: x\r\ninner:\r\n  label: 3\r\n",
+   "errors": [
+    {
+     "type": "int_parsing",
+     "field_path": [
+      "number"
+     ],
+     "msg": "Input should be a valid integer, unable to parse string as an integer",
+     "input": "x",
+     "ctx": {},
+     "span": [
+      2,
+      9,
+      10,
+      true
+     ],
+     "yaml_line": 1
+    },
+    {
+     "type": "string_type",
+     "field_path": [
+      "inner",
+      "label"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      4,
+      10,
+      11,
+      true
+     ],
+     "yaml_line": 3
+    }
+   ]
+  },
+  {
+   "id": "key-quoted",
+   "model": "Probe",
+   "yaml": "\"text\": t\n'number': x\n",
+   "errors": [
+    {
+     "type": "int_parsing",
+     "field_path": [
+      "number"
+     ],
+     "msg": "Input should be a valid integer, unable to parse string as an integer",
+     "input": "x",
+     "ctx": {},
+     "span": [
+      2,
+      11,
+      12,
+      true
+     ],
+     "yaml_line": 1
+    }
+   ]
+  },
+  {
+   "id": "key-quoted-extra",
+   "model": "Probe",
+   "yaml": "text: t\n\"odd key\": 1\n",
+   "errors": [
+    {
+     "type": "extra_forbidden",
+     "field_path": [
+      "odd key"
+     ],
+     "msg": "Extra inputs are not permitted",
+     "input": null,
+     "ctx": {},
+     "span": [
+      2,
+      2,
+      9,
+      true
+     ],
+     "yaml_line": 1
+    }
+   ]
+  },
+  {
+   "id": "duplicate-error-at-two-items",
+   "model": "Probe",
+   "yaml": "text: t\nitems: [1, 1]\n",
+   "errors": [
+    {
+     "type": "string_type",
+     "field_path": [
+      "items",
+      "0"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      2,
+      9,
+      10,
+      true
+     ],
+     "yaml_line": 1
+    },
+    {
+     "type": "string_type",
+     "field_path": [
+      "items",
+      "1"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      2,
+      12,
+      13,
+      true
+     ],
+     "yaml_line": 1
+    }
+   ]
+  },
+  {
+   "id": "explicit-key",
+   "model": "Probe",
+   "yaml": "? text\n: 5\n",
+   "errors": [
+    {
+     "type": "string_type",
+     "field_path": [
+      "text"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      2,
+      3,
+      4,
+      true
+     ],
+     "yaml_line": 1
+    }
+   ]
+  },
+  {
+   "id": "sample-valid",
+   "model": "SampleV1_1",
+   "yaml": "name: n\nuuid: u\nschema: sample::1.1\ndescription: d\nseverity: Low\neffort: 3\nexamples:\n  - description: e\n    link: https://example.org\ntags: [a]\n",
+   "value": {
+    "name": "n",
+    "uuid": "u",
+    "schema": "sample::1.1",
+    "description": "d",
+    "severity": "Low",
+    "effort": 3,
+    "enabled": true,
+    "examples": [
+     {
+      "description": "e",
+      "link": "https://example.org",
+      "language": null
+     }
+    ],
+    "tags": [
+     "a"
+    ]
+   }
+  },
+  {
+   "id": "sample-everything-wrong",
+   "model": "SampleV1_1",
+   "yaml": "name: [n]\nschema_id: 1\ndescription: ~\nseverity:\neffort: lots\nenabled: perhaps\nexamples:\n  - description: e\n  - link: 3\n    language: rust\n    extra: 1\n  - not an example\ntags: a\nunknown: 1\n",
+   "errors": [
+    {
+     "type": "string_type",
+     "field_path": [
+      "name"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      1,
+      1,
+      5,
+      true
+     ],
+     "yaml_line": 0
+    },
+    {
+     "type": "missing",
+     "field_path": [
+      "uuid"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      1,
+      1,
+      5,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "string_type",
+     "field_path": [
+      "schema_id"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      2,
+      12,
+      13,
+      true
+     ],
+     "yaml_line": 1
+    },
+    {
+     "type": "string_type",
+     "field_path": [
+      "description"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      3,
+      14,
+      15,
+      true
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "string_type",
+     "field_path": [
+      "severity"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      5,
+      1,
+      13,
+      true
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "int_parsing",
+     "field_path": [
+      "effort"
+     ],
+     "msg": "Input should be a valid integer, unable to parse string as an integer",
+     "input": "lots",
+     "ctx": {},
+     "span": [
+      5,
+      9,
+      13,
+      true
+     ],
+     "yaml_line": 4
+    },
+    {
+     "type": "bool_parsing",
+     "field_path": [
+      "enabled"
+     ],
+     "msg": "Input should be a valid boolean, unable to interpret input",
+     "input": "perhaps",
+     "ctx": {},
+     "span": [
+      6,
+      10,
+      17,
+      true
+     ],
+     "yaml_line": 5
+    },
+    {
+     "type": "missing",
+     "field_path": [
+      "examples",
+      "0",
+      "link"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      8,
+      5,
+      6,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "missing",
+     "field_path": [
+      "examples",
+      "1",
+      "description"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      9,
+      5,
+      6,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "string_type",
+     "field_path": [
+      "examples",
+      "1",
+      "link"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      9,
+      11,
+      12,
+      true
+     ],
+     "yaml_line": 8
+    },
+    {
+     "type": "extra_forbidden",
+     "field_path": [
+      "examples",
+      "1",
+      "extra"
+     ],
+     "msg": "Extra inputs are not permitted",
+     "input": null,
+     "ctx": {},
+     "span": [
+      11,
+      5,
+      10,
+      true
+     ],
+     "yaml_line": 10
+    },
+    {
+     "type": "model_type",
+     "field_path": [
+      "examples",
+      "2"
+     ],
+     "msg": "Input should be a valid dictionary or instance of SampleExample",
+     "input": "not an example",
+     "ctx": {
+      "class_name": "SampleExample"
+     },
+     "span": [
+      12,
+      5,
+      19,
+      true
+     ],
+     "yaml_line": 11
+    },
+    {
+     "type": "list_type",
+     "field_path": [
+      "tags"
+     ],
+     "msg": "Input should be a valid list",
+     "input": "a",
+     "ctx": {},
+     "span": [
+      13,
+      7,
+      8,
+      true
+     ],
+     "yaml_line": 12
+    },
+    {
+     "type": "extra_forbidden",
+     "field_path": [
+      "unknown"
+     ],
+     "msg": "Extra inputs are not permitted",
+     "input": null,
+     "ctx": {},
+     "span": [
+      14,
+      1,
+      8,
+      true
+     ],
+     "yaml_line": 13
+    }
+   ]
+  },
+  {
+   "id": "sample-empty-mapping",
+   "model": "SampleV1_1",
+   "yaml": "{}\n",
+   "errors": [
+    {
+     "type": "missing",
+     "field_path": [
+      "name"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": null,
+     "yaml_line": null
+    },
+    {
+     "type": "missing",
+     "field_path": [
+      "uuid"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": null,
+     "yaml_line": null
+    },
+    {
+     "type": "missing",
+     "field_path": [
+      "schema"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": null,
+     "yaml_line": null
+    },
+    {
+     "type": "missing",
+     "field_path": [
+      "description"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": null,
+     "yaml_line": null
+    },
+    {
+     "type": "missing",
+     "field_path": [
+      "severity"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": null,
+     "yaml_line": null
+    }
+   ]
+  },
+  {
+   "id": "empty-value-trailing-comment",
+   "model": "Probe",
+   "yaml": "text: t\nnumber: # c\nflag: true\n",
+   "errors": [
+    {
+     "type": "int_type",
+     "field_path": [
+      "number"
+     ],
+     "msg": "Input should be a valid integer",
+     "input": null,
+     "ctx": {},
+     "span": [
+      2,
+      1,
+      7,
+      true
+     ],
+     "yaml_line": null
+    }
+   ]
+  },
+  {
+   "id": "empty-value-comment-line",
+   "model": "Probe",
+   "yaml": "text: t\nnumber:\n# c\nflag: true\n",
+   "errors": [
+    {
+     "type": "int_type",
+     "field_path": [
+      "number"
+     ],
+     "msg": "Input should be a valid integer",
+     "input": null,
+     "ctx": {},
+     "span": [
+      4,
+      1,
+      11,
+      true
+     ],
+     "yaml_line": null
+    }
+   ]
+  },
+  {
+   "id": "empty-value-blank-line",
+   "model": "Probe",
+   "yaml": "text: t\nnumber:\n\nflag: true\n",
+   "errors": [
+    {
+     "type": "int_type",
+     "field_path": [
+      "number"
+     ],
+     "msg": "Input should be a valid integer",
+     "input": null,
+     "ctx": {},
+     "span": [
+      4,
+      1,
+      11,
+      true
+     ],
+     "yaml_line": null
+    }
+   ]
+  },
+  {
+   "id": "empty-value-last",
+   "model": "Probe",
+   "yaml": "text: t\nnumber:\n",
+   "errors": [
+    {
+     "type": "int_type",
+     "field_path": [
+      "number"
+     ],
+     "msg": "Input should be a valid integer",
+     "input": null,
+     "ctx": {},
+     "span": [
+      2,
+      1,
+      7,
+      true
+     ],
+     "yaml_line": null
+    }
+   ]
+  },
+  {
+   "id": "empty-value-dedent",
+   "model": "Probe",
+   "yaml": "text: t\ninner:\n  label:\nnumber: 1\n",
+   "errors": [
+    {
+     "type": "string_type",
+     "field_path": [
+      "inner",
+      "label"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      4,
+      1,
+      10,
+      true
+     ],
+     "yaml_line": null
+    }
+   ]
+  },
+  {
+   "id": "empty-value-in-list-item",
+   "model": "Probe",
+   "yaml": "text: t\ninners:\n  - label:\n  - label: x\n",
+   "errors": [
+    {
+     "type": "string_type",
+     "field_path": [
+      "inners",
+      "0",
+      "label"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      4,
+      3,
+      13,
+      true
+     ],
+     "yaml_line": null
+    }
+   ]
+  },
+  {
+   "id": "empty-value-flow",
+   "model": "Probe",
+   "yaml": "text: t\ninner: {label: , count: 1}\n",
+   "errors": [
+    {
+     "type": "string_type",
+     "field_path": [
+      "inner",
+      "label"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      2,
+      9,
+      14,
+      true
+     ],
+     "yaml_line": null
+    }
+   ]
+  },
+  {
+   "id": "empty-sequence-item",
+   "model": "Probe",
+   "yaml": "text: t\nitems:\n  -\n  - b\n",
+   "errors": [
+    {
+     "type": "string_type",
+     "field_path": [
+      "items",
+      "0"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      3,
+      4,
+      5,
+      true
+     ],
+     "yaml_line": null
+    }
+   ]
+  },
+  {
+   "id": "empty-value-anchor",
+   "model": "Probe",
+   "yaml": "text: t\nnumber: &a\nflag: true\n",
+   "errors": [
+    {
+     "type": "int_type",
+     "field_path": [
+      "number"
+     ],
+     "msg": "Input should be a valid integer",
+     "input": null,
+     "ctx": {},
+     "span": [
+      2,
+      9,
+      11,
+      true
+     ],
+     "yaml_line": null
+    }
+   ]
+  },
+  {
+   "id": "int-from-float-too-large",
+   "model": "Probe",
+   "yaml": "text: t\nnumber: 1.0e+20\n",
+   "errors": [
+    {
+     "type": "int_parsing_size",
+     "field_path": [
+      "number"
+     ],
+     "msg": "Unable to parse input string as an integer, exceeded maximum size",
+     "input": null,
+     "ctx": {},
+     "span": [
+      2,
+      9,
+      16,
+      true
+     ],
+     "yaml_line": 1
+    }
+   ]
+  },
+  {
+   "id": "int-beyond-i64",
+   "model": "Probe",
+   "yaml": "text: t\nnumber: 123456789012345678901234567890\n",
+   "value": {
+    "text": "t",
+    "number": 123456789012345678901234567890,
+    "ratio": null,
+    "flag": true,
+    "items": null,
+    "inners": null,
+    "inner": null,
+    "mapping": null,
+    "choice": null,
+    "kind": null,
+    "either": null,
+    "some": null,
+    "schema": null,
+    "vocab": null
+   }
+  },
+  {
+   "id": "missing-top-with-int-first-key",
+   "model": "Probe",
+   "yaml": "1: x\nnumber: 2\n",
+   "errors": [
+    {
+     "type": "missing",
+     "field_path": [
+      "text"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": null,
+     "yaml_line": null
+    },
+    {
+     "type": "invalid_key",
+     "field_path": [
+      "1"
+     ],
+     "msg": "Keys should be strings",
+     "input": null,
+     "ctx": {},
+     "span": null,
+     "yaml_line": null
+    }
+   ]
+  },
+  {
+   "id": "extra-in-merge",
+   "model": "Probe",
+   "yaml": "base: &b {odd: 1}\ntext: t\ninner:\n  <<: *b\n  label: x\n",
+   "errors": [
+    {
+     "type": "extra_forbidden",
+     "field_path": [
+      "inner",
+      "odd"
+     ],
+     "msg": "Extra inputs are not permitted",
+     "input": null,
+     "ctx": {},
+     "span": null,
+     "yaml_line": {
+      "crash": "KeyError"
+     }
+    },
+    {
+     "type": "extra_forbidden",
+     "field_path": [
+      "base"
+     ],
+     "msg": "Extra inputs are not permitted",
+     "input": null,
+     "ctx": {},
+     "span": [
+      1,
+      1,
+      5,
+      true
+     ],
+     "yaml_line": 0
+    }
+   ]
+  }
+ ]
+}

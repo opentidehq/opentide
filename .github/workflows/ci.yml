@@ -386,9 +386,16 @@ jobs:
         with:
           python-version: "3.12"
       - run: python3 scripts/engine/release.py vendor
-      - run: cargo package --locked --workspace --exclude opentide-native --exclude xtask --exclude opentide-compare --allow-dirty
+      # opentide-schema (publish = false) depends on opentide-schema-derive,
+      # which is not on crates.io yet, so it cannot be packaged until both
+      # are published (crates/opentide-schema/Cargo.toml says when). A crate
+      # left out of the package step is scanned as its source directory
+      # instead (tests/test_ci/test_own_ci_workflow.py holds both to it).
+      - run: cargo package --locked --workspace --exclude opentide-native --exclude xtask --exclude opentide-compare --exclude opentide-schema --allow-dirty
       - name: license scan (no oracle references)
-        run: bash scripts/engine/license-scan.sh target/package/*.crate
+        run: |
+          bash scripts/engine/license-scan.sh target/package/*.crate
+          bash scripts/engine/license-scan.sh crates/opentide-schema crates/opentide-schema-derive crates/opentide-compare
 
   # The supply-chain gate (#843, deny.toml): licences of what we ship,
   # RustSec advisories (vulnerable, unsound, unmaintained, yanked), a second
@@ -519,7 +526,7 @@ jobs:
       matrix:
         # Every target of fuzz/fuzz_targets/ (tests/test_ci/test_one_ci.py),
         # up to three to a runner: one build serves them all.
-        targets: ["kql spl esql", "eql kuery lucene", "falco tide protocol", "config framing", "cql"]
+        targets: ["kql spl esql", "eql kuery lucene", "falco tide protocol", "config framing", "cql", "from_node"]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

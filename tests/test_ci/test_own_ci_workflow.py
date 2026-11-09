@@ -21,6 +21,11 @@ lockfile with the bundle, and hand-edited pins pass once relocked.
 
 The same checkout feeds the model field description check, which must fail
 rather than skip when the checkout is missing.
+
+Also holds the engine crates' licence scan to what the package step leaves
+out: a workspace crate under ``crates/`` excluded from ``cargo package`` is not
+published (``publish = false``), and the scan reads its source directory
+instead, so an exclusion never quietly shrinks the scan.
 """
 
 from __future__ import annotations
@@ -230,3 +235,82 @@ def test_field_description_check_requires_a_specifications_checkout(
     ]
     assert len(checkouts) == 1
     assert checks[0].get("if") in _conditions(checkouts[0])
+
+
+LOCAL_CI = ROOT / "scripts" / "ci-local.sh"
+
+
+def _package_and_scan(text: str) -> tuple[set[str], str]:
+    """The crates a ``cargo package`` command excludes, and the licence scan commands."""
+    packages = [line for line in text.splitlines() if "cargo package" in line]
+    scans = [line for line in text.splitlines() if "license-scan.sh" in line and "bash" in line]
+    assert len(packages) == 1, packages
+    assert scans, text
+    return set(re.findall(r"--exclude\s+(\S+)", packages[0])), " ".join(scans)
+
+
+def _engine_package_text(workflow: dict[str, Any]) -> str:
+    steps = workflow["jobs"]["engine-package"]["steps"]
+    return "\n".join(str(step.get("run", "")) for step in steps)
+
+
+def _check_excluded_crates_are_scanned(text: str, root: Path = ROOT) -> None:
+    excluded, scan = _package_and_scan(text)
+    crates = [
+        name for name in sorted(excluded) if (root / "crates" / name / "Cargo.toml").is_file()
+    ]
+    for name in crates:
+        manifest = (root / "crates" / name / "Cargo.toml").read_text(encoding="utf-8")
+        assert re.search(r"^publish\s*=\s*false\s*$", manifest, re.MULTILINE), (
+            f"{name} is left out of `cargo package` but is published: package it, "
+            "and drop the --exclude, before it is released"
+        )
+        assert f"crates/{name}" in scan.split(), (
+            f"{name} is left out of `cargo package`: the licence scan must read crates/{name}"
+        )
+
+
+def test_engine_package_scans_the_crates_it_does_not_package(workflow: dict[str, Any]) -> None:
+    text = _engine_package_text(workflow)
+    assert "opentide-schema" in _package_and_scan(text)[0]
+    _check_excluded_crates_are_scanned(text)
+
+
+def test_local_ci_scans_the_crates_it_does_not_package() -> None:
+    text = LOCAL_CI.read_text(encoding="utf-8")
+    assert "opentide-schema" in _package_and_scan(text)[0]
+    _check_excluded_crates_are_scanned(text)
+
+
+_EXCLUDED_UNSCANNED = (
+    "cargo package --workspace --exclude opentide-schema\n"
+    "bash scripts/engine/license-scan.sh target/package/*.crate\n"
+)
+_EXCLUDED_SCANNED = (
+    "cargo package --workspace --exclude opentide-schema\n"
+    "bash scripts/engine/license-scan.sh target/package/*.crate crates/opentide-schema\n"
+)
+
+
+def test_the_scan_check_fails_for_an_excluded_crate_it_does_not_scan() -> None:
+    with pytest.raises(AssertionError, match="licence scan must read crates/opentide-schema"):
+        _check_excluded_crates_are_scanned(_EXCLUDED_UNSCANNED)
+
+
+@pytest.mark.parametrize("publish", ["", 'publish = ["crates-io"]\n'])
+def test_the_scan_check_fails_once_an_excluded_crate_is_published(
+    tmp_path: Path, publish: str
+) -> None:
+    # opentide-schema losing `publish = false` while the package step still
+    # excludes it: the exclusion must go, so the crate is packaged and scanned.
+    crate = tmp_path / "crates" / "opentide-schema"
+    crate.mkdir(parents=True)
+    (crate / "Cargo.toml").write_text(
+        f'[package]\nname = "opentide-schema"\n{publish}', encoding="utf-8"
+    )
+    with pytest.raises(AssertionError, match="is left out of `cargo package` but is published"):
+        _check_excluded_crates_are_scanned(_EXCLUDED_SCANNED, tmp_path)
+    (crate / "Cargo.toml").write_text(
+        '[package]\nname = "opentide-schema"\npublish = false\n', encoding="utf-8"
+    )
+    _check_excluded_crates_are_scanned(_EXCLUDED_SCANNED, tmp_path)

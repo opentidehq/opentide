@@ -1,0 +1,4 @@
+a: !!float 1
+b: !!float infinity
+c: !!float ' 2.5 '
+d: !!float 1:30

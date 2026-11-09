@@ -1,0 +1,11 @@
+text: t
+number: abc
+inners:
+  - {label: a, count: 3.5}
+  - {label: b, count: .inf}
+  - {label: c, count: [1]}
+  - {label: d, count: {}}
+  - {label: e, count: '3.5'}
+  - {label: f, count: ''}
+  - {label: g, count: .nan}
+  - {label: h, count: '0x10'}

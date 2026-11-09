@@ -1,0 +1,9 @@
+a: ~
+b: null
+c: Null
+d: NULL
+e:
+f: nULL
+g: 'null'
+h: "~"
+i: !!null ''

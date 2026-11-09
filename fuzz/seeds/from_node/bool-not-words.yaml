@@ -1,0 +1,12 @@
+a: y
+b: n
+c: Y
+d: N
+e: yEs
+f: tRUE
+g: oN
+h: 'yes'
+i: "no"
+j: !!str on
+k: t
+l: f
