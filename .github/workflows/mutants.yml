@@ -33,6 +33,8 @@ env:
   INSTA_UPDATE: "no"
   # Shards per run: the `mutate` matrix below lists 0 to SHARDS - 1.
   SHARDS: "8"
+  # The one shard whose Rust cache is saved; the others restore it.
+  SAVING_SHARD: "0"
 
 jobs:
   plan:
@@ -92,8 +94,8 @@ jobs:
         with:
           workspaces: . -> target
           shared-key: mutants
-          # The shards build the same tree: one saves it.
-          save-if: ${{ matrix.shard == 0 }}
+          # The shards build the same tree: one saves it (SAVING_SHARD).
+          save-if: ${{ matrix.shard == env.SAVING_SHARD }}
 
       - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
         with:
