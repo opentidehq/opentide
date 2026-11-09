@@ -156,8 +156,11 @@ rust_baseline_s = 0.154
 # enforced as MiB (150e6 bytes).
 target_rss_mib = 143.1
 
-# The medians on more CPU models of the runner class, each from one CI run of the
-# workflow (same oracle, workspace and run count as [baseline]). A report on one of
+# The medians on more CPU models of the runner class, from CI runs of the workflow
+# (same oracle, workspace and run count as [baseline]). Two runners with the same CPU
+# model differ by up to about 10% on every command (run 42587161988 measured 3 to 12%
+# above run 42514414249, both on EPYC 9V74), so where two runs exist the entry keeps
+# each command's slower median, and the 10% rule starts from there. A report on one of
 # these CPUs is held to its own numbers at policy.regression; on a CPU listed nowhere,
 # to the slowest recorded + policy.cross_cpu_regression. Add an entry when a job's
 # summary notes an unrecorded CPU, copying that job's medians.
@@ -165,22 +168,23 @@ target_rss_mib = 143.1
 [[cpu_baseline]]
 engine = "python"
 cpu_model = "AMD EPYC 7763 64-Core Processor"
-source = "https://github.com/opentidehq/opentide/actions/runs/42511597394"
+# The slower median of each command over two runs on this CPU.
+source = "https://github.com/opentidehq/opentide/actions/runs/42511597394 and https://github.com/opentidehq/opentide/actions/runs/42515106569"
 
 [cpu_baseline.median_s]
-validate_clean = 4.338
-validate_warnings = 17.515
-validate_file = 2.222
-lint = 4.905
-lint_file = 1.030
-info = 1.524
-info_catalog = 1.804
-deploy_dry_run = 3.337
-generate_docs = 20.287
-generate_exports_navigator = 1.433
-rules_unreviewed = 0.590
-explain = 0.198
-lsp_first_diagnostics = 2.625
+validate_clean = 4.577
+validate_warnings = 18.173
+validate_file = 2.316
+lint = 5.074
+lint_file = 1.064
+info = 1.614
+info_catalog = 1.909
+deploy_dry_run = 3.510
+generate_docs = 21.062
+generate_exports_navigator = 1.499
+rules_unreviewed = 0.627
+explain = 0.211
+lsp_first_diagnostics = 2.646
 
 [[cpu_baseline]]
 engine = "rust"
@@ -193,22 +197,23 @@ lsp_first_diagnostics = 0.178
 [[cpu_baseline]]
 engine = "python"
 cpu_model = "AMD EPYC 9V74 80-Core Processor"
-source = "https://github.com/opentidehq/opentide/actions/runs/42514414249"
+# The slower median of each command over two runs on this CPU.
+source = "https://github.com/opentidehq/opentide/actions/runs/42514414249 and https://github.com/opentidehq/opentide/actions/runs/42587161988"
 
 [cpu_baseline.median_s]
-validate_clean = 3.266
-validate_warnings = 12.909
-validate_file = 1.724
-lint = 3.769
-lint_file = 0.780
-info = 1.169
-info_catalog = 1.398
-deploy_dry_run = 2.514
-generate_docs = 15.804
-generate_exports_navigator = 1.114
-rules_unreviewed = 0.456
-explain = 0.160
-lsp_first_diagnostics = 1.998
+validate_clean = 3.583
+validate_warnings = 13.347
+validate_file = 1.818
+lint = 3.894
+lint_file = 0.828
+info = 1.284
+info_catalog = 1.525
+deploy_dry_run = 2.817
+generate_docs = 16.282
+generate_exports_navigator = 1.176
+rules_unreviewed = 0.481
+explain = 0.174
+lsp_first_diagnostics = 2.048
 
 [[cpu_baseline]]
 engine = "rust"
