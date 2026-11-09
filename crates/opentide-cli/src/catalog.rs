@@ -111,9 +111,30 @@ pub struct Entry {
 }
 
 /// The root command: the tree, with no `help` subcommand (the CLI has
-/// `--help` only).
+/// `--help` only), parsed as the CLI always has ([`parse_settings`]).
 pub fn root() -> Command {
-    Cli::command().disable_help_subcommand(true)
+    parse_settings(Cli::command().disable_help_subcommand(true))
+}
+
+/// clap's settings for how `command` and everything under it parse:
+///
+/// - an option or flag given twice keeps the last value (`--json commands
+///   --json`, `--repo a --repo b`), as it always has; a repeatable option
+///   (`--strategy`) still collects every value;
+/// - an option's value may start with `-` (`--query --json` searches for
+///   `--json`, `--limit -1` is a number out of range): the word after an
+///   option that takes a value is its value.
+pub fn parse_settings(command: Command) -> Command {
+    command
+        .args_override_self(true)
+        .mut_args(|arg| {
+            if !arg.is_positional() && crate::hoist::takes_value(&arg) {
+                arg.allow_hyphen_values(true)
+            } else {
+                arg
+            }
+        })
+        .mut_subcommands(parse_settings)
 }
 
 /// Every visible command under `root`, depth first.

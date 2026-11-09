@@ -39,6 +39,7 @@ fn replay(data: &[u8]) -> (i32, String) {
         log_sink: Arc::new(Mutex::new(err.clone())),
         cwd: None,
         width: None,
+        interrupt: opentide_cli::app::Interrupt::default(),
     };
     let mut out = Vec::new();
     let code = run(&argv, &Env::default(), &host, &mut out, &mut err.clone());

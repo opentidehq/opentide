@@ -9,8 +9,9 @@
 //! otherwise, as `cargo xtask golden record` runs them. `duration_ms` is the
 //! one value normalised, as the goldens normalise it.
 //!
-//! Intended differences are not here: `--help` (clap's help, see
-//! `tests/golden/APPROVED_DIFFS.toml` and the CHANGELOG) and the home screen.
+//! Intended differences are not here: `--help` and the help a bare `mcp`,
+//! `lsp` or `new` prints to a person (clap's help, see
+//! `tests/golden/APPROVED_DIFFS.toml` and the CHANGELOG), and the home screen.
 
 #![expect(
     clippy::unwrap_used,
@@ -56,6 +57,9 @@ const CASES: &[(&str, &[&str])] = &[
     ("setup.ci", &["missing-argument"]),
     ("rules", &["bare"]),
     ("generate.extract", &["bare"]),
+    ("mcp", &["bare"]),
+    ("lsp", &["bare"]),
+    ("new", &["bare"]),
 ];
 
 /// Recordings of those variants left out, and why.
@@ -69,8 +73,14 @@ const LEFT_OUT: &[(&str, &str)] = &[
     ("_root/plain/tide-corpus/bare", "help"),
     ("_root/agent/none/bare", "help"),
     ("_root/agent/tide-corpus/bare", "help"),
-    // `opentide --json` in a workspace runs the root callback's workspace checks.
-    ("_root/json/tide-corpus/bare", "workspace"),
+    // `opentide mcp`, `lsp` and `new` print the group's help to a person
+    // (exit 2), laid out by clap: the help difference.
+    ("mcp/human/none/bare", "help"),
+    ("mcp/plain/none/bare", "help"),
+    ("lsp/human/none/bare", "help"),
+    ("lsp/plain/none/bare", "help"),
+    ("new/human/none/bare", "help"),
+    ("new/plain/none/bare", "help"),
 ];
 
 fn repo() -> PathBuf {
@@ -115,6 +125,11 @@ fn replay(dir: &Path, scratch: &Path) -> Outcome {
     for folder in [&home, &tmp, &ws] {
         std::fs::create_dir_all(folder).unwrap();
     }
+    match case["fixture"].as_str().unwrap() {
+        "none" => {}
+        "tide-corpus" => tide_corpus(&ws),
+        other => panic!("{other}: a fixture this test does not lay out"),
+    }
     let env = Env::from_pairs(case["env"].as_table().unwrap().iter().map(|(key, value)| {
         let value = value
             .as_str()
@@ -134,6 +149,7 @@ fn replay(dir: &Path, scratch: &Path) -> Outcome {
         cwd: Some(ws),
         // The recorder's pseudo-terminal: 100 columns.
         width: terminal.then_some(100),
+        interrupt: opentide_cli::app::Interrupt::default(),
     };
     let mut out = Vec::new();
     let mut err = stderr.clone();
@@ -173,6 +189,33 @@ fn without_engine_variable(stdout: &str) -> String {
         "the catalogue's last variable is OPENTIDE_ENGINE"
     );
     document_text(&document, stdout.starts_with("{\n"))
+}
+
+/// The `tide-corpus` fixture as the recorder lays it out
+/// (`xtask/src/golden/fixture.rs`), for what the framework reads: the
+/// corpus, and its `Configurations/` as `.opentide/configurations/` (the
+/// tenants the redactor reads). The objects' links are left out: no
+/// framework case reads an object.
+fn tide_corpus(ws: &Path) {
+    let source = repo().join("tests/fixtures/tide_corpus/current");
+    copy_tree(&source, ws);
+    copy_tree(
+        &source.join("Configurations"),
+        &ws.join(".opentide/configurations"),
+    );
+}
+
+fn copy_tree(from: &Path, to: &Path) {
+    std::fs::create_dir_all(to).unwrap();
+    for entry in std::fs::read_dir(from).unwrap() {
+        let entry = entry.unwrap();
+        let target = to.join(entry.file_name());
+        if entry.file_type().unwrap().is_dir() {
+            copy_tree(&entry.path(), &target);
+        } else {
+            std::fs::copy(entry.path(), &target).unwrap();
+        }
+    }
 }
 
 fn recorded_exit_code(dir: &Path) -> i32 {

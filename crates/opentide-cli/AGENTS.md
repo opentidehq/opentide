@@ -37,6 +37,17 @@ the filesystem. The bindings (`main(argv)` from Python and npm, UC-3.8 and UC-5.
 - Everything the CLI writes about itself (log lines, the crash report, the crash log) goes
   through `redact::Redactor`. Never print an environment value, a URL or a configuration value
   without it.
+- Redact a value as it was written, before it is escaped or formatted (JSON, `{:?}`, shell
+  quoting): an escaped secret no longer matches.
+- A write to stdout or stderr that fails is the run's error, never ignored: exit 1 as an
+  internal error, or quietly when the reader closed the pipe (`BrokenPipe`). Commands write
+  through `Run::emit` and return its `io::Result`.
+- Ctrl-C sets the run's `Interrupt`: a long job polls `Run::interrupted` and stops; the run then
+  prints `error: interrupted` and exits 130 with no document. A second Ctrl-C, or a run still
+  going after `INTERRUPT_GRACE`, ends the process.
+- Parsing is clap's, set in `catalog::parse_settings`: the last of a repeated option wins, and an
+  option's value may start with `-`. A `--` where a group expects its command is dropped
+  (`hoist::drop_group_separators`).
 - The tree is code: a port changes its struct. When an option's catalogue entry needs what clap
   cannot say, add a row to `tree_meta.rs`, never a special case in `catalog.rs`.
 - `data/output-schemas.json` is generated, never edited: `OPENTIDE_CLI_BLESS=1 cargo nextest run

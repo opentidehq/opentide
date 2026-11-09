@@ -1743,6 +1743,7 @@ pub enum RootCommand {
         long_about = "Scaffold a threat, objective or rule from its template\n\nThe new file gets a fresh UUID, today's date, your git author and the catalogue's organisation, and is named the way opentide lint expects. Required values nobody has chosen yet are placeholders, listed in the output: replace them, then run opentide validate --file on the path.",
         after_help = "Examples:\n  $ opentide new threat --name \"Credential Dumping\"",
         subcommand_required = true,
+        arg_required_else_help = true,
         subcommand_value_name = "COMMAND"
     )]
     New(NewArgs),
@@ -1825,6 +1826,7 @@ pub enum RootCommand {
         long_about = "Run the opentide MCP server for editors and agents\n\nThe server speaks on stdio. The editor owns the process: stop is the host closing stdin, and reload is the host spawning this command again. There is no reload or stop subcommand.",
         after_help = "Examples:\n  $ opentide mcp start",
         subcommand_required = true,
+        arg_required_else_help = true,
         subcommand_value_name = "COMMAND"
     )]
     Mcp(McpArgs),
@@ -1834,6 +1836,7 @@ pub enum RootCommand {
         long_about = "Serve the language server for editors\n\nThe server is the analysis engine that pip install opentide installs: KQL, SPL, ES|QL, EQL, Kibana KQL, Lucene and Tide YAML. The editor owns the process and speaks the protocol on stdio. On the command line, opentide validate and opentide lint report what it finds.",
         after_help = "Examples:\n  $ opentide lsp start",
         subcommand_required = true,
+        arg_required_else_help = true,
         subcommand_value_name = "COMMAND"
     )]
     Lsp(LspArgs),

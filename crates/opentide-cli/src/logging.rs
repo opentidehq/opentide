@@ -168,6 +168,14 @@ impl<S: Subscriber> Layer<S> for LogLayer {
         }
         let mut fields = Fields::default();
         event.record(&mut fields);
+        // Each value is redacted as it was logged, before the line escapes
+        // it (JSON) or a Debug field quoted it: a secret with a `"` or a `\`
+        // in it must match as written. The whole line is redacted again for
+        // what spans a field and its key (`token=...`).
+        fields.message = self.redactor.redact(&fields.message);
+        for (_, value) in &mut fields.pairs {
+            *value = self.redactor.redact(value);
+        }
         let line = self.redactor.redact(&self.line(level, &fields));
         if let Ok(mut sink) = self.sink.lock() {
             let _ = sink.write_all(line.as_bytes());

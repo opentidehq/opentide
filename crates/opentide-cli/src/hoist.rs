@@ -113,6 +113,56 @@ pub fn hoist(root: &Command, args: &[String]) -> Vec<String> {
     out
 }
 
+/// `args` without each `--` typed where a group expects its command, before
+/// that command's name: `opentide -- commands` and `validate -- query` run
+/// the command, as they always have. A `--` before an option-shaped word
+/// (`validate -- --json`) stays: that word is no command, and the usage
+/// error names it. A `--` after a command's own options or arguments is the
+/// usual end of options, left to clap.
+pub fn drop_group_separators(root: &Command, args: &[String]) -> Vec<String> {
+    let mut out: Vec<String> = Vec::with_capacity(args.len());
+    let start = root_options_end(root, args);
+    out.extend_from_slice(&args[..start]);
+    let mut command = root;
+    let mut index = start;
+    while index < args.len() {
+        let token = &args[index];
+        index += 1;
+        let groups = command.get_subcommands().next().is_some();
+        if token == "--" {
+            let next = args.get(index);
+            if groups && next.is_some_and(|word| !word.starts_with('-')) {
+                continue;
+            }
+            out.extend_from_slice(&args[index - 1..]);
+            return out;
+        }
+        out.push(token.clone());
+        if token.starts_with('-') && token != "-" {
+            let (name, has_value) = match token.split_once('=') {
+                Some((name, _)) => (name, true),
+                None => (token.as_str(), false),
+            };
+            if find_option(command, name).is_some_and(takes_value)
+                && !has_value
+                && let Some(value) = args.get(index)
+            {
+                out.push(value.clone());
+                index += 1;
+            }
+            continue;
+        }
+        match command.find_subcommand(token) {
+            Some(sub) => command = sub,
+            None => {
+                out.extend_from_slice(&args[index..]);
+                return out;
+            }
+        }
+    }
+    out
+}
+
 /// The command path `args` name (`["generate", "docs", "rules"]`): only words
 /// that name a subcommand count, and the hoisted flags are skipped.
 pub fn command_words(root: &Command, args: &[String]) -> Vec<String> {
@@ -229,6 +279,28 @@ mod tests {
             leading_words(&root, &args("--repo r mcp start --x")),
             args("mcp start")
         );
+    }
+
+    #[test]
+    fn framework_hoist_drops_a_separator_before_a_command_name() {
+        let root = root();
+        let dropped = |text: &str| drop_group_separators(&root, &args(text));
+        assert_eq!(dropped("-- commands"), args("commands"));
+        assert_eq!(dropped("--repo r -- commands"), args("--repo r commands"));
+        assert_eq!(dropped("validate -- query"), args("validate query"));
+        assert_eq!(
+            dropped("validate --strict -- query x"),
+            args("validate --strict query x")
+        );
+        // An option-shaped word after it is no command: the `--` stays.
+        assert_eq!(dropped("validate -- --json"), args("validate -- --json"));
+        // A command's own arguments: the end of options, for clap.
+        assert_eq!(dropped("explain -- x"), args("explain -- x"));
+        assert_eq!(
+            dropped("query --platform -- -- x"),
+            args("query --platform -- -- x")
+        );
+        assert_eq!(dropped("validate query -- x"), args("validate query -- x"));
     }
 
     #[test]

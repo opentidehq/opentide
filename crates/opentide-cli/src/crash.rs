@@ -270,7 +270,8 @@ pub fn crash_log_text(error: &Internal, report: &Report<'_>) -> String {
         .redactor
         .argv(report.argv)
         .iter()
-        .map(|word| shell_quote(word))
+        // Redacted before quoting: a quoted secret no longer reads as written.
+        .map(|word| shell_quote(&report.redactor.redact(word)))
         .collect::<Vec<_>>()
         .join(" ");
     let mut lines = vec![
@@ -304,17 +305,10 @@ pub fn crash_log_text(error: &Internal, report: &Report<'_>) -> String {
     report.redactor.redact(&lines.join("\n"))
 }
 
-/// A word as a POSIX shell reads it back.
+/// A word as a POSIX shell reads it back (the shlex crate's quoting). A word
+/// no shell can carry (a NUL byte) is shown as Rust writes a string.
 pub fn shell_quote(word: &str) -> String {
-    let safe = !word.is_empty()
-        && word
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || "@%+=:,./-_".contains(c));
-    if safe {
-        word.to_owned()
-    } else {
-        format!("'{}'", word.replace('\'', "'\"'\"'"))
-    }
+    shlex::try_quote(word).map_or_else(|_| format!("{word:?}"), std::borrow::Cow::into_owned)
 }
 
 /// Reports `error`: writes the crash log, prints the report on `err` and, in
@@ -436,9 +430,12 @@ mod tests {
         };
         assert_eq!(bare.summary(), "panic");
         assert_eq!(shell_quote("a b"), "'a b'");
-        assert_eq!(shell_quote("it's"), "'it'\"'\"'s'");
-        assert_eq!(shell_quote("--x=1"), "--x=1");
+        assert_eq!(shell_quote("it's"), "\"it's\"");
+        // shlex quotes `=`, which a shell reads as an assignment first.
+        assert_eq!(shell_quote("--x=1"), "'--x=1'");
+        assert_eq!(shell_quote("--strict"), "--strict");
         assert_eq!(shell_quote(""), "''");
+        assert_eq!(shell_quote("a\0b"), "\"a\\0b\"");
         assert_eq!(panic_message(&"x"), "x");
         assert_eq!(panic_message(&String::from("y")), "y");
         assert_eq!(panic_message(&1_u8), "(no message)");

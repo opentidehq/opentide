@@ -21,8 +21,9 @@ use clap::parser::ValueSource;
 use std::cell::RefCell;
 use std::io::Write;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime};
 
 /// Command paths with a Rust implementation; every other one is refused with
 /// `engine_not_ported`, as `OPENTIDE_ENGINE=rust` refuses it.
@@ -42,7 +43,48 @@ pub struct Host {
     pub cwd: Option<PathBuf>,
     /// The terminal's width in columns, when there is a terminal.
     pub width: Option<usize>,
+    /// Ctrl-C for this run: set by the handler ([`install_interrupt_handler`]),
+    /// polled by long jobs ([`Interrupt::requested`]).
+    pub interrupt: Interrupt,
 }
+
+/// Ctrl-C, as one run sees it.
+///
+/// The first Ctrl-C sets it: long jobs (tenant calls) poll
+/// [`Interrupt::requested`], stop and clean up, and the run then prints
+/// `error: interrupted` on stderr and exits 130 with no JSON document. A
+/// second Ctrl-C, or a run that has not stopped after [`INTERRUPT_GRACE`],
+/// ends the process at once with the same line and code.
+#[derive(Clone, Debug, Default)]
+pub struct Interrupt {
+    requested: Arc<AtomicBool>,
+    reported: Arc<AtomicBool>,
+}
+
+impl Interrupt {
+    /// Records a Ctrl-C; whether one was recorded before.
+    pub fn request(&self) -> bool {
+        self.requested.swap(true, Ordering::SeqCst)
+    }
+
+    /// Whether Ctrl-C was pressed: long jobs poll this and stop.
+    pub fn requested(&self) -> bool {
+        self.requested.load(Ordering::SeqCst)
+    }
+
+    /// Prints `error: interrupted` once, whoever reports it first; 130.
+    pub fn report(&self, err: &mut dyn Write) -> i32 {
+        if !self.reported.swap(true, Ordering::SeqCst) {
+            let _ignored = err.write_all(b"error: interrupted\n");
+            let _ignored = err.flush();
+        }
+        INTERRUPTED_EXIT_CODE
+    }
+}
+
+/// How long the run has to stop after the first Ctrl-C before the process
+/// ends without it.
+pub const INTERRUPT_GRACE: Duration = Duration::from_secs(5);
 
 /// The parsed root options: what every command shares.
 #[expect(
@@ -126,7 +168,14 @@ impl Run<'_> {
         i64::try_from(self.started.elapsed().as_millis()).unwrap_or(i64::MAX)
     }
 
-    /// Prints `outcome` in this run's mode; its exit code.
+    /// Whether Ctrl-C was pressed: long jobs poll this and stop.
+    pub fn interrupted(&self) -> bool {
+        self.host.interrupt.requested()
+    }
+
+    /// Prints `outcome` in this run's mode; its exit code. A run Ctrl-C
+    /// stopped prints nothing here: [`run`] reports it. A write that fails
+    /// is the run's error ([`run`] reports it).
     fn emit(
         &self,
         outcome: &Outcome,
@@ -134,11 +183,14 @@ impl Run<'_> {
         lines: &[String],
         out: &mut dyn Write,
         err: &mut dyn Write,
-    ) -> i32 {
+    ) -> std::io::Result<i32> {
+        if self.interrupted() {
+            return Ok(INTERRUPTED_EXIT_CODE);
+        }
         match self.mode {
             Mode::Json => {
                 let text = document_text(&outcome.document(self.duration_ms()), self.indent);
-                let _ = out.write_all(text.as_bytes());
+                out.write_all(text.as_bytes())?;
             }
             _ if outcome.failure.is_some() && outcome.exit_code != 0 => {
                 let message = outcome
@@ -148,23 +200,23 @@ impl Run<'_> {
                 let painter = self.painter(self.host.stderr_tty);
                 let text =
                     style::error_lines(self.mode, painter, message, notes, &outcome.next_actions);
-                let _ = err.write_all(text.as_bytes());
+                err.write_all(text.as_bytes())?;
             }
             Mode::Mcp => {}
             _ => {
                 let painter = self.painter(self.host.stdout_tty);
                 for line in lines {
-                    let _ = writeln!(out, "{}", painter.paint(style::bold(), line));
+                    writeln!(out, "{}", painter.paint(style::bold(), line))?;
                 }
-                let _ = out.write_all(style::success_line(painter, &outcome.message).as_bytes());
+                out.write_all(style::success_line(painter, &outcome.message).as_bytes())?;
                 for action in &outcome.next_actions {
-                    let _ = writeln!(out, "{}", style::next_action_line(painter, action));
+                    writeln!(out, "{}", style::next_action_line(painter, action))?;
                 }
             }
         }
-        let _ = out.flush();
-        let _ = err.flush();
-        outcome.exit_code
+        out.flush()?;
+        err.flush()?;
+        Ok(outcome.exit_code)
     }
 
     fn painter(&self, tty: bool) -> Painter {
@@ -177,7 +229,8 @@ impl Run<'_> {
         Painter::for_stream(self.mode, tty, dumb).wrapping(self.host.width)
     }
 
-    fn help(&self, path: &[String], out: &mut dyn Write) -> i32 {
+    /// The help of the command at `path` on `out`; `code`.
+    fn help(&self, path: &[String], code: i32, out: &mut dyn Write) -> std::io::Result<i32> {
         let mut command = usage::command_at(&self.root, path).clone();
         let mut bin = vec![catalog::PROGRAM.to_owned()];
         bin.extend(path.iter().cloned());
@@ -188,30 +241,38 @@ impl Run<'_> {
         } else {
             help.to_string()
         };
-        let _ = out.write_all(text.as_bytes());
+        out.write_all(text.as_bytes())?;
         if !text.ends_with('\n') {
-            let _ = out.write_all(b"\n");
+            out.write_all(b"\n")?;
         }
-        let _ = out.flush();
-        0
+        out.flush()?;
+        Ok(code)
     }
 
-    fn dispatch(&self, out: &mut dyn Write, err: &mut dyn Write) -> i32 {
+    fn dispatch(&self, out: &mut dyn Write, err: &mut dyn Write) -> std::io::Result<i32> {
         if self.globals.version {
-            let _ = writeln!(out, "{} {}", catalog::PROGRAM, self.host.version);
-            let _ = out.flush();
-            return 0;
+            writeln!(out, "{} {}", catalog::PROGRAM, self.host.version)?;
+            out.flush()?;
+            return Ok(0);
         }
         if self.args.is_empty() && !self.mode.is_machine() {
-            return self.help(&[], out);
+            return self.help(&[], 0, out);
         }
         let argv = std::iter::once(catalog::PROGRAM.to_owned()).chain(self.args.iter().cloned());
         let matches = match self.root.clone().try_get_matches_from(argv) {
             Ok(matches) => matches,
             Err(error) => {
-                if matches!(error.kind(), clap::error::ErrorKind::DisplayHelp) {
-                    let path = hoist::command_words(&self.root, &self.args);
-                    return self.help(&path, out);
+                let path = hoist::command_words(&self.root, &self.args);
+                match error.kind() {
+                    clap::error::ErrorKind::DisplayHelp => return self.help(&path, 0, out),
+                    // `opentide mcp`: a person gets the group's help, exit 2;
+                    // json and agent mode get the usage error below.
+                    clap::error::ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand
+                        if matches!(self.mode, Mode::Human | Mode::Plain) =>
+                    {
+                        return self.help(&path, USAGE_EXIT_CODE, out);
+                    }
+                    _ => {}
                 }
                 let problem = usage::describe(&self.root, &self.args, &error);
                 let outcome = Outcome::failed(&problem.command, USAGE_EXIT_CODE, problem.failure);
@@ -341,35 +402,20 @@ pub fn install_panic_hook() {
 /// The UTC time now: `2026-11-09T10:11:12Z`, the crash log's stamp
 /// `20261109T101112123456Z`, and the log lines' `10:11:12`.
 pub fn utc_now() -> (String, String, String) {
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default();
-    let secs = i64::try_from(now.as_secs()).unwrap_or(0);
-    let (year, month, day) = civil(secs.div_euclid(86_400));
-    let rest = secs.rem_euclid(86_400);
-    let (hour, minute, second) = (rest / 3600, rest % 3600 / 60, rest % 60);
-    (
-        format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}Z"),
-        format!(
-            "{year:04}{month:02}{day:02}T{hour:02}{minute:02}{second:02}{:06}Z",
-            now.subsec_micros()
-        ),
-        format!("{hour:02}:{minute:02}:{second:02}"),
-    )
+    utc_at(SystemTime::now())
 }
 
-/// Days since 1970-01-01 as a proleptic Gregorian date (Howard Hinnant's algorithm).
-fn civil(days: i64) -> (i64, i64, i64) {
-    let z = days + 719_468;
-    let era = z.div_euclid(146_097);
-    let doe = z.rem_euclid(146_097);
-    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let day = doy - (153 * mp + 2) / 5 + 1;
-    let month = if mp < 10 { mp + 3 } else { mp - 9 };
-    let year = yoe + era * 400 + i64::from(month <= 2);
-    (year, month, day)
+/// [`utc_now`] at `time`, formatted by humantime's RFC 3339.
+pub fn utc_at(time: SystemTime) -> (String, String, String) {
+    let iso = humantime::format_rfc3339_seconds(time).to_string();
+    // `2026-11-09T10:11:12.123456Z` -> `20261109T101112123456Z`.
+    let stamp: String = humantime::format_rfc3339_micros(time)
+        .to_string()
+        .chars()
+        .filter(|c| !matches!(c, '-' | ':' | '.'))
+        .collect();
+    let clock = iso.get(11..19).unwrap_or_default().to_owned();
+    (iso, stamp, clock)
 }
 
 fn log_clock() -> String {
@@ -385,7 +431,7 @@ pub fn run(
     err: &mut dyn Write,
 ) -> i32 {
     run_with(argv, env, host, out, err, |run, out, err| {
-        Ok(run.dispatch(out, err))
+        Ok(run.dispatch(out, err)?)
     })
 }
 
@@ -405,7 +451,7 @@ fn run_with(
 ) -> i32 {
     let started = Instant::now();
     let root = catalog::root();
-    let hoisted = hoist::hoist(&root, argv);
+    let hoisted = hoist::drop_group_separators(&root, &hoist::hoist(&root, argv));
     let globals = globals(&root, &hoisted, env);
     let leading = hoist::leading_words(&root, &hoisted);
     let mode = mode::resolve(
@@ -445,8 +491,15 @@ fn run_with(
     let result = tracing::subscriber::with_default(logging::subscriber(layer), || {
         std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| command(&run, out, err)))
     });
+    if run.interrupted() {
+        // The jobs stopped: one line, no document, whatever they returned.
+        return host.interrupt.report(err);
+    }
     match result {
         Ok(Ok(code)) => code,
+        // The reader went away (`opentide --json commands | head -c1`):
+        // nobody reads a report either. Exit 1, quietly, as the CLI always has.
+        Ok(Err(error)) if is_broken_pipe(error.as_ref()) => 1,
         Ok(Err(error)) => {
             let internal = Internal::from_error(error.as_ref());
             report_internal(&run, &internal, &redactor, debug, out, err)
@@ -495,37 +548,54 @@ fn report_internal(
     )
 }
 
-static INTERRUPTED: AtomicBool = AtomicBool::new(false);
-
-/// Whether Ctrl-C was pressed: long jobs (tenant calls) poll this and stop.
-pub fn interrupted() -> bool {
-    INTERRUPTED.load(Ordering::SeqCst)
+/// Whether `error` is, or wraps, a write to a closed pipe.
+fn is_broken_pipe(error: &(dyn std::error::Error + 'static)) -> bool {
+    let mut current = Some(error);
+    while let Some(error) = current {
+        if error
+            .downcast_ref::<std::io::Error>()
+            .is_some_and(|error| error.kind() == std::io::ErrorKind::BrokenPipe)
+        {
+            return true;
+        }
+        current = error.source();
+    }
+    false
 }
 
-/// Ctrl-C: `error: interrupted` on stderr, exit 130, in every mode and with
-/// no JSON document. Jobs see [`interrupted`] first.
-pub fn install_interrupt_handler() {
+/// Ctrl-C: `interrupt` is set, and the run stops ([`Interrupt`]). The
+/// process ends with `error: interrupted` and 130 on a second Ctrl-C, or when
+/// the run has not stopped after [`INTERRUPT_GRACE`].
+pub fn install_interrupt_handler(interrupt: Interrupt) {
     // A second install (an embedding host calling `main` twice) keeps the first.
-    let _ = ctrlc::set_handler(|| {
-        let code = on_interrupt(&mut std::io::stderr().lock());
-        std::process::exit(code);
+    let _ignored = ctrlc::set_handler(move || {
+        if let Some(code) = on_interrupt(&interrupt, &mut std::io::stderr().lock()) {
+            std::process::exit(code);
+        }
+        let interrupt = interrupt.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(INTERRUPT_GRACE);
+            std::process::exit(interrupt.report(&mut std::io::stderr().lock()));
+        });
     });
 }
 
-/// What Ctrl-C does before the process exits: tell the jobs, then one line
-/// on stderr. The exit code, 130.
-pub fn on_interrupt(err: &mut dyn Write) -> i32 {
-    INTERRUPTED.store(true, Ordering::SeqCst);
-    let _ = err.write_all(b"error: interrupted\n");
-    let _ = err.flush();
-    INTERRUPTED_EXIT_CODE
+/// One Ctrl-C: the first tells the jobs and returns `None` (the run stops
+/// and reports it); a second reports it now and returns the exit code, 130.
+pub fn on_interrupt(interrupt: &Interrupt, err: &mut dyn Write) -> Option<i32> {
+    if interrupt.request() {
+        Some(interrupt.report(err))
+    } else {
+        None
+    }
 }
 
 /// `opentide` in this process: the process's environment and streams.
 pub fn main(argv: &[String], version: &str) -> i32 {
     use std::io::IsTerminal;
     install_panic_hook();
-    install_interrupt_handler();
+    let interrupt = Interrupt::default();
+    install_interrupt_handler(interrupt.clone());
     let env = Env::from_process();
     let stderr_sink: Sink = std::sync::Arc::new(std::sync::Mutex::new(std::io::stderr()));
     let host = Host {
@@ -537,6 +607,7 @@ pub fn main(argv: &[String], version: &str) -> i32 {
         width: terminal_size::terminal_size_of(std::io::stderr())
             .or_else(|| terminal_size::terminal_size_of(std::io::stdout()))
             .map(|(width, _)| usize::from(width.0)),
+        interrupt,
     };
     let mut out = std::io::stdout().lock();
     let mut err = std::io::stderr();
@@ -548,11 +619,29 @@ mod tests {
     use super::*;
 
     #[test]
-    fn framework_civil_dates() {
-        assert_eq!(civil(0), (1970, 1, 1));
-        assert_eq!(civil(20_766), (2026, 11, 9));
-        assert_eq!(civil(-1), (1969, 12, 31));
-        assert_eq!(civil(11_016), (2000, 2, 29));
+    fn framework_utc_dates() {
+        let at = |secs: u64, micros: u64| {
+            utc_at(
+                std::time::UNIX_EPOCH + Duration::from_secs(secs) + Duration::from_micros(micros),
+            )
+        };
+        assert_eq!(
+            at(0, 0),
+            (
+                "1970-01-01T00:00:00Z".into(),
+                "19700101T000000000000Z".into(),
+                "00:00:00".into()
+            )
+        );
+        assert_eq!(
+            at(1_794_219_072, 123_456),
+            (
+                "2026-11-09T10:11:12Z".into(),
+                "20261109T101112123456Z".into(),
+                "10:11:12".into()
+            )
+        );
+        assert_eq!(at(951_782_400, 0).0, "2000-02-29T00:00:00Z");
         let (iso, stamp, clock) = utc_now();
         assert_eq!(iso.len(), 20);
         assert_eq!(stamp.len(), 22);
@@ -605,6 +694,7 @@ mod tests {
             log_sink: std::sync::Arc::new(std::sync::Mutex::new(sink.clone())),
             cwd: None,
             width: None,
+            interrupt: Interrupt::default(),
         }
     }
 
@@ -635,7 +725,12 @@ mod tests {
     }
 
     fn dispatched(line: &str, pairs: &[(&str, &str)], tty: bool) -> Ran {
-        ran(line, pairs, tty, |run, out, err| Ok(run.dispatch(out, err)))
+        ran(
+            line,
+            pairs,
+            tty,
+            |run, out, err| Ok(run.dispatch(out, err)?),
+        )
     }
 
     const MODES: &[(&str, &[(&str, &str)])] = &[
@@ -797,11 +892,111 @@ mod tests {
     }
 
     #[test]
-    fn framework_interrupt_prints_one_line_and_exits_130() {
+    fn framework_interrupt_first_tells_the_jobs_second_exits_130() {
+        let interrupt = Interrupt::default();
         let mut err = Vec::new();
-        assert_eq!(on_interrupt(&mut err), 130);
+        // The first Ctrl-C only tells the jobs: the run reports it.
+        assert_eq!(on_interrupt(&interrupt, &mut err), None);
+        assert!(interrupt.requested());
+        assert!(err.is_empty());
+        // The second ends the process now, with the one line.
+        assert_eq!(on_interrupt(&interrupt, &mut err), Some(130));
         assert_eq!(err, b"error: interrupted\n");
-        assert!(interrupted());
+        // Reported once, whoever reports it first.
+        assert_eq!(interrupt.report(&mut err), 130);
+        assert_eq!(err, b"error: interrupted\n");
+    }
+
+    #[test]
+    fn framework_interrupt_lets_a_polling_job_clean_up_and_prints_no_document() {
+        for line in ["--json commands", "commands", "mcp start"] {
+            let cleaned = std::cell::Cell::new(false);
+            let result = ran(line, &[], false, |run, out, err| {
+                // Ctrl-C while the job runs: it polls, stops and cleans up.
+                assert_eq!(on_interrupt(&run.host.interrupt, &mut Vec::new()), None);
+                for _ in 0..3 {
+                    if run.interrupted() {
+                        cleaned.set(true);
+                        break;
+                    }
+                }
+                Ok(run.dispatch(out, err)?)
+            });
+            assert!(cleaned.get(), "{line}");
+            assert_eq!(result.code, 130, "{line}");
+            assert_eq!(result.stdout, "", "{line}");
+            assert_eq!(result.stderr, "error: interrupted\n", "{line}");
+        }
+        // A job that fails on its way out is still an interrupt, not a crash.
+        let failed = ran("--json validate", &[], false, |run, _, _| {
+            run.host.interrupt.request();
+            Err("cancelled".into())
+        });
+        assert_eq!(
+            (failed.code, failed.stdout.as_str(), failed.stderr.as_str()),
+            (130, "", "error: interrupted\n")
+        );
+    }
+
+    /// A stream whose every write fails with `kind`.
+    struct Failing(std::io::ErrorKind);
+
+    impl Write for Failing {
+        fn write(&mut self, _bytes: &[u8]) -> std::io::Result<usize> {
+            Err(std::io::Error::from(self.0))
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Err(std::io::Error::from(self.0))
+        }
+    }
+
+    fn into_failing(line: &str, kind: std::io::ErrorKind) -> (i32, String) {
+        let argv: Vec<String> = line.split_whitespace().map(str::to_owned).collect();
+        let sink = Buffer::default();
+        let state = std::env::temp_dir().join(format!(
+            "opentide-cli-write-{}-{}",
+            std::process::id(),
+            line.len()
+        ));
+        let state_text = state.display().to_string();
+        let env = Env::from_pairs([
+            ("XDG_STATE_HOME", state_text.as_str()),
+            ("HOME", state_text.as_str()),
+            ("USERPROFILE", state_text.as_str()),
+            ("LOCALAPPDATA", state_text.as_str()),
+        ]);
+        let code = run(
+            &argv,
+            &env,
+            &host(false, &sink),
+            &mut Failing(kind),
+            &mut sink.clone(),
+        );
+        let _ = std::fs::remove_dir_all(&state);
+        let stderr = String::from_utf8(sink.0.lock().unwrap().clone()).unwrap();
+        (code, stderr)
+    }
+
+    #[test]
+    fn framework_a_lost_document_is_a_failure_not_success() {
+        // `opentide --json commands > /dev/full`: the document is lost, so
+        // the run fails as an internal error (exit 1), as the CLI always has.
+        for line in [
+            "--json commands",
+            "commands",
+            "--version",
+            "--json validate",
+        ] {
+            let (code, stderr) = into_failing(line, std::io::ErrorKind::StorageFull);
+            assert_eq!(code, 1, "{line}");
+            assert!(stderr.starts_with("error[internal]: "), "{line}: {stderr}");
+        }
+        // Help on a full disk too.
+        let (code, _) = into_failing("validate --help", std::io::ErrorKind::StorageFull);
+        assert_eq!(code, 1);
+        // The reader went away: exit 1, quietly.
+        let (code, stderr) = into_failing("--json commands", std::io::ErrorKind::BrokenPipe);
+        assert_eq!((code, stderr.as_str()), (1, ""));
     }
 
     #[test]
@@ -878,8 +1073,10 @@ mod tests {
             state ^= state >> 27;
             state.wrapping_mul(0x2545_F491_4F6C_DD1D)
         };
+        // Quotes, backslashes and non-ASCII too: a secret must be redacted
+        // as written, before JSON or Debug escapes it.
         let alphabet: Vec<char> =
-            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.~!$%^*+"
+            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.~!$%^*+\"\\éü日"
                 .chars()
                 .collect();
         for round in 0..60 {
@@ -891,12 +1088,15 @@ mod tests {
             };
             let secret = format!("S{}", word(secret_length));
             let password = format!("P{}", word(password_length)).replace(['@', '/', '?', '#'], "x");
-            let tenant = format!("tenant-{}", word(4));
+            let tenant = format!("tenant-{}", word(4)).replace(['"', '\\', 'é', 'ü', '日'], "t");
             let host = format!(
                 "{}.example",
-                word(3)
-                    .to_lowercase()
-                    .replace(['.', '~', '!', '$', '%', '^', '*', '+', '_'], "a")
+                word(3).to_lowercase().replace(
+                    [
+                        '.', '~', '!', '$', '%', '^', '*', '+', '_', '"', '\\', 'é', 'ü', '日'
+                    ],
+                    "a",
+                )
             );
             let workspace = root.join(round.to_string());
             let platforms = workspace.join(".opentide/configurations/platforms");
@@ -909,7 +1109,10 @@ mod tests {
             let state_home = workspace.join("state").display().to_string();
             let repo = workspace.display().to_string();
             let proxy = format!("http://user:{password}@proxy.local:3128");
+            // Every other round logs JSON lines (OPENTIDE_LOG_JSON=1).
+            let log_json = if round % 2 == 0 { "1" } else { "0" };
             let pairs = [
+                ("OPENTIDE_LOG_JSON", log_json),
                 ("SPLUNK_TOKEN", secret.as_str()),
                 ("HTTPS_PROXY", proxy.as_str()),
                 ("XDG_STATE_HOME", state_home.as_str()),
@@ -923,6 +1126,10 @@ mod tests {
             );
             let result = ran(&line, &pairs, false, |_, _, _| {
                 tracing::warn!(detail = leak.as_str(), "request_failed");
+                tracing::warn!(detail = ?leak, "debug_field");
+                // Alone, with no key or scheme a pattern would catch.
+                tracing::warn!(detail = secret.as_str(), "secret_alone");
+                tracing::warn!(detail = ?secret, "secret_debug");
                 tracing::debug!("{}", leak);
                 panic!("{leak}")
             });
@@ -942,14 +1149,297 @@ mod tests {
                 ("crash log", &crash_log),
             ] {
                 for value in [&secret, &password, &tenant, &host] {
+                    // As written, and as JSON or `{:?}` escapes it.
+                    let escaped = value.escape_debug().to_string();
                     assert!(
-                        !text.contains(value.as_str()),
+                        !text.contains(value.as_str()) && !text.contains(escaped.as_str()),
                         "round {round}: {value} in the {name}:\n{text}"
                     );
                 }
             }
         }
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn framework_repeated_flags_run_as_once_and_the_last_value_wins() {
+        let once = dispatched("--json commands", &[], false);
+        assert_eq!(once.code, 0);
+        for line in [
+            "--json commands --json",
+            "commands --json --json",
+            "--debug --debug --json commands",
+            "--quiet --json commands --quiet",
+        ] {
+            let twice = dispatched(line, &[], false);
+            assert_eq!(twice.code, 0, "{line}: {}", twice.stdout);
+            assert_eq!(
+                normalised(&twice.stdout),
+                normalised(&once.stdout),
+                "{line}"
+            );
+        }
+        let plain = dispatched("--quiet commands --quiet", &[], false);
+        assert_eq!(plain.code, 0);
+        assert!(plain.stdout.contains("commands"), "{}", plain.stdout);
+        // Parsed, then refused as not ported: no usage error.
+        let strict = dispatched("--json validate --strict --strict", &[], false);
+        assert!(
+            strict.stdout.contains("\"code\":\"engine_not_ported\""),
+            "{}",
+            strict.stdout
+        );
+        // `--repo` twice: the last one is the repository.
+        let dir = std::env::temp_dir().display().to_string();
+        let last = dispatched(
+            &format!("--repo /nowhere-at-all --repo {dir} --json commands"),
+            &[],
+            false,
+        );
+        assert_eq!(last.code, 0, "{}", last.stdout);
+        let first = dispatched(
+            &format!("--repo {dir} --repo /nowhere-at-all --json commands"),
+            &[],
+            false,
+        );
+        assert_eq!(first.code, 2);
+        assert!(
+            first
+                .stdout
+                .contains("--repo /nowhere-at-all does not exist")
+        );
+        let root = catalog::root();
+        assert_eq!(
+            globals_of(
+                &root,
+                "--repo a --repo=b --proxy p --proxy q x",
+                &Env::default()
+            ),
+            Globals {
+                repo: Some("b".into()),
+                proxy: Some("q".into()),
+                ..Globals::default()
+            }
+        );
+    }
+
+    fn normalised(stdout: &str) -> String {
+        regex::Regex::new(r#""duration_ms":\d+"#)
+            .unwrap()
+            .replace_all(stdout, "")
+            .into_owned()
+    }
+
+    #[test]
+    fn framework_a_separator_before_a_command_name_runs_it() {
+        let run = dispatched("--json -- commands", &[], false);
+        assert_eq!(run.code, 0, "{}", run.stdout);
+        assert!(run.stdout.starts_with("{\"program\""));
+        let plain = dispatched("-- commands", &[], false);
+        assert_eq!((plain.code, plain.stderr.as_str()), (0, ""));
+        let nested = dispatched("--json validate -- query", &[], false);
+        assert!(
+            nested.stdout.contains("\"command\":\"validate query\""),
+            "{}",
+            nested.stdout
+        );
+        assert!(nested.stdout.contains("engine_not_ported"));
+        // `validate -- --json`: an unknown option of validate, not a command.
+        let option = dispatched("--json validate -- --json", &[], false);
+        assert_eq!(option.code, 2);
+        assert!(
+            option.stdout.contains("\"command\":\"validate\""),
+            "{}",
+            option.stdout
+        );
+        assert!(option.stdout.contains("\"code\":\"usage_unknown_option\""));
+        assert!(
+            option
+                .stdout
+                .contains("\"message\":\"No such option: --json\"")
+        );
+    }
+
+    #[test]
+    fn framework_a_bare_help_group_prints_its_help_to_a_person() {
+        for (line, pairs, tty) in [
+            ("mcp", &[][..], false),
+            ("lsp", &[("OPENTIDE_OUTPUT", "human")][..], true),
+        ] {
+            let bare = dispatched(line, pairs, tty);
+            assert_eq!(bare.code, 2, "{line}");
+            assert_eq!(bare.stderr, "", "{line}");
+            assert!(
+                bare.stdout.contains(&format!("opentide {line}")),
+                "{line}: {}",
+                bare.stdout
+            );
+            assert!(bare.stdout.contains("start"), "{line}");
+        }
+        let new = dispatched("--json new", &[], false);
+        assert!(
+            new.stdout
+                .contains("\"error\":\"Missing command: choose from threat, objective, rule.\"")
+        );
+        let agent = dispatched("mcp", &[("AI_AGENT", "a")], false);
+        assert!(agent.stdout.is_empty());
+        assert!(
+            agent
+                .stderr
+                .starts_with("error: Missing command: choose from start.\n")
+        );
+    }
+
+    fn write_platform(workspace: &std::path::Path, tenant: &str) {
+        let platforms = workspace.join(".opentide/configurations/platforms");
+        std::fs::create_dir_all(&platforms).unwrap();
+        std::fs::write(
+            platforms.join("splunk.toml"),
+            format!("[[tenants]]\nname = \"{tenant}\"\nurl = \"https://splunk.example:8089\"\n"),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn framework_redaction_is_wired_to_every_source() {
+        // The --proxy password, from the command line only.
+        let proxy = ran(
+            "--proxy http://user:pr0xy-pass@proxy.local:3128 x",
+            &[],
+            false,
+            |_, _, _| {
+                tracing::warn!(detail = "auth pr0xy-pass failed", "proxy_failed");
+                Ok(0)
+            },
+        );
+        assert!(
+            proxy.stderr.contains("warning: Proxy failed"),
+            "{}",
+            proxy.stderr
+        );
+        assert!(!proxy.stderr.contains("pr0xy-pass"), "{}", proxy.stderr);
+        // The tenants of OPENTIDE_REPO_ROOT's workspace.
+        let workspace =
+            std::env::temp_dir().join(format!("opentide-cli-repo-root-{}", std::process::id()));
+        write_platform(&workspace, "tenant-acme-prod");
+        let repo_root = workspace.display().to_string();
+        let tenant = ran(
+            "x",
+            &[("OPENTIDE_REPO_ROOT", repo_root.as_str())],
+            false,
+            |_, _, _| {
+                tracing::warn!(tenant = "tenant-acme-prod", "deploy_failed");
+                Ok(0)
+            },
+        );
+        assert!(tenant.stderr.contains("tenant: ***"), "{}", tenant.stderr);
+        assert!(!tenant.stderr.contains("acme"), "{}", tenant.stderr);
+        let _ = std::fs::remove_dir_all(&workspace);
+    }
+
+    #[test]
+    fn framework_log_json_is_wired_and_redacted_before_escaping() {
+        let secret = "s3cr\"et\\v4lué日";
+        let pairs = [("OPENTIDE_LOG_JSON", "1"), ("API_TOKEN", secret)];
+        let result = ran("x", &pairs, false, |_, _, _| {
+            tracing::warn!(detail = secret, "request_failed");
+            tracing::warn!(detail = ?secret, "debug_field");
+            tracing::warn!("{}", secret);
+            Ok(0)
+        });
+        let lines: Vec<&str> = result.stderr.lines().collect();
+        assert_eq!(lines.len(), 3, "{}", result.stderr);
+        for line in &lines {
+            let document = crate::json::Json::parse(line).unwrap();
+            assert!(document.get("event").is_some(), "{line}");
+            assert!(!line.contains("s3cr"), "{line}");
+            assert!(line.contains("***"), "{line}");
+        }
+        // Without OPENTIDE_LOG_JSON, the readable line, redacted the same.
+        let text = ran("x", &[("API_TOKEN", secret)], false, |_, _, _| {
+            tracing::warn!(detail = ?secret, "debug_field");
+            Ok(0)
+        });
+        assert_eq!(text.stderr, "warning: Debug field · detail: \"***\"\n");
+    }
+
+    #[test]
+    fn framework_crash_log_masks_short_secret_named_variables() {
+        let state =
+            std::env::temp_dir().join(format!("opentide-cli-short-secret-{}", std::process::id()));
+        let state_text = state.display().to_string();
+        let pairs = [
+            ("XDG_STATE_HOME", state_text.as_str()),
+            ("HOME", state_text.as_str()),
+            ("USERPROFILE", state_text.as_str()),
+            ("LOCALAPPDATA", state_text.as_str()),
+            // Too short to be redacted as text, but its name says secret.
+            ("OPENTIDE_API_TOKEN", "abc"),
+            ("OPENTIDE_LINKS", "none"),
+        ];
+        let crashed = ran("--json x", &pairs, false, |_, _, _| Err("boom".into()));
+        let document = crate::json::Json::parse(&crashed.stdout).unwrap();
+        let crate::json::Json::Str(log) = document
+            .get("failure")
+            .and_then(|failure| failure.get("crash_log"))
+            .unwrap()
+        else {
+            panic!("no crash log")
+        };
+        let text = std::fs::read_to_string(log).unwrap();
+        assert!(text.contains("  OPENTIDE_API_TOKEN=***\n"), "{text}");
+        assert!(text.contains("  OPENTIDE_LINKS=none\n"), "{text}");
+        let _ = std::fs::remove_dir_all(&state);
+    }
+
+    #[test]
+    fn framework_mcp_mode_never_writes_stdout_and_error_comes_first() {
+        let success = ran("mcp start", &[], false, |run, out, err| {
+            let outcome = Outcome {
+                command: "mcp start".into(),
+                status: "completed".into(),
+                message: "done".into(),
+                data: Vec::new(),
+                exit_code: 0,
+                summary: Vec::new(),
+                next_actions: Vec::new(),
+                failure: None,
+            };
+            Ok(run.emit(&outcome, &[], &["a line".into()], out, err)?)
+        });
+        assert_eq!((success.code, success.stdout.as_str()), (0, ""));
+        let failed = dispatched("--json validate", &[], false);
+        assert!(
+            failed.stdout.starts_with("{\"error\":"),
+            "{}",
+            failed.stdout
+        );
+    }
+
+    #[test]
+    fn framework_small_behaviours() {
+        // TERM=DUMB in any case: no SGR, even in human mode on a terminal.
+        let dumb = dispatched(
+            "validate",
+            &[("OPENTIDE_OUTPUT", "human"), ("TERM", "DUMB")],
+            true,
+        );
+        assert!(!dumb.stderr.contains('\u{1b}'), "{}", dumb.stderr);
+        let coloured = dispatched(
+            "validate",
+            &[("OPENTIDE_OUTPUT", "human"), ("TERM", "xterm")],
+            true,
+        );
+        assert!(coloured.stderr.contains('\u{1b}'), "{}", coloured.stderr);
+        // A bare argv in machine mode is the usage error, not help.
+        let bare = dispatched("--json", &[], false);
+        assert_eq!(bare.code, 2);
+        assert!(bare.stdout.contains("\"error\":\"Missing command.\""));
+        // `-Vh`: clap's `-h` shows the help (an intended difference: the
+        // Python CLI had no `-h` and exited 2).
+        let short = dispatched("-Vh", &[], false);
+        assert_eq!(short.code, 0);
+        assert!(short.stdout.contains("Usage: opentide"));
     }
 
     fn globals_of(root: &clap::Command, text: &str, env: &Env) -> Globals {

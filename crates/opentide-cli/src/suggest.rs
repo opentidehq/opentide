@@ -22,8 +22,17 @@ fn fold(text: &str) -> String {
         .collect()
 }
 
-/// The valid choice closest to `value`, or `None` when nothing is close.
+/// The valid choice closest to `value`, or `None` when nothing is close, or
+/// when the closest is `value` itself (a valid word reported for another
+/// reason: suggesting it again helps nobody).
 pub fn did_you_mean<'a, I>(value: &str, choices: I) -> Option<String>
+where
+    I: IntoIterator<Item = &'a str>,
+{
+    closest(value, choices).filter(|choice| choice != value)
+}
+
+fn closest<'a, I>(value: &str, choices: I) -> Option<String>
 where
     I: IntoIterator<Item = &'a str>,
 {
@@ -122,6 +131,71 @@ mod tests {
             dym("rulez", &["rules", "threats", "objectives"]).as_deref(),
             Some("rules")
         );
+    }
+
+    #[test]
+    fn framework_suggest_the_threshold_is_strictly_above_jaro_0_7() {
+        // Just above the cut-off: suggested.
+        assert!(strsim::jaro("exprt", "extract") > THRESHOLD);
+        assert_eq!(dym("exprt", &["extract"]).as_deref(), Some("extract"));
+        // Just below: nothing.
+        let below = strsim::jaro("ebcdeee", "ced");
+        assert!(below < THRESHOLD && below > 0.69, "{below}");
+        assert_eq!(dym("ebcdeee", &["ced"]), None);
+        // At it exactly (7/10 in exact arithmetic): nothing, as clap.
+        let at = strsim::jaro("aaaede", "acabe");
+        assert!((at - THRESHOLD).abs() < 1e-9, "{at}");
+        assert_eq!(dym("aaaede", &["acabe"]).is_some(), at > THRESHOLD);
+    }
+
+    #[test]
+    fn framework_suggest_ties_go_to_the_first_choice() {
+        assert_eq!(
+            strsim::jaro("xab", "xac").to_bits(),
+            strsim::jaro("xab", "xad").to_bits()
+        );
+        assert_eq!(dym("xab", &["xac", "xad"]).as_deref(), Some("xac"));
+        assert_eq!(dym("xab", &["xad", "xac"]).as_deref(), Some("xad"));
+    }
+
+    #[test]
+    fn framework_suggest_a_prefix_needs_three_letters() {
+        let long = "abcdefghijklmnopqrstuvwxyz0123";
+        // Two letters are no prefix match, and too far by Jaro.
+        assert!(strsim::jaro("ab", long) < THRESHOLD);
+        assert_eq!(dym("ab", &[long]), None);
+        // Three are, when one choice starts with them.
+        assert_eq!(dym("abc", &[long]).as_deref(), Some(long));
+        // Two start with them: no prefix match, and Jaro picks the nearer.
+        assert_eq!(dym("abc", &[long, "abcz"]).as_deref(), Some("abcz"));
+    }
+
+    #[test]
+    fn framework_suggest_compares_lower_cased_spellings() {
+        let commands = ["validate", "query", "lint"];
+        assert_eq!(strsim::jaro("VALDIATE", "validate"), 0.0);
+        assert_eq!(dym("VALDIATE", &commands).as_deref(), Some("validate"));
+        assert_eq!(
+            dym("--JSN", &["--json", "--repo"]).as_deref(),
+            Some("--json")
+        );
+    }
+
+    #[test]
+    fn framework_suggest_ranks_by_jaro_not_jaro_winkler() {
+        // Jaro prefers `cabab`; Jaro-Winkler's prefix bonus would pick `dadcb`.
+        assert!(strsim::jaro("dabba", "cabab") > strsim::jaro("dabba", "dadcb"));
+        assert!(strsim::jaro_winkler("dabba", "dadcb") > strsim::jaro_winkler("dabba", "cabab"));
+        assert_eq!(dym("dabba", &["dadcb", "cabab"]).as_deref(), Some("cabab"));
+    }
+
+    #[test]
+    fn framework_suggest_never_repeats_the_word_typed() {
+        // `opentide -- commands` was refused with "did you mean 'commands'?".
+        assert_eq!(dym("commands", &["commands", "validate"]), None);
+        assert_eq!(dym("query", &["query"]), None);
+        // A different spelling of a valid word is still suggested.
+        assert_eq!(dym("Query", &["query"]).as_deref(), Some("query"));
     }
 
     #[test]

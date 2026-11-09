@@ -295,6 +295,7 @@ pub fn run_cli(argv: &[String]) -> (i32, String, String) {
         log_sink: Arc::new(Mutex::new(err.clone())),
         cwd: None,
         width: None,
+        interrupt: opentide_cli::app::Interrupt::default(),
     };
     let env = opentide_cli::env::Env::default();
     let mut out = Vec::new();

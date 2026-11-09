@@ -26,10 +26,12 @@ path = "src/main.rs"
 clap = { workspace = true, features = ["env", "string"] }
 ctrlc = "3.4"
 form_urlencoded = "1.2"
+humantime = "2.4"
 regex.workspace = true
 url.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+shlex = "2.0"
 strsim = "0.11"
 terminal_size = "0.4"
 textwrap = { version = "0.16", default-features = false, features = ["unicode-width"] }

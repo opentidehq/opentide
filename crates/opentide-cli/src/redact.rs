@@ -192,10 +192,18 @@ impl Redactor {
     }
 
     /// `text` redacted.
+    ///
+    /// A secret is replaced as written and as Rust's `{:?}` writes it
+    /// (`"` and `\` escaped, controls as `\n` or `\u{..}`), so a value a
+    /// Debug field quoted before it got here is caught too.
     pub fn redact(&self, text: &str) -> String {
         let mut text = text.to_owned();
         for secret in &self.secrets {
             text = text.replace(secret.as_str(), REDACTED);
+            let escaped = secret.escape_debug().to_string();
+            if escaped != *secret {
+                text = text.replace(escaped.as_str(), REDACTED);
+            }
         }
         if !self.identifiers.is_empty() {
             text = self.redact_identifiers(&text);
