@@ -230,3 +230,51 @@ fn the_bundled_catalogs_are_the_files_compiled_in() {
         Some(opentide_analysis::catalog_version())
     );
 }
+
+const CORRELATE_THEN_AGGREGATE: &str = "correlate(A: { #event_simpleName=UserLogon }, B: { #event_simpleName=ProcessRollup2 | aid <=> A.aid }, within=10m) | groupBy(aid)";
+
+fn has_correlate_aggregate(diagnostics: &[opentide_analysis::Diagnostic]) -> bool {
+    diagnostics
+        .iter()
+        .any(|d| d.code == codes::CQL_CORRELATE_AGGREGATE)
+}
+
+#[test]
+fn a_single_cql_query_is_a_correlation_rule_only_for_the_crowdstrike_platform() {
+    let request = |platform: Option<&str>| QueryRequest {
+        language: LanguageId::Cql,
+        platform: platform.map(str::to_string),
+        stack: None,
+        text: CORRELATE_THEN_AGGREGATE.into(),
+    };
+    let rule = analyze_query(&request(Some("crowdstrike")));
+    assert!(has_correlate_aggregate(&rule), "{rule:?}");
+    // No platform: plain LogScale, which allows an aggregate after correlate().
+    let plain = analyze_query(&request(None));
+    assert!(!has_correlate_aggregate(&plain), "{plain:?}");
+}
+
+#[test]
+fn a_crowdstrike_hunt_search_is_not_a_correlation_rule() {
+    let query = "correlate(A: { #event_simpleName=UserLogon }, B: { #event_simpleName=ProcessRollup2 | aid <=> A.aid }, within=10m) | count()";
+    let text = format!(
+        "name: Hunt\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000001\n  schema: rule::1.0\nconfigurations:\n  crowdstrike:\n    query: '{query}'\nresponse:\n  procedure:\n    searches:\n      - system: crowdstrike\n        query: '{query}'\n"
+    );
+    let reports = analyze_queries(&MemoryWorkspace::default(), &text);
+    let found: Vec<(String, bool)> = reports
+        .iter()
+        .map(|r| {
+            (
+                r.field_path.join("."),
+                has_correlate_aggregate(&r.diagnostics),
+            )
+        })
+        .collect();
+    assert_eq!(
+        found,
+        vec![
+            ("configurations.crowdstrike.query".into(), true),
+            ("response.procedure.searches.0.query".into(), false),
+        ]
+    );
+}
