@@ -236,6 +236,23 @@ def _restore_process_environment() -> Iterator[None]:
 
 
 @pytest.fixture(autouse=True)
+def _forget_cached_roots() -> Iterator[None]:
+    """Drop the process-wide root caches when a test ends.
+
+    ``get_repo_root`` and ``get_data_root`` are ``lru_cache``d from
+    ``OPENTIDE_REPO_ROOT`` / ``OPENTIDE_DATA_ROOT`` (or the cwd). A test that sets
+    one of them and fills the cache leaves its temporary path cached after its
+    environment is restored, so a later test in the same worker resolves the
+    root to a deleted ``tmp_path``. Which test that hits depends on xdist's order.
+    """
+    from opentide.core.root import get_data_root, get_repo_root
+
+    yield
+    get_repo_root.cache_clear()
+    get_data_root.cache_clear()
+
+
+@pytest.fixture(autouse=True)
 def _restore_typer_rendering() -> Iterator[None]:
     """``--no-color`` switches Typer's module-level styling off for the process."""
     from typer import rich_utils
