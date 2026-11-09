@@ -107,6 +107,34 @@ impl Budgets {
             .map(|s| (s, false))
     }
 
+    /// The largest ratio, over the commands, between the slowest and the
+    /// fastest median recorded for `engine`: how far apart the recorded CPUs
+    /// are.
+    fn spread(&self, engine: &str) -> Option<f64> {
+        let mut ratios = Vec::new();
+        for id in self.commands.keys() {
+            let reference = match engine {
+                "rust" => self.commands.get(id).and_then(|c| c.rust_baseline_s),
+                _ => self.commands.get(id).and_then(|c| c.baseline_s),
+            };
+            let values: Vec<f64> = reference
+                .into_iter()
+                .chain(
+                    self.cpu_baseline
+                        .iter()
+                        .filter(|b| b.engine == engine)
+                        .filter_map(|b| b.median_s.get(id).copied()),
+                )
+                .collect();
+            let max = values.iter().copied().max_by(f64::total_cmp);
+            let min = values.iter().copied().min_by(f64::total_cmp);
+            if let (Some(max), Some(min)) = (max, min) {
+                ratios.push(max / min);
+            }
+        }
+        ratios.into_iter().max_by(f64::total_cmp)
+    }
+
     /// Whether any time baseline of `engine` was recorded on `cpu`.
     fn knows_cpu(&self, engine: &str, cpu: Option<&str>) -> bool {
         let Some(cpu) = cpu else { return false };
@@ -483,11 +511,13 @@ fn check_against(budgets: &Budgets, report: &Report, previous: Option<&Report>) 
     if other_cpu && (baseline_applies || report.engine == "rust") {
         notes.push(format!(
             "no {} baseline was recorded on {}: its times are held to the slowest recorded \
-             CPU's + {:.0}% (RSS + {:.0}%); add a [[cpu_baseline]] for it from a CI run",
+             CPU's + {:.0}% (RSS + {:.0}%), a ceiling of up to {:.2}x the fastest recorded \
+             median; add a [[cpu_baseline]] for it from a CI run",
             report.engine,
             cpu.unwrap_or("an unknown CPU"),
             policy.cross_cpu_regression * 100.0,
-            policy.regression * 100.0
+            policy.regression * 100.0,
+            budgets.spread(&report.engine).unwrap_or(1.0) * (1.0 + policy.cross_cpu_regression)
         ));
     }
     let heavy = report.seed == Some(SEED_OF_TARGETS);
@@ -1318,6 +1348,7 @@ target_s = 0.03
         assert!(outcome.notes.is_empty(), "{:?}", outcome.notes);
         // 5.6 s is +12%: fails at 10%.
         assert!(!check(&budgets, &on_7763(5.6), None).passed());
+        assert!((budgets.spread("python").unwrap() - 5.0 / 3.0).abs() < 1e-9);
         // An unrecorded CPU is held to the slowest recorded (5.0 s) + 50%.
         let mut r = on_7763(7.4);
         r.host.cpu_model = Some("Some Future CPU".into());

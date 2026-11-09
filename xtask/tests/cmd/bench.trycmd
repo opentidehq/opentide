@@ -59,7 +59,7 @@ Median of 5 cold process runs (after 1 warm-up) and the median peak RSS (`wait4`
 | validate, clean (`validate_clean`) | – | – | – | – | – | – | ➖ no Rust yet: the Rust CLI (opentide-cli) is UC-3; the command runs in Python |
 | explain vocab_unknown (`explain`) | – | – | – | – | – | – | ➖ no Rust yet: the Rust CLI (opentide-cli) is UC-3; the command runs in Python |
 
-- no rust baseline was recorded on AMD EPYC 7763 64-Core Processor: its times are held to the slowest recorded CPU's + 50% (RSS + 10%); add a [[cpu_baseline]] for it from a CI run
+- no rust baseline was recorded on AMD EPYC 7763 64-Core Processor: its times are held to the slowest recorded CPU's + 50% (RSS + 10%), a ceiling of up to 1.50x the fastest recorded median; add a [[cpu_baseline]] for it from a CI run
 bench --check: every command is within its budget
 
 $ xtask bench --check budgets.toml
