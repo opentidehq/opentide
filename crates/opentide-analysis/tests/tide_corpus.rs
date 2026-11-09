@@ -269,14 +269,9 @@ fn pydantic_object_issues_are_subset_of_lsp() {
         "legacy meta fixture: pydantic must reject [\"meta\"] as an unknown key"
     );
     // Splunk's `advanced` table of raw savedsearches.conf keys was retired with it
-    // by mistake; opentide accepts it again, and so must the catalog.
+    // by mistake; opentide accepts it again (0.20.1 did, 0.21.0 to 0.23.0 did not, so
+    // what Pydantic says here depends on the installed opentide), and so must the catalog.
     let advanced = ["configurations", "splunk", "advanced"];
-    assert!(
-        !shaped
-            .iter()
-            .any(|issue| issue.field_path.starts_with(&advanced.map(String::from))),
-        "legacy meta fixture: pydantic must accept a Splunk `advanced` mapping"
-    );
     let host = load_workspace("testdata/conformance/pydantic");
     let (uri, text) = host
         .files
