@@ -89,15 +89,24 @@ impl Pins {
 pub const FILES: [(&str, &str); 3] = [
     (
         "objective.toml",
-        include_str!("../../../src/opentide/data/pins/objective.toml"),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/pins/objective.toml"
+        )),
     ),
     (
         "rule.toml",
-        include_str!("../../../src/opentide/data/pins/rule.toml"),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/pins/rule.toml"
+        )),
     ),
     (
         "threat.toml",
-        include_str!("../../../src/opentide/data/pins/threat.toml"),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/pins/threat.toml"
+        )),
     ),
 ];
 

@@ -20,7 +20,10 @@ use serde::{Deserialize, Serialize};
 pub const VERSION: &str = "18";
 
 /// The bundled list's text.
-pub const DOCUMENT: &str = include_str!("../../../../src/opentide/data/sentinel/attack-v18.json");
+pub const DOCUMENT: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/src/opentide/data/sentinel/attack-v18.json"
+));
 
 /// The list.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

@@ -11,7 +11,7 @@ fn the_bundle_is_the_data_directory() {
         env!("CARGO_MANIFEST_DIR"),
         "/../../src/opentide/data/vocabulary"
     );
-    let mut on_disk: Vec<String> = std::fs::read_dir(&dir)
+    let mut on_disk: Vec<String> = std::fs::read_dir(dir)
         .unwrap()
         .map(|entry| entry.unwrap().file_name().into_string().unwrap())
         .filter(|name| name.ends_with(SUFFIX))
@@ -36,12 +36,19 @@ fn the_bundled_pins_are_the_data_directory() {
     let mut on_disk: Vec<String> = std::fs::read_dir(format!("{DATA}/pins"))
         .unwrap()
         .map(|entry| entry.unwrap().file_name().into_string().unwrap())
-        .filter(|name| name.ends_with(".toml"))
+        .filter(|name| {
+            std::path::Path::new(name)
+                .extension()
+                .is_some_and(|extension| extension == "toml")
+        })
         .collect();
     on_disk.sort();
     let compiled: Vec<&str> = pins::FILES.iter().map(|(name, _)| *name).collect();
     assert_eq!(compiled, on_disk, "add or remove the file in pins.rs");
     for (name, text) in pins::FILES {
-        assert_eq!(text, std::fs::read_to_string(format!("{DATA}/pins/{name}")).unwrap());
+        assert_eq!(
+            text,
+            std::fs::read_to_string(format!("{DATA}/pins/{name}")).unwrap()
+        );
     }
 }

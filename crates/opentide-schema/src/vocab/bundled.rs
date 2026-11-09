@@ -9,143 +9,248 @@ use super::{VocabError, Vocabulary};
 pub const FILES: &[(&str, &str)] = &[
     (
         "actors",
-        include_str!("../../../../src/opentide/data/vocabulary/actors.vocab.toml"),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/vocabulary/actors.vocab.toml"
+        )),
     ),
     (
         "alert_severity",
-        include_str!("../../../../src/opentide/data/vocabulary/alert_severity.vocab.toml"),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/vocabulary/alert_severity.vocab.toml"
+        )),
     ),
     (
         "att&ck.groups",
-        include_str!("../../../../src/opentide/data/vocabulary/att&ck.groups.vocab.toml"),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/vocabulary/att&ck.groups.vocab.toml"
+        )),
     ),
     (
         "att&ck",
-        include_str!("../../../../src/opentide/data/vocabulary/att&ck.vocab.toml"),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/vocabulary/att&ck.vocab.toml"
+        )),
     ),
     (
         "chaining_relations",
-        include_str!("../../../../src/opentide/data/vocabulary/chaining_relations.vocab.toml"),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/vocabulary/chaining_relations.vocab.toml"
+        )),
     ),
     (
         "collection",
-        include_str!("../../../../src/opentide/data/vocabulary/collection.vocab.toml"),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/vocabulary/collection.vocab.toml"
+        )),
     ),
     (
         "criticality",
-        include_str!("../../../../src/opentide/data/vocabulary/criticality.vocab.toml"),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/vocabulary/criticality.vocab.toml"
+        )),
     ),
     (
         "datasources",
-        include_str!("../../../../src/opentide/data/vocabulary/datasources.vocab.toml"),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/vocabulary/datasources.vocab.toml"
+        )),
     ),
     (
         "detection.composition",
-        include_str!("../../../../src/opentide/data/vocabulary/detection.composition.vocab.toml"),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/vocabulary/detection.composition.vocab.toml"
+        )),
     ),
     (
         "detection.methodology",
-        include_str!("../../../../src/opentide/data/vocabulary/detection.methodology.vocab.toml"),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/vocabulary/detection.methodology.vocab.toml"
+        )),
     ),
     (
         "detection.types",
-        include_str!("../../../../src/opentide/data/vocabulary/detection.types.vocab.toml"),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/vocabulary/detection.types.vocab.toml"
+        )),
     ),
     (
         "efforts",
-        include_str!("../../../../src/opentide/data/vocabulary/efforts.vocab.toml"),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/vocabulary/efforts.vocab.toml"
+        )),
     ),
     (
         "feasibility",
-        include_str!("../../../../src/opentide/data/vocabulary/feasibility.vocab.toml"),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/vocabulary/feasibility.vocab.toml"
+        )),
     ),
     (
         "impact",
-        include_str!("../../../../src/opentide/data/vocabulary/impact.vocab.toml"),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/vocabulary/impact.vocab.toml"
+        )),
     ),
     (
         "killchain",
-        include_str!("../../../../src/opentide/data/vocabulary/killchain.vocab.toml"),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/vocabulary/killchain.vocab.toml"
+        )),
     ),
     (
         "level",
-        include_str!("../../../../src/opentide/data/vocabulary/level.vocab.toml"),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/vocabulary/level.vocab.toml"
+        )),
     ),
     (
         "leverage",
-        include_str!("../../../../src/opentide/data/vocabulary/leverage.vocab.toml"),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/vocabulary/leverage.vocab.toml"
+        )),
     ),
     (
         "malapi",
-        include_str!("../../../../src/opentide/data/vocabulary/malapi.vocab.toml"),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/vocabulary/malapi.vocab.toml"
+        )),
     ),
     (
         "maturity",
-        include_str!("../../../../src/opentide/data/vocabulary/maturity.vocab.toml"),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/vocabulary/maturity.vocab.toml"
+        )),
     ),
     (
         "mitigations",
-        include_str!("../../../../src/opentide/data/vocabulary/mitigations.vocab.toml"),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/vocabulary/mitigations.vocab.toml"
+        )),
     ),
     (
         "objectives",
-        include_str!("../../../../src/opentide/data/vocabulary/objectives.vocab.toml"),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/vocabulary/objectives.vocab.toml"
+        )),
     ),
     (
         "pap",
-        include_str!("../../../../src/opentide/data/vocabulary/pap.vocab.toml"),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/vocabulary/pap.vocab.toml"
+        )),
     ),
     (
         "resources",
-        include_str!("../../../../src/opentide/data/vocabulary/resources.vocab.toml"),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/vocabulary/resources.vocab.toml"
+        )),
     ),
     (
         "rsit",
-        include_str!("../../../../src/opentide/data/vocabulary/rsit.vocab.toml"),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/vocabulary/rsit.vocab.toml"
+        )),
     ),
     (
         "scheduling",
-        include_str!("../../../../src/opentide/data/vocabulary/scheduling.vocab.toml"),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/vocabulary/scheduling.vocab.toml"
+        )),
     ),
     (
         "sectors",
-        include_str!("../../../../src/opentide/data/vocabulary/sectors.vocab.toml"),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/vocabulary/sectors.vocab.toml"
+        )),
     ),
     (
         "severity",
-        include_str!("../../../../src/opentide/data/vocabulary/severity.vocab.toml"),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/vocabulary/severity.vocab.toml"
+        )),
     ),
     (
         "signal.entities",
-        include_str!("../../../../src/opentide/data/vocabulary/signal.entities.vocab.toml"),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/vocabulary/signal.entities.vocab.toml"
+        )),
     ),
     (
         "sophistication",
-        include_str!("../../../../src/opentide/data/vocabulary/sophistication.vocab.toml"),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/vocabulary/sophistication.vocab.toml"
+        )),
     ),
     (
         "stakeholders",
-        include_str!("../../../../src/opentide/data/vocabulary/stakeholders.vocab.toml"),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/vocabulary/stakeholders.vocab.toml"
+        )),
     ),
     (
         "surface",
-        include_str!("../../../../src/opentide/data/vocabulary/surface.vocab.toml"),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/vocabulary/surface.vocab.toml"
+        )),
     ),
     (
         "tier",
-        include_str!("../../../../src/opentide/data/vocabulary/tier.vocab.toml"),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/vocabulary/tier.vocab.toml"
+        )),
     ),
     (
         "tlp",
-        include_str!("../../../../src/opentide/data/vocabulary/tlp.vocab.toml"),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/vocabulary/tlp.vocab.toml"
+        )),
     ),
     (
         "viability",
-        include_str!("../../../../src/opentide/data/vocabulary/viability.vocab.toml"),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/vocabulary/viability.vocab.toml"
+        )),
     ),
     (
         "violation",
-        include_str!("../../../../src/opentide/data/vocabulary/violation.vocab.toml"),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/vocabulary/violation.vocab.toml"
+        )),
     ),
 ];
 
