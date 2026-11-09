@@ -3,7 +3,7 @@
 #   scripts/engine/fuzz.sh <target> [seconds]     default 300
 set -euo pipefail
 root="$(cd "$(dirname "$0")/../.." && pwd)"
-target="${1:?target: kql spl esql eql kuery lucene falco cql tide protocol framing config cli}"
+target="${1:?target: kql spl esql eql kuery lucene falco cql tide protocol framing config cli from_node}"
 seconds="${2:-300}"
 seeds=()
 case "$target" in
@@ -15,6 +15,7 @@ case "$target" in
   framing) seeds+=("$root/fuzz/seeds/framing") ;;
   config) seeds+=("$root/fuzz/seeds/config") ;;
   cli) seeds+=("$root/fuzz/seeds/cli") ;;
+  from_node) seeds+=("$root/fuzz/seeds/from_node") ;;
   *) echo "unknown target: $target" >&2; exit 2 ;;
 esac
 [[ -d "$root/fuzz/regressions/$target" ]] && seeds+=("$root/fuzz/regressions/$target")

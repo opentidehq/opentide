@@ -1,0 +1,6 @@
+base: &b
+  label: 1
+text: t
+inner:
+  <<: *b
+  count: x

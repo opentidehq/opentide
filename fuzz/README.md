@@ -21,21 +21,24 @@ past `-timeout`, is a failure.
 | `framing` | `fuzz/seeds/framing/` (the protocol seeds, framed) |
 | `config` | `fuzz/seeds/config/` (opentide's configuration templates, `src/opentide/data/configurations/`, each with its file byte and a few field paths) |
 | `cli` | `fuzz/seeds/cli/` (`\0`-separated command lines: the framework goldens' usage errors, hoisting, `--version`, `--help`) |
+| `from_node` | `fuzz/seeds/from_node/` (every document of `crates/opentide-schema/tests/oracle/*_cases.toml`, and the sample fixture) |
 
 ## Targets the plan adds later
 
-UC-X.1 (#843) asks for four more inputs to be fuzzed. Three have Rust code today
-and a target here: configuration TOML (`config`), the message reader
-(`framing`, the language server's; `protocol` covers what follows it) and the
+UC-X.1 (#843) asks for four more inputs to be fuzzed, and each has Rust code
+today and a target here: configuration TOML (`config`), the message reader
+(`framing`, the language server's; `protocol` covers what follows it), the
 `opentide` command line (`cli`, UC-3.3: `\0`-separated arguments through the
 clap tree, hoisting, the output modes and the usage errors of
 `opentide_cli::run`; a crash report, `error[internal]`, is the failure, since
-the run catches its own panics). The item that writes the code adds the
-target:
+the run catches its own panics), and `from_node` (UC-1.2, #808): a Tide object
+from arbitrary YAML, through the YAML loader and the structural conversion of
+every model in `opentide-schema` (`fuzz/src/lib.rs::from_node`; UC-1.3 adds each
+new model there). For an input added later, the item that writes the code adds
+the target:
 
 | Input | Target arrives with |
 | --- | --- |
-| `from_node`: a Tide object from its YAML tree | UC-1.2 (#808), `opentide-schema-derive` |
 | `opentide serve`'s message reader (one JSON-RPC message per line) | UC-3.6 (#828) |
 
 ```bash
@@ -53,8 +56,9 @@ input to `fuzz/regressions/<target>/` with a name that says what it was
 (`spl-prev-sibling-cycle`): `crates/opentide-analysis/tests/fuzz_regressions.rs`,
 `crates/opentide-analysis/tests/config_fuzz_regressions.rs`,
 `crates/opentide-lsp/tests/fuzz_regressions.rs` and
-`crates/opentide-cli/tests/fuzz_regressions.rs` replay every saved input (and
-the `protocol`, `framing`, `config` and `cli` seeds) on stable Rust in the normal
+`crates/opentide-cli/tests/fuzz_regressions.rs` and
+`crates/opentide-schema/tests/fuzz_regressions.rs` replay every saved input (and
+the `protocol`, `framing`, `config`, `cli` and `from_node` seeds) on stable Rust in the normal
 test run. Add a unit test that names what was wrong, too, failing before the
 fix (`crates/opentide-lsp/src/protocol.rs`,
 `a_length_longer_than_the_input_ends_it_without_allocating_the_length`, came

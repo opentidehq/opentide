@@ -1,0 +1,6 @@
+base: &b
+  x: 1
+  y: [1, 2]
+copy: *b
+item: &s hello
+again: *s

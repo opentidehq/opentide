@@ -27,10 +27,24 @@ xtask corpus: --engine python is required (the oracle the expectations name)
 
 ```
 
-The Rust engine's run is not implemented yet: it fails, never passes:
+The Rust engine checks the structural kinds (UC-1.2) against the oracle; any
+other kind is a usage error until the Rust engine's validate (UC-2.x):
 
 ```
-$ xtask corpus faults --check --engine rust
+$ xtask corpus faults --check --engine rust --only sysdig-constraint-priority
+? 2
+xtask corpus: --engine rust checks the structural kinds only (UC-1.2; --only structural lists them): `sysdig-constraint-priority` comes with the Rust engine's validate (UC-2.x)
+
+$ xtask corpus faults --check --engine rust --only no-such-kind
+? 2
+xtask corpus: --only: no fault kind `no-such-kind`
+
+```
+
+`clean` and `codes` have no Rust run yet: they fail, never pass:
+
+```
+$ xtask corpus clean --engine rust --repo .
 ? 1
 xtask corpus: --engine rust is not implemented yet; the Rust engine's validate (UC-2.x, https://github.com/opentidehq/opentide/issues/790) runs it
 

@@ -20,6 +20,7 @@ members = [
     "crates/opentide-falco",
     "crates/opentide-cql",
     "crates/opentide-ecs",
+    "crates/opentide-schema-derive",
     "crates/opentide-schema",
     "crates/opentide-tide",
     "crates/opentide-analysis",
@@ -54,6 +55,7 @@ opentide-falco = { path = "crates/opentide-falco", version = "=0.12.0" }
 opentide-cql = { path = "crates/opentide-cql", version = "=0.12.0" }
 opentide-ecs = { path = "crates/opentide-ecs", version = "=0.12.0" }
 opentide-schema = { path = "crates/opentide-schema", version = "=0.12.0" }
+opentide-schema-derive = { path = "crates/opentide-schema-derive", version = "=0.12.0" }
 opentide-tide = { path = "crates/opentide-tide", version = "=0.12.0" }
 opentide-analysis = { path = "crates/opentide-analysis", version = "=0.12.0" }
 opentide-lsp = { path = "crates/opentide-lsp", version = "=0.12.0" }
@@ -87,6 +89,17 @@ schemars = "1.2"
 # PyO3, for analysis/ (opentide._native) and opentide-schema's `python` feature.
 pyo3 = "0.30.1"
 garde = { version = "0.23", features = ["derive"] }
+# YAML 1.2 for opentide-schema's node tree (UC-1.2, #808): saphyr-parser's
+# events with their spans, saphyr's core-schema scalars and its emitter.
+saphyr = { version = "0.3.3", default-features = false }
+saphyr-parser = "0.3.3"
+# Writing a model as YAML (opentide-schema `node::to_yaml`): saphyr's serde
+# serializer, without its deserializer (and the parser fork it brings).
+serde-saphyr = { version = "2.1.1", default-features = false, features = ["serialize"] }
+# opentide-schema-derive, the `#[derive(FromNode)]` proc-macro.
+proc-macro2 = "1"
+quote = "1"
+syn = { version = "3", features = ["full", "extra-traits"] }
 # Test tools, for dev-dependencies only. insta: snapshot assertions, reviewed
 # with `cargo insta review` and committed beside the test (tests/snapshots/);
 # without its `colors` feature, which only colours a failing diff. trycmd:
@@ -95,6 +108,8 @@ insta = { version = "1.49", default-features = false }
 trycmd = "1.2"
 # Compile-fail cases (tests/ui/*.rs with the expected .stderr beside them).
 trybuild = "1.0"
+# Property tests (opentide-schema: every valid object round-trips).
+proptest = { version = "1", default-features = false, features = ["std"] }
 # xtask only: `cargo xtask bench` reads each benchmarked process's peak RSS
 # from wait4(2), whose safe wrapper this is (the workspace forbids `unsafe`).
 wait4 = "0.2"

@@ -1,0 +1,5 @@
+one: &one {a: 1, b: 1}
+two: &two {b: 2, c: 2}
+item:
+  <<: [*one, *two]
+  d: 4

@@ -90,6 +90,7 @@ Fuzz smoke (config framing)
 Supply chain (cargo deny)
 Fuzz smoke (cql)
 Fuzz smoke (cli)
+Fuzz smoke (from_node)
 Engine release (dry run) / Release tag
 Engine release (dry run) / opentide-lsp x86_64-unknown-linux-gnu
 Engine release (dry run) / opentide-lsp x86_64-unknown-linux-musl
@@ -121,12 +122,33 @@ Analyze (python)
 Analyze (actions)
 ```
 
+Branch protection on `integration/unified-core` requires every check above and the three of
+[`golden.yml`](workflows/golden.yml) below, which run on every pull request into it (#803).
+`tests/test_ci/test_golden_workflow.py` fails when this list and golden.yml's jobs differ, or
+when golden.yml's `pull_request` trigger gets a path or branch filter back: a required check
+that never starts blocks the merge.
+
+<!-- required-checks-integration -->
+```text
+Golden paths
+Golden check (python)
+Golden determinism
+```
+
+`Golden determinism` (recording every case twice, about 26 minutes) stays path-filtered on
+every base, inside the workflow: when no golden input changed it is skipped by its `if`, which
+branch protection counts as passing. `Golden check (python)` (about 8 minutes) runs on every
+pull request into `integration/unified-core`; `Golden compare` (ci.yml) on every pull request.
+`Golden paths` is the filter, and is required so that it cannot fail unnoticed (its dependants
+also run when it fails).
+
 To set it (a repository admin): **Settings → Rules → Rulesets → New ruleset → New branch
 ruleset**; name it `development`, Enforcement status **Active**; **Target branches → Add target →
 Include by pattern** `development`; tick **Require status checks to pass** (and **Require
 branches to be up to date before merging** if wanted), then **Add checks** and add each name
 above (each appears once it has run on a pull request; choose the GitHub Actions source);
-**Create**. With classic branch protection instead: **Settings → Branches → Add classic branch
+**Create**. For `integration/unified-core`, the same with the pattern `integration/unified-core`
+and both lists. With classic branch protection instead: **Settings → Branches → Add classic branch
 protection rule** (or edit the `development` rule) → Branch name pattern `development` → tick
 **Require status checks to pass before merging** → search for and add each name → **Save
 changes**. When a job is renamed or a matrix changes, update the list here and in the rule
@@ -162,10 +184,13 @@ together.
   on demand. Its own triggers and network-heavy references keep it out of ci.yml.
 - [`golden.yml`](workflows/golden.yml) runs `cargo xtask golden check --engine python` and
   `golden record --check-determinism` against the committed recordings of the frozen Python CLI
-  (`tests/golden/README.md`): on a pull request that touches `tests/golden/`, `tests/corpora/`,
-  the tide corpus, `xtask/`, `.cargo/`, `Cargo.*` or `.gitattributes`, on every push to
-  `development`, weekly and on demand. Path-filtered, so not required; whether it becomes required
-  is the maintainer's call.
+  (`tests/golden/README.md`) on every push to `development` and `integration/unified-core`,
+  weekly and on demand. On a pull request its `Golden paths` job reads whether the pull request
+  touches `tests/golden/`, `tests/corpora/`, the tide corpus, `xtask/`, `.cargo/`, `Cargo.*`,
+  `rust-toolchain.toml`, `.gitattributes` or golden.yml: the check runs when it does, and on
+  every pull request into `integration/unified-core`; the determinism run only when it does. The
+  trigger itself has no path filter, so `integration/unified-core` requires all three jobs
+  (Required checks, above).
 - [`codeql.yml`](workflows/codeql.yml), [`docs.yml`](workflows/docs.yml),
   [`publish-pypi.yml`](workflows/publish-pypi.yml), [`stack-comment.yml`](workflows/stack-comment.yml),
   [`vocab-upstream.yml`](workflows/vocab-upstream.yml): below and in their own headers.

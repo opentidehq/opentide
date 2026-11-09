@@ -37,11 +37,15 @@
 #   ADR 0003 make it: the command line, which owns the terminal, the process
 #   and the filesystem, beside opentide-lsp, the editor's host. The bindings
 #   (`main(argv)` from Python and npm, ADR 0003) sit above it.
+# - opentide-schema-derive (UC-1.2, #808) is foundation tier 0: the
+#   `#[derive(FromNode)]` proc-macro opentide-schema uses depends on no
+#   workspace crate (syn, quote), and its expansion names opentide-schema's
+#   paths, which only opentide-schema and the crates above it use.
 
 [[layer]]
 name = "foundation"
 tiers = [
-    ["opentide-core", "opentide-compare"],
+    ["opentide-core", "opentide-compare", "opentide-schema-derive"],
     ["opentide-syntax", "opentide-highlight", "opentide-ecs"],
     ["opentide-kql", "opentide-spl", "opentide-kuery", "opentide-lucene", "opentide-falco", "opentide-cql"],
     ["opentide-esql", "opentide-eql"],

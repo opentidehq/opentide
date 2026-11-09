@@ -20,6 +20,8 @@ opentide-analysis = { path = "../crates/opentide-analysis" }
 opentide-cli = { path = "../crates/opentide-cli" }
 opentide-core = { path = "../crates/opentide-core" }
 opentide-lsp = { path = "../crates/opentide-lsp" }
+opentide-schema = { path = "../crates/opentide-schema" }
+serde = "1"
 opentide-tide = { path = "../crates/opentide-tide" }
 
 [lib]
@@ -112,6 +114,13 @@ bench = false
 [[bin]]
 name = "cli"
 path = "fuzz_targets/cli.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "from_node"
+path = "fuzz_targets/from_node.rs"
 test = false
 doc = false
 bench = false
