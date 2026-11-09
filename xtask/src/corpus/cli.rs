@@ -218,14 +218,19 @@ fn oracle_bin(flag: Option<&str>) -> PathBuf {
 fn oracle_command(bin: &Path, env: &BTreeMap<String, String>) -> Command {
     let mut command = Command::new(bin);
     // A kind that sets a proxy gets only its own: Python's urllib lets an
-    // inherited lowercase variable win over an uppercase one.
+    // inherited lowercase variable win over an uppercase one. Every spelling
+    // the kind does not set itself is removed; on Windows, where `https_proxy`
+    // and `HTTPS_PROXY` are one variable, setting it replaces the inherited one.
     if env
         .keys()
         .any(|k| k.to_ascii_lowercase().ends_with("_proxy"))
     {
-        for var in ["http_proxy", "https_proxy", "all_proxy", "no_proxy"] {
-            command.env_remove(var);
-            command.env_remove(var.to_ascii_uppercase());
+        for name in ["http_proxy", "https_proxy", "all_proxy", "no_proxy"] {
+            for var in [name.to_string(), name.to_ascii_uppercase()] {
+                if !env.keys().any(|k| same_variable(k, &var)) {
+                    command.env_remove(&var);
+                }
+            }
         }
     }
     for var in [
@@ -240,6 +245,16 @@ fn oracle_command(bin: &Path, env: &BTreeMap<String, String>) -> Command {
     command.env("NO_COLOR", "1");
     command.envs(env);
     command
+}
+
+/// Whether two environment variable names name one variable: case-blind on
+/// Windows, exact elsewhere.
+fn same_variable(a: &str, b: &str) -> bool {
+    if cfg!(windows) {
+        a.eq_ignore_ascii_case(b)
+    } else {
+        a == b
+    }
 }
 
 /// How many objects (validate) or object files (lint) the run checked.
@@ -708,20 +723,34 @@ fn materialise(catalogue: &Catalogue, out: &Path) -> Result<u8> {
     Ok(0)
 }
 
-/// The Python the oracle runs on: `bin`'s interpreter, read from its
-/// shebang (a console script of a venv).
+/// The Python the oracle runs on. The oracle is a venv's console script, so
+/// the venv's interpreter sits beside it (`bin/python` on Unix,
+/// `Scripts/python.exe` on Windows); failing that, the script's `#!` line
+/// names it (Unix only: a Windows console script is an `.exe` launcher).
 fn oracle_python(bin: &Path) -> Result<PathBuf> {
     let resolved = if bin.components().count() > 1 {
         bin.to_path_buf()
     } else {
+        let mut names = vec![bin.to_path_buf()];
+        if cfg!(windows) {
+            names.push(bin.with_extension("exe"));
+        }
         std::env::var_os("PATH")
             .and_then(|paths| {
                 std::env::split_paths(&paths)
-                    .map(|dir| dir.join(bin))
+                    .flat_map(|dir| names.iter().map(move |name| dir.join(name)))
                     .find(|candidate| candidate.is_file())
             })
             .with_context(|| format!("`{}` is not on PATH", bin.display()))?
     };
+    if let Some(dir) = resolved.parent() {
+        for name in ["python", "python3", "python.exe"] {
+            let candidate = dir.join(name);
+            if candidate.is_file() {
+                return Ok(candidate);
+            }
+        }
+    }
     let text =
         std::fs::read(&resolved).with_context(|| format!("cannot read {}", resolved.display()))?;
     let first = text.split(|b| *b == b'\n').next().unwrap_or_default();
@@ -880,38 +909,87 @@ fn clean_command(args: &[String]) -> Result<u8> {
 mod tests {
     use super::{Scratch, manifest_path, oracle_command, require_checked, require_run};
     use std::collections::BTreeMap;
-    use std::ffi::OsStr;
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
 
     #[test]
     fn a_kind_that_sets_a_proxy_gets_only_its_own() {
+        /// What the child process sees for a variable.
+        #[derive(Debug, PartialEq)]
+        enum Seen {
+            Set(String),
+            Removed,
+            Inherited,
+        }
+        // Names compared as the OS does: on Windows `https_proxy` and
+        // `HTTPS_PROXY` are one variable.
+        fn sees(command: &std::process::Command, name: &str) -> Seen {
+            match command
+                .get_envs()
+                .filter(|(k, _)| super::same_variable(&k.to_string_lossy(), name))
+                .last()
+            {
+                Some((_, Some(value))) => Seen::Set(value.to_string_lossy().into_owned()),
+                Some((_, None)) => Seen::Removed,
+                None => Seen::Inherited,
+            }
+        }
+        let proxy = "http://127.0.0.1:9";
         let mut env = BTreeMap::new();
-        env.insert("HTTPS_PROXY".to_string(), "http://127.0.0.1:9".to_string());
+        env.insert("HTTPS_PROXY".to_string(), proxy.to_string());
         let command = oracle_command(Path::new("opentide"), &env);
-        let envs: Vec<(&OsStr, Option<&OsStr>)> = command.get_envs().collect();
+        assert_eq!(sees(&command, "HTTPS_PROXY"), Seen::Set(proxy.to_string()));
         for var in [
             "https_proxy",
             "http_proxy",
+            "HTTP_PROXY",
             "no_proxy",
+            "NO_PROXY",
             "all_proxy",
-            "OPENTIDE_REPO_ROOT",
         ] {
-            assert!(
-                envs.contains(&(OsStr::new(var), None)),
-                "{var} is not removed"
-            );
+            // Never inherited: removed or, on Windows where it is the same
+            // variable as the kind's, the kind's own value.
+            match sees(&command, var) {
+                Seen::Removed => {}
+                Seen::Set(value) => {
+                    assert!(var.eq_ignore_ascii_case("HTTPS_PROXY"), "{var} = {value}");
+                    assert_eq!(value, proxy);
+                }
+                Seen::Inherited => panic!("{var} is inherited"),
+            }
         }
-        assert!(envs.contains(&(
-            OsStr::new("HTTPS_PROXY"),
-            Some(OsStr::new("http://127.0.0.1:9"))
-        )));
+        assert_eq!(sees(&command, "OPENTIDE_REPO_ROOT"), Seen::Removed);
+        let lowercase = if cfg!(windows) {
+            Seen::Set(proxy.to_string())
+        } else {
+            Seen::Removed
+        };
+        assert_eq!(sees(&command, "https_proxy"), lowercase);
         // Without a proxy of its own a kind keeps the inherited ones.
         let plain = oracle_command(Path::new("opentide"), &BTreeMap::new());
-        assert!(
-            !plain
-                .get_envs()
-                .any(|(k, _)| k == OsStr::new("https_proxy"))
+        assert_eq!(sees(&plain, "https_proxy"), Seen::Inherited);
+        assert!(super::same_variable("PATH", "PATH"));
+        assert_eq!(super::same_variable("Path", "PATH"), cfg!(windows));
+    }
+
+    #[test]
+    fn the_oracles_python_is_the_venvs() {
+        let dir = std::env::temp_dir().join(format!("xtask-oracle-python-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let bin = dir.join("opentide");
+        std::fs::write(&bin, "#!/opt/elsewhere/python3\n").unwrap();
+        // The shebang, when no interpreter sits beside the script.
+        assert_eq!(
+            super::oracle_python(&bin).unwrap(),
+            PathBuf::from("/opt/elsewhere/python3")
         );
+        // The venv's own interpreter, beside the script, wins (Windows has
+        // no shebang to read).
+        std::fs::write(dir.join("python.exe"), "").unwrap();
+        assert_eq!(super::oracle_python(&bin).unwrap(), dir.join("python.exe"));
+        std::fs::write(&bin, "no interpreter line").unwrap();
+        assert_eq!(super::oracle_python(&bin).unwrap(), dir.join("python.exe"));
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]
