@@ -191,8 +191,9 @@ pub struct Measured {
     pub sample: Sample,
     /// Its exit code; `None` when a signal ended it.
     pub exit_code: Option<i32>,
-    /// xtask's own peak RSS at the spawn: the floor under the measured one
-    /// ([`own_peak_rss`], [`distinct_from_own`]).
+    /// xtask's own peak RSS from just before the spawn to after the wait:
+    /// the floor under the measured one ([`own_peak_rss`],
+    /// [`distinct_from_own`]).
     pub own_peak_rss: Option<u64>,
 }
 
@@ -201,12 +202,24 @@ pub struct Measured {
 /// process and the children it waited for. `inject` sleeps inside the timed
 /// window ([`INJECT_SLEEP_ENV`]).
 pub fn run(command: &mut Command, inject: Option<Duration>) -> Result<Measured> {
-    let own_peak_rss = own_peak_rss();
+    run_with(command, inject, || {})
+}
+
+/// [`run`], calling `before_spawn` between the reset of xtask's high-water
+/// mark and the spawn (the tests fault memory there).
+fn run_with(
+    command: &mut Command,
+    inject: Option<Duration>,
+    before_spawn: impl FnOnce(),
+) -> Result<Measured> {
+    reset_own_peak_rss();
+    before_spawn();
     let start = Instant::now();
     let child = command
         .spawn()
         .with_context(|| format!("spawn {:?}", command.get_program()))?;
     let usage = child.wait4().context("wait4")?;
+    let own_peak_rss = own_peak_rss();
     // After the wait, not during it: a sleep that overlapped the child would
     // add nothing to a command that runs longer than the sleep.
     if let Some(sleep) = inject {
@@ -223,18 +236,26 @@ pub fn run(command: &mut Command, inject: Option<Duration>) -> Result<Measured> 
     })
 }
 
+/// Resets this process's high-water mark to its current RSS (`clear_refs`
+/// 5), before a spawn: what xtask held earlier (the generated corpus, at
+/// scale 10 about 110 MiB) is gone and must not raise the floor of every
+/// later run. Nothing where there is no `/proc`.
+pub fn reset_own_peak_rss() {
+    let _ = std::fs::write("/proc/self/clear_refs", "5");
+}
+
 /// This process's own peak RSS (`VmHWM` in `/proc/self/status`), in bytes;
 /// `None` where there is no `/proc`.
 ///
 /// On Linux a child's `ru_maxrss` is the larger of its own peak and the
 /// spawning process's peak at the spawn: `exec` records the high-water mark
 /// of the memory the child shared with its parent until then. A measured
-/// peak at or under xtask's own is that floor, not the command's.
+/// peak at or under xtask's own is that floor, not the command's. Read it
+/// after the wait, with [`reset_own_peak_rss`] before the spawn: a page
+/// xtask touches between the two (the spawn's own allocations) raises the
+/// floor the child inherits, and a floor read before the spawn would miss
+/// it and let xtask's peak pass for the command's.
 pub fn own_peak_rss() -> Option<u64> {
-    // Reset the high-water mark to the current RSS first (`clear_refs` 5):
-    // what xtask held earlier (the generated corpus, at scale 10 about
-    // 110 MiB) is gone and must not raise the floor of every later run.
-    let _ = std::fs::write("/proc/self/clear_refs", "5");
     let status = std::fs::read_to_string("/proc/self/status").ok()?;
     let kb = status
         .lines()
@@ -319,6 +340,7 @@ mod tests {
         // peak RSS above that; wait4 counts the grandchild `sh` waits for.
         let root = scratch("rss");
         let run_dir = RunDir::prepare(&root, None).unwrap();
+        reset_own_peak_rss();
         let own = own_peak_rss().unwrap();
         let mib = own / (1024 * 1024) + 64;
         let mut big = command(
@@ -356,6 +378,30 @@ mod tests {
         assert!(distinct_from_own(10, Some(5)).is_ok());
         assert!(distinct_from_own(5, Some(5)).is_err());
         assert!(distinct_from_own(5, None).is_ok());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    // Reads /proc (VmHWM, clear_refs) and Linux's ru_maxrss semantics.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn memory_xtask_touches_after_the_reset_is_part_of_the_floor() {
+        // 16 MiB touched between the reset and the spawn is in the floor the
+        // child inherits: a floor read before it would let `sh -c true`
+        // pass for a command that peaks above xtask.
+        let root = scratch("late");
+        let run_dir = RunDir::prepare(&root, None).unwrap();
+        let mut late = Vec::new();
+        let mut small = command(Path::new("sh"), &["-c".into(), "true".into()], &run_dir).unwrap();
+        let measured = run_with(&mut small, None, || {
+            late = vec![1u8; 16 << 20];
+            std::hint::black_box(&late);
+        })
+        .unwrap();
+        let error = distinct_from_own(measured.sample.peak_rss_bytes, measured.own_peak_rss)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("does not exceed xtask's own"), "{error}");
+        drop(late);
         std::fs::remove_dir_all(root).unwrap();
     }
 
