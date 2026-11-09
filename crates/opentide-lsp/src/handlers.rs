@@ -120,10 +120,14 @@ pub mod custom {
         pub root: Value,
     }
 
-    /// Debug builds: a handler that panics, for the isolation test.
-    #[cfg(debug_assertions)]
+    /// Debug builds: a handler that panics, for the isolation test. These
+    /// test hooks are left out of fuzz builds (`--cfg fuzzing`, which
+    /// cargo-fuzz sets with debug assertions on): a fuzzer that finds
+    /// `opentide/__panic` or a long `opentide/__sleep` reports the hook, not a
+    /// bug.
+    #[cfg(all(debug_assertions, not(fuzzing)))]
     pub enum Panic {}
-    #[cfg(debug_assertions)]
+    #[cfg(all(debug_assertions, not(fuzzing)))]
     impl lsp_types::request::Request for Panic {
         type Params = Option<Value>;
         type Result = ();
@@ -132,16 +136,16 @@ pub mod custom {
 
     /// Debug builds: a request that takes `ms` milliseconds, so the messages
     /// sent meanwhile queue up as one batch.
-    #[cfg(debug_assertions)]
+    #[cfg(all(debug_assertions, not(fuzzing)))]
     pub enum Sleep {}
-    #[cfg(debug_assertions)]
+    #[cfg(all(debug_assertions, not(fuzzing)))]
     impl lsp_types::request::Request for Sleep {
         type Params = SleepParams;
         type Result = ();
         const METHOD: &'static str = "opentide/__sleep";
     }
 
-    #[cfg(debug_assertions)]
+    #[cfg(all(debug_assertions, not(fuzzing)))]
     #[derive(Debug, Default, Deserialize, Serialize)]
     #[serde(default)]
     pub struct SleepParams {
@@ -149,9 +153,9 @@ pub mod custom {
     }
 
     /// Debug builds: how many analyses ran, for the cache tests.
-    #[cfg(debug_assertions)]
+    #[cfg(all(debug_assertions, not(fuzzing)))]
     pub enum Stats {}
-    #[cfg(debug_assertions)]
+    #[cfg(all(debug_assertions, not(fuzzing)))]
     impl lsp_types::request::Request for Stats {
         type Params = Option<Value>;
         type Result = Value;
@@ -251,7 +255,7 @@ pub(crate) fn request(session: &mut Session, request: Request) -> Response {
         request: Some(request),
         response: None,
     };
-    #[cfg(debug_assertions)]
+    #[cfg(all(debug_assertions, not(fuzzing)))]
     let dispatcher = dispatcher
         .on::<custom::Panic>(|_, _| panic!("opentide/__panic was requested"))
         .on::<custom::Stats>(|s, _| json!({ "analyses": s.analyses.get() }))

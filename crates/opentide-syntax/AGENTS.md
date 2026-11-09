@@ -12,7 +12,7 @@ One of the two crates allowed `unsafe`: its `[lints]` copy the workspace's with
 
 ## Invariants
 
-- The only `unsafe` is the FFI to the grammars' `tree_sitter_opentide_*()` entry points and `Language::from_raw`; each item allows it with a reason and each block has a `// SAFETY:` comment.
+- The only `unsafe` is the FFI to the grammars' `tree_sitter_opentide_*()` entry points, each wrapped once as a `LanguageFn` constant; each item allows it with a reason, each block has a `// SAFETY:` comment and one unsafe operation, and `docs/internal/unsafe.md` lists every site.
 - No `std::fs` in `src/`. `build.rs` may read the grammars.
 - `build.rs` watches each grammar's `src/`; never print `rerun-if-changed` for a path that may not exist (every crate would rebuild on every run).
 - Every required named grammar rule has a production sample in `crates/testdata/corpus/<language>/` tagged `prod:<rule>` (`tests/corpus_gate.rs`).
@@ -28,7 +28,7 @@ cargo run -p opentide-lsp -- generate-highlights --check
 ## Do not
 
 - Hand-edit `grammars/**/src/parser.c`, `grammar.json` or `node-types.json`: regenerate them (tree-sitter skill).
-- Add `unsafe` beyond the grammar FFI, or call `from_raw` with a pointer that is not a grammar's.
+- Add `unsafe` beyond the grammar FFI, or pass `LanguageFn::from_raw` anything but a grammar's generated entry point.
 
 ## Work items that change this crate
 

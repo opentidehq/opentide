@@ -47,6 +47,6 @@ Bind the value you need to return. Do not "fix" it by leaking (`Box::leak`) or b
 
 ## unsafe review
 
-New `unsafe` needs a comment that states the invariant the compiler cannot check. The existing tree-sitter `from_raw` call is the model: the pointer is the `TSLanguage` returned by the generated C function and is non-null for the life of the process. Do not use `unsafe` to silence a lifetime error.
+New `unsafe` needs a comment that states the invariant the compiler cannot check. The tree-sitter FFI in `crates/opentide-syntax` is the model: `LanguageFn::from_raw` receives a function the tree-sitter CLI generated, which returns a static `TSLanguage` valid for the life of the process. One unsafe operation per block (`clippy::multiple_unsafe_ops_per_block`), and a row in `docs/internal/unsafe.md`, which `xtask/tests/unsafe_listing.rs` keeps complete. Do not use `unsafe` to silence a lifetime error.
 
 `cargo clippy --workspace --all-targets -- -D warnings` includes `clippy::all` plus the warning-deny flag. `#[allow(dead_code)]` needs a reason on the same item. Unused imports fail the build.
