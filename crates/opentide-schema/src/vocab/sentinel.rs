@@ -104,7 +104,16 @@ impl SentinelAttack {
     }
 
     /// What to write instead of `value`, as a clause starting `; `, or empty.
+    ///
+    /// The value is read as an id is meant: without surrounding whitespace,
+    /// in upper case (` t1059.001` names `T1059.001`, `t1086` the retired
+    /// `T1086`).
     pub fn hint(&self, value: &str) -> String {
+        let wanted = value.trim().to_uppercase();
+        let value = wanted.as_str();
+        if let Some(name) = self.techniques.get(value) {
+            return format!("; did you mean {value} ({name})?");
+        }
         if let Some(newer) = self.later.techniques.get(value) {
             let lead = format!("; {value} ({}) is newer than ATT&CK v{VERSION}", newer.name);
             return if newer.replaces.is_empty() {
@@ -131,14 +140,9 @@ impl SentinelAttack {
             };
         }
         // An id is a few digits: one edit away, not a third of its length.
-        let wanted = value.trim().to_uppercase();
-        opentide_core::suggest::closest_within(
-            &wanted,
-            self.techniques.keys().map(String::as_str),
-            1,
-        )
-        .map(|id| format!("; did you mean {id} ({})?", self.techniques[id]))
-        .unwrap_or_default()
+        opentide_core::suggest::closest_within(value, self.techniques.keys().map(String::as_str), 1)
+            .map(|id| format!("; did you mean {id} ({})?", self.techniques[id]))
+            .unwrap_or_default()
     }
 }
 
@@ -171,6 +175,28 @@ mod tests {
             ),
             "{typo}"
         );
+        // An exact id in another case or with whitespace around it names
+        // that id, never a sibling one edit away (T1059.010).
+        for written in ["t1059.001", " T1059.001", "T1059.001 ", "\tt1059.001\n"] {
+            let message = list.check(written).unwrap_err();
+            assert!(
+                message.ends_with(
+                    "; did you mean T1059.001 (Command and Scripting Interpreter: PowerShell)?"
+                ),
+                "{written:?}: {message}"
+            );
+        }
+        // A retired or newer id is recognised the same way.
+        let retired = list.check("t1086").unwrap_err();
+        assert!(
+            retired.contains("ATT&CK retired T1086 (PowerShell) before v18: use T1059.001"),
+            "{retired}"
+        );
+        assert!(
+            list.check(" T1086 ")
+                .unwrap_err()
+                .contains("ATT&CK retired T1086")
+        );
         assert!(
             list.check("T9999.999")
                 .unwrap_err()
@@ -188,6 +214,9 @@ mod tests {
                 "{message}"
             );
             assert!(message.contains(&newer.replaces[0]));
+            let lower = list.check(&id.to_lowercase()).unwrap_err();
+            assert!(lower.contains(&format!("; {id} (")), "{lower}");
+            assert!(lower.contains("is newer than ATT&CK v18: use"), "{lower}");
         }
     }
 }
