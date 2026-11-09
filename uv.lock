@@ -1321,7 +1321,7 @@ requires-dist = [
     { name = "textual", specifier = ">=8.0" },
     { name = "tomli", marker = "python_full_version < '3.11'", specifier = ">=2.0" },
     { name = "tomli-w", specifier = ">=1.0" },
-    { name = "typer", specifier = ">=0.27.0" },
+    { name = "typer", specifier = ">=0.27.0,<0.29" },
     { name = "typing-extensions", specifier = ">=4.0" },
 ]
 
