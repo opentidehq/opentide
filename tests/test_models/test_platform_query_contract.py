@@ -121,7 +121,7 @@ SPLUNK_BLOCK = {
     "query": "index=main | head 1",
 }
 
-#: Every splunk::2.x spelling, and the hidden v2 escape hatch, at its place in the block.
+#: Every splunk::2.x spelling, at its place in the block.
 SPLUNK_2X_KEYS = [
     ("search", "index=main | head 1"),
     ("cron_schedule", "0 * * * *"),
@@ -130,7 +130,6 @@ SPLUNK_2X_KEYS = [
     ("notable", {"security_domain": "threat"}),
     ("risk", {"message": "risk message"}),
     ("email", {"to": ["soc@example.org"]}),
-    ("advanced", {"dispatch.earliest_time": "-1h"}),
     ("scheduling", {"frequency": "1h"}),
     ("scheduling", {"cron": "0 * * * *"}),
     ("scheduling", {"custom_time": "09h15"}),
@@ -150,6 +149,40 @@ def test_deploy_loading_refuses_a_splunk_2x_key(key: str, value: object) -> None
     """``validate`` and ``deploy`` agree: the loader refuses what validation refuses."""
     with pytest.raises(ValidationError):
         load_splunk_config({**SPLUNK_BLOCK, key: value})
+
+
+#: A custom alert action's parameters: what `advanced` exists for.
+ADVANCED = {
+    "action.misp_alert_create_event.param.title": "Canary token triggered",
+    "action.misp_alert_create_event.param.distribution": 0,
+    "action.misp_alert_create_event.param.publish_on_creation": True,
+    "action.misp_alert_create_event.param.tags": None,
+}
+
+
+def test_advanced_is_part_of_the_splunk_layout() -> None:
+    """0.21.0 refused `advanced` as a splunk::2.x key; it is a key of the current layout,
+    and the only place a rule can set keys no other field sets."""
+    config = SplunkConfig.model_validate({**SPLUNK_BLOCK, "advanced": ADVANCED})
+    assert config.advanced == ADVANCED
+    assert load_splunk_config({**SPLUNK_BLOCK, "advanced": ADVANCED}).advanced == ADVANCED
+
+
+@pytest.mark.parametrize(
+    "advanced",
+    [{"action.x.param.y": ["a", "b"]}, {"action.x.param.y": {"a": 1}}, {" ": "value"}],
+    ids=["list", "table", "blank-key"],
+)
+def test_advanced_refuses_what_savedsearches_conf_cannot_hold(advanced: dict) -> None:
+    with pytest.raises(ValidationError):
+        SplunkConfig.model_validate({**SPLUNK_BLOCK, "advanced": advanced})
+
+
+def test_advanced_is_offered_by_the_editor_schema_and_hidden_from_the_template() -> None:
+    properties = build_platform_schema_source(SplunkConfig)["properties"]
+    assert "advanced" in properties
+    assert "deprecated" not in properties["advanced"]
+    assert "advanced" not in render_model_template(SplunkConfig)
 
 
 def test_a_splunk_2x_search_without_a_query_is_no_query() -> None:

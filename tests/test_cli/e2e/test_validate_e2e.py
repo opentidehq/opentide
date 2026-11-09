@@ -37,6 +37,23 @@ def test_validate_without_metadata_schema_fails_the_schema_check(
     ]
 
 
+def test_validate_accepts_a_splunk_advanced_block(invoke_cli, tide_corpus_repo: Path) -> None:
+    """0.21.0 to 0.23.0 refused `advanced` as an unknown key, failing every pipeline whose
+    catalogue held a rule with a custom alert action's parameters."""
+    rule = tide_corpus_repo / "Objects" / "Detection Rules" / "rule-0003-splunk-spl.yaml"
+    text = rule.read_text(encoding="utf-8")
+    block = (
+        "    advanced:\n"
+        '      action.misp_alert_create_event.param.title: "Canary token triggered"\n'
+        "      action.misp_alert_create_event.param.distribution: 0\n"
+        "      action.misp_alert_create_event.param.publish_on_creation: false\n"
+        "      action.misp_alert_create_event.param.tags:\n"
+    )
+    rule.write_text(text.rstrip("\n") + "\n" + block, encoding="utf-8")
+    payload = assert_json_ok(invoke_cli("validate", "--file", rule.name))
+    assert payload["report"]["issues"] == []
+
+
 @pytest.mark.parametrize(
     ("schema", "message"),
     [
