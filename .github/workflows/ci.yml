@@ -477,8 +477,8 @@ jobs:
       fail-fast: false
       matrix:
         # Every target of fuzz/fuzz_targets/ (tests/test_ci/test_one_ci.py),
-        # two or three to a runner: one build serves them.
-        targets: ["kql spl esql", "eql kuery lucene", "falco cql", "tide protocol"]
+        # three or four to a runner: one build serves them.
+        targets: ["kql spl esql", "eql kuery lucene", "falco cql tide protocol"]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

@@ -20,7 +20,7 @@ merge first; CodeQL and the oracles run there too). Jobs run in parallel; a new 
 | `engine-package` | Every engine crate packaged as crates.io builds it, and `license-scan.sh` over the packages (no oracle reference ships) |
 | `grammars`, `textmate` | Every vendored `parser.c` is what tree-sitter-cli 0.25.10 generates (`check-grammars.sh`); the TextMate grammars as VS Code reads them |
 | `elastic-sweep` | Every public Elastic detection rule (a pinned commit) passes the engine |
-| `fuzz-smoke` | Each fuzz target of `fuzz/` for 60 s from its seeds and saved regressions (the dated nightly `fuzz/NIGHTLY` pins, three targets per runner) |
+| `fuzz-smoke` | Each fuzz target of `fuzz/` for 60 s from its seeds and saved regressions (the dated nightly `fuzz/NIGHTLY` pins, three or four targets per runner) |
 | `engine-release-dry-run` | The engine release's own asset jobs ([`engine-release-build.yml`](workflows/engine-release-build.yml)) for the workspace version: every asset, SHA256SUMS, and `release.py check-assets` (language-server v0.11.0's names with the version substituted). No tag, attestation, release or publish; `contents: read` |
 | `engine-release-consumers` | opentidehq/vscode-extension's own grammar and engine scripts (a pinned commit) accept the dry run's assets as this repository's release (`scripts/engine/check-vscode-extension.mjs`) |
 | `test` | The Python matrix, **3.10–3.14**, coverage gate on 3.14 |
@@ -81,7 +81,7 @@ TextMate grammars (vscode-textmate)
 Elastic detection-rules sweep
 Fuzz smoke (kql spl esql)
 Fuzz smoke (eql kuery lucene)
-Fuzz smoke (falco tide protocol)
+Fuzz smoke (falco cql tide protocol)
 Engine release (dry run) / Release tag
 Engine release (dry run) / opentide-lsp x86_64-unknown-linux-gnu
 Engine release (dry run) / opentide-lsp x86_64-unknown-linux-musl
