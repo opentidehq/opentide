@@ -135,6 +135,11 @@ together.
   (`git ls-files`) every day, with deny.toml's exceptions, and opens or comments on one issue when it finds an advisory.
   Its issue job is the only job in any workflow with `issues: write`, and it never runs on a pull
   request (`tests/test_ci/test_supply_chain.py`).
+- [`schema.yml`](workflows/schema.yml), on every pull request and push: `opentide-schema` (UC-1.1)
+  built for the native target, abi3-py310 (feature `python`) and `wasm32-unknown-unknown`
+  (feature `wasm`), clippy on the last two (ci.yml's engine jobs build no features), and its tests
+  with the Python class on CPython 3.10, the abi3 floor. Written before ci.yml became one
+  workflow; not a required check.
 - [`oracle.yml`](workflows/oracle.yml) checks the query parsers against Kusto.Language, Splunk,
   Elasticsearch, Lucene, Kibana and Falco (`OPENTIDE_ORACLE_REQUIRED`) on every push to
   `development`, on an `engine-v*` tag, on a pull request that changes `crates/`, `grammars/`,
