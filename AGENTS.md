@@ -50,7 +50,7 @@
 | `data/catalogs/`, HighlightSpec, conformance corpora, the vendor-parser oracles | [`.agents/skills/catalogs/SKILL.md`](.agents/skills/catalogs/SKILL.md) |
 | A new query language in the engine | [`.agents/skills/add-language/SKILL.md`](.agents/skills/add-language/SKILL.md) |
 | `crates/CHANGELOG.md`, the engine crates' release notes | [`.agents/skills/engine-release-notes/SKILL.md`](.agents/skills/engine-release-notes/SKILL.md) |
-| Releasing the engine crates (parked until UC-0.3) | [`.agents/skills/engine-release/SKILL.md`](.agents/skills/engine-release/SKILL.md) |
+| Releasing the engine crates (`engine-v*` tags, `engine-release.yml`) | [`.agents/skills/engine-release/SKILL.md`](.agents/skills/engine-release/SKILL.md) |
 
 The engine's skills (the last eight rows) came from opentidehq/language-server; their own index, with
 the engine's hard rules, is [`crates/AGENTS.md`](crates/AGENTS.md). Claude Code discovers the skills
@@ -126,7 +126,7 @@ uv sync --group dev                             # this worktree's .venv; _native
 - A compiler cache does not bridge pools as this recipe stands: sccache (0.19) keys each crate on
   every `CARGO_*` variable, `CARGO_TARGET_DIR` included, so two pools never share an entry.
 - Size pools to the disk (a warm pool is several GB). Keep each pool's environment the same
-  (`RUSTFLAGS`, `CARGO_PROFILE_*`): a change rebuilds the workspace crates. CI's `engine` job sets
+  (`RUSTFLAGS`, `CARGO_PROFILE_*`): a change rebuilds the workspace crates. CI's Rust jobs set
   `CARGO_PROFILE_DEV_DEBUG=line-tables-only`.
 - nextest keeps its JUnit report under the worktree's own `target/nextest/` (gitignored), whatever
   `CARGO_TARGET_DIR` says.
@@ -141,7 +141,7 @@ uv sync --group dev                             # this worktree's .venv; _native
 | Rust, everything | `cargo nextest run --workspace --profile ci` and `cargo test --workspace --doc` (nextest runs no doctests), or `cargo test --workspace` |
 | Python, while editing | `uv run pytest tests/<area> -q --no-cov` |
 | Lint and types | `scripts/ci-local.sh --quick` (ruff, ty, cargo fmt, clippy, layers, engine checks, `uv build`) |
-| Before a push | `scripts/ci-local.sh --full` (adds cargo test, pytest with the coverage gate, the E2E suite, GitLab CI lint) |
+| Before a push | `scripts/ci-local.sh --full` (adds nextest `ci`, doctests, rustdoc, the crates' package and licence scan, pytest with the coverage gate, the E2E suite, GitLab CI lint; WebAssembly, grammars and fuzz smoke when their tools are installed) |
 
 The test profiles are in [`.config/nextest.toml`](.config/nextest.toml); CI's jobs are in
 [`.github/AGENTS.md`](.github/AGENTS.md).

@@ -5,9 +5,11 @@ runner's default is. A job that installs another one by name (``stable`` from
 ``dtolnay/rust-toolchain``, say, with the job's targets) leaves the pinned
 release without those targets, and its lints differ from the ones the PR was
 checked with. The jobs install the file's toolchain, ``rustup toolchain
-install`` with no name; only the fuzz workflow names one, nightly, which
-cargo-fuzz needs and selects with ``cargo +nightly``. The engine's parked
-Release workflow (``.github/engine-workflows/``) is held to the same rule.
+install`` with no name; only the fuzz jobs name one, the dated nightly
+``fuzz/NIGHTLY`` pins, which cargo-fuzz needs and selects with ``cargo
++"${FUZZ_TOOLCHAIN}"`` (the nightly fuzz workflow and ci.yml's ``fuzz-smoke``,
+a required check that a new nightly must not break unannounced). The engine's
+Release workflows are held to the same rule.
 
 An install with no name takes the file's components and targets, and rustup
 silently ignores ``--target`` and ``--component`` on it: a job adds a target
@@ -28,19 +30,16 @@ import yaml
 from opentide.core.files import tomllib
 
 ROOT = Path(__file__).resolve().parents[2]
-WORKFLOWS = sorted(
-    [
-        *(ROOT / ".github" / "workflows").glob("*.yml"),
-        *(ROOT / ".github" / "engine-workflows").glob("*.yml"),
-    ]
-)
+WORKFLOWS = sorted((ROOT / ".github" / "workflows").glob("*.yml"))
 # The toolchain-installing actions; none of them reads rust-toolchain.toml.
 TOOLCHAIN_ACTIONS = (
     "dtolnay/rust-toolchain",
     "actions-rs/toolchain",
     "actions-rust-lang/setup-rust-toolchain",
 )
-NAMED = {("engine-fuzz.yml", "nightly")}
+# The fuzz jobs name the nightly fuzz/NIGHTLY pins, read into FUZZ_TOOLCHAIN.
+FUZZ_TOOLCHAIN = '"${FUZZ_TOOLCHAIN}"'
+NAMED = {("engine-fuzz.yml", FUZZ_TOOLCHAIN), ("ci.yml", FUZZ_TOOLCHAIN)}
 # The rustup options that take a value.
 VALUED = {"--target", "--component", "--profile", "-t", "-c"}
 # The options rustup ignores on a `rustup toolchain install` that names no toolchain.
@@ -132,7 +131,13 @@ def test_the_pin_is_one_release() -> None:
 
 def test_the_workflows_install_rust() -> None:
     names = {path.name for path in WORKFLOWS}
-    assert {"ci.yml", "engine-ci.yml", "oracle.yml", "release.yml"} <= names
+    assert {
+        "ci.yml",
+        "oracle.yml",
+        "engine-release.yml",
+        "engine-release-build.yml",
+        "engine-fuzz.yml",
+    } <= names
 
 
 @pytest.mark.parametrize("path", WORKFLOWS, ids=lambda path: path.name)
@@ -149,16 +154,45 @@ def test_every_job_installs_the_pinned_release(path: Path) -> None:
             assert (path.name, name) in NAMED, (path.name, job_id, name)
 
 
-def test_a_named_toolchain_is_seen() -> None:
-    """The fuzz workflow's nightly install is found: the check above reads the commands."""
-    fuzz = ROOT / ".github" / "workflows" / "engine-fuzz.yml"
+@pytest.mark.parametrize(
+    ("workflow", "job"), [("engine-fuzz.yml", "fuzz"), ("ci.yml", "fuzz-smoke")]
+)
+def test_a_named_toolchain_is_seen(workflow: str, job: str) -> None:
+    """The fuzz jobs' nightly install is found: the check above reads the commands."""
+    path = ROOT / ".github" / "workflows" / workflow
     found = [
         name
-        for _, step in _steps(fuzz)
+        for job_id, step in _steps(path)
+        if job_id == job
         for match in re.finditer(r"rustup toolchain install([^\n]*)", str(step.get("run", "")))
         for name in _toolchain_names(match.group(1))
     ]
-    assert found == ["nightly"]
+    assert found == [FUZZ_TOOLCHAIN]
+    run = "\n".join(str(step.get("run", "")) for job_id, step in _steps(path) if job_id == job)
+    assert "FUZZ_TOOLCHAIN=$(cat fuzz/NIGHTLY)" in run
+
+
+def test_the_fuzz_nightly_is_one_dated_release() -> None:
+    """One file pins it; the fuzz script reads the same file."""
+    pinned = (ROOT / "fuzz" / "NIGHTLY").read_text(encoding="utf-8").strip()
+    assert re.fullmatch(r"nightly-\d{4}-\d{2}-\d{2}", pinned), pinned
+    script = (ROOT / "scripts" / "engine" / "fuzz.sh").read_text(encoding="utf-8")
+    assert 'toolchain="${FUZZ_TOOLCHAIN:-$(cat "$root/fuzz/NIGHTLY")}"' in script
+    assert 'exec cargo "+${toolchain}" fuzz run' in script
+    assert "+nightly" not in script
+
+
+def test_only_the_fuzz_jobs_name_a_toolchain() -> None:
+    for path in WORKFLOWS:
+        for job_id, step in _steps(path):
+            run = str(step.get("run", ""))
+            if re.search(
+                r"rustup toolchain install [^\n]*(?:nightly|FUZZ_TOOLCHAIN)|cargo \+\S", run
+            ):
+                assert (path.name, job_id) in {
+                    ("engine-fuzz.yml", "fuzz"),
+                    ("ci.yml", "fuzz-smoke"),
+                }, (path.name, job_id)
 
 
 @pytest.mark.parametrize("path", WORKFLOWS, ids=lambda path: path.name)
@@ -221,8 +255,8 @@ def test_the_jobs_that_build_for_a_target_are_seen() -> None:
         for job_id, (built, _) in _job_targets(path).items()
         if built
     }
-    assert found[("release.yml", "native")] == {"${{ matrix.target }}"}
-    assert found[("release.yml", "wasm")] == wasm
+    assert found[("engine-release-build.yml", "native")] == {"${{ matrix.target }}"}
+    assert found[("engine-release-build.yml", "wasm")] == wasm
     assert found[("ci.yml", "engine-wasm")] == wasm
 
 

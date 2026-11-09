@@ -52,7 +52,7 @@ fn is_reference(path: &[Step]) -> bool {
     }
 }
 
-/// Every reference field of `body` ([`is_reference`]) whose string value is
+/// Every reference field of `body` (`is_reference`) whose string value is
 /// not empty and does not name the object itself (`own`), in document order,
 /// each placed in `source`, the text `body` was parsed from. A value that is
 /// not a UUID (a typo, `TODO`) is kept: `invalid_ref` reports it, and it is

@@ -11,7 +11,7 @@ Before editing, read the one skill that matches the change. Skills follow the [A
 | `crates/opentide-lsp`, `editors/`, stdio tests | `.agents/skills/lsp-host/SKILL.md` |
 | `crates/opentide-wasm`, `packages/`, packaging | `.agents/skills/wasm-hosts/SKILL.md` |
 | A `crates/CHANGELOG.md` entry, or an engine release's notes | `.agents/skills/engine-release-notes/SKILL.md` |
-| An engine release: `scripts/engine/release.py`, `.github/engine-workflows/release.yml` | `.agents/skills/engine-release/SKILL.md` |
+| An engine release: `scripts/engine/release.py`, `.github/workflows/engine-release.yml` (`engine-v*` tags) | `.agents/skills/engine-release/SKILL.md` |
 | `data/catalogs/`, `highlights/spec.toml`, `crates/testdata/conformance`, `crates/testdata/oracles`, `scripts/engine/oracles`, schema sync | `.agents/skills/catalogs/SKILL.md` |
 | A new query language (S1QL, Sigma, YARA) | `.agents/skills/add-language/SKILL.md` (then the rows above) |
 
@@ -96,7 +96,7 @@ cargo test --workspace
 cargo run -p opentide-lsp -- generate-highlights --check
 ```
 
-Grammar, catalog, and corpus edits can flip an oracle verdict. `bash scripts/engine/ci-oracle.sh` runs the Kusto.Language and Splunk oracles and skips a reference you do not have (`scripts/engine/oracles/README.md`). Grammar edits also need `bash scripts/engine/check-grammars.sh` from the repository root (CLI 0.25.10). The engine's CI jobs (`ci.yml`'s `engine` and `engine-wasm`, and `engine-ci.yml`) set `RUSTFLAGS=-Dwarnings`. Code under `cfg(target_arch = "wasm32")` or `cfg(target_os = "wasi")` is linted only for that target: `bash scripts/engine/build-wasm.sh clippy` (CI's `engine-wasm` job) runs clippy for `opentide-wasm` on wasm32-unknown-unknown and `opentide-lsp` on wasm32-wasip1 with the wasm C toolchain the grammars need. Code under `cfg(windows)` is built and tested by `engine-ci.yml`'s Windows job but not linted with clippy (UC-0.3, #801, adds the Windows and macOS Rust jobs).
+Grammar, catalog, and corpus edits can flip an oracle verdict. `bash scripts/engine/ci-oracle.sh` runs the Kusto.Language and Splunk oracles and skips a reference you do not have (`scripts/engine/oracles/README.md`). Grammar edits also need `bash scripts/engine/check-grammars.sh` from the repository root (CLI 0.25.10). The engine's CI jobs (`ci.yml`) set `RUSTFLAGS=-Dwarnings`. Code under `cfg(target_arch = "wasm32")` or `cfg(target_os = "wasi")` is linted only for that target: `bash scripts/engine/build-wasm.sh clippy` (CI's `engine-wasm` job) runs clippy for `opentide-wasm` on wasm32-unknown-unknown and `opentide-lsp` on wasm32-wasip1 with the wasm C toolchain the grammars need. Code under `cfg(windows)` is built and tested by `ci.yml`'s `engine-test` on Windows (nextest, as on Linux and macOS) but not linted with clippy.
 
 ## Upstream docs, not downloaded skills
 

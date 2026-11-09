@@ -33,7 +33,11 @@ Options:
                 cargo xtask check-layers, engine checks, uv build)
   --test        Lint + cargo test + unit pytest (excludes cli_e2e/cli_smoke) — default
   --full        Lint + cargo test + unit pytest + coverage gate + CLI E2E +
-                GitLab CI lint — pre-push
+                GitLab CI lint, and ci.yml's Rust jobs: cargo nextest (profile
+                ci), doctests, rustdoc, the crates' package and licence scan;
+                the WebAssembly build, the grammar drift check and the fuzz
+                smoke run when their tools are installed (each says what it
+                skipped and why) — pre-push
   --coverage    Alias for --full
   --store-e2e-durations
                 Re-measure the E2E suite serially and rewrite
@@ -43,6 +47,9 @@ Options:
   -h, --help    Show this help
 
 Environment:
+  FUZZ_SMOKE_SECONDS
+                  Seconds per fuzz target in --full's fuzz smoke run (default
+                  60, as ci.yml's fuzz-smoke); 0 skips it.
   PYTEST_WORKERS  xdist worker count for the E2E suite (default: 4, matching
                   ci.yml). 0 runs it serially, which is what you want to read a
                   failure. More is not reliably faster -- each worker holds an
@@ -55,6 +62,71 @@ Examples:
   scripts/ci-local.sh --full       # before opening a PR (unit then E2E)
   PYTEST_WORKERS=0 scripts/ci-local.sh   # serial, readable output
 EOF
+}
+
+skip() { echo "==> SKIPPED: $*"; skipped+=("$1"); }
+skipped=()
+
+# ci.yml's Rust jobs (engine, engine-test, engine-package, engine-wasm, grammars,
+# fuzz-smoke) for --full; rustfmt, clippy and the layers ran above.
+rust_jobs() {
+  echo "==> Cargo workspace: nextest (profile ci)"
+  if ! cargo nextest --version >/dev/null 2>&1; then
+    echo "cargo-nextest is not installed: cargo install cargo-nextest --locked" >&2
+    exit 1
+  fi
+  cargo nextest run --workspace --locked --profile ci
+  echo "==> Cargo workspace: doctests"
+  cargo test --workspace --locked --doc --quiet
+  echo "==> rustdoc (RUSTDOCFLAGS=-D warnings)"
+  RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --workspace --locked --quiet
+  echo "==> Engine crates package and licence scan"
+  # vendor copies each crate's shared assets into it (untracked files, which
+  # a later `git add -A` would commit): `vendor --clean` removes them on any
+  # exit, an interrupted push included.
+  trap 'python3 scripts/engine/release.py vendor --clean >/dev/null' EXIT
+  python3 scripts/engine/release.py vendor
+  cargo package --locked --workspace --exclude opentide-native --allow-dirty --quiet
+  bash scripts/engine/license-scan.sh target/package/*.crate
+  python3 scripts/engine/release.py vendor --clean
+  trap - EXIT
+
+  # The rest need tools a contributor may not have: each says what to install.
+  local installed
+  installed="$(rustup target list --installed 2>/dev/null || true)"
+  if ! grep -qx wasm32-unknown-unknown <<<"$installed" || ! grep -qx wasm32-wasip1 <<<"$installed"; then
+    skip "WebAssembly build: rustup target add wasm32-unknown-unknown wasm32-wasip1"
+  elif ! command -v wasm-bindgen >/dev/null || ! command -v node >/dev/null; then
+    skip "WebAssembly build: install node and wasm-bindgen-cli (the version Cargo.lock pins)"
+  else
+    echo "==> WebAssembly engine (browser and WASI), clippy on wasm32, npm packs"
+    RUSTFLAGS="-Dwarnings" bash scripts/engine/build-wasm.sh
+    RUSTFLAGS="-Dwarnings" bash scripts/engine/build-wasm.sh clippy
+    for p in lsp-client lsp-worker; do (cd "packages/$p" && npm ci --silent); done
+    node scripts/engine/check-npm-packs.mjs
+  fi
+
+  if [[ -n "${TREE_SITTER_CLI:-}" || -x /tmp/ts-cli/node_modules/.bin/tree-sitter ]] \
+    || command -v tree-sitter >/dev/null; then
+    echo "==> Grammars regenerate (check-grammars.sh)"
+    bash scripts/engine/check-grammars.sh
+  else
+    skip "grammar drift check: npm install --prefix /tmp/ts-cli tree-sitter-cli@0.25.10"
+  fi
+
+  local seconds="${FUZZ_SMOKE_SECONDS:-60}"
+  if [[ "$seconds" == "0" ]]; then
+    skip "fuzz smoke: FUZZ_SMOKE_SECONDS=0"
+  elif ! rustup run "$(cat fuzz/NIGHTLY)" cargo fuzz --version >/dev/null 2>&1; then
+    skip "fuzz smoke: rustup toolchain install $(cat fuzz/NIGHTLY) && cargo +$(cat fuzz/NIGHTLY) install cargo-fuzz --locked"
+  else
+    local target
+    for target in fuzz/fuzz_targets/*.rs; do
+      target="$(basename "$target" .rs)"
+      echo "==> Fuzz smoke: $target (${seconds}s)"
+      bash scripts/engine/fuzz.sh "$target" "$seconds"
+    done
+  fi
 }
 
 mode="test"
@@ -119,9 +191,14 @@ if [[ "$mode" == "quick" ]]; then
 fi
 
 # The engine's tests compare it with this checkout's models (.venv, synced above).
-echo "==> Cargo workspace: tests"
 # As in CI: insta compares snapshots and never writes one.
-INSTA_UPDATE=no cargo test --workspace --locked --quiet
+export INSTA_UPDATE=no
+if [[ "$mode" == "full" ]]; then
+  rust_jobs
+else
+  echo "==> Cargo workspace: tests"
+  cargo test --workspace --locked --quiet
+fi
 echo "==> The engine release script's tests"
 uv run python -m unittest discover -s scripts/engine -p "test_*.py"
 
@@ -171,4 +248,7 @@ else
   uv run pytest tests/ --no-cov -q "${parallel[@]}" -m "$unit_marker"
 fi
 
+if [[ ${#skipped[@]} -gt 0 ]]; then
+  echo "==> Skipped (CI runs them): ${skipped[*]}"
+fi
 echo "==> All checks passed ($mode)"

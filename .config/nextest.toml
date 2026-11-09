@@ -6,8 +6,8 @@
 #   cargo nextest run                  everything (the default profile)
 #
 # `cargo test --workspace` stays the plain check and needs no install. nextest
-# does not run doctests: `cargo test --workspace --doc` runs them, and so does
-# CI's `cargo test --workspace` (ci.yml, job `engine`).
+# does not run doctests: `cargo test --workspace --doc` runs them, as CI does
+# (ci.yml, job `engine-test`: `cargo test --workspace --locked --doc`).
 
 [profile.default]
 # A test past 60s is reported as slow. The LSP stdio tests drive a child server,
