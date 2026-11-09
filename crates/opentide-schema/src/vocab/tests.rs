@@ -85,6 +85,16 @@ fn scoped_values_carry_their_stage() {
         set.identifier("surface", "OS::Windows::Desktop"),
         "Windows::Desktop"
     );
+    // Only a stage id is stripped, never any `X::` prefix.
+    assert_eq!(
+        set.identifier("surface", "Bogus::Kerberos"),
+        "Bogus::Kerberos"
+    );
+    let unscoped = selector("surface::1.0", false);
+    assert!(set.is_valid("Windows::Desktop", &unscoped));
+    assert!(set.is_valid("OS::Windows::Desktop", &unscoped));
+    assert!(!set.is_valid("Bogus::Windows::Desktop", &unscoped));
+    assert!(!set.is_valid("Bogus::Kerberos", &unscoped));
 
     let entities = selector("signal.entities::1.0", true);
     for value in ["Host::Account", "Cloud::Account", "Host::Process"] {
@@ -152,6 +162,17 @@ fn identifiers_are_not_typos() {
     let actors = selector("actors::1.1", true);
     let uuid = "0b9b4c4c-7c1a-4b0e-9a5e-6b1e1d5c2a11";
     assert_eq!(set.suggest(uuid, &actors), None);
+    // One character from a real actor id: as an edit, it is a typo of that id
+    // (one edit, well within the bound), yet an identifier is never one.
+    let real = "misp::1cb7e1cc-d695-42b1-92f4-fd0112a3c9be";
+    assert!(set.is_valid(real, &actors));
+    let near = "misp::1cb7e1cc-d695-42b1-92f4-fd0112a3c9bf";
+    assert!(!set.is_valid(near, &actors));
+    assert_eq!(
+        opentide_core::suggest::closest(near, set.resolve(&actors).values()),
+        Some(real)
+    );
+    assert_eq!(set.suggest(near, &actors), None);
     assert_eq!(set.suggest(&format!("misp::{uuid}"), &actors), None);
     assert!(is_opaque_identifier(&format!(" {} ", uuid.to_uppercase())));
     assert!(!is_opaque_identifier("0b9b4c4c-7c1a-4b0e-9a5e-6b1e1d5c2a1"));
@@ -180,6 +201,41 @@ fn quotes_as_the_cli_does() {
     assert_eq!(quote("it's \"x\""), "'it\\'s \"x\"'");
     assert_eq!(quote("a\\b\n\t\u{7}"), "'a\\\\b\\n\\t\\x07'");
     assert_eq!(quote("Zürich"), "'Zürich'");
+    // C1 controls (NEL) and DEL.
+    assert_eq!(quote("\u{85}"), "'\\x85'");
+    assert_eq!(quote("\u{7f}"), "'\\x7f'");
+}
+
+/// A character that does not print is escaped as Python's `repr` escapes it
+/// (the oracle's `f"Value {item!r} ..."`), so `High` and a no-break space
+/// never reads as `High`. The expected strings are CPython's `repr`.
+#[test]
+fn quotes_invisible_characters_escaped() {
+    let cases = [
+        ("High\u{a0}", r"'High\xa0'"),
+        ("a\u{ad}b", r"'a\xadb'"),
+        ("a\u{200b}b", r"'a\u200bb'"),
+        ("a\u{2028}b", r"'a\u2028b'"),
+        ("a\u{3000}b", r"'a\u3000b'"),
+        ("\u{e0001}", r"'\U000e0001'"),
+        ("\u{10ffff}", r"'\U0010ffff'"),
+        // What prints stays as written: a space, an emoji, a combining mark.
+        ("a b", "'a b'"),
+        ("\u{1f600}", "'\u{1f600}'"),
+        ("e\u{301}", "'e\u{301}'"),
+    ];
+    for (text, quoted) in cases {
+        assert_eq!(quote(text), quoted, "{text:?}");
+    }
+    let unknown = Unknown {
+        vocab: "alert_severity::1.0".to_owned(),
+        value: "High\u{a0}".to_owned(),
+        suggestion: Some("High".to_owned()),
+    };
+    assert_eq!(
+        unknown.message(),
+        r"Value 'High\xa0' is not a valid 'alert_severity::1.0' vocabulary entry"
+    );
 }
 
 #[test]
@@ -203,6 +259,47 @@ fn a_data_root_replaces_the_bundle_and_objects_add_vocabularies() {
     set.insert(objectives);
     assert_eq!(set.allowed(&selector("objective", false)), ["6f1c"]);
     assert!(Vocabularies::default().fields().contains("att&ck"));
+}
+
+/// An id-keyed vocabulary's scoped values carry the entry's first stage,
+/// however many it has.
+#[test]
+fn an_id_keyed_entry_is_scoped_by_its_first_stage() {
+    let text = "name = \"G\"\nfield = \"groups\"\nkey = \"id\"\n\
+                stages = [{ id = \"misp\" }, { id = \"att&ck\" }]\n\
+                [[keys]]\nid = \"G1\"\nname = \"One\"\n\"tide.vocab.stages\" = [\"att&ck\", \"misp\"]\n";
+    let (set, errors) = Vocabularies::from_files([("groups.vocab.toml", text)]);
+    assert!(errors.is_empty(), "{errors:?}");
+    assert_eq!(set.allowed(&selector("groups", true)), ["att&ck::G1"]);
+    assert_eq!(set.allowed(&selector("groups", false)), ["G1"]);
+}
+
+/// A workspace's object vocabularies (`threat`, `objective`, `rule`) resolve
+/// as id-keyed ones do, whatever the document says: every key, without a
+/// stage filter.
+#[test]
+fn object_vocabularies_ignore_stage_filters() {
+    let document = |field: &str| {
+        format!(
+            "name = \"N\"\nfield = \"{field}\"\nkey = \"name\"\n[[keys]]\nname = \"r1\"\n\"tide.vocab.stages\" = [\"x\"]\n"
+        )
+    };
+    let (rule, other) = (document("rule"), document("other"));
+    let (set, errors) = Vocabularies::from_files([
+        ("rule.vocab.toml", rule.as_str()),
+        ("other.vocab.toml", other.as_str()),
+    ]);
+    assert!(errors.is_empty(), "{errors:?}");
+    assert_eq!(set.allowed(&selector("rule", false).stages(["y"])), ["r1"]);
+    assert_eq!(
+        set.allowed(&selector("rule", true).stages(["y"])),
+        ["x::r1"]
+    );
+    // A name-keyed vocabulary that is no object family applies the filter.
+    assert!(
+        set.allowed(&selector("other", false).stages(["y"]))
+            .is_empty()
+    );
 }
 
 /// Every single-edit misspelling of every value a schema field accepts: the

@@ -435,7 +435,14 @@ impl Unknown {
 
 /// `text` quoted as the CLI's messages quote a value: in single quotes, or in
 /// double quotes when it holds a single quote and no double quote; a
-/// backslash, the quote, and control characters escaped.
+/// backslash, the quote, and every character that does not print escaped
+/// (`\n`, `\x07`, `\xa0`, `\u200b`, `\U000e0001`), so a value that only
+/// looks valid (`High` and a no-break space) shows what it holds.
+///
+/// A character does not print when its general category ([`unicode_properties`])
+/// is a control, format, surrogate, private-use or unassigned one, or a line,
+/// paragraph or space separator other than the space itself: Python's
+/// `str.isprintable`, which the oracle's `repr` follows.
 pub fn quote(text: &str) -> String {
     let delimiter = if text.contains('\'') && !text.contains('"') {
         '"'
@@ -454,14 +461,39 @@ pub fn quote(text: &str) -> String {
                 quoted.push('\\');
                 quoted.push(c);
             }
-            c if (c as u32) < 0x20 || (0x7f..0xa0).contains(&(c as u32)) => {
-                quoted.push_str(&format!("\\x{:02x}", c as u32));
+            c if !prints(c) => {
+                let code = c as u32;
+                let escaped = if code <= 0xff {
+                    format!("\\x{code:02x}")
+                } else if code <= 0xffff {
+                    format!("\\u{code:04x}")
+                } else {
+                    format!("\\U{code:08x}")
+                };
+                quoted.push_str(&escaped);
             }
             c => quoted.push(c),
         }
     }
     quoted.push(delimiter);
     quoted
+}
+
+/// Whether `c` shows as itself in a message ([`quote`]).
+fn prints(c: char) -> bool {
+    use unicode_properties::{GeneralCategory as G, UnicodeGeneralCategory};
+    c == ' '
+        || !matches!(
+            c.general_category(),
+            G::Control
+                | G::Format
+                | G::Surrogate
+                | G::PrivateUse
+                | G::Unassigned
+                | G::LineSeparator
+                | G::ParagraphSeparator
+                | G::SpaceSeparator
+        )
 }
 
 #[cfg(test)]
