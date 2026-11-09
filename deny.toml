@@ -97,6 +97,7 @@ skip = [
   # pseudo-terminals, and tempfile: both bring bitflags 2, beside the bitflags
   # 1 of lsp-types (fluent-uri 0.1). No shipped crate depends on bitflags 2.
   { crate = "bitflags@2.13.2", reason = "only xtask (tooling, never shipped) uses it at run time, through rustix and tempfile; the shipped crates use bitflags 1 through lsp-types" },
+  { crate = "syn@2.0.119", reason = "garde_derive 0.23 (opentide-schema's validation derive, plan D-2) depends on syn 2 and no garde release uses syn 3 yet; every other proc macro uses syn 3. Drop this when garde moves" },
 ]
 
 # Every crate comes from crates.io. A git or another registry's crate fails

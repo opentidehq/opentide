@@ -34,12 +34,12 @@ list (`scripts/engine/audit.py ignores`). Today there is one:
 |----------|-------|--------------------|-----------|
 | RUSTSEC-2024-0449 | `unsafe-libyaml` (unmaintained), through `serde_yaml` 0.9 | `opentide-tide` and `opentide-lsp` read Tide YAML with `serde_yaml`. Replacing it changes the YAML the engine accepts and the positions it reports, a behaviour change that needs a parity proof on every corpus | [#850](https://github.com/opentidehq/opentide/issues/850) |
 
-**Bans.** A second version of a crate we ship fails (there is none today). Dev-dependencies are
+**Bans.** A second version of a crate we ship fails, unless `[bans] skip` lists it with its reason. There is one: `syn` 2, which `garde_derive` 0.23 needs (`opentide-schema`'s validation derive, plan D-2; no garde release uses `syn` 3 yet), beside the `syn` 3 of every other proc macro. Dev-dependencies are
 left out, as cargo-deny leaves them out by default. These test tools duplicate a shipped crate,
 reviewed and harmless because none of them ships: `trycmd`'s `toml_edit` 0.25 (with `winnow` 1,
 `toml_datetime` 1 and `serde_spanned` 1) beside the engine's `toml` 0.8 and `toml_edit` 0.22;
 `trycmd`'s `shlex` 1 beside `cc`'s `shlex` 2; `insta`'s `similar` 2 beside `snapbox`'s `similar` 3;
-`tempfile`'s `bitflags` 2 beside `lsp-types`'s `bitflags` 1. xtask, which is tooling and never ships, uses `rustix` (the golden runner's pseudo-terminals) and `tempfile` at run time, so `bitflags` 2 is in the checked graph through it alone: `skip` names `bitflags@2.13.2` with that reason. `openssl-sys`, `openssl` and
+`tempfile`'s `bitflags` 2 beside `lsp-types`'s `bitflags` 1. `trybuild`'s `toml` 1 (with its `toml_*` crates) beside the engine's `toml` 0.8, for `opentide-schema`'s compile-fail tests. xtask, which is tooling and never ships, uses `rustix` (the golden runner's pseudo-terminals) and `tempfile` at run time, so `bitflags` 2 is in the checked graph through it alone: `skip` names `bitflags@2.13.2` with that reason. `openssl-sys`, `openssl` and
 `native-tls` are banned: TLS is rustls (plan D-8; per-tenant TLS settings are a §3 invariant), with
 no system library to link on every wheel target. Wildcard version requirements fail.
 
