@@ -195,10 +195,7 @@ def main() -> int:
         "oracle": opentide.__version__,
         "metadata_keys": list(metadata_keys()),
         "bundled": sorted(
-            str(path.relative_to(Path(opentide.__file__).parent / "data" / "configurations"))
-            for path in (Path(opentide.__file__).parent / "data" / "configurations").rglob(
-                "*.toml"
-            )
+            path.relative_to(BUNDLED).as_posix() for path in Path(BUNDLED).rglob("*.toml")
         ),
         "cases": {},
     }
@@ -206,7 +203,7 @@ def main() -> int:
         table["cases"][case["id"]] = runners[case["kind"]](case)
     out = HERE / "config_table.json"
     out.write_text(json.dumps(table, indent=1, sort_keys=True) + "\n", encoding="utf-8")
-    print(f"wrote {out} ({len(table['cases'])} cases)", file=sys.stderr)
+    sys.stderr.write(f"wrote {out} ({len(table['cases'])} cases)\n")
     return 0
 
 
