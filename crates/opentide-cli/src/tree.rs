@@ -9,7 +9,7 @@
 //! holds that document to the oracle's byte for byte.
 //!
 //! What clap cannot say about an argument, the catalogue reads from
-//! [`crate::tree_meta`]: the negative flag of a pair (`--publish` /
+//! `tree_meta.rs`: the negative flag of a pair (`--publish` /
 //! `--no-publish`) and a default that is not the flag's (`null`, `true`, `[]`).
 //! `long_about = ""` marks a command whose help text is empty: the catalogue's
 //! `help` is `""` and its `summary` the `about` line.
