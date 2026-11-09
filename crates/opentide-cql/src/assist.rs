@@ -284,6 +284,10 @@ fn argument_name(arg: &str) -> Option<&str> {
 }
 
 /// Signature help at byte `offset` of `source`.
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "the active parameter indexes a catalogued function's parameters, a few dozen at most; LSP positions are u32"
+)]
 pub fn signature_help(source: &str, offset: usize) -> Option<SignatureHelp> {
     let before = source.get(..offset.min(source.len()))?;
     let (name, args) = open_call(before)?;
@@ -344,7 +348,7 @@ fn field_items(catalog: &Catalog) -> impl Iterator<Item = CompletionItem> + '_ {
         .map(|f| {
             let mut item = CompletionItem::new(f.name.clone(), "property");
             item.detail = Some(format!("{} ({})", f.ty, layer_name(&f.layer)));
-            item.documentation = f.docs.clone();
+            item.documentation.clone_from(&f.docs);
             item
         })
 }

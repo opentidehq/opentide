@@ -7,8 +7,8 @@ CQL is closed source. There is no reference parser to port (Falco has libsinsp) 
 | Layer | Source of truth | Engine |
 |-------|-----------------|--------|
 | Syntax | CrowdStrike's "CQL Grammar Subset" (library.humio.com, `lql-grammar/syntax-grammar-guide-subset`) and its appendices (quirks, character table), the operator, filter, expression, conditional, comment, regular-expression and array pages, and the release notes 1.90–1.265 | `grammars/tree-sitter-opentide-cql` (tree-sitter, with an external scanner for context-dependent tokens) |
-| Functions | the CQL function reference (one page per function: parameters, types, required, default, the omittable parameter, allowed values, bounds, availability, deprecation) | `catalogs/cql/functions.toml` (`scripts/sync_cql_catalog.py`) |
-| Data | LogScale built-in fields and tags; Falcon sensor events and fields from redistributable sources only; CrowdStrike Parsing Standard (CPS, ECS-based) fields | `catalogs/cql/events.toml`, `catalogs/cql/fields.toml` |
+| Functions | the CQL function reference (one page per function: parameters, types, required, default, the omittable parameter, allowed values, bounds, availability, deprecation) | `data/catalogs/cql/functions.toml` (`scripts/engine/sync_cql_catalog.py`) |
+| Data | LogScale built-in fields and tags; Falcon sensor events and fields from redistributable sources only; CrowdStrike Parsing Standard (CPS, ECS-based) fields | `data/catalogs/cql/events.toml`, `data/catalogs/cql/fields.toml` |
 | Correlation rules | the Next-Gen SIEM correlation-rule API (FalconPy, gofalcon, the CrowdStrike Terraform provider) and the `correlate()` reference | `crates/opentide-cql/src/check.rs` (`correlation_rule`) |
 
 CrowdStrike's grammar text is cited, not copied: the grammar is re-derived in `grammar.js`, and catalog summaries are written for this repository. Facts (names, parameter names, types, defaults, enums) are generated.
@@ -19,7 +19,7 @@ CrowdStrike's grammar text is cited, not copied: the grammar is re-derived in `g
 |-------|---------|-----------|---------|
 | CrowdStrike/logscale-community-content@77cfc4e3 (searches, saved searches, dashboards, parsers; measured, not vendored) | 2,812 blocks labelled CQL | 2,786 parse; the 26 that do not are not CQL: non-breaking spaces pasted from the web, prose or input lists, SPL, YAML leftovers, author errors | `cql_parse_error` |
 | The same, every check | 2,812 | no false positive found: every finding is a removed function (`rdns`, `lookup`), a deprecated one (`lowercase`), a genuine mistake in the published query (`bucket(span=1day,(field="Tactic"))`, `worldMap(brokenWidget)`), SPL, or an event the catalog lacks (warning) | `opentide_cql::analyze` |
-| Public queries, vendored (`testdata/conformance/external/cql/`, Unlicense parts only, unmodified) | 45, each with a `.broken.cql` twin | 45 / 45 clean; every twin reports the code `FAULTS.toml` names (14 fault kinds) | `crates/opentide-analysis/tests/external_cql.rs` |
+| Public queries, vendored (`crates/testdata/conformance/external/cql/`, Unlicense parts only, unmodified) | 45, each with a `.broken.cql` twin | 45 / 45 clean; every twin reports the code `FAULTS.toml` names (14 fault kinds) | `crates/opentide-analysis/tests/external_cql.rs` |
 | CrowdStrike's function and example pages (library.humio.com, every `Query` block, fetched 2026-11-07; measured, not vendored) | 490 | 475 clean; the 15 flagged are argument templates (`correlate()` fragments, `query={...}`), documentation typos (`join(suffix=)`, an unbalanced parenthesis, an empty `match` guard, `<REPO_NAME>`), and `math:mod(x, 3, as=...)` (two arguments without a name for one parameter, which the grammar subset forbids) | adversarial review, `opentide-lsp analyze` |
 | Other public CQL on GitHub (12 repositories, among them CrowdStrike/fal.con.2026, fusion-skills, terraform-provider-crowdstrike, corelight/CorelightForCrowdStrike; measured, not vendored) | 1,622 | every error a reviewer traced to the source: placeholders, invented parameters (`defineTable(lookbackDays=)`), `test(Field="x")` for `==`, aggregates inside `correlate()`, missing commas | adversarial review |
 | Grammar productions | 35 rules, one valid and one invalid fixture each | 35 / 35 | `crates/opentide-syntax/tests/corpus_gate.rs` |
@@ -164,9 +164,9 @@ Diagnostics map back onto the YAML (block scalar indent stripped), with `field_p
 
 ## Corpus and oracle
 
-- `testdata/corpus/cql/`: one valid and one invalid fixture per grammar production (`crates/opentide-syntax/tests/corpus_gate.rs`).
-- `testdata/conformance/external/cql/`: public CrowdStrike queries, unmodified, from the Unlicense parts of `CrowdStrike/logscale-community-content`, each with a `.broken.cql` twin carrying one injected fault (`SOURCES.md`).
-- Oracle: none runs in CI. See `scripts/oracles/README.md`. A tenant's GraphQL `validateQuery` (LogScale) or a failed query job (Next-Gen SIEM, HTTP 400) is the only reference, and it needs credentials.
+- `crates/testdata/corpus/cql/`: one valid and one invalid fixture per grammar production (`crates/opentide-syntax/tests/corpus_gate.rs`).
+- `crates/testdata/conformance/external/cql/`: public CrowdStrike queries, unmodified, from the Unlicense parts of `CrowdStrike/logscale-community-content`, each with a `.broken.cql` twin carrying one injected fault (`SOURCES.md`).
+- Oracle: none runs in CI. See `scripts/engine/oracles/README.md`. A tenant's GraphQL `validateQuery` (LogScale) or a failed query job (Next-Gen SIEM, HTTP 400) is the only reference, and it needs credentials.
 
 ## Known differences
 

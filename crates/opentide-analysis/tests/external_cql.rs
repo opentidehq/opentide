@@ -1,11 +1,16 @@
 //! Public CQL queries from CrowdStrike/logscale-community-content, each
 //! unmodified, plus a twin with one injected fault.
 //!
-//! Sources and licence: `testdata/conformance/external/SOURCES.md`. Only the
+//! Sources and licence: `crates/testdata/conformance/external/SOURCES.md`. Only the
 //! Unlicense parts of the repository are used. `cql/FAULTS.toml` lists every
 //! public query with the fault injected into its `.broken.cql` twin and the
 //! code that twin must report. Every public query must come out clean: no
 //! finding of any severity, as a raw query and through `analyze_query`.
+
+#![expect(
+    clippy::unwrap_used,
+    reason = "test helpers outside #[test] functions: a panic fails the test"
+)]
 
 use opentide_analysis::{Diagnostic, LanguageId, QueryRequest, analyze_query, codes};
 use std::collections::BTreeSet;
@@ -13,7 +18,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 fn root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../testdata/conformance/external/cql")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../testdata/conformance/external/cql")
 }
 
 /// Every fault kind the twins must cover, with the code it produces.

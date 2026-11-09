@@ -120,7 +120,7 @@ pub(crate) fn call_name<'s>(call: Node, source: &'s str) -> &'s str {
 
 /// The arguments of a call: `(name node, value node)`, the name absent when
 /// the argument has none.
-pub(crate) fn call_arguments<'t>(call: Node<'t>) -> Vec<(Option<Node<'t>>, Option<Node<'t>>)> {
+pub(crate) fn call_arguments(call: Node<'_>) -> Vec<(Option<Node<'_>>, Option<Node<'_>>)> {
     let Some(list) = call.child_by_field_name("arguments") else {
         return Vec::new();
     };
@@ -504,6 +504,10 @@ fn parameter_value(
 }
 
 /// Why `lit` is not a value `parameter` takes, or `None` when it is.
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "the catalog's bounds are small integers, exact in an f64"
+)]
 fn value_problem(parameter: &Parameter, lit: &str) -> Option<String> {
     // Booleans are `true` or `false`. The data-types page says "strictly in
     // lowercase", but CrowdStrike's own function examples write

@@ -4,7 +4,12 @@
 //! The tree-sitter grammar (`grammars/tree-sitter-opentide-cql`) is the parser;
 //! it follows CrowdStrike's published CQL grammar. [`analyze`] reports its first
 //! syntax error and then the checks of [`check`] against the catalogs of
-//! [`catalog`]. See `docs/CQL.md`.
+//! [`catalog`]. See `docs/engine/CQL.md`.
+
+#![expect(
+    missing_docs,
+    reason = "imported from language-server with public items undocumented: crates/AGENTS.md, Lints"
+)]
 
 pub mod assist;
 pub mod catalog;
@@ -44,6 +49,10 @@ pub fn analyze(source: &str) -> AnalyzeResult {
 }
 
 /// Analyze a CQL query where `ctx` says it runs.
+#[expect(
+    clippy::expect_used,
+    reason = "loads the HighlightSpec compiled in (highlights/spec.toml): a bad spec fails the tests, never a user's document"
+)]
 pub fn analyze_with(source: &str, ctx: &Context) -> AnalyzeResult {
     let spec = HighlightSpec::load().expect("highlight spec");
     let Some(tree) = ts_parse(LanguageId::Cql, source) else {
@@ -102,7 +111,7 @@ fn highlight(spec: &HighlightSpec, tree: &Tree, source: &str) -> Vec<HighlightTo
         return Vec::new();
     };
     let catalog = Catalog::cached();
-    for (span, capture) in spans.iter_mut() {
+    for (span, capture) in &mut spans {
         if capture == "function" {
             let name = source.get(span.start..span.end).unwrap_or("");
             if catalog.function(name).is_some_and(|f| !f.removed) {

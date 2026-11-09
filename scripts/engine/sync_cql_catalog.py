@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate catalogs/cql/*.toml, the CrowdStrike Query Language (CQL) catalogs.
+"""Generate data/catalogs/cql/*.toml, the CrowdStrike Query Language (CQL) catalogs.
 
 CQL is the query language of Falcon LogScale and Falcon Next-Gen SIEM. This
 script writes three catalogs, all facts only:
@@ -18,7 +18,7 @@ script writes three catalogs, all facts only:
 - ``fields.toml``: the LogScale built-in fields and tags, the Falcon platform
   tags and common sensor fields, the CrowdStrike Parsing Standard (CPS) tags
   and extras, and the ECS fields that Next-Gen SIEM parsers and dashboards
-  use (types from catalogs/ecs/fields.json).
+  use (types from data/catalogs/ecs/fields.json).
 
 Inputs (all read as data, never executed):
 
@@ -48,13 +48,13 @@ an input: no name that only Elastic supplies may ship. The erickatwork
 CrowdStrike's login-gated event reference.
 
 Usage:
-    python -I scripts/sync_cql_catalog.py --cache ../cql-cache \
+    python -I scripts/engine/sync_cql_catalog.py --cache ../cql-cache \
         --lcc ../logscale-community-content --query-hub ../Query-Hub \
         --cql-queries ../CQL-Queries --sentinel ../Azure-Sentinel \
         --pysigma ../pySigma-backend-crowdstrike [--offline] [--check]
 
 ``--check`` regenerates in memory, makes no network request, and exits 1
-when a committed file differs. Requires PyYAML (scripts/requirements-cql.txt).
+when a committed file differs. Requires PyYAML (scripts/engine/requirements-cql.txt).
 """
 
 from __future__ import annotations
@@ -76,9 +76,9 @@ from typing import Any
 
 import yaml
 
-ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / "catalogs" / "cql"
-ECS_CATALOG = ROOT / "catalogs" / "ecs" / "fields.json"
+ROOT = Path(__file__).resolve().parents[2]
+OUT = ROOT / "data" / "catalogs" / "cql"
+ECS_CATALOG = ROOT / "data" / "catalogs" / "ecs" / "fields.json"
 
 SITE = "https://library.humio.com/crowdstrike-query-language/"
 INDEX_PAGE = "functions.html"
@@ -93,8 +93,20 @@ PYSIGMA_PIPELINE = "sigma/pipelines/crowdstrike/crowdstrike.py"
 # stack that pops to the matching start tag is enough.
 
 VOID = {
-    "area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta",
-    "param", "source", "track", "wbr",
+    "area",
+    "base",
+    "br",
+    "col",
+    "embed",
+    "hr",
+    "img",
+    "input",
+    "link",
+    "meta",
+    "param",
+    "source",
+    "track",
+    "wbr",
 }
 SKIP_TEXT = {"script", "style", "svg"}
 
@@ -281,7 +293,7 @@ TYPE_MAP = {
     "array of file or table names": "array<file>",
 }
 QUERY_TYPES = {"function", "array<function>", "query"}
-DEPRECATED_IN = re.compile(r"\(\s*deprecated in (\d+(?:\.\d+)*)\s*\)", re.I)
+DEPRECATED_IN = re.compile(r"\(\s*deprecated in (\d+(?:\.\d+)*)\s*\)", re.IGNORECASE)
 # Page "Compatible Context" names -> catalog spelling.
 CONTEXTS = {
     "Query": "query",
@@ -388,7 +400,9 @@ def parse_params(article: Element) -> list[Param]:
     footnotes: dict[str, str] = {}
     for div in table.find_all("div", class_="footnote"):
         footnotes[div.get("id").removeprefix("ftn.")] = div.text()
-    body = next(el for el in table.elements() if el.tag == "tbody" and not el.has_class("footnotes"))
+    body = next(
+        el for el in table.elements() if el.tag == "tbody" and not el.has_class("footnotes")
+    )
     params: list[Param] = []
     current: Param | None = None
     mode = ""
@@ -492,17 +506,22 @@ def parse_function_page(page: str, text: str) -> Function | None:
     title = article.find("div", class_="titlepage")
     if title is not None and title.parent is not None:
         siblings = title.parent.children
-        for node in siblings[siblings.index(title) + 1:]:
+        for node in siblings[siblings.index(title) + 1 :]:
             if not isinstance(node, Element):
                 continue
             if node.has_class("bridgehead"):
                 break
-            if {"important", "note", "depnote", "warning", "caution", "tip"} & set(node.get("class").split()):
+            if {"important", "note", "depnote", "warning", "caution", "tip"} & set(
+                node.get("class").split()
+            ):
                 notes.append(node.text())
     joined = " ".join(notes)
     page_text = article.text()
     flag = re.search(r"feature flag (\w+)|feature (\w+) must be enabled", joined + " " + page_text)
-    badge = next((el for el in doc.find_all("span", class_="version-badge") if el.has_class("available")), None)
+    badge = next(
+        (el for el in doc.find_all("span", class_="version-badge") if el.has_class("available")),
+        None,
+    )
     params = parse_params(article)
     examples = "\n".join(c.text() for pre in article.find_all("pre") for c in pre.find_all("code"))
     for p in params:
@@ -510,7 +529,9 @@ def parse_function_page(page: str, text: str) -> Function | None:
         if not sub and p.unnamed:
             sub = re.search(re.escape(name) + r"\(\s*\[?\s*\{", examples)
         p.query = p.type in QUERY_TYPES or bool(sub)
-    for alias, of in sorted(set(re.findall(r"\buse (\w+) as an alias of the (\w+) parameter", page_text))):
+    for alias, of in sorted(
+        set(re.findall(r"\buse (\w+) as an alias of the (\w+) parameter", page_text))
+    ):
         for p in params:
             if p.name == of and alias not in p.aliases:
                 p.aliases.append(alias)
@@ -535,7 +556,7 @@ def parse_function_page(page: str, text: str) -> Function | None:
         incompatible=incompatible,
         since=badge.text() if badge is not None else None,
         deprecated=any(n.startswith("Deprecated:") for n in notes),
-        experimental=bool(re.search(r"experimental|beta feature", joined, re.I)),
+        experimental=bool(re.search(r"experimental|beta feature", joined, re.IGNORECASE)),
         feature_flag=(flag.group(1) or flag.group(2)) if flag else None,
         ngsiem_only=bool(re.search(r"only\s+available in Falcon NG-SIEM", page_text)),
     )
@@ -587,7 +608,12 @@ REMOVED_FUNCTIONS: list[dict[str, str | None]] = [
     # "holtwinters() is now deprecated and will be removed along with ... 1.73" (1.68.0).
     {"name": "holtwinters", "removed_in": "1.73", "replacement": None, "citation": RELEASE_NOTES},
     # match(strict=false) "works like the deprecated lookup()"; no page since.
-    {"name": "lookup", "removed_in": None, "replacement": "match", "citation": SITE + "functions-match.html"},
+    {
+        "name": "lookup",
+        "removed_in": None,
+        "replacement": "match",
+        "citation": SITE + "functions-match.html",
+    },
     # "rdns() has been deprecated and will be removed in version 1.249" (1.193.0).
     {"name": "rdns", "removed_in": "1.249", "replacement": "reverseDns", "citation": RELEASE_NOTES},
 ]
@@ -626,7 +652,13 @@ EXTRA_PARAMS: dict[str, list[Param]] = {
     # `query={*}`).
     "remoteTable": [
         Param(
-            name="query", type="query", required=True, default=None, unnamed=False, multi=False, query=True
+            name="query",
+            type="query",
+            required=True,
+            default=None,
+            unnamed=False,
+            multi=False,
+            query=True,
         )
     ],
 }
@@ -647,7 +679,9 @@ def read_functions(cache: Path) -> list[Function]:
         if fn is None:
             continue
         fn.category = index.get(page) or by_category.get(page, [])
-        fn.aggregate = "aggregate" in fn.function_type or (not fn.function_type and "aggregate" in fn.category)
+        fn.aggregate = "aggregate" in fn.function_type or (
+            not fn.function_type and "aggregate" in fn.category
+        )
         for key, value in FUNCTION_FIXES.get(fn.name, {}).items():
             setattr(fn, key, value)
         for p in fn.params:
@@ -665,9 +699,19 @@ def read_functions(cache: Path) -> list[Function]:
     for row in REMOVED_FUNCTIONS:
         functions.append(
             Function(
-                name=str(row["name"]), page=str(row["citation"]), params=[], function_type=[],
-                contexts=[], incompatible=[], since=None, deprecated=True, experimental=False, feature_flag=None,
-                ngsiem_only=False, removed=True, removed_in=row["removed_in"],
+                name=str(row["name"]),
+                page=str(row["citation"]),
+                params=[],
+                function_type=[],
+                contexts=[],
+                incompatible=[],
+                since=None,
+                deprecated=True,
+                experimental=False,
+                feature_flag=None,
+                ngsiem_only=False,
+                removed=True,
+                removed_in=row["removed_in"],
                 replacement=row["replacement"],
             )
         )
@@ -684,7 +728,7 @@ def signature(fn: Function) -> str:
 # --------------------------------------------------------------------------
 # Query corpora (logscale-community-content, Query-Hub, CQL-Queries)
 
-FENCE = re.compile(r"```[^\n]*\n(.*?)```", re.S)
+FENCE = re.compile(r"```[^\n]*\n(.*?)```", re.DOTALL)
 QUERY_KEYS = {"queryString", "query", "search", "script", "filter", "cql"}
 
 
@@ -772,7 +816,7 @@ REGEX_LITERAL = re.compile(r"(?<=[=\s(,])/(?:[^/\\\n]|\\.)+/[a-zA-Z]*")
 
 
 def strip_comments(q: str) -> str:
-    q = re.sub(r"/\*.*?\*/", " ", q, flags=re.S)
+    q = re.sub(r"/\*.*?\*/", " ", q, flags=re.DOTALL)
     return re.sub(r"(?m)(?<!:)//.*$", " ", q)
 
 
@@ -803,21 +847,88 @@ def ngsiem_evidence(queries: list[Query], names: list[str]) -> dict[str, str]:
     return {**weak, **strong}
 
 
-EVENT_EQ = re.compile(r"#?event_simpleName\s*(?:=|!=)\s*\"?([A-Za-z][A-Za-z0-9_]*)\"?(?![*A-Za-z0-9_])")
-EVENT_IN = re.compile(r"in\(\s*(?:field\s*=\s*)?\"?#?event_simpleName\"?\s*,\s*values\s*=\s*\[([^\]]*)\]", re.S)
+EVENT_EQ = re.compile(
+    r"#?event_simpleName\s*(?:=|!=)\s*\"?([A-Za-z][A-Za-z0-9_]*)\"?(?![*A-Za-z0-9_])"
+)
+EVENT_IN = re.compile(
+    r"in\(\s*(?:field\s*=\s*)?\"?#?event_simpleName\"?\s*,\s*values\s*=\s*\[([^\]]*)\]", re.DOTALL
+)
 EVENT_RX = re.compile(r"#?event_simpleName\s*=\s*/((?:[^/\\\n]|\\.)+)/")
 IDENT = re.compile(r"(?<![A-Za-z0-9_.\-@#$])([@#]?[A-Za-z_][A-Za-z0-9_.\[\]]*)")
 # Argument names and keywords that look like field names.
 KEYWORDS = {
-    "and", "or", "not", "true", "false", "as", "field", "function", "values", "limit",
-    "max", "min", "distinct", "where", "include", "file", "column", "strict", "span",
-    "unit", "format", "series", "sortby", "order", "desc", "asc", "type", "regex",
-    "flags", "ignorecase", "mode", "prefilter", "buckets", "timezone", "query",
-    "start", "end", "key", "repo", "glob", "within", "sequence", "maxperroot", "root",
-    "jittertolerance", "globalconstraints", "maxdepth", "precision", "separator",
-    "strip", "multiline", "with", "then", "case", "match", "in", "from", "to", "by",
-    "default", "replace", "time", "timefield", "decimals", "n", "num", "percent",
-    "infile", "template", "id", "minspan", "outputformat",
+    "and",
+    "or",
+    "not",
+    "true",
+    "false",
+    "as",
+    "field",
+    "function",
+    "values",
+    "limit",
+    "max",
+    "min",
+    "distinct",
+    "where",
+    "include",
+    "file",
+    "column",
+    "strict",
+    "span",
+    "unit",
+    "format",
+    "series",
+    "sortby",
+    "order",
+    "desc",
+    "asc",
+    "type",
+    "regex",
+    "flags",
+    "ignorecase",
+    "mode",
+    "prefilter",
+    "buckets",
+    "timezone",
+    "query",
+    "start",
+    "end",
+    "key",
+    "repo",
+    "glob",
+    "within",
+    "sequence",
+    "maxperroot",
+    "root",
+    "jittertolerance",
+    "globalconstraints",
+    "maxdepth",
+    "precision",
+    "separator",
+    "strip",
+    "multiline",
+    "with",
+    "then",
+    "case",
+    "match",
+    "in",
+    "from",
+    "to",
+    "by",
+    "default",
+    "replace",
+    "time",
+    "timefield",
+    "decimals",
+    "n",
+    "num",
+    "percent",
+    "infile",
+    "template",
+    "id",
+    "minspan",
+    "outputformat",
 }
 FIELD_ARGS = {"field", "fields", "key", "column", "sortby", "timefield", "keys"}
 
@@ -841,19 +952,26 @@ def fields_in(q: str) -> tuple[set[str], set[str]]:
     """(names a query reads, names it creates)."""
     bare = REGEX_LITERAL.sub(" // ", STRING.sub(' "" ', q))
     created: set[str] = set()
-    created.update(m.group(1) for m in re.finditer(r"([@#]?[A-Za-z_][A-Za-z0-9_.\[\]]*)\s*:=", bare))
-    created.update(m.group(1) for m in re.finditer(r"\bas\s*=\s*\"?([A-Za-z_@#][A-Za-z0-9_.\[\]]*)", bare))
+    created.update(
+        m.group(1) for m in re.finditer(r"([@#]?[A-Za-z_][A-Za-z0-9_.\[\]]*)\s*:=", bare)
+    )
+    created.update(
+        m.group(1) for m in re.finditer(r"\bas\s*=\s*\"?([A-Za-z_@#][A-Za-z0-9_.\[\]]*)", bare)
+    )
     created.update(m.group(1) for m in re.finditer(r"\?([A-Za-z_][A-Za-z0-9_]*)", bare))
     created.update(m.group(1) for m in re.finditer(r"\(\?<([A-Za-z_][A-Za-z0-9_.]*)>", q))
-    created.update(m.group(1) for m in re.finditer(r"defineTable\(\s*name\s*=\s*\"?([A-Za-z_][A-Za-z0-9_]*)", q))
+    created.update(
+        m.group(1)
+        for m in re.finditer(r"defineTable\(\s*name\s*=\s*\"?([A-Za-z_][A-Za-z0-9_]*)", q)
+    )
     bare = re.sub(r"values\s*=\s*\[[^\]]*\]", " ", bare)
     read: set[str] = set()
     for m in IDENT.finditer(bare):
         token = re.sub(r"\[\d*\]$", "", m.group(1).rstrip(".")).rstrip("[]")
-        after = bare[m.end():m.end() + 3].lstrip()
+        after = bare[m.end() : m.end() + 3].lstrip()
         if after.startswith(("(", ":=")):
             continue
-        before = bare[max(0, m.start() - 40):m.start()]
+        before = bare[max(0, m.start() - 40) : m.start()]
         if before.endswith("?"):
             continue
         lhs = re.search(r"([A-Za-z_@#][A-Za-z0-9_.]*)\s*(!=|=|<=|>=|<|>)\s*$", before)
@@ -863,7 +981,11 @@ def fields_in(q: str) -> tuple[set[str], set[str]]:
             continue
         if re.fullmatch(r"[a-z]+", token) and token not in {"aid", "cid", "aip"}:
             continue
-        if re.search(r"\.(exe|dll|ps1|bat|cmd|sh|py|json|sys|vbs|js|msc|com|scr|hta|lnk)$", token, re.I):
+        if re.search(
+            r"\.(exe|dll|ps1|bat|cmd|sh|py|json|sys|vbs|js|msc|com|scr|hta|lnk)$",
+            token,
+            re.IGNORECASE,
+        ):
             continue
         if re.fullmatch(r"[A-Z0-9_]+", token) and len(token) > 3:
             continue
@@ -901,7 +1023,7 @@ def or_groups(stage: str) -> list[str]:
         elif ch == ")":
             depth -= 1
             if depth == 0:
-                groups.append(stage[start + 1:i])
+                groups.append(stage[start + 1 : i])
     return groups
 
 
@@ -922,8 +1044,14 @@ class Mined:
 
 
 VALUE_TAGS = [
-    "#repo", "event_platform", "#Vendor", "#event.module", "#event.kind", "#kind",
-    "#streamingApiEvent", "#data_source_name",
+    "#repo",
+    "event_platform",
+    "#Vendor",
+    "#event.module",
+    "#event.kind",
+    "#kind",
+    "#streamingApiEvent",
+    "#data_source_name",
 ]
 
 
@@ -974,8 +1102,15 @@ def mine(queries: list[Query]) -> dict[str, Mined]:
 # Microsoft Sentinel's CrowdStrike FDR connector (MIT)
 
 SENTINEL_ONLY_COLUMNS = {
-    "TimeGenerated", "CrowdStrikeId", "AdditionalFields", "eventDatetime", "_ItemId",
-    "TenantId", "Type", "_ResourceId", "event_simpleName",
+    "TimeGenerated",
+    "CrowdStrikeId",
+    "AdditionalFields",
+    "eventDatetime",
+    "_ItemId",
+    "TenantId",
+    "Type",
+    "_ResourceId",
+    "event_simpleName",
 }
 
 
@@ -1005,7 +1140,9 @@ def read_sentinel(checkout: Path) -> Sentinel:
     for path in sorted(fdr.glob("CrowdStrike_*_CL.json")):
         data = json.loads(path.read_text(encoding="utf-8"))
         cols = data["properties"]["schema"]["columns"]
-        tables[data["name"]] = [(c["name"], c["type"]) for c in cols if c["name"] not in SENTINEL_ONLY_COLUMNS]
+        tables[data["name"]] = [
+            (c["name"], c["type"]) for c in cols if c["name"] not in SENTINEL_ONLY_COLUMNS
+        ]
     dcr = json.loads((fdr / "DCR.json").read_text(encoding="utf-8"))
     raw: set[str] = set()
     for decls in walk_json(dcr, "streamDeclarations"):
@@ -1015,10 +1152,15 @@ def read_sentinel(checkout: Path) -> Sentinel:
     for flows in walk_json(dcr, "dataFlows"):
         for flow in flows:
             table = flow.get("outputStream", "").removeprefix("Custom-")
-            for m in re.finditer(r"event_simpleName\s+in~?\s*\(([^)]*)\)", flow.get("transformKql") or ""):
+            for m in re.finditer(
+                r"event_simpleName\s+in~?\s*\(([^)]*)\)", flow.get("transformKql") or ""
+            ):
                 for name in re.findall(r"'([A-Za-z0-9_]+)'|\"([A-Za-z0-9_]+)\"", m.group(1)):
                     event_table[name[0] or name[1]] = table
-    mapping = base / "CrowdstrikeReplicatorCLv2/CrowdstrikeFalconAPISentinelConn/QueueTriggerCS/EventsToTableMapping.json"
+    mapping = base / (
+        "CrowdstrikeReplicatorCLv2/CrowdstrikeFalconAPISentinelConn/QueueTriggerCS/"
+        "EventsToTableMapping.json"
+    )
     for name, kind in json.loads(mapping.read_text(encoding="utf-8")).items():
         event_table.setdefault(name, f"CrowdStrike_{kind}_Events_CL")
     return Sentinel(tables, event_table, raw - SENTINEL_ONLY_COLUMNS)
@@ -1026,7 +1168,12 @@ def read_sentinel(checkout: Path) -> Sentinel:
 
 def table_category(table: str) -> str:
     """`CrowdStrike_Process_Events_CL` -> `process`."""
-    core = table.removeprefix("CrowdStrike_").removesuffix("_CL").removesuffix("_Events").removesuffix("_Data")
+    core = (
+        table.removeprefix("CrowdStrike_")
+        .removesuffix("_CL")
+        .removesuffix("_Events")
+        .removesuffix("_Data")
+    )
     return core.lower()
 
 
@@ -1058,7 +1205,11 @@ def read_pysigma(checkout: Path) -> dict[str, SigmaCategory]:
     tree = ast.parse((checkout / PYSIGMA_PIPELINE).read_text(encoding="utf-8"))
     cats: dict[str, SigmaCategory] = collections.defaultdict(SigmaCategory)
     for node in ast.walk(tree):
-        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "ProcessingItem"):
+        if not (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "ProcessingItem"
+        ):
             continue
         kw = {k.arg: k.value for k in node.keywords if k.arg}
         sources: list[tuple[str, str]] = []
@@ -1079,7 +1230,11 @@ def read_pysigma(checkout: Path) -> dict[str, SigmaCategory]:
         events: list[str] = []
         targets: list[str] = []
         for k, v in zip(arg.keys, arg.values, strict=True):
-            if kind == "AddConditionTransformation" and isinstance(k, ast.Constant) and k.value == "#event_simpleName":
+            if (
+                kind == "AddConditionTransformation"
+                and isinstance(k, ast.Constant)
+                and k.value == "#event_simpleName"
+            ):
                 events += _strings(v)
             elif kind == "FieldMappingTransformation":
                 targets += _strings(v)
@@ -1098,19 +1253,60 @@ EVENT_NAME = re.compile(r"^[A-Z][A-Za-z0-9_]+$")
 PLATFORMS = ["Win", "Mac", "Lin", "K8S"]
 PLATFORM_SPELLINGS = {p.lower(): p for p in PLATFORMS}
 # Tutorial placeholders in the community queries, not Falcon events.
-PLACEHOLDER_EVENTS = {"EventTypeA", "EventTypeB", "MyDetection", "MyEvent", "NetworkConnect", "RegGenericValue"}
+PLACEHOLDER_EVENTS = {
+    "EventTypeA",
+    "EventTypeB",
+    "MyDetection",
+    "MyEvent",
+    "NetworkConnect",
+    "RegGenericValue",
+}
 # Capitalised words that query mining picks up from prose-like queries.
 NOISE_FIELDS = {
-    "Chrome", "Edge", "Firefox", "Safari", "Explorer", "Help", "One", "Optional", "Environment",
-    "Configure", "Domains", "Process", "Execution", "Graph", "Last", "Count", "Event", "Run",
-    "System", "Search", "User", "Customer", "Endpoints", "Tenant", "Unverified", "Actor",
+    "Chrome",
+    "Edge",
+    "Firefox",
+    "Safari",
+    "Explorer",
+    "Help",
+    "One",
+    "Optional",
+    "Environment",
+    "Configure",
+    "Domains",
+    "Process",
+    "Execution",
+    "Graph",
+    "Last",
+    "Count",
+    "Event",
+    "Run",
+    "System",
+    "Search",
+    "User",
+    "Customer",
+    "Endpoints",
+    "Tenant",
+    "Unverified",
+    "Actor",
 }
 LOWERCASE_FIELDS = {"aid", "cid", "aip", "event_platform", "name", "id", "timestamp"}
 # Fields on (nearly) every sensor event. Each must be confirmed by Sentinel's
 # raw FDR stream or the community queries; `build_events` checks.
 COMMON_SENSOR_FIELDS = [
-    "aid", "aip", "cid", "event_platform", "timestamp", "ContextTimeStamp", "name", "id",
-    "ConfigBuild", "ConfigStateHash", "EffectiveTransmissionClass", "Entitlements", "EventOrigin",
+    "aid",
+    "aip",
+    "cid",
+    "event_platform",
+    "timestamp",
+    "ContextTimeStamp",
+    "name",
+    "id",
+    "ConfigBuild",
+    "ConfigStateHash",
+    "EffectiveTransmissionClass",
+    "Entitlements",
+    "EventOrigin",
 ]
 QUERY_SOURCES = ("lcc", "queryhub", "cqlqueries")
 
@@ -1177,7 +1373,11 @@ def build_events(
                 continue
             mentions += ev.mentions
             fields |= {f for f, c in ev.fields.items() if accept(f, c)}
-            platforms |= {PLATFORM_SPELLINGS[p.lower()] for p in ev.platforms if p.lower() in PLATFORM_SPELLINGS}
+            platforms |= {
+                PLATFORM_SPELLINGS[p.lower()]
+                for p in ev.platforms
+                if p.lower() in PLATFORM_SPELLINGS
+            }
         if name in sigma_events:
             fields |= sigma_events[name].fields
             platforms |= sigma_events[name].platforms
@@ -1186,7 +1386,9 @@ def build_events(
         if table:
             row["category"] = table_category(table)
         row["platforms"] = [p for p in PLATFORMS if p in platforms]
-        row["fields"] = sorted(fields - set(COMMON_SENSOR_FIELDS) - {"event_simpleName"}, key=lambda f: (f.lower(), f))
+        row["fields"] = sorted(
+            fields - set(COMMON_SENSOR_FIELDS) - {"event_simpleName"}, key=lambda f: (f.lower(), f)
+        )
         row["sources"] = sorted(sources)
         row["mentions"] = mentions
         rows.append(row)
@@ -1202,6 +1404,7 @@ def build_events(
 
 # --------------------------------------------------------------------------
 # Fields and tags
+
 
 @dataclass
 class FieldRow:
@@ -1220,178 +1423,480 @@ class FieldRow:
 # "Backfilling Data", the CPS pages) and the public queries; `docs` is
 # written for this catalog. `sources` names where each was confirmed.
 BUILTIN_FIELDS = [
-    FieldRow("@timestamp", "logscale", "metadata", "timestamp",
-             "When the event happened, in milliseconds since the Unix epoch (UTC). Searches filter on it.",
-             ["library.humio.com"]),
-    FieldRow("@timestamp.nanos", "logscale", "metadata", "integer",
-             "Nanoseconds beyond the millisecond of `@timestamp`, when the source has them.",
-             ["library.humio.com"]),
-    FieldRow("@ingesttimestamp", "logscale", "metadata", "timestamp",
-             "When LogScale received the event, in epoch milliseconds. Correlation rules can schedule on it.",
-             ["library.humio.com", "developer.crowdstrike.com"]),
-    FieldRow("@rawstring", "logscale", "metadata", "string",
-             "The event as it arrived, before parsing. Free-text search and most parsers read it.",
-             ["library.humio.com"]),
-    FieldRow("@id", "logscale", "metadata", "string",
-             "Identifier LogScale gives each stored event.",
-             ["library.humio.com"]),
-    FieldRow("@timezone", "logscale", "metadata", "string",
-             "Time zone of the source timestamp, when the parser could tell.",
-             ["library.humio.com"]),
-    FieldRow("@error_msg", "logscale", "metadata", "string",
-             "Why parsing the event failed; can be an array (`@error_msg[0]`).",
-             ["lcc"], scope="parser"),
-    FieldRow("@event_parsed", "logscale", "metadata", "string",
-             "Parser flag recording whether the event was parsed.",
-             ["lcc"], scope="parser"),
-    FieldRow("@source", "logscale", "metadata", "string",
-             "Ingest source label set on the way in (for example by a data connector).",
-             ["cqlqueries"], scope="collector"),
-    FieldRow("@sourcetype", "logscale", "metadata", "string",
-             "Source type label set at ingest.",
-             ["cqlqueries", "lcc"], scope="collector"),
-    FieldRow("@host", "logscale", "metadata", "string",
-             "Host the shipper or collector sent the event from.",
-             ["lcc"], scope="collector"),
-    FieldRow("@dataConnectionID", "logscale", "metadata", "string",
-             "Next-Gen SIEM data connector that brought the event in.",
-             ["cqlqueries", "lcc"], scope="ngsiem"),
-    FieldRow("@collect.channel", "logscale", "metadata", "string",
-             "LogScale Collector source (channel) the event was read from.",
-             ["lcc"], scope="collector"),
-    FieldRow("@collect.host", "logscale", "metadata", "string",
-             "Host name the LogScale Collector reports for itself.",
-             ["lcc"], scope="collector"),
-    FieldRow("@collect.timestamp", "logscale", "metadata", "timestamp",
-             "When the LogScale Collector read the event.",
-             ["lcc"], scope="collector"),
-    FieldRow("#repo", "logscale", "tag", "string",
-             "Repository that stores the event. A view such as search-all spans several.",
-             ["library.humio.com", "lcc"], values_from="#repo"),
-    FieldRow("#type", "logscale", "tag", "string",
-             "Parser that ingested the event.",
-             ["library.humio.com", "lcc"]),
-    FieldRow("#humioBackfill", "logscale", "tag", "string",
-             "Set at ingest on events whose timestamp is more than about a day old.",
-             ["library.humio.com"]),
-    FieldRow("#repo.cid", "falcon", "tag", "string",
-             "Falcon customer ID (CID) of the repository; filters a multi-CID (MSSP) tenant.",
-             ["lcc", "cqlqueries"], scope="ngsiem"),
-    FieldRow("#event_simpleName", "falcon", "tag", "string",
-             "Falcon event type, such as ProcessRollup2. FDR exports carry it as the plain field `event_simpleName`.",
-             ["lcc", "queryhub", "cqlqueries", "sentinel", "pysigma"]),
-    FieldRow("#cid", "falcon", "tag", "string",
-             "Falcon customer ID of a sensor event; the field `cid` holds the same value.",
-             ["lcc"]),
-    FieldRow("#streamingApiEvent", "falcon", "tag", "string",
-             "Streaming API type of a record in the detections repository, such as Event_EppDetectionSummaryEvent.",
-             ["lcc"], values_from="#streamingApiEvent"),
-    FieldRow("#kind", "falcon", "tag", "string",
-             "Primary for sensor events, Secondary for lookup data such as aidmaster.",
-             ["lcc"], values_from="#kind"),
-    FieldRow("#data_source_name", "falcon", "tag", "string",
-             "Lookup data set in sensor_metadata, such as aidmaster or cid_name.",
-             ["lcc"], values_from="#data_source_name"),
-    FieldRow("#data_source_group", "falcon", "tag", "string",
-             "Group a sensor_metadata data set belongs to.",
-             ["lcc"]),
-    FieldRow("aid", "falcon", "field", "string",
-             "Falcon agent ID: the sensor (host) that sent the event.",
-             ["lcc", "sentinel"]),
-    FieldRow("cid", "falcon", "field", "string",
-             "Falcon customer ID of the sensor's tenant.",
-             ["lcc", "sentinel"]),
-    FieldRow("aip", "falcon", "field", "string",
-             "The host's external IP address as the Falcon cloud saw it.",
-             ["lcc", "sentinel"]),
-    FieldRow("event_platform", "falcon", "field", "string",
-             "Operating system family of the sensor: Win, Mac, Lin or K8S.",
-             ["lcc", "sentinel", "pysigma"], values_from="event_platform"),
-    FieldRow("ComputerName", "falcon", "field", "string",
-             "Host name of the sensor. Many queries join it from aidmaster.",
-             ["lcc", "pysigma"]),
-    FieldRow("timestamp", "falcon", "field", "timestamp",
-             "When the Falcon cloud received the event, in epoch milliseconds.",
-             ["sentinel"]),
-    FieldRow("ContextTimeStamp", "falcon", "field", "number",
-             "When the sensor saw the activity, in epoch seconds with a fraction.",
-             ["lcc", "sentinel"]),
-    FieldRow("name", "falcon", "field", "string",
-             "Internal name of the sensor event record.",
-             ["sentinel"]),
-    FieldRow("id", "falcon", "field", "string",
-             "Unique ID of the sensor event.",
-             ["sentinel"]),
-    FieldRow("ConfigBuild", "falcon", "field", "string",
-             "Sensor build and configuration version that produced the event.",
-             ["lcc", "sentinel"]),
-    FieldRow("ConfigStateHash", "falcon", "field", "string",
-             "Hash of the sensor's configuration state.",
-             ["sentinel"]),
-    FieldRow("EffectiveTransmissionClass", "falcon", "field", "string",
-             "How the sensor prioritised sending the event.",
-             ["sentinel"]),
-    FieldRow("Entitlements", "falcon", "field", "string",
-             "Falcon modules the sensor was licensed for when it sent the event.",
-             ["sentinel"]),
-    FieldRow("EventOrigin", "falcon", "field", "string",
-             "Which part of the sensor produced the event.",
-             ["sentinel"]),
-    FieldRow("ExternalApiType", "falcon", "field", "string",
-             "Streaming API record type in the detections repository, such as Event_UserActivityAuditEvent.",
-             ["lcc", "cqlqueries"]),
-    FieldRow("#Vendor", "cps", "tag", "string",
-             "Vendor of the data source in lower case (aws, microsoft, zscaler). Required by CPS.",
-             ["library.humio.com", "lcc"], values_from="#Vendor"),
-    FieldRow("#event.module", "cps", "tag", "string",
-             "Product or service of the vendor (cloudtrail, azure, zia). Required by CPS.",
-             ["library.humio.com", "lcc"], values_from="#event.module"),
-    FieldRow("#event.dataset", "cps", "tag", "string",
-             "Data set within the module, written `module.dataset`. Required by CPS.",
-             ["library.humio.com", "lcc"]),
-    FieldRow("#event.kind", "cps", "tag", "string",
-             "ECS `event.kind` kept as a tag; event or alert in practice. Required by CPS.",
-             ["library.humio.com", "lcc"], values_from="#event.kind"),
-    FieldRow("#event.outcome", "cps", "tag", "string",
-             "ECS `event.outcome` kept as a tag: success, failure or unknown. Required by CPS.",
-             ["library.humio.com", "lcc"], fixed_values=["failure", "success", "unknown"]),
-    FieldRow("#ecs.version", "cps", "tag", "string",
-             "ECS version the parser maps to. Required by CPS.",
-             ["library.humio.com", "cqlqueries"]),
-    FieldRow("#Cps.version", "cps", "tag", "string",
-             "CPS version the parser follows, capital C. Required by CPS.",
-             ["library.humio.com", "cqlqueries"]),
-    FieldRow("#observer.type", "cps", "tag", "string",
-             "ECS `observer.type` kept as a tag (firewall, proxy, ...). Required by CPS.",
-             ["library.humio.com", "cqlqueries"]),
-    FieldRow("#error", "cps", "tag", "string",
-             "true when a CPS parser could not parse the whole event.",
-             ["lcc"], scope="parser"),
-    FieldRow("Parser.version", "cps", "field", "string",
-             "Version of the parser that produced the event (semver).",
-             ["library.humio.com", "cqlqueries"]),
-    FieldRow("Vendor", "cps", "namespace", "namespace",
-             "Prefix of the vendor's own fields that ECS has no name for (`Vendor.<name>`). Any name is valid.",
-             ["library.humio.com", "lcc"]),
+    FieldRow(
+        "@timestamp",
+        "logscale",
+        "metadata",
+        "timestamp",
+        "When the event happened, in milliseconds since the Unix epoch (UTC). Searches filter on "
+        "it.",
+        ["library.humio.com"],
+    ),
+    FieldRow(
+        "@timestamp.nanos",
+        "logscale",
+        "metadata",
+        "integer",
+        "Nanoseconds beyond the millisecond of `@timestamp`, when the source has them.",
+        ["library.humio.com"],
+    ),
+    FieldRow(
+        "@ingesttimestamp",
+        "logscale",
+        "metadata",
+        "timestamp",
+        "When LogScale received the event, in epoch milliseconds. Correlation rules can schedule "
+        "on it.",
+        ["library.humio.com", "developer.crowdstrike.com"],
+    ),
+    FieldRow(
+        "@rawstring",
+        "logscale",
+        "metadata",
+        "string",
+        "The event as it arrived, before parsing. Free-text search and most parsers read it.",
+        ["library.humio.com"],
+    ),
+    FieldRow(
+        "@id",
+        "logscale",
+        "metadata",
+        "string",
+        "Identifier LogScale gives each stored event.",
+        ["library.humio.com"],
+    ),
+    FieldRow(
+        "@timezone",
+        "logscale",
+        "metadata",
+        "string",
+        "Time zone of the source timestamp, when the parser could tell.",
+        ["library.humio.com"],
+    ),
+    FieldRow(
+        "@error_msg",
+        "logscale",
+        "metadata",
+        "string",
+        "Why parsing the event failed; can be an array (`@error_msg[0]`).",
+        ["lcc"],
+        scope="parser",
+    ),
+    FieldRow(
+        "@event_parsed",
+        "logscale",
+        "metadata",
+        "string",
+        "Parser flag recording whether the event was parsed.",
+        ["lcc"],
+        scope="parser",
+    ),
+    FieldRow(
+        "@source",
+        "logscale",
+        "metadata",
+        "string",
+        "Ingest source label set on the way in (for example by a data connector).",
+        ["cqlqueries"],
+        scope="collector",
+    ),
+    FieldRow(
+        "@sourcetype",
+        "logscale",
+        "metadata",
+        "string",
+        "Source type label set at ingest.",
+        ["cqlqueries", "lcc"],
+        scope="collector",
+    ),
+    FieldRow(
+        "@host",
+        "logscale",
+        "metadata",
+        "string",
+        "Host the shipper or collector sent the event from.",
+        ["lcc"],
+        scope="collector",
+    ),
+    FieldRow(
+        "@dataConnectionID",
+        "logscale",
+        "metadata",
+        "string",
+        "Next-Gen SIEM data connector that brought the event in.",
+        ["cqlqueries", "lcc"],
+        scope="ngsiem",
+    ),
+    FieldRow(
+        "@collect.channel",
+        "logscale",
+        "metadata",
+        "string",
+        "LogScale Collector source (channel) the event was read from.",
+        ["lcc"],
+        scope="collector",
+    ),
+    FieldRow(
+        "@collect.host",
+        "logscale",
+        "metadata",
+        "string",
+        "Host name the LogScale Collector reports for itself.",
+        ["lcc"],
+        scope="collector",
+    ),
+    FieldRow(
+        "@collect.timestamp",
+        "logscale",
+        "metadata",
+        "timestamp",
+        "When the LogScale Collector read the event.",
+        ["lcc"],
+        scope="collector",
+    ),
+    FieldRow(
+        "#repo",
+        "logscale",
+        "tag",
+        "string",
+        "Repository that stores the event. A view such as search-all spans several.",
+        ["library.humio.com", "lcc"],
+        values_from="#repo",
+    ),
+    FieldRow(
+        "#type",
+        "logscale",
+        "tag",
+        "string",
+        "Parser that ingested the event.",
+        ["library.humio.com", "lcc"],
+    ),
+    FieldRow(
+        "#humioBackfill",
+        "logscale",
+        "tag",
+        "string",
+        "Set at ingest on events whose timestamp is more than about a day old.",
+        ["library.humio.com"],
+    ),
+    FieldRow(
+        "#repo.cid",
+        "falcon",
+        "tag",
+        "string",
+        "Falcon customer ID (CID) of the repository; filters a multi-CID (MSSP) tenant.",
+        ["lcc", "cqlqueries"],
+        scope="ngsiem",
+    ),
+    FieldRow(
+        "#event_simpleName",
+        "falcon",
+        "tag",
+        "string",
+        "Falcon event type, such as ProcessRollup2. FDR exports carry it as the plain field "
+        "`event_simpleName`.",
+        ["lcc", "queryhub", "cqlqueries", "sentinel", "pysigma"],
+    ),
+    FieldRow(
+        "#cid",
+        "falcon",
+        "tag",
+        "string",
+        "Falcon customer ID of a sensor event; the field `cid` holds the same value.",
+        ["lcc"],
+    ),
+    FieldRow(
+        "#streamingApiEvent",
+        "falcon",
+        "tag",
+        "string",
+        "Streaming API type of a record in the detections repository, such as "
+        "Event_EppDetectionSummaryEvent.",
+        ["lcc"],
+        values_from="#streamingApiEvent",
+    ),
+    FieldRow(
+        "#kind",
+        "falcon",
+        "tag",
+        "string",
+        "Primary for sensor events, Secondary for lookup data such as aidmaster.",
+        ["lcc"],
+        values_from="#kind",
+    ),
+    FieldRow(
+        "#data_source_name",
+        "falcon",
+        "tag",
+        "string",
+        "Lookup data set in sensor_metadata, such as aidmaster or cid_name.",
+        ["lcc"],
+        values_from="#data_source_name",
+    ),
+    FieldRow(
+        "#data_source_group",
+        "falcon",
+        "tag",
+        "string",
+        "Group a sensor_metadata data set belongs to.",
+        ["lcc"],
+    ),
+    FieldRow(
+        "aid",
+        "falcon",
+        "field",
+        "string",
+        "Falcon agent ID: the sensor (host) that sent the event.",
+        ["lcc", "sentinel"],
+    ),
+    FieldRow(
+        "cid",
+        "falcon",
+        "field",
+        "string",
+        "Falcon customer ID of the sensor's tenant.",
+        ["lcc", "sentinel"],
+    ),
+    FieldRow(
+        "aip",
+        "falcon",
+        "field",
+        "string",
+        "The host's external IP address as the Falcon cloud saw it.",
+        ["lcc", "sentinel"],
+    ),
+    FieldRow(
+        "event_platform",
+        "falcon",
+        "field",
+        "string",
+        "Operating system family of the sensor: Win, Mac, Lin or K8S.",
+        ["lcc", "sentinel", "pysigma"],
+        values_from="event_platform",
+    ),
+    FieldRow(
+        "ComputerName",
+        "falcon",
+        "field",
+        "string",
+        "Host name of the sensor. Many queries join it from aidmaster.",
+        ["lcc", "pysigma"],
+    ),
+    FieldRow(
+        "timestamp",
+        "falcon",
+        "field",
+        "timestamp",
+        "When the Falcon cloud received the event, in epoch milliseconds.",
+        ["sentinel"],
+    ),
+    FieldRow(
+        "ContextTimeStamp",
+        "falcon",
+        "field",
+        "number",
+        "When the sensor saw the activity, in epoch seconds with a fraction.",
+        ["lcc", "sentinel"],
+    ),
+    FieldRow(
+        "name",
+        "falcon",
+        "field",
+        "string",
+        "Internal name of the sensor event record.",
+        ["sentinel"],
+    ),
+    FieldRow("id", "falcon", "field", "string", "Unique ID of the sensor event.", ["sentinel"]),
+    FieldRow(
+        "ConfigBuild",
+        "falcon",
+        "field",
+        "string",
+        "Sensor build and configuration version that produced the event.",
+        ["lcc", "sentinel"],
+    ),
+    FieldRow(
+        "ConfigStateHash",
+        "falcon",
+        "field",
+        "string",
+        "Hash of the sensor's configuration state.",
+        ["sentinel"],
+    ),
+    FieldRow(
+        "EffectiveTransmissionClass",
+        "falcon",
+        "field",
+        "string",
+        "How the sensor prioritised sending the event.",
+        ["sentinel"],
+    ),
+    FieldRow(
+        "Entitlements",
+        "falcon",
+        "field",
+        "string",
+        "Falcon modules the sensor was licensed for when it sent the event.",
+        ["sentinel"],
+    ),
+    FieldRow(
+        "EventOrigin",
+        "falcon",
+        "field",
+        "string",
+        "Which part of the sensor produced the event.",
+        ["sentinel"],
+    ),
+    FieldRow(
+        "ExternalApiType",
+        "falcon",
+        "field",
+        "string",
+        "Streaming API record type in the detections repository, such as "
+        "Event_UserActivityAuditEvent.",
+        ["lcc", "cqlqueries"],
+    ),
+    FieldRow(
+        "#Vendor",
+        "cps",
+        "tag",
+        "string",
+        "Vendor of the data source in lower case (aws, microsoft, zscaler). Required by CPS.",
+        ["library.humio.com", "lcc"],
+        values_from="#Vendor",
+    ),
+    FieldRow(
+        "#event.module",
+        "cps",
+        "tag",
+        "string",
+        "Product or service of the vendor (cloudtrail, azure, zia). Required by CPS.",
+        ["library.humio.com", "lcc"],
+        values_from="#event.module",
+    ),
+    FieldRow(
+        "#event.dataset",
+        "cps",
+        "tag",
+        "string",
+        "Data set within the module, written `module.dataset`. Required by CPS.",
+        ["library.humio.com", "lcc"],
+    ),
+    FieldRow(
+        "#event.kind",
+        "cps",
+        "tag",
+        "string",
+        "ECS `event.kind` kept as a tag; event or alert in practice. Required by CPS.",
+        ["library.humio.com", "lcc"],
+        values_from="#event.kind",
+    ),
+    FieldRow(
+        "#event.outcome",
+        "cps",
+        "tag",
+        "string",
+        "ECS `event.outcome` kept as a tag: success, failure or unknown. Required by CPS.",
+        ["library.humio.com", "lcc"],
+        fixed_values=["failure", "success", "unknown"],
+    ),
+    FieldRow(
+        "#ecs.version",
+        "cps",
+        "tag",
+        "string",
+        "ECS version the parser maps to. Required by CPS.",
+        ["library.humio.com", "cqlqueries"],
+    ),
+    FieldRow(
+        "#Cps.version",
+        "cps",
+        "tag",
+        "string",
+        "CPS version the parser follows, capital C. Required by CPS.",
+        ["library.humio.com", "cqlqueries"],
+    ),
+    FieldRow(
+        "#observer.type",
+        "cps",
+        "tag",
+        "string",
+        "ECS `observer.type` kept as a tag (firewall, proxy, ...). Required by CPS.",
+        ["library.humio.com", "cqlqueries"],
+    ),
+    FieldRow(
+        "#error",
+        "cps",
+        "tag",
+        "string",
+        "true when a CPS parser could not parse the whole event.",
+        ["lcc"],
+        scope="parser",
+    ),
+    FieldRow(
+        "Parser.version",
+        "cps",
+        "field",
+        "string",
+        "Version of the parser that produced the event (semver).",
+        ["library.humio.com", "cqlqueries"],
+    ),
+    FieldRow(
+        "Vendor",
+        "cps",
+        "namespace",
+        "namespace",
+        "Prefix of the vendor's own fields that ECS has no name for (`Vendor.<name>`). Any name is "
+        "valid.",
+        ["library.humio.com", "lcc"],
+    ),
 ]
 # CrowdStrike-managed repositories `#repo` is compared with in the public
 # queries; tenants name their own third-party repositories freely.
 KNOWN_REPOS = {
-    "base_sensor", "detections", "xdr_indicatorsrepo", "xdr_eventsarchive", "sensor_metadata",
-    "falcon_for_it", "fcs_csp_events", "fusion", "3pi_connection_errors", "humio", "humio-audit",
-    "humio-usage", "humio-fleet", "humio-measurements", "humio-activity",
+    "base_sensor",
+    "detections",
+    "xdr_indicatorsrepo",
+    "xdr_eventsarchive",
+    "sensor_metadata",
+    "falcon_for_it",
+    "fcs_csp_events",
+    "fusion",
+    "3pi_connection_errors",
+    "humio",
+    "humio-audit",
+    "humio-usage",
+    "humio-fleet",
+    "humio-measurements",
+    "humio-activity",
 }
 # CPS writes `#Vendor` and `#event.module` in lower case.
 LOWERCASE_VALUES = {"#Vendor", "#event.module"}
 # ECS arrays that CPS stores as LogScale arrays (`event.category[0]`).
 CPS_ARRAYS = {"event.category", "event.type", "event.kind"}
 ECS_TYPES = {
-    "keyword": "string", "constant_keyword": "string", "wildcard": "string", "text": "string",
-    "match_only_text": "string", "long": "integer", "integer": "integer", "short": "integer",
-    "byte": "integer", "unsigned_long": "integer", "float": "number", "double": "number",
-    "scaled_float": "number", "half_float": "number", "boolean": "boolean", "ip": "ip",
-    "date": "date", "object": "object", "flattened": "object", "nested": "object",
-    "geo_point": "object", "binary": "string",
+    "keyword": "string",
+    "constant_keyword": "string",
+    "wildcard": "string",
+    "text": "string",
+    "match_only_text": "string",
+    "long": "integer",
+    "integer": "integer",
+    "short": "integer",
+    "byte": "integer",
+    "unsigned_long": "integer",
+    "float": "number",
+    "double": "number",
+    "scaled_float": "number",
+    "half_float": "number",
+    "boolean": "boolean",
+    "ip": "ip",
+    "date": "date",
+    "object": "object",
+    "flattened": "object",
+    "nested": "object",
+    "geo_point": "object",
+    "binary": "string",
 }
 
 
@@ -1465,7 +1970,12 @@ def build_fields(mined: dict[str, Mined], queries: list[Query]) -> tuple[list[di
     for name in sorted(used):
         if name in builtin or name == "@timestamp":
             continue
-        row = {"name": name, "layer": "cps", "kind": "field", "type": ECS_TYPES.get(ecs_types[name], "string")}
+        row = {
+            "name": name,
+            "layer": "cps",
+            "kind": "field",
+            "type": ECS_TYPES.get(ecs_types[name], "string"),
+        }
         if name in CPS_ARRAYS:
             row["type"] = "array<string>"
         row["ecs"] = True
@@ -1523,7 +2033,9 @@ def git_rev(path: Path) -> str:
     try:
         out = subprocess.run(
             ["git", "-C", str(path), "log", "-1", "--format=%H %cs"],
-            check=True, capture_output=True, text=True,
+            check=True,
+            capture_output=True,
+            text=True,
         ).stdout.split()
         return f"{out[0]} ({out[1]})"
     except (OSError, subprocess.CalledProcessError, IndexError):
@@ -1607,8 +2119,14 @@ def param_row(p: Param) -> dict[str, Any]:
     }
 
 
-def write_functions(functions: list[Function], ngsiem: dict[str, str], cache: Path, lcc: Path) -> str:
-    fetched = (cache / "FETCHED").read_text(encoding="utf-8").strip() if (cache / "FETCHED").is_file() else "unknown"
+def write_functions(
+    functions: list[Function], ngsiem: dict[str, str], cache: Path, lcc: Path
+) -> str:
+    fetched = (
+        (cache / "FETCHED").read_text(encoding="utf-8").strip()
+        if (cache / "FETCHED").is_file()
+        else "unknown"
+    )
     out = [
         "# CQL functions, generated by scripts/sync_cql_catalog.py. Do not edit.",
         "# Facts only (names, parameters, types, defaults, values, bounds, lifecycle);",
@@ -1616,7 +2134,8 @@ def write_functions(functions: list[Function], ngsiem: dict[str, str], cache: Pa
         f"# Source: {SITE}functions.html and the pages it links",
         f"# (CrowdStrike Query Language {docs_version(cache)}, fetched {fetched}),",
         f"# and {RELEASE_NOTES} for removed functions.",
-        f"# Source: CrowdStrike/logscale-community-content@{git_rev(lcc)} Next-Gen-SIEM/ (Unlicense) for `ngsiem`.",
+        f"# Source: CrowdStrike/logscale-community-content@{git_rev(lcc)} Next-Gen-SIEM/"
+        " (Unlicense) for `ngsiem`.",
         "# `ngsiem = true` means CrowdStrike's own Next-Gen SIEM content calls the function;",
         "# omitted means no evidence either way, never that it is unavailable.",
         "",
@@ -1631,15 +2150,19 @@ def write_functions(functions: list[Function], ngsiem: dict[str, str], cache: Pa
     return "\n".join(out) + "\n"
 
 
-def write_events(rows: list[dict[str, Any]], categories: dict[str, list[str]], heads: dict[str, str]) -> str:
+def write_events(
+    rows: list[dict[str, Any]], categories: dict[str, list[str]], heads: dict[str, str]
+) -> str:
     out = [
-        "# Falcon events (#event_simpleName), generated by scripts/sync_cql_catalog.py. Do not edit.",
+        "# Falcon events (#event_simpleName), generated by scripts/sync_cql_catalog.py. Do not "
+        "edit.",
         "# Names, platforms and fields are facts from public, redistributable sources only",
         "# (catalogs/cql/NOTICE). Elastic's integration (ELv2) is not a source.",
     ]
     out += [f"# Source: {name}@{rev}" for name, rev in heads.items()]
     out += [
-        "# `fields`: what queries pinning the event read, and pySigma's field mappings: \"seen with\",",
+        "# `fields`: what queries pinning the event read, and pySigma's field mappings: \"seen "
+        'with",',
         "# not the event schema. `category`: the Sentinel FDR table the event is routed to;",
         "# `categories` lists each table's columns. `common_fields` apply to every sensor event.",
         "# `mentions`: query blocks naming the event (for ranking). No list here is closed.",
@@ -1660,14 +2183,16 @@ def write_fields(rows: list[dict[str, Any]], heads: dict[str, str], ecs: str) ->
     out = [
         "# CQL fields and tags, generated by scripts/sync_cql_catalog.py. Do not edit.",
         "# Layers: `logscale` (on every event or ingest route), `falcon` (Falcon platform data),",
-        "# `cps` (third-party data parsed to the CrowdStrike Parsing Standard, ECS names at the root).",
+        "# `cps` (third-party data parsed to the CrowdStrike Parsing Standard, ECS names at the "
+        "root).",
         "# Names are facts from library.humio.com and the sources below; `docs` is written",
         "# for this catalog. Rows with `ecs = true` take their description from catalogs/ecs.",
     ]
     out += [f"# Source: {name}@{rev}" for name, rev in heads.items()]
     out += [
         f"# Source: {ecs} via catalogs/ecs/fields.json (Apache-2.0) for ECS types.",
-        "# `values`: values the public queries compare the tag with (twice or more; for `#repo`, the",
+        "# `values`: values the public queries compare the tag with (twice or more; for `#repo`, "
+        "the",
         "# CrowdStrike-managed repositories among them). Completion only.",
         "# LogScale is schemaless: this is never a closed list.",
     ]
@@ -1683,96 +2208,218 @@ def write_fields(rows: list[dict[str, Any]], heads: dict[str, str], ecs: str) ->
 
 DEPRECATION_NOTES: dict[str, str] = {
     "holtwinters": "Deprecated in 1.68 and announced for removal in 1.73; no replacement.",
-    "lookup": "Removed; match() replaces it (strict=false keeps unmatched events, as lookup() did).",
+    "lookup": (
+        "Removed; match() replaces it (strict=false keeps unmatched events, as lookup() did)."
+    ),
     "lowercase": "Deprecated in queries; meant for parsers. Use lower() in a query.",
     "rdns": "Deprecated in 1.193, announced for removal in 1.249; use reverseDns().",
 }
 # Documented, but the reference says they are not released yet.
 UNAVAILABLE: set[str] = {"math:spherical2cartesian"}
 FUNCTION_SUMMARIES: dict[str, str] = {
-    "accumulate": "Running aggregate over an ordered sequence: each event gets the aggregate of itself and the events before it.",
-    "appendAggregation": "Keeps the input events and adds the result of an aggregation as extra rows after them, such as a totals row.",
-    "array:append": "Adds one or more values to the end of a flat array field, creating the array when it does not exist.",
+    "accumulate": (
+        "Running aggregate over an ordered sequence: each event gets the aggregate of itself and "
+        "the events before it."
+    ),
+    "appendAggregation": (
+        "Keeps the input events and adds the result of an aggregation as extra rows after them, "
+        "such as a totals row."
+    ),
+    "array:append": (
+        "Adds one or more values to the end of a flat array field, creating the array when it does "
+        "not exist."
+    ),
     "array:contains": "Keeps events whose flat array has an element equal to the given value.",
-    "array:dedup": "Removes repeated values from a flat array, keeping the first occurrence of each in order.",
+    "array:dedup": (
+        "Removes repeated values from a flat array, keeping the first occurrence of each in order."
+    ),
     "array:drop": "Removes every element field (`a[0]`, `a[1]`, ...) of the named array.",
-    "array:eval": "Runs a function on each element of a flat array and writes the results to a new or the same array.",
-    "array:exists": "Keeps events whose flat array has at least one element for which a condition holds.",
-    "array:filter": "Keeps the elements of a flat array for which a filter function passes; element order is kept.",
-    "array:intersection": "Aggregate: the values present in the named array of every input event (behind the ArrayFunctions flag).",
+    "array:eval": (
+        "Runs a function on each element of a flat array and writes the results to a new or the "
+        "same array."
+    ),
+    "array:exists": (
+        "Keeps events whose flat array has at least one element for which a condition holds."
+    ),
+    "array:filter": (
+        "Keeps the elements of a flat array for which a filter function passes; element order is "
+        "kept."
+    ),
+    "array:intersection": (
+        "Aggregate: the values present in the named array of every input event (behind the "
+        "ArrayFunctions flag)."
+    ),
     "array:length": "Number of elements in a flat array, written to a field.",
-    "array:reduceAll": "Aggregate: folds all elements of the named array, across all events, into one value with a function.",
-    "array:reduceColumn": "Aggregate: for each array index, combines the elements at that index across events (experimental).",
-    "array:reduceRow": "Reduces each event's array to one value with an aggregate function (experimental).",
-    "array:regex": "Keeps events whose flat array has an element that matches a regular expression.",
+    "array:reduceAll": (
+        "Aggregate: folds all elements of the named array, across all events, into one value with "
+        "a function."
+    ),
+    "array:reduceColumn": (
+        "Aggregate: for each array index, combines the elements at that index across events "
+        "(experimental)."
+    ),
+    "array:reduceRow": (
+        "Reduces each event's array to one value with an aggregate function (experimental)."
+    ),
+    "array:regex": (
+        "Keeps events whose flat array has an element that matches a regular expression."
+    ),
     "array:rename": "Gives every element field of an array a new array name.",
-    "array:sort": "Sorts a flat array as strings or numbers, ascending or descending, in place or into a new array.",
-    "array:union": "Aggregate: every distinct value of the named array across the input events (experimental).",
-    "asn": "Adds the autonomous system number and organisation of an IP address (MaxMind GeoLite2 data).",
+    "array:sort": (
+        "Sorts a flat array as strings or numbers, ascending or descending, in place or into a new "
+        "array."
+    ),
+    "array:union": (
+        "Aggregate: every distinct value of the named array across the input events (experimental)."
+    ),
+    "asn": (
+        "Adds the autonomous system number and organisation of an IP address (MaxMind GeoLite2 "
+        "data)."
+    ),
     "avg": "Aggregate: arithmetic mean of a numeric field.",
     "base64Decode": "Decodes a Base64 field into text in a chosen character set.",
     "base64Encode": "Encodes a field's value as Base64.",
     "beta:param": "Copies the value of a query parameter into a field of each event (beta).",
-    "beta:repeating": "Turns a live query into one rerun as a historical query at an interval (beta).",
+    "beta:repeating": (
+        "Turns a live query into one rerun as a historical query at an interval (beta)."
+    ),
     "bitfield:extractFlags": "Reads an integer as bit flags and writes one field per named bit.",
-    "bitfield:extractFlagsAsArray": "Reads an integer as bit flags and lists the names of the set bits in an array.",
-    "bitfield:extractFlagsAsString": "Reads an integer as bit flags and joins the names of the set bits into one string.",
-    "bucket": "Aggregate: groups events into time buckets (and optional fields) and runs aggregate functions per bucket.",
-    "callFunction": "Runs an aggregate function chosen by name (for example from a dashboard parameter) on a field.",
-    "cidr": "Keeps events whose IP field lies in the given IPv4 or IPv6 subnets, listed inline or in a lookup file.",
+    "bitfield:extractFlagsAsArray": (
+        "Reads an integer as bit flags and lists the names of the set bits in an array."
+    ),
+    "bitfield:extractFlagsAsString": (
+        "Reads an integer as bit flags and joins the names of the set bits into one string."
+    ),
+    "bucket": (
+        "Aggregate: groups events into time buckets (and optional fields) and runs aggregate "
+        "functions per bucket."
+    ),
+    "callFunction": (
+        "Runs an aggregate function chosen by name (for example from a dashboard parameter) on a "
+        "field."
+    ),
+    "cidr": (
+        "Keeps events whose IP field lies in the given IPv4 or IPv6 subnets, listed inline or in a "
+        "lookup file."
+    ),
     "coalesce": "The first of several expressions that is not missing (or empty, by default).",
-    "collect": "Aggregate: gathers the values of fields from many events into one event, as multi-line text or rows.",
+    "collect": (
+        "Aggregate: gathers the values of fields from many events into one event, as multi-line "
+        "text or rows."
+    ),
     "communityId": "Computes the Community ID flow hash from addresses, ports and protocol.",
     "concat": "Joins the values of several fields into one string field.",
-    "concatArray": "Joins the elements of an array (`f[0]`, `f[1]`, ...) into one string, with optional prefix, separator and suffix.",
-    "copyEvent": "Parser only: duplicates the event so the copy can be routed or tagged separately.",
-    "correlate": "Finds groups of events matching several named subqueries linked by shared field values, optionally in order and within a time span.",
-    "count": "Aggregate: number of events, of events with a field, or of distinct values of a field.",
+    "concatArray": (
+        "Joins the elements of an array (`f[0]`, `f[1]`, ...) into one string, with optional "
+        "prefix, separator and suffix."
+    ),
+    "copyEvent": (
+        "Parser only: duplicates the event so the copy can be routed or tagged separately."
+    ),
+    "correlate": (
+        "Finds groups of events matching several named subqueries linked by shared field values, "
+        "optionally in order and within a time span."
+    ),
+    "count": (
+        "Aggregate: number of events, of events with a field, or of distinct values of a field."
+    ),
     "counterAsRate": "Aggregate: per-second rate of change of an increasing counter field.",
-    "createEvents": "Replaces the input with new events made from the given raw strings; handy for test data.",
+    "createEvents": (
+        "Replaces the input with new events made from the given raw strings; handy for test data."
+    ),
     "crypto:md5": "MD5 hash of a field's value.",
     "crypto:sha1": "SHA-1 hash of a field's value.",
     "crypto:sha256": "SHA-256 hash of a field's value.",
     "default": "Sets a field to a value on events that lack it (or, optionally, have it empty).",
-    "defineTable": "Runs a subquery in the preamble and keeps its results as a named in-memory table for match() and readFile().",
+    "defineTable": (
+        "Runs a subquery in the preamble and keeps its results as a named in-memory table for "
+        "match() and readFile()."
+    ),
     "drop": "Removes the listed fields from each event.",
-    "dropEvent": "In a parser, discards the event so it is not stored; in a search it acts like `false` and drops every event.",
+    "dropEvent": (
+        "In a parser, discards the event so it is not stored; in a search it acts like `false` and "
+        "drops every event."
+    ),
     "duration": "Converts a relative time such as `5m` or `2d` into milliseconds.",
     "end": "Writes the end of the search time range, in epoch milliseconds, to a field.",
-    "eval": "Assigns the result of an arithmetic or comparison expression to a field: `eval(f = a + b)`.",
+    "eval": (
+        "Assigns the result of an arithmetic or comparison expression to a field: `eval(f = a + "
+        "b)`."
+    ),
     "eventFieldCount": "Number of fields the event stores internally, written to a field.",
     "eventInternals": "Adds fields that describe where LogScale stores the event.",
     "eventSize": "Bytes the event's values take in uncompressed storage, written to a field.",
-    "explain:asTable": "Replaces the result with per-step profiling of the query (time, event counts, prefilters); experimental.",
+    "explain:asTable": (
+        "Replaces the result with per-step profiling of the query (time, event counts, "
+        "prefilters); experimental."
+    ),
     "fieldset": "Aggregate: lists the field names present in the events searched.",
-    "fieldstats": "Aggregate: for each field in the events, how many events have it and how many distinct values it takes.",
-    "findTimestamp": "Looks for a timestamp near the start of a field in several known formats and parses the first one found.",
+    "fieldstats": (
+        "Aggregate: for each field in the events, how many events have it and how many distinct "
+        "values it takes."
+    ),
+    "findTimestamp": (
+        "Looks for a timestamp near the start of a field in several known formats and parses the "
+        "first one found."
+    ),
     "format": "Builds a string from fields with a printf-style pattern.",
     "formatDuration": "Turns a duration number into readable text such as `1h 2m 3s`.",
-    "formatTime": "Formats an epoch-millisecond field as text with a strftime-style pattern, time zone and locale.",
+    "formatTime": (
+        "Formats an epoch-millisecond field as text with a strftime-style pattern, time zone and "
+        "locale."
+    ),
     "geography:distance": "Great-circle distance in metres between two latitude/longitude points.",
     "geohash": "Geohash of a latitude/longitude pair at a given precision.",
     "getField": "Reads the field whose name an expression computes at run time.",
-    "groupBy": "Aggregate: one row per distinct combination of the grouping fields, with aggregate functions (count() by default).",
+    "groupBy": (
+        "Aggregate: one row per distinct combination of the grouping fields, with aggregate "
+        "functions (count() by default)."
+    ),
     "hash": "Non-cryptographic 32-bit hash of one or more fields; useful to bucket values.",
-    "hashMatch": "Filter: keeps events where a salted secure hash of the input equals a hash stored by hashRewrite().",
-    "hashRewrite": "Replaces a field (and optionally its text in @rawstring) with a salted secure hash.",
+    "hashMatch": (
+        "Filter: keeps events where a salted secure hash of the input equals a hash stored by "
+        "hashRewrite()."
+    ),
+    "hashRewrite": (
+        "Replaces a field (and optionally its text in @rawstring) with a salted secure hash."
+    ),
     "head": "Aggregate: the first N events in time order (oldest first).",
     "holtwinters": "Removed time-series forecasting function.",
-    "if": "Inline conditional: the value of `then` when the condition holds, else the value of `else`.",
-    "in": "Keeps events where a field equals one of the listed values (wildcards allowed, case optional).",
-    "ioc:lookup": "Annotates IPs, domains or URLs found in CrowdStrike's threat intelligence, optionally keeping only matches.",
-    "ipLocation": "Adds country, city, latitude and longitude for an IP address (MaxMind GeoLite2 data).",
-    "join": "Runs a subquery and merges its matching rows into the main query's events on key fields.",
+    "if": (
+        "Inline conditional: the value of `then` when the condition holds, else the value of "
+        "`else`."
+    ),
+    "in": (
+        "Keeps events where a field equals one of the listed values (wildcards allowed, case "
+        "optional)."
+    ),
+    "ioc:lookup": (
+        "Annotates IPs, domains or URLs found in CrowdStrike's threat intelligence, optionally "
+        "keeping only matches."
+    ),
+    "ipLocation": (
+        "Adds country, city, latitude and longitude for an IP address (MaxMind GeoLite2 data)."
+    ),
+    "join": (
+        "Runs a subquery and merges its matching rows into the main query's events on key fields."
+    ),
     "json:prettyPrint": "Reformats a JSON field with indentation for reading.",
     "kvParse": "Extracts `key=value` pairs from a field into fields.",
     "length": "Length of a string field in UTF-16 code units (Java characters).",
-    "linReg": "Aggregate: least-squares line through two numeric fields: slope, intercept, adjusted R² and point count.",
+    "linReg": (
+        "Aggregate: least-squares line through two numeric fields: slope, intercept, adjusted R² "
+        "and point count."
+    ),
     "lookup": "Removed lookup-file join; replaced by match().",
     "lower": "Lower-cases a string field's value.",
     "lowercase": "Parser function: lower-cases field names, values or both.",
-    "match": "Joins events with a lookup file or ad-hoc table on a key column; by default drops events without a match.",
-    "matchAsArray": "Like match(), but puts all matching table rows into an array of objects on the event.",
+    "match": (
+        "Joins events with a lookup file or ad-hoc table on a key column; by default drops events "
+        "without a match."
+    ),
+    "matchAsArray": (
+        "Like match(), but puts all matching table rows into an array of objects on the event."
+    ),
     "math:abs": "Absolute value of a number.",
     "math:arccos": "Arc cosine, in radians.",
     "math:arcsin": "Arc sine, in radians.",
@@ -1794,70 +2441,137 @@ FUNCTION_SUMMARIES: dict[str, str] = {
     "math:rad2deg": "Converts radians to degrees.",
     "math:sin": "Sine of an angle in radians.",
     "math:sinh": "Hyperbolic sine.",
-    "math:spherical2cartesian": "Converts spherical coordinates (radius, polar and azimuth angles) to x, y, z. Documented, not yet released.",
+    "math:spherical2cartesian": (
+        "Converts spherical coordinates (radius, polar and azimuth angles) to x, y, z. Documented, "
+        "not yet released."
+    ),
     "math:sqrt": "Square root.",
     "math:tan": "Tangent of an angle in radians.",
     "math:tanh": "Hyperbolic tangent.",
     "max": "Aggregate: largest value of a numeric field.",
     "min": "Aggregate: smallest value of a numeric field.",
-    "neighbor": "In an ordered sequence, copies fields from the event a given distance before or after.",
+    "neighbor": (
+        "In an ordered sequence, copies fields from the event a given distance before or after."
+    ),
     "now": "Writes the current time, in epoch milliseconds, to a field.",
-    "objectArray:eval": "Runs a function on each element of an array of objects (or of arrays) and collects the results in a flat array.",
-    "objectArray:exists": "Keeps events whose array of objects has an element for which a condition holds.",
+    "objectArray:eval": (
+        "Runs a function on each element of an array of objects (or of arrays) and collects the "
+        "results in a flat array."
+    ),
+    "objectArray:exists": (
+        "Keeps events whose array of objects has an element for which a condition holds."
+    ),
     "parseCEF": "Parses a CEF (ArcSight Common Event Format) message into fields.",
     "parseCsv": "Splits a delimited line into the named column fields.",
     "parseFixedWidth": "Cuts a field into named columns of fixed character widths.",
     "parseHexString": "Decodes hexadecimal bytes into text in a chosen character set.",
     "parseInt": "Converts an integer written in another base (hex, octal, ...) to decimal.",
-    "parseJson": "Parses a JSON field into fields, with dotted names for nesting and `[n]` for arrays.",
+    "parseJson": (
+        "Parses a JSON field into fields, with dotted names for nesting and `[n]` for arrays."
+    ),
     "parseLEEF": "Parses an IBM LEEF 1.0 or 2.0 message into fields.",
-    "parseTimestamp": "Parses a date/time text field with a format into epoch milliseconds, by default into @timestamp.",
+    "parseTimestamp": (
+        "Parses a date/time text field with a format into epoch milliseconds, by default into "
+        "@timestamp."
+    ),
     "parseUri": "Splits a URI field into scheme, host, port, path, query and other parts.",
     "parseUrl": "Splits a URL field into scheme, host, port, path, query and other parts.",
     "parseXml": "Parses an XML field into fields named after its element paths.",
-    "partition": "In an ordered sequence, starts a new partition wherever a condition holds and aggregates each partition.",
+    "partition": (
+        "In an ordered sequence, starts a new partition wherever a condition holds and aggregates "
+        "each partition."
+    ),
     "percentage": "Aggregate: share of events, from 0 to 100, for which a condition holds.",
-    "percentile": "Aggregate: approximate percentiles of a numeric field (50th, 75th and 99th by default).",
+    "percentile": (
+        "Aggregate: approximate percentiles of a numeric field (50th, 75th and 99th by default)."
+    ),
     "range": "Aggregate: difference between the largest and smallest value of a numeric field.",
     "rdns": "Removed reverse DNS lookup; replaced by reverseDns().",
     "readFile": "Source: emits the rows of a lookup file or ad-hoc table as events.",
-    "readPersistedAggregation": "Source: emits the stored results of a persisted aggregation as events.",
-    "regex": "Matches a regular expression against a field; named groups become fields, and non-matching events drop.",
-    "remoteTable": "Next-Gen SIEM: runs a federated search on an external source and keeps the result as an ad-hoc table.",
+    "readPersistedAggregation": (
+        "Source: emits the stored results of a persisted aggregation as events."
+    ),
+    "regex": (
+        "Matches a regular expression against a field; named groups become fields, and "
+        "non-matching events drop."
+    ),
+    "remoteTable": (
+        "Next-Gen SIEM: runs a federated search on an external source and keeps the result as an "
+        "ad-hoc table."
+    ),
     "rename": "Renames one or more fields.",
     "replace": "Replaces every regular expression match in a field with replacement text.",
-    "reverseDns": "Looks up host names for IP addresses after the first aggregation, up to a limit.",
+    "reverseDns": (
+        "Looks up host names for IP addresses after the first aggregation, up to a limit."
+    ),
     "round": "Rounds a number to an integer, to nearest by default or by floor or ceiling.",
-    "sample": "Keeps a random percentage of events; events without the sampled field (@timestamp by default) are dropped.",
+    "sample": (
+        "Keeps a random percentage of events; events without the sampled field (@timestamp by "
+        "default) are dropped."
+    ),
     "sankey": "Aggregate: source-to-target flow totals shaped for the Sankey widget.",
     "select": "Keeps only the listed fields on each event, without aggregating.",
-    "selectFromMax": "Aggregate: the event with the largest value of a field, with the chosen fields.",
-    "selectFromMin": "Aggregate: the event with the smallest value of a field, with the chosen fields.",
+    "selectFromMax": (
+        "Aggregate: the event with the largest value of a field, with the chosen fields."
+    ),
+    "selectFromMin": (
+        "Aggregate: the event with the smallest value of a field, with the chosen fields."
+    ),
     "selectLast": "Aggregate: the most recent value of each listed field.",
-    "selfJoin": "Two-pass join of events sharing a key field where each `where` filter is met by some event of the key.",
-    "selfJoinFilter": "Two-pass filter: finds key values for which every `where` filter matches some event, then keeps all events of those keys.",
-    "series": "Aggregate: collects field values from successive events into one event per series, split by pauses or start/end matches.",
-    "session": "Aggregate: splits events into sessions separated by gaps longer than maxpause and aggregates each.",
+    "selfJoin": (
+        "Two-pass join of events sharing a key field where each `where` filter is met by some "
+        "event of the key."
+    ),
+    "selfJoinFilter": (
+        "Two-pass filter: finds key values for which every `where` filter matches some event, then "
+        "keeps all events of those keys."
+    ),
+    "series": (
+        "Aggregate: collects field values from successive events into one event per series, split "
+        "by pauses or start/end matches."
+    ),
+    "session": (
+        "Aggregate: splits events into sessions separated by gaps longer than maxpause and "
+        "aggregates each."
+    ),
     "setField": "Writes a value to a field whose name an expression computes at run time.",
-    "setTimeInterval": "Preamble: sets the query's own time range and time zone, overriding the UI or API.",
-    "shannonEntropy": "Shannon entropy of a string's characters; high values hint at random-looking text.",
-    "slidingTimeWindow": "In an ordered sequence, aggregates over the events within a time span before each event.",
-    "slidingWindow": "In an ordered sequence, aggregates over a fixed number of events before each event.",
-    "sort": "Aggregate: orders events by one or more fields and keeps the first N (200 by default).",
+    "setTimeInterval": (
+        "Preamble: sets the query's own time range and time zone, overriding the UI or API."
+    ),
+    "shannonEntropy": (
+        "Shannon entropy of a string's characters; high values hint at random-looking text."
+    ),
+    "slidingTimeWindow": (
+        "In an ordered sequence, aggregates over the events within a time span before each event."
+    ),
+    "slidingWindow": (
+        "In an ordered sequence, aggregates over a fixed number of events before each event."
+    ),
+    "sort": (
+        "Aggregate: orders events by one or more fields and keeps the first N (200 by default)."
+    ),
     "split": "Turns each element of a JSON array field into its own event.",
-    "splitString": "Splits a string on a regular expression into an array, or keeps one element by index.",
+    "splitString": (
+        "Splits a string on a regular expression into an array, or keeps one element by index."
+    ),
     "start": "Writes the start of the search time range, in epoch milliseconds, to a field.",
-    "stats": "Aggregate: runs several aggregate functions over the whole input and returns one row.",
+    "stats": (
+        "Aggregate: runs several aggregate functions over the whole input and returns one row."
+    ),
     "stdDev": "Aggregate: standard deviation of a numeric field.",
     "stripAnsiCodes": "Removes ANSI escape sequences (colours, cursor moves) from a field.",
     "subnet": "Masks an IPv4 address to a prefix length, giving its network address.",
     "sum": "Aggregate: total of a numeric field.",
     "table": "Aggregate: a table of the listed fields for up to N events, sorted by a field.",
     "tail": "Aggregate: the last N events in time order (newest).",
-    "test": "Keeps events for which a boolean expression is true; bare words in it are field names.",
+    "test": (
+        "Keeps events for which a boolean expression is true; bare words in it are field names."
+    ),
     "text:contains": "True when a string contains a substring.",
     "text:editDistance": "Levenshtein distance between two strings, capped at a maximum.",
-    "text:editDistanceAsArray": "Levenshtein distance from one string to each string in a list, as an array of objects.",
+    "text:editDistanceAsArray": (
+        "Levenshtein distance from one string to each string in a list, as an array of objects."
+    ),
     "text:endsWith": "True when a string ends with a substring.",
     "text:length": "Length of a string in grapheme clusters (what a reader counts as characters).",
     "text:positionOf": "Position of the n-th occurrence of a character or substring in a string.",
@@ -1876,18 +2590,34 @@ FUNCTION_SUMMARIES: dict[str, str] = {
     "time:second": "Second (0-59) of a timestamp.",
     "time:weekOfYear": "Week of the year (1-53) of a timestamp.",
     "time:year": "Year of a timestamp.",
-    "timeChart": "Aggregate: buckets events over time, optionally per series field, for a time chart.",
-    "tokenHash": "Hash that is the same for strings of similar structure; groups log lines by shape.",
-    "top": "Aggregate: the most frequent values of fields, or the values with the largest total of another field.",
+    "timeChart": (
+        "Aggregate: buckets events over time, optionally per series field, for a time chart."
+    ),
+    "tokenHash": (
+        "Hash that is the same for strings of similar structure; groups log lines by shape."
+    ),
+    "top": (
+        "Aggregate: the most frequent values of fields, or the values with the largest total of "
+        "another field."
+    ),
     "transpose": "Aggregate: swaps rows and columns of a table result.",
-    "unit:convert": "Converts a number between units, such as milliseconds to seconds or KiB to bytes.",
+    "unit:convert": (
+        "Converts a number between units, such as milliseconds to seconds or KiB to bytes."
+    ),
     "upper": "Upper-cases a string field's value.",
     "urlDecode": "Decodes percent-encoding in a field.",
     "urlEncode": "Percent-encodes a field for use in a URL.",
-    "wildcard": "Filter on a `*` pattern, in one field or in the raw event, optionally ignoring case.",
+    "wildcard": (
+        "Filter on a `*` pattern, in one field or in the raw event, optionally ignoring case."
+    ),
     "window": "Inside timeChart() or bucket(): aggregates over a number of preceding buckets.",
-    "worldMap": "Aggregate: points from IPs or coordinates, geohashed and counted, for the World Map widget.",
-    "writeJson": "Writes the fields matching the given names or `*` patterns to one field as a JSON object.",
+    "worldMap": (
+        "Aggregate: points from IPs or coordinates, geohashed and counted, for the World Map "
+        "widget."
+    ),
+    "writeJson": (
+        "Writes the fields matching the given names or `*` patterns to one field as a JSON object."
+    ),
     "xml:prettyPrint": "Reformats an XML field with indentation for reading.",
 }
 
@@ -1895,24 +2625,42 @@ FUNCTION_SUMMARIES: dict[str, str] = {
 def main() -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").split("\n", 1)[0])
     parser.add_argument("--cache", type=Path, required=True, help="library.humio.com page cache")
-    parser.add_argument("--lcc", type=Path, required=True, help="CrowdStrike/logscale-community-content")
+    parser.add_argument(
+        "--lcc", type=Path, required=True, help="CrowdStrike/logscale-community-content"
+    )
     parser.add_argument("--query-hub", type=Path, required=True, help="ByteRay-Labs/Query-Hub")
     parser.add_argument("--cql-queries", type=Path, required=True, help="cs-shadowbq/CQL-Queries")
-    parser.add_argument("--sentinel", type=Path, required=True, help="Azure/Azure-Sentinel (CrowdStrike solution)")
-    parser.add_argument("--pysigma", type=Path, required=True, help="SigmaHQ/pySigma-backend-crowdstrike")
-    parser.add_argument("--offline", action="store_true", help="never fetch; fail on a missing page")
+    parser.add_argument(
+        "--sentinel", type=Path, required=True, help="Azure/Azure-Sentinel (CrowdStrike solution)"
+    )
+    parser.add_argument(
+        "--pysigma", type=Path, required=True, help="SigmaHQ/pySigma-backend-crowdstrike"
+    )
+    parser.add_argument(
+        "--offline", action="store_true", help="never fetch; fail on a missing page"
+    )
     parser.add_argument("--refresh", action="store_true", help="fetch every page again")
-    parser.add_argument("--check", action="store_true", help="exit 1 when a file would change (offline)")
+    parser.add_argument(
+        "--check", action="store_true", help="exit 1 when a file would change (offline)"
+    )
     args = parser.parse_args()
 
-    fill_cache(args.cache, offline=args.offline or args.check, refresh=args.refresh and not args.check)
+    fill_cache(
+        args.cache, offline=args.offline or args.check, refresh=args.refresh and not args.check
+    )
     functions = read_functions(args.cache)
     check_text(functions)
     lcc = read_corpus(args.lcc, "lcc", licences=True)
-    queries = lcc + read_corpus(args.query_hub, "queryhub", False) + read_corpus(args.cql_queries, "cqlqueries", False)
+    queries = (
+        lcc
+        + read_corpus(args.query_hub, "queryhub", False)
+        + read_corpus(args.cql_queries, "cqlqueries", False)
+    )
     ngsiem = ngsiem_evidence(lcc, [f.name for f in functions if not f.removed])
     mined = mine(queries)
-    events, categories = build_events(mined, read_sentinel(args.sentinel), read_pysigma(args.pysigma))
+    events, categories = build_events(
+        mined, read_sentinel(args.sentinel), read_pysigma(args.pysigma)
+    )
     heads = {
         "CrowdStrike/logscale-community-content": git_rev(args.lcc),
         "ByteRay-Labs/Query-Hub": git_rev(args.query_hub),
@@ -1921,11 +2669,14 @@ def main() -> int:
         "SigmaHQ/pySigma-backend-crowdstrike": git_rev(args.pysigma),
     }
     evidence = {
-        key: "\n".join(q.text for q in queries if q.source.split("-")[0] == key) for key in QUERY_SOURCES
+        key: "\n".join(q.text for q in queries if q.source.split("-")[0] == key)
+        for key in QUERY_SOURCES
     }
     evidence["cqlqueries"] += "\n" + export_keys(args.cql_queries)
     fdr = args.sentinel / SENTINEL_SOLUTION / "CrowdStrikeS3FDR_ccp"
-    evidence["sentinel"] = "\n".join(p.read_text(encoding="utf-8") for p in sorted(fdr.glob("*.json")))
+    evidence["sentinel"] = "\n".join(
+        p.read_text(encoding="utf-8") for p in sorted(fdr.glob("*.json"))
+    )
     evidence["pysigma"] = (args.pysigma / PYSIGMA_PIPELINE).read_text(encoding="utf-8")
     check_sources(evidence)
     field_rows, ecs = build_fields(mined, lcc)

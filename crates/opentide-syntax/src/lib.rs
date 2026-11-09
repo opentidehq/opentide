@@ -56,6 +56,7 @@ pub fn language(id: LanguageId) -> Option<Language> {
         LanguageId::Lucene => Some(unsafe { from_raw(tree_sitter_opentide_lucene()) }),
         // SAFETY: as above.
         LanguageId::Falco => Some(unsafe { from_raw(tree_sitter_opentide_falco()) }),
+        // SAFETY: as above.
         LanguageId::Cql => Some(unsafe { from_raw(tree_sitter_opentide_cql()) }),
         // Tide YAML has its own parser; configuration TOML is the host's.
         LanguageId::TideYaml | LanguageId::Config => None,
