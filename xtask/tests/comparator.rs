@@ -339,8 +339,8 @@ mod comparator {
             "*",
             "stderr",
             "text",
-            "help: run opentide doctor",
-            "help: run opentide doctor --json",
+            "  help: run opentide doctor",
+            "  help: run opentide doctor --json",
         );
         let exit = entry("*", "exit_code", "text", "1", "2");
         let ledger = Ledger::parse(&format!("{text}{exit}")).expect("valid");
@@ -364,24 +364,60 @@ mod comparator {
     }
 
     #[test]
-    fn a_text_rule_does_not_approve_its_text_on_another_line() {
-        // V854-I-1: the rule explains line 1; line 3 holds the same texts
-        // but differs beyond them, and stays a difference.
+    fn a_partial_text_rule_approves_nothing() {
+        // V854-I-1: ": 1" -> ": 2" is part of a line, not a whole line, so it
+        // explains neither "rules" nor "errors", and is unused. The old
+        // substring rewrite approved both lines.
         let ledger = Ledger::parse(&entry("*", "stdout", "text", ": 1", ": 2")).expect("valid");
-        let oracle = run(0, "rules: 1\nok\nerrors: 1 found\n", "");
-        let candidate = run(0, "rules: 2\nok\nerrors: 2 seen\n", "");
+        let oracle = run(0, "rules: 1\nok\nerrors: 1\n", "");
+        let candidate = run(0, "rules: 2\nok\nerrors: 2\n", "");
+        let (report, usage) = check(&oracle, &candidate, &ledger);
+        assert!(!report.equal, "{report:?}");
+        assert_eq!(report.differences[0].at.as_deref(), Some("line 1, byte 7"));
+        assert!(!usage.is_used(0));
+    }
+
+    #[test]
+    fn a_whole_line_text_rule_approves_that_line_only() {
+        // V854-I-1: "rules: 1" -> "rules: 2" explains line 1 and nothing else:
+        // the errors line stays a difference, and the run is equal only when
+        // the candidate's errors line is unchanged.
+        let ledger =
+            Ledger::parse(&entry("*", "stdout", "text", "rules: 1", "rules: 2")).expect("valid");
+        let oracle = run(0, "rules: 1\nok\nerrors: 1\n", "");
+        let candidate = run(0, "rules: 2\nok\nerrors: 2\n", "");
         let (report, usage) = check(&oracle, &candidate, &ledger);
         assert!(!report.equal, "{report:?}");
         assert_eq!(report.differences[0].at.as_deref(), Some("line 3, byte 20"));
-        assert!(usage.is_used(0), "line 1 is still approved");
+        assert!(usage.is_used(0), "line 1 is approved");
 
-        // A second occurrence on another line with nothing else different is
-        // approved there too, line by line, and nothing else is.
-        let oracle = run(0, "rules: 1\nok\nerrors: 1\n", "");
-        let candidate = run(0, "rules: 2\nok\nerrors: 2\n", "");
-        assert!(check(&oracle, &candidate, &ledger).0.equal);
-        let shifted = run(0, "rules: 2\nerrors: 2\nok\n", "");
+        let unchanged = run(0, "rules: 2\nok\nerrors: 1\n", "");
+        let (report, usage) = check(&oracle, &unchanged, &ledger);
+        assert!(report.equal, "{report:?}");
+        assert!(usage.is_used(0));
+
+        // A line that holds the text and more is not that line.
+        let longer = run(0, "rules: 1 of 3\n", "");
+        let (report, usage) = check(&longer, &run(0, "rules: 2 of 3\n", ""), &ledger);
+        assert!(!report.equal, "{report:?}");
+        assert!(!usage.is_used(0));
+        // Nor is the same line at another line number.
+        let shifted = run(0, "ok\nrules: 2\nerrors: 1\n", "");
         assert!(!check(&oracle, &shifted, &ledger).0.equal);
+    }
+
+    #[test]
+    fn a_whole_line_text_rule_approves_every_line_it_matches() {
+        let ledger =
+            Ledger::parse(&entry("*", "stdout", "text", "rules: 1", "rules: 2")).expect("valid");
+        let oracle = run(0, "rules: 1\nok\nrules: 1\n", "");
+        let candidate = run(0, "rules: 2\nok\nrules: 2\n", "");
+        let (report, usage) = check(&oracle, &candidate, &ledger);
+        assert!(report.equal, "{report:?}");
+        assert!(usage.is_used(0));
+        // The oracle's line ending is kept: a different ending is reported.
+        let crlf = run(0, "rules: 2\r\nok\nrules: 2\n", "");
+        assert!(!check(&oracle, &crlf, &ledger).0.equal);
     }
 
     #[test]

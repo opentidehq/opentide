@@ -15,7 +15,8 @@
 #   rule       json:<JSON pointer> (the value there in the target's JSON
 #              document; "json:" alone is the whole document) or text
 #   oracle     a json: rule: the oracle's value there, as JSON, or (absent);
-#              a text rule: literal text the oracle's target holds;
+#              a text rule: one whole line of the oracle's target, without
+#              its line ending;
 #              exit_code: the oracle's code
 #   candidate  the same, for the candidate
 #   reason     why the difference is intended
@@ -24,8 +25,9 @@
 #
 # An entry applies only where both values are found as written, and only for
 # its command, case glob and target: every other difference is still
-# reported. A text rule rewrites the oracle's text into the candidate's before
-# the comparison. An entry that applies to no case in a complete run is stale,
+# reported. A text rule is one whole line on each side, approved where the
+# oracle and candidate lines match it at the same line number; part of a line
+# approves nothing. An entry that applies to no case in a complete run is stale,
 # and fails the run: remove it in the change that makes it stale. Differences
 # in a file's presence, mode or deletion have no rule: fix them instead.
 #
