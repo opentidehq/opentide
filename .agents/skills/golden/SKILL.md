@@ -97,7 +97,7 @@ is required (#805):
 |-------|-------|
 | command | The command path |
 | case glob | The cases it applies to, as narrow as possible |
-| rule | A JSON pointer, or a text rule |
+| rule | A JSON pointer, or a text rule: one whole line on each side, approved where the oracle and candidate lines match it at the same line number |
 | oracle value | What Python prints or writes |
 | candidate value | What Rust prints or writes |
 | reason | Why the difference is right |

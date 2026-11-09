@@ -401,10 +401,12 @@ impl Comparison<'_> {
                 _ => None,
             })
             .collect();
-        // Narrow, line by line: on line N, every entry whose oracle text is on
-        // the oracle's line N and whose candidate text is on the candidate's
-        // rewrites that line; the line is approved only if it then reads as
-        // the candidate's line exactly. Every other line is compared as it is.
+        // Exact, line by line: an entry approves line N only where the
+        // oracle's line N is its oracle text and the candidate's line N is its
+        // candidate text, each the whole line without its newline. The line
+        // then reads as the candidate's, keeping the oracle's line ending, so
+        // a different ending is still reported. Every other line is compared
+        // as it is.
         let oracle_lines: Vec<&[u8]> = oracle.split_inclusive(|b| *b == b'\n').collect();
         let candidate_lines: Vec<&[u8]> = candidate.split_inclusive(|b| *b == b'\n').collect();
         let mut rewritten: Vec<Vec<u8>> = oracle_lines.iter().map(|line| line.to_vec()).collect();
@@ -413,17 +415,13 @@ impl Comparison<'_> {
             let Some(other) = candidate_lines.get(number) else {
                 continue;
             };
-            let mut text = line.to_vec();
-            let mut here = Vec::new();
+            let (body, ending) = split_ending(line);
+            let (other_body, _) = split_ending(other);
             for (index, from, to) in &rules {
-                if contains(line, from) && contains(other, to) {
-                    text = replace(&text, from, to);
-                    here.push(*index);
+                if body == from.as_slice() && other_body == to.as_slice() {
+                    rewritten[number] = [to.as_slice(), ending].concat();
+                    applied.insert(*index);
                 }
-            }
-            if !here.is_empty() && text == *other {
-                rewritten[number] = text;
-                applied.extend(here);
             }
         }
         for index in applied {
@@ -579,30 +577,17 @@ fn excerpt(text: &str) -> String {
     out
 }
 
-fn contains(haystack: &[u8], needle: &[u8]) -> bool {
-    !needle.is_empty()
-        && haystack
-            .windows(needle.len())
-            .any(|window| window == needle)
-}
-
-/// `bytes` with every occurrence of `from` replaced by `to`, left to right.
-pub(crate) fn replace(bytes: &[u8], from: &[u8], to: &[u8]) -> Vec<u8> {
-    if from.is_empty() {
-        return bytes.to_vec();
-    }
-    let mut out = Vec::with_capacity(bytes.len());
-    let mut at = 0;
-    while at < bytes.len() {
-        if bytes[at..].starts_with(from) {
-            out.extend_from_slice(to);
-            at += from.len();
-        } else {
-            out.push(bytes[at]);
-            at += 1;
-        }
-    }
-    out
+/// A line's text and its ending (`\n` or `\r\n`, or nothing on a last line
+/// without one).
+fn split_ending(line: &[u8]) -> (&[u8], &[u8]) {
+    let cut = if line.ends_with(b"\r\n") {
+        line.len() - 2
+    } else if line.ends_with(b"\n") {
+        line.len() - 1
+    } else {
+        line.len()
+    };
+    line.split_at(cut)
 }
 
 /// A report of a whole run (`golden check --engine compare`, `xtask
@@ -673,9 +658,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn replace_is_left_to_right_and_does_not_rescan() {
-        assert_eq!(replace(b"aaa", b"aa", b"a"), b"aa");
-        assert_eq!(replace(b"x", b"", b"y"), b"x");
+    fn a_line_splits_from_its_ending() {
+        assert_eq!(split_ending(b"a\n"), (&b"a"[..], &b"\n"[..]));
+        assert_eq!(split_ending(b"a\r\n"), (&b"a"[..], &b"\r\n"[..]));
+        assert_eq!(split_ending(b"a"), (&b"a"[..], &b""[..]));
+        assert_eq!(split_ending(b"\n"), (&b""[..], &b"\n"[..]));
     }
 
     #[test]

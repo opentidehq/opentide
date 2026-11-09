@@ -86,11 +86,12 @@ pub enum Rule {
         /// The candidate's value there.
         candidate: Option<Json>,
     },
-    /// Literal text: the oracle's text reads as the candidate's.
+    /// One whole line on each side, approved where the oracle and candidate
+    /// lines match it at the same line number.
     Text {
-        /// Text the oracle's target contains.
+        /// The oracle's line, without its line ending.
         oracle: String,
-        /// The text the candidate has in its place.
+        /// The candidate's line at the same line number, without its ending.
         candidate: String,
     },
     /// The exit code.
@@ -352,9 +353,14 @@ fn check_entry(raw: RawEntry) -> Result<Entry, Vec<String>> {
             problems.push("on `exit_code`, `rule` is `text`".to_owned());
             None
         }
-        (_, "text") if raw.oracle.contains('\n') || raw.candidate.contains('\n') => {
+        (_, "text")
+            if [&raw.oracle, &raw.candidate]
+                .iter()
+                .any(|value| value.contains(['\n', '\r'])) =>
+        {
             problems.push(
-                "a `text` rule's `oracle` and `candidate` are one line each: it applies line by line"
+                "a `text` rule's `oracle` and `candidate` are one whole line each, without its \
+                 line ending: it approves the lines equal to them at the same line number"
                     .to_owned(),
             );
             None
@@ -623,7 +629,16 @@ changelog = "**Nested rules**"
             Ledger::parse(&text)
                 .unwrap_err()
                 .to_string()
-                .contains("one line each")
+                .contains("one whole line each")
+        );
+        let carriage = ENTRY
+            .replace("json:/summary/rules", "text")
+            .replace("candidate = \"2\"", "candidate = \"b\\r\"");
+        assert!(
+            Ledger::parse(&carriage)
+                .unwrap_err()
+                .to_string()
+                .contains("one whole line each")
         );
     }
 

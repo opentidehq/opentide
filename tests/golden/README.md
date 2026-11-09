@@ -36,6 +36,10 @@ cargo xtask golden lock                         # rewrite oracle-requirements.tx
 6. **Coverage**: every command path has at least one case in every mode. `COVERAGE.md` is
    generated with the recordings; `record` and `check` fail when a path or mode has none, or when
    the recordings outgrow their budget.
+7. **An approved difference is as narrow as the change**: an entry in `APPROVED_DIFFS.toml`
+   (UC-0.7) names one command, a case glob and a target. A text rule is one whole line on each
+   side, approved where the oracle and candidate lines match it at the same line number; a JSON
+   rule is one value at one pointer.
 
 ## The oracle
 

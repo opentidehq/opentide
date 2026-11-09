@@ -29,6 +29,9 @@ goes when compare mode does (UC-6.2, #841).
   at its target; everything else is still compared. With an approved JSON value, the bytes are
   checked by layout (both sides must be the same one of `json::LAYOUTS`), so a layout change is
   never hidden behind an approval.
+- A text rule is one whole line on each side, approved where the oracle and candidate lines match
+  it at the same line number (without the line ending, which is still compared). Part of a line
+  approves nothing.
 - A ledger entry that applies to no case in a complete run is stale, and the run fails
   (`RunReport::new`). A single CLI run (`compare_normalised`) does not check staleness.
 - Every ledger field is required; the schema is in the comment at the top of
