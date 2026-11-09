@@ -1,7 +1,8 @@
 """Platforms whose queries can be checked against a tenant.
 
-CrowdStrike and HarfangLab expose no query language, so their capability
-entry is ``can_validate False``.
+CrowdStrike, HarfangLab and Sysdig have no tenant-side query check, so their
+capability entry is ``can_validate False``; the analysis engine checks
+CrowdStrike's CQL and Sysdig's Falco conditions offline.
 """
 
 from __future__ import annotations
@@ -18,9 +19,10 @@ QUERY_VALIDATION_PLATFORMS: frozenset[str] = frozenset(
 )
 
 #: Platforms whose rule queries the analysis engine checks offline, and their languages.
-#: Sysdig's Falco condition is checked offline only: Sysdig has no rule preview.
+#: Sysdig's Falco condition and CrowdStrike's Next-Gen SIEM query (CQL) are checked
+#: offline only: neither platform has a query check opentide can call.
 #: SentinelOne (S1QL) is checked on the tenant only (``validate query --live``).
-#: CrowdStrike and HarfangLab are never checked: no fake validation.
+#: HarfangLab is never checked: no fake validation.
 OFFLINE_QUERY_LANGUAGES: dict[str, tuple[str, ...]] = {
     "sentinel": ("kql",),
     "defender_for_endpoint": ("kql",),
@@ -28,11 +30,6 @@ OFFLINE_QUERY_LANGUAGES: dict[str, tuple[str, ...]] = {
     "elastic": ("esql", "eql", "kuery", "lucene"),
     "carbon_black_cloud": ("lucene",),
     "sysdig": ("falco",),
+    "crowdstrike": ("cql",),
 }
 OFFLINE_QUERY_PLATFORMS = frozenset(OFFLINE_QUERY_LANGUAGES)
-#: Every language the CLI checks offline. The engine reads more (CQL, for
-#: CrowdStrike): a query in another language is the editor's, not ``validate``'s
-#: or ``lint``'s, until its platform is in :data:`OFFLINE_QUERY_LANGUAGES`.
-OFFLINE_LANGUAGES: frozenset[str] = frozenset(
-    language for languages in OFFLINE_QUERY_LANGUAGES.values() for language in languages
-)

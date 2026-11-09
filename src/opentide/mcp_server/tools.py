@@ -280,6 +280,7 @@ _DEFAULT_QUERY_LANGUAGE = {
     "carbon_black_cloud": "lucene",
     "elastic": "kuery",
     "sysdig": "falco",
+    "crowdstrike": "cql",
 }
 
 
@@ -292,7 +293,7 @@ def tool_validate_query(
     """
     from opentide.validation.query_platforms import OFFLINE_QUERY_PLATFORMS
 
-    # Sysdig is checked offline (Falco) but has no tenant check.
+    # Sysdig (Falco) and CrowdStrike (CQL) are checked offline but have no tenant check.
     if platform not in QUERY_VALIDATION_PLATFORMS and (
         live or platform not in OFFLINE_QUERY_PLATFORMS
     ):
@@ -429,7 +430,9 @@ def _offline_query_check(query: str, platform: str, *, language: str, stack: str
                 reason="how to fix it",
             )
         )
-    actions.append(live_step)
+    # CrowdStrike and Sysdig are checked offline only: a live step would be refused.
+    if platform in QUERY_VALIDATION_PLATFORMS:
+        actions.append(live_step)
     payload["next_actions"] = actions
     return payload
 
