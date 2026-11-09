@@ -86,6 +86,7 @@ Fuzz smoke (eql kuery lucene)
 Fuzz smoke (falco tide protocol)
 Fuzz smoke (config framing)
 Supply chain (cargo deny)
+Fuzz smoke (cql)
 Engine release (dry run) / Release tag
 Engine release (dry run) / opentide-lsp x86_64-unknown-linux-gnu
 Engine release (dry run) / opentide-lsp x86_64-unknown-linux-musl

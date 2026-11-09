@@ -30,3 +30,9 @@ OFFLINE_QUERY_LANGUAGES: dict[str, tuple[str, ...]] = {
     "sysdig": ("falco",),
 }
 OFFLINE_QUERY_PLATFORMS = frozenset(OFFLINE_QUERY_LANGUAGES)
+#: Every language the CLI checks offline. The engine reads more (CQL, for
+#: CrowdStrike): a query in another language is the editor's, not ``validate``'s
+#: or ``lint``'s, until its platform is in :data:`OFFLINE_QUERY_LANGUAGES`.
+OFFLINE_LANGUAGES: frozenset[str] = frozenset(
+    language for languages in OFFLINE_QUERY_LANGUAGES.values() for language in languages
+)

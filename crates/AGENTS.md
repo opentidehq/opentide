@@ -17,7 +17,7 @@ Before editing, read the one skill that matches the change. Skills follow the [A
 
 ## Product
 
-Native language server for **KQL**, **SPL**, **Tide YAML**, the Elastic Security languages **ES|QL**, **EQL**, **Kibana KQL** (`kuery`, never confused with Microsoft KQL), and **Lucene**, and **Falco** rule conditions (Sysdig Secure, `configurations.sysdig`). SQL is out of scope. Names use `opentide`, never `otide`. The client factory is `createOpentideClient`.
+Native language server for **KQL**, **SPL**, **Tide YAML**, the Elastic Security languages **ES|QL**, **EQL**, **Kibana KQL** (`kuery`, never confused with Microsoft KQL), and **Lucene**, **Falco** rule conditions (Sysdig Secure, `configurations.sysdig`), and the **CrowdStrike Query Language** (CQL: Falcon LogScale and Next-Gen SIEM, `configurations.crowdstrike`). SQL is out of scope. Names use `opentide`, never `otide`. The client factory is `createOpentideClient`.
 
 The offline query checks of the CLI (`validate`'s and `lint`'s `queries` checks, `validate query`), `opentide lsp start`, `opentide tui` and MCP `validate_query` run this engine: `analysis/` binds `opentide-analysis` and `opentide-lsp` with PyO3, by path, and `hatch_build.py` compiles it into the opentide package as `opentide._native`. There is no separate engine distribution and no engine pin. `uv sync` builds `_native` (develop profile) with the Rust release `rust-toolchain.toml` pins (rustup installs it); the crates declare `rust-version` 1.85, but no job checks it: the code needs Rust 1.88 or later (let chains) and `Cargo.lock` 1.90 (tree-sitter-language 0.1.8). Release wheels are one `cp310-abi3` wheel per platform, and the sdist carries the workspace.
 
@@ -31,7 +31,7 @@ One workspace (root `Cargo.toml`, one `Cargo.lock`; `fuzz/` keeps its own). A cr
 | --- | --- |
 | foundation 0 | [`opentide-core`](opentide-core/AGENTS.md) |
 | foundation 1 | [`opentide-syntax`](opentide-syntax/AGENTS.md), [`opentide-highlight`](opentide-highlight/AGENTS.md), [`opentide-ecs`](opentide-ecs/AGENTS.md) |
-| foundation 2 | [`opentide-kql`](opentide-kql/AGENTS.md), [`opentide-spl`](opentide-spl/AGENTS.md), [`opentide-kuery`](opentide-kuery/AGENTS.md), [`opentide-lucene`](opentide-lucene/AGENTS.md), [`opentide-falco`](opentide-falco/AGENTS.md) |
+| foundation 2 | [`opentide-kql`](opentide-kql/AGENTS.md), [`opentide-spl`](opentide-spl/AGENTS.md), [`opentide-kuery`](opentide-kuery/AGENTS.md), [`opentide-lucene`](opentide-lucene/AGENTS.md), [`opentide-falco`](opentide-falco/AGENTS.md), [`opentide-cql`](opentide-cql/AGENTS.md) |
 | foundation 3 | [`opentide-esql`](opentide-esql/AGENTS.md), [`opentide-eql`](opentide-eql/AGENTS.md) |
 | foundation 4 | [`opentide-schema`](opentide-schema/AGENTS.md) |
 | domain 0, 1 | [`opentide-tide`](opentide-tide/AGENTS.md), then [`opentide-analysis`](opentide-analysis/AGENTS.md) |
@@ -42,9 +42,9 @@ One workspace (root `Cargo.toml`, one `Cargo.lock`; `fuzz/` keeps its own). A cr
 
 ## Hard rules
 
-- No `std::fs` in `crates/opentide-{core,highlight,syntax,kql,spl,esql,eql,kuery,lucene,falco,ecs,tide,analysis,schema}/src`. Tests may read the repo.
+- No `std::fs` in `crates/opentide-{core,highlight,syntax,kql,spl,esql,eql,kuery,lucene,falco,cql,ecs,tide,analysis,schema}/src`. Tests may read the repo.
 - Do not rename a HighlightSpec capture. Adding one is a minor (`highlights/spec.toml` `[meta].version`).
-- Do not validate CrowdStrike. `configurations.crowdstrike.*` stays unsupported.
+- CrowdStrike is CQL, checked against CrowdStrike's published grammar and function reference (`docs/engine/CQL.md`). Never report an unknown field, saved search, lookup file or repository as a finding: they live in the tenant.
 - Control commands (`.show`, `.create`) parse so the engine can emit `kql_control_command_unsupported`. They are not valid detections.
 - Highlight tokenizes **authored** SPL. An implicit leading `| search` is not a source rewrite.
 - opentide LSP owns Tide diagnostics. Editor samples keep yamlls off `objects/**`.
@@ -64,7 +64,7 @@ The workspace's lints are in the root `Cargo.toml` (`[workspace.lints]`), each a
 
 - **`unsafe_code` is forbidden** except in `opentide-syntax` (tree-sitter FFI) and `opentide-wasm` (wasm32 libc shims). Those two copy the workspace table with `unsafe_code = "deny"`, allow it per item with a reason, and comment every `unsafe` block with `// SAFETY:` (`clippy::undocumented_unsafe_blocks`), one unsafe operation per block (`clippy::multiple_unsafe_ops_per_block`). `xtask/tests/lint_policy.rs` fails when a copy drifts or another crate leaves the workspace table; [`docs/internal/unsafe.md`](../docs/internal/unsafe.md) lists every site with its justification, and `xtask/tests/unsafe_listing.rs` fails when it misses one.
 - **No `unwrap`, `expect`, `dbg!`, `todo!` or `unimplemented!` outside tests.** A panic on user input is a bug: return a diagnostic or an error. Where a value cannot fail (a catalog compiled in with `include_str!`, a regex literal, a structural invariant), the item says why: `#[expect(clippy::expect_used, reason = "...")]`. An integration test file's helpers outside `#[test]` take the same `#![expect]` at the file's top.
-- **`missing_docs`** holds for `opentide-syntax`, `opentide-kuery`, `opentide-lsp`, `opentide-wasm`, `opentide-native` and `xtask`, and for every new crate. The eleven other crates, imported undocumented, opt out at their crate root (`#![expect(missing_docs, ...)]`); remove the opt-out once a crate is documented. Inaccurate docs are worse than none.
+- **`missing_docs`** holds for `opentide-syntax`, `opentide-kuery`, `opentide-lsp`, `opentide-wasm`, `opentide-native` and `xtask`, and for every new crate. The twelve other crates, imported undocumented (`opentide-cql` with language-server 0.12.0), opt out at their crate root (`#![expect(missing_docs, ...)]`); remove the opt-out once a crate is documented. Inaccurate docs are worse than none.
 - Prefer `#[expect(..., reason)]` to `#[allow]`: a stale expectation fails. Use `allow` only where an expectation cannot be fulfilled (clippy's glob-import lints; `dead_code` in a test module only some test binaries use up), and say so beside it.
 - **Casts.** `clippy::cast_possible_truncation` is on: a narrowing `as` carries `#[expect(..., reason)]` on its function naming the bound (LSP positions are `u32`; a char is one or two UTF-16 units), or becomes `try_from`, or widens the other side.
 

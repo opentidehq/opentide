@@ -1,0 +1,320 @@
+# One entry per public query in this directory: where it comes from in
+# CrowdStrike/logscale-community-content@77cfc4e314d40611fdbc354c80ed39c9548fa12c
+# (`source`, first line of the query in that file), the fault injected into its
+# `.broken.cql` twin, and the code the twin must report. See ../SOURCES.md and
+# crates/opentide-analysis/tests/external_cql.rs.
+
+[[query]]
+file = "crowdstrike-query-language-map/bucket-l14.cql"
+source = "CrowdStrike-Query-Language-Map/CrowdStrike-Query-Language/bucket.md"
+line = 14
+fault = "dangling-operator"
+code = "cql_parse_error"
+
+[[query]]
+file = "crowdstrike-query-language-map/correlate.cql"
+source = "CrowdStrike-Query-Language-Map/CrowdStrike-Query-Language/correlate.md"
+line = 6
+fault = "unbalanced-paren"
+code = "cql_parse_error"
+
+[[query]]
+file = "crowdstrike-query-language-map/join-l8.cql"
+source = "CrowdStrike-Query-Language-Map/CrowdStrike-Query-Language/join.md"
+line = 8
+fault = "unbalanced-brace"
+code = "cql_parse_error"
+
+[[query]]
+file = "crowdstrike-query-language-map/selfjoinfilter-l8.cql"
+source = "CrowdStrike-Query-Language-Map/CrowdStrike-Query-Language/selfJoinFilter.md"
+line = 8
+fault = "unknown-function"
+code = "cql_unknown_function"
+
+[[query]]
+file = "dashboards-only/cve-2025-1146-l170.cql"
+source = "Dashboards-Only/CVE-2025-1146.yaml"
+line = 170
+fault = "free-text-after-aggregate"
+code = "cql_free_text_after_aggregate"
+
+[[query]]
+file = "dashboards-only/cve-2025-42701-cve-2025-42706-l219.cql"
+source = "Dashboards-Only/CVE-2025-42701_CVE-2025-42706.yaml"
+line = 219
+fault = "unbalanced-paren"
+code = "cql_parse_error"
+
+[[query]]
+file = "dashboards-only/cve-2025-42701-cve-2025-42706-mssp-dashboard-l132.cql"
+source = "Dashboards-Only/CVE-2025-42701_CVE-2025-42706_MSSP_Dashboard.yaml"
+line = 132
+fault = "bad-enum-value"
+code = "cql_parameter_value"
+
+[[query]]
+file = "dashboards-only/okta-user-tracking-dashboard-l97.cql"
+source = "Dashboards-Only/Okta User Tracking Dashboard.yaml"
+line = 97
+fault = "free-text-after-aggregate"
+code = "cql_free_text_after_aggregate"
+
+[[query]]
+file = "log-sources/1-password-audit.cql"
+source = "Log-Sources/1Password/parsers/1-Password-audit.yaml"
+line = 15
+fault = "assignment-with-as"
+code = "cql_assignment_as"
+
+[[query]]
+file = "log-sources/filteralertdetails-l115.cql"
+source = "Log-Sources/LogScale-Internal/src/dashboards/FilterAlertDetails.yaml"
+line = 115
+fault = "second-unnamed-argument"
+code = "cql_unnamed_argument"
+
+[[query]]
+file = "log-sources/fluentbit.cql"
+source = "Log-Sources/Kubernetes/Fluent-Bit-Logging/src/parsers/fluentbit.yaml"
+line = 57
+fault = "unbalanced-paren"
+code = "cql_parse_error"
+
+[[query]]
+file = "log-sources/ioc-threatactors-l204.cql"
+source = "Log-Sources/Sonicwall/src/dashboards/IOC-ThreatActors.yaml"
+line = 204
+fault = "free-text-after-aggregate"
+code = "cql_free_text_after_aggregate"
+
+[[query]]
+file = "log-sources/tausight-emailactivity-l144.cql"
+source = "Log-Sources/Tausight/src/dashboards/Tausight-eMailActivity.yaml"
+line = 144
+fault = "duplicate-parameter"
+code = "cql_duplicate_parameter"
+
+[[query]]
+file = "log-sources/tausight-ephiownership-l166.cql"
+source = "Log-Sources/Tausight/src/dashboards/Tausight-ePHIOwnership.yaml"
+line = 166
+fault = "unknown-function"
+code = "cql_unknown_function"
+
+[[query]]
+file = "log-sources/vulnerabilities-creator.cql"
+source = "Log-Sources/Tausight/src/alerts/Vulnerabilities-creator-ownerwithexcessivenumberofstale-unusedePHIfiles.yaml"
+line = 8
+fault = "bad-enum-value"
+code = "cql_parameter_value"
+
+[[query]]
+file = "log-sources/web-threatactivity-l319.cql"
+source = "Log-Sources/Zscaler/src/dashboards/Web-ThreatActivity.yaml"
+line = 319
+fault = "duplicate-parameter"
+code = "cql_duplicate_parameter"
+
+[[query]]
+file = "misc/rmmhunting-l425.cql"
+source = "Misc/crwd_live_rmm/RMMHunting.yaml"
+line = 425
+fault = "unknown-parameter"
+code = "cql_unknown_parameter"
+
+[[query]]
+file = "next-gen-siem/cisco-firepower-dashboard-l37.cql"
+source = "Next-Gen-SIEM/Dashboards/Cisco-Firepower/cisco-firepower-dashboard.yaml"
+line = 37
+fault = "unbalanced-brace"
+code = "cql_parse_error"
+
+[[query]]
+file = "next-gen-siem/corelight-secure-channel-insights-l193.cql"
+source = "Next-Gen-SIEM/Dashboards/Corelight/Corelight_secure_channel_insights.yaml"
+line = 193
+fault = "second-unnamed-argument"
+code = "cql_unnamed_argument"
+
+[[query]]
+file = "next-gen-siem/corelight-ssh-inferences-overview-l272.cql"
+source = "Next-Gen-SIEM/Dashboards/Corelight/Corelight_ssh_inferences_overview.yaml"
+line = 272
+fault = "unknown-parameter"
+code = "cql_unknown_parameter"
+
+[[query]]
+file = "next-gen-siem/corelight-vpn-insights-l321.cql"
+source = "Next-Gen-SIEM/Dashboards/Corelight/Corelight_vpn_insights.yaml"
+line = 321
+fault = "missing-parameter"
+code = "cql_missing_parameter"
+
+[[query]]
+file = "next-gen-siem/crowdstrikenext-gensiemdiscoverydashboard-l1492.cql"
+source = "Next-Gen-SIEM/Dashboards/CrowdStrike/CrowdStrikeNext-GenSIEMDiscoveryDashboard.yaml"
+line = 1492
+fault = "unbalanced-brace"
+code = "cql_parse_error"
+
+[[query]]
+file = "next-gen-siem/data-protection-hunt-dashboard-l508.cql"
+source = "Next-Gen-SIEM/Dashboards/CrowdStrike/data-protection-hunt-dashboard.yaml"
+line = 508
+fault = "unknown-parameter"
+code = "cql_unknown_parameter"
+
+[[query]]
+file = "next-gen-siem/mimecast-overview-dashboard-l395.cql"
+source = "Next-Gen-SIEM/Dashboards/Mimecast/mimecast-overview-dashboard.yaml"
+line = 395
+fault = "link-outside-correlate"
+code = "cql_link_outside_correlate"
+
+[[query]]
+file = "next-gen-siem/netskope-dashboard-en-us-l257.cql"
+source = "Next-Gen-SIEM/Dashboards/Netskope/Netskope_Dashboard_en-us.yaml"
+line = 257
+fault = "dangling-operator"
+code = "cql_parse_error"
+
+[[query]]
+file = "next-gen-siem/next-gen-siem-reference-dashboard-l1824.cql"
+source = "Next-Gen-SIEM/Dashboards/CrowdStrike/next-gen-siem-reference-dashboard.yaml"
+line = 1824
+fault = "bad-regex-flag"
+code = "cql_regex_flag"
+
+[[query]]
+file = "parsers-only/cisco-asa.cql"
+source = "Parsers-Only/cisco-asa.logscale"
+line = 1
+fault = "link-outside-correlate"
+code = "cql_link_outside_correlate"
+
+[[query]]
+file = "parsers-only/deciso-opnsense.cql"
+source = "Parsers-Only/deciso-opnsense.logscale"
+line = 1
+fault = "link-outside-correlate"
+code = "cql_link_outside_correlate"
+
+[[query]]
+file = "parsers-only/fortinet-fortigate.cql"
+source = "Parsers-Only/fortinet-fortigate.yaml"
+line = 16
+fault = "unknown-function"
+code = "cql_unknown_function"
+
+[[query]]
+file = "parsers-only/squid-proxy.cql"
+source = "Parsers-Only/Squid-proxy.yaml"
+line = 16
+fault = "missing-parameter"
+code = "cql_missing_parameter"
+
+[[query]]
+file = "queries-only/2023-09-08-cool-query-friday-reflective-net.cql"
+source = "Queries-Only/Cool-Query-Friday/2023-09-08 - Cool Query Friday - Reflective .Net Module Loads and Program Database (PDB) File Paths.md"
+line = 5
+fault = "dangling-operator"
+code = "cql_parse_error"
+
+[[query]]
+file = "queries-only/2023-09-20-cool-query-friday-up-leveling-teams-l6.cql"
+source = "Queries-Only/Cool-Query-Friday/2023-09-20 - Cool Query Friday - Up-leveling Teams With Text-box Driven Queries.md"
+line = 6
+fault = "bad-regex-flag"
+code = "cql_regex_flag"
+
+[[query]]
+file = "queries-only/check-for-falcon-acuninstallconfirmation-event.cql"
+source = "Queries-Only/Helpful-CQL-Queries/Check for Falcon AcUninstallConfirmation Event Followed by no Heartbeat Events.md"
+line = 2
+fault = "url-pattern-comment"
+code = "cql_parse_error"
+
+[[query]]
+file = "queries-only/cve-2025-53770-sharepoint-toolshell-l2.cql"
+source = "Queries-Only/Helpful-CQL-Queries/CVE-2025-53770 - SharePoint ToolShell.md"
+line = 2
+fault = "dangling-operator"
+code = "cql_parse_error"
+
+[[query]]
+file = "queries-only/decode-base64-l2.cql"
+source = "Queries-Only/Helpful-CQL-Queries/Decode Base64.md"
+line = 2
+fault = "bad-enum-value"
+code = "cql_parameter_value"
+
+[[query]]
+file = "queries-only/failed-user-logon-thresholding.cql"
+source = "Queries-Only/Helpful-CQL-Queries/Failed User Logon Thresholding.md"
+line = 2
+fault = "duplicate-parameter"
+code = "cql_duplicate_parameter"
+
+[[query]]
+file = "queries-only/get-dns-resolutions-from-browser-processes.cql"
+source = "Queries-Only/Helpful-CQL-Queries/Get DNS Resolutions from Browser Processes.md"
+line = 2
+fault = "assignment-with-as"
+code = "cql_assignment_as"
+
+[[query]]
+file = "queries-only/httprequestdetect.cql"
+source = "Queries-Only/Helpful-CQL-Queries/HttpRequestDetect.md"
+line = 2
+fault = "url-pattern-comment"
+code = "cql_parse_error"
+
+[[query]]
+file = "queries-only/parse-windows-call-stack.cql"
+source = "Queries-Only/Helpful-CQL-Queries/Parse Windows Call Stack.md"
+line = 2
+fault = "assignment-with-as"
+code = "cql_assignment_as"
+
+[[query]]
+file = "queries-only/show-sensor-update-policies.cql"
+source = "Queries-Only/Helpful-CQL-Queries/Show Sensor Update Policies.md"
+line = 2
+fault = "second-unnamed-argument"
+code = "cql_unnamed_argument"
+
+[[query]]
+file = "queries-only/t1012-query-registry-l10.cql"
+source = "Queries-Only/MITRE-ATT&CK-Enterprise/(TA007) Discovery/(T1012) Query Registry.md"
+line = 10
+fault = "unbalanced-paren"
+code = "cql_parse_error"
+
+[[query]]
+file = "queries-only/two-whoami-commands-run.cql"
+source = "Queries-Only/Helpful-CQL-Queries/Two whoami Commands Run.md"
+line = 2
+fault = "bad-regex-flag"
+code = "cql_regex_flag"
+
+[[query]]
+file = "queries-only/user-added-to-group-l2.cql"
+source = "Queries-Only/Helpful-CQL-Queries/User Added to Group.md"
+line = 2
+fault = "unbalanced-brace"
+code = "cql_parse_error"
+
+[[query]]
+file = "queries-only/user-added-to-group-l22.cql"
+source = "Queries-Only/Helpful-CQL-Queries/User Added to Group.md"
+line = 22
+fault = "url-pattern-comment"
+code = "cql_parse_error"
+
+[[query]]
+file = "queries-only/using-correlate-to-hunt-process-lineage.cql"
+source = "Queries-Only/Helpful-CQL-Queries/Using correlate() to hunt process lineage.md"
+line = 6
+fault = "url-pattern-comment"
+code = "cql_parse_error"
