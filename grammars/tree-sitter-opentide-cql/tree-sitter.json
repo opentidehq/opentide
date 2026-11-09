@@ -1,0 +1,15 @@
+{
+  "grammars": [
+    {
+      "name": "opentide_cql",
+      "camelcase": "OpentideCql",
+      "scope": "source.cql",
+      "file-types": ["cql"],
+      "highlights": "../../highlights/queries/cql/highlights.scm"
+    }
+  ],
+  "metadata": {
+    "version": "0.1.0",
+    "license": "EUPL-1.2"
+  }
+}

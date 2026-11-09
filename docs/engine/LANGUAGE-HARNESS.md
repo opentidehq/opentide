@@ -5,7 +5,7 @@ description: "What adding a query language to the engine takes: grammar, corpus 
 
 # Adding a language
 
-KQL, SPL, and Tide YAML are the 1.0 engines. ES|QL, EQL, Kibana KQL (`kuery`), and Lucene cover Elastic Security rules. A later language (S1QL, Sigma, YARA) follows this list. CrowdStrike stays unsupported.
+KQL, SPL, and Tide YAML are the 1.0 engines. ES|QL, EQL, Kibana KQL (`kuery`), and Lucene cover Elastic Security rules, Falco covers Sysdig Secure, and CQL covers CrowdStrike (`docs/CQL.md`). A later language (S1QL, Sigma, YARA) follows this list.
 
 ## Raw query documents
 

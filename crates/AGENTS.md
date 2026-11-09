@@ -17,7 +17,7 @@ Before editing, read the one skill that matches the change. Skills follow the [A
 
 ## Product
 
-Native language server for **KQL**, **SPL**, **Tide YAML**, the Elastic Security languages **ES|QL**, **EQL**, **Kibana KQL** (`kuery`, never confused with Microsoft KQL), and **Lucene**, and **Falco** rule conditions (Sysdig Secure, `configurations.sysdig`). SQL is out of scope. Names use `opentide`, never `otide`. The client factory is `createOpentideClient`.
+Native language server for **KQL**, **SPL**, **Tide YAML**, the Elastic Security languages **ES|QL**, **EQL**, **Kibana KQL** (`kuery`, never confused with Microsoft KQL), and **Lucene**, **Falco** rule conditions (Sysdig Secure, `configurations.sysdig`), and the **CrowdStrike Query Language** (CQL: Falcon LogScale and Next-Gen SIEM, `configurations.crowdstrike`). SQL is out of scope. Names use `opentide`, never `otide`. The client factory is `createOpentideClient`.
 
 The offline query checks of the CLI (`validate`'s and `lint`'s `queries` checks, `validate query`), `opentide lsp start`, `opentide tui` and MCP `validate_query` run this engine: `analysis/` binds `opentide-analysis` and `opentide-lsp` with PyO3, by path, and `hatch_build.py` compiles it into the opentide package as `opentide._native`. There is no separate engine distribution and no engine pin. `uv sync` builds `_native` (develop profile) with the Rust release `rust-toolchain.toml` pins (rustup installs it); the crates declare `rust-version` 1.85, but no job checks it: the code needs Rust 1.88 or later (let chains) and `Cargo.lock` 1.90 (tree-sitter-language 0.1.8). Release wheels are one `cp310-abi3` wheel per platform, and the sdist carries the workspace.
 
@@ -41,9 +41,9 @@ One workspace (root `Cargo.toml`, one `Cargo.lock`; `fuzz/` keeps its own). A cr
 
 ## Hard rules
 
-- No `std::fs` in `crates/opentide-{core,highlight,syntax,kql,spl,esql,eql,kuery,lucene,falco,ecs,tide,analysis}/src`. Tests may read the repo.
+- No `std::fs` in `crates/opentide-{core,highlight,syntax,kql,spl,esql,eql,kuery,lucene,falco,cql,ecs,tide,analysis}/src`. Tests may read the repo.
 - Do not rename a HighlightSpec capture. Adding one is a minor (`highlights/spec.toml` `[meta].version`).
-- Do not validate CrowdStrike. `configurations.crowdstrike.*` stays unsupported.
+- CrowdStrike is CQL, checked against CrowdStrike's published grammar and function reference (`docs/CQL.md`). Never report an unknown field, saved search, lookup file or repository as a finding: they live in the tenant.
 - Control commands (`.show`, `.create`) parse so the engine can emit `kql_control_command_unsupported`. They are not valid detections.
 - Highlight tokenizes **authored** SPL. An implicit leading `| search` is not a source rewrite.
 - opentide LSP owns Tide diagnostics. Editor samples keep yamlls off `objects/**`.

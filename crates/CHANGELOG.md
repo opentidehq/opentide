@@ -8,7 +8,30 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ### Changed
 
-- **Releases come from opentidehq/opentide, tagged `engine-vX.Y.Z`** ([opentide#801](https://github.com/opentidehq/opentide/issues/801)). The engine moved there with its history; its GitHub Releases carry the same assets under the same names (`highlights-vX.Y.Z.zip`, `opentide-wasm-web-vX.Y.Z.zip`, `opentide-lsp-vX.Y.Z-<target>`, the licences and `SHA256SUMS`), so an editor that pins them changes only the URL: `https://github.com/opentidehq/opentide/releases/download/engine-vX.Y.Z/<asset>`. Their build provenance is signed by `opentidehq/opentide/.github/workflows/engine-release.yml`: verify with `gh attestation verify <asset> --repo opentidehq/opentide` and the identity in `crates/opentide-lsp/README.md`. A release candidate (`engine-vX.Y.Z-rc.N`) is a GitHub pre-release with every asset and nothing on crates.io or npm. Releases up to 0.11.0 stay on opentidehq/language-server.
+- **Releases come from opentidehq/opentide, tagged `engine-vX.Y.Z`** ([opentide#801](https://github.com/opentidehq/opentide/issues/801)). The engine moved there with its history; its GitHub Releases carry the same assets under the same names (`highlights-vX.Y.Z.zip`, `opentide-wasm-web-vX.Y.Z.zip`, `opentide-lsp-vX.Y.Z-<target>`, the licences and `SHA256SUMS`), so an editor that pins them changes only the URL: `https://github.com/opentidehq/opentide/releases/download/engine-vX.Y.Z/<asset>`. Their build provenance is signed by `opentidehq/opentide/.github/workflows/engine-release.yml`: verify with `gh attestation verify <asset> --repo opentidehq/opentide` and the identity in `crates/opentide-lsp/README.md`. A release candidate (`engine-vX.Y.Z-rc.N`) is a GitHub pre-release with every asset and nothing on crates.io or npm. Releases up to 0.12.0 stay on opentidehq/language-server.
+
+## [0.12.0] - 2026-11-08
+
+CrowdStrike queries are checked: the CrowdStrike Query Language (CQL) of Falcon LogScale and Next-Gen SIEM is a language, with diagnostics, hover, completion and highlighting for correlation rules, hunts and `.cql` files.
+
+### Upgrade
+
+- If you match or suppress `crowdstrike_unsupported`, match the `cql_*` codes instead (`docs/CQL.md`).
+
+### Breaking
+
+- **CrowdStrike queries are checked as CQL, and `crowdstrike_unsupported` is gone.** `configurations.crowdstrike.query` and hunts with `system: crowdstrike` used to get one `crowdstrike_unsupported` warning; they now get the `cql_*` diagnostics below, so a query LogScale would refuse is an error where it was not before. `docs/CQL.md` has the language and every code ([#221](https://github.com/opentidehq/language-server/pull/221)).
+
+### Added
+
+- **The CrowdStrike Query Language (CQL), Falcon LogScale's and Next-Gen SIEM's, is a language: id `cql`, files `*.cql`.** It follows CrowdStrike's published grammar and function reference (`docs/CQL.md`): 2,786 of the 2,812 blocks labelled CQL in CrowdStrike's public content parse, and 475 of the 490 queries on its function pages are clean (the rest are templates and documentation typos).
+  - Errors: `cql_parse_error`, `cql_unknown_function`, `cql_removed_function`, `cql_unknown_parameter`, `cql_duplicate_parameter`, `cql_unnamed_argument`, `cql_missing_parameter`, `cql_parameter_value`, `cql_regex_flag`, `cql_free_text_after_aggregate`, `cql_event_function_after_aggregate`, `cql_assignment_as`, `cql_link_outside_correlate`, `cql_correlate_placement` (`correlate()` where its reference forbids it), `cql_match_guard`
+  - In a correlation rule (`configurations.crowdstrike.query`, or `analyze_query` with `platform: crowdstrike`), `cql_correlate_aggregate`: `correlate()` with another aggregate
+  - Warnings: `cql_deprecated_function`, `cql_string_escape`, `cql_unknown_event` (a `#event_simpleName` no Falcon event has, with a near match), `cql_regex_group_under_or`
+  - A field, saved search, lookup file or repository is never reported unknown: they live in the tenant
+  - Hover, completion and signature help for the 196 functions, their parameters and allowed values, LogScale, Falcon and CPS fields and tags, and 395 Falcon events (`catalogs/cql/`, `scripts/sync_cql_catalog.py`)
+  - Highlighting: `highlights/generated/cql.tmLanguage.json`, scope `source.opentide.cql` (Cassandra's CQL extensions own `source.cql`), and the CrowdStrike block's query as an embedded region of Tide YAML
+  - Editors: the Helix, Neovim and Zed samples and `@opentide/lsp-client` map `*.cql` to `cql`
 
 ## [0.11.0] - 2026-11-06
 
@@ -636,6 +659,7 @@ The first working server serves KQL, SPL and Tide YAML over stdio and WASM, with
 - **A frozen HighlightSpec with generated editor maps.** Semantic tokens use the standard LSP legend.
 - **Stdio and WASM hosts, with Zed, Helix and Neovim samples.**
 
+[0.12.0]: https://github.com/opentidehq/language-server/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/opentidehq/language-server/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/opentidehq/language-server/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/opentidehq/language-server/compare/v0.9.0...v0.9.1
