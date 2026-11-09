@@ -1,0 +1,3066 @@
+---
+source: crates/opentide-schema/tests/from_node_table.rs
+expression: "serde_json::to_string_pretty(&results).unwrap()"
+---
+{
+  "alias-and-name": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "schema_id"
+        ],
+        "input": "b",
+        "msg": "Extra inputs are not permitted",
+        "span": [
+          3,
+          1,
+          10,
+          true
+        ],
+        "type": "extra_forbidden",
+        "yaml_line": 2
+      }
+    ]
+  },
+  "alias-wrong-type": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "schema"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          2,
+          1,
+          7,
+          true
+        ],
+        "type": "string_type",
+        "yaml_line": 1
+      }
+    ]
+  },
+  "anchor-alias-values": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "text"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          1,
+          7,
+          11,
+          true
+        ],
+        "type": "string_type",
+        "yaml_line": 0
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "items",
+          "0"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          1,
+          7,
+          11,
+          true
+        ],
+        "type": "string_type",
+        "yaml_line": 0
+      }
+    ]
+  },
+  "before-model-validator": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "legacy is not supported"
+        },
+        "field_path": [],
+        "input": null,
+        "msg": "Value error, legacy is not supported",
+        "span": null,
+        "type": "value_error",
+        "yaml_line": 0
+      }
+    ]
+  },
+  "before-model-validator-passes": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "name"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          1,
+          1,
+          6,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "other"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          1,
+          8,
+          9,
+          true
+        ],
+        "type": "string_type",
+        "yaml_line": 0
+      }
+    ]
+  },
+  "block-scalar-value": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "number"
+        ],
+        "input": "abc\n",
+        "msg": "Input should be a valid integer",
+        "span": [
+          2,
+          1,
+          7,
+          true
+        ],
+        "type": "int_type",
+        "yaml_line": 1
+      }
+    ]
+  },
+  "bool-errors-float": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "flag"
+        ],
+        "input": null,
+        "msg": "Input should be a valid boolean",
+        "span": [
+          2,
+          7,
+          10,
+          true
+        ],
+        "type": "bool_type",
+        "yaml_line": 1
+      }
+    ]
+  },
+  "bool-errors-int": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "flag"
+        ],
+        "input": null,
+        "msg": "Input should be a valid boolean",
+        "span": [
+          2,
+          7,
+          8,
+          true
+        ],
+        "type": "bool_type",
+        "yaml_line": 1
+      }
+    ]
+  },
+  "bool-errors-list": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "flag"
+        ],
+        "input": null,
+        "msg": "Input should be a valid boolean",
+        "span": [
+          2,
+          1,
+          5,
+          true
+        ],
+        "type": "bool_type",
+        "yaml_line": 1
+      }
+    ]
+  },
+  "bool-errors-null": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "flag"
+        ],
+        "input": null,
+        "msg": "Input should be a valid boolean",
+        "span": [
+          2,
+          7,
+          8,
+          true
+        ],
+        "type": "bool_type",
+        "yaml_line": 1
+      }
+    ]
+  },
+  "bool-errors-string": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "flag"
+        ],
+        "input": "maybe",
+        "msg": "Input should be a valid boolean",
+        "span": [
+          2,
+          7,
+          12,
+          true
+        ],
+        "type": "bool_type",
+        "yaml_line": 1
+      }
+    ]
+  },
+  "bool-lax-float-0": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "flag"
+        ],
+        "input": null,
+        "msg": "Input should be a valid boolean",
+        "span": [
+          2,
+          7,
+          10,
+          true
+        ],
+        "type": "bool_type",
+        "yaml_line": 1
+      }
+    ]
+  },
+  "bool-lax-int-1": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "flag"
+        ],
+        "input": null,
+        "msg": "Input should be a valid boolean",
+        "span": [
+          2,
+          7,
+          8,
+          true
+        ],
+        "type": "bool_type",
+        "yaml_line": 1
+      }
+    ]
+  },
+  "bool-lax-off-string": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "flag"
+        ],
+        "input": "OFF",
+        "msg": "Input should be a valid boolean",
+        "span": [
+          2,
+          8,
+          11,
+          true
+        ],
+        "type": "bool_type",
+        "yaml_line": 1
+      }
+    ]
+  },
+  "bool-lax-words": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "flag"
+        ],
+        "input": "yes",
+        "msg": "Input should be a valid boolean",
+        "span": [
+          2,
+          8,
+          11,
+          true
+        ],
+        "type": "bool_type",
+        "yaml_line": 1
+      }
+    ]
+  },
+  "bool-lax-y": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "flag"
+        ],
+        "input": "y",
+        "msg": "Input should be a valid boolean",
+        "span": [
+          2,
+          7,
+          8,
+          true
+        ],
+        "type": "bool_type",
+        "yaml_line": 1
+      }
+    ]
+  },
+  "comment-after-value": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "text"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          1,
+          7,
+          8,
+          true
+        ],
+        "type": "string_type",
+        "yaml_line": 0
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "number"
+        ],
+        "input": "x",
+        "msg": "Input should be a valid integer",
+        "span": [
+          2,
+          9,
+          10,
+          true
+        ],
+        "type": "int_type",
+        "yaml_line": 1
+      }
+    ]
+  },
+  "crlf": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "number"
+        ],
+        "input": "x",
+        "msg": "Input should be a valid integer",
+        "span": [
+          2,
+          9,
+          10,
+          true
+        ],
+        "type": "int_type",
+        "yaml_line": 1
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "inner",
+          "label"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          4,
+          10,
+          11,
+          true
+        ],
+        "type": "string_type",
+        "yaml_line": 3
+      }
+    ]
+  },
+  "dict-errors": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "mapping",
+          "a"
+        ],
+        "input": "x",
+        "msg": "Input should be a valid integer",
+        "span": [
+          3,
+          6,
+          7,
+          true
+        ],
+        "type": "int_type",
+        "yaml_line": 2
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "mapping",
+          "1",
+          "[key]"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          4,
+          3,
+          4,
+          false
+        ],
+        "type": "string_type",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "mapping",
+          "b"
+        ],
+        "input": null,
+        "msg": "Input should be a valid integer",
+        "span": [
+          5,
+          3,
+          4,
+          true
+        ],
+        "type": "int_type",
+        "yaml_line": 4
+      }
+    ]
+  },
+  "dict-not-a-dict": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "mapping"
+        ],
+        "input": null,
+        "msg": "Input should be a valid dictionary",
+        "span": [
+          2,
+          1,
+          8,
+          true
+        ],
+        "type": "dict_type",
+        "yaml_line": 1
+      }
+    ]
+  },
+  "duplicate-error-at-two-items": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "items",
+          "0"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          2,
+          9,
+          10,
+          true
+        ],
+        "type": "string_type",
+        "yaml_line": 1
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "items",
+          "1"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          2,
+          12,
+          13,
+          true
+        ],
+        "type": "string_type",
+        "yaml_line": 1
+      }
+    ]
+  },
+  "empty-sequence-item": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "items",
+          "0"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          3,
+          3,
+          4,
+          true
+        ],
+        "type": "string_type",
+        "yaml_line": 2
+      }
+    ]
+  },
+  "empty-value-anchor": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "number"
+        ],
+        "input": null,
+        "msg": "Input should be a valid integer",
+        "span": [
+          2,
+          9,
+          11,
+          true
+        ],
+        "type": "int_type",
+        "yaml_line": 1
+      }
+    ]
+  },
+  "empty-value-blank-line": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "number"
+        ],
+        "input": null,
+        "msg": "Input should be a valid integer",
+        "span": [
+          2,
+          1,
+          7,
+          true
+        ],
+        "type": "int_type",
+        "yaml_line": 1
+      }
+    ]
+  },
+  "empty-value-comment-line": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "number"
+        ],
+        "input": null,
+        "msg": "Input should be a valid integer",
+        "span": [
+          2,
+          1,
+          7,
+          true
+        ],
+        "type": "int_type",
+        "yaml_line": 1
+      }
+    ]
+  },
+  "empty-value-dedent": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "inner",
+          "label"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          3,
+          3,
+          8,
+          true
+        ],
+        "type": "string_type",
+        "yaml_line": 2
+      }
+    ]
+  },
+  "empty-value-flow": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "inner",
+          "label"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          2,
+          9,
+          14,
+          true
+        ],
+        "type": "string_type",
+        "yaml_line": 1
+      }
+    ]
+  },
+  "empty-value-in-list-item": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "inners",
+          "0",
+          "label"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          3,
+          5,
+          10,
+          true
+        ],
+        "type": "string_type",
+        "yaml_line": 2
+      }
+    ]
+  },
+  "empty-value-last": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "number"
+        ],
+        "input": null,
+        "msg": "Input should be a valid integer",
+        "span": [
+          2,
+          1,
+          7,
+          true
+        ],
+        "type": "int_type",
+        "yaml_line": 1
+      }
+    ]
+  },
+  "empty-value-trailing-comment": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "number"
+        ],
+        "input": null,
+        "msg": "Input should be a valid integer",
+        "span": [
+          2,
+          1,
+          7,
+          true
+        ],
+        "type": "int_type",
+        "yaml_line": 1
+      }
+    ]
+  },
+  "enum-case": {
+    "errors": [
+      {
+        "ctx": {
+          "expected": "'alpha', 'beta' or 'gamma'"
+        },
+        "field_path": [
+          "kind"
+        ],
+        "input": "ALPHA",
+        "msg": "Input should be 'alpha', 'beta' or 'gamma'",
+        "span": [
+          2,
+          7,
+          12,
+          true
+        ],
+        "type": "enum",
+        "yaml_line": 1
+      }
+    ]
+  },
+  "enum-errors": {
+    "errors": [
+      {
+        "ctx": {
+          "expected": "'alpha', 'beta' or 'gamma'"
+        },
+        "field_path": [
+          "kind"
+        ],
+        "input": "delta",
+        "msg": "Input should be 'alpha', 'beta' or 'gamma'",
+        "span": [
+          2,
+          7,
+          12,
+          true
+        ],
+        "type": "enum",
+        "yaml_line": 1
+      }
+    ]
+  },
+  "enum-int": {
+    "errors": [
+      {
+        "ctx": {
+          "expected": "'alpha', 'beta' or 'gamma'"
+        },
+        "field_path": [
+          "kind"
+        ],
+        "input": null,
+        "msg": "Input should be 'alpha', 'beta' or 'gamma'",
+        "span": [
+          2,
+          7,
+          8,
+          true
+        ],
+        "type": "enum",
+        "yaml_line": 1
+      }
+    ]
+  },
+  "explicit-key": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "text"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          2,
+          3,
+          4,
+          true
+        ],
+        "type": "string_type",
+        "yaml_line": 0
+      }
+    ]
+  },
+  "extra-and-missing-order": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "text"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          1,
+          1,
+          5,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "number"
+        ],
+        "input": "x",
+        "msg": "Input should be a valid integer",
+        "span": [
+          2,
+          9,
+          10,
+          true
+        ],
+        "type": "int_type",
+        "yaml_line": 1
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "zeta"
+        ],
+        "input": null,
+        "msg": "Extra inputs are not permitted",
+        "span": [
+          1,
+          1,
+          5,
+          true
+        ],
+        "type": "extra_forbidden",
+        "yaml_line": 0
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "alpha"
+        ],
+        "input": null,
+        "msg": "Extra inputs are not permitted",
+        "span": [
+          3,
+          1,
+          6,
+          true
+        ],
+        "type": "extra_forbidden",
+        "yaml_line": 2
+      }
+    ]
+  },
+  "extra-in-merge": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "inner",
+          "<<"
+        ],
+        "input": null,
+        "msg": "Extra inputs are not permitted",
+        "span": [
+          4,
+          3,
+          5,
+          true
+        ],
+        "type": "extra_forbidden",
+        "yaml_line": 0
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "base"
+        ],
+        "input": null,
+        "msg": "Extra inputs are not permitted",
+        "span": [
+          1,
+          1,
+          5,
+          true
+        ],
+        "type": "extra_forbidden",
+        "yaml_line": 0
+      }
+    ]
+  },
+  "extra-nested-block": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "inner",
+          "extra"
+        ],
+        "input": null,
+        "msg": "Extra inputs are not permitted",
+        "span": [
+          4,
+          3,
+          8,
+          true
+        ],
+        "type": "extra_forbidden",
+        "yaml_line": 4
+      }
+    ]
+  },
+  "extra-top": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "colour"
+        ],
+        "input": "blue",
+        "msg": "Extra inputs are not permitted",
+        "span": [
+          2,
+          1,
+          7,
+          true
+        ],
+        "type": "extra_forbidden",
+        "yaml_line": 1
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "size"
+        ],
+        "input": null,
+        "msg": "Extra inputs are not permitted",
+        "span": [
+          3,
+          1,
+          5,
+          true
+        ],
+        "type": "extra_forbidden",
+        "yaml_line": 2
+      }
+    ]
+  },
+  "float-errors": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "ratio"
+        ],
+        "input": "abc",
+        "msg": "Input should be a valid number",
+        "span": [
+          2,
+          8,
+          11,
+          true
+        ],
+        "type": "float_type",
+        "yaml_line": 1
+      }
+    ]
+  },
+  "float-from-bool": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "ratio"
+        ],
+        "input": null,
+        "msg": "Input should be a valid number",
+        "span": [
+          2,
+          8,
+          12,
+          true
+        ],
+        "type": "float_type",
+        "yaml_line": 1
+      }
+    ]
+  },
+  "float-from-string": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "ratio"
+        ],
+        "input": "2.5",
+        "msg": "Input should be a valid number",
+        "span": [
+          2,
+          9,
+          12,
+          true
+        ],
+        "type": "float_type",
+        "yaml_line": 1
+      }
+    ]
+  },
+  "float-inf": {
+    "value": {
+      "choice": null,
+      "either": null,
+      "flag": true,
+      "inner": null,
+      "inners": null,
+      "items": null,
+      "kind": null,
+      "mapping": null,
+      "number": 0,
+      "ratio": "inf",
+      "schema": null,
+      "some": null,
+      "text": "t",
+      "vocab": null
+    }
+  },
+  "float-lax": {
+    "value": {
+      "choice": null,
+      "either": null,
+      "flag": true,
+      "inner": null,
+      "inners": null,
+      "items": null,
+      "kind": null,
+      "mapping": null,
+      "number": 0,
+      "ratio": 2.0,
+      "schema": null,
+      "some": null,
+      "text": "t",
+      "vocab": null
+    }
+  },
+  "float-list": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "ratio"
+        ],
+        "input": null,
+        "msg": "Input should be a valid number",
+        "span": [
+          2,
+          1,
+          6,
+          true
+        ],
+        "type": "float_type",
+        "yaml_line": 1
+      }
+    ]
+  },
+  "flow-values-span": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "inner",
+          "label"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          2,
+          16,
+          17,
+          true
+        ],
+        "type": "string_type",
+        "yaml_line": 1
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "inner",
+          "count"
+        ],
+        "input": "x",
+        "msg": "Input should be a valid integer",
+        "span": [
+          2,
+          26,
+          27,
+          true
+        ],
+        "type": "int_type",
+        "yaml_line": 1
+      }
+    ]
+  },
+  "int-beyond-i64": {
+    "load_error": "the integer does not fit in 64 bits"
+  },
+  "int-errors": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "number"
+        ],
+        "input": "abc",
+        "msg": "Input should be a valid integer",
+        "span": [
+          2,
+          9,
+          12,
+          true
+        ],
+        "type": "int_type",
+        "yaml_line": 1
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "inners",
+          "0",
+          "count"
+        ],
+        "input": null,
+        "msg": "Input should be a valid integer",
+        "span": [
+          4,
+          23,
+          26,
+          true
+        ],
+        "type": "int_type",
+        "yaml_line": 3
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "inners",
+          "1",
+          "count"
+        ],
+        "input": null,
+        "msg": "Input should be a valid integer",
+        "span": [
+          5,
+          23,
+          27,
+          true
+        ],
+        "type": "int_type",
+        "yaml_line": 4
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "inners",
+          "2",
+          "count"
+        ],
+        "input": null,
+        "msg": "Input should be a valid integer",
+        "span": [
+          6,
+          16,
+          21,
+          true
+        ],
+        "type": "int_type",
+        "yaml_line": 5
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "inners",
+          "3",
+          "count"
+        ],
+        "input": null,
+        "msg": "Input should be a valid integer",
+        "span": [
+          7,
+          16,
+          21,
+          true
+        ],
+        "type": "int_type",
+        "yaml_line": 6
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "inners",
+          "4",
+          "count"
+        ],
+        "input": "3.5",
+        "msg": "Input should be a valid integer",
+        "span": [
+          8,
+          24,
+          27,
+          true
+        ],
+        "type": "int_type",
+        "yaml_line": 7
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "inners",
+          "5",
+          "count"
+        ],
+        "input": "",
+        "msg": "Input should be a valid integer",
+        "span": [
+          9,
+          16,
+          21,
+          true
+        ],
+        "type": "int_type",
+        "yaml_line": 8
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "inners",
+          "6",
+          "count"
+        ],
+        "input": null,
+        "msg": "Input should be a valid integer",
+        "span": [
+          10,
+          23,
+          27,
+          true
+        ],
+        "type": "int_type",
+        "yaml_line": 9
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "inners",
+          "7",
+          "count"
+        ],
+        "input": "0x10",
+        "msg": "Input should be a valid integer",
+        "span": [
+          11,
+          24,
+          28,
+          true
+        ],
+        "type": "int_type",
+        "yaml_line": 10
+      }
+    ]
+  },
+  "int-from-float-too-large": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "number"
+        ],
+        "input": null,
+        "msg": "Input should be a valid integer",
+        "span": [
+          2,
+          9,
+          16,
+          true
+        ],
+        "type": "int_type",
+        "yaml_line": 1
+      }
+    ]
+  },
+  "int-lax": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "number"
+        ],
+        "input": "42",
+        "msg": "Input should be a valid integer",
+        "span": [
+          2,
+          10,
+          12,
+          true
+        ],
+        "type": "int_type",
+        "yaml_line": 1
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "inners",
+          "0",
+          "count"
+        ],
+        "input": null,
+        "msg": "Input should be a valid integer",
+        "span": [
+          4,
+          23,
+          27,
+          true
+        ],
+        "type": "int_type",
+        "yaml_line": 3
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "inners",
+          "1",
+          "count"
+        ],
+        "input": null,
+        "msg": "Input should be a valid integer",
+        "span": [
+          5,
+          23,
+          26,
+          true
+        ],
+        "type": "int_type",
+        "yaml_line": 4
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "inners",
+          "2",
+          "count"
+        ],
+        "input": " 7 ",
+        "msg": "Input should be a valid integer",
+        "span": [
+          6,
+          24,
+          27,
+          true
+        ],
+        "type": "int_type",
+        "yaml_line": 5
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "inners",
+          "3",
+          "count"
+        ],
+        "input": "3.0",
+        "msg": "Input should be a valid integer",
+        "span": [
+          7,
+          24,
+          27,
+          true
+        ],
+        "type": "int_type",
+        "yaml_line": 6
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "inners",
+          "4",
+          "count"
+        ],
+        "input": "-0",
+        "msg": "Input should be a valid integer",
+        "span": [
+          8,
+          24,
+          26,
+          true
+        ],
+        "type": "int_type",
+        "yaml_line": 7
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "inners",
+          "5",
+          "count"
+        ],
+        "input": "+5",
+        "msg": "Input should be a valid integer",
+        "span": [
+          9,
+          24,
+          26,
+          true
+        ],
+        "type": "int_type",
+        "yaml_line": 8
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "inners",
+          "6",
+          "count"
+        ],
+        "input": "1_000",
+        "msg": "Input should be a valid integer",
+        "span": [
+          10,
+          24,
+          29,
+          true
+        ],
+        "type": "int_type",
+        "yaml_line": 9
+      }
+    ]
+  },
+  "int-null-on-defaulted": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "number"
+        ],
+        "input": null,
+        "msg": "Input should be a valid integer",
+        "span": [
+          2,
+          9,
+          10,
+          true
+        ],
+        "type": "int_type",
+        "yaml_line": 1
+      }
+    ]
+  },
+  "key-not-string": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "1"
+        ],
+        "input": null,
+        "msg": "Keys should be strings",
+        "span": [
+          2,
+          4,
+          5,
+          true
+        ],
+        "type": "invalid_key",
+        "yaml_line": 1
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "yes"
+        ],
+        "input": "y",
+        "msg": "Extra inputs are not permitted",
+        "span": [
+          3,
+          1,
+          4,
+          true
+        ],
+        "type": "extra_forbidden",
+        "yaml_line": 2
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "null"
+        ],
+        "input": null,
+        "msg": "Keys should be strings",
+        "span": [
+          4,
+          4,
+          5,
+          true
+        ],
+        "type": "invalid_key",
+        "yaml_line": 3
+      }
+    ]
+  },
+  "key-not-string-nested": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "inner",
+          "2"
+        ],
+        "input": null,
+        "msg": "Keys should be strings",
+        "span": [
+          4,
+          6,
+          7,
+          true
+        ],
+        "type": "invalid_key",
+        "yaml_line": 3
+      }
+    ]
+  },
+  "key-quoted": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "number"
+        ],
+        "input": "x",
+        "msg": "Input should be a valid integer",
+        "span": [
+          2,
+          11,
+          12,
+          true
+        ],
+        "type": "int_type",
+        "yaml_line": 1
+      }
+    ]
+  },
+  "key-quoted-extra": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "odd key"
+        ],
+        "input": null,
+        "msg": "Extra inputs are not permitted",
+        "span": [
+          2,
+          2,
+          9,
+          true
+        ],
+        "type": "extra_forbidden",
+        "yaml_line": 1
+      }
+    ]
+  },
+  "list-errors": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "items"
+        ],
+        "input": "one",
+        "msg": "Input should be a valid list",
+        "span": [
+          2,
+          8,
+          11,
+          true
+        ],
+        "type": "list_type",
+        "yaml_line": 1
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "inners"
+        ],
+        "input": null,
+        "msg": "Input should be a valid list",
+        "span": [
+          3,
+          1,
+          7,
+          true
+        ],
+        "type": "list_type",
+        "yaml_line": 2
+      }
+    ]
+  },
+  "list-null-optional": {
+    "value": {
+      "choice": null,
+      "either": null,
+      "flag": true,
+      "inner": null,
+      "inners": null,
+      "items": null,
+      "kind": null,
+      "mapping": null,
+      "number": 0,
+      "ratio": null,
+      "schema": null,
+      "some": null,
+      "text": "t",
+      "vocab": null
+    }
+  },
+  "literal-errors": {
+    "errors": [
+      {
+        "ctx": {
+          "expected": "'one' or 'two'"
+        },
+        "field_path": [
+          "choice"
+        ],
+        "input": "three",
+        "msg": "Input should be 'one' or 'two'",
+        "span": [
+          2,
+          9,
+          14,
+          true
+        ],
+        "type": "literal_error",
+        "yaml_line": 1
+      }
+    ]
+  },
+  "literal-int": {
+    "errors": [
+      {
+        "ctx": {
+          "expected": "'one' or 'two'"
+        },
+        "field_path": [
+          "choice"
+        ],
+        "input": null,
+        "msg": "Input should be 'one' or 'two'",
+        "span": [
+          2,
+          9,
+          10,
+          true
+        ],
+        "type": "literal_error",
+        "yaml_line": 1
+      }
+    ]
+  },
+  "merge-key-values": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "inner",
+          "label"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          4,
+          1,
+          6,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "inner",
+          "count"
+        ],
+        "input": "x",
+        "msg": "Input should be a valid integer",
+        "span": [
+          6,
+          10,
+          11,
+          true
+        ],
+        "type": "int_type",
+        "yaml_line": 5
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "inner",
+          "<<"
+        ],
+        "input": null,
+        "msg": "Extra inputs are not permitted",
+        "span": [
+          5,
+          3,
+          5,
+          true
+        ],
+        "type": "extra_forbidden",
+        "yaml_line": 0
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "base"
+        ],
+        "input": null,
+        "msg": "Extra inputs are not permitted",
+        "span": [
+          1,
+          1,
+          5,
+          true
+        ],
+        "type": "extra_forbidden",
+        "yaml_line": 0
+      }
+    ]
+  },
+  "missing-in-list-item": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "inners",
+          "1",
+          "label"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          4,
+          5,
+          6,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "inners",
+          "2",
+          "label"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          5,
+          5,
+          7,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      }
+    ]
+  },
+  "missing-required-nested": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "inner",
+          "label"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          2,
+          1,
+          6,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      }
+    ]
+  },
+  "missing-required-top": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "text"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          1,
+          1,
+          7,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      }
+    ]
+  },
+  "missing-top-with-int-first-key": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "text"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          1,
+          1,
+          2,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "1"
+        ],
+        "input": null,
+        "msg": "Keys should be strings",
+        "span": [
+          1,
+          4,
+          5,
+          true
+        ],
+        "type": "invalid_key",
+        "yaml_line": 0
+      }
+    ]
+  },
+  "model-errors": {
+    "errors": [
+      {
+        "ctx": {
+          "class_name": "Inner"
+        },
+        "field_path": [
+          "inners",
+          "0"
+        ],
+        "input": "x",
+        "msg": "Input should be a valid dictionary or instance of Inner",
+        "span": [
+          3,
+          10,
+          11,
+          true
+        ],
+        "type": "model_type",
+        "yaml_line": 2
+      },
+      {
+        "ctx": {
+          "class_name": "Inner"
+        },
+        "field_path": [
+          "inners",
+          "1"
+        ],
+        "input": null,
+        "msg": "Input should be a valid dictionary or instance of Inner",
+        "span": [
+          3,
+          13,
+          14,
+          true
+        ],
+        "type": "model_type",
+        "yaml_line": 2
+      },
+      {
+        "ctx": {
+          "class_name": "Inner"
+        },
+        "field_path": [
+          "inners",
+          "2"
+        ],
+        "input": null,
+        "msg": "Input should be a valid dictionary or instance of Inner",
+        "span": [
+          3,
+          16,
+          17,
+          true
+        ],
+        "type": "model_type",
+        "yaml_line": 2
+      },
+      {
+        "ctx": {
+          "class_name": "Inner"
+        },
+        "field_path": [
+          "inner"
+        ],
+        "input": null,
+        "msg": "Input should be a valid dictionary or instance of Inner",
+        "span": [
+          2,
+          1,
+          6,
+          true
+        ],
+        "type": "model_type",
+        "yaml_line": 1
+      }
+    ]
+  },
+  "model-from-string": {
+    "errors": [
+      {
+        "ctx": {
+          "class_name": "Inner"
+        },
+        "field_path": [
+          "inner"
+        ],
+        "input": "label",
+        "msg": "Input should be a valid dictionary or instance of Inner",
+        "span": [
+          2,
+          8,
+          13,
+          true
+        ],
+        "type": "model_type",
+        "yaml_line": 1
+      }
+    ]
+  },
+  "multiline-plain-value": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "number"
+        ],
+        "input": "abc def",
+        "msg": "Input should be a valid integer",
+        "span": [
+          2,
+          1,
+          7,
+          true
+        ],
+        "type": "int_type",
+        "yaml_line": 1
+      }
+    ]
+  },
+  "name-only": {
+    "value": {
+      "choice": null,
+      "either": null,
+      "flag": true,
+      "inner": null,
+      "inners": null,
+      "items": null,
+      "kind": null,
+      "mapping": null,
+      "number": 0,
+      "ratio": null,
+      "schema": "b",
+      "some": null,
+      "text": "t",
+      "vocab": null
+    }
+  },
+  "name-wrong-type": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "schema_id"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          2,
+          12,
+          13,
+          true
+        ],
+        "type": "string_type",
+        "yaml_line": 1
+      }
+    ]
+  },
+  "quoted-values-span": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "number"
+        ],
+        "input": "z",
+        "msg": "Input should be a valid integer",
+        "span": [
+          3,
+          10,
+          11,
+          true
+        ],
+        "type": "int_type",
+        "yaml_line": 2
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "items",
+          "1"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          2,
+          14,
+          15,
+          true
+        ],
+        "type": "string_type",
+        "yaml_line": 1
+      }
+    ]
+  },
+  "root-not-a-mapping": {
+    "errors": [
+      {
+        "ctx": {
+          "class_name": "Probe"
+        },
+        "field_path": [],
+        "input": null,
+        "msg": "Input should be a valid dictionary or instance of Probe",
+        "span": null,
+        "type": "model_type",
+        "yaml_line": 0
+      }
+    ]
+  },
+  "root-null": {
+    "errors": [
+      {
+        "ctx": {
+          "class_name": "Probe"
+        },
+        "field_path": [],
+        "input": null,
+        "msg": "Input should be a valid dictionary or instance of Probe",
+        "span": null,
+        "type": "model_type",
+        "yaml_line": 0
+      }
+    ]
+  },
+  "root-scalar": {
+    "errors": [
+      {
+        "ctx": {
+          "class_name": "Probe"
+        },
+        "field_path": [],
+        "input": "hello",
+        "msg": "Input should be a valid dictionary or instance of Probe",
+        "span": null,
+        "type": "model_type",
+        "yaml_line": 0
+      }
+    ]
+  },
+  "sample-empty-mapping": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "name"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": null,
+        "type": "missing",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "uuid"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": null,
+        "type": "missing",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "schema"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": null,
+        "type": "missing",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "description"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": null,
+        "type": "missing",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "severity"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": null,
+        "type": "missing",
+        "yaml_line": null
+      }
+    ]
+  },
+  "sample-everything-wrong": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "name"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          1,
+          1,
+          5,
+          true
+        ],
+        "type": "string_type",
+        "yaml_line": 0
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "uuid"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          1,
+          1,
+          5,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "schema_id"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          2,
+          12,
+          13,
+          true
+        ],
+        "type": "string_type",
+        "yaml_line": 1
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "description"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          3,
+          14,
+          15,
+          true
+        ],
+        "type": "string_type",
+        "yaml_line": 2
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "severity"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          4,
+          1,
+          9,
+          true
+        ],
+        "type": "string_type",
+        "yaml_line": 3
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "effort"
+        ],
+        "input": "lots",
+        "msg": "Input should be a valid integer",
+        "span": [
+          5,
+          9,
+          13,
+          true
+        ],
+        "type": "int_type",
+        "yaml_line": 4
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "enabled"
+        ],
+        "input": "perhaps",
+        "msg": "Input should be a valid boolean",
+        "span": [
+          6,
+          10,
+          17,
+          true
+        ],
+        "type": "bool_type",
+        "yaml_line": 5
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "examples",
+          "0",
+          "link"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          8,
+          5,
+          6,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "examples",
+          "1",
+          "description"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          9,
+          5,
+          6,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "examples",
+          "1",
+          "link"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          9,
+          11,
+          12,
+          true
+        ],
+        "type": "string_type",
+        "yaml_line": 8
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "examples",
+          "1",
+          "extra"
+        ],
+        "input": null,
+        "msg": "Extra inputs are not permitted",
+        "span": [
+          11,
+          5,
+          10,
+          true
+        ],
+        "type": "extra_forbidden",
+        "yaml_line": 10
+      },
+      {
+        "ctx": {
+          "class_name": "SampleExample"
+        },
+        "field_path": [
+          "examples",
+          "2"
+        ],
+        "input": "not an example",
+        "msg": "Input should be a valid dictionary or instance of SampleExample",
+        "span": [
+          12,
+          5,
+          19,
+          true
+        ],
+        "type": "model_type",
+        "yaml_line": 11
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "tags"
+        ],
+        "input": "a",
+        "msg": "Input should be a valid list",
+        "span": [
+          13,
+          7,
+          8,
+          true
+        ],
+        "type": "list_type",
+        "yaml_line": 12
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "unknown"
+        ],
+        "input": null,
+        "msg": "Extra inputs are not permitted",
+        "span": [
+          14,
+          1,
+          8,
+          true
+        ],
+        "type": "extra_forbidden",
+        "yaml_line": 13
+      }
+    ]
+  },
+  "sample-valid": {
+    "value": {
+      "description": "d",
+      "effort": 3,
+      "enabled": true,
+      "examples": [
+        {
+          "description": "e",
+          "language": null,
+          "link": "https://example.org"
+        }
+      ],
+      "name": "n",
+      "schema": "sample::1.1",
+      "severity": "Low",
+      "tags": [
+        "a"
+      ],
+      "uuid": "u"
+    }
+  },
+  "string-date-text": {
+    "value": {
+      "choice": null,
+      "either": null,
+      "flag": true,
+      "inner": null,
+      "inners": null,
+      "items": [
+        "2026-01-01T10:00:00Z"
+      ],
+      "kind": null,
+      "mapping": null,
+      "number": 0,
+      "ratio": null,
+      "schema": null,
+      "some": null,
+      "text": "2026-01-01",
+      "vocab": null
+    }
+  },
+  "string-empty-value": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "text"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          1,
+          1,
+          5,
+          true
+        ],
+        "type": "string_type",
+        "yaml_line": 0
+      }
+    ]
+  },
+  "string-null": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "text"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          1,
+          7,
+          8,
+          true
+        ],
+        "type": "string_type",
+        "yaml_line": 0
+      }
+    ]
+  },
+  "string-wrong-types": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "text"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          1,
+          7,
+          9,
+          true
+        ],
+        "type": "string_type",
+        "yaml_line": 0
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "items",
+          "0"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          2,
+          9,
+          10,
+          true
+        ],
+        "type": "string_type",
+        "yaml_line": 1
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "items",
+          "1"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          2,
+          12,
+          16,
+          true
+        ],
+        "type": "string_type",
+        "yaml_line": 1
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "items",
+          "2"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          2,
+          18,
+          22,
+          true
+        ],
+        "type": "string_type",
+        "yaml_line": 1
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "items",
+          "3"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          2,
+          24,
+          27,
+          true
+        ],
+        "type": "string_type",
+        "yaml_line": 1
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "items",
+          "4"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          2,
+          29,
+          32,
+          true
+        ],
+        "type": "string_type",
+        "yaml_line": 1
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "items",
+          "5"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          2,
+          34,
+          40,
+          true
+        ],
+        "type": "string_type",
+        "yaml_line": 1
+      }
+    ]
+  },
+  "unicode-columns": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "number"
+        ],
+        "input": "日本",
+        "msg": "Input should be a valid integer",
+        "span": [
+          3,
+          9,
+          11,
+          true
+        ],
+        "type": "int_type",
+        "yaml_line": 2
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "items",
+          "1"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          2,
+          12,
+          13,
+          true
+        ],
+        "type": "string_type",
+        "yaml_line": 1
+      }
+    ]
+  },
+  "union-bool": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "either",
+          "str"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          2,
+          1,
+          7,
+          false
+        ],
+        "type": "string_type",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "either",
+          "int"
+        ],
+        "input": null,
+        "msg": "Input should be a valid integer",
+        "span": [
+          2,
+          1,
+          7,
+          false
+        ],
+        "type": "int_type",
+        "yaml_line": null
+      }
+    ]
+  },
+  "union-errors": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "either",
+          "str"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          2,
+          1,
+          7,
+          false
+        ],
+        "type": "string_type",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "either",
+          "int"
+        ],
+        "input": null,
+        "msg": "Input should be a valid integer",
+        "span": [
+          2,
+          1,
+          7,
+          false
+        ],
+        "type": "int_type",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "some",
+          "str"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          3,
+          1,
+          5,
+          false
+        ],
+        "type": "string_type",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "some",
+          "list[str]"
+        ],
+        "input": null,
+        "msg": "Input should be a valid list",
+        "span": [
+          3,
+          1,
+          5,
+          false
+        ],
+        "type": "list_type",
+        "yaml_line": null
+      }
+    ]
+  },
+  "union-float": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "either",
+          "str"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          2,
+          1,
+          7,
+          false
+        ],
+        "type": "string_type",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "either",
+          "int"
+        ],
+        "input": null,
+        "msg": "Input should be a valid integer",
+        "span": [
+          2,
+          1,
+          7,
+          false
+        ],
+        "type": "int_type",
+        "yaml_line": null
+      }
+    ]
+  },
+  "union-float-whole": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "either",
+          "str"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          2,
+          1,
+          7,
+          false
+        ],
+        "type": "string_type",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "either",
+          "int"
+        ],
+        "input": null,
+        "msg": "Input should be a valid integer",
+        "span": [
+          2,
+          1,
+          7,
+          false
+        ],
+        "type": "int_type",
+        "yaml_line": null
+      }
+    ]
+  },
+  "union-int": {
+    "value": {
+      "choice": null,
+      "either": 5,
+      "flag": true,
+      "inner": null,
+      "inners": null,
+      "items": null,
+      "kind": null,
+      "mapping": null,
+      "number": 0,
+      "ratio": null,
+      "schema": null,
+      "some": null,
+      "text": "t",
+      "vocab": null
+    }
+  },
+  "union-list-inner-error": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "some",
+          "str"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          2,
+          1,
+          5,
+          false
+        ],
+        "type": "string_type",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "some",
+          "list[str]",
+          "1"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          2,
+          1,
+          5,
+          false
+        ],
+        "type": "string_type",
+        "yaml_line": null
+      }
+    ]
+  },
+  "union-str-int": {
+    "value": {
+      "choice": null,
+      "either": "5",
+      "flag": true,
+      "inner": null,
+      "inners": null,
+      "items": null,
+      "kind": null,
+      "mapping": null,
+      "number": 0,
+      "ratio": null,
+      "schema": null,
+      "some": "x",
+      "text": "t",
+      "vocab": null
+    }
+  },
+  "valid-everything": {
+    "value": {
+      "choice": "two",
+      "either": 3,
+      "flag": false,
+      "inner": {
+        "count": null,
+        "label": "z"
+      },
+      "inners": [
+        {
+          "count": 1,
+          "label": "x"
+        },
+        {
+          "count": null,
+          "label": "y"
+        }
+      ],
+      "items": [
+        "a",
+        "b"
+      ],
+      "kind": "beta",
+      "mapping": {
+        "a": 1,
+        "b": 2
+      },
+      "number": 7,
+      "ratio": 1.5,
+      "schema": "s",
+      "some": [
+        "p",
+        "q"
+      ],
+      "text": "hello",
+      "vocab": [
+        "v"
+      ]
+    }
+  },
+  "valid-minimal": {
+    "value": {
+      "choice": null,
+      "either": null,
+      "flag": true,
+      "inner": null,
+      "inners": null,
+      "items": null,
+      "kind": null,
+      "mapping": null,
+      "number": 0,
+      "ratio": null,
+      "schema": null,
+      "some": null,
+      "text": "hello",
+      "vocab": null
+    }
+  },
+  "vocab-list-wrong-items": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "vocab",
+          "0"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          2,
+          9,
+          10,
+          true
+        ],
+        "type": "string_type",
+        "yaml_line": 1
+      }
+    ]
+  },
+  "vocab-not-a-list": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "vocab"
+        ],
+        "input": null,
+        "msg": "Input should be a valid list",
+        "span": [
+          2,
+          8,
+          9,
+          true
+        ],
+        "type": "list_type",
+        "yaml_line": 1
+      }
+    ]
+  },
+  "vocab-packed": {
+    "errors": [
+      {
+        "ctx": {
+          "field": "vocab",
+          "value": "a;b"
+        },
+        "field_path": [
+          "vocab"
+        ],
+        "input": "a;b",
+        "msg": "must be a YAML list of vocab vocabulary names, not a single string; list each name in 'a;b' as its own item",
+        "span": [
+          2,
+          9,
+          12,
+          true
+        ],
+        "type": "vocab_list_type",
+        "yaml_line": 1
+      }
+    ]
+  },
+  "vocab-single-string": {
+    "errors": [
+      {
+        "ctx": {
+          "field": "vocab",
+          "value": "Data Breach"
+        },
+        "field_path": [
+          "vocab"
+        ],
+        "input": "Data Breach",
+        "msg": "must be a YAML list of vocab vocabulary names, not a single string",
+        "span": [
+          2,
+          8,
+          19,
+          true
+        ],
+        "type": "vocab_list_type",
+        "yaml_line": 1
+      }
+    ]
+  }
+}

@@ -597,10 +597,18 @@
       {
        "str": "2026-01-01T10:00:00Z"
       }
-     ],
+     ]
+    ]
+   }
+  },
+  {
+   "id": "date-timestamp-tag",
+   "group": "timestamp",
+   "value": {
+    "map": [
      [
       {
-       "str": "q"
+       "str": "a"
       },
       {
        "str": "2026-01-01"
@@ -3039,6 +3047,89 @@
          }
         ]
        ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "eof-block-scalar-without-line-break",
+   "group": "eof",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "a"
+      },
+      {
+       "str": "x"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "eof-fuzz-block-scalar-ends-the-file",
+   "group": "eof",
+   "error": "yaml",
+   "detail": "while parsing a block mapping"
+  },
+  {
+   "id": "eof-folded-scalar-without-line-break",
+   "group": "eof",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "a"
+      },
+      {
+       "str": "x y"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "eof-tag-before-comma",
+   "group": "eof",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "a"
+      },
+      {
+       "seq": [
+        {
+         "str": ""
+        },
+        {
+         "str": "x"
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "eof-escape-at-end",
+   "group": "eof",
+   "error": "yaml",
+   "detail": "while parsing a quoted scalar"
+  },
+  {
+   "id": "eof-plain-without-line-break",
+   "group": "eof",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "a"
+      },
+      {
+       "str": "x"
       }
      ]
     ]

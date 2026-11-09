@@ -1,0 +1,2 @@
+text: 12
+items: [1, true, null, 1.5, [x], {a: b}, ok]

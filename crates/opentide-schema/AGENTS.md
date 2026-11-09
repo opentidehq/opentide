@@ -22,6 +22,12 @@ depends on opentide-core (`codes`). Not published yet (`publish = false` in `Car
 | `src/pins.rs` | `Pins`: the vocabulary versions a revision pins, garde's context |
 | `src/revision.rs` | `revisions!`: one struct per revision, shared fields written once, in groups `@0,` … `@3,` around overridden fields |
 | `src/sample.rs` | Every derive and field convention on a two-revision family; not part of the model |
+| `src/node.rs` | The YAML node tree (UC-1.2): saphyr-parser's events, saphyr's YAML 1.2 core-schema scalars, every node's position; `node/locate.rs` places a field path (span, `yaml_line`), `node/dump.rs` writes a model (serde-saphyr) |
+| `src/from_node.rs` | `FromNode` and what `#[derive(FromNode)]` (`opentide-schema-derive`) expands to: every structural error collected, with its path and position |
+| `YAML.md` | Generated: every YAML case read by the oracle (PyYAML, YAML 1.1) and by `node` (YAML 1.2), with each difference and its reason |
+| `tests/yaml_table.rs` | `tests/oracle/yaml_cases.toml` against the oracle (`yaml_table.json`, from `yaml_table.py`); writes `YAML.md` |
+| `tests/from_node_table.rs` | `tests/oracle/from_node_cases.toml` against the oracle (`from_node_table.json`, from `from_node_table.py`); the Rust results are the insta snapshot |
+| `tests/round_trip_property.rs`, `tests/from_node_api.rs`, `tests/fuzz_regressions.rs` | proptest round trip, the API, and the `from_node` fuzz target's seeds and saved crashes |
 | `tests/roundtrip.rs` | YAML → struct → YAML byte for byte; optional, defaulted, alias, closure, pins |
 | `tests/json_schema.rs` | The derived schema (insta snapshot) and its `tide.*` keys |
 | `tests/adr.rs` | ADR 0001's key table matches `keys::ALL` |
@@ -42,6 +48,12 @@ depends on opentide-core (`codes`). Not published yet (`publish = false` in `Car
 - Errors are `SchemaError`; codes are the CLI's, as constants (`error::codes`, which re-exports
   `opentide_core::codes::SCHEMA_VALIDATION`): never mint one, never a second string at a call site.
 - No `std::fs` in `src/` (`scripts/engine/check-io-free.sh`). The derives compile for wasm32.
+- YAML is YAML 1.2, read by the saphyr crates; never re-implement a YAML 1.1 rule to match the
+  oracle. A case where the oracle reads YAML differently names a `[[difference]]` in
+  `tests/oracle/yaml_cases.toml` (reason, CHANGELOG lead); `YAML.md` shows them all.
+- A field takes its declared type, without Pydantic's lax coercion; a case of
+  `tests/oracle/from_node_cases.toml` where the result differs from the oracle names its
+  `[[difference]]`.
 
 ## Test
 
@@ -53,7 +65,10 @@ cargo build -p opentide-schema --target wasm32-unknown-unknown --features wasm
 
 `tests/python.rs` embeds CPython: it links the shared libpython of `PYO3_PYTHON` (or `python3`),
 which must be 3.10 or later; put its `LIBDIR` on `LD_LIBRARY_PATH` if the loader cannot find it.
-After an intended schema change, `cargo insta review`; after a compiler message change,
+The oracle tables are regenerated with the oracle's interpreter (`tests/golden/ORACLE`):
+`<oracle python> tests/oracle/yaml_table.py` and `from_node_table.py`; after a change to what the
+loader reads, `UPDATE_YAML_TABLE=1 cargo test -p opentide-schema --test yaml_table` rewrites
+`YAML.md`. After an intended schema change, `cargo insta review`; after a compiler message change,
 `TRYBUILD=overwrite cargo test -p opentide-schema --features python --test ui`. The
 `.stderr` quotes PyO3's documentation URL with its exact version, so a PyO3 bump regenerates it in
 the same change.

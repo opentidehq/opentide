@@ -33,8 +33,9 @@ serde.workspace = true
 schemars.workspace = true
 garde.workspace = true
 thiserror.workspace = true
-libyaml-safer.workspace = true
-regex.workspace = true
+saphyr.workspace = true
+saphyr-parser.workspace = true
+serde-saphyr.workspace = true
 opentide-schema-derive.workspace = true
 pyo3 = { workspace = true, features = ["abi3-py310"], optional = true }
 

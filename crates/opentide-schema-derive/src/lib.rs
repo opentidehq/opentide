@@ -8,8 +8,8 @@
 //! | Attribute | Effect |
 //! |-----------|--------|
 //! | `#[serde(deny_unknown_fields)]` | a closed model: an unused key is `extra_forbidden` |
-//! | `#[serde(rename = "x")]` | the key (Pydantic's alias, looked up first) |
-//! | `#[serde(alias = "y")]` | another key the field takes (Pydantic's name, `populate_by_name`) |
+//! | `#[serde(rename = "x")]` | the key, looked up first |
+//! | `#[serde(alias = "y")]` | another key the field takes |
 //! | `#[serde(default)]`, `#[serde(default = "path")]` | a missing key is the default, not "Field required" |
 //! | `#[serde(rename_all = "...")]` on a unit enum | the variants' values |
 //!
@@ -17,12 +17,12 @@
 //!
 //! | Where | Attribute | Effect |
 //! |-------|-----------|--------|
-//! | struct | `model = "ThreatBody"` | the Python class name in `model_type` messages (default: the Rust name) |
-//! | struct | `before = "path"` | `fn(&Node, &mut Context) -> bool`, run first on the raw value (a `mode="before"` model validator); `false` stops |
+//! | struct | `model = "ThreatBody"` | the model's name in `model_type` messages (default: the Rust name) |
+//! | struct | `before = "path"` | `fn(&Node, &mut Context) -> bool`, run first on the raw value; `false` stops |
 //! | struct | `tolerate = "PATH"` | a `&[&str]` of keys a closed model does not report (the `__legacy_keys__` pre-pass) |
-//! | field | `before = "path"` | the same, on the field's value (a `mode="before"` field validator) |
+//! | field | `before = "path"` | the same, on the field's value |
 //! | field | `with = "path"` | `fn(&Node, &mut Context) -> Option<T>` converts the field instead of `T: FromNode` |
-//! | unit enum | `literal` | `literal_error` (a `Literal[...]`) rather than `enum` |
+//! | unit enum | `literal` | the error type `literal_error` rather than `enum` |
 //! | enum | `union` | a union of its one-field variants, each with `tag = "str"` |
 //!
 //! serde attributes that change what is read and that the conversion does not
@@ -39,8 +39,11 @@ use syn::{
     parse_macro_input, punctuated::Punctuated, spanned::Spanned,
 };
 
-/// Derives `opentide_schema::FromNode`. See the crate documentation.
-#[proc_macro_derive(FromNode, attributes(from_node))]
+/// Derives `opentide_schema::FromNode`. See the crate documentation. It
+/// registers `serde` as a helper too, as serde's derives do, so a type that
+/// derives only `FromNode` (a test or tooling model) can carry the same
+/// attributes.
+#[proc_macro_derive(FromNode, attributes(from_node, serde))]
 pub fn derive_from_node(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     match expand(&input) {
@@ -311,10 +314,6 @@ fn expand_struct(
                 __fields.finish(__cx, #closed, #tolerate);
                 ::core::option::Option::Some(Self { #(#bindings),* })
             }
-
-            fn takes_strictly(__node: &::opentide_schema::node::Node) -> bool {
-                ::core::matches!(__node.value, ::opentide_schema::node::Value::Map(_))
-            }
         }
     })
 }
@@ -416,10 +415,6 @@ fn expand_unit_enum(
                     _ => ::core::option::Option::None,
                 }
             }
-
-            fn takes_strictly(__node: &::opentide_schema::node::Node) -> bool {
-                ::core::matches!(__node.value, ::opentide_schema::node::Value::Str(_))
-            }
         }
     })
 }
@@ -462,13 +457,12 @@ fn expand_union(
             .ok_or_else(|| {
                 syn::Error::new(
                     variant.span(),
-                    "a union variant names its Pydantic tag: #[from_node(tag = \"str\")]",
+                    "a union variant names its tag: #[from_node(tag = \"str\")]",
                 )
             })?;
         members.push(quote! {
             ::opentide_schema::from_node::Member {
                 tag: #tag,
-                strict: <#ty as ::opentide_schema::from_node::FromNode>::takes_strictly,
                 convert: |__n: &::opentide_schema::node::Node,
                           __cx: &mut ::opentide_schema::from_node::Context| {
                     <#ty as ::opentide_schema::from_node::FromNode>::from_node(__n, __cx).map(Self::#ident)
@@ -487,4 +481,171 @@ fn expand_union(
             }
         }
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn expanded(source: &str) -> Result<String, String> {
+        let input: DeriveInput = syn::parse_str(source).unwrap();
+        expand(&input)
+            .map(|tokens| tokens.to_string())
+            .map_err(|error| error.to_string())
+    }
+
+    #[test]
+    fn a_model_takes_names_aliases_defaults_and_closure_from_serde() {
+        let code = expanded(
+            r#"
+            #[serde(deny_unknown_fields)]
+            #[from_node(model = "ThreatBody", before = "check", tolerate = "LEGACY")]
+            struct Body {
+                #[serde(rename = "schema", alias = "schema_id")]
+                schema_id: String,
+                #[serde(default)]
+                tags: Vec<String>,
+                #[serde(default = "yes", skip_serializing_if = "Option::is_none")]
+                flag: bool,
+                #[from_node(before = "vocab", with = "convert")]
+                impact: Vec<String>,
+                r#type: String,
+            }
+            "#,
+        )
+        .unwrap();
+        assert!(code.contains("\"ThreatBody\""), "{code}");
+        assert!(code.contains("& [\"schema\" , \"schema_id\"]"), "{code}");
+        assert!(code.contains("Missing :: Default (yes)"), "{code}");
+        assert!(
+            code.contains("as :: core :: default :: Default > :: default"),
+            "{code}"
+        );
+        assert!(code.contains("Some (vocab)"), "{code}");
+        assert!(code.contains("convert (__n , __cx)"), "{code}");
+        assert!(code.contains("if ! check (__node , __cx)"), "{code}");
+        assert!(code.contains("finish (__cx , true , LEGACY)"), "{code}");
+        assert!(code.contains("& [\"type\"]"), "{code}");
+    }
+
+    #[test]
+    fn an_open_model_reports_no_unknown_key() {
+        let code = expanded("struct Open { name: String }").unwrap();
+        assert!(code.contains("finish (__cx , false , & [])"), "{code}");
+        assert!(code.contains("\"Open\""), "{code}");
+    }
+
+    #[test]
+    fn unit_enums_take_serde_names() {
+        let code = expanded(
+            r#"
+            #[serde(rename_all = "snake_case")]
+            #[from_node(literal)]
+            enum Kind { FirstOne, #[serde(rename = "other")] Second }
+            "#,
+        )
+        .unwrap();
+        assert!(code.contains("(\"first_one\" , 0usize)"), "{code}");
+        assert!(code.contains("(\"other\" , 1usize)"), "{code}");
+        assert!(code.contains(", true)"), "{code}");
+        for (rule, variant, value) in [
+            ("lowercase", "FirstOne", "firstone"),
+            ("UPPERCASE", "FirstOne", "FIRSTONE"),
+            ("kebab-case", "FirstOne", "first-one"),
+            ("SCREAMING_SNAKE_CASE", "FirstOne", "FIRST_ONE"),
+            ("PascalCase", "FirstOne", "FirstOne"),
+        ] {
+            assert_eq!(rename(rule, variant, Span::call_site()).unwrap(), value);
+        }
+        assert!(rename("camelCase", "A", Span::call_site()).is_err());
+    }
+
+    #[test]
+    fn unions_name_each_members_tag() {
+        let code = expanded(
+            r#"
+            #[serde(untagged)]
+            #[from_node(union)]
+            enum Either { #[from_node(tag = "str")] Str(String), #[from_node(tag = "int")] Int(i64) }
+            "#,
+        )
+        .unwrap();
+        assert!(code.contains("tag : \"str\""), "{code}");
+        assert!(code.contains("tag : \"int\""), "{code}");
+        assert!(code.contains("union_value"), "{code}");
+    }
+
+    #[test]
+    fn what_the_conversion_cannot_reproduce_is_refused() {
+        for (source, message) in [
+            (
+                "struct A { #[serde(flatten)] rest: B }",
+                "#[serde(flatten)] changes what is read",
+            ),
+            (
+                "struct A { #[serde(deserialize_with = \"f\")] a: B }",
+                "#[serde(deserialize_with)] changes what is read",
+            ),
+            (
+                "#[serde(default)] struct A { a: B }",
+                "#[serde(default)] changes what is read",
+            ),
+            (
+                "#[serde(rename_all = \"lowercase\")] struct A { a: B }",
+                "#[serde(rename_all)] on a model",
+            ),
+            ("struct A<T> { a: T }", "one struct per revision"),
+            ("struct A(String);", "a FromNode model has named fields"),
+            ("union A { a: u8 }", "FromNode is for structs and enums"),
+            (
+                "#[serde(untagged)] enum A { B(String) }",
+                "an untagged enum is a union",
+            ),
+            ("enum A { B(String) }", "a FromNode enum has unit variants"),
+            ("#[from_node(union)] enum A { B(String) }", "names its tag"),
+            (
+                "#[from_node(union)] enum A { B { x: u8 } }",
+                "a union variant holds one value",
+            ),
+            (
+                "#[from_node(union)] enum A { #[from_node(tag = \"x\")] B(u8, u8) }",
+                "a union variant holds one value",
+            ),
+            (
+                "#[from_node(union, literal)] enum A { B(u8) }",
+                "unknown #[from_node(literal)] on a union",
+            ),
+            (
+                "#[from_node(colour)] struct A { a: B }",
+                "unknown #[from_node(colour)] on a struct",
+            ),
+            (
+                "#[from_node(colour)] enum A { B }",
+                "unknown #[from_node(colour)] on an enum",
+            ),
+            (
+                "struct A { #[from_node(colour)] a: B }",
+                "unknown #[from_node(colour)] on a field",
+            ),
+            (
+                "struct A { #[serde(rename(deserialize = \"x\"))] a: B }",
+                "is not supported by FromNode",
+            ),
+            (
+                "struct A { #[serde(rename = 3)] a: B }",
+                "only a string literal is supported",
+            ),
+            (
+                "#[from_node(model)] struct A { a: B }",
+                "model needs a string",
+            ),
+            (
+                "#[from_node(before)] struct A { a: B }",
+                "before needs a path",
+            ),
+        ] {
+            let error = expanded(source).unwrap_err();
+            assert!(error.contains(message), "{source}: {error}");
+        }
+    }
 }

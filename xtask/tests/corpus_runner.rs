@@ -316,8 +316,26 @@ ops = [{ op = "set", path = "status", value = "NOPE" }]
         assert!(fails(&["clean", "--engine", "python"]), "no --repo");
         assert!(fails(&["codes", "--bogus"]));
         assert!(fails(&["coverage", "--bogus"]));
-        let args = ["faults", "--check", "--engine", "rust"].map(str::to_string);
-        assert_eq!(run(&args).unwrap(), 1, "rust is not implemented: it fails");
+        // The Rust engine checks the structural kinds against the oracle
+        // (UC-1.2): without one it cannot run; any other kind is refused.
+        assert!(fails(&[
+            "faults",
+            "--check",
+            "--engine",
+            "rust",
+            "--oracle",
+            "/nonexistent/opentide"
+        ]));
+        assert!(fails(&[
+            "faults",
+            "--check",
+            "--engine",
+            "rust",
+            "--only",
+            "uuid-invalid-rule"
+        ]));
+        let args = ["clean", "--engine", "rust", "--repo", "."].map(str::to_string);
+        assert_eq!(run(&args).unwrap(), 1, "clean has no Rust run: it fails");
         assert_eq!(run(&["help".to_string()]).unwrap(), 0);
     }
 

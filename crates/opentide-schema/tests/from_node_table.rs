@@ -1,17 +1,23 @@
-//! The structural conversion against Pydantic and the CLI (UC-1.2, #808):
-//! every case of `tests/oracle/from_node_cases.toml` converted with the models
-//! below, which mirror the Pydantic models of `tests/oracle/from_node_table.py`
-//! field for field. The expectations (`tests/oracle/from_node_table.json`)
-//! are what the oracle reports: each error's type, path, message, input and
-//! context, the span the CLI prints and the `yaml_line` it attaches, or the
-//! validated value.
+//! The structural conversion against the oracle (UC-1.2, #808): every case of
+//! `tests/oracle/from_node_cases.toml` converted with the models below, which
+//! mirror the Pydantic models of `tests/oracle/from_node_table.py` field for
+//! field. `tests/oracle/from_node_table.json` is what the oracle reports: each
+//! error's type, path, message, input and context, the span the CLI prints
+//! and the `yaml_line` it attaches, or the validated value.
+//!
+//! A case whose result differs from the oracle's names one of the file's
+//! `[[difference]]` entries (its reason and the bold lead of its CHANGELOG.md
+//! entry); a case that names one and does not differ fails, as does an entry
+//! no case uses. Every Rust result, the same or not, is the reviewed snapshot
+//! `tests/snapshots/from_node_table__rust_results.snap`.
 
 #![expect(
     clippy::unwrap_used,
     reason = "helpers of the tests: a fixture that does not parse fails them"
 )]
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::Path;
 
 use opentide_schema::from_node::{self, Context};
 use opentide_schema::node::{self, Node};
@@ -28,8 +34,9 @@ const TABLE: &str = include_str!("oracle/from_node_table.json");
 )]
 fn ratio_json<S: serde::Serializer>(value: &Option<f64>, serializer: S) -> Result<S::Ok, S::Error> {
     match value {
-        Some(float) if !float.is_finite() => {
-            serializer.serialize_str(&node::python_float_repr(*float))
+        Some(float) if float.is_nan() => serializer.serialize_str("nan"),
+        Some(float) if float.is_infinite() => {
+            serializer.serialize_str(if *float > 0.0 { "inf" } else { "-inf" })
         }
         other => other.serialize(serializer),
     }
@@ -195,55 +202,68 @@ fn error_json(error: &SchemaError) -> Json {
     })
 }
 
-/// Where the Rust result differs from the oracle's on purpose, each with why.
-fn known_difference(id: &str, expected: &Json) -> Option<Json> {
-    match id {
-        // Pydantic's int has no bound; an `i64` field has one. No Tide integer
-        // field comes near it (effort, version, risk scores).
-        "int-beyond-i64" => Some(json!({"errors": [{
-            "type": "int_parsing_size",
-            "field_path": ["number"],
-            "msg": "Unable to parse input string as an integer, exceeded maximum size",
-            "input": null,
-            "ctx": {},
-            "span": [2, 9, 39, true],
-            "yaml_line": 1,
-        }]})),
-        _ => {
-            // `_find_line` crashes (KeyError) on a key a merge brought in: the
-            // oracle's `validate` dies there. The Rust conversion reports no line.
-            let errors = expected.get("errors")?.as_array()?;
-            if errors.iter().any(|e| e["yaml_line"].get("crash").is_some()) {
-                let fixed: Vec<Json> = errors
-                    .iter()
-                    .map(|e| {
-                        let mut e = e.clone();
-                        if e["yaml_line"].get("crash").is_some() {
-                            e["yaml_line"] = Json::Null;
-                        }
-                        e
-                    })
-                    .collect();
-                return Some(json!({ "errors": fixed }));
-            }
-            None
-        }
-    }
+#[derive(Debug, serde::Deserialize)]
+struct Difference {
+    id: String,
+    changelog: String,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct CaseNote {
+    id: String,
+    #[serde(default)]
+    difference: Vec<String>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct Cases {
+    #[serde(default)]
+    difference: Vec<Difference>,
+    case: Vec<CaseNote>,
 }
 
 #[test]
-fn every_case_converts_as_the_oracle_validates_it() {
+fn every_case_is_compared_with_the_oracle_and_every_difference_is_explained() {
     let table: Json = serde_json::from_str(TABLE).unwrap();
     assert_eq!(table["oracle"], "0.23.0");
+    let notes: Cases = toml::from_str(include_str!("oracle/from_node_cases.toml")).unwrap();
+    let differences: BTreeMap<&str, &Difference> = notes
+        .difference
+        .iter()
+        .map(|difference| (difference.id.as_str(), difference))
+        .collect();
+    let named: BTreeMap<&str, &[String]> = notes
+        .case
+        .iter()
+        .map(|case| (case.id.as_str(), case.difference.as_slice()))
+        .collect();
+    let changelog =
+        std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../CHANGELOG.md"))
+            .unwrap();
     let cases = table["cases"].as_array().unwrap();
     assert!(cases.len() >= 90, "{} cases", cases.len());
+    assert_eq!(cases.len(), named.len(), "run from_node_table.py");
     let mut failures = Vec::new();
+    for difference in differences.values() {
+        if !changelog.contains(&difference.changelog) {
+            failures.push(format!(
+                "difference {}: CHANGELOG.md has no {:?}",
+                difference.id, difference.changelog
+            ));
+        }
+    }
+    let mut used = BTreeSet::new();
+    let mut results = BTreeMap::new();
     for case in cases {
         let id = case["id"].as_str().unwrap();
-        let document = node::load(case["yaml"].as_str().unwrap()).unwrap();
-        let actual = match convert(case["model"].as_str().unwrap(), &document) {
-            Ok(value) => json!({ "value": value }),
-            Err(errors) => json!({ "errors": errors.iter().map(error_json).collect::<Vec<_>>() }),
+        let actual = match node::load(case["yaml"].as_str().unwrap()) {
+            Err(error) => json!({ "load_error": error.problem }),
+            Ok(document) => match convert(case["model"].as_str().unwrap(), &document) {
+                Ok(value) => json!({ "value": value }),
+                Err(errors) => {
+                    json!({ "errors": errors.iter().map(error_json).collect::<Vec<_>>() })
+                }
+            },
         };
         let mut expected = json!({});
         for key in ["value", "errors"] {
@@ -251,17 +271,39 @@ fn every_case_converts_as_the_oracle_validates_it() {
                 expected[key] = value.clone();
             }
         }
-        let expected = known_difference(id, &expected).unwrap_or(expected);
-        if actual != expected {
-            failures.push(format!("{id}:\n  oracle: {expected}\n  rust:   {actual}"));
+        let listed = named.get(id).copied().unwrap_or_default();
+        match (listed.is_empty(), actual == expected) {
+            (true, false) => failures.push(format!(
+                "{id}: differs from the oracle without a difference entry\n  oracle: {expected}\n  rust:   {actual}"
+            )),
+            (false, true) => failures.push(format!(
+                "{id}: names {listed:?} but converts as the oracle does"
+            )),
+            _ => {}
+        }
+        for name in listed {
+            if !differences.contains_key(name.as_str()) {
+                failures.push(format!("{id}: no difference entry {name}"));
+            }
+            used.insert(name.as_str());
+        }
+        results.insert(id.to_owned(), actual);
+    }
+    for id in differences.keys() {
+        if !used.contains(id) {
+            failures.push(format!("difference {id}: no case names it"));
         }
     }
     assert!(
         failures.is_empty(),
-        "{} of {} cases differ:\n{}",
+        "{} of {} cases:\n{}",
         failures.len(),
         cases.len(),
         failures.join("\n")
+    );
+    insta::assert_snapshot!(
+        "rust_results",
+        serde_json::to_string_pretty(&results).unwrap()
     );
 }
 

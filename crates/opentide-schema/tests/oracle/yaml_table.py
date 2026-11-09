@@ -47,6 +47,19 @@ def tagged(value: Any) -> Any:
     raise TypeError(f"unexpected {type(value).__name__}: {value!r}")
 
 
+def stable_repr(value: Any) -> str:
+    """repr() with sets in sorted order, so the file does not change with the hash seed."""
+    if isinstance(value, (set, frozenset)):
+        return "{" + ", ".join(sorted(stable_repr(item) for item in value)) + "}"
+    if isinstance(value, dict):
+        return "{" + ", ".join(f"{stable_repr(k)}: {stable_repr(v)}" for k, v in value.items()) + "}"
+    if isinstance(value, list):
+        return "[" + ", ".join(stable_repr(item) for item in value) + "]"
+    if isinstance(value, tuple):
+        return "(" + ", ".join(stable_repr(item) for item in value) + ("," if len(value) == 1 else "") + ")"
+    return repr(value)
+
+
 def read(raw: bytes) -> dict[str, Any]:
     try:
         text = raw.decode("utf-8-sig")
@@ -63,7 +76,7 @@ def read(raw: bytes) -> dict[str, Any]:
     except TypeError:
         # bytes (!!binary), tuples (!!omap, !!pairs), sets (!!set): read by the
         # oracle, refused by the Rust tree (LoadErrorKind::Unsupported).
-        return {"unsupported": repr(value)}
+        return {"unsupported": stable_repr(value)}
 
 
 def main() -> int:

@@ -88,10 +88,13 @@ schemars = "1.2"
 # PyO3, for analysis/ (opentide._native) and opentide-schema's `python` feature.
 pyo3 = "0.30.1"
 garde = { version = "0.23", features = ["derive"] }
-# The YAML reader of opentide-schema's node tree (UC-1.2, #808): libyaml ported
-# to safe Rust, so the tree is read as the oracle's PyYAML CSafeLoader (libyaml)
-# reads it, with its marks. No dependencies of its own.
-libyaml-safer = "0.3"
+# YAML 1.2 for opentide-schema's node tree (UC-1.2, #808): saphyr-parser's
+# events with their spans, saphyr's core-schema scalars and its emitter.
+saphyr = { version = "0.3.3", default-features = false }
+saphyr-parser = "0.3.3"
+# Writing a model as YAML (opentide-schema `node::to_yaml`): saphyr's serde
+# serializer, without its deserializer (and the parser fork it brings).
+serde-saphyr = { version = "2.1.1", default-features = false, features = ["serialize"] }
 # opentide-schema-derive, the `#[derive(FromNode)]` proc-macro.
 proc-macro2 = "1"
 quote = "1"

@@ -1,13 +1,21 @@
-//! Where the CLI points for a field path: a port of
-//! `opentide.cli.ui.diagnostics.SourceFiles.span` (the span of a finding) and
-//! `opentide.validation.errors._find_line` (its `yaml_line`), at the oracle
-//! (opentide 0.23.0), quirks included. Both walk the document by the field
-//! path's text: a key is found when the mapping has a `str` key equal to the
-//! part, an index when the part is digits within the list.
+//! Where a finding points, from the parser's node positions: the CLI's
+//! contract is one-line spans, lines and columns from 1, columns in Unicode
+//! code points, `end_column` exclusive.
+//!
+//! - A scalar written on one line (`null` and `~` included): the scalar,
+//!   without its quotes.
+//! - A block value (a mapping, a sequence, a scalar over several lines) or a
+//!   value left empty: its key. A sequence item that is a collection: the
+//!   collection when it is written on one line, else its first character; an
+//!   empty item: its `-`.
+//! - A path that stops at a missing key: the deepest key that exists
+//!   (`found` is `false`); a missing top-level key: the document's first key.
 
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::sync::Arc;
 
-use super::{Document, Node, Value};
+use super::{Document, Entry, Mark, Node, Value};
 
 /// A span as the CLI prints it: 1-based `line` and `column` in code points,
 /// `end_column` exclusive on `end_line`.
@@ -17,52 +25,76 @@ pub struct Span {
     pub line: usize,
     /// The first column, from 1.
     pub column: usize,
-    /// The line `end_column` is on (the CLI's spans are one line).
+    /// The line `end_column` is on (spans are one line).
     pub end_line: usize,
     /// The column just after the span.
     pub end_column: usize,
-    /// The text inside the span, unquoted.
+    /// The text inside the span.
     pub text: String,
     /// `false` when the path stopped short of a missing key: the span is the
-    /// deepest key that exists (the CLI then labels it "add … under this key").
+    /// deepest key that exists.
     pub found: bool,
 }
 
-/// One step: the child at `part`, and where its key and value start.
+/// One step down a field path: the child, and the node its key is (the item
+/// itself, in a sequence).
 struct Step<'a> {
     child: &'a Arc<Node>,
-    /// `(line, column)` of the key (of the item, in a list), 0-based; `None`
-    /// for an entry a merge key brought in (ruamel has no marker for it).
-    key: Option<(usize, usize)>,
-    value: Option<(usize, usize)>,
+    key: &'a Node,
     in_mapping: bool,
 }
 
-fn step<'a>(node: &'a Node, part: &str) -> Option<Step<'a>> {
+/// The index of each string key in the mappings a locator has walked, so
+/// many errors in one large mapping are placed in linear time.
+#[derive(Debug, Default)]
+struct KeyIndex {
+    maps: HashMap<usize, HashMap<String, usize>>,
+}
+
+impl KeyIndex {
+    fn position(&mut self, node: &Node, entries: &[Entry], part: &str) -> Option<usize> {
+        if entries.len() < 16 {
+            return entries
+                .iter()
+                .position(|entry| key_text(&entry.key) == part);
+        }
+        let map = self
+            .maps
+            .entry(std::ptr::from_ref(node) as usize)
+            .or_insert_with(|| {
+                entries
+                    .iter()
+                    .enumerate()
+                    .map(|(index, entry)| (key_text(&entry.key), index))
+                    .collect()
+            });
+        map.get(part).copied()
+    }
+}
+
+/// A key as a field path writes it ([`Value`]'s `Display`).
+fn key_text(key: &Node) -> String {
+    key.value.to_string()
+}
+
+fn step<'a>(index: &mut KeyIndex, node: &'a Node, part: &str) -> Option<Step<'a>> {
     match &node.value {
         Value::Map(entries) => {
-            let entry = entries
-                .iter()
-                .find(|entry| entry.key.value.as_str() == Some(part))?;
-            let positioned = !entry.merged;
+            let entry = &entries[index.position(node, entries, part)?];
             Some(Step {
                 child: &entry.value,
-                key: positioned.then_some((entry.key.start.line, entry.key.start.column)),
-                value: positioned.then_some((entry.value.start.line, entry.value.start.column)),
+                key: &entry.key,
                 in_mapping: true,
             })
         }
         Value::Seq(items) => {
-            if part.is_empty() || !part.chars().all(|c| c.is_ascii_digit()) {
+            if part.is_empty() || !part.bytes().all(|b| b.is_ascii_digit()) {
                 return None;
             }
-            let index: usize = part.parse().ok()?;
-            let item = items.get(index)?;
-            let at = Some((item.start.line, item.start.column));
+            let item = items.get(part.parse::<usize>().ok()?)?;
             Some(Step {
                 child: item,
-                key: at,
-                value: at,
+                key: item,
                 in_mapping: false,
             })
         }
@@ -70,59 +102,129 @@ fn step<'a>(node: &'a Node, part: &str) -> Option<Step<'a>> {
     }
 }
 
-fn is_container(node: &Node) -> bool {
-    matches!(node.value, Value::Seq(_) | Value::Map(_))
+fn is_scalar(node: &Node) -> bool {
+    !matches!(node.value, Value::Seq(_) | Value::Map(_))
+}
+
+/// Places field paths in a document, many at a time: [`Document::locator`].
+#[derive(Debug)]
+pub struct Locator<'d> {
+    document: &'d Document,
+    index: RefCell<KeyIndex>,
+}
+
+impl Locator<'_> {
+    /// [`Document::span`].
+    pub fn span(&self, field_path: &[String], at_key: bool) -> Option<Span> {
+        self.document
+            .span_with(&mut self.index.borrow_mut(), field_path, at_key)
+    }
+
+    /// [`Document::yaml_line`].
+    pub fn yaml_line(&self, field_path: &[String]) -> Option<usize> {
+        self.document
+            .yaml_line_with(&mut self.index.borrow_mut(), field_path)
+    }
 }
 
 impl Document {
-    /// The source split as `split_yaml_lines` splits it: on `\r\n`, `\r` and
-    /// `\n`, without a last empty line.
-    fn line_text(&self, number: usize) -> Option<Vec<char>> {
-        if number == 0 {
-            return None;
+    /// A locator for many field paths of this document.
+    pub fn locator(&self) -> Locator<'_> {
+        Locator {
+            document: self,
+            index: RefCell::new(KeyIndex::default()),
         }
-        let mut lines = Vec::new();
-        let mut rest = self.source.as_str();
-        loop {
-            match rest.find(['\r', '\n']) {
-                Some(at) => {
-                    lines.push(&rest[..at]);
-                    let skip = if rest[at..].starts_with("\r\n") { 2 } else { 1 };
-                    rest = &rest[at + skip..];
-                    if lines.len() >= number {
-                        break;
-                    }
-                }
-                None => {
-                    if !rest.is_empty() {
-                        lines.push(rest);
-                    }
-                    break;
-                }
-            }
-        }
-        lines.get(number - 1).map(|line| line.chars().collect())
     }
 
-    /// Where the CLI's frame points for `field_path`: the value when it is a
-    /// scalar written on its line, else its key; for a path that stops at a
-    /// missing key, the deepest key that exists (`found` is `false`), and for
-    /// a missing top-level key the document's first key. `at_key` points at
-    /// the key even for a scalar (the CLI does so for "Extra inputs are not
-    /// permitted"). `None` where the CLI prints no position.
+    /// Line `number` (from 1), as characters.
+    fn line_chars(&self, number: usize) -> Option<Vec<char>> {
+        let &(start, end) = self.lines.get(number.checked_sub(1)?)?;
+        Some(self.source[start..end].chars().collect())
+    }
+
+    /// The span from `start` to `end` when both are on one line and it is not
+    /// empty; quotes around a scalar are left out.
+    fn one_line(&self, start: Mark, end: Mark, unquote: bool, found: bool) -> Option<Span> {
+        if start.line != end.line || end.column <= start.column {
+            return None;
+        }
+        let text = self.line_chars(start.line)?;
+        let (mut first, mut last) = (start.column - 1, (end.column - 1).min(text.len()));
+        // saphyr ends a quoted scalar's span after the blanks that follow it.
+        while last > first && text[last - 1].is_whitespace() {
+            last -= 1;
+        }
+        if unquote
+            && let Some(&quote) = text.get(first).filter(|c| matches!(c, '"' | '\''))
+            && let Some(close) = closing_quote(&text[first + 1..last], quote)
+        {
+            last = first + 1 + close;
+            first += 1;
+        }
+        if last <= first {
+            return None;
+        }
+        Some(Span {
+            line: start.line,
+            column: first + 1,
+            end_line: start.line,
+            end_column: last + 1,
+            text: text[first..last].iter().collect(),
+            found,
+        })
+    }
+
+    /// The key of a step: the key scalar in a mapping; in a sequence, the
+    /// item on its line, else its first character, or its `-` when it is
+    /// empty.
+    fn key_span(&self, step: &Step<'_>, found: bool) -> Option<Span> {
+        let item = step.key;
+        if step.in_mapping {
+            return self.one_line(item.start, item.end, true, found);
+        }
+        if let Some(span) = self.one_line(item.start, item.end, true, found) {
+            return Some(span);
+        }
+        let mut start = item.start;
+        if item.end.index <= item.start.index {
+            // An empty item: the parser marks where its value would be.
+            let text = self.line_chars(start.line)?;
+            let dash = text[..(start.column - 1).min(text.len())]
+                .iter()
+                .rposition(|&c| c == '-')?;
+            start.column = dash + 1;
+        }
+        let end = Mark {
+            index: start.index + 1,
+            line: start.line,
+            column: start.column + 1,
+        };
+        self.one_line(start, end, false, found)
+    }
+
+    /// Where a finding about `field_path` points: the value when it is a
+    /// scalar on one line, else its key; for a path that stops at a missing
+    /// key, the deepest key that exists (`found` is `false`), and for a
+    /// missing top-level key the document's first key. `at_key` points at the
+    /// key even for a scalar (an unknown key). `None` where there is no place
+    /// (an empty document, an empty path).
     pub fn span(&self, field_path: &[String], at_key: bool) -> Option<Span> {
+        self.span_with(&mut KeyIndex::default(), field_path, at_key)
+    }
+
+    fn span_with(&self, index: &mut KeyIndex, field_path: &[String], at_key: bool) -> Option<Span> {
         let root = self.root.as_ref()?;
         if field_path.is_empty() {
             return None;
         }
         let mut node: &Arc<Node> = root;
-        let mut last: Option<(Step<'_>, &str)> = None;
+        let mut last: Option<Step<'_>> = None;
         let mut found = true;
         for part in field_path {
-            match step(node, part) {
+            match step(index, node, part) {
                 Some(next) => {
                     node = next.child;
-                    last = Some((next, part.as_str()));
+                    last = Some(next);
                 }
                 None => {
                     found = false;
@@ -130,193 +232,188 @@ impl Document {
                 }
             }
         }
-        if last.is_none()
-            && !found
-            && let Value::Map(entries) = &root.value
-            && let Some(first) = entries.first()
-        {
-            // A top-level field is missing: point at the mapping's first key.
-            let key = first.key.value.python_str();
-            let next = step(root, &key)?;
-            return self.key_span(&next, &key, false);
-        }
-        let (last_step, key) = last?;
+        let Some(last) = last else {
+            // A top-level field is missing: the mapping's first key.
+            let Value::Map(entries) = &root.value else {
+                return None;
+            };
+            let first = entries.first()?;
+            return self.one_line(first.key.start, first.key.end, true, false);
+        };
         if found
             && !at_key
-            && !is_container(node)
-            && let Some((line, column)) = last_step.value
-            && let Some(span) = self.token(line, column)
+            && is_scalar(node)
+            && let Some(span) = self.one_line(node.start, node.end, true, true)
         {
             return Some(span);
         }
-        self.key_span(&last_step, key, found)
+        self.key_span(&last, found)
     }
 
-    fn key_span(&self, last: &Step<'_>, key: &str, found: bool) -> Option<Span> {
-        let (line, mut column) = last.key?;
-        let text = self.line_text(line + 1)?;
-        let length = if last.in_mapping {
-            key.chars().count()
-        } else {
-            1
-        };
-        if last.in_mapping {
-            let needle: Vec<char> = key.chars().collect();
-            if let Some(located) = find_from(&text, &needle, column) {
-                column = located;
-            }
-        }
-        let slice: String = text.iter().skip(column).take(length).collect();
-        Some(Span {
-            line: line + 1,
-            column: column + 1,
-            end_line: line + 1,
-            end_column: column + 1 + length,
-            text: slice,
-            found,
-        })
-    }
-
-    /// `SourceFiles._token`: the scalar written at `(line, column)`.
-    fn token(&self, line: usize, column: usize) -> Option<Span> {
-        let text = self.line_text(line + 1)?;
-        if column >= text.len() {
-            return None;
-        }
-        let (start, end) = token_bounds(&text, column);
-        if end <= start {
-            return None;
-        }
-        Some(Span {
-            line: line + 1,
-            column: start + 1,
-            end_line: line + 1,
-            end_column: end + 1,
-            text: text[start..end].iter().collect(),
-            found: true,
-        })
-    }
-
-    /// The finding's `yaml_line` (0-based), as `_find_line` computes it: a
-    /// container's own line, else the line its parent marks for the value;
-    /// `None` when a step is missing or its value is `null`.
+    /// The finding's `yaml_line`, from 0 as the CLI's JSON writes it: for a
+    /// scalar in a mapping, its key's line (a block scalar's text starts on
+    /// the next one); otherwise the line the value starts on. `None` when a
+    /// step of the path is missing.
     pub fn yaml_line(&self, field_path: &[String]) -> Option<usize> {
+        self.yaml_line_with(&mut KeyIndex::default(), field_path)
+    }
+
+    fn yaml_line_with(&self, index: &mut KeyIndex, field_path: &[String]) -> Option<usize> {
         let mut node: &Arc<Node> = self.root.as_ref()?;
-        if field_path.is_empty() {
-            return is_container(node).then_some(node.start.line);
-        }
-        for (index, part) in field_path.iter().enumerate() {
-            let next = step(node, part)?;
-            if matches!(next.child.value, Value::Null) {
-                return None;
-            }
-            if index + 1 == field_path.len() {
-                if is_container(next.child) {
-                    return Some(next.child.start.line);
-                }
-                return next.value.map(|(line, _)| line);
-            }
+        let mut key: Option<&Node> = None;
+        for part in field_path {
+            let next = step(index, node, part)?;
+            key = next.in_mapping.then_some(next.key);
             node = next.child;
         }
-        None
-    }
-}
-
-/// Python's `str.find(needle, start)` on code points.
-fn find_from(text: &[char], needle: &[char], start: usize) -> Option<usize> {
-    if needle.is_empty() {
-        return (start <= text.len()).then_some(start);
-    }
-    if needle.len() > text.len() {
-        return None;
-    }
-    (start..=text.len() - needle.len()).find(|&at| text[at..at + needle.len()] == *needle)
-}
-
-/// `_token_bounds`: `[start, end)` of the scalar written at `start`, without
-/// its quotes.
-fn token_bounds(text: &[char], start: usize) -> (usize, usize) {
-    let first = text[start];
-    if first == '"' || first == '\'' {
-        let mut end = start + 1;
-        while end < text.len() {
-            if text[end] == '\\' && first == '"' {
-                end += 2;
-                continue;
-            }
-            if text[end] == first {
-                if first == '\'' && text.get(end + 1) == Some(&'\'') {
-                    end += 2;
-                    continue;
-                }
-                return (start + 1, end);
-            }
-            end += 1;
-        }
-        return (start + 1, text.len());
-    }
-    if first == '|' || first == '>' {
-        return (start, start + 1);
-    }
-    let in_flow = {
-        let prefix = &text[..start];
-        let count = |c: char| prefix.iter().filter(|&&x| x == c).count();
-        count('[') > count(']') || count('{') > count('}')
-    };
-    let mut end = start;
-    while end < text.len() {
-        let character = text[end];
-        let stop = character == '#' || (in_flow && matches!(character, ',' | ']' | '}'));
-        // `text[end - 1]` at `end == 0` is Python's `text[-1]`, the last character.
-        let before = if end == 0 {
-            text[text.len() - 1]
-        } else {
-            text[end - 1]
+        let line = match key {
+            Some(key) if is_scalar(node) => key.start.line,
+            _ => node.start.line,
         };
-        if stop && (character != '#' || before == ' ' || before == '\t') {
-            break;
+        line.checked_sub(1)
+    }
+}
+
+/// The index of the quote that closes a scalar opened with `quote`, in the
+/// text after the opening quote: `''` is a quote inside single quotes, `\`
+/// escapes the next character inside double quotes.
+fn closing_quote(text: &[char], quote: char) -> Option<usize> {
+    let mut at = 0;
+    while at < text.len() {
+        match text[at] {
+            '\\' if quote == '"' => at += 2,
+            c if c == quote => {
+                if quote == '\'' && text.get(at + 1) == Some(&'\'') {
+                    at += 2;
+                } else {
+                    return Some(at);
+                }
+            }
+            _ => at += 1,
         }
-        end += 1;
     }
-    // `len(text[:end].rstrip())`: Python's `str.rstrip()` strips Unicode
-    // whitespace.
-    let mut trimmed = end;
-    while trimmed > 0 && text[trimmed - 1].is_whitespace() {
-        trimmed -= 1;
+    None
+}
+
+/// Byte ranges of the lines of `source`: split on `\r\n`, `\r` and `\n`, as
+/// YAML breaks lines, without a last empty line.
+pub(super) fn split_lines(source: &str) -> Vec<(usize, usize)> {
+    let mut lines = Vec::new();
+    let mut start = 0;
+    let bytes = source.as_bytes();
+    let mut at = 0;
+    while at < bytes.len() {
+        match bytes[at] {
+            b'\r' => {
+                lines.push((start, at));
+                at += if bytes.get(at + 1) == Some(&b'\n') {
+                    2
+                } else {
+                    1
+                };
+                start = at;
+            }
+            b'\n' => {
+                lines.push((start, at));
+                at += 1;
+                start = at;
+            }
+            _ => at += 1,
+        }
     }
-    (start, trimmed)
+    if start < bytes.len() {
+        lines.push((start, bytes.len()));
+    }
+    lines
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::node::load;
 
-    fn chars(text: &str) -> Vec<char> {
-        text.chars().collect()
+    fn path(parts: &[&str]) -> Vec<String> {
+        parts.iter().map(|p| (*p).to_owned()).collect()
     }
 
     #[test]
-    fn token_bounds_are_the_clis() {
-        let text = chars("a: \"x\\\"y\" # c");
-        assert_eq!(token_bounds(&text, 3), (4, 8));
-        let text = chars("a: 'it''s'");
-        assert_eq!(token_bounds(&text, 3), (4, 9));
-        let text = chars("a: plain value # comment");
-        assert_eq!(token_bounds(&text, 3), (3, 14));
-        let text = chars("a: x#y");
-        assert_eq!(token_bounds(&text, 3), (3, 6));
-        let text = chars("a: [x, y]");
-        assert_eq!(token_bounds(&text, 4), (4, 5));
-        let text = chars("a: |");
-        assert_eq!(token_bounds(&text, 3), (3, 4));
-        let text = chars("a: \"unclosed");
-        assert_eq!(token_bounds(&text, 3), (4, 12));
+    fn lines_split_as_yaml_breaks_them() {
+        let text = "a\r\nb\rc\n\nd";
+        let lines: Vec<&str> = split_lines(text)
+            .iter()
+            .map(|&(s, e)| &text[s..e])
+            .collect();
+        assert_eq!(lines, ["a", "b", "c", "", "d"]);
+        assert_eq!(split_lines("a\n").len(), 1);
+        assert!(split_lines("").is_empty());
     }
 
     #[test]
-    fn find_is_pythons() {
-        assert_eq!(find_from(&chars("abcabc"), &chars("bc"), 2), Some(4));
-        assert_eq!(find_from(&chars("abc"), &chars("x"), 0), None);
-        assert_eq!(find_from(&chars("abc"), &chars(""), 1), Some(1));
+    fn a_scalar_points_at_itself_without_quotes() {
+        let document = load("name: 'x y'  # c\nn: 12\nq: [\"a\\\"b\" , 'it''s']\n").unwrap();
+        let span = document.span(&path(&["name"]), false).unwrap();
+        assert_eq!((span.line, span.column, span.end_column), (1, 8, 11));
+        assert_eq!(span.text, "x y");
+        let span = document.span(&path(&["n"]), false).unwrap();
+        assert_eq!((span.line, span.column, span.end_column), (2, 4, 6));
+        let span = document.span(&path(&["n"]), true).unwrap();
+        assert_eq!(
+            (span.column, span.end_column, span.text.as_str()),
+            (1, 2, "n")
+        );
+        let span = document.span(&path(&["q", "0"]), false).unwrap();
+        assert_eq!(
+            (span.column, span.end_column, span.text.as_str()),
+            (6, 10, "a\\\"b")
+        );
+        let span = document.span(&path(&["q", "1"]), false).unwrap();
+        assert_eq!(
+            (span.column, span.end_column, span.text.as_str()),
+            (15, 20, "it''s")
+        );
+    }
+
+    #[test]
+    fn a_block_value_points_at_its_key() {
+        let document = load("top:\n  inner: [a]\ntext: |\n  x\n  y\n").unwrap();
+        let span = document.span(&path(&["top"]), false).unwrap();
+        assert_eq!((span.line, span.column, span.end_column), (1, 1, 4));
+        let span = document.span(&path(&["text"]), false).unwrap();
+        assert_eq!((span.line, span.text.as_str()), (3, "text"));
+        let span = document.span(&path(&["top", "inner", "0"]), false).unwrap();
+        assert_eq!((span.line, span.column, span.end_column), (2, 11, 12));
+    }
+
+    #[test]
+    fn a_missing_key_points_at_its_parent_or_the_first_key() {
+        let document = load("a: 1\nb:\n  c: 2\n").unwrap();
+        let span = document.span(&path(&["b", "d"]), false).unwrap();
+        assert_eq!((span.line, span.text.as_str(), span.found), (2, "b", false));
+        let span = document.span(&path(&["z"]), false).unwrap();
+        assert_eq!((span.line, span.text.as_str(), span.found), (1, "a", false));
+    }
+
+    #[test]
+    fn yaml_line_is_the_values_line_from_zero() {
+        let document = load("a: 1\nb:\n  - x\nc:\nd: |\n  t\n").unwrap();
+        assert_eq!(document.yaml_line(&path(&["a"])), Some(0));
+        assert_eq!(document.yaml_line(&path(&["b"])), Some(2));
+        assert_eq!(document.yaml_line(&path(&["b", "0"])), Some(2));
+        assert_eq!(document.yaml_line(&path(&["c"])), Some(3));
+        assert_eq!(document.yaml_line(&path(&["d"])), Some(4));
+        assert_eq!(document.yaml_line(&path(&["e"])), None);
+    }
+
+    #[test]
+    fn sequence_items_point_at_themselves_or_their_dash() {
+        let document = load("a:\n  -\n  - [x, y]\n  - k: v\n    j: w\n  - ~\n").unwrap();
+        let span = document.span(&path(&["a", "0"]), false).unwrap();
+        assert_eq!((span.line, span.column, span.text.as_str()), (2, 3, "-"));
+        let span = document.span(&path(&["a", "1"]), false).unwrap();
+        assert_eq!((span.line, span.column, span.end_column), (3, 5, 11));
+        let span = document.span(&path(&["a", "2"]), false).unwrap();
+        assert_eq!((span.line, span.column, span.text.as_str()), (4, 5, "k"));
+        let span = document.span(&path(&["a", "3"]), false).unwrap();
+        assert_eq!((span.line, span.column, span.text.as_str()), (6, 5, "~"));
     }
 }

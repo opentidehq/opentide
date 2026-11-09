@@ -1,45 +1,43 @@
 //! The structural conversion (UC-1.2, #808): a model built from the YAML node
-//! tree ([`crate::node`]) with every structural error collected, as Pydantic
-//! collects them, in Pydantic's words, with the CLI's positions.
+//! tree ([`crate::node`]) with every structural error collected, each with
+//! its field path and position.
 //!
-//! serde stops at the first error; Pydantic reports every error of an object
-//! at once, and the CLI prints them all. `#[derive(FromNode)]`
-//! (`opentide-schema-derive`) writes [`FromNode`] for a model from the serde
-//! attributes it already has (`rename`, `alias`, `default`,
-//! `deny_unknown_fields`), so the field names, the aliases and the closure are
-//! written once. serde keeps the happy path and serialisation.
+//! serde stops at the first error; the CLI reports every error of an object
+//! at once. `#[derive(FromNode)]` (`opentide-schema-derive`) writes
+//! [`FromNode`] for a model from the serde attributes it already has
+//! (`rename`, `alias`, `default`, `deny_unknown_fields`), so the field names,
+//! the aliases and the closure are written once. serde keeps the happy path
+//! and serialisation.
 //!
-//! What the conversion reproduces, each checked against Pydantic 2.14 at the
-//! oracle (`tests/oracle/from_node_table.json`):
-//!
+//! - **Types are the declared ones.** A string field takes a string, an
+//!   integer field an integer, a boolean field `true` or `false`; a number
+//!   field takes an integer or a float. Nothing is coerced: `"42"` is not an
+//!   integer and `"yes"` is not a boolean, as the generated JSON Schemas say.
 //! - **Order.** Fields in declaration order (a missing field where it is
 //!   declared), then the keys no field takes, in the document's order: an
 //!   unknown key (`extra_forbidden`) or a key that is not a string
 //!   (`invalid_key`).
-//! - **Names.** The serialised name (Pydantic's alias) is looked up first, then
-//!   each serde `alias` (Pydantic's field name, `populate_by_name`); a second
-//!   one present is an unknown key.
-//! - **Lax scalars.** `int` from `"42"`, `" 7 "`, `"3.00"`, `3.0`, `true`;
-//!   `bool` from `"yes"`, `"off"`, `1`, `0.0`; `float` from `2`, `"2.5"`,
-//!   `true`; `str` from a string only.
-//! - **Unions** (`#[from_node(union)]`): the first member that takes the value
-//!   strictly, else the first that takes it laxly, else every member's errors,
-//!   each under the member's tag (`either.str`, `either.int`).
-//! - **Paths** as Pydantic's `loc`: keys, list indexes, `[key]` for a mapping
-//!   key of the wrong type.
+//! - **Names.** The serialised name is looked up first, then each serde
+//!   `alias`; a second one present is an unknown key.
+//! - **Unions** (`#[from_node(union)]`): the first member that takes the
+//!   value, else every member's errors, each under the member's tag
+//!   (`either.str`, `either.int`).
+//! - **Paths**: keys, list indexes, `[key]` for a mapping key of the wrong
+//!   type; a key that is not a string is written as YAML writes it (`true`,
+//!   `12`).
 //!
-//! Constraints (garde, with the [`crate::Pins`] context) run after a
+//! The messages are the CLI's (Pydantic's wording, which says what is wrong
+//! plainly). Constraints (garde, with the [`crate::Pins`] context) run after a
 //! successful conversion: [`validate`].
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use crate::error::{ErrorKind, PathSegment, SchemaError};
-use crate::node::{Document, Entry, Node, Value};
+use crate::node::{Document, Entry, Mark, Node, Value};
 use crate::pins::Pins;
 
-/// Pydantic's messages for the errors the conversion reports, byte for byte
-/// (pydantic-core 2.14 at the oracle).
+/// The messages the conversion reports.
 pub mod messages {
     /// `missing`.
     pub const FIELD_REQUIRED: &str = "Field required";
@@ -51,26 +49,10 @@ pub mod messages {
     pub const STRING_TYPE: &str = "Input should be a valid string";
     /// `int_type`.
     pub const INT_TYPE: &str = "Input should be a valid integer";
-    /// `int_parsing`.
-    pub const INT_PARSING: &str =
-        "Input should be a valid integer, unable to parse string as an integer";
-    /// `int_from_float`.
-    pub const INT_FROM_FLOAT: &str =
-        "Input should be a valid integer, got a number with a fractional part";
-    /// `int_parsing_size`.
-    pub const INT_PARSING_SIZE: &str =
-        "Unable to parse input string as an integer, exceeded maximum size";
-    /// `finite_number`.
-    pub const FINITE_NUMBER: &str = "Input should be a finite number";
     /// `float_type`.
     pub const FLOAT_TYPE: &str = "Input should be a valid number";
-    /// `float_parsing`.
-    pub const FLOAT_PARSING: &str =
-        "Input should be a valid number, unable to parse string as a number";
     /// `bool_type`.
     pub const BOOL_TYPE: &str = "Input should be a valid boolean";
-    /// `bool_parsing`.
-    pub const BOOL_PARSING: &str = "Input should be a valid boolean, unable to interpret input";
     /// `list_type`.
     pub const LIST_TYPE: &str = "Input should be a valid list";
     /// `dict_type`.
@@ -81,13 +63,10 @@ pub mod messages {
         format!("Input should be a valid dictionary or instance of {class_name}")
     }
 
-    /// Pydantic's list of expected values: `'a'`, `'a' or 'b'`,
-    /// `'a', 'b' or 'c'` (`literal_error`, `enum`).
+    /// The expected values, quoted: `'a'`, `'a' or 'b'`, `'a', 'b' or 'c'`
+    /// (`literal_error`, `enum`).
     pub fn expected(values: &[&str]) -> String {
-        let quoted: Vec<String> = values
-            .iter()
-            .map(|value| crate::node::python_str_repr(value))
-            .collect();
+        let quoted: Vec<String> = values.iter().map(|value| format!("'{value}'")).collect();
         match quoted.split_last() {
             None => String::new(),
             Some((last, [])) => last.clone(),
@@ -97,16 +76,16 @@ pub mod messages {
 }
 
 /// How much work one conversion may do (nodes visited plus errors): far above
-/// any object file, far below what a tree of nested aliases can demand.
-pub const BUDGET: usize = 1_000_000;
+/// any object file (the corpora's largest takes a few hundred), far below what
+/// a tree of nested aliases can demand.
+pub const BUDGET: usize = 100_000;
 
 /// The conversion state: the path to the value being converted, the errors so
-/// far, and whether values are being taken strictly (a union's first pass).
+/// far, and the work left.
 #[derive(Debug)]
 pub struct Context {
     path: Vec<PathSegment>,
     errors: Vec<SchemaError>,
-    strict: bool,
     remaining: usize,
     stopped: bool,
 }
@@ -123,15 +102,9 @@ impl Context {
         Self {
             path: Vec::new(),
             errors: Vec::new(),
-            strict: false,
             remaining: BUDGET,
             stopped: false,
         }
-    }
-
-    /// Whether values are taken strictly (no lax coercion).
-    pub fn strict(&self) -> bool {
-        self.strict
     }
 
     /// Counts one unit of work; `false` once the budget is spent (the
@@ -144,7 +117,7 @@ impl Context {
                     ErrorKind::Limit,
                     Vec::new(),
                     "the document is too large to check: it expands to more than \
-                     1000000 values",
+                     100000 values",
                 ));
             }
             return false;
@@ -213,11 +186,10 @@ impl Context {
 
     /// A context for a trial conversion at the current path (a union member):
     /// its errors are the caller's to keep or drop.
-    fn trial(&self, strict: bool) -> Self {
+    fn trial(&self) -> Self {
         Self {
             path: self.path.clone(),
             errors: Vec::new(),
-            strict,
             remaining: self.remaining,
             stopped: self.stopped,
         }
@@ -237,29 +209,21 @@ pub trait FromNode: Sized {
     /// The value `node` holds, or `None` after reporting, in `cx`, every
     /// error that stops it.
     fn from_node(node: &Node, cx: &mut Context) -> Option<Self>;
-
-    /// Whether `node` is this type's own kind of value, so a union's strict
-    /// pass takes it without coercion. The default is the lax conversion.
-    fn takes_strictly(node: &Node) -> bool {
-        let _ = node;
-        true
-    }
 }
 
 /// Converts a document's root into `T`, with every error placed (span and
-/// `yaml_line`) in the document. A document with no node (empty) is `None`,
-/// as `model_validate(None)` sees it.
+/// `yaml_line`) in the document. A document with no node (empty) is `null`.
 pub fn from_document<T: FromNode>(document: &Document) -> Result<T, Vec<SchemaError>> {
     let mut cx = Context::new();
     let null;
     let root: &Node = match document.root() {
         Some(root) => root,
         None => {
-            null = Node {
-                value: Value::Null,
-                start: crate::node::Mark::default(),
-                end: crate::node::Mark::default(),
-            };
+            null = Node::null_at(Mark {
+                index: 0,
+                line: 1,
+                column: 1,
+            });
             &null
         }
     };
@@ -270,10 +234,11 @@ pub fn from_document<T: FromNode>(document: &Document) -> Result<T, Vec<SchemaEr
     {
         return Ok(value);
     }
+    let locator = document.locator();
     for error in &mut errors {
         let field_path = error.field_path();
-        error.span = document.span(&field_path, error.kind == ErrorKind::UnknownKey);
-        error.yaml_line = document.yaml_line(&field_path);
+        error.span = locator.span(&field_path, error.kind == ErrorKind::UnknownKey);
+        error.yaml_line = locator.yaml_line(&field_path);
     }
     Err(errors)
 }
@@ -284,8 +249,8 @@ pub enum Invalid {
     /// The structure is wrong: every error, placed.
     Structure(Vec<SchemaError>),
     /// The structure is right and garde's constraints fail. Turning each into
-    /// Pydantic's error (type, message, serialised path) is the work of the
-    /// item that ports the constraint (UC-1.3, #809, onwards).
+    /// a placed [`SchemaError`] is the work of the items that add the
+    /// constraints (UC-1.3, #809, onwards).
     Constraints(garde::Report),
 }
 
@@ -417,7 +382,7 @@ impl<'n> Fields<'n> {
                     }
                 }
                 None => {
-                    let key = entry.key.value.python_str();
+                    let key = entry.key.value.to_string();
                     cx.at_key(&key, |cx| {
                         cx.error(
                             ErrorKind::InvalidType("invalid_key"),
@@ -461,9 +426,8 @@ pub fn enum_value<T: Copy>(
     None
 }
 
-/// `_require_vocab_list` (`models/threat.py`, `ThreatBody.impact` and
-/// `.leverage`), a `mode="before"` field validator: a vocabulary list written
-/// as one string is `vocab_list_type`, naming the field (the last key of the
+/// A vocabulary list written as one string (`ThreatBody.impact` and
+/// `.leverage`) is `vocab_list_type`, naming the field (the last key of the
 /// path) and, when the string packs names with `;`, telling to split it. Use
 /// it as `#[from_node(before = "opentide_schema::from_node::require_vocab_list")]`.
 pub fn require_vocab_list(node: &Node, cx: &mut Context) -> bool {
@@ -493,36 +457,21 @@ pub fn require_vocab_list(node: &Node, cx: &mut Context) -> bool {
     false
 }
 
-/// One member of a union: its tag (`str`, `int`, `list[str]`) and its two
-/// tries.
+/// One member of a union: its tag (`str`, `int`, `list[str]`) and its
+/// conversion.
 pub struct Member<'a, T> {
-    /// The tag Pydantic appends to the path of the member's errors.
+    /// The tag added to the path of the member's errors.
     pub tag: &'a str,
-    /// Whether the value is the member's own kind (the strict pass).
-    pub strict: fn(&Node) -> bool,
     /// The conversion.
     pub convert: fn(&Node, &mut Context) -> Option<T>,
 }
 
-/// A union in Pydantic's smart mode, as far as YAML values need it: the first
-/// member that takes the value strictly, else the first that takes it laxly,
-/// else the errors of every member under its tag.
+/// A union: the first member that takes the value, else the errors of every
+/// member, each under its tag.
 pub fn union_value<T>(node: &Node, cx: &mut Context, members: &[Member<'_, T>]) -> Option<T> {
-    for member in members {
-        if (member.strict)(node) {
-            let mut trial = cx.trial(true);
-            let value = (member.convert)(node, &mut trial);
-            cx.absorb_budget(&trial);
-            if trial.errors.is_empty()
-                && let Some(value) = value
-            {
-                return Some(value);
-            }
-        }
-    }
     let mut failures = Vec::new();
     for member in members {
-        let mut trial = cx.trial(false);
+        let mut trial = cx.trial();
         trial.path.push(PathSegment::Key(member.tag.to_owned()));
         let value = (member.convert)(node, &mut trial);
         cx.absorb_budget(&trial);
@@ -553,202 +502,43 @@ impl FromNode for String {
         );
         None
     }
-
-    fn takes_strictly(node: &Node) -> bool {
-        matches!(node.value, Value::Str(_))
-    }
-}
-
-/// Pydantic's integer from a string: whitespace around it, one sign, digits
-/// with single `_` between them, and a fraction of zeros only (`3.00`).
-fn int_from_text(text: &str) -> Option<crate::node::Integer> {
-    let text = text.trim();
-    let (sign, rest) = match text.as_bytes().first() {
-        Some(b'-') => ("-", &text[1..]),
-        Some(b'+') => ("", &text[1..]),
-        _ => ("", text),
-    };
-    let (whole, fraction) = match rest.split_once('.') {
-        Some((whole, fraction)) => (whole, Some(fraction)),
-        None => (rest, None),
-    };
-    if let Some(fraction) = fraction
-        && (fraction.is_empty() || !fraction.bytes().all(|b| b == b'0'))
-    {
-        return None;
-    }
-    if whole.is_empty()
-        || whole.starts_with('_')
-        || whole.ends_with('_')
-        || whole.contains("__")
-        || !whole.bytes().all(|b| b.is_ascii_digit() || b == b'_')
-    {
-        return None;
-    }
-    let digits: String = whole.chars().filter(|&c| c != '_').collect();
-    crate::node::Integer::parse_python(&format!("{sign}{digits}"), 10)
 }
 
 impl FromNode for i64 {
     fn from_node(node: &Node, cx: &mut Context) -> Option<Self> {
-        let parsing_size = |cx: &mut Context| {
-            cx.error(
-                ErrorKind::InvalidValue("int_parsing_size"),
-                messages::INT_PARSING_SIZE,
-                node,
-            );
-            None
-        };
-        match &node.value {
-            Value::Int(integer) => match integer.to_i64() {
-                Some(value) => return Some(value),
-                // Pydantic takes any Python int; an i64 field cannot.
-                None => return parsing_size(cx),
-            },
-            Value::Bool(flag) if !cx.strict() => return Some(i64::from(*flag)),
-            Value::Float(float) if !cx.strict() => {
-                if !float.is_finite() {
-                    cx.error(
-                        ErrorKind::InvalidValue("finite_number"),
-                        messages::FINITE_NUMBER,
-                        node,
-                    );
-                    return None;
-                }
-                if float.fract() != 0.0 {
-                    cx.error(
-                        ErrorKind::InvalidValue("int_from_float"),
-                        messages::INT_FROM_FLOAT,
-                        node,
-                    );
-                    return None;
-                }
-                #[expect(
-                    clippy::cast_possible_truncation,
-                    reason = "a whole number checked to lie within i64's range"
-                )]
-                if *float >= -9_223_372_036_854_775_808.0 && *float < 9_223_372_036_854_775_808.0 {
-                    return Some(*float as i64);
-                }
-                return parsing_size(cx);
-            }
-            Value::Str(text) if !cx.strict() => {
-                return match int_from_text(text) {
-                    Some(integer) => match integer.to_i64() {
-                        Some(value) => Some(value),
-                        None => parsing_size(cx),
-                    },
-                    None => {
-                        cx.error(
-                            ErrorKind::InvalidValue("int_parsing"),
-                            messages::INT_PARSING,
-                            node,
-                        );
-                        None
-                    }
-                };
-            }
-            _ => {}
+        if let Value::Int(integer) = node.value {
+            return Some(integer);
         }
         cx.error(ErrorKind::InvalidType("int_type"), messages::INT_TYPE, node);
         None
     }
-
-    fn takes_strictly(node: &Node) -> bool {
-        matches!(node.value, Value::Int(_))
-    }
-}
-
-/// Pydantic's float from a string: whitespace around it, `_` dropped, then
-/// Rust's (and Python's) float syntax, `inf` and `nan` included.
-fn float_from_text(text: &str) -> Option<f64> {
-    let cleaned: String = text.trim().chars().filter(|&c| c != '_').collect();
-    if cleaned.is_empty() || !cleaned.is_ascii() {
-        return None;
-    }
-    cleaned.parse().ok()
 }
 
 impl FromNode for f64 {
     fn from_node(node: &Node, cx: &mut Context) -> Option<Self> {
-        match &node.value {
-            Value::Float(float) => return Some(*float),
-            Value::Int(integer) => {
-                if let Some(value) = integer.to_f64() {
-                    return Some(value);
-                }
-            }
-            Value::Bool(flag) if !cx.strict() => return Some(f64::from(u8::from(*flag))),
-            Value::Str(text) if !cx.strict() => {
-                if let Some(value) = float_from_text(text) {
-                    return Some(value);
-                }
+        match node.value {
+            Value::Float(float) => Some(float),
+            #[expect(
+                clippy::cast_precision_loss,
+                reason = "a number field takes an integer as the nearest float, as JSON Schema's number does"
+            )]
+            Value::Int(integer) => Some(integer as f64),
+            _ => {
                 cx.error(
-                    ErrorKind::InvalidValue("float_parsing"),
-                    messages::FLOAT_PARSING,
+                    ErrorKind::InvalidType("float_type"),
+                    messages::FLOAT_TYPE,
                     node,
                 );
-                return None;
+                None
             }
-            _ => {}
         }
-        cx.error(
-            ErrorKind::InvalidType("float_type"),
-            messages::FLOAT_TYPE,
-            node,
-        );
-        None
-    }
-
-    fn takes_strictly(node: &Node) -> bool {
-        matches!(node.value, Value::Float(_) | Value::Int(_))
     }
 }
 
 impl FromNode for bool {
     fn from_node(node: &Node, cx: &mut Context) -> Option<Self> {
-        let parsing = |cx: &mut Context| {
-            cx.error(
-                ErrorKind::InvalidValue("bool_parsing"),
-                messages::BOOL_PARSING,
-                node,
-            );
-            None
-        };
-        match &node.value {
-            Value::Bool(flag) => return Some(*flag),
-            Value::Int(integer) if !cx.strict() => {
-                return match integer.to_i64() {
-                    Some(0) => Some(false),
-                    Some(1) => Some(true),
-                    Some(_) => parsing(cx),
-                    None => {
-                        cx.error(
-                            ErrorKind::InvalidType("bool_type"),
-                            messages::BOOL_TYPE,
-                            node,
-                        );
-                        None
-                    }
-                };
-            }
-            Value::Float(float) if !cx.strict() => {
-                // Exactly 0.0 or 1.0, as Pydantic compares them.
-                if float.to_bits() == 0.0f64.to_bits() || float.to_bits() == (-0.0f64).to_bits() {
-                    return Some(false);
-                }
-                if float.to_bits() == 1.0f64.to_bits() {
-                    return Some(true);
-                }
-            }
-            Value::Str(text) if !cx.strict() => {
-                return match text.to_lowercase().as_str() {
-                    "0" | "off" | "f" | "false" | "n" | "no" => Some(false),
-                    "1" | "on" | "t" | "true" | "y" | "yes" => Some(true),
-                    _ => parsing(cx),
-                };
-            }
-            _ => {}
+        if let Value::Bool(flag) = node.value {
+            return Some(flag);
         }
         cx.error(
             ErrorKind::InvalidType("bool_type"),
@@ -756,10 +546,6 @@ impl FromNode for bool {
             node,
         );
         None
-    }
-
-    fn takes_strictly(node: &Node) -> bool {
-        matches!(node.value, Value::Bool(_))
     }
 }
 
@@ -770,19 +556,11 @@ impl<T: FromNode> FromNode for Option<T> {
         }
         T::from_node(node, cx).map(Some)
     }
-
-    fn takes_strictly(node: &Node) -> bool {
-        matches!(node.value, Value::Null) || T::takes_strictly(node)
-    }
 }
 
 impl<T: FromNode> FromNode for Box<T> {
     fn from_node(node: &Node, cx: &mut Context) -> Option<Self> {
         T::from_node(node, cx).map(Box::new)
-    }
-
-    fn takes_strictly(node: &Node) -> bool {
-        T::takes_strictly(node)
     }
 }
 
@@ -809,10 +587,6 @@ impl<T: FromNode> FromNode for Vec<T> {
         }
         ok.then_some(values)
     }
-
-    fn takes_strictly(node: &Node) -> bool {
-        matches!(node.value, Value::Seq(_))
-    }
 }
 
 impl<V: FromNode> FromNode for BTreeMap<String, V> {
@@ -831,7 +605,7 @@ impl<V: FromNode> FromNode for BTreeMap<String, V> {
             if !cx.tick() {
                 return None;
             }
-            let key = entry.key.value.python_str();
+            let key = entry.key.value.to_string();
             cx.at_key(&key, |cx| {
                 let name = cx.at_key("[key]", |cx| String::from_node(&entry.key, cx));
                 let value = V::from_node(&entry.value, cx);
@@ -844,10 +618,6 @@ impl<V: FromNode> FromNode for BTreeMap<String, V> {
             });
         }
         ok.then_some(values)
-    }
-
-    fn takes_strictly(node: &Node) -> bool {
-        matches!(node.value, Value::Map(_))
     }
 }
 

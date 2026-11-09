@@ -1,0 +1,5 @@
+base: &b {odd: 1}
+text: t
+inner:
+  <<: *b
+  label: x

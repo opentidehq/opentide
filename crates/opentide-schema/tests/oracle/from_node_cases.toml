@@ -1,7 +1,27 @@
 # The structural conversion's table (UC-1.2, #808): documents checked against
 # the models of `from_node_table.py` (Pydantic, the oracle) and of
 # `tests/from_node_table.rs` (the Rust derive). `from_node_table.py` writes
-# what the oracle reports into `from_node_table.json`.
+# what the oracle reports into `from_node_table.json`; the test compares the
+# Rust result with it case by case.
+#
+# Where they differ, the case lists the `difference` entries that explain it;
+# each `[[difference]]` gives the reason and the bold lead of its CHANGELOG.md
+# entry.
+
+[[difference]]
+id = "strict-types"
+reason = "A field takes its declared type and nothing else, as the generated JSON Schemas say: an integer field an integer, a boolean field `true` or `false`, a string field a string, a number field an integer or a float. Pydantic's lax mode coerced `\"42\"`, `\" 7 \"` and `3.0` into integers, `\"yes\"`, `1` and `0.0` into booleans and `\"2.5\"` into a float, and gave each failed coercion its own error type (`int_parsing`, `bool_parsing`, `float_parsing`, `int_from_float`, `finite_number`, `int_parsing_size`). Each is now the type's one error (`int_type`, `bool_type`, `float_type`) with its message."
+changelog = "**Field types are checked as declared**"
+
+[[difference]]
+id = "positions"
+reason = "Positions come from the parser's node marks. A value written `null` or `~` has a `yaml_line` (the oracle gave none); a value left empty points at its key (the oracle pointed at whatever the next line held); a key that is not a string is found and pointed at; a collection in a list written on one line is spanned whole; an empty list item points at its `-`; an error on the document itself has `yaml_line` 0; a scalar's `yaml_line` is its key's line."
+changelog = "**Findings point at the key or value they are about**"
+
+[[difference]]
+id = "yaml-1-2"
+reason = "The document is read as YAML 1.2 (crates/opentide-schema/YAML.md): `yes` is a string key, `<<` an ordinary key, an integer beyond 64 bits refuses the file."
+changelog = "**Tide objects are read as YAML 1.2**"
 
 [[case]]
 id = "valid-minimal"
@@ -47,6 +67,7 @@ inner:
 
 [[case]]
 id = "missing-in-list-item"
+difference = ["positions"]
 model = "Probe"
 yaml = """
 text: t
@@ -78,6 +99,7 @@ inner:
 
 [[case]]
 id = "extra-and-missing-order"
+difference = ["strict-types"]
 model = "Probe"
 yaml = """
 zeta: 1
@@ -87,6 +109,7 @@ alpha: 2
 
 [[case]]
 id = "string-wrong-types"
+difference = ["positions"]
 model = "Probe"
 yaml = """
 text: 12
@@ -95,11 +118,13 @@ items: [1, true, null, 1.5, [x], {a: b}, ok]
 
 [[case]]
 id = "string-null"
+difference = ["positions"]
 model = "Probe"
 yaml = "text: ~\n"
 
 [[case]]
 id = "string-empty-value"
+difference = ["positions"]
 model = "Probe"
 yaml = "text:\nnumber: 1\n"
 
@@ -110,6 +135,7 @@ yaml = "text: 2026-01-01\nitems: [2026-01-01T10:00:00Z]\n"
 
 [[case]]
 id = "int-lax"
+difference = ["strict-types"]
 model = "Probe"
 yaml = """
 text: t
@@ -126,6 +152,7 @@ inners:
 
 [[case]]
 id = "int-errors"
+difference = ["strict-types"]
 model = "Probe"
 yaml = """
 text: t
@@ -143,6 +170,7 @@ inners:
 
 [[case]]
 id = "int-null-on-defaulted"
+difference = ["positions"]
 model = "Probe"
 yaml = "text: t\nnumber: ~\n"
 
@@ -156,16 +184,19 @@ ratio: 2
 
 [[case]]
 id = "float-from-string"
+difference = ["strict-types"]
 model = "Probe"
 yaml = "text: t\nratio: '2.5'\n"
 
 [[case]]
 id = "float-from-bool"
+difference = ["strict-types"]
 model = "Probe"
 yaml = "text: t\nratio: true\n"
 
 [[case]]
 id = "float-errors"
+difference = ["strict-types"]
 model = "Probe"
 yaml = "text: t\nratio: abc\n"
 
@@ -181,41 +212,49 @@ yaml = "text: t\nratio: .inf\n"
 
 [[case]]
 id = "bool-lax-words"
+difference = ["strict-types"]
 model = "Probe"
 yaml = "text: t\nflag: 'yes'\n"
 
 [[case]]
 id = "bool-lax-y"
+difference = ["strict-types"]
 model = "Probe"
 yaml = "text: t\nflag: y\n"
 
 [[case]]
 id = "bool-lax-off-string"
+difference = ["strict-types"]
 model = "Probe"
 yaml = "text: t\nflag: 'OFF'\n"
 
 [[case]]
 id = "bool-lax-int-1"
+difference = ["strict-types"]
 model = "Probe"
 yaml = "text: t\nflag: 1\n"
 
 [[case]]
 id = "bool-lax-float-0"
+difference = ["strict-types"]
 model = "Probe"
 yaml = "text: t\nflag: 0.0\n"
 
 [[case]]
 id = "bool-errors-int"
+difference = ["strict-types"]
 model = "Probe"
 yaml = "text: t\nflag: 2\n"
 
 [[case]]
 id = "bool-errors-string"
+difference = ["strict-types"]
 model = "Probe"
 yaml = "text: t\nflag: maybe\n"
 
 [[case]]
 id = "bool-errors-null"
+difference = ["positions"]
 model = "Probe"
 yaml = "text: t\nflag: ~\n"
 
@@ -245,6 +284,7 @@ yaml = "text: t\nitems: ~\ninners:\n"
 
 [[case]]
 id = "model-errors"
+difference = ["positions"]
 model = "Probe"
 yaml = """
 text: t
@@ -259,6 +299,7 @@ yaml = "text: t\ninner: label\n"
 
 [[case]]
 id = "dict-errors"
+difference = ["positions", "strict-types"]
 model = "Probe"
 yaml = """
 text: t
@@ -310,11 +351,13 @@ yaml = "text: t\neither: 5\n"
 
 [[case]]
 id = "union-bool"
+difference = ["strict-types"]
 model = "Probe"
 yaml = "text: t\neither: true\n"
 
 [[case]]
 id = "union-float"
+difference = ["strict-types"]
 model = "Probe"
 yaml = "text: t\neither: 1.5\n"
 
@@ -330,6 +373,7 @@ yaml = "text: t\nsome: [a, 1]\n"
 
 [[case]]
 id = "union-float-whole"
+difference = ["strict-types"]
 model = "Probe"
 yaml = "text: t\neither: 2.0\n"
 
@@ -355,11 +399,13 @@ yaml = "text: t\nschema_id: 3\n"
 
 [[case]]
 id = "key-not-string"
+difference = ["positions", "yaml-1-2"]
 model = "Probe"
 yaml = "text: t\n1: x\nyes: y\n~: z\n"
 
 [[case]]
 id = "key-not-string-nested"
+difference = ["positions"]
 model = "Probe"
 yaml = "text: t\ninner:\n  label: x\n  2: y\n"
 
@@ -390,11 +436,13 @@ yaml = "- a\n- b\n"
 
 [[case]]
 id = "root-scalar"
+difference = ["positions"]
 model = "Probe"
 yaml = "hello\n"
 
 [[case]]
 id = "root-null"
+difference = ["positions"]
 model = "Probe"
 yaml = "~\n"
 
@@ -410,31 +458,37 @@ yaml = "other: 3\n"
 
 [[case]]
 id = "quoted-values-span"
+difference = ["strict-types"]
 model = "Probe"
 yaml = "text: \"x\"\nitems: ['a', 2, \"b\"]\nnumber: 'z'\n"
 
 [[case]]
 id = "flow-values-span"
+difference = ["strict-types"]
 model = "Probe"
 yaml = "text: t\ninner: {label: 1, count: x}\n"
 
 [[case]]
 id = "comment-after-value"
+difference = ["strict-types"]
 model = "Probe"
 yaml = "text: 5 # a comment\nnumber: x  # another\n"
 
 [[case]]
 id = "block-scalar-value"
+difference = ["positions", "strict-types"]
 model = "Probe"
 yaml = "text: t\nnumber: |\n  abc\n"
 
 [[case]]
 id = "multiline-plain-value"
+difference = ["positions", "strict-types"]
 model = "Probe"
 yaml = "text: t\nnumber: abc\n  def\n"
 
 [[case]]
 id = "unicode-columns"
+difference = ["strict-types"]
 model = "Probe"
 yaml = "text: \"日本🔥\"\nitems: [é, 1]\nnumber: 日本\n"
 
@@ -445,16 +499,19 @@ yaml = "text: &t 5\nitems: [*t]\n"
 
 [[case]]
 id = "merge-key-values"
+difference = ["positions", "strict-types", "yaml-1-2"]
 model = "Probe"
 yaml = "base: &b\n  label: 1\ntext: t\ninner:\n  <<: *b\n  count: x\n"
 
 [[case]]
 id = "crlf"
+difference = ["strict-types"]
 model = "Probe"
 yaml = "text: t\r\nnumber: x\r\ninner:\r\n  label: 3\r\n"
 
 [[case]]
 id = "key-quoted"
+difference = ["strict-types"]
 model = "Probe"
 yaml = "\"text\": t\n'number': x\n"
 
@@ -470,6 +527,7 @@ yaml = "text: t\nitems: [1, 1]\n"
 
 [[case]]
 id = "explicit-key"
+difference = ["positions"]
 model = "Probe"
 yaml = "? text\n: 5\n"
 
@@ -491,6 +549,7 @@ tags: [a]
 
 [[case]]
 id = "sample-everything-wrong"
+difference = ["positions", "strict-types"]
 model = "SampleV1_1"
 yaml = """
 name: [n]
@@ -518,65 +577,78 @@ yaml = "{}\n"
 # (the next key, or the end of the block), unless a comment follows the colon.
 [[case]]
 id = "empty-value-trailing-comment"
+difference = ["positions"]
 model = "Probe"
 yaml = "text: t\nnumber: # c\nflag: true\n"
 
 [[case]]
 id = "empty-value-comment-line"
+difference = ["positions"]
 model = "Probe"
 yaml = "text: t\nnumber:\n# c\nflag: true\n"
 
 [[case]]
 id = "empty-value-blank-line"
+difference = ["positions"]
 model = "Probe"
 yaml = "text: t\nnumber:\n\nflag: true\n"
 
 [[case]]
 id = "empty-value-last"
+difference = ["positions"]
 model = "Probe"
 yaml = "text: t\nnumber:\n"
 
 [[case]]
 id = "empty-value-dedent"
+difference = ["positions"]
 model = "Probe"
 yaml = "text: t\ninner:\n  label:\nnumber: 1\n"
 
 [[case]]
 id = "empty-value-in-list-item"
+difference = ["positions"]
 model = "Probe"
 yaml = "text: t\ninners:\n  - label:\n  - label: x\n"
 
 [[case]]
 id = "empty-value-flow"
+difference = ["positions"]
 model = "Probe"
 yaml = "text: t\ninner: {label: , count: 1}\n"
 
 [[case]]
 id = "empty-sequence-item"
+difference = ["positions"]
 model = "Probe"
 yaml = "text: t\nitems:\n  -\n  - b\n"
 
 [[case]]
 id = "empty-value-anchor"
+difference = ["positions"]
 model = "Probe"
 yaml = "text: t\nnumber: &a\nflag: true\n"
 
 [[case]]
 id = "int-from-float-too-large"
+difference = ["strict-types"]
 model = "Probe"
 yaml = "text: t\nnumber: 1.0e+20\n"
 
 [[case]]
 id = "int-beyond-i64"
+difference = ["yaml-1-2"]
 model = "Probe"
 yaml = "text: t\nnumber: 123456789012345678901234567890\n"
 
 [[case]]
 id = "missing-top-with-int-first-key"
+difference = ["positions"]
 model = "Probe"
 yaml = "1: x\nnumber: 2\n"
 
 [[case]]
 id = "extra-in-merge"
+difference = ["yaml-1-2"]
 model = "Probe"
 yaml = "base: &b {odd: 1}\ntext: t\ninner:\n  <<: *b\n  label: x\n"
