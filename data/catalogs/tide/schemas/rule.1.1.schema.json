@@ -13405,6 +13405,39 @@
           "description": "Force the Enterprise Security correlation-search action on or off. null follows the tenant.",
           "title": "Correlation Search",
           "markdownDescription": "Force the Enterprise Security correlation-search action on or off. `null` follows the\ntenant."
+        },
+        "advanced": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "savedsearches.conf keys no other field sets, sent as written at deploy: a custom alert action's action.<name>.param.*, for instance. A value is a string, number, boolean (1 or 0) or null (empty). A key the block also sets takes this value.",
+          "title": "Advanced",
+          "markdownDescription": "`savedsearches.conf` keys no other field sets, sent as written at deploy: a custom alert\naction's `action.<name>.param.*`, for instance. A value is a string, number, boolean\n(`1` or `0`) or `null` (empty). A key the block also sets takes this value."
         }
       },
       "required": [
