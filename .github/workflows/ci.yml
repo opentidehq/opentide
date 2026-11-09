@@ -388,6 +388,45 @@ jobs:
       - name: license scan (no oracle references)
         run: bash scripts/engine/license-scan.sh target/package/*.crate
 
+  # The supply-chain gate (#843, deny.toml): licences of what we ship,
+  # RustSec advisories (vulnerable, unsound, unmaintained, yanked), a second
+  # version of a shipped crate, OpenSSL, and any source but crates.io. fuzz/
+  # (its own lock, never shipped) is checked for advisories, bans and
+  # sources with the same deny.toml; the publishing/ placeholder crate (its
+  # own lock, published) for everything. The advisory database is fetched fresh,
+  # so a new advisory fails the next pull request until it is fixed or
+  # excepted with a reason in deny.toml. cargo-deny is the prebuilt release,
+  # checksum-checked, at the version pinned here.
+  deny:
+    name: Supply chain (cargo deny)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    # cargo-deny only reads `cargo metadata`, but every cargo job here denies
+    # warnings (tests/test_ci/test_one_ci.py).
+    env:
+      RUSTFLAGS: -Dwarnings
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The release rust-toolchain.toml pins: cargo-deny reads the graph with
+      # `cargo metadata`.
+      - name: Set up Rust
+        run: rustup toolchain install --profile minimal --no-self-update
+      - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
+        with:
+          tool: cargo-deny@0.20.2
+          fallback: none
+      - name: cargo deny (workspace)
+        run: cargo deny --config deny.toml --locked check
+      - name: cargo deny (fuzz/)
+        run: cargo deny --config deny.toml --manifest-path fuzz/Cargo.toml --locked check advisories bans sources
+      # The crate that reserves `opentide` on crates.io: a workspace and lock of
+      # its own, published, so every check applies.
+      - name: cargo deny (publishing/ placeholder crate)
+        run: cargo deny --config deny.toml --manifest-path publishing/placeholders/crates/opentide/Cargo.toml --locked check
+
   # The vendored parser.c of every grammar is what tree-sitter-cli generates
   # from its grammar.js (crates/AGENTS.md: never hand-edited).
   grammars:
@@ -466,7 +505,7 @@ jobs:
 
   # Each fuzz target (fuzz/, cargo-fuzz on nightly) for 60 seconds from its
   # seeds and saved regressions: a panic or a timeout on a pull request fails
-  # here. engine-fuzz.yml runs each for five minutes a night with the corpus
+  # here. engine-fuzz.yml runs each for ten minutes a night with the corpus
   # it keeps.
   fuzz-smoke:
     name: Fuzz smoke (${{ matrix.targets }})
@@ -477,8 +516,8 @@ jobs:
       fail-fast: false
       matrix:
         # Every target of fuzz/fuzz_targets/ (tests/test_ci/test_one_ci.py),
-        # three to a runner: one build serves the three.
-        targets: ["kql spl esql", "eql kuery lucene", "falco tide protocol"]
+        # up to three to a runner: one build serves them all.
+        targets: ["kql spl esql", "eql kuery lucene", "falco tide protocol", "config framing"]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -501,7 +540,7 @@ jobs:
           shared-key: fuzz
           key: ${{ steps.nightly.outputs.version }}
           workspaces: fuzz -> target
-      - run: cargo +"${FUZZ_TOOLCHAIN}" install cargo-fuzz --locked
+      - run: cargo +"${FUZZ_TOOLCHAIN}" install cargo-fuzz --locked --version 0.13.2
       - name: fuzz ${{ matrix.targets }} (60 s each)
         env:
           TARGETS: ${{ matrix.targets }}
