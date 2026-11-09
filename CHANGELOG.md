@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+## [0.24.0] — 2026-11-09
+
+A Splunk block's `advanced` table validates and deploys again, so catalogues whose rules set a custom alert action's parameters, such as MISP's, pass `validate`. The editor and `opentide tui` check CrowdStrike queries as CQL.
+
 ### Added
 
 - **The editor and `opentide tui` check CrowdStrike queries as CQL**, the query language of Falcon LogScale and Next-Gen SIEM. `opentide lsp start` adds hover, completion and highlighting. `configurations.crowdstrike.query` and hunts with `system: crowdstrike` get the `cql_*` diagnostics where they got one `crowdstrike_unsupported` warning. `opentide validate`, `lint` and MCP `validate_query` still do not check CrowdStrike queries, so no pipeline fails on them. See [Diagnostics](docs/cli/diagnostics.md#cql_parse_error).
@@ -1589,7 +1593,8 @@ export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate --strict
 ```
 
-[Unreleased]: https://github.com/opentidehq/opentide/compare/v0.23.0...HEAD
+[Unreleased]: https://github.com/opentidehq/opentide/compare/v0.24.0...HEAD
+[0.24.0]: https://github.com/opentidehq/opentide/releases/tag/v0.24.0
 [0.23.0]: https://github.com/opentidehq/opentide/releases/tag/v0.23.0
 [0.22.0]: https://github.com/opentidehq/opentide/releases/tag/v0.22.0
 [0.21.0]: https://github.com/opentidehq/opentide/releases/tag/v0.21.0

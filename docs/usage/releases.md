@@ -7,6 +7,38 @@ description: Public package versions of opentide on PyPI.
 
 Every version of the [`opentide`](https://pypi.org/project/opentide/) package, newest first. Each opens with what it does for you, then the steps to take after upgrading, then what changed, under the same headings every time: Breaking, Added, Changed, Deprecated, Removed, Fixed and Security. Pin a version in CI. [`CHANGELOG.md`](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md) records every change in full; GitHub Releases are tagged `v*` and publish to PyPI.
 
+## 0.24.0 — 9 November 2026
+
+A Splunk block's `advanced` table validates and deploys again, so catalogues whose rules set a custom alert action's parameters, such as MISP's, pass `validate`. The editor and `opentide tui` check CrowdStrike queries as CQL.
+
+**Install**
+
+```bash
+pip install opentide==0.24.0
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
+**Added**
+
+- **The editor and `opentide tui` check CrowdStrike queries as CQL.** `configurations.crowdstrike.query` and CrowdStrike hunts get the `cql_*` diagnostics, with hover and completion in the editor. `validate`, `lint` and MCP `validate_query` still do not check CrowdStrike queries, so no pipeline fails on them.
+
+**Changed**
+
+- **The engine is [language-server 0.12.1](https://github.com/opentidehq/language-server/releases/tag/v0.12.1).** It adds the CQL language and accepts a Splunk block's `advanced` table; `crowdstrike_unsupported` is no longer reported.
+
+**Fixed**
+
+- **A Splunk block's `advanced` table validates and deploys again.** 0.21.0 refused it as a `splunk::2.x` key, which it never was: it is where a rule sets `savedsearches.conf` keys no other field sets, such as `action.misp_alert_create_event.param.*`. A `null` value is sent empty and a boolean as `1` or `0`. See [Splunk's `advanced` table](concepts/platforms.md#splunks-advanced-table).
+
+See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md#0240--2026-11-09) for every change.
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/0.24.0/)
+- [GitHub Release](https://github.com/opentidehq/opentide/releases/tag/v0.24.0)
+- [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md)
+
 ## 0.23.0 — 6 November 2026
 
 `opentide tui` shows each object as a page with its findings in place, and gains Visibility, Configuration and Chains tabs. Coverage counts the techniques rules inherit, and `generate explorer` can export visibility.
