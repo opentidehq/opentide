@@ -48,6 +48,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ### Fixed
 
+- **`pip install opentide` no longer installs a Typer that crashes it.** Typer 0.29.0 removed private modules and options opentide's CLI is built on, so `opentide setup` failed with `No module named 'typer._types'` and `opentide commands` crashed. opentide now requires `typer>=0.27.0,<0.29`, and `setup ci` declares its providers with Typer's public API. An invalid provider names the valid ones and suggests the closest.
 - **MCP `validate_query` suggests a live check only where there is one.** Its `next_actions` for a Sysdig query named `validate_query` with `live: true`, which Sysdig refuses with `supported: false`; for Sysdig and CrowdStrike it now names the finding's `explain` page only.
 - **A huge `Content-Length` no longer crashes `opentide lsp start`** ([#843](https://github.com/opentidehq/opentide/issues/843)). The language server allocated the length a message header named before its body arrived, so a header alone could exhaust memory and end the server. It reads the body as it arrives: a length longer than the input ends the session as a short body always did.
 
