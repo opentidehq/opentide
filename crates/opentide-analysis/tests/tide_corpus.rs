@@ -260,14 +260,46 @@ fn pydantic_object_issues_are_subset_of_lsp() {
                 && issue.field_path == ["threat", "impact"]),
         "scalar impact fixture must be rejected by pydantic"
     );
-    // opentide#745 retired `meta:` and the splunk::2.x `advanced` table: they are
-    // unknown keys, no longer deprecations, in Pydantic and in the catalog alike.
-    for path in [vec!["meta"], vec!["configurations", "splunk", "advanced"]] {
+    // opentide#745 retired `meta:`: it is an unknown key, no longer a deprecation,
+    // in Pydantic and in the catalog alike.
+    assert!(
+        shaped
+            .iter()
+            .any(|issue| issue.code == "schema_validation" && issue.field_path == ["meta"]),
+        "legacy meta fixture: pydantic must reject [\"meta\"] as an unknown key"
+    );
+    // Splunk's `advanced` table of raw savedsearches.conf keys was retired with it
+    // by mistake, and opentide accepts it again: 0.20.1 accepted it, 0.21.0 to 0.23.0
+    // refused it. The catalog comes from opentide's generator (the canary regenerates it
+    // from opentide development), so it must agree with the installed opentide: report
+    // the key when Pydantic refuses it (claimed below), and accept it when Pydantic does.
+    let advanced = ["configurations", "splunk", "advanced"].map(String::from);
+    if !shaped
+        .iter()
+        .any(|issue| issue.field_path.starts_with(&advanced))
+    {
+        let host = load_workspace("testdata/conformance/pydantic");
+        let (uri, text) = host
+            .files
+            .iter()
+            .find(|(path, _)| path.ends_with("legacy-meta.yaml"))
+            .cloned()
+            .expect("legacy-meta.yaml");
+        let response = analyze(
+            &host,
+            AnalyzeRequest {
+                uri,
+                language: LanguageId::TideYaml,
+                text,
+            },
+        );
         assert!(
-            shaped
-                .iter()
-                .any(|issue| issue.code == "schema_validation" && issue.field_path == path),
-            "legacy meta fixture: pydantic must reject {path:?} as an unknown key"
+            !response.diagnostics.iter().any(|diag| diag
+                .field_path
+                .as_deref()
+                .is_some_and(|path| path.starts_with(&advanced))),
+            "opentide accepts a Splunk `advanced` mapping, so the catalog must; have {:?}",
+            response.diagnostics
         );
     }
     assert!(

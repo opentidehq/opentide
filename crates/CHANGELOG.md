@@ -6,6 +6,14 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ## [Unreleased]
 
+## [0.12.1] - 2026-11-09
+
+A Splunk block's `advanced` table is no longer reported as an unknown key, as opentide accepts it again.
+
+### Fixed
+
+- **`configurations.splunk.advanced` is a field again.** The Tide catalog follows opentide, which accepts again the table of raw `savedsearches.conf` keys (a custom alert action's `action.<name>.param.*`) that opentide 0.21.0 refused, so `opentide-lsp` run on its own no longer reports it as an unknown key. As in opentide 0.20.1, it is accepted, not completed.
+
 ## [0.12.0] - 2026-11-08
 
 CrowdStrike queries are checked: the CrowdStrike Query Language (CQL) of Falcon LogScale and Next-Gen SIEM is a language, with diagnostics, hover, completion and highlighting for correlation rules, hunts and `.cql` files.
@@ -655,6 +663,7 @@ The first working server serves KQL, SPL and Tide YAML over stdio and WASM, with
 - **A frozen HighlightSpec with generated editor maps.** Semantic tokens use the standard LSP legend.
 - **Stdio and WASM hosts, with Zed, Helix and Neovim samples.**
 
+[0.12.1]: https://github.com/opentidehq/language-server/compare/v0.12.0...v0.12.1
 [0.12.0]: https://github.com/opentidehq/language-server/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/opentidehq/language-server/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/opentidehq/language-server/compare/v0.9.1...v0.10.0

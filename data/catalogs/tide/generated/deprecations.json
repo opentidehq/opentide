@@ -1,5 +1,5 @@
 {
-  "opentide": "0.1.dev241+gefb99419b",
+  "opentide": "0.23.0",
   "generator": "opentide.generation.lsp_catalog",
   "fields": []
 }
