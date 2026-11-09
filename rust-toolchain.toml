@@ -5,8 +5,8 @@
 # (`rustup toolchain install` with no name). The crates also declare a floor,
 # `rust-version` in Cargo.toml (1.85), which this pin never goes below. That
 # floor is declared, not checked: no job builds with it, the code uses let
-# chains (stable since Rust 1.88), and Cargo.lock's tree-sitter-language 0.1.8
-# requires Rust 1.90.
+# chains (stable since Rust 1.88), Cargo.lock's tree-sitter-language 0.1.8
+# requires Rust 1.90, and xtask's wait4 0.2 (cargo xtask bench) Rust 1.95.
 #
 # To move to a newer release, in one PR: change `channel`, then run
 # `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`

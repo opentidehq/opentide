@@ -4,5 +4,6 @@
 //! The library holds what the commands compute, so that tests drive it
 //! without a workspace or a subprocess; `main.rs` reads the inputs and prints.
 
+pub mod bench;
 pub mod corpus;
 pub mod layers;

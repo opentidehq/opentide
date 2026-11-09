@@ -1,0 +1,252 @@
+# The benchmark budgets: `cargo xtask bench --check tests/bench/budgets.toml bench.json`
+# (UC-0.8, #806; plan docs/internal/unified-core.md, sections 2 and 11).
+#
+# Per command (the ids `cargo xtask bench` reports):
+#
+#   plan_s, plan_rss_mib          plan section 2's measurement (opentide 0.22.0, 4 vCPU,
+#                                 medians of 3), for the record; never enforced
+#   baseline_s, baseline_rss_mib  the oracle (opentide 0.23.0) measured on CI's runner
+#                                 class, [baseline] below: the python engine fails when it
+#                                 is more than policy.regression above these
+#   target_s, target_rss_mib      plan section 11's target: the rust engine fails above it
+#                                 (an absolute budget, at scale 1). Only the commands
+#                                 section 11 names have one
+#   target_waiver, rust_baseline_s  a time target the Rust implementation of today misses,
+#                                 waived until the work item named meets it: meanwhile the
+#                                 rust engine fails more than policy.regression above
+#                                 rust_baseline_s (measured on CI's runner class), and the
+#                                 summary shows the distance to the target. Remove both
+#                                 when the target is met
+#
+# Every run is also held to the last development result (--previous): more than
+# policy.regression above it fails. A difference within the noise floor never does.
+# To re-record the baseline: run the Benchmarks workflow on development, check the run's
+# runner and numbers, and copy its medians here in a change of its own that says why.
+
+schema_version = 1
+
+[policy]
+# A median or peak RSS more than 10% above its reference fails (issue #806).
+regression = 0.10
+# ...and only when the difference is also above these. The medians of 5 runs of the
+# shortest command (explain, about 0.2 s) differ by up to about 15 ms between runs on one
+# machine (single samples by up to 35 ms: process start, page cache, scheduling); 20 ms
+# lets explain regress 15% at most on the fastest CPU (0.136 s) before it fails. The RSS
+# of one Python process moves by about 1 MiB (allocator arenas).
+noise_floor_s = 0.02
+noise_floor_rss_mib = 2.0
+# On a CPU model with no recorded medians ([baseline] and [[cpu_baseline]] below), a time
+# is held to the slowest recorded CPU's median + 20%: an effective ceiling of up to 2.1x
+# the fastest recorded median (the 7763 is 1.78x slower than the 9V45 on validate). RSS
+# keeps 10% on every CPU. CI (--require-reference) also fails a report with no CPU model.
+cross_cpu_regression = 0.20
+
+[baseline]
+engine = "python"
+oracle = "opentide 0.23.0"
+scale = 1
+seed = 20261107
+# The run count of the baseline: a report of another count is not compared with it.
+runs = 5
+warmup = 1
+# The heavy workspace's digest (cargo xtask corpus generate --seed 20261107 --digest): a
+# report of another generator output is not held to these numbers.
+digest = "5978a2ab7c093587"
+runner = "ubuntu-24.04 (GitHub-hosted, 4 vCPU, image 20261101.360.1)"
+# GitHub's runners of this class come on several CPUs (seen: AMD EPYC 9V45, 9V74 and 7763,
+# Intel Xeon Platinum 8573C). The commands' baseline_s are the medians on cpu_model,
+# rust_baseline_s on rust_cpu_model; [[cpu_baseline]] holds the medians on more CPUs. A
+# report is held to the medians of its own CPU at policy.regression, or on a CPU recorded
+# nowhere to the slowest recorded + policy.cross_cpu_regression.
+cpu_model = "AMD EPYC 9V45 96-Core Processor"
+rust_cpu_model = "INTEL(R) XEON(R) PLATINUM 8573C"
+# Run 42510209388 (commit 078ca8d, heavy workspace digest 5978a2ab7c093587): the
+# python job for baseline_*, the rust job for rust_baseline_s.
+source = "https://github.com/opentidehq/opentide/actions/runs/42510209388"
+
+[commands.validate_clean]
+label = "validate, clean"
+plan_s = 3.18
+plan_rss_mib = 171.0
+baseline_s = 2.443
+baseline_rss_mib = 190.1
+target_s = 0.7
+# Plan section 11: <= 100 MB, enforced as MiB (100e6 bytes).
+target_rss_mib = 95.4
+
+[commands.validate_warnings]
+label = "validate, platforms disabled (a warning per platform block)"
+plan_s = 12.76
+baseline_s = 9.869
+baseline_rss_mib = 184.7
+target_s = 0.7
+
+[commands.validate_file]
+label = "validate --file"
+plan_s = 1.77
+baseline_s = 1.484
+baseline_rss_mib = 115.7
+target_s = 0.1
+
+[commands.lint]
+label = "lint"
+baseline_s = 2.91
+baseline_rss_mib = 133.6
+
+[commands.lint_file]
+label = "lint --file"
+plan_s = 0.73
+baseline_s = 0.645
+baseline_rss_mib = 78.6
+
+[commands.info]
+label = "info"
+baseline_s = 0.947
+baseline_rss_mib = 89.9
+
+[commands.info_catalog]
+label = "info catalog"
+plan_s = 1.36
+baseline_s = 1.133
+baseline_rss_mib = 105.7
+target_s = 0.15
+
+[commands.deploy_dry_run]
+label = "deploy --dry-run --all --strategy PREVIEW"
+plan_s = 2.20
+baseline_s = 2.158
+baseline_rss_mib = 120.6
+target_s = 0.3
+
+[commands.generate_docs]
+label = "generate docs"
+plan_s = 11.61
+baseline_s = 11.738
+baseline_rss_mib = 131.9
+target_s = 1.5
+
+[commands.generate_exports_navigator]
+label = "generate exports navigator"
+baseline_s = 0.889
+baseline_rss_mib = 76.3
+
+[commands.rules_unreviewed]
+label = "rules unreviewed"
+baseline_s = 0.359
+baseline_rss_mib = 52.9
+
+[commands.explain]
+label = "explain vocab_unknown"
+plan_s = 0.18
+baseline_s = 0.136
+baseline_rss_mib = 36.3
+target_s = 0.03
+
+[commands.lsp_first_diagnostics]
+label = "language server, first diagnostics"
+# Plan section 2: 0.7 to 3.0 s in the editor (vscode-extension, Python backend).
+baseline_s = 1.515
+baseline_rss_mib = 163.2
+target_s = 0.1
+# The language server of today (the engine imported from language-server) misses
+# the target; UC-2.6 rebuilds it on opentide-workspace.
+target_waiver = "UC-2.6 (#821) rebuilds the server on opentide-workspace"
+rust_baseline_s = 0.154
+# Plan section 11: editor memory per window (language server and backend) <= 150 MB,
+# enforced as MiB (150e6 bytes).
+target_rss_mib = 143.1
+
+# The medians on more CPU models of the runner class, from CI runs of the workflow
+# (same oracle, workspace and run count as [baseline]). Two runners with the same CPU
+# model differ by up to about 10% on every command (run 42587161988 measured 3 to 12%
+# above run 42514414249, both on EPYC 9V74), so where two runs exist the entry keeps
+# each command's slower median, and the 10% rule starts from there. A report on one of
+# these CPUs is held to its own numbers at policy.regression; on a CPU listed nowhere,
+# to the slowest recorded + policy.cross_cpu_regression. Add an entry when a job's
+# summary notes an unrecorded CPU, copying that job's medians.
+
+[[cpu_baseline]]
+engine = "python"
+cpu_model = "AMD EPYC 7763 64-Core Processor"
+# The slower median of each command over two runs on this CPU.
+source = "https://github.com/opentidehq/opentide/actions/runs/42511597394 and https://github.com/opentidehq/opentide/actions/runs/42515106569"
+
+[cpu_baseline.median_s]
+validate_clean = 4.577
+validate_warnings = 18.173
+validate_file = 2.316
+lint = 5.074
+lint_file = 1.064
+info = 1.614
+info_catalog = 1.909
+deploy_dry_run = 3.510
+generate_docs = 21.062
+generate_exports_navigator = 1.499
+rules_unreviewed = 0.627
+explain = 0.211
+lsp_first_diagnostics = 2.646
+
+[[cpu_baseline]]
+engine = "rust"
+cpu_model = "AMD EPYC 9V74 80-Core Processor"
+source = "https://github.com/opentidehq/opentide/actions/runs/42511597394"
+
+[cpu_baseline.median_s]
+lsp_first_diagnostics = 0.178
+
+[[cpu_baseline]]
+engine = "python"
+cpu_model = "AMD EPYC 9V74 80-Core Processor"
+# The slower median of each command over two runs on this CPU.
+source = "https://github.com/opentidehq/opentide/actions/runs/42514414249 and https://github.com/opentidehq/opentide/actions/runs/42587161988"
+
+[cpu_baseline.median_s]
+validate_clean = 3.583
+validate_warnings = 13.347
+validate_file = 1.818
+lint = 3.894
+lint_file = 0.828
+info = 1.284
+info_catalog = 1.525
+deploy_dry_run = 2.817
+generate_docs = 16.282
+generate_exports_navigator = 1.176
+rules_unreviewed = 0.481
+explain = 0.174
+lsp_first_diagnostics = 2.048
+
+[[cpu_baseline]]
+engine = "rust"
+cpu_model = "AMD EPYC 7763 64-Core Processor"
+source = "https://github.com/opentidehq/opentide/actions/runs/42514414249"
+
+[cpu_baseline.median_s]
+lsp_first_diagnostics = 0.165
+
+[[cpu_baseline]]
+engine = "python"
+cpu_model = "INTEL(R) XEON(R) PLATINUM 8573C"
+source = "https://github.com/opentidehq/opentide/actions/runs/42534909670"
+
+[cpu_baseline.median_s]
+validate_clean = 4.237
+validate_warnings = 16.869
+validate_file = 2.089
+lint = 4.952
+lint_file = 0.954
+info = 1.459
+info_catalog = 1.686
+deploy_dry_run = 3.140
+generate_docs = 18.290
+generate_exports_navigator = 1.342
+rules_unreviewed = 0.580
+explain = 0.210
+lsp_first_diagnostics = 2.372
+
+[[cpu_baseline]]
+engine = "rust"
+cpu_model = "AMD EPYC 9V45 96-Core Processor"
+source = "https://github.com/opentidehq/opentide/actions/runs/42515106569"
+
+[cpu_baseline.median_s]
+lsp_first_diagnostics = 0.114

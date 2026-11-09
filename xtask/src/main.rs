@@ -56,7 +56,7 @@ fn main() -> ExitCode {
         },
         "codegen" => not_yet("codegen", "UC-1.8", 814),
         "golden" => not_yet("golden", "UC-0.5", 803),
-        "bench" => not_yet("bench", "UC-0.8", 806),
+        "bench" => xtask::bench::main(rest),
         "help" | "--help" | "-h" => {
             print!("{USAGE}");
             ExitCode::SUCCESS

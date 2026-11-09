@@ -15,7 +15,7 @@
 | `Cargo.toml`, `Cargo.lock` | One Cargo workspace: lints, shared dependencies, profiles | [`crates/AGENTS.md`](crates/AGENTS.md) |
 | `crates/opentide-*/` | The engine and language server crates, one guide each | `crates/<crate>/AGENTS.md` |
 | `analysis/` | The PyO3 binding compiled into the package as `opentide._native` | [`analysis/AGENTS.md`](analysis/AGENTS.md) |
-| `xtask/` | `cargo xtask`: the layer check (`xtask/layers.toml`), codegen, golden and bench to come | [`xtask/AGENTS.md`](xtask/AGENTS.md) |
+| `xtask/` | `cargo xtask`: the layer check (`xtask/layers.toml`), the benchmarks (`bench`, budgets in `tests/bench/`), codegen and golden to come | [`xtask/AGENTS.md`](xtask/AGENTS.md) |
 | `grammars/`, `highlights/`, `data/catalogs/`, `editors/`, `packages/`, `fuzz/`, `crates/testdata/`, `scripts/engine/` | What the engine compiles in, its hosts, fuzzing and tooling | [`crates/AGENTS.md`](crates/AGENTS.md) |
 | `docs/` | The site's four tabs (Usage, CLI, MCP, SDK); `docs/internal/` (with the ADRs, `docs/internal/adr/`) and `docs/engine/` for maintainers | [`docs/README.md`](docs/README.md) |
 | `.github/` | CI, CodeQL, release and Dependabot workflows | [`.github/AGENTS.md`](.github/AGENTS.md) |
