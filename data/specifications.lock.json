@@ -1,6 +1,6 @@
 {
   "bundled_pins_sha256": "ef5f2b4e92b997c7b08c752d7d8bd64d5d7fdf70a3ec79d986daa736ae1464e0",
-  "bundled_vocabulary_sha256": "4a618aec4aee4ff5ee1ef3c382d8fd87c4cc1862fe0d7091e404a12305541998",
+  "bundled_vocabulary_sha256": "b766c23b8b39e0e3f2c9b5dbe0dbfbacb267d0e09ac6e56c29d1bc62d9d81340",
   "lock_version": 2,
   "managed_files": [
     "actors.vocab.toml",
@@ -46,6 +46,6 @@
   ],
   "pins_source_glob": "schemas/pins/*.toml",
   "source_glob": "vocabularies/*.vocab.toml",
-  "specifications_git_sha": "6b1bbaa4e8827ae9542ec68d70c09b9273880cdb",
+  "specifications_git_sha": "215c96adbe0782a045721cca780d5867bdf5ea51",
   "specifications_repo": "opentidehq/specifications"
 }
