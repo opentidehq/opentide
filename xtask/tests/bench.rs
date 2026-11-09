@@ -310,6 +310,7 @@ fn a_command_whose_peak_rss_cannot_be_told_from_xtasks_is_refused() {
 /// A language server in `sh` that answers just enough: `initialize`, the
 /// first diagnostics for the opened document, `shutdown` and `exit`. A shell
 /// (with its `dd`, `tr` and `sed` children) peaks far below xtask's own RSS.
+#[cfg(target_os = "linux")]
 const STUB_SERVER: &str = r#"#!/bin/sh
 send() { printf 'Content-Length: %d\r\n\r\n%s' "${#1}" "$1"; }
 while :; do
