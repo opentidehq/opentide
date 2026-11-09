@@ -46,7 +46,7 @@ Phase 0 merges into `integration/unified-core`, not `development`. The integrati
 | UC-X.3 | [#849](https://github.com/opentidehq/opentide/pull/849) | `91079386` |
 | Test fix: forget the cached repository root when a test ends | [#867](https://github.com/opentidehq/opentide/pull/867) | `51a52c27` |
 | Test fix: keep the caller's `PYTEST_ADDOPTS` out of the root-cache probe | [#868](https://github.com/opentidehq/opentide/pull/868) | `47ae6f97` |
-| UC-X.2 | In review (#855) | |
+| UC-X.2 | [#855](https://github.com/opentidehq/opentide/pull/855) | `1cc105ab` |
 
 ### Decisions taken during Phase 0
 
