@@ -50,7 +50,12 @@ dependencies = [
     "typing_extensions>=4.0",
     # Required by the `opentide` console script (opentide.cli imports typer at import time).
     # Typer 0.27+ ships rich/shellingham/colorama as default deps; extra `all` was removed.
-    "typer>=0.27.0",
+    # Capped below 0.29: opentide builds its CLI on Typer's vendored Click
+    # (typer._click, typer._completion_*, rich_utils._get_rich_console), which has
+    # no public equivalent, and 0.29.0 rewrote it (Parameter.type, click_type and
+    # typer._types are gone). Raise the cap only after the suite passes on the new
+    # release; tests/test_package/test_typer_compat.py checks the cap is present.
+    "typer>=0.27.0,<0.29",
     "ruamel.yaml",
     "questionary>=2.1.1",
     # `opentide tui`. A dependency, not an extra, because `pip install opentide`

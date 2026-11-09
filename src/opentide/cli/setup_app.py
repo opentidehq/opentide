@@ -9,12 +9,12 @@ from typing import TYPE_CHECKING, NoReturn
 
 import typer
 from rich.markup import escape
-from typer._types import TyperChoice
 
 from opentide.cli.context import CliContext, get_context
 from opentide.cli.enums import (
     PLATFORM_METAVAR,
     CiPlatform,
+    CiProvider,
     DetectionPlatform,
     McpHost,
     SkillTarget,
@@ -290,21 +290,6 @@ def _ignored_ci_flag_warnings(
         f"CI flags {', '.join(ignored)} were ignored because no CI platform was selected. "
         "Re-run with --ci github, --ci gitlab, or --ci azure."
     ]
-
-
-class _CiProvider(TyperChoice[str]):
-    """``setup ci`` providers. ``none`` stays on the wizard, not this argument.
-
-    Typer vendors Click. A ``click.Choice`` is not a parameter type there, so
-    Click wrapped it as a function parser and the docs harness never saw
-    ``github``, ``gitlab``, and ``azure``.
-    """
-
-    def __init__(self) -> None:
-        super().__init__(["github", "gitlab", "azure"], case_sensitive=False)
-
-    def get_invalid_choice_message(self, value: object, ctx: object) -> str:
-        return "Choose github, gitlab, or azure"
 
 
 def _require_scripted_for_json(cli: CliContext, command: str, flags: str) -> None:
@@ -692,10 +677,10 @@ def setup_platforms_cmd(
 @setup_app.command("ci")
 def setup_ci_cmd(
     ctx: typer.Context,
-    ci_platform: str = typer.Argument(
+    ci_platform: CiProvider = typer.Argument(
         ...,
         help="github, gitlab, or azure",
-        click_type=_CiProvider(),
+        case_sensitive=False,
     ),
     path: str = PATH_OPTION,
     staging: bool = typer.Option(True, "--staging/--no-staging", help=_STAGING_HELP),
@@ -740,7 +725,7 @@ def setup_ci_cmd(
     from opentide.cli.services.setup.ci import CiSetupOptions, run_ci_setup
 
     cli = get_context(ctx)
-    provider = CiPlatform(ci_platform)
+    provider = CiPlatform(ci_platform.value)
     target = _option_path(ctx, cli, path)
     yes = _consented(ctx, yes)
     planning = _planning(ctx, plan)
