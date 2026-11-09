@@ -25,6 +25,7 @@ pub mod keys;
 pub mod pins;
 mod revision;
 pub mod sample;
+pub mod vocab;
 
 pub use error::{ErrorKind, PathSegment, SchemaError, Surface};
-pub use pins::Pins;
+pub use pins::{PinTable, Pins};

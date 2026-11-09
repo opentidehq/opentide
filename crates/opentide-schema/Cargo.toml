@@ -33,10 +33,15 @@ serde.workspace = true
 schemars.workspace = true
 garde.workspace = true
 thiserror.workspace = true
+# Vocabularies (`vocab`): the documents, pin files and Sentinel's ATT&CK list.
+toml.workspace = true
+serde_json.workspace = true
+# Entries in document order, looked up by key. The version Cargo.lock holds.
+indexmap = { version = "2", features = ["serde"] }
 pyo3 = { workspace = true, features = ["abi3-py310"], optional = true }
 
 [dev-dependencies]
 insta.workspace = true
-serde_json.workspace = true
+strsim.workspace = true
 serde_yaml.workspace = true
 trybuild.workspace = true

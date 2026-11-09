@@ -4,14 +4,14 @@ The Tide model as Rust code (plan D-2): object, platform and configuration model
 with serde, garde, schemars and PyO3 derives, from which the JSON Schemas, field hints, templates,
 snippets, `.pyi` and `.d.ts` are generated. Today it is the skeleton (UC-1.1, #807): the
 conventions, the `Pins` validation context, the typed errors, the 23 `tide.*` metadata keys and
-`sample`, their worked example. The conventions are decided in
+`sample`, their worked example; and the vocabularies and pins (UC-1.6, `vocab`). The conventions are decided in
 [ADR 0001](../../docs/internal/adr/0001-tide-model-as-rust-code.md); read it before adding a model.
 
 ## Place
 
 foundation, top tier (`xtask/layers.toml`), as the plan's table orders it: it may depend on
 opentide-core, -syntax, -highlight and the query crates, and none of them may depend on it. Today it
-depends on opentide-core (`codes`). Not published yet (`publish = false` in `Cargo.toml`, with the reason).
+depends on opentide-core (`codes`, `suggest`). Not published yet (`publish = false` in `Cargo.toml`, with the reason).
 
 ## Layout
 
@@ -19,7 +19,9 @@ depends on opentide-core (`codes`). Not published yet (`publish = false` in `Car
 | --- | --- |
 | `src/keys.rs` | The 23 `tide.*` keys as constants, each with where the oracle sets it (`Origin`) |
 | `src/error.rs` | `SchemaError`, `ErrorKind` (Pydantic's error type) and `code(Surface)` (the CLI's code) |
-| `src/pins.rs` | `Pins`: the vocabulary versions a revision pins, garde's context |
+| `src/pins.rs` | `Pins`: the contracts a revision pins, by field path (`contract`) and by vocabulary (`version`), garde's context; `PinTable`: every revision's, from `src/opentide/data/pins/*.toml` (`bundled`) |
+| `src/vocab/` | Vocabularies (UC-1.6, #812): `Vocabulary` (a `*.vocab.toml` document), `Vocabularies` (the bundle, parsed per file on first use, or a data root's files, plus a workspace's object vocabularies), `Selector`/`Resolved` (what a field accepts: pins, stages, scoped values; `is_valid`, `suggest`, `check` → `Unknown`, the `vocab_unknown` finding), `attack` (the ATT&CK matrix of `info catalog`), `sentinel` (Sentinel's ATT&CK v18 list) |
+| `src/vocab/bundled.rs` | The bundled documents, one `include_str!` each; `tests.rs` fails when it and `src/opentide/data/vocabulary` differ |
 | `src/revision.rs` | `revisions!`: one struct per revision, shared fields written once, in groups `@0,` … `@3,` around overridden fields |
 | `src/sample.rs` | Every derive and field convention on a two-revision family; not part of the model |
 | `tests/roundtrip.rs` | YAML → struct → YAML byte for byte; optional, defaulted, alias, closure, pins |
@@ -42,6 +44,9 @@ depends on opentide-core (`codes`). Not published yet (`publish = false` in `Car
 - Errors are `SchemaError`; codes are the CLI's, as constants (`error::codes`, which re-exports
   `opentide_core::codes::SCHEMA_VALIDATION`): never mint one, never a second string at a call site.
 - No `std::fs` in `src/` (`scripts/engine/check-io-free.sh`). The derives compile for wasm32.
+- Suggestions are `opentide_core::suggest`'s (strsim), never a port of Python's `difflib`: where
+  one differs from the oracle's on a corpus value, `tests/golden/vocab/APPROVED.toml` lists it and
+  `cargo xtask vocab diff --against python` checks it. Accepted values and validity never differ.
 
 ## Test
 
@@ -49,6 +54,8 @@ depends on opentide-core (`codes`). Not published yet (`publish = false` in `Car
 cargo nextest run -p opentide-schema                       # native, no Python
 cargo nextest run -p opentide-schema --features python     # + the Python class and trybuild
 cargo build -p opentide-schema --target wasm32-unknown-unknown --features wasm
+cargo nextest run -p opentide-schema vocab                 # the vocabularies, 13k misspellings
+cargo xtask vocab diff --against python                    # against the oracle, every corpus
 ```
 
 `tests/python.rs` embeds CPython: it links the shared libpython of `PYO3_PYTHON` (or `python3`),
