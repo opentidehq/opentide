@@ -219,7 +219,7 @@ fn sharing_case(case: &toml::Value) -> Json {
 }
 
 #[test]
-fn every_case_matches_the_oracle_or_names_its_difference() {
+fn configuration_cases_match_the_oracle_or_name_their_difference() {
     let table: Json = serde_json::from_str(TABLE).unwrap();
     let cases: toml::Value = toml::from_str(CASES).unwrap();
     let differences: BTreeSet<String> = cases["difference"]
@@ -269,7 +269,7 @@ fn every_case_matches_the_oracle_or_names_its_difference() {
 }
 
 #[test]
-fn the_compiled_in_files_are_the_bundled_folder_and_the_oracles() {
+fn configuration_bundled_files_are_the_folder_and_the_oracles() {
     let table: Json = serde_json::from_str(TABLE).unwrap();
     let compiled: Vec<&str> = bundled::FILES.iter().map(|(path, _)| *path).collect();
     let oracle: Vec<&str> = table["bundled"]
@@ -314,7 +314,7 @@ fn the_compiled_in_files_are_the_bundled_folder_and_the_oracles() {
 }
 
 #[test]
-fn every_bundled_file_is_valid_on_its_own() {
+fn configuration_bundled_files_are_valid_on_their_own() {
     for (path, text) in bundled::FILES {
         let found = checks::text_issues(
             &format!("/w/.opentide/configurations/{path}"),
@@ -333,7 +333,7 @@ fn every_bundled_file_is_valid_on_its_own() {
 }
 
 #[test]
-fn a_buffer_takes_its_parent_layer_and_open_deployment() {
+fn configuration_buffer_takes_its_parent_layer_and_open_deployment() {
     let path = "/w/.opentide/configurations/sharing.toml";
     let text = "[[misp]]\nname = \"a\"\nurl = \"https://a\"\napi_key = \"${K}\"\nmax_tlp = \"red\"\nrule_statuses = [\"ONLY\"]\n";
     let unknown = checks::buffer_issues(path, text, &checks::BufferContext::default());
@@ -381,7 +381,7 @@ fn a_buffer_takes_its_parent_layer_and_open_deployment() {
 }
 
 #[test]
-fn file_keys_route_as_the_oracle_routes_them() {
+fn configuration_file_keys_route_as_the_oracle_routes_them() {
     for (path, key) in [
         ("deployment.toml", Some("deployment.toml")),
         (
@@ -398,7 +398,7 @@ fn file_keys_route_as_the_oracle_routes_them() {
     }
 }
 
-mod never_panics {
+mod configuration_never_panics {
     use super::*;
     use proptest::prelude::*;
 
