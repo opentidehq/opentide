@@ -32,8 +32,9 @@ mod dump;
 mod locate;
 
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::fmt;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use saphyr::{Scalar, ScalarStyle, Tag};
 use saphyr_parser::{Event, Parser, ScanError};
@@ -128,16 +129,6 @@ impl Value {
         match self {
             Self::Str(text) => Some(text),
             _ => None,
-        }
-    }
-
-    /// Whether two keys are the same key: the same type and value (floats by
-    /// their bits, so `.nan` equals itself).
-    fn same_key(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Self::Float(a), Self::Float(b)) => a.to_bits() == b.to_bits(),
-            (Self::Seq(_) | Self::Map(_), _) | (_, Self::Seq(_) | Self::Map(_)) => false,
-            (a, b) => a == b,
         }
     }
 }
@@ -279,6 +270,9 @@ pub struct Document {
     source: String,
     /// Byte ranges of the lines, computed once: every error's span reads one.
     lines: Vec<(usize, usize)>,
+    /// Each line as characters, made the first time a span reads it, so many
+    /// errors on one long line (a flow mapping) read it once.
+    line_chars: Vec<OnceLock<Box<[char]>>>,
     root: Option<Arc<Node>>,
 }
 
@@ -312,9 +306,13 @@ pub fn load(text: &str) -> Result<Document, LoadError> {
     let source = text.strip_prefix('\u{feff}').unwrap_or(text).to_owned();
     let root = Builder::default().run(&source)?;
     let lines = locate::split_lines(&source);
+    let line_chars = std::iter::repeat_with(OnceLock::new)
+        .take(lines.len())
+        .collect();
     Ok(Document {
         source,
         lines,
+        line_chars,
         root,
     })
 }
@@ -332,7 +330,36 @@ enum Frame {
         start: Mark,
         entries: Vec<Entry>,
         key: Option<Arc<Node>>,
+        /// The keys so far, each with the line it is first written on, so a
+        /// repeated key is found in constant time.
+        seen: HashMap<KeyId, usize>,
     },
+}
+
+/// A mapping key's identity: two keys are the same key when they are the
+/// same type and value, as the YAML specification defines node equality
+/// (floats by their bits, so `.nan` equals itself).
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+enum KeyId {
+    Null,
+    Bool(bool),
+    Int(i64),
+    Float(u64),
+    Str(String),
+}
+
+impl KeyId {
+    /// The key's identity; `None` for a collection, which is never a key.
+    fn of(value: &Value) -> Option<Self> {
+        Some(match value {
+            Value::Null => Self::Null,
+            Value::Bool(flag) => Self::Bool(*flag),
+            Value::Int(integer) => Self::Int(*integer),
+            Value::Float(float) => Self::Float(float.to_bits()),
+            Value::Str(text) => Self::Str(text.clone()),
+            Value::Seq(_) | Value::Map(_) => return None,
+        })
+    }
 }
 
 /// Assembles saphyr-parser's events into nodes, in one iterative pass.
@@ -340,7 +367,7 @@ enum Frame {
 struct Builder {
     frames: Vec<Frame>,
     /// Finished anchored nodes, by the parser's anchor id.
-    anchors: std::collections::HashMap<usize, Arc<Node>>,
+    anchors: HashMap<usize, Arc<Node>>,
     documents: usize,
     root: Option<Arc<Node>>,
 }
@@ -404,11 +431,16 @@ fn scalar_value(
     tag: Option<&Tag>,
 ) -> Result<Value, String> {
     let Some(tag) = tag else {
-        let plain_integer = style == ScalarStyle::Plain && is_core_integer(&text);
-        let value = match Scalar::parse_from_cow_and_metadata(text, style, None) {
-            Some(scalar) => from_scalar(scalar),
-            None => Value::Null,
-        };
+        if style != ScalarStyle::Plain {
+            return Ok(
+                match Scalar::parse_from_cow_and_metadata(text, style, None) {
+                    Some(scalar) => from_scalar(scalar),
+                    None => Value::Null,
+                },
+            );
+        }
+        let plain_integer = is_core_integer(&text);
+        let value = resolve_plain(text);
         if plain_integer && !matches!(value, Value::Int(_)) {
             return Err(OUT_OF_RANGE.to_owned());
         }
@@ -424,11 +456,7 @@ fn scalar_value(
         return Ok(Value::Str(text.into_owned()));
     }
     let shown = text.clone().into_owned();
-    let resolved = if text.is_empty() {
-        Value::Null
-    } else {
-        from_scalar(Scalar::parse_from_cow(text))
-    };
+    let resolved = resolve_plain(text);
     match (suffix, resolved) {
         ("int", value @ Value::Int(_))
         | ("float", value @ Value::Float(_))
@@ -444,6 +472,24 @@ fn scalar_value(
             tag_text(tag)
         )),
         _ => Err(format!("the tag {} is not supported", tag_text(tag))),
+    }
+}
+
+/// A plain scalar's value under the core schema: saphyr's resolution, except
+/// that an integer must be written as the core schema writes one. saphyr
+/// parses `0x`/`0o` digits with Rust's `from_str_radix`, which takes a sign
+/// after the prefix (`0x-A`, `0o+7`); the core schema does not, so that text
+/// is a string. An empty scalar is `null`.
+fn resolve_plain(text: Cow<'_, str>) -> Value {
+    if text.is_empty() {
+        return Value::Null;
+    }
+    if is_core_integer(&text) {
+        return from_scalar(Scalar::parse_from_cow(text));
+    }
+    match from_scalar(Scalar::parse_from_cow(Cow::Borrowed(text.as_ref()))) {
+        Value::Int(_) => Value::Str(text.into_owned()),
+        value => value,
     }
 }
 
@@ -500,14 +546,14 @@ fn non_printable(source: &str) -> Option<(char, Mark)> {
             ));
         }
         match character {
+            // The `\n` of a `\r\n`: the `\r` broke the line already.
             '\n' if previous == '\r' => {}
             '\n' | '\r' => {
                 line += 1;
-                column = 0;
+                column = 1;
             }
-            _ => {}
+            _ => column += 1,
         }
-        column += 1;
         previous = character;
     }
     None
@@ -528,8 +574,13 @@ impl Builder {
         // A block scalar that ends the file without a line break: saphyr
         // adds one, which the YAML specification's chomping (§8.1.1.2: the
         // end of the file instead of a final line break) does not.
+        // Only when the scalar's last content line is that unterminated last
+        // line: after a final line break, or a last line of blanks only (the
+        // scalar's trailing indentation), saphyr's line break is the
+        // scalar's own.
         let length = source.chars().count();
-        let ends_in_break = source.ends_with(['\n', '\r']);
+        let last_line = source.rsplit(['\n', '\r']).next().unwrap_or_default();
+        let unterminated_content = !last_line.trim_matches([' ', '\t']).is_empty();
         for event in Parser::new_from_str(source) {
             let (event, span) = event.map_err(|error| LoadError::from_scan(&error))?;
             let start = Mark::from_saphyr(span.start);
@@ -557,7 +608,7 @@ impl Builder {
                             LoadError::at(kind, problem, start)
                         })?;
                     if matches!(style, ScalarStyle::Literal | ScalarStyle::Folded)
-                        && !ends_in_break
+                        && unterminated_content
                         && end.index == length
                         && let Value::Str(text) = &mut value
                         && text.ends_with('\n')
@@ -597,6 +648,7 @@ impl Builder {
                             start,
                             entries: Vec::new(),
                             key: None,
+                            seen: HashMap::new(),
                         },
                         start,
                     )?;
@@ -665,27 +717,32 @@ impl Builder {
         match self.frames.last_mut() {
             None => self.root = Some(node),
             Some(Frame::Seq { items, .. }) => items.push(node),
-            Some(Frame::Map { entries, key, .. }) => match key.take() {
+            Some(Frame::Map {
+                entries, key, seen, ..
+            }) => match key.take() {
                 None => {
-                    if matches!(node.value, Value::Seq(_) | Value::Map(_)) {
+                    let Some(id) = KeyId::of(&node.value) else {
                         return Err(LoadError::at(
                             LoadErrorKind::ComplexKey,
                             "a mapping key must be a scalar, not a sequence or a mapping",
                             start,
                         ));
-                    }
-                    if let Some(first) = entries
-                        .iter()
-                        .find(|entry| entry.key.value.same_key(&node.value))
-                    {
-                        return Err(LoadError::at(
-                            LoadErrorKind::DuplicateKey,
-                            format!(
-                                "the key '{}' is repeated; it is first written on line {}",
-                                node.value, first.key.start.line
-                            ),
-                            start,
-                        ));
+                    };
+                    match seen.entry(id) {
+                        std::collections::hash_map::Entry::Occupied(first) => {
+                            return Err(LoadError::at(
+                                LoadErrorKind::DuplicateKey,
+                                format!(
+                                    "the key '{}' is repeated; it is first written on line {}",
+                                    node.value,
+                                    first.get()
+                                ),
+                                start,
+                            ));
+                        }
+                        std::collections::hash_map::Entry::Vacant(slot) => {
+                            slot.insert(node.start.line);
+                        }
                     }
                     *key = Some(node);
                 }
@@ -730,15 +787,43 @@ mod tests {
 
     #[test]
     fn keys_are_equal_by_type_and_value() {
-        assert!(Value::Bool(true).same_key(&Value::Bool(true)));
-        assert!(!Value::Bool(true).same_key(&Value::Int(1)));
-        assert!(!Value::Float(1.0).same_key(&Value::Int(1)));
-        assert!(Value::Float(f64::NAN).same_key(&Value::Float(f64::NAN)));
-        assert!(!Value::Str("1".into()).same_key(&Value::Int(1)));
+        let same_key = |a: &Value, b: &Value| KeyId::of(a).is_some_and(|a| Some(a) == KeyId::of(b));
+        assert!(same_key(&Value::Bool(true), &Value::Bool(true)));
+        assert!(!same_key(&Value::Bool(true), &Value::Int(1)));
+        assert!(!same_key(&Value::Float(1.0), &Value::Int(1)));
+        assert!(same_key(&Value::Float(f64::NAN), &Value::Float(f64::NAN)));
+        assert!(!same_key(&Value::Float(0.0), &Value::Float(-0.0)));
+        assert!(!same_key(&Value::Str("1".into()), &Value::Int(1)));
+        assert!(!same_key(&Value::Seq(Vec::new()), &Value::Seq(Vec::new())));
         let error = load("true: 1\nTrue: 2\n").unwrap_err();
         assert_eq!(error.kind, LoadErrorKind::DuplicateKey);
         assert_eq!(error.mark.map(|m| (m.line, m.column)), Some((2, 1)));
         assert!(error.problem.contains("first written on line 1"), "{error}");
+    }
+
+    #[test]
+    fn a_large_mapping_loads_in_linear_time() {
+        // A linear scan per key took 22 s for 40 000 keys in a debug build;
+        // with a hash set this takes well under a second.
+        let mut text = String::new();
+        for key in 0..200_000 {
+            text.push_str(&format!("k{key}: {key}\n"));
+        }
+        let started = std::time::Instant::now();
+        let document = load(&text).unwrap();
+        let elapsed = started.elapsed();
+        let Value::Map(entries) = &document.root().unwrap().value else {
+            panic!()
+        };
+        assert_eq!(entries.len(), 200_000);
+        assert!(elapsed.as_secs() < 30, "{elapsed:?}");
+        text.push_str("k123456: again\n");
+        let error = load(&text).unwrap_err();
+        assert_eq!(error.kind, LoadErrorKind::DuplicateKey);
+        assert!(
+            error.problem.contains("first written on line 123457"),
+            "{error}"
+        );
     }
 
     #[test]
@@ -753,6 +838,91 @@ mod tests {
         assert_eq!((items[1].end.line, items[1].end.column), (2, 11));
         let one = root.get("é").unwrap();
         assert_eq!((one.start.line, one.start.column), (1, 4));
+    }
+
+    fn value_of(text: &str) -> Value {
+        load(text)
+            .unwrap()
+            .root()
+            .unwrap()
+            .get("a")
+            .unwrap()
+            .value
+            .clone()
+    }
+
+    #[test]
+    fn a_sign_after_the_base_prefix_is_a_string() {
+        for text in [
+            "0x-A",
+            "0x+A",
+            "0o-7",
+            "0o+7",
+            "0x-8000000000000000",
+            "-0x1",
+        ] {
+            assert_eq!(
+                value_of(&format!("a: {text}\n")),
+                Value::Str(text.to_owned()),
+                "{text}"
+            );
+        }
+        assert_eq!(value_of("a: 0x1F\n"), Value::Int(31));
+        assert_eq!(value_of("a: 0o17\n"), Value::Int(15));
+        assert_eq!(value_of("a: +12\n"), Value::Int(12));
+        for text in ["a: !!int 0x-A\n", "a: !!int 0o+7\n", "a: !!float 0x-A\n"] {
+            let error = load(text).unwrap_err();
+            assert_eq!(error.kind, LoadErrorKind::Tag, "{text}");
+        }
+        assert_eq!(value_of("a: !!int 0x10\n"), Value::Int(16));
+    }
+
+    #[test]
+    fn an_integer_beyond_64_bits_is_out_of_range() {
+        for text in [
+            "a: 12345678901234567890\n",
+            "a: -9223372036854775809\n",
+            "a: 0xFFFFFFFFFFFFFFFFFFFF\n",
+        ] {
+            let error = load(text).unwrap_err();
+            assert_eq!(error.kind, LoadErrorKind::OutOfRange, "{text}");
+            assert_eq!(error.problem, OUT_OF_RANGE);
+            assert_eq!(error.mark.map(|m| (m.line, m.column)), Some((1, 4)));
+        }
+    }
+
+    #[test]
+    fn a_forbidden_character_is_placed_by_line_and_column() {
+        let error = load("a: 1\r\nb: 2\r\nc: x\u{1}\r\n").unwrap_err();
+        assert_eq!(error.kind, LoadErrorKind::Syntax);
+        let mark = error.mark.unwrap();
+        assert_eq!((mark.line, mark.column, mark.index), (3, 5, 16));
+        let error = load("a: 1\rb: \u{7f}\n").unwrap_err();
+        let mark = error.mark.unwrap();
+        assert_eq!((mark.line, mark.column), (2, 4));
+    }
+
+    #[test]
+    fn a_block_scalar_keeps_its_line_break_before_a_last_blank_line() {
+        for (text, expected) in [
+            ("a: |\n  x\n ", "x\n"),
+            ("a: >\n  x\n ", "x\n"),
+            ("a: |\n  x\n  y\n ", "x\ny\n"),
+            ("a: |\n  x\r\n ", "x\n"),
+            ("a: |\n  x\n\t", "x\n"),
+            ("a: |\n  x\nb: 1", "x\n"),
+            ("a: |\n  x\n# c", "x\n"),
+            ("a: |\n  x", "x"),
+            ("a: |\n  x\n  y", "x\ny"),
+            ("a: >\n  x\n  y", "x y"),
+        ] {
+            assert_eq!(value_of(text), Value::Str(expected.to_owned()), "{text:?}");
+        }
+        let document = load("- |\n  x\n ").unwrap();
+        let Value::Seq(items) = &document.root().unwrap().value else {
+            panic!()
+        };
+        assert_eq!(items[0].value, Value::Str("x\n".to_owned()));
     }
 
     #[test]

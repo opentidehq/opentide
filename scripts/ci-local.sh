@@ -87,7 +87,8 @@ rust_jobs() {
   trap 'python3 scripts/engine/release.py vendor --clean >/dev/null' EXIT
   python3 scripts/engine/release.py vendor
   cargo package --locked --workspace --exclude opentide-native --exclude opentide-schema --allow-dirty --quiet
-  bash scripts/engine/license-scan.sh target/package/*.crate
+  # opentide-schema cannot be packaged until its derive is published: scan its source.
+  bash scripts/engine/license-scan.sh target/package/*.crate crates/opentide-schema crates/opentide-schema-derive
   python3 scripts/engine/release.py vendor --clean
   trap - EXIT
 

@@ -28,8 +28,10 @@
 //! serde attributes that change what is read and that the conversion does not
 //! reproduce (`flatten`, `skip`, `deserialize_with`, `with`, `untagged` on a
 //! non-union, a container `default`, `from`, `try_from`, `transparent`, a
-//! struct `rename_all`) are compile errors, so a model cannot silently read
-//! differently under serde and under the conversion.
+//! struct `rename_all`, a variant's `alias` or `other`) are compile errors, as
+//! is an `Option` field without `#[serde(default)]` (serde reads it as `None`
+//! when missing), so a model cannot silently read differently under serde and
+//! under the conversion.
 
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
@@ -110,6 +112,21 @@ const SERDE_FIELD_REFUSED: &[&str] = &[
     "with",
     "borrow",
     "getter",
+];
+/// The serde attributes of a unit variant FromNode cannot reproduce: those
+/// of a field, and `alias` (another value serde takes) and `other` (any
+/// value serde takes), which would make serde accept a value the
+/// conversion refuses.
+const SERDE_VARIANT_REFUSED: &[&str] = &[
+    "flatten",
+    "skip",
+    "skip_deserializing",
+    "deserialize_with",
+    "with",
+    "borrow",
+    "getter",
+    "alias",
+    "other",
 ];
 const SERDE_CONTAINER_REFUSED: &[&str] = &[
     "default",
@@ -258,6 +275,14 @@ fn expand_struct(
                 _ => {}
             }
         }
+        if is_option(ty) && !field_serde.iter().any(|item| item.key == "default") {
+            // serde reads a missing `Option` as `None`; the conversion would
+            // report "Field required". Saying which is meant keeps them one.
+            return Err(syn::Error::new(
+                field.span(),
+                "an Option field needs #[serde(default)]: serde reads a missing one as None",
+            ));
+        }
         names.extend(aliases);
         let mut field_before = quote!(::core::option::Option::None);
         let mut convert =
@@ -316,6 +341,21 @@ fn expand_struct(
             }
         }
     })
+}
+
+/// Whether `ty` is written `Option<...>` (any path ending in `Option`), the
+/// type serde reads as `None` when its key is missing.
+fn is_option(ty: &syn::Type) -> bool {
+    match ty {
+        syn::Type::Path(path) if path.qself.is_none() => path
+            .path
+            .segments
+            .last()
+            .is_some_and(|segment| segment.ident == "Option"),
+        syn::Type::Group(group) => is_option(&group.elem),
+        syn::Type::Paren(paren) => is_option(&paren.elem),
+        _ => false,
+    }
 }
 
 /// serde's `rename_all` rules for unit variants.
@@ -389,7 +429,7 @@ fn expand_unit_enum(
             ));
         }
         let variant_serde = items(&variant.attrs, "serde")?;
-        refuse(&variant_serde, SERDE_FIELD_REFUSED)?;
+        refuse(&variant_serde, SERDE_VARIANT_REFUSED)?;
         let ident = &variant.ident;
         let mut value = match &rule {
             Some((rule, span)) => rename(rule, &ident.to_string(), *span)?,
@@ -529,6 +569,19 @@ mod tests {
     }
 
     #[test]
+    fn an_option_field_with_a_default_is_accepted() {
+        let code = expanded(
+            "struct A { #[serde(default)] a: Option<String>, #[serde(default = \"f\")] b: Option<u8> }",
+        )
+        .unwrap();
+        assert!(code.contains("Missing :: Default (f)"), "{code}");
+        assert!(!is_option(&syn::parse_str("Vec<Option<u8>>").unwrap()));
+        assert!(is_option(
+            &syn::parse_str("std::option::Option<u8>").unwrap()
+        ));
+    }
+
+    #[test]
     fn an_open_model_reports_no_unknown_key() {
         let code = expanded("struct Open { name: String }").unwrap();
         assert!(code.contains("finish (__cx , false , & [])"), "{code}");
@@ -642,6 +695,22 @@ mod tests {
             (
                 "#[from_node(before)] struct A { a: B }",
                 "before needs a path",
+            ),
+            (
+                "enum A { #[serde(alias = \"b\")] B }",
+                "#[serde(alias)] changes what is read",
+            ),
+            (
+                "enum A { B, #[serde(other)] Rest }",
+                "#[serde(other)] changes what is read",
+            ),
+            (
+                "struct A { a: Option<String> }",
+                "an Option field needs #[serde(default)]",
+            ),
+            (
+                "struct A { a: ::core::option::Option<u8> }",
+                "an Option field needs #[serde(default)]",
             ),
         ] {
             let error = expanded(source).unwrap_err();

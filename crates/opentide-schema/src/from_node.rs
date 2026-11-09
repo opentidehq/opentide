@@ -474,6 +474,15 @@ pub fn union_value<T>(node: &Node, cx: &mut Context, members: &[Member<'_, T>]) 
         let mut trial = cx.trial();
         trial.path.push(PathSegment::Key(member.tag.to_owned()));
         let value = (member.convert)(node, &mut trial);
+        if trial.stopped && !cx.stopped {
+            // The budget ran out in this member: the conversion stops here,
+            // with the errors so far and one `Limit`, the caller's, last.
+            trial.errors.retain(|error| error.kind != ErrorKind::Limit);
+            cx.errors.extend(failures);
+            cx.errors.append(&mut trial.errors);
+            cx.absorb_budget(&trial);
+            return None;
+        }
         cx.absorb_budget(&trial);
         if trial.errors.is_empty()
             && let Some(value) = value
@@ -625,5 +634,78 @@ impl<V: FromNode> FromNode for BTreeMap<String, V> {
 impl FromNode for Arc<Node> {
     fn from_node(node: &Node, _cx: &mut Context) -> Option<Self> {
         Some(Arc::new(node.clone()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::node::load;
+
+    /// A union's value: the members convert to different types.
+    #[derive(Debug, PartialEq)]
+    enum Either {
+        Texts(Vec<String>),
+        Ints(Vec<i64>),
+    }
+
+    fn ints(node: &Node, cx: &mut Context) -> Option<Either> {
+        Vec::<i64>::from_node(node, cx).map(Either::Ints)
+    }
+
+    fn texts(node: &Node, cx: &mut Context) -> Option<Either> {
+        Vec::<String>::from_node(node, cx).map(Either::Texts)
+    }
+
+    #[test]
+    fn a_union_members_work_is_the_callers() {
+        let document = load("[1, 2, 3]\n").unwrap();
+        let root = document.root().unwrap();
+        let mut cx = Context::new();
+        cx.remaining = 100;
+        let members = [
+            Member {
+                tag: "list[str]",
+                convert: texts,
+            },
+            Member {
+                tag: "list[int]",
+                convert: ints,
+            },
+        ];
+        assert_eq!(
+            union_value(root, &mut cx, &members),
+            Some(Either::Ints(vec![1, 2, 3]))
+        );
+        // list[str]: 3 items and 3 errors; list[int]: 3 items.
+        assert_eq!(cx.remaining, 100 - 9);
+        assert_eq!(cx.error_count(), 0);
+    }
+
+    #[test]
+    fn a_union_that_spends_the_budget_reports_the_limit_once() {
+        let document = load("[1, 2, 3, 4, 5, 6]\n").unwrap();
+        let root = document.root().unwrap();
+        let mut cx = Context::new();
+        cx.remaining = 4;
+        let members = [
+            Member {
+                tag: "list[str]",
+                convert: texts,
+            },
+            Member {
+                tag: "list[int]",
+                convert: ints,
+            },
+        ];
+        assert_eq!(union_value(root, &mut cx, &members), None);
+        assert_eq!(cx.remaining, 0);
+        assert!(cx.stopped);
+        let errors = cx.into_errors();
+        let limits = errors
+            .iter()
+            .filter(|error| error.kind == ErrorKind::Limit)
+            .count();
+        assert_eq!(limits, 1, "{errors:#?}");
     }
 }

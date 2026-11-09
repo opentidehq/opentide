@@ -65,8 +65,12 @@ impl KeyIndex {
                 entries
                     .iter()
                     .enumerate()
-                    .map(|(index, entry)| (key_text(&entry.key), index))
-                    .collect()
+                    .fold(HashMap::new(), |mut map, (index, entry)| {
+                        // The first entry wins, as in the scan of a small
+                        // mapping: `1` and `"1"` both display as `1`.
+                        map.entry(key_text(&entry.key)).or_insert(index);
+                        map
+                    })
             });
         map.get(part).copied()
     }
@@ -136,10 +140,15 @@ impl Document {
         }
     }
 
-    /// Line `number` (from 1), as characters.
-    fn line_chars(&self, number: usize) -> Option<Vec<char>> {
-        let &(start, end) = self.lines.get(number.checked_sub(1)?)?;
-        Some(self.source[start..end].chars().collect())
+    /// Line `number` (from 1), as characters, made once per line.
+    fn line_chars(&self, number: usize) -> Option<&[char]> {
+        let index = number.checked_sub(1)?;
+        let &(start, end) = self.lines.get(index)?;
+        let chars = self
+            .line_chars
+            .get(index)?
+            .get_or_init(|| self.source[start..end].chars().collect());
+        Some(chars)
     }
 
     /// The span from `start` to `end` when both are on one line and it is not
@@ -150,8 +159,11 @@ impl Document {
         }
         let text = self.line_chars(start.line)?;
         let (mut first, mut last) = (start.column - 1, (end.column - 1).min(text.len()));
-        // saphyr ends a quoted scalar's span after the blanks that follow it.
-        while last > first && text[last - 1].is_whitespace() {
+        // saphyr ends a flow collection that is a block sequence's item, and
+        // a quoted scalar, after the blanks that follow it (`- {k: v}   `).
+        // Only YAML's blanks: a plain scalar may end in a space YAML does not
+        // treat as white space (U+00A0, U+3000), which is the scalar's own.
+        while last > first && matches!(text[last - 1], ' ' | '\t') {
             last -= 1;
         }
         if unquote
@@ -371,6 +383,67 @@ mod tests {
             (span.column, span.end_column, span.text.as_str()),
             (15, 20, "it''s")
         );
+    }
+
+    #[test]
+    fn a_span_ends_at_the_values_last_character() {
+        // Blanks after a flow collection item or a quoted scalar.
+        let document = load("a:\n  - {k: v}   \n  - [x]\t \nb: 'x'   \nc: z   \n").unwrap();
+        for (parts, text) in [
+            (&["a", "0"][..], "{k: v}"),
+            (&["a", "1"][..], "[x]"),
+            (&["b"][..], "x"),
+            (&["c"][..], "z"),
+        ] {
+            let span = document.span(&path(parts), false).unwrap();
+            assert_eq!(span.text, text, "{parts:?}");
+            assert_eq!(span.end_column, span.column + text.chars().count());
+        }
+        // A space YAML does not treat as white space is the scalar's own.
+        for text in ["a: x\u{a0}\n", "a: x  \u{3000}\n"] {
+            let document = load(text).unwrap();
+            let value = document.root().unwrap().get("a").unwrap().value.clone();
+            let span = document.span(&path(&["a"]), false).unwrap();
+            assert_eq!(Some(span.text.as_str()), value.as_str(), "{text:?}");
+        }
+    }
+
+    #[test]
+    fn colliding_display_keys_take_the_first_entry_at_any_size() {
+        // `1` and `"1"` are two keys; a field path writes both as `1`.
+        let small = load("1: a\n\"1\": b\n").unwrap();
+        let mut large_text = String::from("1: a\n\"1\": b\n");
+        for key in 0..20 {
+            large_text.push_str(&format!("f{key}: x\n"));
+        }
+        let large = load(&large_text).unwrap();
+        for document in [&small, &large] {
+            let locator = document.locator();
+            let span = locator.span(&path(&["1"]), false).unwrap();
+            assert_eq!((span.line, span.text.as_str()), (1, "a"));
+            assert_eq!(locator.yaml_line(&path(&["1"])), Some(0));
+        }
+    }
+
+    #[test]
+    fn many_errors_on_one_long_line_are_placed_in_linear_time() {
+        let count = 40_000;
+        let mut text = String::from("a: {");
+        for key in 0..count {
+            text.push_str(&format!("k{key}: v{key}, "));
+        }
+        text.push_str("}\n");
+        let document = load(&text).unwrap();
+        let locator = document.locator();
+        let started = std::time::Instant::now();
+        for key in 0..count {
+            let span = locator
+                .span(&path(&["a", &format!("k{key}")]), false)
+                .unwrap();
+            assert_eq!(span.text, format!("v{key}"));
+        }
+        let elapsed = started.elapsed();
+        assert!(elapsed.as_secs() < 30, "{elapsed:?}");
     }
 
     #[test]

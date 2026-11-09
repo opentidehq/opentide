@@ -15,7 +15,8 @@ use proptest::prelude::*;
 
 /// Any text, with the shapes a YAML reader takes for something else when
 /// unquoted (`true`, `null`, `~`, `017`, `0x1F`, `1e3`, `.inf`, `2026-01-01`,
-/// `<<`) and the characters that need escaping or quoting, mixed in.
+/// `<<`; `0x-A`, which only a reader that takes a sign after the prefix
+/// does) and the characters that need escaping or quoting, mixed in.
 fn text() -> impl Strategy<Value = String> {
     prop_oneof![
         3 => any::<String>(),
@@ -23,7 +24,7 @@ fn text() -> impl Strategy<Value = String> {
         2 => prop::sample::select(vec![
             "yes", "No", "on", "OFF", "y", "n", "~", "null", "Null", "", " ", "017", "0o17",
             "true", "True", "FALSE", "12", "-3", "+4", "1.5", "99999999999999999999",
-            "0x1F", "1_000", "1:20", "190:20:30.15", "2026-01-01", "2026-01-01 10:00:00",
+            "0x1F", "0x-A", "0x+A", "0o-7", "0o+7", "1_000", "1:20", "190:20:30.15", "2026-01-01", "2026-01-01 10:00:00",
             ".inf", "-.Inf", ".nan", "1e3", "1.0e+3", "<<", "=", "- a", "a: b", "#c", "&a",
             "*a", "!tag", "|", ">", "'", "\"", "\t", "\u{feff}x", "x\u{85}y", "a\u{2028}b",
             "\r\n", "\u{1F525}", "\u{7f}", "\u{0}",
@@ -121,4 +122,24 @@ fn strings_that_look_like_scalars_round_trip() {
         ],
     };
     round_trip(&sample).unwrap();
+}
+
+/// A sign after the base prefix is not a YAML 1.2 integer: serde-saphyr
+/// writes such a string plain, and the loader reads it back as the string.
+#[test]
+fn a_sign_after_the_base_prefix_round_trips_as_a_string() {
+    for text in ["0x-A", "0x+A", "0o-7", "0o+7", "0x-8000000000000000"] {
+        let sample = SampleV1_1 {
+            name: "n".to_owned(),
+            uuid: "u".to_owned(),
+            schema_id: "s".to_owned(),
+            description: text.to_owned(),
+            severity: "Low".to_owned(),
+            effort: None,
+            enabled: true,
+            examples: None,
+            tags: vec![text.to_owned()],
+        };
+        round_trip(&sample).unwrap();
+    }
 }

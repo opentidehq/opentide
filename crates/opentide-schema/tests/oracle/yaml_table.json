@@ -936,6 +936,108 @@
    "detail": "ValueError: invalid literal for int() with base 16: ''"
   },
   {
+   "id": "int-sign-after-prefix",
+   "group": "int",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "a"
+      },
+      {
+       "str": "0x-A"
+      }
+     ],
+     [
+      {
+       "str": "b"
+      },
+      {
+       "str": "0x+A"
+      }
+     ],
+     [
+      {
+       "str": "c"
+      },
+      {
+       "str": "0o-7"
+      }
+     ],
+     [
+      {
+       "str": "d"
+      },
+      {
+       "str": "0o+7"
+      }
+     ],
+     [
+      {
+       "str": "e"
+      },
+      {
+       "str": "0x-8000000000000000"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "int-octal-digits-8-and-9",
+   "group": "int",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "a"
+      },
+      {
+       "str": "0o8"
+      }
+     ],
+     [
+      {
+       "str": "b"
+      },
+      {
+       "str": "0o9"
+      }
+     ],
+     [
+      {
+       "str": "c"
+      },
+      {
+       "str": "0o78"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "int-explicit-tag-sign-after-prefix",
+   "group": "int",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "a"
+      },
+      {
+       "int": "-10"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "float-explicit-tag-sign-after-prefix",
+   "group": "int",
+   "error": "python",
+   "detail": "ValueError: could not convert string to float: '0o+7'"
+  },
+  {
    "id": "underscore",
    "group": "underscore",
    "value": {
@@ -2786,6 +2888,12 @@
    "detail": "unacceptable character #x0001: control characters are not allowed"
   },
   {
+   "id": "control-character-on-line-3-crlf",
+   "group": "structure",
+   "error": "yaml",
+   "detail": "unacceptable character #x0001: control characters are not allowed"
+  },
+  {
    "id": "not-utf8",
    "group": "structure",
    "error": "not_utf8"
@@ -3130,6 +3238,121 @@
       },
       {
        "str": "x"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "eof-literal-then-blank-line",
+   "group": "eof",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "a"
+      },
+      {
+       "str": "x\n"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "eof-folded-then-blank-line",
+   "group": "eof",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "a"
+      },
+      {
+       "str": "x\n"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "eof-literal-item-then-blank-line",
+   "group": "eof",
+   "value": {
+    "seq": [
+     {
+      "str": "x\n"
+     }
+    ]
+   }
+  },
+  {
+   "id": "eof-literal-two-lines-then-blank-line",
+   "group": "eof",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "a"
+      },
+      {
+       "str": "x\ny\n"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "eof-literal-crlf-then-blank-line",
+   "group": "eof",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "a"
+      },
+      {
+       "str": "x\n"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "eof-literal-then-key-without-line-break",
+   "group": "eof",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "a"
+      },
+      {
+       "str": "x\n"
+      }
+     ],
+     [
+      {
+       "str": "b"
+      },
+      {
+       "int": "1"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "id": "eof-literal-then-comment-without-line-break",
+   "group": "eof",
+   "value": {
+    "map": [
+     [
+      {
+       "str": "a"
+      },
+      {
+       "str": "x\n"
       }
      ]
     ]

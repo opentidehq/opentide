@@ -50,7 +50,7 @@ Changelog: **Tide objects are read as YAML 1.2**. Changes how an existing worksp
 
 ### integers
 
-YAML 1.2 integers are decimal, `0o` octal and `0x` hexadecimal. `017` is 17 (YAML 1.1: 15, octal), `0o17` is 15 (YAML 1.1: a string); `0b101`, `1_000` and sexagesimal `1:20` are strings (YAML 1.1: integers).
+YAML 1.2 integers are decimal, `0o` octal and `0x` hexadecimal. `017` is 17 (YAML 1.1: 15, octal), `0o17` is 15 (YAML 1.1: a string); `0b101`, `1_000` and sexagesimal `1:20` are strings (YAML 1.1: integers). A sign goes before the digits only: `0x-A` and `-0x1` are strings, and `!!int 0x-A` refuses the file (YAML 1.1: -10).
 
 Changelog: **Tide objects are read as YAML 1.2**. Changes how an existing workspace file reads: **yes** (a question for the maintainers in the PR).
 
@@ -129,6 +129,10 @@ Changelog: **Tide objects are read as YAML 1.2**. Changes how an existing worksp
 | int-key | `"1: a\n0x10: b\n\"1\": c\n"` | refused: duplicate key '1' at line 3 | {1: "a", 16: "b", "1": "c"} | [duplicate-keys](#duplicate-keys) |
 | int-binary-empty | `"a: 0b_\n"` | refused: ValueError: invalid literal for int() with base 2: '' | {"a": "0b_"} | [integers](#integers) |
 | int-hex-empty | `"a: 0x_\n"` | refused: ValueError: invalid literal for int() with base 16: '' | {"a": "0x_"} | [integers](#integers) |
+| int-sign-after-prefix | `"a: 0x-A\nb: 0x+A\nc: 0o-7\nd: 0o+7\ne: 0x-8000000000000000\n"` | {"a": "0x-A", "b": "0x+A", "c": "0o-7", "d": "0o+7", "e": "0x-8000000000000000"} | {"a": "0x-A", "b": "0x+A", "c": "0o-7", "d": "0o+7", "e": "0x-8000000000000000"} | same |
+| int-octal-digits-8-and-9 | `"a: 0o8\nb: 0o9\nc: 0o78\n"` | {"a": "0o8", "b": "0o9", "c": "0o78"} | {"a": "0o8", "b": "0o9", "c": "0o78"} | same |
+| int-explicit-tag-sign-after-prefix | `"a: !!int 0x-A\n"` | {"a": -10} | refused: '0x-A' is not a valid value for the tag !!int (line 1, column 4) | [integers](#integers) |
+| float-explicit-tag-sign-after-prefix | `"a: !!float 0o+7\n"` | refused: ValueError: could not convert string to float: '0o+7' | refused: '0o+7' is not a valid value for the tag !!float (line 1, column 4) | same |
 
 ### underscore
 
@@ -277,6 +281,7 @@ Changelog: **Tide objects are read as YAML 1.2**. Changes how an existing worksp
 | colon-in-plain | `"a: b: c\n"` | refused: mapping values are not allowed in this context | refused: mapping values are not allowed in this context (line 1, column 5) | same |
 | nested-flow | `"a: {b: [1, {c: d}], e: f}\n"` | {"a": {"b": [1, {"c": "d"}], "e": "f"}} | {"a": {"b": [1, {"c": "d"}], "e": "f"}} | same |
 | control-character | bytes `613a2078017a0a` | refused: unacceptable character #x0001: control characters are not allowed | refused: the character U+0001 is not allowed in YAML (line 1, column 5) | same |
+| control-character-on-line-3-crlf | `"a: 1\r\nb: 2\r\nc: x\u0001\r\n"` | refused: unacceptable character #x0001: control characters are not allowed | refused: the character U+0001 is not allowed in YAML (line 3, column 5) | same |
 | not-utf8 | bytes `613a20ff0a` | refused (not_utf8) | refused: not UTF-8 at byte offset 3 | same |
 | plain-with-hash | `"a: x#y\nb: x #y\n"` | {"a": "x#y", "b": "x"} | {"a": "x#y", "b": "x"} | same |
 | empty-flow | `"a: []\nb: {}\n"` | {"a": [], "b": {}} | {"a": [], "b": {}} | same |
@@ -303,3 +308,10 @@ Changelog: **Tide objects are read as YAML 1.2**. Changes how an existing worksp
 | eof-tag-before-comma | `"a: [!!str , x]\n"` | {"a": ["", "x"]} | {"a": ["", "x"]} | same |
 | eof-escape-at-end | `"a: \"x\\"` | refused: while parsing a quoted scalar | refused: while parsing a quoted scalar, found unknown escape character (line 1, column 4) | same |
 | eof-plain-without-line-break | `"a: x"` | {"a": "x"} | {"a": "x"} | same |
+| eof-literal-then-blank-line | `"a: \|\n  x\n "` | {"a": "x\n"} | {"a": "x\n"} | same |
+| eof-folded-then-blank-line | `"a: >\n  x\n "` | {"a": "x\n"} | {"a": "x\n"} | same |
+| eof-literal-item-then-blank-line | `"- \|\n  x\n "` | ["x\n"] | ["x\n"] | same |
+| eof-literal-two-lines-then-blank-line | `"a: \|\n  x\n  y\n "` | {"a": "x\ny\n"} | {"a": "x\ny\n"} | same |
+| eof-literal-crlf-then-blank-line | `"a: \|\n  x\r\n "` | {"a": "x\n"} | {"a": "x\n"} | same |
+| eof-literal-then-key-without-line-break | `"a: \|\n  x\nb: 1"` | {"a": "x\n", "b": 1} | {"a": "x\n", "b": 1} | same |
+| eof-literal-then-comment-without-line-break | `"a: \|\n  x\n# c"` | {"a": "x\n"} | {"a": "x\n"} | same |

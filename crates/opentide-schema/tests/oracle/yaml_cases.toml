@@ -31,7 +31,7 @@ workspace = true
 
 [[difference]]
 id = "integers"
-reason = "YAML 1.2 integers are decimal, `0o` octal and `0x` hexadecimal. `017` is 17 (YAML 1.1: 15, octal), `0o17` is 15 (YAML 1.1: a string); `0b101`, `1_000` and sexagesimal `1:20` are strings (YAML 1.1: integers)."
+reason = "YAML 1.2 integers are decimal, `0o` octal and `0x` hexadecimal. `017` is 17 (YAML 1.1: 15, octal), `0o17` is 15 (YAML 1.1: a string); `0b101`, `1_000` and sexagesimal `1:20` are strings (YAML 1.1: integers). A sign goes before the digits only: `0x-A` and `-0x1` are strings, and `!!int 0x-A` refuses the file (YAML 1.1: -10)."
 changelog = "**Tide objects are read as YAML 1.2**"
 workspace = true
 
@@ -336,6 +336,35 @@ group = "int"
 id = "int-hex-empty"
 difference = "integers"
 yaml = "a: 0x_\n"
+
+# A sign after the base prefix: the core schema's integers have none there
+# (Rust's `from_str_radix`, which saphyr uses, accepts one).
+[[case]]
+group = "int"
+id = "int-sign-after-prefix"
+yaml = """
+a: 0x-A
+b: 0x+A
+c: 0o-7
+d: 0o+7
+e: 0x-8000000000000000
+"""
+
+[[case]]
+group = "int"
+id = "int-octal-digits-8-and-9"
+yaml = "a: 0o8\nb: 0o9\nc: 0o78\n"
+
+[[case]]
+group = "int"
+id = "int-explicit-tag-sign-after-prefix"
+difference = "integers"
+yaml = "a: !!int 0x-A\n"
+
+[[case]]
+group = "int"
+id = "float-explicit-tag-sign-after-prefix"
+yaml = "a: !!float 0o+7\n"
 
 # --- numbers with _ ---------------------------------------------------------
 [[case]]
@@ -843,6 +872,12 @@ group = "structure"
 id = "control-character"
 bytes_hex = "613a2078017a0a"
 
+# The position counts CRLF as one line break and starts each line at column 1.
+[[case]]
+group = "structure"
+id = "control-character-on-line-3-crlf"
+yaml = "a: 1\r\nb: 2\r\nc: x\u0001\r\n"
+
 [[case]]
 group = "structure"
 id = "not-utf8"
@@ -990,3 +1025,41 @@ yaml = "a: \"x\\"
 group = "eof"
 id = "eof-plain-without-line-break"
 yaml = "a: x"
+
+# A block scalar whose last content line ends in a line break, followed by a
+# last line of blanks without one: the scalar keeps its line break (clip).
+[[case]]
+group = "eof"
+id = "eof-literal-then-blank-line"
+yaml = "a: |\n  x\n "
+
+[[case]]
+group = "eof"
+id = "eof-folded-then-blank-line"
+yaml = "a: >\n  x\n "
+
+[[case]]
+group = "eof"
+id = "eof-literal-item-then-blank-line"
+yaml = "- |\n  x\n "
+
+[[case]]
+group = "eof"
+id = "eof-literal-two-lines-then-blank-line"
+yaml = "a: |\n  x\n  y\n "
+
+[[case]]
+group = "eof"
+id = "eof-literal-crlf-then-blank-line"
+yaml = "a: |\n  x\r\n "
+
+# A block scalar without a final line break that does not end the file.
+[[case]]
+group = "eof"
+id = "eof-literal-then-key-without-line-break"
+yaml = "a: |\n  x\nb: 1"
+
+[[case]]
+group = "eof"
+id = "eof-literal-then-comment-without-line-break"
+yaml = "a: |\n  x\n# c"
