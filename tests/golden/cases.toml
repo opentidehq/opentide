@@ -979,6 +979,7 @@ command = "generate"
 variant = "default"
 args = ["generate"]
 fixtures = ["tide-corpus", "vscode"]
+normalise = ["fresh-uuids"]
 
 # UC-3.4 (#826): generate's steps as progress events and as the step checklist.
 [[case]]
