@@ -83,6 +83,7 @@
 # name: test_preview_payload_shape[rule-0003-splunk-spl.yaml-splunk][splunk_api_request]
   dict({
     'actions': None,
+    'advanced': None,
     'contributors': None,
     'correlation_search': None,
     'enabled': True,
