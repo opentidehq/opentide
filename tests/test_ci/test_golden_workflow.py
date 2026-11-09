@@ -66,10 +66,32 @@ def _paths_step() -> dict[str, Any]:
     return next(step for step in steps if step.get("id") == "paths")
 
 
+# GitHub's status-check functions, for one run that was not cancelled and
+# whose only dependency is `changes`.
+STATUS = re.compile(r"(!\s*)?\b(success|failure|always|cancelled)\(\)")
+
+
 def _evaluate(condition: str, context: dict[str, str]) -> bool:
     """Evaluate a job's `if` for one event: the subset of GitHub's expression
-    language golden.yml uses (`!cancelled()`, `&&`, `||`, `==`, `!=`)."""
-    expression = condition.replace("!cancelled()", "True")
+    language golden.yml uses (status functions, `!`, `&&`, `||`, `==`, `!=`).
+
+    As on GitHub, a condition with no status function gets an implicit
+    `success()`: the job is skipped when a job it needs did not succeed."""
+    if not STATUS.search(condition):
+        condition = f"success() && ({condition})"
+    result = context["needs.changes.result"]
+    status = {
+        "success": result == "success",
+        "failure": result == "failure",
+        "always": True,
+        "cancelled": False,
+    }
+
+    def call(match: re.Match[str]) -> str:
+        value = status[match.group(2)]
+        return repr(not value if match.group(1) else value)
+
+    expression = STATUS.sub(call, condition)
     expression = expression.replace("&&", " and ").replace("||", " or ")
     names = re.compile(r"\b(?:github|needs)\.[A-Za-z0-9_.]+")
     unknown = {name for name in names.findall(expression) if name not in context}
@@ -154,6 +176,37 @@ def test_when_each_job_runs(
 ) -> None:
     condition = _workflow()["jobs"][job]["if"]
     assert _evaluate(condition, _context(event, base, result, golden)) is runs
+
+
+@pytest.mark.parametrize("job", ["check", "determinism"])
+def test_without_not_cancelled_a_failed_filter_skips_the_job(job: str) -> None:
+    # GitHub adds `success()` to an `if` with no status function, so dropping
+    # `!cancelled() &&` skips the job (a passing check) when `Golden paths`
+    # fails: the fail-open is gone. The evaluator must see that.
+    condition = _workflow()["jobs"][job]["if"]
+    assert condition.lstrip().startswith("!cancelled() && (")
+    mutated = condition.replace("!cancelled() && (", "(", 1)
+    failed = _context("pull_request", INTEGRATION, "failure", "")
+    assert _evaluate(condition, failed) is True
+    assert _evaluate(mutated, failed) is False
+    assert _evaluate(mutated, _context("push", "", "success", "true")) is True
+
+
+@pytest.mark.parametrize(
+    ("condition", "result", "runs"),
+    [
+        ("github.event_name == 'push'", "success", True),
+        ("github.event_name == 'push'", "failure", False),
+        ("github.event_name == 'push'", "skipped", False),
+        ("always() && github.event_name == 'push'", "failure", True),
+        ("failure()", "failure", True),
+        ("failure()", "success", False),
+        ("!cancelled()", "skipped", True),
+        ("cancelled()", "success", False),
+    ],
+)
+def test_the_evaluator_models_status_functions(condition: str, result: str, runs: bool) -> None:
+    assert _evaluate(condition, _context("push", "", result, "true")) is runs
 
 
 def test_the_filter_keeps_the_previous_paths() -> None:
