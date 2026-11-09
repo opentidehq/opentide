@@ -233,19 +233,31 @@ impl Ledger {
         }
     }
 
-    /// The entries whose `changelog` text `changelog` (the text of
-    /// `CHANGELOG.md`) does not contain.
+    /// The entries whose `changelog` is not the bold lead of an entry of
+    /// `changelog` (the text of `CHANGELOG.md`): `**Lead**`, found as a list
+    /// item that starts with it (`- **Lead** …`), in any version's section,
+    /// since entries move from `[Unreleased]` to their release.
     pub fn missing_changelog(&self, changelog: &str) -> Vec<String> {
         self.entries
             .iter()
             .enumerate()
-            .filter(|(_, entry)| !changelog.contains(&entry.changelog))
-            .map(|(index, entry)| {
-                format!(
-                    "entry {}: changelog {:?} is not in CHANGELOG.md",
-                    index + 1,
-                    entry.changelog
-                )
+            .filter_map(|(index, entry)| {
+                let lead = &entry.changelog;
+                let bold = lead.len() > 4 && lead.starts_with("**") && lead.ends_with("**");
+                let listed = changelog
+                    .lines()
+                    .any(|line| line.trim_start().strip_prefix("- ").is_some_and(|item| item.starts_with(lead.as_str())));
+                match (bold, listed) {
+                    (false, _) => Some(format!(
+                        "entry {}: changelog {lead:?} is not a bold lead (`**…**`)",
+                        index + 1
+                    )),
+                    (true, false) => Some(format!(
+                        "entry {}: changelog {lead:?} begins no entry (`- {lead} …`) of CHANGELOG.md",
+                        index + 1
+                    )),
+                    (true, true) => None,
+                }
             })
             .collect()
     }
@@ -338,6 +350,13 @@ fn check_entry(raw: RawEntry) -> Result<Entry, Vec<String>> {
         }
         (Some(Target::ExitCode), _) => {
             problems.push("on `exit_code`, `rule` is `text`".to_owned());
+            None
+        }
+        (_, "text") if raw.oracle.contains('\n') || raw.candidate.contains('\n') => {
+            problems.push(
+                "a `text` rule's `oracle` and `candidate` are one line each: it applies line by line"
+                    .to_owned(),
+            );
             None
         }
         (_, "text") => Some(Rule::Text {
@@ -592,6 +611,19 @@ changelog = "**Nested rules**"
                 .unwrap_err()
                 .to_string()
                 .contains("are integers")
+        );
+    }
+
+    #[test]
+    fn a_text_rule_is_one_line_each_side() {
+        let text = ENTRY
+            .replace("json:/summary/rules", "text")
+            .replace("oracle = \"1\"", "oracle = \"a\\nb\"");
+        assert!(
+            Ledger::parse(&text)
+                .unwrap_err()
+                .to_string()
+                .contains("one line each")
         );
     }
 
