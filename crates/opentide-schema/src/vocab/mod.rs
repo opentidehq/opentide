@@ -1,7 +1,7 @@
 //! Vocabularies (RFC 0003): loading, pinned resolution, scoped values,
 //! stages, suggestions, the ATT&CK matrix and Sentinel's ATT&CK v18 list.
 //!
-//! - [`Vocabulary`]: one `{field}.vocab.toml` document ([`document`]).
+//! - [`Vocabulary`]: one `{field}.vocab.toml` document.
 //! - [`Vocabularies`]: the set a workspace resolves against: the bundled
 //!   documents ([`bundled`], parsed on first use), or the documents of a data
 //!   root that replaces them (`OPENTIDE_DATA_ROOT`), plus the vocabularies a
