@@ -481,7 +481,7 @@ pub fn compare(corpus: &str, workspace: &Workspace, text: &str) -> Result<Tally>
         for platform in unported(&rule) {
             tally.skipped.push((
                 object.uuid.clone(),
-                format!("{platform} body is not compiled by opentide-compile yet (#823)"),
+                format!("{platform} body (UC-3.1b, #895)"),
             ));
         }
     }
@@ -787,8 +787,8 @@ mod tests {
         assert_eq!(
             skipped,
             [
-                "defender body is not compiled by opentide-compile yet (#823)",
-                "splunk body is not compiled by opentide-compile yet (#823)",
+                "defender body (UC-3.1b, #895)",
+                "splunk body (UC-3.1b, #895)",
             ]
         );
         assert!(
