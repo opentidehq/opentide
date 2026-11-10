@@ -21,7 +21,7 @@ behaviour only on purpose, with a test and a changelog entry.
 | `platforms/` | A module and a package per platform (`client`, `deployer`, `runner`, `validator`, `compile` where it has one); `transport.py` holds `TenantSession`, which the clients build their HTTP session from |
 | `deployment/`, `states/`, `sharing/`, `extraction/`, `query/` | Deploy plans and state, MISP sharing, extraction, `opentide query` |
 | `generation/`, `documentation/`, `export/`, `ci/` | Generated schemas, docs, exports, CI templates |
-| `analysis.py`, `_native.pyi` | The one door to the Rust engine (`opentide._native`, built from `analysis/`) |
+| `analysis.py`, `_native/` | The one door to the Rust engine (`opentide._native`, built from `analysis/`); `_native/__init__.pyi` is its stub, `_native/models.pyi` the generated stub of the Rust models (`opentide._native.models`, ADR 0010) |
 | `data/` | Bundled data: vocabularies, pins, configuration and log-source defaults, the `opentide explain` pages (`diagnostics/`), setup templates and skills |
 
 ## Rules of the package
@@ -30,7 +30,8 @@ behaviour only on purpose, with a test and a changelog entry.
   `T20`). `--json` stdout carries only the JSON document; logs go to stderr.
 - **The engine:** Python reaches it only through `src/opentide/analysis.py`. A missing engine is
   `engine_unavailable`, never a skipped check. After a change to the binding, update
-  `_native.pyi` ([`analysis/AGENTS.md`](../analysis/AGENTS.md)).
+  `_native/__init__.pyi`; after a change to a Rust model, `cargo xtask stubs` regenerates
+  `_native/models.pyi` ([`analysis/AGENTS.md`](../analysis/AGENTS.md)).
 - **Object models, vocabulary or pins:** regenerate the engine's bundled Tide catalog in the same
   change, `uv run python scripts/engine/sync_opentide_schemas.py`;
   `tests/test_generation/test_bundled_tide_catalog.py` fails otherwise. Model field docstrings
