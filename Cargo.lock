@@ -2208,6 +2208,7 @@ dependencies = [
  "opentide-schema",
  "regex",
  "rustix",
+ "schemars",
  "serde",
  "serde_json",
  "similar 2.7.0",
