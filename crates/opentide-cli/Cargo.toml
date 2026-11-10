@@ -31,6 +31,11 @@ clap = { workspace = true, features = ["env", "string"] }
 ctrlc = "3.4"
 # The query lines of a code frame, coloured as the editor colours them.
 opentide-analysis.workspace = true
+# The queries check of validate on the query engines (src/queries.rs, UC-2.5):
+# the workspace and its one Diagnostic, and the quoting of a suggestion.
+opentide-workspace.workspace = true
+opentide-schema.workspace = true
+indexmap = "2"
 form_urlencoded = "1.2"
 # Percent-encoded paths in links and SARIF URIs.
 percent-encoding = "2.3"

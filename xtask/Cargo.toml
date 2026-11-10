@@ -21,6 +21,9 @@ opentide-compare.workspace = true
 opentide-schema = { workspace = true }
 # `registry diff` (UC-2.1, #816) and the `load` benchmark.
 opentide-workspace.workspace = true
+# `validate diff` and `corpus faults --only queries` (UC-2.5): the queries
+# check on the query engines, `opentide_cli::queries`.
+opentide-cli.workspace = true
 schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
