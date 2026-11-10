@@ -2799,6 +2799,48 @@
    ]
   },
   {
+   "id": "revision-schema-bool",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: true\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n",
+   "loader": "unknown schema identifier: 'True'"
+  },
+  {
+   "id": "revision-schema-list",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: [rule::1.1]\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n",
+   "loader": "unknown schema identifier: \"['rule::1.1']\""
+  },
+  {
+   "id": "revision-schema-map",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: {rule: 1.1}\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n",
+   "loader": "unknown schema identifier: \"{'rule': 1.1}\""
+  },
+  {
+   "id": "revision-schema-quote",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: \"rule's::1.1\"\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n",
+   "loader": "unknown schema identifier: \"rule's::1.1\""
+  },
+  {
+   "id": "revision-schema-float-zero",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: 0.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n",
+   "loader": "schema_missing"
+  },
+  {
+   "id": "revision-schema-negative-float-zero",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: -0.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n",
+   "loader": "schema_missing"
+  },
+  {
+   "id": "revision-metadata-float-zero",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata: 0.0\ndescription: d\n",
+   "loader": "schema_missing"
+  },
+  {
    "id": "file:tests/fixtures/tide_corpus/current/Objects/Detection Objectives/objective-0001-credential-access.yaml",
    "family": "objective",
    "yaml": "name: Credential Access Objective\n\nmetadata:\n  uuid: 00000000-0000-4000-8002-000000000001\n  schema: objective::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n\nobjective:\n  priority: High\n  type: Threat\n  description: Detect credential access techniques\n  composition:\n    strategy: Combined\n    description: Compose signals for credential access detection\n  threats:\n    - 00000000-0000-4000-8001-000000000001\n  signals:\n    - name: Suspicious logon signal\n      uuid: 00000000-0000-4000-8099-000000000001\n      description: Suspicious authentication activity\n      severity: Medium\n      methodology: Statistical\n      entities:\n        - Host::Hostname\n      data:\n        availability: Complete\n        requirements: Security event logs\n",

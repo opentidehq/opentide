@@ -107,7 +107,10 @@ pub enum Rejection {
         family: String,
     },
     /// An identifier that is neither registered nor a revision of the expected
-    /// family.
+    /// family. The message quotes it in single quotes whatever it holds: a
+    /// string as written, a boolean or number as YAML 1.2 reads it, a list as
+    /// `[...]` and a mapping as `{...}` (`identifier-quoting` in
+    /// `tests/oracle/objects_cases.toml`; the oracle used Python's `repr`).
     #[error("unknown schema identifier: '{identifier}'")]
     Unknown {
         /// The identifier as written.

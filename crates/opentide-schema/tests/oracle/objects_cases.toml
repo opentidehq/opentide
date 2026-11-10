@@ -47,8 +47,13 @@ changelog = "**Field types are checked as declared**"
 
 [[difference]]
 id = "unknown-revision"
-reason = "A `metadata.schema` that names a revision of the object's family the registry does not hold (`rule::7.0`, `Rule::1.1`, `threat::1.5`) is checked against the family's newest revision (`rule::1.1`), without the unknown-key check, as the language server already did (ADR 0009). The object still fails: the error at `metadata.schema` stays (`value_error`, `unknown schema identifier: 'rule::7.0'; checked against rule::1.1, the newest rule revision, without the unknown-key check`), followed by every other error the newest revision finds. The oracle stopped at the identifier (`unknown schema identifier: 'rule::7.0'`) and reported nothing else. An identifier of another family, or one that is not `family::major.minor`, is refused as before."
+reason = "A `metadata.schema` that names a revision of the object's family the registry does not hold (`rule::7.0`, `Rule::1.1`, `threat::1.5`) is checked against the family's newest revision (`rule::1.1`), without the unknown-key check, as the language server already did (ADR 0009). The object still fails: the error at `metadata.schema` stays (`value_error`, `unknown schema identifier: 'rule::7.0'; checked against rule::1.1, the newest rule revision, without the unknown-key check`), followed by every other error the newest revision finds. The oracle stopped at the identifier (`unknown schema identifier: 'rule::7.0'`) and reported nothing else. An identifier of another family, or one that is not `family::major.minor`, is refused as before, with the same code; its message quotes it as `identifier-quoting` says."
 changelog = "**An unknown schema revision is checked against the newest revision of its family**"
+
+[[difference]]
+id = "identifier-quoting"
+reason = "A `metadata.schema` that is not a registered revision nor a revision of the object's family is refused as before (`schema_validation`, `unknown schema identifier: ...`), but the identifier is quoted the same way whatever it holds: in single quotes, as written in the file (`'rule's::1.1'`), a boolean as YAML 1.2 spells it (`'true'`, where the oracle printed Python's `'True'`), a list as `'[...]'` and a mapping as `'{...}'` (where the oracle printed Python's repr, `\"['rule::1.1']\"`). The oracle used Python's `repr`, which switches to double quotes when the text holds a single quote. Codes and exit codes are unchanged."
+changelog = "**An unknown schema identifier is quoted the same way whatever it holds**"
 
 [[case]]
 id = "rule-1-1-minimal"
@@ -1837,7 +1842,9 @@ objective:
 # The revision registry (UC-1.7, #813; ADR 0009): what `metadata.schema`
 # selects. A revision of the expected family that the registry does not hold
 # is checked against the family's newest revision without the unknown-key
-# check (`unknown-revision`); every other verdict is the oracle's.
+# check (`unknown-revision`), and an identifier that is refused is quoted in
+# single quotes as written (`identifier-quoting`); every other verdict is the
+# oracle's.
 
 [[case]]
 id = "revision-unknown-rule"
@@ -2092,5 +2099,108 @@ yaml = '''
 name: Rule
 metadata:
   - schema: rule::1.1
+description: d
+'''
+
+[[case]]
+id = "revision-schema-bool"
+family = "rule"
+difference = ["identifier-quoting"]
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: true
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+'''
+
+[[case]]
+id = "revision-schema-list"
+family = "rule"
+difference = ["identifier-quoting"]
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: [rule::1.1]
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+'''
+
+[[case]]
+id = "revision-schema-map"
+family = "rule"
+difference = ["identifier-quoting"]
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: {rule: 1.1}
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+'''
+
+[[case]]
+id = "revision-schema-quote"
+family = "rule"
+difference = ["identifier-quoting"]
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: "rule's::1.1"
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+'''
+
+[[case]]
+id = "revision-schema-float-zero"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: 0.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+'''
+
+[[case]]
+id = "revision-schema-negative-float-zero"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: -0.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+'''
+
+[[case]]
+id = "revision-metadata-float-zero"
+family = "rule"
+yaml = '''
+name: Rule
+metadata: 0.0
 description: d
 '''

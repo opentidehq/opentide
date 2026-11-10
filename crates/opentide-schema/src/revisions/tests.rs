@@ -312,6 +312,9 @@ fn the_loader_refuses_what_is_not_a_revision_of_the_family() {
         ("rule::1.x", "rule::1.x"),
         ("1.1", "1.1"),
         ("true", "true"),
+        ("[rule::1.1]", "[...]"),
+        ("{rule: 1.1}", "{...}"),
+        ("\"rule's::1.1\"", "rule's::1.1"),
     ] {
         assert_eq!(
             verdict(schema, "rule"),
@@ -321,10 +324,24 @@ fn the_loader_refuses_what_is_not_a_revision_of_the_family() {
             "{schema}"
         );
     }
-    for schema in ["''", "null", "0", "false", "[]", "{}"] {
+    for schema in ["''", "null", "0", "0.0", "-0.0", "false", "[]", "{}"] {
         let verdict = verdict(schema, "rule");
         assert_eq!(verdict, Err(Rejection::SchemaMissing), "{schema}");
         assert_eq!(verdict.unwrap_err().code(), "schema_missing");
+    }
+    // `identifier-quoting` (tests/oracle/objects_cases.toml): single quotes
+    // whatever the identifier holds, where the oracle used Python's repr.
+    for (schema, message) in [
+        ("true", "unknown schema identifier: 'true'"),
+        ("[rule::1.1]", "unknown schema identifier: '[...]'"),
+        (
+            "\"rule's::1.1\"",
+            "unknown schema identifier: 'rule's::1.1'",
+        ),
+    ] {
+        let rejection = verdict(schema, "rule").unwrap_err();
+        assert_eq!(rejection.to_string(), message, "{schema}");
+        assert_eq!(rejection.code(), "schema_validation", "{schema}");
     }
     assert_eq!(
         verdict("rule::1.1", "visibility"),
@@ -338,7 +355,14 @@ fn the_loader_refuses_what_is_not_a_revision_of_the_family() {
             family: "detection".into()
         })
     );
-    for text in ["", "- a\n", "name: x\n", "metadata:\n", "metadata: 0\n"] {
+    for text in [
+        "",
+        "- a\n",
+        "name: x\n",
+        "metadata:\n",
+        "metadata: 0\n",
+        "metadata: 0.0\n",
+    ] {
         assert_eq!(
             select(&node::load(text).unwrap(), "rule"),
             Err(Rejection::SchemaMissing),

@@ -828,6 +828,9 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
   "revision-empty": {
     "loader": "schema_missing"
   },
+  "revision-metadata-float-zero": {
+    "loader": "schema_missing"
+  },
   "revision-metadata-list": {
     "errors": [
       {
@@ -888,6 +891,24 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
   },
   "revision-platform-identifier": {
     "loader": "unknown schema identifier: 'platform::sentinel::1.0'"
+  },
+  "revision-schema-bool": {
+    "loader": "unknown schema identifier: 'true'"
+  },
+  "revision-schema-float-zero": {
+    "loader": "schema_missing"
+  },
+  "revision-schema-list": {
+    "loader": "unknown schema identifier: '[...]'"
+  },
+  "revision-schema-map": {
+    "loader": "unknown schema identifier: '{...}'"
+  },
+  "revision-schema-negative-float-zero": {
+    "loader": "schema_missing"
+  },
+  "revision-schema-quote": {
+    "loader": "unknown schema identifier: 'rule's::1.1'"
   },
   "revision-unknown-family-spelling": {
     "errors": [
