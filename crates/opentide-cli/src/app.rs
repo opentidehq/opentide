@@ -28,7 +28,7 @@ use std::time::{Duration, Instant, SystemTime};
 
 /// Command paths with a Rust implementation; every other one is refused with
 /// `engine_not_ported`, as `OPENTIDE_ENGINE=rust` refuses it.
-pub const PORTED: &[&str] = &["commands"];
+pub const PORTED: &[&str] = &["commands", "info", "rules unreviewed"];
 
 /// What the embedding process tells the run about itself.
 pub struct Host {
@@ -339,6 +339,26 @@ impl Run<'_> {
                 };
                 self.emit(&outcome, &[], &lines, out, err)
             }
+            "info" => {
+                let report = self.info(&matches);
+                self.emit_report(&report, out, err)
+            }
+            "rules unreviewed" => {
+                let older_than = leaf(&matches)
+                    .get_one::<String>("older_than")
+                    .cloned()
+                    .unwrap_or_else(|| "90d".to_owned());
+                let cwd = self.host.cwd.clone().unwrap_or_default();
+                let report = crate::commands::rules::run(
+                    &older_than,
+                    self.globals.repo.as_deref(),
+                    self.env,
+                    &cwd,
+                    jiff::Timestamp::now(),
+                    self.mode != Mode::Json,
+                );
+                self.emit_report(&report, out, err)
+            }
             _ => {
                 let message = format!(
                     "opentide {path} has no Rust implementation yet: unset OPENTIDE_ENGINE, or set it to python or compare."
@@ -349,6 +369,138 @@ impl Run<'_> {
                 self.emit(&outcome, &[], &[], out, err)
             }
         }
+    }
+
+    /// `opentide info`, from its parsed arguments.
+    fn info(&self, matches: &clap::ArgMatches) -> crate::commands::Report {
+        use clap::ValueEnum;
+        let args = leaf(matches);
+        let cwd = self.host.cwd.clone().unwrap_or_default();
+        let parsed = crate::commands::info::Args {
+            platform: args
+                .get_one::<crate::tree::Platform>("platform")
+                .and_then(|platform| platform.to_possible_value())
+                .map(|value| value.get_name().to_owned()),
+            section: args.get_one::<String>("section").cloned(),
+            name: args.get_one::<String>("name").cloned(),
+            technique: args.get_one::<String>("technique").cloned(),
+            strict: args.get_flag("strict"),
+        };
+        crate::commands::info::run(
+            &parsed,
+            &crate::commands::info::Context {
+                repo: self.globals.repo.as_deref(),
+                env: self.env,
+                cwd: &cwd,
+                version: &self.host.version,
+                text: self.mode != Mode::Json,
+            },
+        )
+    }
+
+    /// The width a table or a long line is laid out at on stdout: `COLUMNS`,
+    /// else the terminal's, else 80.
+    fn stdout_width(&self) -> usize {
+        if let Some(columns) = self
+            .env
+            .get("COLUMNS")
+            .filter(|value| !value.is_empty() && value.bytes().all(|b| b.is_ascii_digit()))
+            .and_then(|value| value.parse::<usize>().ok())
+        {
+            return columns;
+        }
+        if self.host.stdout_tty {
+            self.host.width.unwrap_or(80)
+        } else {
+            80
+        }
+    }
+
+    /// Prints `report` in this run's mode; its exit code.
+    fn emit_report(
+        &self,
+        report: &crate::commands::Report,
+        out: &mut dyn Write,
+        err: &mut dyn Write,
+    ) -> std::io::Result<i32> {
+        use crate::commands::Block;
+        use crate::render::outcome::{ResultView, render_result};
+        if self.interrupted() {
+            return Ok(INTERRUPTED_EXIT_CODE);
+        }
+        let outcome = &report.outcome;
+        if self.mode == Mode::Json {
+            let mut document = outcome.document(self.duration_ms());
+            if !report.warnings.is_empty()
+                && let crate::json::Json::Object(members) = &mut document
+            {
+                let at = members
+                    .iter()
+                    .position(|(key, _)| key == "message")
+                    .map_or(members.len(), |at| at + 1);
+                members.insert(
+                    at,
+                    (
+                        "warnings".into(),
+                        crate::json::Json::Array(
+                            report.warnings.iter().map(crate::json::Json::str).collect(),
+                        ),
+                    ),
+                );
+            }
+            out.write_all(document_text(&document, self.indent).as_bytes())?;
+            out.flush()?;
+            return Ok(outcome.exit_code);
+        }
+        let stdout = self.console(self.host.stdout_tty);
+        let width = self.stdout_width();
+        if self.mode != Mode::Mcp {
+            for block in &report.body {
+                match block {
+                    Block::Lines(lines) => {
+                        for line in lines {
+                            for row in crate::render::table::wrap_text(line, width) {
+                                out.write_all(stdout.line(&row).as_bytes())?;
+                            }
+                        }
+                    }
+                    Block::Table(table) => {
+                        for line in table.render(width) {
+                            out.write_all(stdout.line(&line).as_bytes())?;
+                        }
+                    }
+                }
+            }
+        }
+        let view = ResultView {
+            message: outcome.message.clone(),
+            outcome: report.outcome_line.clone(),
+            status: outcome.status.clone(),
+            ok: outcome.ok(),
+            outcome_kind: report.outcome_kind,
+            failure: outcome
+                .failure
+                .as_ref()
+                .map(|failure| (failure.code.clone(), failure.suggestion.clone())),
+            detail: None,
+            advice: None,
+            warnings: report.warnings.clone(),
+            next_actions: outcome.next_actions.clone(),
+        };
+        let (text_out, text_err) = render_result(
+            &view,
+            stdout,
+            self.console(self.host.stderr_tty),
+            self.mode,
+            self.globals.quiet,
+        );
+        if self.mode != Mode::Mcp {
+            out.write_all(text_out.as_bytes())?;
+        }
+        err.write_all(text_err.as_bytes())?;
+        out.flush()?;
+        err.flush()?;
+        Ok(outcome.exit_code)
     }
 
     fn resolve(&self, path: &str) -> PathBuf {
@@ -372,6 +524,15 @@ impl Run<'_> {
         out.extend(self.host.cwd.clone());
         out
     }
+}
+
+/// The matches of the subcommand `matches` ran.
+fn leaf(matches: &clap::ArgMatches) -> &clap::ArgMatches {
+    let mut current = matches;
+    while let Some((_, sub)) = current.subcommand() {
+        current = sub;
+    }
+    current
 }
 
 /// The subcommand path `matches` ran.

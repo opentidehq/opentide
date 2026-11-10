@@ -37,6 +37,15 @@ mod comparator {
         )
     }
 
+    /// An entry whose values may span lines (TOML multi-line literals).
+    fn lines_entry(target: &str, oracle: &str, candidate: &str) -> String {
+        format!(
+            "[[diff]]\ncommand = \"info\"\ncase = \"*\"\ntarget = {target:?}\nrule = \"lines\"\n\
+             oracle = '''\n{oracle}'''\ncandidate = '''\n{candidate}'''\nreason = \"intended\"\n\
+             issue = \"{ISSUE}\"\nchangelog = \"**Intended**\"\n"
+        )
+    }
+
     fn check(oracle: &Run, candidate: &Run, ledger: &Ledger) -> (CaseReport, Usage) {
         let mut usage = Usage::default();
         let report = compare(
@@ -418,6 +427,46 @@ mod comparator {
         // The oracle's line ending is kept: a different ending is reported.
         let crlf = run(0, "rules: 2\r\nok\nrules: 2\n", "");
         assert!(!check(&oracle, &crlf, &ledger).0.equal);
+    }
+
+    /// A `lines` entry: a row the candidate adds is one entry, and the lines
+    /// after it are compared at their new place.
+    #[test]
+    fn a_lines_rule_approves_an_inserted_row_and_nothing_else() {
+        let ledger = Ledger::parse(&lines_entry("stdout", "| a |", "| a |\n| new |\n|     |"))
+            .expect("valid");
+        let oracle = run(0, "title\n| a |\n| b |\nend\n", "");
+        let candidate = run(0, "title\n| a |\n| new |\n|     |\n| b |\nend\n", "");
+        let (report, usage) = check(&oracle, &candidate, &ledger);
+        assert!(report.equal, "{report:?}");
+        assert!(usage.is_used(0));
+        // The lines after the block still count: a change there is reported.
+        let changed = run(0, "title\n| a |\n| new |\n|     |\n| c |\nend\n", "");
+        let (report, _) = check(&oracle, &changed, &ledger);
+        assert!(!report.equal);
+        assert_eq!(report.differences[0].at.as_deref(), Some("line 5, byte 30"));
+        // Not where the candidate lacks the inserted lines.
+        let (report, usage) = check(&oracle, &run(0, "title\n| a |\n| b |\nend\n", ""), &ledger);
+        assert!(report.equal);
+        assert!(!usage.is_used(0), "nothing differed, nothing is approved");
+        let without = run(0, "title\n| a |\n| other |\n| b |\nend\n", "");
+        let (report, usage) = check(&oracle, &without, &ledger);
+        assert!(!report.equal);
+        assert!(!usage.is_used(0));
+        // A removed row: the oracle's block is longer.
+        let removal =
+            Ledger::parse(&lines_entry("stdout", "| a |\n| b |", "| a |")).expect("valid");
+        let (report, usage) = check(&oracle, &run(0, "title\n| a |\nend\n", ""), &removal);
+        assert!(report.equal, "{report:?}");
+        assert!(usage.is_used(0));
+    }
+
+    #[test]
+    fn a_lines_rule_must_differ_and_take_no_carriage_return() {
+        assert!(Ledger::parse(&lines_entry("stdout", "a\nb", "a\nb")).is_err());
+        assert!(Ledger::parse(&lines_entry("stdout", "a\r", "b")).is_err());
+        assert!(Ledger::parse(&lines_entry("exit_code", "1", "2")).is_err());
+        assert!(Ledger::parse(&lines_entry("stdout", "a\nb", "a")).is_ok());
     }
 
     #[test]

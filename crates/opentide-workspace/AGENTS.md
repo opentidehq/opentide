@@ -4,8 +4,9 @@ Loading a Tide workspace once, in parallel, into the index the CLI, the SDK, `se
 language server share (plan §4, the `opentide-workspace` domain crate; UC-2.1, #816). It ports the
 oracle's `core/root.py`, `registry/discovery.py`, `registry/paths.py`, `registry/catalogue.py`,
 `registry/builder.py` (object loading), `registry/signals.py`, `core/chaining.py` and the
-references `validation/checks/cross_object.py` follows. Validation, lint, the catalogue and the
-language server come next (UC-2.2 to UC-2.6).
+references `validation/checks/cross_object.py` follows; the catalogue, coverage, `info`'s data and
+`rules unreviewed` (UC-2.4, `cli/services/catalog.py`, `info.py`, `rules.py`). Validation, lint
+and the language server come next (UC-2.2, UC-2.3, UC-2.5, UC-2.6).
 
 ## Place
 
@@ -26,6 +27,12 @@ source (`ci.yml` `engine-package`, `scripts/ci-local.sh`).
 | `src/index.rs` | `assemble`: the index from the scans and parses, in discovery order: objects, `file_paths`, duplicates, load errors (`yaml_parse`, `missing_uuid`), nested files, signals, references, chaining |
 | `src/workspace.rs` | `Workspace::open` (parallel read and parse with rayon), `Stats`, `invalidate` |
 | `src/registry.rs` | `Registry`: the SDK lifecycle (`initialise` once, `reload`, accessors, `lookup`) |
+| `src/fields.rs` | Reading fields by their model role (`core/object_fields.py`): role paths from `opentide_schema::objects::fields`, Python's `str()` of a value |
+| `src/coverage.rs` | Own and inherited techniques of each rule, `info coverage`'s match (`core/technique_coverage.py`) |
+| `src/catalogue.rs` | `info catalog`'s document (UC-2.4): object rows, load-error rows read from the text, edges (`covers`, `implements`, `parent`, `chains`, `technique`, `logsource`), signals, the ATT&CK matrix, the summary |
+| `src/state.rs` | The deployment state shards, read only, for the catalogue's `deployment` |
+| `src/info.rs` | `info`: the platforms with their tenants (names of variables, never values), the vocabularies and their pins |
+| `src/review.rs` | `rules unreviewed`: the window, review instants (jiff), the RFC 0008 predicate |
 | `src/export.rs` | `Index::to_json`: what `cargo xtask registry diff` compares |
 | `examples/load.rs` | `cargo xtask bench`'s `load` command for the Rust engine |
 | `tests/loading.rs` | Discovery, counts (one read and one parse per file, one resolution), load errors, duplicates, signals, references, the registry lifecycle, invalidation, the disk |

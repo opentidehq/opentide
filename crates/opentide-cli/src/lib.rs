@@ -15,6 +15,7 @@
 
 pub mod app;
 pub mod catalog;
+pub mod commands;
 pub mod crash;
 pub mod env;
 pub mod envelope;

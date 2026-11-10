@@ -15,6 +15,7 @@
 
 pub mod any;
 pub mod checks;
+pub mod fields;
 pub mod metadata;
 pub mod objective;
 pub mod response;

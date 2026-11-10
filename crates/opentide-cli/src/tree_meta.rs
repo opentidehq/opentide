@@ -68,6 +68,21 @@ pub(crate) const DEFAULTS: &[(&str, &str, &str)] = &[
     ("setup hooks", "install", "true"),
     ("setup skills", "install", "[]"),
 ];
+/// `(command path, argument id, choices)`: an argument whose value the
+/// command checks itself, with its own message and suggestion (`info`'s
+/// section), so clap holds no choices for it; the catalogue lists them.
+pub(crate) const CHOICES: &[(&str, &str, &[&str])] =
+    &[("info", "section", &crate::commands::info::SECTIONS)];
+
+/// The catalogue's choices for `id` in the command at `path`, when the
+/// command checks them itself.
+pub(crate) fn choices(path: &str, id: &str) -> Option<Vec<String>> {
+    CHOICES
+        .iter()
+        .find(|(p, arg, _)| *p == path && *arg == id)
+        .map(|(_, _, values)| values.iter().map(|v| (*v).to_owned()).collect())
+}
+
 /// Environment variables a root option reads itself, not through clap:
 /// `--debug` reads `OPENTIDE_DEBUG` (and `DEBUG` when it is a boolean), so
 /// that `DEBUG='*'` cannot fail every command.
