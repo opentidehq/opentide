@@ -1,0 +1,43 @@
+name: Stage-1 loader with an encrypted config blob
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000052
+  schema: rule::1.0
+  version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
+  tlp: clear
+  author: Detection Engineering
+description: |
+  YARA detection for a stage-1 loader that carries an encrypted
+  configuration blob after an MZ header.
+techniques:
+- T1027
+response:
+  alert_severity: Critical
+configurations:
+  bitdefender:
+    enabled: true
+    schema: platform::bitdefender::1.0
+    status: PRODUCTION
+    actions:
+      quarantine: true
+      antimalware_scan: full
+    yara:
+      on_access: false
+      signature: |
+        import "pe"
+
+        private rule MZ_Header {
+          condition:
+            uint16(0) == 0x5A4D
+        }
+
+        rule Loader_Stage1 : loader {
+          meta:
+            description = "Stage-1 loader with an encrypted config blob"
+          strings:
+            $cfg = { 43 46 47 21 [4-16] 00 01 }
+            $mutex = "Global\\qx-7731" ascii wide
+          condition:
+            MZ_Header and pe.number_of_sections > 3 and all of them
+        }

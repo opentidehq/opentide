@@ -37,7 +37,7 @@ fn text(value: Option<&Value>) -> Option<&str> {
 }
 
 /// The queries a YAML loader finds, as `(path, language, platform, text)`.
-fn expected(doc: &Value) -> BTreeSet<Query> {
+fn expected(doc: &Value, source: &str) -> BTreeSet<Query> {
     let mut out = BTreeSet::new();
     let mut add = |path: String, language: LanguageId, platform: &str, value: &str| {
         let value = value.trim_matches(['\n', '\r']);
@@ -68,6 +68,24 @@ fn expected(doc: &Value) -> BTreeSet<Query> {
                     value,
                 );
             }
+        }
+    }
+    // A YaraSignature written out in the block; an alias is not analysed
+    // (`yara_signature_alias`), though a loader resolves it.
+    let alias = source.contains("signature: *");
+    for platform in ["harfanglab", "bitdefender"] {
+        let yara = configurations
+            .and_then(|c| c.get(platform))
+            .and_then(|b| b.get("yara"));
+        if let Some(value) = text(yara.and_then(|y| y.get("signature")))
+            && !alias
+        {
+            add(
+                format!("configurations.{platform}.yara.signature"),
+                LanguageId::Yara,
+                platform,
+                value,
+            );
         }
     }
     if let Some(elastic) = configurations.and_then(|c| c.get("elastic")) {
@@ -158,9 +176,12 @@ fn every_testdata_query_is_extracted_as_yaml_loads_it() {
         let Ok(doc) = serde_yaml::from_str::<Value>(&source) else {
             continue;
         };
-        let want = expected(&doc);
+        let want = expected(&doc, &source);
+        // A HarfangLab decomposed YARA rule is assembled from several fields,
+        // which no loader does: crates/opentide-tide/tests/yara.rs checks it.
         let got: BTreeSet<Query> = extract_injections(&source)
             .into_iter()
+            .filter(|q| q.parts.is_empty())
             .map(|q| {
                 (
                     q.field_path.join("."),

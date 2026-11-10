@@ -220,3 +220,43 @@ fn standalone_cql_matches_tide_crowdstrike_query_unknown_function() {
         )
     );
 }
+
+#[test]
+fn standalone_yara_matches_tide_harfanglab_signature() {
+    let signature = "rule cmd {\n  meta:\n    context = \"file\"\n  strings:\n    $a = \"cmd.exe\"\n  condition:\n    $a and $b\n}";
+    let raw = analyze_raw("signatures/broken.yar", LanguageId::Yara, signature);
+    let raw_d = operator(&raw.diagnostics, codes::YARA_UNDEFINED_STRING);
+    assert!(raw_d.message.contains("$b"), "{}", raw_d.message);
+
+    let body = signature
+        .lines()
+        .map(|line| format!("        {line}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let yaml = format!(
+        "name: Composability\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000099\n  schema: rule::1.0\nconfigurations:\n  harfanglab:\n    yara:\n      signature: |\n{body}\n"
+    );
+    let host = MemoryWorkspace {
+        files: vec![("objects/rules/composability-yara.yaml".into(), yaml.clone())],
+    };
+    let embedded = analyze_doc(
+        "objects/rules/composability-yara.yaml",
+        LanguageId::TideYaml,
+        &yaml,
+        &host,
+    );
+    let embedded_d = operator(&embedded.diagnostics, codes::YARA_UNDEFINED_STRING);
+    assert_same_operator(raw_d, embedded_d);
+    assert_eq!(
+        embedded_d.field_path.as_deref(),
+        Some(
+            [
+                "configurations".to_string(),
+                "harfanglab".to_string(),
+                "yara".to_string(),
+                "signature".to_string(),
+            ]
+            .as_slice()
+        )
+    );
+}
