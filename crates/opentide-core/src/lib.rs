@@ -1282,7 +1282,7 @@ pub mod codes {
                 "The YARA rule name deploy derives from the rule name is a YARA keyword or keeps a character other than an ASCII letter, digit or underscore."
             }
             HARFANGLAB_YARA_CONTEXT => {
-                "A HarfangLab YARA rule's meta context is not file, memory, file,memory, file.pe, file.elf or file.macho."
+                "A HarfangLab YARA rule's meta context is not a comma-joined list, without blanks, of file, memory, file.pe, file.elf and file.macho."
             }
             BITDEFENDER_YARA_ASCII => {
                 "A Bitdefender YARA signature holds a character that is not ASCII."

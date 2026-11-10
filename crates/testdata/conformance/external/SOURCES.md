@@ -199,7 +199,7 @@ Licence text: [`LICENSE.MIT-ReversingLabs.txt`](LICENSE.MIT-ReversingLabs.txt).
 
 ### signature-base/ — at `de3c7252c22b3376352b5a68defa46459a12a693`
 
-The rules are shared under the Detection Rule License 1.1: [`LICENSE.DRL-1.1.md`](LICENSE.DRL-1.1.md). The files are unmodified, so every rule keeps the attribution meta (`author`, `reference`) the licence requires.
+The rules are shared under the Detection Rule License 1.1: [`LICENSE.DRL-1.1.md`](LICENSE.DRL-1.1.md). Each public file is unmodified, so every rule keeps the attribution meta (`author`, `reference`) the licence requires; its `.broken.` twin is a modified copy with one injected fault, as described above.
 
 - `apt_aa19_024a.yar` from `yara/apt_aa19_024a.yar`
 - `apt_agent_btz.yar` from `yara/apt_agent_btz.yar`
