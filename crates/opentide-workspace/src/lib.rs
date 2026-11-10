@@ -35,6 +35,7 @@ pub mod load;
 pub mod registry;
 pub mod root;
 pub mod validate;
+pub mod watch;
 mod workspace;
 
 pub use config::{ConfigError, Configuration};

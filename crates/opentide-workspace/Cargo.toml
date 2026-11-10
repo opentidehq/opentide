@@ -45,7 +45,7 @@ shlex = "2.0"
 # `--watch`'s change detection. The language server and the WebAssembly
 # build have no file watcher of their own to need.
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
-notify = { version = "8.2", default-features = false }
+notify = "8.2"
 
 [dev-dependencies]
 proptest.workspace = true
