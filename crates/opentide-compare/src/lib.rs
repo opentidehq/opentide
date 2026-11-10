@@ -741,6 +741,50 @@ impl RunReport {
 mod tests {
     use super::*;
 
+    /// A `text` entry whose line holds a terminal's `\r` approves that line,
+    /// and only it: the next line is still compared.
+    #[test]
+    fn a_text_entry_approves_a_line_with_a_carriage_return() {
+        let ledger = Ledger::parse(
+            r#"
+[[diff]]
+command = "generate exports"
+case = "human/*"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>x</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K  done"
+candidate = "  done"
+reason = "no live display"
+issue = "https://github.com/opentidehq/opentide/issues/824"
+changelog = "**x**"
+"#,
+        )
+        .unwrap();
+        let oracle = Run {
+            stderr: b"\x1b[?25l<LIVE>x</LIVE>\x1b[?25h\r\x1b[1A\x1b[2K  done\nerror: a\n".to_vec(),
+            ..Run::default()
+        };
+        let case = Case {
+            command: "generate exports",
+            id: "human/ws/default",
+        };
+        let mut usage = Usage::default();
+        let same = Run {
+            stderr: b"  done\nerror: a\n".to_vec(),
+            ..Run::default()
+        };
+        let report = compare(case, &oracle, &same, &ledger, &mut usage);
+        assert!(report.equal, "{report:?}");
+        assert!(usage.is_used(0));
+        let other = Run {
+            stderr: b"  done\nerror: b\n".to_vec(),
+            ..Run::default()
+        };
+        let report = compare(case, &oracle, &other, &ledger, &mut usage);
+        assert!(!report.equal);
+        assert_eq!(report.differences[0].at.as_deref(), Some("line 2, byte 14"));
+    }
+
     #[test]
     fn a_line_splits_from_its_ending() {
         assert_eq!(split_ending(b"a\n"), (&b"a"[..], &b"\n"[..]));
