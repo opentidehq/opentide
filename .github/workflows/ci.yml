@@ -783,8 +783,10 @@ jobs:
       - name: Workspace index against the oracle (registry diff)
         run: cargo xtask registry diff --against python --corpus all
       # opentide-compile's request bodies against the oracle's (UC-3.1, #823):
-      # every Sentinel and Elastic block of every rule of every corpus, the dry
-      # run's body, each tenant's and the dry run's payload entry, byte for byte.
+      # every Sentinel, Elastic and Sysdig block of every rule of every corpus,
+      # the dry run's body, each tenant's and the dry run's payload entry, byte
+      # for byte. The blocks of the platforms opentide-compile does not compile
+      # yet are listed as "not compared", per corpus.
       - name: Deploy compile against the oracle (payloads diff)
         run: >-
           cargo xtask payloads diff --against python --corpus all

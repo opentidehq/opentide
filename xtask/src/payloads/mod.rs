@@ -6,7 +6,9 @@
 //! Elastic and Sysdig block (`probe.py`: the dry run's body, each configured
 //! tenant's, and the dry run's payload entry), compiles the same with
 //! `opentide-compile`, and compares them byte for byte. A difference fails,
-//! unless `tests/golden/payloads/APPROVED.toml` approves it.
+//! unless `tests/golden/payloads/APPROVED.toml` approves it. The blocks of
+//! every other platform, which opentide-compile does not compile yet, are
+//! listed as not compared.
 
 pub mod git;
 pub mod plan;
@@ -461,7 +463,44 @@ pub fn compare(corpus: &str, workspace: &Workspace, text: &str) -> Result<Tally>
             )),
         }
     }
+    // The blocks of the platforms opentide-compile does not compile yet: the
+    // probe has no body for them, so the report lists each one as not
+    // compared, rather than leave the gap out of the tally.
+    for object in index.rules() {
+        if result
+            .unloadable
+            .iter()
+            .any(|refused| refused.uuid == object.uuid)
+        {
+            continue;
+        }
+        let Some(root) = object.root() else {
+            continue;
+        };
+        let rule = Rule::new(root, None);
+        for platform in unported(&rule) {
+            tally.skipped.push((
+                object.uuid.clone(),
+                format!("{platform} body is not compiled by opentide-compile yet (#823)"),
+            ));
+        }
+    }
     Ok(tally)
+}
+
+/// The platforms of `rule`'s set blocks whose body opentide-compile does not
+/// build ([`preview::OFFLINE`] lists those it does), in the rule's order.
+fn unported(rule: &Rule) -> Vec<String> {
+    let Some(Json::Object(configurations)) = rule.data.get("configurations") else {
+        return Vec::new();
+    };
+    configurations
+        .keys()
+        .filter(|platform| {
+            !preview::OFFLINE.contains(&platform.as_str()) && rule.block(platform).is_some()
+        })
+        .cloned()
+        .collect()
 }
 
 /// Lays out `corpus` in `ws`: the compile corpus, or a fixture of `cases.toml`.
@@ -725,6 +764,42 @@ mod tests {
                 .ends_with("refuses the rule: ValidationError: no")
         );
         assert!(compare("payloads", &workspace, "not json").is_err());
+    }
+
+    #[test]
+    fn blocks_of_platforms_not_compiled_are_listed_as_not_compared() {
+        let scratch = tempfile::tempdir().unwrap();
+        let ws = scratch.path().join("ws");
+        fs::create_dir_all(ws.join(".opentide/configurations/platforms")).unwrap();
+        fs::create_dir_all(ws.join("objects/rules")).unwrap();
+        fs::write(
+            ws.join("objects/rules/r.yaml"),
+            "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8005-000000000902\n  \
+             schema: rule::1.0\ndescription: d\nconfigurations:\n  defender:\n    \
+             status: STAGING\n  sentinel:\n    status: STAGING\n  splunk:\n    \
+             status: STAGING\n  crowdstrike: null\n",
+        )
+        .unwrap();
+        let ws = ws.canonicalize().unwrap();
+        let workspace = open(&ws).unwrap();
+        let tally = compare("c", &workspace, r#"{"rules":[],"unloadable":[]}"#).unwrap();
+        let skipped: Vec<&str> = tally.skipped.iter().map(|(_, why)| why.as_str()).collect();
+        assert_eq!(
+            skipped,
+            [
+                "defender body is not compiled by opentide-compile yet (#823)",
+                "splunk body is not compiled by opentide-compile yet (#823)",
+            ]
+        );
+        assert!(
+            tally
+                .skipped
+                .iter()
+                .all(|(uuid, _)| uuid == "00000000-0000-4000-8005-000000000902")
+        );
+        // A rule the oracle refused is listed once, for that.
+        let refused = r#"{"rules":[],"unloadable":[{"uuid":"00000000-0000-4000-8005-000000000902","error":"no"}]}"#;
+        assert_eq!(compare("c", &workspace, refused).unwrap().skipped.len(), 1);
     }
 
     #[test]
