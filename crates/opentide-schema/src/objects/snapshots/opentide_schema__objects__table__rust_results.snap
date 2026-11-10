@@ -48,7 +48,27 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
   "file:tests/fixtures/tide_corpus/current/Objects/Detection Rules/rule-0001-sentinel-kql.yaml": {
     "value": {
       "configurations": {
-        "sentinel": {}
+        "sentinel": {
+          "alert": {
+            "create_incident": true,
+            "suppression": false,
+            "title": "Sentinel KQL Rule"
+          },
+          "enabled": true,
+          "grouping": {
+            "alert": {
+              "enabled": false
+            },
+            "event": "SingleAlert"
+          },
+          "name": "Sentinel KQL Rule",
+          "query": "SecurityEvent\n| where EventID == 4688\n| take 1\n",
+          "scheduling": {
+            "frequency": "PT1H",
+            "lookback": "PT2H"
+          },
+          "status": "STAGING"
+        }
       },
       "description": "Simulated Sentinel rule for CLI E2E corpus.\n",
       "detection_model": "00000000-0000-4000-8002-000000000001",
@@ -75,7 +95,22 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
   "file:tests/fixtures/tide_corpus/current/Objects/Detection Rules/rule-0002-defender-kql.yaml": {
     "value": {
       "configurations": {
-        "defender_for_endpoint": {}
+        "defender_for_endpoint": {
+          "alert": {
+            "category": "Execution"
+          },
+          "enabled": true,
+          "impacted_entities": {
+            "device": "device_id"
+          },
+          "name": "Defender KQL Rule",
+          "query": "DeviceProcessEvents\n| take 1\n",
+          "scheduling": "1H",
+          "scope": {
+            "selection": "All"
+          },
+          "status": "STAGING"
+        }
       },
       "description": "Simulated Defender rule for CLI E2E corpus.\n",
       "detection_model": "00000000-0000-4000-8002-000000000001",
@@ -102,7 +137,17 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
   "file:tests/fixtures/tide_corpus/current/Objects/Detection Rules/rule-0003-splunk-spl.yaml": {
     "value": {
       "configurations": {
-        "splunk": {}
+        "splunk": {
+          "enabled": true,
+          "name": "Splunk SPL Rule",
+          "query": "index=main | head 1",
+          "scheduling": {
+            "schedule": {
+              "cron": "0 * * * *"
+            }
+          },
+          "status": "STAGING"
+        }
       },
       "description": "Simulated Splunk rule for CLI E2E corpus.\n",
       "detection_model": "00000000-0000-4000-8002-000000000001",
@@ -129,7 +174,29 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
   "file:tests/fixtures/tide_corpus/current/Objects/Detection Rules/rule-0004-sentinel-one-s1ql.yaml": {
     "value": {
       "configurations": {
-        "sentinel_one": {}
+        "sentinel_one": {
+          "condition": {
+            "correlation": {
+              "entity": "host",
+              "match_in_order": true,
+              "sub_queries": [
+                {
+                  "matches_required": 1,
+                  "query": "EventType = \"Process Create\""
+                }
+              ],
+              "time_window": "1h"
+            },
+            "type": "Correlation"
+          },
+          "enabled": true,
+          "name": "SentinelOne S1QL Rule",
+          "response": {
+            "network_quarantine": false,
+            "treat_as_threat": "Malicious"
+          },
+          "status": "STAGING"
+        }
       },
       "description": "Simulated SentinelOne rule for CLI E2E corpus.\n",
       "detection_model": "00000000-0000-4000-8002-000000000001",
@@ -156,7 +223,12 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
   "file:tests/fixtures/tide_corpus/current/Objects/Detection Rules/rule-0005-carbon-black-lucene.yaml": {
     "value": {
       "configurations": {
-        "carbon_black_cloud": {}
+        "carbon_black_cloud": {
+          "enabled": true,
+          "name": "Carbon Black Lucene Rule",
+          "query": "process_name:cmd.exe",
+          "status": "STAGING"
+        }
       },
       "description": "Simulated Carbon Black rule for CLI E2E corpus.\n",
       "detection_model": "00000000-0000-4000-8002-000000000001",
@@ -183,7 +255,20 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
   "file:tests/fixtures/tide_corpus/current/Objects/Detection Rules/rule-0006-crowdstrike-deploy-only.yaml": {
     "value": {
       "configurations": {
-        "crowdstrike": {}
+        "crowdstrike": {
+          "details": {
+            "outcome": "detection",
+            "trigger": "event"
+          },
+          "enabled": true,
+          "name": "CrowdStrike Deploy Rule",
+          "query": "index=main",
+          "schedule": {
+            "frequency": "1h",
+            "lookback": "2h"
+          },
+          "status": "STAGING"
+        }
       },
       "description": "Simulated CrowdStrike rule for CLI E2E corpus (deploy-only).\n",
       "detection_model": "00000000-0000-4000-8002-000000000001",
@@ -210,7 +295,28 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
   "file:tests/fixtures/tide_corpus/current/Objects/Detection Rules/rule-0007-harfanglab-deploy-only.yaml": {
     "value": {
       "configurations": {
-        "harfanglab": {}
+        "harfanglab": {
+          "action": "Alert",
+          "confidence": "Moderate",
+          "enabled": true,
+          "maturity": "Experimental",
+          "name": "HarfangLab Deploy Rule",
+          "sigma": {
+            "condition": "selection",
+            "logsource": {
+              "category": "process_creation",
+              "product": "windows"
+            },
+            "selections": [
+              {
+                "field": "Image",
+                "name": "selection",
+                "value": "cmd.exe"
+              }
+            ]
+          },
+          "status": "STAGING"
+        }
       },
       "description": "Simulated HarfangLab rule for CLI E2E corpus (deploy-only).\n",
       "detection_model": "00000000-0000-4000-8002-000000000001",
@@ -237,7 +343,27 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
   "file:tests/fixtures/tide_corpus/current/Objects/Detection Rules/rule-0008-staging-promote.yaml": {
     "value": {
       "configurations": {
-        "sentinel": {}
+        "sentinel": {
+          "alert": {
+            "create_incident": true,
+            "suppression": false,
+            "title": "Staging Promote Rule"
+          },
+          "enabled": true,
+          "grouping": {
+            "alert": {
+              "enabled": false
+            },
+            "event": "SingleAlert"
+          },
+          "name": "Staging Promote Rule",
+          "query": "SecurityEvent | take 1\n",
+          "scheduling": {
+            "frequency": "PT1H",
+            "lookback": "PT2H"
+          },
+          "status": "STAGING"
+        }
       },
       "description": "Rule with higher metadata.version for mutate/promote E2E tests.\n",
       "detection_model": "00000000-0000-4000-8002-000000000001",
@@ -264,7 +390,23 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
   "file:tests/fixtures/tide_corpus/current/Objects/Detection Rules/rule-0009-elastic-kql.yaml": {
     "value": {
       "configurations": {
-        "elastic": {}
+        "elastic": {
+          "building_block": false,
+          "enabled": true,
+          "index": [
+            "logs-*"
+          ],
+          "language": "kuery",
+          "name": "",
+          "query": "process.name: \"powershell.exe\"\n",
+          "scheduling": {
+            "interval": "5m",
+            "lookback": "1m"
+          },
+          "schema": "platform::elastic::1.0",
+          "status": "STAGING",
+          "type": "query"
+        }
       },
       "description": "Simulated Elastic rule for CLI E2E corpus.\n",
       "detection_model": "00000000-0000-4000-8002-000000000001",
@@ -291,7 +433,27 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
   "file:tests/fixtures/tide_corpus/current/Objects/Detection Rules/rule-0013-sysdig-falco.yaml": {
     "value": {
       "configurations": {
-        "sysdig": {}
+        "sysdig": {
+          "condition": "spawned_process and container and proc.name in (corpus_shells)\n",
+          "enabled": true,
+          "lists": [
+            {
+              "items": [
+                "bash",
+                "sh",
+                "zsh"
+              ],
+              "name": "corpus_shells"
+            }
+          ],
+          "name": "",
+          "schema": "platform::sysdig::1.0",
+          "status": "STAGING",
+          "tags": [
+            "container",
+            "shell"
+          ]
+        }
       },
       "description": "Simulated Sysdig Secure Falco rule for CLI E2E corpus: a shell spawned in\na container.\n",
       "detection_model": "00000000-0000-4000-8002-000000000001",
@@ -489,6 +651,60 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           1,
           1,
           5,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "sentinel",
+          "status"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          8,
+          3,
+          11,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "sentinel",
+          "scheduling"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          8,
+          3,
+          11,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "sentinel",
+          "alert"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          8,
+          3,
+          11,
           false
         ],
         "type": "missing",

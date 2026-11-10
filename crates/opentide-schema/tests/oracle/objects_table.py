@@ -19,8 +19,10 @@ records:
   field path, message, string input, ctx, the span the CLI prints and the
   `yaml_line` it attaches);
 - or `value`: `model_dump(by_alias=True, exclude_none=True, mode="json")`,
-  with each platform block of `configurations` reduced to `{}` (UC-1.4) and
-  `file` left out.
+  with `file` left out.
+
+The cases are those of objects_cases.toml and of platform_cases.toml (the
+platform blocks, UC-1.4), then the files.
 """
 
 from __future__ import annotations
@@ -72,9 +74,6 @@ def find_line(located: Any, field_path: list[str]) -> Any:
 def value_of(model: Any) -> Any:
     dumped = model.model_dump(by_alias=True, exclude_none=True, mode="json")
     dumped.pop("file", None)
-    configurations = dumped.get("configurations")
-    if isinstance(configurations, dict):
-        dumped["configurations"] = {key: {} for key in configurations}
     return dumped
 
 
@@ -132,7 +131,11 @@ def file_cases() -> list[dict[str, str]]:
 
 
 def main() -> int:
-    written = tomllib.loads((HERE / "objects_cases.toml").read_text(encoding="utf-8"))["case"]
+    written = [
+        case
+        for name in ("objects_cases.toml", "platform_cases.toml")
+        for case in tomllib.loads((HERE / name).read_text(encoding="utf-8"))["case"]
+    ]
     cases = [{"id": c["id"], "family": c["family"], "yaml": c["yaml"]} for c in written]
     out = []
     for case in [*cases, *file_cases()]:

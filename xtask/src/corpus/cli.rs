@@ -29,13 +29,14 @@ commands:
                  apply each fault kind of tests/corpora/faults.toml to its own
                  copy of the clean workspace, run the oracle, and check it
                  reports exactly the expected codes and severities
-  faults --check --engine rust [--oracle BIN] [--only objects|structural|ID,...]
-         [--keep DIR] [--catalogue FILE]
-                 the object fault kinds (UC-1.3; structural: UC-1.2's subset):
-                 each object file read and converted by opentide-schema's object
-                 models, every schema_validation finding outside the platform
-                 blocks compared with the oracle's field for field (code, field
-                 path, message, line, columns, yaml_line), and yaml_parse by code
+  faults --check --engine rust [--oracle BIN]
+         [--only objects|structural|platforms|ID,...] [--keep DIR] [--catalogue FILE]
+                 the object fault kinds (UC-1.3; structural: UC-1.2's subset;
+                 platforms: the platform blocks', UC-1.4): each object file read
+                 and converted by opentide-schema's object models, every
+                 schema_validation finding compared with the oracle's field for
+                 field (code, field path, message, line, columns, yaml_line),
+                 and yaml_parse by code
   faults --check --engine rust [--oracle BIN] --only configuration|ID,...
          [--keep DIR] [--catalogue FILE]
                  the configuration fault kinds (UC-1.5): each workspace's
@@ -62,7 +63,8 @@ commands:
 
 The oracle is BIN, else $OPENTIDE_ORACLE, else `opentide` on PATH; it must
 print the version faults.toml names. `--engine rust` covers the object
-kinds (opentide-schema, UC-1.3) and the configuration kinds (UC-1.5) today;
+kinds (opentide-schema, UC-1.3), the platform kinds (UC-1.4) and the
+configuration kinds (UC-1.5) today;
 every kind comes with the Rust engine's validate (UC-2.x).
 ";
 
@@ -902,9 +904,9 @@ fn structural_check(parsed: &FaultArgs, catalogue: &Catalogue) -> Result<u8> {
                 } else {
                     bail!(
                         "--engine rust checks the object kinds (UC-1.3; --only objects lists \
-                         them) and the configuration kinds (UC-1.5; --only configuration): \
-                         `{id}` comes with the platform blocks (UC-1.4) or the Rust engine's \
-                         validate (UC-2.x)"
+                         them), the platform kinds (UC-1.4; --only platforms) and the \
+                         configuration kinds (UC-1.5; --only configuration): `{id}` comes with \
+                         the Rust engine's validate (UC-2.x)"
                     );
                 }
             }

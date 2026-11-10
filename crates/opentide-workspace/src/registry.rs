@@ -4,10 +4,9 @@
 //! again; the accessors initialise on first use, as Python's do.
 //!
 //! The typed objects of Python's `Rules`, `Threats` and `Objectives` are the
-//! model structs of `opentide-schema`; until the rule's platform blocks are
-//! modelled (UC-1.4) and the models are exposed to Python (UC-1.9) the
-//! accessors hand out the index's [`Object`]s, whose documents those models
-//! read.
+//! model structs of `opentide-schema` (the rules' platform blocks included,
+//! UC-1.4); until the models are exposed to Python (UC-1.9) the accessors
+//! hand out the index's [`Object`]s, whose documents those models read.
 
 use std::sync::Arc;
 

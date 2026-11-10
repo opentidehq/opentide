@@ -122,13 +122,6 @@ pub enum Rejection {
         /// The family asked for.
         family: String,
     },
-    /// A rule cannot be read until its platform blocks have models (UC-1.4,
-    /// #810): only with the `unchecked-platform-blocks` feature.
-    #[error("'{identifier}': the platform blocks of a rule have no models yet (UC-1.4)")]
-    Unchecked {
-        /// The rule's identifier.
-        identifier: &'static str,
-    },
 }
 
 impl Rejection {
@@ -273,20 +266,14 @@ fn convert(
             from_node::from_document::<ObjectiveV1_0>(document),
             TideObject::ObjectiveV1_0,
         ),
-        #[cfg(any(test, feature = "unchecked-platform-blocks"))]
         RuleV1_0::SCHEMA_IDENTIFIER => boxed(
             from_node::from_document::<RuleV1_0>(document),
             TideObject::RuleV1_0,
         ),
-        #[cfg(any(test, feature = "unchecked-platform-blocks"))]
         RuleV1_1::SCHEMA_IDENTIFIER => boxed(
             from_node::from_document::<RuleV1_1>(document),
             TideObject::RuleV1_1,
         ),
-        #[cfg(not(any(test, feature = "unchecked-platform-blocks")))]
-        identifier @ (RuleV1_0::SCHEMA_IDENTIFIER | RuleV1_1::SCHEMA_IDENTIFIER) => {
-            return Err(Rejection::Unchecked { identifier });
-        }
         _ => {
             return Err(Rejection::NoModel {
                 family: revision.id().family().to_owned(),

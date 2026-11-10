@@ -11,13 +11,14 @@
 //! with every error placed; garde ([`garde::Validate`]) checks a value built
 //! in memory. The validators both run are in [`checks`].
 //!
-//! The rule's platform blocks are UC-1.4's: see [`rule`].
+//! The rule's platform blocks (UC-1.4) are [`platform`]'s.
 
 pub mod any;
 pub mod checks;
 pub mod fields;
 pub mod metadata;
 pub mod objective;
+pub mod platform;
 pub mod response;
 pub mod role;
 pub mod rule;
@@ -31,7 +32,7 @@ pub use objective::{
 };
 pub use response::{ResponseProcedure, ResponseSearch, RuleResponse};
 pub use role::FieldRole;
-pub use rule::{Rule, RuleConfigurations, RuleV1_0, RuleV1_1, UncheckedBlock};
+pub use rule::{Rule, RuleConfigurations, RuleV1_0, RuleV1_1};
 pub use threat::{Killchain, ThreatActor, ThreatBody, ThreatVector, ThreatVectorV1_0};
 
 #[cfg(test)]

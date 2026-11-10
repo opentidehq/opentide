@@ -14,6 +14,8 @@ readme = "../COMPONENT.md"
 workspace = true
 
 [dependencies]
+# Elastic durations (`duration`): linear-time patterns, no look-around.
+regex.workspace = true
 serde.workspace = true
 toml.workspace = true
 thiserror.workspace = true
