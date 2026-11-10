@@ -301,6 +301,103 @@ mod tests {
         assert_eq!(text("f"), "['x', 1]");
     }
 
+    fn index_of(objects: &[(&str, &str, &str)]) -> Index {
+        let mut index = Index::default();
+        for (family, uuid, text) in objects {
+            index
+                .objects
+                .entry((*family).to_owned())
+                .or_default()
+                .insert(
+                    (*uuid).to_owned(),
+                    opentide_workspace::Object {
+                        uuid: (*uuid).to_owned(),
+                        family: (*family).to_owned(),
+                        path: std::path::PathBuf::from(format!("{uuid}.yaml")),
+                        document: std::sync::Arc::new(opentide_schema::node::load(text).unwrap()),
+                    },
+                );
+        }
+        index
+    }
+
+    #[test]
+    fn a_rule_whose_detection_model_is_not_indexed_fails() {
+        let index = index_of(&[
+            (
+                "objective",
+                "o1",
+                "name: O\nmetadata: {schema: 'objective::1.0'}\nobjective: {}\n",
+            ),
+            (
+                "rule",
+                "r1",
+                "name: R\nmetadata: {schema: 'rule::1.0'}\ndetection_model: o1\n",
+            ),
+            (
+                "rule",
+                "r2",
+                "name: R2\nmetadata: {schema: 'rule::1.0'}\ndetection_model: [o1, gone, lost]\n",
+            ),
+        ]);
+        let relations = Relations::new(&index);
+        assert_eq!(relations.parents("r1").unwrap(), ["o1"]);
+        assert_eq!(
+            relations.parents("r2").unwrap_err(),
+            Cause::Other("detection_model gone, lost does not exist in the catalogue".into())
+        );
+        assert_eq!(relations.children("o1").unwrap(), ["r1", "r2"]);
+    }
+
+    #[test]
+    fn an_objects_kind_is_its_schema_else_what_it_holds() {
+        let mut index = index_of(&[
+            (
+                "threat",
+                "t1",
+                "name: T\nmetadata: {schema: 'threat::1.0'}\n",
+            ),
+            (
+                "rule",
+                "r1",
+                "name: R\nmetadata: {}\nconfigurations: {sentinel: {}}\n",
+            ),
+            ("rule", "x1", "name: Lost\nmetadata: {schema: ''}\n"),
+            ("rule", "x2", "metadata: {}\n"),
+            ("rule", "empty", "{}\n"),
+        ]);
+        index.signals.insert(
+            "s1".into(),
+            opentide_workspace::index::Signal {
+                uuid: "s1".into(),
+                owner: "o1".into(),
+                node: opentide_schema::node::load("name: S\n")
+                    .unwrap()
+                    .root()
+                    .unwrap()
+                    .clone(),
+            },
+        );
+        let relations = Relations::new(&index);
+        assert_eq!(relations.kind("t1").unwrap(), "threat");
+        assert_eq!(relations.kind("s1").unwrap(), "signal");
+        assert_eq!(relations.kind("r1").unwrap(), "rule");
+        assert_eq!(
+            relations.kind("x1").unwrap_err(),
+            Cause::Other("Object Lost is missing a schema identifier".into())
+        );
+        assert_eq!(
+            relations.kind("x2").unwrap_err(),
+            Cause::Other("Object NAME NOT FOUND is missing a schema identifier".into())
+        );
+        for unknown in ["empty", "nowhere"] {
+            assert_eq!(
+                relations.kind(unknown).unwrap_err(),
+                Cause::Other(format!("UUID {unknown} does not exist in the catalogue"))
+            );
+        }
+    }
+
     #[test]
     fn references_are_strings_or_lists_of_strings() {
         let document = opentide_schema::node::load("a: x\nb: [x, 1, y]\nc: 3\n").unwrap();

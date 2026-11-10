@@ -168,7 +168,11 @@ fn techniques_of(
                 .filter(|name| truthy(name))
                 .map(|name| py_str(name))
                 .unwrap_or_default();
-            Some((name.to_lowercase(), object.uuid.as_str(), root))
+            Some((
+                caseless::default_case_fold_str(&name),
+                object.uuid.as_str(),
+                root,
+            ))
         })
         .collect();
     ordered.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(b.1)));
@@ -574,6 +578,148 @@ mod tests {
             actor_names(&actors, &vocabularies),
             ["[Enterprise] APT1", "Unknown Crew"]
         );
+    }
+
+    /// An index of `(family, uuid, document)`, in that order.
+    fn index_of(objects: &[(&str, &str, &str)]) -> Index {
+        let mut index = Index::default();
+        for (family, uuid, text) in objects {
+            index
+                .objects
+                .entry((*family).to_owned())
+                .or_default()
+                .insert(
+                    (*uuid).to_owned(),
+                    opentide_workspace::Object {
+                        uuid: (*uuid).to_owned(),
+                        family: (*family).to_owned(),
+                        path: PathBuf::from(format!("{uuid}.yaml")),
+                        document: std::sync::Arc::new(opentide_schema::node::load(text).unwrap()),
+                    },
+                );
+        }
+        index
+    }
+
+    fn settings(object_names: &[(&str, &str)]) -> Settings {
+        Settings {
+            dir: PathBuf::from("exports"),
+            navigator: "attack-navigator.json".into(),
+            objects: "objects.export.json".into(),
+            revisions: "revisions.export.json".into(),
+            families: vec!["threat".into(), "objective".into(), "rule".into()],
+            object_names: object_names
+                .iter()
+                .map(|(family, name)| ((*family).to_owned(), (*name).to_owned()))
+                .collect(),
+        }
+    }
+
+    fn rendered(target: Target, index: &Index, settings: &Settings) -> serde_json::Value {
+        let output = export(target, index, settings, &Vocabularies::bundled()).unwrap();
+        serde_json::from_slice(&output.bytes).unwrap()
+    }
+
+    fn rule(name: &str, uuid: &str, model: &str) -> String {
+        format!("name: '{name}'\nmetadata: {{uuid: {uuid}}}\ndetection_model: {model}\n")
+    }
+
+    #[test]
+    fn the_layer_colours_each_technique_by_who_covers_it_in_technique_order() {
+        let index = index_of(&[
+            (
+                "threat",
+                "t1",
+                "name: Zeta threat\nmetadata: {uuid: t1}\nthreat: {mitre_attack: [T1059, T1003]}\n",
+            ),
+            (
+                "objective",
+                "o1",
+                "name: Objective\nmetadata: {uuid: o1}\nobjective: {mitre_attack: [T1566, T1059]}\n",
+            ),
+            ("rule", "r1", &rule("Rule b", "r1", "o1")),
+        ]);
+        let layer = rendered(Target::Navigator, &index, &settings(&[]));
+        let techniques: Vec<(&str, &str, &str)> = layer["techniques"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|technique| {
+                assert_eq!(technique["enabled"], true);
+                (
+                    technique["techniqueID"].as_str().unwrap(),
+                    technique["color"].as_str().unwrap(),
+                    technique["comment"].as_str().unwrap(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            techniques,
+            [
+                ("T1003", "#fc6b6b", "[THREAT] Zeta threat"),
+                ("T1059", "#74c476", "[THREAT] Zeta threat, [RULE] Rule b"),
+                ("T1566", "#6baed6", "[RULE] Rule b"),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_comment_lists_objects_by_case_folded_name_then_uuid() {
+        let index = index_of(&[
+            (
+                "objective",
+                "o1",
+                "name: Objective\nmetadata: {uuid: o1}\nobjective: {mitre_attack: [T1059]}\n",
+            ),
+            ("rule", "u2", &rule("Gamma", "u2", "o1")),
+            ("rule", "b", &rule("Beta", "b", "o1")),
+            ("rule", "z1", &rule("strasse b", "z1", "o1")),
+            ("rule", "u1", &rule("GAMMA", "u1", "o1")),
+            ("rule", "a", &rule("alpha", "a", "o1")),
+            ("rule", "z2", &rule("Straße a", "z2", "o1")),
+        ]);
+        let layer = rendered(Target::Navigator, &index, &settings(&[]));
+        assert_eq!(
+            layer["techniques"][0]["comment"],
+            "[RULE] alpha, [RULE] Beta, [RULE] GAMMA, [RULE] Gamma, [RULE] Straße a, [RULE] strasse b"
+        );
+    }
+
+    #[test]
+    fn an_actor_is_found_by_its_legacy_identifier() {
+        let mut vocabularies = Vocabularies::bundled();
+        vocabularies.insert(
+            opentide_schema::vocab::Vocabulary::parse(
+                "name = \"Actors\"\nfield = \"actors\"\nkey = \"id\"\n\
+                 [[keys]]\nid = \"G9001\"\nname = \"Current Name\"\nlegacy = \"OLD-1\"\n",
+                "actors",
+            )
+            .unwrap(),
+        );
+        let actors = node("- name: 'actor::OLD-1'\n- name: G9001\n- name: OLD-2\n");
+        assert_eq!(
+            actor_names(&actors, &vocabularies),
+            ["Current Name", "Current Name", "OLD-2"]
+        );
+    }
+
+    #[test]
+    fn a_revision_names_its_family_when_no_object_name_is_configured() {
+        let index = index_of(&[(
+            "rule",
+            "r1",
+            "name: R\nmetadata: {uuid: r1, version: 2, schema: 'rule::1.0'}\ndescription: d\n",
+        )]);
+        let unnamed = rendered(Target::Revisions, &index, &settings(&[]));
+        assert_eq!(unnamed["r1"]["object"], "rule");
+        assert_eq!(unnamed["r1"]["description"], "d");
+        assert!(unnamed["r1"]["versions"]["2"].is_object());
+        let named = rendered(
+            Target::Revisions,
+            &index,
+            &settings(&[("rule", "Detection Rule")]),
+        );
+        assert_eq!(named["r1"]["object"], "Detection Rule");
     }
 
     #[test]

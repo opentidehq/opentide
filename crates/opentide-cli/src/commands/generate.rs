@@ -271,6 +271,37 @@ mod tests {
     }
 
     #[test]
+    fn a_phase_that_only_removes_files_counts_them_as_removed() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().to_path_buf();
+        let folder = root.join("docs");
+        std::fs::create_dir_all(&folder).unwrap();
+        for name in ["a.md", "b.md"] {
+            std::fs::write(folder.join(name), "x").unwrap();
+        }
+        let phase = run_phase("docs", std::slice::from_ref(&root), &root, &root, || {
+            std::fs::remove_file(folder.join("a.md")).map_err(|error| error.to_string())?;
+            std::fs::remove_file(folder.join("b.md")).map_err(|error| error.to_string())
+        });
+        assert_eq!(phase.error, None);
+        assert_eq!(phase.step.status, StepStatus::Ok);
+        assert_eq!(phase.step.count, Some(2));
+        assert_eq!(phase.step.unit, "file removed");
+        assert_eq!(phase.step.detail, "removed");
+        assert_eq!(phase.step.place.as_deref(), Some("docs/"));
+        let report = generated("generate", vec![], vec![phase.step]);
+        assert!(report.outcome.message.starts_with("Removed 2 files in "));
+
+        std::fs::write(folder.join("c.md"), "x").unwrap();
+        let phase = run_phase("docs", std::slice::from_ref(&root), &root, &root, || {
+            std::fs::write(folder.join("d.md"), "y").map_err(|error| error.to_string())?;
+            std::fs::remove_file(folder.join("c.md")).map_err(|error| error.to_string())
+        });
+        assert_eq!(phase.step.count, Some(1));
+        assert_eq!(phase.step.unit, "file");
+    }
+
+    #[test]
     fn a_failed_phase_leads_its_message_with_the_phase() {
         let report = phase_failed(
             "generate exports objects",

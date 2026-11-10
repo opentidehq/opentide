@@ -481,7 +481,7 @@ impl Run<'_> {
             let console = self.console(self.host.stderr_tty);
             if self.mode == Mode::Human && self.host.stderr_tty {
                 err.write_all(
-                    crate::render::progress::live_checklist(
+                    crate::render::progress::checklist(
                         &report.steps,
                         self.host.width.unwrap_or(80),
                         console.colour,

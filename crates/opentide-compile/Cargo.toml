@@ -44,6 +44,9 @@ dunce = "1"
 indexmap = { version = "2", features = ["serde"] }
 # generate: a phase's files written in parallel (UC-3.2).
 rayon.workspace = true
+# generate exports: the Navigator layer lists objects by name under full
+# Unicode case folding, as the oracle's `str.casefold()` sorts them.
+caseless = "0.2"
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

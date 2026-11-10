@@ -195,36 +195,6 @@ pub fn checklist(steps: &[Step], width: usize, colour: Colour) -> String {
     out
 }
 
-/// What `human` mode prints on a terminal for finished steps: the live
-/// display's first frame (the first step running, as the display draws it
-/// before any work), erased when it stops, then the [`checklist`]. The
-/// spinner's later frames follow the clock; the goldens keep only the first.
-pub fn live_checklist(steps: &[Step], width: usize, colour: Colour) -> String {
-    let Some(first) = steps.first() else {
-        return String::new();
-    };
-    let mut out = String::from("\x1b[?25l");
-    if colour == Colour::Full {
-        out.push_str(&format!(
-            "  \x1b[1;36m{SPINNER}\x1b[0m  \x1b[1;36m{}\x1b[0m\x1b[1m  \x1b[0m\x1b[2m \x1b[0m\x1b[2m{}\x1b[0m\x1b[2m \x1b[0m",
-            first.name,
-            seconds_text(0.0)
-        ));
-    } else {
-        out.push_str(&format!(
-            "  {SPINNER}  {}    {} ",
-            first.name,
-            seconds_text(0.0)
-        ));
-    }
-    out.push_str("\n\x1b[?25h\r\x1b[1A\x1b[2K");
-    out.push_str(&checklist(steps, width, colour));
-    out
-}
-
-/// The live display's spinner, at its first frame.
-const SPINNER: char = '\u{280b}';
-
 /// `rows` as aligned columns, one line each, trailing blanks trimmed; the
 /// columns in `right` right-aligned. A column empty on every row takes no room.
 pub fn columns(rows: &[Vec<Text>], gap: usize, indent: usize, right: &[usize]) -> Vec<Text> {

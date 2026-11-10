@@ -30,18 +30,34 @@ const SKIPPED_DIRS: [&str; 10] = [
     ".tox",
 ];
 
-/// Writes every output, in parallel.
+/// Writes every output, in parallel. Where two outputs name the same path
+/// (two exports configured to one file name), the later one is written, as
+/// writing them one after another leaves it.
 ///
 /// # Errors
 ///
 /// The first output that could not be written, with its path.
 pub fn write_all(outputs: &[Output]) -> Result<(), (PathBuf, io::Error)> {
-    outputs.par_iter().try_for_each(|output| {
+    last_per_path(outputs).par_iter().try_for_each(|output| {
         if let Some(parent) = output.path.parent() {
             std::fs::create_dir_all(parent).map_err(|error| (parent.to_path_buf(), error))?;
         }
         std::fs::write(&output.path, &output.bytes).map_err(|error| (output.path.clone(), error))
     })
+}
+
+/// `outputs` without those a later output of the same path replaces, in order.
+fn last_per_path(outputs: &[Output]) -> Vec<&Output> {
+    let mut last: std::collections::HashMap<&Path, usize> = std::collections::HashMap::new();
+    for (position, output) in outputs.iter().enumerate() {
+        last.insert(output.path.as_path(), position);
+    }
+    outputs
+        .iter()
+        .enumerate()
+        .filter(|(position, output)| last[output.path.as_path()] == *position)
+        .map(|(_, output)| output)
+        .collect()
 }
 
 /// A file's stamp: modification time and size.
@@ -192,5 +208,50 @@ mod tests {
             Some("./")
         );
         assert_eq!(common_dir(&[], &root, &root), None);
+    }
+
+    #[test]
+    fn a_rewritten_file_counts_as_written() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dunce::canonicalize(dir.path()).unwrap();
+        let (same, changed, untouched) = (root.join("same"), root.join("changed"), root.join("x"));
+        for path in [&same, &changed, &untouched] {
+            std::fs::write(path, "abc").unwrap();
+        }
+        // Stamps differ by modification time alone: set an old one.
+        let old = SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_000_000);
+        for path in [&same, &changed, &untouched] {
+            std::fs::File::options()
+                .write(true)
+                .open(path)
+                .unwrap()
+                .set_modified(old)
+                .unwrap();
+        }
+        let snapshot = Snapshot::take(std::slice::from_ref(&root));
+        write_all(&[
+            Output::text(same.clone(), "abc".into()),
+            Output::text(changed.clone(), "xyz".into()),
+        ])
+        .unwrap();
+        let (written, removed) = snapshot.changes();
+        assert_eq!(written, [changed, same]);
+        assert!(removed.is_empty());
+    }
+
+    #[test]
+    fn the_last_output_of_a_path_wins() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dunce::canonicalize(dir.path()).unwrap();
+        let path = root.join("export.json");
+        let outputs = [
+            Output::text(path.clone(), "a much longer first export\n".into()),
+            Output::text(root.join("other.json"), "{}\n".into()),
+            Output::text(path.clone(), "second\n".into()),
+        ];
+        let kept: Vec<&Output> = last_per_path(&outputs);
+        assert_eq!(kept, [&outputs[1], &outputs[2]]);
+        write_all(&outputs).unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "second\n");
     }
 }

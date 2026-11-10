@@ -1,8 +1,10 @@
 //! `generate` against the oracle's recordings (UC-3.2, #824): every recorded
 //! case of the ported generate commands, run in-process through
 //! [`opentide_cli::run`] on a fresh copy of its fixture, with the goldens'
-//! normalisation (`opentide-compare`), compared with the recording: exit
-//! code, stdout, stderr, and every file written, byte for byte.
+//! normalisation (`opentide-compare`), compared with the recording by the
+//! goldens' comparator (`opentide_compare::compare`, as `cargo xtask golden
+//! check --engine compare` compares them) under `APPROVED_DIFFS.toml`: exit
+//! code, stdout, stderr, and every file written.
 
 #![cfg(unix)]
 #![expect(
@@ -17,7 +19,9 @@ use std::sync::{Arc, Mutex};
 use opentide_cli::env::Env;
 use opentide_cli::logging::Sink;
 use opentide_cli::{Host, run};
+use opentide_compare::ledger::{Ledger, Usage};
 use opentide_compare::normalise::{Normaliser, Volatile};
+use opentide_compare::{FileState, Run};
 
 /// The commands whose recordings this test replays.
 const COMMANDS: &[&str] = &[
@@ -108,8 +112,31 @@ fn files(root: &Path) -> BTreeMap<String, Vec<u8>> {
     out
 }
 
-/// What the recording says the case wrote under `ws/`.
-fn recorded_files(dir: &Path, outcome: &toml::Table) -> BTreeMap<String, Vec<u8>> {
+/// Every folder under `root` (links not followed), by relative path.
+fn dirs(root: &Path) -> std::collections::BTreeSet<String> {
+    let mut out = std::collections::BTreeSet::new();
+    let mut pending = vec![root.to_path_buf()];
+    while let Some(dir) = pending.pop() {
+        for entry in std::fs::read_dir(&dir).unwrap() {
+            let entry = entry.unwrap();
+            if entry.file_type().unwrap().is_dir() {
+                let relative = entry
+                    .path()
+                    .strip_prefix(root)
+                    .unwrap()
+                    .to_string_lossy()
+                    .into_owned();
+                out.insert(relative);
+                pending.push(entry.path());
+            }
+        }
+    }
+    out
+}
+
+/// What the recording says the case wrote, by its path in the recording
+/// (`ws/...`).
+fn recorded_files(dir: &Path, outcome: &toml::Table) -> BTreeMap<String, FileState> {
     let mut out = BTreeMap::new();
     for entry in outcome
         .get("files")
@@ -118,23 +145,40 @@ fn recorded_files(dir: &Path, outcome: &toml::Table) -> BTreeMap<String, Vec<u8>
         .flatten()
     {
         let path = entry["path"].as_str().unwrap();
-        if entry["kind"].as_str() != Some("file") {
-            continue;
-        }
-        let Some(relative) = path.strip_prefix("ws/") else {
-            continue;
+        assert_ne!(entry["change"].as_str(), Some("deleted"), "{path}");
+        let mode = u32::from_str_radix(entry["mode"].as_str().unwrap(), 8).unwrap();
+        // As `cargo xtask golden check` reads a recording (`xtask/src/compare.rs` `run_of`).
+        let state = match entry["kind"].as_str() {
+            Some("dir") => FileState::Written {
+                mode: 0o040_000 | mode,
+                bytes: Vec::new(),
+            },
+            Some("file") => FileState::Written {
+                mode,
+                bytes: match entry.get("blob").and_then(|blob| blob.as_str()) {
+                    Some(blob) => {
+                        std::fs::read(repo().join("tests/golden/blobs").join(blob)).unwrap()
+                    }
+                    None => std::fs::read(dir.join("files").join(path)).unwrap(),
+                },
+            },
+            other => panic!("{path}: a recorded {other:?} this test does not read"),
         };
-        let bytes = match entry.get("blob").and_then(|blob| blob.as_str()) {
-            Some(blob) => std::fs::read(repo().join("tests/golden/blobs").join(blob)).unwrap(),
-            None => std::fs::read(dir.join("files").join(path)).unwrap(),
-        };
-        out.insert(relative.to_owned(), bytes);
+        out.insert(path.to_owned(), state);
     }
     out
 }
 
+/// The ledger, as `cargo xtask golden check` reads it.
+fn ledger() -> Ledger {
+    Ledger::parse(
+        &std::fs::read_to_string(repo().join("tests/golden/APPROVED_DIFFS.toml")).unwrap(),
+    )
+    .unwrap()
+}
+
 /// Replays the recording in `dir`; the differences found, if any.
-fn replay(id: &str, dir: &Path) -> Vec<String> {
+fn replay(id: &str, dir: &Path, ledger: &Ledger, usage: &mut Usage) -> Vec<String> {
     let case: toml::Table = std::fs::read_to_string(dir.join("case.toml"))
         .unwrap()
         .parse()
@@ -159,6 +203,7 @@ fn replay(id: &str, dir: &Path) -> Vec<String> {
     }
     fixture(case["fixture"].as_str().unwrap(), &ws);
     let before = files(&ws);
+    let folders_before = dirs(&ws);
     let env = Env::from_pairs(case["env"].as_table().unwrap().iter().map(|(key, value)| {
         let value = value
             .as_str()
@@ -200,41 +245,77 @@ fn replay(id: &str, dir: &Path) -> Vec<String> {
     let stdout = normaliser.text(&String::from_utf8(out).unwrap());
     let stderr = normaliser.text(&String::from_utf8(stderr.0.lock().unwrap().clone()).unwrap());
     let mut problems = Vec::new();
-    let expected_code = outcome["exit_code"].as_integer().unwrap();
-    if i64::from(exit_code) != expected_code {
+    if mode == "human" && stderr.contains("\x1b[?25l") {
         problems.push(format!(
-            "{id}: exit {exit_code}, the oracle's {expected_code}"
+            "{id}: stderr draws a live display after the work is done"
         ));
     }
-    for (name, got) in [("stdout", &stdout), ("stderr", &stderr)] {
-        let want = std::fs::read_to_string(dir.join(name)).unwrap();
-        if *got != want {
-            problems.push(format!(
-                "{id}: {name}\n--- oracle\n{want:?}\n--- rust\n{got:?}"
-            ));
+    let mut written = BTreeMap::new();
+    for (path, bytes) in files(&ws) {
+        if before.get(&path) == Some(&bytes) {
+            continue;
         }
+        let mode = {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::metadata(ws.join(&path))
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o7777
+        };
+        let bytes = normaliser
+            .text(&String::from_utf8_lossy(&bytes))
+            .into_bytes();
+        written.insert(format!("ws/{path}"), FileState::Written { mode, bytes });
     }
-    let after = files(&ws);
-    let written: BTreeMap<String, Vec<u8>> = after
-        .into_iter()
-        .filter(|(path, bytes)| before.get(path) != Some(bytes))
-        .collect();
-    let want = recorded_files(dir, &outcome);
-    let paths = |files: &BTreeMap<String, Vec<u8>>| files.keys().cloned().collect::<Vec<_>>();
-    if paths(&written) != paths(&want) {
+    for folder in dirs(&ws).difference(&folders_before) {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = std::fs::metadata(ws.join(folder))
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o7777;
+        written.insert(
+            format!("ws/{folder}"),
+            FileState::Written {
+                mode: 0o040_000 | mode,
+                bytes: Vec::new(),
+            },
+        );
+    }
+    let oracle = Run {
+        exit_code: i32::try_from(outcome["exit_code"].as_integer().unwrap()).unwrap(),
+        stdout: std::fs::read(dir.join("stdout")).unwrap(),
+        stderr: std::fs::read(dir.join("stderr")).unwrap(),
+        files: recorded_files(dir, &outcome),
+    };
+    let candidate = Run {
+        exit_code,
+        stdout: stdout.into_bytes(),
+        stderr: stderr.into_bytes(),
+        files: written,
+    };
+    let command = case["command"].as_str().unwrap();
+    let report = opentide_compare::compare(
+        opentide_compare::Case { command, id },
+        &oracle,
+        &candidate,
+        ledger,
+        usage,
+    );
+    for difference in &report.differences {
         problems.push(format!(
-            "{id}: wrote {:?}, the oracle {:?}",
-            paths(&written),
-            paths(&want)
+            "{id}: {} {} {}\n--- oracle\n{}\n--- rust\n{}",
+            difference.target,
+            difference.kind.as_str(),
+            difference
+                .pointer
+                .as_deref()
+                .or(difference.at.as_deref())
+                .unwrap_or_default(),
+            difference.oracle,
+            difference.candidate
         ));
-    }
-    for (path, bytes) in &want {
-        if let Some(got) = written.get(path) {
-            let got = normaliser.text(&String::from_utf8_lossy(got));
-            if got.as_bytes() != bytes.as_slice() {
-                problems.push(format!("{id}: {path} differs from the oracle's"));
-            }
-        }
     }
     problems
 }
@@ -242,6 +323,8 @@ fn replay(id: &str, dir: &Path) -> Vec<String> {
 #[test]
 fn generate_cases_are_the_oracles() {
     let cases = repo().join("tests/golden/cases");
+    let ledger = ledger();
+    let mut usage = Usage::default();
     let mut problems = Vec::new();
     let mut ran = 0;
     for command in COMMANDS {
@@ -257,12 +340,65 @@ fn generate_cases_are_the_oracles() {
                         "{command}/{mode}/{fixture}/{}",
                         dir.file_name().unwrap().to_string_lossy()
                     );
-                    problems.extend(replay(&id, &dir));
+                    problems.extend(replay(&id, &dir, &ledger, &mut usage));
                     ran += 1;
                 }
             }
         }
     }
     assert!(ran >= 32, "only {ran} cases found");
+    for (index, entry) in ledger.entries.iter().enumerate() {
+        if COMMANDS.contains(&entry.command.replace(' ', ".").as_str()) && !usage.is_used(index) {
+            problems.push(format!(
+                "APPROVED_DIFFS.toml entry {} ({} {}) applied to no case: it is stale",
+                index + 1,
+                entry.command,
+                entry.case
+            ));
+        }
+    }
     assert!(problems.is_empty(), "{}", problems.join("\n\n"));
+}
+
+/// The exports that rendered before one failed are on disk, as the oracle,
+/// which writes them one after another, leaves them: a threat without
+/// `metadata.version` fails the objects table after the Navigator layer.
+#[test]
+fn exports_before_a_failure_are_written() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
+    fixture("tide-corpus", &ws);
+    let threat = ws.join("Objects/Threat Vectors/threat-0001-simulated-actor.yaml");
+    let text = std::fs::read_to_string(&threat).unwrap();
+    assert!(text.contains("  version: 1\n"));
+    std::fs::write(&threat, text.replace("  version: 1\n", "")).unwrap();
+    let sink: Sink = Arc::new(Mutex::new(Buffer::default()));
+    let host = Host {
+        version: "0.23.0".into(),
+        stdout_tty: false,
+        stderr_tty: false,
+        log_sink: sink,
+        cwd: Some(ws.clone()),
+        width: None,
+        interrupt: opentide_cli::app::Interrupt::default(),
+    };
+    let argv: Vec<String> = ["--json", "generate", "exports"]
+        .into_iter()
+        .map(str::to_owned)
+        .collect();
+    let home = ws.with_file_name("home");
+    std::fs::create_dir_all(&home).unwrap();
+    let env = Env::from_pairs([("HOME".to_owned(), home.display().to_string())]);
+    let (mut out, mut err) = (Vec::new(), Buffer::default());
+    let exit_code = run(&argv, &env, &host, &mut out, &mut err);
+    let stdout = String::from_utf8(out).unwrap();
+    assert_eq!(exit_code, 1, "{stdout}");
+    assert!(
+        stdout.contains("\"message\":\"exports: KeyError: 'version' while rendering 00000000-0000-4000-8001-000000000001\""),
+        "{stdout}"
+    );
+    let exports = ws.join(".opentide/exports");
+    assert!(exports.join("attack-navigator.json").is_file());
+    assert!(!exports.join("objects.export.json").exists());
+    assert!(!exports.join("revisions.export.json").exists());
 }
