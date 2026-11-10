@@ -71,6 +71,10 @@
 # - deploy (changed rules, no --all): the rules a diff selects are read in
 #   path order, not in a Python set's order.
 # - deploy: the unset-variable warning names variables in plan order.
+# - deploy: a Sentinel duration written with non-ASCII digits is a compile
+#   failure (compile_invalid_rule), as Azure refuses it.
+# - deploy (CI pull or merge request without its merge commit): origin's
+#   branches are read as the checkout holds them, never fetched.
 # - `-h` (and `-Vh`): clap's short help flag shows the help, exit 0, where the
 #   oracle had no `-h` (`No such option: -h`, exit 2).
 #
