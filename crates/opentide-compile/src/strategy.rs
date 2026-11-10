@@ -396,5 +396,70 @@ mod tests {
         assert_eq!(python_repr("a"), "'a'");
         assert_eq!(python_repr("it's"), "\"it's\"");
         assert_eq!(python_repr("a\nb"), "'a\\nb'");
+        // Both quotes: single quotes, the single one escaped (Python's repr).
+        assert_eq!(python_repr("a'b\""), "'a\\'b\"'");
+        assert_eq!(python_repr("\\\r\t\u{1}\u{7f}é"), "'\\\\\\r\\t\\x01\\x7fé'");
+    }
+
+    #[test]
+    fn a_retired_name_says_what_to_pass() {
+        let hint = |name: &str| parse_strategies(&[name], &statuses(), "--strategy").unwrap_err();
+        for (name, says) in [
+            ("universal", "both PREVIEW and RELEASE runs deploy"),
+            ("DISABLEMENT", "disables the changed rules"),
+            ("deletion", "deletes the changed rules"),
+            ("INERT", "never deployed"),
+            ("full", "--strategy PREVIEW --strategy RELEASE --all"),
+            ("ALWAYS", "lists the strategies it accepts"),
+            ("manual", "sets 'manual = true'"),
+            ("debug", "pass PREVIEW or RELEASE"),
+            (
+                "PRODUCTION",
+                "PRODUCTION was a deployment plan, removed in 0.17.0: pass RELEASE",
+            ),
+        ] {
+            let error = hint(name);
+            assert!(
+                error.starts_with(&format!(
+                    "--strategy {} is not a deployable strategy. Use PREVIEW or RELEASE. ",
+                    python_repr(name)
+                )),
+                "{error}"
+            );
+            assert!(error.contains(says), "{name}: {error}");
+        }
+        // A status no run deploys says so.
+        assert!(hint("design").ends_with("it maps to INERT, which no run deploys"));
+        assert!(hint("removed").ends_with("it maps to DELETION, which a RELEASE run deploys"));
+        assert_eq!(
+            hint("nothing"),
+            "--strategy 'nothing' is not a deployable strategy. Use PREVIEW or RELEASE"
+        );
+    }
+
+    #[test]
+    fn an_invalid_deployment_names_each_key() {
+        let document = opentide_schema::node::load(
+            "statuses:\n- name: A\n  strategy: PREVIEW\n  colour: red\n- strategy: RELEASE\n",
+        )
+        .unwrap();
+        let error = deployment_error(document.root().unwrap()).unwrap();
+        assert!(error.starts_with("deployment.toml is invalid: "), "{error}");
+        assert!(error.contains("statuses.0.colour: unknown key"), "{error}");
+        assert!(
+            error.contains("statuses.1.name: required key is missing"),
+            "{error}"
+        );
+        let valid = opentide_schema::node::load(
+            "statuses:\n- name: A\n  description: d\n  strategy: PREVIEW\n",
+        )
+        .unwrap();
+        assert_eq!(deployment_error(valid.root().unwrap()), None);
+        let invalid = Statuses(Vec::new(), Some(error.clone()));
+        assert_eq!(
+            invalid.strategy("A"),
+            Err(StatusError::Invalid(error.clone()))
+        );
+        assert_eq!(StatusError::Invalid(error.clone()).exception_text(), error);
     }
 }

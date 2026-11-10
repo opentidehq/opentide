@@ -263,3 +263,50 @@ fn without_a_checkout_the_changed_rules_fail_with_the_baselines_message() {
     assert_eq!(outcome.exit_code, 1);
     assert_eq!(text(&outcome, "message"), "\"no git here\"");
 }
+
+const SYSDIG: &str = "[platform]\nenabled = true\n\n[[tenants]]\nname = \"one\"\n\
+    description = \"d\"\n[tenants.setup]\nssl = true\nurl = \"https://s.example.org\"\n\
+    api_token = \"$SYSDIG_TOKEN\"\n";
+
+#[test]
+fn a_block_that_cannot_compile_is_a_diagnostic_of_the_plan() {
+    let ws = workspace(&[
+        (".opentide/configurations/platforms/sysdig.toml", SYSDIG),
+        (
+            "objects/rules/bad.yaml",
+            &rule(
+                "00000000-0000-4000-8000-0000000000b1",
+                "sysdig",
+                "STAGING",
+                "    condition: proc.name = x\n    priority: urgent\n",
+            ),
+        ),
+        (
+            "objects/rules/good.yaml",
+            &rule(
+                "00000000-0000-4000-8000-0000000000b2",
+                "sysdig",
+                "STAGING",
+                "    condition: proc.name = y\n",
+            ),
+        ),
+    ]);
+    let outcome = run(&ws, all(&["PREVIEW"]), &["SYSDIG_TOKEN"]);
+    assert_eq!(outcome.exit_code, 1);
+    assert_eq!(text(&outcome, "status"), "\"failed\"");
+    assert_eq!(text(&outcome, "error"), "\"1 rule would fail to deploy\"");
+    assert_eq!(
+        text(&outcome, "diagnostics"),
+        "[{\"code\":\"compile_failed\",\"severity\":\"error\",\"message\":\"Sysdig cannot \
+         compile this rule: 'URGENT'\",\"help\":null,\"path\":\"objects/rules/bad.yaml\",\
+         \"file_path\":\"/ws/objects/rules/bad.yaml\",\
+         \"platform\":\"sysdig\",\"uuid\":\"00000000-0000-4000-8000-0000000000b1\",\
+         \"name\":\"Rule 00000000-0000-4000-8000-0000000000b1\"}]"
+    );
+    let payloads = text(&outcome, "payloads");
+    assert!(
+        payloads
+            .contains("\"api_request\":{\"name\":\"Rule 00000000-0000-4000-8000-0000000000b2\""),
+        "{payloads}"
+    );
+}

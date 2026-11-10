@@ -316,3 +316,39 @@ fn a_linked_worktree_reads_the_common_repository() {
     let got = git::changed_paths(&linked, &linked, &env, DiffSource::LastCommit).unwrap();
     assert_eq!(got, ["objects/rules/r2.yaml"]);
 }
+
+#[test]
+fn the_dry_run_reads_the_changed_rules_from_the_rules_folder() {
+    let h = history();
+    let env = |_: &str| None::<String>;
+    let rules = h.root.join("objects/rules");
+    let (scope, warning) =
+        opentide_compile::dry_run::git_scope(&h.root, &h.root, &env, &rules, "objects/rules")
+            .unwrap();
+    assert_eq!(scope.files, [rules.join("r2.yaml")]);
+    assert!(scope.nested.is_empty());
+    assert_eq!(warning, None);
+    // A repository without a commit has changed nothing, and says why.
+    let empty = tempfile::tempdir().unwrap();
+    let root = dunce::canonicalize(empty.path()).unwrap();
+    git_cmd(&root, &["init", "-q", "-b", "main"]);
+    let (scope, warning) = opentide_compile::dry_run::git_scope(
+        &root,
+        &root,
+        &env,
+        &root.join("objects/rules"),
+        "objects/rules",
+    )
+    .unwrap();
+    assert!(scope.files.is_empty());
+    assert!(
+        warning.is_some_and(|warning| warning.starts_with("HEAD names no commit yet")
+            && warning.ends_with("commit the rules, or pass --all to read every rule file"))
+    );
+    // Outside a checkout, the error says what to do.
+    let bare = tempfile::tempdir().unwrap();
+    assert!(
+        opentide_compile::dry_run::git_scope(bare.path(), bare.path(), &env, bare.path(), "x")
+            .is_err()
+    );
+}
