@@ -141,6 +141,8 @@ pub struct Checker<'a> {
     yara_x_bool: BTreeSet<(usize, usize)>,
     /// Whether the last field `member` resolved is such a boolean.
     last_member_yara_x_bool: bool,
+    /// Loop variables bound to what YARA-X types as boolean.
+    yara_x_bool_vars: BTreeSet<String>,
     /// Identifiers past libyara's 128 characters already reported.
     long_identifiers: BTreeSet<String>,
     /// Rules defined before the current one.
@@ -175,6 +177,7 @@ impl<'a> Checker<'a> {
             import_at: Vec::new(),
             yara_x_bool: BTreeSet::new(),
             last_member_yara_x_bool: false,
+            yara_x_bool_vars: BTreeSet::new(),
             long_identifiers: BTreeSet::new(),
             earlier_rules: BTreeSet::new(),
             rule_wildcards,
@@ -387,14 +390,15 @@ impl<'a> Checker<'a> {
             }
         }
         let ty = self.expr(&rule.condition);
-        let cond_at = span(&rule.condition.span());
+        let cond_key = span(&rule.condition.span());
+        let cond_at = full_span_in(self.source, &rule.condition);
         match ty {
             Ty::Regexp => self.yara_x(
                 "YARA-X refuses a regular expression as a condition; libyara reads it as true".to_string(),
                 cond_at,
             ),
             // YARA-X's non_bool_expr: a predicate it types as boolean is not one.
-            Ty::Int | Ty::Float if self.yara_x_bool.contains(&cond_at) => {}
+            Ty::Int | Ty::Float if self.yara_x_bool.contains(&cond_key) => {}
             Ty::Int | Ty::Float => self.warn(
                 codes::YARA_SUSPICIOUS_EXPRESSION,
                 format!("the condition is {}, not a boolean: libyara reads any non-zero value as true", ty.name()),
@@ -934,11 +938,11 @@ impl<'a> Checker<'a> {
     /// does not call a non-boolean.
     fn operand(&mut self, e: &Expr, non_bool: bool) {
         let ty = self.expr(e);
-        let at = span(&e.span());
+        let at = full_span_in(self.source, e);
         if non_bool
             && matches!(ty, Ty::Int | Ty::Float | Ty::Str)
             && !matches!(e, Expr::LiteralString(_))
-            && !self.yara_x_bool.contains(&at)
+            && !self.yara_x_bool.contains(&span(&e.span()))
         {
             // YARA-X's non_bool_expr (libyara reads any non-zero number,
             // any non-empty string, as true).
@@ -991,7 +995,7 @@ impl<'a> Checker<'a> {
     fn yara_x_number(&mut self, e: &Expr, place: &str) -> bool {
         let refused = self.yara_x_bool.contains(&span(&e.span()));
         if refused {
-            let at = full_span(e);
+            let at = full_span_in(self.source, e);
             self.yara_x(
                 format!(
                     "YARA-X refuses `{}` {place}: it types it as a boolean, where libyara reads an integer",
@@ -1019,7 +1023,10 @@ impl<'a> Checker<'a> {
     }
 
     fn expr(&mut self, e: &Expr) -> Ty {
-        let at = span(&e.span());
+        // `key` is the parser's span, which `yara_x_bool` is keyed by; `at`
+        // the range as written, which findings use.
+        let key = span(&e.span());
+        let at = full_span_in(self.source, e);
         match e {
             Expr::True { .. } | Expr::False { .. } => Ty::Bool,
             Expr::Filesize { .. } => Ty::Int,
@@ -1166,7 +1173,7 @@ impl<'a> Checker<'a> {
                     _ => false,
                 };
                 if self.last_member_yara_x_bool || last_call_bool {
-                    self.yara_x_bool.insert(at);
+                    self.yara_x_bool.insert(key);
                 }
                 if let Ty::Func { path, .. } = &ty {
                     // A function named, not called (`pe.imphash`): libyara's
@@ -1430,6 +1437,8 @@ impl<'a> Checker<'a> {
                 self.quantifier(&f.quantifier, None);
                 let mut scope = BTreeMap::new();
                 let vars: Vec<&Ident> = f.variables.iter().collect();
+                // The variables are what YARA-X types as boolean.
+                let mut bool_vars = false;
                 for v in &vars {
                     self.identifier_length("loop variable", v.name, span(&v.span()));
                 }
@@ -1449,6 +1458,21 @@ impl<'a> Checker<'a> {
                                 span(&item.span()),
                             );
                             ty = t;
+                        }
+                        // YARA-X types `pe.is_dll()` as boolean: it refuses
+                        // one among integers (E003); all booleans bind one.
+                        let booleans = items
+                            .iter()
+                            .filter(|i| self.yara_x_bool.contains(&span(&i.span())))
+                            .count();
+                        if booleans == items.len() {
+                            bool_vars = true;
+                        } else if booleans > 0 {
+                            let first = items
+                                .iter()
+                                .find(|i| self.yara_x_bool.contains(&span(&i.span())))
+                                .expect("counted above");
+                            self.yara_x_number(first, "among integers in an enumeration");
                         }
                         vec![ty]
                     }
@@ -1487,9 +1511,18 @@ impl<'a> Checker<'a> {
                         bound.get(i).cloned().unwrap_or(Ty::Unknown),
                     );
                 }
+                let saved = self.yara_x_bool_vars.clone();
+                for var in &vars {
+                    if bool_vars {
+                        self.yara_x_bool_vars.insert(var.name.to_string());
+                    } else {
+                        self.yara_x_bool_vars.remove(var.name);
+                    }
+                }
                 self.scopes.push(scope);
                 self.boolean_operand(&f.body);
                 self.scopes.pop();
+                self.yara_x_bool_vars = saved;
                 Ty::Bool
             }
             Expr::With(w) => {
@@ -1685,6 +1718,9 @@ impl<'a> Checker<'a> {
         let name = ident.name;
         let at = span(&ident.span());
         if let Some(ty) = self.lookup_var(name) {
+            if self.yara_x_bool_vars.contains(name) {
+                self.yara_x_bool.insert(at);
+            }
             return ty;
         }
         if self.imports.contains(name) {
@@ -1912,13 +1948,20 @@ impl<'a> Checker<'a> {
         });
         match found {
             Some(o) => {
-                for (want, a) in o.args.chars().zip(&call.args) {
-                    if matches!(want, 'i' | 'f') {
+                // A YARA-X boolean in a number's place, unless a YARA-X
+                // overload takes a boolean there (`console.log(pe.is_dll())`).
+                for (k, (want, a)) in o.args.chars().zip(&call.args).enumerate() {
+                    let boolean_overload = m.overloads.iter().any(|x| {
+                        x.yara_x
+                            && x.args.len() == call.args.len()
+                            && x.args.chars().nth(k) == Some('b')
+                    });
+                    if matches!(want, 'i' | 'f') && !boolean_overload {
                         self.yara_x_number(a, "as a function argument");
                     }
                 }
                 if o.yara_x_ret.as_deref() == Some("boolean") {
-                    self.yara_x_bool.insert(at);
+                    self.yara_x_bool.insert(span(&call.span()));
                 }
                 ret_ty(&o.ret)
             }
@@ -1948,16 +1991,92 @@ impl<'a> Checker<'a> {
     }
 }
 
-/// `e`'s span, with the object of a method call: yara-x-parser spans
-/// `pe.is_dll()` from `is_dll`.
-fn full_span(e: &Expr) -> (usize, usize) {
-    match e {
-        Expr::FuncCall(call) => match &call.object {
-            Some(object) => span(&object.span().combine(&call.span())),
-            None => span(&call.span()),
-        },
-        other => span(&other.span()),
+/// Where `e` starts as written: yara-x-parser spans a method call
+/// (`pe.is_dll()`) from its name, and an expression whose left operand is
+/// one (`pe.is_dll() == 1`) from there too.
+fn start_of(e: &Expr) -> usize {
+    let own = e.span().start();
+    let left = match e {
+        Expr::FuncCall(call) => call.object.as_ref().map(start_of),
+        Expr::FieldAccess(access) => access.operands().next().map(start_of),
+        Expr::Lookup(lookup) => Some(start_of(&lookup.primary)),
+        Expr::And(n)
+        | Expr::Or(n)
+        | Expr::Add(n)
+        | Expr::Sub(n)
+        | Expr::Mul(n)
+        | Expr::Div(n)
+        | Expr::Mod(n) => n.operands().next().map(start_of),
+        Expr::Eq(b)
+        | Expr::Ne(b)
+        | Expr::Lt(b)
+        | Expr::Gt(b)
+        | Expr::Le(b)
+        | Expr::Ge(b)
+        | Expr::Shl(b)
+        | Expr::Shr(b)
+        | Expr::BitwiseAnd(b)
+        | Expr::BitwiseOr(b)
+        | Expr::BitwiseXor(b)
+        | Expr::Contains(b)
+        | Expr::IContains(b)
+        | Expr::StartsWith(b)
+        | Expr::IStartsWith(b)
+        | Expr::EndsWith(b)
+        | Expr::IEndsWith(b)
+        | Expr::IEquals(b)
+        | Expr::Matches(b) => Some(start_of(&b.lhs)),
+        _ => None,
+    };
+    left.map_or(own, |l| l.min(own))
+}
+
+/// `e`'s range as written in `source`: from [`start_of`], and widened over
+/// the parentheses yara-x-parser leaves out of an operand's span, so it
+/// never holds an unbalanced one (`(pe.is_dll()) == 1`).
+fn full_span_in(source: &str, e: &Expr) -> (usize, usize) {
+    let (mut start, mut end) = (start_of(e), e.span().end());
+    let bytes = source.as_bytes();
+    let depth = |start: usize, end: usize| {
+        let mut depth = 0i64;
+        let mut quote = false;
+        let mut escaped = false;
+        for &b in &bytes[start.min(end)..end.min(bytes.len())] {
+            match b {
+                _ if escaped => escaped = false,
+                b'\\' if quote => escaped = true,
+                b'"' => quote = !quote,
+                b'(' if !quote => depth += 1,
+                b')' if !quote => depth -= 1,
+                _ => {}
+            }
+        }
+        depth
+    };
+    let mut d = depth(start, end);
+    while d < 0 {
+        let mut at = start;
+        while at > 0 && bytes[at - 1].is_ascii_whitespace() {
+            at -= 1;
+        }
+        if at == 0 || bytes[at - 1] != b'(' {
+            break;
+        }
+        start = at - 1;
+        d += 1;
     }
+    while d > 0 {
+        let mut at = end;
+        while at < bytes.len() && bytes[at].is_ascii_whitespace() {
+            at += 1;
+        }
+        if at >= bytes.len() || bytes[at] != b')' {
+            break;
+        }
+        end = at + 1;
+        d -= 1;
+    }
+    (start, end)
 }
 
 fn element_ty(module: String, path: String, element: Kind) -> Ty {

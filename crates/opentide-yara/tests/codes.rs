@@ -611,6 +611,29 @@ const RAW: &[(&str, &[(&str, Severity)])] = &[
         "import \"pe\" rule a { strings: $a = \"cmd.exe\" condition: #a == pe.is_dll() }",
         &[("yara_suspicious_expression", W)],
     ),
+    // A YARA-X overload takes a boolean there: `console.log`'s `b` and `sb`.
+    (
+        "import \"pe\" import \"console\" rule a { condition: console.log(pe.is_dll()) }",
+        &[],
+    ),
+    (
+        "import \"pe\" import \"console\" rule a { condition: console.log(\"x\", pe.is_dll()) }",
+        &[],
+    ),
+    // An enumeration mixing YARA-X booleans and integers (E003); all booleans
+    // bind a boolean, which is no non-boolean body.
+    (
+        "import \"pe\" rule a { condition: for 1 i in (pe.is_dll(), 2) : (true) }",
+        &[("yara_x_incompatible", W)],
+    ),
+    (
+        "import \"pe\" rule a { condition: for any i in (1, pe.is_dll()) : (i == 1) }",
+        &[("yara_x_incompatible", W)],
+    ),
+    (
+        "import \"pe\" rule a { condition: for any i in (pe.is_dll(), pe.is_32bit()) : (i) }",
+        &[],
+    ),
     // libyara reports a jump's first error only.
     (
         "rule a { strings: $h = { 01 02 ( 05 [9223372036854775813] 06 | 07 ) } condition: $h }",
@@ -806,5 +829,56 @@ fn identifiers_over_128_characters() {
             &yx
         ),
         []
+    );
+}
+
+/// A finding's range is the expression as written: from the module of a
+/// method call (yara-x-parser spans `pe.is_dll()` from `is_dll`), and with
+/// both parentheses of an operand it leaves out.
+#[test]
+fn ranges_cover_the_expression_as_written() {
+    let ranges = |source: &str| -> Vec<(String, String)> {
+        let line: Vec<&str> = source.lines().collect();
+        analyze_with(source, &raw())
+            .diagnostics
+            .into_iter()
+            .map(|d| {
+                let text = line[d.range.start.line as usize];
+                assert_eq!(d.range.start.line, d.range.end.line);
+                (
+                    d.code,
+                    text[d.range.start.character as usize..d.range.end.character as usize]
+                        .to_string(),
+                )
+            })
+            .collect()
+    };
+    let head = "import \"pe\"\nimport \"math\"\n";
+    assert_eq!(
+        ranges(&format!("{head}rule a {{ condition: pe.is_dll() == 1 }}")),
+        [(
+            "yara_suspicious_expression".to_string(),
+            "pe.is_dll() == 1".to_string()
+        )]
+    );
+    assert_eq!(
+        ranges(&format!(
+            "{head}rule a {{ condition: math.entropy(0, filesize) }}"
+        )),
+        [(
+            "yara_suspicious_expression".to_string(),
+            "math.entropy(0, filesize)".to_string()
+        )]
+    );
+    assert_eq!(
+        ranges(&format!("{head}rule a {{ condition: (pe.is_dll()) == 1 }}")),
+        [(
+            "yara_suspicious_expression".to_string(),
+            "(pe.is_dll()) == 1".to_string()
+        )]
+    );
+    assert_eq!(
+        ranges(&format!("{head}rule a {{ condition: pe.is_dll() > 0 }}")),
+        [("yara_x_incompatible".to_string(), "pe.is_dll()".to_string())]
     );
 }
