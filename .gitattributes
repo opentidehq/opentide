@@ -5,6 +5,10 @@ tests/golden/blobs/** -text linguist-generated
 tests/golden/COVERAGE.md linguist-generated
 tests/golden/oracle-requirements.txt linguist-generated
 tests/golden/fixtures/** -text
+# The golden fixture sources outside tests/golden/fixtures/ (cases.toml's `source`):
+# the harnesses lay them out and compare the bytes `--fix` writes with the
+# recordings, so a Windows checkout must hold the recorded (LF) bytes too.
+tests/fixtures/tide_corpus/** -text
 # The renderers' oracle files (crates/opentide-cli/AGENTS.md): compared byte for byte too.
 crates/opentide-cli/tests/render/** -text linguist-generated
 

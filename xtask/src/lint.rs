@@ -318,6 +318,20 @@ fn changed_for(ws: &Path) -> Changed {
     }
 }
 
+/// `text`, a plain string, with the workspace `ws` written `<WS>` and the
+/// path that follows it with `/`, on every host ([`crate::payloads::placeholder`]).
+fn masked(text: &str, ws: &Path) -> String {
+    masked_for(text, &ws.to_string_lossy(), cfg!(windows))
+}
+
+/// [`masked`] for a workspace spelled `ws`, with Windows' separator when
+/// `windows`.
+fn masked_for(text: &str, ws: &str, windows: bool) -> String {
+    let quoted = serde_json::to_string(text).unwrap_or_default();
+    serde_json::from_str(&crate::payloads::placeholder_for(&quoted, ws, windows))
+        .unwrap_or_else(|_| text.to_owned())
+}
+
 /// Runs one case on `ws`, a fresh copy of its fixture.
 fn run_case(recording: &Recording, ws: &Path) -> Result<Vec<Difference>> {
     let case = &recording.case;
@@ -351,7 +365,6 @@ fn run_case(recording: &Recording, ws: &Path) -> Result<Vec<Difference>> {
     };
     let report: LintReport = workspace.lint(Some(&OsFs), &options);
     let after = Snapshot::take(ws)?;
-    let root = ws.to_string_lossy().into_owned();
     let mut out = Vec::new();
     let oracle: Vec<Item> = recorded
         .findings
@@ -365,7 +378,7 @@ fn run_case(recording: &Recording, ws: &Path) -> Result<Vec<Difference>> {
         .map(|finding| {
             let text = serde_json::to_string(&finding.json).unwrap_or_default();
             let map: IndexMap<String, Json> =
-                serde_json::from_str(&text.replace(&root, "<WS>")).unwrap_or_default();
+                serde_json::from_str(&crate::payloads::placeholder(&text, ws)).unwrap_or_default();
             Item::new(&map)
         })
         .collect();
@@ -385,12 +398,7 @@ fn run_case(recording: &Recording, ws: &Path) -> Result<Vec<Difference>> {
     scalar(
         "path",
         json!("<WS>"),
-        json!(
-            payload["path"]
-                .as_str()
-                .unwrap_or("")
-                .replace(&root, "<WS>")
-        ),
+        json!(masked(payload["path"].as_str().unwrap_or(""), ws)),
     );
     scalar("checks", json!(recorded.checks), payload["checks"].clone());
     scalar("count", json!(oracle.len()), payload["count"].clone());
@@ -409,7 +417,7 @@ fn run_case(recording: &Recording, ws: &Path) -> Result<Vec<Difference>> {
     let (status, message, exit_code, summary) = if refused {
         (
             recorded.status.clone(),
-            recorded.message.replace(&root, "<WS>"),
+            recorded.message.clone(),
             recorded.exit_code,
             Json::Null,
         )
@@ -425,7 +433,7 @@ fn run_case(recording: &Recording, ws: &Path) -> Result<Vec<Difference>> {
     scalar(
         "message",
         json!(message),
-        json!(report.message.replace(&root, "<WS>")),
+        json!(masked(&report.message, ws)),
     );
     scalar("exit_code", json!(exit_code), json!(report.exit_code));
     scalar(
@@ -562,7 +570,7 @@ pub fn run(args: &[String]) -> Result<u8> {
             .join("ws");
         crate::golden::fixture::copy_tree(&source, &ws)?;
         crate::golden::fixture::fix_modes(&ws)?;
-        let ws = ws.canonicalize()?;
+        let ws = dunce::canonicalize(&ws)?;
         differences.extend(run_case(recording, &ws)?);
     }
     let mut used = vec![0usize; APPROVED.len()];
@@ -779,6 +787,31 @@ mod tests {
     }
 
     #[test]
+    fn a_windows_workspace_reads_ws_on_every_host() {
+        let ws = r"C:\Users\runneradmin\AppData\Local\Temp\cases\5\ws";
+        assert_eq!(masked_for(ws, ws, true), "<WS>");
+        assert_eq!(
+            masked_for(&format!("no .git was found from {ws}"), ws, true),
+            "no .git was found from <WS>"
+        );
+        assert_eq!(
+            masked_for(&format!("{ws}\\Objects\\a.yaml"), ws, true),
+            "<WS>/Objects/a.yaml"
+        );
+        // The verbatim spelling `std::fs::canonicalize` gives, on either side.
+        assert_eq!(masked_for(&format!(r"\\?\{ws}"), ws, true), "<WS>");
+        assert_eq!(masked_for(ws, &format!(r"\\?\{ws}"), true), "<WS>");
+        // A finding's JSON, its strings escaped.
+        let finding = serde_json::to_string(&json!({"file": format!("{ws}\\a.yaml")})).unwrap();
+        assert_eq!(
+            crate::payloads::placeholder_for(&finding, ws, true),
+            r#"{"file":"<WS>/a.yaml"}"#
+        );
+        assert_eq!(masked_for("/tmp/ws/a", "/tmp/ws", false), "<WS>/a");
+        assert_eq!(masked_for("elsewhere", ws, true), "elsewhere");
+    }
+
+    #[test]
     fn changed_needs_a_git_checkout() {
         let dir = tempfile::tempdir().unwrap();
         let ws = dir.path().canonicalize().unwrap();
@@ -816,7 +849,7 @@ mod tests {
             .materialise(&repo, &ws)
             .unwrap();
         crate::golden::fixture::fix_modes(&ws).unwrap();
-        (recording, ws.canonicalize().unwrap())
+        (recording, dunce::canonicalize(&ws).unwrap())
     }
 
     fn parts(differences: &[Difference]) -> std::collections::BTreeSet<String> {

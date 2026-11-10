@@ -282,6 +282,38 @@ fn migrate_tide_corpus_layout(dest: &Path) -> Result<()> {
 mod portable_tests {
     use super::*;
 
+    /// Every fixture copied from the repository is checked out with the
+    /// bytes it was recorded from: no end-of-line conversion (a Windows
+    /// checkout with `core.autocrlf` would otherwise hold CRLF, and the
+    /// fixture edits and the bytes `--fix` writes would differ).
+    #[test]
+    fn every_fixture_source_is_checked_out_byte_for_byte() {
+        let repo = crate::corpus::cli::repo_root();
+        let text = fs::read_to_string(repo.join("tests/golden/cases.toml")).unwrap();
+        let spec = crate::golden::case::Spec::parse(&text).unwrap();
+        let sources: Vec<&str> = spec
+            .fixtures
+            .values()
+            .filter_map(|fixture| fixture.source.as_deref())
+            .collect();
+        assert!(!sources.is_empty());
+        for source in sources {
+            let output = Command::new("git")
+                .args(["ls-files", "--eol", "--", source])
+                .current_dir(&repo)
+                .output()
+                .unwrap();
+            assert!(output.status.success(), "git ls-files {source}");
+            let listing = String::from_utf8(output.stdout).unwrap();
+            assert!(!listing.is_empty(), "{source} holds no tracked file");
+            for line in listing.lines() {
+                // `i/lf w/lf attr/-text\tpath`: the attribute column.
+                let attr = line.split_whitespace().nth(2).unwrap_or_default();
+                assert_eq!(attr, "attr/-text", "{line}");
+            }
+        }
+    }
+
     #[test]
     fn tide_corpus_links_resolve_on_every_host() {
         let repo = tempfile::tempdir().unwrap();

@@ -521,7 +521,7 @@ fn run_case(
         }
     };
     let root = ws.to_string_lossy().into_owned();
-    let text = serde_json::to_string(&validation.report)?.replace(&root, "<WS>");
+    let text = crate::payloads::placeholder(&serde_json::to_string(&validation.report)?, ws);
     let rust: Json = serde_json::from_str(&text)?;
     let list = |report: &Json, key: &str| -> Vec<Json> {
         report[key].as_array().cloned().unwrap_or_default()
@@ -816,7 +816,7 @@ pub fn run(args: &[String]) -> Result<u8> {
                 fixture
                     .materialise(&repo, &ws)
                     .with_context(|| format!("lay out {}", case.fixture))?;
-                let ws = ws.canonicalize()?;
+                let ws = dunce::canonicalize(&ws)?;
                 laid_out.insert(case.fixture.clone(), ws.clone());
                 ws
             }
@@ -826,7 +826,7 @@ pub fn run(args: &[String]) -> Result<u8> {
             let copy = scratch.path.join("fix").join(number.to_string()).join("ws");
             crate::golden::fixture::copy_tree(&ws, &copy)?;
             crate::golden::fixture::fix_modes(&copy)?;
-            copy.canonicalize()?
+            dunce::canonicalize(&copy)?
         } else {
             ws
         };
@@ -1077,7 +1077,7 @@ mod tests {
             .materialise(&repo, &ws)
             .unwrap();
         crate::golden::fixture::fix_modes(&ws).unwrap();
-        (recorded, ws.canonicalize().unwrap())
+        (recorded, dunce::canonicalize(&ws).unwrap())
     }
 
     fn parts(differences: &[Difference]) -> std::collections::BTreeSet<&str> {
