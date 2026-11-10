@@ -202,6 +202,11 @@ def merge(module: str, ly: dict[str, dict], yx: dict[str, dict]) -> list[dict]:
             for o in (a or {}).get("overloads", []):
                 overloads[o["args"]] = {**o, "libyara": True, "yara_x": False}
             for o in (b or {}).get("overloads", []):
+                # YARA-X reflects a method of an array element with the
+                # element as a leading argument (`signatures[].valid_on` takes
+                # `signature, timestamp`): libyara's overload without it.
+                if "[]." in path and o["args"] not in overloads and o["args"][1:] in overloads:
+                    o = {**o, "args": o["args"][1:]}
                 if o["args"] in overloads:
                     overloads[o["args"]]["yara_x"] = True
                     overloads[o["args"]]["doc"] = o.get("doc")

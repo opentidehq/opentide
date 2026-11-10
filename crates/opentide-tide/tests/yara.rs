@@ -119,6 +119,57 @@ fn decomposed_module_needs_an_import() {
     assert_eq!(yara(&imported), []);
 }
 
+/// #165: a flow sequence reads as deploy's YAML loader reads it: a comment
+/// after `[` or a comma is no item, a plain item's lines fold, and an empty
+/// item stays one. Each lands on its own item.
+#[test]
+fn decomposed_flow_imports_read_as_deploy_reads_them() {
+    let source = decomposed(
+        "        $a = \"cmd.exe\" ascii\n",
+        "        $a\n",
+        "      imports: [ # lead\n          pe, # a comment\n          foo\n          bar, '']\n",
+    );
+    assert_eq!(
+        yara(&source),
+        [
+            row(
+                "harfanglab_yara_import",
+                "configurations.harfanglab.yara.imports.1",
+                "foo"
+            ),
+            row(
+                "harfanglab_yara_import",
+                "configurations.harfanglab.yara.imports.2",
+                "'"
+            ),
+        ]
+    );
+}
+
+/// #165: the contexts deploy writes are the ones checked. A plain item over
+/// two lines folds into one (`file memory`), and an empty item is kept
+/// (`file.pe,`): neither is a context HarfangLab knows.
+#[test]
+fn decomposed_contexts_are_checked_as_deploy_writes_them() {
+    let ctx = "        context:\n          - file\n          - memory\n";
+    for new in [
+        "        context: [file\n          memory]\n",
+        "        context: [file, '']\n",
+    ] {
+        let source = DEPLOYED_RULE.replace(ctx, new);
+        let found = yara(&source);
+        assert!(
+            found
+                .iter()
+                .any(|(code, path, _)| code == "harfanglab_yara_context"
+                    && path.starts_with("configurations.harfanglab.yara.meta.context")),
+            "{new:?}: {found:?}"
+        );
+    }
+    let fine = DEPLOYED_RULE.replace(ctx, "        context: [file, # \"pe\"\n          memory]\n");
+    assert_eq!(yara(&fine), []);
+}
+
 #[test]
 fn decomposed_imports_and_headers_and_rule_names() {
     let source = decomposed(
@@ -489,6 +540,84 @@ const DEPLOY_VARIANTS: &[(&str, &str, &str, &str)] = &[
         "description_comment_dash",
         "description: |\n  Finds \"cmd.exe\".\n",
         "description: | # a-b note\n  Finds \"cmd.exe\".\n",
+        "import \"pe\"\n\nrule cmd_string {\n    meta:\n        id = \"00000000-0000-4000-8003-000000000018\"\n        title = \"Cmd String\"\n        description = \"Finds \\\"cmd.exe\\\".\\n\"\n        author = \"Jane \\\"J\\\" Doe\"\n        date = \"2026-01-01\"\n        modified = \"2026-01-02\"\n        references = \"https://example.com/a\\nhttps://example.com/b\"\n        tags = \"attack.t1059;cmd\"\n        context = \"file.pe,memory\"\n        os = \"Windows\"\n        arch = \"x86,x64\"\n        classification = \"trojan\"\n        score = 70\n        confidence = \"strong\"\n    strings:\n        $a = \"cmd.exe\" ascii\n    condition:\n        $a and pe.is_dll()\n}",
+    ),
+    (
+        "tags_comment_after_bracket",
+        "    tags:\n      - attack.t1059\n      - cmd\n",
+        "    tags: [ # lead\n      a, # mid\n      b]\n",
+        "import \"pe\"\n\nrule cmd_string {\n    meta:\n        id = \"00000000-0000-4000-8003-000000000018\"\n        title = \"Cmd String\"\n        description = \"Finds \\\"cmd.exe\\\".\\n\"\n        author = \"Jane \\\"J\\\" Doe\"\n        date = \"2026-01-01\"\n        modified = \"2026-01-02\"\n        references = \"https://example.com/a\\nhttps://example.com/b\"\n        tags = \"a;b\"\n        context = \"file.pe,memory\"\n        os = \"Windows\"\n        arch = \"x86,x64\"\n        classification = \"trojan\"\n        score = 70\n        confidence = \"strong\"\n    strings:\n        $a = \"cmd.exe\" ascii\n    condition:\n        $a and pe.is_dll()\n}",
+    ),
+    (
+        "tags_tab_comment",
+        "    tags:\n      - attack.t1059\n      - cmd\n",
+        "    tags: [a\t# c\n      , b]\n",
+        "import \"pe\"\n\nrule cmd_string {\n    meta:\n        id = \"00000000-0000-4000-8003-000000000018\"\n        title = \"Cmd String\"\n        description = \"Finds \\\"cmd.exe\\\".\\n\"\n        author = \"Jane \\\"J\\\" Doe\"\n        date = \"2026-01-01\"\n        modified = \"2026-01-02\"\n        references = \"https://example.com/a\\nhttps://example.com/b\"\n        tags = \"a;b\"\n        context = \"file.pe,memory\"\n        os = \"Windows\"\n        arch = \"x86,x64\"\n        classification = \"trojan\"\n        score = 70\n        confidence = \"strong\"\n    strings:\n        $a = \"cmd.exe\" ascii\n    condition:\n        $a and pe.is_dll()\n}",
+    ),
+    (
+        "tags_block_tab_comment",
+        "    tags:\n      - attack.t1059\n      - cmd\n",
+        "    tags:\n      - a\t# c\n      - b\n",
+        "import \"pe\"\n\nrule cmd_string {\n    meta:\n        id = \"00000000-0000-4000-8003-000000000018\"\n        title = \"Cmd String\"\n        description = \"Finds \\\"cmd.exe\\\".\\n\"\n        author = \"Jane \\\"J\\\" Doe\"\n        date = \"2026-01-01\"\n        modified = \"2026-01-02\"\n        references = \"https://example.com/a\\nhttps://example.com/b\"\n        tags = \"a;b\"\n        context = \"file.pe,memory\"\n        os = \"Windows\"\n        arch = \"x86,x64\"\n        classification = \"trojan\"\n        score = 70\n        confidence = \"strong\"\n    strings:\n        $a = \"cmd.exe\" ascii\n    condition:\n        $a and pe.is_dll()\n}",
+    ),
+    (
+        "tags_multiline_plain",
+        "    tags:\n      - attack.t1059\n      - cmd\n",
+        "    tags: [a\n      b, c]\n",
+        "import \"pe\"\n\nrule cmd_string {\n    meta:\n        id = \"00000000-0000-4000-8003-000000000018\"\n        title = \"Cmd String\"\n        description = \"Finds \\\"cmd.exe\\\".\\n\"\n        author = \"Jane \\\"J\\\" Doe\"\n        date = \"2026-01-01\"\n        modified = \"2026-01-02\"\n        references = \"https://example.com/a\\nhttps://example.com/b\"\n        tags = \"a b;c\"\n        context = \"file.pe,memory\"\n        os = \"Windows\"\n        arch = \"x86,x64\"\n        classification = \"trojan\"\n        score = 70\n        confidence = \"strong\"\n    strings:\n        $a = \"cmd.exe\" ascii\n    condition:\n        $a and pe.is_dll()\n}",
+    ),
+    (
+        "tags_empty_flow",
+        "    tags:\n      - attack.t1059\n      - cmd\n",
+        "    tags: ['', a]\n",
+        "import \"pe\"\n\nrule cmd_string {\n    meta:\n        id = \"00000000-0000-4000-8003-000000000018\"\n        title = \"Cmd String\"\n        description = \"Finds \\\"cmd.exe\\\".\\n\"\n        author = \"Jane \\\"J\\\" Doe\"\n        date = \"2026-01-01\"\n        modified = \"2026-01-02\"\n        references = \"https://example.com/a\\nhttps://example.com/b\"\n        tags = \";a\"\n        context = \"file.pe,memory\"\n        os = \"Windows\"\n        arch = \"x86,x64\"\n        classification = \"trojan\"\n        score = 70\n        confidence = \"strong\"\n    strings:\n        $a = \"cmd.exe\" ascii\n    condition:\n        $a and pe.is_dll()\n}",
+    ),
+    (
+        "tags_empty_block",
+        "    tags:\n      - attack.t1059\n      - cmd\n",
+        "    tags:\n      - \"\"\n      - cmd\n",
+        "import \"pe\"\n\nrule cmd_string {\n    meta:\n        id = \"00000000-0000-4000-8003-000000000018\"\n        title = \"Cmd String\"\n        description = \"Finds \\\"cmd.exe\\\".\\n\"\n        author = \"Jane \\\"J\\\" Doe\"\n        date = \"2026-01-01\"\n        modified = \"2026-01-02\"\n        references = \"https://example.com/a\\nhttps://example.com/b\"\n        tags = \";cmd\"\n        context = \"file.pe,memory\"\n        os = \"Windows\"\n        arch = \"x86,x64\"\n        classification = \"trojan\"\n        score = 70\n        confidence = \"strong\"\n    strings:\n        $a = \"cmd.exe\" ascii\n    condition:\n        $a and pe.is_dll()\n}",
+    ),
+    (
+        "tags_block_scalar",
+        "    tags:\n      - attack.t1059\n      - cmd\n",
+        "    tags:\n      - |\n        ab\n      - cmd\n",
+        "import \"pe\"\n\nrule cmd_string {\n    meta:\n        id = \"00000000-0000-4000-8003-000000000018\"\n        title = \"Cmd String\"\n        description = \"Finds \\\"cmd.exe\\\".\\n\"\n        author = \"Jane \\\"J\\\" Doe\"\n        date = \"2026-01-01\"\n        modified = \"2026-01-02\"\n        references = \"https://example.com/a\\nhttps://example.com/b\"\n        tags = \"ab\n;cmd\"\n        context = \"file.pe,memory\"\n        os = \"Windows\"\n        arch = \"x86,x64\"\n        classification = \"trojan\"\n        score = 70\n        confidence = \"strong\"\n    strings:\n        $a = \"cmd.exe\" ascii\n    condition:\n        $a and pe.is_dll()\n}",
+    ),
+    (
+        "context_multiline",
+        "        context:\n          - file\n          - memory\n",
+        "        context: [file\n          memory]\n",
+        "import \"pe\"\n\nrule cmd_string {\n    meta:\n        id = \"00000000-0000-4000-8003-000000000018\"\n        title = \"Cmd String\"\n        description = \"Finds \\\"cmd.exe\\\".\\n\"\n        author = \"Jane \\\"J\\\" Doe\"\n        date = \"2026-01-01\"\n        modified = \"2026-01-02\"\n        references = \"https://example.com/a\\nhttps://example.com/b\"\n        tags = \"attack.t1059;cmd\"\n        context = \"file memory\"\n        os = \"Windows\"\n        arch = \"x86,x64\"\n        classification = \"trojan\"\n        score = 70\n        confidence = \"strong\"\n    strings:\n        $a = \"cmd.exe\" ascii\n    condition:\n        $a and pe.is_dll()\n}",
+    ),
+    (
+        "context_empty",
+        "        context:\n          - file\n          - memory\n",
+        "        context: [file, '']\n",
+        "import \"pe\"\n\nrule cmd_string {\n    meta:\n        id = \"00000000-0000-4000-8003-000000000018\"\n        title = \"Cmd String\"\n        description = \"Finds \\\"cmd.exe\\\".\\n\"\n        author = \"Jane \\\"J\\\" Doe\"\n        date = \"2026-01-01\"\n        modified = \"2026-01-02\"\n        references = \"https://example.com/a\\nhttps://example.com/b\"\n        tags = \"attack.t1059;cmd\"\n        context = \"file.pe,\"\n        os = \"Windows\"\n        arch = \"x86,x64\"\n        classification = \"trojan\"\n        score = 70\n        confidence = \"strong\"\n    strings:\n        $a = \"cmd.exe\" ascii\n    condition:\n        $a and pe.is_dll()\n}",
+    ),
+    (
+        "tags_comment_after_comma_quoted",
+        "    tags:\n      - attack.t1059\n      - cmd\n",
+        "    tags: [a, # see \"x\"\n      b]\n",
+        "import \"pe\"\n\nrule cmd_string {\n    meta:\n        id = \"00000000-0000-4000-8003-000000000018\"\n        title = \"Cmd String\"\n        description = \"Finds \\\"cmd.exe\\\".\\n\"\n        author = \"Jane \\\"J\\\" Doe\"\n        date = \"2026-01-01\"\n        modified = \"2026-01-02\"\n        references = \"https://example.com/a\\nhttps://example.com/b\"\n        tags = \"a;b\"\n        context = \"file.pe,memory\"\n        os = \"Windows\"\n        arch = \"x86,x64\"\n        classification = \"trojan\"\n        score = 70\n        confidence = \"strong\"\n    strings:\n        $a = \"cmd.exe\" ascii\n    condition:\n        $a and pe.is_dll()\n}",
+    ),
+    (
+        "tags_comment_after_quoted_item",
+        "    tags:\n      - attack.t1059\n      - cmd\n",
+        "    tags: [\"a\", # c\n      \"b\"]\n",
+        "import \"pe\"\n\nrule cmd_string {\n    meta:\n        id = \"00000000-0000-4000-8003-000000000018\"\n        title = \"Cmd String\"\n        description = \"Finds \\\"cmd.exe\\\".\\n\"\n        author = \"Jane \\\"J\\\" Doe\"\n        date = \"2026-01-01\"\n        modified = \"2026-01-02\"\n        references = \"https://example.com/a\\nhttps://example.com/b\"\n        tags = \"a;b\"\n        context = \"file.pe,memory\"\n        os = \"Windows\"\n        arch = \"x86,x64\"\n        classification = \"trojan\"\n        score = 70\n        confidence = \"strong\"\n    strings:\n        $a = \"cmd.exe\" ascii\n    condition:\n        $a and pe.is_dll()\n}",
+    ),
+    (
+        "tags_tab_comment_before_close",
+        "    tags:\n      - attack.t1059\n      - cmd\n",
+        "    tags: [a\t# \"q\"\n      ]\n",
+        "import \"pe\"\n\nrule cmd_string {\n    meta:\n        id = \"00000000-0000-4000-8003-000000000018\"\n        title = \"Cmd String\"\n        description = \"Finds \\\"cmd.exe\\\".\\n\"\n        author = \"Jane \\\"J\\\" Doe\"\n        date = \"2026-01-01\"\n        modified = \"2026-01-02\"\n        references = \"https://example.com/a\\nhttps://example.com/b\"\n        tags = \"a\"\n        context = \"file.pe,memory\"\n        os = \"Windows\"\n        arch = \"x86,x64\"\n        classification = \"trojan\"\n        score = 70\n        confidence = \"strong\"\n    strings:\n        $a = \"cmd.exe\" ascii\n    condition:\n        $a and pe.is_dll()\n}",
+    ),
+    (
+        "context_comment_after_comma",
+        "        context:\n          - file\n          - memory\n",
+        "        context: [file, # \"pe\"\n          memory]\n",
         "import \"pe\"\n\nrule cmd_string {\n    meta:\n        id = \"00000000-0000-4000-8003-000000000018\"\n        title = \"Cmd String\"\n        description = \"Finds \\\"cmd.exe\\\".\\n\"\n        author = \"Jane \\\"J\\\" Doe\"\n        date = \"2026-01-01\"\n        modified = \"2026-01-02\"\n        references = \"https://example.com/a\\nhttps://example.com/b\"\n        tags = \"attack.t1059;cmd\"\n        context = \"file.pe,memory\"\n        os = \"Windows\"\n        arch = \"x86,x64\"\n        classification = \"trojan\"\n        score = 70\n        confidence = \"strong\"\n    strings:\n        $a = \"cmd.exe\" ascii\n    condition:\n        $a and pe.is_dll()\n}",
     ),
 ];

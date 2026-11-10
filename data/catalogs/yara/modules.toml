@@ -2876,12 +2876,8 @@ yara_x = true
 [[member.overload]]
 args = "i"
 ret = "integer"
+yara_x_ret = "boolean"
 libyara = true
-yara_x = false
-[[member.overload]]
-args = "ii"
-ret = "boolean"
-libyara = false
 yara_x = true
 doc = "Returns true if the signature was valid on the date indicated by `timestamp`."
 

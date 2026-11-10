@@ -428,6 +428,87 @@ const RAW: &[(&str, &[(&str, Severity)])] = &[
         "rule a { strings: $d = \"abcd\" condition: any of ($c*) }",
         &[("yara_undefined_string", E)],
     ),
+    // libyara's strtoll saturates a bound at i64::MAX before the 32-bit
+    // truncation: 2^63 and above read as -1, refused.
+    (
+        "rule a { strings: $h = { 01 02 03 04 [9223372036854775813] 05 06 07 08 } condition: $h }",
+        &[("yara_hex_string", E), ("yara_x_incompatible", W)],
+    ),
+    (
+        "rule a { strings: $h = { 01 02 03 04 [18446744073709551621] 05 06 07 08 } condition: $h }",
+        &[("yara_hex_string", E), ("yara_x_incompatible", W)],
+    ),
+    // An integer compared with a boolean (YARA-X `bool_int_comparison`).
+    (
+        "import \"pe\" rule a { condition: pe.is_dll() == 1 }",
+        &[("yara_suspicious_expression", W)],
+    ),
+    (
+        "import \"pe\" rule a { condition: pe.exports(\"x\") == 0 }",
+        &[("yara_suspicious_expression", W)],
+    ),
+    (
+        "import \"pe\" rule a { condition: pe.is_signed == 1 }",
+        &[("yara_suspicious_expression", W)],
+    ),
+    // Arithmetic or an ordering on what YARA-X types as a boolean: libyara
+    // reads an integer, YARA-X refuses it.
+    (
+        "import \"pe\" rule a { condition: pe.is_dll() > 0 }",
+        &[("yara_x_incompatible", W)],
+    ),
+    (
+        "import \"pe\" rule a { condition: pe.is_dll() * 2 > 1 }",
+        &[("yara_x_incompatible", W)],
+    ),
+    (
+        "import \"pe\" rule a { condition: pe.is_dll() + 1 }",
+        &[
+            ("yara_suspicious_expression", W),
+            ("yara_x_incompatible", W),
+        ],
+    ),
+    (
+        "import \"pe\" rule a { condition: pe.is_dll() & 1 }",
+        &[
+            ("yara_suspicious_expression", W),
+            ("yara_x_incompatible", W),
+        ],
+    ),
+    (
+        "import \"pe\" rule a { condition: -pe.is_dll() }",
+        &[
+            ("yara_suspicious_expression", W),
+            ("yara_x_incompatible", W),
+        ],
+    ),
+    // A non-boolean operand of `and`, `or`, `not` or a `for` body (YARA-X
+    // `non_bool_expr`).
+    (
+        "import \"pe\" rule a { condition: true and pe.number_of_sections }",
+        &[("yara_suspicious_expression", W)],
+    ),
+    (
+        "import \"pe\" rule a { condition: not pe.number_of_sections }",
+        &[("yara_suspicious_expression", W)],
+    ),
+    (
+        "rule a { condition: true and 1 }",
+        &[("yara_suspicious_expression", W)],
+    ),
+    (
+        "import \"pe\" rule a { condition: pe.is_dll() or 0 }",
+        &[("yara_suspicious_expression", W)],
+    ),
+    (
+        "import \"pe\" rule a { condition: for any s in pe.sections : ( s.virtual_size ) }",
+        &[("yara_suspicious_expression", W)],
+    ),
+    // A function member of a struct array's element.
+    (
+        "import \"pe\" rule a { condition: pe.signatures[0].valid_on(0) }",
+        &[],
+    ),
 ];
 
 #[test]
@@ -564,6 +645,59 @@ rule Loader_Stage1 : loader {
     );
     assert_eq!(
         codes(example, &Context::for_profile(Profile::Bitdefender)),
+        []
+    );
+}
+
+/// libyara refuses an identifier over 128 characters, every one but a
+/// string's: a loop variable, a bare name, a field. A string identifier of
+/// any length is fine; YARA-X has no limit.
+#[test]
+fn identifiers_over_128_characters() {
+    let long = "a".repeat(129);
+    let parse_error = |source: &str| {
+        codes(source, &raw())
+            .iter()
+            .any(|(c, s)| c == "yara_parse_error" && *s == E)
+    };
+    assert!(parse_error(&format!(
+        "rule a {{ condition: for any {long} in (1..2) : ({long} > 0) }}"
+    )));
+    assert!(parse_error(&format!("rule a {{ condition: {long} }}")));
+    assert!(parse_error(&format!(
+        "import \"pe\" rule a {{ condition: pe.{long} }}"
+    )));
+    assert!(parse_error(&format!("rule {long} {{ condition: true }}")));
+    assert!(parse_error(&format!(
+        "rule a : {long} {{ condition: true }}"
+    )));
+    assert!(parse_error(&format!(
+        "rule a {{ meta: {long} = 1 condition: true }}"
+    )));
+    assert_eq!(
+        codes(
+            &format!("rule a {{ strings: ${long} = \"cmd.exe\" condition: ${long} }}"),
+            &raw()
+        ),
+        []
+    );
+    let at_limit = "a".repeat(128);
+    assert_eq!(
+        codes(
+            &format!("rule a {{ condition: for any {at_limit} in (1..2) : ({at_limit} > 0) }}"),
+            &raw()
+        ),
+        []
+    );
+    let yx = Context {
+        dialect: Dialect::YaraX,
+        profile: None,
+    };
+    assert_eq!(
+        codes(
+            &format!("rule a {{ condition: for any {long} in (1..2) : ({long} > 0) }}"),
+            &yx
+        ),
         []
     );
 }

@@ -16,7 +16,7 @@
 //! The block's constraint codes are here too, reported as opentide reports
 //! them: `{code, field_path, severity}` with a range.
 
-use crate::yaml_scalar::{YamlKey, scalar_at};
+use crate::yaml_scalar::{Scalar, YamlKey, scalar_at};
 use crate::{InjectedQuery, InjectionPart};
 use opentide_core::{ByteSpan, Diagnostic, LanguageId, codes};
 use opentide_yara::catalog::Catalog;
@@ -163,14 +163,18 @@ fn find<'a>(keys: &'a [YamlKey], p: &[&str]) -> Option<&'a YamlKey> {
     keys.iter().find(|k| k.path_is(p))
 }
 
-/// A scalar's value as a YAML loader gives it to deploy. [`scalar_at`]
-/// leaves a block scalar's final line breaks out; chomping decides them:
-/// clip (`|`) keeps one, strip (`|-`) none, keep (`|+`) every one,
-/// including the empty lines after the text.
+/// A scalar's value as a YAML loader gives it to deploy.
 fn deployed_text(source: &str, keys: &[YamlKey], p: &[&str]) -> Option<String> {
     let key = find(keys, p)?;
     let at = key.scalar?;
-    let scalar = scalar_at(source, at, key.column)?;
+    Some(chomped(source, at, scalar_at(source, at, key.column)?))
+}
+
+/// The value of the scalar at `at`, which [`scalar_at`] read as `scalar`,
+/// with the final line breaks [`scalar_at`] leaves out of a block scalar:
+/// chomping decides them: clip (`|`) keeps one, strip (`|-`) none, keep
+/// (`|+`) every one, including the empty lines after the text.
+fn chomped(source: &str, at: usize, scalar: Scalar) -> String {
     let mut text = scalar.text;
     let line_end = source[at..].find('\n').map_or(source.len(), |n| at + n);
     // The header token: `|` or `>`, then indicators up to a blank or comment.
@@ -179,11 +183,11 @@ fn deployed_text(source: &str, keys: &[YamlKey], p: &[&str]) -> Option<String> {
         .take_while(|c| !c.is_whitespace() && *c != '#')
         .collect();
     if !header.starts_with(['|', '>']) || text.is_empty() {
-        return Some(text);
+        return text;
     }
     let indicators = &header[1..];
     if indicators.contains('-') {
-        return Some(text);
+        return text;
     }
     text.push('\n');
     if indicators.contains('+') {
@@ -200,7 +204,7 @@ fn deployed_text(source: &str, keys: &[YamlKey], p: &[&str]) -> Option<String> {
             text.push('\n');
         }
     }
-    Some(text)
+    text
 }
 
 fn text_of(source: &str, keys: &[YamlKey], p: &[&str]) -> Option<String> {
@@ -213,11 +217,97 @@ fn strs(p: &[String]) -> Vec<&str> {
     p.iter().map(String::as_str).collect()
 }
 
-/// The scalar items of the sequence at `p`, each decoded as a YAML loader
-/// decodes it (escapes, `''`, comments), with its source map and its path
-/// (`p.0`, `p.1`, ...): a block sequence (`- pe`) or a flow one
-/// (`[pe, "a,b"]`), whose commas inside quotes do not split items.
-fn items(keys: &[YamlKey], source: &str, p: &[&str]) -> Vec<(String, Vec<usize>, Vec<String>)> {
+/// One item of a sequence deploy reads.
+struct Item {
+    /// The value as deploy's YAML loader gives it.
+    text: String,
+    /// The source byte of each byte of `text`: exact where the item reads
+    /// in place, else every byte at the item's start.
+    map: Vec<usize>,
+    /// `p.0`, `p.1`, ...
+    path: Vec<String>,
+    /// Where the item starts in the source.
+    start: usize,
+}
+
+impl Item {
+    /// The item's span in the source; one byte at its start when empty.
+    fn span(&self) -> ByteSpan {
+        match (self.map.first(), self.map.last()) {
+            (Some(first), Some(last)) if last >= first => ByteSpan::new(*first, *last + 1),
+            _ => ByteSpan::new(self.start, self.start + 1),
+        }
+    }
+}
+
+/// The document as deploy's YAML loader reads it, when it is valid YAML.
+fn document(source: &str) -> Option<serde_yaml::Value> {
+    serde_yaml::from_str(source).ok()
+}
+
+/// The value at `p` in `doc`; a list index is a path component too.
+fn value_at<'a>(doc: &'a serde_yaml::Value, p: &[&str]) -> Option<&'a serde_yaml::Value> {
+    p.iter().try_fold(doc, |v, k| match v {
+        serde_yaml::Value::Sequence(items) => items.get(k.parse::<usize>().ok()?),
+        serde_yaml::Value::Mapping(_) => v.get(*k),
+        _ => None,
+    })
+}
+
+/// The scalar items of the sequence at `p`, as deploy reads them.
+///
+/// The values are the YAML loader's (`doc`, libyaml as deploy's), so
+/// comments, folded lines, escapes and chomping decode as deploy decodes
+/// them, and an empty item stays an item. The source maps come from reading
+/// the items in place, a block sequence (`- pe`) or a flow one
+/// (`[pe, "a,b"]`); an item read differently maps to its start.
+fn items(keys: &[YamlKey], source: &str, doc: Option<&serde_yaml::Value>, p: &[&str]) -> Vec<Item> {
+    let raw = raw_items(keys, source, p);
+    let item = |index: usize, text: String| {
+        let mut item_path = path(p);
+        item_path.push(index.to_string());
+        let at = raw.get(index);
+        let map = match at {
+            Some(r) if r.0 == text => r.1.clone(),
+            Some(r) => vec![r.2; text.len()],
+            None => vec![find(keys, p).map_or(0, |k| k.key_start); text.len()],
+        };
+        let start = at.map_or_else(|| map.first().copied().unwrap_or(0), |r| r.2);
+        Item {
+            text,
+            map,
+            path: item_path,
+            start,
+        }
+    };
+    let Some(doc) = doc else {
+        // Not valid YAML, which deploy cannot load: the items as they read in place.
+        return (0..raw.len())
+            .filter(|&i| raw[i].3)
+            .map(|i| item(i, raw[i].0.clone()))
+            .collect();
+    };
+    let Some(serde_yaml::Value::Sequence(values)) = value_at(doc, p) else {
+        return Vec::new();
+    };
+    values
+        .iter()
+        .enumerate()
+        .filter_map(|(i, v)| {
+            let text = match v {
+                serde_yaml::Value::String(s) => s.clone(),
+                serde_yaml::Value::Number(n) => n.to_string(),
+                serde_yaml::Value::Bool(_) => raw.get(i)?.0.clone(),
+                _ => return None,
+            };
+            Some(item(i, text))
+        })
+        .collect()
+}
+
+/// The sequence at `p` read in place: each item's text, source map, start,
+/// and whether it is a scalar.
+fn raw_items(keys: &[YamlKey], source: &str, p: &[&str]) -> Vec<(String, Vec<usize>, usize, bool)> {
     let Some(i) = keys.iter().position(|k| k.path_is(p)) else {
         return Vec::new();
     };
@@ -231,83 +321,180 @@ fn items(keys: &[YamlKey], source: &str, p: &[&str]) -> Vec<(String, Vec<usize>,
         .filter(|next| next.key_start > from)
         .map_or(source.len(), |next| next.key_start);
     let region = &source[from..end];
-    let mut out = Vec::new();
-    let mut add = |index: usize, text: String, map: Vec<usize>| {
-        if text.is_empty() {
-            return;
-        }
-        let mut item_path = path(p);
-        item_path.push(index.to_string());
-        out.push((text, map, item_path));
-    };
     let trimmed = region.trim_start_matches([' ', '\t']);
     if trimmed.starts_with('[') {
-        let bytes = source.as_bytes();
-        let mut at = from + (region.len() - trimmed.len()) + 1;
-        let mut index = 0;
-        while at < end {
-            while at < end && matches!(bytes[at], b' ' | b'\t' | b'\n' | b'\r') {
-                at += 1;
+        flow_items(
+            source,
+            key.column,
+            from + (region.len() - trimmed.len()) + 1,
+            end,
+        )
+    } else {
+        block_items(source, from, end)
+    }
+}
+
+/// Whether `#` at `at` starts a comment: at a line start or after a blank.
+fn comment_at(bytes: &[u8], at: usize) -> bool {
+    bytes[at] == b'#' && (at == 0 || matches!(bytes[at - 1], b' ' | b'\t' | b'\n' | b'\r'))
+}
+
+/// Past blanks, line breaks and comments.
+fn skip_separation(bytes: &[u8], mut at: usize, end: usize) -> usize {
+    while at < end {
+        match bytes[at] {
+            b' ' | b'\t' | b'\n' | b'\r' => at += 1,
+            b'#' if comment_at(bytes, at) => {
+                while at < end && bytes[at] != b'\n' {
+                    at += 1;
+                }
             }
-            if at >= end || bytes[at] == b']' {
-                break;
-            }
-            if matches!(bytes[at], b'"' | b'\'') {
+            _ => break,
+        }
+    }
+    at
+}
+
+/// The items of a flow sequence whose `[` ends before `at`.
+fn flow_items(
+    source: &str,
+    column: usize,
+    mut at: usize,
+    end: usize,
+) -> Vec<(String, Vec<usize>, usize, bool)> {
+    let bytes = source.as_bytes();
+    let mut out = Vec::new();
+    loop {
+        at = skip_separation(bytes, at, end);
+        if at >= end || bytes[at] == b']' {
+            break;
+        }
+        let start = at;
+        match bytes[at] {
+            b'"' | b'\'' => {
                 // A quoted item: the decoder unescapes it and finds its end.
-                let Some(item) = scalar_at(source, at, key.column) else {
+                let Some(item) = scalar_at(source, at, column) else {
                     break;
                 };
                 at = item.end;
-                add(index, item.text, item.map);
-            } else {
-                // A plain item runs to `,`, `]` or a comment.
-                let start = at;
-                while at < end
-                    && !matches!(bytes[at], b',' | b']' | b'\n')
-                    && !(bytes[at] == b'#' && at > start && bytes[at - 1] == b' ')
-                {
+                out.push((item.text, item.map, start, true));
+            }
+            b'[' | b'{' => {
+                // A nested collection: one item, not a scalar.
+                let mut depth = 0usize;
+                while at < end {
+                    match bytes[at] {
+                        b'[' | b'{' => depth += 1,
+                        b']' | b'}' => {
+                            depth -= 1;
+                            if depth == 0 {
+                                at += 1;
+                                break;
+                            }
+                        }
+                        _ => {}
+                    }
                     at += 1;
                 }
-                let raw = &source[start..at];
-                let value = raw.trim_end();
-                add(
-                    index,
-                    value.to_string(),
-                    (start..start + value.len()).collect(),
-                );
-                if at < end && bytes[at] == b'#' {
-                    at = source[at..end].find('\n').map_or(end, |n| at + n);
+                out.push((String::new(), Vec::new(), start, false));
+            }
+            _ => {
+                // A plain item runs to `,`, `]` or a comment; its lines fold:
+                // one line break is a space, each empty line a line break.
+                let mut text = String::new();
+                let mut map = Vec::new();
+                let mut breaks: Vec<usize> = Vec::new();
+                'lines: while at < end {
+                    let line_start = at;
+                    while at < end
+                        && !matches!(bytes[at], b',' | b']' | b'\n')
+                        && !comment_at(bytes, at)
+                    {
+                        at += 1;
+                    }
+                    let line = source[line_start..at].trim_end_matches([' ', '\t', '\r']);
+                    if !line.is_empty() {
+                        if !text.is_empty() {
+                            match breaks.len() {
+                                0 | 1 => {
+                                    text.push(' ');
+                                    map.push(breaks.first().copied().unwrap_or(line_start));
+                                }
+                                _ => {
+                                    for b in &breaks[1..] {
+                                        text.push('\n');
+                                        map.push(*b);
+                                    }
+                                }
+                            }
+                        }
+                        text.push_str(line);
+                        map.extend(line_start..line_start + line.len());
+                        breaks.clear();
+                    }
+                    if at >= end || bytes[at] != b'\n' {
+                        break;
+                    }
+                    breaks.push(at);
+                    at += 1;
+                    while at < end && matches!(bytes[at], b' ' | b'\t') {
+                        at += 1;
+                    }
+                    if at < end && (matches!(bytes[at], b',' | b']') || comment_at(bytes, at)) {
+                        break 'lines;
+                    }
                 }
+                out.push((text, map, start, true));
             }
-            while at < end && matches!(bytes[at], b' ' | b'\t' | b'\n' | b'\r') {
-                at += 1;
-            }
-            if at < end && bytes[at] == b',' {
-                at += 1;
-            }
-            index += 1;
         }
-    } else {
-        let mut at = from;
-        let mut index = 0;
-        for line in region.split_inclusive('\n') {
-            let content = line.trim_start_matches([' ', '\t']);
-            let dash = at + (line.len() - content.len());
-            if let Some(item) = content
-                .strip_prefix("- ")
-                .or_else(|| content.strip_prefix('-'))
-            {
-                let lead = item.len() - item.trim_start_matches([' ', '\t']).len();
-                let item_at = dash + (content.len() - item.len()) + lead;
-                let column = dash - source[..dash].rfind('\n').map_or(0, |n| n + 1);
-                // The item as a YAML loader reads it: quoted or plain, with
-                // its comment dropped.
-                if let Some(s) = scalar_at(source, item_at, column) {
-                    add(index, s.text, s.map);
-                }
-                index += 1;
+        at = skip_separation(bytes, at, end);
+        if at < end && bytes[at] == b',' {
+            at += 1;
+        } else {
+            break;
+        }
+    }
+    out
+}
+
+/// The items of a block sequence in `from..end`: the lines whose `-` is at
+/// the first item's column.
+fn block_items(source: &str, from: usize, end: usize) -> Vec<(String, Vec<usize>, usize, bool)> {
+    let mut out = Vec::new();
+    let mut at = from;
+    let mut item_column = None;
+    for line in source[from..end].split_inclusive('\n') {
+        let content = line.trim_start_matches([' ', '\t']);
+        let dash = at + (line.len() - content.len());
+        let column = dash - source[..dash].rfind('\n').map_or(0, |n| n + 1);
+        at += line.len();
+        let rest = match content.strip_prefix('-') {
+            Some(rest) if rest.is_empty() || rest.starts_with([' ', '\t', '\n', '\r']) => rest,
+            _ => continue,
+        };
+        if *item_column.get_or_insert(column) != column {
+            continue;
+        }
+        let lead = rest.len() - rest.trim_start_matches([' ', '\t']).len();
+        let item_at = dash + 1 + lead;
+        // The item as a YAML loader reads it: quoted, plain or a block
+        // scalar, with its comment dropped.
+        match scalar_at(source, item_at, column) {
+            Some(s) => {
+                let map = s.map.clone();
+                let text = chomped(source, item_at, s);
+                let map = if text.len() == map.len() {
+                    map
+                } else {
+                    // Chomping's line breaks: at the last byte of text.
+                    let last = map.last().copied().unwrap_or(item_at);
+                    let mut m = map;
+                    m.resize(text.len(), last);
+                    m
+                };
+                out.push((text, map, item_at, true));
             }
-            at += line.len();
+            None => out.push((String::new(), Vec::new(), item_at, false)),
         }
     }
     out
@@ -432,15 +619,17 @@ pub(crate) fn decomposed_injection(source: &str, keys: &[YamlKey]) -> Option<Inj
         parts: Vec::new(),
     };
 
+    let doc = document(source);
     let imports = items(
         keys,
         source,
+        doc.as_ref(),
         &["configurations", "harfanglab", "yara", "imports"],
     );
     if !imports.is_empty() {
-        for (module, map, item_path) in &imports {
+        for item in &imports {
             b.synthetic("import \"", host, &yara_path);
-            b.push(module, map, item_path, false);
+            b.push(&item.text, &item.map, &item.path, false);
             b.synthetic("\"\n", host, &yara_path);
         }
         b.synthetic("\n", host, &yara_path);
@@ -530,26 +719,28 @@ pub(crate) fn decomposed_injection(source: &str, keys: &[YamlKey]) -> Option<Inj
         .iter()
         .filter(|k| k.path.len() == 3 && k.path[0] == "references" && k.path[1] == "public")
         .collect();
-    let refs: Vec<(String, Vec<usize>, Vec<String>)> = public
+    let refs: Vec<Item> = public
         .iter()
         .filter_map(|k| {
-            let s = scalar_at(source, k.scalar?, k.column)?;
-            Some((s.text, s.map, k.path.clone()))
+            let at = k.scalar?;
+            let s = scalar_at(source, at, k.column)?;
+            Some(Item {
+                text: s.text,
+                map: s.map,
+                path: k.path.clone(),
+                start: at,
+            })
         })
         .collect();
-    let joined = |b: &mut Builder,
-                  key: &str,
-                  p: &[&str],
-                  values: &[(String, Vec<usize>, Vec<String>)],
-                  sep: &str| {
+    let joined = |b: &mut Builder, key: &str, p: &[&str], values: &[Item], sep: &str| {
         let field = path(p);
         let at = host_of(p);
         b.synthetic(&format!("        {key} = \""), at, &field);
-        for (i, (text, map, item_path)) in values.iter().enumerate() {
+        for (i, item) in values.iter().enumerate() {
             if i > 0 {
                 b.synthetic(sep, at, &field);
             }
-            b.push(text, map, item_path, false);
+            b.push(&item.text, &item.map, &item.path, false);
         }
         b.synthetic("\"\n", at, &field);
     };
@@ -562,7 +753,12 @@ pub(crate) fn decomposed_injection(source: &str, keys: &[YamlKey]) -> Option<Inj
             "\\n",
         );
     }
-    let tags = items(keys, source, &["configurations", "harfanglab", "tags"]);
+    let tags = items(
+        keys,
+        source,
+        doc.as_ref(),
+        &["configurations", "harfanglab", "tags"],
+    );
     if !tags.is_empty() {
         joined(
             &mut b,
@@ -575,27 +771,26 @@ pub(crate) fn decomposed_injection(source: &str, keys: &[YamlKey]) -> Option<Inj
     let os = scalar(&["configurations", "harfanglab", "yara", "meta", "os"]);
     let os_text = os.as_ref().map(|(t, _)| t.clone()).unwrap_or_default();
     let context_path = meta_field("context");
-    let contexts: Vec<(String, Vec<usize>, Vec<String>)> =
-        items(keys, source, &strs(&context_path))
-            .into_iter()
-            .map(|(c, map, item_path)| {
-                match OS_TO_FILE_CONTEXT.iter().find(|(o, _)| *o == os_text) {
-                    // Deploy writes `file` as the os's file context.
-                    Some((_, file)) if c == "file" => {
-                        let file = file.to_string();
-                        let map = vec![map[0]; file.len()];
-                        (file, map, item_path)
-                    }
-                    _ => (c, map, item_path),
-                }
-            })
-            .collect();
+    let contexts: Vec<Item> = items(keys, source, doc.as_ref(), &strs(&context_path))
+        .into_iter()
+        .map(|item| {
+            match OS_TO_FILE_CONTEXT.iter().find(|(o, _)| *o == os_text) {
+                // Deploy writes `file` as the os's file context.
+                Some((_, file)) if item.text == "file" => Item {
+                    text: file.to_string(),
+                    map: vec![item.start; file.len()],
+                    ..item
+                },
+                _ => item,
+            }
+        })
+        .collect();
     if !contexts.is_empty() {
         joined(&mut b, "context", &strs(&context_path), &contexts, ",");
     }
     verbatim(&mut b, "os", &strs(&meta_field("os")), os);
     let arch_path = meta_field("arch");
-    let arch_items = items(keys, source, &strs(&arch_path));
+    let arch_items = items(keys, source, doc.as_ref(), &strs(&arch_path));
     if !arch_items.is_empty() {
         joined(&mut b, "arch", &strs(&arch_path), &arch_items, ",");
     } else if let Some(arch) = scalar(&strs(&arch_path)) {
@@ -841,20 +1036,22 @@ pub(crate) fn constraint_diagnostics(source: &str, keys: &[YamlKey]) -> Vec<Diag
             }
         }
         let known = &Catalog::cached().known_modules;
-        for (module, map, item_path) in items(
+        let doc = document(source);
+        for item in items(
             keys,
             source,
+            doc.as_ref(),
             &["configurations", "harfanglab", "yara", "imports"],
         ) {
-            if !known.contains(module.as_str()) {
-                let span = ByteSpan::new(map[0], map[map.len() - 1] + 1);
+            if !known.contains(item.text.as_str()) {
+                let module = &item.text;
                 out.push(
                     Diagnostic::error(
                         codes::HARFANGLAB_YARA_IMPORT,
                         format!("`{module}` is not a YARA module the language knows"),
-                        opentide_core::span_to_range(source, span),
+                        opentide_core::span_to_range(source, item.span()),
                     )
-                    .with_field_path(item_path),
+                    .with_field_path(item.path.clone()),
                 );
             }
         }

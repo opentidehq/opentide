@@ -55,9 +55,14 @@ pub fn prepare(source: &str) -> Prepared {
                     // refuses it. Writing the bound libyara reads, as long
                     // as the original, lets yara-x-parser read the string,
                     // so its atoms and its jumps are checked as libyara's.
-                    if let Ok(value) = source[start..end].parse::<u128>()
-                        && value > u128::from(u32::MAX)
-                    {
+                    // libyara's strtoll saturates at i64::MAX before the
+                    // 32-bit truncation: 2^63 and above read as -1.
+                    let digits = &source[start..end];
+                    let value = digits
+                        .parse::<u128>()
+                        .unwrap_or(u128::MAX)
+                        .min(i64::MAX as u128);
+                    if digits.bytes().all(|b| b.is_ascii_digit()) && value > u128::from(u32::MAX) {
                         let wrapped = (value % (1u128 << 32)) as u32;
                         let text = format!("{wrapped:0>width$}", width = end - start);
                         if text.len() == end - start {
@@ -65,7 +70,7 @@ pub fn prepare(source: &str) -> Prepared {
                             findings.push(Finding::new(
                                 codes::YARA_X_INCOMPATIBLE,
                                 Severity::Warning,
-                                format!("YARA-X refuses a jump bound above {}; libyara reads `{value}` as {wrapped}", u32::MAX),
+                                format!("YARA-X refuses a jump bound above {}; libyara reads `{digits}` as {wrapped}", u32::MAX),
                                 start,
                                 end,
                             ));
