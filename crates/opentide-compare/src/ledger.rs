@@ -16,10 +16,13 @@
 //!
 //! Every field is required. A `json:` rule's values are JSON texts, or
 //! `(absent)` where that side has no value; a `text` rule's values are
-//! literal text (on `exit_code`, the code in decimal); a `lines` rule's are
+//! literal text (on `exit_code`, the code in decimal), one whole line
+//! without its ending; a `lines` rule's are
 //! one or more whole lines, without the last line's ending: the oracle's
 //! lines, consecutive, read as the candidate's where the candidate has them
-//! at the same place, so a row the candidate adds or drops is one entry. An entry applies only
+//! at the same place, so a row the candidate adds or drops is one entry. A
+//! line ends at `\n` (or `\r\n`): a value may hold a `\r` inside a line, as
+//! a terminal's cursor movements do, but no line of it ends in one. An entry applies only
 //! where both values are found as written; an entry that applies nowhere in a
 //! complete run is stale, and a stale entry fails the run.
 
@@ -373,7 +376,7 @@ fn check_entry(raw: RawEntry) -> Result<Entry, Vec<String>> {
         (_, "text")
             if [&raw.oracle, &raw.candidate]
                 .iter()
-                .any(|value| value.contains(['\n', '\r'])) =>
+                .any(|value| value.contains('\n') || value.ends_with('\r')) =>
         {
             problems.push(
                 "a `text` rule's `oracle` and `candidate` are one whole line each, without its \
@@ -382,9 +385,15 @@ fn check_entry(raw: RawEntry) -> Result<Entry, Vec<String>> {
             );
             None
         }
-        (_, "lines") if raw.oracle.contains('\r') || raw.candidate.contains('\r') => {
+        (_, "lines")
+            if [&raw.oracle, &raw.candidate]
+                .iter()
+                .any(|value| value.split('\n').any(|line| line.ends_with('\r'))) =>
+        {
             problems.push(
-                "a `lines` rule's `oracle` and `candidate` are lines separated by `\\n`".to_owned(),
+                "a `lines` rule's `oracle` and `candidate` are lines separated by `\\n`, none \
+                 ending in `\\r`"
+                    .to_owned(),
             );
             None
         }
@@ -678,6 +687,46 @@ changelog = "**Nested rules**"
                 .to_string()
                 .contains("one whole line each")
         );
+    }
+
+    /// A terminal's cursor movements put a `\r` inside a line (`\x1b[?25h\r
+    /// \x1b[1A\x1b[2K` after a live display): a rule may name such a line. A
+    /// `\r` that ends a line could be read as half of its ending, and stays
+    /// refused.
+    #[test]
+    fn a_carriage_return_inside_a_line_is_text() {
+        let text = ENTRY
+            .replace("json:/summary/rules", "text")
+            .replace("oracle = \"1\"", "oracle = \"a\\u001b[?25h\\r\\u001b[1Ab\"");
+        let ledger = Ledger::parse(&text).unwrap();
+        assert!(matches!(
+            &ledger.entries[0].rule,
+            Rule::Text { oracle, .. } if oracle == "a\x1b[?25h\r\x1b[1Ab"
+        ));
+        let lines = ENTRY
+            .replace("case = \"json/*\"", "case = \"json/one\"")
+            .replace("json:/summary/rules", "lines")
+            .replace("oracle = \"1\"", "oracle = \"a\\rb\\nc\"");
+        let ledger = Ledger::parse(&lines).unwrap();
+        assert!(matches!(
+            &ledger.entries[0].rule,
+            Rule::Lines { oracle, .. } if oracle == &["a\rb", "c"]
+        ));
+        for (rule, value) in [
+            ("lines", "a\\r\\nb"),
+            ("lines", "a\\nb\\r"),
+            ("text", "a\\rb\\r"),
+        ] {
+            let refused = ENTRY
+                .replace("case = \"json/*\"", "case = \"json/one\"")
+                .replace("json:/summary/rules", rule)
+                .replace("candidate = \"2\"", &format!("candidate = \"{value}\""));
+            let error = Ledger::parse(&refused).unwrap_err().to_string();
+            assert!(
+                error.contains("one whole line each") || error.contains("none ending in `\\r`"),
+                "{rule} {value}: {error}"
+            );
+        }
     }
 
     #[test]
