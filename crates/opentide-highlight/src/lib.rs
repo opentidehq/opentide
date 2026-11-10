@@ -818,14 +818,14 @@ pub fn generate_tm_language(language: LanguageId, spec: &HighlightSpec) -> serde
             "comment": "capture:comment",
         }));
     }
-    if language == LanguageId::Spl {
-        if let Some(maps) = spec.captures.get("macro") {
-            patterns.push(serde_json::json!({
-                "name": maps.tm,
-                "match": "`[A-Za-z_][A-Za-z0-9_]*(?:\\([^)`]*\\))?`",
-                "comment": "capture:macro",
-            }));
-        }
+    if language == LanguageId::Spl
+        && let Some(maps) = spec.captures.get("macro")
+    {
+        patterns.push(serde_json::json!({
+            "name": maps.tm,
+            "match": "`[A-Za-z_][A-Za-z0-9_]*(?:\\([^)`]*\\))?`",
+            "comment": "capture:macro",
+        }));
     }
     patterns.push(serde_json::json!({
         "name": string_tm,

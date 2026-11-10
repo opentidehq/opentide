@@ -597,10 +597,10 @@ fn collect_highlights(node: Node, _source: &str, out: &mut Vec<(ByteSpan, &'stat
         "," => Some("punctuation.delimiter"),
         _ => None,
     };
-    if let Some(capture) = capture {
-        if node.child_count() == 0 || matches!(kind, "string" | "comment" | "number" | "macro") {
-            out.push((ByteSpan::new(node.start_byte(), node.end_byte()), capture));
-        }
+    if let Some(capture) = capture
+        && (node.child_count() == 0 || matches!(kind, "string" | "comment" | "number" | "macro"))
+    {
+        out.push((ByteSpan::new(node.start_byte(), node.end_byte()), capture));
     }
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
@@ -952,14 +952,13 @@ pub fn hover(source: &str, offset: usize) -> Option<String> {
         }
         return Some(md);
     }
-    if let Some(cmd) = last_command(&source[..offset]) {
-        if let Some(opt) = catalog
+    if let Some(cmd) = last_command(&source[..offset])
+        && let Some(opt) = catalog
             .options_for(argument_command(&cmd))
             .into_iter()
             .find(|o| o.name.eq_ignore_ascii_case(&word))
-        {
-            return Some(option_markdown(opt));
-        }
+    {
+        return Some(option_markdown(opt));
     }
     if let Some(c) = catalog.command(&word) {
         let source_label = c.app.as_deref().unwrap_or("searchbnf");
@@ -1061,10 +1060,10 @@ pub fn signature_help(source: &str, offset: usize) -> Option<SignatureHelp> {
         let same_as_command = cmd.as_ref().is_some_and(|c| c.eq_ignore_ascii_case(&name));
         if !same_as_command {
             let aggregate = cmd.as_ref().is_some_and(|c| aggregate_command(c));
-            if let Some(f) = catalog.function_in_context(&name, aggregate) {
-                if let Some(help) = function_signature(f, active) {
-                    return Some(help);
-                }
+            if let Some(f) = catalog.function_in_context(&name, aggregate)
+                && let Some(help) = function_signature(f, active)
+            {
+                return Some(help);
             }
         }
         if let Some(m) = catalog.macro_named(&name) {
@@ -1153,10 +1152,10 @@ fn active_option(before: &str, opts: &[&CommandOption]) -> u32 {
     let mut best: Option<(usize, u32)> = None;
     for (i, opt) in opts.iter().enumerate() {
         let needle = opt.name.to_ascii_lowercase();
-        if let Some(pos) = rfind_word(&lower, &needle) {
-            if best.map(|(at, _)| pos >= at).unwrap_or(true) {
-                best = Some((pos, i as u32));
-            }
+        if let Some(pos) = rfind_word(&lower, &needle)
+            && best.map(|(at, _)| pos >= at).unwrap_or(true)
+        {
+            best = Some((pos, i as u32));
         }
     }
     best.map(|(_, index)| index).unwrap_or(0)

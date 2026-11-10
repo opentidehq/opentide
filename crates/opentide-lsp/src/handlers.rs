@@ -1201,13 +1201,13 @@ fn handle_resolve(session: &mut Session, mut item: lsp::CompletionItem) -> lsp::
         engine = engine.with_detail(detail);
     }
     let resolved = opentide_tide::resolve_completion(engine);
-    if item.documentation.is_none() {
-        if let Some(docs) = resolved.documentation {
-            item.documentation = Some(lsp::Documentation::MarkupContent(markup(
-                session.caps.plaintext_completion,
-                docs,
-            )));
-        }
+    if item.documentation.is_none()
+        && let Some(docs) = resolved.documentation
+    {
+        item.documentation = Some(lsp::Documentation::MarkupContent(markup(
+            session.caps.plaintext_completion,
+            docs,
+        )));
     }
     if item.detail.is_none() {
         item.detail = resolved.detail;
@@ -1659,10 +1659,10 @@ fn handle_code_action(
         }
         actions.extend(declare_actions(session, &uri, &findings));
     }
-    if wanted(only, &fix_all_kind()) {
-        if let Some(action) = fix_all(session, &uri) {
-            actions.push(action);
-        }
+    if wanted(only, &fix_all_kind())
+        && let Some(action) = fix_all(session, &uri)
+    {
+        actions.push(action);
     }
     Some(actions)
 }
@@ -2070,10 +2070,10 @@ pub(crate) fn folding_ranges(text: &str) -> Vec<(u32, u32)> {
                 break;
             }
         }
-        if let Some(end) = end {
-            if !(i == 0 && end == last) {
-                out.push((i as u32, end as u32));
-            }
+        if let Some(end) = end
+            && !(i == 0 && end == last)
+        {
+            out.push((i as u32, end as u32));
         }
     }
     out
@@ -2084,11 +2084,11 @@ pub(crate) fn enclosing_block(lines: &[&str], line: usize) -> (u32, u32) {
     let indent = content_indent(lines.get(line).copied().unwrap_or("")).unwrap_or(0);
     let mut parent = line;
     for i in (0..line).rev() {
-        if let Some(parent_indent) = content_indent(lines[i]) {
-            if parent_indent < indent {
-                parent = i;
-                break;
-            }
+        if let Some(parent_indent) = content_indent(lines[i])
+            && parent_indent < indent
+        {
+            parent = i;
+            break;
         }
     }
     let parent_indent = content_indent(lines.get(parent).copied().unwrap_or("")).unwrap_or(0);

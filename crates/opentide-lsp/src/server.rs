@@ -296,11 +296,10 @@ pub fn yaml_files(dir: &Path) -> Vec<(String, String)> {
                     path.extension().and_then(|s| s.to_str()),
                     Some("yaml" | "yml")
                 )
+                && let Ok(text) = std::fs::read_to_string(&path)
             {
-                if let Ok(text) = std::fs::read_to_string(&path) {
-                    let text = opentide_core::strip_bom(&text).to_string();
-                    out.push((path.display().to_string(), text));
-                }
+                let text = opentide_core::strip_bom(&text).to_string();
+                out.push((path.display().to_string(), text));
             }
         }
     }

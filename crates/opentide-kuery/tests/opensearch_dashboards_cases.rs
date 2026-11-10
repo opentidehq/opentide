@@ -81,12 +81,12 @@ fn opensearch_dashboards_kuery_tests() {
             "accept" | "reject" => {}
             other => panic!("unknown verdict {other}"),
         }
-        if verdict == "accept" {
-            if let Some(twin) = fault_twin(&query) {
-                twins += 1;
-                if !has_error(&twin) {
-                    wrong.push(format!("fault twin {twin:?} ({source}) passes"));
-                }
+        if verdict == "accept"
+            && let Some(twin) = fault_twin(&query)
+        {
+            twins += 1;
+            if !has_error(&twin) {
+                wrong.push(format!("fault twin {twin:?} ({source}) passes"));
             }
         }
     }

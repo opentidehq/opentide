@@ -351,14 +351,8 @@ fn block_scalar(source: &str, at: usize, indent: usize) -> Option<Scalar> {
                     scalar.push('\n', *at);
                 }
             }
-            Some(at) if folded && !previous_spaced && !spaced => {
-                if empties.is_empty() {
-                    scalar.push(' ', at);
-                } else {
-                    for at in &empties {
-                        scalar.push('\n', *at);
-                    }
-                }
+            Some(at) if folded && !previous_spaced && !spaced && empties.is_empty() => {
+                scalar.push(' ', at);
             }
             Some(at) => {
                 scalar.push('\n', at);

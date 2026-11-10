@@ -84,21 +84,21 @@ fn expected(doc: &Value) -> BTreeSet<Query> {
             );
         }
         let threat = elastic.get("threat");
-        if rule_type == Some("threat_match") {
-            if let (Some(language), Some(value)) = (
+        if rule_type == Some("threat_match")
+            && let (Some(language), Some(value)) = (
                 elastic_query_language(
                     Some("threat_match"),
                     text(threat.and_then(|t| t.get("language"))),
                 ),
                 text(threat.and_then(|t| t.get("query"))),
-            ) {
-                add(
-                    "configurations.elastic.threat.query".into(),
-                    language,
-                    "elastic",
-                    value,
-                );
-            }
+            )
+        {
+            add(
+                "configurations.elastic.threat.query".into(),
+                language,
+                "elastic",
+                value,
+            );
         }
     }
     if let Some(sysdig) = configurations.and_then(|c| c.get("sysdig")) {
