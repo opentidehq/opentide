@@ -833,12 +833,11 @@ pub fn validate(ws: &Workspace, options: &Options<'_>) -> Validation {
         files: files_with(Severity::Error),
         warning_files: files_with(Severity::Warning),
         queries: report.stats.queries_checked,
-        fixable: report
-            .issues
-            .iter()
-            .chain(&report.warnings)
-            .filter(|item| item.fix.as_ref().is_some_and(|fix| fix.safe))
-            .count(),
+        // What `--fix` would apply: the safe fixes that still fit their file
+        // (`plan_fixes`), not every finding that offers one.
+        fixable: crate::fix::plan(fs, report.issues.iter().chain(&report.warnings))
+            .changes
+            .len(),
     };
     Validation {
         checks: check_list,

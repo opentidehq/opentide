@@ -17,9 +17,12 @@
 //! temporary file beside it, renamed into place, and only while the file
 //! still holds the text the plan was made from.
 //!
-//! `--fix --dry-run` prints [`FixPlan::diff`]: a unified diff from the
-//! `similar` crate, `a/<path>` against `b/<path>` with three lines of context,
-//! the lines split where YAML breaks them (`\r\n`, `\r`, `\n`).
+//! `--fix --dry-run` prints [`FixPlan::diff`]: the `similar` crate's unified
+//! diff, `a/<path>` against `b/<path>` with three lines of context, the lines
+//! split where YAML breaks them (`\r\n`, `\r`, `\n`). It is the crate's own
+//! output, not a copy of difflib's: where a changed line sits next to an
+//! identical one, the hunk can show the change against the other copy, and
+//! applies to the same file.
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -144,13 +147,13 @@ impl FixPlan {
 }
 
 /// `before` against `after` as a unified diff with `a/<path>` and `b/<path>`
-/// headers and three lines of context (`similar`'s patience diff and unified
-/// format); empty when they are the same.
+/// headers and three lines of context (`similar`'s default, Myers, diff and
+/// its unified format); empty when they are the same.
 pub fn unified_diff(path: &str, before: &str, after: &str) -> String {
     let old = split_keeping_breaks(before);
     let new = split_keeping_breaks(after);
     let diff = TextDiff::configure()
-        .algorithm(Algorithm::Patience)
+        .algorithm(Algorithm::Myers)
         .newline_terminated(true)
         .diff_slices(&old, &new);
     diff.unified_diff()
@@ -405,6 +408,125 @@ fn changed_scalars(
     }
 }
 
+/// What `validate --fix` (or `--fix --dry-run`) did.
+#[derive(Debug)]
+pub struct FixRun {
+    /// The validation the result reports: after the fixes were written, or
+    /// the one that found them under `--dry-run`.
+    pub validation: crate::validate::Validation,
+    /// The values replaced (`fixed`), or that would be (`would_fix`).
+    pub changes: Vec<FixChange>,
+    /// The files written, or that would be.
+    pub files: usize,
+    /// `--dry-run`'s unified diff (`diff`); `None` when the fixes were
+    /// written.
+    pub diff: Option<String>,
+    /// One line per file not written (`<path>: <why>`); the CLI warns
+    /// `Could not write the fix to <line>`.
+    pub unwritten: Vec<String>,
+    /// How many planned fixes those files held.
+    pub unwritten_fixes: usize,
+}
+
+impl crate::Workspace {
+    /// `validate --fix`: validates, applies every safe fix through `writer`,
+    /// reloads the files it wrote and validates again. With `dry_run`
+    /// nothing is written: the result is the first validation, with the
+    /// diff of what would change.
+    ///
+    /// # Errors
+    ///
+    /// The configuration no longer resolves when the written files are
+    /// reloaded.
+    pub fn validate_fix(
+        &mut self,
+        writer: &dyn WriteFs,
+        options: &crate::validate::Options<'_>,
+        dry_run: bool,
+    ) -> Result<FixRun, crate::OpenError> {
+        let validation = self.validate(options);
+        let planned = plan(
+            self.fs().as_ref(),
+            validation
+                .report
+                .issues
+                .iter()
+                .chain(&validation.report.warnings),
+        );
+        if dry_run {
+            return Ok(FixRun {
+                diff: Some(planned.diff()),
+                files: planned.file_count(),
+                changes: planned.changes,
+                validation,
+                unwritten: Vec::new(),
+                unwritten_fixes: 0,
+            });
+        }
+        if planned.is_empty() {
+            return Ok(FixRun {
+                validation,
+                changes: Vec::new(),
+                files: 0,
+                diff: None,
+                unwritten: Vec::new(),
+                unwritten_fixes: 0,
+            });
+        }
+        let (written, unwritten) = planned.write(writer);
+        let changes: Vec<crate::Change> = written
+            .files
+            .keys()
+            .map(|path| crate::Change::changed(path.clone()))
+            .collect();
+        self.invalidate(&changes)?;
+        let validation = self.validate(options);
+        Ok(FixRun {
+            validation,
+            unwritten_fixes: planned.changes.len() - written.changes.len(),
+            files: written.file_count(),
+            changes: written.changes,
+            diff: None,
+            unwritten,
+        })
+    }
+}
+
+/// `opentide validate --fix` with the scope of the run that found the fixes
+/// (`fix_command`), quoted as a shell reads it.
+pub fn fix_command(
+    check: Option<&str>,
+    queries: Option<&str>,
+    selection: &crate::validate::Selection,
+) -> String {
+    let mut words: Vec<&str> = vec!["opentide", "validate", "--fix"];
+    if let Some(check) = check {
+        words.extend(["--check", check]);
+    }
+    if let Some(queries) = queries {
+        words.extend(["--queries", queries]);
+    }
+    for (flag, values) in [
+        ("--file", &selection.files),
+        ("--uuid", &selection.uuids),
+        ("--type", &selection.types),
+    ] {
+        for value in values {
+            words.extend([flag, value.as_str()]);
+        }
+    }
+    shlex::try_join(words).unwrap_or_default()
+}
+
+/// `apply 1 safe fix`, `apply 3 safe fixes`.
+pub fn apply_reason(count: usize) -> String {
+    if count == 1 {
+        "apply 1 safe fix".to_owned()
+    } else {
+        format!("apply {count} safe fixes")
+    }
+}
+
 /// `Fixed 3 values in 2 files`, `Would fix 1 value in 1 file`, `No safe fix
 /// to apply`; `unwritten` counts the fixes whose file could not be written
 /// (`validation.py` `fix_phrase`).
@@ -653,6 +775,25 @@ mod tests {
             fix_phrase(written.changes.len(), written.file_count(), false, 1),
             "Fixed 1 value in 1 file · could not write 1 fix"
         );
+    }
+
+    #[test]
+    fn the_fix_command_keeps_the_scope_quoted() {
+        let selection = crate::validate::Selection {
+            files: vec!["objects/rules/my rule.yaml".to_owned()],
+            uuids: vec!["u".to_owned()],
+            types: vec!["rule".to_owned()],
+        };
+        assert_eq!(
+            fix_command(Some("schema"), Some("warn"), &selection),
+            "opentide validate --fix --check schema --queries warn --file 'objects/rules/my rule.yaml' --uuid u --type rule"
+        );
+        assert_eq!(
+            fix_command(None, None, &crate::validate::Selection::default()),
+            "opentide validate --fix"
+        );
+        assert_eq!(apply_reason(1), "apply 1 safe fix");
+        assert_eq!(apply_reason(2), "apply 2 safe fixes");
     }
 
     #[test]
