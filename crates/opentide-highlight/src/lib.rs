@@ -71,6 +71,8 @@ pub fn highlights_scm(language: LanguageId) -> &'static str {
         LanguageId::Config => "",
         LanguageId::Falco => FALCO_HIGHLIGHTS_SCM,
         LanguageId::Cql => CQL_HIGHLIGHTS_SCM,
+        // No grammar yet (#165): no tree-sitter highlighting.
+        LanguageId::Yara => "",
     }
 }
 
@@ -803,7 +805,9 @@ pub fn generate_tm_language(language: LanguageId, spec: &HighlightSpec) -> serde
         .unwrap_or("constant.numeric");
     let comment_match = match language {
         LanguageId::TideYaml => Some("(?m)^\\s*#.*$"),
-        LanguageId::Kql | LanguageId::Esql | LanguageId::Eql => Some("//.*$|/\\*[\\s\\S]*?\\*/"),
+        LanguageId::Kql | LanguageId::Esql | LanguageId::Eql | LanguageId::Yara => {
+            Some("//.*$|/\\*[\\s\\S]*?\\*/")
+        }
         LanguageId::Spl => Some("```[^`]*```"),
         // A CQL comment starts only where a token may: `https://x` is one pattern.
         LanguageId::Cql => Some("(?:^|(?<=[\\s|(\\[{,;]))//.*$|/\\*[\\s\\S]*?\\*/"),

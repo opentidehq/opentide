@@ -6,6 +6,14 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ## [Unreleased]
 
+### Upgrade
+
+- If you build the engine crates or `opentide-lsp` from source, use Rust 1.95 or later: `rust-version` is 1.95, which the YARA parser crates need ([#165](https://github.com/opentidehq/language-server/issues/165)).
+
+### Added
+
+- **`.yar` and `.yara` files are YARA, language id `yara`.** The server reports what libyara 4.5 cannot parse as `yara_parse_error`, an integer literal out of range as `yara_number_out_of_range`, and a bad regexp modifier as `yara_regexp`. `opentide explain` knows every code of the YARA language spec and its HarfangLab and Bitdefender profiles, listed in `docs/YARA.md` ([#165](https://github.com/opentidehq/language-server/issues/165)).
+
 ## [0.12.1] - 2026-11-09
 
 A Splunk block's `advanced` table is no longer reported as an unknown key, as opentide accepts it again.

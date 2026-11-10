@@ -660,6 +660,22 @@ configurations:
 }
 
 #[test]
+fn yara_over_stdio() {
+    let mut lsp = Lsp::spawn();
+    lsp.request("initialize", json!({ "capabilities": {} }));
+    lsp.notify("initialized", json!({}));
+    // `.yar` and `.yara` select the engine when the client reports no known id.
+    let broken = "rule a {\n  condition:\n    true and\n}\n";
+    for uri in ["file:///tmp/r.yar", "file:///tmp/r.yara"] {
+        let codes = published_codes(&mut lsp, uri, "plaintext", broken);
+        assert_eq!(codes, ["yara_parse_error"], "{uri}");
+    }
+    let clean = "import \"pe\"\n\nrule a : tag {\n  strings:\n    $a = \"x\" wide\n  condition:\n    $a and pe.is_dll()\n}\n";
+    let codes = published_codes(&mut lsp, "file:///tmp/clean.yar", "yara", clean);
+    assert!(codes.is_empty(), "{codes:?}");
+}
+
+#[test]
 fn cql_over_stdio() {
     let mut lsp = Lsp::spawn();
     lsp.request("initialize", json!({ "capabilities": {} }));

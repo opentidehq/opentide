@@ -969,7 +969,11 @@ fn analyze_injections(
                 let r = opentide_cql::analyze_with(&inj.inner, &ctx);
                 (r.diagnostics, r.tokens)
             }
-            LanguageId::TideYaml | LanguageId::Config => (Vec::new(), Vec::new()),
+            // No field path injects YARA yet: `yara.signature` and the
+            // decomposed HarfangLab fragments come with their profiles (#165).
+            LanguageId::TideYaml | LanguageId::Config | LanguageId::Yara => {
+                (Vec::new(), Vec::new())
+            }
         };
         // The stand-in `opentide new` wrote is lint's `placeholders` finding,
         // not a query to check: `opentide validate` skips it too.
