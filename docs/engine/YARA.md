@@ -31,7 +31,7 @@ Errors are what libyara 4.5 refuses to compile. **Source** is the libyara 4.5.4 
 
 | Code | Condition | Source | Test |
 |------|-----------|--------|------|
-| `yara_parse_error` | Syntax error; YARA-X-only syntax, named (`.len()` included); an empty text string; an identifier longer than 128 characters: every one but a string's (`$`, `#`, `@`, `!`), so rule names, tags, meta keys, loop variables and any other bare name or field (YARA-X has no limit) | `grammar.y`, `lexer.l`; `parser.c` `ERROR_EMPTY_STRING` | `RAW`: `true and }`, `with`, `1_000`, `f = 1.5`, `[0x2-0x4]`, `of (true, false)`, `pe.sections.len()`, a 129-character rule name; `identifiers_over_128_characters`: a 129-character loop variable, bare name, field, tag and meta key, and a 129-character string identifier clean |
+| `yara_parse_error` | Syntax error; YARA-X-only syntax, named (`.len()` included); an empty text string; an identifier longer than 128 characters: every one but a string's (`$`, `#`, `@`, `!`), so rule names, tags, meta keys, loop variables and any other bare name or field (YARA-X has no limit) | `grammar.y`, `lexer.l`; `parser.c` `ERROR_EMPTY_STRING` | `RAW`: `true and }`, `with`, `1_000`, `f = 1.5`, `[0x2-0x4]`, `of (true, false)`, `pe.sections.len()`, a 129-character rule name; `identifiers_over_128_characters`: a 129-character loop variable, bare name, field, tag and meta key, and a 129-character string identifier clean; `tests/yara.rs` `decomposed_raw_quotes_are_parse_errors_in_their_field`: a `"` in `references`, `tags`, `arch`, `context` or `os`, which deploy writes raw |
 | `yara_include` | An `include` directive | `lexer.l` `include` | `RAW`: `include "x.yar"` |
 | `yara_signature_alias` | `signature` is a YAML alias | yara-1.0 (Tide) | `crates/opentide-tide/tests/yara.rs` `spec_fixtures` |
 | `yara_empty_signature` | No rule, or only `private` or `global` rules | yara-1.0 | `RAW`: `private rule a`, `""` |
@@ -71,7 +71,7 @@ Errors are what libyara 4.5 refuses to compile. **Source** is the libyara 4.5.4 
 | `harfanglab_yara_section_header` | error | HarfangLab | A `strings:`, `condition:`, `meta:` or `rule` header in a fragment | `tests/yara.rs` `decomposed_imports_and_headers_and_rule_names` |
 | `harfanglab_yara_import` | error | HarfangLab | An `imports` entry that is not a known module | same |
 | `harfanglab_yara_rule_name` | error | HarfangLab | The derived rule name is a keyword or keeps a character other than an ASCII letter, digit or `_` | same (`Condition`, `Détection`) |
-| `harfanglab_yara_context` | warning | HarfangLab | Meta `context` that is not a comma-joined list, without blanks, of `file`, `memory`, `file.pe`, `file.elf`, `file.macho`, on the unknown value; the decomposed form's `context` too | `profiles`; `tests/yara.rs` `decomposed_unescaped_meta_is_checked_where_it_is_written` |
+| `harfanglab_yara_context` | warning | HarfangLab | Meta `context` that is not a comma-joined list, without blanks, of `file`, `memory`, `file.pe`, `file.elf`, `file.macho`, on the unknown value; the decomposed form's `context` too | `profiles`; `tests/yara.rs` `decomposed_unescaped_meta_is_checked_where_it_is_written`, `decomposed_contexts_are_checked_as_deploy_writes_them` |
 | `bitdefender_yara_ascii` | error | Bitdefender | A character that is not ASCII | `profiles` |
 | `bitdefender_yara_size` | error | Bitdefender | More than 30,000 characters | `profiles` |
 

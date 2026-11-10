@@ -646,3 +646,72 @@ fn decomposed_assembly_decodes_yaml_as_deploy_does() {
         "{found:?}"
     );
 }
+
+/// The spec's HarfangLab fixture (`specifications/fixtures/platforms`).
+const SPEC_FIXTURE: &str =
+    include_str!("../../../testdata/conformance/specifications-yara/harfanglab-yara.yaml");
+
+/// `(name, old, new, field, what compile_yara_deployment writes)`: a `"` in
+/// a value deploy writes unescaped. libyara refuses each assembled rule.
+const RAW_QUOTE_VARIANTS: &[(&str, &str, &str, &str, &str)] = &[
+    (
+        "references_quote",
+        "status: STAGING\nseverity",
+        "references:\n  public:\n    1: 'https://x.test/a\"b'\nstatus: STAGING\nseverity",
+        "references.public.1",
+        "import \"pe\"\n\nrule harfanglab_yara_platform_block {\n    meta:\n        id = \"00000000-0000-4000-8003-000000000018\"\n        title = \"HarfangLab YARA platform block\"\n        description = \"HarfangLab YARA scan rule.\\n\"\n        author = \"\"\n        date = \"2026-01-01\"\n        modified = \"2026-01-02\"\n        references = \"https://x.test/a\"b\"\n        context = \"file.pe\"\n        os = \"Windows\"\n        arch = \"x86,x64\"\n        classification = \"trojan\"\n        score = 70\n        confidence = \"moderate\"\n    strings:\n        $a = \"cmd.exe\" ascii\n    condition:\n        $a\n}",
+    ),
+    (
+        "tags_quote",
+        "    action: \"Alert & Block\"\n",
+        "    action: \"Alert & Block\"\n    tags: ['a\"b']\n",
+        "configurations.harfanglab.tags.0",
+        "import \"pe\"\n\nrule harfanglab_yara_platform_block {\n    meta:\n        id = \"00000000-0000-4000-8003-000000000018\"\n        title = \"HarfangLab YARA platform block\"\n        description = \"HarfangLab YARA scan rule.\\n\"\n        author = \"\"\n        date = \"2026-01-01\"\n        modified = \"2026-01-02\"\n        tags = \"a\"b\"\n        context = \"file.pe\"\n        os = \"Windows\"\n        arch = \"x86,x64\"\n        classification = \"trojan\"\n        score = 70\n        confidence = \"moderate\"\n    strings:\n        $a = \"cmd.exe\" ascii\n    condition:\n        $a\n}",
+    ),
+    (
+        "arch_quote",
+        "        arch:\n          - x86\n          - x64\n",
+        "        arch: ['x\"64']\n",
+        "configurations.harfanglab.yara.meta.arch.0",
+        "import \"pe\"\n\nrule harfanglab_yara_platform_block {\n    meta:\n        id = \"00000000-0000-4000-8003-000000000018\"\n        title = \"HarfangLab YARA platform block\"\n        description = \"HarfangLab YARA scan rule.\\n\"\n        author = \"\"\n        date = \"2026-01-01\"\n        modified = \"2026-01-02\"\n        context = \"file.pe\"\n        os = \"Windows\"\n        arch = \"x\"64\"\n        classification = \"trojan\"\n        score = 70\n        confidence = \"moderate\"\n    strings:\n        $a = \"cmd.exe\" ascii\n    condition:\n        $a\n}",
+    ),
+    (
+        "context_quote",
+        "        context:\n          - file\n",
+        "        context: ['fi\"le']\n",
+        "configurations.harfanglab.yara.meta.context.0",
+        "import \"pe\"\n\nrule harfanglab_yara_platform_block {\n    meta:\n        id = \"00000000-0000-4000-8003-000000000018\"\n        title = \"HarfangLab YARA platform block\"\n        description = \"HarfangLab YARA scan rule.\\n\"\n        author = \"\"\n        date = \"2026-01-01\"\n        modified = \"2026-01-02\"\n        context = \"fi\"le\"\n        os = \"Windows\"\n        arch = \"x86,x64\"\n        classification = \"trojan\"\n        score = 70\n        confidence = \"moderate\"\n    strings:\n        $a = \"cmd.exe\" ascii\n    condition:\n        $a\n}",
+    ),
+    (
+        "os_quote",
+        "        os: Windows\n",
+        "        os: 'Win\"dows'\n",
+        "configurations.harfanglab.yara.meta.os",
+        "import \"pe\"\n\nrule harfanglab_yara_platform_block {\n    meta:\n        id = \"00000000-0000-4000-8003-000000000018\"\n        title = \"HarfangLab YARA platform block\"\n        description = \"HarfangLab YARA scan rule.\\n\"\n        author = \"\"\n        date = \"2026-01-01\"\n        modified = \"2026-01-02\"\n        context = \"file\"\n        os = \"Win\"dows\"\n        arch = \"x86,x64\"\n        classification = \"trojan\"\n        score = 70\n        confidence = \"moderate\"\n    strings:\n        $a = \"cmd.exe\" ascii\n    condition:\n        $a\n}",
+    ),
+];
+
+/// #165: a `"` in a meta value deploy writes raw (`references`, `tags`,
+/// `arch`, `context`, `os`) is the parse error libyara gives the deployed
+/// rule, in the field it was written in, not dropped as generated text.
+#[test]
+fn decomposed_raw_quotes_are_parse_errors_in_their_field() {
+    for (name, old, new, field, expected) in RAW_QUOTE_VARIANTS {
+        assert_eq!(SPEC_FIXTURE.matches(old).count(), 1, "{name}");
+        let source = SPEC_FIXTURE.replace(old, new);
+        let injected = opentide_tide::extract_injections(&source)
+            .into_iter()
+            .find(|q| q.language == opentide_core::LanguageId::Yara)
+            .expect("a YARA injection");
+        assert_eq!(&injected.inner, expected, "{name}");
+        let found = yara(&source);
+        assert_eq!(
+            found
+                .iter()
+                .map(|(code, path, _)| (code.as_str(), path.as_str()))
+                .collect::<Vec<_>>(),
+            [("yara_parse_error", *field)],
+            "{name}"
+        );
+    }
+}
