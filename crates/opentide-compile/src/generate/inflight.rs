@@ -510,6 +510,11 @@ mod tests {
             described.get("url"),
             Some(&Json::from("https://g/p/-/merge_requests/12"))
         );
+        // Without the project's URL there is no link to write.
+        let unlinked = vars(&[("CI_MERGE_REQUEST_IID", "12")]);
+        let described = change(&unlinked, Ci::GitLab, "p", None, "t");
+        assert_eq!(described.get("number"), Some(&Json::Int(12)));
+        assert_eq!(described.get("url"), Some(&Json::Null));
         let azure = vars(&[
             ("SYSTEM_PULLREQUEST_PULLREQUESTNUMBER", ""),
             ("SYSTEM_PULLREQUEST_PULLREQUESTID", "x9"),

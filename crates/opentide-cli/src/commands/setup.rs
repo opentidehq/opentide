@@ -295,8 +295,16 @@ fn promotion_override(
     }
     let relative = ".opentide/configurations/deployment.toml";
     let path = root.join(relative);
+    // A file that cannot be read is refused: read as empty, the override
+    // would replace everything in it.
     let existing = if path.is_file() {
-        std::fs::read_to_string(&path).unwrap_or_default()
+        std::fs::read_to_string(&path).map_err(|error| {
+            bad_parameter(
+                &format!("{relative} cannot be read ({error}); fix it, then re-run setup."),
+                &hint,
+                None,
+            )
+        })?
     } else {
         String::new()
     };
@@ -948,5 +956,53 @@ mod tests {
             "Invalid value for '--promotion-target': 'NOPE' is not a status in this repository's deployment.toml; use one of: STAGING, PRODUCTION"
         );
         assert_eq!(unknown.outcome.exit_code, 2);
+    }
+
+    /// A `deployment.toml` that cannot be read is refused and left as it
+    /// is: read as empty, the override would replace the whole file.
+    #[test]
+    fn an_unreadable_deployment_file_is_refused_not_replaced() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let config = root.join(".opentide/configurations");
+        std::fs::create_dir_all(&config).unwrap();
+        let path = config.join("deployment.toml");
+        let bytes = b"# caf\xe9\n[x]\na = 1\n".to_vec();
+        std::fs::write(&path, &bytes).unwrap();
+        let args = CiArgs {
+            provider: Provider::GitHub,
+            path: None,
+            group_path: None,
+            staging: true,
+            inflight: true,
+            sharing: false,
+            lint_changed: false,
+            promotion: Some(false),
+            promotion_target: None,
+            python_version: "3.12".into(),
+            explorer_pages: false,
+            default_branch: None,
+            plan: false,
+            yes: true,
+            group_only: Vec::new(),
+        };
+        let refused = promotion_override(root, &args, || Ok(Vec::new())).unwrap_err();
+        assert_eq!(refused.outcome.exit_code, 2);
+        assert!(
+            refused.outcome.message.starts_with(
+                "Invalid value for '--promotion/--no-promotion': .opentide/configurations/deployment.toml cannot be read ("
+            ),
+            "{}",
+            refused.outcome.message
+        );
+        assert!(
+            refused
+                .outcome
+                .message
+                .ends_with("); fix it, then re-run setup."),
+            "{}",
+            refused.outcome.message
+        );
+        assert_eq!(std::fs::read(&path).unwrap(), bytes);
     }
 }

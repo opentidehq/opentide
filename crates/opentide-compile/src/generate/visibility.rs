@@ -539,6 +539,37 @@ mod tests {
         assert_eq!(report.get("present"), Some(&Json::Bool(true)));
     }
 
+    /// A source only a signal names, with no rule implementing it, is used
+    /// through its objective (`used = bool(rules or objectives)`).
+    #[test]
+    fn a_source_named_only_by_an_objective_is_used() {
+        let index = index_of(&[(
+            "objective",
+            "o1",
+            "objective: {signals: [{uuid: s1, name: Logons, data: {logsources: [Syslog]}}]}\n",
+        )]);
+        let tree = opentide_schema::node::load(
+            "logsources:\n- {name: Syslog, system: sentinel, description: d}\n",
+        )
+        .unwrap();
+        let inputs = Inputs {
+            declared: Some(declared(tree.root().unwrap()).unwrap()),
+            ..Inputs::default()
+        };
+        let report = report(&index, &inputs);
+        assert_eq!(
+            line(report.get("systems").unwrap()),
+            "{\"sentinel\": {\"logsources\": 1, \"with_columns\": 0, \"used\": 1}}"
+        );
+        assert_eq!(
+            line(report.get("logsources").unwrap()),
+            "[{\"name\": \"Syslog\", \"system\": \"sentinel\", \"description\": \"d\", \"tenants\": [], \
+             \"columns\": [], \"read_by\": [], \"objectives\": [\"o1\"], \
+             \"signals\": [{\"objective\": \"o1\", \"uuid\": \"s1\", \"name\": \"Logons\"}], \
+             \"signal_rules\": [], \"rules\": []}]"
+        );
+    }
+
     #[test]
     fn a_file_its_model_refuses_is_a_problem() {
         let tree = opentide_schema::node::load("logsources:\n- {name: x}\n").unwrap();

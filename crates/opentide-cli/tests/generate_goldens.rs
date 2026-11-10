@@ -409,6 +409,11 @@ fn exports_before_a_failure_are_written() {
 
 /// Runs `args` in `ws` in json mode; the exit code and stdout.
 fn run_json(ws: &Path, words: &[&str]) -> (i32, String) {
+    run_json_with(ws, words, &[])
+}
+
+/// [`run_json`] with `extra` added to the environment.
+fn run_json_with(ws: &Path, words: &[&str], extra: &[(&str, &str)]) -> (i32, String) {
     let sink: Sink = Arc::new(Mutex::new(Buffer::default()));
     let host = Host {
         version: "0.23.0".into(),
@@ -425,12 +430,20 @@ fn run_json(ws: &Path, words: &[&str]) -> (i32, String) {
         .collect();
     let home = ws.with_file_name("home");
     std::fs::create_dir_all(&home).unwrap();
-    let env = Env::from_pairs([
-        ("HOME".to_owned(), home.display().to_string()),
-        ("PATH".to_owned(), std::env::var("PATH").unwrap_or_default()),
-        ("GIT_CONFIG_NOSYSTEM".to_owned(), "1".to_owned()),
-        ("GIT_CONFIG_GLOBAL".to_owned(), "/dev/null".to_owned()),
-    ]);
+    let env = Env::from_pairs(
+        [
+            ("HOME".to_owned(), home.display().to_string()),
+            ("PATH".to_owned(), std::env::var("PATH").unwrap_or_default()),
+            ("GIT_CONFIG_NOSYSTEM".to_owned(), "1".to_owned()),
+            ("GIT_CONFIG_GLOBAL".to_owned(), "/dev/null".to_owned()),
+        ]
+        .into_iter()
+        .chain(
+            extra
+                .iter()
+                .map(|(key, value)| ((*key).to_owned(), (*value).to_owned())),
+        ),
+    );
     let (mut out, mut err) = (Vec::new(), Buffer::default());
     let exit_code = run(&argv, &env, &host, &mut out, &mut err);
     (exit_code, String::from_utf8(out).unwrap())
@@ -650,4 +663,288 @@ fn setup_ci_refuses_then_writes() {
         plan["message"],
         "Plan: 1 file to write (0 new, 1 changed) · nothing written"
     );
+}
+
+/// The parsed document of a run's stdout.
+fn document(stdout: &str) -> serde_json::Value {
+    serde_json::from_str(stdout).unwrap()
+}
+
+/// `--include-visibility` reads the workspace's `visibility.toml`: a declared
+/// source lists the rules that read it and leaves `undeclared`; a custom
+/// table, which the KQL engine reports as unknown, is a read too; and a file
+/// its model refuses is the report's `problem`.
+#[test]
+fn the_explorer_reports_declared_visibility() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
+    fixture("tide-corpus", &ws);
+    let rule = ws.join("Objects/Detection Rules/rule-0001-sentinel-kql.yaml");
+    let text = std::fs::read_to_string(&rule).unwrap();
+    assert!(text.contains("      SecurityEvent\n"));
+    std::fs::write(
+        &rule,
+        text.replace("      SecurityEvent\n", "      MyCustom_CL\n"),
+    )
+    .unwrap();
+    let configuration = ws.join(".opentide/configurations/visibility.toml");
+    std::fs::write(
+        &configuration,
+        "[[logsources]]\nname = \"SecurityEvent\"\nsystem = \"sentinel\"\ndescription = \"Windows security events\"\n\n[logsources.columns.EventID]\ntype = \"int\"\n",
+    )
+    .unwrap();
+    let visibility = ws.join(".opentide/exports/explorer.visibility.json");
+    let (code, stdout) = run_json(&ws, &["generate", "explorer", "--include-visibility"]);
+    assert_eq!(code, 0, "{stdout}");
+    let report: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&visibility).unwrap()).unwrap();
+    assert_eq!(report["present"], true);
+    assert_eq!(report["problem"], serde_json::Value::Null);
+    let rows = report["logsources"].as_array().unwrap();
+    assert_eq!(rows.len(), 1, "{report}");
+    assert_eq!(rows[0]["name"], "SecurityEvent");
+    assert_eq!(
+        rows[0]["read_by"],
+        serde_json::json!(["00000000-0000-4000-8003-000000000008"])
+    );
+    assert_eq!(
+        rows[0]["columns"],
+        serde_json::json!([{"name": "EventID", "type": "int", "description": ""}])
+    );
+    assert_eq!(
+        report["systems"],
+        serde_json::json!({"sentinel": {"logsources": 1, "with_columns": 1, "used": 1}})
+    );
+    let reads = report["reads"].as_array().unwrap();
+    assert!(
+        reads.contains(&serde_json::json!({
+            "rule": "00000000-0000-4000-8003-000000000001",
+            "system": "sentinel",
+            "name": "MyCustom_CL",
+            "field_path": "configurations.sentinel.query",
+        })),
+        "{report}"
+    );
+    let undeclared = report["undeclared"].as_array().unwrap();
+    assert!(
+        undeclared
+            .iter()
+            .all(|entry| entry["name"] != "SecurityEvent"),
+        "{report}"
+    );
+    assert!(
+        undeclared.contains(&serde_json::json!({
+            "system": "sentinel",
+            "name": "MyCustom_CL",
+            "rules": ["00000000-0000-4000-8003-000000000001"],
+            "system_declares": true,
+        })),
+        "{report}"
+    );
+    // A source without its `system` is refused by the model.
+    std::fs::write(
+        &configuration,
+        "[[logsources]]\nname = \"SecurityEvent\"\ndescription = \"d\"\n",
+    )
+    .unwrap();
+    let (code, stdout) = run_json(&ws, &["generate", "explorer", "--include-visibility"]);
+    assert_eq!(code, 0, "{stdout}");
+    let report: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&visibility).unwrap()).unwrap();
+    // As the oracle's report: nothing could be read, so nothing is present.
+    assert_eq!(report["present"], false);
+    assert_eq!(report["logsources"], serde_json::json!([]));
+    let problem = report["problem"].as_str().unwrap();
+    assert!(
+        problem.starts_with("visibility.toml could not be read: ") && problem.contains("system"),
+        "{problem}"
+    );
+}
+
+/// `INFLIGHT_PATHS` names the change set outside git.
+#[test]
+fn inflight_paths_name_the_change_set() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
+    fixture("tide-corpus", &ws);
+    let (code, stdout) = run_json_with(
+        &ws,
+        &["generate", "inflight"],
+        &[(
+            "INFLIGHT_PATHS",
+            " objects/rules/rule-0003-splunk-spl.yaml, ",
+        )],
+    );
+    assert_eq!(code, 0, "{stdout}");
+    let shards: Vec<String> = std::fs::read_dir(ws.join(".opentide/inflight"))
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(shards, ["00000000-0000-4000-8003-000000000003.json"]);
+}
+
+fn has_git() -> bool {
+    std::process::Command::new("git")
+        .arg("--version")
+        .output()
+        .is_ok()
+}
+
+/// The vscode fixture committed on `main`, checked out on `feature`; its
+/// rule files, sorted.
+fn feature_branch(ws: &Path) -> Vec<PathBuf> {
+    fixture("vscode", ws);
+    git(ws, &["init", "-q", "-b", "main"]);
+    git(ws, &["add", "-A"]);
+    git(ws, &["commit", "-q", "-m", "catalogue"]);
+    git(ws, &["checkout", "-q", "-b", "feature"]);
+    let mut rules: Vec<PathBuf> = std::fs::read_dir(ws.join("objects/rules"))
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .filter(|path| path.extension().is_some_and(|ext| ext == "yaml"))
+        .collect();
+    rules.sort();
+    rules
+}
+
+/// A deleted object file has nothing to preview: only the changed one gets
+/// a shard, locally and when a CI run's diff cannot be read (the work tree
+/// again).
+#[test]
+fn inflight_skips_deleted_object_files() {
+    if !has_git() {
+        return;
+    }
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
+    let rules = feature_branch(&ws);
+    std::fs::remove_file(ws.join("objects/objectives/detect-lsass-access.yaml")).unwrap();
+    let text = std::fs::read_to_string(&rules[0]).unwrap();
+    std::fs::write(&rules[0], format!("{text}\n# changed\n")).unwrap();
+    let inflight = ws.join(".opentide/inflight");
+    let count = || std::fs::read_dir(&inflight).unwrap().count();
+    let (code, stdout) = run_json(&ws, &["generate", "inflight"]);
+    assert_eq!(code, 0, "{stdout}");
+    assert!(
+        stdout.contains("\"message\":\"Generated 1 file in "),
+        "{stdout}"
+    );
+    assert_eq!(count(), 1);
+    std::fs::remove_dir_all(&inflight).unwrap();
+    // A GitHub run without the pull request's refs falls back to the work tree.
+    let (code, stdout) = run_json_with(
+        &ws,
+        &["generate", "inflight"],
+        &[("GITHUB_ACTIONS", "true")],
+    );
+    assert_eq!(code, 0, "{stdout}");
+    assert_eq!(count(), 1);
+    let shard: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(
+            std::fs::read_dir(&inflight)
+                .unwrap()
+                .next()
+                .unwrap()
+                .unwrap()
+                .path(),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(shard["change"]["platform"], "github");
+}
+
+/// GitHub and Azure pipelines deploy from `origin/HEAD`'s branch; without
+/// it, from the checked-out branch, with a warning when others exist.
+#[test]
+fn setup_ci_detects_the_default_branch() {
+    if !has_git() {
+        return;
+    }
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
+    fixture("tide-corpus", &ws);
+    git(&ws, &["init", "-q", "-b", "trunk"]);
+    git(&ws, &["add", "-A"]);
+    git(&ws, &["commit", "-q", "-m", "catalogue"]);
+    git(&ws, &["update-ref", "refs/remotes/origin/trunk", "HEAD"]);
+    git(
+        &ws,
+        &[
+            "symbolic-ref",
+            "refs/remotes/origin/HEAD",
+            "refs/remotes/origin/trunk",
+        ],
+    );
+    git(&ws, &["checkout", "-q", "-b", "feature"]);
+    let (code, stdout) = run_json(&ws, &["setup", "ci", "github", "--yes"]);
+    assert_eq!(code, 0, "{stdout}");
+    let written = document(&stdout);
+    assert_eq!(written["default_branch"], "trunk");
+    assert!(written.get("warnings").is_none(), "{stdout}");
+    let (code, stdout) = run_json(&ws, &["setup", "ci", "azure", "--yes"]);
+    assert_eq!(code, 0, "{stdout}");
+    assert_eq!(document(&stdout)["default_branch"], "trunk");
+    git(
+        &ws,
+        &["symbolic-ref", "--delete", "refs/remotes/origin/HEAD"],
+    );
+    let (code, stdout) = run_json(&ws, &["setup", "ci", "github", "--yes"]);
+    assert_eq!(code, 0, "{stdout}");
+    let written = document(&stdout);
+    assert_eq!(written["default_branch"], "feature");
+    assert_eq!(
+        written["warnings"],
+        serde_json::json!([
+            "origin/HEAD is not set, so the pipeline targets the checked-out branch 'feature'. Re-run with --default-branch <branch> if another branch deploys."
+        ])
+    );
+}
+
+/// Only the platforms whose file enables them get validate query jobs; and
+/// two different repository paths are refused before anything is written.
+#[test]
+fn setup_ci_reads_enabled_platforms_and_one_path() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
+    fixture("tide-corpus", &ws);
+    std::fs::create_dir_all(ws.join("other")).unwrap();
+    let (code, stdout) = run_json(
+        &ws,
+        &[
+            "setup", "--path", ".", "ci", "github", "--path", "other", "--yes",
+        ],
+    );
+    assert_eq!(code, 2, "{stdout}");
+    let refused = document(&stdout);
+    assert_eq!(refused["failure"]["code"], "usage_invalid_value");
+    assert_eq!(
+        refused["failure"]["message"],
+        "Invalid value: Pass the repository path once: . and other name different targets."
+    );
+    assert!(!ws.join(".github").exists());
+    assert!(!ws.join("other/.github").exists());
+    let splunk = ws.join(".opentide/configurations/platforms/splunk.toml");
+    let text = std::fs::read_to_string(&splunk).unwrap();
+    assert!(text.starts_with("[platform]\nenabled = true\n"));
+    std::fs::write(
+        &splunk,
+        text.replacen("enabled = true", "enabled = false", 1),
+    )
+    .unwrap();
+    let (code, stdout) = run_json(
+        &ws,
+        &["setup", "ci", "github", "--default-branch", "main", "--yes"],
+    );
+    assert_eq!(code, 0, "{stdout}");
+    let platforms = document(&stdout)["platforms"].clone();
+    let platforms: Vec<&str> = platforms
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|name| name.as_str().unwrap())
+        .collect();
+    assert!(!platforms.contains(&"splunk"), "{platforms:?}");
+    assert!(platforms.contains(&"sentinel"), "{platforms:?}");
+    assert_eq!(platforms.len(), 8, "{platforms:?}");
 }
