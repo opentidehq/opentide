@@ -66,6 +66,10 @@ fn entry(pointer: &str, oracle: &str, candidate: &str) -> String {
 }
 
 fn run(dir: &Path, candidate: &str) -> (bool, serde_json::Value) {
+    run_versions(dir, candidate, ("0.23.0", "0.23.0"))
+}
+
+fn run_versions(dir: &Path, candidate: &str, versions: (&str, &str)) -> (bool, serde_json::Value) {
     let golden = dir.join("tests/golden");
     let report = dir.join("report.json");
     let passed = xtask::compare::golden(
@@ -77,6 +81,7 @@ fn run(dir: &Path, candidate: &str) -> (bool, serde_json::Value) {
         true,
         Some(&report),
         false,
+        versions,
     )
     .expect("the comparison runs");
     let text = std::fs::read_to_string(report).unwrap();
@@ -129,7 +134,42 @@ fn comparator_golden_fails_a_listed_command_the_cli_refuses() {
         true,
         None,
         false,
+        ("0.23.0", "0.23.0"),
     )
     .unwrap();
+    assert!(!passed);
+}
+
+#[test]
+fn comparator_golden_compares_each_sides_own_version_as_a_placeholder() {
+    let dir = tempfile::tempdir().unwrap();
+    repo(dir.path(), "");
+    let golden = dir.path().join("tests/golden");
+    std::fs::remove_dir_all(golden.join("cases")).unwrap();
+    recording("{\"version\":\"0.23.0\",\"requires\":\"0.23.0\"}\n")
+        .write(&golden.join("cases").join(ID), &golden.join("blobs"))
+        .unwrap();
+    let build = "0.23.1.dev5+g34227995";
+    // Each side reports its own version: equal.
+    let (passed, report) = run_versions(
+        dir.path(),
+        &format!("{{\"version\":\"{build}\",\"requires\":\"{build}\"}}\n"),
+        ("0.23.0", build),
+    );
+    assert!(passed, "{report}");
+    // The candidate printing the oracle's version, not its own, still differs.
+    let (passed, report) = run_versions(
+        dir.path(),
+        &format!("{{\"version\":\"0.23.0\",\"requires\":\"{build}\"}}\n"),
+        ("0.23.0", build),
+    );
+    assert!(!passed);
+    assert_eq!(report["cases"][0]["differences"][0]["pointer"], "/version");
+    // Another version-shaped value is still compared.
+    let (passed, _) = run_versions(
+        dir.path(),
+        &format!("{{\"version\":\"{build}\",\"requires\":\"0.23.1\"}}\n"),
+        ("0.23.0", build),
+    );
     assert!(!passed);
 }

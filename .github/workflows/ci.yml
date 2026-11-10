@@ -1089,14 +1089,10 @@ jobs:
           shared-key: golden-compare
 
       # The candidate is this repository's CLI, with the engine compiled in.
-      # It stands in for the oracle's release, so it takes that version:
-      # `info` prints the package's version, which a shallow checkout's
-      # hatch-vcs cannot derive and the recordings hold as the oracle's.
+      # Its version is whatever this checkout builds: the comparison replaces
+      # each side's own version with a placeholder (tests/golden/README.md).
       - name: Install this repository's CLI
-        run: |
-          set -euo pipefail
-          version="$(sed -n 's/^version = "\(.*\)"$/\1/p' tests/golden/ORACLE)"
-          SETUPTOOLS_SCM_PRETEND_VERSION="${version}" uv sync --group dev
+        run: uv sync --group dev
 
       - name: Compare every ported command with the recordings
         run: cargo xtask golden check --engine compare --report golden-compare.json

@@ -298,15 +298,15 @@ fn outcome_line(rules: usize, threats: usize, objectives: usize, load_errors: us
     .join(&format!(" {SEPARATOR} "))
 }
 
-/// The version and every platform, enabled first.
+/// The version and every platform, enabled first. The labels share a
+/// column; the version follows its label on its own, so a long build
+/// version (`0.23.1.dev726+g34227995`) does not widen the platforms' name
+/// column.
 fn summary_lines(version: &str, platforms: &[PlatformInfo]) -> Vec<Text> {
+    const GAP: usize = 2;
     let label = Style::new("bold dim");
     let dim = Style::new("dim");
-    let mut rows = vec![vec![
-        Text::styled("version", &label),
-        Text::plain(version),
-        Text::default(),
-    ]];
+    let mut rows = vec![vec![Text::styled("version", &label)]];
     let mut ordered: Vec<&PlatformInfo> = platforms.iter().collect();
     ordered.sort_by_key(|platform| !platform.enabled);
     for (number, platform) in ordered.into_iter().enumerate() {
@@ -342,7 +342,12 @@ fn summary_lines(version: &str, platforms: &[PlatformInfo]) -> Vec<Text> {
             detail,
         ]);
     }
-    columns(&rows, 2, &[0])
+    let mut lines = columns(&rows, GAP, &[0]);
+    if let Some(first) = lines.first_mut() {
+        first.push_str(&" ".repeat(GAP));
+        first.push_str(version);
+    }
+    lines
 }
 
 fn title(section: &str) -> &str {
@@ -598,6 +603,44 @@ pub fn catalogue_document(workspace: &Workspace) -> Json {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_version_does_not_widen_the_platform_column() {
+        let platform = |name: &str, enabled: bool| PlatformInfo {
+            name: name.into(),
+            enabled,
+            can_deploy: true,
+            can_validate: false,
+            can_query: true,
+            tenants: Vec::new(),
+        };
+        let platforms = [platform("sentinel", false), platform("splunk", true)];
+        let plain = |version: &str| -> Vec<String> {
+            summary_lines(version, &platforms)
+                .iter()
+                .map(Text::as_plain)
+                .collect()
+        };
+        let short = plain("0.23.0");
+        let long = plain("0.23.1.dev726+g34227995.d20261110");
+        assert_eq!(short[0], "  version  0.23.0");
+        assert_eq!(long[0], "  version  0.23.1.dev726+g34227995.d20261110");
+        // The platform rows are the same whatever the version's length.
+        assert_eq!(short[1..], long[1..]);
+        assert_eq!(short.len(), 3);
+        // Enabled first, the names padded to the widest name only.
+        let enabled = data::label("splunk");
+        let disabled = data::label("sentinel");
+        let width = enabled.chars().count().max(disabled.chars().count());
+        assert_eq!(
+            short[1],
+            format!("platforms  {enabled:<width$}  enabled · deploy, query")
+        );
+        assert_eq!(
+            short[2],
+            format!("           {disabled:<width$}  disabled · deploy, query")
+        );
+    }
 
     #[test]
     fn the_outcome_line() {
