@@ -1,5 +1,6 @@
 ---
 source: crates/opentide-schema/src/objects/platform/table.rs
+assertion_line: 23
 expression: "serde_json::to_string_pretty(&results).unwrap()"
 ---
 {
@@ -1446,6 +1447,29 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
       }
     ]
   },
+  "platform-elastic-interval-zero": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "ElasticConfig validation failed with code(s): duration"
+        },
+        "field_path": [
+          "configurations",
+          "elastic"
+        ],
+        "input": null,
+        "msg": "Value error, ElasticConfig validation failed with code(s): duration",
+        "span": [
+          11,
+          3,
+          10,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
   "platform-elastic-many-codes": {
     "errors": [
       {
@@ -1571,6 +1595,29 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
       }
     ]
   },
+  "platform-elastic-ml-language": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "ElasticConfig validation failed with code(s): language"
+        },
+        "field_path": [
+          "configurations",
+          "elastic"
+        ],
+        "input": null,
+        "msg": "Value error, ElasticConfig validation failed with code(s): language",
+        "span": [
+          11,
+          3,
+          10,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
   "platform-elastic-ml-missing": {
     "errors": [
       {
@@ -1677,6 +1724,86 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
         "yaml_line": 11
       }
     ]
+  },
+  "platform-elastic-new-terms-fields-empty": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "ElasticConfig validation failed with code(s): new_terms_fields"
+        },
+        "field_path": [
+          "configurations",
+          "elastic"
+        ],
+        "input": null,
+        "msg": "Value error, ElasticConfig validation failed with code(s): new_terms_fields",
+        "span": [
+          11,
+          3,
+          10,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-elastic-new-terms-fields-four": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "ElasticConfig validation failed with code(s): new_terms_fields"
+        },
+        "field_path": [
+          "configurations",
+          "elastic"
+        ],
+        "input": null,
+        "msg": "Value error, ElasticConfig validation failed with code(s): new_terms_fields",
+        "span": [
+          11,
+          3,
+          10,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-elastic-new-terms-fields-three": {
+    "value": {
+      "configurations": {
+        "elastic": {
+          "building_block": false,
+          "enabled": false,
+          "name": "",
+          "new_terms": {
+            "fields": [
+              "a",
+              "b",
+              "c"
+            ],
+            "history_window_start": "7d"
+          },
+          "query": "q",
+          "status": "STAGING",
+          "type": "new_terms"
+        }
+      },
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
   },
   "platform-elastic-new-terms-missing": {
     "errors": [
@@ -1790,6 +1917,29 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
       }
     ]
   },
+  "platform-elastic-query-float-zero": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "ElasticConfig validation failed with code(s): type_block"
+        },
+        "field_path": [
+          "configurations",
+          "elastic"
+        ],
+        "input": null,
+        "msg": "Value error, ElasticConfig validation failed with code(s): type_block",
+        "span": [
+          11,
+          3,
+          10,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
   "platform-elastic-query-missing": {
     "errors": [
       {
@@ -1837,6 +1987,52 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
     ]
   },
   "platform-elastic-respond": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "ElasticConfig validation failed with code(s): response_action"
+        },
+        "field_path": [
+          "configurations",
+          "elastic"
+        ],
+        "input": null,
+        "msg": "Value error, ElasticConfig validation failed with code(s): response_action",
+        "span": [
+          11,
+          3,
+          10,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-elastic-respond-int-key": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "ElasticConfig validation failed with code(s): response_action"
+        },
+        "field_path": [
+          "configurations",
+          "elastic"
+        ],
+        "input": null,
+        "msg": "Value error, ElasticConfig validation failed with code(s): response_action",
+        "span": [
+          11,
+          3,
+          10,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-elastic-respond-osquery-extra": {
     "errors": [
       {
         "ctx": {
@@ -1994,6 +2190,64 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
         "yaml_line": 11
       }
     ]
+  },
+  "platform-elastic-risk-score-hundred": {
+    "value": {
+      "configurations": {
+        "elastic": {
+          "building_block": false,
+          "enabled": false,
+          "name": "",
+          "query": "process.name: cmd.exe",
+          "risk": {
+            "score": 100
+          },
+          "status": "STAGING",
+          "type": "query"
+        }
+      },
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
+  },
+  "platform-elastic-risk-score-zero": {
+    "value": {
+      "configurations": {
+        "elastic": {
+          "building_block": false,
+          "enabled": false,
+          "name": "",
+          "query": "process.name: cmd.exe",
+          "risk": {
+            "score": 0
+          },
+          "status": "STAGING",
+          "type": "query"
+        }
+      },
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
   },
   "platform-elastic-risk-string": {
     "errors": [
@@ -2255,6 +2509,29 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
       }
     ]
   },
+  "platform-elastic-suppression-duration-zero": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "ElasticConfig validation failed with code(s): duration"
+        },
+        "field_path": [
+          "configurations",
+          "elastic"
+        ],
+        "input": null,
+        "msg": "Value error, ElasticConfig validation failed with code(s): duration",
+        "span": [
+          11,
+          3,
+          10,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
   "platform-elastic-suppression-empty-item": {
     "errors": [
       {
@@ -2422,6 +2699,29 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
       "techniques": []
     }
   },
+  "platform-elastic-threat-no-mapping": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "ElasticConfig validation failed with code(s): type_block"
+        },
+        "field_path": [
+          "configurations",
+          "elastic"
+        ],
+        "input": null,
+        "msg": "Value error, ElasticConfig validation failed with code(s): type_block",
+        "span": [
+          11,
+          3,
+          10,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
   "platform-elastic-threshold": {
     "value": {
       "configurations": {
@@ -2487,6 +2787,65 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
     ]
   },
   "platform-elastic-threshold-fields": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "ElasticConfig validation failed with code(s): threshold_fields"
+        },
+        "field_path": [
+          "configurations",
+          "elastic"
+        ],
+        "input": null,
+        "msg": "Value error, ElasticConfig validation failed with code(s): threshold_fields",
+        "span": [
+          11,
+          3,
+          10,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-elastic-threshold-fields-five": {
+    "value": {
+      "configurations": {
+        "elastic": {
+          "building_block": false,
+          "enabled": false,
+          "name": "",
+          "query": "q",
+          "status": "STAGING",
+          "threshold": {
+            "field": [
+              "a",
+              "b",
+              "c",
+              "d",
+              "e"
+            ],
+            "value": 10
+          },
+          "type": "threshold"
+        }
+      },
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
+  },
+  "platform-elastic-threshold-fields-six": {
     "errors": [
       {
         "ctx": {
@@ -3594,6 +3953,73 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
         ],
         "type": "value_error",
         "yaml_line": 15
+      }
+    ]
+  },
+  "platform-sentinel-durations-overflow": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "Duration '1000000000d' is longer than a rule can be deployed with (at most 999999999 days, 23 hours, 59 minutes and 59 seconds)"
+        },
+        "field_path": [
+          "configurations",
+          "sentinel",
+          "scheduling",
+          "frequency"
+        ],
+        "input": "1000000000d",
+        "msg": "Value error, Duration '1000000000d' is longer than a rule can be deployed with (at most 999999999 days, 23 hours, 59 minutes and 59 seconds)",
+        "span": [
+          14,
+          29,
+          40,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 13
+      },
+      {
+        "ctx": {
+          "error": "Duration 'P99999999999D' is longer than a rule can be deployed with (at most 999999999 days, 23 hours, 59 minutes and 59 seconds)"
+        },
+        "field_path": [
+          "configurations",
+          "sentinel",
+          "scheduling",
+          "lookback"
+        ],
+        "input": "P99999999999D",
+        "msg": "Value error, Duration 'P99999999999D' is longer than a rule can be deployed with (at most 999999999 days, 23 hours, 59 minutes and 59 seconds)",
+        "span": [
+          14,
+          52,
+          65,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 13
+      },
+      {
+        "ctx": {
+          "error": "Duration 'P142857143W' is longer than a rule can be deployed with (at most 999999999 days, 23 hours, 59 minutes and 59 seconds)"
+        },
+        "field_path": [
+          "configurations",
+          "sentinel",
+          "alert",
+          "suppression"
+        ],
+        "input": "P142857143W",
+        "msg": "Value error, Duration 'P142857143W' is longer than a rule can be deployed with (at most 999999999 days, 23 hours, 59 minutes and 59 seconds)",
+        "span": [
+          15,
+          26,
+          37,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 14
       }
     ]
   },
@@ -4773,6 +5199,29 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
       "techniques": []
     }
   },
+  "platform-sysdig-exception-shape-gates-list": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "SysdigConfig validation failed with code(s): sysdig_exception_shape"
+        },
+        "field_path": [
+          "configurations",
+          "sysdig"
+        ],
+        "input": null,
+        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_exception_shape",
+        "span": [
+          11,
+          3,
+          9,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
   "platform-sysdig-exception-shapes": {
     "errors": [
       {
@@ -4922,6 +5371,29 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
       "platforms": {},
       "techniques": []
     }
+  },
+  "platform-sysdig-list-flattened": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "SysdigConfig validation failed with code(s): sysdig_list_in_value"
+        },
+        "field_path": [
+          "configurations",
+          "sysdig"
+        ],
+        "input": null,
+        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_list_in_value",
+        "span": [
+          11,
+          3,
+          9,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
   },
   "platform-sysdig-list-in-comp": {
     "value": {
@@ -5078,6 +5550,52 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
       "techniques": []
     }
   },
+  "platform-sysdig-list-named-true": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "SysdigConfig validation failed with code(s): sysdig_list_in_value"
+        },
+        "field_path": [
+          "configurations",
+          "sysdig"
+        ],
+        "input": null,
+        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_list_in_value",
+        "span": [
+          11,
+          3,
+          9,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-sysdig-list-pass": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "SysdigConfig validation failed with code(s): sysdig_list_in_value"
+        },
+        "field_path": [
+          "configurations",
+          "sysdig"
+        ],
+        "input": null,
+        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_list_in_value",
+        "span": [
+          11,
+          3,
+          9,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
   "platform-sysdig-list-scalar-comp": {
     "errors": [
       {
@@ -5134,6 +5652,52 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
       "techniques": []
     }
   },
+  "platform-sysdig-macro-form-feed": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "SysdigConfig validation failed with code(s): sysdig_definition_order"
+        },
+        "field_path": [
+          "configurations",
+          "sysdig"
+        ],
+        "input": null,
+        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_definition_order",
+        "span": [
+          11,
+          3,
+          9,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-sysdig-macro-line-separator": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "SysdigConfig validation failed with code(s): sysdig_definition_order"
+        },
+        "field_path": [
+          "configurations",
+          "sysdig"
+        ],
+        "input": null,
+        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_definition_order",
+        "span": [
+          11,
+          3,
+          9,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
   "platform-sysdig-macro-unparsed": {
     "errors": [
       {
@@ -5146,6 +5710,29 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
         ],
         "input": null,
         "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_definition_order",
+        "span": [
+          11,
+          3,
+          9,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-sysdig-name-gates-order": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "SysdigConfig validation failed with code(s): sysdig_definition_name"
+        },
+        "field_path": [
+          "configurations",
+          "sysdig"
+        ],
+        "input": null,
+        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_definition_name",
         "span": [
           11,
           3,
@@ -5273,6 +5860,29 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
       }
     ]
   },
+  "platform-sysdig-source-digit": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "SysdigConfig validation failed with code(s): sysdig_source"
+        },
+        "field_path": [
+          "configurations",
+          "sysdig"
+        ],
+        "input": null,
+        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_source",
+        "span": [
+          11,
+          3,
+          9,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
   "platform-sysdig-source-upper": {
     "errors": [
       {
@@ -5322,6 +5932,29 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
     }
   },
   "platform-sysdig-tuning-blank": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "SysdigConfig validation failed with code(s): sysdig_rule_shape"
+        },
+        "field_path": [
+          "configurations",
+          "sysdig"
+        ],
+        "input": null,
+        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_rule_shape",
+        "span": [
+          11,
+          3,
+          9,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-sysdig-tuning-condition-blank": {
     "errors": [
       {
         "ctx": {

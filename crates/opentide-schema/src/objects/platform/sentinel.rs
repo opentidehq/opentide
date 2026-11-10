@@ -51,25 +51,55 @@ pub struct SentinelTrigger {
 /// (`iso_duration_timedelta`). ISO 8601 with weeks, days and a time part, any
 /// case (`PT1H`, `P1D`, `p1w`), or the shorthand `<n>d<n>h<n>m<n>s` (`30m`,
 /// `1h10m`), around blanks; empty is left to deploy, which asks for the
-/// value where it needs one. Validation refuses what deploy cannot convert
-/// (`frequency: hourly`), which the oracle accepted and deploy refused.
+/// value where it needs one. Validation refuses what deploy cannot convert:
+/// a value of neither shape (`frequency: hourly`), and one longer than
+/// deploy's `timedelta` holds ([`MAX_DURATION_SECONDS`]: `1000000000d`,
+/// `P99999999999D`), both of which the oracle accepted and deploy refused.
 pub fn check_duration(value: &str) -> Result<(), Violation> {
     let text = crate::objects::platform::python_strip(value);
-    if text.is_empty() || duration_ok(text) {
+    if text.is_empty() {
         return Ok(());
     }
-    Err(Violation::value_error(format!(
-        "Duration {} is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand duration \
-         (30m, 1h, 1d, 1h10m)",
-        repr::quote(value)
-    )))
+    match duration_seconds(text) {
+        Length::Seconds(_) => Ok(()),
+        Length::TooLong => Err(Violation::value_error(format!(
+            "Duration {} is longer than a rule can be deployed with (at most {MAX_DURATION_DAYS} \
+             days, 23 hours, 59 minutes and 59 seconds)",
+            repr::quote(value)
+        ))),
+        Length::NotADuration => Err(Violation::value_error(format!(
+            "Duration {} is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand duration \
+             (30m, 1h, 1d, 1h10m)",
+            repr::quote(value)
+        ))),
+    }
 }
 
+/// The most days deploy's duration holds (Python's `timedelta.max.days`).
+pub const MAX_DURATION_DAYS: u64 = 999_999_999;
+
+/// The longest duration deploy converts, in seconds: [`MAX_DURATION_DAYS`]
+/// and a day less one second (`timedelta.max`, whole seconds).
+pub const MAX_DURATION_SECONDS: u64 = MAX_DURATION_DAYS * 86_400 + 86_399;
+
+/// What a Sentinel duration's text spells.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Length {
+    /// Neither shape.
+    NotADuration,
+    /// Longer than [`MAX_DURATION_SECONDS`] (a part too long for a `u64`
+    /// included: the sum is checked, so no digit string can overflow it).
+    TooLong,
+    /// The duration, in seconds.
+    Seconds(u64),
+}
+
+/// The duration `text` (stripped) spells.
 #[expect(
     clippy::expect_used,
     reason = "regex literals, tested by `sentinel_durations`"
 )]
-fn duration_ok(text: &str) -> bool {
+fn duration_seconds(text: &str) -> Length {
     use std::sync::OnceLock;
     static PATTERNS: OnceLock<(regex::Regex, regex::Regex)> = OnceLock::new();
     let (short, iso) = PATTERNS.get_or_init(|| {
@@ -82,12 +112,40 @@ fn duration_ok(text: &str) -> bool {
             .expect("a valid pattern"),
         )
     });
-    let any_part =
-        |captures: regex::Captures<'_>| captures.iter().skip(1).any(|part| part.is_some());
-    if short.captures(text).is_some_and(any_part) {
-        return true;
+    // Each group's length in seconds, in the pattern's order.
+    let total = |captures: &regex::Captures<'_>, units: &[u64]| -> Option<Length> {
+        if !captures.iter().skip(1).any(|part| part.is_some()) {
+            return None;
+        }
+        let mut sum: Option<u64> = Some(0);
+        for (part, unit) in captures.iter().skip(1).zip(units) {
+            if let Some(part) = part {
+                let seconds = part
+                    .as_str()
+                    .parse::<u64>()
+                    .ok()
+                    .and_then(|count| count.checked_mul(*unit));
+                sum = sum
+                    .zip(seconds)
+                    .and_then(|(sum, seconds)| sum.checked_add(seconds));
+            }
+        }
+        Some(
+            sum.filter(|seconds| *seconds <= MAX_DURATION_SECONDS)
+                .map_or(Length::TooLong, Length::Seconds),
+        )
+    };
+    if let Some(captures) = short.captures(text)
+        && let Some(length) = total(&captures, &[86_400, 3_600, 60, 1])
+    {
+        return length;
     }
-    !text.to_uppercase().ends_with('T') && iso.captures(text).is_some_and(any_part)
+    if text.to_uppercase().ends_with('T') {
+        return Length::NotADuration;
+    }
+    iso.captures(text)
+        .and_then(|captures| total(&captures, &[604_800, 86_400, 3_600, 60, 1]))
+        .unwrap_or(Length::NotADuration)
 }
 
 /// A duration field in the conversion: `null`, or a string [`check_duration`]
@@ -494,6 +552,42 @@ mod tests {
             check_duration("hourly").unwrap_err().message,
             "Value error, Duration 'hourly' is not an ISO 8601 duration (PT1H, PT30M, P1D) or a \
              shorthand duration (30m, 1h, 1d, 1h10m)"
+        );
+    }
+
+    /// What deploy's `timedelta` holds passes; one second more, or a part
+    /// too long for any integer, is refused (the oracle's deploy raised
+    /// `OverflowError` on each, after validation accepted it).
+    #[test]
+    fn sentinel_durations_are_bounded_by_what_deploy_converts() {
+        for text in [
+            "P999999999DT23H59M59S",
+            "86399999999999s",
+            "999999999d23h59m59s",
+            "P142857142W",
+            "0d",
+            "PT0S",
+        ] {
+            assert_eq!(check_duration(text), Ok(()), "{text:?}");
+        }
+        for text in [
+            "1000000000d",
+            "P99999999999D",
+            "P142857143W",
+            "86400000000000s",
+            "P142857142WT1000000M",
+            "P999999999DT24H",
+            "99999999999999999999999999999999999999999d",
+            "PT99999999999999999999999999999999999999999S",
+        ] {
+            let violation = check_duration(text).unwrap_err();
+            assert_eq!(violation.kind, "value_error", "{text:?}");
+            assert!(violation.message.contains("longer than"), "{text:?}");
+        }
+        assert_eq!(
+            check_duration("1000000000d").unwrap_err().message,
+            "Value error, Duration '1000000000d' is longer than a rule can be deployed with (at \
+             most 999999999 days, 23 hours, 59 minutes and 59 seconds)"
         );
     }
 }

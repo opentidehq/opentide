@@ -402,13 +402,34 @@ fn definitions(raw: &Node, codes: &mut BTreeSet<&'static str>) -> Definitions {
     out
 }
 
-/// `join_lines`: multiline text as one line, each line stripped.
+/// `join_lines`: multiline text as one line, each line stripped. Lines end
+/// where Python's `str.splitlines` ends them ([`is_line_boundary`]), not only
+/// at `\n` and `\r\n`: `m2\x0cand x` is the words `m2` and `and x`.
 fn join_lines(text: &str) -> String {
-    text.lines()
+    text.split(is_line_boundary)
         .map(python_strip)
         .filter(|line| !line.is_empty())
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+/// A line boundary of the oracle's `str.splitlines`: `\n`, `\r` (and so
+/// `\r\n`, whose empty middle line [`join_lines`] drops), vertical tab,
+/// form feed, the file, group and record separators, NEL, and the Unicode
+/// line and paragraph separators.
+fn is_line_boundary(c: char) -> bool {
+    matches!(
+        c,
+        '\n' | '\r'
+            | '\x0b'
+            | '\x0c'
+            | '\x1c'
+            | '\x1d'
+            | '\x1e'
+            | '\u{85}'
+            | '\u{2028}'
+            | '\u{2029}'
+    )
 }
 
 /// The block's expansion (`Expander`): the lists flattened in block order.

@@ -29,7 +29,7 @@ changelog = "**\"Did you mean\" suggests what a typo meant, not a word that shar
 
 [[difference]]
 id = "sentinel-durations"
-reason = "`scheduling.frequency`, `scheduling.lookback`, `grouping.alert.grouping_lookback` and a string `alert.suppression` must be what Sentinel's deploy converts to ISO 8601: ISO 8601 (`PT1H`, `P1D`, any case) or shorthand (`30m`, `1h10m`), around blanks; empty stays deploy's to judge. The oracle accepted `frequency: hourly` and failed at deploy; the Rust model refuses it as `value_error` on the field (UC-1.4 Known gap). Digits are ASCII only."
+reason = "`scheduling.frequency`, `scheduling.lookback`, `grouping.alert.grouping_lookback` and a string `alert.suppression` must be what Sentinel's deploy converts to ISO 8601: ISO 8601 (`PT1H`, `P1D`, any case) or shorthand (`30m`, `1h10m`), around blanks; empty stays deploy's to judge. The oracle accepted `frequency: hourly` and failed at deploy; the Rust model refuses it as `value_error` on the field (UC-1.4 Known gap). A duration longer than deploy's `timedelta` holds (999999999 days, 23:59:59: `1000000000d`, `P99999999999D`, `P142857143W`) is refused the same way, where the oracle accepted it and deploy crashed with `OverflowError`. Digits are ASCII only."
 changelog = "**Sentinel durations are checked when the rule is validated**"
 
 [[case]]
@@ -775,6 +775,29 @@ configurations:
     scheduling: {frequency: PT1H, lookback: PT2H}
     alert: {suppression: 'one hour'}
     grouping: {event: SingleAlert, alert: {enabled: true, grouping_lookback: 5 hours}}
+'''
+
+[[case]]
+id = "platform-sentinel-durations-overflow"
+family = "rule"
+difference = ["sentinel-durations"]
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+configurations:
+  sentinel:
+    status: STAGING
+    query: SecurityEvent | take 1
+    scheduling: {frequency: 1000000000d, lookback: P99999999999D}
+    alert: {suppression: P142857143W}
+    grouping: {event: SingleAlert, alert: {enabled: true, grouping_lookback: P999999999DT23H59M59S}}
 '''
 
 [[case]]
@@ -2608,6 +2631,299 @@ configurations:
 '''
 
 [[case]]
+id = "platform-elastic-threat-no-mapping"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+configurations:
+  elastic:
+    status: STAGING
+    type: threat_match
+    query: q
+    threat: {index: [ti-*], query: '*'}
+'''
+
+[[case]]
+id = "platform-elastic-ml-language"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+configurations:
+  elastic:
+    status: STAGING
+    type: machine_learning
+    machine_learning: {job_id: [a], anomaly_threshold: 75}
+    language: kuery
+'''
+
+[[case]]
+id = "platform-elastic-respond-int-key"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+configurations:
+  elastic:
+    status: STAGING
+    type: query
+    query: 'process.name: cmd.exe'
+    actions: {respond: [{endpoint: isolate, 1: x}]}
+'''
+
+[[case]]
+id = "platform-elastic-respond-osquery-extra"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+configurations:
+  elastic:
+    status: STAGING
+    type: query
+    query: 'process.name: cmd.exe'
+    actions: {respond: [{osquery: {query: q}, comment: c}]}
+'''
+
+[[case]]
+id = "platform-elastic-new-terms-fields-empty"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+configurations:
+  elastic:
+    status: STAGING
+    type: new_terms
+    query: q
+    new_terms: {fields: [], history_window_start: 7d}
+'''
+
+[[case]]
+id = "platform-elastic-new-terms-fields-three"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+configurations:
+  elastic:
+    status: STAGING
+    type: new_terms
+    query: q
+    new_terms: {fields: [a, b, c], history_window_start: 7d}
+'''
+
+[[case]]
+id = "platform-elastic-new-terms-fields-four"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+configurations:
+  elastic:
+    status: STAGING
+    type: new_terms
+    query: q
+    new_terms: {fields: [a, b, c, d], history_window_start: 7d}
+'''
+
+[[case]]
+id = "platform-elastic-threshold-fields-five"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+configurations:
+  elastic:
+    status: STAGING
+    type: threshold
+    query: q
+    threshold: {field: [a, b, c, d, e], value: 10}
+'''
+
+[[case]]
+id = "platform-elastic-threshold-fields-six"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+configurations:
+  elastic:
+    status: STAGING
+    type: threshold
+    query: q
+    threshold: {field: [a, b, c, d, e, f], value: 10}
+'''
+
+[[case]]
+id = "platform-elastic-risk-score-zero"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+configurations:
+  elastic:
+    status: STAGING
+    type: query
+    query: 'process.name: cmd.exe'
+    risk: {score: 0}
+'''
+
+[[case]]
+id = "platform-elastic-risk-score-hundred"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+configurations:
+  elastic:
+    status: STAGING
+    type: query
+    query: 'process.name: cmd.exe'
+    risk: {score: 100}
+'''
+
+[[case]]
+id = "platform-elastic-interval-zero"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+configurations:
+  elastic:
+    status: STAGING
+    type: query
+    query: 'process.name: cmd.exe'
+    scheduling: {interval: 0m}
+'''
+
+[[case]]
+id = "platform-elastic-suppression-duration-zero"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+configurations:
+  elastic:
+    status: STAGING
+    type: query
+    query: 'process.name: cmd.exe'
+    suppression: {group_by: [a], duration: 0m}
+'''
+
+[[case]]
+id = "platform-elastic-query-float-zero"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+configurations:
+  elastic:
+    status: STAGING
+    type: query
+    query: 0.0
+'''
+
+[[case]]
 id = "platform-sysdig-full"
 family = "rule"
 yaml = '''
@@ -3293,6 +3609,193 @@ configurations:
     lists: [{name: l, items: [[a]]}]
     macros: [{name: m}]
     tags: t
+'''
+
+[[case]]
+id = "platform-sysdig-tuning-condition-blank"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+configurations:
+  sysdig:
+    status: STAGING
+    append_to_rule: R
+    condition: '  '
+    exceptions: [{name: e, fields: proc.name, values: [a]}]
+'''
+
+[[case]]
+id = "platform-sysdig-source-digit"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+configurations:
+  sysdig:
+    status: STAGING
+    condition: spawned_process and proc.name = sh
+    source: 1abc
+'''
+
+[[case]]
+id = "platform-sysdig-list-flattened"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+configurations:
+  sysdig:
+    status: STAGING
+    condition: spawned_process and proc.name = sh
+    lists: [{name: l0, items: [a]}, {name: l1, items: ['x l0']}, {name: l2, items: [l1, y]}]
+    exceptions: [{name: e, fields: proc.name, comps: in, values: [l2]}]
+'''
+
+[[case]]
+id = "platform-sysdig-list-pass"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+configurations:
+  sysdig:
+    status: STAGING
+    condition: spawned_process and proc.name = sh
+    lists: [{name: l0, items: [a]}, {name: l1, items: ['x l0']}]
+    exceptions: [{name: e, fields: proc.name, comps: in, values: [l1]}]
+'''
+
+[[case]]
+id = "platform-sysdig-exception-shape-gates-list"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+configurations:
+  sysdig:
+    status: STAGING
+    condition: spawned_process and proc.name = sh
+    lists: [{name: l1, items: [a]}]
+    exceptions: [{name: e1, fields: [a, b], comps: ['=']}, {name: e2, fields: proc.name, values: ['x l1']}]
+'''
+
+[[case]]
+id = "platform-sysdig-name-gates-order"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+configurations:
+  sysdig:
+    status: STAGING
+    condition: spawned_process and proc.name = sh
+    macros: [{name: m1, condition: m2}, {name: m2, condition: proc.name = sh}]
+    lists: [{name: 1bad, items: [a]}, {name: l1, items: [b]}]
+    exceptions: [{name: e, fields: proc.name, values: ['x l1']}]
+'''
+
+[[case]]
+id = "platform-sysdig-list-named-true"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+configurations:
+  sysdig:
+    status: STAGING
+    condition: spawned_process and proc.name = sh
+    lists: [{name: 'true', items: [a]}]
+    exceptions: [{name: e, fields: [proc.name], comps: ['='], values: [[true]]}]
+'''
+
+[[case]]
+id = "platform-sysdig-macro-form-feed"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+configurations:
+  sysdig:
+    status: STAGING
+    condition: spawned_process and proc.name = sh
+    macros: [{name: m1, condition: "m2\fand proc.name = x"}, {name: m2, condition: proc.name = sh}]
+'''
+
+[[case]]
+id = "platform-sysdig-macro-line-separator"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+configurations:
+  sysdig:
+    status: STAGING
+    condition: spawned_process and proc.name = sh
+    macros: [{name: m1, condition: "m2\u2028and proc.name = x"}, {name: m2, condition: proc.name = sh}]
 '''
 
 [[case]]
