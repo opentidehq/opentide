@@ -250,7 +250,7 @@ fn the_json_document_keeps_the_oracles_keys_and_order() {
 }
 
 #[test]
-fn a_failed_selection_puts_error_after_the_warnings() {
+fn a_failed_selection_puts_error_right_after_the_message() {
     let ws = workspace();
     std::fs::create_dir_all(ws.join("objects/rules/nested")).unwrap();
     std::fs::write(
@@ -275,10 +275,105 @@ fn a_failed_selection_puts_error_after_the_warnings() {
     let document = Json::parse(&ran.stdout).unwrap();
     let order = keys(&document);
     let at = |key: &str| order.iter().position(|name| name == key).unwrap();
-    assert!(at("message") < at("error"), "{order:?}");
+    // No warnings here: `error` comes right after `message`, before every
+    // key of the envelope.
+    assert!(!order.iter().any(|key| key == "warnings"), "{order:?}");
+    assert_eq!(at("message") + 1, at("error"), "{order:?}");
+    assert!(at("error") < at("schema_version"), "{order:?}");
     assert_eq!(document.get("scope"), Some(&Json::str("selected")));
     assert_eq!(at("scope"), 0, "{order:?}");
     let _ = std::fs::remove_dir_all(&ws);
+}
+
+#[test]
+fn a_failed_plan_puts_error_right_after_the_warnings() {
+    let ws = workspace();
+    // A selected rule with no `name` fails the plan; an object file the
+    // index cannot read is a warning on it.
+    std::fs::write(
+        ws.join("objects/rules/nameless.yaml"),
+        "metadata:\n  uuid: 00000000-0000-4000-8000-0000000000c2\n  schema: rule::1.0\n\
+         configurations:\n  sysdig:\n    status: STAGING\n    condition: proc.name = z\n",
+    )
+    .unwrap();
+    std::fs::write(ws.join("objects/rules/broken.yaml"), "name: [unclosed\n").unwrap();
+    let ran = deploy(
+        &ws,
+        &[
+            "--json",
+            "deploy",
+            "--strategy",
+            "PREVIEW",
+            "--file",
+            "objects/rules/nameless.yaml",
+            "--dry-run",
+        ],
+        &[],
+    );
+    assert_eq!(ran.exit_code, 1, "{}", ran.stdout);
+    let document = Json::parse(&ran.stdout).unwrap();
+    let order = keys(&document);
+    let at = |key: &str| {
+        order
+            .iter()
+            .position(|name| name == key)
+            .unwrap_or_else(|| panic!("no {key}: {order:?}"))
+    };
+    assert_eq!(at("message") + 1, at("warnings"), "{order:?}");
+    assert_eq!(at("warnings") + 1, at("error"), "{order:?}");
+    assert!(at("error") < at("schema_version"), "{order:?}");
+    assert!(at("error") < at("failure"), "{order:?}");
+    assert_eq!(document.get("scope"), Some(&Json::str("selected")));
+    let _ = std::fs::remove_dir_all(&ws);
+}
+
+/// `--json deploy --strategy RELEASE --all --dry-run` run from `cwd`.
+fn release_all(cwd: &Path) -> Ran {
+    deploy(
+        cwd,
+        &[
+            "--json",
+            "deploy",
+            "--strategy",
+            "RELEASE",
+            "--all",
+            "--dry-run",
+        ],
+        &[],
+    )
+}
+
+#[test]
+fn a_skipped_run_at_the_workspace_root_has_no_next_actions() {
+    let ws = workspace();
+    let ran = release_all(&ws);
+    assert_eq!(ran.exit_code, 0, "{}", ran.stdout);
+    let document = Json::parse(&ran.stdout).unwrap();
+    assert_eq!(document.get("status"), Some(&Json::str("skipped")));
+    assert_eq!(document.get("next_actions"), Some(&Json::Array(Vec::new())));
+    let _ = std::fs::remove_dir_all(&ws);
+}
+
+#[test]
+fn a_skipped_run_outside_a_workspace_names_opentide_setup() {
+    // A sibling of a fresh workspace: no workspace above it.
+    let ws = workspace();
+    let outside = ws.with_extension("outside");
+    std::fs::create_dir_all(&outside).unwrap();
+    let ran = release_all(&outside);
+    assert_eq!(ran.exit_code, 0, "{}", ran.stdout);
+    let document = Json::parse(&ran.stdout).unwrap();
+    assert_eq!(document.get("status"), Some(&Json::str("skipped")));
+    let Some(Json::Array(actions)) = document.get("next_actions") else {
+        panic!("no next_actions: {}", ran.stdout);
+    };
+    assert_eq!(actions.len(), 1, "{}", ran.stdout);
+    assert_eq!(
+        actions[0].get("command"),
+        Some(&Json::str("opentide --json setup"))
+    );
+    let _ = std::fs::remove_dir_all(&ws);
+    let _ = std::fs::remove_dir_all(&outside);
 }
 
 #[test]
@@ -346,9 +441,20 @@ fn a_typo_in_the_strategy_is_the_commands_usage_error_and_writes_no_summary() {
     assert_eq!(failure.get("suggestion"), Some(&Json::str("PREVIEW")));
     assert!(!ws.join("opentide-reports").exists());
     // Plain: the error, its suggestion, then the note.
-    let plain = deploy(&ws, &["deploy", "--strategy", "PREVEW", "--dry-run"], &[]);
+    // The text modes write a CI summary when a CI provider is set: a usage
+    // error writes none.
+    let plain = deploy(
+        &ws,
+        &["deploy", "--strategy", "PREVEW", "--dry-run"],
+        &[
+            ("GITLAB_CI", "true".to_owned()),
+            ("CI_PROJECT_DIR", ws.display().to_string()),
+        ],
+    );
     assert_eq!(plain.exit_code, 2);
     assert_eq!(plain.stdout, "dry run, nothing sent\n");
+    assert!(!ws.join("opentide-reports/summary.md").exists());
+    assert!(!ws.join("opentide-reports").exists());
     assert_eq!(
         plain.stderr,
         "error: --strategy 'PREVEW' is not a deployable strategy. Use PREVIEW or RELEASE\n  \
