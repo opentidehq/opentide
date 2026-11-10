@@ -251,6 +251,11 @@ impl Workspace {
         missing
     }
 
+    /// The working directory the workspace was opened from.
+    pub fn cwd(&self) -> &Path {
+        &self.options.roots.cwd
+    }
+
     /// The roots.
     pub fn roots(&self) -> &Roots {
         &self.roots
