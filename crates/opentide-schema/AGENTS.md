@@ -28,6 +28,8 @@ depends on opentide-core (`codes`, `suggest`). Not published yet (`publish = fal
 | `src/objects/` | The object models (UC-1.3, #809): `metadata` (`ObjectMetadata`, `RuleMetadata`, `ObjectReferences`, `Organisation`), `response`, `threat` (`ThreatVectorV1_0`), `objective` (`ObjectiveV1_0`), `rule` (`RuleV1_0`, `RuleV1_1`, `RuleConfigurations`), `role` (`FieldRole`), `any` (an unchecked value), `checks` (the validators, run by the conversion and by garde), `tests.rs` (the ported `tests/test_models/` tests) |
 | `src/node.rs` | The YAML node tree (UC-1.2): saphyr-parser's events, saphyr's YAML 1.2 core-schema scalars, every node's position; `node/locate.rs` places a field path (span, `yaml_line`), `node/dump.rs` writes a model (serde-saphyr) |
 | `src/from_node.rs` | `FromNode` and what `#[derive(FromNode)]` (`opentide-schema-derive`) expands to: every structural error collected, with its path and position |
+| `src/configuration/` | The configuration TOML files (UC-1.5): `toml` (toml_edit into the node tree, with positions), `models` (one per file, `#[derive(FromNode)]`), `types` (constraints with Pydantic's messages), `errors` (`model_errors`: union branches dropped as the oracle drops them), `merge` and `resolve` (the layering, once per run), `checks` (`configuration_text_issues`, the buffer and workspace checks), `sharing`, `lint`, `repr` (values quoted as the CLI quotes them), `bundled` (the bundled files, compiled in from `src/opentide/data/`) |
+| `tests/configuration.rs` | `tests/oracle/config_cases.toml` against the oracle (`config_table.json`, from `config_table.py`): findings, resolved JSON, lint settings, sharing findings; the bundled list; no panic (proptest) |
 | `YAML.md` | Generated: every YAML case read by the oracle (PyYAML, YAML 1.1) and by `node` (YAML 1.2), with each difference and its reason |
 | `tests/yaml_table.rs` | `tests/oracle/yaml_cases.toml` against the oracle (`yaml_table.json`, from `yaml_table.py`); writes `YAML.md` |
 | `tests/from_node_table.rs` | `tests/oracle/from_node_cases.toml` against the oracle (`from_node_table.json`, from `from_node_table.py`); the Rust results are the insta snapshot |
@@ -59,6 +61,9 @@ depends on opentide-core (`codes`, `suggest`). Not published yet (`publish = fal
 - YAML is YAML 1.2, read by the saphyr crates; never re-implement a YAML 1.1 rule to match the
   oracle. A case where the oracle reads YAML differently names a `[[difference]]` in
   `tests/oracle/yaml_cases.toml` (reason, CHANGELOG lead); `YAML.md` shows them all.
+- Configuration TOML is read by `toml_edit` (TOML 1.0), never by a hand-written parser; a case of
+  `tests/oracle/config_cases.toml` where the result differs from the oracle names its
+  `[[difference]]`. Regenerate the table with `<oracle python> -I tests/oracle/config_table.py`.
 - A field takes its declared type, without Pydantic's lax coercion; a case of
   `tests/oracle/from_node_cases.toml` or `objects_cases.toml` where the result differs from the
   oracle names its `[[difference]]`.

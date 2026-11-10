@@ -103,6 +103,11 @@ pub enum Value {
     Float(f64),
     /// A string: quoted, or plain text no other type takes (dates included).
     Str(String),
+    /// A TOML offset date-time, local date-time, local date or local time, as
+    /// written (`1979-05-27T07:32:00Z`). YAML 1.2's core schema has no such
+    /// type, so only a configuration file ([`crate::configuration`]) holds
+    /// one; a field that takes a string does not take it.
+    Datetime(String),
     /// A sequence.
     Seq(Vec<Arc<Node>>),
     /// A mapping, in the document's order, keys unique.
@@ -111,7 +116,7 @@ pub enum Value {
 
 impl Value {
     /// The type's name in messages: `null`, `boolean`, `integer`, `float`,
-    /// `string`, `sequence`, `mapping`.
+    /// `string`, `datetime`, `sequence`, `mapping`.
     pub fn type_name(&self) -> &'static str {
         match self {
             Self::Null => "null",
@@ -119,6 +124,7 @@ impl Value {
             Self::Int(_) => "integer",
             Self::Float(_) => "float",
             Self::Str(_) => "string",
+            Self::Datetime(_) => "datetime",
             Self::Seq(_) => "sequence",
             Self::Map(_) => "mapping",
         }
@@ -147,7 +153,7 @@ impl fmt::Display for Value {
                 f.write_str(if *float > 0.0 { ".inf" } else { "-.inf" })
             }
             Self::Float(float) => write!(f, "{float:?}"),
-            Self::Str(text) => f.write_str(text),
+            Self::Str(text) | Self::Datetime(text) => f.write_str(text),
             Self::Seq(_) => f.write_str("[...]"),
             Self::Map(_) => f.write_str("{...}"),
         }
@@ -357,7 +363,7 @@ impl KeyId {
             Value::Int(integer) => Self::Int(*integer),
             Value::Float(float) => Self::Float(float.to_bits()),
             Value::Str(text) => Self::Str(text.clone()),
-            Value::Seq(_) | Value::Map(_) => return None,
+            Value::Seq(_) | Value::Map(_) | Value::Datetime(_) => return None,
         })
     }
 }

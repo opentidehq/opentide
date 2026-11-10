@@ -79,7 +79,9 @@ impl Serialize for AsData<'_> {
             Value::Bool(flag) => serializer.serialize_bool(*flag),
             Value::Int(integer) => serializer.serialize_i64(*integer),
             Value::Float(float) => serializer.serialize_f64(*float),
-            Value::Str(text) => serializer.serialize_str(text),
+            // A TOML date-time (configuration files only) as written, as
+            // `configuration::merge` gives it.
+            Value::Str(text) | Value::Datetime(text) => serializer.serialize_str(text),
             Value::Seq(items) => {
                 let mut seq = serializer.serialize_seq(Some(items.len()))?;
                 for item in items {
@@ -220,5 +222,14 @@ mod tests {
         );
         let back: Any = serde_json::from_value(json).unwrap();
         assert_eq!(back, any);
+    }
+
+    #[test]
+    fn a_toml_date_time_is_written_as_text() {
+        let any = Any(node(Value::Datetime("1979-05-27T07:32:00Z".into())));
+        assert_eq!(
+            serde_json::to_value(&any).unwrap(),
+            serde_json::json!("1979-05-27T07:32:00Z")
+        );
     }
 }

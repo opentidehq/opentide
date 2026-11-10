@@ -1,5 +1,6 @@
 //! The `corpus` subcommands: argument parsing, files and processes.
 
+use super::configuration;
 use super::coverage;
 use super::faults::{self, Catalogue, Kind, Verdict};
 use super::generate::{self, Counts, Layout, Options};
@@ -35,6 +36,13 @@ commands:
                  models, every schema_validation finding outside the platform
                  blocks compared with the oracle's field for field (code, field
                  path, message, line, columns, yaml_line), and yaml_parse by code
+  faults --check --engine rust [--oracle BIN] --only configuration|ID,...
+         [--keep DIR] [--catalogue FILE]
+                 the configuration fault kinds (UC-1.5): each workspace's
+                 configuration resolved by opentide-schema, and what validate
+                 reports for it compared with the oracle field for field
+                 (code, severity, field path, message), or the failure that
+                 stops resolution; without --only, both groups run
   faults --out DIR [--catalogue FILE]
                  write one workspace ([combined] counts) with every fault
                  kind not marked isolated applied once (twice if cross-file)
@@ -54,8 +62,8 @@ commands:
 
 The oracle is BIN, else $OPENTIDE_ORACLE, else `opentide` on PATH; it must
 print the version faults.toml names. `--engine rust` covers the object
-kinds today (opentide-schema, UC-1.3); every kind comes with the Rust
-engine's validate (UC-2.x).
+kinds (opentide-schema, UC-1.3) and the configuration kinds (UC-1.5) today;
+every kind comes with the Rust engine's validate (UC-2.x).
 ";
 
 /// Runs `corpus <args>`; the process exit status.
@@ -217,14 +225,14 @@ pub fn corpora_dir() -> PathBuf {
 }
 
 /// The oracle executable: `--oracle`, `$OPENTIDE_ORACLE`, or `opentide`.
-fn oracle_bin(flag: Option<&str>) -> PathBuf {
+pub(crate) fn oracle_bin(flag: Option<&str>) -> PathBuf {
     flag.map(PathBuf::from)
         .or_else(|| std::env::var_os("OPENTIDE_ORACLE").map(PathBuf::from))
         .unwrap_or_else(|| PathBuf::from("opentide"))
 }
 
 /// Runs the oracle without the variables that would point it elsewhere.
-fn oracle_command(bin: &Path, env: &BTreeMap<String, String>) -> Command {
+pub(crate) fn oracle_command(bin: &Path, env: &BTreeMap<String, String>) -> Command {
     let mut command = Command::new(bin);
     // A kind that sets a proxy gets only its own: Python's urllib lets an
     // inherited lowercase variable win over an uppercase one. Every spelling
@@ -326,9 +334,9 @@ fn object_files(workspace: &Workspace) -> usize {
 }
 
 /// Removes the scratch directory however the run ends, unless `--keep`.
-struct Scratch {
-    path: PathBuf,
-    keep: bool,
+pub(crate) struct Scratch {
+    pub(crate) path: PathBuf,
+    pub(crate) keep: bool,
 }
 
 impl Drop for Scratch {
@@ -340,7 +348,7 @@ impl Drop for Scratch {
 }
 
 /// Checks that `bin` is the oracle version the catalogue names.
-fn check_oracle_version(bin: &Path, expected: &str) -> Result<()> {
+pub(crate) fn check_oracle_version(bin: &Path, expected: &str) -> Result<()> {
     let output = oracle_command(bin, &BTreeMap::new())
         .arg("--version")
         .output()
@@ -380,6 +388,7 @@ fn run_oracle(
     })
 }
 
+#[derive(Clone)]
 struct FaultArgs {
     check: bool,
     engine: Option<String>,
@@ -429,7 +438,7 @@ fn parse_fault_args(args: &[String]) -> Result<FaultArgs> {
     Ok(parsed)
 }
 
-fn load_catalogue(path: &Path) -> Result<Catalogue> {
+pub(crate) fn load_catalogue(path: &Path) -> Result<Catalogue> {
     let text =
         std::fs::read_to_string(path).with_context(|| format!("cannot read {}", path.display()))?;
     Catalogue::parse(&text).with_context(|| format!("in {}", path.display()))
@@ -461,7 +470,7 @@ fn faults_command(args: &[String]) -> Result<u8> {
         bail!("faults needs --check or --out\n\n{USAGE}");
     }
     if parsed.engine.as_deref() == Some("rust") {
-        return structural_check(&parsed, &catalogue);
+        return rust_check(&parsed, &catalogue);
     }
     if let Some(code) = require_python(parsed.engine.as_deref())? {
         return Ok(code);
@@ -641,6 +650,240 @@ fn run_kind(
     Ok((faults::judge(kind, &target_paths, &found), target_paths))
 }
 
+/// `faults --check --engine rust`: `--only` split between the object
+/// kinds and the configuration group; without it, both.
+fn rust_check(parsed: &FaultArgs, catalogue: &Catalogue) -> Result<u8> {
+    let config: BTreeSet<&str> = configuration::CONFIGURATION
+        .iter()
+        .map(|(id, _)| *id)
+        .collect();
+    let Some(only) = &parsed.only else {
+        let structural = structural_check(parsed, catalogue)?;
+        let all: BTreeSet<String> = config.iter().map(|id| (*id).to_string()).collect();
+        let configuration = configuration_check(parsed, catalogue, &all)?;
+        return Ok(structural.max(configuration));
+    };
+    let mut config_ids = BTreeSet::new();
+    let mut rest = BTreeSet::new();
+    for id in only {
+        if id == configuration::GROUP {
+            config_ids.extend(config.iter().map(|id| (*id).to_string()));
+        } else if config.contains(id.as_str()) {
+            config_ids.insert(id.clone());
+        } else {
+            rest.insert(id.clone());
+        }
+    }
+    let mut status = 0;
+    if !rest.is_empty() {
+        let mut structural = parsed.clone();
+        structural.only = Some(rest);
+        status = structural_check(&structural, catalogue)?;
+    }
+    if !config_ids.is_empty() {
+        status = status.max(configuration_check(parsed, catalogue, &config_ids)?);
+    }
+    Ok(status)
+}
+
+/// A configuration folder as [`configuration::rust_findings`] reads it:
+/// every file directly in it or in a folder directly under it, `path` the
+/// name it carries in messages. `None` when it is not a folder.
+pub(crate) fn read_folder(
+    dir: &Path,
+    path: &str,
+) -> Result<Option<opentide_schema::configuration::resolve::Folder>> {
+    if !dir.is_dir() {
+        return Ok(None);
+    }
+    let mut folder = opentide_schema::configuration::resolve::Folder {
+        path: path.to_owned(),
+        ..Default::default()
+    };
+    for entry in std::fs::read_dir(dir).with_context(|| format!("cannot read {}", dir.display()))? {
+        let entry = entry?;
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let kind = entry.file_type()?;
+        if kind.is_dir() {
+            folder.folders.push(name.clone());
+            for nested in std::fs::read_dir(entry.path())? {
+                let nested = nested?;
+                if nested.file_type()?.is_file() {
+                    let text = std::fs::read_to_string(nested.path())
+                        .with_context(|| format!("cannot read {}", nested.path().display()))?;
+                    folder.files.push((
+                        format!("{name}/{}", nested.file_name().to_string_lossy()),
+                        text,
+                    ));
+                }
+            }
+        } else if kind.is_file() {
+            let text = std::fs::read_to_string(entry.path())
+                .with_context(|| format!("cannot read {}", entry.path().display()))?;
+            folder.files.push((name, text));
+        }
+    }
+    Ok(Some(folder))
+}
+
+/// The configuration folders of the workspace at `dir`: its own, its
+/// parent instance's, and the `sharing.toml` layers (bundled first) by
+/// absolute folder.
+type Folders = (
+    Option<opentide_schema::configuration::resolve::Folder>,
+    Option<opentide_schema::configuration::resolve::Folder>,
+    Vec<(String, Option<String>, bool)>,
+);
+
+fn workspace_folders(dir: &Path) -> Result<Folders> {
+    let dir =
+        std::fs::canonicalize(dir).with_context(|| format!("cannot resolve {}", dir.display()))?;
+    let own_dir = dir.join(".opentide").join("configurations");
+    let own = read_folder(&own_dir, ".opentide/configurations")?;
+    let parent_dir = dir
+        .parent()
+        .map(|parent| parent.join(".opentide").join("configurations"));
+    let parent = match &parent_dir {
+        Some(parent_dir) if *parent_dir != own_dir => {
+            read_folder(parent_dir, "../.opentide/configurations")?
+        }
+        _ => None,
+    };
+    let mut sharing = vec![(
+        "<bundled>".to_owned(),
+        opentide_schema::configuration::bundled::text("sharing.toml").map(str::to_owned),
+        false,
+    )];
+    for (folder, path) in [(&own, Some(&own_dir)), (&parent, parent_dir.as_ref())] {
+        if let (Some(folder), Some(path)) = (folder, path) {
+            sharing.push((
+                path.to_string_lossy().into_owned(),
+                folder
+                    .files
+                    .iter()
+                    .find(|(name, _)| name == "sharing.toml")
+                    .map(|(_, text)| text.clone()),
+                folder.folders.iter().any(|name| name == "sharing"),
+            ));
+        }
+    }
+    Ok((own, parent, sharing))
+}
+
+/// `faults --check --engine rust --only configuration`: the configuration
+/// kinds, the Rust resolution and checks against the oracle
+/// ([`configuration`]).
+fn configuration_check(
+    parsed: &FaultArgs,
+    catalogue: &Catalogue,
+    ids: &BTreeSet<String>,
+) -> Result<u8> {
+    for id in ids {
+        if catalogue.kind(id).is_none() {
+            bail!("--only: no fault kind `{id}`");
+        }
+    }
+    let bin = oracle_bin(parsed.oracle.as_deref());
+    check_oracle_version(&bin, &catalogue.oracle)?;
+    let base = generate::generate(&catalogue.base.options()?);
+    let scratch = match &parsed.keep {
+        Some(dir) => dir.join("configuration"),
+        None => std::env::temp_dir().join(format!(
+            "opentide-corpus-configuration-{}",
+            std::process::id()
+        )),
+    };
+    let scratch = std::path::absolute(&scratch)
+        .with_context(|| format!("cannot resolve {}", scratch.display()))?;
+    if scratch.exists() {
+        bail!(
+            "{} exists; remove it or name another --keep",
+            scratch.display()
+        );
+    }
+    let guard = Scratch {
+        path: scratch.clone(),
+        keep: parsed.keep.is_some(),
+    };
+    let changelog = std::fs::read_to_string(repo_root().join("CHANGELOG.md"))
+        .context("reading CHANGELOG.md for the approved differences")?;
+    let started = Instant::now();
+    let mut failed = 0usize;
+    for id in ids {
+        let kind = catalogue
+            .kind(id)
+            .with_context(|| format!("no fault kind `{id}` in the catalogue"))?;
+        let mut workspace = base.clone();
+        let targets = faults::select(&workspace, kind, &BTreeSet::new())?;
+        faults::apply(&mut workspace, kind, &targets)?;
+        let dir = scratch.join(&kind.id);
+        write_workspace(&workspace, &dir)?;
+        let mut env = kind.env.clone();
+        env.entry("XDG_STATE_HOME".to_string())
+            .or_insert_with(|| scratch.join("_state").to_string_lossy().into_owned());
+        let document = run_oracle(&bin, &dir, &kind.command, &env)?;
+        let sharing = configuration::is_sharing(&kind.command);
+        let oracle = configuration::oracle_findings(&document, sharing);
+        let (own, parent, layers) = workspace_folders(&dir)?;
+        let rust =
+            configuration::rust_findings(&kind.command, own.as_ref(), parent.as_ref(), &layers);
+        let mut problems = Vec::new();
+        let approved = configuration::approved(id);
+        let equal = match approved {
+            Some(approved) => {
+                if rust == oracle {
+                    problems.push(format!(
+                        "the approved difference is stale: the findings are equal ({})",
+                        approved.reason
+                    ));
+                }
+                if !changelog.contains(approved.changelog) {
+                    problems.push(format!("CHANGELOG.md has no {:?}", approved.changelog));
+                }
+                configuration::codes_only(&rust) == configuration::codes_only(&oracle)
+            }
+            None => rust == oracle,
+        };
+        if !equal {
+            problems.push(format!(
+                "findings differ:\n         oracle: {}\n         rust:   {}",
+                serde_json::to_string(&oracle)?,
+                serde_json::to_string(&rust)?
+            ));
+        }
+        // Not vacuous: a kind that expects codes has findings to compare.
+        if !kind.codes.is_empty() && oracle.is_empty() {
+            problems.push("the oracle reports no configuration finding".to_owned());
+        }
+        let status = if problems.is_empty() { "ok  " } else { "FAIL" };
+        println!(
+            "{status} {id:<48} {} finding(s) compared{}",
+            oracle.len(),
+            if approved.is_some() {
+                ", codes only (approved)"
+            } else {
+                ""
+            }
+        );
+        for problem in &problems {
+            println!("       - {problem}");
+        }
+        if !problems.is_empty() {
+            failed += 1;
+        }
+    }
+    drop(guard);
+    println!(
+        "corpus faults --engine rust: {} configuration kinds, {} passed, {failed} failed, in \
+         {:.1} s against {}",
+        ids.len(),
+        ids.len() - failed,
+        started.elapsed().as_secs_f64(),
+        catalogue.oracle
+    );
+    Ok(u8::from(failed > 0))
+}
+
 /// `faults --check --engine rust`: the object kinds, the Rust object models
 /// against the oracle, finding for finding ([`structural`]).
 fn structural_check(parsed: &FaultArgs, catalogue: &Catalogue) -> Result<u8> {
@@ -658,9 +901,10 @@ fn structural_check(parsed: &FaultArgs, catalogue: &Catalogue) -> Result<u8> {
                     bail!("--only: no fault kind `{id}`");
                 } else {
                     bail!(
-                        "--engine rust checks the object kinds only (UC-1.3; --only objects \
-                         lists them): `{id}` comes with the platform blocks (UC-1.4), the \
-                         configuration models (UC-1.5) or the Rust engine's validate (UC-2.x)"
+                        "--engine rust checks the object kinds (UC-1.3; --only objects lists \
+                         them) and the configuration kinds (UC-1.5; --only configuration): \
+                         `{id}` comes with the platform blocks (UC-1.4) or the Rust engine's \
+                         validate (UC-2.x)"
                     );
                 }
             }
@@ -818,7 +1062,7 @@ fn manifest_path(out: &Path) -> Result<PathBuf> {
 }
 
 /// Writes the combined fault workspace and its manifest.
-fn materialise(catalogue: &Catalogue, out: &Path) -> Result<u8> {
+pub(crate) fn materialise(catalogue: &Catalogue, out: &Path) -> Result<u8> {
     let options = catalogue.combined_options()?;
     let mut workspace = generate::generate(&options);
     let mut taken = BTreeSet::new();

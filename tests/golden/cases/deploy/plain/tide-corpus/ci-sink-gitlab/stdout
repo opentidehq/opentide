@@ -1,0 +1,35 @@
+Deploy plan · strategy PREVIEW · 9 platforms, 2 tenants · dry run, nothing is sent
+
+sentinel · 0 tenants
+  + create or update  Sentinel KQL Rule     …000000000001  status STAGING
+  + create or update  Staging Promote Rule  …000000000008  status STAGING
+
+defender_for_endpoint · 0 tenants
+  + create  Defender KQL Rule  …000000000002  status STAGING
+
+splunk · 0 tenants
+  + create or update  Splunk SPL Rule  …000000000003  status STAGING
+
+sentinel_one · 0 tenants
+  + create  SentinelOne S1QL Rule  …000000000004  status STAGING
+
+carbon_black_cloud · 0 tenants
+  + create or update  Carbon Black Lucene Rule  …000000000005  status STAGING
+
+crowdstrike · 0 tenants
+  + create  CrowdStrike Deploy Rule  …000000000006  status STAGING
+
+harfanglab · 0 tenants
+  + create or update  HarfangLab Deploy Rule  …000000000007  status STAGING
+
+elastic · 1 tenant
+  staging
+    + create or update  Elastic KQL Rule  …000000000009  status STAGING
+
+sysdig · 1 tenant
+  staging
+    + create  Sysdig Falco Rule  …0000005d1a90  status STAGING
+
+Plan: 4 to create, 0 to update, 6 to create or update, 0 to disable, 0 to delete
+  help: add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/sentinel.toml; add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/defender_for_endpoint.toml; add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/splunk.toml; add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/sentinel_one.toml; add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/carbon_black_cloud.toml; add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/crowdstrike.toml; add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/harfanglab.toml
+dry run, nothing sent
