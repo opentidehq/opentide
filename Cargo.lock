@@ -743,6 +743,7 @@ dependencies = [
  "opentide-kuery",
  "opentide-lucene",
  "opentide-spl",
+ "opentide-yara",
  "regex",
  "serde",
  "serde_json",

@@ -1,0 +1,39 @@
+# A HarfangLab block with both a Sigma rule and a YARA rule.
+# Expected constraint code: harfanglab_rule_kind.
+name: HarfangLab block with two kinds
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000041
+  schema: rule::1.0
+  version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
+  tlp: clear
+description: |
+  A Sigma detection and a YARA file in one block.
+status: STAGING
+severity: Medium
+configurations:
+  harfanglab:
+    enabled: true
+    schema: platform::harfanglab::1.0
+    status: STAGING
+    sigma:
+      logsource:
+        category: process_creation
+        product: windows
+      selections:
+        - name: selection
+          field: Image
+          value: cmd.exe
+          modifiers: [endswith]
+      condition: selection
+    yara:
+      signature: |
+        rule Cmd_String {
+          meta:
+            context = "file"
+          strings:
+            $a = "cmd.exe" ascii
+          condition:
+            $a
+        }

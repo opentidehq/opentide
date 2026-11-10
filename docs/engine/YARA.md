@@ -33,7 +33,7 @@ Errors are what libyara 4.5 refuses to compile. **Source** is the libyara 4.5.4 
 |------|-----------|--------|------|
 | `yara_parse_error` | Syntax error; YARA-X-only syntax, named; an empty text string | `grammar.y`, `lexer.l`; `parser.c` `ERROR_EMPTY_STRING` | `RAW`: `true and }`, `with`, `1_000`, `f = 1.5`, `[0x2-0x4]`, `of (true, false)` |
 | `yara_include` | An `include` directive | `lexer.l` `include` | `RAW`: `include "x.yar"` |
-| `yara_signature_alias` | `signature` is a YAML alias | yara-1.0 (Tide) | Tide injection |
+| `yara_signature_alias` | `signature` is a YAML alias | yara-1.0 (Tide) | `crates/opentide-tide/tests/yara.rs` `spec_fixtures` |
 | `yara_empty_signature` | No rule, or only `private` or `global` rules | yara-1.0 | `RAW`: `private rule a`, `""` |
 | `yara_duplicate_rule` | Two rules with one name | `parser.c` `ERROR_DUPLICATED_IDENTIFIER` | `RAW`: `rule a … rule a` |
 | `yara_duplicate_string` | Two strings with one identifier (`$` excepted) | `parser.c` `ERROR_DUPLICATED_STRING_IDENTIFIER` | `RAW`: `$a … $a` |
@@ -66,16 +66,26 @@ Errors are what libyara 4.5 refuses to compile. **Source** is the libyara 4.5.4 
 
 | Code | Severity | Platform | Condition | Test |
 |------|----------|----------|-----------|------|
-| `harfanglab_rule_kind` | error | HarfangLab | `sigma` and `yara` both set | Tide injection |
-| `harfanglab_yara_form` | error | HarfangLab | `signature` with decomposed keys | Tide injection |
-| `harfanglab_yara_section_header` | error | HarfangLab | A `strings:`, `condition:` or `rule` header in a fragment | Tide injection |
-| `harfanglab_yara_import` | error | HarfangLab | An `imports` entry that is not a known module | Tide injection |
-| `harfanglab_yara_rule_name` | error | HarfangLab | The derived rule name is a keyword or keeps a non-ASCII-word character | Tide injection |
+| `harfanglab_rule_kind` | error | HarfangLab | `sigma` and `yara` both set | `tests/yara.rs` `spec_fixtures` |
+| `harfanglab_yara_form` | error | HarfangLab | `signature` with decomposed keys | `tests/yara.rs` `spec_fixtures` |
+| `harfanglab_yara_section_header` | error | HarfangLab | A `strings:`, `condition:`, `meta:` or `rule` header in a fragment | `tests/yara.rs` `decomposed_imports_and_headers_and_rule_names` |
+| `harfanglab_yara_import` | error | HarfangLab | An `imports` entry that is not a known module | same |
+| `harfanglab_yara_rule_name` | error | HarfangLab | The derived rule name is a keyword or keeps a character other than an ASCII letter, digit or `_` | same (`Condition`, `Détection`) |
 | `harfanglab_yara_context` | warning | HarfangLab | Meta `context` outside `file`, `memory`, `file,memory`, `file.pe`, `file.elf`, `file.macho` | `profiles` |
 | `bitdefender_yara_ascii` | error | Bitdefender | A character that is not ASCII | `profiles` |
 | `bitdefender_yara_size` | error | Bitdefender | More than 30,000 characters | `profiles` |
 
-The codes are constants in `opentide_core::codes`; `opentide explain <code>` prints each one's sentence. "Tide injection" codes need the Tide block around the signature and are checked by `opentide-tide`.
+The codes are constants in `opentide_core::codes`; `opentide explain <code>` prints each one's sentence. The `harfanglab_*` constraint codes and `yara_signature_alias` need the Tide block around the YARA text: `opentide-tide` checks them (`crates/opentide-tide/src/yara.rs`, tests in `crates/opentide-tide/tests/yara.rs`), as opentide's models will.
+
+## In Tide objects
+
+| Path | Analysed as |
+|------|-------------|
+| `configurations.harfanglab.yara.signature` | a whole signature, HarfangLab profile |
+| `configurations.bitdefender.yara.signature` | a whole signature, Bitdefender profile |
+| `configurations.harfanglab.yara.strings`, `.condition`, `.imports` | the one rule deploy assembles, HarfangLab profile: each finding lands in `strings`, `condition` or the `imports` item where it is written |
+
+The pinned opentide's catalogue does not have `yara.signature` or the Bitdefender block yet (opentide's HarfangLab `signature` branch and RFC 0016): until it does, the schema check may also report those keys.
 
 ## Modules
 
