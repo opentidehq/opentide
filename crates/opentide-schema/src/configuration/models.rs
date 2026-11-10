@@ -11,6 +11,7 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use schemars::JsonSchema;
 use serde::Serialize;
 
 use super::types::{
@@ -28,7 +29,7 @@ fn yes() -> bool {
 }
 
 /// The object families a configuration can scope (`ObjectFamily`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, FromNode)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, FromNode, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 #[from_node(literal)]
 pub enum ObjectFamily {
@@ -43,7 +44,7 @@ pub enum ObjectFamily {
 // --- deployment.toml -------------------------------------------------------------------
 
 /// One `[[statuses]]` entry.
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode)]
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct DeploymentStatusEntry {
     /// Status name a rule's status field takes.
@@ -55,7 +56,7 @@ pub struct DeploymentStatusEntry {
 }
 
 /// One `[[responders]]` entry.
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode)]
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct DeploymentResponder {
     /// Team name a rule's `response.responders` takes.
@@ -70,7 +71,7 @@ fn production() -> NonEmptyString {
 }
 
 /// `[promotion]`.
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode)]
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct PromotionSettings {
     /// Whether status promotion is allowed.
@@ -91,7 +92,7 @@ impl Default for PromotionSettings {
 }
 
 /// `[debug]`.
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode)]
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct DebugSettings {
     /// UUIDs of rules usable for debugging.
@@ -112,7 +113,7 @@ impl Default for DebugSettings {
 }
 
 /// Merged `deployment.toml`.
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode)]
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct DeploymentConfiguration {
     /// Team applied when a rule sets no `response.responders`.
@@ -146,7 +147,7 @@ impl DeploymentConfiguration {
 
 /// A markdown flavor (`DocumentFlavor`), read by value; `azure-devops` is read
 /// as `azure_devops`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Flavor {
     /// `github`.
@@ -186,7 +187,7 @@ fn generic_flavor() -> Flavor {
 }
 
 /// `[flavor]`.
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode)]
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct FlavorSettings {
     /// Flavor used when `opentide generate docs` gets no `--flavor`.
@@ -195,7 +196,7 @@ pub struct FlavorSettings {
 }
 
 /// `flavor`: a `[flavor]` table, or the flavor name itself.
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode)]
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(untagged)]
 #[from_node(union)]
 pub enum FlavorChoice {
@@ -214,7 +215,7 @@ fn flavor_settings() -> FlavorChoice {
 }
 
 /// `[gitlab]`.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, FromNode)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct GitlabSettings {
     /// Link object pages by UUID instead of by name.
@@ -223,7 +224,7 @@ pub struct GitlabSettings {
 }
 
 /// Which relations an object page diagram draws.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, FromNode)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, FromNode, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 #[from_node(literal)]
 pub enum RelationsDirection {
@@ -240,7 +241,7 @@ fn both() -> RelationsDirection {
 }
 
 /// `[diagrams]`.
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode)]
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct DiagramSettings {
     /// Which relations an object page diagram draws.
@@ -249,7 +250,7 @@ pub struct DiagramSettings {
 }
 
 /// `[index]`.
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode)]
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct IndexSettings {
     /// Show how many objects each object relates to.
@@ -269,7 +270,7 @@ fn fifteen() -> PositiveFloat {
 }
 
 /// `[cve]`.
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode)]
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CveSettings {
     /// Base URL of the Vulnerability-Lookup API.
@@ -287,7 +288,7 @@ pub struct CveSettings {
 }
 
 /// `[object_names]`.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, FromNode)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ObjectNames {
     /// Display name of threat vectors.
@@ -335,7 +336,7 @@ fn cve_settings() -> CveSettings {
 }
 
 /// Merged `documentation.toml`.
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode)]
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct DocumentationConfiguration {
     /// Object families that get documentation pages.
@@ -376,7 +377,7 @@ pub struct DocumentationConfiguration {
 // --- paths.toml ------------------------------------------------------------------------
 
 /// `[paths.opentide]`.
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode)]
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct OpentidePaths {
     /// The `.opentide` folder.
@@ -391,7 +392,7 @@ pub struct OpentidePaths {
 }
 
 /// `[paths.objects]`.
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode)]
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ObjectPaths {
     /// Threat vector folder.
@@ -409,7 +410,7 @@ pub struct ObjectPaths {
 }
 
 /// `[paths.exports]`.
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode)]
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ExportPaths {
     /// Exports folder.
@@ -418,7 +419,7 @@ pub struct ExportPaths {
 }
 
 /// `[paths.docs]`.
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode)]
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct DocsPaths {
     /// Documentation root.
@@ -436,7 +437,7 @@ pub struct DocsPaths {
 }
 
 /// `[paths]`.
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode)]
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct WorkspacePaths {
     /// The `.opentide` folder.
@@ -454,7 +455,7 @@ pub struct WorkspacePaths {
 }
 
 /// `[artifacts.schemas]`.
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode)]
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct SchemaArtifacts {
     /// Threat vector schema file name.
@@ -475,7 +476,7 @@ pub struct SchemaArtifacts {
 }
 
 /// `[artifacts.templates]`.
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode)]
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct TemplateArtifacts {
     /// Threat vector template file name.
@@ -490,7 +491,7 @@ pub struct TemplateArtifacts {
 }
 
 /// `[artifacts.exports]`.
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode)]
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ExportArtifacts {
     /// Revisions export file name.
@@ -505,7 +506,7 @@ pub struct ExportArtifacts {
 }
 
 /// `[artifacts]`.
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode)]
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Artifacts {
     /// JSON Schema files.
@@ -520,7 +521,7 @@ pub struct Artifacts {
 }
 
 /// Merged `paths.toml`.
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode)]
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct PathsConfiguration {
     /// Object families the workspace holds.
@@ -540,7 +541,7 @@ pub struct PathsConfiguration {
 // --- platforms/<id>.toml ---------------------------------------------------------------
 
 /// `[platform]`.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, FromNode)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct PlatformIdentity {
     /// Load and deploy to this platform.
@@ -555,7 +556,7 @@ pub struct PlatformIdentity {
 }
 
 /// `[modifiers.conditions]`.
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode)]
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ModifierConditions {
     /// Deployment statuses.
@@ -573,7 +574,7 @@ pub struct ModifierConditions {
 }
 
 /// `[[modifiers]]`.
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode)]
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Modifier {
     /// Modifier name.
@@ -586,11 +587,12 @@ pub struct Modifier {
     pub conditions: ModifierConditions,
     /// Rule values to set, keyed by dotted platform field path.
     #[serde(skip_serializing)]
+    #[schemars(with = "BTreeMap<String, serde_json::Value>")]
     pub modifications: BTreeMap<String, Arc<Node>>,
 }
 
 /// A tenant `ssl`: a boolean, a `$NAME` placeholder, or a boolean word.
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode)]
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(untagged)]
 #[from_node(union)]
 pub enum SslValue {
@@ -606,7 +608,7 @@ pub enum SslValue {
 }
 
 /// A boolean, or a `$NAME` placeholder.
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode)]
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(untagged)]
 #[from_node(union)]
 pub enum BoolOrPlaceholder {
@@ -619,7 +621,7 @@ pub enum BoolOrPlaceholder {
 }
 
 /// An integer, or a `$NAME` placeholder.
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode)]
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(untagged)]
 #[from_node(union)]
 pub enum IntOrPlaceholder {
@@ -632,7 +634,7 @@ pub enum IntOrPlaceholder {
 }
 
 /// An integer or a string.
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode)]
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(untagged)]
 #[from_node(union)]
 pub enum IntOrString {
@@ -645,7 +647,7 @@ pub enum IntOrString {
 }
 
 /// Splunk `allow_skew`: a string, an integer or a number.
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode)]
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(untagged)]
 #[from_node(union)]
 pub enum Skew {
@@ -661,7 +663,7 @@ pub enum Skew {
 }
 
 /// A tenant's `strategies`: a list of at least one, or one strategy.
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode)]
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(untagged)]
 #[from_node(union)]
 pub enum Strategies {
@@ -682,7 +684,7 @@ fn ssl_true() -> SslValue {
 macro_rules! tenant {
     ($(#[$meta:meta])* $name:ident, $model:literal, $setup:ty $(, $extra:ident : $extra_ty:ty)?) => {
         $(#[$meta])*
-        #[derive(Debug, Clone, PartialEq, Serialize, FromNode)]
+        #[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
         #[serde(deny_unknown_fields)]
         #[from_node(model = $model)]
         pub struct $name {
@@ -712,7 +714,7 @@ macro_rules! tenant {
 macro_rules! platform {
     ($(#[$meta:meta])* $name:ident, $model:literal, $tenant:ty) => {
         $(#[$meta])*
-        #[derive(Debug, Clone, PartialEq, Serialize, FromNode)]
+        #[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
         #[serde(deny_unknown_fields)]
         #[from_node(model = $model)]
         pub struct $name {
@@ -730,7 +732,7 @@ macro_rules! platform {
 }
 
 /// `[tenants.setup]` for Microsoft Sentinel.
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode)]
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[from_node(model = "SentinelSetup")]
 pub struct SentinelSetup {
@@ -779,7 +781,7 @@ fn bool_false() -> BoolOrPlaceholder {
 }
 
 /// `[tenants.setup]` for Splunk.
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode)]
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[from_node(model = "SplunkSetup")]
 pub struct SplunkSetup {
@@ -827,7 +829,7 @@ platform!(
 );
 
 /// `[tenants.setup]` for Carbon Black Cloud.
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode)]
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[from_node(model = "CarbonBlackCloudSetup")]
 pub struct CarbonBlackCloudSetup {
@@ -858,7 +860,7 @@ platform!(
 );
 
 /// `[tenants.setup]` for SentinelOne.
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode)]
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[from_node(model = "SentinelOneSetup")]
 pub struct SentinelOneSetup {
@@ -886,7 +888,7 @@ platform!(
 );
 
 /// `[tenants.setup]` for Microsoft Defender for Endpoint.
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode)]
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[from_node(model = "DefenderForEndpointSetup")]
 pub struct DefenderForEndpointSetup {
@@ -903,7 +905,7 @@ pub struct DefenderForEndpointSetup {
 }
 
 /// `[tenants.parameters]` for Microsoft Defender for Endpoint.
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode)]
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[from_node(model = "DefenderForEndpointParameters")]
 pub struct DefenderForEndpointParameters {
@@ -926,7 +928,7 @@ platform!(
 );
 
 /// `[tenants.setup]` for CrowdStrike Falcon.
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode)]
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[from_node(model = "CrowdstrikeSetup")]
 pub struct CrowdstrikeSetup {
@@ -953,7 +955,7 @@ platform!(
 );
 
 /// `[tenants.setup]` for HarfangLab.
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode)]
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[from_node(model = "HarfangLabSetup")]
 pub struct HarfangLabSetup {
@@ -984,7 +986,7 @@ fn default_space() -> String {
 }
 
 /// `[tenants.setup]` for Elastic Security.
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode)]
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[from_node(model = "ElasticSetup")]
 pub struct ElasticSetup {
@@ -1023,7 +1025,7 @@ platform!(
 );
 
 /// `[tenants.setup]` for Sysdig Secure.
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode)]
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[from_node(model = "SysdigSetup")]
 pub struct SysdigSetup {
@@ -1051,7 +1053,7 @@ platform!(
 );
 
 /// `[tenants.setup]` of a platform opentide has no model for: open.
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode)]
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[from_node(model = "GenericTenantSetup")]
 pub struct GenericTenantSetup {
     /// Verify the tenant's TLS certificate.
@@ -1064,7 +1066,7 @@ fn generic_setup() -> GenericTenantSetup {
 }
 
 /// `[[tenants]]` of a platform opentide has no model for: open.
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode)]
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[from_node(model = "GenericTenant")]
 pub struct GenericTenant {
     /// Tenant name.
@@ -1083,11 +1085,12 @@ pub struct GenericTenant {
     pub setup: GenericTenantSetup,
     /// Values rules can select from.
     #[serde(default, skip_serializing)]
+    #[schemars(with = "Option<BTreeMap<String, serde_json::Value>>")]
     pub parameters: Option<BTreeMap<String, Arc<Node>>>,
 }
 
 /// Merged `platforms/<id>.toml` of a platform opentide has no model for: open.
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode)]
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[from_node(model = "PlatformConfiguration")]
 pub struct PlatformConfiguration {
     /// Platform identity.
@@ -1191,7 +1194,7 @@ pub const COLUMN_TYPES: [(&str, &[&str]); 4] = [
 ];
 
 /// A `custom_details` value.
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode)]
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(untagged)]
 #[from_node(union)]
 pub enum DetailValue {
@@ -1210,7 +1213,7 @@ pub enum DetailValue {
 }
 
 /// One `[[assets]]` entry.
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode)]
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct VisibilityAsset {
     /// Asset name.
@@ -1228,7 +1231,7 @@ pub struct VisibilityAsset {
 }
 
 /// One column of a log source's dataset.
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode)]
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct VisibilityColumn {
     /// Column type, from the system's type set.
@@ -1239,7 +1242,8 @@ pub struct VisibilityColumn {
 }
 
 /// One `[[logsources]]` entry: one dataset.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct VisibilityLogSource {
     /// The dataset, unique per `system`.
     pub name: String,
@@ -1254,6 +1258,7 @@ pub struct VisibilityLogSource {
     /// Reference links.
     pub references: Option<Vec<String>>,
     /// The dataset's columns, keyed by column name, in the file's order.
+    #[schemars(with = "Option<BTreeMap<String, VisibilityColumn>>")]
     pub columns: Option<Vec<(String, VisibilityColumn)>>,
 }
 
@@ -1432,7 +1437,7 @@ impl FromNode for VisibilityLogSource {
 }
 
 /// One `[[detectors]]` entry.
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode)]
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct VisibilityDetector {
     /// Detector name.
@@ -1448,7 +1453,7 @@ pub struct VisibilityDetector {
 }
 
 /// Merged `visibility.toml` (`visibility::1.0`).
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode)]
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[from_node(model = "VisibilityConfig")]
 pub struct VisibilityFields {
@@ -1463,7 +1468,7 @@ pub struct VisibilityFields {
 }
 
 /// Merged `visibility.toml`, with `name` unique per `system`.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, JsonSchema)]
 #[serde(transparent)]
 pub struct VisibilityConfig(pub VisibilityFields);
 
@@ -1548,7 +1553,7 @@ impl VisibilityConfig {
 // --- sharing.toml ----------------------------------------------------------------------
 
 /// `tlp` vocabulary names, in ceiling order (`TlpName`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, FromNode)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, FromNode, JsonSchema)]
 #[from_node(literal)]
 pub enum TlpName {
     /// `clear`.
@@ -1589,7 +1594,7 @@ fn production_statuses() -> Vec<NonEmptyString> {
 }
 
 /// One `[[misp]]` block (`sharing::misp::1.0`).
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode)]
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct MispIntegration {
     /// Block name.
@@ -1622,7 +1627,7 @@ pub struct MispIntegration {
 }
 
 /// Merged `sharing.toml`: connector arrays; `[[misp]]` is the only one.
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode)]
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[from_node(before = "only_connector_arrays")]
 pub struct SharingConfiguration {
     /// MISP instances.

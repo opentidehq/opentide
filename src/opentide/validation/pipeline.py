@@ -6,14 +6,14 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from opentide._models.base import TideModel
+from opentide._models.object_types import CORE_OBJECT_TYPES
+from opentide._models.results import ValidationResult
 from opentide.loading.object_loader import (
     SchemaIdentifierError,
     SchemaMissingError,
     load_object_for_validation,
 )
-from opentide.models.base import TideModel
-from opentide.models.object_types import CORE_OBJECT_TYPES
-from opentide.models.results import ValidationResult
 
 
 def validate_object(

@@ -9,8 +9,8 @@ import pytest
 import yaml
 from pydantic import ValidationError
 
+from opentide._models.platform import PLATFORM_CONFIG_MODELS, RuleConfigurations, SysdigConfig
 from opentide.loading.platform_loader import load_platform_config
-from opentide.models.platform import PLATFORM_CONFIG_MODELS, RuleConfigurations, SysdigConfig
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "sysdig"
 RULE = {"status": "STAGING", "condition": "spawned_process and container"}

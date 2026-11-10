@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from opentide._models.platform_schema import platform_model_for_key
+from opentide._models.schema_registry import identifiers_for_families, is_registered, resolve_model
 from opentide.core.lint_config import parse_lint_config
 from opentide.core.logging import get_logger
 from opentide.core.progress import report_stage
@@ -14,8 +16,6 @@ from opentide.generation.pydantic_templates import (
     core_template_model_keys,
     generate_core_template,
 )
-from opentide.models.platform_schema import platform_model_for_key
-from opentide.models.schema_registry import identifiers_for_families, is_registered, resolve_model
 from opentide.package.paths import platform_template_name, platform_templates_root
 from opentide.registry.artifacts import template_artifact_name
 
@@ -45,7 +45,7 @@ def enabled_platforms(configurations: dict[str, Any]) -> list[str]:
     A plugin's ``platforms/<id>.toml`` has no rule-block model, so no
     template or snippet (#736).
     """
-    from opentide.models.platform import PLATFORM_CONFIG_MODELS
+    from opentide._models.platform import PLATFORM_CONFIG_MODELS
 
     platforms = configurations.get("platforms")
     if not isinstance(platforms, dict):
@@ -71,7 +71,7 @@ def write_bundled_platform_templates(directory: Path | None = None) -> list[Path
     For maintainers: run after changing a platform model, so the bundled
     templates the golden test compares stay in step.
     """
-    from opentide.models.platform import PLATFORM_CONFIG_MODELS
+    from opentide._models.platform import PLATFORM_CONFIG_MODELS
 
     target = directory or platform_templates_root()
     written: list[Path] = []

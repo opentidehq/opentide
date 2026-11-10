@@ -9,9 +9,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 import requests
 
-from opentide.models.deployment_enums import StatusStrategy
-from opentide.models.rule import DetectionRule
-from opentide.models.system_config import ConfigurationModels
+from opentide._models.deployment_enums import StatusStrategy
+from opentide._models.rule import DetectionRule
+from opentide._models.system_config import ConfigurationModels
 from opentide.platforms.elastic.client import ElasticClient
 from opentide.platforms.elastic.deployer import ElasticDeploy
 from opentide.platforms.elastic.es_checks import ElasticTenantError

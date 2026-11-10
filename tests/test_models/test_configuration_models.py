@@ -14,14 +14,14 @@ if sys.version_info >= (3, 11):
 else:
     import tomli as tomllib
 
-from opentide.loading.config_loader import ConfigurationsLoader
-from opentide.models.configuration import (
+from opentide._models.configuration import (
     DeploymentConfiguration,
     configuration_files,
 )
-from opentide.models.configuration.loading import ConfigurationError
-from opentide.models.deployment_enums import StatusStrategy
-from opentide.models.system_config import DeploymentStatus
+from opentide._models.configuration.loading import ConfigurationError
+from opentide._models.deployment_enums import StatusStrategy
+from opentide._models.system_config import DeploymentStatus
+from opentide.loading.config_loader import ConfigurationsLoader
 
 _STATUS = {"name": "LIVE", "description": "Live", "strategy": "RELEASE"}
 
@@ -217,8 +217,8 @@ def test_documentation_settings_reject_an_unknown_direction() -> None:
 
 
 def test_documentation_flavor_name_with_hyphen() -> None:
+    from opentide._models.configuration import DocumentationConfiguration
     from opentide.documentation.types import DocumentFlavor
-    from opentide.models.configuration import DocumentationConfiguration
 
     loaded = DocumentationConfiguration.model_validate({"flavor": "azure-devops"})
     assert loaded.default_flavor() is DocumentFlavor.azure_devops
@@ -317,8 +317,8 @@ def test_coretide_global_toml_does_not_fail_the_paths(tmp_path) -> None:
     ],
 )
 def test_a_failing_secret_value_is_never_repeated(setup: dict[str, Any]) -> None:
-    from opentide.models.configuration.loading import validate_configuration
-    from opentide.models.configuration.platforms import SplunkConfiguration
+    from opentide._models.configuration.loading import validate_configuration
+    from opentide._models.configuration.platforms import SplunkConfiguration
 
     document = {"tenants": [{"name": "T", "setup": {"url": "u", "port": 1, "app": "a", **setup}}]}
     with pytest.raises(ConfigurationError) as raised:

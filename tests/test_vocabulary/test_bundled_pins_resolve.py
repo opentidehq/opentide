@@ -13,14 +13,14 @@ from pathlib import Path
 
 import pytest
 
+from opentide._models.schema_registry import is_registered
+from opentide._models.vocab_pins import get_pins, pin_data_dir, pins_for_family
 from opentide.generation.vocabulary import (
     VocabularyDefinition,
     VocabularyLoader,
     VocabularyRevisionResolver,
     parse_vocab_contract,
 )
-from opentide.models.schema_registry import is_registered
-from opentide.models.vocab_pins import get_pins, pin_data_dir, pins_for_family
 
 _VOCABULARY_DIR = pin_data_dir().parent / "vocabulary"
 

@@ -17,6 +17,8 @@ platform_block! {
     #[garde(allow_unvalidated)]
     #[schemars(rename = "CarbonBlackConfig", description = "")]
     #[from_node(model = "CarbonBlackConfig")]
+    #[cfg_attr(feature = "python", pyo3::pyclass(frozen, get_all, eq, name = "CarbonBlackConfig", module = "opentide._native.models"))]
+    #[cfg_attr(feature = "python", expect(clippy::unsafe_derive_deserialize, reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"))]
     pub struct CarbonBlackConfig ["platform::carbon_black_cloud::1.0"] {
         /// Lucene query. Multiline in YAML. Deploy joins lines with spaces.
         #[schemars(extend("tide.template.multiline" = true, "tide.template.spacer" = true))]

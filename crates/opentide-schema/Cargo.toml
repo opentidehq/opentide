@@ -25,6 +25,9 @@ workspace = true
 # The Python classes (`#[pyclass(frozen, get_all)]`), for the PyO3 binding.
 # abi3-py310: one build serves CPython 3.10 and later, as analysis/ does.
 python = ["dep:pyo3"]
+# The classes' type hints for the generated stubs (`cargo xtask stubs`, UC-1.9):
+# PyO3's introspection data, which only the stub build compiles in.
+stubs = ["python", "pyo3/experimental-inspect"]
 # The wasm32-unknown-unknown hosts. The skeleton adds no code behind it yet:
 # the TypeScript types arrive with UC-5.3 (#838). CI builds the crate for
 # wasm32 with it so that no dependency of the model stops compiling there.
@@ -57,7 +60,9 @@ regex.workspace = true
 regex-syntax.workspace = true
 # The oracle's Markdown patterns of the editor annotations (`generate::annotate`).
 fancy-regex.workspace = true
-pyo3 = { workspace = true, features = ["abi3-py310"], optional = true }
+# An all-lower-case vocabulary name, title-cased in a dropdown (`generate::schema`).
+titlecase.workspace = true
+pyo3 = { workspace = true, features = ["abi3-py310", "indexmap"], optional = true }
 # `metadata.reviewed` (UC-1.3): whether the date, the time and the offset
 # exist (jiff's civil types; no time zone database).
 jiff = { workspace = true }

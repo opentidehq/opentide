@@ -138,7 +138,7 @@ def expected_stem(name: str, style: FilenameStyle) -> str | None:
 
 def metadata_keys() -> tuple[str, ...]:
     """Every YAML key an object's ``metadata`` block can hold, across schemas."""
-    from opentide.models.metadata import ObjectMetadata, RuleMetadata
+    from opentide._models.metadata import ObjectMetadata, RuleMetadata
 
     keys: list[str] = []
     for model in (ObjectMetadata, RuleMetadata):

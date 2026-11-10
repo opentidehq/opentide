@@ -3,17 +3,17 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Any, Protocol, TypeVar
 
-from opentide.core import registry
-from opentide.core.logging import get_logger
-from opentide.generation.framework import unroll_dot_dict
-from opentide.models.deployment_enums import (
+from opentide._models.deployment_enums import (
     DetectionPlatforms,
     RunStrategies,
     StatusStrategy,
 )
-from opentide.models.platform import PLATFORM_CONFIG_MODELS, PlatformConfigBase
-from opentide.models.rule import DetectionRule
-from opentide.models.system_config import DeploymentBatch, SystemConfig
+from opentide._models.platform import PLATFORM_CONFIG_MODELS, PlatformConfigBase
+from opentide._models.rule import DetectionRule
+from opentide._models.system_config import DeploymentBatch, SystemConfig
+from opentide.core import registry
+from opentide.core.logging import get_logger
+from opentide.generation.framework import unroll_dot_dict
 from opentide.platforms.enabled import MissingTenantsError
 
 DEPRECATED_STATUSES = (StatusStrategy.DELETION, StatusStrategy.DISABLEMENT)

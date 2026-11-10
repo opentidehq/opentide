@@ -14,8 +14,8 @@ from pathlib import Path
 
 import pytest
 
-from opentide.models.base import TideModel
-from opentide.models.schema_registry import registered_identifiers, resolve_model
+from opentide._models.base import TideModel
+from opentide._models.schema_registry import registered_identifiers, resolve_model
 
 _REPO = Path(__file__).resolve().parents[2]
 SPECS = Path(os.environ.get("OPENTIDE_SPECIFICATIONS_ROOT", _REPO.parent / "specifications"))

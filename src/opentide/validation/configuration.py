@@ -24,14 +24,14 @@ if sys.version_info >= (3, 11):
 else:
     import tomli as tomllib
 
-from opentide.models.configuration import (
+from opentide._models.configuration import (
     GENERIC_PLATFORM_FILE,
     configuration_file_key,
     configuration_files,
 )
-from opentide.models.configuration.deployment import DeploymentConfiguration
-from opentide.models.configuration.loading import describe_error, model_errors
-from opentide.models.visibility import VisibilityConfig
+from opentide._models.configuration.deployment import DeploymentConfiguration
+from opentide._models.configuration.loading import describe_error, model_errors
+from opentide._models.visibility import VisibilityConfig
 from opentide.validation.issues import ValidationIssue
 
 if TYPE_CHECKING:
@@ -600,8 +600,8 @@ def workspace_configuration_issues(
     merged document. Sharing has its own check (`sharing-config`); a platform
     plugin's file is its own.
     """
+    from opentide._models.configuration.platforms import PLATFORM_CONFIGURATION_MODELS
     from opentide.core.files import resolve_configurations
-    from opentide.models.configuration.platforms import PLATFORM_CONFIGURATION_MODELS
 
     if configs is None:
         configs = resolve_configurations()

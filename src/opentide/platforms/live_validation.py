@@ -20,9 +20,9 @@ from typing import ClassVar
 
 import structlog
 
-from opentide.models.deployment_enums import RunStrategies
-from opentide.models.rule import DetectionRule
-from opentide.models.system_config import SystemConfig
+from opentide._models.deployment_enums import RunStrategies
+from opentide._models.rule import DetectionRule
+from opentide._models.system_config import SystemConfig
 from opentide.platforms.plugins import QueryValidator, resolve_rules
 from opentide.query.check import (
     CHECK_TIMEOUT_ENV,
@@ -173,8 +173,8 @@ class LiveQueryValidator(QueryValidator):
         once; a query the tenant refuses, or does not answer in time, is a
         failed :class:`RuleCheck`.
         """
+        from opentide._models.deployment_enums import DEPLOYABLE_STRATEGIES, DetectionPlatforms
         from opentide.deployment import TideDeployment
-        from opentide.models.deployment_enums import DEPLOYABLE_STRATEGIES, DetectionPlatforms
         from opentide.platforms.transport import reaching_tenant
 
         seconds = check_timeout(timeout)

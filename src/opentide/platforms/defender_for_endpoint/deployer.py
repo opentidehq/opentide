@@ -2,6 +2,9 @@ import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from opentide._models.deployment_enums import RunStrategies, StatusStrategy
+from opentide._models.rule import DetectionRule
+from opentide._models.system_config import ConfigurationModels, batch_tenant
 from opentide.core import deploy_events
 from opentide.core.debug import DebugEnvironment
 from opentide.core.logging import get_logger
@@ -15,9 +18,6 @@ from opentide.deployment.external_ids import (
     report_failure,
     screen_tenant,
 )
-from opentide.models.deployment_enums import RunStrategies, StatusStrategy
-from opentide.models.rule import DetectionRule
-from opentide.models.system_config import ConfigurationModels, batch_tenant
 from opentide.platforms.defender_for_endpoint.client import (
     DefenderForEndpointService,
     SeverityMapping,

@@ -8,10 +8,10 @@ import os
 from pathlib import Path
 from typing import Any, cast
 
+from opentide._models.object_types import CORE_OBJECT_TYPES
+from opentide._models.schema_registry import identifiers_for_families
+from opentide._models.version import SchemaVersion
 from opentide.core.files import resolve_configurations
-from opentide.models.object_types import CORE_OBJECT_TYPES
-from opentide.models.schema_registry import identifiers_for_families
-from opentide.models.version import SchemaVersion
 from opentide.registry.artifacts import schema_artifact_name
 from opentide.registry.discovery import OPENTIDE_DIR
 from opentide.registry.paths import resolve_workspace_paths

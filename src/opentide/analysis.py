@@ -499,7 +499,7 @@ def _catalog_fingerprint(root: Path | None) -> str:
     package = Path(opentide.__file__).parent
     data = get_data_root()
     stamped = [
-        *sorted((package / "models").rglob("*.py")),
+        *sorted((package / "_models").rglob("*.py")),
         *sorted((package / "generation").rglob("*.py")),
         *sorted((data / "vocabulary").rglob("*")),
         *sorted((data / "pins").rglob("*")),

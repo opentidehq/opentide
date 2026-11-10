@@ -84,6 +84,9 @@ fancy-regex = "0.14"
 # Dates and times (opentide-schema `metadata.reviewed`): the calendar, the
 # clock and UTC offsets, without the time zone database.
 jiff = { version = "0.2", default-features = false, features = ["std"] }
+# Title case for an all-lower-case vocabulary name in an editor dropdown
+# (opentide-schema `generate::schema`): Gruber's English title-case rules.
+titlecase = { version = "3.6", default-features = false }
 # The parsed pattern (HIR) of a `regex` pattern, to anchor it whatever its
 # flags (opentide-schema `lint`): the version `regex` itself locks.
 regex-syntax = "0.8"
@@ -104,7 +107,7 @@ js-sys = "0.3"
 # The Tide model as code (plan D-2, docs/internal/adr/0001-tide-model-as-rust-code.md):
 # JSON Schema 2020-12 from the structs, and their constraints. garde has no
 # default features; a model that needs one (`regex` for `pattern`) adds it then.
-schemars = "1.2"
+schemars = { version = "1.2", features = ["indexmap2"] }
 # PyO3, for analysis/ (opentide._native) and opentide-schema's `python` feature.
 pyo3 = "0.30.1"
 garde = { version = "0.23", features = ["derive"] }

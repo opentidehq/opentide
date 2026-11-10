@@ -377,8 +377,8 @@ def test_scoped_fields_cover_every_scoped_model_field() -> None:
     Read from the models rather than restated, so a future scoped field
     cannot be silently left out of the migration.
     """
-    from opentide.models.objective import DetectionSignal
-    from opentide.models.threat import ThreatBody
+    from opentide._models.objective import DetectionSignal
+    from opentide._models.threat import ThreatBody
 
     declared = set()
     for model in (DetectionSignal, ThreatBody):

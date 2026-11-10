@@ -374,7 +374,7 @@ def test_a_strategy_whose_rules_reach_no_tenant_at_all_exits_2(
 def test_an_inherited_deployment_plan_is_refused(
     repo: Path, azure_client: MagicMock, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from opentide.models.deployment_enums import removed_plan_message
+    from opentide._models.deployment_enums import removed_plan_message
 
     _configure(repo, _tenant("Both", BOTH_WORKSPACE))
     monkeypatch.setenv("DEPLOYMENT_PLAN", "FULL")
@@ -409,10 +409,10 @@ def test_a_tenant_still_using_deployment_is_refused_with_its_replacement(
 
 def test_deploy_resolves_the_same_tenants_as_validation(repo: Path) -> None:
     """``TideDeployment`` is what both commands use: the run strategies pick the tenants."""
+    from opentide._models.deployment_enums import DEPLOYABLE_STRATEGIES, DetectionPlatforms
+    from opentide._models.deployment_enums import StatusStrategy as S
     from opentide.core.registry import Opentide
     from opentide.deployment import TideDeployment
-    from opentide.models.deployment_enums import DEPLOYABLE_STRATEGIES, DetectionPlatforms
-    from opentide.models.deployment_enums import StatusStrategy as S
 
     _configure(
         repo,

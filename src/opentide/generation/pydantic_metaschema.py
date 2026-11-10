@@ -8,12 +8,12 @@ import types
 from collections.abc import Mapping
 from typing import Any, Union, cast, get_args, get_origin
 
+from opentide._models.base import TideModel, field_json_schema_extra
+from opentide._models.metadata import ObjectMetadata, ObjectReferences
+from opentide._models.object_types import OBJECTIVE, RULE, THREAT
+from opentide._models.schema_registry import core_object_schemas, resolve_model
+from opentide._models.version import SchemaVersion
 from opentide.generation.model_json_schema import model_json_schema
-from opentide.models.base import TideModel, field_json_schema_extra
-from opentide.models.metadata import ObjectMetadata, ObjectReferences
-from opentide.models.object_types import OBJECTIVE, RULE, THREAT
-from opentide.models.schema_registry import core_object_schemas, resolve_model
-from opentide.models.version import SchemaVersion
 
 
 def core_schema_models() -> dict[str, type[TideModel]]:
@@ -200,7 +200,7 @@ DEFINITION_PINS = "tide.vocab.pins"
 
 def apply_vocab_pins(schema: dict[str, Any], schema_id: str) -> None:
     """Inject versioned ``tide.vocab`` contracts from the pin manifest onto *schema*."""
-    from opentide.models.vocab_pins import get_pins
+    from opentide._models.vocab_pins import get_pins
 
     apply_pin_map(schema, get_pins(schema_id))
 
@@ -293,7 +293,7 @@ def _merge_nested_def_extras(model: type[TideModel], defs: dict[str, Any]) -> No
 
 def build_platform_schema_source(model: type[TideModel]) -> dict[str, Any]:
     """Build template/schema source for a platform configuration model."""
-    from opentide.models.platform_schema import platform_root_extras
+    from opentide._models.platform_schema import platform_root_extras
 
     extras = platform_root_extras(model)
     return build_model_schema_source(model, root_extras=extras)

@@ -6,8 +6,8 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+from opentide._models.version import SchemaVersion
 from opentide.core.io import load_toml
-from opentide.models.version import SchemaVersion
 
 _PINS_DIR = Path(__file__).resolve().parent.parent / "data" / "pins"
 _PIN_FAMILIES = ("threat", "objective", "rule")

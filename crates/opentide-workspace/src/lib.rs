@@ -39,6 +39,7 @@ pub mod review;
 pub mod root;
 pub mod state;
 pub mod validate;
+pub mod vocabularies;
 mod workspace;
 
 pub use config::{ConfigError, Configuration};

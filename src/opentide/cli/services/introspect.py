@@ -36,7 +36,7 @@ def _app_choices() -> dict[tuple[str, str], tuple[str, ...]]:
     ``share --target`` is left out: its values are the configured targets.
     ``tests/test_cli/test_commands_introspect.py`` checks each against the command.
     """
-    from opentide.models.deployment_enums import DEPLOYABLE_STRATEGIES
+    from opentide._models.deployment_enums import DEPLOYABLE_STRATEGIES
 
     return {
         ("validate", "object_type"): ("rule", "threat", "objective"),

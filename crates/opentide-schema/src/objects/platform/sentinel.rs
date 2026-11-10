@@ -2,9 +2,9 @@
 //! (`SentinelConfig` and its nested models).
 
 use std::borrow::Cow;
-use std::collections::BTreeMap;
 
 use garde::Validate;
+use indexmap::IndexMap;
 use schemars::{JsonSchema, Schema, SchemaGenerator, json_schema};
 use serde::{Deserialize, Serialize};
 
@@ -25,6 +25,23 @@ use crate::vocab::sentinel::{SentinelAttack, VERSION};
 #[garde(allow_unvalidated)]
 #[schemars(rename = "SentinelTemplate", description = "")]
 #[from_node(model = "SentinelTemplate")]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(
+        frozen,
+        get_all,
+        eq,
+        name = "SentinelTemplate",
+        module = "opentide._native.models"
+    )
+)]
+#[cfg_attr(
+    feature = "python",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+    )
+)]
 pub struct SentinelTemplate {
     /// Sentinel alert-rule template name.
     pub uuid: String,
@@ -39,6 +56,23 @@ pub struct SentinelTemplate {
 #[garde(allow_unvalidated)]
 #[schemars(rename = "SentinelTrigger", description = "")]
 #[from_node(model = "SentinelTrigger")]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(
+        frozen,
+        get_all,
+        eq,
+        name = "SentinelTrigger",
+        module = "opentide._native.models"
+    )
+)]
+#[cfg_attr(
+    feature = "python",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+    )
+)]
 pub struct SentinelTrigger {
     /// Sentinel trigger operator.
     pub operator: String,
@@ -197,6 +231,23 @@ fn garde_suppression(value: &Suppression, _pins: &Pins) -> garde::Result {
 #[garde(allow_unvalidated)]
 #[schemars(rename = "SentinelScheduling", description = "")]
 #[from_node(model = "SentinelScheduling")]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(
+        frozen,
+        get_all,
+        eq,
+        name = "SentinelScheduling",
+        module = "opentide._native.models"
+    )
+)]
+#[cfg_attr(
+    feature = "python",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+    )
+)]
 pub struct SentinelScheduling {
     /// `true` deploys `kind: NRT` and skips frequency, lookback, and trigger.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -222,6 +273,23 @@ pub struct SentinelScheduling {
 #[garde(allow_unvalidated)]
 #[schemars(rename = "SentinelCustomDetails", description = "")]
 #[from_node(model = "SentinelCustomDetails")]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(
+        frozen,
+        get_all,
+        eq,
+        name = "SentinelCustomDetails",
+        module = "opentide._native.models"
+    )
+)]
+#[cfg_attr(
+    feature = "python",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+    )
+)]
 pub struct SentinelCustomDetails {
     /// Alert property name.
     pub key: String,
@@ -236,6 +304,23 @@ pub struct SentinelCustomDetails {
 #[garde(allow_unvalidated)]
 #[schemars(rename = "SentinelDynamicProperties", description = "")]
 #[from_node(model = "SentinelDynamicProperties")]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(
+        frozen,
+        get_all,
+        eq,
+        name = "SentinelDynamicProperties",
+        module = "opentide._native.models"
+    )
+)]
+#[cfg_attr(
+    feature = "python",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+    )
+)]
 pub struct SentinelDynamicProperties {
     /// Sentinel alert property. `Tactics` and `Severity` are sent as the tactics and severity column
     /// overrides. Any other value is an alert dynamic property.
@@ -347,6 +432,23 @@ pub fn garde_techniques(value: &Option<Vec<SentinelTechnique>>, _pins: &Pins) ->
 #[garde(allow_unvalidated)]
 #[schemars(rename = "SentinelAlert", description = "")]
 #[from_node(model = "SentinelAlert")]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(
+        frozen,
+        get_all,
+        eq,
+        name = "SentinelAlert",
+        module = "opentide._native.models"
+    )
+)]
+#[cfg_attr(
+    feature = "python",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+    )
+)]
 pub struct SentinelAlert {
     /// Alert display-name format. Empty leaves the Sentinel default. The rule `name` is still the
     /// analytics-rule display name.
@@ -399,6 +501,23 @@ fn yes() -> bool {
 #[garde(allow_unvalidated)]
 #[schemars(rename = "SentinelAlertGrouping", description = "")]
 #[from_node(model = "SentinelAlertGrouping")]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(
+        frozen,
+        get_all,
+        eq,
+        name = "SentinelAlertGrouping",
+        module = "opentide._native.models"
+    )
+)]
+#[cfg_attr(
+    feature = "python",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+    )
+)]
 pub struct SentinelAlertGrouping {
     /// Group alerts into one incident.
     pub enabled: bool,
@@ -432,6 +551,23 @@ pub struct SentinelAlertGrouping {
 #[garde(allow_unvalidated)]
 #[schemars(rename = "SentinelGrouping", description = "")]
 #[from_node(model = "SentinelGrouping")]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(
+        frozen,
+        get_all,
+        eq,
+        name = "SentinelGrouping",
+        module = "opentide._native.models"
+    )
+)]
+#[cfg_attr(
+    feature = "python",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+    )
+)]
 pub struct SentinelGrouping {
     /// Sentinel `aggregationKind`. `SingleAlert` groups events into one alert. `AlertPerResult`
     /// emits one alert per row.
@@ -448,6 +584,23 @@ pub struct SentinelGrouping {
 #[garde(allow_unvalidated)]
 #[schemars(rename = "SentinelMappingEntry", description = "")]
 #[from_node(model = "SentinelMappingEntry")]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(
+        frozen,
+        get_all,
+        eq,
+        name = "SentinelMappingEntry",
+        module = "opentide._native.models"
+    )
+)]
+#[cfg_attr(
+    feature = "python",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+    )
+)]
 pub struct SentinelMappingEntry {
     /// Entity identifier (`Name`, `Address`, …).
     pub identifier: String,
@@ -462,6 +615,23 @@ pub struct SentinelMappingEntry {
 #[garde(allow_unvalidated)]
 #[schemars(rename = "SentinelEntityMapping", description = "")]
 #[from_node(model = "SentinelEntityMapping")]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(
+        frozen,
+        get_all,
+        eq,
+        name = "SentinelEntityMapping",
+        module = "opentide._native.models"
+    )
+)]
+#[cfg_attr(
+    feature = "python",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+    )
+)]
 pub struct SentinelEntityMapping {
     /// Sentinel entity type (`Account`, `Host`, `IP`, `URL`, …).
     pub entity: String,
@@ -476,6 +646,23 @@ pub struct SentinelEntityMapping {
 #[garde(allow_unvalidated)]
 #[schemars(rename = "SentinelExclusion", description = "")]
 #[from_node(model = "SentinelExclusion")]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(
+        frozen,
+        get_all,
+        eq,
+        name = "SentinelExclusion",
+        module = "opentide._native.models"
+    )
+)]
+#[cfg_attr(
+    feature = "python",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+    )
+)]
 pub struct SentinelExclusion {
     /// KQL fragment appended after the base query. The key is required. An empty string is accepted
     /// (this field is not the non-blank rule `query`).
@@ -489,7 +676,7 @@ pub struct SentinelExclusion {
     /// KQL `let` bindings prepended to the query. Values may be string, number, or boolean. Other
     /// types are skipped. The last definition of a name wins.
     #[serde(rename = "let", default, skip_serializing_if = "Option::is_none")]
-    pub r#let: Option<BTreeMap<String, Any>>,
+    pub r#let: Option<IndexMap<String, Any>>,
 }
 
 platform_block! {
@@ -500,6 +687,8 @@ platform_block! {
     #[garde(allow_unvalidated)]
     #[schemars(rename = "SentinelConfig", description = "")]
     #[from_node(model = "SentinelConfig")]
+    #[cfg_attr(feature = "python", pyo3::pyclass(frozen, get_all, eq, name = "SentinelConfig", module = "opentide._native.models"))]
+    #[cfg_attr(feature = "python", expect(clippy::unsafe_derive_deserialize, reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"))]
     pub struct SentinelConfig ["platform::sentinel::1.0"] {
         /// KQL. Multiline. Compiled with matching `exclusions` before deploy.
         #[schemars(extend("tide.template.multiline" = true, "tide.template.spacer" = true))]

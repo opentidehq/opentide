@@ -5,7 +5,7 @@ from __future__ import annotations
 from pydantic import Field
 from pydantic.fields import FieldInfo
 
-from opentide.models.base import TideField, TideModel, field_json_schema_extra
+from opentide._models.base import TideField, TideModel, field_json_schema_extra
 
 
 def test_tide_field_attaches_schema_extra() -> None:

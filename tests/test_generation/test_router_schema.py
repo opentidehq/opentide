@@ -16,10 +16,10 @@ from referencing import Registry, Resource
 from referencing.exceptions import Unresolvable
 from referencing.jsonschema import DRAFT202012
 
+from opentide._models.object_types import CORE_OBJECT_TYPES
+from opentide._models.schema_registry import identifiers_for_families, registered_identifiers
 from opentide.generation.pydantic_schemas import generate_schema_for_identifier
 from opentide.generation.router_schema import build_opentide_router, export_opentide_router
-from opentide.models.object_types import CORE_OBJECT_TYPES
-from opentide.models.schema_registry import identifiers_for_families, registered_identifiers
 from opentide.registry.artifacts import schema_artifact_name
 
 ROOT = Path(__file__).resolve().parents[2]

@@ -329,7 +329,7 @@ const OBJECTIVE: &str = "name: Objective\nmetadata:\n  uuid: u\n  schema: object
 fn detection_objective_reads() {
     let objective: Objective = read(OBJECTIVE).unwrap();
     assert_eq!(objective.objective.signals.len(), 1);
-    assert_eq!(objective.objective.kind, "Threat");
+    assert_eq!(objective.objective.r#type, "Threat");
     let written = serde_json::to_value(&objective).unwrap();
     assert_eq!(written["objective"]["type"], "Threat");
 }
