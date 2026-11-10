@@ -144,21 +144,26 @@ fn workspace_files(source: &str, workspace: &Workspace, indices: &BTreeSet<usize
 
 /// Every fault of `tests/corpora/faults.toml`, each applied alone to the
 /// catalogue's base workspace: the files it changes and adds. The base's
-/// own files come first.
+/// own files come first. A kind that cannot be selected or applied is an
+/// error, as it is for `cargo xtask corpus`: the comparison never covers
+/// fewer faults than the catalogue holds.
 pub fn fault_instances() -> Result<Instances> {
     let catalogue = load_catalogue(&corpora_dir().join("faults.toml"))?;
     let base = generate(&catalogue.base.options()?);
+    faults_of(&base, &catalogue.kinds)
+}
+
+/// `base`'s files, then each kind's, applied alone to `base`.
+fn faults_of(base: &Workspace, kinds: &[faults::Kind]) -> Result<Instances> {
     let all: BTreeSet<usize> = (0..base.files.len()).collect();
-    let mut instances = workspace_files("fault-base", &base, &all);
-    for kind in &catalogue.kinds {
+    let mut instances = workspace_files("fault-base", base, &all);
+    for kind in kinds {
         let mut workspace = base.clone();
-        let Ok(targets) = faults::select(&workspace, kind, &BTreeSet::new()) else {
-            continue;
-        };
+        let targets = faults::select(&workspace, kind, &BTreeSet::new())
+            .with_context(|| format!("fault kind `{}`: select its targets", kind.id))?;
         let before = workspace.files.len();
-        if faults::apply(&mut workspace, kind, &targets).is_err() {
-            continue;
-        }
+        faults::apply(&mut workspace, kind, &targets)
+            .with_context(|| format!("fault kind `{}`: apply it", kind.id))?;
         let touched: BTreeSet<usize> = targets
             .iter()
             .copied()
@@ -172,6 +177,130 @@ pub fn fault_instances() -> Result<Instances> {
         ));
     }
     Ok(instances)
+}
+
+/// The object files of `crates/opentide-schema/tests/oracle/objects_cases.toml`
+/// (each case's `yaml`), labelled `object-case:<id>`.
+pub fn object_case_instances(root: &Path) -> Result<Instances> {
+    let cases_path = root.join("crates/opentide-schema/tests/oracle/objects_cases.toml");
+    let text = std::fs::read_to_string(&cases_path)
+        .with_context(|| format!("read {}", cases_path.display()))?;
+    object_cases(&text)
+}
+
+fn object_cases(text: &str) -> Result<Instances> {
+    let cases: toml::Table = toml::from_str(text).context("parse objects_cases.toml")?;
+    let mut instances = Instances::default();
+    for case in cases
+        .get("case")
+        .and_then(toml::Value::as_array)
+        .into_iter()
+        .flatten()
+    {
+        let id = case
+            .get("id")
+            .and_then(toml::Value::as_str)
+            .context("objects_cases.toml: a case without an `id`")?;
+        let yaml = case
+            .get("yaml")
+            .and_then(toml::Value::as_str)
+            .with_context(|| format!("objects_cases.toml: case `{id}` has no `yaml`"))?;
+        if let Some(value) = yaml_instance(yaml) {
+            instances.objects.push(Instance {
+                label: format!("object-case:{id}"),
+                value,
+            });
+        }
+    }
+    Ok(instances)
+}
+
+/// Documents written for the comparison itself, each with the verdict both
+/// schemas must give it (`true`: accepted). They keep every compared
+/// document non-vacuous (a minimal `rule::1.0` object, which a workspace
+/// whose rules reference its own objectives still accepts; a file of a
+/// platform opentide has no model for) and sit on either side of each
+/// hand-written constraint (`exclusiveMinimum`, `minLength`, `pattern`), so
+/// a schema that moves a boundary gets a different verdict from the
+/// oracle's.
+pub const PROBES: [(&str, &str, bool); 12] = [
+    (
+        "rule-1.0-minimal.yaml",
+        "name: Probe\nmetadata:\n  uuid: 00000000-0000-4000-8000-0000000000aa\n  schema: rule::1.0\n  \
+         version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n\
+         description: d\nresponse: null\nconfigurations: null\n",
+        true,
+    ),
+    (
+        ".opentide/configurations/platforms/plugin.toml",
+        "[platform]\nenabled = true\nname = \"Plugin\"\n[[tenants]]\nname = \"prod\"\n",
+        true,
+    ),
+    (
+        ".opentide/configurations/platforms/plugin.toml",
+        "[[tenants]]\nname = \"\"\n",
+        false,
+    ),
+    (
+        ".opentide/configurations/documentation.toml",
+        "[cve]\ntimeout = 0.1\n",
+        true,
+    ),
+    (
+        ".opentide/configurations/documentation.toml",
+        "[cve]\ntimeout = 0\n",
+        false,
+    ),
+    (
+        ".opentide/configurations/documentation.toml",
+        "[cve]\ntimeout = -1.5\n",
+        false,
+    ),
+    (
+        ".opentide/configurations/sharing.toml",
+        "[[misp]]\nname = \"prod\"\nurl = \"https://misp.example\"\n\
+         api_key = \"${MISP_KEY}\"\nmax_tlp = \"amber\"\n",
+        true,
+    ),
+    (
+        ".opentide/configurations/sharing.toml",
+        "[[misp]]\nname = \"prod\"\nurl = \"https://misp.example\"\n\
+         api_key = \"\"\nmax_tlp = \"amber\"\n",
+        false,
+    ),
+    (
+        ".opentide/configurations/sharing.toml",
+        "[[misp]]\nname = \"\"\nurl = \"https://misp.example\"\n\
+         api_key = \"${MISP_KEY}\"\nmax_tlp = \"amber\"\n",
+        false,
+    ),
+    (
+        ".opentide/configurations/sharing.toml",
+        "[[misp]]\nname = \"Prod\"\nurl = \"https://misp.example\"\n\
+         api_key = \"${MISP_KEY}\"\nmax_tlp = \"amber\"\n",
+        false,
+    ),
+    (
+        ".opentide/configurations/sharing.toml",
+        "[[misp]]\nname = \"prod\"\nurl = \"\"\n\
+         api_key = \"${MISP_KEY}\"\nmax_tlp = \"amber\"\n",
+        false,
+    ),
+    (
+        ".opentide/configurations/sharing.toml",
+        "[[misp]]\nname = \"prod\"\nurl = \"ftp://misp.example\"\n\
+         api_key = \"${MISP_KEY}\"\nmax_tlp = \"amber\"\n",
+        false,
+    ),
+];
+
+/// The [`PROBES`], labelled `probe:<n>:<path>`.
+pub fn probe_instances() -> Instances {
+    let mut instances = Instances::default();
+    for (index, (path, text, _)) in PROBES.iter().enumerate() {
+        instances.add(&format!("probe:{index}"), path, text);
+    }
+    instances
 }
 
 /// The configuration texts of `crates/opentide-schema/tests/oracle/config_cases.toml`
@@ -232,12 +361,27 @@ fn compile(schema: &Value) -> Result<jsonschema::Validator> {
     jsonschema::validator_for(schema).map_err(|error| anyhow::anyhow!("{error}"))
 }
 
+/// Why a schema refuses an instance: the first error and where it is.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Refusal {
+    /// The validator's message.
+    pub message: String,
+    /// The JSON pointer of the refused value (`/references`).
+    pub at: String,
+}
+
+impl std::fmt::Display for Refusal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} at {}", self.message, self.at)
+    }
+}
+
 /// Each instance's verdict under `schema`: `None` when it is accepted,
 /// else the first reason it is refused.
 pub fn verdicts<'a>(
     schema: &Value,
     instances: impl IntoIterator<Item = &'a Instance>,
-) -> Result<Vec<Option<String>>> {
+) -> Result<Vec<Option<Refusal>>> {
     let validator = compile(schema)?;
     Ok(instances
         .into_iter()
@@ -245,38 +389,124 @@ pub fn verdicts<'a>(
             validator
                 .iter_errors(&instance.value)
                 .next()
-                .map(|error| format!("{} at {}", error, error.instance_path()))
+                .map(|error| Refusal {
+                    message: error.to_string(),
+                    at: error.instance_path().to_string(),
+                })
         })
         .collect())
 }
 
+/// An approved verdict difference: the instance `label`, which the oracle's
+/// schema `schema` (a document's file name) refuses at `at` and Rust's
+/// accepts. Each is an entry of `tests/golden/APPROVED_DIFFS.toml`, named by
+/// `ledger`, and must still occur: an allowance no comparison uses is stale.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Allowance {
+    /// The instance's label (`<source>:<path or case>`).
+    pub label: &'static str,
+    /// The file name of the document it applies to.
+    pub schema: &'static str,
+    /// Where the oracle's schema refuses it.
+    pub at: &'static str,
+    /// The ledger entry that records the difference.
+    pub ledger: &'static str,
+}
+
+/// The approved verdict differences.
+pub const ALLOWANCES: [Allowance; 1] = [Allowance {
+    // `references: null` (objects_cases.toml `rule-configurations-null`):
+    // the model accepts it, the oracle's inlined definition refused it.
+    label: "object-case:rule-configurations-null",
+    schema: "rule.1.1.schema.json",
+    at: "/references",
+    ledger: "schema-references-null",
+}];
+
+/// What one comparison found.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct Tally {
+    /// Instances validated against both schemas.
+    pub compared: usize,
+    /// Instances both schemas accept.
+    pub accepted: usize,
+    /// Instances both schemas refuse.
+    pub refused: usize,
+    /// The allowances that matched a difference.
+    pub allowed: Vec<Allowance>,
+}
+
 /// Compares `oracle` and `rust` on `instances`: pushes a problem for each
-/// instance only one of them accepts, and returns the number compared.
+/// instance only one of them accepts, unless one of `allowances` approves
+/// that difference, and a problem when the comparison is vacuous: no
+/// instance both accept, or none both refuse (a document handed instances
+/// of another kind refuses them all, and agrees).
 pub fn compare(
     name: &str,
     oracle: &Value,
     rust: &Value,
     instances: &[&Instance],
+    allowances: &[Allowance],
     problems: &mut Vec<String>,
-) -> Result<usize> {
+) -> Result<Tally> {
     let oracle_verdicts = verdicts(oracle, instances.iter().copied())
         .with_context(|| format!("{name}: the oracle's schema"))?;
     let rust_verdicts = verdicts(rust, instances.iter().copied())
         .with_context(|| format!("{name}: the schema Rust generates"))?;
+    let file_name = name.rsplit(['/', ' ']).next().unwrap_or(name);
+    let mut tally = Tally {
+        compared: instances.len(),
+        ..Tally::default()
+    };
     for ((instance, oracle), rust) in instances.iter().zip(oracle_verdicts).zip(rust_verdicts) {
         match (oracle, rust) {
+            (None, None) => tally.accepted += 1,
+            (Some(_), Some(_)) => tally.refused += 1,
             (None, Some(reason)) => problems.push(format!(
                 "{name}: {}: the oracle's schema accepts it, Rust's refuses it ({reason})",
                 instance.label
             )),
-            (Some(reason), None) => problems.push(format!(
-                "{name}: {}: the oracle's schema refuses it ({reason}), Rust's accepts it",
-                instance.label
-            )),
-            _ => {}
+            (Some(reason), None) => {
+                if let Some(allowance) = allowances.iter().find(|allowance| {
+                    allowance.label == instance.label
+                        && allowance.schema == file_name
+                        && allowance.at == reason.at
+                }) {
+                    tally.allowed.push(*allowance);
+                } else {
+                    problems.push(format!(
+                        "{name}: {}: the oracle's schema refuses it ({reason}), Rust's accepts it",
+                        instance.label
+                    ));
+                }
+            }
         }
     }
-    Ok(instances.len())
+    if tally.accepted == 0 {
+        problems.push(format!(
+            "{name}: no instance is accepted by both schemas, so the comparison proves nothing"
+        ));
+    }
+    if tally.refused == 0 {
+        problems.push(format!(
+            "{name}: no instance is refused by both schemas, so the comparison proves nothing"
+        ));
+    }
+    Ok(tally)
+}
+
+/// A problem for each allowance no comparison used.
+pub fn stale_allowances(allowances: &[Allowance], used: &[Allowance]) -> Vec<String> {
+    allowances
+        .iter()
+        .filter(|allowance| !used.contains(allowance))
+        .map(|allowance| {
+            format!(
+                "the approved difference `{}` ({} on {}) no longer occurs: remove its allowance",
+                allowance.ledger, allowance.label, allowance.schema
+            )
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -302,23 +532,151 @@ mod tests {
         let only_oracle = instance(json!({"a": "y"}));
         let mut problems = Vec::new();
         let all = [&accepted, &refused, &only_oracle];
+        let tally = compare("s", &oracle, &same, &all, &[], &mut problems).unwrap();
         assert_eq!(
-            compare("s", &oracle, &same, &all, &mut problems).unwrap(),
-            3
+            tally,
+            Tally {
+                compared: 3,
+                accepted: 2,
+                refused: 1,
+                allowed: Vec::new()
+            }
         );
         assert!(problems.is_empty(), "{problems:#?}");
-        compare("s", &oracle, &narrower, &all, &mut problems).unwrap();
+        compare("s", &oracle, &narrower, &all, &[], &mut problems).unwrap();
         assert_eq!(problems.len(), 1, "{problems:#?}");
         assert!(
             problems[0].starts_with("s: t: the oracle's schema accepts it, Rust's refuses it"),
             "{problems:#?}"
         );
         problems.clear();
-        compare("s", &narrower, &oracle, &all, &mut problems).unwrap();
+        compare("s", &narrower, &oracle, &all, &[], &mut problems).unwrap();
+        assert_eq!(problems.len(), 1, "{problems:#?}");
         assert!(
             problems[0].contains("the oracle's schema refuses it")
                 && problems[0].ends_with("Rust's accepts it"),
             "{problems:#?}"
+        );
+    }
+
+    #[test]
+    fn a_comparison_where_both_accept_nothing_or_refuse_nothing_is_a_problem() {
+        let schema = json!({"type": "object", "required": ["a"]});
+        let with_a = instance(json!({"a": 1}));
+        let without_a = instance(json!({"b": 1}));
+        // Instances of another kind: both schemas refuse every one, and agree.
+        let mut problems = Vec::new();
+        compare("doc", &schema, &schema, &[&without_a], &[], &mut problems).unwrap();
+        assert_eq!(
+            problems,
+            ["doc: no instance is accepted by both schemas, so the comparison proves nothing"]
+        );
+        let mut problems = Vec::new();
+        compare("doc", &schema, &schema, &[&with_a], &[], &mut problems).unwrap();
+        assert_eq!(
+            problems,
+            ["doc: no instance is refused by both schemas, so the comparison proves nothing"]
+        );
+        let mut problems = Vec::new();
+        compare("doc", &schema, &schema, &[], &[], &mut problems).unwrap();
+        assert_eq!(problems.len(), 2, "{problems:#?}");
+        let mut problems = Vec::new();
+        compare(
+            "doc",
+            &schema,
+            &schema,
+            &[&with_a, &without_a],
+            &[],
+            &mut problems,
+        )
+        .unwrap();
+        assert!(problems.is_empty(), "{problems:#?}");
+    }
+
+    #[test]
+    fn an_allowance_approves_only_its_own_difference() {
+        let oracle = json!({"type": "object", "properties": {"r": {"type": "object"}}});
+        let rust = json!({"type": "object", "properties": {"r": {"type": ["object", "null"]}}});
+        let base = [instance(json!({})), instance(json!({"r": 1}))];
+        let null = Instance {
+            label: "object-case:n".to_owned(),
+            value: json!({"r": null}),
+        };
+        let allowance = Allowance {
+            label: "object-case:n",
+            schema: "rule.1.1.schema.json",
+            at: "/r",
+            ledger: "x",
+        };
+        let all = [&base[0], &base[1], &null];
+        let mut problems = Vec::new();
+        let tally = compare(
+            "case: .opentide/schemas/rule.1.1.schema.json",
+            &oracle,
+            &rust,
+            &all,
+            &[allowance],
+            &mut problems,
+        )
+        .unwrap();
+        assert!(problems.is_empty(), "{problems:#?}");
+        assert_eq!(tally.allowed, [allowance]);
+        assert!(stale_allowances(&[allowance], &tally.allowed).is_empty());
+        // Another document, another place or the other direction is not approved.
+        for (name, allowance, oracle, rust) in [
+            ("rule.1.0.schema.json", allowance, &oracle, &rust),
+            (
+                "rule.1.1.schema.json",
+                Allowance {
+                    at: "/s",
+                    ..allowance
+                },
+                &oracle,
+                &rust,
+            ),
+            ("rule.1.1.schema.json", allowance, &rust, &oracle),
+        ] {
+            let mut problems = Vec::new();
+            let tally = compare(name, oracle, rust, &all, &[allowance], &mut problems).unwrap();
+            assert_eq!(problems.len(), 1, "{name}: {problems:#?}");
+            assert!(tally.allowed.is_empty());
+            assert_eq!(
+                stale_allowances(&[allowance], &tally.allowed),
+                [
+                    "the approved difference `x` (object-case:n on rule.1.1.schema.json) no \
+                  longer occurs: remove its allowance"
+                ]
+            );
+        }
+    }
+
+    #[test]
+    fn the_object_cases_are_instances_and_the_null_references_case_is_among_them() {
+        let instances = object_case_instances(&crate::corpus::cli::repo_root()).unwrap();
+        assert!(instances.objects.len() > 50, "{}", instances.objects.len());
+        let null = instances
+            .objects
+            .iter()
+            .find(|instance| instance.label == ALLOWANCES[0].label)
+            .unwrap();
+        assert_eq!(null.value["references"], Value::Null);
+        let malformed = object_cases("[[case]]\nid = \"a\"\n");
+        assert!(malformed.is_err());
+    }
+
+    #[test]
+    fn a_fault_kind_that_cannot_be_applied_fails_the_comparison() {
+        let catalogue = load_catalogue(&corpora_dir().join("faults.toml")).unwrap();
+        let base = generate(&catalogue.base.options().unwrap());
+        let mut kinds = catalogue.kinds[..2].to_vec();
+        assert!(faults_of(&base, &kinds).is_ok());
+        // More targets than the base has files: the kind selects too few.
+        kinds[1].count = base.files.len() + 1;
+        let error = faults_of(&base, &kinds).unwrap_err();
+        assert!(
+            format!("{error:#}")
+                .starts_with(&format!("fault kind `{}`: select its targets", kinds[1].id)),
+            "{error:#}"
         );
     }
 

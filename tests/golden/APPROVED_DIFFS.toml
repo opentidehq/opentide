@@ -186,11 +186,18 @@
 #   declares `$schema` (draft 2020-12), and `visibility.toml`'s schema is
 #   titled `visibility.toml`.
 # - `schema-references-null`: `references: null` is accepted, as the model
-#   accepts it, where the oracle's inlined definition refused it (no corpus
-#   object or fault writes it, so no verdict differs).
+#   accepts it, where the oracle's inlined definition refused it. One compared
+#   object writes it, objects_cases.toml `rule-configurations-null`
+#   (rule::1.1): the comparison approves exactly that verdict difference
+#   (xtask/src/verdict.rs `ALLOWANCES`: that case, `rule.1.1.schema.json`,
+#   refused at `/references`) and fails if it stops occurring.
 # - `schema-dropdowns`: a vocabulary dropdown's Markdown leaves out empty
 #   lines and the icon placeholders the oracle wrote as empty strings, and
-#   writes the TLP as `**TLP:AMBER**` after the level.
+#   writes the TLP as `**TLP:AMBER**` after the level. An all-lower-case
+#   entry name is title-cased by English rules (the `titlecase` crate:
+#   `command and control` is `Command and Control`, `it's` is `It's`), where
+#   Python's `str.title()` capitalised every word and every letter after an
+#   apostrophe (`Command And Control`, `It'S`).
 # - `schema-defaults`: a `default` is schemars' (from the serde default),
 #   left out where the field has none; the configuration schemas are written
 #   with two-space indentation as before, keys sorted.

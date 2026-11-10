@@ -24,9 +24,13 @@
 //!   configuration_schemas.json`, from `configuration_schemas.py`), are
 //!   compared with Rust's by what they accept and refuse, not by their text
 //!   ([`crate::verdict`]): every object and configuration file of the
-//!   fixtures and of the fault catalogue, the configuration table's texts and
-//!   the bundled configuration files must get the same verdict from both.
-//!   The configuration router must be the same document. The text
+//!   fixtures and of the fault catalogue (every kind must apply), the object
+//!   and configuration tables' cases, the bundled configuration files and
+//!   the comparison's own probes must get the same verdict from both, but
+//!   for each approved difference (`verdict::ALLOWANCES`, which must still
+//!   occur). Each compared document must accept at least one instance and
+//!   refuse at least one, so a document handed the wrong kind of instance
+//!   fails. The configuration router must be the same document. The text
 //!   differences are listed in `tests/golden/APPROVED_DIFFS.toml`.
 //! - **Editor schemas** (committed): each object revision's schema in
 //!   `data/catalogs/tide/schemas/`, generated from the bundled configuration
@@ -42,7 +46,7 @@ use std::sync::Arc;
 use anyhow::{Context, Result, bail};
 use opentide_schema::configuration::resolve::{Instance, resolve};
 use opentide_schema::generate::configuration::{
-    ROUTER_NAME, configuration_router, configuration_schema_name, configuration_schemas, file_keys,
+    ROUTER_NAME, configuration_schema_name, configuration_schemas, file_keys,
 };
 use opentide_schema::generate::schema::{Sources, revision_schema};
 use opentide_schema::generate::workspace::{
@@ -482,6 +486,24 @@ fn judged_here(path: &str) -> bool {
         && !generated_here(path)
 }
 
+/// What a JSON Schema of the `schemas` phase validates.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SchemaKind {
+    /// `visibility.toml` (`.opentide/schemas/visibility.schema.json`).
+    Visibility,
+    /// An object revision (`.opentide/schemas/rule.1.1.schema.json`).
+    Object,
+}
+
+fn schema_kind(path: &str) -> SchemaKind {
+    let name = path.rsplit('/').next().unwrap_or(path);
+    if name.starts_with("visibility.") {
+        SchemaKind::Visibility
+    } else {
+        SchemaKind::Object
+    }
+}
+
 fn parse_json(label: &str, bytes: &[u8]) -> Result<Value> {
     serde_json::from_slice(bytes).with_context(|| format!("{label}: not JSON"))
 }
@@ -510,12 +532,15 @@ fn schema_verdicts(root: &Path) -> Result<(usize, Vec<String>)> {
     }
     instances.extend(verdict::fault_instances()?);
     instances.extend(verdict::configuration_case_instances(root)?);
+    instances.extend(verdict::object_case_instances(root)?);
+    instances.extend(verdict::probe_instances());
     let objects: Vec<&verdict::Instance> = instances.objects.iter().collect();
     let visibility: Vec<&verdict::Instance> =
         instances.configurations_of("visibility.toml").collect();
 
     let mut problems = Vec::new();
     let mut judged = 0;
+    let mut allowed = Vec::new();
     let cases = golden.join("cases");
     let blobs = golden.join("blobs");
     let mut generated: BTreeMap<String, Vec<Artifact>> = BTreeMap::new();
@@ -586,18 +611,20 @@ fn schema_verdicts(root: &Path) -> Result<(usize, Vec<String>)> {
             }
             let oracle = parse_json(&format!("{id}: {path}"), bytes)?;
             let rust = parse_json(&format!("Rust's {path}"), artifact.text.as_bytes())?;
-            let subjects = if path.contains("visibility") {
-                &visibility
-            } else {
-                &objects
+            let subjects = match schema_kind(&path) {
+                SchemaKind::Visibility => &visibility,
+                SchemaKind::Object => &objects,
             };
-            judged += verdict::compare(
+            let tally = verdict::compare(
                 &format!("{id}: {path}"),
                 &oracle,
                 &rust,
                 subjects,
+                &verdict::ALLOWANCES,
                 &mut problems,
             )?;
+            judged += tally.compared;
+            allowed.extend(tally.allowed);
         }
     }
 
@@ -610,19 +637,46 @@ fn schema_verdicts(root: &Path) -> Result<(usize, Vec<String>)> {
         .get("documents")
         .and_then(Value::as_object)
         .with_context(|| format!("{ORACLE_CONFIGURATION_SCHEMAS}: no `documents`"))?;
-    let rust_documents = configuration_schemas();
-    for name in documents.keys() {
-        if !rust_documents.iter().any(|(known, _)| known == name) {
+    let tally = configuration_verdicts(
+        documents,
+        &configuration_schemas(),
+        &instances,
+        &mut problems,
+    )?;
+    judged += tally.compared;
+    allowed.extend(tally.allowed);
+    problems.extend(verdict::stale_allowances(&verdict::ALLOWANCES, &allowed));
+    if judged == 0 && problems.is_empty() {
+        problems.push("no schema verdict was compared".to_owned());
+    }
+    Ok((judged, problems))
+}
+
+/// Compares the configuration documents Rust generates (`rust`, by file
+/// name) with the oracle's (`oracle`): each file only one side generates is
+/// a problem, the router must be the same document, and every other schema
+/// is compared by verdict on the configuration files routed to it. Returns
+/// the comparisons' sum.
+fn configuration_verdicts(
+    oracle: &serde_json::Map<String, Value>,
+    rust: &[(String, Value)],
+    instances: &Instances,
+    problems: &mut Vec<String>,
+) -> Result<verdict::Tally> {
+    let mut sum = verdict::Tally::default();
+    for name in oracle.keys() {
+        if !rust.iter().any(|(known, _)| known == name) {
             problems.push(format!("the oracle generates {name}, Rust does not"));
         }
     }
-    for (name, rust) in &rust_documents {
-        let Some(oracle) = documents.get(name) else {
+    for (name, document) in rust {
+        let Some(expected) = oracle.get(name) else {
             problems.push(format!("Rust generates {name}, the oracle does not"));
             continue;
         };
         if name == ROUTER_NAME {
-            if *oracle != configuration_router() {
+            // The router names schemas; it validates no file.
+            if expected != document {
                 problems.push(format!("{name}: differs from the oracle's"));
             }
             continue;
@@ -637,12 +691,20 @@ fn schema_verdicts(root: &Path) -> Result<(usize, Vec<String>)> {
             .filter(|(key, _)| keys.contains(key))
             .map(|(_, instance)| instance)
             .collect();
-        judged += verdict::compare(name, oracle, rust, &subjects, &mut problems)?;
+        let tally = verdict::compare(
+            name,
+            expected,
+            document,
+            &subjects,
+            &verdict::ALLOWANCES,
+            problems,
+        )?;
+        sum.compared += tally.compared;
+        sum.accepted += tally.accepted;
+        sum.refused += tally.refused;
+        sum.allowed.extend(tally.allowed);
     }
-    if judged == 0 && problems.is_empty() {
-        problems.push("no schema verdict was compared".to_owned());
-    }
-    Ok((judged, problems))
+    Ok(sum)
 }
 
 /// Compares what Rust generates with what case `id` recorded, by path:
@@ -883,5 +945,103 @@ mod tests {
                 .is_none()
         );
         assert!(editor_reference_text(&schema).ends_with("}\n"));
+    }
+
+    fn oracle_configuration_documents() -> serde_json::Map<String, Value> {
+        let text = std::fs::read_to_string(repo_root().join(ORACLE_CONFIGURATION_SCHEMAS)).unwrap();
+        let oracle: Value = serde_json::from_str(&text).unwrap();
+        oracle["documents"].as_object().unwrap().clone()
+    }
+
+    #[test]
+    fn the_configuration_documents_agree_with_the_oracles_and_a_changed_router_does_not() {
+        let oracle = oracle_configuration_documents();
+        let mut instances = verdict::configuration_case_instances(&repo_root()).unwrap();
+        instances.extend(verdict::probe_instances());
+        let rust = configuration_schemas();
+        let mut problems = Vec::new();
+        let tally = configuration_verdicts(&oracle, &rust, &instances, &mut problems).unwrap();
+        assert!(problems.is_empty(), "{problems:#?}");
+        assert!(tally.accepted > 0 && tally.refused > 0, "{tally:?}");
+
+        let mut changed = rust.clone();
+        let router = changed
+            .iter_mut()
+            .find(|(name, _)| name == ROUTER_NAME)
+            .map(|(_, document)| document)
+            .unwrap();
+        router["files"].as_object_mut().unwrap().insert(
+            "extra.toml".to_owned(),
+            serde_json::json!("extra.schema.json"),
+        );
+        let mut problems = Vec::new();
+        configuration_verdicts(&oracle, &changed, &instances, &mut problems).unwrap();
+        assert_eq!(
+            problems,
+            [format!("{ROUTER_NAME}: differs from the oracle's")]
+        );
+
+        // A document only one side generates is reported.
+        let mut fewer = rust.clone();
+        fewer.retain(|(name, _)| name != "sharing.schema.json");
+        let mut problems = Vec::new();
+        configuration_verdicts(&oracle, &fewer, &instances, &mut problems).unwrap();
+        assert_eq!(
+            problems,
+            ["the oracle generates sharing.schema.json, Rust does not"]
+        );
+    }
+
+    #[test]
+    fn the_probes_get_their_verdict_from_the_schemas_rust_generates() {
+        let rust = configuration_schemas();
+        let artifacts = committed_artifacts().unwrap();
+        let rule_1_0: Value = artifacts
+            .iter()
+            .find(|(path, _)| path.ends_with("/rule.1.0.schema.json"))
+            .map(|(_, text)| serde_json::from_str(text).unwrap())
+            .unwrap();
+        for (index, (path, text, accepted)) in verdict::PROBES.iter().enumerate() {
+            let mut instances = Instances::default();
+            instances.add("probe", path, text);
+            let (schema, instance) = if let Some(instance) = instances.objects.first() {
+                (&rule_1_0, instance)
+            } else {
+                let (key, instance) = instances.configurations.first().unwrap();
+                let name = configuration_schema_name(key);
+                let schema = rust
+                    .iter()
+                    .find(|(known, _)| *known == name)
+                    .map(|(_, schema)| schema)
+                    .unwrap();
+                (schema, instance)
+            };
+            let verdict = verdict::verdicts(schema, [instance]).unwrap().remove(0);
+            assert_eq!(
+                verdict.is_none(),
+                *accepted,
+                "probe {index} ({path}): {verdict:?}\n{text}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_visibility_schema_validates_visibility_files_and_any_other_objects() {
+        assert_eq!(
+            schema_kind(".opentide/schemas/visibility.1.0.schema.json"),
+            SchemaKind::Visibility
+        );
+        assert_eq!(
+            schema_kind(".opentide/schemas/visibility.schema.json"),
+            SchemaKind::Visibility
+        );
+        assert_eq!(
+            schema_kind(".opentide/schemas/rule.1.1.schema.json"),
+            SchemaKind::Object
+        );
+        assert_eq!(
+            schema_kind(".opentide/schemas/objective.1.0.schema.json"),
+            SchemaKind::Object
+        );
     }
 }
