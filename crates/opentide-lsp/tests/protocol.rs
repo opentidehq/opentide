@@ -469,6 +469,16 @@ fn code_actions_follow_the_context() {
     let found = actions(&mut lsp, json!({ "diagnostics": [diagnostics[0]] }));
     assert_eq!(found.len(), 1, "{found:#?}");
     assert_eq!(found[0]["title"], "Apply suggestion: where");
+    let edit = &found[0]["edit"]["changes"][uri][0];
+    assert_eq!(edit["range"]["start"]["character"], 16, "{edit}");
+    assert_eq!(edit["range"]["end"]["character"], 20, "{edit}");
+    // The diagnostic itself still covers the stage (plan §3 invariant 3).
+    assert!(
+        diagnostics[0]["range"]["end"]["character"]
+            .as_u64()
+            .unwrap()
+            > 20
+    );
     assert_eq!(found[0]["isPreferred"], true);
     assert_eq!(found[0]["diagnostics"][0], diagnostics[0]);
 
@@ -490,9 +500,57 @@ fn code_actions_follow_the_context() {
         .map(|e| e["newText"].as_str().unwrap())
         .collect();
     assert_eq!(texts, ["where", "project"]);
+    // Each replaces the operator's word, not its stage: the arguments stay (#887).
+    let ranges: Vec<(u64, u64)> = edits
+        .iter()
+        .map(|e| {
+            (
+                e["range"]["start"]["character"].as_u64().unwrap(),
+                e["range"]["end"]["character"].as_u64().unwrap(),
+            )
+        })
+        .collect();
+    assert_eq!(ranges, [(16, 20), (39, 45)], "{edits:#?}");
 
     let found = actions(&mut lsp, json!({ "diagnostics": [], "only": ["quickfix"] }));
     assert!(found.iter().all(|a| a["kind"] == "quickfix"), "{found:#?}");
+}
+
+/// #887: an unknown SPL command's fix replaces the command, not its stage.
+#[test]
+fn an_spl_command_fix_keeps_the_stage_s_arguments() {
+    let (mut lsp, _) = start(json!({ "capabilities": {} }));
+    let uri = "file:///tmp/typo.spl";
+    let text = "index=main | stast count by host";
+    open(&mut lsp, uri, "spl", text);
+    let diagnostics = published_for(&mut lsp, uri);
+    let typo: Vec<&Value> = diagnostics
+        .iter()
+        .filter(|d| d["code"] == "spl_unknown_command")
+        .collect();
+    assert_eq!(typo.len(), 1, "{diagnostics:#?}");
+    let found = lsp.request(
+        "textDocument/codeAction",
+        json!({
+            "textDocument": { "uri": uri },
+            "range": typo[0]["range"],
+            "context": { "diagnostics": [typo[0]] },
+        }),
+    )["result"]
+        .as_array()
+        .unwrap()
+        .clone();
+    assert_eq!(found.len(), 1, "{found:#?}");
+    assert_eq!(found[0]["title"], "Apply suggestion: stats");
+    let edit = &found[0]["edit"]["changes"][uri][0];
+    assert_eq!(edit["newText"], "stats");
+    assert_eq!(edit["range"]["start"]["character"], 13, "{edit}");
+    assert_eq!(edit["range"]["end"]["character"], 18, "{edit}");
+    // Applied, the edit keeps `count by host`.
+    let start = usize::try_from(edit["range"]["start"]["character"].as_u64().unwrap()).unwrap();
+    let end = usize::try_from(edit["range"]["end"]["character"].as_u64().unwrap()).unwrap();
+    let fixed = format!("{}stats{}", &text[..start], &text[end..]);
+    assert_eq!(fixed, "index=main | stats count by host");
 }
 
 /// P2.5: loads are logged, and a broken `visibility.toml` is shown once.

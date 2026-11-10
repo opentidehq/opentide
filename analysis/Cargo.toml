@@ -29,6 +29,9 @@ opentide-lsp.workspace = true
 opentide-compare.workspace = true
 # The Tide models as Python classes, opentide._native.models (UC-1.9, #815).
 opentide-schema = { workspace = true, features = ["python"] }
+# The Rust command line, for the commands ported to it (`cli_main`, run by
+# `python -m opentide.cli.rust`).
+opentide-cli.workspace = true
 
 [features]
 # PyO3's introspection data, from which `cargo xtask stubs` writes the

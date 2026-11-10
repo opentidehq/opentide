@@ -148,6 +148,27 @@ pub fn candidate(repo: &Path) -> Result<crate::golden::run::Engine> {
     })
 }
 
+/// The version the candidate reports (`opentide --version` prints
+/// `opentide <version>`): this repository's build, compared against the
+/// oracle's release version as [`opentide_compare::normalise::OPENTIDE_VERSION`].
+pub fn candidate_version(repo: &Path) -> Result<String> {
+    let opentide = repo.join(".venv").join("bin").join("opentide");
+    let output = std::process::Command::new(&opentide)
+        .arg("--version")
+        .env("NO_COLOR", "1")
+        .output()
+        .with_context(|| format!("run {} --version (uv sync --group dev)", opentide.display()))?;
+    let printed = String::from_utf8_lossy(&output.stdout);
+    version_of(&printed)
+        .with_context(|| format!("read the candidate's version from `{}`", printed.trim()))
+}
+
+/// The version in `opentide --version`'s output, `opentide <version>`.
+fn version_of(printed: &str) -> Option<String> {
+    let version = printed.trim().strip_prefix("opentide ")?.trim();
+    (!version.is_empty() && !version.contains(char::is_whitespace)).then(|| version.to_owned())
+}
+
 /// The UUIDs in this repository's package (`src/opentide`: its bundled
 /// vocabularies and data), which the editable install in `.venv` runs from;
 /// the oracle's are those of its installed wheel.
@@ -257,8 +278,10 @@ pub fn golden(
     complete: bool,
     report_path: Option<&Path>,
     full: bool,
+    (oracle_version, candidate_version): (&str, &str),
 ) -> Result<bool> {
     use opentide_compare::ledger::Usage;
+    use opentide_compare::normalise::opentide_version_in_run;
     let changelog = std::fs::read_to_string(repo.join("CHANGELOG.md"))
         .with_context(|| format!("read {}", repo.join("CHANGELOG.md").display()))?;
     let ledger = match read_ledger(&repo.join(LEDGER), &changelog) {
@@ -292,13 +315,18 @@ pub fn golden(
         let dir = cases.join(&actual.case.id);
         let recorded = crate::golden::recording::Recording::read(&dir, blobs)
             .with_context(|| format!("{}: not recorded", actual.case.id))?;
+        // Each side's own version, the exact string it reports, is not behaviour.
+        let mut oracle_run = run_of(&recorded);
+        opentide_version_in_run(&mut oracle_run, oracle_version);
+        let mut candidate_run = run_of(actual);
+        opentide_version_in_run(&mut candidate_run, candidate_version);
         let report = opentide_compare::compare(
             opentide_compare::Case {
                 command: &actual.case.command,
                 id: &actual.case.id,
             },
-            &run_of(&recorded),
-            &run_of(actual),
+            &oracle_run,
+            &candidate_run,
             &ledger,
             &mut usage,
         );
@@ -353,4 +381,20 @@ pub fn golden(
         eprintln!("{line}");
     }
     Ok(passed)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::version_of;
+
+    #[test]
+    fn reads_the_version_opentide_prints() {
+        assert_eq!(
+            version_of("opentide 0.23.1.dev719+g1f903689.d20261110\n").as_deref(),
+            Some("0.23.1.dev719+g1f903689.d20261110")
+        );
+        assert_eq!(version_of("opentide \n"), None);
+        assert_eq!(version_of("usage: opentide\n"), None);
+        assert_eq!(version_of("opentide 1 2\n"), None);
+    }
 }

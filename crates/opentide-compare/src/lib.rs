@@ -401,15 +401,43 @@ impl Comparison<'_> {
                 _ => None,
             })
             .collect();
+        let blocks: Vec<LineBlock> = self
+            .ledger
+            .entries_for(self.case.command, self.case.id, target)
+            .filter_map(|(index, entry)| match &entry.rule {
+                Rule::Lines {
+                    oracle: expected_oracle,
+                    candidate: expected_candidate,
+                } => Some((
+                    index,
+                    expected_oracle
+                        .iter()
+                        .map(|l| l.as_bytes().to_vec())
+                        .collect(),
+                    expected_candidate
+                        .iter()
+                        .map(|l| l.as_bytes().to_vec())
+                        .collect(),
+                )),
+                _ => None,
+            })
+            .collect();
+        let candidate_lines: Vec<&[u8]> = candidate.split_inclusive(|b| *b == b'\n').collect();
+        let oracle_lines: Vec<Vec<u8>> = oracle
+            .split_inclusive(|b| *b == b'\n')
+            .map(<[u8]>::to_vec)
+            .collect();
+        let (oracle_lines, applied) = apply_blocks(oracle_lines, &candidate_lines, &blocks);
+        for index in applied {
+            self.approve(target, index);
+        }
         // Exact, line by line: an entry approves line N only where the
         // oracle's line N is its oracle text and the candidate's line N is its
         // candidate text, each the whole line without its newline. The line
         // then reads as the candidate's, keeping the oracle's line ending, so
         // a different ending is still reported. Every other line is compared
         // as it is.
-        let oracle_lines: Vec<&[u8]> = oracle.split_inclusive(|b| *b == b'\n').collect();
-        let candidate_lines: Vec<&[u8]> = candidate.split_inclusive(|b| *b == b'\n').collect();
-        let mut rewritten: Vec<Vec<u8>> = oracle_lines.iter().map(|line| line.to_vec()).collect();
+        let mut rewritten: Vec<Vec<u8>> = oracle_lines.clone();
         let mut applied = std::collections::BTreeSet::new();
         for (number, line) in oracle_lines.iter().enumerate() {
             let Some(other) = candidate_lines.get(number) else {
@@ -496,6 +524,62 @@ impl Comparison<'_> {
             }
         }
     }
+}
+
+/// A `lines` entry: its index, the oracle's lines and the candidate's.
+type LineBlock = (usize, Vec<Vec<u8>>, Vec<Vec<u8>>);
+
+/// The oracle's lines with each `lines` entry applied: where the oracle's
+/// lines from N are an entry's oracle lines and the candidate's, from the
+/// same place, its candidate lines, the oracle reads the candidate's lines
+/// there; the place moves by what each block added or removed. The entries
+/// that applied, by index.
+fn apply_blocks(
+    oracle_lines: Vec<Vec<u8>>,
+    candidate_lines: &[&[u8]],
+    blocks: &[LineBlock],
+) -> (Vec<Vec<u8>>, std::collections::BTreeSet<usize>) {
+    let mut applied = std::collections::BTreeSet::new();
+    if blocks.is_empty() {
+        return (oracle_lines, applied);
+    }
+    let body = |line: &[u8]| split_ending(line).0.to_vec();
+    let mut rewritten: Vec<Vec<u8>> = Vec::new();
+    let mut number = 0;
+    while number < oracle_lines.len() {
+        let at = rewritten.len();
+        let found = blocks.iter().find(|(_, from, to)| {
+            number + from.len() <= oracle_lines.len()
+                && at + to.len() <= candidate_lines.len()
+                && from
+                    .iter()
+                    .zip(&oracle_lines[number..])
+                    .all(|(want, line)| body(line) == *want)
+                && to
+                    .iter()
+                    .zip(&candidate_lines[at..])
+                    .all(|(want, line)| body(line) == *want)
+        });
+        if let Some((index, from, to)) = found {
+            let ending = split_ending(&oracle_lines[number + from.len() - 1])
+                .1
+                .to_vec();
+            for (position, line) in to.iter().enumerate() {
+                let end: &[u8] = if position + 1 == to.len() {
+                    &ending
+                } else {
+                    b"\n"
+                };
+                rewritten.push([line.as_slice(), end].concat());
+            }
+            applied.insert(*index);
+            number += from.len();
+        } else {
+            rewritten.push(oracle_lines[number].clone());
+            number += 1;
+        }
+    }
+    (rewritten, applied)
 }
 
 fn describe(state: &FileState) -> &'static str {

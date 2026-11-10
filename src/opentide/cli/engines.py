@@ -71,10 +71,17 @@ class RustCommand:
     side_effects: bool = False
 
 
+#: The Rust command line compiled into ``opentide._native`` (:mod:`opentide.cli.rust`).
+RUST_CLI: tuple[str, ...] = (sys.executable, "-m", "opentide.cli.rust")
+
 #: Command paths (``("validate",)``, ``("generate", "docs")``) that have a Rust
-#: implementation. Every command has its Python one. Empty until a command is
-#: ported (UC-2.7, UC-3.x); a path is added here in the change that ports it.
-RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {}
+#: implementation. Every command has its Python one; a path is added here in
+#: the change that ports it. ``info`` (every section) and ``rules unreviewed``
+#: came with UC-2.4 (#819).
+RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
+    ("info",): RustCommand(launch=RUST_CLI),
+    ("rules", "unreviewed"): RustCommand(launch=RUST_CLI),
+}
 
 
 def python_launch() -> tuple[str, ...]:
