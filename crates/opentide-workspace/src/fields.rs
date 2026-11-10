@@ -136,7 +136,7 @@ pub fn role_values(root: &Node, role: FieldRole) -> Vec<(String, String)> {
     let mut seen = BTreeSet::new();
     for path in role_paths(schema_id(root).as_deref(), role) {
         let mut values = Vec::new();
-        resolve(root, &path, &mut values);
+        resolve(root, path, &mut values);
         for value in values {
             let mut out = Vec::new();
             names(value, &mut out);
@@ -155,7 +155,7 @@ pub fn platforms(root: &Node) -> BTreeSet<String> {
     let mut out = BTreeSet::new();
     for path in role_paths(schema_id(root).as_deref(), FieldRole::Configurations) {
         let mut values = Vec::new();
-        resolve(root, &path, &mut values);
+        resolve(root, path, &mut values);
         for value in values {
             if let Value::Map(entries) = &value.value {
                 out.extend(
