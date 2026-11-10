@@ -53,12 +53,41 @@ fn candidate(result: Result<Json, CompileError>) -> String {
     }
 }
 
+/// `text` (compact JSON) with the workspace `ws` written `<WS>` and the rest
+/// of each path under it with `/` separators, as the oracle's record writes
+/// it on every system.
+fn in_workspace(text: &str, ws: &str) -> String {
+    let escaped = ws.replace('\\', "\\\\");
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(at) = rest.find(&escaped) {
+        out.push_str(&rest[..at]);
+        out.push_str("<WS>");
+        rest = &rest[at + escaped.len()..];
+        let end = rest.find('"').unwrap_or(rest.len());
+        out.push_str(&rest[..end].replace("\\\\", "/"));
+        rest = &rest[end..];
+    }
+    out.push_str(rest);
+    out
+}
+
+#[test]
+fn a_windows_path_reads_as_the_record_writes_it() {
+    let text = r#"{"file":"D:\\a\\corpus\\objects\\rules\\x.yaml","q":"a\\b"}"#;
+    assert_eq!(
+        in_workspace(text, r"D:\a\corpus"),
+        r#"{"file":"<WS>/objects/rules/x.yaml","q":"a\\b"}"#
+    );
+    assert_eq!(
+        in_workspace(r#"{"file":"/w/c/objects/x.yaml"}"#, "/w/c"),
+        r#"{"file":"<WS>/objects/x.yaml"}"#
+    );
+}
+
 #[test]
 fn the_compile_corpus_compiles_as_the_oracle_compiles_it() {
-    let corpus = repo()
-        .join("tests/golden/payloads/corpus")
-        .canonicalize()
-        .unwrap();
+    let corpus = dunce::canonicalize(repo().join("tests/golden/payloads/corpus")).unwrap();
     let record: Value = serde_json::from_str(
         &std::fs::read_to_string(repo().join("tests/golden/payloads/oracle.json")).unwrap(),
     )
@@ -101,7 +130,7 @@ fn the_compile_corpus_compiles_as_the_oracle_compiles_it() {
         );
         let mut check = |what: String, oracle: String, mine: String| {
             compared += 1;
-            if oracle != mine.replace(&ws, "<WS>") {
+            if oracle != in_workspace(&mine, &ws) {
                 differences.push(format!(
                     "{uuid} {platform} {what}\n  oracle:    {oracle}\n  candidate: {mine}"
                 ));

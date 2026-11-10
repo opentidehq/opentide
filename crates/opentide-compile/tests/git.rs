@@ -58,7 +58,7 @@ struct History {
 
 fn history() -> History {
     let dir = tempfile::tempdir().unwrap();
-    let root = dir.path().canonicalize().unwrap();
+    let root = dunce::canonicalize(dir.path()).unwrap();
     git_cmd(&root, &["init", "-q", "-b", "main"]);
     write(&root, "objects/rules/r1.yaml", "a: 1\n");
     let a = commit(&root, "a");
@@ -279,7 +279,7 @@ fn azure_reads_the_first_parent_and_the_pull_requests_merge() {
 #[test]
 fn a_ci_run_without_a_checkout_names_where_it_looked() {
     let dir = tempfile::tempdir().unwrap();
-    let root = dir.path().canonicalize().unwrap();
+    let root = dunce::canonicalize(dir.path()).unwrap();
     let error = changed(&root, &[("CI", "true")]).unwrap_err();
     assert_eq!(error, GitError::MissingCheckout(root.clone()));
     let env = |_: &str| None::<String>;

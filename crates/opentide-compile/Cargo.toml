@@ -40,6 +40,9 @@ serde_json.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
+# Paths without Windows' verbatim prefix (`\\?\`), which git and the oracle's
+# paths do not use.
+dunce = "1"
 proptest.workspace = true
 # Repositories the git baseline's tests build (the version xtask locks).
 tempfile = "3"
