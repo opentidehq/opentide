@@ -277,6 +277,70 @@ fn azure_reads_the_first_parent_and_the_pull_requests_merge() {
 }
 
 #[test]
+fn a_merge_whose_second_parent_is_not_the_requests_head_reads_the_origin_branches() {
+    let h = history();
+    // origin's branches put the request at b on top of a: the diff a..b
+    // edits r1, where the merge's first parent (b) would give r2.
+    git_cmd(&h.root, &["update-ref", "refs/remotes/origin/main", &h.a]);
+    git_cmd(
+        &h.root,
+        &["update-ref", "refs/remotes/origin/feature", &h.b],
+    );
+    let azure = changed(
+        &h.root,
+        &[
+            ("TF_BUILD", "True"),
+            ("BUILD_REASON", "PullRequest"),
+            ("SYSTEM_PULLREQUEST_SOURCEBRANCH", "refs/heads/feature"),
+            ("SYSTEM_PULLREQUEST_TARGETBRANCHNAME", "main"),
+            ("SYSTEM_PULLREQUEST_SOURCECOMMITID", &h.b),
+            ("BUILD_SOURCEVERSION", &h.m),
+        ],
+    )
+    .unwrap();
+    assert_eq!(azure, ["objects/rules/r1.yaml"]);
+    // GitLab: the source head is read instead, from the diff base.
+    let gitlab = changed(
+        &h.root,
+        &[
+            ("CI", "true"),
+            ("CI_PIPELINE_SOURCE", "merge_request_event"),
+            ("CI_MERGE_REQUEST_EVENT_TYPE", "merged_result"),
+            ("CI_MERGE_REQUEST_SOURCE_BRANCH_SHA", &h.b),
+            ("CI_MERGE_REQUEST_DIFF_BASE_SHA", &h.a),
+            ("CI_COMMIT_SHA", &h.m),
+        ],
+    )
+    .unwrap();
+    assert_eq!(gitlab, ["objects/rules/r1.yaml"]);
+}
+
+#[test]
+fn a_shallow_clone_names_the_parent_it_does_not_hold() {
+    let h = history();
+    let dir = tempfile::tempdir().unwrap();
+    let shallow = dunce::canonicalize(dir.path()).unwrap().join("shallow");
+    let path = h.root.to_string_lossy().replace('\\', "/");
+    let url = format!("file:///{}", path.trim_start_matches('/'));
+    git_cmd(
+        dir.path(),
+        &[
+            "clone",
+            "-q",
+            "--depth",
+            "1",
+            &url,
+            &shallow.to_string_lossy(),
+        ],
+    );
+    // HEAD is the merge; its first parent, b, is not in the clone.
+    assert_eq!(
+        changed(&shallow, &[]).unwrap_err(),
+        GitError::Failed(format!("Could not find git commit {}", h.b))
+    );
+}
+
+#[test]
 fn a_ci_run_without_a_checkout_names_where_it_looked() {
     let dir = tempfile::tempdir().unwrap();
     let root = dunce::canonicalize(dir.path()).unwrap();

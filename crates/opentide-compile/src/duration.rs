@@ -184,11 +184,15 @@ mod tests {
         assert_eq!(sentinel("PT0S").unwrap(), "PT0S");
         assert_eq!(sentinel(" 5m ").unwrap(), "PT05M00S");
         assert_eq!(sentinel("PT25H").unwrap(), "P1DT01H00M00S");
+        // Days with minutes and no hours: the hours field still written.
+        assert_eq!(sentinel("P1DT30M").unwrap(), "P1DT00H30M00S");
     }
 
     #[test]
     fn sentinel_refuses_what_the_oracle_refuses() {
-        for text in ["P", "PT", "P1DT", "1H", "h", "1x", "", "PT1H1D", "1m1h"] {
+        for text in [
+            "P", "PT", "P1DT", "1H", "h", "1x", "", "PT1H1D", "1m1h", "1h1h", "PT1H1H", "P1D1D",
+        ] {
             assert!(sentinel(text).is_err(), "{text}");
         }
         assert_eq!(

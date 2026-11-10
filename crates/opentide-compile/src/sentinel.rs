@@ -464,6 +464,7 @@ mod tests {
         assert_eq!(tactic("Command and Control"), Some("CommandAndControl"));
         assert_eq!(tactic("stealth"), Some("DefenseEvasion"));
         assert_eq!(tactic("Defense Impairment"), Some("DefenseEvasion"));
+        assert_eq!(tactic("Evasion"), Some("DefenseEvasion"));
         assert_eq!(tactic("Privilege Escalation"), Some("PrivilegeEscalation"));
         assert_eq!(tactic("Network Effects"), None);
     }
