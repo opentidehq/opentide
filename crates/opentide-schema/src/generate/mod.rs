@@ -12,16 +12,22 @@
 //!   derives do not keep;
 //! - [`template`]: YAML skeletons (`pydantic_skeleton.py`);
 //! - [`snippets`]: VS Code snippets (`vscode_snippets.py`);
-//! - [`workspace`]: the files of the `templates` and `snippets` phases and
-//!   the router, from a workspace's resolved configuration.
+//! - [`schema`]: the editor schema of each object revision and of
+//!   `visibility.toml` (UC-1.8b, #900), schemars' schema with opentide's
+//!   transforms;
+//! - [`configuration`]: each configuration file's schema and their router;
+//! - [`workspace`]: the files of the `schemas`, `templates` and `snippets`
+//!   phases, from a workspace's resolved configuration.
 //!
 //! The module is I/O-free: hosts (`cargo xtask codegen`, the CLI) write the
 //! files.
 
 pub mod annotate;
+pub mod configuration;
 pub mod json;
 pub mod models;
 pub mod router;
+pub mod schema;
 pub mod snippets;
 pub mod template;
 pub mod workspace;
