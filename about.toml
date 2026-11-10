@@ -12,9 +12,6 @@ accepted = [
   "Unicode-DFS-2016",
   "Zlib",
   "EUPL-1.2",
-  # notify (opentide-workspace `--watch`, UC-2.3 #818): a public-domain
-  # dedication, distributable with EUPL-1.2 code. Pending maintainer approval.
-  "CC0-1.0",
 ]
 targets = ["x86_64-unknown-linux-gnu", "aarch64-apple-darwin", "x86_64-pc-windows-msvc"]
 ignore-build-dependencies = true
