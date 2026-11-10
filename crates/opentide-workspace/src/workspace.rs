@@ -230,11 +230,14 @@ impl Workspace {
         self.stats.file_reads += fresh.len();
         self.stats.parses += fresh.len();
         self.parsed.extend(fresh);
+        // Messages show paths from the working directory, both resolved, as
+        // `_shown_path` compares them (links, `\\?\` on Windows, `/private`).
+        let display_base = self.fs.resolve(&self.options.roots.cwd);
         self.index = Arc::new(index::assemble(
             &self.config.families,
             &scans,
             &self.parsed,
-            &self.options.roots.cwd,
+            &display_base,
         ));
         missing
     }

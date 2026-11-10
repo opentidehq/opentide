@@ -203,6 +203,15 @@ mod loading {
         assert_eq!(index.get("rule", "same").unwrap().file_name(), "b.yaml");
         // Another family keeps its own: id_uniqueness reports that one.
         assert!(index.get("threat", "same").is_some());
+        // The working directory is resolved before it is compared, as
+        // `_shown_path` resolves it (a link, `\\?\` on Windows).
+        let mut indirect = options();
+        indirect.roots.cwd = PathBuf::from("/ws/sub/..");
+        let workspace = Workspace::open(Arc::clone(&fs) as Arc<dyn FileSystem>, indirect).unwrap();
+        assert_eq!(
+            workspace.index().duplicates[0].message,
+            "UUID same is also used by objects/rules/b.yaml"
+        );
         // Outside the working directory the path is shown whole.
         opts.roots.cwd = PathBuf::from("/elsewhere");
         let workspace = Workspace::open(Arc::clone(&fs) as Arc<dyn FileSystem>, opts).unwrap();
