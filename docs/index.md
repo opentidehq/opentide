@@ -18,10 +18,10 @@ description: Spec-driven development for agentic detection engineering — valid
 
 ## Quick start
 
-The latest release is **[0.24.0](./usage/releases.md)** (9 November 2026). The first public release was **0.1.0**.
+The latest release is **[0.24.1](./usage/releases.md)** (10 November 2026). The first public release was **0.1.0**.
 
 ```bash
-pip install 'opentide==0.24.0'
+pip install 'opentide==0.24.1'
 export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 
 opentide setup --yes --platform sentinel --ci github

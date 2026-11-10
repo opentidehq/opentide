@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+## [0.24.1] — 2026-11-10
+
+`pip install opentide` works again: Typer 0.29.0 crashed every opentide on start, and opentide now requires a Typer it runs on. The diagnostic codes reference publishes on opentide.org again.
+
 ### Fixed
 
 - **`pip install opentide` no longer installs a Typer that crashes it.** Typer 0.29.0 removed private modules and options opentide's CLI is built on, so `opentide setup` failed with `No module named 'typer._types'` and `opentide commands` crashed. opentide now requires `typer>=0.27.0,<0.29`, and `setup ci` declares its providers with Typer's public API. An invalid provider names the valid ones and suggests the closest.
@@ -1598,7 +1602,8 @@ export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate --strict
 ```
 
-[Unreleased]: https://github.com/opentidehq/opentide/compare/v0.24.0...HEAD
+[Unreleased]: https://github.com/opentidehq/opentide/compare/v0.24.1...HEAD
+[0.24.1]: https://github.com/opentidehq/opentide/releases/tag/v0.24.1
 [0.24.0]: https://github.com/opentidehq/opentide/releases/tag/v0.24.0
 [0.23.0]: https://github.com/opentidehq/opentide/releases/tag/v0.23.0
 [0.22.0]: https://github.com/opentidehq/opentide/releases/tag/v0.22.0
