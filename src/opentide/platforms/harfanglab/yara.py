@@ -322,6 +322,8 @@ class YaraAdvisory:
     code: str
     message: str
     offset: int
+    #: The YARA rule it is about.
+    rule: str = ""
 
 
 def _meta_span(code: str, header: YaraRuleHeader) -> tuple[int, int] | None:
@@ -366,6 +368,7 @@ def advisories(signature: str) -> Iterator[YaraAdvisory]:
                 "yara_meta_missing",
                 f"YARA rule {header.name!r} has no meta context; HarfangLab expects one",
                 header.start,
+                header.name,
             )
             continue
         value, written, offset = found
@@ -375,6 +378,7 @@ def advisories(signature: str) -> Iterator[YaraAdvisory]:
                 f"YARA rule {header.name!r} sets meta context to {written}, not a string; "
                 f"HarfangLab expects {_CONTEXTS_TEXT}",
                 offset,
+                header.name,
             )
         elif not context_accepted(value):
             yield YaraAdvisory(
@@ -382,6 +386,7 @@ def advisories(signature: str) -> Iterator[YaraAdvisory]:
                 f"YARA rule {header.name!r} sets meta context {value!r}; "
                 f"HarfangLab expects {_CONTEXTS_TEXT}",
                 offset,
+                header.name,
             )
 
 
@@ -734,3 +739,36 @@ def _line_start(text: str, line: int) -> int:
     for _ in range(line):
         offset = text.index("\n", offset) + 1
     return offset
+
+
+#: Which advisory a finding is: ``(code, form, YARA rule)``. The form is
+#: ``signature`` or ``decomposed``; the rule is a signature rule's name, ``""``
+#: in the decomposed form, which assembles one rule.
+AdvisoryKey = tuple[str, str, str]
+
+
+def advisory_keys(text: str) -> set[AdvisoryKey]:
+    """The advisories opentide's own check reports on a rule file's *text*, by key."""
+    site = signature_in(text)
+    if site is not None:
+        return {(item.code, "signature", item.rule) for item in advisories(site.value)}
+    decomposed = decomposed_context_in(text)
+    found = decomposed_advisory(*decomposed[:2]) if decomposed else None
+    return {(found[0], "decomposed", "")} if found else set()
+
+
+def engine_advisory_key(text: str, code: str, line: int) -> AdvisoryKey:
+    """The key of an engine *code* reported at 0-based *line* of a rule file's *text*.
+
+    In the signature form the rule is the one whose header is the last at or
+    before *line*; a finding before every header has the first rule's.
+    """
+    site = signature_in(text)
+    if site is None:
+        return code, "decomposed", ""
+    rule = ""
+    for header in rule_headers(site.value):
+        if site.line_of(header.start) > line and rule:
+            break
+        rule = header.name
+    return code, "signature", rule

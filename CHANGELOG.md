@@ -24,6 +24,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 ### Changed
 
 - **The analysis engine is language-server at the head of its YARA work ([#165](https://github.com/opentidehq/language-server/issues/165))**, pinned by git revision until the release that ships it. Building opentide from source needs Rust 1.95 or later, which the engine's YARA parser requires.
+- **The analysis engine checks the HarfangLab YARA rule deploy assembles, byte for byte** (language-server [#235](https://github.com/opentidehq/language-server/pull/235) and [#236](https://github.com/opentidehq/language-server/pull/236), pinned at `d8a7c66`). A `"` in a reference, a tag, `arch`, `meta.context` or `os`, which deploy writes into the rule unescaped, is `yara_parse_error` at that field, as libyara refuses it. The engine's Tide catalog knows `yara.signature`, so `opentide-lsp` run on its own agrees with `opentide validate`. `lint` shows `harfanglab_yara_context` and `yara_meta_missing` once per YARA rule, where both opentide and the engine find it.
 
 ## [0.24.1] — 2026-11-10
 

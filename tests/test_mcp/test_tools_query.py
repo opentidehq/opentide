@@ -257,3 +257,15 @@ def test_validate_query_harfanglab_live_is_unsupported() -> None:
     result = tools.tool_validate_query("rule a { condition: true }", "harfanglab", live=True)
     assert result["supported"] is False
     assert result["valid"] is None
+
+
+@pytest.mark.parametrize("context", ["file.pe,memory", "file.elf,file.macho"])
+def test_validate_query_takes_a_harfanglab_context_list(context: str) -> None:
+    """R7: any comma-joined list of the scan contexts is a HarfangLab context (1.3)."""
+    result = tools.tool_validate_query(
+        f'rule a {{\n  meta:\n    context = "{context}"\n  condition:\n    true\n}}\n',
+        "harfanglab",
+    )
+    assert result["valid"] is True
+    codes = [item["code"] for item in [*result["warnings"], *result["errors"]]]
+    assert "harfanglab_yara_context" not in codes

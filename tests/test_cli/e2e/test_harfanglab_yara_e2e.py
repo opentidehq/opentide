@@ -370,3 +370,48 @@ def test_lint_reads_a_merged_decomposed_context(invoke_cli, tide_corpus_repo: Pa
     found = [item for item in payload["findings"] if item["code"] in ADVISORIES]
     assert [item["code"] for item in found] == ["yara_meta_missing"]
     assert text.splitlines()[found[0]["yaml_line"]].strip() == "<<: {context: []}"
+
+
+#: A `"` in each field the decomposed deploy writes into the YARA rule unescaped: libyara
+#: refuses what deploy would send, and the engine checks the rule deploy assembles (R6).
+_DECOMPOSED_QUOTES = {
+    "references": (
+        (
+            "status: STAGING\nseverity",
+            "references:\n  public:\n    1: 'https://x.test/a\"b'\nstatus: STAGING\nseverity",
+        ),
+        ["references", "public", "1"],
+    ),
+    "tags": (
+        ('    action: "Alert & Block"\n', '    action: "Alert & Block"\n    tags: [\'a"b\']\n'),
+        ["configurations", "harfanglab", "tags", "0"],
+    ),
+    "arch": (
+        ("          - x86\n", "          - 'x\"64'\n"),
+        ["configurations", "harfanglab", "yara", "meta", "arch", "0"],
+    ),
+    "context": (
+        ("          - file\n", "          - 'fi\"le'\n"),
+        ["configurations", "harfanglab", "yara", "meta", "context", "0"],
+    ),
+    "os": (
+        ("        os: Windows\n", "        os: 'Win\"dows'\n"),
+        ["configurations", "harfanglab", "yara", "meta", "os"],
+    ),
+}
+
+
+@pytest.mark.parametrize("field", list(_DECOMPOSED_QUOTES))
+def test_a_quote_deploy_writes_unescaped_fails_at_its_field(
+    invoke_cli, tide_corpus_repo: Path, field: str
+) -> None:
+    (old, new), field_path = _DECOMPOSED_QUOTES[field]
+    text = (FIXTURES / "harfanglab-yara.yaml").read_text(encoding="utf-8")
+    assert old in text
+    text = text.replace(old, new, 1)
+    name = _add(tide_corpus_repo, "harfanglab-yara.yaml", text=text)
+    result = invoke_cli("validate", "--file", name)
+    assert result.exit_code == 1
+    [issue] = [i for i in _issues(parse_cli_json(result)) if i["code"] == "yara_parse_error"]
+    assert issue["field_path"] == field_path
+    assert '"' in text.splitlines()[issue["line"] - 1]

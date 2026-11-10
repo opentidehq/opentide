@@ -588,7 +588,7 @@ def _query_findings(root: Path, records: list[_ObjectRecord]) -> list[dict[str, 
         workspace,
     )
     from opentide.cli.ui.diagnostics import diagnostic_from_engine, engine_reference
-    from opentide.platforms.harfanglab.yara import ADVISORY_CODES, SIGNATURE_PATH
+    from opentide.platforms.harfanglab.yara import ADVISORY_CODES
 
     # The datasets visibility.toml declares, as validate and the editor see them.
     install_workspace_visibility(root)
@@ -602,8 +602,8 @@ def _query_findings(root: Path, records: list[_ObjectRecord]) -> list[dict[str, 
         for finding in check_file(space, record.path, record.text):
             if finding.severity == "error" or _in_placeholder(finding, lines, marked):
                 continue
-            if finding.code in ADVISORY_CODES and finding.field_path[:3] == SIGNATURE_PATH[:3]:
-                continue  # _harfanglab_yara_findings reports it, with or without the engine
+            if finding.code in ADVISORY_CODES and _reported_by_opentide(record, finding):
+                continue  # one finding per code, form and rule: opentide's, placed by key
             if (
                 engine_reference(finding.code) is None
                 and finding.code not in ELASTIC_ADVISORY_CODES
@@ -628,6 +628,22 @@ def _query_findings(root: Path, records: list[_ObjectRecord]) -> list[dict[str, 
                 }
             )
     return findings
+
+
+def _reported_by_opentide(record: _ObjectRecord, finding: Finding) -> bool:
+    """Whether opentide's own check reports the engine *finding*'s HarfangLab advisory too.
+
+    Both check the HarfangLab YARA profile. opentide's copy is placed on the
+    key a merge brings in and is there without the engine, so it is the one
+    shown, matched by code, form (signature or decomposed) and YARA rule. An
+    advisory only the engine reports is kept.
+    """
+    from opentide.platforms.harfanglab.yara import advisory_keys, engine_advisory_key
+
+    if record.text is None or "harfanglab" not in record.text:
+        return False
+    key = engine_advisory_key(record.text, finding.code, finding.line - 1)
+    return key in advisory_keys(record.text)
 
 
 def _harfanglab_yara_findings(record: _ObjectRecord) -> list[dict[str, object]]:
