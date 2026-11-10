@@ -1,0 +1,6728 @@
+{
+ "bundled": [
+  "deployment.toml",
+  "documentation.toml",
+  "lint.toml",
+  "paths.toml",
+  "platforms/carbon_black_cloud.toml",
+  "platforms/crowdstrike.toml",
+  "platforms/defender_for_endpoint.toml",
+  "platforms/elastic.toml",
+  "platforms/harfanglab.toml",
+  "platforms/sentinel.toml",
+  "platforms/sentinel_one.toml",
+  "platforms/splunk.toml",
+  "platforms/sysdig.toml",
+  "resources.toml",
+  "sharing.toml",
+  "visibility.toml"
+ ],
+ "cases": {
+  "carbon-black": [
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "tenants",
+     "0",
+     "setup",
+     "organizations",
+     "0"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/carbon_black_cloud.toml",
+    "message": "Input should be a valid string",
+    "severity": "error"
+   }
+  ],
+  "crowdstrike-harfanglab": [
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "tenants",
+     "0",
+     "setup",
+     "type"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/harfanglab.toml",
+    "message": "Input should be a valid string",
+    "severity": "error"
+   },
+   {
+    "code": "missing_field",
+    "context": {},
+    "field_path": [
+     "tenants",
+     "0",
+     "setup",
+     "source_id"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/harfanglab.toml",
+    "message": "required key is missing",
+    "severity": "error"
+   }
+  ],
+  "crowdstrike-setup": [
+   {
+    "code": "missing_field",
+    "context": {},
+    "field_path": [
+     "tenants",
+     "0",
+     "setup",
+     "api"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/crowdstrike.toml",
+    "message": "required key is missing",
+    "severity": "error"
+   },
+   {
+    "code": "missing_field",
+    "context": {},
+    "field_path": [
+     "tenants",
+     "0",
+     "setup",
+     "client_id"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/crowdstrike.toml",
+    "message": "required key is missing",
+    "severity": "error"
+   },
+   {
+    "code": "missing_field",
+    "context": {},
+    "field_path": [
+     "tenants",
+     "0",
+     "setup",
+     "client_secret"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/crowdstrike.toml",
+    "message": "required key is missing",
+    "severity": "error"
+   },
+   {
+    "code": "missing_field",
+    "context": {},
+    "field_path": [
+     "tenants",
+     "0",
+     "setup",
+     "customer_id"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/crowdstrike.toml",
+    "message": "required key is missing",
+    "severity": "error"
+   }
+  ],
+  "deep-nesting": [
+   {
+    "code": "config_parse",
+    "context": {},
+    "field_path": [],
+    "file_path": "/w/.opentide/configurations/paths.toml",
+    "message": "Not valid TOML: TOMLDecodeError.",
+    "severity": "error"
+   }
+  ],
+  "defender-parameters": [
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "tenants",
+     "0",
+     "parameters",
+     "device_groups"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/defender_for_endpoint.toml",
+    "message": "Input should be a valid list",
+    "severity": "error"
+   },
+   {
+    "code": "unknown_key",
+    "context": {},
+    "field_path": [
+     "tenants",
+     "0",
+     "parameters",
+     "x"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/defender_for_endpoint.toml",
+    "message": "unknown key",
+    "severity": "error"
+   }
+  ],
+  "deployment-clean": [],
+  "deployment-datetime": [
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "default_responders"
+    ],
+    "file_path": "/w/.opentide/configurations/deployment.toml",
+    "message": "Input should be a valid string",
+    "severity": "error"
+   }
+  ],
+  "deployment-empty-statuses": [
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "statuses"
+    ],
+    "file_path": "/w/.opentide/configurations/deployment.toml",
+    "message": "List should have at least 1 item after validation, not 0",
+    "severity": "error"
+   },
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "promotion"
+    ],
+    "file_path": "/w/.opentide/configurations/deployment.toml",
+    "message": "Input should be a valid dictionary or instance of PromotionSettings",
+    "severity": "error"
+   }
+  ],
+  "deployment-later-layer": [],
+  "deployment-missing-required": [
+   {
+    "code": "missing_field",
+    "context": {},
+    "field_path": [
+     "statuses",
+     "0",
+     "description"
+    ],
+    "file_path": "/w/.opentide/configurations/deployment.toml",
+    "message": "required key is missing",
+    "severity": "error"
+   },
+   {
+    "code": "missing_field",
+    "context": {},
+    "field_path": [
+     "statuses",
+     "0",
+     "strategy"
+    ],
+    "file_path": "/w/.opentide/configurations/deployment.toml",
+    "message": "required key is missing",
+    "severity": "error"
+   }
+  ],
+  "deployment-missing-required-partial": [],
+  "deployment-no-earlier": [
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "default_responders"
+    ],
+    "file_path": "/w/.opentide/configurations/deployment.toml",
+    "message": "Input should be a valid string",
+    "severity": "error"
+   },
+   {
+    "code": "missing_field",
+    "context": {},
+    "field_path": [
+     "statuses"
+    ],
+    "file_path": "/w/.opentide/configurations/deployment.toml",
+    "message": "required key is missing",
+    "severity": "error"
+   }
+  ],
+  "deployment-promotion-unknown": [
+   {
+    "code": "promotion_target_unknown",
+    "context": {
+     "value": "NOPE"
+    },
+    "field_path": [
+     "promotion",
+     "promotion_target"
+    ],
+    "file_path": "/w/.opentide/configurations/deployment.toml",
+    "message": "promotion_target 'NOPE' is not a [[statuses]] name.",
+    "severity": "error"
+   }
+  ],
+  "deployment-quote-in-target": [
+   {
+    "code": "promotion_target_unknown",
+    "context": {
+     "value": "it's\n"
+    },
+    "field_path": [
+     "promotion",
+     "promotion_target"
+    ],
+    "file_path": "/w/.opentide/configurations/deployment.toml",
+    "message": "promotion_target \"it's\\n\" is not a [[statuses]] name.",
+    "severity": "error"
+   }
+  ],
+  "deployment-responder-only": [
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "responders",
+     "0",
+     "name"
+    ],
+    "file_path": "/w/.opentide/configurations/deployment.toml",
+    "message": "String should have at least 1 character",
+    "severity": "warning"
+   },
+   {
+    "code": "unknown_key",
+    "context": {},
+    "field_path": [
+     "responders",
+     "0",
+     "colour"
+    ],
+    "file_path": "/w/.opentide/configurations/deployment.toml",
+    "message": "unknown key",
+    "severity": "warning"
+   },
+   {
+    "code": "promotion_target_unknown",
+    "context": {
+     "value": "NOPE"
+    },
+    "field_path": [
+     "promotion",
+     "promotion_target"
+    ],
+    "file_path": "/w/.opentide/configurations/deployment.toml",
+    "message": "promotion_target 'NOPE' is not a [[statuses]] name.",
+    "severity": "error"
+   }
+  ],
+  "deployment-statuses-table": [
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "statuses"
+    ],
+    "file_path": "/w/.opentide/configurations/deployment.toml",
+    "message": "Input should be a valid list",
+    "severity": "error"
+   }
+  ],
+  "deployment-strategy-and-responder": [
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "statuses",
+     "0",
+     "strategy"
+    ],
+    "file_path": "/w/.opentide/configurations/deployment.toml",
+    "message": "Value error, strategy must be one of INERT, RELEASE, PREVIEW, DISABLEMENT, DELETION, UNIVERSAL",
+    "severity": "error"
+   },
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "responders",
+     "0",
+     "name"
+    ],
+    "file_path": "/w/.opentide/configurations/deployment.toml",
+    "message": "Input should be a valid string",
+    "severity": "warning"
+   }
+  ],
+  "deployment-types": [
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "statuses",
+     "0",
+     "name"
+    ],
+    "file_path": "/w/.opentide/configurations/deployment.toml",
+    "message": "String should have at least 1 character",
+    "severity": "error"
+   },
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "statuses",
+     "0",
+     "description"
+    ],
+    "file_path": "/w/.opentide/configurations/deployment.toml",
+    "message": "Input should be a valid string",
+    "severity": "error"
+   },
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "statuses",
+     "0",
+     "strategy"
+    ],
+    "file_path": "/w/.opentide/configurations/deployment.toml",
+    "message": "Input should be an instance of StatusStrategy",
+    "severity": "error"
+   },
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "promotion",
+     "enabled"
+    ],
+    "file_path": "/w/.opentide/configurations/deployment.toml",
+    "message": "Input should be a valid boolean",
+    "severity": "error"
+   }
+  ],
+  "deployment-unknown-keys": [
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "debug",
+     "mdr_test_uuids",
+     "0"
+    ],
+    "file_path": "/w/.opentide/configurations/deployment.toml",
+    "message": "Input should be a valid string",
+    "severity": "error"
+   },
+   {
+    "code": "unknown_key",
+    "context": {},
+    "field_path": [
+     "debug",
+     "ssl"
+    ],
+    "file_path": "/w/.opentide/configurations/deployment.toml",
+    "message": "unknown key",
+    "severity": "error"
+   },
+   {
+    "code": "unknown_key",
+    "context": {},
+    "field_path": [
+     "colour1"
+    ],
+    "file_path": "/w/.opentide/configurations/deployment.toml",
+    "message": "unknown key",
+    "severity": "error"
+   },
+   {
+    "code": "unknown_key",
+    "context": {},
+    "field_path": [
+     "colour2"
+    ],
+    "file_path": "/w/.opentide/configurations/deployment.toml",
+    "message": "unknown key",
+    "severity": "error"
+   }
+  ],
+  "documentation-everything": [
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "skip_model_keys"
+    ],
+    "file_path": "/w/.opentide/configurations/documentation.toml",
+    "message": "Input should be a valid list",
+    "severity": "error"
+   },
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "folder_index_pages"
+    ],
+    "file_path": "/w/.opentide/configurations/documentation.toml",
+    "message": "Input should be a valid boolean",
+    "severity": "error"
+   },
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "output"
+    ],
+    "file_path": "/w/.opentide/configurations/documentation.toml",
+    "message": "Input should be a valid string",
+    "severity": "error"
+   },
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "gitlab",
+     "uuid_permalinks"
+    ],
+    "file_path": "/w/.opentide/configurations/documentation.toml",
+    "message": "Input should be a valid boolean",
+    "severity": "error"
+   },
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "diagrams",
+     "relations_direction"
+    ],
+    "file_path": "/w/.opentide/configurations/documentation.toml",
+    "message": "Input should be 'upstream', 'downstream' or 'both'",
+    "severity": "error"
+   },
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "index",
+     "icons"
+    ],
+    "file_path": "/w/.opentide/configurations/documentation.toml",
+    "message": "Input should be a valid boolean",
+    "severity": "error"
+   },
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "cve",
+     "base_url"
+    ],
+    "file_path": "/w/.opentide/configurations/documentation.toml",
+    "message": "Input should be a valid string",
+    "severity": "error"
+   },
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "cve",
+     "timeout"
+    ],
+    "file_path": "/w/.opentide/configurations/documentation.toml",
+    "message": "Input should be a valid number",
+    "severity": "error"
+   },
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "object_names",
+     "signal"
+    ],
+    "file_path": "/w/.opentide/configurations/documentation.toml",
+    "message": "Input should be a valid string",
+    "severity": "error"
+   }
+  ],
+  "documentation-flavor-name": [
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "icons",
+     "a"
+    ],
+    "file_path": "/w/.opentide/configurations/documentation.toml",
+    "message": "Input should be a valid string",
+    "severity": "error"
+   }
+  ],
+  "documentation-flavor-table": [
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "flavor",
+     "default"
+    ],
+    "file_path": "/w/.opentide/configurations/documentation.toml",
+    "message": "Input should be 'github', 'gitlab', 'azure_devops' or 'generic'",
+    "severity": "error"
+   }
+  ],
+  "documentation-flavor-table-unknown": [
+   {
+    "code": "unknown_key",
+    "context": {},
+    "field_path": [
+     "flavor",
+     "colour"
+    ],
+    "file_path": "/w/.opentide/configurations/documentation.toml",
+    "message": "unknown key",
+    "severity": "error"
+   }
+  ],
+  "documentation-retired-proxy-field": [
+   {
+    "code": "unknown_key",
+    "context": {},
+    "field_path": [
+     "cve",
+     "proxy"
+    ],
+    "file_path": "/w/.opentide/configurations/documentation.toml",
+    "message": "unknown key",
+    "severity": "error"
+   }
+  ],
+  "documentation-timeout-inf-nan": [
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "cve",
+     "timeout"
+    ],
+    "file_path": "/w/.opentide/configurations/documentation.toml",
+    "message": "Input should be greater than 0",
+    "severity": "error"
+   }
+  ],
+  "documentation-types": [
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "scope",
+     "0"
+    ],
+    "file_path": "/w/.opentide/configurations/documentation.toml",
+    "message": "Input should be 'threat', 'objective' or 'rule'",
+    "severity": "error"
+   },
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "flavor"
+    ],
+    "file_path": "/w/.opentide/configurations/documentation.toml",
+    "message": "Input should be 'github', 'gitlab', 'azure_devops' or 'generic'",
+    "severity": "error"
+   },
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "cve",
+     "timeout"
+    ],
+    "file_path": "/w/.opentide/configurations/documentation.toml",
+    "message": "Input should be greater than 0",
+    "severity": "error"
+   }
+  ],
+  "elastic-patterns": [
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "tenants",
+     "0",
+     "setup",
+     "api_key"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/elastic.toml",
+    "message": "String should match pattern '^\\$'",
+    "severity": "error"
+   },
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "tenants",
+     "0",
+     "setup",
+     "suppression"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/elastic.toml",
+    "message": "Input should be a valid boolean",
+    "severity": "error"
+   },
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "tenants",
+     "0",
+     "setup",
+     "version"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/elastic.toml",
+    "message": "String should match pattern '^(?:[0-9]+\\.[0-9]+|serverless)$'",
+    "severity": "error"
+   }
+  ],
+  "elastic-valid-version": [],
+  "generic-platform": [
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "tenants",
+     "0",
+     "setup",
+     "ssl"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/foo.toml",
+    "message": "Input should be a valid boolean",
+    "severity": "error"
+   }
+  ],
+  "generic-platform-tenant": [
+   {
+    "code": "unknown_key",
+    "context": {},
+    "field_path": [
+     "platform",
+     "x"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/foo.bar.toml",
+    "message": "unknown key",
+    "severity": "error"
+   },
+   {
+    "code": "missing_field",
+    "context": {},
+    "field_path": [
+     "tenants",
+     "0",
+     "name"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/foo.bar.toml",
+    "message": "required key is missing",
+    "severity": "error"
+   },
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "tenants",
+     "0",
+     "parameters"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/foo.bar.toml",
+    "message": "Input should be a valid dictionary",
+    "severity": "error"
+   }
+  ],
+  "lint-bundled": {
+   "checks": {
+    "filenames": {
+     "enabled": true,
+     "severity": null
+    },
+    "metadata": {
+     "enabled": true,
+     "severity": null
+    },
+    "placeholders": {
+     "enabled": true,
+     "severity": null
+    },
+    "queries": {
+     "enabled": true,
+     "severity": null
+    }
+   },
+   "filenames": {
+    "kinds": {},
+    "pattern": null,
+    "pattern_key": "[filenames].pattern",
+    "style": "slug"
+   },
+   "required_metadata": [
+    "author",
+    "organisation"
+   ]
+  },
+  "lint-enabled": {
+   "error": "lint.toml [placeholders].enabled must be true or false, got 'no'"
+  },
+  "lint-enabled-datetime": {
+   "error": "lint.toml [placeholders].enabled must be true or false, got datetime.datetime(1979, 5, 27, 7, 32, tzinfo=datetime.timezone.utc)"
+  },
+  "lint-enabled-floats": {
+   "error": "lint.toml [placeholders].enabled must be true or false, got [1e+20, 1.5e-07, 1e+16, 1e-05, 0.0001, 1000000000000000.0, 9999999999999998.0, 5e-324]"
+  },
+  "lint-kind-not-a-table": {
+   "error": "lint.toml [filenames].rules must be a table, got 1"
+  },
+  "lint-kind-style": {
+   "error": "lint.toml [filenames.objectives].style must be one of slug, name, none, got 'x'"
+  },
+  "lint-kind-unknown-key": {
+   "error": "lint.toml [filenames.rules]: unknown key(s) 'colour'. Known keys: pattern, style"
+  },
+  "lint-kinds": {
+   "checks": {
+    "filenames": {
+     "enabled": true,
+     "severity": null
+    },
+    "metadata": {
+     "enabled": true,
+     "severity": null
+    },
+    "placeholders": {
+     "enabled": true,
+     "severity": null
+    },
+    "queries": {
+     "enabled": true,
+     "severity": null
+    }
+   },
+   "filenames": {
+    "kinds": {
+     "rules": {
+      "kinds": {},
+      "pattern": "^R-.+",
+      "pattern_key": "[filenames.rules].pattern",
+      "style": "name"
+     },
+     "threats": {
+      "kinds": {},
+      "pattern": "^\\[(SEN|XDR)\\]\\[[^\\]]+\\].+$",
+      "pattern_key": "[filenames].pattern",
+      "style": "none"
+     }
+    },
+    "pattern": "^\\[(SEN|XDR)\\]\\[[^\\]]+\\].+$",
+    "pattern_key": "[filenames].pattern",
+    "style": "name"
+   },
+   "required_metadata": [
+    "author",
+    "organisation"
+   ]
+  },
+  "lint-not-a-table": {
+   "error": "lint.toml [metadata] must be a table"
+  },
+  "lint-pattern-empty": {
+   "error": "lint.toml [filenames].pattern must not be empty"
+  },
+  "lint-pattern-invalid": {
+   "error": "lint.toml [filenames].pattern: invalid regular expression '(': missing ), unterminated subpattern at position 0"
+  },
+  "lint-pattern-lookahead": {
+   "checks": {
+    "filenames": {
+     "enabled": true,
+     "severity": null
+    },
+    "metadata": {
+     "enabled": true,
+     "severity": null
+    },
+    "placeholders": {
+     "enabled": true,
+     "severity": null
+    },
+    "queries": {
+     "enabled": true,
+     "severity": null
+    }
+   },
+   "filenames": {
+    "kinds": {},
+    "pattern": "^(?!x).+$",
+    "pattern_key": "[filenames].pattern",
+    "style": "slug"
+   },
+   "required_metadata": [
+    "author",
+    "organisation"
+   ]
+  },
+  "lint-pattern-type": {
+   "error": "lint.toml [filenames].pattern must be a string, got 5"
+  },
+  "lint-pattern-verbose-comment": {
+   "checks": {
+    "filenames": {
+     "enabled": true,
+     "severity": null
+    },
+    "metadata": {
+     "enabled": true,
+     "severity": null
+    },
+    "placeholders": {
+     "enabled": true,
+     "severity": null
+    },
+    "queries": {
+     "enabled": true,
+     "severity": null
+    }
+   },
+   "filenames": {
+    "kinds": {},
+    "pattern": "(?x)a # c",
+    "pattern_key": "[filenames].pattern",
+    "style": "slug"
+   },
+   "required_metadata": [
+    "author",
+    "organisation"
+   ]
+  },
+  "lint-required": {
+   "error": "lint.toml [metadata].required: unknown metadata field(s) 'colour', 'shade'. Known fields: uuid, schema, version, created, modified, tlp, author, contributors, organisation, reviewed"
+  },
+  "lint-required-dedupe": {
+   "checks": {
+    "filenames": {
+     "enabled": true,
+     "severity": null
+    },
+    "metadata": {
+     "enabled": true,
+     "severity": "info"
+    },
+    "placeholders": {
+     "enabled": true,
+     "severity": null
+    },
+    "queries": {
+     "enabled": true,
+     "severity": null
+    }
+   },
+   "filenames": {
+    "kinds": {},
+    "pattern": null,
+    "pattern_key": "[filenames].pattern",
+    "style": "slug"
+   },
+   "required_metadata": [
+    "tlp",
+    "author"
+   ]
+  },
+  "lint-required-type": {
+   "error": "lint.toml [metadata].required must be a list of metadata keys"
+  },
+  "lint-severity": {
+   "error": "lint.toml [queries].severity must be one of error, warning, info, got 'loud'"
+  },
+  "lint-severity-type": {
+   "error": "lint.toml [queries].severity must be one of error, warning, info, got 5"
+  },
+  "lint-style": {
+   "error": "lint.toml [filenames].style must be one of slug, name, none, got 'camel'"
+  },
+  "lint-unknown-check": {
+   "error": "lint.toml: unknown check(s) 'alpha', 'zeta'. Known checks: filenames, metadata, placeholders, queries"
+  },
+  "lint-unknown-key": {
+   "error": "lint.toml [queries]: unknown key(s) 'colour', 'shade'. Known keys: enabled, severity"
+  },
+  "lint-unknown-kind": {
+   "error": "lint.toml [filenames.widgets]: unknown object kind(s) 'widgets'. Known kinds: threats, objectives, rules"
+  },
+  "modifiers": [
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "modifiers",
+     "0",
+     "name"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/sentinel.toml",
+    "message": "Input should be a valid string",
+    "severity": "error"
+   },
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "modifiers",
+     "0",
+     "conditions",
+     "status"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/sentinel.toml",
+    "message": "Input should be a valid list",
+    "severity": "error"
+   },
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "modifiers",
+     "0",
+     "conditions",
+     "default"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/sentinel.toml",
+    "message": "Input should be a valid boolean",
+    "severity": "error"
+   },
+   {
+    "code": "missing_field",
+    "context": {},
+    "field_path": [
+     "modifiers",
+     "0",
+     "modifications"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/sentinel.toml",
+    "message": "required key is missing",
+    "severity": "error"
+   }
+  ],
+  "not-toml-extension": [
+   {
+    "code": "not_a_configuration_file",
+    "context": {},
+    "field_path": [],
+    "file_path": "/w/.opentide/configurations/deployment.yaml",
+    "message": "deployment.yaml is not a configuration file opentide reads.",
+    "severity": "warning"
+   }
+  ],
+  "parse-duplicate-key": [
+   {
+    "code": "config_parse",
+    "context": {},
+    "field_path": [],
+    "file_path": "/w/.opentide/configurations/paths.toml",
+    "message": "Not valid TOML: TOMLDecodeError.",
+    "severity": "error"
+   }
+  ],
+  "parse-error": [
+   {
+    "code": "config_parse",
+    "context": {},
+    "field_path": [],
+    "file_path": "/w/.opentide/configurations/paths.toml",
+    "message": "Not valid TOML: TOMLDecodeError.",
+    "severity": "error"
+   }
+  ],
+  "paths-nested": [
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "paths",
+     "objects",
+     "rule"
+    ],
+    "file_path": "/w/.opentide/configurations/paths.toml",
+    "message": "Input should be a valid string",
+    "severity": "error"
+   },
+   {
+    "code": "unknown_key",
+    "context": {},
+    "field_path": [
+     "paths",
+     "objects",
+     "colour"
+    ],
+    "file_path": "/w/.opentide/configurations/paths.toml",
+    "message": "unknown key",
+    "severity": "error"
+   },
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "artifacts",
+     "schemas",
+     "router"
+    ],
+    "file_path": "/w/.opentide/configurations/paths.toml",
+    "message": "Input should be a valid string",
+    "severity": "error"
+   },
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "metaschemas",
+     "threat"
+    ],
+    "file_path": "/w/.opentide/configurations/paths.toml",
+    "message": "Input should be a valid string",
+    "severity": "error"
+   }
+  ],
+  "paths-types": [
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "objects",
+     "0"
+    ],
+    "file_path": "/w/.opentide/configurations/paths.toml",
+    "message": "Input should be 'threat', 'objective' or 'rule'",
+    "severity": "error"
+   },
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "paths",
+     "opentide"
+    ],
+    "file_path": "/w/.opentide/configurations/paths.toml",
+    "message": "Input should be a valid dictionary or instance of OpentidePaths",
+    "severity": "error"
+   },
+   {
+    "code": "unknown_key",
+    "context": {},
+    "field_path": [
+     "d"
+    ],
+    "file_path": "/w/.opentide/configurations/paths.toml",
+    "message": "unknown key",
+    "severity": "error"
+   }
+  ],
+  "retired-global": [
+   {
+    "code": "retired_configuration_file",
+    "context": {},
+    "field_path": [],
+    "file_path": "/w/.opentide/configurations/global.toml",
+    "message": "global.toml is not read by opentide: workspace paths and artifact names are set in paths.toml.",
+    "severity": "error"
+   }
+  ],
+  "retired-systems-elsewhere": [
+   {
+    "code": "not_a_configuration_file",
+    "context": {},
+    "field_path": [],
+    "file_path": "/w/other/systems/x.toml",
+    "message": "x.toml is not a configuration file opentide reads.",
+    "severity": "warning"
+   }
+  ],
+  "retired-systems-folder": [
+   {
+    "code": "retired_configuration_file",
+    "context": {},
+    "field_path": [],
+    "file_path": "/w/.opentide/configurations/systems/splunk.toml",
+    "message": "systems/ is not read by opentide: platform files live in platforms/<platform>.toml.",
+    "severity": "error"
+   }
+  ],
+  "retired-systems-nested": [
+   {
+    "code": "not_a_configuration_file",
+    "context": {},
+    "field_path": [],
+    "file_path": "/w/.opentide/configurations/platforms/systems/x.toml",
+    "message": "x.toml is not a configuration file opentide reads.",
+    "severity": "warning"
+   }
+  ],
+  "retired-systems-relative": [
+   {
+    "code": "retired_configuration_file",
+    "context": {},
+    "field_path": [],
+    "file_path": "systems/splunk.toml",
+    "message": "systems/ is not read by opentide: platform files live in platforms/<platform>.toml.",
+    "severity": "error"
+   }
+  ],
+  "schemas-folder": [
+   {
+    "code": "not_a_configuration_file",
+    "context": {},
+    "field_path": [],
+    "file_path": "/w/.opentide/schemas/deployment.toml",
+    "message": "deployment.toml is not a configuration file opentide reads.",
+    "severity": "warning"
+   }
+  ],
+  "sentinel-one-ids": [
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "tenants",
+     "0",
+     "setup",
+     "account_id"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/sentinel_one.toml",
+    "message": "Input should be a valid integer",
+    "severity": "error"
+   },
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "tenants",
+     "0",
+     "setup",
+     "site_id"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/sentinel_one.toml",
+    "message": "Input should be a valid integer",
+    "severity": "error"
+   }
+  ],
+  "sentinel-setup": [
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "platform",
+     "name"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/sentinel.toml",
+    "message": "Input should be a valid string",
+    "severity": "error"
+   },
+   {
+    "code": "unknown_key",
+    "context": {},
+    "field_path": [
+     "platform",
+     "colour"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/sentinel.toml",
+    "message": "unknown key",
+    "severity": "error"
+   },
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "tenants",
+     "0",
+     "setup",
+     "resource_group"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/sentinel.toml",
+    "message": "Input should be a valid string",
+    "severity": "error"
+   },
+   {
+    "code": "missing_field",
+    "context": {},
+    "field_path": [
+     "tenants",
+     "0",
+     "setup",
+     "workspace_name"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/sentinel.toml",
+    "message": "required key is missing",
+    "severity": "error"
+   },
+   {
+    "code": "missing_field",
+    "context": {},
+    "field_path": [
+     "tenants",
+     "0",
+     "setup",
+     "workspace_id"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/sentinel.toml",
+    "message": "required key is missing",
+    "severity": "error"
+   },
+   {
+    "code": "missing_field",
+    "context": {},
+    "field_path": [
+     "tenants",
+     "0",
+     "setup",
+     "azure_tenant_id"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/sentinel.toml",
+    "message": "required key is missing",
+    "severity": "error"
+   },
+   {
+    "code": "missing_field",
+    "context": {},
+    "field_path": [
+     "tenants",
+     "0",
+     "setup",
+     "azure_subscription_id"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/sentinel.toml",
+    "message": "required key is missing",
+    "severity": "error"
+   },
+   {
+    "code": "missing_field",
+    "context": {},
+    "field_path": [
+     "tenants",
+     "0",
+     "setup",
+     "azure_client_id"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/sentinel.toml",
+    "message": "required key is missing",
+    "severity": "error"
+   },
+   {
+    "code": "missing_field",
+    "context": {},
+    "field_path": [
+     "tenants",
+     "0",
+     "setup",
+     "azure_client_secret"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/sentinel.toml",
+    "message": "required key is missing",
+    "severity": "error"
+   }
+  ],
+  "sharing-config-clean": [],
+  "sharing-config-findings": [
+   {
+    "code": "name_invalid",
+    "context": {},
+    "field_path": [
+     "misp",
+     "Bad Name",
+     "name"
+    ],
+    "file_path": "<root>/parent/ws/.opentide/configurations/sharing.toml",
+    "message": "Block name must be 1\u201364 characters of lowercase letters, digits, hyphen, and underscore.",
+    "severity": "error"
+   },
+   {
+    "code": "url_invalid",
+    "context": {},
+    "field_path": [
+     "misp",
+     "Bad Name",
+     "url"
+    ],
+    "file_path": "<root>/parent/ws/.opentide/configurations/sharing.toml",
+    "message": "[[misp]] block 'Bad Name' url must be an http(s) URL.",
+    "severity": "error"
+   },
+   {
+    "code": "max_tlp_unknown",
+    "context": {},
+    "field_path": [
+     "misp",
+     "Bad Name",
+     "max_tlp"
+    ],
+    "file_path": "<root>/parent/ws/.opentide/configurations/sharing.toml",
+    "message": "[[misp]] block 'Bad Name' max_tlp is not a tlp vocabulary name.",
+    "severity": "error"
+   },
+   {
+    "code": "object_type_unknown",
+    "context": {},
+    "field_path": [
+     "misp",
+     "Bad Name",
+     "object_types"
+    ],
+    "file_path": "<root>/parent/ws/.opentide/configurations/sharing.toml",
+    "message": "[[misp]] block 'Bad Name' object_types entry 'widget' is unknown.",
+    "severity": "error"
+   },
+   {
+    "code": "invalid_value",
+    "context": {},
+    "field_path": [
+     "misp",
+     "Bad Name",
+     "verify_ssl"
+    ],
+    "file_path": "<root>/parent/ws/.opentide/configurations/sharing.toml",
+    "message": "[[misp]] block 'Bad Name' verify_ssl has an invalid value.",
+    "severity": "error"
+   },
+   {
+    "code": "rule_status_unknown",
+    "context": {},
+    "field_path": [
+     "misp",
+     "Bad Name",
+     "rule_statuses"
+    ],
+    "file_path": "<root>/parent/ws/.opentide/configurations/sharing.toml",
+    "message": "[[misp]] block 'Bad Name' rule_statuses entry 'NOPE' is unknown.",
+    "severity": "error"
+   },
+   {
+    "code": "api_key_literal",
+    "context": {},
+    "field_path": [
+     "misp",
+     "Bad Name",
+     "api_key"
+    ],
+    "file_path": "<root>/parent/ws/.opentide/configurations/sharing.toml",
+    "message": "[[misp]] block 'Bad Name' api_key is a literal. Use ${ENV_VAR}. The value was replaced with [REDACTED].",
+    "severity": "warning"
+   }
+  ],
+  "sharing-config-folder": [
+   {
+    "code": "sharing_directory",
+    "context": {},
+    "field_path": [],
+    "file_path": "<bundled>/sharing.toml",
+    "message": "<root>/parent/ws/.opentide/configurations/sharing is not a sharing configuration. Use a single sharing.toml file.",
+    "severity": "error"
+   }
+  ],
+  "sharing-config-parent": [],
+  "sharing-config-statuses": [
+   {
+    "code": "rule_status_unknown",
+    "context": {},
+    "field_path": [
+     "misp",
+     "a",
+     "rule_statuses"
+    ],
+    "file_path": "<root>/parent/ws/.opentide/configurations/sharing.toml",
+    "message": "[[misp]] block 'a' rule_statuses entry 'PRODUCTION' is unknown.",
+    "severity": "error"
+   }
+  ],
+  "sharing-config-unparsable": [
+   {
+    "code": "config_parse",
+    "context": {},
+    "field_path": [],
+    "file_path": "<root>/parent/ws/.opentide/configurations/sharing.toml",
+    "message": "Could not read sharing.toml: TOMLDecodeError",
+    "severity": "error"
+   }
+  ],
+  "sharing-datetime-entry": [
+   {
+    "code": "rule_status_unknown",
+    "context": {
+     "block": "a",
+     "index": 0,
+     "integration": "misp",
+     "layer": 1
+    },
+    "field_path": [
+     "misp",
+     "0",
+     "rule_statuses"
+    ],
+    "file_path": "/w/.opentide/configurations/sharing.toml",
+    "message": "[[misp]] block 'a' rule_statuses entry datetime.datetime(1979, 5, 27, 7, 32, tzinfo=datetime.timezone.utc) is unknown.",
+    "severity": "error"
+   }
+  ],
+  "sharing-duplicates": [
+   {
+    "code": "unknown_connector",
+    "context": {
+     "index": null,
+     "integration": "other",
+     "layer": 1
+    },
+    "field_path": [
+     "other"
+    ],
+    "file_path": "/w/.opentide/configurations/sharing.toml",
+    "message": "Unknown sharing integration 'other' was skipped.",
+    "severity": "warning"
+   },
+   {
+    "code": "duplicate_name",
+    "context": {
+     "block": "dup",
+     "index": 0,
+     "integration": "misp",
+     "layer": 1
+    },
+    "field_path": [
+     "misp",
+     "0",
+     "name"
+    ],
+    "file_path": "/w/.opentide/configurations/sharing.toml",
+    "message": "Name 'dup' is used by more than one block in one layer: [[misp]] #1, [[misp]] #2, [[other]] #1.",
+    "severity": "error"
+   },
+   {
+    "code": "duplicate_name",
+    "context": {
+     "block": "dup",
+     "index": 1,
+     "integration": "misp",
+     "layer": 1
+    },
+    "field_path": [
+     "misp",
+     "1",
+     "name"
+    ],
+    "file_path": "/w/.opentide/configurations/sharing.toml",
+    "message": "Name 'dup' is used by more than one block in one layer: [[misp]] #1, [[misp]] #2, [[other]] #1.",
+    "severity": "error"
+   },
+   {
+    "code": "duplicate_name",
+    "context": {
+     "block": "dup",
+     "index": 0,
+     "integration": "other",
+     "layer": 1
+    },
+    "field_path": [
+     "other",
+     "0",
+     "name"
+    ],
+    "file_path": "/w/.opentide/configurations/sharing.toml",
+    "message": "Name 'dup' is used by more than one block in one layer: [[misp]] #1, [[misp]] #2, [[other]] #1.",
+    "severity": "error"
+   }
+  ],
+  "sharing-duplicates-invalid": [
+   {
+    "code": "duplicate_name",
+    "context": {
+     "block": "dup",
+     "index": 0,
+     "integration": "misp",
+     "layer": 1
+    },
+    "field_path": [
+     "misp",
+     "0",
+     "name"
+    ],
+    "file_path": "/w/.opentide/configurations/sharing.toml",
+    "message": "Name 'dup' is used by more than one block in one layer: [[misp]] #1, [[misp]] #2.",
+    "severity": "error"
+   },
+   {
+    "code": "duplicate_name",
+    "context": {
+     "block": "dup",
+     "index": 1,
+     "integration": "misp",
+     "layer": 1
+    },
+    "field_path": [
+     "misp",
+     "1",
+     "name"
+    ],
+    "file_path": "/w/.opentide/configurations/sharing.toml",
+    "message": "Name 'dup' is used by more than one block in one layer: [[misp]] #1, [[misp]] #2.",
+    "severity": "error"
+   }
+  ],
+  "sharing-everything": [
+   {
+    "code": "unknown_key",
+    "context": {
+     "index": null,
+     "layer": 1
+    },
+    "field_path": [
+     "x"
+    ],
+    "file_path": "/w/.opentide/configurations/sharing.toml",
+    "message": "Unknown key 'x'. The only sharing integration is [[misp]].",
+    "severity": "error"
+   },
+   {
+    "code": "name_invalid",
+    "context": {
+     "block": "Bad",
+     "index": 0,
+     "integration": "misp",
+     "layer": 1
+    },
+    "field_path": [
+     "misp",
+     "0",
+     "name"
+    ],
+    "file_path": "/w/.opentide/configurations/sharing.toml",
+    "message": "Block name must be 1\u201364 characters of lowercase letters, digits, hyphen, and underscore.",
+    "severity": "error"
+   },
+   {
+    "code": "url_invalid",
+    "context": {
+     "block": "Bad",
+     "index": 0,
+     "integration": "misp",
+     "layer": 1
+    },
+    "field_path": [
+     "misp",
+     "0",
+     "url"
+    ],
+    "file_path": "/w/.opentide/configurations/sharing.toml",
+    "message": "[[misp]] block 'Bad' url must be an http(s) URL.",
+    "severity": "error"
+   },
+   {
+    "code": "max_tlp_unknown",
+    "context": {
+     "block": "Bad",
+     "index": 0,
+     "integration": "misp",
+     "layer": 1
+    },
+    "field_path": [
+     "misp",
+     "0",
+     "max_tlp"
+    ],
+    "file_path": "/w/.opentide/configurations/sharing.toml",
+    "message": "[[misp]] block 'Bad' max_tlp is not a tlp vocabulary name.",
+    "severity": "error"
+   },
+   {
+    "code": "rule_status_unknown",
+    "context": {
+     "block": "Bad",
+     "index": 0,
+     "integration": "misp",
+     "layer": 1
+    },
+    "field_path": [
+     "misp",
+     "0",
+     "rule_statuses"
+    ],
+    "file_path": "/w/.opentide/configurations/sharing.toml",
+    "message": "[[misp]] block 'Bad' rule_statuses entry 'NOPE' is unknown.",
+    "severity": "error"
+   },
+   {
+    "code": "api_key_literal",
+    "context": {
+     "block": "Bad",
+     "index": 0,
+     "integration": "misp",
+     "layer": 1
+    },
+    "field_path": [
+     "misp",
+     "0",
+     "api_key"
+    ],
+    "file_path": "/w/.opentide/configurations/sharing.toml",
+    "message": "[[misp]] block 'Bad' api_key is a literal. Use ${ENV_VAR}. The value was replaced with [REDACTED].",
+    "severity": "warning"
+   }
+  ],
+  "sharing-float-entries": [
+   {
+    "code": "rule_status_unknown",
+    "context": {
+     "block": "a",
+     "index": 0,
+     "integration": "misp",
+     "layer": 1
+    },
+    "field_path": [
+     "misp",
+     "0",
+     "rule_statuses"
+    ],
+    "file_path": "/w/.opentide/configurations/sharing.toml",
+    "message": "[[misp]] block 'a' rule_statuses entry 1e+20 is unknown.",
+    "severity": "error"
+   },
+   {
+    "code": "rule_status_unknown",
+    "context": {
+     "block": "a",
+     "index": 0,
+     "integration": "misp",
+     "layer": 1
+    },
+    "field_path": [
+     "misp",
+     "0",
+     "rule_statuses"
+    ],
+    "file_path": "/w/.opentide/configurations/sharing.toml",
+    "message": "[[misp]] block 'a' rule_statuses entry 1.5e-07 is unknown.",
+    "severity": "error"
+   },
+   {
+    "code": "rule_status_unknown",
+    "context": {
+     "block": "a",
+     "index": 0,
+     "integration": "misp",
+     "layer": 1
+    },
+    "field_path": [
+     "misp",
+     "0",
+     "rule_statuses"
+    ],
+    "file_path": "/w/.opentide/configurations/sharing.toml",
+    "message": "[[misp]] block 'a' rule_statuses entry 1e+16 is unknown.",
+    "severity": "error"
+   },
+   {
+    "code": "rule_status_unknown",
+    "context": {
+     "block": "a",
+     "index": 0,
+     "integration": "misp",
+     "layer": 1
+    },
+    "field_path": [
+     "misp",
+     "0",
+     "rule_statuses"
+    ],
+    "file_path": "/w/.opentide/configurations/sharing.toml",
+    "message": "[[misp]] block 'a' rule_statuses entry 1e-05 is unknown.",
+    "severity": "error"
+   },
+   {
+    "code": "rule_status_unknown",
+    "context": {
+     "block": "a",
+     "index": 0,
+     "integration": "misp",
+     "layer": 1
+    },
+    "field_path": [
+     "misp",
+     "0",
+     "rule_statuses"
+    ],
+    "file_path": "/w/.opentide/configurations/sharing.toml",
+    "message": "[[misp]] block 'a' rule_statuses entry 0.0001 is unknown.",
+    "severity": "error"
+   },
+   {
+    "code": "rule_status_unknown",
+    "context": {
+     "block": "a",
+     "index": 0,
+     "integration": "misp",
+     "layer": 1
+    },
+    "field_path": [
+     "misp",
+     "0",
+     "rule_statuses"
+    ],
+    "file_path": "/w/.opentide/configurations/sharing.toml",
+    "message": "[[misp]] block 'a' rule_statuses entry 1000000000000000.0 is unknown.",
+    "severity": "error"
+   },
+   {
+    "code": "rule_status_unknown",
+    "context": {
+     "block": "a",
+     "index": 0,
+     "integration": "misp",
+     "layer": 1
+    },
+    "field_path": [
+     "misp",
+     "0",
+     "rule_statuses"
+    ],
+    "file_path": "/w/.opentide/configurations/sharing.toml",
+    "message": "[[misp]] block 'a' rule_statuses entry -2.5e-300 is unknown.",
+    "severity": "error"
+   },
+   {
+    "code": "rule_status_unknown",
+    "context": {
+     "block": "a",
+     "index": 0,
+     "integration": "misp",
+     "layer": 1
+    },
+    "field_path": [
+     "misp",
+     "0",
+     "rule_statuses"
+    ],
+    "file_path": "/w/.opentide/configurations/sharing.toml",
+    "message": "[[misp]] block 'a' rule_statuses entry 1.7976931348623157e+308 is unknown.",
+    "severity": "error"
+   },
+   {
+    "code": "rule_status_unknown",
+    "context": {
+     "block": "a",
+     "index": 0,
+     "integration": "misp",
+     "layer": 1
+    },
+    "field_path": [
+     "misp",
+     "0",
+     "rule_statuses"
+    ],
+    "file_path": "/w/.opentide/configurations/sharing.toml",
+    "message": "[[misp]] block 'a' rule_statuses entry 5e-324 is unknown.",
+    "severity": "error"
+   },
+   {
+    "code": "rule_status_unknown",
+    "context": {
+     "block": "a",
+     "index": 0,
+     "integration": "misp",
+     "layer": 1
+    },
+    "field_path": [
+     "misp",
+     "0",
+     "rule_statuses"
+    ],
+    "file_path": "/w/.opentide/configurations/sharing.toml",
+    "message": "[[misp]] block 'a' rule_statuses entry 123.0 is unknown.",
+    "severity": "error"
+   },
+   {
+    "code": "rule_status_unknown",
+    "context": {
+     "block": "a",
+     "index": 0,
+     "integration": "misp",
+     "layer": 1
+    },
+    "field_path": [
+     "misp",
+     "0",
+     "rule_statuses"
+    ],
+    "file_path": "/w/.opentide/configurations/sharing.toml",
+    "message": "[[misp]] block 'a' rule_statuses entry -0.0 is unknown.",
+    "severity": "error"
+   }
+  ],
+  "sharing-folder": [
+   {
+    "code": "sharing_directory",
+    "context": {},
+    "field_path": [],
+    "file_path": "/w/.opentide/configurations/sharing/misp.toml",
+    "message": "configurations/sharing/ is not a sharing configuration. Use a single sharing.toml file.",
+    "severity": "error"
+   }
+  ],
+  "sharing-layers": [
+   {
+    "code": "sharing_directory",
+    "context": {},
+    "field_path": [],
+    "file_path": "/w/.opentide/configurations/sharing.toml",
+    "message": "configurations/sharing/ is not a sharing configuration. Use a single sharing.toml file.",
+    "severity": "error"
+   },
+   {
+    "code": "unknown_key",
+    "context": {
+     "index": null,
+     "layer": 2
+    },
+    "field_path": [],
+    "file_path": "/w/.opentide/configurations/sharing.toml",
+    "message": "Unknown key 'colour'. The only sharing integration is [[misp]].",
+    "severity": "error"
+   },
+   {
+    "code": "max_tlp_unknown",
+    "context": {
+     "block": "a",
+     "index": 1,
+     "integration": "misp",
+     "layer": 1
+    },
+    "field_path": [
+     "misp",
+     "1",
+     "max_tlp"
+    ],
+    "file_path": "/w/.opentide/configurations/sharing.toml",
+    "message": "[[misp]] block 'a' max_tlp is not a tlp vocabulary name.",
+    "severity": "error"
+   },
+   {
+    "code": "api_key_literal",
+    "context": {
+     "block": "a",
+     "index": 0,
+     "integration": "misp",
+     "layer": 2
+    },
+    "field_path": [
+     "misp",
+     "1",
+     "api_key"
+    ],
+    "file_path": "/w/.opentide/configurations/sharing.toml",
+    "message": "[[misp]] block 'a' api_key is a literal. Use ${ENV_VAR}. The value was replaced with [REDACTED].",
+    "severity": "warning"
+   },
+   {
+    "code": "url_invalid",
+    "context": {
+     "block": "b",
+     "index": 1,
+     "integration": "misp",
+     "layer": 0
+    },
+    "field_path": [
+     "misp",
+     "0",
+     "url"
+    ],
+    "file_path": "/w/.opentide/configurations/sharing.toml",
+    "message": "[[misp]] block 'b' url must be an http(s) URL.",
+    "severity": "error"
+   },
+   {
+    "code": "rule_status_unknown",
+    "context": {
+     "block": "b",
+     "index": 0,
+     "integration": "misp",
+     "layer": 1
+    },
+    "field_path": [
+     "misp",
+     "0",
+     "rule_statuses"
+    ],
+    "file_path": "/w/.opentide/configurations/sharing.toml",
+    "message": "[[misp]] block 'b' rule_statuses entry '' is unknown.",
+    "severity": "error"
+   },
+   {
+    "code": "rule_status_unknown",
+    "context": {
+     "block": "b",
+     "index": 0,
+     "integration": "misp",
+     "layer": 1
+    },
+    "field_path": [
+     "misp",
+     "0",
+     "rule_statuses"
+    ],
+    "file_path": "/w/.opentide/configurations/sharing.toml",
+    "message": "[[misp]] block 'b' rule_statuses entry 'NOPE' is unknown.",
+    "severity": "error"
+   }
+  ],
+  "sharing-missing-and-unknown": [
+   {
+    "code": "unknown_connector",
+    "context": {
+     "index": null,
+     "integration": "opencti",
+     "layer": 1
+    },
+    "field_path": [
+     "opencti"
+    ],
+    "file_path": "/w/.opentide/configurations/sharing.toml",
+    "message": "Unknown sharing integration 'opencti' was skipped.",
+    "severity": "warning"
+   },
+   {
+    "code": "missing_field",
+    "context": {
+     "index": 1,
+     "integration": "misp",
+     "layer": 1
+    },
+    "field_path": [
+     "misp",
+     "1",
+     "name"
+    ],
+    "file_path": "/w/.opentide/configurations/sharing.toml",
+    "message": "A [[misp]] block is missing name.",
+    "severity": "error"
+   },
+   {
+    "code": "missing_field",
+    "context": {
+     "block": "a",
+     "index": 0,
+     "integration": "misp",
+     "layer": 1
+    },
+    "field_path": [
+     "misp",
+     "0",
+     "url"
+    ],
+    "file_path": "/w/.opentide/configurations/sharing.toml",
+    "message": "[[misp]] block 'a' is missing url.",
+    "severity": "error"
+   },
+   {
+    "code": "missing_field",
+    "context": {
+     "block": "a",
+     "index": 0,
+     "integration": "misp",
+     "layer": 1
+    },
+    "field_path": [
+     "misp",
+     "0",
+     "api_key"
+    ],
+    "file_path": "/w/.opentide/configurations/sharing.toml",
+    "message": "[[misp]] block 'a' is missing api_key.",
+    "severity": "error"
+   },
+   {
+    "code": "missing_field",
+    "context": {
+     "block": "a",
+     "index": 0,
+     "integration": "misp",
+     "layer": 1
+    },
+    "field_path": [
+     "misp",
+     "0",
+     "max_tlp"
+    ],
+    "file_path": "/w/.opentide/configurations/sharing.toml",
+    "message": "[[misp]] block 'a' is missing max_tlp.",
+    "severity": "error"
+   },
+   {
+    "code": "object_type_unknown",
+    "context": {
+     "block": "a",
+     "index": 0,
+     "integration": "misp",
+     "layer": 1
+    },
+    "field_path": [
+     "misp",
+     "0",
+     "object_types"
+    ],
+    "file_path": "/w/.opentide/configurations/sharing.toml",
+    "message": "[[misp]] block 'a' object_types entry 'widget' is unknown.",
+    "severity": "error"
+   },
+   {
+    "code": "object_type_unknown",
+    "context": {
+     "block": "a",
+     "index": 0,
+     "integration": "misp",
+     "layer": 1
+    },
+    "field_path": [
+     "misp",
+     "0",
+     "object_types"
+    ],
+    "file_path": "/w/.opentide/configurations/sharing.toml",
+    "message": "[[misp]] block 'a' object_types entry 2 is unknown.",
+    "severity": "error"
+   },
+   {
+    "code": "organisation_uuid_invalid",
+    "context": {
+     "block": "a",
+     "index": 0,
+     "integration": "misp",
+     "layer": 1
+    },
+    "field_path": [
+     "misp",
+     "0",
+     "organisation_uuid"
+    ],
+    "file_path": "/w/.opentide/configurations/sharing.toml",
+    "message": "[[misp]] block 'a' organisation_uuid must be a 36-character hex UUID (8-4-4-4-12).",
+    "severity": "error"
+   },
+   {
+    "code": "invalid_value",
+    "context": {
+     "block": "a",
+     "index": 0,
+     "integration": "misp",
+     "layer": 1
+    },
+    "field_path": [
+     "misp",
+     "0",
+     "verify_ssl"
+    ],
+    "file_path": "/w/.opentide/configurations/sharing.toml",
+    "message": "[[misp]] block 'a' verify_ssl has an invalid value.",
+    "severity": "error"
+   },
+   {
+    "code": "unknown_key",
+    "context": {
+     "block": "a",
+     "index": 0,
+     "integration": "misp",
+     "layer": 1
+    },
+    "field_path": [
+     "misp",
+     "0",
+     "colour"
+    ],
+    "file_path": "/w/.opentide/configurations/sharing.toml",
+    "message": "Unknown key 'colour' in [[misp]] block 'a'.",
+    "severity": "error"
+   }
+  ],
+  "sharing-partial": [
+   {
+    "code": "missing_field",
+    "context": {
+     "index": 1,
+     "integration": "misp",
+     "layer": 1
+    },
+    "field_path": [
+     "misp",
+     "1",
+     "name"
+    ],
+    "file_path": "/w/.opentide/configurations/sharing.toml",
+    "message": "A [[misp]] block is missing name.",
+    "severity": "error"
+   }
+  ],
+  "sharing-quotes": [
+   {
+    "code": "name_invalid",
+    "context": {
+     "block": "it's",
+     "index": 0,
+     "integration": "misp",
+     "layer": 1
+    },
+    "field_path": [
+     "misp",
+     "0",
+     "name"
+    ],
+    "file_path": "/w/.opentide/configurations/sharing.toml",
+    "message": "Block name must be 1\u201364 characters of lowercase letters, digits, hyphen, and underscore.",
+    "severity": "error"
+   },
+   {
+    "code": "rule_status_unknown",
+    "context": {
+     "block": "it's",
+     "index": 0,
+     "integration": "misp",
+     "layer": 1
+    },
+    "field_path": [
+     "misp",
+     "0",
+     "rule_statuses"
+    ],
+    "file_path": "/w/.opentide/configurations/sharing.toml",
+    "message": "[[misp]] block \"it's\" rule_statuses entry 'a\"b' is unknown.",
+    "severity": "error"
+   }
+  ],
+  "sharing-unprintable-entries": [
+   {
+    "code": "rule_status_unknown",
+    "context": {
+     "block": "a",
+     "index": 0,
+     "integration": "misp",
+     "layer": 1
+    },
+    "field_path": [
+     "misp",
+     "0",
+     "rule_statuses"
+    ],
+    "file_path": "/w/.opentide/configurations/sharing.toml",
+    "message": "[[misp]] block 'a' rule_statuses entry '\\ue000' is unknown.",
+    "severity": "error"
+   },
+   {
+    "code": "rule_status_unknown",
+    "context": {
+     "block": "a",
+     "index": 0,
+     "integration": "misp",
+     "layer": 1
+    },
+    "field_path": [
+     "misp",
+     "0",
+     "rule_statuses"
+    ],
+    "file_path": "/w/.opentide/configurations/sharing.toml",
+    "message": "[[misp]] block 'a' rule_statuses entry '\\u0600x' is unknown.",
+    "severity": "error"
+   },
+   {
+    "code": "rule_status_unknown",
+    "context": {
+     "block": "a",
+     "index": 0,
+     "integration": "misp",
+     "layer": 1
+    },
+    "field_path": [
+     "misp",
+     "0",
+     "rule_statuses"
+    ],
+    "file_path": "/w/.opentide/configurations/sharing.toml",
+    "message": "[[misp]] block 'a' rule_statuses entry '\\u0378' is unknown.",
+    "severity": "error"
+   },
+   {
+    "code": "rule_status_unknown",
+    "context": {
+     "block": "a",
+     "index": 0,
+     "integration": "misp",
+     "layer": 1
+    },
+    "field_path": [
+     "misp",
+     "0",
+     "rule_statuses"
+    ],
+    "file_path": "/w/.opentide/configurations/sharing.toml",
+    "message": "[[misp]] block 'a' rule_statuses entry '\\ufff9' is unknown.",
+    "severity": "error"
+   },
+   {
+    "code": "rule_status_unknown",
+    "context": {
+     "block": "a",
+     "index": 0,
+     "integration": "misp",
+     "layer": 1
+    },
+    "field_path": [
+     "misp",
+     "0",
+     "rule_statuses"
+    ],
+    "file_path": "/w/.opentide/configurations/sharing.toml",
+    "message": "[[misp]] block 'a' rule_statuses entry '\\xa0' is unknown.",
+    "severity": "error"
+   },
+   {
+    "code": "rule_status_unknown",
+    "context": {
+     "block": "a",
+     "index": 0,
+     "integration": "misp",
+     "layer": 1
+    },
+    "field_path": [
+     "misp",
+     "0",
+     "rule_statuses"
+    ],
+    "file_path": "/w/.opentide/configurations/sharing.toml",
+    "message": "[[misp]] block 'a' rule_statuses entry '\\u3000' is unknown.",
+    "severity": "error"
+   },
+   {
+    "code": "rule_status_unknown",
+    "context": {
+     "block": "a",
+     "index": 0,
+     "integration": "misp",
+     "layer": 1
+    },
+    "field_path": [
+     "misp",
+     "0",
+     "rule_statuses"
+    ],
+    "file_path": "/w/.opentide/configurations/sharing.toml",
+    "message": "[[misp]] block 'a' rule_statuses entry '\\u2028' is unknown.",
+    "severity": "error"
+   },
+   {
+    "code": "rule_status_unknown",
+    "context": {
+     "block": "a",
+     "index": 0,
+     "integration": "misp",
+     "layer": 1
+    },
+    "field_path": [
+     "misp",
+     "0",
+     "rule_statuses"
+    ],
+    "file_path": "/w/.opentide/configurations/sharing.toml",
+    "message": "[[misp]] block 'a' rule_statuses entry '\\xad' is unknown.",
+    "severity": "error"
+   },
+   {
+    "code": "rule_status_unknown",
+    "context": {
+     "block": "a",
+     "index": 0,
+     "integration": "misp",
+     "layer": 1
+    },
+    "field_path": [
+     "misp",
+     "0",
+     "rule_statuses"
+    ],
+    "file_path": "/w/.opentide/configurations/sharing.toml",
+    "message": "[[misp]] block 'a' rule_statuses entry '\\U000f0000' is unknown.",
+    "severity": "error"
+   },
+   {
+    "code": "rule_status_unknown",
+    "context": {
+     "block": "a",
+     "index": 0,
+     "integration": "misp",
+     "layer": 1
+    },
+    "field_path": [
+     "misp",
+     "0",
+     "rule_statuses"
+    ],
+    "file_path": "/w/.opentide/configurations/sharing.toml",
+    "message": "[[misp]] block 'a' rule_statuses entry '\ud83d\ude00' is unknown.",
+    "severity": "error"
+   },
+   {
+    "code": "rule_status_unknown",
+    "context": {
+     "block": "a",
+     "index": 0,
+     "integration": "misp",
+     "layer": 1
+    },
+    "field_path": [
+     "misp",
+     "0",
+     "rule_statuses"
+    ],
+    "file_path": "/w/.opentide/configurations/sharing.toml",
+    "message": "[[misp]] block 'a' rule_statuses entry 'a b' is unknown.",
+    "severity": "error"
+   },
+   {
+    "code": "rule_status_unknown",
+    "context": {
+     "block": "a",
+     "index": 0,
+     "integration": "misp",
+     "layer": 1
+    },
+    "field_path": [
+     "misp",
+     "0",
+     "rule_statuses"
+    ],
+    "file_path": "/w/.opentide/configurations/sharing.toml",
+    "message": "[[misp]] block 'a' rule_statuses entry '\u00e9' is unknown.",
+    "severity": "error"
+   },
+   {
+    "code": "rule_status_unknown",
+    "context": {
+     "block": "a",
+     "index": 0,
+     "integration": "misp",
+     "layer": 1
+    },
+    "field_path": [
+     "misp",
+     "0",
+     "rule_statuses"
+    ],
+    "file_path": "/w/.opentide/configurations/sharing.toml",
+    "message": "[[misp]] block 'a' rule_statuses entry '\\x85' is unknown.",
+    "severity": "error"
+   }
+  ],
+  "splunk-missing-setup": [
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "tenants",
+     "0",
+     "name"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/splunk.toml",
+    "message": "String should have at least 1 character",
+    "severity": "error"
+   },
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "tenants",
+     "0",
+     "manual"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/splunk.toml",
+    "message": "Input should be a valid boolean",
+    "severity": "error"
+   },
+   {
+    "code": "missing_field",
+    "context": {},
+    "field_path": [
+     "tenants",
+     "0",
+     "setup"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/splunk.toml",
+    "message": "required key is missing",
+    "severity": "error"
+   }
+  ],
+  "splunk-strategies-empty": [
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "tenants",
+     "0",
+     "strategies"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/splunk.toml",
+    "message": "List should have at least 1 item after validation, not 0",
+    "severity": "error"
+   },
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "tenants",
+     "0",
+     "setup",
+     "correlation_searches"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/splunk.toml",
+    "message": "String should match pattern '^\\$'",
+    "severity": "error"
+   },
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "tenants",
+     "0",
+     "setup",
+     "allow_skew"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/splunk.toml",
+    "message": "Input should be a valid string",
+    "severity": "error"
+   }
+  ],
+  "splunk-strategy-list": [
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "tenants",
+     "0",
+     "strategies",
+     "1"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/splunk.toml",
+    "message": "Input should be an instance of StatusStrategy",
+    "severity": "error"
+   },
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "tenants",
+     "0",
+     "setup"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/splunk.toml",
+    "message": "Input should be a valid dictionary or instance of SplunkSetup",
+    "severity": "error"
+   }
+  ],
+  "splunk-unions": [
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "tenants",
+     "0",
+     "strategies"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/splunk.toml",
+    "message": "Value error, a tenant strategy must be PREVIEW or RELEASE",
+    "severity": "error"
+   },
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "tenants",
+     "0",
+     "setup",
+     "ssl"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/splunk.toml",
+    "message": "String should match pattern '^\\$'",
+    "severity": "error"
+   },
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "tenants",
+     "0",
+     "setup",
+     "url"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/splunk.toml",
+    "message": "Input should be a valid string",
+    "severity": "error"
+   },
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "tenants",
+     "0",
+     "setup",
+     "port"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/splunk.toml",
+    "message": "Input should be a valid integer",
+    "severity": "error"
+   },
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "tenants",
+     "0",
+     "setup",
+     "schedule_offset"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/splunk.toml",
+    "message": "String should match pattern '^\\$'",
+    "severity": "error"
+   }
+  ],
+  "splunk-valid": [],
+  "sysdig-setup": [
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "tenants",
+     "0",
+     "setup",
+     "api_token"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/sysdig.toml",
+    "message": "String should match pattern '^\\$'",
+    "severity": "error"
+   },
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "tenants",
+     "0",
+     "setup",
+     "policies"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/sysdig.toml",
+    "message": "Input should be a valid list",
+    "severity": "error"
+   }
+  ],
+  "unknown-file": [
+   {
+    "code": "not_a_configuration_file",
+    "context": {},
+    "field_path": [],
+    "file_path": "/w/.opentide/configurations/colours.toml",
+    "message": "colours.toml is not a configuration file opentide reads.",
+    "severity": "warning"
+   }
+  ],
+  "unmodelled-lint": [
+   {
+    "code": "not_a_configuration_file",
+    "context": {},
+    "field_path": [],
+    "file_path": "/w/.opentide/configurations/lint.toml",
+    "message": "lint.toml has no configuration model; it is not checked.",
+    "severity": "warning"
+   }
+  ],
+  "unmodelled-resources": [
+   {
+    "code": "not_a_configuration_file",
+    "context": {},
+    "field_path": [],
+    "file_path": "/w/.opentide/configurations/resources.toml",
+    "message": "resources.toml has no configuration model; it is not checked.",
+    "severity": "warning"
+   }
+  ],
+  "visibility-asset-types": [
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "assets",
+     "0",
+     "name"
+    ],
+    "file_path": "/w/.opentide/configurations/visibility.toml",
+    "message": "Input should be a valid string",
+    "severity": "error"
+   },
+   {
+    "code": "missing_field",
+    "context": {},
+    "field_path": [
+     "assets",
+     "0",
+     "description"
+    ],
+    "file_path": "/w/.opentide/configurations/visibility.toml",
+    "message": "required key is missing",
+    "severity": "error"
+   },
+   {
+    "code": "missing_field",
+    "context": {},
+    "field_path": [
+     "assets",
+     "0",
+     "criticality"
+    ],
+    "file_path": "/w/.opentide/configurations/visibility.toml",
+    "message": "required key is missing",
+    "severity": "error"
+   },
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "assets",
+     "0",
+     "custom_details",
+     "a"
+    ],
+    "file_path": "/w/.opentide/configurations/visibility.toml",
+    "message": "Input should be a valid string",
+    "severity": "error"
+   }
+  ],
+  "visibility-column-types": [
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "logsources",
+     "0",
+     "name"
+    ],
+    "file_path": "/w/.opentide/configurations/visibility.toml",
+    "message": "`name` cannot be empty",
+    "severity": "error"
+   },
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "logsources",
+     "0",
+     "columns",
+     ""
+    ],
+    "file_path": "/w/.opentide/configurations/visibility.toml",
+    "message": "a column name cannot be empty",
+    "severity": "error"
+   },
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "logsources",
+     "0",
+     "columns",
+     "b",
+     "type"
+    ],
+    "file_path": "/w/.opentide/configurations/visibility.toml",
+    "message": "column type 'x' is not a splunk type; use one of string, number, boolean",
+    "severity": "error"
+   },
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "logsources",
+     "0",
+     "columns",
+     "a",
+     "type"
+    ],
+    "file_path": "/w/.opentide/configurations/visibility.toml",
+    "message": "column type 'y' is not a splunk type; use one of string, number, boolean",
+    "severity": "error"
+   }
+  ],
+  "visibility-duplicate": [
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "logsources",
+     "1",
+     "name"
+    ],
+    "file_path": "/w/.opentide/configurations/visibility.toml",
+    "message": "log source 'n' is already declared for splunk by log source 1; names are unique per system",
+    "severity": "error"
+   }
+  ],
+  "visibility-legacy-and-columns": [
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "logsources",
+     "0",
+     "tables"
+    ],
+    "file_path": "/w/.opentide/configurations/visibility.toml",
+    "message": "`tables` was removed in 0.20.1: declare each table as its own [[logsources]] entry whose `name` is the table",
+    "severity": "error"
+   },
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "logsources",
+     "1",
+     "columns"
+    ],
+    "file_path": "/w/.opentide/configurations/visibility.toml",
+    "message": "`columns` does not apply to system 'carbon'; it applies to a log source of sentinel, splunk, elastic, defender_for_endpoint",
+    "severity": "error"
+   }
+  ],
+  "visibility-legacy-only": [
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "logsources",
+     "0",
+     "ecs"
+    ],
+    "file_path": "/w/.opentide/configurations/visibility.toml",
+    "message": "`ecs` is no longer supported; remove it",
+    "severity": "error"
+   }
+  ],
+  "visibility-not-a-table": [
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "logsources",
+     "0"
+    ],
+    "file_path": "/w/.opentide/configurations/visibility.toml",
+    "message": "Input should be a valid dictionary or instance of VisibilityLogSource",
+    "severity": "error"
+   },
+   {
+    "code": "unknown_key",
+    "context": {},
+    "field_path": [
+     "x"
+    ],
+    "file_path": "/w/.opentide/configurations/visibility.toml",
+    "message": "unknown key",
+    "severity": "error"
+   }
+  ],
+  "visibility-system-missing": [
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "logsources",
+     "0",
+     "macros"
+    ],
+    "file_path": "/w/.opentide/configurations/visibility.toml",
+    "message": "`macros` is no longer supported (Splunk macros are not declared); remove it",
+    "severity": "error"
+   },
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "logsources",
+     "0",
+     "indexes"
+    ],
+    "file_path": "/w/.opentide/configurations/visibility.toml",
+    "message": "`indexes` is no longer supported (Splunk indexes are not declared); remove it",
+    "severity": "error"
+   }
+  ],
+  "visibility-unknown-assets": [
+   {
+    "code": "asset_unknown",
+    "context": {
+     "asset": "ghost",
+     "entry": "logsource",
+     "name": "n"
+    },
+    "field_path": [
+     "logsources",
+     "0",
+     "assets",
+     "1"
+    ],
+    "file_path": "/w/.opentide/configurations/visibility.toml",
+    "message": "logsource 'n' names asset 'ghost', which [[assets]] does not declare.",
+    "severity": "warning"
+   },
+   {
+    "code": "asset_unknown",
+    "context": {
+     "asset": "it's",
+     "entry": "logsource",
+     "name": "n"
+    },
+    "field_path": [
+     "logsources",
+     "0",
+     "assets",
+     "2"
+    ],
+    "file_path": "/w/.opentide/configurations/visibility.toml",
+    "message": "logsource 'n' names asset \"it's\", which [[assets]] does not declare.",
+    "severity": "warning"
+   },
+   {
+    "code": "asset_unknown",
+    "context": {
+     "asset": "z",
+     "entry": "detector",
+     "name": "d"
+    },
+    "field_path": [
+     "detectors",
+     "0",
+     "assets",
+     "0"
+    ],
+    "file_path": "/w/.opentide/configurations/visibility.toml",
+    "message": "detector 'd' names asset 'z', which [[assets]] does not declare.",
+    "severity": "warning"
+   }
+  ],
+  "windows-path": [
+   {
+    "code": "unknown_key",
+    "context": {},
+    "field_path": [
+     "colour"
+    ],
+    "file_path": "C:\\w\\.opentide\\configurations\\deployment.toml",
+    "message": "unknown key",
+    "severity": "error"
+   }
+  ],
+  "workspace-bundled": {
+   "issues": [],
+   "resolved": {
+    "deployment": {
+     "debug": {
+      "mdr_test_uuids": [
+       ""
+      ],
+      "ssl_enabled": true
+     },
+     "default_responders": "",
+     "promotion": {
+      "enabled": true,
+      "promotion_target": "PRODUCTION"
+     },
+     "statuses": [
+      {
+       "description": "Under active functional design, without technical translation yet",
+       "name": "DESIGN",
+       "strategy": "INERT"
+      },
+      {
+       "description": "Under active technical implementation, going in exploratory rounds",
+       "name": "DEVELOPMENT",
+       "strategy": "PREVIEW"
+      },
+      {
+       "description": "Rule is qualified functionally, but is undergoing refinement rounds",
+       "name": "IMPROVING",
+       "strategy": "PREVIEW"
+      },
+      {
+       "description": "Deployed in staging environment for operational testing",
+       "name": "STAGING",
+       "strategy": "PREVIEW"
+      },
+      {
+       "description": "A rule is ready to go for PRODUCTION for the responding team. During ACCEPTANCE an\nanalyst will handle the alert and will ensure the alert ticket and playbook are correct.",
+       "name": "ACCEPTANCE",
+       "strategy": "PREVIEW"
+      },
+      {
+       "description": "Deployed in active production environment, potentially raising alerts",
+       "name": "PRODUCTION",
+       "strategy": "RELEASE"
+      },
+      {
+       "description": "Rule is still accessible, but not active in any environment",
+       "name": "DISABLED",
+       "strategy": "DISABLEMENT"
+      },
+      {
+       "description": "Rule is fully deprecated, and only flagged under this status for archival purposes",
+       "name": "REMOVED",
+       "strategy": "DELETION"
+      }
+     ]
+    },
+    "documentation": {
+     "cve": {
+      "base_url": "https://vulnerability.circl.lu",
+      "default_db_link": "https://vulnerability.circl.lu/vuln/",
+      "retrieve_details": true
+     },
+     "diagrams": {
+      "relations_direction": "both"
+     },
+     "flavor": {
+      "default": "generic"
+     },
+     "folder_index_pages": true,
+     "gitlab": {
+      "uuid_permalinks": true
+     },
+     "index": {
+      "icons": false,
+      "relation_counts": true
+     },
+     "object_names": {
+      "objective": "Detection Objectives",
+      "rule": "Detection Rules",
+      "signal": "Detection Objective Signals",
+      "threat": "Threat Vectors"
+     },
+     "scope": [
+      "threat",
+      "objective",
+      "rule"
+     ],
+     "skip_model_keys": [
+      "description",
+      "guidelines",
+      "terrain",
+      "surface",
+      "tuning",
+      "mitre_attack",
+      "actors",
+      "vectors",
+      "justification",
+      "chaining",
+      "cve"
+     ]
+    },
+    "lint": {
+     "filenames": {
+      "enabled": true,
+      "style": "slug"
+     },
+     "metadata": {
+      "enabled": true,
+      "required": [
+       "author",
+       "organisation"
+      ]
+     },
+     "placeholders": {
+      "enabled": true
+     },
+     "queries": {
+      "enabled": true
+     }
+    },
+    "paths": {
+     "artifacts": {
+      "exports": {
+       "attack_layer": "attack-navigator.json",
+       "objects": "objects.export.json",
+       "revisions": "revisions.export.json"
+      },
+      "schemas": {
+       "objective": "objective.1.0.schema.json",
+       "router": "opentide.schema.json",
+       "rule": "rule.1.0.schema.json",
+       "threat": "threat.1.0.schema.json",
+       "visibility": "visibility.1.0.schema.json"
+      },
+      "templates": {
+       "objective": "objective.1.0.template.yaml",
+       "rule": "rule.1.0.template.yaml",
+       "threat": "threat.1.0.template.yaml"
+      }
+     },
+     "metaschemas": {
+      "objective": "objective",
+      "rule": "rule",
+      "threat": "threat"
+     },
+     "objects": [
+      "threat",
+      "objective",
+      "rule"
+     ],
+     "paths": {
+      "docs": {
+       "objectives": "docs/objectives/",
+       "root": "docs/",
+       "rules": "docs/rules/",
+       "threats": "docs/threats/"
+      },
+      "exports": {
+       "root": ".opentide/exports/"
+      },
+      "objects": {
+       "objective": "objects/objectives/",
+       "rule": "objects/rules/",
+       "snippet_file": ".vscode/model-templates.code-snippets",
+       "threat": "objects/threats/"
+      },
+      "opentide": {
+       "root": ".opentide/",
+       "schemas": ".opentide/schemas/",
+       "templates": ".opentide/templates/"
+      }
+     }
+    },
+    "platforms": {
+     "carbon_black_cloud": {
+      "platform": {
+       "description": "VMware Carbon Black Enterprise EDR is an advanced threat hunting\nand incident response solution delivering continuous visibility for top security\noperations centres (SOCs) and incident response (IR) teams.",
+       "enabled": false,
+       "name": "Carbon Black Cloud Enterprise EDR"
+      }
+     },
+     "crowdstrike": {
+      "platform": {
+       "description": "The CrowdStrike Falcon\u00ae platform delivers real-time\nthreat detection, simplified management, and proactive threat hunting\nfor unmatched protection.\n",
+       "enabled": false,
+       "name": "Crowdstrike Falcon Correlation Rules"
+      }
+     },
+     "defender_for_endpoint": {
+      "platform": {
+       "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
+       "enabled": false,
+       "name": "Microsoft Defender for Endpoint"
+      }
+     },
+     "elastic": {
+      "platform": {
+       "description": "Elastic Security detection rules via the Kibana detection engine API.",
+       "enabled": false,
+       "name": "Elastic Security"
+      }
+     },
+     "harfanglab": {
+      "platform": {
+       "description": "HarfangLab EDR provides advanced threat detection using Sigma rules\nfor behavioral detection and YARA rules for memory/file scanning. This integration\nsupports deploying detection rules to HarfangLab's threat intelligence API, including\nboth Sigma-based behavioral rules and YARA-based scanning rules.\n",
+       "enabled": false,
+       "name": "HarfangLab"
+      }
+     },
+     "sentinel": {
+      "platform": {
+       "description": "Microsoft Sentinel delivers intelligent security analytics\nand threat intelligence across the enterprise. With Microsoft Sentinel, you\nget a single solution for attack detection, threat visibility, proactive\nhunting, and threat response.",
+       "enabled": false,
+       "name": "Microsoft Sentinel"
+      }
+     },
+     "sentinel_one": {
+      "platform": {
+       "description": "STAR Rules Engine is a rules-based engine which enables users\nto transform queries of cloud workload telemetry into automated threat hunting\nrules. Whenever a match is made, these custom rules trigger alerts and, optionally,\nautomated response actions.\n",
+       "enabled": false,
+       "name": "Sentinel One"
+      }
+     },
+     "splunk": {
+      "platform": {
+       "description": "Splunk Enterprise enables you to search, analyze and\nvisualize your data to quickly act on insights from across your technology landscape.",
+       "enabled": false,
+       "name": "Splunk Enterprise"
+      }
+     },
+     "sysdig": {
+      "platform": {
+       "description": "Custom Falco rules for Sysdig Secure runtime detection.",
+       "enabled": false,
+       "name": "Sysdig Secure"
+      }
+     }
+    },
+    "resources": {
+     "misp": {
+      "galaxies": {
+       "threat_actors": "https://raw.githubusercontent.com/MISP/misp-galaxy/refs/heads/main/clusters/threat-actor.json"
+      }
+     }
+    },
+    "systems": {
+     "carbon_black_cloud": {
+      "platform": {
+       "description": "VMware Carbon Black Enterprise EDR is an advanced threat hunting\nand incident response solution delivering continuous visibility for top security\noperations centres (SOCs) and incident response (IR) teams.",
+       "enabled": false,
+       "name": "Carbon Black Cloud Enterprise EDR"
+      }
+     },
+     "crowdstrike": {
+      "platform": {
+       "description": "The CrowdStrike Falcon\u00ae platform delivers real-time\nthreat detection, simplified management, and proactive threat hunting\nfor unmatched protection.\n",
+       "enabled": false,
+       "name": "Crowdstrike Falcon Correlation Rules"
+      }
+     },
+     "defender_for_endpoint": {
+      "platform": {
+       "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
+       "enabled": false,
+       "name": "Microsoft Defender for Endpoint"
+      }
+     },
+     "elastic": {
+      "platform": {
+       "description": "Elastic Security detection rules via the Kibana detection engine API.",
+       "enabled": false,
+       "name": "Elastic Security"
+      }
+     },
+     "harfanglab": {
+      "platform": {
+       "description": "HarfangLab EDR provides advanced threat detection using Sigma rules\nfor behavioral detection and YARA rules for memory/file scanning. This integration\nsupports deploying detection rules to HarfangLab's threat intelligence API, including\nboth Sigma-based behavioral rules and YARA-based scanning rules.\n",
+       "enabled": false,
+       "name": "HarfangLab"
+      }
+     },
+     "sentinel": {
+      "platform": {
+       "description": "Microsoft Sentinel delivers intelligent security analytics\nand threat intelligence across the enterprise. With Microsoft Sentinel, you\nget a single solution for attack detection, threat visibility, proactive\nhunting, and threat response.",
+       "enabled": false,
+       "name": "Microsoft Sentinel"
+      }
+     },
+     "sentinel_one": {
+      "platform": {
+       "description": "STAR Rules Engine is a rules-based engine which enables users\nto transform queries of cloud workload telemetry into automated threat hunting\nrules. Whenever a match is made, these custom rules trigger alerts and, optionally,\nautomated response actions.\n",
+       "enabled": false,
+       "name": "Sentinel One"
+      }
+     },
+     "splunk": {
+      "platform": {
+       "description": "Splunk Enterprise enables you to search, analyze and\nvisualize your data to quickly act on insights from across your technology landscape.",
+       "enabled": false,
+       "name": "Splunk Enterprise"
+      }
+     },
+     "sysdig": {
+      "platform": {
+       "description": "Custom Falco rules for Sysdig Secure runtime detection.",
+       "enabled": false,
+       "name": "Sysdig Secure"
+      }
+     }
+    },
+    "visibility": {
+     "logsources": []
+    }
+   }
+  },
+  "workspace-cross-checks": {
+   "issues": [
+    {
+     "code": "schema_validation",
+     "context": {
+      "file": "deployment.toml"
+     },
+     "field_path": [
+      "responders",
+      "0",
+      "name"
+     ],
+     "file_path": null,
+     "message": "deployment.toml.responders.0.name: Input should be a valid string",
+     "severity": "warning"
+    },
+    {
+     "code": "promotion_target_unknown",
+     "context": {
+      "file": "deployment.toml",
+      "value": "NOPE"
+     },
+     "field_path": [
+      "promotion",
+      "promotion_target"
+     ],
+     "file_path": null,
+     "message": "deployment.toml.promotion.promotion_target: promotion_target 'NOPE' is not a [[statuses]] name.",
+     "severity": "error"
+    },
+    {
+     "code": "asset_unknown",
+     "context": {
+      "asset": "ghost",
+      "entry": "logsource",
+      "file": "visibility.toml",
+      "name": "n"
+     },
+     "field_path": [
+      "logsources",
+      "0",
+      "assets",
+      "0"
+     ],
+     "file_path": null,
+     "message": "visibility.toml.logsources.0.assets.0: logsource 'n' names asset 'ghost', which [[assets]] does not declare.",
+     "severity": "warning"
+    }
+   ],
+   "resolved": {
+    "deployment": {
+     "debug": {
+      "mdr_test_uuids": [
+       ""
+      ],
+      "ssl_enabled": true
+     },
+     "default_responders": "",
+     "promotion": {
+      "enabled": true,
+      "promotion_target": "NOPE"
+     },
+     "responders": [
+      {
+       "name": 1
+      }
+     ],
+     "statuses": [
+      {
+       "description": "Under active functional design, without technical translation yet",
+       "name": "DESIGN",
+       "strategy": "INERT"
+      },
+      {
+       "description": "Under active technical implementation, going in exploratory rounds",
+       "name": "DEVELOPMENT",
+       "strategy": "PREVIEW"
+      },
+      {
+       "description": "Rule is qualified functionally, but is undergoing refinement rounds",
+       "name": "IMPROVING",
+       "strategy": "PREVIEW"
+      },
+      {
+       "description": "Deployed in staging environment for operational testing",
+       "name": "STAGING",
+       "strategy": "PREVIEW"
+      },
+      {
+       "description": "A rule is ready to go for PRODUCTION for the responding team. During ACCEPTANCE an\nanalyst will handle the alert and will ensure the alert ticket and playbook are correct.",
+       "name": "ACCEPTANCE",
+       "strategy": "PREVIEW"
+      },
+      {
+       "description": "Deployed in active production environment, potentially raising alerts",
+       "name": "PRODUCTION",
+       "strategy": "RELEASE"
+      },
+      {
+       "description": "Rule is still accessible, but not active in any environment",
+       "name": "DISABLED",
+       "strategy": "DISABLEMENT"
+      },
+      {
+       "description": "Rule is fully deprecated, and only flagged under this status for archival purposes",
+       "name": "REMOVED",
+       "strategy": "DELETION"
+      }
+     ]
+    },
+    "documentation": {
+     "cve": {
+      "base_url": "https://vulnerability.circl.lu",
+      "default_db_link": "https://vulnerability.circl.lu/vuln/",
+      "retrieve_details": true
+     },
+     "diagrams": {
+      "relations_direction": "both"
+     },
+     "flavor": {
+      "default": "generic"
+     },
+     "folder_index_pages": true,
+     "gitlab": {
+      "uuid_permalinks": true
+     },
+     "index": {
+      "icons": false,
+      "relation_counts": true
+     },
+     "object_names": {
+      "objective": "Detection Objectives",
+      "rule": "Detection Rules",
+      "signal": "Detection Objective Signals",
+      "threat": "Threat Vectors"
+     },
+     "scope": [
+      "threat",
+      "objective",
+      "rule"
+     ],
+     "skip_model_keys": [
+      "description",
+      "guidelines",
+      "terrain",
+      "surface",
+      "tuning",
+      "mitre_attack",
+      "actors",
+      "vectors",
+      "justification",
+      "chaining",
+      "cve"
+     ]
+    },
+    "lint": {
+     "filenames": {
+      "enabled": true,
+      "style": "slug"
+     },
+     "metadata": {
+      "enabled": true,
+      "required": [
+       "author",
+       "organisation"
+      ]
+     },
+     "placeholders": {
+      "enabled": true
+     },
+     "queries": {
+      "enabled": true
+     }
+    },
+    "paths": {
+     "artifacts": {
+      "exports": {
+       "attack_layer": "attack-navigator.json",
+       "objects": "objects.export.json",
+       "revisions": "revisions.export.json"
+      },
+      "schemas": {
+       "objective": "objective.1.0.schema.json",
+       "router": "opentide.schema.json",
+       "rule": "rule.1.0.schema.json",
+       "threat": "threat.1.0.schema.json",
+       "visibility": "visibility.1.0.schema.json"
+      },
+      "templates": {
+       "objective": "objective.1.0.template.yaml",
+       "rule": "rule.1.0.template.yaml",
+       "threat": "threat.1.0.template.yaml"
+      }
+     },
+     "metaschemas": {
+      "objective": "objective",
+      "rule": "rule",
+      "threat": "threat"
+     },
+     "objects": [
+      "threat",
+      "objective",
+      "rule"
+     ],
+     "paths": {
+      "docs": {
+       "objectives": "docs/objectives/",
+       "root": "docs/",
+       "rules": "docs/rules/",
+       "threats": "docs/threats/"
+      },
+      "exports": {
+       "root": ".opentide/exports/"
+      },
+      "objects": {
+       "objective": "objects/objectives/",
+       "rule": "objects/rules/",
+       "snippet_file": ".vscode/model-templates.code-snippets",
+       "threat": "objects/threats/"
+      },
+      "opentide": {
+       "root": ".opentide/",
+       "schemas": ".opentide/schemas/",
+       "templates": ".opentide/templates/"
+      }
+     }
+    },
+    "platforms": {
+     "carbon_black_cloud": {
+      "platform": {
+       "description": "VMware Carbon Black Enterprise EDR is an advanced threat hunting\nand incident response solution delivering continuous visibility for top security\noperations centres (SOCs) and incident response (IR) teams.",
+       "enabled": false,
+       "name": "Carbon Black Cloud Enterprise EDR"
+      }
+     },
+     "crowdstrike": {
+      "platform": {
+       "description": "The CrowdStrike Falcon\u00ae platform delivers real-time\nthreat detection, simplified management, and proactive threat hunting\nfor unmatched protection.\n",
+       "enabled": false,
+       "name": "Crowdstrike Falcon Correlation Rules"
+      }
+     },
+     "defender_for_endpoint": {
+      "platform": {
+       "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
+       "enabled": false,
+       "name": "Microsoft Defender for Endpoint"
+      }
+     },
+     "elastic": {
+      "platform": {
+       "description": "Elastic Security detection rules via the Kibana detection engine API.",
+       "enabled": false,
+       "name": "Elastic Security"
+      }
+     },
+     "harfanglab": {
+      "platform": {
+       "description": "HarfangLab EDR provides advanced threat detection using Sigma rules\nfor behavioral detection and YARA rules for memory/file scanning. This integration\nsupports deploying detection rules to HarfangLab's threat intelligence API, including\nboth Sigma-based behavioral rules and YARA-based scanning rules.\n",
+       "enabled": false,
+       "name": "HarfangLab"
+      }
+     },
+     "sentinel": {
+      "platform": {
+       "description": "Microsoft Sentinel delivers intelligent security analytics\nand threat intelligence across the enterprise. With Microsoft Sentinel, you\nget a single solution for attack detection, threat visibility, proactive\nhunting, and threat response.",
+       "enabled": false,
+       "name": "Microsoft Sentinel"
+      }
+     },
+     "sentinel_one": {
+      "platform": {
+       "description": "STAR Rules Engine is a rules-based engine which enables users\nto transform queries of cloud workload telemetry into automated threat hunting\nrules. Whenever a match is made, these custom rules trigger alerts and, optionally,\nautomated response actions.\n",
+       "enabled": false,
+       "name": "Sentinel One"
+      }
+     },
+     "splunk": {
+      "platform": {
+       "description": "Splunk Enterprise enables you to search, analyze and\nvisualize your data to quickly act on insights from across your technology landscape.",
+       "enabled": false,
+       "name": "Splunk Enterprise"
+      }
+     },
+     "sysdig": {
+      "platform": {
+       "description": "Custom Falco rules for Sysdig Secure runtime detection.",
+       "enabled": false,
+       "name": "Sysdig Secure"
+      }
+     }
+    },
+    "resources": {
+     "misp": {
+      "galaxies": {
+       "threat_actors": "https://raw.githubusercontent.com/MISP/misp-galaxy/refs/heads/main/clusters/threat-actor.json"
+      }
+     }
+    },
+    "systems": {
+     "carbon_black_cloud": {
+      "platform": {
+       "description": "VMware Carbon Black Enterprise EDR is an advanced threat hunting\nand incident response solution delivering continuous visibility for top security\noperations centres (SOCs) and incident response (IR) teams.",
+       "enabled": false,
+       "name": "Carbon Black Cloud Enterprise EDR"
+      }
+     },
+     "crowdstrike": {
+      "platform": {
+       "description": "The CrowdStrike Falcon\u00ae platform delivers real-time\nthreat detection, simplified management, and proactive threat hunting\nfor unmatched protection.\n",
+       "enabled": false,
+       "name": "Crowdstrike Falcon Correlation Rules"
+      }
+     },
+     "defender_for_endpoint": {
+      "platform": {
+       "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
+       "enabled": false,
+       "name": "Microsoft Defender for Endpoint"
+      }
+     },
+     "elastic": {
+      "platform": {
+       "description": "Elastic Security detection rules via the Kibana detection engine API.",
+       "enabled": false,
+       "name": "Elastic Security"
+      }
+     },
+     "harfanglab": {
+      "platform": {
+       "description": "HarfangLab EDR provides advanced threat detection using Sigma rules\nfor behavioral detection and YARA rules for memory/file scanning. This integration\nsupports deploying detection rules to HarfangLab's threat intelligence API, including\nboth Sigma-based behavioral rules and YARA-based scanning rules.\n",
+       "enabled": false,
+       "name": "HarfangLab"
+      }
+     },
+     "sentinel": {
+      "platform": {
+       "description": "Microsoft Sentinel delivers intelligent security analytics\nand threat intelligence across the enterprise. With Microsoft Sentinel, you\nget a single solution for attack detection, threat visibility, proactive\nhunting, and threat response.",
+       "enabled": false,
+       "name": "Microsoft Sentinel"
+      }
+     },
+     "sentinel_one": {
+      "platform": {
+       "description": "STAR Rules Engine is a rules-based engine which enables users\nto transform queries of cloud workload telemetry into automated threat hunting\nrules. Whenever a match is made, these custom rules trigger alerts and, optionally,\nautomated response actions.\n",
+       "enabled": false,
+       "name": "Sentinel One"
+      }
+     },
+     "splunk": {
+      "platform": {
+       "description": "Splunk Enterprise enables you to search, analyze and\nvisualize your data to quickly act on insights from across your technology landscape.",
+       "enabled": false,
+       "name": "Splunk Enterprise"
+      }
+     },
+     "sysdig": {
+      "platform": {
+       "description": "Custom Falco rules for Sysdig Secure runtime detection.",
+       "enabled": false,
+       "name": "Sysdig Secure"
+      }
+     }
+    },
+    "visibility": {
+     "logsources": [
+      {
+       "assets": [
+        "ghost"
+       ],
+       "description": "d",
+       "name": "n",
+       "system": "sentinel"
+      }
+     ]
+    }
+   }
+  },
+  "workspace-cve-proxy": {
+   "error": {
+    "code": null,
+    "message": "[cve].proxy is retired. Pass the proxy URL with `opentide --proxy http://[user:pass@]host:port`."
+   }
+  },
+  "workspace-datetimes": {
+   "issues": [],
+   "resolved": {
+    "custom": {
+     "dt_fraction": "1979-05-27T07:32:00.500000Z",
+     "dt_offset": "1979-05-27T07:32:00Z",
+     "local": "1979-05-27T07:32:00",
+     "micros": "07:32:00.123456",
+     "plain": "1979-05-27T07:32:00Z",
+     "time_nanos": "07:32:00.123456"
+    },
+    "deployment": {
+     "debug": {
+      "mdr_test_uuids": [
+       ""
+      ],
+      "ssl_enabled": true
+     },
+     "default_responders": "",
+     "promotion": {
+      "enabled": true,
+      "promotion_target": "PRODUCTION"
+     },
+     "statuses": [
+      {
+       "description": "Under active functional design, without technical translation yet",
+       "name": "DESIGN",
+       "strategy": "INERT"
+      },
+      {
+       "description": "Under active technical implementation, going in exploratory rounds",
+       "name": "DEVELOPMENT",
+       "strategy": "PREVIEW"
+      },
+      {
+       "description": "Rule is qualified functionally, but is undergoing refinement rounds",
+       "name": "IMPROVING",
+       "strategy": "PREVIEW"
+      },
+      {
+       "description": "Deployed in staging environment for operational testing",
+       "name": "STAGING",
+       "strategy": "PREVIEW"
+      },
+      {
+       "description": "A rule is ready to go for PRODUCTION for the responding team. During ACCEPTANCE an\nanalyst will handle the alert and will ensure the alert ticket and playbook are correct.",
+       "name": "ACCEPTANCE",
+       "strategy": "PREVIEW"
+      },
+      {
+       "description": "Deployed in active production environment, potentially raising alerts",
+       "name": "PRODUCTION",
+       "strategy": "RELEASE"
+      },
+      {
+       "description": "Rule is still accessible, but not active in any environment",
+       "name": "DISABLED",
+       "strategy": "DISABLEMENT"
+      },
+      {
+       "description": "Rule is fully deprecated, and only flagged under this status for archival purposes",
+       "name": "REMOVED",
+       "strategy": "DELETION"
+      }
+     ]
+    },
+    "documentation": {
+     "cve": {
+      "base_url": "https://vulnerability.circl.lu",
+      "default_db_link": "https://vulnerability.circl.lu/vuln/",
+      "retrieve_details": true
+     },
+     "diagrams": {
+      "relations_direction": "both"
+     },
+     "flavor": {
+      "default": "generic"
+     },
+     "folder_index_pages": true,
+     "gitlab": {
+      "uuid_permalinks": true
+     },
+     "index": {
+      "icons": false,
+      "relation_counts": true
+     },
+     "object_names": {
+      "objective": "Detection Objectives",
+      "rule": "Detection Rules",
+      "signal": "Detection Objective Signals",
+      "threat": "Threat Vectors"
+     },
+     "scope": [
+      "threat",
+      "objective",
+      "rule"
+     ],
+     "skip_model_keys": [
+      "description",
+      "guidelines",
+      "terrain",
+      "surface",
+      "tuning",
+      "mitre_attack",
+      "actors",
+      "vectors",
+      "justification",
+      "chaining",
+      "cve"
+     ]
+    },
+    "lint": {
+     "filenames": {
+      "enabled": true,
+      "style": "slug"
+     },
+     "metadata": {
+      "enabled": true,
+      "required": [
+       "author",
+       "organisation"
+      ]
+     },
+     "placeholders": {
+      "enabled": true
+     },
+     "queries": {
+      "enabled": true
+     }
+    },
+    "paths": {
+     "artifacts": {
+      "exports": {
+       "attack_layer": "attack-navigator.json",
+       "objects": "objects.export.json",
+       "revisions": "revisions.export.json"
+      },
+      "schemas": {
+       "objective": "objective.1.0.schema.json",
+       "router": "opentide.schema.json",
+       "rule": "rule.1.0.schema.json",
+       "threat": "threat.1.0.schema.json",
+       "visibility": "visibility.1.0.schema.json"
+      },
+      "templates": {
+       "objective": "objective.1.0.template.yaml",
+       "rule": "rule.1.0.template.yaml",
+       "threat": "threat.1.0.template.yaml"
+      }
+     },
+     "metaschemas": {
+      "objective": "objective",
+      "rule": "rule",
+      "threat": "threat"
+     },
+     "objects": [
+      "threat",
+      "objective",
+      "rule"
+     ],
+     "paths": {
+      "docs": {
+       "objectives": "docs/objectives/",
+       "root": "docs/",
+       "rules": "docs/rules/",
+       "threats": "docs/threats/"
+      },
+      "exports": {
+       "root": ".opentide/exports/"
+      },
+      "objects": {
+       "objective": "objects/objectives/",
+       "rule": "objects/rules/",
+       "snippet_file": ".vscode/model-templates.code-snippets",
+       "threat": "objects/threats/"
+      },
+      "opentide": {
+       "root": ".opentide/",
+       "schemas": ".opentide/schemas/",
+       "templates": ".opentide/templates/"
+      }
+     }
+    },
+    "platforms": {
+     "carbon_black_cloud": {
+      "platform": {
+       "description": "VMware Carbon Black Enterprise EDR is an advanced threat hunting\nand incident response solution delivering continuous visibility for top security\noperations centres (SOCs) and incident response (IR) teams.",
+       "enabled": false,
+       "name": "Carbon Black Cloud Enterprise EDR"
+      }
+     },
+     "crowdstrike": {
+      "platform": {
+       "description": "The CrowdStrike Falcon\u00ae platform delivers real-time\nthreat detection, simplified management, and proactive threat hunting\nfor unmatched protection.\n",
+       "enabled": false,
+       "name": "Crowdstrike Falcon Correlation Rules"
+      }
+     },
+     "defender_for_endpoint": {
+      "platform": {
+       "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
+       "enabled": false,
+       "name": "Microsoft Defender for Endpoint"
+      }
+     },
+     "elastic": {
+      "platform": {
+       "description": "Elastic Security detection rules via the Kibana detection engine API.",
+       "enabled": false,
+       "name": "Elastic Security"
+      }
+     },
+     "harfanglab": {
+      "platform": {
+       "description": "HarfangLab EDR provides advanced threat detection using Sigma rules\nfor behavioral detection and YARA rules for memory/file scanning. This integration\nsupports deploying detection rules to HarfangLab's threat intelligence API, including\nboth Sigma-based behavioral rules and YARA-based scanning rules.\n",
+       "enabled": false,
+       "name": "HarfangLab"
+      }
+     },
+     "sentinel": {
+      "platform": {
+       "description": "Microsoft Sentinel delivers intelligent security analytics\nand threat intelligence across the enterprise. With Microsoft Sentinel, you\nget a single solution for attack detection, threat visibility, proactive\nhunting, and threat response.",
+       "enabled": false,
+       "name": "Microsoft Sentinel"
+      }
+     },
+     "sentinel_one": {
+      "platform": {
+       "description": "STAR Rules Engine is a rules-based engine which enables users\nto transform queries of cloud workload telemetry into automated threat hunting\nrules. Whenever a match is made, these custom rules trigger alerts and, optionally,\nautomated response actions.\n",
+       "enabled": false,
+       "name": "Sentinel One"
+      }
+     },
+     "splunk": {
+      "platform": {
+       "description": "Splunk Enterprise enables you to search, analyze and\nvisualize your data to quickly act on insights from across your technology landscape.",
+       "enabled": false,
+       "name": "Splunk Enterprise"
+      }
+     },
+     "sysdig": {
+      "platform": {
+       "description": "Custom Falco rules for Sysdig Secure runtime detection.",
+       "enabled": false,
+       "name": "Sysdig Secure"
+      }
+     }
+    },
+    "resources": {
+     "misp": {
+      "galaxies": {
+       "threat_actors": "https://raw.githubusercontent.com/MISP/misp-galaxy/refs/heads/main/clusters/threat-actor.json"
+      }
+     }
+    },
+    "systems": {
+     "carbon_black_cloud": {
+      "platform": {
+       "description": "VMware Carbon Black Enterprise EDR is an advanced threat hunting\nand incident response solution delivering continuous visibility for top security\noperations centres (SOCs) and incident response (IR) teams.",
+       "enabled": false,
+       "name": "Carbon Black Cloud Enterprise EDR"
+      }
+     },
+     "crowdstrike": {
+      "platform": {
+       "description": "The CrowdStrike Falcon\u00ae platform delivers real-time\nthreat detection, simplified management, and proactive threat hunting\nfor unmatched protection.\n",
+       "enabled": false,
+       "name": "Crowdstrike Falcon Correlation Rules"
+      }
+     },
+     "defender_for_endpoint": {
+      "platform": {
+       "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
+       "enabled": false,
+       "name": "Microsoft Defender for Endpoint"
+      }
+     },
+     "elastic": {
+      "platform": {
+       "description": "Elastic Security detection rules via the Kibana detection engine API.",
+       "enabled": false,
+       "name": "Elastic Security"
+      }
+     },
+     "harfanglab": {
+      "platform": {
+       "description": "HarfangLab EDR provides advanced threat detection using Sigma rules\nfor behavioral detection and YARA rules for memory/file scanning. This integration\nsupports deploying detection rules to HarfangLab's threat intelligence API, including\nboth Sigma-based behavioral rules and YARA-based scanning rules.\n",
+       "enabled": false,
+       "name": "HarfangLab"
+      }
+     },
+     "sentinel": {
+      "platform": {
+       "description": "Microsoft Sentinel delivers intelligent security analytics\nand threat intelligence across the enterprise. With Microsoft Sentinel, you\nget a single solution for attack detection, threat visibility, proactive\nhunting, and threat response.",
+       "enabled": false,
+       "name": "Microsoft Sentinel"
+      }
+     },
+     "sentinel_one": {
+      "platform": {
+       "description": "STAR Rules Engine is a rules-based engine which enables users\nto transform queries of cloud workload telemetry into automated threat hunting\nrules. Whenever a match is made, these custom rules trigger alerts and, optionally,\nautomated response actions.\n",
+       "enabled": false,
+       "name": "Sentinel One"
+      }
+     },
+     "splunk": {
+      "platform": {
+       "description": "Splunk Enterprise enables you to search, analyze and\nvisualize your data to quickly act on insights from across your technology landscape.",
+       "enabled": false,
+       "name": "Splunk Enterprise"
+      }
+     },
+     "sysdig": {
+      "platform": {
+       "description": "Custom Falco rules for Sysdig Secure runtime detection.",
+       "enabled": false,
+       "name": "Sysdig Secure"
+      }
+     }
+    },
+    "visibility": {
+     "logsources": []
+    }
+   }
+  },
+  "workspace-empty-visibility": {
+   "issues": [
+    {
+     "code": "schema_validation",
+     "context": {
+      "file": "platforms/splunk.toml"
+     },
+     "field_path": [
+      "platform"
+     ],
+     "file_path": null,
+     "message": "platforms/splunk.toml.platform: Input should be a valid dictionary or instance of PlatformIdentity",
+     "severity": "error"
+    }
+   ],
+   "resolved": {
+    "deployment": {
+     "debug": {
+      "mdr_test_uuids": [
+       ""
+      ],
+      "ssl_enabled": true
+     },
+     "default_responders": "",
+     "promotion": {
+      "enabled": true,
+      "promotion_target": "PRODUCTION"
+     },
+     "statuses": [
+      {
+       "description": "Under active functional design, without technical translation yet",
+       "name": "DESIGN",
+       "strategy": "INERT"
+      },
+      {
+       "description": "Under active technical implementation, going in exploratory rounds",
+       "name": "DEVELOPMENT",
+       "strategy": "PREVIEW"
+      },
+      {
+       "description": "Rule is qualified functionally, but is undergoing refinement rounds",
+       "name": "IMPROVING",
+       "strategy": "PREVIEW"
+      },
+      {
+       "description": "Deployed in staging environment for operational testing",
+       "name": "STAGING",
+       "strategy": "PREVIEW"
+      },
+      {
+       "description": "A rule is ready to go for PRODUCTION for the responding team. During ACCEPTANCE an\nanalyst will handle the alert and will ensure the alert ticket and playbook are correct.",
+       "name": "ACCEPTANCE",
+       "strategy": "PREVIEW"
+      },
+      {
+       "description": "Deployed in active production environment, potentially raising alerts",
+       "name": "PRODUCTION",
+       "strategy": "RELEASE"
+      },
+      {
+       "description": "Rule is still accessible, but not active in any environment",
+       "name": "DISABLED",
+       "strategy": "DISABLEMENT"
+      },
+      {
+       "description": "Rule is fully deprecated, and only flagged under this status for archival purposes",
+       "name": "REMOVED",
+       "strategy": "DELETION"
+      }
+     ]
+    },
+    "documentation": {
+     "cve": {
+      "base_url": "https://vulnerability.circl.lu",
+      "default_db_link": "https://vulnerability.circl.lu/vuln/",
+      "retrieve_details": true
+     },
+     "diagrams": {
+      "relations_direction": "both"
+     },
+     "flavor": {
+      "default": "generic"
+     },
+     "folder_index_pages": true,
+     "gitlab": {
+      "uuid_permalinks": true
+     },
+     "index": {
+      "icons": false,
+      "relation_counts": true
+     },
+     "object_names": {
+      "objective": "Detection Objectives",
+      "rule": "Detection Rules",
+      "signal": "Detection Objective Signals",
+      "threat": "Threat Vectors"
+     },
+     "scope": [
+      "threat",
+      "objective",
+      "rule"
+     ],
+     "skip_model_keys": [
+      "description",
+      "guidelines",
+      "terrain",
+      "surface",
+      "tuning",
+      "mitre_attack",
+      "actors",
+      "vectors",
+      "justification",
+      "chaining",
+      "cve"
+     ]
+    },
+    "lint": {
+     "filenames": {
+      "enabled": true,
+      "style": "slug"
+     },
+     "metadata": {
+      "enabled": true,
+      "required": [
+       "author",
+       "organisation"
+      ]
+     },
+     "placeholders": {
+      "enabled": true
+     },
+     "queries": {
+      "enabled": true
+     }
+    },
+    "paths": {
+     "artifacts": {
+      "exports": {
+       "attack_layer": "attack-navigator.json",
+       "objects": "objects.export.json",
+       "revisions": "revisions.export.json"
+      },
+      "schemas": {
+       "objective": "objective.1.0.schema.json",
+       "router": "opentide.schema.json",
+       "rule": "rule.1.0.schema.json",
+       "threat": "threat.1.0.schema.json",
+       "visibility": "visibility.1.0.schema.json"
+      },
+      "templates": {
+       "objective": "objective.1.0.template.yaml",
+       "rule": "rule.1.0.template.yaml",
+       "threat": "threat.1.0.template.yaml"
+      }
+     },
+     "metaschemas": {
+      "objective": "objective",
+      "rule": "rule",
+      "threat": "threat"
+     },
+     "objects": [
+      "threat",
+      "objective",
+      "rule"
+     ],
+     "paths": {
+      "docs": {
+       "objectives": "docs/objectives/",
+       "root": "docs/",
+       "rules": "docs/rules/",
+       "threats": "docs/threats/"
+      },
+      "exports": {
+       "root": ".opentide/exports/"
+      },
+      "objects": {
+       "objective": "objects/objectives/",
+       "rule": "objects/rules/",
+       "snippet_file": ".vscode/model-templates.code-snippets",
+       "threat": "objects/threats/"
+      },
+      "opentide": {
+       "root": ".opentide/",
+       "schemas": ".opentide/schemas/",
+       "templates": ".opentide/templates/"
+      }
+     }
+    },
+    "platforms": {
+     "carbon_black_cloud": {
+      "platform": {
+       "description": "VMware Carbon Black Enterprise EDR is an advanced threat hunting\nand incident response solution delivering continuous visibility for top security\noperations centres (SOCs) and incident response (IR) teams.",
+       "enabled": false,
+       "name": "Carbon Black Cloud Enterprise EDR"
+      }
+     },
+     "crowdstrike": {
+      "platform": {
+       "description": "The CrowdStrike Falcon\u00ae platform delivers real-time\nthreat detection, simplified management, and proactive threat hunting\nfor unmatched protection.\n",
+       "enabled": false,
+       "name": "Crowdstrike Falcon Correlation Rules"
+      }
+     },
+     "defender_for_endpoint": {
+      "platform": {
+       "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
+       "enabled": false,
+       "name": "Microsoft Defender for Endpoint"
+      }
+     },
+     "elastic": {
+      "platform": {
+       "description": "Elastic Security detection rules via the Kibana detection engine API.",
+       "enabled": false,
+       "name": "Elastic Security"
+      }
+     },
+     "harfanglab": {
+      "platform": {
+       "description": "HarfangLab EDR provides advanced threat detection using Sigma rules\nfor behavioral detection and YARA rules for memory/file scanning. This integration\nsupports deploying detection rules to HarfangLab's threat intelligence API, including\nboth Sigma-based behavioral rules and YARA-based scanning rules.\n",
+       "enabled": false,
+       "name": "HarfangLab"
+      }
+     },
+     "sentinel": {
+      "platform": {
+       "description": "Microsoft Sentinel delivers intelligent security analytics\nand threat intelligence across the enterprise. With Microsoft Sentinel, you\nget a single solution for attack detection, threat visibility, proactive\nhunting, and threat response.",
+       "enabled": false,
+       "name": "Microsoft Sentinel"
+      }
+     },
+     "sentinel_one": {
+      "platform": {
+       "description": "STAR Rules Engine is a rules-based engine which enables users\nto transform queries of cloud workload telemetry into automated threat hunting\nrules. Whenever a match is made, these custom rules trigger alerts and, optionally,\nautomated response actions.\n",
+       "enabled": false,
+       "name": "Sentinel One"
+      }
+     },
+     "splunk": {
+      "platform": 1
+     },
+     "sysdig": {
+      "platform": {
+       "description": "Custom Falco rules for Sysdig Secure runtime detection.",
+       "enabled": false,
+       "name": "Sysdig Secure"
+      }
+     }
+    },
+    "resources": {
+     "misp": {
+      "galaxies": {
+       "threat_actors": "https://raw.githubusercontent.com/MISP/misp-galaxy/refs/heads/main/clusters/threat-actor.json"
+      }
+     }
+    },
+    "systems": {
+     "carbon_black_cloud": {
+      "platform": {
+       "description": "VMware Carbon Black Enterprise EDR is an advanced threat hunting\nand incident response solution delivering continuous visibility for top security\noperations centres (SOCs) and incident response (IR) teams.",
+       "enabled": false,
+       "name": "Carbon Black Cloud Enterprise EDR"
+      }
+     },
+     "crowdstrike": {
+      "platform": {
+       "description": "The CrowdStrike Falcon\u00ae platform delivers real-time\nthreat detection, simplified management, and proactive threat hunting\nfor unmatched protection.\n",
+       "enabled": false,
+       "name": "Crowdstrike Falcon Correlation Rules"
+      }
+     },
+     "defender_for_endpoint": {
+      "platform": {
+       "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
+       "enabled": false,
+       "name": "Microsoft Defender for Endpoint"
+      }
+     },
+     "elastic": {
+      "platform": {
+       "description": "Elastic Security detection rules via the Kibana detection engine API.",
+       "enabled": false,
+       "name": "Elastic Security"
+      }
+     },
+     "harfanglab": {
+      "platform": {
+       "description": "HarfangLab EDR provides advanced threat detection using Sigma rules\nfor behavioral detection and YARA rules for memory/file scanning. This integration\nsupports deploying detection rules to HarfangLab's threat intelligence API, including\nboth Sigma-based behavioral rules and YARA-based scanning rules.\n",
+       "enabled": false,
+       "name": "HarfangLab"
+      }
+     },
+     "sentinel": {
+      "platform": {
+       "description": "Microsoft Sentinel delivers intelligent security analytics\nand threat intelligence across the enterprise. With Microsoft Sentinel, you\nget a single solution for attack detection, threat visibility, proactive\nhunting, and threat response.",
+       "enabled": false,
+       "name": "Microsoft Sentinel"
+      }
+     },
+     "sentinel_one": {
+      "platform": {
+       "description": "STAR Rules Engine is a rules-based engine which enables users\nto transform queries of cloud workload telemetry into automated threat hunting\nrules. Whenever a match is made, these custom rules trigger alerts and, optionally,\nautomated response actions.\n",
+       "enabled": false,
+       "name": "Sentinel One"
+      }
+     },
+     "splunk": {
+      "platform": 1
+     },
+     "sysdig": {
+      "platform": {
+       "description": "Custom Falco rules for Sysdig Secure runtime detection.",
+       "enabled": false,
+       "name": "Sysdig Secure"
+      }
+     }
+    },
+    "visibility": {
+     "logsources": []
+    }
+   }
+  },
+  "workspace-file-and-folder": {
+   "issues": [
+    {
+     "code": "unknown_key",
+     "context": {
+      "file": "platforms/splunk.toml"
+     },
+     "field_path": [
+      "x"
+     ],
+     "file_path": null,
+     "message": "platforms/splunk.toml.x: unknown key",
+     "severity": "error"
+    }
+   ],
+   "resolved": {
+    "deployment": {
+     "debug": {
+      "mdr_test_uuids": [
+       ""
+      ],
+      "ssl_enabled": true
+     },
+     "default_responders": "",
+     "promotion": {
+      "enabled": true,
+      "promotion_target": "PRODUCTION"
+     },
+     "statuses": [
+      {
+       "description": "Under active functional design, without technical translation yet",
+       "name": "DESIGN",
+       "strategy": "INERT"
+      },
+      {
+       "description": "Under active technical implementation, going in exploratory rounds",
+       "name": "DEVELOPMENT",
+       "strategy": "PREVIEW"
+      },
+      {
+       "description": "Rule is qualified functionally, but is undergoing refinement rounds",
+       "name": "IMPROVING",
+       "strategy": "PREVIEW"
+      },
+      {
+       "description": "Deployed in staging environment for operational testing",
+       "name": "STAGING",
+       "strategy": "PREVIEW"
+      },
+      {
+       "description": "A rule is ready to go for PRODUCTION for the responding team. During ACCEPTANCE an\nanalyst will handle the alert and will ensure the alert ticket and playbook are correct.",
+       "name": "ACCEPTANCE",
+       "strategy": "PREVIEW"
+      },
+      {
+       "description": "Deployed in active production environment, potentially raising alerts",
+       "name": "PRODUCTION",
+       "strategy": "RELEASE"
+      },
+      {
+       "description": "Rule is still accessible, but not active in any environment",
+       "name": "DISABLED",
+       "strategy": "DISABLEMENT"
+      },
+      {
+       "description": "Rule is fully deprecated, and only flagged under this status for archival purposes",
+       "name": "REMOVED",
+       "strategy": "DELETION"
+      }
+     ]
+    },
+    "documentation": {
+     "cve": {
+      "base_url": "https://vulnerability.circl.lu",
+      "default_db_link": "https://vulnerability.circl.lu/vuln/",
+      "retrieve_details": true
+     },
+     "diagrams": {
+      "relations_direction": "both"
+     },
+     "flavor": {
+      "default": "generic"
+     },
+     "folder_index_pages": true,
+     "gitlab": {
+      "uuid_permalinks": true
+     },
+     "index": {
+      "icons": false,
+      "relation_counts": true
+     },
+     "object_names": {
+      "objective": "Detection Objectives",
+      "rule": "Detection Rules",
+      "signal": "Detection Objective Signals",
+      "threat": "Threat Vectors"
+     },
+     "scope": [
+      "threat",
+      "objective",
+      "rule"
+     ],
+     "skip_model_keys": [
+      "description",
+      "guidelines",
+      "terrain",
+      "surface",
+      "tuning",
+      "mitre_attack",
+      "actors",
+      "vectors",
+      "justification",
+      "chaining",
+      "cve"
+     ]
+    },
+    "lint": {
+     "filenames": {
+      "enabled": true,
+      "style": "slug"
+     },
+     "metadata": {
+      "enabled": true,
+      "required": [
+       "author",
+       "organisation"
+      ]
+     },
+     "placeholders": {
+      "enabled": true
+     },
+     "queries": {
+      "enabled": true
+     }
+    },
+    "paths": {
+     "artifacts": {
+      "exports": {
+       "attack_layer": "attack-navigator.json",
+       "objects": "objects.export.json",
+       "revisions": "revisions.export.json"
+      },
+      "schemas": {
+       "objective": "objective.1.0.schema.json",
+       "router": "opentide.schema.json",
+       "rule": "rule.1.0.schema.json",
+       "threat": "threat.1.0.schema.json",
+       "visibility": "visibility.1.0.schema.json"
+      },
+      "templates": {
+       "objective": "objective.1.0.template.yaml",
+       "rule": "rule.1.0.template.yaml",
+       "threat": "threat.1.0.template.yaml"
+      }
+     },
+     "metaschemas": {
+      "objective": "objective",
+      "rule": "rule",
+      "threat": "threat"
+     },
+     "objects": [
+      "threat",
+      "objective",
+      "rule"
+     ],
+     "paths": {
+      "docs": {
+       "objectives": "docs/objectives/",
+       "root": "docs/",
+       "rules": "docs/rules/",
+       "threats": "docs/threats/"
+      },
+      "exports": {
+       "root": ".opentide/exports/"
+      },
+      "objects": {
+       "objective": "objects/objectives/",
+       "rule": "objects/rules/",
+       "snippet_file": ".vscode/model-templates.code-snippets",
+       "threat": "objects/threats/"
+      },
+      "opentide": {
+       "root": ".opentide/",
+       "schemas": ".opentide/schemas/",
+       "templates": ".opentide/templates/"
+      }
+     }
+    },
+    "platforms": {
+     "carbon_black_cloud": {
+      "platform": {
+       "description": "VMware Carbon Black Enterprise EDR is an advanced threat hunting\nand incident response solution delivering continuous visibility for top security\noperations centres (SOCs) and incident response (IR) teams.",
+       "enabled": false,
+       "name": "Carbon Black Cloud Enterprise EDR"
+      }
+     },
+     "crowdstrike": {
+      "platform": {
+       "description": "The CrowdStrike Falcon\u00ae platform delivers real-time\nthreat detection, simplified management, and proactive threat hunting\nfor unmatched protection.\n",
+       "enabled": false,
+       "name": "Crowdstrike Falcon Correlation Rules"
+      }
+     },
+     "defender_for_endpoint": {
+      "platform": {
+       "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
+       "enabled": false,
+       "name": "Microsoft Defender for Endpoint"
+      }
+     },
+     "elastic": {
+      "platform": {
+       "description": "Elastic Security detection rules via the Kibana detection engine API.",
+       "enabled": false,
+       "name": "Elastic Security"
+      }
+     },
+     "harfanglab": {
+      "platform": {
+       "description": "HarfangLab EDR provides advanced threat detection using Sigma rules\nfor behavioral detection and YARA rules for memory/file scanning. This integration\nsupports deploying detection rules to HarfangLab's threat intelligence API, including\nboth Sigma-based behavioral rules and YARA-based scanning rules.\n",
+       "enabled": false,
+       "name": "HarfangLab"
+      }
+     },
+     "sentinel": {
+      "platform": {
+       "description": "Microsoft Sentinel delivers intelligent security analytics\nand threat intelligence across the enterprise. With Microsoft Sentinel, you\nget a single solution for attack detection, threat visibility, proactive\nhunting, and threat response.",
+       "enabled": false,
+       "name": "Microsoft Sentinel"
+      }
+     },
+     "sentinel_one": {
+      "platform": {
+       "description": "STAR Rules Engine is a rules-based engine which enables users\nto transform queries of cloud workload telemetry into automated threat hunting\nrules. Whenever a match is made, these custom rules trigger alerts and, optionally,\nautomated response actions.\n",
+       "enabled": false,
+       "name": "Sentinel One"
+      }
+     },
+     "splunk": {
+      "platform": {
+       "description": "Splunk Enterprise enables you to search, analyze and\nvisualize your data to quickly act on insights from across your technology landscape.",
+       "enabled": false,
+       "name": "Splunk Enterprise"
+      },
+      "x": 1
+     },
+     "sysdig": {
+      "platform": {
+       "description": "Custom Falco rules for Sysdig Secure runtime detection.",
+       "enabled": false,
+       "name": "Sysdig Secure"
+      }
+     }
+    },
+    "resources": {
+     "misp": {
+      "galaxies": {
+       "threat_actors": "https://raw.githubusercontent.com/MISP/misp-galaxy/refs/heads/main/clusters/threat-actor.json"
+      }
+     }
+    },
+    "systems": {
+     "carbon_black_cloud": {
+      "platform": {
+       "description": "VMware Carbon Black Enterprise EDR is an advanced threat hunting\nand incident response solution delivering continuous visibility for top security\noperations centres (SOCs) and incident response (IR) teams.",
+       "enabled": false,
+       "name": "Carbon Black Cloud Enterprise EDR"
+      }
+     },
+     "crowdstrike": {
+      "platform": {
+       "description": "The CrowdStrike Falcon\u00ae platform delivers real-time\nthreat detection, simplified management, and proactive threat hunting\nfor unmatched protection.\n",
+       "enabled": false,
+       "name": "Crowdstrike Falcon Correlation Rules"
+      }
+     },
+     "defender_for_endpoint": {
+      "platform": {
+       "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
+       "enabled": false,
+       "name": "Microsoft Defender for Endpoint"
+      }
+     },
+     "elastic": {
+      "platform": {
+       "description": "Elastic Security detection rules via the Kibana detection engine API.",
+       "enabled": false,
+       "name": "Elastic Security"
+      }
+     },
+     "harfanglab": {
+      "platform": {
+       "description": "HarfangLab EDR provides advanced threat detection using Sigma rules\nfor behavioral detection and YARA rules for memory/file scanning. This integration\nsupports deploying detection rules to HarfangLab's threat intelligence API, including\nboth Sigma-based behavioral rules and YARA-based scanning rules.\n",
+       "enabled": false,
+       "name": "HarfangLab"
+      }
+     },
+     "sentinel": {
+      "platform": {
+       "description": "Microsoft Sentinel delivers intelligent security analytics\nand threat intelligence across the enterprise. With Microsoft Sentinel, you\nget a single solution for attack detection, threat visibility, proactive\nhunting, and threat response.",
+       "enabled": false,
+       "name": "Microsoft Sentinel"
+      }
+     },
+     "sentinel_one": {
+      "platform": {
+       "description": "STAR Rules Engine is a rules-based engine which enables users\nto transform queries of cloud workload telemetry into automated threat hunting\nrules. Whenever a match is made, these custom rules trigger alerts and, optionally,\nautomated response actions.\n",
+       "enabled": false,
+       "name": "Sentinel One"
+      }
+     },
+     "splunk": {
+      "platform": {
+       "description": "Splunk Enterprise enables you to search, analyze and\nvisualize your data to quickly act on insights from across your technology landscape.",
+       "enabled": false,
+       "name": "Splunk Enterprise"
+      },
+      "x": 1
+     },
+     "sysdig": {
+      "platform": {
+       "description": "Custom Falco rules for Sysdig Secure runtime detection.",
+       "enabled": false,
+       "name": "Sysdig Secure"
+      }
+     }
+    },
+    "visibility": {
+     "logsources": []
+    }
+   }
+  },
+  "workspace-findings": {
+   "issues": [
+    {
+     "code": "schema_validation",
+     "context": {
+      "file": "paths.toml"
+     },
+     "field_path": [
+      "objects",
+      "0"
+     ],
+     "file_path": null,
+     "message": "paths.toml.objects.0: Input should be 'threat', 'objective' or 'rule'",
+     "severity": "error"
+    },
+    {
+     "code": "unknown_key",
+     "context": {
+      "file": "deployment.toml"
+     },
+     "field_path": [
+      "colour"
+     ],
+     "file_path": null,
+     "message": "deployment.toml.colour: unknown key",
+     "severity": "error"
+    },
+    {
+     "code": "asset_unknown",
+     "context": {
+      "asset": "ghost",
+      "entry": "logsource",
+      "file": "visibility.toml",
+      "name": "n"
+     },
+     "field_path": [
+      "logsources",
+      "0",
+      "assets",
+      "0"
+     ],
+     "file_path": null,
+     "message": "visibility.toml.logsources.0.assets.0: logsource 'n' names asset 'ghost', which [[assets]] does not declare.",
+     "severity": "warning"
+    },
+    {
+     "code": "schema_validation",
+     "context": {
+      "file": "documentation.toml"
+     },
+     "field_path": [
+      "flavor"
+     ],
+     "file_path": null,
+     "message": "documentation.toml.flavor: Input should be 'github', 'gitlab', 'azure_devops' or 'generic'",
+     "severity": "error"
+    },
+    {
+     "code": "unknown_key",
+     "context": {
+      "file": "platforms/sentinel.toml"
+     },
+     "field_path": [
+      "platform",
+      "colour"
+     ],
+     "file_path": null,
+     "message": "platforms/sentinel.toml.platform.colour: unknown key",
+     "severity": "error"
+    }
+   ],
+   "resolved": {
+    "deployment": {
+     "colour": "blue",
+     "debug": {
+      "mdr_test_uuids": [
+       ""
+      ],
+      "ssl_enabled": true
+     },
+     "default_responders": "",
+     "promotion": {
+      "enabled": true,
+      "promotion_target": "NOPE"
+     },
+     "statuses": [
+      {
+       "description": "Under active functional design, without technical translation yet",
+       "name": "DESIGN",
+       "strategy": "INERT"
+      },
+      {
+       "description": "Under active technical implementation, going in exploratory rounds",
+       "name": "DEVELOPMENT",
+       "strategy": "PREVIEW"
+      },
+      {
+       "description": "Rule is qualified functionally, but is undergoing refinement rounds",
+       "name": "IMPROVING",
+       "strategy": "PREVIEW"
+      },
+      {
+       "description": "Deployed in staging environment for operational testing",
+       "name": "STAGING",
+       "strategy": "PREVIEW"
+      },
+      {
+       "description": "A rule is ready to go for PRODUCTION for the responding team. During ACCEPTANCE an\nanalyst will handle the alert and will ensure the alert ticket and playbook are correct.",
+       "name": "ACCEPTANCE",
+       "strategy": "PREVIEW"
+      },
+      {
+       "description": "Deployed in active production environment, potentially raising alerts",
+       "name": "PRODUCTION",
+       "strategy": "RELEASE"
+      },
+      {
+       "description": "Rule is still accessible, but not active in any environment",
+       "name": "DISABLED",
+       "strategy": "DISABLEMENT"
+      },
+      {
+       "description": "Rule is fully deprecated, and only flagged under this status for archival purposes",
+       "name": "REMOVED",
+       "strategy": "DELETION"
+      }
+     ]
+    },
+    "documentation": {
+     "cve": {
+      "base_url": "https://vulnerability.circl.lu",
+      "default_db_link": "https://vulnerability.circl.lu/vuln/",
+      "retrieve_details": true
+     },
+     "diagrams": {
+      "relations_direction": "both"
+     },
+     "flavor": 5,
+     "folder_index_pages": true,
+     "gitlab": {
+      "uuid_permalinks": true
+     },
+     "index": {
+      "icons": false,
+      "relation_counts": true
+     },
+     "object_names": {
+      "objective": "Detection Objectives",
+      "rule": "Detection Rules",
+      "signal": "Detection Objective Signals",
+      "threat": "Threat Vectors"
+     },
+     "scope": [
+      "threat",
+      "objective",
+      "rule"
+     ],
+     "skip_model_keys": [
+      "description",
+      "guidelines",
+      "terrain",
+      "surface",
+      "tuning",
+      "mitre_attack",
+      "actors",
+      "vectors",
+      "justification",
+      "chaining",
+      "cve"
+     ]
+    },
+    "lint": {
+     "filenames": {
+      "enabled": true,
+      "style": "slug"
+     },
+     "metadata": {
+      "enabled": true,
+      "required": [
+       "author",
+       "organisation"
+      ]
+     },
+     "placeholders": {
+      "enabled": true
+     },
+     "queries": {
+      "enabled": true
+     }
+    },
+    "paths": {
+     "artifacts": {
+      "exports": {
+       "attack_layer": "attack-navigator.json",
+       "objects": "objects.export.json",
+       "revisions": "revisions.export.json"
+      },
+      "schemas": {
+       "objective": "objective.1.0.schema.json",
+       "router": "opentide.schema.json",
+       "rule": "rule.1.0.schema.json",
+       "threat": "threat.1.0.schema.json",
+       "visibility": "visibility.1.0.schema.json"
+      },
+      "templates": {
+       "objective": "objective.1.0.template.yaml",
+       "rule": "rule.1.0.template.yaml",
+       "threat": "threat.1.0.template.yaml"
+      }
+     },
+     "metaschemas": {
+      "objective": "objective",
+      "rule": "rule",
+      "threat": "threat"
+     },
+     "objects": [
+      "x"
+     ],
+     "paths": {
+      "docs": {
+       "objectives": "docs/objectives/",
+       "root": "docs/",
+       "rules": "docs/rules/",
+       "threats": "docs/threats/"
+      },
+      "exports": {
+       "root": ".opentide/exports/"
+      },
+      "objects": {
+       "objective": "objects/objectives/",
+       "rule": "objects/rules/",
+       "snippet_file": ".vscode/model-templates.code-snippets",
+       "threat": "objects/threats/"
+      },
+      "opentide": {
+       "root": ".opentide/",
+       "schemas": ".opentide/schemas/",
+       "templates": ".opentide/templates/"
+      }
+     }
+    },
+    "platforms": {
+     "carbon_black_cloud": {
+      "platform": {
+       "description": "VMware Carbon Black Enterprise EDR is an advanced threat hunting\nand incident response solution delivering continuous visibility for top security\noperations centres (SOCs) and incident response (IR) teams.",
+       "enabled": false,
+       "name": "Carbon Black Cloud Enterprise EDR"
+      }
+     },
+     "crowdstrike": {
+      "platform": {
+       "description": "The CrowdStrike Falcon\u00ae platform delivers real-time\nthreat detection, simplified management, and proactive threat hunting\nfor unmatched protection.\n",
+       "enabled": false,
+       "name": "Crowdstrike Falcon Correlation Rules"
+      }
+     },
+     "defender_for_endpoint": {
+      "platform": {
+       "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
+       "enabled": false,
+       "name": "Microsoft Defender for Endpoint"
+      }
+     },
+     "elastic": {
+      "platform": {
+       "description": "Elastic Security detection rules via the Kibana detection engine API.",
+       "enabled": false,
+       "name": "Elastic Security"
+      }
+     },
+     "foo": {
+      "x": 1
+     },
+     "harfanglab": {
+      "platform": {
+       "description": "HarfangLab EDR provides advanced threat detection using Sigma rules\nfor behavioral detection and YARA rules for memory/file scanning. This integration\nsupports deploying detection rules to HarfangLab's threat intelligence API, including\nboth Sigma-based behavioral rules and YARA-based scanning rules.\n",
+       "enabled": false,
+       "name": "HarfangLab"
+      }
+     },
+     "sentinel": {
+      "platform": {
+       "colour": 1,
+       "description": "Microsoft Sentinel delivers intelligent security analytics\nand threat intelligence across the enterprise. With Microsoft Sentinel, you\nget a single solution for attack detection, threat visibility, proactive\nhunting, and threat response.",
+       "enabled": false,
+       "name": "Microsoft Sentinel"
+      }
+     },
+     "sentinel_one": {
+      "platform": {
+       "description": "STAR Rules Engine is a rules-based engine which enables users\nto transform queries of cloud workload telemetry into automated threat hunting\nrules. Whenever a match is made, these custom rules trigger alerts and, optionally,\nautomated response actions.\n",
+       "enabled": false,
+       "name": "Sentinel One"
+      }
+     },
+     "splunk": {
+      "platform": {
+       "description": "Splunk Enterprise enables you to search, analyze and\nvisualize your data to quickly act on insights from across your technology landscape.",
+       "enabled": false,
+       "name": "Splunk Enterprise"
+      }
+     },
+     "sysdig": {
+      "platform": {
+       "description": "Custom Falco rules for Sysdig Secure runtime detection.",
+       "enabled": false,
+       "name": "Sysdig Secure"
+      }
+     }
+    },
+    "resources": {
+     "misp": {
+      "galaxies": {
+       "threat_actors": "https://raw.githubusercontent.com/MISP/misp-galaxy/refs/heads/main/clusters/threat-actor.json"
+      }
+     }
+    },
+    "systems": {
+     "carbon_black_cloud": {
+      "platform": {
+       "description": "VMware Carbon Black Enterprise EDR is an advanced threat hunting\nand incident response solution delivering continuous visibility for top security\noperations centres (SOCs) and incident response (IR) teams.",
+       "enabled": false,
+       "name": "Carbon Black Cloud Enterprise EDR"
+      }
+     },
+     "crowdstrike": {
+      "platform": {
+       "description": "The CrowdStrike Falcon\u00ae platform delivers real-time\nthreat detection, simplified management, and proactive threat hunting\nfor unmatched protection.\n",
+       "enabled": false,
+       "name": "Crowdstrike Falcon Correlation Rules"
+      }
+     },
+     "defender_for_endpoint": {
+      "platform": {
+       "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
+       "enabled": false,
+       "name": "Microsoft Defender for Endpoint"
+      }
+     },
+     "elastic": {
+      "platform": {
+       "description": "Elastic Security detection rules via the Kibana detection engine API.",
+       "enabled": false,
+       "name": "Elastic Security"
+      }
+     },
+     "foo": {
+      "x": 1
+     },
+     "harfanglab": {
+      "platform": {
+       "description": "HarfangLab EDR provides advanced threat detection using Sigma rules\nfor behavioral detection and YARA rules for memory/file scanning. This integration\nsupports deploying detection rules to HarfangLab's threat intelligence API, including\nboth Sigma-based behavioral rules and YARA-based scanning rules.\n",
+       "enabled": false,
+       "name": "HarfangLab"
+      }
+     },
+     "sentinel": {
+      "platform": {
+       "colour": 1,
+       "description": "Microsoft Sentinel delivers intelligent security analytics\nand threat intelligence across the enterprise. With Microsoft Sentinel, you\nget a single solution for attack detection, threat visibility, proactive\nhunting, and threat response.",
+       "enabled": false,
+       "name": "Microsoft Sentinel"
+      }
+     },
+     "sentinel_one": {
+      "platform": {
+       "description": "STAR Rules Engine is a rules-based engine which enables users\nto transform queries of cloud workload telemetry into automated threat hunting\nrules. Whenever a match is made, these custom rules trigger alerts and, optionally,\nautomated response actions.\n",
+       "enabled": false,
+       "name": "Sentinel One"
+      }
+     },
+     "splunk": {
+      "platform": {
+       "description": "Splunk Enterprise enables you to search, analyze and\nvisualize your data to quickly act on insights from across your technology landscape.",
+       "enabled": false,
+       "name": "Splunk Enterprise"
+      }
+     },
+     "sysdig": {
+      "platform": {
+       "description": "Custom Falco rules for Sysdig Secure runtime detection.",
+       "enabled": false,
+       "name": "Sysdig Secure"
+      }
+     }
+    },
+    "visibility": {
+     "logsources": [
+      {
+       "assets": [
+        "ghost"
+       ],
+       "description": "d",
+       "name": "n",
+       "system": "sentinel"
+      }
+     ]
+    }
+   }
+  },
+  "workspace-hidden-and-private": {
+   "issues": [],
+   "resolved": {
+    ".dot": {
+     "c": 1
+    },
+    "deployment": {
+     "debug": {
+      "mdr_test_uuids": [
+       ""
+      ],
+      "ssl_enabled": true
+     },
+     "default_responders": "",
+     "promotion": {
+      "enabled": true,
+      "promotion_target": "PRODUCTION"
+     },
+     "statuses": [
+      {
+       "description": "Under active functional design, without technical translation yet",
+       "name": "DESIGN",
+       "strategy": "INERT"
+      },
+      {
+       "description": "Under active technical implementation, going in exploratory rounds",
+       "name": "DEVELOPMENT",
+       "strategy": "PREVIEW"
+      },
+      {
+       "description": "Rule is qualified functionally, but is undergoing refinement rounds",
+       "name": "IMPROVING",
+       "strategy": "PREVIEW"
+      },
+      {
+       "description": "Deployed in staging environment for operational testing",
+       "name": "STAGING",
+       "strategy": "PREVIEW"
+      },
+      {
+       "description": "A rule is ready to go for PRODUCTION for the responding team. During ACCEPTANCE an\nanalyst will handle the alert and will ensure the alert ticket and playbook are correct.",
+       "name": "ACCEPTANCE",
+       "strategy": "PREVIEW"
+      },
+      {
+       "description": "Deployed in active production environment, potentially raising alerts",
+       "name": "PRODUCTION",
+       "strategy": "RELEASE"
+      },
+      {
+       "description": "Rule is still accessible, but not active in any environment",
+       "name": "DISABLED",
+       "strategy": "DISABLEMENT"
+      },
+      {
+       "description": "Rule is fully deprecated, and only flagged under this status for archival purposes",
+       "name": "REMOVED",
+       "strategy": "DELETION"
+      }
+     ]
+    },
+    "documentation": {
+     "cve": {
+      "base_url": "https://vulnerability.circl.lu",
+      "default_db_link": "https://vulnerability.circl.lu/vuln/",
+      "retrieve_details": true
+     },
+     "diagrams": {
+      "relations_direction": "both"
+     },
+     "flavor": {
+      "default": "generic"
+     },
+     "folder_index_pages": true,
+     "gitlab": {
+      "uuid_permalinks": true
+     },
+     "index": {
+      "icons": false,
+      "relation_counts": true
+     },
+     "object_names": {
+      "objective": "Detection Objectives",
+      "rule": "Detection Rules",
+      "signal": "Detection Objective Signals",
+      "threat": "Threat Vectors"
+     },
+     "scope": [
+      "threat",
+      "objective",
+      "rule"
+     ],
+     "skip_model_keys": [
+      "description",
+      "guidelines",
+      "terrain",
+      "surface",
+      "tuning",
+      "mitre_attack",
+      "actors",
+      "vectors",
+      "justification",
+      "chaining",
+      "cve"
+     ]
+    },
+    "folder": {
+     ".h": {
+      "d": 1
+     },
+     "x.y": {
+      "e": 1
+     }
+    },
+    "lint": {
+     "filenames": {
+      "enabled": true,
+      "style": "slug"
+     },
+     "metadata": {
+      "enabled": true,
+      "required": [
+       "author",
+       "organisation"
+      ]
+     },
+     "placeholders": {
+      "enabled": true
+     },
+     "queries": {
+      "enabled": true
+     }
+    },
+    "paths": {
+     "artifacts": {
+      "exports": {
+       "attack_layer": "attack-navigator.json",
+       "objects": "objects.export.json",
+       "revisions": "revisions.export.json"
+      },
+      "schemas": {
+       "objective": "objective.1.0.schema.json",
+       "router": "opentide.schema.json",
+       "rule": "rule.1.0.schema.json",
+       "threat": "threat.1.0.schema.json",
+       "visibility": "visibility.1.0.schema.json"
+      },
+      "templates": {
+       "objective": "objective.1.0.template.yaml",
+       "rule": "rule.1.0.template.yaml",
+       "threat": "threat.1.0.template.yaml"
+      }
+     },
+     "metaschemas": {
+      "objective": "objective",
+      "rule": "rule",
+      "threat": "threat"
+     },
+     "objects": [
+      "threat",
+      "objective",
+      "rule"
+     ],
+     "paths": {
+      "docs": {
+       "objectives": "docs/objectives/",
+       "root": "docs/",
+       "rules": "docs/rules/",
+       "threats": "docs/threats/"
+      },
+      "exports": {
+       "root": ".opentide/exports/"
+      },
+      "objects": {
+       "objective": "objects/objectives/",
+       "rule": "objects/rules/",
+       "snippet_file": ".vscode/model-templates.code-snippets",
+       "threat": "objects/threats/"
+      },
+      "opentide": {
+       "root": ".opentide/",
+       "schemas": ".opentide/schemas/",
+       "templates": ".opentide/templates/"
+      }
+     }
+    },
+    "platforms": {
+     "carbon_black_cloud": {
+      "platform": {
+       "description": "VMware Carbon Black Enterprise EDR is an advanced threat hunting\nand incident response solution delivering continuous visibility for top security\noperations centres (SOCs) and incident response (IR) teams.",
+       "enabled": false,
+       "name": "Carbon Black Cloud Enterprise EDR"
+      }
+     },
+     "crowdstrike": {
+      "platform": {
+       "description": "The CrowdStrike Falcon\u00ae platform delivers real-time\nthreat detection, simplified management, and proactive threat hunting\nfor unmatched protection.\n",
+       "enabled": false,
+       "name": "Crowdstrike Falcon Correlation Rules"
+      }
+     },
+     "defender_for_endpoint": {
+      "platform": {
+       "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
+       "enabled": false,
+       "name": "Microsoft Defender for Endpoint"
+      }
+     },
+     "elastic": {
+      "platform": {
+       "description": "Elastic Security detection rules via the Kibana detection engine API.",
+       "enabled": false,
+       "name": "Elastic Security"
+      }
+     },
+     "harfanglab": {
+      "platform": {
+       "description": "HarfangLab EDR provides advanced threat detection using Sigma rules\nfor behavioral detection and YARA rules for memory/file scanning. This integration\nsupports deploying detection rules to HarfangLab's threat intelligence API, including\nboth Sigma-based behavioral rules and YARA-based scanning rules.\n",
+       "enabled": false,
+       "name": "HarfangLab"
+      }
+     },
+     "sentinel": {
+      "platform": {
+       "description": "Microsoft Sentinel delivers intelligent security analytics\nand threat intelligence across the enterprise. With Microsoft Sentinel, you\nget a single solution for attack detection, threat visibility, proactive\nhunting, and threat response.",
+       "enabled": false,
+       "name": "Microsoft Sentinel"
+      }
+     },
+     "sentinel_one": {
+      "platform": {
+       "description": "STAR Rules Engine is a rules-based engine which enables users\nto transform queries of cloud workload telemetry into automated threat hunting\nrules. Whenever a match is made, these custom rules trigger alerts and, optionally,\nautomated response actions.\n",
+       "enabled": false,
+       "name": "Sentinel One"
+      }
+     },
+     "splunk": {
+      "platform": {
+       "description": "Splunk Enterprise enables you to search, analyze and\nvisualize your data to quickly act on insights from across your technology landscape.",
+       "enabled": false,
+       "name": "Splunk Enterprise"
+      }
+     },
+     "sysdig": {
+      "platform": {
+       "description": "Custom Falco rules for Sysdig Secure runtime detection.",
+       "enabled": false,
+       "name": "Sysdig Secure"
+      }
+     }
+    },
+    "resources": {
+     "misp": {
+      "galaxies": {
+       "threat_actors": "https://raw.githubusercontent.com/MISP/misp-galaxy/refs/heads/main/clusters/threat-actor.json"
+      }
+     }
+    },
+    "systems": {
+     "carbon_black_cloud": {
+      "platform": {
+       "description": "VMware Carbon Black Enterprise EDR is an advanced threat hunting\nand incident response solution delivering continuous visibility for top security\noperations centres (SOCs) and incident response (IR) teams.",
+       "enabled": false,
+       "name": "Carbon Black Cloud Enterprise EDR"
+      }
+     },
+     "crowdstrike": {
+      "platform": {
+       "description": "The CrowdStrike Falcon\u00ae platform delivers real-time\nthreat detection, simplified management, and proactive threat hunting\nfor unmatched protection.\n",
+       "enabled": false,
+       "name": "Crowdstrike Falcon Correlation Rules"
+      }
+     },
+     "defender_for_endpoint": {
+      "platform": {
+       "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
+       "enabled": false,
+       "name": "Microsoft Defender for Endpoint"
+      }
+     },
+     "elastic": {
+      "platform": {
+       "description": "Elastic Security detection rules via the Kibana detection engine API.",
+       "enabled": false,
+       "name": "Elastic Security"
+      }
+     },
+     "harfanglab": {
+      "platform": {
+       "description": "HarfangLab EDR provides advanced threat detection using Sigma rules\nfor behavioral detection and YARA rules for memory/file scanning. This integration\nsupports deploying detection rules to HarfangLab's threat intelligence API, including\nboth Sigma-based behavioral rules and YARA-based scanning rules.\n",
+       "enabled": false,
+       "name": "HarfangLab"
+      }
+     },
+     "sentinel": {
+      "platform": {
+       "description": "Microsoft Sentinel delivers intelligent security analytics\nand threat intelligence across the enterprise. With Microsoft Sentinel, you\nget a single solution for attack detection, threat visibility, proactive\nhunting, and threat response.",
+       "enabled": false,
+       "name": "Microsoft Sentinel"
+      }
+     },
+     "sentinel_one": {
+      "platform": {
+       "description": "STAR Rules Engine is a rules-based engine which enables users\nto transform queries of cloud workload telemetry into automated threat hunting\nrules. Whenever a match is made, these custom rules trigger alerts and, optionally,\nautomated response actions.\n",
+       "enabled": false,
+       "name": "Sentinel One"
+      }
+     },
+     "splunk": {
+      "platform": {
+       "description": "Splunk Enterprise enables you to search, analyze and\nvisualize your data to quickly act on insights from across your technology landscape.",
+       "enabled": false,
+       "name": "Splunk Enterprise"
+      }
+     },
+     "sysdig": {
+      "platform": {
+       "description": "Custom Falco rules for Sysdig Secure runtime detection.",
+       "enabled": false,
+       "name": "Sysdig Secure"
+      }
+     }
+    },
+    "visibility": {
+     "logsources": []
+    }
+   }
+  },
+  "workspace-integer-past-range": {
+   "issues": [],
+   "resolved": {
+    "custom": {
+     "a": 9223372036854775808
+    },
+    "deployment": {
+     "debug": {
+      "mdr_test_uuids": [
+       ""
+      ],
+      "ssl_enabled": true
+     },
+     "default_responders": "",
+     "promotion": {
+      "enabled": true,
+      "promotion_target": "PRODUCTION"
+     },
+     "statuses": [
+      {
+       "description": "Under active functional design, without technical translation yet",
+       "name": "DESIGN",
+       "strategy": "INERT"
+      },
+      {
+       "description": "Under active technical implementation, going in exploratory rounds",
+       "name": "DEVELOPMENT",
+       "strategy": "PREVIEW"
+      },
+      {
+       "description": "Rule is qualified functionally, but is undergoing refinement rounds",
+       "name": "IMPROVING",
+       "strategy": "PREVIEW"
+      },
+      {
+       "description": "Deployed in staging environment for operational testing",
+       "name": "STAGING",
+       "strategy": "PREVIEW"
+      },
+      {
+       "description": "A rule is ready to go for PRODUCTION for the responding team. During ACCEPTANCE an\nanalyst will handle the alert and will ensure the alert ticket and playbook are correct.",
+       "name": "ACCEPTANCE",
+       "strategy": "PREVIEW"
+      },
+      {
+       "description": "Deployed in active production environment, potentially raising alerts",
+       "name": "PRODUCTION",
+       "strategy": "RELEASE"
+      },
+      {
+       "description": "Rule is still accessible, but not active in any environment",
+       "name": "DISABLED",
+       "strategy": "DISABLEMENT"
+      },
+      {
+       "description": "Rule is fully deprecated, and only flagged under this status for archival purposes",
+       "name": "REMOVED",
+       "strategy": "DELETION"
+      }
+     ]
+    },
+    "documentation": {
+     "cve": {
+      "base_url": "https://vulnerability.circl.lu",
+      "default_db_link": "https://vulnerability.circl.lu/vuln/",
+      "retrieve_details": true
+     },
+     "diagrams": {
+      "relations_direction": "both"
+     },
+     "flavor": {
+      "default": "generic"
+     },
+     "folder_index_pages": true,
+     "gitlab": {
+      "uuid_permalinks": true
+     },
+     "index": {
+      "icons": false,
+      "relation_counts": true
+     },
+     "object_names": {
+      "objective": "Detection Objectives",
+      "rule": "Detection Rules",
+      "signal": "Detection Objective Signals",
+      "threat": "Threat Vectors"
+     },
+     "scope": [
+      "threat",
+      "objective",
+      "rule"
+     ],
+     "skip_model_keys": [
+      "description",
+      "guidelines",
+      "terrain",
+      "surface",
+      "tuning",
+      "mitre_attack",
+      "actors",
+      "vectors",
+      "justification",
+      "chaining",
+      "cve"
+     ]
+    },
+    "lint": {
+     "filenames": {
+      "enabled": true,
+      "style": "slug"
+     },
+     "metadata": {
+      "enabled": true,
+      "required": [
+       "author",
+       "organisation"
+      ]
+     },
+     "placeholders": {
+      "enabled": true
+     },
+     "queries": {
+      "enabled": true
+     }
+    },
+    "paths": {
+     "artifacts": {
+      "exports": {
+       "attack_layer": "attack-navigator.json",
+       "objects": "objects.export.json",
+       "revisions": "revisions.export.json"
+      },
+      "schemas": {
+       "objective": "objective.1.0.schema.json",
+       "router": "opentide.schema.json",
+       "rule": "rule.1.0.schema.json",
+       "threat": "threat.1.0.schema.json",
+       "visibility": "visibility.1.0.schema.json"
+      },
+      "templates": {
+       "objective": "objective.1.0.template.yaml",
+       "rule": "rule.1.0.template.yaml",
+       "threat": "threat.1.0.template.yaml"
+      }
+     },
+     "metaschemas": {
+      "objective": "objective",
+      "rule": "rule",
+      "threat": "threat"
+     },
+     "objects": [
+      "threat",
+      "objective",
+      "rule"
+     ],
+     "paths": {
+      "docs": {
+       "objectives": "docs/objectives/",
+       "root": "docs/",
+       "rules": "docs/rules/",
+       "threats": "docs/threats/"
+      },
+      "exports": {
+       "root": ".opentide/exports/"
+      },
+      "objects": {
+       "objective": "objects/objectives/",
+       "rule": "objects/rules/",
+       "snippet_file": ".vscode/model-templates.code-snippets",
+       "threat": "objects/threats/"
+      },
+      "opentide": {
+       "root": ".opentide/",
+       "schemas": ".opentide/schemas/",
+       "templates": ".opentide/templates/"
+      }
+     }
+    },
+    "platforms": {
+     "carbon_black_cloud": {
+      "platform": {
+       "description": "VMware Carbon Black Enterprise EDR is an advanced threat hunting\nand incident response solution delivering continuous visibility for top security\noperations centres (SOCs) and incident response (IR) teams.",
+       "enabled": false,
+       "name": "Carbon Black Cloud Enterprise EDR"
+      }
+     },
+     "crowdstrike": {
+      "platform": {
+       "description": "The CrowdStrike Falcon\u00ae platform delivers real-time\nthreat detection, simplified management, and proactive threat hunting\nfor unmatched protection.\n",
+       "enabled": false,
+       "name": "Crowdstrike Falcon Correlation Rules"
+      }
+     },
+     "defender_for_endpoint": {
+      "platform": {
+       "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
+       "enabled": false,
+       "name": "Microsoft Defender for Endpoint"
+      }
+     },
+     "elastic": {
+      "platform": {
+       "description": "Elastic Security detection rules via the Kibana detection engine API.",
+       "enabled": false,
+       "name": "Elastic Security"
+      }
+     },
+     "harfanglab": {
+      "platform": {
+       "description": "HarfangLab EDR provides advanced threat detection using Sigma rules\nfor behavioral detection and YARA rules for memory/file scanning. This integration\nsupports deploying detection rules to HarfangLab's threat intelligence API, including\nboth Sigma-based behavioral rules and YARA-based scanning rules.\n",
+       "enabled": false,
+       "name": "HarfangLab"
+      }
+     },
+     "sentinel": {
+      "platform": {
+       "description": "Microsoft Sentinel delivers intelligent security analytics\nand threat intelligence across the enterprise. With Microsoft Sentinel, you\nget a single solution for attack detection, threat visibility, proactive\nhunting, and threat response.",
+       "enabled": false,
+       "name": "Microsoft Sentinel"
+      }
+     },
+     "sentinel_one": {
+      "platform": {
+       "description": "STAR Rules Engine is a rules-based engine which enables users\nto transform queries of cloud workload telemetry into automated threat hunting\nrules. Whenever a match is made, these custom rules trigger alerts and, optionally,\nautomated response actions.\n",
+       "enabled": false,
+       "name": "Sentinel One"
+      }
+     },
+     "splunk": {
+      "platform": {
+       "description": "Splunk Enterprise enables you to search, analyze and\nvisualize your data to quickly act on insights from across your technology landscape.",
+       "enabled": false,
+       "name": "Splunk Enterprise"
+      }
+     },
+     "sysdig": {
+      "platform": {
+       "description": "Custom Falco rules for Sysdig Secure runtime detection.",
+       "enabled": false,
+       "name": "Sysdig Secure"
+      }
+     }
+    },
+    "resources": {
+     "misp": {
+      "galaxies": {
+       "threat_actors": "https://raw.githubusercontent.com/MISP/misp-galaxy/refs/heads/main/clusters/threat-actor.json"
+      }
+     }
+    },
+    "systems": {
+     "carbon_black_cloud": {
+      "platform": {
+       "description": "VMware Carbon Black Enterprise EDR is an advanced threat hunting\nand incident response solution delivering continuous visibility for top security\noperations centres (SOCs) and incident response (IR) teams.",
+       "enabled": false,
+       "name": "Carbon Black Cloud Enterprise EDR"
+      }
+     },
+     "crowdstrike": {
+      "platform": {
+       "description": "The CrowdStrike Falcon\u00ae platform delivers real-time\nthreat detection, simplified management, and proactive threat hunting\nfor unmatched protection.\n",
+       "enabled": false,
+       "name": "Crowdstrike Falcon Correlation Rules"
+      }
+     },
+     "defender_for_endpoint": {
+      "platform": {
+       "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
+       "enabled": false,
+       "name": "Microsoft Defender for Endpoint"
+      }
+     },
+     "elastic": {
+      "platform": {
+       "description": "Elastic Security detection rules via the Kibana detection engine API.",
+       "enabled": false,
+       "name": "Elastic Security"
+      }
+     },
+     "harfanglab": {
+      "platform": {
+       "description": "HarfangLab EDR provides advanced threat detection using Sigma rules\nfor behavioral detection and YARA rules for memory/file scanning. This integration\nsupports deploying detection rules to HarfangLab's threat intelligence API, including\nboth Sigma-based behavioral rules and YARA-based scanning rules.\n",
+       "enabled": false,
+       "name": "HarfangLab"
+      }
+     },
+     "sentinel": {
+      "platform": {
+       "description": "Microsoft Sentinel delivers intelligent security analytics\nand threat intelligence across the enterprise. With Microsoft Sentinel, you\nget a single solution for attack detection, threat visibility, proactive\nhunting, and threat response.",
+       "enabled": false,
+       "name": "Microsoft Sentinel"
+      }
+     },
+     "sentinel_one": {
+      "platform": {
+       "description": "STAR Rules Engine is a rules-based engine which enables users\nto transform queries of cloud workload telemetry into automated threat hunting\nrules. Whenever a match is made, these custom rules trigger alerts and, optionally,\nautomated response actions.\n",
+       "enabled": false,
+       "name": "Sentinel One"
+      }
+     },
+     "splunk": {
+      "platform": {
+       "description": "Splunk Enterprise enables you to search, analyze and\nvisualize your data to quickly act on insights from across your technology landscape.",
+       "enabled": false,
+       "name": "Splunk Enterprise"
+      }
+     },
+     "sysdig": {
+      "platform": {
+       "description": "Custom Falco rules for Sysdig Secure runtime detection.",
+       "enabled": false,
+       "name": "Sysdig Secure"
+      }
+     }
+    },
+    "visibility": {
+     "logsources": []
+    }
+   }
+  },
+  "workspace-integer-range": {
+   "issues": [],
+   "resolved": {
+    "custom": {
+     "a": 9223372036854775807,
+     "b": -9223372036854775808
+    },
+    "deployment": {
+     "debug": {
+      "mdr_test_uuids": [
+       ""
+      ],
+      "ssl_enabled": true
+     },
+     "default_responders": "",
+     "promotion": {
+      "enabled": true,
+      "promotion_target": "PRODUCTION"
+     },
+     "statuses": [
+      {
+       "description": "Under active functional design, without technical translation yet",
+       "name": "DESIGN",
+       "strategy": "INERT"
+      },
+      {
+       "description": "Under active technical implementation, going in exploratory rounds",
+       "name": "DEVELOPMENT",
+       "strategy": "PREVIEW"
+      },
+      {
+       "description": "Rule is qualified functionally, but is undergoing refinement rounds",
+       "name": "IMPROVING",
+       "strategy": "PREVIEW"
+      },
+      {
+       "description": "Deployed in staging environment for operational testing",
+       "name": "STAGING",
+       "strategy": "PREVIEW"
+      },
+      {
+       "description": "A rule is ready to go for PRODUCTION for the responding team. During ACCEPTANCE an\nanalyst will handle the alert and will ensure the alert ticket and playbook are correct.",
+       "name": "ACCEPTANCE",
+       "strategy": "PREVIEW"
+      },
+      {
+       "description": "Deployed in active production environment, potentially raising alerts",
+       "name": "PRODUCTION",
+       "strategy": "RELEASE"
+      },
+      {
+       "description": "Rule is still accessible, but not active in any environment",
+       "name": "DISABLED",
+       "strategy": "DISABLEMENT"
+      },
+      {
+       "description": "Rule is fully deprecated, and only flagged under this status for archival purposes",
+       "name": "REMOVED",
+       "strategy": "DELETION"
+      }
+     ]
+    },
+    "documentation": {
+     "cve": {
+      "base_url": "https://vulnerability.circl.lu",
+      "default_db_link": "https://vulnerability.circl.lu/vuln/",
+      "retrieve_details": true
+     },
+     "diagrams": {
+      "relations_direction": "both"
+     },
+     "flavor": {
+      "default": "generic"
+     },
+     "folder_index_pages": true,
+     "gitlab": {
+      "uuid_permalinks": true
+     },
+     "index": {
+      "icons": false,
+      "relation_counts": true
+     },
+     "object_names": {
+      "objective": "Detection Objectives",
+      "rule": "Detection Rules",
+      "signal": "Detection Objective Signals",
+      "threat": "Threat Vectors"
+     },
+     "scope": [
+      "threat",
+      "objective",
+      "rule"
+     ],
+     "skip_model_keys": [
+      "description",
+      "guidelines",
+      "terrain",
+      "surface",
+      "tuning",
+      "mitre_attack",
+      "actors",
+      "vectors",
+      "justification",
+      "chaining",
+      "cve"
+     ]
+    },
+    "lint": {
+     "filenames": {
+      "enabled": true,
+      "style": "slug"
+     },
+     "metadata": {
+      "enabled": true,
+      "required": [
+       "author",
+       "organisation"
+      ]
+     },
+     "placeholders": {
+      "enabled": true
+     },
+     "queries": {
+      "enabled": true
+     }
+    },
+    "paths": {
+     "artifacts": {
+      "exports": {
+       "attack_layer": "attack-navigator.json",
+       "objects": "objects.export.json",
+       "revisions": "revisions.export.json"
+      },
+      "schemas": {
+       "objective": "objective.1.0.schema.json",
+       "router": "opentide.schema.json",
+       "rule": "rule.1.0.schema.json",
+       "threat": "threat.1.0.schema.json",
+       "visibility": "visibility.1.0.schema.json"
+      },
+      "templates": {
+       "objective": "objective.1.0.template.yaml",
+       "rule": "rule.1.0.template.yaml",
+       "threat": "threat.1.0.template.yaml"
+      }
+     },
+     "metaschemas": {
+      "objective": "objective",
+      "rule": "rule",
+      "threat": "threat"
+     },
+     "objects": [
+      "threat",
+      "objective",
+      "rule"
+     ],
+     "paths": {
+      "docs": {
+       "objectives": "docs/objectives/",
+       "root": "docs/",
+       "rules": "docs/rules/",
+       "threats": "docs/threats/"
+      },
+      "exports": {
+       "root": ".opentide/exports/"
+      },
+      "objects": {
+       "objective": "objects/objectives/",
+       "rule": "objects/rules/",
+       "snippet_file": ".vscode/model-templates.code-snippets",
+       "threat": "objects/threats/"
+      },
+      "opentide": {
+       "root": ".opentide/",
+       "schemas": ".opentide/schemas/",
+       "templates": ".opentide/templates/"
+      }
+     }
+    },
+    "platforms": {
+     "carbon_black_cloud": {
+      "platform": {
+       "description": "VMware Carbon Black Enterprise EDR is an advanced threat hunting\nand incident response solution delivering continuous visibility for top security\noperations centres (SOCs) and incident response (IR) teams.",
+       "enabled": false,
+       "name": "Carbon Black Cloud Enterprise EDR"
+      }
+     },
+     "crowdstrike": {
+      "platform": {
+       "description": "The CrowdStrike Falcon\u00ae platform delivers real-time\nthreat detection, simplified management, and proactive threat hunting\nfor unmatched protection.\n",
+       "enabled": false,
+       "name": "Crowdstrike Falcon Correlation Rules"
+      }
+     },
+     "defender_for_endpoint": {
+      "platform": {
+       "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
+       "enabled": false,
+       "name": "Microsoft Defender for Endpoint"
+      }
+     },
+     "elastic": {
+      "platform": {
+       "description": "Elastic Security detection rules via the Kibana detection engine API.",
+       "enabled": false,
+       "name": "Elastic Security"
+      }
+     },
+     "harfanglab": {
+      "platform": {
+       "description": "HarfangLab EDR provides advanced threat detection using Sigma rules\nfor behavioral detection and YARA rules for memory/file scanning. This integration\nsupports deploying detection rules to HarfangLab's threat intelligence API, including\nboth Sigma-based behavioral rules and YARA-based scanning rules.\n",
+       "enabled": false,
+       "name": "HarfangLab"
+      }
+     },
+     "sentinel": {
+      "platform": {
+       "description": "Microsoft Sentinel delivers intelligent security analytics\nand threat intelligence across the enterprise. With Microsoft Sentinel, you\nget a single solution for attack detection, threat visibility, proactive\nhunting, and threat response.",
+       "enabled": false,
+       "name": "Microsoft Sentinel"
+      }
+     },
+     "sentinel_one": {
+      "platform": {
+       "description": "STAR Rules Engine is a rules-based engine which enables users\nto transform queries of cloud workload telemetry into automated threat hunting\nrules. Whenever a match is made, these custom rules trigger alerts and, optionally,\nautomated response actions.\n",
+       "enabled": false,
+       "name": "Sentinel One"
+      }
+     },
+     "splunk": {
+      "platform": {
+       "description": "Splunk Enterprise enables you to search, analyze and\nvisualize your data to quickly act on insights from across your technology landscape.",
+       "enabled": false,
+       "name": "Splunk Enterprise"
+      }
+     },
+     "sysdig": {
+      "platform": {
+       "description": "Custom Falco rules for Sysdig Secure runtime detection.",
+       "enabled": false,
+       "name": "Sysdig Secure"
+      }
+     }
+    },
+    "resources": {
+     "misp": {
+      "galaxies": {
+       "threat_actors": "https://raw.githubusercontent.com/MISP/misp-galaxy/refs/heads/main/clusters/threat-actor.json"
+      }
+     }
+    },
+    "systems": {
+     "carbon_black_cloud": {
+      "platform": {
+       "description": "VMware Carbon Black Enterprise EDR is an advanced threat hunting\nand incident response solution delivering continuous visibility for top security\noperations centres (SOCs) and incident response (IR) teams.",
+       "enabled": false,
+       "name": "Carbon Black Cloud Enterprise EDR"
+      }
+     },
+     "crowdstrike": {
+      "platform": {
+       "description": "The CrowdStrike Falcon\u00ae platform delivers real-time\nthreat detection, simplified management, and proactive threat hunting\nfor unmatched protection.\n",
+       "enabled": false,
+       "name": "Crowdstrike Falcon Correlation Rules"
+      }
+     },
+     "defender_for_endpoint": {
+      "platform": {
+       "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
+       "enabled": false,
+       "name": "Microsoft Defender for Endpoint"
+      }
+     },
+     "elastic": {
+      "platform": {
+       "description": "Elastic Security detection rules via the Kibana detection engine API.",
+       "enabled": false,
+       "name": "Elastic Security"
+      }
+     },
+     "harfanglab": {
+      "platform": {
+       "description": "HarfangLab EDR provides advanced threat detection using Sigma rules\nfor behavioral detection and YARA rules for memory/file scanning. This integration\nsupports deploying detection rules to HarfangLab's threat intelligence API, including\nboth Sigma-based behavioral rules and YARA-based scanning rules.\n",
+       "enabled": false,
+       "name": "HarfangLab"
+      }
+     },
+     "sentinel": {
+      "platform": {
+       "description": "Microsoft Sentinel delivers intelligent security analytics\nand threat intelligence across the enterprise. With Microsoft Sentinel, you\nget a single solution for attack detection, threat visibility, proactive\nhunting, and threat response.",
+       "enabled": false,
+       "name": "Microsoft Sentinel"
+      }
+     },
+     "sentinel_one": {
+      "platform": {
+       "description": "STAR Rules Engine is a rules-based engine which enables users\nto transform queries of cloud workload telemetry into automated threat hunting\nrules. Whenever a match is made, these custom rules trigger alerts and, optionally,\nautomated response actions.\n",
+       "enabled": false,
+       "name": "Sentinel One"
+      }
+     },
+     "splunk": {
+      "platform": {
+       "description": "Splunk Enterprise enables you to search, analyze and\nvisualize your data to quickly act on insights from across your technology landscape.",
+       "enabled": false,
+       "name": "Splunk Enterprise"
+      }
+     },
+     "sysdig": {
+      "platform": {
+       "description": "Custom Falco rules for Sysdig Secure runtime detection.",
+       "enabled": false,
+       "name": "Sysdig Secure"
+      }
+     }
+    },
+    "visibility": {
+     "logsources": []
+    }
+   }
+  },
+  "workspace-overrides": {
+   "issues": [],
+   "resolved": {
+    "custom": {
+     "one": {
+      "b": [
+       1,
+       2.5,
+       true
+      ]
+     }
+    },
+    "deployment": {
+     "debug": {
+      "mdr_test_uuids": [
+       ""
+      ],
+      "ssl_enabled": true
+     },
+     "default_responders": "cert",
+     "promotion": {
+      "enabled": true,
+      "promotion_target": "PRODUCTION"
+     },
+     "responders": [
+      {
+       "name": "soc"
+      }
+     ],
+     "statuses": [
+      {
+       "description": "Under active functional design, without technical translation yet",
+       "name": "DESIGN",
+       "strategy": "INERT"
+      },
+      {
+       "description": "Under active technical implementation, going in exploratory rounds",
+       "name": "DEVELOPMENT",
+       "strategy": "PREVIEW"
+      },
+      {
+       "description": "Rule is qualified functionally, but is undergoing refinement rounds",
+       "name": "IMPROVING",
+       "strategy": "PREVIEW"
+      },
+      {
+       "description": "Deployed in staging environment for operational testing",
+       "name": "STAGING",
+       "strategy": "PREVIEW"
+      },
+      {
+       "description": "A rule is ready to go for PRODUCTION for the responding team. During ACCEPTANCE an\nanalyst will handle the alert and will ensure the alert ticket and playbook are correct.",
+       "name": "ACCEPTANCE",
+       "strategy": "PREVIEW"
+      },
+      {
+       "description": "Deployed in active production environment, potentially raising alerts",
+       "name": "PRODUCTION",
+       "strategy": "RELEASE"
+      },
+      {
+       "description": "Rule is still accessible, but not active in any environment",
+       "name": "DISABLED",
+       "strategy": "DISABLEMENT"
+      },
+      {
+       "description": "Rule is fully deprecated, and only flagged under this status for archival purposes",
+       "name": "REMOVED",
+       "strategy": "DELETION"
+      }
+     ]
+    },
+    "documentation": {
+     "cve": {
+      "base_url": "https://vulnerability.circl.lu",
+      "default_db_link": "https://vulnerability.circl.lu/vuln/",
+      "retrieve_details": true
+     },
+     "diagrams": {
+      "relations_direction": "both"
+     },
+     "flavor": {
+      "default": "generic"
+     },
+     "folder_index_pages": true,
+     "gitlab": {
+      "uuid_permalinks": true
+     },
+     "index": {
+      "icons": false,
+      "relation_counts": true
+     },
+     "object_names": {
+      "objective": "Detection Objectives",
+      "rule": "Detection Rules",
+      "signal": "Detection Objective Signals",
+      "threat": "Threat Vectors"
+     },
+     "scope": [
+      "threat",
+      "objective",
+      "rule"
+     ],
+     "skip_model_keys": [
+      "description",
+      "guidelines",
+      "terrain",
+      "surface",
+      "tuning",
+      "mitre_attack",
+      "actors",
+      "vectors",
+      "justification",
+      "chaining",
+      "cve"
+     ]
+    },
+    "extra": {
+     "a": 1
+    },
+    "lint": {
+     "filenames": {
+      "enabled": true,
+      "style": "slug"
+     },
+     "metadata": {
+      "enabled": true,
+      "required": [
+       "author",
+       "organisation"
+      ]
+     },
+     "placeholders": {
+      "enabled": true
+     },
+     "queries": {
+      "enabled": true
+     }
+    },
+    "paths": {
+     "artifacts": {
+      "exports": {
+       "attack_layer": "attack-navigator.json",
+       "objects": "objects.export.json",
+       "revisions": "revisions.export.json"
+      },
+      "schemas": {
+       "objective": "objective.1.0.schema.json",
+       "router": "opentide.schema.json",
+       "rule": "rule.1.0.schema.json",
+       "threat": "threat.1.0.schema.json",
+       "visibility": "visibility.1.0.schema.json"
+      },
+      "templates": {
+       "objective": "objective.1.0.template.yaml",
+       "rule": "rule.1.0.template.yaml",
+       "threat": "threat.1.0.template.yaml"
+      }
+     },
+     "metaschemas": {
+      "objective": "objective",
+      "rule": "rule",
+      "threat": "threat"
+     },
+     "objects": [
+      "threat",
+      "objective",
+      "rule"
+     ],
+     "paths": {
+      "docs": {
+       "objectives": "docs/objectives/",
+       "root": "docs/",
+       "rules": "docs/rules/",
+       "threats": "docs/threats/"
+      },
+      "exports": {
+       "root": ".opentide/exports/"
+      },
+      "objects": {
+       "objective": "objects/objectives/",
+       "rule": "objects/rules/",
+       "snippet_file": ".vscode/model-templates.code-snippets",
+       "threat": "objects/threats/"
+      },
+      "opentide": {
+       "root": ".opentide/",
+       "schemas": ".opentide/schemas/",
+       "templates": ".opentide/templates/"
+      }
+     }
+    },
+    "platforms": {
+     "carbon_black_cloud": {
+      "platform": {
+       "description": "VMware Carbon Black Enterprise EDR is an advanced threat hunting\nand incident response solution delivering continuous visibility for top security\noperations centres (SOCs) and incident response (IR) teams.",
+       "enabled": false,
+       "name": "Carbon Black Cloud Enterprise EDR"
+      }
+     },
+     "crowdstrike": {
+      "platform": {
+       "description": "The CrowdStrike Falcon\u00ae platform delivers real-time\nthreat detection, simplified management, and proactive threat hunting\nfor unmatched protection.\n",
+       "enabled": false,
+       "name": "Crowdstrike Falcon Correlation Rules"
+      }
+     },
+     "defender_for_endpoint": {
+      "platform": {
+       "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
+       "enabled": false,
+       "name": "Microsoft Defender for Endpoint"
+      }
+     },
+     "elastic": {
+      "platform": {
+       "description": "Elastic Security detection rules via the Kibana detection engine API.",
+       "enabled": true,
+       "name": "Elastic Security"
+      }
+     },
+     "harfanglab": {
+      "platform": {
+       "description": "HarfangLab EDR provides advanced threat detection using Sigma rules\nfor behavioral detection and YARA rules for memory/file scanning. This integration\nsupports deploying detection rules to HarfangLab's threat intelligence API, including\nboth Sigma-based behavioral rules and YARA-based scanning rules.\n",
+       "enabled": false,
+       "name": "HarfangLab"
+      }
+     },
+     "sentinel": {
+      "platform": {
+       "description": "Microsoft Sentinel delivers intelligent security analytics\nand threat intelligence across the enterprise. With Microsoft Sentinel, you\nget a single solution for attack detection, threat visibility, proactive\nhunting, and threat response.",
+       "enabled": false,
+       "name": "Microsoft Sentinel"
+      }
+     },
+     "sentinel_one": {
+      "platform": {
+       "description": "STAR Rules Engine is a rules-based engine which enables users\nto transform queries of cloud workload telemetry into automated threat hunting\nrules. Whenever a match is made, these custom rules trigger alerts and, optionally,\nautomated response actions.\n",
+       "enabled": false,
+       "name": "Sentinel One"
+      }
+     },
+     "splunk": {
+      "platform": {
+       "description": "Splunk Enterprise enables you to search, analyze and\nvisualize your data to quickly act on insights from across your technology landscape.",
+       "enabled": true,
+       "name": "Splunk Enterprise"
+      },
+      "tenants": [
+       {
+        "name": "prod",
+        "setup": {
+         "app": "search",
+         "port": 8089,
+         "token": "$TOKEN",
+         "url": "$URL"
+        }
+       }
+      ]
+     },
+     "sysdig": {
+      "platform": {
+       "description": "Custom Falco rules for Sysdig Secure runtime detection.",
+       "enabled": false,
+       "name": "Sysdig Secure"
+      }
+     }
+    },
+    "resources": {
+     "misp": {
+      "galaxies": {
+       "threat_actors": "https://raw.githubusercontent.com/MISP/misp-galaxy/refs/heads/main/clusters/threat-actor.json"
+      }
+     }
+    },
+    "systems": {
+     "carbon_black_cloud": {
+      "platform": {
+       "description": "VMware Carbon Black Enterprise EDR is an advanced threat hunting\nand incident response solution delivering continuous visibility for top security\noperations centres (SOCs) and incident response (IR) teams.",
+       "enabled": false,
+       "name": "Carbon Black Cloud Enterprise EDR"
+      }
+     },
+     "crowdstrike": {
+      "platform": {
+       "description": "The CrowdStrike Falcon\u00ae platform delivers real-time\nthreat detection, simplified management, and proactive threat hunting\nfor unmatched protection.\n",
+       "enabled": false,
+       "name": "Crowdstrike Falcon Correlation Rules"
+      }
+     },
+     "defender_for_endpoint": {
+      "platform": {
+       "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
+       "enabled": false,
+       "name": "Microsoft Defender for Endpoint"
+      }
+     },
+     "elastic": {
+      "platform": {
+       "description": "Elastic Security detection rules via the Kibana detection engine API.",
+       "enabled": true,
+       "name": "Elastic Security"
+      }
+     },
+     "harfanglab": {
+      "platform": {
+       "description": "HarfangLab EDR provides advanced threat detection using Sigma rules\nfor behavioral detection and YARA rules for memory/file scanning. This integration\nsupports deploying detection rules to HarfangLab's threat intelligence API, including\nboth Sigma-based behavioral rules and YARA-based scanning rules.\n",
+       "enabled": false,
+       "name": "HarfangLab"
+      }
+     },
+     "sentinel": {
+      "platform": {
+       "description": "Microsoft Sentinel delivers intelligent security analytics\nand threat intelligence across the enterprise. With Microsoft Sentinel, you\nget a single solution for attack detection, threat visibility, proactive\nhunting, and threat response.",
+       "enabled": false,
+       "name": "Microsoft Sentinel"
+      }
+     },
+     "sentinel_one": {
+      "platform": {
+       "description": "STAR Rules Engine is a rules-based engine which enables users\nto transform queries of cloud workload telemetry into automated threat hunting\nrules. Whenever a match is made, these custom rules trigger alerts and, optionally,\nautomated response actions.\n",
+       "enabled": false,
+       "name": "Sentinel One"
+      }
+     },
+     "splunk": {
+      "platform": {
+       "description": "Splunk Enterprise enables you to search, analyze and\nvisualize your data to quickly act on insights from across your technology landscape.",
+       "enabled": true,
+       "name": "Splunk Enterprise"
+      },
+      "tenants": [
+       {
+        "name": "prod",
+        "setup": {
+         "app": "search",
+         "port": 8089,
+         "token": "$TOKEN",
+         "url": "$URL"
+        }
+       }
+      ]
+     },
+     "sysdig": {
+      "platform": {
+       "description": "Custom Falco rules for Sysdig Secure runtime detection.",
+       "enabled": false,
+       "name": "Sysdig Secure"
+      }
+     }
+    },
+    "visibility": {
+     "logsources": [
+      {
+       "description": "d",
+       "name": "SecurityEvent",
+       "system": "sentinel"
+      }
+     ]
+    }
+   }
+  },
+  "workspace-parent-retired-global": {
+   "error": {
+    "code": "retired_configuration_file",
+    "column": null,
+    "line": null,
+    "message": "global.toml is not read by opentide: workspace paths and artifact names are set in paths.toml.",
+    "path": "<root>/parent/.opentide/configurations/global.toml"
+   }
+  },
+  "workspace-parent-retired-systems": {
+   "error": {
+    "code": "retired_configuration_file",
+    "column": null,
+    "line": null,
+    "message": "systems is not read by opentide: platform files live in platforms/<platform>.toml.",
+    "path": "<root>/parent/.opentide/configurations/systems"
+   }
+  },
+  "workspace-parse-error": {
+   "error": {
+    "code": "config_parse",
+    "column": 5,
+    "line": 1,
+    "message": "Invalid value",
+    "path": "<root>/parent/ws/.opentide/configurations/visibility.toml"
+   }
+  },
+  "workspace-parse-error-accent": {
+   "error": {
+    "code": "config_parse",
+    "column": 10,
+    "line": 1,
+    "message": "Expected newline or end of document after a statement",
+    "path": "<root>/parent/ws/.opentide/configurations/visibility.toml"
+   }
+  },
+  "workspace-parse-error-astral": {
+   "error": {
+    "code": "config_parse",
+    "column": 9,
+    "line": 1,
+    "message": "Expected newline or end of document after a statement",
+    "path": "<root>/parent/ws/.opentide/configurations/visibility.toml"
+   }
+  },
+  "workspace-proxy": {
+   "error": {
+    "code": null,
+    "message": "deployment.toml [proxy] is retired. Pass the proxy URL with `opentide --proxy http://[user:pass@]host:port`."
+   }
+  },
+  "workspace-retired": {
+   "error": {
+    "code": "retired_configuration_file",
+    "column": null,
+    "line": null,
+    "message": "global.toml is not read by opentide: workspace paths and artifact names are set in paths.toml.",
+    "path": "<root>/parent/ws/.opentide/configurations/global.toml"
+   }
+  },
+  "workspace-retired-systems": {
+   "error": {
+    "code": "retired_configuration_file",
+    "column": null,
+    "line": null,
+    "message": "systems is not read by opentide: platform files live in platforms/<platform>.toml.",
+    "path": "<root>/parent/ws/.opentide/configurations/systems"
+   }
+  },
+  "workspace-systems-file": {
+   "issues": [],
+   "resolved": {
+    "deployment": {
+     "debug": {
+      "mdr_test_uuids": [
+       ""
+      ],
+      "ssl_enabled": true
+     },
+     "default_responders": "",
+     "promotion": {
+      "enabled": true,
+      "promotion_target": "PRODUCTION"
+     },
+     "statuses": [
+      {
+       "description": "Under active functional design, without technical translation yet",
+       "name": "DESIGN",
+       "strategy": "INERT"
+      },
+      {
+       "description": "Under active technical implementation, going in exploratory rounds",
+       "name": "DEVELOPMENT",
+       "strategy": "PREVIEW"
+      },
+      {
+       "description": "Rule is qualified functionally, but is undergoing refinement rounds",
+       "name": "IMPROVING",
+       "strategy": "PREVIEW"
+      },
+      {
+       "description": "Deployed in staging environment for operational testing",
+       "name": "STAGING",
+       "strategy": "PREVIEW"
+      },
+      {
+       "description": "A rule is ready to go for PRODUCTION for the responding team. During ACCEPTANCE an\nanalyst will handle the alert and will ensure the alert ticket and playbook are correct.",
+       "name": "ACCEPTANCE",
+       "strategy": "PREVIEW"
+      },
+      {
+       "description": "Deployed in active production environment, potentially raising alerts",
+       "name": "PRODUCTION",
+       "strategy": "RELEASE"
+      },
+      {
+       "description": "Rule is still accessible, but not active in any environment",
+       "name": "DISABLED",
+       "strategy": "DISABLEMENT"
+      },
+      {
+       "description": "Rule is fully deprecated, and only flagged under this status for archival purposes",
+       "name": "REMOVED",
+       "strategy": "DELETION"
+      }
+     ]
+    },
+    "documentation": {
+     "cve": {
+      "base_url": "https://vulnerability.circl.lu",
+      "default_db_link": "https://vulnerability.circl.lu/vuln/",
+      "retrieve_details": true
+     },
+     "diagrams": {
+      "relations_direction": "both"
+     },
+     "flavor": {
+      "default": "generic"
+     },
+     "folder_index_pages": true,
+     "gitlab": {
+      "uuid_permalinks": true
+     },
+     "index": {
+      "icons": false,
+      "relation_counts": true
+     },
+     "object_names": {
+      "objective": "Detection Objectives",
+      "rule": "Detection Rules",
+      "signal": "Detection Objective Signals",
+      "threat": "Threat Vectors"
+     },
+     "scope": [
+      "threat",
+      "objective",
+      "rule"
+     ],
+     "skip_model_keys": [
+      "description",
+      "guidelines",
+      "terrain",
+      "surface",
+      "tuning",
+      "mitre_attack",
+      "actors",
+      "vectors",
+      "justification",
+      "chaining",
+      "cve"
+     ]
+    },
+    "lint": {
+     "filenames": {
+      "enabled": true,
+      "style": "slug"
+     },
+     "metadata": {
+      "enabled": true,
+      "required": [
+       "author",
+       "organisation"
+      ]
+     },
+     "placeholders": {
+      "enabled": true
+     },
+     "queries": {
+      "enabled": true
+     }
+    },
+    "paths": {
+     "artifacts": {
+      "exports": {
+       "attack_layer": "attack-navigator.json",
+       "objects": "objects.export.json",
+       "revisions": "revisions.export.json"
+      },
+      "schemas": {
+       "objective": "objective.1.0.schema.json",
+       "router": "opentide.schema.json",
+       "rule": "rule.1.0.schema.json",
+       "threat": "threat.1.0.schema.json",
+       "visibility": "visibility.1.0.schema.json"
+      },
+      "templates": {
+       "objective": "objective.1.0.template.yaml",
+       "rule": "rule.1.0.template.yaml",
+       "threat": "threat.1.0.template.yaml"
+      }
+     },
+     "metaschemas": {
+      "objective": "objective",
+      "rule": "rule",
+      "threat": "threat"
+     },
+     "objects": [
+      "threat",
+      "objective",
+      "rule"
+     ],
+     "paths": {
+      "docs": {
+       "objectives": "docs/objectives/",
+       "root": "docs/",
+       "rules": "docs/rules/",
+       "threats": "docs/threats/"
+      },
+      "exports": {
+       "root": ".opentide/exports/"
+      },
+      "objects": {
+       "objective": "objects/objectives/",
+       "rule": "objects/rules/",
+       "snippet_file": ".vscode/model-templates.code-snippets",
+       "threat": "objects/threats/"
+      },
+      "opentide": {
+       "root": ".opentide/",
+       "schemas": ".opentide/schemas/",
+       "templates": ".opentide/templates/"
+      }
+     }
+    },
+    "platforms": {
+     "carbon_black_cloud": {
+      "platform": {
+       "description": "VMware Carbon Black Enterprise EDR is an advanced threat hunting\nand incident response solution delivering continuous visibility for top security\noperations centres (SOCs) and incident response (IR) teams.",
+       "enabled": false,
+       "name": "Carbon Black Cloud Enterprise EDR"
+      }
+     },
+     "crowdstrike": {
+      "platform": {
+       "description": "The CrowdStrike Falcon\u00ae platform delivers real-time\nthreat detection, simplified management, and proactive threat hunting\nfor unmatched protection.\n",
+       "enabled": false,
+       "name": "Crowdstrike Falcon Correlation Rules"
+      }
+     },
+     "defender_for_endpoint": {
+      "platform": {
+       "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
+       "enabled": false,
+       "name": "Microsoft Defender for Endpoint"
+      }
+     },
+     "elastic": {
+      "platform": {
+       "description": "Elastic Security detection rules via the Kibana detection engine API.",
+       "enabled": false,
+       "name": "Elastic Security"
+      }
+     },
+     "harfanglab": {
+      "platform": {
+       "description": "HarfangLab EDR provides advanced threat detection using Sigma rules\nfor behavioral detection and YARA rules for memory/file scanning. This integration\nsupports deploying detection rules to HarfangLab's threat intelligence API, including\nboth Sigma-based behavioral rules and YARA-based scanning rules.\n",
+       "enabled": false,
+       "name": "HarfangLab"
+      }
+     },
+     "sentinel": {
+      "platform": {
+       "description": "Microsoft Sentinel delivers intelligent security analytics\nand threat intelligence across the enterprise. With Microsoft Sentinel, you\nget a single solution for attack detection, threat visibility, proactive\nhunting, and threat response.",
+       "enabled": false,
+       "name": "Microsoft Sentinel"
+      }
+     },
+     "sentinel_one": {
+      "platform": {
+       "description": "STAR Rules Engine is a rules-based engine which enables users\nto transform queries of cloud workload telemetry into automated threat hunting\nrules. Whenever a match is made, these custom rules trigger alerts and, optionally,\nautomated response actions.\n",
+       "enabled": false,
+       "name": "Sentinel One"
+      }
+     },
+     "splunk": {
+      "platform": {
+       "description": "Splunk Enterprise enables you to search, analyze and\nvisualize your data to quickly act on insights from across your technology landscape.",
+       "enabled": true,
+       "name": "Splunk Enterprise"
+      }
+     },
+     "sysdig": {
+      "platform": {
+       "description": "Custom Falco rules for Sysdig Secure runtime detection.",
+       "enabled": false,
+       "name": "Sysdig Secure"
+      }
+     }
+    },
+    "resources": {
+     "misp": {
+      "galaxies": {
+       "threat_actors": "https://raw.githubusercontent.com/MISP/misp-galaxy/refs/heads/main/clusters/threat-actor.json"
+      }
+     }
+    },
+    "systems": {
+     "carbon_black_cloud": {
+      "platform": {
+       "description": "VMware Carbon Black Enterprise EDR is an advanced threat hunting\nand incident response solution delivering continuous visibility for top security\noperations centres (SOCs) and incident response (IR) teams.",
+       "enabled": false,
+       "name": "Carbon Black Cloud Enterprise EDR"
+      }
+     },
+     "crowdstrike": {
+      "platform": {
+       "description": "The CrowdStrike Falcon\u00ae platform delivers real-time\nthreat detection, simplified management, and proactive threat hunting\nfor unmatched protection.\n",
+       "enabled": false,
+       "name": "Crowdstrike Falcon Correlation Rules"
+      }
+     },
+     "defender_for_endpoint": {
+      "platform": {
+       "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
+       "enabled": false,
+       "name": "Microsoft Defender for Endpoint"
+      }
+     },
+     "elastic": {
+      "platform": {
+       "description": "Elastic Security detection rules via the Kibana detection engine API.",
+       "enabled": false,
+       "name": "Elastic Security"
+      }
+     },
+     "harfanglab": {
+      "platform": {
+       "description": "HarfangLab EDR provides advanced threat detection using Sigma rules\nfor behavioral detection and YARA rules for memory/file scanning. This integration\nsupports deploying detection rules to HarfangLab's threat intelligence API, including\nboth Sigma-based behavioral rules and YARA-based scanning rules.\n",
+       "enabled": false,
+       "name": "HarfangLab"
+      }
+     },
+     "sentinel": {
+      "platform": {
+       "description": "Microsoft Sentinel delivers intelligent security analytics\nand threat intelligence across the enterprise. With Microsoft Sentinel, you\nget a single solution for attack detection, threat visibility, proactive\nhunting, and threat response.",
+       "enabled": false,
+       "name": "Microsoft Sentinel"
+      }
+     },
+     "sentinel_one": {
+      "platform": {
+       "description": "STAR Rules Engine is a rules-based engine which enables users\nto transform queries of cloud workload telemetry into automated threat hunting\nrules. Whenever a match is made, these custom rules trigger alerts and, optionally,\nautomated response actions.\n",
+       "enabled": false,
+       "name": "Sentinel One"
+      }
+     },
+     "splunk": {
+      "platform": {
+       "description": "Splunk Enterprise enables you to search, analyze and\nvisualize your data to quickly act on insights from across your technology landscape.",
+       "enabled": true,
+       "name": "Splunk Enterprise"
+      }
+     },
+     "sysdig": {
+      "platform": {
+       "description": "Custom Falco rules for Sysdig Secure runtime detection.",
+       "enabled": false,
+       "name": "Sysdig Secure"
+      }
+     }
+    },
+    "visibility": {
+     "logsources": []
+    }
+   }
+  }
+ },
+ "metadata_keys": [
+  "uuid",
+  "schema",
+  "version",
+  "created",
+  "modified",
+  "tlp",
+  "author",
+  "contributors",
+  "organisation",
+  "reviewed"
+ ],
+ "oracle": "0.23.0"
+}

@@ -75,6 +75,8 @@ jobs:
           GOLDEN_PATHS: |
             tests/golden/*
             tests/fixtures/tide_corpus/*
+            scripts/golden/*
+            crates/opentide-cli/tests/render/*
             tests/corpora/*
             xtask/*
             .cargo/*
@@ -137,6 +139,21 @@ jobs:
 
       - name: Check the goldens against the oracle
         run: cargo xtask golden check --engine python
+
+      # UC-3.4 (#826): what the oracle's renderers print for the inputs in
+      # crates/opentide-cli/tests/render/, which tests/render.rs compares the
+      # Rust renderers with. A snapshot updated from the Rust side would pass
+      # there; here it must still be the oracle's.
+      - name: The renderer snapshots are the oracle's
+        run: |
+          set -euo pipefail
+          python="$(echo target/golden/oracle-*/bin/python)"
+          work="$(mktemp -d)"
+          cargo xtask corpus faults --out "${work}/fault"
+          mkdir "${work}/scratch"
+          HOME="${work}" "${python}" -I scripts/golden/render_oracle.py \
+            --fault "${work}/fault" --scratch "${work}/scratch" \
+            --out crates/opentide-cli/tests/render --check
 
   determinism:
     name: Golden determinism

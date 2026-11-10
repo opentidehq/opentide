@@ -94,3 +94,37 @@
 # https://www.elastic.co/docs/reference/query-languages/esql`), and the same
 # four for `validate query` (`*/fault/default`; its JSON is an array of
 # findings, the 0170 one with `"help":"try: bool"`).
+#
+# Decided by UC-3.4 (#826), the renderers; entered when `validate`, `lint`
+# and the other commands route their cases to Rust (UC-3.5). The CHANGELOG
+# announces them under "**The Rust command line's renderers**":
+#
+# - glyphs and frame characters on a stream that cannot encode them: the
+#   Rust CLI writes UTF-8 everywhere, with no ASCII fallback (`ok`, `-->`,
+#   `|`, `^`) and no `?` for other characters. No golden case runs on such a
+#   stream (every case is UTF-8), so no entry may be needed.
+# - terminal cell widths from the `unicode-width` crate instead of Rich's
+#   tables: a character the two measure differently can move an underline or
+#   a wrap point by one cell in `human` mode (a terminal of 100 columns).
+#   The fault workspace and every code's frame measure the same today
+#   (crates/opentide-cli/tests/render.rs). At a terminal, a frame's message,
+#   notes and location are cut by cells, not characters, so a line of wide
+#   (CJK) text stays within the terminal's width: its wrap point moves earlier.
+# - SARIF rules: the oracle (0.23.0) predates retired codes and the `cql_`
+#   reference; development tags `crowdstrike_unsupported` `retired`
+#   (#800) and lists the CQL codes, and the Rust catalogue follows
+#   development, so `validate --format sarif` and `lint --format sarif`
+#   differ from the oracle's recordings there.
+# - quoted values (`fix: replace with …`, `fixed: 'a' → 'b'`, `help: did you
+#   mean …?`, SARIF `fixes[].description`): a character that is not printable
+#   is escaped as Rust's `char::escape_debug` escapes it (`\u{a0}`, `\u{200b}`,
+#   `\u{85}`, `\0`, `\u{1b}`) instead of Python's `repr` (`\xa0`, `\u200b`,
+#   `\x85`, `\x00`, `\x1b`). Printable text and the quotes are unchanged.
+# - the underline of a span that holds a tab covers the tab as the terminal
+#   expands it, to the next stop of 8 cells; the oracle counted it as one cell.
+# - control characters in a frame or an outcome line (ESC, DEL, NUL and the
+#   other C0 controls but tab and newline) are shown as their Unicode control
+#   pictures (`␛`, `␡`, `␀`), and C1 controls as `�`, instead of being
+#   written raw; a line break inside a message, a note or a label continues
+#   on an indented row (under the frame's bar), so no printed line starts
+#   with text from a file.

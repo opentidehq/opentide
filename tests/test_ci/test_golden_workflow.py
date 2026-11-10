@@ -36,10 +36,13 @@ JOB_NAMES = {
     "determinism": "Golden determinism",
 }
 
-# The pull_request path filter golden.yml had before #803, as bash patterns.
+# The pull_request path filter golden.yml had before #803, as bash patterns,
+# plus the renderers' oracle snapshots and their driver (UC-3.4, #826).
 GOLDEN_PATHS = [
     "tests/golden/*",
     "tests/fixtures/tide_corpus/*",
+    "scripts/golden/*",
+    "crates/opentide-cli/tests/render/*",
     "tests/corpora/*",
     "xtask/*",
     ".cargo/*",

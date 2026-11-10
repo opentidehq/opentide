@@ -6,6 +6,7 @@
 
 pub mod bench;
 pub mod compare;
+pub mod config;
 pub mod corpus;
 pub mod coverage;
 pub mod golden;

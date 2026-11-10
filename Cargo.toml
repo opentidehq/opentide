@@ -73,6 +73,9 @@ lsp-server = "0.10"
 lsp-types = "0.97"
 url = "2.5"
 regex = "1"
+# The parsed pattern (HIR) of a `regex` pattern, to anchor it whatever its
+# flags (opentide-schema `lint`): the version `regex` itself locks.
+regex-syntax = "0.8"
 # "did you mean" suggestions (opentide-core `suggest`): edit distances. Also clap's.
 strsim = "0.11"
 # Unicode general categories (opentide-schema `vocab::quote`: which characters a

@@ -1,0 +1,9 @@
+{"event":"progress","step":"sentinel","done":1,"total":9}
+{"event":"progress","step":"defender_for_endpoint","done":2,"total":9}
+{"event":"progress","step":"splunk","done":3,"total":9}
+{"event":"progress","step":"sentinel_one","done":4,"total":9}
+{"event":"progress","step":"carbon_black_cloud","done":5,"total":9}
+{"event":"progress","step":"crowdstrike","done":6,"total":9}
+{"event":"progress","step":"harfanglab","done":7,"total":9}
+{"event":"progress","step":"elastic","done":8,"total":9}
+{"event":"progress","step":"sysdig","done":9,"total":9}

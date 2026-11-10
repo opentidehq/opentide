@@ -1,0 +1,789 @@
+# The configuration table (UC-1.5, #811): configuration files checked by the
+# oracle (`config_table.py`, opentide 0.23.0) and by
+# `opentide_schema::configuration` (`tests/configuration.rs`), case by case.
+#
+# Kinds:
+# - `text`: `configuration_text_issues(path, text, ...)` against
+#   `checks::text_issues`; `earlier` / `later` are layer texts,
+#   `status_names`, `partial` and `sharing_directory` the keyword arguments;
+# - `workspace`: a workspace whose `.opentide/configurations` holds `files`
+#   (and a parent instance holding `parent`): the resolved configuration as
+#   JSON (`resolve_configurations`) and `workspace_configuration_issues`,
+#   or the error resolution stops on;
+# - `lint`: `lint.toml` merged onto the bundled one, then
+#   `parse_lint_config`;
+# - `sharing`: `validate --check sharing-config`'s findings (`load_sharing`)
+#   for a workspace holding `files`.
+#
+# A case whose Rust result differs names the `difference` that explains it
+# (its reason and the bold lead of its CHANGELOG.md entry). A difference's
+# `fields` are the members it may change, at any depth of the result; every
+# other member (code, severity, field path, file, line, column, context) is
+# still compared with the oracle's. The test fails when such a case no longer
+# differs, when it differs outside its difference's `fields`, or when a
+# difference no case names.
+
+[[difference]]
+id = "toml-parse-message"
+reason = "A configuration file that is not TOML is refused by the toml_edit crate, which says what is wrong (`expected `=``, `invalid table header`) where the oracle said `TOMLDecodeError` or tomllib's own words; the position is the crate's."
+fields = ["message"]
+changelog = "**Configuration files are read by the Rust engine**"
+
+[[difference]]
+id = "lint-pattern-regex"
+reason = "A `[filenames]` `pattern` is compiled by the Rust `regex` crate, which has no look-around or back-reference: such a pattern is refused with the crate's reason, where Python's `re` compiled it; an invalid pattern's reason is the crate's. A refused pattern's outcome is an error where the oracle's was the settings."
+fields = ["error", "checks", "filenames", "required_metadata"]
+changelog = "**Configuration files are read by the Rust engine**"
+
+[[difference]]
+id = "toml-integer-range"
+reason = "TOML 1.0 integers are 64-bit: toml_edit refuses an integer outside the i64 range (`number too large to fit in target type`), so the file is a `config_parse` error and resolution stops, where tomllib read it as a Python int."
+fields = ["resolved", "issues", "error"]
+changelog = "**Configuration files are read by the Rust engine**"
+
+[[difference]]
+id = "toml-datetime-text"
+reason = "A TOML date-time is kept as toml_datetime writes it, losslessly: fractional seconds as written (`.5`, nanoseconds), a `-00:00` offset as `+00:00`. The oracle rounded to microseconds, padded the fraction to six digits and wrote UTC as `Z`; a message quotes the value as a string (`'1979-05-27T07:32:00Z'`) where the oracle wrote `datetime.datetime(...)`."
+fields = ["dt_fraction", "dt_offset", "time_nanos", "error", "message"]
+changelog = "**Configuration files are read by the Rust engine**"
+
+# --- routing ---------------------------------------------------------------------------
+
+[[case]]
+id = "retired-global"
+kind = "text"
+path = "/w/.opentide/configurations/global.toml"
+text = "x = 1\n"
+
+[[case]]
+id = "retired-systems-folder"
+kind = "text"
+path = "/w/.opentide/configurations/systems/splunk.toml"
+text = "x = 1\n"
+
+[[case]]
+id = "retired-systems-relative"
+kind = "text"
+path = "systems/splunk.toml"
+text = "x = 1\n"
+
+[[case]]
+id = "unknown-file"
+kind = "text"
+path = "/w/.opentide/configurations/colours.toml"
+text = "x = 1\n"
+
+[[case]]
+id = "unmodelled-lint"
+kind = "text"
+path = "/w/.opentide/configurations/lint.toml"
+text = "x = 1\n"
+
+[[case]]
+id = "unmodelled-resources"
+kind = "text"
+path = "/w/.opentide/configurations/resources.toml"
+text = "x = 1\n"
+
+[[case]]
+id = "not-toml-extension"
+kind = "text"
+path = "/w/.opentide/configurations/deployment.yaml"
+text = "x = 1\n"
+
+[[case]]
+id = "sharing-folder"
+kind = "text"
+path = "/w/.opentide/configurations/sharing/misp.toml"
+text = "x = 1\n"
+
+[[case]]
+id = "schemas-folder"
+kind = "text"
+path = "/w/.opentide/schemas/deployment.toml"
+text = "x = 1\n"
+
+[[case]]
+id = "windows-path"
+kind = "text"
+path = "C:\\w\\.opentide\\configurations\\deployment.toml"
+text = "colour = 1\n"
+
+[[case]]
+id = "parse-error"
+kind = "text"
+path = "/w/.opentide/configurations/paths.toml"
+text = "x = = 1\n"
+difference = "toml-parse-message"
+
+[[case]]
+id = "parse-duplicate-key"
+kind = "text"
+path = "/w/.opentide/configurations/paths.toml"
+text = "a = 1\na = 2\n"
+difference = "toml-parse-message"
+
+[[case]]
+id = "deep-nesting"
+kind = "text"
+path = "/w/.opentide/configurations/paths.toml"
+text = "x = [[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[1]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]\n"
+difference = "toml-parse-message"
+
+# --- deployment.toml -------------------------------------------------------------------
+
+[[case]]
+id = "deployment-clean"
+kind = "text"
+path = "/w/.opentide/configurations/deployment.toml"
+text = "default_responders = \"soc\"\n"
+
+[[case]]
+id = "deployment-types"
+kind = "text"
+path = "/w/.opentide/configurations/deployment.toml"
+text = "[promotion]\nenabled = 5\n[[statuses]]\nname = \"\"\ndescription = 1\nstrategy = 5\n"
+
+[[case]]
+id = "deployment-empty-statuses"
+kind = "text"
+path = "/w/.opentide/configurations/deployment.toml"
+text = "promotion = 3\nstatuses = []\n"
+
+[[case]]
+id = "deployment-strategy-and-responder"
+kind = "text"
+path = "/w/.opentide/configurations/deployment.toml"
+text = "[[statuses]]\nname = \"X\"\ndescription = \"d\"\nstrategy = \"NOPE\"\n[[responders]]\nname = 1\n"
+
+[[case]]
+id = "deployment-responder-only"
+kind = "text"
+path = "/w/.opentide/configurations/deployment.toml"
+text = "[promotion]\npromotion_target = \"NOPE\"\n[[responders]]\nname = \"\"\ncolour = 1\n[[responders]]\nname = \"ok\"\n"
+
+[[case]]
+id = "deployment-promotion-unknown"
+kind = "text"
+path = "/w/.opentide/configurations/deployment.toml"
+text = "[promotion]\npromotion_target = \"NOPE\"\n"
+
+[[case]]
+id = "deployment-unknown-keys"
+kind = "text"
+path = "/w/.opentide/configurations/deployment.toml"
+text = "colour1 = \"blue\"\ncolour2 = 2\n[debug]\nmdr_test_uuids = [1, \"a\"]\nssl = true\n"
+
+[[case]]
+id = "deployment-missing-required-partial"
+kind = "text"
+path = "/w/.opentide/configurations/deployment.toml"
+text = "[[statuses]]\nname = \"X\"\n"
+earlier = []
+partial = true
+
+[[case]]
+id = "deployment-missing-required"
+kind = "text"
+path = "/w/.opentide/configurations/deployment.toml"
+text = "[[statuses]]\nname = \"X\"\n"
+earlier = []
+
+[[case]]
+id = "deployment-no-earlier"
+kind = "text"
+path = "/w/.opentide/configurations/deployment.toml"
+text = "default_responders = 1\n"
+earlier = []
+
+[[case]]
+id = "deployment-later-layer"
+kind = "text"
+path = "/w/.opentide/configurations/deployment.toml"
+text = "[promotion]\npromotion_target = \"NOPE\"\n"
+later = ["[promotion]\npromotion_target = \"DESIGN\"\n"]
+
+[[case]]
+id = "deployment-datetime"
+kind = "text"
+path = "/w/.opentide/configurations/deployment.toml"
+text = "default_responders = 1979-05-27\n"
+
+[[case]]
+id = "deployment-statuses-table"
+kind = "text"
+path = "/w/.opentide/configurations/deployment.toml"
+text = "[statuses]\nname = \"X\"\n"
+
+[[case]]
+id = "deployment-quote-in-target"
+kind = "text"
+path = "/w/.opentide/configurations/deployment.toml"
+text = "[promotion]\npromotion_target = \"it's\\n\"\n"
+
+# --- documentation.toml ----------------------------------------------------------------
+
+[[case]]
+id = "documentation-types"
+kind = "text"
+path = "/w/.opentide/configurations/documentation.toml"
+text = "flavor = 5\ncve = {timeout = 0}\nscope = [\"x\"]\n"
+
+[[case]]
+id = "documentation-flavor-table"
+kind = "text"
+path = "/w/.opentide/configurations/documentation.toml"
+text = "flavor = {default = \"x\"}\n"
+
+[[case]]
+id = "documentation-flavor-table-unknown"
+kind = "text"
+path = "/w/.opentide/configurations/documentation.toml"
+text = "flavor = {colour = \"x\"}\n"
+
+[[case]]
+id = "documentation-flavor-name"
+kind = "text"
+path = "/w/.opentide/configurations/documentation.toml"
+text = "flavor = \"azure-devops\"\nicons = {a = 1}\n"
+
+[[case]]
+id = "documentation-everything"
+kind = "text"
+path = "/w/.opentide/configurations/documentation.toml"
+text = "output = 1\ngitlab = {uuid_permalinks = \"no\"}\ndiagrams = {relations_direction = \"sideways\"}\nindex = {icons = 1}\ncve = {timeout = \"x\", base_url = 2}\nobject_names = {signal = 3}\nskip_model_keys = \"a\"\nfolder_index_pages = \"yes\"\n"
+
+[[case]]
+id = "documentation-timeout-inf-nan"
+kind = "text"
+path = "/w/.opentide/configurations/documentation.toml"
+text = "cve = {timeout = nan}\n"
+
+[[case]]
+id = "documentation-retired-proxy-field"
+kind = "text"
+path = "/w/.opentide/configurations/documentation.toml"
+text = "[cve]\nproxy = \"http://p\"\n"
+
+# --- paths.toml ------------------------------------------------------------------------
+
+[[case]]
+id = "paths-types"
+kind = "text"
+path = "/w/.opentide/configurations/paths.toml"
+text = "objects = [\"x\"]\npaths = {opentide = 1}\nd = 1979-05-27\n"
+
+[[case]]
+id = "paths-nested"
+kind = "text"
+path = "/w/.opentide/configurations/paths.toml"
+text = "[paths.objects]\nrule = 1\ncolour = \"x\"\n[artifacts.schemas]\nrouter = []\n[metaschemas]\nthreat = 1\n"
+
+# --- platforms -------------------------------------------------------------------------
+
+[[case]]
+id = "splunk-unions"
+kind = "text"
+path = "/w/.opentide/configurations/platforms/splunk.toml"
+text = "[[tenants]]\nname = \"a\"\nstrategies = \"DELETION\"\n[tenants.setup]\nurl = 1\nport = 1.5\napp = \"a\"\nssl = \"maybe\"\nschedule_offset = \"x\"\n"
+
+[[case]]
+id = "splunk-strategy-list"
+kind = "text"
+path = "/w/.opentide/configurations/platforms/splunk.toml"
+text = "[[tenants]]\nname = \"a\"\nstrategies = [\"release\", 3]\nsetup = 5\n"
+
+[[case]]
+id = "splunk-strategies-empty"
+kind = "text"
+path = "/w/.opentide/configurations/platforms/splunk.toml"
+text = "[[tenants]]\nname = \"a\"\nstrategies = []\n[tenants.setup]\nurl = \"u\"\nport = \"8089\"\napp = \"a\"\ncorrelation_searches = \"x\"\nallow_skew = true\nenterprise_security = \"$ES\"\nssl = \" Yes \"\n"
+
+[[case]]
+id = "splunk-valid"
+kind = "text"
+path = "/w/.opentide/configurations/platforms/splunk.toml"
+text = "[platform]\nenabled = true\n[[tenants]]\nname = \"a\"\nstrategies = [\" preview \"]\n[tenants.setup]\nurl = \"$URL\"\nport = 8089\napp = \"search\"\nallow_skew = 1.5\nschedule_offset = \"$OFF\"\nssl = \"$SSL\"\n"
+
+[[case]]
+id = "splunk-missing-setup"
+kind = "text"
+path = "/w/.opentide/configurations/platforms/splunk.toml"
+text = "[[tenants]]\nname = \"\"\nmanual = 1\n"
+
+[[case]]
+id = "elastic-patterns"
+kind = "text"
+path = "/w/.opentide/configurations/platforms/elastic.toml"
+text = "[[tenants]]\nname = \"a\"\n[tenants.setup]\nurl = \"u\"\nelasticsearch_url = \"e\"\napi_key = \"lit\"\nversion = \"x\"\nsuppression = 1\n"
+
+[[case]]
+id = "elastic-valid-version"
+kind = "text"
+path = "/w/.opentide/configurations/platforms/elastic.toml"
+text = "[[tenants]]\nname = \"a\"\n[tenants.setup]\nurl = \"u\"\nelasticsearch_url = \"e\"\napi_key = \"$K\"\nversion = \"serverless\"\n"
+
+[[case]]
+id = "sentinel-setup"
+kind = "text"
+path = "/w/.opentide/configurations/platforms/sentinel.toml"
+text = "[platform]\ncolour = \"blue\"\nname = 5\n[[tenants]]\nname = \"t\"\n[tenants.setup]\nresource_group = 1\n"
+
+[[case]]
+id = "sentinel-one-ids"
+kind = "text"
+path = "/w/.opentide/configurations/platforms/sentinel_one.toml"
+text = "[[tenants]]\nname = \"t\"\n[tenants.setup]\nurl = \"u\"\naccount_id = 1.5\napi_token = \"$T\"\nsite_id = true\n"
+
+[[case]]
+id = "defender-parameters"
+kind = "text"
+path = "/w/.opentide/configurations/platforms/defender_for_endpoint.toml"
+text = "[[tenants]]\nname = \"t\"\nparameters = {device_groups = \"g\", x = 1}\n[tenants.setup]\ntenant_id = \"a\"\nclient_id = \"b\"\nclient_secret = \"$S\"\n"
+
+[[case]]
+id = "crowdstrike-harfanglab"
+kind = "text"
+path = "/w/.opentide/configurations/platforms/harfanglab.toml"
+text = "[[tenants]]\nname = \"t\"\n[tenants.setup]\ntype = 1\nurl = \"u\"\napi_token = \"$T\"\n"
+
+[[case]]
+id = "crowdstrike-setup"
+kind = "text"
+path = "/w/.opentide/configurations/platforms/crowdstrike.toml"
+text = "[[tenants]]\nname = \"t\"\nsetup = {}\n"
+
+[[case]]
+id = "carbon-black"
+kind = "text"
+path = "/w/.opentide/configurations/platforms/carbon_black_cloud.toml"
+text = "[[tenants]]\nname = \"t\"\n[tenants.setup]\nurl = \"u\"\norg_key = \"k\"\ntoken = \"$T\"\norganizations = [1]\n"
+
+[[case]]
+id = "sysdig-setup"
+kind = "text"
+path = "/w/.opentide/configurations/platforms/sysdig.toml"
+text = "[[tenants]]\nname = \"t\"\n[tenants.setup]\nurl = \"u\"\napi_token = \"literal\"\npolicies = \"p\"\n"
+
+[[case]]
+id = "modifiers"
+kind = "text"
+path = "/w/.opentide/configurations/platforms/sentinel.toml"
+text = "[[modifiers]]\nname = 1\n[modifiers.conditions]\nstatus = \"X\"\ndefault = \"yes\"\n[[modifiers]]\nconditions = {}\nmodifications = {a = 1}\n"
+
+[[case]]
+id = "generic-platform"
+kind = "text"
+path = "/w/.opentide/configurations/platforms/foo.toml"
+text = "x = 1\n[[tenants]]\nname = \"a\"\ny = 2\n[tenants.setup]\nz = 3\nssl = 2\n"
+
+[[case]]
+id = "generic-platform-tenant"
+kind = "text"
+path = "/w/.opentide/configurations/platforms/foo.bar.toml"
+text = "[platform]\nx = 1\n[[tenants]]\nparameters = 1\n"
+
+# --- visibility.toml -------------------------------------------------------------------
+
+[[case]]
+id = "visibility-legacy-and-columns"
+kind = "text"
+path = "/w/.opentide/configurations/visibility.toml"
+text = "[[logsources]]\nname = \" \"\ndescription = \"d\"\nsystem = \"splunk\"\ntables = []\ncolumns = {a = {type = \"x\"}, \"\" = {type = \"string\"}}\n[[logsources]]\nname = \"n\"\ndescription = \"d\"\nsystem = \"carbon\"\ncolumns = {}\n[[logsources]]\nname = \"n\"\ndescription = \"d\"\nsystem = \"carbon\"\n"
+
+[[case]]
+id = "visibility-column-types"
+kind = "text"
+path = "/w/.opentide/configurations/visibility.toml"
+text = "[[logsources]]\nname = \" \"\ndescription = \"d\"\nsystem = \"splunk\"\ncolumns = {b = {type = \"x\"}, a = {type = \"y\"}, \"\" = {type = \"string\"}}\n"
+
+[[case]]
+id = "visibility-duplicate"
+kind = "text"
+path = "/w/.opentide/configurations/visibility.toml"
+text = "[[logsources]]\nname = \"n\"\ndescription = \"d\"\nsystem = \"splunk\"\n[[logsources]]\nname = \"n\"\ndescription = \"d\"\nsystem = \"splunk\"\nassets = [\"q\"]\n[[detectors]]\nname = \"d\"\ndescription = \"x\"\nassets = [\"z\"]\n"
+
+[[case]]
+id = "visibility-unknown-assets"
+kind = "text"
+path = "/w/.opentide/configurations/visibility.toml"
+text = "[[assets]]\nname = \"known\"\ndescription = \"d\"\ncriticality = \"high\"\ncustom_details = {a = 1, b = \"x\", c = true, d = 1.5}\n[[logsources]]\nname = \"n\"\ndescription = \"d\"\nsystem = \"sentinel\"\nassets = [\"known\", \"ghost\", \"it's\"]\n[[detectors]]\nname = \"d\"\ndescription = \"x\"\nassets = [\"z\"]\n"
+
+[[case]]
+id = "visibility-asset-types"
+kind = "text"
+path = "/w/.opentide/configurations/visibility.toml"
+text = "logsources = []\nassets = [{name = 1, custom_details = {a = [1]}}]\n"
+
+[[case]]
+id = "visibility-system-missing"
+kind = "text"
+path = "/w/.opentide/configurations/visibility.toml"
+text = "[[logsources]]\nname = \"n\"\ndescription = \"d\"\ncolumns = {a = {type = 1}}\nmacros = 1\nindexes = 2\n"
+
+[[case]]
+id = "visibility-legacy-only"
+kind = "text"
+path = "/w/.opentide/configurations/visibility.toml"
+text = "[[logsources]]\necs = true\n"
+
+[[case]]
+id = "visibility-not-a-table"
+kind = "text"
+path = "/w/.opentide/configurations/visibility.toml"
+text = "logsources = [1]\nx = 1\n"
+
+# --- sharing.toml (the open-file check) ------------------------------------------------
+
+[[case]]
+id = "sharing-everything"
+kind = "text"
+path = "/w/.opentide/configurations/sharing.toml"
+text = "x = 1\n[[misp]]\nname = \"Bad\"\nurl = \"ftp://x\"\napi_key = \"lit\"\nmax_tlp = \"purple\"\nrule_statuses = [\"NOPE\"]\n"
+
+[[case]]
+id = "sharing-missing-and-unknown"
+kind = "text"
+path = "/w/.opentide/configurations/sharing.toml"
+text = "[[misp]]\nname = \"a\"\nurl = \"\"\ncolour = 1\nobject_types = [\"widget\", 2]\norganisation_uuid = \"nope\"\nverify_ssl = \"maybe\"\n[[misp]]\nurl = \"https://x\"\n[[opencti]]\nname = \"o\"\n"
+
+[[case]]
+id = "sharing-partial"
+kind = "text"
+path = "/w/.opentide/configurations/sharing.toml"
+text = "[[misp]]\nname = \"a\"\nenabled = true\n[[misp]]\nurl = \"https://x\"\n"
+partial = true
+
+[[case]]
+id = "sharing-duplicates"
+kind = "text"
+path = "/w/.opentide/configurations/sharing.toml"
+text = "[[misp]]\nname = \"dup\"\nurl = \"https://a\"\napi_key = \"${K}\"\nmax_tlp = \"red\"\n[[misp]]\nname = \"dup\"\nurl = \"https://b\"\napi_key = \"${K}\"\nmax_tlp = \"red\"\n[[other]]\nname = \"dup\"\n"
+
+[[case]]
+id = "sharing-layers"
+kind = "text"
+path = "/w/.opentide/configurations/sharing.toml"
+earlier = ["[[misp]]\nname = \"a\"\nurl = \"https://a\"\napi_key = \"${K}\"\nmax_tlp = \"red\"\n[[misp]]\nname = \"b\"\nurl = \"ftp://b\"\napi_key = \"${K}\"\nmax_tlp = \"red\"\n"]
+text = "[[misp]]\nname = \"b\"\nenabled = true\nrule_statuses = [\"DESIGN\", \"NOPE\", \"\"]\n[[misp]]\nname = \"a\"\nmax_tlp = \"nope\"\n"
+later = ["colour = 1\n[[misp]]\nname = \"a\"\napi_key = \"literal\"\n"]
+status_names = ["DESIGN"]
+sharing_directory = true
+
+[[case]]
+id = "sharing-quotes"
+kind = "text"
+path = "/w/.opentide/configurations/sharing.toml"
+text = "[[misp]]\nname = \"it's\"\nurl = \"https://a\"\napi_key = \"${K}\"\nmax_tlp = \"red\"\nrule_statuses = [\"a\\\"b\"]\n"
+
+# --- workspaces ------------------------------------------------------------------------
+
+[[case]]
+id = "workspace-bundled"
+kind = "workspace"
+files = {}
+
+[[case]]
+id = "workspace-overrides"
+kind = "workspace"
+files = { "deployment.toml" = "default_responders = \"soc\"\n[[responders]]\nname = \"soc\"\n", "platforms/splunk.toml" = "[platform]\nenabled = true\n[[tenants]]\nname = \"prod\"\n[tenants.setup]\nurl = \"$URL\"\nport = 8089\napp = \"search\"\ntoken = \"$TOKEN\"\n", "visibility.toml" = "[[logsources]]\nname = \"SecurityEvent\"\ndescription = \"d\"\nsystem = \"sentinel\"\n", "notes.txt" = "not read", "extra.toml" = "a = 1\n", "custom/one.toml" = "b = [1, 2.5, true]\n" }
+parent = { "deployment.toml" = "default_responders = \"cert\"\n", "platforms/elastic.toml" = "[platform]\nenabled = true\n" }
+
+[[case]]
+id = "workspace-findings"
+kind = "workspace"
+files = { "deployment.toml" = "colour = \"blue\"\n[promotion]\npromotion_target = \"NOPE\"\n", "documentation.toml" = "flavor = 5\n", "paths.toml" = "objects = [\"x\"]\n", "platforms/sentinel.toml" = "[platform]\ncolour = 1\n", "platforms/foo.toml" = "x = 1\n", "visibility.toml" = "[[logsources]]\nname = \"n\"\ndescription = \"d\"\nsystem = \"sentinel\"\nassets = [\"ghost\"]\n" }
+
+[[case]]
+id = "workspace-cross-checks"
+kind = "workspace"
+files = { "deployment.toml" = "[promotion]\npromotion_target = \"NOPE\"\n[[responders]]\nname = 1\n", "visibility.toml" = "[[logsources]]\nname = \"n\"\ndescription = \"d\"\nsystem = \"sentinel\"\nassets = [\"ghost\"]\n" }
+
+[[case]]
+id = "workspace-retired"
+kind = "workspace"
+files = { "global.toml" = "[global]\nname = \"retired\"\n" }
+
+[[case]]
+id = "workspace-retired-systems"
+kind = "workspace"
+files = { "systems/splunk.toml" = "x = 1\n" }
+
+[[case]]
+id = "workspace-parse-error"
+kind = "workspace"
+files = { "visibility.toml" = "x = = 1\n" }
+difference = "toml-parse-message"
+
+[[case]]
+id = "workspace-proxy"
+kind = "workspace"
+files = { "deployment.toml" = "[proxy]\nurl = \"http://p\"\n" }
+
+[[case]]
+id = "workspace-cve-proxy"
+kind = "workspace"
+files = { "documentation.toml" = "[cve]\nproxy = \"http://p\"\n" }
+
+[[case]]
+id = "workspace-hidden-and-private"
+kind = "workspace"
+files = { ".hidden/a.toml" = "a = 1\n", "__cache__/b.toml" = "b = 1\n", ".dot.toml" = "c = 1\n", "folder/.h.toml" = "d = 1\n", "folder/x.y.toml" = "e = 1\n", "sharing.toml" = "[[misp]]\nname = \"a\"\n" }
+
+[[case]]
+id = "workspace-systems-file"
+kind = "workspace"
+files = { "systems.toml" = "[splunk.platform]\nenabled = true\n" }
+
+[[case]]
+id = "workspace-empty-visibility"
+kind = "workspace"
+files = { "platforms.toml" = "[splunk]\nplatform = 1\n" }
+
+# --- lint.toml -------------------------------------------------------------------------
+
+[[case]]
+id = "lint-bundled"
+kind = "lint"
+text = ""
+
+[[case]]
+id = "lint-unknown-check"
+kind = "lint"
+text = "[zeta]\nx = 1\n[alpha]\n"
+
+[[case]]
+id = "lint-not-a-table"
+kind = "lint"
+text = "metadata = 1\n"
+
+[[case]]
+id = "lint-unknown-key"
+kind = "lint"
+text = "[queries]\ncolour = 1\nshade = 2\n"
+
+[[case]]
+id = "lint-unknown-kind"
+kind = "lint"
+text = "[filenames.widgets]\nstyle = \"name\"\n"
+
+[[case]]
+id = "lint-enabled"
+kind = "lint"
+text = "[placeholders]\nenabled = \"no\"\n"
+
+[[case]]
+id = "lint-severity"
+kind = "lint"
+text = "[queries]\nseverity = \"loud\"\n"
+
+[[case]]
+id = "lint-severity-type"
+kind = "lint"
+text = "[queries]\nseverity = 5\n"
+
+[[case]]
+id = "lint-required"
+kind = "lint"
+text = "[metadata]\nrequired = [\"author\", \"colour\", \"shade\"]\n"
+
+[[case]]
+id = "lint-required-type"
+kind = "lint"
+text = "[metadata]\nrequired = \"author\"\n"
+
+[[case]]
+id = "lint-required-dedupe"
+kind = "lint"
+text = "[metadata]\nrequired = [\"tlp\", \"author\", \"tlp\"]\nseverity = \"info\"\n"
+
+[[case]]
+id = "lint-style"
+kind = "lint"
+text = "[filenames]\nstyle = \"camel\"\n"
+
+[[case]]
+id = "lint-pattern-type"
+kind = "lint"
+text = "[filenames]\npattern = 5\n"
+
+[[case]]
+id = "lint-pattern-empty"
+kind = "lint"
+text = "[filenames]\npattern = \"\"\n"
+
+[[case]]
+id = "lint-pattern-invalid"
+kind = "lint"
+text = "[filenames]\npattern = \"(\"\n"
+difference = "lint-pattern-regex"
+
+[[case]]
+id = "lint-pattern-lookahead"
+kind = "lint"
+text = "[filenames]\npattern = \"^(?!x).+$\"\n"
+difference = "lint-pattern-regex"
+
+[[case]]
+id = "lint-kinds"
+kind = "lint"
+text = "[filenames]\nstyle = \"name\"\npattern = '^\\[(SEN|XDR)\\]\\[[^\\]]+\\].+$'\n[filenames.rules]\npattern = '^R-.+'\n[filenames.threats]\nstyle = \"none\"\n"
+
+[[case]]
+id = "lint-kind-not-a-table"
+kind = "lint"
+text = "[filenames]\nrules = 1\n"
+
+[[case]]
+id = "lint-kind-unknown-key"
+kind = "lint"
+text = "[filenames.rules]\ncolour = 1\n"
+
+[[case]]
+id = "lint-kind-style"
+kind = "lint"
+text = "[filenames.objectives]\nstyle = \"x\"\n"
+
+# --- sharing-config (validate) ---------------------------------------------------------
+
+[[case]]
+id = "sharing-config-clean"
+kind = "sharing"
+files = { "sharing.toml" = "[[misp]]\nname = \"circl\"\nurl = \"https://misp.example\"\napi_key = \"${MISP_API_KEY}\"\nmax_tlp = \"amber\"\n" }
+
+[[case]]
+id = "sharing-config-findings"
+kind = "sharing"
+files = { "sharing.toml" = "[[misp]]\nname = \"Bad Name\"\nurl = \"ftp://x\"\napi_key = \"literal\"\nmax_tlp = \"purple\"\nrule_statuses = [\"NOPE\"]\nobject_types = [\"widget\"]\nverify_ssl = \"maybe\"\n" }
+
+[[case]]
+id = "sharing-config-statuses"
+kind = "sharing"
+files = { "deployment.toml" = "[[statuses]]\nname = \"ONLY\"\ndescription = \"d\"\nstrategy = \"RELEASE\"\n", "sharing.toml" = "[[misp]]\nname = \"a\"\nurl = \"https://a\"\napi_key = \"${K}\"\nmax_tlp = \"red\"\nrule_statuses = [\"ONLY\", \"PRODUCTION\"]\n" }
+
+[[case]]
+id = "sharing-config-folder"
+kind = "sharing"
+files = { "sharing/misp.toml" = "x = 1\n" }
+
+[[case]]
+id = "sharing-config-parent"
+kind = "sharing"
+files = { "sharing.toml" = "[[misp]]\nname = \"a\"\nenabled = true\n" }
+parent = { "sharing.toml" = "[[misp]]\nname = \"a\"\nurl = \"https://a\"\napi_key = \"${K}\"\nmax_tlp = \"clear\"\n" }
+
+[[case]]
+id = "sharing-config-unparsable"
+kind = "sharing"
+files = { "sharing.toml" = "[[misp]\n" }
+difference = "toml-parse-message"
+
+# --- review findings (V1.5) ------------------------------------------------------------
+
+# Only a `systems` entry directly in a configuration folder is retired.
+[[case]]
+id = "retired-systems-nested"
+kind = "text"
+path = "/w/.opentide/configurations/platforms/systems/x.toml"
+text = "x = 1\n"
+
+[[case]]
+id = "retired-systems-elsewhere"
+kind = "text"
+path = "/w/other/systems/x.toml"
+text = "x = 1\n"
+
+[[case]]
+id = "workspace-parent-retired-global"
+kind = "workspace"
+files = { "deployment.toml" = "default_responders = \"soc\"\n" }
+parent = { "global.toml" = "x = 1\n" }
+
+[[case]]
+id = "workspace-parent-retired-systems"
+kind = "workspace"
+parent = { "systems/splunk.toml" = "x = 1\n" }
+
+# A file and a folder of the same name: the file comes later in name order
+# and replaces the folder.
+[[case]]
+id = "workspace-file-and-folder"
+kind = "workspace"
+files = { "platforms.toml" = "[splunk]\nx = 1\n", "platforms/splunk.toml" = "[platform]\nenabled = true\n" }
+
+# The error's column counts code points, after a two-byte and a four-byte
+# character.
+[[case]]
+id = "workspace-parse-error-accent"
+kind = "workspace"
+files = { "visibility.toml" = "a = \"éé\" x\n" }
+difference = "toml-parse-message"
+
+[[case]]
+id = "workspace-parse-error-astral"
+kind = "workspace"
+files = { "visibility.toml" = "a = \"😀\" x\n" }
+difference = "toml-parse-message"
+
+[[case]]
+id = "workspace-integer-range"
+kind = "workspace"
+files = { "custom.toml" = "a = 9223372036854775807\nb = -9223372036854775808\n" }
+
+[[case]]
+id = "workspace-integer-past-range"
+kind = "workspace"
+files = { "custom.toml" = "a = 9223372036854775808\n" }
+difference = "toml-integer-range"
+
+[[case]]
+id = "workspace-datetimes"
+kind = "workspace"
+files = { "custom.toml" = "plain = 1979-05-27T07:32:00Z\nlocal = 1979-05-27T07:32:00\nmicros = 07:32:00.123456\ndt_fraction = 1979-05-27 07:32:00.5Z\ndt_offset = 1979-05-27T07:32:00-00:00\ntime_nanos = 07:32:00.123456789\n" }
+difference = "toml-datetime-text"
+
+[[case]]
+id = "sharing-datetime-entry"
+kind = "text"
+path = "/w/.opentide/configurations/sharing.toml"
+text = "[[misp]]\nname = \"a\"\nurl = \"https://a\"\napi_key = \"${K}\"\nmax_tlp = \"red\"\nrule_statuses = [1979-05-27T07:32:00Z]\n"
+difference = "toml-datetime-text"
+
+[[case]]
+id = "lint-enabled-datetime"
+kind = "lint"
+text = "[placeholders]\nenabled = 1979-05-27T07:32:00Z\n"
+difference = "toml-datetime-text"
+
+# Characters that do not print are escaped by general category.
+[[case]]
+id = "sharing-unprintable-entries"
+kind = "text"
+path = "/w/.opentide/configurations/sharing.toml"
+text = "[[misp]]\nname = \"a\"\nurl = \"https://a\"\napi_key = \"${K}\"\nmax_tlp = \"red\"\nrule_statuses = [\"\\uE000\", \"\\u0600x\", \"\\u0378\", \"\\uFFF9\", \"\\u00A0\", \"\\u3000\", \"\\u2028\", \"\\u00AD\", \"\\U000F0000\", \"\\U0001F600\", \"a b\", \"\\u00E9\", \"\\u0085\"]\n"
+status_names = []
+
+# Floats are written as the oracle's repr writes them, exponent included.
+[[case]]
+id = "sharing-float-entries"
+kind = "text"
+path = "/w/.opentide/configurations/sharing.toml"
+text = "[[misp]]\nname = \"a\"\nurl = \"https://a\"\napi_key = \"${K}\"\nmax_tlp = \"red\"\nrule_statuses = [1e20, 1.5e-7, 1e16, 1e-5, 0.0001, 1e15, -2.5e-300, 1.7976931348623157e308, 5e-324, 123.0, -0.0]\n"
+
+[[case]]
+id = "lint-enabled-floats"
+kind = "lint"
+text = "[placeholders]\nenabled = [1e20, 1.5e-7, 1e16, 1e-5, 0.0001, 1e15, 9999999999999998.0, 5e-324]\n"
+
+[[case]]
+id = "lint-pattern-verbose-comment"
+kind = "lint"
+text = "[filenames]\npattern = '(?x)a # c'\n"
+
+# Duplicated blocks leave the merge: the oracle reports only duplicate_name,
+# not the invalid url or literal api_key of one of them.
+[[case]]
+id = "sharing-duplicates-invalid"
+kind = "text"
+path = "/w/.opentide/configurations/sharing.toml"
+text = "[[misp]]\nname = \"dup\"\nurl = \"https://a\"\napi_key = \"${K}\"\nmax_tlp = \"red\"\n[[misp]]\nname = \"dup\"\nurl = \"ftp://b\"\napi_key = \"literal\"\nmax_tlp = \"red\"\n"

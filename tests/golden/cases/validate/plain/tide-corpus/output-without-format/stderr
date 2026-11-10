@@ -1,0 +1,1 @@
+error: --output needs --format sarif or --format codequality
