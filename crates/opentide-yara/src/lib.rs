@@ -6,14 +6,125 @@
 //! `.yar` files are formatted with `yara-x-fmt`. The `yara-x` compiler crate is
 //! not a dependency: it is an oracle only (`scripts/oracles`).
 //!
-//! This first cut reports what the parser refuses. The symbol table and the
-//! semantic pass for the rest of the spec's code tables, the dialects and the
-//! platform profiles build on it.
+//! A signature goes through:
+//!
+//! 1. the platform profile's text checks (`bitdefender_yara_ascii`,
+//!    `bitdefender_yara_size`);
+//! 2. [`syntax::prepare`]: the libyara forms yara-x-parser refuses are
+//!    blanked, keeping every offset (`yara_x_incompatible`);
+//! 3. `yara-x-parser`: its errors, classified (`yara_parse_error`,
+//!    `yara_hex_string`, `yara_number_out_of_range`, ...);
+//! 4. [`check::Checker`]: the symbol table, types and every other code of
+//!    the spec, on each rule that parsed.
+//!
+//! `docs/YARA.md` maps each code to the libyara source and the test.
 
-use opentide_core::{ByteSpan, Diagnostic, LanguageId, codes, span_to_range};
+mod atoms;
+pub mod catalog;
+mod check;
+pub mod regexp;
+mod syntax;
+
+use opentide_core::{ByteSpan, Diagnostic, LanguageId, LineIndex, Range, Severity, codes};
 use opentide_highlight::{HighlightSpec, HighlightToken, YARA_HIGHLIGHTS_SCM, tokens_from_spans};
 use yara_x_parser::Parser;
-use yara_x_parser::ast::{AST, Error as ParseError};
+use yara_x_parser::ast::AST;
+
+/// Which engine's language the signature is checked against.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Dialect {
+    /// libyara 4.5: the contract of every profile today. What only YARA-X
+    /// refuses is the warning `yara_x_incompatible`.
+    #[default]
+    Libyara4,
+    /// YARA-X 1.x: its syntax is accepted, and `yara_x_incompatible` is an
+    /// error.
+    YaraX,
+}
+
+/// A platform's YARA profile (yara-1.0 "Platform profiles").
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Profile {
+    Harfanglab,
+    Bitdefender,
+}
+
+impl Profile {
+    pub fn key(self) -> &'static str {
+        match self {
+            Profile::Harfanglab => "harfanglab",
+            Profile::Bitdefender => "bitdefender",
+        }
+    }
+
+    pub fn display(self) -> &'static str {
+        match self {
+            Profile::Harfanglab => "HarfangLab",
+            Profile::Bitdefender => "Bitdefender",
+        }
+    }
+
+    /// The profile of a Tide platform block, by its key under `configurations`.
+    pub fn for_platform(platform: &str) -> Option<Self> {
+        match platform {
+            "harfanglab" => Some(Profile::Harfanglab),
+            "bitdefender" => Some(Profile::Bitdefender),
+            _ => None,
+        }
+    }
+}
+
+/// Where the signature runs. A raw `.yar` file has no profile: libyara 4.5,
+/// no module set to confirm, no recommended meta.
+#[derive(Debug, Clone, Default)]
+pub struct Context {
+    pub dialect: Dialect,
+    pub profile: Option<Profile>,
+}
+
+impl Context {
+    /// The profile's context, with the dialect it names.
+    pub fn for_profile(profile: Profile) -> Self {
+        let data = &catalog::Catalog::cached().profiles[profile.key()];
+        let dialect = if data.dialect == "yara_x" {
+            Dialect::YaraX
+        } else {
+            Dialect::Libyara4
+        };
+        Self {
+            dialect,
+            profile: Some(profile),
+        }
+    }
+}
+
+/// A finding in byte offsets, before ranges.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct Finding {
+    pub code: &'static str,
+    pub severity: Severity,
+    pub message: String,
+    pub start: usize,
+    pub end: usize,
+}
+
+impl Finding {
+    pub fn new(
+        code: &'static str,
+        severity: Severity,
+        message: String,
+        start: usize,
+        end: usize,
+    ) -> Self {
+        Self {
+            code,
+            severity,
+            message,
+            start,
+            end,
+        }
+    }
+}
 
 pub struct AnalyzeResult {
     pub diagnostics: Vec<Diagnostic>,
@@ -22,10 +133,127 @@ pub struct AnalyzeResult {
 
 /// Analyze a YARA signature on its own (a raw `.yar` file).
 pub fn analyze(source: &str) -> AnalyzeResult {
+    analyze_with(source, &Context::default())
+}
+
+/// Analyze a YARA signature where `ctx` says it runs.
+pub fn analyze_with(source: &str, ctx: &Context) -> AnalyzeResult {
     AnalyzeResult {
-        diagnostics: parse_diagnostics(source),
+        diagnostics: diagnostics(source, ctx),
         tokens: highlight(source),
     }
+}
+
+/// Every diagnostic of a signature, in source order.
+pub fn diagnostics(source: &str, ctx: &Context) -> Vec<Diagnostic> {
+    let mut findings = profile_findings(source, ctx);
+    let prepared = syntax::prepare(source);
+    findings.extend(prepared.findings.iter().cloned().map(|mut f| {
+        if ctx.dialect == Dialect::YaraX {
+            f.severity = Severity::Error;
+        }
+        f
+    }));
+    let ast = AST::from(Parser::new(prepared.text.as_bytes()));
+    let errors: Vec<(usize, usize)> = ast
+        .errors()
+        .iter()
+        .map(|e| {
+            let s = syntax::error_span(e);
+            (s.start(), s.end())
+        })
+        .collect();
+    for error in ast.errors() {
+        findings.push(syntax::classify(error, &prepared.text));
+    }
+    // A rule runs from its name to the next rule's: a parse error there
+    // stops libyara before the semantic checks.
+    let starts: Vec<usize> = ast
+        .rules()
+        .map(|r| {
+            use yara_x_parser::ast::WithSpan;
+            r.identifier.span().start()
+        })
+        .collect();
+    let broken = |at: (usize, usize)| {
+        let i = starts.iter().position(|&s| s == at.0);
+        let end = i
+            .and_then(|i| starts.get(i + 1))
+            .copied()
+            .unwrap_or(usize::MAX);
+        let begin = i
+            .and_then(|i| i.checked_sub(1))
+            .and_then(|p| starts.get(p))
+            .map_or(0, |&p| p + 1);
+        let begin = begin.min(at.0);
+        errors.iter().any(|&(s, _)| {
+            s >= begin && s < end && (s >= at.0 || !starts.iter().any(|&o| o > s && o < at.0))
+        })
+    };
+    // The checker reads text (alphabets, jump bounds) from the source itself.
+    let mut checker = check::Checker::new(source, ctx, &prepared.rule_wildcards);
+    checker.signature(&ast, errors.is_empty(), &broken);
+    findings.extend(checker.findings);
+    findings.sort_by_key(|f| (f.start, f.end));
+    findings.dedup();
+    let lines = LineIndex::new(source);
+    findings
+        .into_iter()
+        .map(|f| Diagnostic {
+            code: f.code.to_string(),
+            severity: f.severity,
+            message: f.message,
+            range: Range::new(lines.position(f.start), lines.position(f.end.max(f.start))),
+            field_path: None,
+            suggestion: None,
+            object_uuid: None,
+            object_type: None,
+        })
+        .collect()
+}
+
+/// `bitdefender_yara_ascii` and `bitdefender_yara_size` (bitdefender-1.0).
+fn profile_findings(source: &str, ctx: &Context) -> Vec<Finding> {
+    let mut out = Vec::new();
+    let Some(profile) = ctx.profile else {
+        return out;
+    };
+    let data = &catalog::Catalog::cached().profiles[profile.key()];
+    if data.ascii_only
+        && let Some((i, c)) = source.char_indices().find(|(_, c)| !c.is_ascii())
+    {
+        out.push(Finding::new(
+            codes::BITDEFENDER_YARA_ASCII,
+            Severity::Error,
+            format!(
+                "{} takes ASCII only; `{c}` (U+{:04X}) is not",
+                profile.display(),
+                c as u32
+            ),
+            i,
+            i + c.len_utf8(),
+        ));
+    }
+    if let Some(max) = data.max_characters {
+        let count = source.chars().count();
+        if count > max {
+            let at = source
+                .char_indices()
+                .nth(max)
+                .map_or(source.len(), |(i, _)| i);
+            out.push(Finding::new(
+                codes::BITDEFENDER_YARA_SIZE,
+                Severity::Error,
+                format!(
+                    "{} takes at most {max} characters; this signature has {count}",
+                    profile.display()
+                ),
+                at,
+                source.len(),
+            ));
+        }
+    }
+    out
 }
 
 /// Semantic tokens from the tree-sitter grammar and `highlights.scm`. The
@@ -42,59 +270,13 @@ pub fn highlight(source: &str) -> Vec<HighlightToken> {
     tokens_from_spans(&spec, source, &spans).unwrap_or_default()
 }
 
-/// The parser's errors, one diagnostic each. The parser recovers after an
-/// error, so one signature may report several.
-pub fn parse_diagnostics(source: &str) -> Vec<Diagnostic> {
-    let ast = AST::from(Parser::new(source.as_bytes()));
-    ast.errors()
-        .iter()
-        .map(|error| {
-            let (code, message, span) = classify(error);
-            let span = ByteSpan {
-                start: span.start(),
-                end: span.end(),
-            };
-            Diagnostic::error(code, message, span_to_range(source, span))
-        })
-        .collect()
-}
-
-/// The code a parser error reports under, its message, and its span.
-fn classify(error: &ParseError) -> (&'static str, String, &yara_x_parser::Span) {
-    match error {
-        ParseError::SyntaxError { message, span } => (
-            codes::YARA_PARSE_ERROR,
-            format!("YARA syntax error: {message}"),
-            span,
-        ),
-        // An integer literal that does not fit libyara's 64-bit integers.
-        ParseError::InvalidInteger { message, span } => {
-            (codes::YARA_NUMBER_OUT_OF_RANGE, message.clone(), span)
-        }
-        ParseError::InvalidRegexpModifier { message, span } => {
-            (codes::YARA_REGEXP, message.clone(), span)
-        }
-        ParseError::InvalidFloat { message, span }
-        | ParseError::InvalidEscapeSequence { message, span } => {
-            (codes::YARA_PARSE_ERROR, message.clone(), span)
-        }
-        ParseError::InvalidUTF8(span) => (
-            codes::YARA_PARSE_ERROR,
-            "invalid UTF-8 in the YARA source".to_string(),
-            span,
-        ),
-        ParseError::UnexpectedEscapeSequence(span) => (
-            codes::YARA_PARSE_ERROR,
-            "escape sequences are not allowed in this string".to_string(),
-            span,
-        ),
-    }
-}
-
 /// Format a YARA signature with `yara-x-fmt`'s defaults. `None` when the text
 /// does not parse, so an editor never rewrites a broken buffer.
 pub fn format(source: &str) -> Option<String> {
-    if !parse_diagnostics(source).is_empty() {
+    if !AST::from(Parser::new(source.as_bytes()))
+        .errors()
+        .is_empty()
+    {
         return None;
     }
     let mut out = Vec::with_capacity(source.len());

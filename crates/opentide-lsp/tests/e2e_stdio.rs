@@ -670,7 +670,7 @@ fn yara_over_stdio() {
         let codes = published_codes(&mut lsp, uri, "plaintext", broken);
         assert_eq!(codes, ["yara_parse_error"], "{uri}");
     }
-    let clean = "import \"pe\"\n\nrule a : tag {\n  strings:\n    $a = \"x\" wide\n  condition:\n    $a and pe.is_dll()\n}\n";
+    let clean = "import \"pe\"\n\nrule a : tag {\n  strings:\n    $a = \"Global\\\\qx-7731\" wide\n  condition:\n    $a and pe.is_dll()\n}\n";
     let codes = published_codes(&mut lsp, "file:///tmp/clean.yar", "yara", clean);
     assert!(codes.is_empty(), "{codes:?}");
     let tokens = lsp.request(

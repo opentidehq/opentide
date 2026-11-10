@@ -14,56 +14,79 @@ Language id `yara` (`.yar`, `.yara`). Platforms: HarfangLab (`configurations.har
 
 The `yara-x` compiler crate is not a dependency: it brings wasmtime, breaks the WASI build, reports one error per compile, and would make YARA-X the contract. The `yara-x-*` crates need Rust 1.95, which `rust-toolchain.toml` pins.
 
+## Pipeline
+
+1. **Profile text checks**: `bitdefender_yara_ascii` and `bitdefender_yara_size` on the raw text.
+2. **libyara-only forms** (`syntax.rs`): the tree-sitter grammar (libyara's dialect) finds what yara-x-parser refuses and libyara accepts: a repeated rule modifier, a rule wildcard in `of`, an escape in a `base64` alphabet. Each is blanked to text of the same length and reported as `yara_x_incompatible`.
+3. **yara-x-parser** on that text: each error, classified (a syntax error inside a hex string is `yara_hex_string`, an `xor` bound `yara_string_modifier`, an integer overflow `yara_number_out_of_range`).
+4. **Semantic pass** (`check.rs`) on each rule that parsed: the symbol table (imports, rules defined so far, strings, loop variables), types, module members from `catalogs/yara/modules.toml`, and the YARA-X-only syntax yara-x-parser accepts and libyara refuses (`with`, digit separators, float meta, `"""` strings, booleans in `of` tuples, hex or octal jump bounds), each a `yara_parse_error` naming the feature.
+
+`Dialect::YaraX` accepts YARA-X's syntax and makes `yara_x_incompatible` an error. No profile uses it today.
+
 ## Codes
 
-Errors are what libyara 4.5 refuses to compile. The **Checked** column says what the engine reports today; the rest of the table lands with the semantic pass (#165).
+Errors are what libyara 4.5 refuses to compile. **Source** is the libyara 4.5.4 file whose behaviour the check follows. **Test** names the case in `crates/opentide-yara/tests/codes.rs` (`RAW`, `profiles`, `spec_examples_are_clean`) or the unit test that proves it.
 
 ### Errors
 
-| Code | Condition | Checked |
-|------|-----------|---------|
-| `yara_parse_error` | Syntax error | yes, every error `yara-x-parser` recovers from |
-| `yara_include` | An `include` directive | — |
-| `yara_signature_alias` | `signature` is a YAML alias | — |
-| `yara_empty_signature` | No rule, or only `private` or `global` rules | — |
-| `yara_duplicate_rule` | Two rules with one name | — |
-| `yara_duplicate_string` | Two strings with one identifier in a rule | — |
-| `yara_duplicate_tag` | A rule tag repeated on one rule | — |
-| `yara_undefined_string` | `$id`, `#id`, `@id`, `!id`, `$prefix*` matching no string | — |
-| `yara_unreferenced_string` | A string the condition never uses, without `them` | — |
-| `yara_undefined_identifier` | A bare identifier that is neither an earlier rule nor a module | — |
-| `yara_rule_identifier_conflict` | A rule named like an imported module or a keyword | — |
-| `yara_unknown_module` | `import` of a module libyara does not ship | — |
-| `yara_module_not_imported` | A module member used without its `import` | — |
-| `yara_unknown_module_member` | A field or function the module lacks, or the wrong arguments | — |
-| `yara_type` | An operator or function on the wrong type | — |
-| `yara_regexp` | An invalid regular expression | regexp modifiers only |
-| `yara_hex_string` | Odd nibbles, a bad jump, unbalanced alternatives | — |
-| `yara_string_modifier` | A modifier combination or argument libyara refuses | — |
-| `yara_number_out_of_range` | An integer, size suffix, jump bound or index out of range | integer literals only |
+| Code | Condition | Source | Test |
+|------|-----------|--------|------|
+| `yara_parse_error` | Syntax error; YARA-X-only syntax, named; an empty text string | `grammar.y`, `lexer.l`; `parser.c` `ERROR_EMPTY_STRING` | `RAW`: `true and }`, `with`, `1_000`, `f = 1.5`, `[0x2-0x4]`, `of (true, false)` |
+| `yara_include` | An `include` directive | `lexer.l` `include` | `RAW`: `include "x.yar"` |
+| `yara_signature_alias` | `signature` is a YAML alias | yara-1.0 (Tide) | Tide injection |
+| `yara_empty_signature` | No rule, or only `private` or `global` rules | yara-1.0 | `RAW`: `private rule a`, `""` |
+| `yara_duplicate_rule` | Two rules with one name | `parser.c` `ERROR_DUPLICATED_IDENTIFIER` | `RAW`: `rule a … rule a` |
+| `yara_duplicate_string` | Two strings with one identifier (`$` excepted) | `parser.c` `ERROR_DUPLICATED_STRING_IDENTIFIER` | `RAW`: `$a … $a` |
+| `yara_duplicate_tag` | A tag repeated on one rule | `parser.c` `ERROR_DUPLICATED_TAG_IDENTIFIER` | `RAW`: `rule a : t t` |
+| `yara_undefined_string` | `$id`, `#id`, `@id`, `!id`, `$prefix*` matching no string; `$` outside `for … of`; `them` in a rule with no strings | `parser.c` `ERROR_UNDEFINED_STRING` | `RAW`: `$b`, `#b`, `($c*)`, `$`, `any of them` |
+| `yara_unreferenced_string` | A string the condition never uses, without `them` (`$_name` excepted) | `parser.c` `yr_parser_reduce_rule_declaration_phase_2` | `RAW`: `$b` unused; `$_x` clean |
+| `yara_undefined_identifier` | A bare name that is neither an earlier rule nor a module; a call that is not a module function or integer reader; a rule wildcard matching no earlier rule | `grammar.y` `identifier` | `RAW`: `b`, `b` defined later, `foo(1)` |
+| `yara_rule_identifier_conflict` | A rule named like an imported module or a reserved word | `parser.c` `ERROR_DUPLICATED_IDENTIFIER`; `lexer.l` | `RAW`: `rule pe`, `rule uint8` |
+| `yara_unknown_module` | `import` of a module outside yara-1.0's 13 | `modules/module_list` | `RAW`: `import "foo"` |
+| `yara_module_not_imported` | A module member used without its `import` | `grammar.y` `identifier` | `RAW`: `pe.number_of_sections` |
+| `yara_unknown_module_member` | A member the module lacks (or only YARA-X has), or arguments no overload takes | `modules/*/*.c` `begin_declarations`; `parser.c` `yr_parser_check_types` | `RAW`: `pe.nonexistent`, `pe.exports(1, 2)`, `math.entropy("a", "b")` |
+| `yara_type` | An operator or function on the wrong type; a boolean where libyara wants a `primary_expression` | `grammar.y` `check_type` | `RAW`: `filesize contains "a"`, `"a" + 1`, `filesize matches "x"` |
+| `yara_regexp` | An invalid regular expression | `re_lexer.l`, `re_grammar.y` | `RAW`: `/a(b/`, `/[z-a]bc/`, `/a{3,1}/`; `regexp.rs` `libyara_errors` |
+| `yara_hex_string` | Odd nibbles, `[0]`, `[a-b]` with a > b, an unbounded or over-200 jump in an alternative, unbalanced alternatives | `hex_grammar.y` | `RAW`: `[4-2]`, `( 03 \| [-] 04 )`, `[1-300]` in an alternative, `{ 01 0 }` |
+| `yara_string_modifier` | A modifier repeated, on the wrong kind of string, or combined as libyara refuses (`xor nocase`, `base64` with `nocase`, `fullword` or `xor`); an `xor` range or `base64` alphabet libyara refuses; two different alphabets | `grammar.y` `string_modifiers`; `parser.c` `_yr_parser_check_string_modifiers` | `RAW`: `base64 nocase`, `xor nocase`, `wide wide`, hex `xor`, `xor(3-1)`, `xor(300)`, `base64("abc")` |
+| `yara_number_out_of_range` | An integer literal over 64 bits; a percentage outside 1-100 | `lexer.l`; `grammar.y` `ERROR_INVALID_PERCENTAGE` | `RAW`: `99999999999999999999`, `150% of them` |
 
 ### Warnings
 
-| Code | Condition | Checked |
-|------|-----------|---------|
-| `yara_x_incompatible` | libyara compiles it, YARA-X 1.x refuses it | — |
-| `yara_slow_pattern` | libyara's slow-scanning warnings | — |
-| `yara_entrypoint_deprecated` | `entrypoint` | — |
-| `yara_suspicious_expression` | Invariant, unsatisfiable or non-boolean condition | — |
-| `yara_module_unconfirmed` | A known module outside the profile's confirmed set | — |
-| `yara_meta_missing` | A recommended meta key missing on a non-private rule | — |
+| Code | Condition | Source | Test |
+|------|-----------|--------|------|
+| `yara_x_incompatible` | libyara compiles it, YARA-X 1.x refuses it: unknown regexp escapes, a `{` outside a repetition, `base64` under 3 bytes, a negative string index, a repeated rule modifier, rule wildcards in `of`, escapes in a base64 alphabet, a module member YARA-X lacks | YARA-X's [differences with YARA](https://virustotal.github.io/yara-x/docs/writing_rules/differences/) | `RAW`: `/\\Release/`, `/abc{/`, `"ab" base64`, `@a[-1]`, `global global`, `any of (base*)`, `base64("…\\x09…")` |
+| `yara_slow_pattern` | libyara's "string may slow down scanning": no atom of the string scores 38 | `atoms.c` `yr_atoms_heuristic_quality`; `parser.c` | `RAW`: `"a"`, `{ ?? ?? ?? }`, `/a.b/`; `atoms.rs` `libyara_examples` |
+| `yara_entrypoint_deprecated` | `entrypoint` | `grammar.y` | `RAW`: `entrypoint == 0` |
+| `yara_suspicious_expression` | libyara's warnings: a literal string in a boolean operation, "expression always false - requesting N of M", "consider using none", "multiple strings at an offset is usually false"; a non-boolean condition; an integer compared with a boolean | `grammar.y` `yywarning` | `RAW`: `"abc" and true`, `condition: filesize`, `2 of them`, `0 of them`, `all of them at 0` |
+| `yara_module_unconfirmed` | A known module outside the profile's confirmed set | yara-1.0 profiles | `profiles`: `import "dotnet"` under HarfangLab |
+| `yara_meta_missing` | A recommended meta key missing on a non-private rule | yara-1.0 profiles | `profiles`: no `context` under HarfangLab |
 
 ### Platform profiles
 
-| Code | Severity | Platform | Condition |
-|------|----------|----------|-----------|
-| `harfanglab_rule_kind` | error | HarfangLab | `sigma` and `yara` both set |
-| `harfanglab_yara_form` | error | HarfangLab | `signature` with decomposed keys |
-| `harfanglab_yara_section_header` | error | HarfangLab | A `strings:`, `condition:` or `rule` header in a fragment |
-| `harfanglab_yara_import` | error | HarfangLab | An `imports` entry that is not a known module |
-| `harfanglab_yara_rule_name` | error | HarfangLab | The derived rule name is a keyword or keeps a non-ASCII-word character |
-| `harfanglab_yara_context` | warning | HarfangLab | Meta `context` outside `file`, `memory`, `file,memory`, `file.pe`, `file.elf`, `file.macho` |
-| `bitdefender_yara_ascii` | error | Bitdefender | A character that is not ASCII |
-| `bitdefender_yara_size` | error | Bitdefender | More than 30,000 characters |
+| Code | Severity | Platform | Condition | Test |
+|------|----------|----------|-----------|------|
+| `harfanglab_rule_kind` | error | HarfangLab | `sigma` and `yara` both set | Tide injection |
+| `harfanglab_yara_form` | error | HarfangLab | `signature` with decomposed keys | Tide injection |
+| `harfanglab_yara_section_header` | error | HarfangLab | A `strings:`, `condition:` or `rule` header in a fragment | Tide injection |
+| `harfanglab_yara_import` | error | HarfangLab | An `imports` entry that is not a known module | Tide injection |
+| `harfanglab_yara_rule_name` | error | HarfangLab | The derived rule name is a keyword or keeps a non-ASCII-word character | Tide injection |
+| `harfanglab_yara_context` | warning | HarfangLab | Meta `context` outside `file`, `memory`, `file,memory`, `file.pe`, `file.elf`, `file.macho` | `profiles` |
+| `bitdefender_yara_ascii` | error | Bitdefender | A character that is not ASCII | `profiles` |
+| `bitdefender_yara_size` | error | Bitdefender | More than 30,000 characters | `profiles` |
 
-The codes are constants in `opentide_core::codes`; `opentide explain <code>` prints each one's sentence.
+The codes are constants in `opentide_core::codes`; `opentide explain <code>` prints each one's sentence. "Tide injection" codes need the Tide block around the signature and are checked by `opentide-tide`.
+
+## Modules
+
+`catalogs/yara/modules.toml` has every member of the 13 modules, generated from libyara 4.5.4's module declarations and YARA-X 1.23.0's module reflection (`skills/catalogs/SKILL.md`). Each row says which engine has it, so a member only one engine knows is reported as above. **libyara 4.5.4 ships no `lnk` module**, though yara-1.0 lists it among the 13: importing it is allowed as the spec says, and its members are checked against YARA-X's.
+
+## Verified against the engines
+
+Local runs, against `yara-python` 4.5.4 (libyara) and the `yara-x` 1.23.0 wheel. The CI oracle job comes with the conformance work.
+
+| Set | Result |
+|-----|--------|
+| Neo23x0/signature-base (`de3c725`, 754 files) and ReversingLabs/reversinglabs-yara-rules (`e0a0be5`, 309 files) | 1,059 / 1,063 files agree with libyara on error or not, no file libyara refuses is missed; the other 4 have every rule commented out, which yara-1.0 reports as `yara_empty_signature` |
+| 467 one-fault mutations of those rules (a renamed string reference, a dropped import, a duplicated string, a broken hex byte or regexp, an unclosed parenthesis, a bad rule name, `nocase xor`, a 20-digit integer, a repeated tag) | 467 / 467 agree with libyara |
+| 400 random short strings, hex strings and regexps | 400 / 400 agree with libyara on "may slow down scanning" |

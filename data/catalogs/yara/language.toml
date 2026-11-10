@@ -1,0 +1,36 @@
+# The YARA language's profiles and fixed vocabulary (opentidehq/specifications
+# yara-1.0, harfanglab-1.0 1.2, bitdefender-1.0). Hand-written: each value
+# cites the spec table it comes from.
+
+# yara-1.0 "Modules": the 13 modules the engine knows. Importing any other is
+# `yara_unknown_module`.
+known_modules = ["pe", "elf", "math", "hash", "time", "dotnet", "macho", "magic", "cuckoo", "console", "string", "lnk", "dex"]
+
+# libyara 4.5 reserved words (libyara/lexer.l): a rule may not be named after
+# one (`yara_rule_identifier_conflict`), and neither may a derived HarfangLab
+# rule name (`harfanglab_yara_rule_name`).
+keywords = [
+  "all", "and", "any", "ascii", "at", "base64", "base64wide", "condition",
+  "contains", "defined", "endswith", "entrypoint", "false", "filesize",
+  "for", "fullword", "global", "icontains", "iendswith", "iequals", "import",
+  "in", "include", "int16", "int16be", "int32", "int32be", "int8", "int8be",
+  "istartswith", "matches", "meta", "nocase", "none", "not", "of", "or",
+  "private", "rule", "startswith", "strings", "them", "true", "uint16",
+  "uint16be", "uint32", "uint32be", "uint8", "uint8be", "wide", "xor",
+]
+
+# yara-1.0 "Platform profiles".
+[profile.harfanglab]
+dialect = "libyara4"
+ascii_only = false
+confirmed_modules = ["pe", "elf", "math", "hash", "time"]
+recommended_meta = ["context"]
+# harfanglab-1.0 "YARA profile": meta `context` values.
+context_values = ["file", "memory", "file,memory", "file.pe", "file.elf", "file.macho"]
+
+[profile.bitdefender]
+dialect = "libyara4"
+ascii_only = true
+max_characters = 30000
+confirmed_modules = ["pe", "elf", "math", "hash", "time"]
+recommended_meta = []

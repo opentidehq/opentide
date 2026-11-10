@@ -61,7 +61,7 @@ const SAMPLES: Record<string, string> = {
   lucene: "event.category:process AND process.name:/power.*/",
   falco: "spawned_process and container and proc.name in (shell_binaries)",
   cql: "#event_simpleName=ProcessRollup2 | groupBy([aid, ComputerName], function=count())",
-  yara: 'import "pe"\nrule r : t {\n  strings:\n    $a = "x" wide\n  condition:\n    $a and pe.is_dll() and uint16(0) == 0x5A4D\n}\n',
+  yara: 'import "pe"\nrule r : t {\n  strings:\n    $a = "mutex-7731" wide\n  condition:\n    $a and pe.is_dll() and uint16(0) == 0x5A4D\n}\n',
   "opentide-yaml": TIDE_RULE,
 };
 
