@@ -86,6 +86,7 @@ PLATFORM_EXTRA_KEYS: dict[str, tuple[tuple[str, ...], ...]] = {
     "harfanglab": (("sigma",),),
     "sysdig": (("condition",),),
     "bitdefender": (
+        ("severity",),
         ("detection", "target"),
         ("detection", "criteria", "field"),
         ("detection", "criteria", "is"),
@@ -97,6 +98,9 @@ PLATFORM_EXTRA_KEYS: dict[str, tuple[tuple[str, ...], ...]] = {
 #: platform's own defaults (Sentinel's ``SingleAlert`` grouping).
 PLATFORM_VALUES: dict[str, dict[tuple[str, ...], tuple[Any, bool]]] = {
     "bitdefender": {
+        # What GravityZone sends for the scaffold's Informational alert severity,
+        # written out so the rule does not earn bitdefender_severity_collapsed.
+        ("severity",): ("Low", False),
         ("detection", "target"): ("process", True),
         ("detection", "criteria", "field"): ("Process.Name", True),
         ("detection", "criteria", "is"): ("...", True),
