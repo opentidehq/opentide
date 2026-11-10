@@ -58,6 +58,19 @@
 #   log's `arguments:` quoted by the shlex crate (`'--x=1'`, `"it's"`).
 # - a bare `mcp`, `lsp` or `new` in plain and human mode: clap's help of the
 #   group on stdout, exit 2 as before (the `--help` difference above).
+#
+# Decided by UC-3.1 (#823), entered when `deploy --dry-run` routes to Rust
+# (its payloads wait for the platform models, UC-1.4 #810); the CHANGELOG
+# announces them under "**Deploy compile and plan in Rust, `opentide-compile`**",
+# and `cargo xtask payloads plan` approves the first in
+# tests/golden/payloads/APPROVED.toml until then:
+#
+# - deploy/*/fault/*: `warnings[1]` counts 5 unreadable object files, not 6:
+#   `reviewed: 2026-02-30` unquoted is text under YAML 1.2, so the file loads
+#   and the date field reports it ("**Tide objects are read as YAML 1.2**").
+# - deploy (changed rules, no --all): the rules a diff selects are read in
+#   path order, not in a Python set's order.
+# - deploy: the unset-variable warning names variables in plan order.
 # - `-h` (and `-Vh`): clap's short help flag shows the help, exit 0, where the
 #   oracle had no `-h` (`No such option: -h`, exit 2).
 #
