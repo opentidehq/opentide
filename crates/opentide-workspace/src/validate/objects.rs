@@ -269,7 +269,7 @@ pub fn revision_schema(identifier: &str) -> Option<&'static Json> {
         .into_iter()
         .map(|(id, mut schema)| {
             if let Some(pins) = opentide_schema::PinTable::bundled().get(id) {
-                apply_pins(&mut schema, pins);
+                opentide_schema::generate::schema::apply_pins(&mut schema, pins);
             }
             (id, schema)
         })
@@ -279,93 +279,6 @@ pub fn revision_schema(identifier: &str) -> Option<&'static Json> {
         .iter()
         .find(|(id, _)| *id == identifier)
         .map(|(_, schema)| schema)
-}
-
-/// A JSON Pointer token.
-fn token(key: &str) -> String {
-    key.replace('~', "~0").replace('/', "~1")
-}
-
-/// The pointer of the node at `pointer` with its local `$ref` followed.
-fn deref_pointer(schema: &Json, pointer: &str) -> String {
-    schema
-        .pointer(pointer)
-        .and_then(|node| node.get("$ref"))
-        .and_then(Json::as_str)
-        .and_then(|reference| reference.rsplit('/').next())
-        .filter(|name| {
-            schema
-                .get("$defs")
-                .and_then(|defs| defs.get(*name))
-                .is_some_and(Json::is_object)
-        })
-        .map_or_else(
-            || pointer.to_owned(),
-            |name| format!("/$defs/{}", token(name)),
-        )
-}
-
-/// Writes each pinned contract (`metadata.tlp` = `tlp::1.0`) onto the field
-/// it names as its `tide.vocab` (`apply_pin_map`): through nested models
-/// and list items, into the shared definitions as the oracle does.
-fn apply_pins(schema: &mut Json, pins: &opentide_schema::Pins) {
-    for (path, contract) in pins.contracts() {
-        let parts: Vec<&str> = path.split('.').filter(|part| !part.is_empty()).collect();
-        if !parts.is_empty() {
-            set_vocab(schema, "/properties", &parts, &contract.to_string());
-        }
-    }
-}
-
-fn set_vocab(schema: &mut Json, properties: &str, parts: &[&str], contract: &str) {
-    let field = format!("{properties}/{}", token(parts[0]));
-    if !schema.pointer(&field).is_some_and(Json::is_object) {
-        return;
-    }
-    if parts.len() == 1 {
-        if let Some(Json::Object(node)) = schema.pointer_mut(&field) {
-            node.insert("tide.vocab".to_owned(), Json::String(contract.to_owned()));
-        }
-        return;
-    }
-    let resolved = deref_pointer(schema, &field);
-    let alternatives = ["anyOf", "oneOf"].into_iter().find_map(|key| {
-        schema
-            .pointer(&format!("{resolved}/{key}"))
-            .and_then(Json::as_array)
-            .filter(|list| !list.is_empty())
-            .map(|list| (key, list.len()))
-    });
-    let branches: Vec<String> = match alternatives {
-        Some((key, count)) => (0..count)
-            .map(|index| format!("{resolved}/{key}/{index}"))
-            .filter(|pointer| schema.pointer(pointer).is_some_and(Json::is_object))
-            .map(|pointer| deref_pointer(schema, &pointer))
-            .collect(),
-        None => vec![resolved],
-    };
-    for branch in branches {
-        let is_array = schema
-            .pointer(&format!("{branch}/type"))
-            .is_some_and(|kind| kind == "array");
-        if is_array {
-            let items = format!("{branch}/items");
-            if !schema.pointer(&items).is_some_and(Json::is_object) {
-                continue;
-            }
-            let item = deref_pointer(schema, &items);
-            if let Some(Json::Object(node)) = schema.pointer_mut(&item) {
-                node.entry("properties")
-                    .or_insert_with(|| Json::Object(serde_json::Map::new()));
-            }
-            set_vocab(schema, &format!("{item}/properties"), &parts[1..], contract);
-            continue;
-        }
-        let nested = format!("{branch}/properties");
-        if schema.pointer(&nested).is_some_and(Json::is_object) {
-            set_vocab(schema, &nested, &parts[1..], contract);
-        }
-    }
 }
 
 /// The findings of one object: its errors and its warnings.

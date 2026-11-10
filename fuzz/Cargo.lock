@@ -1588,6 +1588,7 @@ dependencies = [
  "serde-saphyr",
  "serde_json",
  "thiserror",
+ "titlecase",
  "toml",
  "toml_edit",
  "unicode-properties",
@@ -2226,6 +2227,15 @@ name = "tinyvec"
 version = "1.13.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fd3ca314f692efd6c868f8408f53fe444634a845f96c028b97d35f6a1f79f0ee"
+
+[[package]]
+name = "titlecase"
+version = "3.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eb567088a91d59b492520c8149e2be5ce10d5deb2d9a383f3378df3259679d40"
+dependencies = [
+ "regex",
+]
 
 [[package]]
 name = "toml"
