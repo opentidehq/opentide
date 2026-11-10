@@ -1,0 +1,467 @@
+{
+ "tickers": [
+  {
+   "step": "schemas",
+   "total": 0,
+   "advances": [
+    1
+   ],
+   "events": [
+    {
+     "event": "progress",
+     "step": "schemas",
+     "done": 1,
+     "total": 0
+    }
+   ]
+  },
+  {
+   "step": "schemas",
+   "total": 1,
+   "advances": [
+    1
+   ],
+   "events": [
+    {
+     "event": "progress",
+     "step": "schemas",
+     "done": 1,
+     "total": 1
+    }
+   ]
+  },
+  {
+   "step": "schemas",
+   "total": 7,
+   "advances": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "events": [
+    {
+     "event": "progress",
+     "step": "schemas",
+     "done": 1,
+     "total": 7
+    },
+    {
+     "event": "progress",
+     "step": "schemas",
+     "done": 2,
+     "total": 7
+    },
+    {
+     "event": "progress",
+     "step": "schemas",
+     "done": 3,
+     "total": 7
+    },
+    {
+     "event": "progress",
+     "step": "schemas",
+     "done": 4,
+     "total": 7
+    },
+    {
+     "event": "progress",
+     "step": "schemas",
+     "done": 5,
+     "total": 7
+    },
+    {
+     "event": "progress",
+     "step": "schemas",
+     "done": 6,
+     "total": 7
+    },
+    {
+     "event": "progress",
+     "step": "schemas",
+     "done": 7,
+     "total": 7
+    }
+   ]
+  },
+  {
+   "step": "schemas",
+   "total": 45,
+   "advances": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "events": [
+    {
+     "event": "progress",
+     "step": "schemas",
+     "done": 2,
+     "total": 45
+    },
+    {
+     "event": "progress",
+     "step": "schemas",
+     "done": 4,
+     "total": 45
+    },
+    {
+     "event": "progress",
+     "step": "schemas",
+     "done": 6,
+     "total": 45
+    },
+    {
+     "event": "progress",
+     "step": "schemas",
+     "done": 8,
+     "total": 45
+    },
+    {
+     "event": "progress",
+     "step": "schemas",
+     "done": 10,
+     "total": 45
+    },
+    {
+     "event": "progress",
+     "step": "schemas",
+     "done": 12,
+     "total": 45
+    },
+    {
+     "event": "progress",
+     "step": "schemas",
+     "done": 14,
+     "total": 45
+    },
+    {
+     "event": "progress",
+     "step": "schemas",
+     "done": 16,
+     "total": 45
+    },
+    {
+     "event": "progress",
+     "step": "schemas",
+     "done": 18,
+     "total": 45
+    },
+    {
+     "event": "progress",
+     "step": "schemas",
+     "done": 20,
+     "total": 45
+    },
+    {
+     "event": "progress",
+     "step": "schemas",
+     "done": 22,
+     "total": 45
+    },
+    {
+     "event": "progress",
+     "step": "schemas",
+     "done": 24,
+     "total": 45
+    },
+    {
+     "event": "progress",
+     "step": "schemas",
+     "done": 26,
+     "total": 45
+    },
+    {
+     "event": "progress",
+     "step": "schemas",
+     "done": 28,
+     "total": 45
+    },
+    {
+     "event": "progress",
+     "step": "schemas",
+     "done": 30,
+     "total": 45
+    },
+    {
+     "event": "progress",
+     "step": "schemas",
+     "done": 32,
+     "total": 45
+    },
+    {
+     "event": "progress",
+     "step": "schemas",
+     "done": 34,
+     "total": 45
+    },
+    {
+     "event": "progress",
+     "step": "schemas",
+     "done": 36,
+     "total": 45
+    },
+    {
+     "event": "progress",
+     "step": "schemas",
+     "done": 38,
+     "total": 45
+    },
+    {
+     "event": "progress",
+     "step": "schemas",
+     "done": 40,
+     "total": 45
+    },
+    {
+     "event": "progress",
+     "step": "schemas",
+     "done": 42,
+     "total": 45
+    },
+    {
+     "event": "progress",
+     "step": "schemas",
+     "done": 44,
+     "total": 45
+    },
+    {
+     "event": "progress",
+     "step": "schemas",
+     "done": 45,
+     "total": 45
+    }
+   ]
+  },
+  {
+   "step": "schemas",
+   "total": 100,
+   "advances": [
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3
+   ],
+   "events": [
+    {
+     "event": "progress",
+     "step": "schemas",
+     "done": 6,
+     "total": 100
+    },
+    {
+     "event": "progress",
+     "step": "schemas",
+     "done": 12,
+     "total": 100
+    },
+    {
+     "event": "progress",
+     "step": "schemas",
+     "done": 15,
+     "total": 100
+    },
+    {
+     "event": "progress",
+     "step": "schemas",
+     "done": 21,
+     "total": 100
+    },
+    {
+     "event": "progress",
+     "step": "schemas",
+     "done": 27,
+     "total": 100
+    },
+    {
+     "event": "progress",
+     "step": "schemas",
+     "done": 30,
+     "total": 100
+    },
+    {
+     "event": "progress",
+     "step": "schemas",
+     "done": 36,
+     "total": 100
+    },
+    {
+     "event": "progress",
+     "step": "schemas",
+     "done": 42,
+     "total": 100
+    },
+    {
+     "event": "progress",
+     "step": "schemas",
+     "done": 45,
+     "total": 100
+    },
+    {
+     "event": "progress",
+     "step": "schemas",
+     "done": 51,
+     "total": 100
+    },
+    {
+     "event": "progress",
+     "step": "schemas",
+     "done": 57,
+     "total": 100
+    },
+    {
+     "event": "progress",
+     "step": "schemas",
+     "done": 60,
+     "total": 100
+    },
+    {
+     "event": "progress",
+     "step": "schemas",
+     "done": 66,
+     "total": 100
+    },
+    {
+     "event": "progress",
+     "step": "schemas",
+     "done": 72,
+     "total": 100
+    },
+    {
+     "event": "progress",
+     "step": "schemas",
+     "done": 75,
+     "total": 100
+    },
+    {
+     "event": "progress",
+     "step": "schemas",
+     "done": 81,
+     "total": 100
+    },
+    {
+     "event": "progress",
+     "step": "schemas",
+     "done": 87,
+     "total": 100
+    },
+    {
+     "event": "progress",
+     "step": "schemas",
+     "done": 90,
+     "total": 100
+    },
+    {
+     "event": "progress",
+     "step": "schemas",
+     "done": 96,
+     "total": 100
+    },
+    {
+     "event": "progress",
+     "step": "schemas",
+     "done": 102,
+     "total": 100
+    }
+   ]
+  },
+  {
+   "step": "schemas",
+   "total": 41,
+   "advances": [
+    40,
+    1
+   ],
+   "events": [
+    {
+     "event": "progress",
+     "step": "schemas",
+     "done": 40,
+     "total": 41
+    },
+    {
+     "event": "progress",
+     "step": "schemas",
+     "done": 41,
+     "total": 41
+    }
+   ]
+  }
+ ],
+ "stderr": "{\"event\":\"progress\",\"step\":\"objects\",\"done\":3,\"total\":null}\n{\"event\":\"tenant\",\"platform\":\"sentinel\",\"tenant\":\"prod \\ud83d\\udd25\",\"status\":\"failed\",\"rows\":0,\"elapsed_ms\":12}\n{\"event\":\"tenant\",\"platform\":\"elastic\",\"tenant\":\"dev\",\"status\":\"ok\",\"rows\":4,\"elapsed_ms\":5,\"label\":\"query 2\"}\n"
+}

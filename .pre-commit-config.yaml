@@ -23,9 +23,9 @@ repos:
       # or parse files leave them alone; detect-private-key and
       # check-merge-conflict still read them.
       - id: trailing-whitespace
-        exclude: '\.ambr$|^tests/golden/(cases|blobs|fixtures)/'
+        exclude: '\.ambr$|^tests/golden/(cases|blobs|fixtures)/|^crates/opentide-cli/tests/render/'
       - id: end-of-file-fixer
-        exclude: '^tests/golden/(cases|blobs|fixtures)/'
+        exclude: '^tests/golden/(cases|blobs|fixtures)/|^crates/opentide-cli/tests/render/'
       - id: check-yaml
         args: [--unsafe]  # allow custom YAML tags in GitHub Actions
         exclude: '^tests/golden/(cases|blobs|fixtures)/'

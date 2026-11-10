@@ -15,7 +15,8 @@ use crate::json::document_text;
 use crate::logging::{self, LogLayer, Sink};
 use crate::mode::{self, Inputs, Mode};
 use crate::redact::{Redactor, url_secrets, workspace_redactor};
-use crate::style::{self, Painter};
+use crate::render::outcome::{Console, OutcomeKind};
+use crate::render::text::{Colour, Style, Text};
 use crate::usage;
 use clap::parser::ValueSource;
 use std::cell::RefCell;
@@ -197,21 +198,25 @@ impl Run<'_> {
                     .failure
                     .as_ref()
                     .map_or(outcome.message.as_str(), |failure| failure.message.as_str());
-                let painter = self.painter(self.host.stderr_tty);
-                let text =
-                    style::error_lines(self.mode, painter, message, notes, &outcome.next_actions);
+                let console = self.console(self.host.stderr_tty);
+                let mut text = console.error(message, notes, self.mode, false);
+                text.push_str(&console.next_actions(&outcome.next_actions));
+                text.push_str(&console.agent_tip(self.mode));
                 err.write_all(text.as_bytes())?;
             }
             Mode::Mcp => {}
             _ => {
-                let painter = self.painter(self.host.stdout_tty);
+                let console = self.console(self.host.stdout_tty);
+                let bold = Style::new("bold");
                 for line in lines {
-                    writeln!(out, "{}", painter.paint(style::bold(), line))?;
+                    out.write_all(console.line(&Text::styled(line, &bold)).as_bytes())?;
                 }
-                out.write_all(style::success_line(painter, &outcome.message).as_bytes())?;
-                for action in &outcome.next_actions {
-                    writeln!(out, "{}", style::next_action_line(painter, action))?;
-                }
+                out.write_all(
+                    console
+                        .outcome(OutcomeKind::Ok, &outcome.message)
+                        .as_bytes(),
+                )?;
+                out.write_all(console.next_actions(&outcome.next_actions).as_bytes())?;
             }
         }
         out.flush()?;
@@ -219,14 +224,26 @@ impl Run<'_> {
         Ok(outcome.exit_code)
     }
 
-    fn painter(&self, tty: bool) -> Painter {
+    /// The stream the lines go to: colour in `human` mode, bold and dim only
+    /// in `plain` mode, on a terminal that is not `TERM=dumb`; wrapped at its
+    /// width there, whole on a pipe.
+    fn console(&self, tty: bool) -> Console {
         let dumb = self
             .env
             .get("TERM")
             .unwrap_or_default()
             .trim()
             .eq_ignore_ascii_case("dumb");
-        Painter::for_stream(self.mode, tty, dumb).wrapping(self.host.width)
+        let colour = match self.mode {
+            _ if !tty || dumb => Colour::None,
+            Mode::Human => Colour::Full,
+            Mode::Plain => Colour::Mono,
+            _ => Colour::None,
+        };
+        Console {
+            colour,
+            width: self.host.width.filter(|_| colour != Colour::None),
+        }
     }
 
     /// The help of the command at `path` on `out`; `code`.
@@ -731,6 +748,71 @@ mod tests {
             tty,
             |run, out, err| Ok(run.dispatch(out, err)?),
         )
+    }
+
+    /// `line` dispatched at a terminal of `width` columns.
+    fn dispatched_at(line: &str, pairs: &[(&str, &str)], width: usize) -> Ran {
+        let argv: Vec<String> = line.split_whitespace().map(str::to_owned).collect();
+        let env = Env::from_pairs(pairs.iter().copied());
+        let err = Buffer::default();
+        let mut out = Vec::new();
+        let mut host = host(true, &err);
+        host.width = Some(width);
+        let code = run_with(
+            &argv,
+            &env,
+            &host,
+            &mut out,
+            &mut err.clone(),
+            |run, out, err| Ok(run.dispatch(out, err)?),
+        );
+        let stderr = String::from_utf8(err.0.lock().unwrap().clone()).unwrap();
+        Ran {
+            code,
+            stdout: String::from_utf8(out).unwrap(),
+            stderr,
+        }
+    }
+
+    #[test]
+    fn framework_usage_error_at_a_narrow_terminal_is_the_outcome_renderer() {
+        let word = "--an-option-whose-name-is-wider-than-the-terminal";
+        let line = format!("validate {word}");
+        for (mode, colour) in [("plain", Colour::Mono), ("human", Colour::Full)] {
+            let result = dispatched_at(&line, &[("OPENTIDE_OUTPUT", mode)], 30);
+            assert_eq!(result.code, USAGE_EXIT_CODE, "{mode}");
+            // A word is never split: the option stays whole on its row.
+            assert!(result.stderr.contains(word), "{mode}: {}", result.stderr);
+            let message = format!("No such option: {word}");
+            let console = Console {
+                colour,
+                width: Some(30),
+            };
+            let notes = [
+                (
+                    "usage".to_owned(),
+                    "opentide validate [OPTIONS] COMMAND [ARGS]...".to_owned(),
+                ),
+                (
+                    "help".to_owned(),
+                    "run 'opentide validate --help'".to_owned(),
+                ),
+            ];
+            assert_eq!(
+                result.stderr,
+                console.error(&message, &notes, Mode::Plain, false),
+                "{mode}"
+            );
+        }
+        // The agent tip, as the outcome renderer writes it.
+        let result = dispatched_at(&line, &[("AI_AGENT", "a")], 30);
+        assert!(
+            result
+                .stderr
+                .ends_with("tip: add --json for machine-readable output\n"),
+            "{}",
+            result.stderr
+        );
     }
 
     const MODES: &[(&str, &[(&str, &str)])] = &[

@@ -1,0 +1,21 @@
+---
+source: crates/opentide-cli/tests/render.rs
+expression: validate_fault_ci_github
+---
+::error title=unknown_key::deployment.toml.colour1: unknown key
+::error title=unknown_key::deployment.toml.colour2: unknown key
+::error title=unknown_key::deployment.toml.colour3: unknown key
+::error title=unknown_key::deployment.toml.colour4: unknown key
+::error title=unknown_key::deployment.toml.colour5: unknown key
+::error title=unknown_key::platforms/sentinel.toml.platform.colour: unknown key
+::error title=schema_validation::platform.name: platforms/splunk.toml.platform.name: Input should be a valid string%0Ahelp: the template in .opentide/templates/ shows the field and its values
+::error title=missing_field::platforms/defender_for_endpoint.toml.tenants.0.name: required key is missing
+::error file=.opentide/states/deployment/1fe3b71b-24be-4604-9b91-72cb32381bfc.json,title=deployment_state_uuid_mismatch::<WS>/.opentide/states/deployment/1fe3b71b-24be-4604-9b91-72cb32381bfc.json records object_uuid '00000000-0000-4000-8000-000000000001', but its file name is '1fe3b71b-24be-4604-9b91-72cb32381bfc'
+::error file=.opentide/states/deployment/8df3e0d3-8a3f-490c-9f31-b71df88f3562.json,title=deployment_state_shape::<WS>/.opentide/states/deployment/8df3e0d3-8a3f-490c-9f31-b71df88f3562.json has no platforms object
+::warning file=objects/rules/nested/hidden-harvest-rule-0020.yaml,title=nested_object_file::objects/rules/nested/hidden-harvest-rule-0020.yaml is in a subfolder of objects/rules and is not an object instance: it is not indexed, validated, shared, documented or deployed (opentide reads only files directly in objects/rules; see https://github.com/opentidehq/opentide/issues/584)
+::warning title=asset_unknown::visibility.toml.logsources.7.assets.0: logsource 'Ghost1' names asset 'ghost-1', which [[assets]] does not declare.
+::warning title=asset_unknown::visibility.toml.logsources.8.assets.0: logsource 'Ghost2' names asset 'ghost-2', which [[assets]] does not declare.
+::warning title=asset_unknown::visibility.toml.logsources.9.assets.0: logsource 'Ghost3' names asset 'ghost-3', which [[assets]] does not declare.
+::warning title=asset_unknown::visibility.toml.logsources.10.assets.0: logsource 'Ghost4' names asset 'ghost-4', which [[assets]] does not declare.
+::warning title=asset_unknown::visibility.toml.logsources.11.assets.0: logsource 'Ghost5' names asset 'ghost-5', which [[assets]] does not declare.
+::notice title=opentide::91 more findings: see the job summary or code scanning

@@ -1,0 +1,30 @@
+{
+    "versions": {
+        "layer": "4.5"
+    },
+    "techniques": [
+        {
+            "techniqueID": "T1059",
+            "color": "#74c476",
+            "comment": "[THREAT] Simulated Actor, [RULE] Carbon Black Lucene Rule, [RULE] CrowdStrike Deploy Rule, [RULE] Defender KQL Rule, [RULE] Elastic KQL Rule, [RULE] HarfangLab Deploy Rule, [RULE] Sentinel KQL Rule, [RULE] SentinelOne S1QL Rule, [RULE] Splunk SPL Rule, [RULE] Staging Promote Rule, [RULE] Sysdig Falco Rule",
+            "enabled": true
+        }
+    ],
+    "name": "layer",
+    "domain": "enterprise-attack",
+    "hideDisabled": false,
+    "legendItems": [
+        {
+            "label": "TVM Only",
+            "color": "#fc6b6b"
+        },
+        {
+            "label": "Full Coverage",
+            "color": "#74c476"
+        },
+        {
+            "label": "Rule Only - Needs to be checked",
+            "color": "#6baed6"
+        }
+    ]
+}
