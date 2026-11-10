@@ -16,7 +16,9 @@ mod replay;
 
 fn check(commands: &[&str], at_least: usize) {
     let (problems, ran) = replay::replay_commands(commands, true);
-    assert!(ran >= at_least, "only {ran} cases found");
+    if std::env::var_os("OPENTIDE_REPLAY_FILTER").is_none() {
+        assert!(ran >= at_least, "only {ran} cases found");
+    }
     assert!(
         problems.is_empty(),
         "{} problem(s):\n\n{}",
@@ -77,4 +79,14 @@ fn a_watch_shows_a_pass_and_ctrl_c_exits_0() {
         "{stdout}"
     );
     assert!(err.0.lock().unwrap().is_empty());
+}
+
+#[test]
+fn lint_cases_are_the_oracles() {
+    check(&["lint"], 50);
+}
+
+#[test]
+fn commands_cases_are_the_oracles() {
+    check(&["commands"], 10);
 }

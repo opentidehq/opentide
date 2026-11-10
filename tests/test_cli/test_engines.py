@@ -42,6 +42,10 @@ def state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return home / "opentide" / "compare"
 
 
+#: A command line with no Rust implementation: ``setup`` (UC-3.6).
+UNPORTED = ("setup", "--plan", "--platform", "sentinel")
+
+
 def fake(mode: str) -> RustCommand:
     return RustCommand(launch=(sys.executable, str(FAKE), mode))
 
@@ -66,21 +70,21 @@ def test_the_engine_is_python_unless_set() -> None:
 
 def test_the_engine_is_read_per_process(workspace: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Read when the command runs, not when opentide is imported."""
-    args = ["--json", "--repo", str(workspace), "validate"]
+    args = ["--json", "--repo", str(workspace), *UNPORTED]
     assert invoke(args, "rust")[0] == 2
     monkeypatch.delenv("OPENTIDE_ENGINE", raising=False)
     assert invoke(args, None)[0] != 2
 
 
 def test_rust_on_a_command_without_rust_is_engine_not_ported(workspace: Path) -> None:
-    code, stdout, _ = invoke(["--json", "--repo", str(workspace), "validate"], "rust")
+    code, stdout, _ = invoke(["--json", "--repo", str(workspace), *UNPORTED], "rust")
     assert code == 2
     doc = document(stdout)
     assert doc["exit_code"] == 2
-    assert doc["command"] == "validate"
+    assert doc["command"] == "setup"
     assert doc["failure"]["code"] == "engine_not_ported"
     assert doc["failure"]["argument"] == "OPENTIDE_ENGINE"
-    assert "opentide validate has no Rust implementation yet" in doc["failure"]["message"]
+    assert "opentide setup has no Rust implementation yet" in doc["failure"]["message"]
     assert stdout.endswith("}\n") and stdout.count("\n") == 1
 
 
@@ -93,10 +97,10 @@ def test_rust_on_a_subcommand_names_its_path(workspace: Path) -> None:
 
 
 def test_rust_without_json_is_one_error_line(workspace: Path) -> None:
-    code, stdout, stderr = invoke(["--no-color", "--repo", str(workspace), "validate"], "rust")
+    code, stdout, stderr = invoke(["--no-color", "--repo", str(workspace), *UNPORTED], "rust")
     assert code == 2
     assert stdout == ""
-    assert "error: opentide validate has no Rust implementation yet" in stderr
+    assert "error: opentide setup has no Rust implementation yet" in stderr
 
 
 def test_an_unknown_engine_is_a_usage_error_with_a_suggestion(workspace: Path) -> None:
@@ -111,7 +115,7 @@ def test_an_unknown_engine_is_a_usage_error_with_a_suggestion(workspace: Path) -
 @pytest.mark.parametrize("engine", [None, "", "python", "compare"])
 def test_python_runs_where_rust_does_not_exist(workspace: Path, engine: str | None) -> None:
     """``compare`` on a command with no Rust implementation runs Python alone."""
-    code, stdout, _ = invoke(["--json", "--repo", str(workspace), "explain", "internal"], engine)
+    code, stdout, _ = invoke(["--json", "--repo", str(workspace), *UNPORTED], engine)
     assert code == 0
     doc = document(stdout)
     assert doc["ok"] is True

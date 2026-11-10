@@ -10,13 +10,15 @@ cases that share it:
 - a JSON document (both sides parse): one ``json:`` entry per node that
   differs: a scalar, an object whose keys differ or are in another order, an
   array of another length;
-- text: one ``lines`` entry per block ``difflib`` finds changed, with a line of
-  context when the block only adds or only drops lines.
+- text: one ``lines`` entry per case and target, from the first line
+  ``difflib`` finds changed to the last, with a line of context when the block
+  only adds or only drops lines.
 
 Each entry's ``reason``, ``issue`` and ``changelog`` come from the first rule
 of a ``--reasons`` TOML file whose ``match`` (a regular expression) is found
-in the entry's oracle or candidate side, or in its case id when the rule
-says ``on = "case"``; an entry no rule explains is printed with
+in the entry's oracle or candidate side, or in its case ids or its rule when
+the reason says ``on = "case"`` or ``on = "rule"`` (and whose ``command``,
+when it names one, is the entry's); an entry no rule explains is printed with
 ``reason = "UNEXPLAINED"`` so a person reads it. Nothing here edits the
 ledger: a person reviews the output and pastes it.
 
@@ -32,9 +34,13 @@ import difflib
 import json
 import re
 import sys
-import tomllib
 from collections import OrderedDict
 from pathlib import Path
+
+if sys.version_info >= (3, 11):
+    import tomllib
+else:  # Python 3.10
+    import tomli as tomllib
 
 REPO = Path(__file__).resolve().parents[2]
 CASES = REPO / "tests" / "golden" / "cases"
@@ -60,7 +66,9 @@ def pointer_part(key: object) -> str:
     return str(key).replace("~", "~0").replace("/", "~1")
 
 
-def json_entries(oracle: object, candidate: object, pointer: str = "") -> list[tuple[str, str, str]]:
+def json_entries(
+    oracle: object, candidate: object, pointer: str = ""
+) -> list[tuple[str, str, str]]:
     """``(pointer, oracle JSON, candidate JSON)`` for each node that differs."""
     if isinstance(oracle, dict) and isinstance(candidate, dict):
         if list(oracle) != list(candidate):
@@ -82,21 +90,28 @@ def json_entries(oracle: object, candidate: object, pointer: str = "") -> list[t
 
 
 def text_entries(oracle: str, candidate: str) -> list[tuple[str, str]]:
-    """``(oracle lines, candidate lines)`` for each changed block."""
+    """``(oracle lines, candidate lines)``: the one block from the first changed
+    line to the last, as a ``lines`` rule takes it (one per case and target),
+    with a line of context when it only adds or only drops lines."""
     left, right = oracle.split("\n"), candidate.split("\n")
-    out = []
+    # A final line ending ends a line: it starts none.
+    if oracle.endswith("\n"):
+        left.pop()
+    if candidate.endswith("\n"):
+        right.pop()
     matcher = difflib.SequenceMatcher(a=left, b=right, autojunk=False)
-    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
-        if tag == "equal":
-            continue
-        if i1 == i2 or j1 == j2:
-            # Only added or only dropped lines: anchor on the line before.
-            if i1 > 0 and j1 > 0:
-                i1, j1 = i1 - 1, j1 - 1
-            else:
-                i2, j2 = i2 + 1, j2 + 1
-        out.append(("\n".join(left[i1:i2]), "\n".join(right[j1:j2])))
-    return out
+    changed = [op for op in matcher.get_opcodes() if op[0] != "equal"]
+    if not changed:
+        return []
+    i1, j1 = changed[0][1], changed[0][3]
+    i2, j2 = changed[-1][2], changed[-1][4]
+    if i1 == i2 or j1 == j2:
+        # Only added or only dropped lines: anchor on the line before.
+        if i1 > 0 and j1 > 0:
+            i1, j1 = i1 - 1, j1 - 1
+        else:
+            i2, j2 = i2 + 1, j2 + 1
+    return [("\n".join(left[i1:i2]), "\n".join(right[j1:j2]))]
 
 
 def case_glob(ids: list[str]) -> str:
@@ -110,15 +125,17 @@ def targets(case_dir: Path, dump_dir: Path) -> list[tuple[str, bytes, bytes]]:
     out = []
     for stream in ("stdout", "stderr"):
         out.append((stream, (case_dir / stream).read_bytes(), (dump_dir / stream).read_bytes()))
-    files = dump_dir / "files"
-    if files.is_dir():
-        for path in sorted(files.rglob("*")):
-            if not path.is_file():
-                continue
-            relative = path.relative_to(files).as_posix()
-            recorded = case_dir / "files" / relative
-            if recorded.is_file():
-                out.append((f"file:{relative.removeprefix('ws/')}", recorded.read_bytes(), path.read_bytes()))
+    outcome = tomllib.loads((case_dir / "outcome.toml").read_text("utf-8"))
+    for entry in outcome.get("files", []):
+        if entry.get("kind") != "file" or entry.get("change") == "deleted":
+            continue
+        path = entry["path"]
+        written = dump_dir / "files" / path
+        if not written.is_file():
+            continue
+        blob = entry.get("blob")
+        recorded = REPO / "tests" / "golden" / "blobs" / blob if blob else case_dir / "files" / path
+        out.append((f"file:{path}", recorded.read_bytes(), written.read_bytes()))
     return out
 
 
@@ -128,7 +145,7 @@ def main() -> int:
     parser.add_argument("--reasons", type=Path, required=True)
     args = parser.parse_args()
     reasons = tomllib.loads(args.reasons.read_text("utf-8"))["reason"]
-    grouped: OrderedDict[tuple[str, str, str, str, str], list[str]] = OrderedDict()
+    grouped: OrderedDict[tuple[str, str, str, str, str, str], list[str]] = OrderedDict()
     for exit_file in sorted(args.dump.rglob("exit_code")):
         dump_dir = exit_file.parent
         case_id = dump_dir.relative_to(args.dump).as_posix()
@@ -140,15 +157,22 @@ def main() -> int:
             left, right = load_json(oracle), load_json(candidate)
             if left is not None and right is not None:
                 for pointer, old, new in json_entries(left, right):
-                    key = (command, target, f"json:{pointer}", old, new)
+                    key = (command, target, f"json:{pointer}", old, new, "")
                     grouped.setdefault(key, []).append(case_id)
                 continue
             for old, new in text_entries(oracle.decode("utf-8"), candidate.decode("utf-8")):
-                grouped.setdefault((command, target, "lines", old, new), []).append(case_id)
-    for (command, target, rule, old, new), ids in grouped.items():
+                # A `lines` rule names its one case.
+                key = (command, target, "lines", old, new, case_id)
+                grouped.setdefault(key, []).append(case_id)
+    for (command, target, rule, old, new, _), ids in grouped.items():
+        if rule == "lines" and not (old.strip() and new.strip()):
+            # The ledger refuses a blank side: a stream one run leaves empty.
+            print(f"cannot approve: {', '.join(ids)} {target}: one side is blank", file=sys.stderr)
+            continue
         found = None
         for reason in reasons:
-            haystacks = [" ".join(ids)] if reason.get("on") == "case" else [old, new]
+            on = reason.get("on", "text")
+            haystacks = {"case": [" ".join(ids)], "rule": [rule]}.get(on, [old, new])
             if reason.get("command") not in (None, command):
                 continue
             if any(re.search(reason["match"], text) for text in haystacks):

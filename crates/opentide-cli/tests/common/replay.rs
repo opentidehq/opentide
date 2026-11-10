@@ -227,8 +227,19 @@ pub fn replay(id: &str, dir: &Path, ledger: &Ledger, usage: &mut Usage) -> Vec<S
         std::fs::create_dir_all(folder).unwrap();
     }
     fixture(case["fixture"].as_str().unwrap(), &ws);
-    let before = files(&ws);
-    let folders_before = dirs(&ws);
+    // Every folder a recording names files under: the workspace, the
+    // temporary directory (CI summaries), home (the state directory).
+    // A recording's `tmp/` is `$TMPDIR`, `<TMP>/tmp`.
+    std::fs::create_dir_all(tmp.join("tmp")).unwrap();
+    let roots = [
+        ("ws", ws.clone()),
+        ("tmp", tmp.join("tmp")),
+        ("home", home.clone()),
+    ];
+    let before: Vec<_> = roots
+        .iter()
+        .map(|(_, root)| (files(root), dirs(root)))
+        .collect();
     let env = Env::from_pairs(case["env"].as_table().unwrap().iter().map(|(key, value)| {
         let value = value
             .as_str()
@@ -274,49 +285,52 @@ pub fn replay(id: &str, dir: &Path, ledger: &Ledger, usage: &mut Usage) -> Vec<S
     let stdout = normaliser.text(&String::from_utf8(out).unwrap());
     let stderr = normaliser.text(&String::from_utf8(stderr.0.lock().unwrap().clone()).unwrap());
     let mut problems = Vec::new();
-    if mode == "human" && stderr.contains("\x1b[?25l") {
+    // `generate` prints its checklist once the work is done: no live display.
+    if mode == "human" && id.starts_with("generate") && stderr.contains("\x1b[?25l") {
         problems.push(format!(
             "{id}: stderr draws a live display after the work is done"
         ));
     }
     let mut written = BTreeMap::new();
-    for (path, bytes) in files(&ws) {
-        if before.get(&path) == Some(&bytes) {
-            continue;
-        }
-        let mode = {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::metadata(ws.join(&path))
+    for ((prefix, root), (files_before, folders_before)) in roots.iter().zip(&before) {
+        use std::os::unix::fs::PermissionsExt;
+        let after = files(root);
+        for (path, bytes) in &after {
+            if files_before.get(path) == Some(bytes) {
+                continue;
+            }
+            let mode = std::fs::metadata(root.join(path))
                 .unwrap()
                 .permissions()
                 .mode()
-                & 0o7777
-        };
-        let bytes = normaliser
-            .text(&String::from_utf8_lossy(&bytes))
-            .into_bytes();
-        written.insert(format!("ws/{path}"), FileState::Written { mode, bytes });
-    }
-    let after = files(&ws);
-    for path in before.keys() {
-        if !after.contains_key(path) {
-            written.insert(format!("ws/{path}"), FileState::Deleted);
+                & 0o7777;
+            let bytes = normaliser
+                .text(&String::from_utf8_lossy(bytes))
+                .into_bytes();
+            written.insert(
+                format!("{prefix}/{path}"),
+                FileState::Written { mode, bytes },
+            );
         }
-    }
-    for folder in dirs(&ws).difference(&folders_before) {
-        use std::os::unix::fs::PermissionsExt;
-        let mode = std::fs::metadata(ws.join(folder))
-            .unwrap()
-            .permissions()
-            .mode()
-            & 0o7777;
-        written.insert(
-            format!("ws/{folder}"),
-            FileState::Written {
-                mode: 0o040_000 | mode,
-                bytes: Vec::new(),
-            },
-        );
+        for path in files_before.keys() {
+            if !after.contains_key(path) {
+                written.insert(format!("{prefix}/{path}"), FileState::Deleted);
+            }
+        }
+        for folder in dirs(root).difference(folders_before) {
+            let mode = std::fs::metadata(root.join(folder))
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o7777;
+            written.insert(
+                format!("{prefix}/{folder}"),
+                FileState::Written {
+                    mode: 0o040_000 | mode,
+                    bytes: Vec::new(),
+                },
+            );
+        }
     }
     let oracle = Run {
         exit_code: i32::try_from(outcome["exit_code"].as_integer().unwrap()).unwrap(),
