@@ -85,13 +85,22 @@ PLATFORM_EXTRA_KEYS: dict[str, tuple[tuple[str, ...], ...]] = {
     "sentinel_one": (("condition", "single_event"), ("condition", "single_event", "query")),
     "harfanglab": (("sigma",),),
     "sysdig": (("condition",),),
-    "bitdefender": (("detection",),),
+    "bitdefender": (
+        ("detection", "target"),
+        ("detection", "criteria", "field"),
+        ("detection", "criteria", "is"),
+    ),
 }
 
 #: Values for those keys that compile, as ``(value, is_placeholder)``. A
 #: placeholder is a detection decision nobody has made yet; the rest are the
 #: platform's own defaults (Sentinel's ``SingleAlert`` grouping).
 PLATFORM_VALUES: dict[str, dict[tuple[str, ...], tuple[Any, bool]]] = {
+    "bitdefender": {
+        ("detection", "target"): ("process", True),
+        ("detection", "criteria", "field"): ("Process.Name", True),
+        ("detection", "criteria", "is"): ("...", True),
+    },
     "sentinel": {
         ("scheduling", "frequency"): ("1h", True),
         ("scheduling", "lookback"): ("1h", True),

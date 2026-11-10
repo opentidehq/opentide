@@ -14,7 +14,7 @@ description: |
 status: STAGING
 severity: High
 techniques:
-  - T1059.001
+  - T1204.002
 detection_model: 00000000-0000-4000-8002-000000000001
 
 response:

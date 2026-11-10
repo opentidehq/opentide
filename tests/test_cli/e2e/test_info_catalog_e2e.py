@@ -262,7 +262,7 @@ def test_info_catalog_human_summary(cli_runner, tide_corpus_repo: Path) -> None:
     assert result.exit_code == 0, result.stdout
     rows = [" ".join(line.split()) for line in result.stdout.splitlines()]
     assert any(row.startswith("objects ") and "2 threats" in row for row in rows)
-    assert "edges 31" in rows
+    assert "edges 33" in rows
     assert "2 chains" in rows
     assert "2 missing: name no object" in rows
     assert "load errors 1" in rows

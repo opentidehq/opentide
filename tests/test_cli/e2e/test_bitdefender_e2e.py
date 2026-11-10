@@ -103,7 +103,7 @@ def test_deploy_dry_run_previews_the_create_request(
     assert (params["type"], params["subtype"], params["returnRuleId"]) == (1, 0, True)
     assert params["name"] == "Bitdefender GravityZone Rule"
     assert params["settings"]["severity"] == 3
-    assert "T1059.001" in params["tags"]
+    assert "T1204.002" in params["tags"]
     assert f"opentide:{UUID}" in params["tags"]
     deployer.deploy.assert_not_called()
 
