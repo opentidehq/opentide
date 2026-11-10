@@ -31,8 +31,9 @@ pub mod node;
 pub mod pins;
 mod revision;
 pub mod sample;
+pub mod vocab;
 
 pub use error::{ErrorKind, PathSegment, SchemaError, Surface};
 pub use from_node::FromNode;
 pub use opentide_schema_derive::FromNode;
-pub use pins::Pins;
+pub use pins::{PinTable, Pins};
