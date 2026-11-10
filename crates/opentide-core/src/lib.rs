@@ -1227,10 +1227,10 @@ pub mod codes {
                 "A YARA string is never used in the condition, which libyara refuses unless the condition uses them."
             }
             YARA_UNDEFINED_IDENTIFIER => {
-                "A YARA identifier is neither a rule defined earlier in the signature nor an imported module."
+                "A YARA identifier is neither a rule defined earlier in the signature nor an imported module, or is used as libyara refuses: a module field called as a function, a module function named without a call, or a loop variable a loop already binds."
             }
             YARA_RULE_IDENTIFIER_CONFLICT => {
-                "A YARA rule is named like an imported module or a keyword."
+                "A YARA rule is named like a keyword, or matches a rule wildcard an earlier condition uses; a rule named like an imported module is yara_x_incompatible."
             }
             YARA_UNKNOWN_MODULE => "A YARA import names a module libyara does not ship.",
             YARA_MODULE_NOT_IMPORTED => {
