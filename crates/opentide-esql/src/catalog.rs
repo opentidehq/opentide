@@ -6,6 +6,7 @@
 //! process.
 
 use crate::version::Availability;
+use opentide_core::suggest;
 use serde::Deserialize;
 use std::sync::OnceLock;
 
@@ -211,8 +212,9 @@ impl Catalog {
             .find(|t| t.name.eq_ignore_ascii_case(name))
     }
 
+    /// The cast type `name` most likely means ([`opentide_core::suggest`]).
     pub fn suggest_type(&self, name: &str) -> Option<String> {
-        closest(self.types.iter().map(|t| t.name.as_str()), name, 2)
+        suggest::closest(name, self.types.iter().map(|t| t.name.as_str())).map(str::to_string)
     }
 
     pub fn operator(&self, symbol: &str) -> Option<&OperatorRow> {
@@ -221,52 +223,30 @@ impl Catalog {
             .find(|o| o.operator.eq_ignore_ascii_case(symbol))
     }
 
-    /// Closest command name within edit distance 3, for `esql_unknown_command`.
+    /// The command `name` most likely means, for `esql_unknown_command`
+    /// ([`opentide_core::suggest`]).
     pub fn suggest_command(&self, name: &str) -> Option<String> {
-        closest(
+        suggest::closest(
+            name,
             self.commands
                 .iter()
                 .filter(|c| !c.snapshot_only && c.alias_of.is_none())
                 .map(|c| c.name.as_str()),
-            name,
-            3,
         )
+        .map(str::to_string)
     }
 
+    /// The function `name` most likely means ([`opentide_core::suggest`]).
     pub fn suggest_function(&self, name: &str) -> Option<String> {
-        closest(
+        suggest::closest(
+            name,
             self.functions
                 .iter()
                 .filter(|f| !f.snapshot_only)
                 .map(|f| f.name.as_str()),
-            name,
-            2,
         )
+        .map(str::to_string)
     }
-}
-
-fn closest<'a>(names: impl Iterator<Item = &'a str>, target: &str, max: usize) -> Option<String> {
-    let target = target.to_ascii_lowercase();
-    names
-        .map(|n| (n, edit_distance(n, &target)))
-        .filter(|(_, d)| *d > 0 && *d <= max)
-        .min_by_key(|(_, d)| *d)
-        .map(|(n, _)| n.to_string())
-}
-
-pub(crate) fn edit_distance(a: &str, b: &str) -> usize {
-    let a: Vec<char> = a.chars().collect();
-    let b: Vec<char> = b.chars().collect();
-    let mut prev: Vec<usize> = (0..=b.len()).collect();
-    for (i, ca) in a.iter().enumerate() {
-        let mut cur = vec![i + 1];
-        for (j, cb) in b.iter().enumerate() {
-            let cost = usize::from(!ca.eq_ignore_ascii_case(cb));
-            cur.push((prev[j] + cost).min(prev[j + 1] + 1).min(cur[j] + 1));
-        }
-        prev = cur;
-    }
-    prev[b.len()]
 }
 
 /// A stack version such as `9.2`. Patch numbers are dropped.
@@ -397,6 +377,14 @@ mod tests {
         );
         assert!(catalog.operator("==").is_some());
         assert_eq!(catalog.suggest_command("wehre").as_deref(), Some("where"));
+        // The shared rule: the same word without `_` first, and no
+        // suggestion three edits from a three-letter word (`whr` is not `mmr`).
+        assert_eq!(
+            catalog.suggest_function("tolower").as_deref(),
+            Some("to_lower")
+        );
+        assert_eq!(catalog.suggest_command("whr"), None);
+        assert_eq!(catalog.suggest_type("keywrd").as_deref(), Some("keyword"));
         assert!(catalog.function("abs").is_some(), "math module definitions");
         assert_eq!(
             catalog.cast_type("STRING").map(|t| t.function.as_str()),

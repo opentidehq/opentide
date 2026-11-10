@@ -206,17 +206,10 @@ impl Vocab {
         self.keys.iter().find(|k| k.name == value)
     }
 
+    /// The key `value` most likely means ([`opentide_core::suggest`]).
     pub fn suggest(&self, value: &str) -> Option<String> {
-        let needle = value.to_ascii_lowercase();
-        self.keys
-            .iter()
-            .map(|k| {
-                let d = levenshtein(&k.name.to_ascii_lowercase(), &needle);
-                (k.name.clone(), d)
-            })
-            .filter(|(_, d)| *d <= 4)
-            .min_by_key(|(_, d)| *d)
-            .map(|(n, _)| n)
+        opentide_core::suggest::closest(value, self.keys.iter().map(|k| k.name.as_str()))
+            .map(str::to_string)
     }
 
     pub fn hover(&self, value: &str) -> Option<String> {
@@ -230,22 +223,6 @@ impl Vocab {
             md
         })
     }
-}
-
-pub(crate) fn levenshtein(a: &str, b: &str) -> usize {
-    let a: Vec<char> = a.chars().collect();
-    let b: Vec<char> = b.chars().collect();
-    let mut prev: Vec<usize> = (0..=b.len()).collect();
-    let mut cur = vec![0; b.len() + 1];
-    for (i, ca) in a.iter().enumerate() {
-        cur[0] = i + 1;
-        for (j, cb) in b.iter().enumerate() {
-            let cost = usize::from(ca != cb);
-            cur[j + 1] = (prev[j + 1] + 1).min(cur[j] + 1).min(prev[j] + cost);
-        }
-        std::mem::swap(&mut prev, &mut cur);
-    }
-    prev[b.len()]
 }
 
 /// Stage ids a key belongs to: `"tide.vocab.stages"` is a string or an array of them.

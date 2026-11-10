@@ -15,13 +15,20 @@
 //!    lower-cased spellings, counted in characters. A candidate qualifies when
 //!    it is at most [`max_edits`] away (a third of the length, at least one
 //!    edit: the bound rustc uses for its own suggestions), measured twice: over
-//!    the whole value, and over the part that differs once the prefix and
-//!    suffix both spellings share are set aside. A typo is a few edits in one
-//!    place; a different word is many, and sharing ` incident` with it does
-//!    not make `Big incident` a typo of `Minor incident`.
+//!    the whole value, and over the words that hold the part that differs
+//!    once the prefix and suffix both spellings share are set aside. A typo
+//!    is a few edits in one word, adjacent or not (`SecurityEve` →
+//!    `SecurityEvent`, two letters cut); a different word is many, and
+//!    sharing ` incident` with it does not make `Big incident` a typo of
+//!    `Minor incident` (`big`/`minor`: four edits in a five-letter word).
+//!    A caller with its own bound ([`closest_within`], [`ranked`]) caps both.
 //! 3. **Ties** go to the candidate whose start matches best
 //!    ([`strsim::jaro_winkler`]), then to the one that sorts first, so the
 //!    result never depends on the order the candidates came in.
+//!
+//! [`best`] applies rules 1 and 3, with the fewest edits between them, and no
+//! bound: for a check whose own threshold decides whether a near miss is
+//! reported at all.
 //!
 //! This is deliberately not Python's `difflib.get_close_matches`: a ratio of
 //! matching blocks suggests unrelated words that share letters (`Big
@@ -86,6 +93,37 @@ pub fn ranked<'a>(
         .collect()
 }
 
+/// The candidate the shared order (rules 1 and 3, with the fewest edits
+/// between) puts first, with no bound on the edits: for a check whose own
+/// threshold decides whether a near miss is reported at all, and which only
+/// needs this rule to choose among the candidates it accepted.
+///
+/// Whether a diagnostic is reported, and at what severity, is a contract
+/// (plan §3, invariant 3), so a check that reports only near misses (an ECS
+/// field, a CIM data model, a KQL column of a documented table) keeps its own
+/// threshold; what it suggests comes from here, as everywhere else. `Some`
+/// whenever `candidates` is not empty, even when the value itself is among
+/// them.
+pub fn best<'a>(value: &str, candidates: impl IntoIterator<Item = &'a str>) -> Option<&'a str> {
+    let lower = value.to_lowercase();
+    let folded = fold(value);
+    candidates
+        .into_iter()
+        .map(|candidate| {
+            let other = candidate.to_lowercase();
+            let (a, b) = middles(&lower, &other);
+            Scored {
+                candidate,
+                index: 0,
+                same_word: fold(candidate) == folded,
+                distance: strsim::osa_distance(a, b),
+                prefix: strsim::jaro_winkler(&lower, &other),
+            }
+        })
+        .min_by(Scored::order)
+        .map(|s| s.candidate)
+}
+
 /// Candidates prepared once (lower-cased, folded, measured) for many
 /// lookups: a field's allowed values, checked for every value of a
 /// workspace. Results are indices into the candidates as given.
@@ -148,9 +186,11 @@ impl Candidates {
             if !same_word && item.length.abs_diff(length) > edits {
                 continue;
             }
-            // A common prefix and suffix cost no edit: measure what lies between.
+            // A common prefix and suffix cost no edit: measure what lies
+            // between, against a third of the words it falls in.
             let (a, b) = middles(&lower, &item.lower);
-            let differing = a.chars().count().max(b.chars().count());
+            let (wa, wb) = words(&lower, &item.lower);
+            let differing = wa.chars().count().max(wb.chars().count());
             let bound = edits.min(max_edits(differing));
             if !same_word && a.chars().count().abs_diff(b.chars().count()) > bound {
                 continue;
@@ -175,21 +215,51 @@ impl Candidates {
 /// What is left of `a` and `b` once the prefix and the suffix they share are
 /// set aside: the part an edit has to change.
 fn middles<'s>(a: &'s str, b: &'s str) -> (&'s str, &'s str) {
+    let (prefix, suffix) = shared(a, b);
+    (&a[prefix..a.len() - suffix], &b[prefix..b.len() - suffix])
+}
+
+/// The lengths, in bytes, of the prefix and the suffix `a` and `b` share; the
+/// suffix is taken from what the prefix leaves, so the two never overlap.
+fn shared(a: &str, b: &str) -> (usize, usize) {
     let prefix: usize = a
         .chars()
         .zip(b.chars())
         .take_while(|(x, y)| x == y)
         .map(|(x, _)| x.len_utf8())
         .sum();
-    let (a, b) = (&a[prefix..], &b[prefix..]);
-    let suffix: usize = a
+    let suffix: usize = a[prefix..]
         .chars()
         .rev()
-        .zip(b.chars().rev())
+        .zip(b[prefix..].chars().rev())
         .take_while(|(x, y)| x == y)
         .map(|(x, _)| x.len_utf8())
         .sum();
-    (&a[..a.len() - suffix], &b[..b.len() - suffix])
+    (prefix, suffix)
+}
+
+/// The whole words of `a` and `b` that hold their differing part
+/// ([`middles`]): the middles widened, through the shared prefix and suffix,
+/// to the nearest whitespace on each side. A typo is bound by the length of
+/// the word it is in, so `SecurityEve` (two letters cut from a thirteen-letter
+/// name) is a typo of `SecurityEvent`, while `Big incident` is not one of
+/// `Minor incident`: its differing word, `big`/`minor`, is too short for four
+/// edits.
+fn words<'s>(a: &'s str, b: &'s str) -> (&'s str, &'s str) {
+    let (prefix, suffix) = shared(a, b);
+    // The prefix and the suffix are the same text in both spellings.
+    let start = a[..prefix]
+        .char_indices()
+        .rev()
+        .find(|(_, c)| c.is_whitespace())
+        .map_or(0, |(i, c)| i + c.len_utf8());
+    let tail = &a[a.len() - suffix..];
+    let end = suffix
+        - tail
+            .char_indices()
+            .find(|(_, c)| c.is_whitespace())
+            .map_or(suffix, |(i, _)| i);
+    (&a[start..a.len() - end], &b[start..b.len() - end])
 }
 
 struct Scored<'a> {
@@ -285,6 +355,49 @@ mod tests {
         assert_eq!(middles("zürich", "zürch"), ("i", ""));
     }
 
+    /// Two edits side by side, or two characters cut or added at one place,
+    /// are bound by the word they are in, not by the two characters that
+    /// differ: a long name keeps its suggestion.
+    #[test]
+    fn adjacent_edits_and_truncations_are_found() {
+        assert_eq!(
+            closest("SecurityEve", ["SecurityEvent", "Event"]),
+            Some("SecurityEvent")
+        );
+        assert_eq!(closest("summari", ["summarize"]), Some("summarize"));
+        assert_eq!(
+            closest("DeviceProcessEven", ["DeviceProcessEvents"]),
+            Some("DeviceProcessEvents")
+        );
+        assert_eq!(closest("plXYet", ["planet"]), Some("planet"));
+        let uuid = "00000000-0000-0000-0000-000000000001";
+        for typo in [
+            "00000000-0000-0000-0000-0000000000ab",
+            "00000000-0000-0000-0000-0000000001",
+            "00000000-0000-0000-0000-00000000000100",
+        ] {
+            assert_eq!(closest_within(typo, [uuid], 2), Some(uuid), "{typo}");
+        }
+        // The caller's bound still caps it.
+        assert_eq!(
+            closest_within("00000000-0000-0000-0000-000000000abc", [uuid], 2),
+            None
+        );
+        // Only the words that differ count: a short differing word in a
+        // phrase is still bound by its own length.
+        assert_eq!(words("big incident", "minor incident"), ("big", "minor"));
+        assert_eq!(
+            words("severe planet incident", "severe glands incident"),
+            ("planet", "glands")
+        );
+        assert_eq!(
+            words("securityeve", "securityevent"),
+            ("securityeve", "securityevent")
+        );
+        assert_eq!(words("a bc d", "a bxc d"), ("bc", "bxc"));
+        assert_eq!(words("one two", "one two"), ("two", "two"));
+    }
+
     #[test]
     fn the_bound_is_a_third_of_the_length() {
         assert_eq!(max_edits(0), 1);
@@ -332,6 +445,31 @@ mod tests {
     #[test]
     fn the_value_itself_and_duplicates_are_not_suggested() {
         assert_eq!(suggestions("red", ["red", "rad", "rad"], 5), ["rad"]);
+    }
+
+    #[test]
+    fn best_orders_without_a_bound() {
+        // The same word first, then the fewest edits, then the best start.
+        assert_eq!(
+            best("Process_Name", ["process_title", "process_name"]),
+            Some("process_name")
+        );
+        assert_eq!(best("stast", ["stash", "stats"]), Some("stats"));
+        assert_eq!(best("bat", ["hat", "cat", "bad"]), Some("bad"));
+        assert_eq!(best("bat", ["hat", "cat"]), Some("cat"));
+        // The same word beats a closer spelling: `a_b_c` is `abc` (two
+        // edits) before it is `a_b_x` (one).
+        assert_eq!(best("a_b_c", ["a_b_x", "abc"]), Some("abc"));
+        // No bound: a far candidate is still the best of one.
+        assert_eq!(best("planet", ["glands"]), Some("glands"));
+        // The value itself is not skipped: the caller's check chose it.
+        assert_eq!(best("red", ["red"]), Some("red"));
+        assert_eq!(best("red", []), None);
+        // The order of the candidates does not matter.
+        assert_eq!(
+            best("tabel", ["label", "table"]),
+            best("tabel", ["table", "label"])
+        );
     }
 
     #[test]
