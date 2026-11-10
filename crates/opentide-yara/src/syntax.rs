@@ -49,6 +49,34 @@ pub fn prepare(source: &str) -> Prepared {
                     ));
                 }
                 "rule" => blank_repeated_modifiers(node, source, &mut bytes, &mut findings),
+                "hex_jump_bound" => {
+                    let (start, end) = (node.start_byte(), node.end_byte());
+                    // libyara reads a bound past `u32` modulo 2^32; YARA-X
+                    // refuses it. Writing the bound libyara reads, as long
+                    // as the original, lets yara-x-parser read the string,
+                    // so its atoms and its jumps are checked as libyara's.
+                    // libyara's strtoll saturates at i64::MAX before the
+                    // 32-bit truncation: 2^63 and above read as -1.
+                    let digits = &source[start..end];
+                    let value = digits
+                        .parse::<u128>()
+                        .unwrap_or(u128::MAX)
+                        .min(i64::MAX as u128);
+                    if digits.bytes().all(|b| b.is_ascii_digit()) && value > u128::from(u32::MAX) {
+                        let wrapped = (value % (1u128 << 32)) as u32;
+                        let text = format!("{wrapped:0>width$}", width = end - start);
+                        if text.len() == end - start {
+                            bytes[start..end].copy_from_slice(text.as_bytes());
+                            findings.push(Finding::new(
+                                codes::YARA_X_INCOMPATIBLE,
+                                Severity::Warning,
+                                format!("YARA-X refuses a jump bound above {}; libyara reads `{digits}` as {wrapped}", u32::MAX),
+                                start,
+                                end,
+                            ));
+                        }
+                    }
+                }
                 "base64_modifier" => {
                     if let Some(alphabet) = node.child_by_field_name("alphabet") {
                         let (start, end) = (alphabet.start_byte(), alphabet.end_byte());
@@ -81,6 +109,41 @@ pub fn prepare(source: &str) -> Prepared {
         rule_wildcards,
         findings,
     }
+}
+
+/// Every `(`…`)` pair of the libyara grammar's tree, as the byte offsets
+/// of the two parentheses. They are its tokens, so a parenthesis inside a
+/// string, a regexp or a comment is none; pairs are matched in order.
+pub fn paren_pairs(source: &str) -> Vec<(usize, usize)> {
+    let mut pairs = Vec::new();
+    let Some(tree) = opentide_syntax::parse(LanguageId::Yara, source) else {
+        return pairs;
+    };
+    let mut open: Vec<usize> = Vec::new();
+    let mut cursor = tree.walk();
+    'walk: loop {
+        let node = cursor.node();
+        if node.child_count() == 0 && !node.is_missing() {
+            match node.kind() {
+                "(" => open.push(node.start_byte()),
+                ")" => {
+                    if let Some(o) = open.pop() {
+                        pairs.push((o, node.start_byte()));
+                    }
+                }
+                _ => {}
+            }
+        }
+        if cursor.goto_first_child() {
+            continue;
+        }
+        while !cursor.goto_next_sibling() {
+            if !cursor.goto_parent() {
+                break 'walk;
+            }
+        }
+    }
+    pairs
 }
 
 fn blank_repeated_modifiers(rule: Node, source: &str, bytes: &mut [u8], out: &mut Vec<Finding>) {
@@ -128,12 +191,17 @@ pub fn classify(error: &ParseError, source: &str) -> Finding {
         }
         ParseError::InvalidInteger { message, span } => {
             let before = source[..span.start()].trim_end();
-            let code =
-                if before.ends_with("xor(") || before.ends_with('-') && before.contains("xor(") {
-                    codes::YARA_STRING_MODIFIER
-                } else {
-                    codes::YARA_NUMBER_OUT_OF_RANGE
-                };
+            // A bound of `xor(a-b)`: the number follows `xor(` or the `-`
+            // of a range whose `xor(` is still open. A `-` elsewhere is a
+            // negative number, whatever came earlier in the text.
+            let open_xor = before
+                .rfind("xor(")
+                .is_some_and(|i| !before[i..].contains(')'));
+            let code = if open_xor && (before.ends_with("xor(") || before.ends_with('-')) {
+                codes::YARA_STRING_MODIFIER
+            } else {
+                codes::YARA_NUMBER_OUT_OF_RANGE
+            };
             (code, message.clone(), span)
         }
         ParseError::InvalidRegexpModifier { message, span } => {

@@ -26,6 +26,12 @@ pub mod editor;
 pub mod regexp;
 mod syntax;
 
+/// The parser's parenthesis pairs of `source`, for the range tests.
+#[doc(hidden)]
+pub fn paren_pairs(source: &str) -> Vec<(usize, usize)> {
+    syntax::paren_pairs(source)
+}
+
 use opentide_core::{ByteSpan, Diagnostic, LanguageId, LineIndex, Range, Severity, codes};
 use opentide_highlight::{HighlightSpec, HighlightToken, YARA_HIGHLIGHTS_SCM, tokens_from_spans};
 use yara_x_parser::Parser;

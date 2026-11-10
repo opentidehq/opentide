@@ -160,12 +160,16 @@ def render(rows: list[dict]) -> str:
                 lines.append(f"{key} = {toml_str(row[key])}")
         lines.append(f"libyara = {'true' if row['libyara'] else 'false'}")
         lines.append(f"yara_x = {'true' if row['yara_x'] else 'false'}")
+        if row.get("yara_x_kind"):
+            lines.append(f"yara_x_kind = {toml_str(row['yara_x_kind'])}")
         if row.get("doc"):
             lines.append(f"doc = {toml_str(row['doc'].strip())}")
         for o in row.get("overloads", []):
             lines.append("[[member.overload]]")
             lines.append(f"args = {toml_str(o['args'])}")
             lines.append(f"ret = {toml_str(o['ret'])}")
+            if o.get("yara_x_ret"):
+                lines.append(f"yara_x_ret = {toml_str(o['yara_x_ret'])}")
             lines.append(f"libyara = {'true' if o['libyara'] else 'false'}")
             lines.append(f"yara_x = {'true' if o['yara_x'] else 'false'}")
             if o.get("doc"):
@@ -188,14 +192,26 @@ def merge(module: str, ly: dict[str, dict], yx: dict[str, dict]) -> list[dict]:
             "yara_x": b is not None,
             "doc": (b or {}).get("doc"),
         }
+        # YARA-X's own type where it differs from libyara's (a predicate libyara
+        # declares as an integer is a boolean there): what YARA-X's non_bool_expr
+        # warning reads.
+        if a and b and base["kind"] != "function" and b["kind"] != a["kind"]:
+            row["yara_x_kind"] = b["kind"]
         if base["kind"] == "function":
             overloads: dict[str, dict] = {}
             for o in (a or {}).get("overloads", []):
                 overloads[o["args"]] = {**o, "libyara": True, "yara_x": False}
             for o in (b or {}).get("overloads", []):
+                # YARA-X reflects a method of an array element with the
+                # element as a leading argument (`signatures[].valid_on` takes
+                # `signature, timestamp`): libyara's overload without it.
+                if "[]." in path and o["args"] not in overloads and o["args"][1:] in overloads:
+                    o = {**o, "args": o["args"][1:]}
                 if o["args"] in overloads:
                     overloads[o["args"]]["yara_x"] = True
                     overloads[o["args"]]["doc"] = o.get("doc")
+                    if o["ret"] != overloads[o["args"]]["ret"]:
+                        overloads[o["args"]]["yara_x_ret"] = o["ret"]
                 else:
                     overloads[o["args"]] = {**o, "libyara": False, "yara_x": True}
             row["overloads"] = sorted(overloads.values(), key=lambda o: o["args"])
