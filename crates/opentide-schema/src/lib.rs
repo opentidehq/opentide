@@ -30,6 +30,7 @@ extern crate self as opentide_schema;
 pub mod configuration;
 pub mod error;
 pub mod from_node;
+pub mod generate;
 pub mod keys;
 pub mod migration;
 pub mod node;

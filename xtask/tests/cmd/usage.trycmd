@@ -63,7 +63,12 @@ commands:
                  run opentide-workspace's validate on every recorded
                  `validate --json` case that only checks, and compare its
                  report, checks and summary with the recording (UC-2.2, #817)
-  codegen        generate schemas, stubs, types and references (UC-1.8, #814)
+  codegen [--check]
+                 write the artifacts generated from the Rust model (the
+                 platform templates); --check compares them, and what
+                 `opentide generate` writes with each golden recording of an
+                 `opentide generate` that ran its schemas, templates and
+                 snippets phases and exited 0 (UC-1.8, #814)
   golden <record|check|diff|lock|coverage> [options]
                  record what the frozen Python CLI does, and check an engine
                  against the recordings (tests/golden/README.md);
@@ -85,9 +90,12 @@ commands:
 exit status: 0 passed, 1 check failed or not implemented yet,
 2 usage error or the check could not run
 
-$ xtask codegen
-? 1
-xtask codegen: not implemented yet; UC-1.8 (https://github.com/opentidehq/opentide/issues/814) implements it
+$ xtask codegen --frobnicate
+? 2
+xtask codegen: unknown option `--frobnicate`
+
+usage: cargo xtask codegen [--check]
+...
 
 $ xtask frobnicate
 ? 2
