@@ -438,4 +438,122 @@ mod loading {
         assert_eq!(json["nested"][0]["folder"], "objects/rules");
         std::fs::remove_dir_all(&dir).unwrap();
     }
+
+    /// A filesystem in memory where one path cannot be read or listed.
+    struct Faulty {
+        inner: MemoryFs,
+        broken: PathBuf,
+    }
+
+    impl FileSystem for Faulty {
+        fn read(&self, path: &Path) -> std::io::Result<Vec<u8>> {
+            if path == self.broken {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::PermissionDenied,
+                    "Permission denied (os error 13)",
+                ));
+            }
+            self.inner.read(path)
+        }
+
+        fn kind(&self, path: &Path) -> std::io::Result<opentide_workspace::fs::EntryKind> {
+            self.inner.kind(path)
+        }
+
+        fn read_dir(&self, path: &Path) -> std::io::Result<Vec<opentide_workspace::fs::DirEntry>> {
+            if path == self.broken {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::PermissionDenied,
+                    "Permission denied (os error 13)",
+                ));
+            }
+            self.inner.read_dir(path)
+        }
+
+        fn resolve(&self, path: &Path) -> PathBuf {
+            self.inner.resolve(path)
+        }
+    }
+
+    fn faulty(broken: &str) -> Arc<Faulty> {
+        let inner = MemoryFs::new();
+        inner.write("/ws/objects/rules/a.yaml", object("a"));
+        inner.write("/ws/objects/rules/b.yaml", object("b"));
+        inner.write("/ws/objects/threats/t.yaml", object("t"));
+        Arc::new(Faulty {
+            inner,
+            broken: PathBuf::from(broken),
+        })
+    }
+
+    #[test]
+    fn an_unreadable_file_is_a_load_error_and_an_unreadable_folder_is_skipped() {
+        let fs = faulty("/ws/objects/rules/a.yaml");
+        let workspace = Workspace::open(fs as Arc<dyn FileSystem>, options()).unwrap();
+        let errors = &workspace.index().load_errors;
+        assert_eq!(errors.len(), 1);
+        assert_eq!(errors[0].code, YAML_PARSE);
+        assert_eq!(
+            errors[0].failure,
+            Some(opentide_workspace::load::FailureKind::Unreadable)
+        );
+        assert_eq!(
+            errors[0].message(),
+            "Could not parse object YAML: Permission denied (os error 13)"
+        );
+        assert_eq!(workspace.index().rules().count(), 1);
+
+        let fs = faulty("/ws/objects/rules");
+        let workspace = Workspace::open(fs as Arc<dyn FileSystem>, options()).unwrap();
+        let skipped = &workspace.index().skipped_folders;
+        assert_eq!(skipped.len(), 2, "{skipped:?}");
+        assert!(skipped.iter().any(|folder| folder.family == "rule"
+            && matches!(
+                folder.problem,
+                opentide_workspace::discover::FolderProblem::Unreadable(_)
+            )));
+        assert_eq!(workspace.index().threats().count(), 1);
+    }
+
+    #[test]
+    fn a_configuration_file_that_cannot_be_read_stops_the_load() {
+        let fs = faulty("/ws/.opentide/configurations/deployment.toml");
+        fs.inner
+            .write("/ws/.opentide/configurations/deployment.toml", "x = 1\n");
+        let error = Workspace::open(fs as Arc<dyn FileSystem>, options()).unwrap_err();
+        assert!(matches!(error, ConfigError::Unreadable { .. }), "{error:?}");
+        assert_eq!(error.code(), Some("config_parse"));
+        assert!(error.to_string().contains("deployment.toml"));
+
+        let fs = Arc::new(MemoryFs::new());
+        fs.write(
+            "/ws/.opentide/configurations/deployment.toml",
+            b"x = \"caf\xe9\"\n".to_vec(),
+        );
+        let error = Workspace::open(Arc::clone(&fs) as Arc<dyn FileSystem>, options()).unwrap_err();
+        assert!(error.to_string().contains("not UTF-8"), "{error}");
+    }
+
+    #[test]
+    fn hidden_configuration_folders_and_other_files_are_never_read() {
+        let fs = Arc::new(MemoryFs::new());
+        fs.write("/ws/.opentide/configurations/.cache/x.toml", "broken [\n");
+        fs.write("/ws/.opentide/configurations/__pycache__/y.toml", "broken [\n");
+        fs.write("/ws/.opentide/configurations/notes.md", "# notes\n");
+        fs.write("/ws/.opentide/configurations/platforms/notes.txt", "x\n");
+        fs.write(
+            "/ws/.opentide/configurations/platforms/splunk.toml",
+            "[platform]\nenabled = true\n",
+        );
+        fs.create_dir("/ws/objects");
+        let workspace = open(&fs);
+        assert_eq!(workspace.stats().config_files_read, 1);
+        assert_eq!(workspace.roots().workspace, PathBuf::from(ROOT));
+        assert_eq!(workspace.root(), Path::new(ROOT));
+        assert!(workspace.fs().is_dir(Path::new("/ws/objects")));
+        assert_eq!(
+            workspace.configuration().folders[0],
+            PathBuf::from("/ws/.opentide/configurations")
+        );
+    }
 }
