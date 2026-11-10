@@ -5,6 +5,7 @@
 //! without a workspace or a subprocess; `main.rs` reads the inputs and prints.
 
 pub mod bench;
+pub mod codegen;
 pub mod compare;
 pub mod config;
 pub mod corpus;

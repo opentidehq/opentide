@@ -448,6 +448,7 @@ model! {
         pub query: String,
         /// `kuery` or `lucene`, for the indicator query.
         #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[schemars(schema_with = "crate::objects::platform::optional_literal::<QueryLanguage>")]
         pub language: Option<QueryLanguage>,
         /// Groups are OR. Entries in a group are AND.
         pub mapping: Vec<ElasticThreatGroup>,
@@ -565,6 +566,7 @@ platform_block! {
         /// `threat_match`. Compiled as `kuery` when omitted. MUST NOT be set for `eql`, `esql`, or
         /// `machine_learning`.
         #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[schemars(schema_with = "crate::objects::platform::optional_literal::<QueryLanguage>")]
         pub language: Option<QueryLanguage>,
         /// Index patterns. A single pattern is a one-item list (`[logs-*]`). Omitted uses the tenant
         /// `setup.index`.

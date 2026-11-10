@@ -29,6 +29,7 @@ depends on opentide-core (`codes`, `suggest`). Not published yet (`publish = fal
 | `src/migration.rs` | Forward one-step `From` impls (`From<RuleV1_0> for RuleV1_1`), `TideObject::step`, `migrate_to`, `into_newest`, `path` (`SchemaVersionChain`), `stamp_schema_identifier`; `migration/tests.rs`: the migration properties |
 | `src/revision.rs` | `revisions!`: one struct per revision, shared fields written once, in groups `@0,` … `@3,` around overridden fields |
 | `src/sample.rs` | Every derive and field convention on a two-revision family; not part of the model |
+| `src/generate/` | The generated artifacts (UC-1.8, #814): `json` (keys in insertion order, written as Python's `json.dumps(indent=4)`), `annotate` (`schema_annotations.py`, its patterns on `fancy-regex`), `router` (`opentide.schema.json`), `models` (each model's field order, from its derived `Deserialize`: the schemas schemars writes keep their keys sorted), `template` (`pydantic_skeleton.py`, walking the schemars schema), `snippets` (`vscode_snippets.py`), `workspace` (the `templates` and `snippets` phases and the router from a resolved configuration), `tests.rs` (the committed platform templates and the tide-corpus golden templates) |
 | `src/objects/` | The object models (UC-1.3, #809): `metadata` (`ObjectMetadata`, `RuleMetadata`, `ObjectReferences`, `Organisation`), `response`, `threat` (`ThreatVectorV1_0`), `objective` (`ObjectiveV1_0`), `rule` (`RuleV1_0`, `RuleV1_1`, `RuleConfigurations`), `role` (`FieldRole`), `any` (an unchecked value), `checks` (the validators, run by the conversion and by garde), `tests.rs` (the ported `tests/test_models/` tests) |
 | `src/objects/platform/` | The platform blocks (UC-1.4, #810): one module per platform with its nested models (`platform_block!` puts `PlatformConfigBase`'s fields first), `PLATFORM_CONFIG_MODELS` (closed), `LEGACY_KEYS` (the oracle declares none to tolerate), the named checks `elastic_rule_shape` and `sysdig_rule_shape` (`NAMED_CHECKS`, each block's before-validator: codes judged on the raw block, one `value_error` naming them), `QueryText`, the Sentinel ATT&CK v18 and duration checks, `durations` (Elastic; `opentide_core::duration` re-exported), `falco_text` (the oracle's `resolve_list` and macro scan; Falco's terms are `opentide_core::falco`'s), `schema` (`platform_schema.py`), `deprecation` (`deprecated_field`), `table.rs` (`tests/oracle/platform_cases.toml` against the oracle) and `tests.rs` (the ported Python tests) |
 | `tests/platform.rs` | Every block of `tests/fixtures/sysdig` and `tests/fixtures/elastic` |
@@ -99,6 +100,11 @@ depends on opentide-core (`codes`, `suggest`). Not published yet (`publish = fal
   oracle), and `xtask/tests/sysdig_engines.rs` runs both on `tests/oracle/platform_cases.toml`'s
   Sysdig cases and compares the codes, a difference by design listed there with its reason. The
   language server's walk goes when it reads this model (UC-2.6, #821).
+- A generated artifact is byte for byte what the oracle writes: `cargo xtask codegen --check`
+  compares the templates, snippets and router schema with every golden recording of `opentide
+  generate`. A model a template or schema reaches is listed in `generate::models` (its field
+  order); `generate::tests` fails on one it does not list. A Pydantic `Literal` is written in place
+  (`literal_enum!`'s `inline_schema`), as Pydantic writes it: the template offers its first value.
 - `metadata.schema` is read through `revisions` (`select`, `read`), never matched by hand; a new
   revision is a row of `REVISIONS`, its struct, its `From` step and its arm of `TideObject::step`.
   `objects::checks::REGISTERED` is the registry's object and configuration rows
@@ -118,6 +124,8 @@ cargo xtask corpus faults --check --engine rust --only platforms
 cargo nextest run -p opentide-schema revision migration    # the registry, dispatch and migrations (properties)
 cargo xtask schema diff --against python                   # JSON Schemas and every corpus, live
 cargo xtask corpus faults --check --engine rust --only objects
+cargo nextest run -p opentide-schema generate             # the generated templates, snippets, router
+cargo xtask codegen --check                                # against every golden `opentide generate`
 ```
 
 `tests/python.rs` embeds CPython: it links the shared libpython of `PYO3_PYTHON` (or `python3`),

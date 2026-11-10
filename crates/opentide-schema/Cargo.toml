@@ -58,6 +58,8 @@ toml_edit.workspace = true
 regex.workspace = true
 # The lint `pattern` anchored on its parsed form, verbose comments and all.
 regex-syntax.workspace = true
+# The oracle's Markdown patterns of the editor annotations (`generate::annotate`).
+fancy-regex.workspace = true
 pyo3 = { workspace = true, features = ["abi3-py310", "indexmap"], optional = true }
 # `metadata.reviewed` (UC-1.3): whether the date, the time and the offset
 # exist (jiff's civil types; no time zone database).
