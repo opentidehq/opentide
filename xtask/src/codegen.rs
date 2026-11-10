@@ -843,7 +843,10 @@ mod tests {
         let names: Vec<String> = schemas
             .iter()
             .map(|name| (*name).to_owned())
-            .chain(["opentide.schema.json".to_owned(), "rule.0.9.schema.json".to_owned()])
+            .chain([
+                "opentide.schema.json".to_owned(),
+                "rule.0.9.schema.json".to_owned(),
+            ])
             .collect();
         assert_eq!(
             stale_editor_schemas(&names, &artifacts),
@@ -855,8 +858,13 @@ mod tests {
 
     #[test]
     fn enum_essays_are_shortened_in_the_committed_schemas() {
-        let many: Vec<Value> = (0..=ENUM_DOC_MAX).map(|n| Value::from(n.to_string())).collect();
-        let long_doc = format!("### Name\n\n**Identifier**: `x`\n\n---\n\n{}", "word ".repeat(60));
+        let many: Vec<Value> = (0..=ENUM_DOC_MAX)
+            .map(|n| Value::from(n.to_string()))
+            .collect();
+        let long_doc = format!(
+            "### Name\n\n**Identifier**: `x`\n\n---\n\n{}",
+            "word ".repeat(60)
+        );
         let mut schema = serde_json::json!({
             "properties": {
                 "few": {"enum": ["a"], "markdownEnumDescriptions": [long_doc]},
@@ -869,7 +877,11 @@ mod tests {
             .unwrap();
         assert_eq!(few.chars().count(), DOC_CAP);
         assert!(few.starts_with("word word") && few.ends_with('…'), "{few}");
-        assert!(schema["properties"]["many"].get("markdownEnumDescriptions").is_none());
+        assert!(
+            schema["properties"]["many"]
+                .get("markdownEnumDescriptions")
+                .is_none()
+        );
         assert!(editor_reference_text(&schema).ends_with("}\n"));
     }
 }
