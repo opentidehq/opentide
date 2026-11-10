@@ -259,3 +259,16 @@ def test_a_constraint_code_keeps_the_models_finding(invoke_cli, tide_corpus_repo
     assert [issue["code"] for issue in issues if issue["code"] == "yara_include"] == [
         "yara_include"
     ]
+
+
+def test_queries_warn_keeps_the_models_include_error(invoke_cli, tide_corpus_repo: Path) -> None:
+    """With --queries warn the engine's yara_include is a warning; deploy still refuses the
+    rule at model validation, so validate keeps the model's error and fails, once."""
+    name = _add(tide_corpus_repo, INCLUDE_RULE)
+    result = invoke_cli("validate", "--queries", "warn", "--file", name)
+    assert result.exit_code == 1
+    report = parse_cli_json(result)["report"]
+    [model] = report["issues"]
+    assert model["code"] == "schema_validation"
+    assert "yara_include" in model["message"]
+    assert not [item for item in report["warnings"] if item["code"] == "yara_include"]

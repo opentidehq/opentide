@@ -254,9 +254,19 @@ def run_validation(
             for issue in issues
             if issue.field_path and issue.field_path[-1] == "query"
         }
-        issues = _without_engine_reported_yara(issues, [*found.errors, *found.warnings])
+        # A YARA code the model and the engine both find is shown once. Only an
+        # engine *error* replaces the model's: with --queries warn the model's
+        # error stays, so validate fails the rule as deploy would, and the
+        # engine's warning for the same code is dropped instead.
+        issues = _without_engine_reported_yara(issues, found.errors)
+        modelled = _model_yara_codes(issues)
+        engine_warnings = [
+            item
+            for item in found.warnings
+            if (item.file_path, tuple(item.field_path[:2]), item.code) not in modelled
+        ]
         issues.extend(_not_in(found.errors, rejected))
-        warnings.extend(_not_in(found.warnings, rejected))
+        warnings.extend(_not_in(engine_warnings, rejected))
         stats["queries_checked"] = found.queries
         progress_events.progress("queries", found.queries, found.queries)
         if not object_checks:
@@ -281,6 +291,24 @@ def run_validation(
 _MODEL_CODES = re.compile(r"validation failed with code\(s\): ([a-z0-9_]+(?:, [a-z0-9_]+)*)")
 
 
+def _model_codes(issue: ValidationIssue) -> list[str]:
+    """The codes a coded model validator's ``schema_validation`` finding carries."""
+    match = _MODEL_CODES.search(issue.message) if issue.code == "schema_validation" else None
+    return match.group(1).split(", ") if match else []
+
+
+def _model_yara_codes(
+    issues: list[ValidationIssue],
+) -> set[tuple[Path | None, tuple[str, ...], str]]:
+    """``(file, configurations block, code)`` of each ``yara_*`` code the model reports."""
+    return {
+        (issue.file_path, tuple(issue.field_path[:2]), code)
+        for issue in issues
+        for code in _model_codes(issue)
+        if code.startswith("yara_")
+    }
+
+
 def _without_engine_reported_yara(
     issues: list[ValidationIssue], engine: list[ValidationIssue]
 ) -> list[ValidationIssue]:
@@ -290,9 +318,9 @@ def _without_engine_reported_yara(
     (``yara_include``, ...) so deploy and the paths without the engine keep
     them; the engine reports the same code at its line and column. A
     ``schema_validation`` finding on a ``configurations`` block is dropped when
-    every code it carries is a ``yara_*`` code the engine reported in that
-    block of that file. A ``harfanglab_*`` constraint code keeps it, and so
-    does an engine that did not run (``engine_unavailable``).
+    every code it carries is a ``yara_*`` code the engine reported as an error
+    (*engine*) in that block of that file. A ``harfanglab_*`` constraint code
+    keeps it, and so does an engine that did not run (``engine_unavailable``).
     """
     reported = {
         (item.file_path, tuple(item.field_path[:2]), item.code)
@@ -303,9 +331,8 @@ def _without_engine_reported_yara(
         return issues
     kept: list[ValidationIssue] = []
     for issue in issues:
-        match = _MODEL_CODES.search(issue.message) if issue.code == "schema_validation" else None
         block = (issue.file_path, tuple(issue.field_path[:2]))
-        codes = match.group(1).split(", ") if match else []
+        codes = _model_codes(issue)
         if codes and all(code.startswith("yara_") and (*block, code) in reported for code in codes):
             continue
         kept.append(issue)
