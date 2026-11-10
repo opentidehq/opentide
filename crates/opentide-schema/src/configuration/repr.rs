@@ -94,7 +94,7 @@ pub fn node(node: &Node) -> String {
 /// that read back, `1.0`, `1.5`, `inf`, `-inf`, `nan`; past 1e16 or below
 /// 1e-4 with an exponent of a sign and at least two digits (`1e+20`,
 /// `1.5e-07`).
-fn float_text(float: f64) -> String {
+pub fn float_text(float: f64) -> String {
     if float.is_nan() {
         return "nan".to_owned();
     }

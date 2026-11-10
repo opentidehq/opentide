@@ -3,6 +3,7 @@
 //! to the tenant before the query, their filters after it.
 
 use indexmap::IndexMap;
+use opentide_schema::configuration::repr::float_text;
 
 use crate::json::Json;
 
@@ -30,22 +31,9 @@ fn let_literal(value: &Json) -> Option<String> {
     match value {
         Json::Bool(flag) => Some(if *flag { "true" } else { "false" }.to_owned()),
         Json::Int(integer) => Some(integer.to_string()),
-        Json::Float(float) => Some(python_float(*float)),
+        Json::Float(float) => Some(float_text(*float)),
         Json::Str(text) => Some(kql_string(text)),
         Json::Null | Json::Array(_) | Json::Object(_) => None,
-    }
-}
-
-/// A float as Python's `str` writes it.
-fn python_float(value: f64) -> String {
-    if value.is_nan() {
-        "nan".to_owned()
-    } else if value.is_infinite() {
-        if value > 0.0 { "inf" } else { "-inf" }.to_owned()
-    } else if value.fract() == 0.0 && value.abs() < 1e16 {
-        format!("{value:.1}")
-    } else {
-        format!("{value}")
     }
 }
 
@@ -116,6 +104,18 @@ mod tests {
             "let x = true;\nlet z = 1.5;\nT\n| where B\n| where C"
         );
         assert_eq!(compile_query("T", None, "two"), "T");
+    }
+
+    #[test]
+    fn float_lets_are_written_as_python_writes_them() {
+        // Past 1e16 and below 1e-4 Python's str takes an exponent.
+        let list =
+            exclusions("- {let: {big: 1.0e+16, small: 1.0e-5, whole: 1.0e+15, half: 0.5}}\n");
+        assert_eq!(
+            compile_query("T", Some(&list), "one"),
+            "let big = 1e+16;\nlet small = 1e-05;\nlet whole = 1000000000000000.0;\n\
+             let half = 0.5;\nT"
+        );
     }
 
     #[test]

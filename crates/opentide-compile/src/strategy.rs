@@ -70,35 +70,10 @@ fn not_a_run_strategy(name: &str) -> Option<&'static str> {
     })
 }
 
-/// A value Python's `repr` writes for a string: single quotes unless the
-/// text holds one and no double quote.
-pub fn python_repr(text: &str) -> String {
-    let quote = if text.contains('\'') && !text.contains('"') {
-        '"'
-    } else {
-        '\''
-    };
-    let mut out = String::with_capacity(text.len() + 2);
-    out.push(quote);
-    for c in text.chars() {
-        match c {
-            '\\' => out.push_str("\\\\"),
-            '\n' => out.push_str("\\n"),
-            '\r' => out.push_str("\\r"),
-            '\t' => out.push_str("\\t"),
-            c if c == quote => {
-                out.push('\\');
-                out.push(c);
-            }
-            c if (c as u32) < 0x20 || c as u32 == 0x7f => {
-                out.push_str(&format!("\\x{:02x}", c as u32));
-            }
-            c => out.push(c),
-        }
-    }
-    out.push(quote);
-    out
-}
+/// A string as Python's `repr` writes it (single quotes unless the text
+/// holds one and no double quote; what does not print escaped): the schema's
+/// own quoting, which the configuration messages use.
+pub use opentide_schema::configuration::repr::quote as python_repr;
 
 /// The configured statuses, in `[[statuses]]` order: each name with the
 /// strategy it maps to.
@@ -399,6 +374,9 @@ mod tests {
         // Both quotes: single quotes, the single one escaped (Python's repr).
         assert_eq!(python_repr("a'b\""), "'a\\'b\"'");
         assert_eq!(python_repr("\\\r\t\u{1}\u{7f}é"), "'\\\\\\r\\t\\x01\\x7fé'");
+        // What str.isprintable rejects beyond ASCII: a C1 control, a line
+        // separator.
+        assert_eq!(python_repr("a\u{85}b\u{2028}c"), "'a\\x85b\\u2028c'");
     }
 
     #[test]

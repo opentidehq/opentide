@@ -12,6 +12,7 @@ use opentide_core::falco::{
     flatten_lists, is_list_comparison, is_python_space, list_inside, normalize_comp, python_strip,
     resolve_list, upsert,
 };
+use opentide_schema::configuration::repr::float_text;
 use opentide_schema::objects::platform::falco_text::{
     check_position_names, join_lines, substitute_macros,
 };
@@ -137,7 +138,7 @@ fn py_repr(value: &Json) -> String {
         Json::Null => "None".to_owned(),
         Json::Bool(flag) => if *flag { "True" } else { "False" }.to_owned(),
         Json::Int(integer) => integer.to_string(),
-        Json::Float(float) => python_float(*float),
+        Json::Float(float) => float_text(*float),
         Json::Str(text) => python_repr(text),
         Json::Array(items) => format!(
             "[{}]",
@@ -151,19 +152,6 @@ fn py_repr(value: &Json) -> String {
                 .collect::<Vec<_>>()
                 .join(", ")
         ),
-    }
-}
-
-/// A float as Python's `str()` writes it.
-fn python_float(float: f64) -> String {
-    if float.is_nan() {
-        "nan".to_owned()
-    } else if float.is_infinite() {
-        if float > 0.0 { "inf" } else { "-inf" }.to_owned()
-    } else if float.fract() == 0.0 && float.abs() < 1e16 {
-        format!("{float:.1}")
-    } else {
-        format!("{float}")
     }
 }
 

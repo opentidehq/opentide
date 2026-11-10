@@ -19,6 +19,11 @@ use opentide_workspace::{FileSystem, MemoryFs, Options, RootOptions, Workspace};
 const UUID: &str = "00000000-0000-4000-8005-000000000901";
 
 fn workspace(block: &str) -> Workspace {
+    workspace_with("", block)
+}
+
+/// A workspace whose rule has the top-level keys `top` besides the block.
+fn workspace_with(top: &str, block: &str) -> Workspace {
     let fs = Arc::new(MemoryFs::new());
     fs.create_dir("/ws/.opentide/configurations/platforms");
     fs.create_dir("/ws/objects/rules");
@@ -26,7 +31,7 @@ fn workspace(block: &str) -> Workspace {
         "/ws/objects/rules/r.yaml",
         format!(
             "name: Rule\nmetadata:\n  uuid: {UUID}\n  schema: rule::1.0\n\
-             description: \"a\\u001cb  c\"\nconfigurations:\n  sysdig:\n{block}"
+             description: \"a\\u001cb  c\"\n{top}configurations:\n  sysdig:\n{block}"
         ),
     );
     Workspace::open(
@@ -44,7 +49,12 @@ fn workspace(block: &str) -> Workspace {
 
 /// The dry run's body of the block, or its error's code and reason.
 fn body(block: &str) -> Result<String, (String, String)> {
-    let workspace = workspace(block);
+    body_with("", block)
+}
+
+/// The dry run's body of the block in a rule with the top-level keys `top`.
+fn body_with(top: &str, block: &str) -> Result<String, (String, String)> {
+    let workspace = workspace_with(top, block);
     let owned = Owned::new(
         &Vocabularies::bundled(),
         &workspace.configuration().resolved,
@@ -81,6 +91,61 @@ fn a_macro_sees_only_earlier_macros() {
         "Sysdig cannot compile this rule: macro 'm1' uses the block macro 'm2', which is \
          itself or defined after it: Falco refuses it as an undefined macro"
     );
+}
+
+#[test]
+fn a_macro_cannot_use_itself() {
+    let (code, reason) = body(
+        "    status: STAGING\n    condition: m1\n    macros:\n    - name: m1\n      \
+         condition: m1 and proc.name = x\n",
+    )
+    .unwrap_err();
+    assert_eq!(code, "compile_failed");
+    assert_eq!(
+        reason,
+        "Sysdig cannot compile this rule: macro 'm1' uses the block macro 'm1', which is \
+         itself or defined after it: Falco refuses it as an undefined macro"
+    );
+}
+
+#[test]
+fn a_tuple_exception_without_comps_compares_with_equals() {
+    // No comps: every field compares with `=`, which takes one value, so a
+    // block list as a whole tuple item is refused, not expanded.
+    let (_, reason) = body(
+        "    status: STAGING\n    condition: proc.name = x\n    exceptions:\n    - name: t\n      \
+         fields: [proc.name]\n      values:\n      - [shells]\n    lists:\n    - name: shells\n      \
+         items: [bash, sh]\n",
+    )
+    .unwrap_err();
+    assert_eq!(
+        reason,
+        "Sysdig cannot compile this rule: exception 't': the block list 'shells' appears in a \
+         value where Falco's expansion would not produce a value list"
+    );
+}
+
+#[test]
+fn float_items_are_written_as_python_writes_them() {
+    let out = details(
+        "    status: STAGING\n    condition: proc.name in (l)\n    lists:\n    - name: l\n      \
+         items: [1.0e+16, 1.0e-5, 0.5]\n",
+    );
+    let Json::Str(text) = out else { panic!() };
+    assert!(
+        text.contains("\"condition\":\"proc.name in ( 1e+16, 1e-05, 0.5 )\""),
+        "{text}"
+    );
+}
+
+#[test]
+fn a_low_severity_is_a_notice() {
+    let text = body_with(
+        "response:\n  alert_severity: Low\n",
+        "    status: STAGING\n    condition: proc.name = x\n",
+    )
+    .unwrap();
+    assert!(text.contains("\"priority\":\"notice\""), "{text}");
 }
 
 #[test]

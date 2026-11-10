@@ -6,6 +6,7 @@
 use std::fmt::Write as _;
 
 use indexmap::IndexMap;
+use opentide_schema::configuration::repr::float_text;
 use opentide_schema::node::{Node, Value};
 use serde::ser::{Serialize, SerializeMap, SerializeSeq, Serializer};
 
@@ -119,16 +120,15 @@ fn key_text(node: &Node) -> String {
     }
 }
 
-/// A float as Python's `repr` writes it, for a dict key.
+/// A float as `json.dumps` writes a dict key: `NaN`, `Infinity` and
+/// `-Infinity` for what JSON has no number for, otherwise Python's `repr`.
 fn python_float(value: f64) -> String {
     if value.is_nan() {
         "NaN".to_owned()
     } else if value.is_infinite() {
         if value > 0.0 { "Infinity" } else { "-Infinity" }.to_owned()
-    } else if value.fract() == 0.0 && value.abs() < 1e16 {
-        format!("{value:.1}")
     } else {
-        format!("{value}")
+        float_text(value)
     }
 }
 
@@ -234,5 +234,9 @@ mod tests {
     fn float_keys_are_written_as_python_writes_them() {
         assert_eq!(python_float(1.0), "1.0");
         assert_eq!(python_float(2.5), "2.5");
+        assert_eq!(python_float(1e16), "1e+16");
+        assert_eq!(python_float(1e-5), "1e-05");
+        assert_eq!(python_float(f64::NAN), "NaN");
+        assert_eq!(python_float(f64::NEG_INFINITY), "-Infinity");
     }
 }
