@@ -96,9 +96,17 @@ YARA_KEYWORDS = frozenset(
 )
 
 #: The meta ``context`` values the HarfangLab profile expects (harfanglab-1.0, YARA profile).
-HARFANGLAB_CONTEXTS = frozenset(
-    {"file", "memory", "file,memory", "file.pe", "file.elf", "file.macho"}
-)
+#: The scan contexts a HarfangLab meta ``context`` joins with commas, without blanks
+#: (harfanglab-1.0 1.3, YARA profile): ``file,memory`` and ``file.pe,memory`` are lists.
+HARFANGLAB_CONTEXTS = frozenset({"file", "memory", "file.pe", "file.elf", "file.macho"})
+_CONTEXTS_TEXT = "a comma-joined list of " + ", ".join(sorted(HARFANGLAB_CONTEXTS))
+
+#: The ``context`` deploy writes for ``file`` in the decomposed form, by ``meta.os``
+#: (the deployer's ``OS_TO_FILE_CONTEXT``).
+OS_FILE_CONTEXT = {"Windows": "file.pe", "MacOS": "file.macho", "Linux": "file.elf"}
+
+#: libyara's longest identifier (yara-1.0 1.1, Dialect).
+MAX_IDENTIFIER = 128
 
 #: The decomposed form's keys; a ``yara`` object with ``signature`` sets none of them.
 DECOMPOSED_KEYS = ("meta", "strings", "condition", "imports")
@@ -208,9 +216,29 @@ def derived_rule_name(name: str) -> str:
 
 
 def rule_name_refused(name: str) -> bool:
-    """Whether libyara refuses the rule name deploy derives (``harfanglab_yara_rule_name``)."""
+    """Whether libyara refuses the rule name deploy derives (``harfanglab_yara_rule_name``).
+
+    A keyword, a letter other than ASCII, or more than 128 characters (harfanglab-1.0 1.3).
+    """
     derived = derived_rule_name(name)
-    return derived in YARA_KEYWORDS or not _ASCII_NAME.fullmatch(derived)
+    return (
+        derived in YARA_KEYWORDS
+        or not _ASCII_NAME.fullmatch(derived)
+        or len(derived) > MAX_IDENTIFIER
+    )
+
+
+def context_accepted(value: str) -> bool:
+    """Whether *value* is a comma-joined list, without blanks, of HarfangLab scan contexts."""
+    return all(part in HARFANGLAB_CONTEXTS for part in value.split(","))
+
+
+def decomposed_context(contexts: list[str], os: str) -> str:
+    """The meta ``context`` the decomposed form deploys: ``file`` rewritten from ``os``."""
+    return ",".join(
+        OS_FILE_CONTEXT[os] if context == "file" and os in OS_FILE_CONTEXT else context
+        for context in contexts
+    )
 
 
 def deployed_signature(signature: str) -> str:
@@ -316,16 +344,39 @@ def advisories(signature: str) -> Iterator[YaraAdvisory]:
             yield YaraAdvisory(
                 "harfanglab_yara_context",
                 f"YARA rule {header.name!r} sets meta context to {written}, not a string; "
-                "HarfangLab's rules use " + ", ".join(sorted(HARFANGLAB_CONTEXTS)),
+                f"HarfangLab expects {_CONTEXTS_TEXT}",
                 offset,
             )
-        elif value not in HARFANGLAB_CONTEXTS:
+        elif not context_accepted(value):
             yield YaraAdvisory(
                 "harfanglab_yara_context",
-                f"YARA rule {header.name!r} sets meta context {value!r}; HarfangLab's rules use "
-                + ", ".join(sorted(HARFANGLAB_CONTEXTS)),
+                f"YARA rule {header.name!r} sets meta context {value!r}; "
+                f"HarfangLab expects {_CONTEXTS_TEXT}",
                 offset,
             )
+
+
+def decomposed_advisory(contexts: object, os: object) -> tuple[str, str] | None:
+    """``(code, message)`` for the ``context`` the decomposed form deploys, or ``None``.
+
+    The advisory applies to the decomposed form on the value deploy writes
+    (harfanglab-1.0 1.3); deploy writes no ``context`` for an empty list.
+    """
+    if not isinstance(contexts, list) or not all(isinstance(item, str) for item in contexts):
+        return None  # the schema check's finding
+    if not contexts:
+        return (
+            "yara_meta_missing",
+            "meta.context is empty, so deploy writes the YARA rule with no meta context; "
+            "HarfangLab expects one",
+        )
+    written = decomposed_context(contexts, os if isinstance(os, str) else "")
+    if context_accepted(written):
+        return None
+    return (
+        "harfanglab_yara_context",
+        f"meta.context deploys as context {written!r}; HarfangLab expects {_CONTEXTS_TEXT}",
+    )
 
 
 #: Where a HarfangLab block's signature sits in a rule file.
@@ -434,6 +485,47 @@ class SignatureSite:
             if before < len(written):
                 return self.text.count("\n", 0, written[before].start())
         return self.text.count("\n", 0, self.start)
+
+
+def _node_at(text: str, path: tuple[str, ...]) -> Any:
+    import yaml
+
+    node = _compose(text)
+    for key in path:
+        if not isinstance(node, yaml.MappingNode):
+            return None
+        node = next((value for k, value in node.value if k.value == key), None)
+    return node
+
+
+#: Where the decomposed form's scan contexts and OS sit in a rule file.
+CONTEXT_PATH = ("configurations", "harfanglab", "yara", "meta", "context")
+OS_PATH = ("configurations", "harfanglab", "yara", "meta", "os")
+
+
+def decomposed_context_in(text: str) -> tuple[Any, Any, int] | None:
+    """``(meta.context, meta.os, 0-based line of meta.context)`` of a decomposed HarfangLab block.
+
+    ``None`` when the file has no ``meta.context`` or its block has a ``signature``.
+    """
+    import yaml
+
+    if _node_at(text, SIGNATURE_PATH) is not None:
+        return None
+    meta = _node_at(text, CONTEXT_PATH[:-1])
+    if not isinstance(meta, yaml.MappingNode):
+        return None
+    key, node = next(((k, v) for k, v in meta.value if k.value == CONTEXT_PATH[-1]), (None, None))
+    if key is None:
+        return None
+    loader = yaml.SafeLoader("")
+    os_node = _node_at(text, OS_PATH)
+    try:
+        contexts = loader.construct_object(node, deep=True)
+        os = loader.construct_object(os_node, deep=True) if os_node is not None else None
+    except yaml.YAMLError:
+        return None
+    return contexts, os, key.start_mark.line
 
 
 def signature_in(text: str) -> SignatureSite | None:

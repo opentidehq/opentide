@@ -193,14 +193,18 @@ def test_codes_are_reported_together() -> None:
         assert code in message
 
 
-@pytest.mark.parametrize("name", ["Condition", "Détection", "rule", "Them", "for"])
+@pytest.mark.parametrize(
+    "name", ["Condition", "Détection", "rule", "Them", "for", "a" * 129, "1" + "a" * 123]
+)
 def test_a_decomposed_rule_name_libyara_refuses_fails(name: str) -> None:
     with pytest.raises(ValidationError) as caught:
         DetectionRule.model_validate(_rule(name=name))
     assert "harfanglab_yara_rule_name" in str(caught.value)
 
 
-@pytest.mark.parametrize("name", ["Cmd String", "2024 loader", "Condition check", "a-b.c"])
+@pytest.mark.parametrize(
+    "name", ["Cmd String", "2024 loader", "Condition check", "a-b.c", "a" * 128, "1" + "a" * 122]
+)
 def test_a_decomposed_rule_name_libyara_takes_validates(name: str) -> None:
     assert DetectionRule.model_validate(_rule(name=name)).name == name
 
@@ -309,6 +313,17 @@ def test_no_signature_is_found_without_one() -> None:
         ),
         (
             'rule a {\n  meta:\n    context = "file, memory"\n  condition:\n    true\n}',
+            ["harfanglab_yara_context"],
+        ),
+        # Any comma-joined list of the five contexts, without blanks (harfanglab-1.0 1.3).
+        ('rule a {\n  meta:\n    context = "file.pe,memory"\n  condition:\n    true\n}', []),
+        ('rule a {\n  meta:\n    context = "memory,file.elf,file"\n  condition:\n    true\n}', []),
+        (
+            'rule a {\n  meta:\n    context = "file,"\n  condition:\n    true\n}',
+            ["harfanglab_yara_context"],
+        ),
+        (
+            'rule a {\n  meta:\n    context = ""\n  condition:\n    true\n}',
             ["harfanglab_yara_context"],
         ),
         # A context that is not a string is set, and wrong (m2).
@@ -443,3 +458,42 @@ def test_a_signature_deploys_by_metadata_uuid() -> None:
     )
     HarfangLabDeploy().deploy_mdr(data=rule, service=service, tenant_config=TENANT)
     assert service.calls == [(SIGNATURE_CONTENT, data["metadata"]["uuid"])]
+
+
+@pytest.mark.parametrize(
+    ("contexts", "os", "expected"),
+    [
+        (["file"], "Windows", None),
+        (["file", "memory"], "Linux", None),
+        (["memory"], "Unknown", None),
+        # `file` stays `file` for an OS deploy does not map, which is still a context.
+        (["file"], "Solaris", None),
+        (["disk"], "Windows", "harfanglab_yara_context"),
+        (["file", "disk"], "MacOS", "harfanglab_yara_context"),
+        (["file memory"], "Windows", "harfanglab_yara_context"),
+        ([], "Windows", "yara_meta_missing"),
+        ("file", "Windows", None),  # not a list: the schema check's finding
+    ],
+)
+def test_the_decomposed_context_advisory(contexts: Any, os: str, expected: str | None) -> None:
+    """harfanglab-1.0 1.3: the advisory applies to the context the decomposed form deploys."""
+    found = yara.decomposed_advisory(contexts, os)
+    assert (found[0] if found else None) == expected
+
+
+def test_the_decomposed_context_is_what_deploy_writes() -> None:
+    data = _load("harfanglab-yara.yaml")
+    data["configurations"]["harfanglab"]["yara"]["meta"]["context"] = ["file", "memory"]
+    content = _compiled(data).content
+    assert f'context = "{yara.decomposed_context(["file", "memory"], "Windows")}"' in content
+
+
+def test_the_decomposed_context_is_found_with_its_line() -> None:
+    text = (FIXTURES / "harfanglab-yara.yaml").read_text(encoding="utf-8")
+    found = yara.decomposed_context_in(text)
+    assert found is not None
+    contexts, os, line = found
+    assert (contexts, os) == (["file"], "Windows")
+    assert "context:" in text.splitlines()[line]
+    signature = (FIXTURES / "harfanglab-yara-signature.yaml").read_text(encoding="utf-8")
+    assert yara.decomposed_context_in(signature) is None

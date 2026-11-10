@@ -148,9 +148,13 @@ def test_validate_query_crowdstrike_not_supported() -> None:
     assert "not supported" in result.stdout.lower() or "not supported" in result.stderr.lower()
 
 
-def test_validate_query_harfanglab_not_supported() -> None:
-    result = runner.invoke(app, ["--json", "validate", "query", "--platform", "harfanglab"])
+def test_validate_query_harfanglab_live_not_supported() -> None:
+    # HarfangLab's YARA is checked offline; there is no tenant check.
+    result = runner.invoke(
+        app, ["--json", "validate", "query", "--platform", "harfanglab", "--live"]
+    )
     assert result.exit_code != 0
+    assert '"supported":false' in result.stdout
 
 
 def test_info_json_output() -> None:

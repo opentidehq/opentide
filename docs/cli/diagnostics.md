@@ -126,7 +126,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`git`](#git) | git is on `PATH`. |
 | [`git_repository`](#git_repository) | The workspace is in a git repository, and its default branch (`origin/HEAD`). |
 | [`harfanglab_rule_kind`](#harfanglab_rule_kind) | A HarfangLab block sets both sigma and yara; a block is one kind. |
-| [`harfanglab_yara_context`](#harfanglab_yara_context) | A YARA rule in a HarfangLab `yara.signature` sets a meta `context` HarfangLab's rules do not use. |
+| [`harfanglab_yara_context`](#harfanglab_yara_context) | A HarfangLab YARA rule's meta `context` is not a comma-joined list of the scan contexts HarfangLab uses. |
 | [`harfanglab_yara_form`](#harfanglab_yara_form) | A HarfangLab yara object sets signature together with decomposed keys (meta, strings, condition or imports). |
 | [`harfanglab_yara_import`](#harfanglab_yara_import) | A decomposed HarfangLab YARA imports entry is not a module the YARA language knows. |
 | [`harfanglab_yara_rule_name`](#harfanglab_yara_rule_name) | The YARA rule name deploy derives from the rule name is a YARA keyword or keeps a character other than an ASCII letter, digit or underscore. |
@@ -2187,9 +2187,9 @@ Change the file where the frame points, then run `opentide validate` again.
 
 ## harfanglab_yara_context
 
-A YARA rule in a HarfangLab `yara.signature` sets a meta `context` HarfangLab's rules do not use.
+A HarfangLab YARA rule's meta `context` is not a comma-joined list of the scan contexts HarfangLab uses.
 
-Severity: warning. Reported by `opentide lint` (its `queries` check) on a HarfangLab rule (`harfanglab`) written in the signature form: a rule that is not `private` sets meta `context` to a value other than `file`, `memory`, `file,memory`, `file.pe`, `file.elf`, or `file.macho`. `opentide validate` does not fail on it. `file`, `memory`, and `file,memory` are the values HarfangLab's published rules use; `file.pe`, `file.elf`, and `file.macho` are what the decomposed form writes from `meta.os`. No HarfangLab document defines the key, so another value may be accepted and never scanned.
+Severity: warning. Reported by `opentide lint` (its `queries` check) on a HarfangLab rule (`harfanglab`). In the signature form, a rule that is not `private` sets meta `context` to something other than a comma-joined list, without blanks, of `file`, `memory`, `file.pe`, `file.elf`, and `file.macho` (`file,memory` and `file.pe,memory` are lists), or to a value that is not a string (`context = 1`). In the decomposed form, the `context` deploy writes from `meta.context` and `meta.os` is checked the same way. `opentide validate` does not fail on it. `file`, `memory`, and `file,memory` are the values HarfangLab's published rules use; `file.pe`, `file.elf`, and `file.macho` are what the decomposed form writes for `file`. No HarfangLab document defines the key, so another value may be accepted and never scanned.
 
 ### Example
 
@@ -2210,7 +2210,7 @@ configurations:
 
 ### How to fix
 
-Set `context` to where the agent should scan: `file`, `memory`, or `file,memory`, or a file type (`file.pe`, `file.elf`, `file.macho`). Then run `opentide lint --check queries` again.
+Set `context` to where the agent should scan: `file`, `memory`, or both (`file,memory`), or a file type (`file.pe`, `file.elf`, `file.macho`), joined with commas and no spaces. In the decomposed form, list them under `meta.context`. Then run `opentide lint --check queries` again.
 
 ```yaml
           meta:

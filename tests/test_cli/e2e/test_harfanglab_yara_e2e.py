@@ -191,3 +191,26 @@ def test_lint_reports_the_advisories_without_the_engine(
     assert payload["failure"]["code"] == "engine_unavailable"
     assert [item["code"] for item in payload["findings"]] == ["harfanglab_yara_context"]
     assert "disk" in text.splitlines()[payload["findings"][0]["yaml_line"]]
+
+
+def test_lint_reports_the_decomposed_context_advisory(invoke_cli, tide_corpus_repo: Path) -> None:
+    text = (FIXTURES / "harfanglab-yara.yaml").read_text(encoding="utf-8")
+    text = text.replace(
+        "        context:\n          - file\n", "        context:\n          - disk\n"
+    )
+    name = _add(tide_corpus_repo, "harfanglab-yara.yaml", text=text)
+    payload = parse_cli_json(invoke_cli("lint", "--check", "queries", "--file", name))
+    found = [item for item in payload["findings"] if item["code"] in ADVISORIES]
+    assert [item["code"] for item in found] == ["harfanglab_yara_context"]
+    assert "context:" in text.splitlines()[found[0]["yaml_line"]]
+
+
+def test_lint_is_quiet_on_a_decomposed_file_and_memory_context(
+    invoke_cli, tide_corpus_repo: Path
+) -> None:
+    """The decomposed deploy writes `file.pe,memory`, which HarfangLab accepts (1.3)."""
+    text = (FIXTURES / "harfanglab-yara.yaml").read_text(encoding="utf-8")
+    text = text.replace("          - file\n", "          - file\n          - memory\n")
+    name = _add(tide_corpus_repo, "harfanglab-yara.yaml", text=text)
+    payload = parse_cli_json(invoke_cli("lint", "--check", "queries", "--file", name))
+    assert not [item for item in payload["findings"] if item["code"] in ADVISORIES]

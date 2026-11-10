@@ -602,7 +602,7 @@ def _query_findings(root: Path, records: list[_ObjectRecord]) -> list[dict[str, 
         for finding in check_file(space, record.path, record.text):
             if finding.severity == "error" or _in_placeholder(finding, lines, marked):
                 continue
-            if finding.code in ADVISORY_CODES and finding.field_path[:4] == SIGNATURE_PATH:
+            if finding.code in ADVISORY_CODES and finding.field_path[:3] == SIGNATURE_PATH[:3]:
                 continue  # _harfanglab_yara_findings reports it, with or without the engine
             if (
                 engine_reference(finding.code) is None
@@ -636,13 +636,29 @@ def _harfanglab_yara_findings(record: _ObjectRecord) -> list[dict[str, object]]:
     ``harfanglab_yara_context`` and ``yara_meta_missing`` are warnings: HarfangLab
     takes the rule, but may not scan where the author meant.
     """
-    from opentide.platforms.harfanglab.yara import SIGNATURE_PATH, advisories, signature_in
+    from opentide.platforms.harfanglab.yara import (
+        CONTEXT_PATH,
+        SIGNATURE_PATH,
+        advisories,
+        decomposed_advisory,
+        decomposed_context_in,
+        signature_in,
+    )
 
     if record.parse_error or record.text is None or "harfanglab" not in record.text:
         return []
     site = signature_in(record.text)
     if site is None:
-        return []
+        decomposed = decomposed_context_in(record.text)
+        found = decomposed_advisory(*decomposed[:2]) if decomposed else None
+        if decomposed is None or found is None:
+            return []
+        code, message = found
+        finding = _finding(
+            LintCheck.queries, "warning", record, message, code=code, yaml_line=decomposed[2]
+        )
+        finding["_field_path"] = list(CONTEXT_PATH)
+        return [finding]
     findings: list[dict[str, object]] = []
     for advisory in advisories(site.value):
         line = site.line_of(advisory.offset)
