@@ -6,6 +6,7 @@
 //! place. [`OsFs`] is the disk.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::ffi::OsString;
 use std::io;
 use std::path::{Component, Path, PathBuf};
 use std::sync::{Mutex, PoisonError, RwLock};
@@ -24,8 +25,12 @@ pub enum EntryKind {
 /// One entry of a directory listing.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DirEntry {
-    /// The entry's name (lossily decoded when it is not UTF-8).
+    /// The entry's name, lossily decoded when it is not UTF-8: for matching
+    /// suffixes and for display only.
     pub name: String,
+    /// The entry's name as the filesystem gives it: the one to join onto
+    /// its folder, so a name that is not UTF-8 still names the file.
+    pub file_name: OsString,
     /// What it names, links followed.
     pub kind: EntryKind,
     /// Whether the entry itself is a symbolic link. A walk does not descend
@@ -100,8 +105,10 @@ impl FileSystem for OsFs {
             let symlink = entry.file_type()?.is_symlink();
             // A broken link, or one the process may not follow, is neither.
             let kind = self.kind(&entry.path()).unwrap_or(EntryKind::Other);
+            let file_name = entry.file_name();
             entries.push(DirEntry {
-                name: entry.file_name().to_string_lossy().into_owned(),
+                name: file_name.to_string_lossy().into_owned(),
+                file_name,
                 kind,
                 symlink,
             });
@@ -342,14 +349,15 @@ impl FileSystem for MemoryFs {
             (entry.parent() == Some(path.as_path()))
                 .then(|| entry.file_name())
                 .flatten()
-                .map(|name| name.to_string_lossy().into_owned())
+                .map(std::ffi::OsStr::to_os_string)
         };
         let mut entries: Vec<DirEntry> = tree
             .files
             .keys()
             .filter_map(|file| child(file))
-            .map(|name| DirEntry {
-                name,
+            .map(|file_name| DirEntry {
+                name: file_name.to_string_lossy().into_owned(),
+                file_name,
                 kind: EntryKind::File,
                 symlink: false,
             })
@@ -358,8 +366,9 @@ impl FileSystem for MemoryFs {
             tree.dirs
                 .iter()
                 .filter_map(|dir| child(dir))
-                .map(|name| DirEntry {
-                    name,
+                .map(|file_name| DirEntry {
+                    name: file_name.to_string_lossy().into_owned(),
+                    file_name,
                     kind: EntryKind::Dir,
                     symlink: false,
                 }),

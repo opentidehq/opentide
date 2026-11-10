@@ -140,7 +140,7 @@ fn read_folder(
         .map_err(|error| unreadable(dir, error.to_string()))?;
     entries.sort_by(|a, b| a.name.cmp(&b.name));
     for entry in entries {
-        let path = dir.join(&entry.name);
+        let path = dir.join(&entry.file_name);
         match entry.kind {
             EntryKind::Dir => {
                 folder.folders.push(entry.name.clone());
@@ -155,7 +155,7 @@ fn read_folder(
                 for file in nested {
                     // Only TOML files are ever parsed; nothing else is read.
                     if file.kind == EntryKind::File && is_toml(&file.name) {
-                        let text = read(&path.join(&file.name))?;
+                        let text = read(&path.join(&file.file_name))?;
                         folder
                             .files
                             .push((format!("{}/{}", entry.name, file.name), text));
@@ -220,10 +220,9 @@ pub fn load(fs: &dyn FileSystem, roots: &Roots) -> Result<Configuration, ConfigE
     } else {
         None
     };
+    // `parent_dir` is never `own_dir`: a folder's parent is not the folder.
     let parent = match &parent_dir {
-        Some(dir) if *dir != own_dir && !roots.tide_workspace => {
-            read_folder(fs, dir, &mut files_read)?
-        }
+        Some(dir) if !roots.tide_workspace => read_folder(fs, dir, &mut files_read)?,
         _ => None,
     };
     let resolved = resolve(&Instance {

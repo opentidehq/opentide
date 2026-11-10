@@ -375,9 +375,10 @@ fn ingest(
     }
     let uuid = text(id);
     let bucket = index.objects.entry(family.to_owned()).or_default();
+    // `assemble` ingests one family at a time and a scan lists a path once,
+    // so the displaced file is never `path` itself.
     if let Some(previous) = bucket.get(&uuid)
         && let Some(displaced) = index.file_paths.get(&uuid)
-        && displaced != path
     {
         let message = format!(
             "UUID {uuid} is also used by {}",

@@ -33,6 +33,9 @@ pub struct Scan {
     pub files: Vec<PathBuf>,
     /// YAML files in subfolders: not objects.
     pub nested: Vec<PathBuf>,
+    /// The objects that are symbolic links: a change to what one points at
+    /// changes the object.
+    pub links: Vec<PathBuf>,
 }
 
 /// Why an object folder was not scanned (`could_not_find_object_folder`).
@@ -68,7 +71,7 @@ pub fn scan(fs: &dyn FileSystem, dir: &Path) -> Result<Scan, FolderProblem> {
     let mut stack = vec![(dir.to_path_buf(), top, 0usize)];
     while let Some((folder, entries, depth)) = stack.pop() {
         for entry in entries {
-            let path = folder.join(&entry.name);
+            let path = folder.join(&entry.file_name);
             if entry.kind == EntryKind::Dir && !entry.symlink && depth < MAX_DEPTH {
                 if let Ok(children) = fs.read_dir(&path) {
                     stack.push((path.clone(), children, depth + 1));
@@ -78,6 +81,9 @@ pub fn scan(fs: &dyn FileSystem, dir: &Path) -> Result<Scan, FolderProblem> {
                 continue;
             }
             if depth == 0 {
+                if entry.symlink {
+                    scan.links.push(path.clone());
+                }
                 scan.files.push(path);
             } else {
                 scan.nested.push(path);
@@ -86,6 +92,7 @@ pub fn scan(fs: &dyn FileSystem, dir: &Path) -> Result<Scan, FolderProblem> {
     }
     scan.files.sort();
     scan.nested.sort();
+    scan.links.sort();
     Ok(scan)
 }
 

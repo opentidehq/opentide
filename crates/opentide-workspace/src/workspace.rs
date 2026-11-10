@@ -10,7 +10,7 @@ use rayon::prelude::*;
 
 use crate::config::{self, ConfigError, Configuration};
 use crate::discover;
-use crate::fs::FileSystem;
+use crate::fs::{self, FileSystem};
 use crate::index::{self, FamilyScan, Index};
 use crate::load::{self, Parsed};
 use crate::root::{self, RootOptions, Roots};
@@ -106,8 +106,8 @@ pub struct Invalidation {
     pub configuration: bool,
     /// The object files read and parsed again.
     pub reparsed: Vec<PathBuf>,
-    /// The UUIDs whose object, signal or references changed, removed ones
-    /// included.
+    /// The UUIDs whose object, signal, references or duplicate findings
+    /// changed, removed ones included.
     pub affected: BTreeSet<String>,
 }
 
@@ -118,6 +118,8 @@ pub struct Workspace {
     roots: Roots,
     config: Arc<Configuration>,
     parsed: HashMap<PathBuf, Arc<Parsed>>,
+    /// Each object file that is a symbolic link, and what it resolves to.
+    links: HashMap<PathBuf, PathBuf>,
     index: Arc<Index>,
     stats: Stats,
 }
@@ -192,6 +194,7 @@ impl Workspace {
             roots,
             config: Arc::new(config),
             parsed: HashMap::new(),
+            links: HashMap::new(),
             index: Arc::new(Index::default()),
         };
         workspace.refresh(&HashSet::new());
@@ -230,6 +233,12 @@ impl Workspace {
         self.stats.file_reads += fresh.len();
         self.stats.parses += fresh.len();
         self.parsed.extend(fresh);
+        self.links = scans
+            .iter()
+            .filter_map(|scan| scan.scan.as_ref().ok())
+            .flat_map(|scan| scan.links.iter())
+            .map(|link| (link.clone(), self.fs.resolve(link)))
+            .collect();
         // Messages show paths from the working directory, both resolved, as
         // `_shown_path` compares them (links, `\\?\` on Windows, `/private`).
         let display_base = self.fs.resolve(&self.options.roots.cwd);
@@ -277,37 +286,62 @@ impl Workspace {
     /// a configuration folder resolves the configuration again; any other
     /// path, or one that contains the workspace, loads everything again, as
     /// `serve`'s `invalidate` drops every snapshot for a path that matches
-    /// none (vscode-extension `docs/CONTRACTS.md`). The index is assembled
-    /// again from the parses either way, and equals a full load's.
+    /// none (vscode-extension `docs/CONTRACTS.md`). A change that moves the
+    /// workspace (a root marker created or deleted) also loads everything
+    /// again. An object file that is a symbolic link is read again when
+    /// the link or what it points at changes. The index is assembled again
+    /// from the parses either way, and equals a full load's.
     ///
     /// # Errors
     ///
     /// The configuration no longer resolves; the workspace is then unchanged.
     pub fn invalidate(&mut self, changes: &[Change]) -> Result<Invalidation, OpenError> {
-        let root = self.roots.workspace.clone();
-        let paths: Vec<PathBuf> = changes
-            .iter()
-            .map(|change| self.fs.resolve(&self.options.roots.absolute(&change.path)))
-            .collect();
-        if paths.is_empty() {
+        if changes.is_empty() {
             return Ok(Invalidation::default());
         }
+        let root = self.roots.workspace.clone();
+        // Each change in the two forms a cache key can take: resolved, and
+        // with only its folder resolved, as discovery names an object file
+        // that is a symbolic link.
+        let forms: Vec<Vec<PathBuf>> = changes
+            .iter()
+            .map(|change| {
+                let absolute = self.options.roots.absolute(&change.path);
+                let resolved = self.fs.resolve(&absolute);
+                let lexical = fs::normalise(&absolute);
+                let entry = match (lexical.parent(), lexical.file_name()) {
+                    (Some(parent), Some(name)) => self.fs.resolve(parent).join(name),
+                    _ => resolved.clone(),
+                };
+                if entry == resolved {
+                    vec![resolved]
+                } else {
+                    vec![resolved, entry]
+                }
+            })
+            .collect();
         let touches =
             |folder: &Path, path: &Path| path.starts_with(folder) || folder.starts_with(path);
-        let configuration = paths.iter().any(|path| {
+        let configuration = forms.iter().flatten().any(|path| {
             self.config
                 .folders
                 .iter()
                 .any(|folder| touches(folder, path))
         });
-        let full = paths.iter().any(|path| {
-            let configuration_only = self
-                .config
-                .folders
-                .iter()
-                .any(|folder| path.starts_with(folder));
-            !configuration_only && (!path.starts_with(&root) || path == &root)
+        let outside = forms.iter().any(|forms| {
+            let configuration_only = forms.iter().any(|path| {
+                self.config
+                    .folders
+                    .iter()
+                    .any(|folder| path.starts_with(folder))
+            });
+            let contains_root = forms.iter().any(|path| root.starts_with(path));
+            let inside = forms.iter().any(|path| path.starts_with(&root));
+            !configuration_only && (contains_root || !inside)
         });
+        // A root marker (`.opentide/`, `objects/`) created or deleted moves the
+        // workspace: everything is loaded again from the new one.
+        let full = outside || root::resolve(self.fs.as_ref(), &self.options.roots) != self.roots;
         let before = Arc::clone(&self.index);
         if full {
             let fresh = Self::open(Arc::clone(&self.fs), self.options.clone())?;
@@ -340,7 +374,13 @@ impl Workspace {
         let stale: HashSet<PathBuf> = self
             .parsed
             .keys()
-            .filter(|cached| paths.iter().any(|path| cached.starts_with(path)))
+            .filter(|cached| {
+                let target = self.links.get(*cached);
+                forms.iter().flatten().any(|path| {
+                    cached.starts_with(path)
+                        || target.is_some_and(|target| target.starts_with(path))
+                })
+            })
             .cloned()
             .collect();
         let mut reparsed = self.refresh(&stale);
@@ -354,8 +394,8 @@ impl Workspace {
     }
 }
 
-/// The UUIDs whose object (file, document), signal or references differ
-/// between `before` and `after`.
+/// The UUIDs whose object (file, document), signal, references or duplicate
+/// findings differ between `before` and `after`.
 fn affected(before: &Index, after: &Index) -> BTreeSet<String> {
     let mut out = BTreeSet::new();
     let objects = |index: &Index| -> HashMap<(String, String), (PathBuf, usize)> {
@@ -408,6 +448,18 @@ fn affected(before: &Index, after: &Index) -> BTreeSet<String> {
     for reference in old.symmetric_difference(&new) {
         out.insert(reference.from.clone());
         out.insert(reference.target.clone());
+    }
+    // A UUID can gain or lose a duplicate while the object that wins stays.
+    let duplicates = |index: &Index| -> HashSet<(PathBuf, String)> {
+        index
+            .duplicates
+            .iter()
+            .map(|duplicate| (duplicate.path.clone(), duplicate.uuid.clone()))
+            .collect()
+    };
+    let (old, new) = (duplicates(before), duplicates(after));
+    for (_, uuid) in old.symmetric_difference(&new) {
+        out.insert(uuid.clone());
     }
     out
 }

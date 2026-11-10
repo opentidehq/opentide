@@ -103,7 +103,13 @@ mod loading {
 
     #[test]
     fn references_signals_and_lookups() {
-        let workspace = open(&sample());
+        let fs = sample();
+        // An empty `detection_model` names nothing.
+        fs.write(
+            "/ws/objects/rules/r5.yaml",
+            "metadata:\n  uuid: r-5\ndetection_model: ''\n",
+        );
+        let workspace = open(&fs);
         let index = workspace.index();
         let refs: Vec<(&str, &str, &str)> = index
             .references
@@ -125,7 +131,7 @@ mod loading {
         assert_eq!(index.lookup("r-2").unwrap().family, "rule");
         assert_eq!(index.lookup("t-1").unwrap().file_name(), "t1.yaml");
         assert!(index.lookup("s-1").is_none());
-        assert_eq!(index.rules().count(), 2);
+        assert_eq!(index.rules().count(), 3);
         assert_eq!(index.threats().count(), 1);
         assert_eq!(index.objectives().count(), 1);
         assert_eq!(index.files()["r-2"], "r2.yml");
@@ -143,6 +149,10 @@ mod loading {
         fs.write("/ws/objects/rules/c-no-uuid.yaml", "metadata:\n  name: x\n");
         fs.write("/ws/objects/rules/d-list-uuid.yaml", "uuid: [a]\n");
         fs.write("/ws/objects/rules/e-syntax.yaml", "a: [1\n");
+        fs.write(
+            "/ws/objects/rules/f-empty-uuid.yaml",
+            "metadata:\n  uuid: ''\n",
+        );
         let workspace = open(&fs);
         let errors: Vec<(&str, &str, String)> = workspace
             .index()
@@ -181,6 +191,16 @@ mod loading {
         );
         assert_eq!(errors[4].1, YAML_PARSE);
         assert!(errors[4].2.contains("at line 2"), "{}", errors[4].2);
+        // An empty UUID is no UUID: nothing is indexed under "".
+        assert_eq!(
+            errors[5],
+            (
+                "f-empty-uuid.yaml",
+                MISSING_UUID,
+                "Object YAML has no uuid: f-empty-uuid.yaml".to_owned()
+            )
+        );
+        assert_eq!(errors.len(), 6);
         assert!(workspace.index().is_empty());
     }
 
@@ -248,6 +268,42 @@ mod loading {
     }
 
     #[test]
+    fn a_signal_repeated_in_one_objective_keeps_its_first_definition() {
+        let fs = Arc::new(MemoryFs::new());
+        fs.write(
+            "/ws/objects/objectives/a.yaml",
+            "metadata:\n  uuid: o-a\nobjective:\n  signals:\n    - uuid: s\n      name: first\n    - uuid: s\n      name: repeated\n",
+        );
+        let workspace = open(&fs);
+        let signals = &workspace.index().signals;
+        assert_eq!(signals["s"].owner, "o-a");
+        assert_eq!(
+            signals["s"].node.get("name").unwrap().value.as_str(),
+            Some("first")
+        );
+    }
+
+    #[test]
+    fn a_signal_another_objective_owns_is_not_taken_over() {
+        let fs = Arc::new(MemoryFs::new());
+        fs.write(
+            "/ws/objects/objectives/a.yaml",
+            "metadata:\n  uuid: o-a\nobjective:\n  signals:\n    - uuid: s\n      name: own\n",
+        );
+        fs.write(
+            "/ws/objects/objectives/b.yaml",
+            "metadata:\n  uuid: o-b\nobjective:\n  signals:\n    - uuid: s\n      name: other\n",
+        );
+        let workspace = open(&fs);
+        let signals = &workspace.index().signals;
+        assert_eq!(signals["s"].owner, "o-a");
+        assert_eq!(
+            signals["s"].node.get("name").unwrap().value.as_str(),
+            Some("own")
+        );
+    }
+
+    #[test]
     fn chaining_groups_vectors_by_relation() {
         let fs = Arc::new(MemoryFs::new());
         fs.write(
@@ -256,16 +312,21 @@ mod loading {
         );
         fs.write(
             "/ws/objects/threats/u.yaml",
-            "metadata:\n  uuid: u\nthreat:\n  chaining:\n    - {relation: ''}\n",
+            "metadata:\n  uuid: u\nthreat:\n  chaining:\n    - {relation: ''}\n    - {relation: '', vector: x}\n",
         );
         let workspace = open(&fs);
         let index = workspace.index();
         assert_eq!(index.chaining["t"]["precedes"], ["a"]);
         assert_eq!(index.chaining["t"]["follows"], ["b"]);
-        assert!(index.chaining["u"].is_empty());
+        // An empty relation groups nothing: the vector is referenced without one.
+        assert!(index.chaining["u"].is_empty(), "{:?}", index.chaining["u"]);
         let kinds: Vec<&ReferenceKind> = index.references.iter().map(|r| &r.kind).collect();
-        assert_eq!(kinds.len(), 4);
+        assert_eq!(kinds.len(), 5);
         assert_eq!(kinds[3], &ReferenceKind::Chaining { relation: None });
+        let from_u: Vec<_> = index.references.iter().filter(|r| r.from == "u").collect();
+        assert_eq!(from_u.len(), 1);
+        assert_eq!(from_u[0].target, "x");
+        assert_eq!(from_u[0].kind, ReferenceKind::Chaining { relation: None });
     }
 
     #[test]
@@ -288,6 +349,22 @@ mod loading {
             2,
             "threats and objectives are missing"
         );
+
+        // An empty folder names none, as the oracle's `if rel:` skips it: the
+        // workspace root is never scanned as the rule folder.
+        fs.write("/ws/root-level.yaml", object("root"));
+        fs.write(
+            "/ws/.opentide/configurations/paths.toml",
+            "[paths.objects]\nrule = \"\"\n",
+        );
+        let workspace = open(&fs);
+        assert_eq!(workspace.configuration().folder("rule"), None);
+        assert_eq!(workspace.index().rules().count(), 0);
+        assert!(workspace.index().skipped_folders.iter().any(|folder| {
+            folder.family == "rule"
+                && folder.path.is_none()
+                && folder.problem == opentide_workspace::discover::FolderProblem::Missing
+        }));
 
         fs.write(
             "/ws/.opentide/configurations/paths.toml",
@@ -370,6 +447,21 @@ mod loading {
         assert!(done.affected.contains("s-1"), "the reference it dropped");
         assert_eq!(workspace.stats().config_resolutions, 1);
 
+        // A duplicate gained or lost names its UUID, though the object that
+        // wins (r2.yml, the later file) stays the same.
+        fs.write("/ws/objects/rules/0.yaml", object("r-2"));
+        let done = workspace
+            .invalidate(&[Change::created("/ws/objects/rules/0.yaml")])
+            .unwrap();
+        assert_eq!(workspace.index().duplicates.len(), 1);
+        assert_eq!(done.affected.iter().collect::<Vec<_>>(), ["r-2"]);
+        fs.remove("/ws/objects/rules/0.yaml");
+        let done = workspace
+            .invalidate(&[Change::deleted("/ws/objects/rules/0.yaml")])
+            .unwrap();
+        assert!(workspace.index().duplicates.is_empty());
+        assert_eq!(done.affected.iter().collect::<Vec<_>>(), ["r-2"]);
+
         // A rename is a deletion and a creation.
         fs.rename("/ws/objects/rules/r2.yml", "/ws/objects/rules/team/r2.yml");
         let done = workspace
@@ -414,6 +506,146 @@ mod loading {
         assert!(format!("{workspace:?}").contains("Workspace"));
     }
 
+    #[expect(
+        clippy::unwrap_used,
+        reason = "a test helper: every workspace it opens resolves"
+    )]
+    fn fresh(fs: &Arc<MemoryFs>, options: Options) -> serde_json::Value {
+        let workspace = Workspace::open(Arc::clone(fs) as Arc<dyn FileSystem>, options).unwrap();
+        workspace.index().to_json(workspace.root())
+    }
+
+    #[test]
+    fn removing_the_configuration_folder_resolves_the_configuration_again() {
+        for removed in ["/ws/.opentide", "/ws/.opentide/configurations"] {
+            let fs = Arc::new(MemoryFs::new());
+            fs.write(
+                "/ws/.opentide/configurations/paths.toml",
+                "[paths.objects]\nrule = \"detections/\"\n",
+            );
+            fs.write("/ws/detections/d.yaml", object("d"));
+            fs.write("/ws/objects/rules/r.yaml", object("r"));
+            let mut workspace = open(&fs);
+            assert!(workspace.index().get("rule", "d").is_some());
+            fs.remove(removed);
+            // Only the folder is reported, as a watcher reports a deleted tree.
+            let done = workspace.invalidate(&[Change::deleted(removed)]).unwrap();
+            assert!(done.configuration && !done.full, "{removed}: {done:?}");
+            assert_eq!(
+                workspace.configuration().folder("rule"),
+                Some(Path::new("/ws/objects/rules"))
+            );
+            assert!(workspace.index().get("rule", "r").is_some());
+            assert_eq!(
+                workspace.index().to_json(workspace.root()),
+                fresh(&fs, options())
+            );
+        }
+        // A rename of the folder, reported as the folder alone.
+        let fs = Arc::new(MemoryFs::new());
+        fs.write(
+            "/ws/.opentide/configurations/paths.toml",
+            "[paths.objects]\nrule = \"detections/\"\n",
+        );
+        fs.write("/ws/detections/d.yaml", object("d"));
+        fs.write("/ws/objects/rules/r.yaml", object("r"));
+        let mut workspace = open(&fs);
+        fs.rename("/ws/.opentide", "/ws/.retired");
+        let done = workspace
+            .invalidate(&Change::renamed("/ws/.opentide", "/ws/.retired"))
+            .unwrap();
+        assert!(done.configuration && !done.full, "{done:?}");
+        assert_eq!(
+            workspace.index().to_json(workspace.root()),
+            fresh(&fs, options())
+        );
+    }
+
+    #[test]
+    fn the_workspace_root_itself_and_the_parent_configuration() {
+        let fs = sample();
+        let mut workspace = open(&fs);
+        // A change that names the workspace itself loads everything again.
+        let done = workspace.invalidate(&[Change::changed(ROOT)]).unwrap();
+        assert!(done.full, "{done:?}");
+
+        // The parent instance's configuration, outside the workspace, is
+        // resolved again without a full load.
+        fs.write(
+            "/.opentide/configurations/paths.toml",
+            "[paths.objects]\nrule = \"objects/rules/team/\"\n",
+        );
+        let done = workspace
+            .invalidate(&[Change::created("/.opentide/configurations/paths.toml")])
+            .unwrap();
+        assert!(done.configuration && !done.full, "{done:?}");
+        assert_eq!(
+            workspace.configuration().folder("rule"),
+            Some(Path::new("/ws/objects/rules/team"))
+        );
+        assert!(workspace.index().get("rule", "r-4").is_some());
+        assert_eq!(
+            workspace.index().to_json(workspace.root()),
+            fresh(&fs, options())
+        );
+    }
+
+    fn discovered() -> Options {
+        Options {
+            roots: RootOptions {
+                cwd: PathBuf::from("/repo/ws/sub"),
+                ..RootOptions::default()
+            },
+        }
+    }
+
+    #[test]
+    fn a_root_marker_created_or_deleted_moves_the_workspace() {
+        for marker in ["objects", ".opentide"] {
+            let fs = Arc::new(MemoryFs::new());
+            fs.create_dir("/repo/.git");
+            fs.create_dir("/repo/ws/sub");
+            fs.write("/repo/ws/objects/rules/a.yaml", object("r-a"));
+            fs.write("/repo/ws/sub/objects/rules/b.yaml", object("r-b"));
+            fs.remove("/repo/ws/sub/objects");
+            let mut workspace =
+                Workspace::open(Arc::clone(&fs) as Arc<dyn FileSystem>, discovered()).unwrap();
+            assert_eq!(workspace.root(), Path::new("/repo/ws"));
+
+            // Created: the nearer marker wins.
+            let created = format!("/repo/ws/sub/{marker}");
+            if marker == "objects" {
+                fs.write("/repo/ws/sub/objects/rules/b.yaml", object("r-b"));
+            } else {
+                fs.create_dir(&created);
+            }
+            let done = workspace
+                .invalidate(&[Change::created(created.as_str())])
+                .unwrap();
+            assert!(done.full, "{marker}: {done:?}");
+            assert_eq!(workspace.root(), Path::new("/repo/ws/sub"), "{marker}");
+            assert_eq!(
+                workspace.index().to_json(workspace.root()),
+                fresh(&fs, discovered()),
+                "{marker}"
+            );
+
+            // Deleted: back to the outer workspace.
+            fs.remove(&created);
+            let done = workspace
+                .invalidate(&[Change::deleted(created.as_str())])
+                .unwrap();
+            assert!(done.full, "{marker}: {done:?}");
+            assert_eq!(workspace.root(), Path::new("/repo/ws"), "{marker}");
+            assert!(workspace.index().get("rule", "r-a").is_some());
+            assert_eq!(
+                workspace.index().to_json(workspace.root()),
+                fresh(&fs, discovered()),
+                "{marker}"
+            );
+        }
+    }
+
     #[test]
     fn a_configuration_that_stops_leaves_the_workspace_as_it_was() {
         let fs = sample();
@@ -445,6 +677,99 @@ mod loading {
         let json = workspace.index().to_json(workspace.root());
         assert_eq!(json["file_paths"]["r"], "objects/rules/r.yaml");
         assert_eq!(json["nested"][0]["folder"], "objects/rules");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// A fresh folder under the system's temporary directory.
+    #[cfg(unix)]
+    #[expect(
+        clippy::unwrap_used,
+        reason = "a test helper: the scratch folder is writable"
+    )]
+    fn scratch(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("opentide-ws-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("objects/rules")).unwrap();
+        dir
+    }
+
+    #[cfg(unix)]
+    #[expect(
+        clippy::unwrap_used,
+        reason = "a test helper: the scratch folder is writable"
+    )]
+    fn on_disk(dir: &Path) -> serde_json::Value {
+        let workspace = Workspace::open_os(Some(dir.to_path_buf())).unwrap();
+        workspace.index().to_json(workspace.root())
+    }
+
+    #[cfg(unix)]
+    fn rule_name(workspace: &Workspace) -> Option<String> {
+        let rule = workspace.index().get("rule", "r-1")?;
+        let root = rule.root()?;
+        let name = root.get("metadata")?.get("name")?.value.as_str()?;
+        Some(name.to_owned())
+    }
+
+    /// An object file that is a symbolic link to a file in the workspace is
+    /// read again when a change is reported through the link or its target.
+    #[cfg(unix)]
+    #[test]
+    fn a_linked_object_is_read_again_through_the_link_or_its_target() {
+        let dir = scratch("link");
+        std::fs::create_dir_all(dir.join("shared")).unwrap();
+        let target = dir.join("shared/x.yaml");
+        let body = |name: &str| format!("metadata:\n  uuid: r-1\n  name: {name}\n");
+        std::fs::write(&target, body("old")).unwrap();
+        std::os::unix::fs::symlink(&target, dir.join("objects/rules/link.yaml")).unwrap();
+        let mut workspace = Workspace::open_os(Some(dir.clone())).unwrap();
+        assert_eq!(rule_name(&workspace).as_deref(), Some("old"));
+
+        for (round, reported) in [
+            dir.join("objects/rules/link.yaml"),
+            target.clone(),
+            PathBuf::from("objects/rules/../rules/link.yaml"),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let name = format!("new-{round}");
+            std::fs::write(&target, body(&name)).unwrap();
+            let reported = if reported.is_absolute() {
+                reported
+            } else {
+                dir.join(reported)
+            };
+            let done = workspace.invalidate(&[Change::changed(&reported)]).unwrap();
+            assert!(!done.full, "{}: {done:?}", reported.display());
+            assert_eq!(
+                done.reparsed,
+                [dir.canonicalize().unwrap().join("objects/rules/link.yaml")],
+                "{}",
+                reported.display()
+            );
+            assert_eq!(rule_name(&workspace).as_deref(), Some(name.as_str()));
+            assert_eq!(workspace.index().to_json(workspace.root()), on_disk(&dir));
+        }
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// A file name that is not UTF-8, valid on Linux, still names its file.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn an_object_file_name_that_is_not_utf8_is_loaded() {
+        use std::os::unix::ffi::OsStrExt;
+        let dir = scratch("bytes");
+        let name = std::ffi::OsStr::from_bytes(b"r\xff.yaml");
+        std::fs::write(dir.join("objects/rules").join(name), object("r-1")).unwrap();
+        let workspace = Workspace::open_os(Some(dir.clone())).unwrap();
+        assert!(
+            workspace.index().load_errors.is_empty(),
+            "{:?}",
+            workspace.index().load_errors
+        );
+        let rule = workspace.index().get("rule", "r-1").unwrap();
+        assert_eq!(rule.path.file_name(), Some(name));
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
