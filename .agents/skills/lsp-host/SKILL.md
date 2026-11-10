@@ -77,7 +77,7 @@ Roots are the workspace folders (`workspaceFolders`, else `rootUri`, else `rootP
 
 `Session::analysis(uri)` is the one place that analyses an open document: cached per document state and workspace generation (bumped by any edit, file change, `visibility.toml` or root change), and shared by publish, pull, semantic tokens, code actions, symbols, lenses and links. Without a file watcher the cache lives for one batch, and each batch reads the disk again.
 
-A host that supplies its own catalogs calls `opentide_analysis::set_default_catalog` and `opentide_lsp::use_host_catalogs()`; `opentide lsp start` does both, and `set_host_info("opentide", <version>)`. Configuration diagnostics come from the host's checker (`opentide_analysis::set_configuration_checker`, #158): with none installed, an `opentide-config` document gets none. `.opentide/configurations/platforms/elastic.toml` reaches the analysis through the host: its tenants' `setup.version` decides the Elastic stack.
+A host that supplies its own catalogs calls `opentide_analysis::set_default_catalog` and `opentide_lsp::use_host_catalogs()`; `opentide lsp start` does both, and `set_host_info("opentide", <version>)`. Configuration diagnostics are the server's own (UC-2.6): `checks::configuration_issues` calls `opentide-schema`'s `buffer_issues` with the parent instance's file, the open `deployment.toml` and the `sharing/` folder. Tide object diagnostics are `validate`'s: `Root::checks` holds the root's `opentide_workspace::Workspace` over the disk and the open buffers (`checks::OverlayFs`), invalidated by edits, watched files and `opentide/didChangeWorkspace`. `.opentide/configurations/platforms/elastic.toml` reaches the analysis through the host: its tenants' `setup.version` decides the Elastic stack.
 
 Logs go to the client as `window/logMessage` once it is initialized (catalog and `visibility.toml` loads and failures, a failed server request), and a broken file on disk is shown once per session (`window/showMessage`). Frame errors and panics are stderr traces.
 
@@ -89,7 +89,7 @@ Semantic tokens are `[deltaLine, deltaStartChar, length, tokenType, tokenModifie
 
 ## Diagnostics
 
-Diagnostics carry `source: "opentide"`, the stable `code`, an LSP severity, and `data: { field_path, suggestion }`, which a code action reads back from `context.diagnostics`. Tide object checks match the Pydantic issue's `{code, field_path, severity}` and add a range. Do not drop a code to make a fixture quiet; fix the document or the engine. `DIAGNOSTICS_DOCS` is where every code has a section (opentide's `docs/cli/diagnostics.md`).
+Diagnostics carry `source: "opentide"`, the stable `code`, an LSP severity, and `data: { field_path, suggestion }`, which a code action reads back from `context.diagnostics`. Tide object findings are `validate`'s, ranges converted from code points to UTF-16 (`checks::finding_range`); `cargo xtask lsp parity --corpus faults` holds them equal. Do not drop a code to make a fixture quiet; fix the document or the engine. `DIAGNOSTICS_DOCS` is where every code has a section (opentide's `docs/cli/diagnostics.md`).
 
 CrowdStrike queries are CQL (`opentide-cql`). Falcon FQL (the API filter language) is not CQL and is never parsed.
 

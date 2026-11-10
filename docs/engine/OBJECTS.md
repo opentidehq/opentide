@@ -1,6 +1,6 @@
 ---
 title: "Tide objects"
-description: "How the language server checks Tide objects: types, references, vocabularies, lint.toml and the diagnostics it reports."
+description: "How the language server checks Tide objects: validate's findings from opentide-workspace, and the query and block checks it adds."
 ---
 
 # Tide objects
@@ -9,51 +9,36 @@ opentide LSP owns Tide diagnostics. Disable Red Hat YAML / yamlls on `objects/**
 
 There is **no YAML formatter**. The LSP does not rename object `name`.
 
-## Types
+## Object checks: `validate`'s
 
-| schema | refs |
-| --- | --- |
-| `rule::1.0`, `rule::1.1` | `detection_model` → the UUID of an objective, or of a signal an objective declares (`objective.signals.<i>.uuid`), as `opentide validate` accepts both (optional; not schema-required). Each revision has its own fields: an object is checked against the revision its `metadata.schema` names (required fields, keys the revision does not define, enums). A revision the catalog does not know takes the newest one's fields, without the unknown-key check. `metadata.schema` offers both |
-| `objective::1.0` | `objective.threats[]` → threat UUIDs |
-| `threat::1.0` | `threat.impact` / `threat.leverage` are non-empty lists. `threat.chaining[].vector` / `relation` are not schema properties |
+The language server reports what `opentide validate` reports on an open
+object (UC-2.6, [#821](https://github.com/opentidehq/opentide/issues/821)):
+`opentide-workspace` loads the document's root once, with the editor's
+buffers in place of their files, and runs `validate` (the queries check off:
+the editor's own analysis below covers the queries) on the root's open
+objects. Each finding keeps its code, severity, message and field path; its
+range is `validate`'s 1-based line and code-point columns (end exclusive)
+converted to LSP's 0-based lines and UTF-16 columns, and a finding without a
+line is at the start of the file. A fix of one edit (a vocabulary or
+reference typo) is the quick fix's suggestion. `cargo xtask lsp parity
+--corpus faults` holds the two equal on every fault kind `validate` reports.
 
-The vocabulary fields of `threat` (`impact`, `leverage`, `severity`,
-`viability`) are checked against the catalog's field shape. A list field
-written as one YAML string (`impact: High`) is `schema_validation`: "{path}
-must be a YAML list of {name} vocabulary names, not a single string". The
-diagnostic's `suggestion` is `- {text}`. A list shorter than the field's
-`min_items` is also `schema_validation`. Unknown names inside the list are
-`vocab_unknown`. Each diagnostic's range is the field's key.
+Every code, its meaning and its place are `validate`'s
+([diagnostics](../cli/diagnostics.md)): `schema_validation`, `vocab_unknown`,
+`invalid_uuid`, `missing_uuid`, `yaml_parse`, `duplicate_id`, `invalid_ref`,
+`chaining_relation_unknown`, `deprecated_field`, `platform_not_enabled`,
+`nested_object_file` and the others. A document outside every workspace
+folder is checked in the workspace its `objects/` folder belongs to; one in
+no `objects/` folder gets no object finding, as `validate` checks no such
+file. While the configuration does not resolve, objects are not checked and
+the editor says why once.
 
-## Diagnostic codes (CLI-compatible)
-
-Pydantic stays CLI authority. LSP emits the same `{code, field_path, severity}`:
-
-- `schema_validation`
-- `vocab_unknown`
-- `invalid_uuid`
-- `duplicate_id`
-- `invalid_ref` — error on the reference field when the UUID names nothing in the workspace: a rule's `detection_model` that is neither an indexed objective nor a signal one declares, an objective's `objective.threats` entry, or a threat's `threat.chaining.<i>.vector` that is not an indexed threat.
-- `chaining_relation_unknown`
-- `deprecated_field`
-- `filename_slug` — warning on the `name` value. A non-empty file stem must equal the stem `[filenames] style` derives from the name, or start with `{stem}-`. With `style = "slug"` (the default) that is `slugify(name)`: ASCII alphanumerics lowercased, each run of other characters one `-`, and `-` trimmed from both ends (`Sentinel KQL Rule` → `sentinel-kql-rule`). With `style = "name"` it is the name less `<>:"\/|?*`, control characters, the spaces and dots around it and a trailing `.debug`, as `opentide lint` derives it. `style = "none"` compares no stem. The file stem is the file name less `.yaml` (or `.yml`) and a `.debug` infix, as opentide's `object_stem` reads it. Suggestion text is `{stem}.yaml`, or `{stem}.debug.yaml` for a debug file. A document that is not a file (`untitled:Untitled-1`) gets neither filename check.
-- `filename_pattern` — warning on the `name` value when the file stem does not match `[filenames] pattern` (the whole stem less a `.debug` infix, as `re.fullmatch` matches it). A pattern the Rust `regex` crate cannot compile (look-around, backreferences) is not checked here; `opentide lint` still checks it.
-- `missing_author` — warning on the `metadata` key when `metadata` has no `author` and `[metadata] required` names it (the default does).
-- `missing_organisation` — warning on the `metadata` key when `metadata` has no `organisation` and `[metadata] required` names it (the default does).
-
-### `lint.toml`
-
-The four checks above follow the root's `.opentide/configurations/lint.toml` as `opentide lint` does ([#214](https://github.com/opentidehq/language-server/issues/214)), so the editor and the CLI agree:
-
-| `lint.toml` | Decides |
-| --- | --- |
-| `[filenames] enabled = false` | no `filename_slug` or `filename_pattern` |
-| `[filenames] style`, `pattern`, and `[filenames.threats]`, `[filenames.objectives]`, `[filenames.rules]` (a key a kind leaves unset comes from `[filenames]`) | `filename_slug`, `filename_pattern` |
-| `[metadata] enabled = false` | no `missing_author` or `missing_organisation` |
-| `[metadata] required` | which of `missing_author` and `missing_organisation` apply |
-| `[filenames] severity`, `[metadata] severity` (`error`, `warning`, `info`) | the findings' severity |
-
-Without a `lint.toml` the defaults are `opentide lint`'s: slug filenames, no pattern, `author` and `organisation` required. Other keys `required` names (`reviewed`) have no engine finding. The language server reads the file of the document's root: the editor's buffer while it is open, else the file on disk, else the root's `lint.toml` among the documents a browser host supplies; editing it re-checks open documents. Another host installs it with `opentide_analysis::install_lint`. The host checks the file itself (`opentide-config`); a value of the wrong type keeps its default here. `crates/testdata/conformance/lint-toml` is a workspace with its own conventions and `opentide-lint.json` what `opentide lint` reports for it (`scripts/engine/opentide_lint_findings.py` records it); `crates/opentide-analysis/tests/lint_settings.rs` checks the engine reports the same.
+`filename_slug`, `missing_author`, `missing_organisation` and
+`recommended_field_missing` are retired (KG-03, KG-05): `opentide lint`'s
+`filename_mismatch` and `metadata_recommended` report those problems, and
+the editor shows them once `lint::lint_file` is wired in
+([#905](https://github.com/opentidehq/opentide/pull/905)). `lint.toml` no
+longer changes what the language server reports.
 
 Query extras (the engines add these inside an injected query, and on a raw query file):
 
