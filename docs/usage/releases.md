@@ -7,6 +7,31 @@ description: Public package versions of opentide on PyPI.
 
 Every version of the [`opentide`](https://pypi.org/project/opentide/) package, newest first. Each opens with what it does for you, then the steps to take after upgrading, then what changed, under the same headings every time: Breaking, Added, Changed, Deprecated, Removed, Fixed and Security. Pin a version in CI. [`CHANGELOG.md`](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md) records every change in full; GitHub Releases are tagged `v*` and publish to PyPI.
 
+## 0.24.1 — 10 November 2026
+
+`pip install opentide` works again: Typer 0.29.0 crashed every opentide on start, and opentide now requires a Typer it runs on. The diagnostic codes reference publishes on opentide.org again.
+
+**Install**
+
+```bash
+pip install opentide==0.24.1
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
+**Fixed**
+
+- **`pip install opentide` no longer installs a Typer that crashes it.** Typer 0.29.0 removed private modules opentide's CLI was built on, so `opentide setup` failed with `No module named 'typer._types'`. opentide requires `typer>=0.27.0,<0.29`. See [Troubleshooting](troubleshooting.md#no-module-named-typer_types-after-pip-install).
+- **The diagnostic codes reference publishes on opentide.org again.** The `cql_link_outside_correlate` page named the CQL operator `<=>` in plain text, which stopped the docs and release notes from updating.
+
+See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md#0241--2026-11-10) for every change.
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/0.24.1/)
+- [GitHub Release](https://github.com/opentidehq/opentide/releases/tag/v0.24.1)
+- [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md)
+
 ## 0.24.0 — 9 November 2026
 
 A Splunk block's `advanced` table validates and deploys again, so catalogues whose rules set a custom alert action's parameters, such as MISP's, pass `validate`. The editor and `opentide tui` check CrowdStrike queries as CQL.

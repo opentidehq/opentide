@@ -12,6 +12,7 @@ adds is explained without a file here. A file of the same name wins.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -140,6 +141,22 @@ def all_pages() -> list[ExplainPage]:
     return [page for code in diagnostic_codes() if (page := load_page(code)) is not None]
 
 
+_INLINE_CODE = re.compile(r"(`+(?:(?!`).)+?`+)")
+_STRAY_LT = re.compile(r"<(?![A-Za-z/!>])")
+
+
+def _mdx_prose(line: str) -> str:
+    """*line* with each ``<`` that cannot open a tag written ``&lt;``, code spans left alone.
+
+    The website renders the docs as MDX, which reads ``<=>`` in prose as a broken tag.
+    Engine sentences are plain text, so the reference escapes them here, not in the engine.
+    """
+    parts = _INLINE_CODE.split(line)
+    return "".join(
+        part if index % 2 else _STRAY_LT.sub("&lt;", part) for index, part in enumerate(parts)
+    )
+
+
 def reference_markdown() -> str:
     """``docs/cli/diagnostics.md``: every page, with its headings one level down."""
     lines = [
@@ -163,7 +180,9 @@ def reference_markdown() -> str:
         "|------|---------|",
     ]
     pages = all_pages()
-    lines.extend(f"| [`{page.code}`](#{page.code}) | {page.summary} |" for page in pages)
+    lines.extend(
+        f"| [`{page.code}`](#{page.code}) | {_mdx_prose(page.summary)} |" for page in pages
+    )
     for page in pages:
         lines.append("")
         in_fence = False
@@ -175,7 +194,9 @@ def reference_markdown() -> str:
                 if in_fence and line == "```text" and not following.startswith("opentide "):
                     # Output an example shows, not a command the docs check could run.
                     line = "```text illustrative"
-            if not in_fence and line.startswith("#"):
-                line = "#" + line
+            elif not in_fence:
+                line = _mdx_prose(line)
+                if line.startswith("#"):
+                    line = "#" + line
             lines.append(line)
     return "\n".join(lines) + "\n"
