@@ -1386,6 +1386,7 @@ version = "0.12.0"
 dependencies = [
  "caseless",
  "dunce",
+ "form_urlencoded",
  "gix-diff",
  "gix-discover",
  "gix-error",
@@ -1401,6 +1402,7 @@ dependencies = [
  "opentide-workspace",
  "rayon",
  "serde",
+ "serde-saphyr",
  "serde_json",
  "thiserror",
 ]
