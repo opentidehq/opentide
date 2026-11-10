@@ -133,8 +133,11 @@ baseline_rss_mib = 76.3
 [commands.load]
 label = "load and index the workspace (SDK: Opentide.initialise())"
 # UC-2.1 (#816): heavy workspace load and index in 80 ms or less on 4 cores.
-# The oracle side is the SDK's registry load; its baseline is recorded from
-# the Benchmarks workflow on CI's runner class.
+# The oracle side is the SDK's registry load (`Opentide.initialise()`). Its
+# time is recorded only on the EPYC 9V74 ([[cpu_baseline]] below, run
+# 42758665925, the first that measured it), so on another CPU it is held to
+# that median + cross_cpu_regression until a run there records its own.
+baseline_rss_mib = 70.2
 target_s = 0.08
 
 [commands.rules_unreviewed]
@@ -221,6 +224,8 @@ generate_exports_navigator = 1.176
 rules_unreviewed = 0.481
 explain = 0.174
 lsp_first_diagnostics = 2.048
+# One run: https://github.com/opentidehq/opentide/actions/runs/42758665925 (UC-2.1).
+load = 1.003
 
 [[cpu_baseline]]
 engine = "rust"
