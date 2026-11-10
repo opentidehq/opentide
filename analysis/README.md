@@ -20,6 +20,6 @@ This crate binds [`opentide-analysis`](../crates/opentide-analysis) and [`openti
 - A wheel (`uv build`, the release workflow) uses the `release` profile. `OPENTIDE_ENGINE_PROFILE` overrides it.
 - The release workflow builds a wheel per platform with cibuildwheel: Linux (manylinux and musllinux, x86_64 and aarch64), macOS (x86_64, arm64) and Windows (x64). Elsewhere pip builds the sdist, which needs a Rust toolchain.
 
-After changing the bindings (`src/lib.rs`), update the stub `src/opentide/_native.pyi` and run `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings` and `cargo test --workspace` from the repository root.
+After changing the bindings (`src/lib.rs`), update the stub `src/opentide/_native/__init__.pyi` (the models' stub, `_native/models.pyi`, is generated: `cargo xtask stubs`) and run `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings` and `cargo test --workspace` from the repository root.
 
 Licence: EUPL-1.2.

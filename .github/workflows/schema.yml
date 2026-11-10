@@ -70,6 +70,7 @@ jobs:
       - name: clippy (python, wasm32)
         run: |
           cargo clippy --locked -p opentide-schema --all-targets --features python -- -D warnings
+          cargo clippy --locked -p opentide-schema --all-targets --features stubs -- -D warnings
           cargo clippy --locked -p opentide-schema --target wasm32-unknown-unknown --features wasm -- -D warnings
 
       # PYO3_PYTHON: link the interpreter setup-python installed, not the
@@ -82,3 +83,11 @@ jobs:
           export LD_LIBRARY_PATH
           cargo nextest run --locked -p opentide-schema --features python --profile ci
           cargo test --locked -p opentide-schema --features python --doc
+
+      # The stubs of opentide._native.models are generated from the extension
+      # (UC-1.9, ADR 0010): build it with PyO3's introspection data, as Python
+      # 3.10 (the abi3 floor) sees it, and fail when the committed stub differs.
+      - name: Generated stubs are up to date
+        env:
+          PYO3_PYTHON: ${{ steps.python.outputs.python-path }}
+        run: cargo xtask stubs --check
