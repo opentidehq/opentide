@@ -305,13 +305,13 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`yara_number_out_of_range`](#yara_number_out_of_range) | A YARA integer, size suffix, jump bound or string index is outside the range libyara accepts. |
 | [`yara_parse_error`](#yara_parse_error) | The YARA signature does not parse as libyara 4.5 reads it. |
 | [`yara_regexp`](#yara_regexp) | A YARA regular expression is invalid. |
-| [`yara_rule_identifier_conflict`](#yara_rule_identifier_conflict) | A YARA rule is named like an imported module or a keyword. |
+| [`yara_rule_identifier_conflict`](#yara_rule_identifier_conflict) | A YARA rule is named like a keyword, or matches a rule wildcard an earlier condition uses; a rule named like an imported module is yara_x_incompatible. |
 | [`yara_signature_alias`](#yara_signature_alias) | A `yara.signature` is a YAML alias of text anchored elsewhere in the file instead of YARA written in the block. |
 | [`yara_slow_pattern`](#yara_slow_pattern) | libyara warns that this YARA string or loop may slow scanning down. |
 | [`yara_string_modifier`](#yara_string_modifier) | libyara refuses this combination of YARA string modifiers, or an xor or base64 argument is out of range. |
 | [`yara_suspicious_expression`](#yara_suspicious_expression) | A YARA condition is invariant, unsatisfiable or not boolean, or compares an integer with a boolean. |
 | [`yara_type`](#yara_type) | A YARA operator or function is applied to a value of the wrong type. |
-| [`yara_undefined_identifier`](#yara_undefined_identifier) | A YARA identifier is neither a rule defined earlier in the signature nor an imported module. |
+| [`yara_undefined_identifier`](#yara_undefined_identifier) | A YARA identifier is neither a rule defined earlier in the signature nor an imported module, or is used as libyara refuses: a module field called as a function, a module function named without a call, or a loop variable a loop already binds. |
 | [`yara_undefined_string`](#yara_undefined_string) | A YARA condition names a string ($id, #id, @id, !id or $prefix*) that the rule does not define. |
 | [`yara_unknown_module`](#yara_unknown_module) | A YARA import names a module libyara does not ship. |
 | [`yara_unknown_module_member`](#yara_unknown_module_member) | The YARA module has no such field or function, or the function takes other arguments. |
@@ -5317,7 +5317,7 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 ## yara_rule_identifier_conflict
 
-A YARA rule is named like an imported module or a keyword.
+A YARA rule is named like a keyword, or matches a rule wildcard an earlier condition uses; a rule named like an imported module is yara_x_incompatible.
 
 Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
@@ -5431,7 +5431,7 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 ## yara_undefined_identifier
 
-A YARA identifier is neither a rule defined earlier in the signature nor an imported module.
+A YARA identifier is neither a rule defined earlier in the signature nor an imported module, or is used as libyara refuses: a module field called as a function, a module function named without a call, or a loop variable a loop already binds.
 
 Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 

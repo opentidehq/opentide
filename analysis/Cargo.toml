@@ -24,9 +24,10 @@ pyo3 = { version = "0.30.1", features = ["abi3-py310", "generate-import-lib"] }
 # language-server releases this may be a git revision, but
 # scripts/build/check_engine_pin.py refuses a git source when a release is
 # published, so a release always builds from crates.io.
-# YARA (opentidehq/language-server#165, #235, #236), ahead of the release that ships it.
-opentide-analysis = { git = "https://github.com/opentidehq/language-server", rev = "d8a7c660f65c22852440eca7e7151de1f3a0aa54" }
-opentide-lsp = { git = "https://github.com/opentidehq/language-server", rev = "d8a7c660f65c22852440eca7e7151de1f3a0aa54" }
+# YARA (opentidehq/language-server#165, #235, #236, #237, #238) and the Bitdefender rows of
+# the Tide catalog (#239), ahead of the release that ships them.
+opentide-analysis = { git = "https://github.com/opentidehq/language-server", rev = "6ace3ed201a3c7ced515276d2cc7321a3f199d9c" }
+opentide-lsp = { git = "https://github.com/opentidehq/language-server", rev = "6ace3ed201a3c7ced515276d2cc7321a3f199d9c" }
 
 [build-dependencies]
 pyo3-build-config = "0.30.1"
