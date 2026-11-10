@@ -49,7 +49,7 @@ pub struct Violation {
 impl Violation {
     /// A `ValueError` raised in a validator: Pydantic prefixes "Value error, "
     /// and keeps the text as `ctx.error`.
-    fn value_error(text: impl Into<String>) -> Self {
+    pub(crate) fn value_error(text: impl Into<String>) -> Self {
         let text = text.into();
         Self {
             kind: "value_error",
@@ -68,7 +68,7 @@ impl Violation {
         );
     }
 
-    fn into_garde(self) -> garde::Error {
+    pub(crate) fn into_garde(self) -> garde::Error {
         garde::Error::new(self.message)
     }
 }

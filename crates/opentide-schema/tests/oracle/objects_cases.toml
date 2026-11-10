@@ -12,7 +12,8 @@
 # field path, message, input, context, span and `yaml_line`, or the value. A
 # case that differs names the `[[difference]]` that explains it (its reason
 # and the bold lead of its CHANGELOG.md entry); the platform blocks under
-# `configurations` are UC-1.4's (#810) and are not compared. The intended
+# `configurations` are compared whole (UC-1.4, #810), and their own cases
+# are in platform_cases.toml. The intended
 # differences are listed in tests/golden/APPROVED_DIFFS.toml too.
 
 [[difference]]

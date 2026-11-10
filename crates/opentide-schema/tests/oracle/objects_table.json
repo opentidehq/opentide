@@ -410,10 +410,10 @@
       "metadata",
       "reviewed"
      ],
-     "msg": "Value error, day 30 must be in range 1..28 for month 2 in year 2026",
+     "msg": "Value error, day is out of range for month",
      "input": "2026-02-30",
      "ctx": {
-      "error": "day 30 must be in range 1..28 for month 2 in year 2026"
+      "error": "day is out of range for month"
      },
      "span": [
       9,
@@ -436,10 +436,10 @@
       "metadata",
       "reviewed"
      ],
-     "msg": "Value error, hour must be in 0..23, not 25",
+     "msg": "Value error, hour must be in 0..23",
      "input": "2026-01-01T25:00:00Z",
      "ctx": {
-      "error": "hour must be in 0..23, not 25"
+      "error": "hour must be in 0..23"
      },
      "span": [
       9,
@@ -1271,10 +1271,10 @@
       "metadata",
       "reviewed"
      ],
-     "msg": "Value error, year must be in 1..9999, not 0",
+     "msg": "Value error, year 0 is out of range",
      "input": "0000-01-01",
      "ctx": {
-      "error": "year must be in 1..9999, not 0"
+      "error": "year 0 is out of range"
      },
      "span": [
       9,
@@ -1297,10 +1297,10 @@
       "metadata",
       "reviewed"
      ],
-     "msg": "Value error, year must be in 1..9999, not 0",
+     "msg": "Value error, year 0 is out of range",
      "input": "0000-01-01T00:00:00Z",
      "ctx": {
-      "error": "year must be in 1..9999, not 0"
+      "error": "year 0 is out of range"
      },
      "span": [
       9,
@@ -2841,6 +2841,6427 @@
    "loader": "schema_missing"
   },
   {
+   "id": "platform-unknown-key",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sentinal: {status: STAGING}\n",
+   "errors": [
+    {
+     "type": "extra_forbidden",
+     "field_path": [
+      "configurations",
+      "sentinal"
+     ],
+     "msg": "Extra inputs are not permitted",
+     "input": null,
+     "ctx": {},
+     "span": [
+      11,
+      3,
+      11,
+      true
+     ],
+     "yaml_line": 10
+    }
+   ]
+  },
+  {
+   "id": "platform-null-block",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sentinel: null\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "configurations": {}
+   }
+  },
+  {
+   "id": "platform-string-block",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sentinel: on\n",
+   "errors": [
+    {
+     "type": "model_type",
+     "field_path": [
+      "configurations",
+      "sentinel"
+     ],
+     "msg": "Input should be a valid dictionary or instance of SentinelConfig",
+     "input": null,
+     "ctx": {
+      "class_name": "SentinelConfig"
+     },
+     "span": [
+      11,
+      13,
+      15,
+      true
+     ],
+     "yaml_line": 10
+    }
+   ]
+  },
+  {
+   "id": "platform-empty-block",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  splunk: {}\n",
+   "errors": [
+    {
+     "type": "missing",
+     "field_path": [
+      "configurations",
+      "splunk",
+      "status"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      11,
+      3,
+      9,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "missing",
+     "field_path": [
+      "configurations",
+      "splunk",
+      "query"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      11,
+      3,
+      9,
+      false
+     ],
+     "yaml_line": null
+    }
+   ]
+  },
+  {
+   "id": "platform-list-block",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic: []\n",
+   "errors": [
+    {
+     "type": "model_type",
+     "field_path": [
+      "configurations",
+      "elastic"
+     ],
+     "msg": "Input should be a valid dictionary or instance of ElasticConfig",
+     "input": null,
+     "ctx": {
+      "class_name": "ElasticConfig"
+     },
+     "span": [
+      11,
+      3,
+      10,
+      true
+     ],
+     "yaml_line": 10
+    }
+   ]
+  },
+  {
+   "id": "platform-all-nine",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sentinel:\n    status: STAGING\n    query: SecurityEvent | take 1\n    scheduling: {frequency: PT1H, lookback: PT2H}\n    alert: {title: t}\n  defender_for_endpoint:\n    status: STAGING\n    query: DeviceProcessEvents | take 1\n    alert: {category: Execution}\n    impacted_entities: {device: DeviceId}\n    scheduling: 1H\n  splunk:\n    status: STAGING\n    query: index=main | head 1\n  sentinel_one:\n    status: STAGING\n    condition:\n      type: Single Event\n      single_event: {query: EventType = \"Process Creation\"}\n  crowdstrike:\n    status: STAGING\n    details: {trigger: verbose, outcome: detection}\n    schedule: {frequency: 1h, lookback: 2h}\n    query: '#event_simpleName=ProcessRollup2'\n  harfanglab:\n    status: STAGING\n    sigma:\n      logsource: {category: process_creation, product: windows}\n      selections:\n      - {name: s, field: Image, value: x.exe}\n      condition: s\n  carbon_black_cloud:\n    status: STAGING\n    query: process_name:cmd.exe\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "configurations": {
+     "sentinel": {
+      "enabled": false,
+      "name": "",
+      "status": "STAGING",
+      "query": "SecurityEvent | take 1",
+      "scheduling": {
+       "frequency": "PT1H",
+       "lookback": "PT2H"
+      },
+      "alert": {
+       "title": "t",
+       "suppression": false,
+       "create_incident": true
+      }
+     },
+     "defender_for_endpoint": {
+      "enabled": false,
+      "name": "",
+      "status": "STAGING",
+      "query": "DeviceProcessEvents | take 1",
+      "alert": {
+       "category": "Execution"
+      },
+      "impacted_entities": {
+       "device": "DeviceId"
+      },
+      "scheduling": "1H"
+     },
+     "splunk": {
+      "enabled": false,
+      "name": "",
+      "status": "STAGING",
+      "query": "index=main | head 1"
+     },
+     "sentinel_one": {
+      "enabled": false,
+      "name": "",
+      "status": "STAGING",
+      "condition": {
+       "type": "Single Event",
+       "single_event": {
+        "query": "EventType = \"Process Creation\""
+       }
+      }
+     },
+     "crowdstrike": {
+      "enabled": false,
+      "name": "",
+      "status": "STAGING",
+      "details": {
+       "trigger": "verbose",
+       "outcome": "detection"
+      },
+      "schedule": {
+       "frequency": "1h",
+       "lookback": "2h"
+      },
+      "query": "#event_simpleName=ProcessRollup2"
+     },
+     "harfanglab": {
+      "enabled": false,
+      "name": "",
+      "status": "STAGING",
+      "maturity": "Experimental",
+      "confidence": "Moderate",
+      "action": "Alert",
+      "sigma": {
+       "logsource": {
+        "category": "process_creation",
+        "product": "windows"
+       },
+       "selections": [
+        {
+         "name": "s",
+         "field": "Image",
+         "value": "x.exe"
+        }
+       ],
+       "condition": "s"
+      }
+     },
+     "carbon_black_cloud": {
+      "enabled": false,
+      "name": "",
+      "status": "STAGING",
+      "query": "process_name:cmd.exe"
+     },
+     "elastic": {
+      "enabled": false,
+      "name": "",
+      "status": "STAGING",
+      "type": "query",
+      "query": "process.name: cmd.exe",
+      "building_block": false
+     },
+     "sysdig": {
+      "enabled": false,
+      "name": "",
+      "status": "STAGING",
+      "condition": "spawned_process and proc.name = sh"
+     }
+    }
+   }
+  },
+  {
+   "id": "platform-external-id",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  splunk:\n    status: STAGING\n    query: index=main | head 1\n    rule_id: abc\n",
+   "errors": [
+    {
+     "type": "extra_forbidden",
+     "field_path": [
+      "configurations",
+      "splunk",
+      "rule_id"
+     ],
+     "msg": "Extra inputs are not permitted",
+     "input": "abc",
+     "ctx": {},
+     "span": [
+      14,
+      5,
+      12,
+      true
+     ],
+     "yaml_line": 13
+    }
+   ]
+  },
+  {
+   "id": "platform-base-missing-status",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  carbon_black_cloud:\n    query: q\n",
+   "errors": [
+    {
+     "type": "missing",
+     "field_path": [
+      "configurations",
+      "carbon_black_cloud",
+      "status"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      11,
+      3,
+      21,
+      false
+     ],
+     "yaml_line": null
+    }
+   ]
+  },
+  {
+   "id": "platform-base-fields",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  carbon_black_cloud:\n    status: STAGING\n    query: process_name:cmd.exe\n    enabled: true\n    name: n\n    schema: platform::carbon_black_cloud::1.0\n    flags: [a]\n    tenants: [t1]\n    contributors: [c]\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "configurations": {
+     "carbon_black_cloud": {
+      "enabled": true,
+      "name": "n",
+      "schema": "platform::carbon_black_cloud::1.0",
+      "status": "STAGING",
+      "flags": [
+       "a"
+      ],
+      "tenants": [
+       "t1"
+      ],
+      "contributors": [
+       "c"
+      ],
+      "query": "process_name:cmd.exe"
+     }
+    }
+   }
+  },
+  {
+   "id": "platform-base-wrong-schema",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  splunk:\n    status: STAGING\n    query: index=main | head 1\n    schema: platform::sentinel::1.0\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "splunk",
+      "schema"
+     ],
+     "msg": "Value error, unknown platform schema 'platform::sentinel::1.0': this block's schema is 'platform::splunk::1.0'",
+     "input": "platform::sentinel::1.0",
+     "ctx": {
+      "error": "unknown platform schema 'platform::sentinel::1.0': this block's schema is 'platform::splunk::1.0'"
+     },
+     "span": [
+      14,
+      13,
+      36,
+      true
+     ],
+     "yaml_line": 13
+    }
+   ]
+  },
+  {
+   "id": "platform-base-schema-null",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  splunk:\n    status: STAGING\n    query: index=main | head 1\n    schema: null\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "configurations": {
+     "splunk": {
+      "enabled": false,
+      "name": "",
+      "status": "STAGING",
+      "query": "index=main | head 1"
+     }
+    }
+   }
+  },
+  {
+   "id": "platform-base-schema-alias",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  splunk:\n    status: STAGING\n    query: index=main | head 1\n    platform_schema: platform::splunk::1.0\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "configurations": {
+     "splunk": {
+      "enabled": false,
+      "name": "",
+      "schema": "platform::splunk::1.0",
+      "status": "STAGING",
+      "query": "index=main | head 1"
+     }
+    }
+   }
+  },
+  {
+   "id": "platform-base-schema-quote",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  splunk:\n    status: STAGING\n    query: index=main | head 1\n    schema: \"it's\"\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "splunk",
+      "schema"
+     ],
+     "msg": "Value error, unknown platform schema \"it's\": this block's schema is 'platform::splunk::1.0'",
+     "input": "it's",
+     "ctx": {
+      "error": "unknown platform schema \"it's\": this block's schema is 'platform::splunk::1.0'"
+     },
+     "span": [
+      14,
+      14,
+      18,
+      true
+     ],
+     "yaml_line": 13
+    }
+   ]
+  },
+  {
+   "id": "platform-base-types",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  splunk:\n    status: STAGING\n    query: index=main | head 1\n    enabled: 1\n    name: 2\n    tenants: t\n    status2: x\n",
+   "errors": [
+    {
+     "type": "string_type",
+     "field_path": [
+      "configurations",
+      "splunk",
+      "name"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      15,
+      11,
+      12,
+      true
+     ],
+     "yaml_line": 14
+    },
+    {
+     "type": "list_type",
+     "field_path": [
+      "configurations",
+      "splunk",
+      "tenants"
+     ],
+     "msg": "Input should be a valid list",
+     "input": "t",
+     "ctx": {},
+     "span": [
+      16,
+      14,
+      15,
+      true
+     ],
+     "yaml_line": 15
+    },
+    {
+     "type": "extra_forbidden",
+     "field_path": [
+      "configurations",
+      "splunk",
+      "status2"
+     ],
+     "msg": "Extra inputs are not permitted",
+     "input": "x",
+     "ctx": {},
+     "span": [
+      17,
+      5,
+      12,
+      true
+     ],
+     "yaml_line": 16
+    }
+   ]
+  },
+  {
+   "id": "platform-base-status-number",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  splunk:\n    status: 3\n    query: q\n",
+   "errors": [
+    {
+     "type": "string_type",
+     "field_path": [
+      "configurations",
+      "splunk",
+      "status"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      12,
+      13,
+      14,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-query-empty",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  carbon_black_cloud:\n    status: STAGING\n    query: ''\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "carbon_black_cloud",
+      "query"
+     ],
+     "msg": "Value error, query must not be empty",
+     "input": "",
+     "ctx": {
+      "error": "query must not be empty"
+     },
+     "span": [
+      13,
+      5,
+      10,
+      true
+     ],
+     "yaml_line": 12
+    }
+   ]
+  },
+  {
+   "id": "platform-query-blank",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sentinel:\n    status: STAGING\n    query: '   '\n    scheduling: {frequency: PT1H, lookback: PT2H}\n    alert: {title: t}\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "sentinel",
+      "query"
+     ],
+     "msg": "Value error, query must not be empty",
+     "input": "   ",
+     "ctx": {
+      "error": "query must not be empty"
+     },
+     "span": [
+      13,
+      13,
+      16,
+      true
+     ],
+     "yaml_line": 12
+    }
+   ]
+  },
+  {
+   "id": "platform-query-number",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  crowdstrike:\n    status: STAGING\n    details: {trigger: verbose, outcome: detection}\n    schedule: {frequency: 1h, lookback: 2h}\n    query: 5\n",
+   "errors": [
+    {
+     "type": "string_type",
+     "field_path": [
+      "configurations",
+      "crowdstrike",
+      "query"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      15,
+      12,
+      13,
+      true
+     ],
+     "yaml_line": 14
+    }
+   ]
+  },
+  {
+   "id": "platform-query-missing",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  defender_for_endpoint:\n    status: STAGING\n    alert: {category: Execution}\n    impacted_entities: {device: DeviceId}\n    scheduling: 1H\n",
+   "errors": [
+    {
+     "type": "missing",
+     "field_path": [
+      "configurations",
+      "defender_for_endpoint",
+      "query"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      11,
+      3,
+      24,
+      false
+     ],
+     "yaml_line": null
+    }
+   ]
+  },
+  {
+   "id": "platform-query-separator",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  splunk:\n    status: STAGING\n    query: \"\\x1c\"\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "splunk",
+      "query"
+     ],
+     "msg": "Value error, query must not be empty",
+     "input": "\u001c",
+     "ctx": {
+      "error": "query must not be empty"
+     },
+     "span": [
+      13,
+      13,
+      17,
+      true
+     ],
+     "yaml_line": 12
+    }
+   ]
+  },
+  {
+   "id": "platform-query-nbsp",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  splunk:\n    status: STAGING\n    query: \"\\u00a0\"\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "splunk",
+      "query"
+     ],
+     "msg": "Value error, query must not be empty",
+     "input": " ",
+     "ctx": {
+      "error": "query must not be empty"
+     },
+     "span": [
+      13,
+      13,
+      19,
+      true
+     ],
+     "yaml_line": 12
+    }
+   ]
+  },
+  {
+   "id": "platform-sentinel-full",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sentinel:\n    status: STAGING\n    query: SecurityEvent | take 1\n    scheduling: {frequency: PT1H, lookback: PT2H}\n    alert: {title: t}\n    exclusions:\n    - {query: '| where x', reason: r, tenant: t, let: {a: 1, b: x, c: true}}\n    - {query: '', reason: empty}\n    template: {uuid: u, version: '1.0'}\n    trigger: {operator: GreaterThan, threshold: 0}\n    grouping:\n      event: SingleAlert\n      alert: {enabled: true, grouping_lookback: PT5H, matching: Selected, group_by_entities: [Host]}\n    entities:\n    - entity: Host\n      mappings: [{identifier: HostName, column: Computer}]\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "configurations": {
+     "sentinel": {
+      "enabled": false,
+      "name": "",
+      "status": "STAGING",
+      "query": "SecurityEvent | take 1",
+      "scheduling": {
+       "frequency": "PT1H",
+       "lookback": "PT2H"
+      },
+      "alert": {
+       "title": "t",
+       "suppression": false,
+       "create_incident": true
+      },
+      "exclusions": [
+       {
+        "query": "| where x",
+        "reason": "r",
+        "tenant": "t",
+        "let": {
+         "a": 1,
+         "b": "x",
+         "c": true
+        }
+       },
+       {
+        "query": "",
+        "reason": "empty"
+       }
+      ],
+      "template": {
+       "uuid": "u",
+       "version": "1.0"
+      },
+      "trigger": {
+       "operator": "GreaterThan",
+       "threshold": 0
+      },
+      "grouping": {
+       "event": "SingleAlert",
+       "alert": {
+        "enabled": true,
+        "grouping_lookback": "PT5H",
+        "matching": "Selected",
+        "group_by_entities": [
+         "Host"
+        ]
+       }
+      },
+      "entities": [
+       {
+        "entity": "Host",
+        "mappings": [
+         {
+          "identifier": "HostName",
+          "column": "Computer"
+         }
+        ]
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "platform-sentinel-alert-full",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sentinel:\n    status: STAGING\n    query: SecurityEvent | take 1\n    scheduling: {frequency: PT1H, lookback: PT2H}\n    alert:\n      title: t\n      description: d\n      severity: High\n      suppression: PT1H\n      create_incident: false\n      tactics: [Execution]\n      techniques: [T1059, T1059.001]\n      custom_details: [{key: k, column: c}]\n      dynamic_properties: [{property: Severity, column: c}]\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "configurations": {
+     "sentinel": {
+      "enabled": false,
+      "name": "",
+      "status": "STAGING",
+      "query": "SecurityEvent | take 1",
+      "scheduling": {
+       "frequency": "PT1H",
+       "lookback": "PT2H"
+      },
+      "alert": {
+       "title": "t",
+       "description": "d",
+       "severity": "High",
+       "suppression": "PT1H",
+       "create_incident": false,
+       "tactics": [
+        "Execution"
+       ],
+       "techniques": [
+        "T1059",
+        "T1059.001"
+       ],
+       "custom_details": [
+        {
+         "key": "k",
+         "column": "c"
+        }
+       ],
+       "dynamic_properties": [
+        {
+         "property": "Severity",
+         "column": "c"
+        }
+       ]
+      }
+     }
+    }
+   }
+  },
+  {
+   "id": "platform-sentinel-missing",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sentinel:\n    status: STAGING\n    query: q\n",
+   "errors": [
+    {
+     "type": "missing",
+     "field_path": [
+      "configurations",
+      "sentinel",
+      "scheduling"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      11,
+      3,
+      11,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "missing",
+     "field_path": [
+      "configurations",
+      "sentinel",
+      "alert"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      11,
+      3,
+      11,
+      false
+     ],
+     "yaml_line": null
+    }
+   ]
+  },
+  {
+   "id": "platform-sentinel-suppression-int",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sentinel:\n    status: STAGING\n    query: SecurityEvent | take 1\n    scheduling: {frequency: PT1H, lookback: PT2H}\n    alert: {suppression: 5}\n",
+   "errors": [
+    {
+     "type": "string_type",
+     "field_path": [
+      "configurations",
+      "sentinel",
+      "alert",
+      "suppression",
+      "str"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      15,
+      13,
+      24,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "bool_parsing",
+     "field_path": [
+      "configurations",
+      "sentinel",
+      "alert",
+      "suppression",
+      "bool"
+     ],
+     "msg": "Input should be a valid boolean, unable to interpret input",
+     "input": null,
+     "ctx": {},
+     "span": [
+      15,
+      13,
+      24,
+      false
+     ],
+     "yaml_line": null
+    }
+   ]
+  },
+  {
+   "id": "platform-sentinel-suppression-list",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sentinel:\n    status: STAGING\n    query: SecurityEvent | take 1\n    scheduling: {frequency: PT1H, lookback: PT2H}\n    alert: {suppression: [a]}\n",
+   "errors": [
+    {
+     "type": "string_type",
+     "field_path": [
+      "configurations",
+      "sentinel",
+      "alert",
+      "suppression",
+      "str"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      15,
+      13,
+      24,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "bool_type",
+     "field_path": [
+      "configurations",
+      "sentinel",
+      "alert",
+      "suppression",
+      "bool"
+     ],
+     "msg": "Input should be a valid boolean",
+     "input": null,
+     "ctx": {},
+     "span": [
+      15,
+      13,
+      24,
+      false
+     ],
+     "yaml_line": null
+    }
+   ]
+  },
+  {
+   "id": "platform-sentinel-technique-unknown",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sentinel:\n    status: STAGING\n    query: SecurityEvent | take 1\n    scheduling: {frequency: PT1H, lookback: PT2H}\n    alert: {techniques: [T9999, T1059]}\n",
+   "errors": [
+    {
+     "type": "sentinel_attack_technique",
+     "field_path": [
+      "configurations",
+      "sentinel",
+      "alert",
+      "techniques",
+      "0"
+     ],
+     "msg": "'T9999' is not an ATT&CK v18 technique or sub-technique id, which is what Sentinel is aligned to",
+     "input": "T9999",
+     "ctx": {
+      "value": "'T9999'",
+      "version": "18",
+      "hint": ""
+     },
+     "span": [
+      15,
+      26,
+      31,
+      true
+     ],
+     "yaml_line": 14
+    }
+   ]
+  },
+  {
+   "id": "platform-sentinel-technique-typo",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sentinel:\n    status: STAGING\n    query: SecurityEvent | take 1\n    scheduling: {frequency: PT1H, lookback: PT2H}\n    alert: {techniques: [T1059.01]}\n",
+   "errors": [
+    {
+     "type": "sentinel_attack_technique",
+     "field_path": [
+      "configurations",
+      "sentinel",
+      "alert",
+      "techniques",
+      "0"
+     ],
+     "msg": "'T1059.01' is not an ATT&CK v18 technique or sub-technique id, which is what Sentinel is aligned to; did you mean T1059.013 (Command and Scripting Interpreter: Container CLI/API)?",
+     "input": "T1059.01",
+     "ctx": {
+      "value": "'T1059.01'",
+      "version": "18",
+      "hint": "; did you mean T1059.013 (Command and Scripting Interpreter: Container CLI/API)?"
+     },
+     "span": [
+      15,
+      26,
+      34,
+      true
+     ],
+     "yaml_line": 14
+    }
+   ]
+  },
+  {
+   "id": "platform-sentinel-technique-number",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sentinel:\n    status: STAGING\n    query: SecurityEvent | take 1\n    scheduling: {frequency: PT1H, lookback: PT2H}\n    alert: {techniques: [1059]}\n",
+   "errors": [
+    {
+     "type": "string_type",
+     "field_path": [
+      "configurations",
+      "sentinel",
+      "alert",
+      "techniques",
+      "0"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      15,
+      26,
+      30,
+      true
+     ],
+     "yaml_line": 14
+    }
+   ]
+  },
+  {
+   "id": "platform-sentinel-technique-string",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sentinel:\n    status: STAGING\n    query: SecurityEvent | take 1\n    scheduling: {frequency: PT1H, lookback: PT2H}\n    alert: {techniques: T1059}\n",
+   "errors": [
+    {
+     "type": "list_type",
+     "field_path": [
+      "configurations",
+      "sentinel",
+      "alert",
+      "techniques"
+     ],
+     "msg": "Input should be a valid list",
+     "input": "T1059",
+     "ctx": {},
+     "span": [
+      15,
+      25,
+      30,
+      true
+     ],
+     "yaml_line": 14
+    }
+   ]
+  },
+  {
+   "id": "platform-sentinel-scheduling-string",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sentinel:\n    status: STAGING\n    query: SecurityEvent | take 1\n    scheduling: hourly\n    alert: {title: t}\n",
+   "errors": [
+    {
+     "type": "model_type",
+     "field_path": [
+      "configurations",
+      "sentinel",
+      "scheduling"
+     ],
+     "msg": "Input should be a valid dictionary or instance of SentinelScheduling",
+     "input": "hourly",
+     "ctx": {
+      "class_name": "SentinelScheduling"
+     },
+     "span": [
+      14,
+      17,
+      23,
+      true
+     ],
+     "yaml_line": 13
+    }
+   ]
+  },
+  {
+   "id": "platform-sentinel-frequency-hourly",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sentinel:\n    status: STAGING\n    query: SecurityEvent | take 1\n    scheduling: {frequency: hourly, lookback: daily}\n    alert: {title: t}\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "configurations": {
+     "sentinel": {
+      "enabled": false,
+      "name": "",
+      "status": "STAGING",
+      "query": "SecurityEvent | take 1",
+      "scheduling": {
+       "frequency": "hourly",
+       "lookback": "daily"
+      },
+      "alert": {
+       "title": "t",
+       "suppression": false,
+       "create_incident": true
+      }
+     }
+    }
+   }
+  },
+  {
+   "id": "platform-sentinel-durations-shorthand",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sentinel:\n    status: STAGING\n    query: SecurityEvent | take 1\n    scheduling: {frequency: 1h, lookback: 1h10m}\n    alert: {suppression: p1d}\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "configurations": {
+     "sentinel": {
+      "enabled": false,
+      "name": "",
+      "status": "STAGING",
+      "query": "SecurityEvent | take 1",
+      "scheduling": {
+       "frequency": "1h",
+       "lookback": "1h10m"
+      },
+      "alert": {
+       "suppression": "p1d",
+       "create_incident": true
+      }
+     }
+    }
+   }
+  },
+  {
+   "id": "platform-sentinel-durations-bad",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sentinel:\n    status: STAGING\n    query: SecurityEvent | take 1\n    scheduling: {frequency: PT1H, lookback: PT2H}\n    alert: {suppression: 'one hour'}\n    grouping: {event: SingleAlert, alert: {enabled: true, grouping_lookback: 5 hours}}\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "configurations": {
+     "sentinel": {
+      "enabled": false,
+      "name": "",
+      "status": "STAGING",
+      "query": "SecurityEvent | take 1",
+      "scheduling": {
+       "frequency": "PT1H",
+       "lookback": "PT2H"
+      },
+      "alert": {
+       "suppression": "one hour",
+       "create_incident": true
+      },
+      "grouping": {
+       "event": "SingleAlert",
+       "alert": {
+        "enabled": true,
+        "grouping_lookback": "5 hours"
+       }
+      }
+     }
+    }
+   }
+  },
+  {
+   "id": "platform-sentinel-durations-overflow",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sentinel:\n    status: STAGING\n    query: SecurityEvent | take 1\n    scheduling: {frequency: 1000000000d, lookback: P99999999999D}\n    alert: {suppression: P142857143W}\n    grouping: {event: SingleAlert, alert: {enabled: true, grouping_lookback: P999999999DT23H59M59S}}\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "configurations": {
+     "sentinel": {
+      "enabled": false,
+      "name": "",
+      "status": "STAGING",
+      "query": "SecurityEvent | take 1",
+      "scheduling": {
+       "frequency": "1000000000d",
+       "lookback": "P99999999999D"
+      },
+      "alert": {
+       "suppression": "P142857143W",
+       "create_incident": true
+      },
+      "grouping": {
+       "event": "SingleAlert",
+       "alert": {
+        "enabled": true,
+        "grouping_lookback": "P999999999DT23H59M59S"
+       }
+      }
+     }
+    }
+   }
+  },
+  {
+   "id": "platform-sentinel-nrt",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sentinel:\n    status: STAGING\n    query: SecurityEvent | take 1\n    scheduling: {nrt: true}\n    alert: {title: t}\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "configurations": {
+     "sentinel": {
+      "enabled": false,
+      "name": "",
+      "status": "STAGING",
+      "query": "SecurityEvent | take 1",
+      "scheduling": {
+       "nrt": true
+      },
+      "alert": {
+       "title": "t",
+       "suppression": false,
+       "create_incident": true
+      }
+     }
+    }
+   }
+  },
+  {
+   "id": "platform-sentinel-nested-errors",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sentinel:\n    status: STAGING\n    query: SecurityEvent | take 1\n    scheduling: {frequency: PT1H, lookback: PT2H}\n    alert: {title: t}\n    exclusions: [{query: 1}]\n    trigger: {operator: GreaterThan, threshold: x}\n    grouping: {alert: {enabled: yes}}\n    entities: [{entity: Host, mappings: [{column: c}]}]\n    template: {uuid: u, version: 1, extra: 1}\n",
+   "errors": [
+    {
+     "type": "string_type",
+     "field_path": [
+      "configurations",
+      "sentinel",
+      "exclusions",
+      "0",
+      "query"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      16,
+      26,
+      27,
+      true
+     ],
+     "yaml_line": 15
+    },
+    {
+     "type": "missing",
+     "field_path": [
+      "configurations",
+      "sentinel",
+      "exclusions",
+      "0",
+      "reason"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      16,
+      18,
+      19,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "string_type",
+     "field_path": [
+      "configurations",
+      "sentinel",
+      "template",
+      "version"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      20,
+      34,
+      35,
+      true
+     ],
+     "yaml_line": 19
+    },
+    {
+     "type": "extra_forbidden",
+     "field_path": [
+      "configurations",
+      "sentinel",
+      "template",
+      "extra"
+     ],
+     "msg": "Extra inputs are not permitted",
+     "input": null,
+     "ctx": {},
+     "span": [
+      20,
+      37,
+      42,
+      true
+     ],
+     "yaml_line": 19
+    },
+    {
+     "type": "int_parsing",
+     "field_path": [
+      "configurations",
+      "sentinel",
+      "trigger",
+      "threshold"
+     ],
+     "msg": "Input should be a valid integer, unable to parse string as an integer",
+     "input": "x",
+     "ctx": {},
+     "span": [
+      17,
+      49,
+      50,
+      true
+     ],
+     "yaml_line": 16
+    },
+    {
+     "type": "missing",
+     "field_path": [
+      "configurations",
+      "sentinel",
+      "grouping",
+      "event"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      18,
+      5,
+      13,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "missing",
+     "field_path": [
+      "configurations",
+      "sentinel",
+      "entities",
+      "0",
+      "mappings",
+      "0",
+      "identifier"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      19,
+      42,
+      43,
+      false
+     ],
+     "yaml_line": null
+    }
+   ]
+  },
+  {
+   "id": "platform-defender-full",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  defender_for_endpoint:\n    status: STAGING\n    query: DeviceProcessEvents | take 1\n    alert: {category: Execution}\n    impacted_entities: {device: DeviceId}\n    scheduling: 1H\n    actions:\n      devices: {isolate_device: Full, collect_investigation_package: true, run_antivirus_scan: true}\n      files:\n        allow_block: {action: Block, identifier: SHA1, groups: {selection: Specific, device_groups: [g]}}\n        quarantine_file: SHA1\n      users: {mark_as_compromised: AccountSid, disable_user: AccountSid}\n    scope: {selection: All}\n    exclusions: [{query: '| where 1', reason: r, let: {a: 1}}]\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "configurations": {
+     "defender_for_endpoint": {
+      "enabled": false,
+      "name": "",
+      "status": "STAGING",
+      "query": "DeviceProcessEvents | take 1",
+      "alert": {
+       "category": "Execution"
+      },
+      "impacted_entities": {
+       "device": "DeviceId"
+      },
+      "scheduling": "1H",
+      "actions": {
+       "devices": {
+        "isolate_device": "Full",
+        "collect_investigation_package": true,
+        "run_antivirus_scan": true,
+        "initiate_investigation": false,
+        "restrict_app_execution": false
+       },
+       "files": {
+        "allow_block": {
+         "action": "Block",
+         "identifier": "SHA1",
+         "groups": {
+          "selection": "Specific",
+          "device_groups": [
+           "g"
+          ]
+         }
+        },
+        "quarantine_file": "SHA1"
+       },
+       "users": {
+        "mark_as_compromised": "AccountSid",
+        "disable_user": "AccountSid"
+       }
+      },
+      "scope": {
+       "selection": "All"
+      },
+      "exclusions": [
+       {
+        "query": "| where 1",
+        "reason": "r",
+        "let": {
+         "a": 1
+        }
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "platform-defender-schedule",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  defender_for_endpoint:\n    status: STAGING\n    query: DeviceProcessEvents | take 1\n    alert: {category: Execution}\n    impacted_entities: {device: DeviceId}\n    scheduling: 2H\n",
+   "errors": [
+    {
+     "type": "literal_error",
+     "field_path": [
+      "configurations",
+      "defender_for_endpoint",
+      "scheduling"
+     ],
+     "msg": "Input should be 'NRT', '1H', '3H', '12H' or '24H'",
+     "input": "2H",
+     "ctx": {
+      "expected": "'NRT', '1H', '3H', '12H' or '24H'"
+     },
+     "span": [
+      16,
+      17,
+      19,
+      true
+     ],
+     "yaml_line": 15
+    }
+   ]
+  },
+  {
+   "id": "platform-defender-schedule-int",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  defender_for_endpoint:\n    status: STAGING\n    query: DeviceProcessEvents | take 1\n    alert: {category: Execution}\n    impacted_entities: {device: DeviceId}\n    scheduling: 1\n",
+   "errors": [
+    {
+     "type": "literal_error",
+     "field_path": [
+      "configurations",
+      "defender_for_endpoint",
+      "scheduling"
+     ],
+     "msg": "Input should be 'NRT', '1H', '3H', '12H' or '24H'",
+     "input": null,
+     "ctx": {
+      "expected": "'NRT', '1H', '3H', '12H' or '24H'"
+     },
+     "span": [
+      16,
+      17,
+      18,
+      true
+     ],
+     "yaml_line": 15
+    }
+   ]
+  },
+  {
+   "id": "platform-defender-literals",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  defender_for_endpoint:\n    status: STAGING\n    query: DeviceProcessEvents | take 1\n    alert: {category: Execution}\n    impacted_entities: {device: DeviceId}\n    scheduling: 1H\n    scope: {selection: Some}\n    actions: {files: {allow_block: {action: allow, identifier: x}}, devices: {run_antivirus_scan: maybe}}\n",
+   "errors": [
+    {
+     "type": "bool_parsing",
+     "field_path": [
+      "configurations",
+      "defender_for_endpoint",
+      "actions",
+      "devices",
+      "run_antivirus_scan"
+     ],
+     "msg": "Input should be a valid boolean, unable to interpret input",
+     "input": "maybe",
+     "ctx": {},
+     "span": [
+      18,
+      99,
+      104,
+      true
+     ],
+     "yaml_line": 17
+    },
+    {
+     "type": "literal_error",
+     "field_path": [
+      "configurations",
+      "defender_for_endpoint",
+      "actions",
+      "files",
+      "allow_block",
+      "action"
+     ],
+     "msg": "Input should be 'Allow' or 'Block'",
+     "input": "allow",
+     "ctx": {
+      "expected": "'Allow' or 'Block'"
+     },
+     "span": [
+      18,
+      45,
+      50,
+      true
+     ],
+     "yaml_line": 17
+    },
+    {
+     "type": "literal_error",
+     "field_path": [
+      "configurations",
+      "defender_for_endpoint",
+      "scope",
+      "selection"
+     ],
+     "msg": "Input should be 'All' or 'Specific'",
+     "input": "Some",
+     "ctx": {
+      "expected": "'All' or 'Specific'"
+     },
+     "span": [
+      17,
+      24,
+      28,
+      true
+     ],
+     "yaml_line": 16
+    }
+   ]
+  },
+  {
+   "id": "platform-defender-missing",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  defender_for_endpoint:\n    status: STAGING\n    query: q\n    alert: {}\n",
+   "errors": [
+    {
+     "type": "missing",
+     "field_path": [
+      "configurations",
+      "defender_for_endpoint",
+      "alert",
+      "category"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      14,
+      5,
+      10,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "missing",
+     "field_path": [
+      "configurations",
+      "defender_for_endpoint",
+      "impacted_entities"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      11,
+      3,
+      24,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "missing",
+     "field_path": [
+      "configurations",
+      "defender_for_endpoint",
+      "scheduling"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      11,
+      3,
+      24,
+      false
+     ],
+     "yaml_line": null
+    }
+   ]
+  },
+  {
+   "id": "platform-splunk-full",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  splunk:\n    status: STAGING\n    query: index=main | head 1\n    scheduling:\n      type: Scheduled\n      expires: 1d\n      schedule: {frequency: 5m, cron: '*/5 * * * *', custom_time: 09h15}\n      timerange: {lookback: 1h, earliest: -1h, latest: now}\n    trigger:\n      condition: number of events\n      comparator: greater than\n      threshold: 0\n      severity: 3\n      custom_condition: search x\n      type: once\n      throttling: {fields: [host], duration: 1h, group_name: g}\n    actions:\n      notable:\n        event: {title: t, description: d}\n        drilldown: {name: n, search: s}\n        security_domain: endpoint\n      risk:\n        message: m\n        risk_objects: [{field: host, type: system, score: 50}]\n        threat_objects: [{field: ip, type: ip_address}]\n      email:\n        to: a@example.org\n        send_csv: true\n        include: {results_link: true, trigger_time: false}\n    correlation_search: false\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "configurations": {
+     "splunk": {
+      "enabled": false,
+      "name": "",
+      "status": "STAGING",
+      "query": "index=main | head 1",
+      "scheduling": {
+       "type": "Scheduled",
+       "expires": "1d",
+       "schedule": {
+        "frequency": "5m",
+        "cron": "*/5 * * * *",
+        "custom_time": "09h15"
+       },
+       "timerange": {
+        "lookback": "1h",
+        "earliest": "-1h",
+        "latest": "now"
+       }
+      },
+      "trigger": {
+       "condition": "number of events",
+       "comparator": "greater than",
+       "threshold": 0,
+       "severity": 3,
+       "custom_condition": "search x",
+       "type": "once",
+       "throttling": {
+        "fields": [
+         "host"
+        ],
+        "duration": "1h",
+        "group_name": "g"
+       }
+      },
+      "actions": {
+       "notable": {
+        "event": {
+         "title": "t",
+         "description": "d"
+        },
+        "drilldown": {
+         "name": "n",
+         "search": "s"
+        },
+        "security_domain": "endpoint"
+       },
+       "risk": {
+        "message": "m",
+        "risk_objects": [
+         {
+          "field": "host",
+          "type": "system",
+          "score": 50
+         }
+        ],
+        "threat_objects": [
+         {
+          "field": "ip",
+          "type": "ip_address"
+         }
+        ]
+       },
+       "email": {
+        "to": "a@example.org",
+        "send_csv": true,
+        "include": {
+         "results_link": true,
+         "trigger_time": false
+        }
+       }
+      },
+      "correlation_search": false
+     }
+    }
+   }
+  },
+  {
+   "id": "platform-splunk-errors",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  splunk:\n    status: STAGING\n    query: index=main | head 1\n    trigger: {severity: high, threshold: 1.5}\n    actions: {risk: {risk_objects: [{field: host, type: system}]}, email: {send_pdf: 1}}\n    scheduling: {schedule: {frequency: 5}}\n    correlation_search: maybe\n",
+   "errors": [
+    {
+     "type": "string_type",
+     "field_path": [
+      "configurations",
+      "splunk",
+      "scheduling",
+      "schedule",
+      "frequency"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      16,
+      40,
+      41,
+      true
+     ],
+     "yaml_line": 15
+    },
+    {
+     "type": "int_from_float",
+     "field_path": [
+      "configurations",
+      "splunk",
+      "trigger",
+      "threshold"
+     ],
+     "msg": "Input should be a valid integer, got a number with a fractional part",
+     "input": null,
+     "ctx": {},
+     "span": [
+      14,
+      42,
+      45,
+      true
+     ],
+     "yaml_line": 13
+    },
+    {
+     "type": "int_parsing",
+     "field_path": [
+      "configurations",
+      "splunk",
+      "trigger",
+      "severity"
+     ],
+     "msg": "Input should be a valid integer, unable to parse string as an integer",
+     "input": "high",
+     "ctx": {},
+     "span": [
+      14,
+      25,
+      29,
+      true
+     ],
+     "yaml_line": 13
+    },
+    {
+     "type": "missing",
+     "field_path": [
+      "configurations",
+      "splunk",
+      "actions",
+      "risk",
+      "risk_objects",
+      "0",
+      "score"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      15,
+      37,
+      38,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "bool_parsing",
+     "field_path": [
+      "configurations",
+      "splunk",
+      "correlation_search"
+     ],
+     "msg": "Input should be a valid boolean, unable to interpret input",
+     "input": "maybe",
+     "ctx": {},
+     "span": [
+      17,
+      25,
+      30,
+      true
+     ],
+     "yaml_line": 16
+    }
+   ]
+  },
+  {
+   "id": "platform-s1-full",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sentinel_one:\n    status: STAGING\n    condition:\n      type: Correlation\n      correlation:\n        entity: host\n        match_in_order: true\n        time_window: 1h\n        sub_queries:\n        - {query: a, matches_required: 1}\n        - {query: b, matches_required: 2}\n      cool_off: 30m\n    response: {treat_as_threat: Malicious, network_quarantine: false}\n    details: {name: n, description: d, severity: High, expiration: '2027-01-01'}\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "configurations": {
+     "sentinel_one": {
+      "enabled": false,
+      "name": "",
+      "status": "STAGING",
+      "condition": {
+       "type": "Correlation",
+       "correlation": {
+        "entity": "host",
+        "match_in_order": true,
+        "time_window": "1h",
+        "sub_queries": [
+         {
+          "query": "a",
+          "matches_required": 1
+         },
+         {
+          "query": "b",
+          "matches_required": 2
+         }
+        ]
+       },
+       "cool_off": "30m"
+      },
+      "response": {
+       "treat_as_threat": "Malicious",
+       "network_quarantine": false
+      },
+      "details": {
+       "name": "n",
+       "description": "d",
+       "severity": "High",
+       "expiration": "2027-01-01"
+      }
+     }
+    }
+   }
+  },
+  {
+   "id": "platform-s1-treat-false",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sentinel_one:\n    status: STAGING\n    condition:\n      type: Single Event\n      single_event: {query: EventType = \"Process Creation\"}\n    response: {treat_as_threat: false, network_quarantine: true}\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "configurations": {
+     "sentinel_one": {
+      "enabled": false,
+      "name": "",
+      "status": "STAGING",
+      "condition": {
+       "type": "Single Event",
+       "single_event": {
+        "query": "EventType = \"Process Creation\""
+       }
+      },
+      "response": {
+       "treat_as_threat": false,
+       "network_quarantine": true
+      }
+     }
+    }
+   }
+  },
+  {
+   "id": "platform-s1-treat-true",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sentinel_one:\n    status: STAGING\n    condition:\n      type: Single Event\n      single_event: {query: EventType = \"Process Creation\"}\n    response: {treat_as_threat: true, network_quarantine: true}\n",
+   "errors": [
+    {
+     "type": "literal_error",
+     "field_path": [
+      "configurations",
+      "sentinel_one",
+      "response",
+      "treat_as_threat"
+     ],
+     "msg": "Input should be False, 'Malicious' or 'Suspicious'",
+     "input": null,
+     "ctx": {
+      "expected": "False, 'Malicious' or 'Suspicious'"
+     },
+     "span": [
+      16,
+      33,
+      37,
+      true
+     ],
+     "yaml_line": 15
+    }
+   ]
+  },
+  {
+   "id": "platform-s1-treat-word",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sentinel_one:\n    status: STAGING\n    condition:\n      type: Single Event\n      single_event: {query: EventType = \"Process Creation\"}\n    response: {treat_as_threat: malicious, network_quarantine: no}\n",
+   "errors": [
+    {
+     "type": "literal_error",
+     "field_path": [
+      "configurations",
+      "sentinel_one",
+      "response",
+      "treat_as_threat"
+     ],
+     "msg": "Input should be False, 'Malicious' or 'Suspicious'",
+     "input": "malicious",
+     "ctx": {
+      "expected": "False, 'Malicious' or 'Suspicious'"
+     },
+     "span": [
+      16,
+      33,
+      42,
+      true
+     ],
+     "yaml_line": 15
+    }
+   ]
+  },
+  {
+   "id": "platform-s1-type",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sentinel_one:\n    status: STAGING\n    condition: {type: single event}\n",
+   "errors": [
+    {
+     "type": "literal_error",
+     "field_path": [
+      "configurations",
+      "sentinel_one",
+      "condition",
+      "type"
+     ],
+     "msg": "Input should be 'Single Event' or 'Correlation'",
+     "input": "single event",
+     "ctx": {
+      "expected": "'Single Event' or 'Correlation'"
+     },
+     "span": [
+      13,
+      23,
+      35,
+      true
+     ],
+     "yaml_line": 12
+    }
+   ]
+  },
+  {
+   "id": "platform-s1-correlation-errors",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sentinel_one:\n    status: STAGING\n    condition:\n      type: Correlation\n      correlation: {entity: host, match_in_order: 1, sub_queries: [{query: a}]}\n",
+   "errors": [
+    {
+     "type": "missing",
+     "field_path": [
+      "configurations",
+      "sentinel_one",
+      "condition",
+      "correlation",
+      "time_window"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      15,
+      7,
+      18,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "missing",
+     "field_path": [
+      "configurations",
+      "sentinel_one",
+      "condition",
+      "correlation",
+      "sub_queries",
+      "0",
+      "matches_required"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      15,
+      68,
+      69,
+      false
+     ],
+     "yaml_line": null
+    }
+   ]
+  },
+  {
+   "id": "platform-crowdstrike-full",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  crowdstrike:\n    status: STAGING\n    details: {trigger: verbose, outcome: detection, name: n, description: d, severity: High, tactic: TA0002, technique: T1059}\n    schedule: {frequency: 1h, lookback: 2h, start: '2026-01-01T00:00:00Z', end: '2027-01-01T00:00:00Z'}\n    query: '#event_simpleName=ProcessRollup2'\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "configurations": {
+     "crowdstrike": {
+      "enabled": false,
+      "name": "",
+      "status": "STAGING",
+      "details": {
+       "trigger": "verbose",
+       "outcome": "detection",
+       "name": "n",
+       "description": "d",
+       "severity": "High",
+       "tactic": "TA0002",
+       "technique": "T1059"
+      },
+      "schedule": {
+       "frequency": "1h",
+       "lookback": "2h",
+       "start": "2026-01-01T00:00:00Z",
+       "end": "2027-01-01T00:00:00Z"
+      },
+      "query": "#event_simpleName=ProcessRollup2"
+     }
+    }
+   }
+  },
+  {
+   "id": "platform-crowdstrike-missing",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  crowdstrike:\n    status: STAGING\n    query: q\n    details: {trigger: verbose}\n",
+   "errors": [
+    {
+     "type": "missing",
+     "field_path": [
+      "configurations",
+      "crowdstrike",
+      "details",
+      "outcome"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      14,
+      5,
+      12,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "missing",
+     "field_path": [
+      "configurations",
+      "crowdstrike",
+      "schedule"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      11,
+      3,
+      14,
+      false
+     ],
+     "yaml_line": null
+    }
+   ]
+  },
+  {
+   "id": "platform-harfanglab-full",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  harfanglab:\n    status: STAGING\n    sigma:\n      logsource: {category: process_creation, product: windows}\n      selections:\n      - {name: s, field: Image, value: x.exe, modifiers: [endswith]}\n      - {name: l, field: CommandLine, value: [a, b]}\n      - {name: b, field: Signed, value: false}\n      - {name: i, field: Pid, value: 4}\n      - {name: f, field: Score, value: 1.5}\n      condition: s and l\n      false_positives: [admin]\n    maturity: Stable\n    confidence: High\n    action: Block\n    tags: [attack.t1059]\n    yara:\n      meta: {context: [file], os: Windows, arch: [x64], score: High, classification: c}\n      strings: '$a = \"x\"'\n      condition: $a\n      imports: [pe]\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "configurations": {
+     "harfanglab": {
+      "enabled": false,
+      "name": "",
+      "status": "STAGING",
+      "maturity": "Stable",
+      "confidence": "High",
+      "action": "Block",
+      "tags": [
+       "attack.t1059"
+      ],
+      "sigma": {
+       "logsource": {
+        "category": "process_creation",
+        "product": "windows"
+       },
+       "selections": [
+        {
+         "name": "s",
+         "field": "Image",
+         "value": "x.exe",
+         "modifiers": [
+          "endswith"
+         ]
+        },
+        {
+         "name": "l",
+         "field": "CommandLine",
+         "value": [
+          "a",
+          "b"
+         ]
+        },
+        {
+         "name": "b",
+         "field": "Signed",
+         "value": false
+        },
+        {
+         "name": "i",
+         "field": "Pid",
+         "value": 4
+        },
+        {
+         "name": "f",
+         "field": "Score",
+         "value": 1.5
+        }
+       ],
+       "condition": "s and l",
+       "false_positives": [
+        "admin"
+       ]
+      },
+      "yara": {
+       "meta": {
+        "context": [
+         "file"
+        ],
+        "os": "Windows",
+        "arch": [
+         "x64"
+        ],
+        "score": "High",
+        "classification": "c"
+       },
+       "strings": "$a = \"x\"",
+       "condition": "$a",
+       "imports": [
+        "pe"
+       ]
+      }
+     }
+    }
+   }
+  },
+  {
+   "id": "platform-harfanglab-defaults",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  harfanglab:\n    status: STAGING\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "configurations": {
+     "harfanglab": {
+      "enabled": false,
+      "name": "",
+      "status": "STAGING",
+      "maturity": "Experimental",
+      "confidence": "Moderate",
+      "action": "Alert"
+     }
+    }
+   }
+  },
+  {
+   "id": "platform-harfanglab-value-union",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  harfanglab:\n    status: STAGING\n    sigma:\n      logsource: {category: process_creation, product: windows}\n      selections:\n      - {name: s, field: Image, value: {a: 1}}\n      condition: s\n",
+   "errors": [
+    {
+     "type": "string_type",
+     "field_path": [
+      "configurations",
+      "harfanglab",
+      "sigma",
+      "selections",
+      "0",
+      "value",
+      "str"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      16,
+      33,
+      38,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "list_type",
+     "field_path": [
+      "configurations",
+      "harfanglab",
+      "sigma",
+      "selections",
+      "0",
+      "value",
+      "list[str]"
+     ],
+     "msg": "Input should be a valid list",
+     "input": null,
+     "ctx": {},
+     "span": [
+      16,
+      33,
+      38,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "bool_type",
+     "field_path": [
+      "configurations",
+      "harfanglab",
+      "sigma",
+      "selections",
+      "0",
+      "value",
+      "bool"
+     ],
+     "msg": "Input should be a valid boolean",
+     "input": null,
+     "ctx": {},
+     "span": [
+      16,
+      33,
+      38,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "int_type",
+     "field_path": [
+      "configurations",
+      "harfanglab",
+      "sigma",
+      "selections",
+      "0",
+      "value",
+      "int"
+     ],
+     "msg": "Input should be a valid integer",
+     "input": null,
+     "ctx": {},
+     "span": [
+      16,
+      33,
+      38,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "float_type",
+     "field_path": [
+      "configurations",
+      "harfanglab",
+      "sigma",
+      "selections",
+      "0",
+      "value",
+      "float"
+     ],
+     "msg": "Input should be a valid number",
+     "input": null,
+     "ctx": {},
+     "span": [
+      16,
+      33,
+      38,
+      false
+     ],
+     "yaml_line": null
+    }
+   ]
+  },
+  {
+   "id": "platform-harfanglab-value-mixed-list",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  harfanglab:\n    status: STAGING\n    sigma:\n      logsource: {category: process_creation, product: windows}\n      selections:\n      - {name: s, field: Image, value: [a, 1]}\n      condition: s\n",
+   "errors": [
+    {
+     "type": "string_type",
+     "field_path": [
+      "configurations",
+      "harfanglab",
+      "sigma",
+      "selections",
+      "0",
+      "value",
+      "str"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      16,
+      33,
+      38,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "string_type",
+     "field_path": [
+      "configurations",
+      "harfanglab",
+      "sigma",
+      "selections",
+      "0",
+      "value",
+      "list[str]",
+      "1"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      16,
+      33,
+      38,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "bool_type",
+     "field_path": [
+      "configurations",
+      "harfanglab",
+      "sigma",
+      "selections",
+      "0",
+      "value",
+      "bool"
+     ],
+     "msg": "Input should be a valid boolean",
+     "input": null,
+     "ctx": {},
+     "span": [
+      16,
+      33,
+      38,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "int_type",
+     "field_path": [
+      "configurations",
+      "harfanglab",
+      "sigma",
+      "selections",
+      "0",
+      "value",
+      "int"
+     ],
+     "msg": "Input should be a valid integer",
+     "input": null,
+     "ctx": {},
+     "span": [
+      16,
+      33,
+      38,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "float_type",
+     "field_path": [
+      "configurations",
+      "harfanglab",
+      "sigma",
+      "selections",
+      "0",
+      "value",
+      "float"
+     ],
+     "msg": "Input should be a valid number",
+     "input": null,
+     "ctx": {},
+     "span": [
+      16,
+      33,
+      38,
+      false
+     ],
+     "yaml_line": null
+    }
+   ]
+  },
+  {
+   "id": "platform-harfanglab-yara-missing",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  harfanglab:\n    status: STAGING\n    yara: {meta: {context: file}, strings: s}\n",
+   "errors": [
+    {
+     "type": "list_type",
+     "field_path": [
+      "configurations",
+      "harfanglab",
+      "yara",
+      "meta",
+      "context"
+     ],
+     "msg": "Input should be a valid list",
+     "input": "file",
+     "ctx": {},
+     "span": [
+      13,
+      28,
+      32,
+      true
+     ],
+     "yaml_line": 12
+    },
+    {
+     "type": "missing",
+     "field_path": [
+      "configurations",
+      "harfanglab",
+      "yara",
+      "meta",
+      "os"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      13,
+      12,
+      16,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "missing",
+     "field_path": [
+      "configurations",
+      "harfanglab",
+      "yara",
+      "condition"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      13,
+      5,
+      9,
+      false
+     ],
+     "yaml_line": null
+    }
+   ]
+  },
+  {
+   "id": "platform-carbon-black-full",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  carbon_black_cloud:\n    status: STAGING\n    query: process_name:cmd.exe\n    organizations: [o]\n    watchlist: w\n    report: r\n    tags: [t]\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "configurations": {
+     "carbon_black_cloud": {
+      "enabled": false,
+      "name": "",
+      "status": "STAGING",
+      "query": "process_name:cmd.exe",
+      "organizations": [
+       "o"
+      ],
+      "watchlist": "w",
+      "report": "r",
+      "tags": [
+       "t"
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "platform-elastic-minimal",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "configurations": {
+     "elastic": {
+      "enabled": false,
+      "name": "",
+      "status": "STAGING",
+      "type": "query",
+      "query": "process.name: cmd.exe",
+      "building_block": false
+     }
+    }
+   }
+  },
+  {
+   "id": "platform-elastic-full",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    language: kuery\n    index: [logs-*]\n    filters:\n    - {field: host.name, value: h, negate: true}\n    - {meta: {alias: x}, query: {match_phrase: {a: b}}}\n    scheduling: {interval: 5m, lookback: 0m, max_alerts: 100}\n    severity: {default: High, mapping: [{field: f, value: v, severity: critical}]}\n    risk: {score: 50, mapping: [{field: f}]}\n    suppression: {group_by: [host.name], duration: 1h, missing_fields_strategy: doNotSuppress}\n    highlighted_fields: [host.name]\n    integration: [windows, {package: endpoint, integration: e, version: ^8.0.0}]\n    required_fields: [{name: host.name, type: keyword}]\n    guide: {investigation: i, setup: s}\n    false_positives: [fp]\n    tags: [t]\n    exceptions: {endpoint: true, lists: [{id: i, list_id: l, namespace_type: single, type: detection}]}\n    building_block: true\n    overrides: {name: rule.name, timestamp: event.ingested, disable_fallback: true}\n    actions:\n      notify: [{id: c, action_type_id: .email, group: default, params: {}}]\n      respond: [{endpoint: isolate, comment: c}, {osquery: {query: select 1}}]\n      timeline: {id: t, title: T}\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "configurations": {
+     "elastic": {
+      "enabled": false,
+      "name": "",
+      "status": "STAGING",
+      "type": "query",
+      "query": "process.name: cmd.exe",
+      "language": "kuery",
+      "index": [
+       "logs-*"
+      ],
+      "filters": [
+       {
+        "field": "host.name",
+        "value": "h",
+        "negate": true
+       },
+       {
+        "negate": false,
+        "meta": {
+         "alias": "x"
+        },
+        "query": {
+         "match_phrase": {
+          "a": "b"
+         }
+        }
+       }
+      ],
+      "scheduling": {
+       "interval": "5m",
+       "lookback": "0m",
+       "max_alerts": 100
+      },
+      "severity": {
+       "default": "High",
+       "mapping": [
+        {
+         "field": "f",
+         "value": "v",
+         "operator": "equals",
+         "severity": "critical"
+        }
+       ]
+      },
+      "risk": {
+       "score": 50,
+       "mapping": [
+        {
+         "field": "f",
+         "operator": "equals",
+         "value": ""
+        }
+       ]
+      },
+      "suppression": {
+       "group_by": [
+        "host.name"
+       ],
+       "duration": "1h",
+       "missing_fields_strategy": "doNotSuppress"
+      },
+      "highlighted_fields": [
+       "host.name"
+      ],
+      "integration": [
+       "windows",
+       {
+        "package": "endpoint",
+        "integration": "e",
+        "version": "^8.0.0"
+       }
+      ],
+      "required_fields": [
+       {
+        "name": "host.name",
+        "type": "keyword"
+       }
+      ],
+      "guide": {
+       "investigation": "i",
+       "setup": "s"
+      },
+      "false_positives": [
+       "fp"
+      ],
+      "tags": [
+       "t"
+      ],
+      "exceptions": {
+       "endpoint": true,
+       "lists": [
+        {
+         "id": "i",
+         "list_id": "l",
+         "namespace_type": "single",
+         "type": "detection"
+        }
+       ]
+      },
+      "building_block": true,
+      "overrides": {
+       "name": "rule.name",
+       "timestamp": "event.ingested",
+       "disable_fallback": true
+      },
+      "actions": {
+       "notify": [
+        {
+         "id": "c",
+         "action_type_id": ".email",
+         "group": "default",
+         "params": {}
+        }
+       ],
+       "respond": [
+        {
+         "endpoint": "isolate",
+         "comment": "c"
+        },
+        {
+         "osquery": {
+          "query": "select 1"
+         }
+        }
+       ],
+       "timeline": {
+        "id": "t",
+        "title": "T"
+       }
+      }
+     }
+    }
+   }
+  },
+  {
+   "id": "platform-elastic-no-status",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    type: bogus\n",
+   "errors": [
+    {
+     "type": "missing",
+     "field_path": [
+      "configurations",
+      "elastic",
+      "status"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      11,
+      3,
+      10,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "literal_error",
+     "field_path": [
+      "configurations",
+      "elastic",
+      "type"
+     ],
+     "msg": "Input should be 'query', 'eql', 'esql', 'threshold', 'new_terms', 'threat_match' or 'machine_learning'",
+     "input": "bogus",
+     "ctx": {
+      "expected": "'query', 'eql', 'esql', 'threshold', 'new_terms', 'threat_match' or 'machine_learning'"
+     },
+     "span": [
+      12,
+      11,
+      16,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-elastic-type-unknown",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: bogus\n    query: q\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "elastic"
+     ],
+     "msg": "Value error, ElasticConfig validation failed with code(s): type_block",
+     "input": null,
+     "ctx": {
+      "error": "ElasticConfig validation failed with code(s): type_block"
+     },
+     "span": [
+      11,
+      3,
+      10,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-elastic-type-missing",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    query: q\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "elastic"
+     ],
+     "msg": "Value error, ElasticConfig validation failed with code(s): type_block",
+     "input": null,
+     "ctx": {
+      "error": "ElasticConfig validation failed with code(s): type_block"
+     },
+     "span": [
+      11,
+      3,
+      10,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-elastic-removed-flat",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    risk_score: 21\n    note: n\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "elastic"
+     ],
+     "msg": "Value error, ElasticConfig validation failed with code(s): type_block",
+     "input": null,
+     "ctx": {
+      "error": "ElasticConfig validation failed with code(s): type_block"
+     },
+     "span": [
+      11,
+      3,
+      10,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-elastic-query-missing",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "elastic"
+     ],
+     "msg": "Value error, ElasticConfig validation failed with code(s): type_block",
+     "input": null,
+     "ctx": {
+      "error": "ElasticConfig validation failed with code(s): type_block"
+     },
+     "span": [
+      11,
+      3,
+      10,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-elastic-query-empty",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: eql\n    query: ''\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "elastic"
+     ],
+     "msg": "Value error, ElasticConfig validation failed with code(s): type_block",
+     "input": null,
+     "ctx": {
+      "error": "ElasticConfig validation failed with code(s): type_block"
+     },
+     "span": [
+      11,
+      3,
+      10,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-elastic-query-blank",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: '  '\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "elastic",
+      "query"
+     ],
+     "msg": "Value error, query must not be empty",
+     "input": "  ",
+     "ctx": {
+      "error": "query must not be empty"
+     },
+     "span": [
+      14,
+      13,
+      15,
+      true
+     ],
+     "yaml_line": 13
+    }
+   ]
+  },
+  {
+   "id": "platform-elastic-eql",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: eql\n    query: process where true\n    eql: {timestamp_field: t, event_category_override: c, tiebreaker_field: x}\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "configurations": {
+     "elastic": {
+      "enabled": false,
+      "name": "",
+      "status": "STAGING",
+      "type": "eql",
+      "query": "process where true",
+      "eql": {
+       "timestamp_field": "t",
+       "event_category_override": "c",
+       "tiebreaker_field": "x"
+      },
+      "building_block": false
+     }
+    }
+   }
+  },
+  {
+   "id": "platform-elastic-eql-on-query",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    eql: {timestamp_field: t}\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "elastic"
+     ],
+     "msg": "Value error, ElasticConfig validation failed with code(s): type_block",
+     "input": null,
+     "ctx": {
+      "error": "ElasticConfig validation failed with code(s): type_block"
+     },
+     "span": [
+      11,
+      3,
+      10,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-elastic-esql-language",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: esql\n    query: from logs-*\n    language: kuery\n    index: [a]\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "elastic"
+     ],
+     "msg": "Value error, ElasticConfig validation failed with code(s): esql_source, language",
+     "input": null,
+     "ctx": {
+      "error": "ElasticConfig validation failed with code(s): esql_source, language"
+     },
+     "span": [
+      11,
+      3,
+      10,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-elastic-ml",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: machine_learning\n    machine_learning: {job_id: [a, b], anomaly_threshold: 75}\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "configurations": {
+     "elastic": {
+      "enabled": false,
+      "name": "",
+      "status": "STAGING",
+      "type": "machine_learning",
+      "machine_learning": {
+       "job_id": [
+        "a",
+        "b"
+       ],
+       "anomaly_threshold": 75
+      },
+      "building_block": false
+     }
+    }
+   }
+  },
+  {
+   "id": "platform-elastic-ml-one-job",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: machine_learning\n    machine_learning: {job_id: a, anomaly_threshold: 75}\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "configurations": {
+     "elastic": {
+      "enabled": false,
+      "name": "",
+      "status": "STAGING",
+      "type": "machine_learning",
+      "machine_learning": {
+       "job_id": "a",
+       "anomaly_threshold": 75
+      },
+      "building_block": false
+     }
+    }
+   }
+  },
+  {
+   "id": "platform-elastic-ml-missing",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: machine_learning\n    machine_learning: {job_id: a}\n    filters: [{field: a, value: b}]\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "elastic"
+     ],
+     "msg": "Value error, ElasticConfig validation failed with code(s): esql_source, type_block",
+     "input": null,
+     "ctx": {
+      "error": "ElasticConfig validation failed with code(s): esql_source, type_block"
+     },
+     "span": [
+      11,
+      3,
+      10,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-elastic-ml-job-number",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: machine_learning\n    machine_learning: {job_id: 5, anomaly_threshold: 75}\n",
+   "errors": [
+    {
+     "type": "string_type",
+     "field_path": [
+      "configurations",
+      "elastic",
+      "machine_learning",
+      "job_id",
+      "str"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      14,
+      24,
+      30,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "list_type",
+     "field_path": [
+      "configurations",
+      "elastic",
+      "machine_learning",
+      "job_id",
+      "list[str]"
+     ],
+     "msg": "Input should be a valid list",
+     "input": null,
+     "ctx": {},
+     "span": [
+      14,
+      24,
+      30,
+      false
+     ],
+     "yaml_line": null
+    }
+   ]
+  },
+  {
+   "id": "platform-elastic-threshold",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: threshold\n    query: q\n    threshold: {field: [a, b], value: 10, cardinality: {field: c, value: 2}}\n    suppression: {duration: 1h}\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "configurations": {
+     "elastic": {
+      "enabled": false,
+      "name": "",
+      "status": "STAGING",
+      "type": "threshold",
+      "query": "q",
+      "suppression": {
+       "duration": "1h",
+       "missing_fields_strategy": "suppress"
+      },
+      "threshold": {
+       "field": [
+        "a",
+        "b"
+       ],
+       "value": 10,
+       "cardinality": {
+        "field": "c",
+        "value": 2
+       }
+      },
+      "building_block": false
+     }
+    }
+   }
+  },
+  {
+   "id": "platform-elastic-threshold-missing",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: threshold\n    query: q\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "elastic"
+     ],
+     "msg": "Value error, ElasticConfig validation failed with code(s): type_block",
+     "input": null,
+     "ctx": {
+      "error": "ElasticConfig validation failed with code(s): type_block"
+     },
+     "span": [
+      11,
+      3,
+      10,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-elastic-threshold-fields",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: threshold\n    query: q\n    threshold: {field: [a, b, c, d, e, f], value: 0}\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "elastic"
+     ],
+     "msg": "Value error, ElasticConfig validation failed with code(s): threshold_fields",
+     "input": null,
+     "ctx": {
+      "error": "ElasticConfig validation failed with code(s): threshold_fields"
+     },
+     "span": [
+      11,
+      3,
+      10,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-elastic-threshold-bool",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: threshold\n    query: q\n    threshold: {value: true}\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "configurations": {
+     "elastic": {
+      "enabled": false,
+      "name": "",
+      "status": "STAGING",
+      "type": "threshold",
+      "query": "q",
+      "threshold": {
+       "field": [],
+       "value": 1
+      },
+      "building_block": false
+     }
+    }
+   }
+  },
+  {
+   "id": "platform-elastic-threshold-suppression",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: threshold\n    query: q\n    threshold: {value: 1}\n    suppression: {group_by: [a]}\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "elastic"
+     ],
+     "msg": "Value error, ElasticConfig validation failed with code(s): suppression_shape",
+     "input": null,
+     "ctx": {
+      "error": "ElasticConfig validation failed with code(s): suppression_shape"
+     },
+     "span": [
+      11,
+      3,
+      10,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-elastic-new-terms",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: new_terms\n    query: q\n    new_terms: {fields: [a], history_window_start: 7d}\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "configurations": {
+     "elastic": {
+      "enabled": false,
+      "name": "",
+      "status": "STAGING",
+      "type": "new_terms",
+      "query": "q",
+      "new_terms": {
+       "fields": [
+        "a"
+       ],
+       "history_window_start": "7d"
+      },
+      "building_block": false
+     }
+    }
+   }
+  },
+  {
+   "id": "platform-elastic-new-terms-bad",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: new_terms\n    query: q\n    new_terms: {fields: [a, b, c, d], history_window_start: 7x}\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "elastic"
+     ],
+     "msg": "Value error, ElasticConfig validation failed with code(s): duration, new_terms_fields",
+     "input": null,
+     "ctx": {
+      "error": "ElasticConfig validation failed with code(s): duration, new_terms_fields"
+     },
+     "span": [
+      11,
+      3,
+      10,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-elastic-new-terms-missing",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: new_terms\n    query: q\n    new_terms: {fields: [a]}\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "elastic"
+     ],
+     "msg": "Value error, ElasticConfig validation failed with code(s): type_block",
+     "input": null,
+     "ctx": {
+      "error": "ElasticConfig validation failed with code(s): type_block"
+     },
+     "span": [
+      11,
+      3,
+      10,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-elastic-threat-match",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: threat_match\n    query: q\n    threat:\n      index: [ti-*]\n      query: '*'\n      language: lucene\n      mapping: [{entries: [{field: a, value: b, negate: false}]}]\n      filters: [{meta: {}, query: {}}]\n      indicator_path: threat.indicator\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "configurations": {
+     "elastic": {
+      "enabled": false,
+      "name": "",
+      "status": "STAGING",
+      "type": "threat_match",
+      "query": "q",
+      "threat": {
+       "index": [
+        "ti-*"
+       ],
+       "query": "*",
+       "language": "lucene",
+       "mapping": [
+        {
+         "entries": [
+          {
+           "field": "a",
+           "value": "b",
+           "type": "mapping",
+           "negate": false
+          }
+         ]
+        }
+       ],
+       "filters": [
+        {
+         "meta": {},
+         "query": {}
+        }
+       ],
+       "indicator_path": "threat.indicator"
+      },
+      "building_block": false
+     }
+    }
+   }
+  },
+  {
+   "id": "platform-elastic-threat-bad",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: threat_match\n    query: q\n    threat:\n      index: ti-*\n      query: '*'\n      mapping: []\n      filters: [{field: a}]\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "elastic"
+     ],
+     "msg": "Value error, ElasticConfig validation failed with code(s): filter_shape, index_list",
+     "input": null,
+     "ctx": {
+      "error": "ElasticConfig validation failed with code(s): filter_shape, index_list"
+     },
+     "span": [
+      11,
+      3,
+      10,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-elastic-index-string",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    index: logs-*\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "elastic"
+     ],
+     "msg": "Value error, ElasticConfig validation failed with code(s): index_list",
+     "input": null,
+     "ctx": {
+      "error": "ElasticConfig validation failed with code(s): index_list"
+     },
+     "span": [
+      11,
+      3,
+      10,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-elastic-index-empty-item",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    index: ['']\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "elastic"
+     ],
+     "msg": "Value error, ElasticConfig validation failed with code(s): index_list",
+     "input": null,
+     "ctx": {
+      "error": "ElasticConfig validation failed with code(s): index_list"
+     },
+     "span": [
+      11,
+      3,
+      10,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-elastic-index-and-view",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    index: [a]\n    data_view_id: v\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "elastic"
+     ],
+     "msg": "Value error, ElasticConfig validation failed with code(s): index_xor_data_view",
+     "input": null,
+     "ctx": {
+      "error": "ElasticConfig validation failed with code(s): index_xor_data_view"
+     },
+     "span": [
+      11,
+      3,
+      10,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-elastic-filters",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    filters: [{}, x, {field: a}, {meta: {}}, {field: a, value: b, meta: {}, query: {}}]\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "elastic"
+     ],
+     "msg": "Value error, ElasticConfig validation failed with code(s): filter_shape",
+     "input": null,
+     "ctx": {
+      "error": "ElasticConfig validation failed with code(s): filter_shape"
+     },
+     "span": [
+      11,
+      3,
+      10,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-elastic-filters-string",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    filters: abc\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "elastic"
+     ],
+     "msg": "Value error, ElasticConfig validation failed with code(s): filter_shape",
+     "input": null,
+     "ctx": {
+      "error": "ElasticConfig validation failed with code(s): filter_shape"
+     },
+     "span": [
+      11,
+      3,
+      10,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-elastic-exception-type",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    exceptions: {lists: [{id: i, list_id: l, namespace_type: single, type: endpoint}, x]}\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "elastic"
+     ],
+     "msg": "Value error, ElasticConfig validation failed with code(s): exception_type",
+     "input": null,
+     "ctx": {
+      "error": "ElasticConfig validation failed with code(s): exception_type"
+     },
+     "span": [
+      11,
+      3,
+      10,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-elastic-exception-lists-string",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    exceptions: {lists: ab}\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "elastic"
+     ],
+     "msg": "Value error, ElasticConfig validation failed with code(s): exception_type",
+     "input": null,
+     "ctx": {
+      "error": "ElasticConfig validation failed with code(s): exception_type"
+     },
+     "span": [
+      11,
+      3,
+      10,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-elastic-actions-list",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    actions: [a]\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "elastic"
+     ],
+     "msg": "Value error, ElasticConfig validation failed with code(s): type_block",
+     "input": null,
+     "ctx": {
+      "error": "ElasticConfig validation failed with code(s): type_block"
+     },
+     "span": [
+      11,
+      3,
+      10,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-elastic-respond",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    actions: {respond: [{endpoint: reboot}, {endpoint: isolate, extra: 1}, {osquery: {}}, {osquery: {query: q}, x: 1}, {}, z]}\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "elastic"
+     ],
+     "msg": "Value error, ElasticConfig validation failed with code(s): response_action",
+     "input": null,
+     "ctx": {
+      "error": "ElasticConfig validation failed with code(s): response_action"
+     },
+     "span": [
+      11,
+      3,
+      10,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-elastic-respond-string",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    actions: {respond: ab}\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "elastic"
+     ],
+     "msg": "Value error, ElasticConfig validation failed with code(s): response_action",
+     "input": null,
+     "ctx": {
+      "error": "ElasticConfig validation failed with code(s): response_action"
+     },
+     "span": [
+      11,
+      3,
+      10,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-elastic-suppression-shape",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    suppression: {group_by: [a, b, c, d]}\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "elastic"
+     ],
+     "msg": "Value error, ElasticConfig validation failed with code(s): suppression_shape",
+     "input": null,
+     "ctx": {
+      "error": "ElasticConfig validation failed with code(s): suppression_shape"
+     },
+     "span": [
+      11,
+      3,
+      10,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-elastic-suppression-dupe",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    suppression: {group_by: [a, a]}\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "elastic"
+     ],
+     "msg": "Value error, ElasticConfig validation failed with code(s): suppression_shape",
+     "input": null,
+     "ctx": {
+      "error": "ElasticConfig validation failed with code(s): suppression_shape"
+     },
+     "span": [
+      11,
+      3,
+      10,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-elastic-suppression-empty-item",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    suppression: {group_by: ['']}\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "elastic"
+     ],
+     "msg": "Value error, ElasticConfig validation failed with code(s): suppression_shape",
+     "input": null,
+     "ctx": {
+      "error": "ElasticConfig validation failed with code(s): suppression_shape"
+     },
+     "span": [
+      11,
+      3,
+      10,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-elastic-suppression-string",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    suppression: x\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "elastic"
+     ],
+     "msg": "Value error, ElasticConfig validation failed with code(s): suppression_shape",
+     "input": null,
+     "ctx": {
+      "error": "ElasticConfig validation failed with code(s): suppression_shape"
+     },
+     "span": [
+      11,
+      3,
+      10,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-elastic-suppression-no-group",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    suppression: {duration: 1h}\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "elastic"
+     ],
+     "msg": "Value error, ElasticConfig validation failed with code(s): suppression_shape",
+     "input": null,
+     "ctx": {
+      "error": "ElasticConfig validation failed with code(s): suppression_shape"
+     },
+     "span": [
+      11,
+      3,
+      10,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-elastic-suppression-duration",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    suppression: {group_by: [a], duration: ''}\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "elastic"
+     ],
+     "msg": "Value error, ElasticConfig validation failed with code(s): duration",
+     "input": null,
+     "ctx": {
+      "error": "ElasticConfig validation failed with code(s): duration"
+     },
+     "span": [
+      11,
+      3,
+      10,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-elastic-severity-unknown",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    severity: Severe\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "elastic"
+     ],
+     "msg": "Value error, ElasticConfig validation failed with code(s): severity",
+     "input": null,
+     "ctx": {
+      "error": "ElasticConfig validation failed with code(s): severity"
+     },
+     "span": [
+      11,
+      3,
+      10,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-elastic-severity-case",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    severity: ' HIGH '\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "configurations": {
+     "elastic": {
+      "enabled": false,
+      "name": "",
+      "status": "STAGING",
+      "type": "query",
+      "query": "process.name: cmd.exe",
+      "severity": " HIGH ",
+      "building_block": false
+     }
+    }
+   }
+  },
+  {
+   "id": "platform-elastic-severity-number",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    severity: 3\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "elastic"
+     ],
+     "msg": "Value error, ElasticConfig validation failed with code(s): severity",
+     "input": null,
+     "ctx": {
+      "error": "ElasticConfig validation failed with code(s): severity"
+     },
+     "span": [
+      11,
+      3,
+      10,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-elastic-severity-mapping-bad",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    severity: {default: nope}\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "elastic"
+     ],
+     "msg": "Value error, ElasticConfig validation failed with code(s): severity",
+     "input": null,
+     "ctx": {
+      "error": "ElasticConfig validation failed with code(s): severity"
+     },
+     "span": [
+      11,
+      3,
+      10,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-elastic-severity-mapping-fields",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    severity: {default: low, mapping: [{field: f, value: v, severity: urgent, operator: is}]}\n",
+   "errors": [
+    {
+     "type": "string_type",
+     "field_path": [
+      "configurations",
+      "elastic",
+      "severity",
+      "str"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      15,
+      5,
+      13,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "literal_error",
+     "field_path": [
+      "configurations",
+      "elastic",
+      "severity",
+      "ElasticSeverity",
+      "mapping",
+      "0",
+      "operator"
+     ],
+     "msg": "Input should be 'equals'",
+     "input": "is",
+     "ctx": {
+      "expected": "'equals'"
+     },
+     "span": [
+      15,
+      5,
+      13,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "literal_error",
+     "field_path": [
+      "configurations",
+      "elastic",
+      "severity",
+      "ElasticSeverity",
+      "mapping",
+      "0",
+      "severity"
+     ],
+     "msg": "Input should be 'low', 'medium', 'high' or 'critical'",
+     "input": "urgent",
+     "ctx": {
+      "expected": "'low', 'medium', 'high' or 'critical'"
+     },
+     "span": [
+      15,
+      5,
+      13,
+      false
+     ],
+     "yaml_line": null
+    }
+   ]
+  },
+  {
+   "id": "platform-elastic-risk-range",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    risk: 150\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "elastic"
+     ],
+     "msg": "Value error, ElasticConfig validation failed with code(s): risk_score",
+     "input": null,
+     "ctx": {
+      "error": "ElasticConfig validation failed with code(s): risk_score"
+     },
+     "span": [
+      11,
+      3,
+      10,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-elastic-risk-float",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    risk: 5.5\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "elastic"
+     ],
+     "msg": "Value error, ElasticConfig validation failed with code(s): risk_score",
+     "input": null,
+     "ctx": {
+      "error": "ElasticConfig validation failed with code(s): risk_score"
+     },
+     "span": [
+      11,
+      3,
+      10,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-elastic-risk-bool",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    risk: true\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "configurations": {
+     "elastic": {
+      "enabled": false,
+      "name": "",
+      "status": "STAGING",
+      "type": "query",
+      "query": "process.name: cmd.exe",
+      "risk": 1,
+      "building_block": false
+     }
+    }
+   }
+  },
+  {
+   "id": "platform-elastic-risk-dict",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    risk: {score: -1}\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "elastic"
+     ],
+     "msg": "Value error, ElasticConfig validation failed with code(s): risk_score",
+     "input": null,
+     "ctx": {
+      "error": "ElasticConfig validation failed with code(s): risk_score"
+     },
+     "span": [
+      11,
+      3,
+      10,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-elastic-risk-string",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    risk: high\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "elastic"
+     ],
+     "msg": "Value error, ElasticConfig validation failed with code(s): risk_score",
+     "input": null,
+     "ctx": {
+      "error": "ElasticConfig validation failed with code(s): risk_score"
+     },
+     "span": [
+      11,
+      3,
+      10,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-elastic-durations",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    scheduling: {interval: 0m, lookback: '-1m'}\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "elastic"
+     ],
+     "msg": "Value error, ElasticConfig validation failed with code(s): duration",
+     "input": null,
+     "ctx": {
+      "error": "ElasticConfig validation failed with code(s): duration"
+     },
+     "span": [
+      11,
+      3,
+      10,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-elastic-durations-iso",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    scheduling: {interval: PT5M, lookback: P1D}\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "configurations": {
+     "elastic": {
+      "enabled": false,
+      "name": "",
+      "status": "STAGING",
+      "type": "query",
+      "query": "process.name: cmd.exe",
+      "scheduling": {
+       "interval": "PT5M",
+       "lookback": "P1D"
+      },
+      "building_block": false
+     }
+    }
+   }
+  },
+  {
+   "id": "platform-elastic-duration-number",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    scheduling: {interval: 5}\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "elastic"
+     ],
+     "msg": "Value error, ElasticConfig validation failed with code(s): duration",
+     "input": null,
+     "ctx": {
+      "error": "ElasticConfig validation failed with code(s): duration"
+     },
+     "span": [
+      11,
+      3,
+      10,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-elastic-scheduling-string",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    scheduling: 5m\n",
+   "errors": [
+    {
+     "type": "model_type",
+     "field_path": [
+      "configurations",
+      "elastic",
+      "scheduling"
+     ],
+     "msg": "Input should be a valid dictionary or instance of ElasticScheduling",
+     "input": "5m",
+     "ctx": {
+      "class_name": "ElasticScheduling"
+     },
+     "span": [
+      15,
+      17,
+      19,
+      true
+     ],
+     "yaml_line": 14
+    }
+   ]
+  },
+  {
+   "id": "platform-elastic-many-codes",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: esql\n    language: lucene\n    index: x\n    data_view_id: v\n    risk: 101\n    severity: x\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "elastic"
+     ],
+     "msg": "Value error, ElasticConfig validation failed with code(s): esql_source, index_list, index_xor_data_view, language, risk_score, severity, type_block",
+     "input": null,
+     "ctx": {
+      "error": "ElasticConfig validation failed with code(s): esql_source, index_list, index_xor_data_view, language, risk_score, severity, type_block"
+     },
+     "span": [
+      11,
+      3,
+      10,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-elastic-field-errors",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    tags: t\n    building_block: 1\n    required_fields: [{name: a, type: str}]\n    integration: [5, {version: 1}]\n    language: KQL\n",
+   "errors": [
+    {
+     "type": "literal_error",
+     "field_path": [
+      "configurations",
+      "elastic",
+      "language"
+     ],
+     "msg": "Input should be 'kuery' or 'lucene'",
+     "input": "KQL",
+     "ctx": {
+      "expected": "'kuery' or 'lucene'"
+     },
+     "span": [
+      19,
+      15,
+      18,
+      true
+     ],
+     "yaml_line": 18
+    },
+    {
+     "type": "string_type",
+     "field_path": [
+      "configurations",
+      "elastic",
+      "integration",
+      "0",
+      "str"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      18,
+      19,
+      20,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "model_type",
+     "field_path": [
+      "configurations",
+      "elastic",
+      "integration",
+      "0",
+      "ElasticIntegration"
+     ],
+     "msg": "Input should be a valid dictionary or instance of ElasticIntegration",
+     "input": null,
+     "ctx": {
+      "class_name": "ElasticIntegration"
+     },
+     "span": [
+      18,
+      19,
+      20,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "string_type",
+     "field_path": [
+      "configurations",
+      "elastic",
+      "integration",
+      "1",
+      "str"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      18,
+      22,
+      23,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "missing",
+     "field_path": [
+      "configurations",
+      "elastic",
+      "integration",
+      "1",
+      "ElasticIntegration",
+      "package"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      18,
+      22,
+      23,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "string_type",
+     "field_path": [
+      "configurations",
+      "elastic",
+      "integration",
+      "1",
+      "ElasticIntegration",
+      "version"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      18,
+      22,
+      23,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "literal_error",
+     "field_path": [
+      "configurations",
+      "elastic",
+      "required_fields",
+      "0",
+      "type"
+     ],
+     "msg": "Input should be 'keyword', 'constant_keyword', 'wildcard', 'text', 'match_only_text', 'long', 'integer', 'short', 'byte', 'unsigned_long', 'double', 'float', 'half_float', 'scaled_float', 'date', 'date_nanos', 'boolean', 'ip', 'version', 'binary', 'geo_point', 'geo_shape', 'object', 'flattened' or 'nested'",
+     "input": "str",
+     "ctx": {
+      "expected": "'keyword', 'constant_keyword', 'wildcard', 'text', 'match_only_text', 'long', 'integer', 'short', 'byte', 'unsigned_long', 'double', 'float', 'half_float', 'scaled_float', 'date', 'date_nanos', 'boolean', 'ip', 'version', 'binary', 'geo_point', 'geo_shape', 'object', 'flattened' or 'nested'"
+     },
+     "span": [
+      17,
+      39,
+      42,
+      true
+     ],
+     "yaml_line": 16
+    },
+    {
+     "type": "list_type",
+     "field_path": [
+      "configurations",
+      "elastic",
+      "tags"
+     ],
+     "msg": "Input should be a valid list",
+     "input": "t",
+     "ctx": {},
+     "span": [
+      15,
+      11,
+      12,
+      true
+     ],
+     "yaml_line": 14
+    }
+   ]
+  },
+  {
+   "id": "platform-elastic-integration-dict",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    integration: [{package: p, extra: 1}]\n",
+   "errors": [
+    {
+     "type": "string_type",
+     "field_path": [
+      "configurations",
+      "elastic",
+      "integration",
+      "0",
+      "str"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      15,
+      19,
+      20,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "extra_forbidden",
+     "field_path": [
+      "configurations",
+      "elastic",
+      "integration",
+      "0",
+      "ElasticIntegration",
+      "extra"
+     ],
+     "msg": "Extra inputs are not permitted",
+     "input": null,
+     "ctx": {},
+     "span": [
+      15,
+      19,
+      20,
+      false
+     ],
+     "yaml_line": null
+    }
+   ]
+  },
+  {
+   "id": "platform-elastic-threat-no-mapping",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: threat_match\n    query: q\n    threat: {index: [ti-*], query: '*'}\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "elastic"
+     ],
+     "msg": "Value error, ElasticConfig validation failed with code(s): type_block",
+     "input": null,
+     "ctx": {
+      "error": "ElasticConfig validation failed with code(s): type_block"
+     },
+     "span": [
+      11,
+      3,
+      10,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-elastic-ml-language",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: machine_learning\n    machine_learning: {job_id: [a], anomaly_threshold: 75}\n    language: kuery\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "elastic"
+     ],
+     "msg": "Value error, ElasticConfig validation failed with code(s): language",
+     "input": null,
+     "ctx": {
+      "error": "ElasticConfig validation failed with code(s): language"
+     },
+     "span": [
+      11,
+      3,
+      10,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-elastic-respond-int-key",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    actions: {respond: [{endpoint: isolate, 1: x}]}\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "elastic"
+     ],
+     "msg": "Value error, ElasticConfig validation failed with code(s): response_action",
+     "input": null,
+     "ctx": {
+      "error": "ElasticConfig validation failed with code(s): response_action"
+     },
+     "span": [
+      11,
+      3,
+      10,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-elastic-respond-osquery-extra",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    actions: {respond: [{osquery: {query: q}, comment: c}]}\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "elastic"
+     ],
+     "msg": "Value error, ElasticConfig validation failed with code(s): response_action",
+     "input": null,
+     "ctx": {
+      "error": "ElasticConfig validation failed with code(s): response_action"
+     },
+     "span": [
+      11,
+      3,
+      10,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-elastic-new-terms-fields-empty",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: new_terms\n    query: q\n    new_terms: {fields: [], history_window_start: 7d}\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "elastic"
+     ],
+     "msg": "Value error, ElasticConfig validation failed with code(s): new_terms_fields",
+     "input": null,
+     "ctx": {
+      "error": "ElasticConfig validation failed with code(s): new_terms_fields"
+     },
+     "span": [
+      11,
+      3,
+      10,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-elastic-new-terms-fields-three",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: new_terms\n    query: q\n    new_terms: {fields: [a, b, c], history_window_start: 7d}\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "configurations": {
+     "elastic": {
+      "enabled": false,
+      "name": "",
+      "status": "STAGING",
+      "type": "new_terms",
+      "query": "q",
+      "new_terms": {
+       "fields": [
+        "a",
+        "b",
+        "c"
+       ],
+       "history_window_start": "7d"
+      },
+      "building_block": false
+     }
+    }
+   }
+  },
+  {
+   "id": "platform-elastic-new-terms-fields-four",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: new_terms\n    query: q\n    new_terms: {fields: [a, b, c, d], history_window_start: 7d}\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "elastic"
+     ],
+     "msg": "Value error, ElasticConfig validation failed with code(s): new_terms_fields",
+     "input": null,
+     "ctx": {
+      "error": "ElasticConfig validation failed with code(s): new_terms_fields"
+     },
+     "span": [
+      11,
+      3,
+      10,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-elastic-threshold-fields-five",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: threshold\n    query: q\n    threshold: {field: [a, b, c, d, e], value: 10}\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "configurations": {
+     "elastic": {
+      "enabled": false,
+      "name": "",
+      "status": "STAGING",
+      "type": "threshold",
+      "query": "q",
+      "threshold": {
+       "field": [
+        "a",
+        "b",
+        "c",
+        "d",
+        "e"
+       ],
+       "value": 10
+      },
+      "building_block": false
+     }
+    }
+   }
+  },
+  {
+   "id": "platform-elastic-threshold-fields-six",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: threshold\n    query: q\n    threshold: {field: [a, b, c, d, e, f], value: 10}\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "elastic"
+     ],
+     "msg": "Value error, ElasticConfig validation failed with code(s): threshold_fields",
+     "input": null,
+     "ctx": {
+      "error": "ElasticConfig validation failed with code(s): threshold_fields"
+     },
+     "span": [
+      11,
+      3,
+      10,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-elastic-risk-score-zero",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    risk: {score: 0}\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "configurations": {
+     "elastic": {
+      "enabled": false,
+      "name": "",
+      "status": "STAGING",
+      "type": "query",
+      "query": "process.name: cmd.exe",
+      "risk": {
+       "score": 0
+      },
+      "building_block": false
+     }
+    }
+   }
+  },
+  {
+   "id": "platform-elastic-risk-score-hundred",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    risk: {score: 100}\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "configurations": {
+     "elastic": {
+      "enabled": false,
+      "name": "",
+      "status": "STAGING",
+      "type": "query",
+      "query": "process.name: cmd.exe",
+      "risk": {
+       "score": 100
+      },
+      "building_block": false
+     }
+    }
+   }
+  },
+  {
+   "id": "platform-elastic-interval-zero",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    scheduling: {interval: 0m}\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "elastic"
+     ],
+     "msg": "Value error, ElasticConfig validation failed with code(s): duration",
+     "input": null,
+     "ctx": {
+      "error": "ElasticConfig validation failed with code(s): duration"
+     },
+     "span": [
+      11,
+      3,
+      10,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-elastic-suppression-duration-zero",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    suppression: {group_by: [a], duration: 0m}\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "elastic"
+     ],
+     "msg": "Value error, ElasticConfig validation failed with code(s): duration",
+     "input": null,
+     "ctx": {
+      "error": "ElasticConfig validation failed with code(s): duration"
+     },
+     "span": [
+      11,
+      3,
+      10,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-elastic-query-float-zero",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 0.0\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "elastic"
+     ],
+     "msg": "Value error, ElasticConfig validation failed with code(s): type_block",
+     "input": null,
+     "ctx": {
+      "error": "ElasticConfig validation failed with code(s): type_block"
+     },
+     "span": [
+      11,
+      3,
+      10,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-sysdig-full",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    source: syscall\n    output: 'shell %proc.name'\n    priority: WARNING\n    tags: [t]\n    exceptions:\n    - {name: e1, fields: proc.name, comps: in, values: [sh, bash]}\n    - {name: e2, fields: [proc.pname, fd.name], comps: ['=', 'startswith oneof'], values: [[a, [/tmp, /var]]]}\n    macros: [{name: m1, condition: proc.name = sh}]\n    lists: [{name: l1, items: [sh, 1, 2.5]}]\n    policies: [p]\n    minimum_engine_version: 0\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "configurations": {
+     "sysdig": {
+      "enabled": false,
+      "name": "",
+      "status": "STAGING",
+      "condition": "spawned_process and proc.name = sh",
+      "source": "syscall",
+      "output": "shell %proc.name",
+      "priority": "WARNING",
+      "tags": [
+       "t"
+      ],
+      "exceptions": [
+       {
+        "name": "e1",
+        "fields": "proc.name",
+        "comps": "in",
+        "values": [
+         "sh",
+         "bash"
+        ]
+       },
+       {
+        "name": "e2",
+        "fields": [
+         "proc.pname",
+         "fd.name"
+        ],
+        "comps": [
+         "=",
+         "startswith oneof"
+        ],
+        "values": [
+         [
+          "a",
+          [
+           "/tmp",
+           "/var"
+          ]
+         ]
+        ]
+       }
+      ],
+      "macros": [
+       {
+        "name": "m1",
+        "condition": "proc.name = sh"
+       }
+      ],
+      "lists": [
+       {
+        "name": "l1",
+        "items": [
+         "sh",
+         1,
+         2.5
+        ]
+       }
+      ],
+      "policies": [
+       "p"
+      ],
+      "minimum_engine_version": 0
+     }
+    }
+   }
+  },
+  {
+   "id": "platform-sysdig-no-status",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    priority: LOUD\n",
+   "errors": [
+    {
+     "type": "missing",
+     "field_path": [
+      "configurations",
+      "sysdig",
+      "status"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      11,
+      3,
+      9,
+      false
+     ],
+     "yaml_line": null
+    }
+   ]
+  },
+  {
+   "id": "platform-sysdig-priority",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    priority: LOUD\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "sysdig"
+     ],
+     "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_priority",
+     "input": null,
+     "ctx": {
+      "error": "SysdigConfig validation failed with code(s): sysdig_priority"
+     },
+     "span": [
+      11,
+      3,
+      9,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-sysdig-priority-info",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    priority: ' info '\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "configurations": {
+     "sysdig": {
+      "enabled": false,
+      "name": "",
+      "status": "STAGING",
+      "condition": "spawned_process and proc.name = sh",
+      "priority": " info "
+     }
+    }
+   }
+  },
+  {
+   "id": "platform-sysdig-priority-number",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    priority: 3\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "sysdig"
+     ],
+     "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_priority",
+     "input": null,
+     "ctx": {
+      "error": "SysdigConfig validation failed with code(s): sysdig_priority"
+     },
+     "span": [
+      11,
+      3,
+      9,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-sysdig-source",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    source: k8s-audit\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "sysdig"
+     ],
+     "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_source",
+     "input": null,
+     "ctx": {
+      "error": "SysdigConfig validation failed with code(s): sysdig_source"
+     },
+     "span": [
+      11,
+      3,
+      9,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-sysdig-source-upper",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    source: Syscall\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "sysdig"
+     ],
+     "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_source",
+     "input": null,
+     "ctx": {
+      "error": "SysdigConfig validation failed with code(s): sysdig_source"
+     },
+     "span": [
+      11,
+      3,
+      9,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-sysdig-condition-missing",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "sysdig"
+     ],
+     "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_rule_shape",
+     "input": null,
+     "ctx": {
+      "error": "SysdigConfig validation failed with code(s): sysdig_rule_shape"
+     },
+     "span": [
+      11,
+      3,
+      9,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-sysdig-condition-blank",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: '  '\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "sysdig"
+     ],
+     "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_rule_shape",
+     "input": null,
+     "ctx": {
+      "error": "SysdigConfig validation failed with code(s): sysdig_rule_shape"
+     },
+     "span": [
+      11,
+      3,
+      9,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-sysdig-condition-number",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: 5\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "sysdig"
+     ],
+     "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_rule_shape",
+     "input": null,
+     "ctx": {
+      "error": "SysdigConfig validation failed with code(s): sysdig_rule_shape"
+     },
+     "span": [
+      11,
+      3,
+      9,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-sysdig-tuning",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    append_to_rule: Terminal shell in container\n    condition: and not proc.pname = x\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "configurations": {
+     "sysdig": {
+      "enabled": false,
+      "name": "",
+      "status": "STAGING",
+      "condition": "and not proc.pname = x",
+      "append_to_rule": "Terminal shell in container"
+     }
+    }
+   }
+  },
+  {
+   "id": "platform-sysdig-tuning-exceptions",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    append_to_rule: R\n    exceptions: [{name: e, fields: proc.name, values: [a]}]\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "configurations": {
+     "sysdig": {
+      "enabled": false,
+      "name": "",
+      "status": "STAGING",
+      "append_to_rule": "R",
+      "exceptions": [
+       {
+        "name": "e",
+        "fields": "proc.name",
+        "values": [
+         "a"
+        ]
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "platform-sysdig-tuning-nothing",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    append_to_rule: R\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "sysdig"
+     ],
+     "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_rule_shape",
+     "input": null,
+     "ctx": {
+      "error": "SysdigConfig validation failed with code(s): sysdig_rule_shape"
+     },
+     "span": [
+      11,
+      3,
+      9,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-sysdig-tuning-blank",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    append_to_rule: ' '\n    condition: and x\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "sysdig"
+     ],
+     "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_rule_shape",
+     "input": null,
+     "ctx": {
+      "error": "SysdigConfig validation failed with code(s): sysdig_rule_shape"
+     },
+     "span": [
+      11,
+      3,
+      9,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-sysdig-tuning-keys",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    append_to_rule: R\n    condition: and x\n    output: o\n    priority: ERROR\n    policies: []\n    source: ''\n    name: n\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "sysdig"
+     ],
+     "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_source, sysdig_tuning_keys",
+     "input": null,
+     "ctx": {
+      "error": "SysdigConfig validation failed with code(s): sysdig_source, sysdig_tuning_keys"
+     },
+     "span": [
+      11,
+      3,
+      9,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-sysdig-exception-shapes",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    exceptions:\n    - {name: a, fields: [x, y], comps: ['=']}\n    - {name: b, fields: x, comps: '='}\n    - {name: '', fields: x}\n    - {name: d, fields: [x], values: [[{a: 1}]]}\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "sysdig"
+     ],
+     "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_exception_shape",
+     "input": null,
+     "ctx": {
+      "error": "SysdigConfig validation failed with code(s): sysdig_exception_shape"
+     },
+     "span": [
+      11,
+      3,
+      9,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-sysdig-exception-ok-forms",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    exceptions:\n    - {name: a, fields: proc.name, comps: ' startswith anyof ', values: [x]}\n    - {name: b, fields: [proc.name], comps: [exists]}\n    - {name: c, fields: [proc.name, proc.pid], values: [[x, 1], [[a, b], 2]]}\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "configurations": {
+     "sysdig": {
+      "enabled": false,
+      "name": "",
+      "status": "STAGING",
+      "condition": "spawned_process and proc.name = sh",
+      "exceptions": [
+       {
+        "name": "a",
+        "fields": "proc.name",
+        "comps": " startswith anyof ",
+        "values": [
+         "x"
+        ]
+       },
+       {
+        "name": "b",
+        "fields": [
+         "proc.name"
+        ],
+        "comps": [
+         "exists"
+        ]
+       },
+       {
+        "name": "c",
+        "fields": [
+         "proc.name",
+         "proc.pid"
+        ],
+        "values": [
+         [
+          "x",
+          1
+         ],
+         [
+          [
+           "a",
+           "b"
+          ],
+          2
+         ]
+        ]
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "platform-sysdig-exceptions-string",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    exceptions: x\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "sysdig"
+     ],
+     "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_exception_shape",
+     "input": null,
+     "ctx": {
+      "error": "SysdigConfig validation failed with code(s): sysdig_exception_shape"
+     },
+     "span": [
+      11,
+      3,
+      9,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-sysdig-definition-name",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    lists: [{name: 9bad, items: [a]}]\n    macros: [{name: contains, condition: x}]\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "sysdig"
+     ],
+     "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_definition_name",
+     "input": null,
+     "ctx": {
+      "error": "SysdigConfig validation failed with code(s): sysdig_definition_name"
+     },
+     "span": [
+      11,
+      3,
+      9,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-sysdig-definition-duplicate",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    lists: [{name: d, items: [a]}]\n    macros: [{name: d, condition: proc.name = x}]\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "sysdig"
+     ],
+     "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_definition_duplicate",
+     "input": null,
+     "ctx": {
+      "error": "SysdigConfig validation failed with code(s): sysdig_definition_duplicate"
+     },
+     "span": [
+      11,
+      3,
+      9,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-sysdig-definition-order",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    macros: [{name: m1, condition: m2}, {name: m2, condition: proc.name = sh}]\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "sysdig"
+     ],
+     "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_definition_order",
+     "input": null,
+     "ctx": {
+      "error": "SysdigConfig validation failed with code(s): sysdig_definition_order"
+     },
+     "span": [
+      11,
+      3,
+      9,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-sysdig-definition-self",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    macros: [{name: m1, condition: m1 and proc.name = sh}]\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "sysdig"
+     ],
+     "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_definition_order",
+     "input": null,
+     "ctx": {
+      "error": "SysdigConfig validation failed with code(s): sysdig_definition_order"
+     },
+     "span": [
+      11,
+      3,
+      9,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-sysdig-definition-ok-order",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    macros: [{name: m1, condition: proc.name in (l1)}, {name: m2, condition: m1 and evt.type = execve}]\n    lists: [{name: l1, items: [sh]}]\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "configurations": {
+     "sysdig": {
+      "enabled": false,
+      "name": "",
+      "status": "STAGING",
+      "condition": "spawned_process and proc.name = sh",
+      "macros": [
+       {
+        "name": "m1",
+        "condition": "proc.name in (l1)"
+       },
+       {
+        "name": "m2",
+        "condition": "m1 and evt.type = execve"
+       }
+      ],
+      "lists": [
+       {
+        "name": "l1",
+        "items": [
+         "sh"
+        ]
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "platform-sysdig-list-self",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    lists: [{name: l1, items: [l1, zsh]}]\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "configurations": {
+     "sysdig": {
+      "enabled": false,
+      "name": "",
+      "status": "STAGING",
+      "condition": "spawned_process and proc.name = sh",
+      "lists": [
+       {
+        "name": "l1",
+        "items": [
+         "l1",
+         "zsh"
+        ]
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "platform-sysdig-list-later",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    lists: [{name: l1, items: [l2, zsh]}, {name: l2, items: [bash]}]\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "configurations": {
+     "sysdig": {
+      "enabled": false,
+      "name": "",
+      "status": "STAGING",
+      "condition": "spawned_process and proc.name = sh",
+      "lists": [
+       {
+        "name": "l1",
+        "items": [
+         "l2",
+         "zsh"
+        ]
+       },
+       {
+        "name": "l2",
+        "items": [
+         "bash"
+        ]
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "platform-sysdig-list-in-value",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    lists: [{name: parents, items: [sshd]}]\n    exceptions: [{name: e, fields: [proc.name], comps: ['='], values: [[x parents]]}]\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "sysdig"
+     ],
+     "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_list_in_value",
+     "input": null,
+     "ctx": {
+      "error": "SysdigConfig validation failed with code(s): sysdig_list_in_value"
+     },
+     "span": [
+      11,
+      3,
+      9,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-sysdig-list-scalar-comp",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    lists: [{name: parents, items: [sshd]}]\n    exceptions: [{name: e, fields: [proc.name], comps: ['='], values: [[parents]]}]\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "sysdig"
+     ],
+     "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_list_in_value",
+     "input": null,
+     "ctx": {
+      "error": "SysdigConfig validation failed with code(s): sysdig_list_in_value"
+     },
+     "span": [
+      11,
+      3,
+      9,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-sysdig-list-in-comp",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    lists: [{name: parents, items: [sshd]}]\n    exceptions:\n    - {name: e, fields: [proc.name], comps: [in], values: [[parents]]}\n    - {name: f, fields: proc.pname, values: [parents, bash]}\n    - {name: g, fields: [proc.name], values: [[[parents, x]]]}\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "configurations": {
+     "sysdig": {
+      "enabled": false,
+      "name": "",
+      "status": "STAGING",
+      "condition": "spawned_process and proc.name = sh",
+      "exceptions": [
+       {
+        "name": "e",
+        "fields": [
+         "proc.name"
+        ],
+        "comps": [
+         "in"
+        ],
+        "values": [
+         [
+          "parents"
+         ]
+        ]
+       },
+       {
+        "name": "f",
+        "fields": "proc.pname",
+        "values": [
+         "parents",
+         "bash"
+        ]
+       },
+       {
+        "name": "g",
+        "fields": [
+         "proc.name"
+        ],
+        "values": [
+         [
+          [
+           "parents",
+           "x"
+          ]
+         ]
+        ]
+       }
+      ],
+      "lists": [
+       {
+        "name": "parents",
+        "items": [
+         "sshd"
+        ]
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "platform-sysdig-list-in-single",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    lists: [{name: parents, items: [sshd]}]\n    exceptions: [{name: f, fields: proc.pname, values: ['(parents)']}]\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "sysdig"
+     ],
+     "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_list_in_value",
+     "input": null,
+     "ctx": {
+      "error": "SysdigConfig validation failed with code(s): sysdig_list_in_value"
+     },
+     "span": [
+      11,
+      3,
+      9,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-sysdig-engine-version",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    minimum_engine_version: -1\n",
+   "errors": [
+    {
+     "type": "greater_than_equal",
+     "field_path": [
+      "configurations",
+      "sysdig",
+      "minimum_engine_version"
+     ],
+     "msg": "Input should be greater than or equal to 0",
+     "input": null,
+     "ctx": {
+      "ge": "0"
+     },
+     "span": [
+      14,
+      29,
+      31,
+      true
+     ],
+     "yaml_line": 13
+    }
+   ]
+  },
+  {
+   "id": "platform-sysdig-engine-version-string",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    minimum_engine_version: '3'\n",
+   "errors": [
+    {
+     "type": "int_type",
+     "field_path": [
+      "configurations",
+      "sysdig",
+      "minimum_engine_version"
+     ],
+     "msg": "Input should be a valid integer",
+     "input": "3",
+     "ctx": {},
+     "span": [
+      14,
+      30,
+      31,
+      true
+     ],
+     "yaml_line": 13
+    }
+   ]
+  },
+  {
+   "id": "platform-sysdig-engine-version-float",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    minimum_engine_version: 3.0\n",
+   "errors": [
+    {
+     "type": "int_type",
+     "field_path": [
+      "configurations",
+      "sysdig",
+      "minimum_engine_version"
+     ],
+     "msg": "Input should be a valid integer",
+     "input": null,
+     "ctx": {},
+     "span": [
+      14,
+      29,
+      32,
+      true
+     ],
+     "yaml_line": 13
+    }
+   ]
+  },
+  {
+   "id": "platform-sysdig-field-errors",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    exceptions: [{name: e, fields: 5}]\n    lists: [{name: l, items: [[a]]}]\n    macros: [{name: m}]\n    tags: t\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "sysdig"
+     ],
+     "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_exception_shape",
+     "input": null,
+     "ctx": {
+      "error": "SysdigConfig validation failed with code(s): sysdig_exception_shape"
+     },
+     "span": [
+      11,
+      3,
+      9,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-sysdig-tuning-condition-blank",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    append_to_rule: R\n    condition: '  '\n    exceptions: [{name: e, fields: proc.name, values: [a]}]\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "sysdig"
+     ],
+     "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_rule_shape",
+     "input": null,
+     "ctx": {
+      "error": "SysdigConfig validation failed with code(s): sysdig_rule_shape"
+     },
+     "span": [
+      11,
+      3,
+      9,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-sysdig-source-digit",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    source: 1abc\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "sysdig"
+     ],
+     "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_source",
+     "input": null,
+     "ctx": {
+      "error": "SysdigConfig validation failed with code(s): sysdig_source"
+     },
+     "span": [
+      11,
+      3,
+      9,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-sysdig-list-flattened",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    lists: [{name: l0, items: [a]}, {name: l1, items: ['x l0']}, {name: l2, items: [l1, y]}]\n    exceptions: [{name: e, fields: proc.name, comps: in, values: [l2]}]\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "sysdig"
+     ],
+     "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_list_in_value",
+     "input": null,
+     "ctx": {
+      "error": "SysdigConfig validation failed with code(s): sysdig_list_in_value"
+     },
+     "span": [
+      11,
+      3,
+      9,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-sysdig-list-pass",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    lists: [{name: l0, items: [a]}, {name: l1, items: ['x l0']}]\n    exceptions: [{name: e, fields: proc.name, comps: in, values: [l1]}]\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "sysdig"
+     ],
+     "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_list_in_value",
+     "input": null,
+     "ctx": {
+      "error": "SysdigConfig validation failed with code(s): sysdig_list_in_value"
+     },
+     "span": [
+      11,
+      3,
+      9,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-sysdig-exception-shape-gates-list",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    lists: [{name: l1, items: [a]}]\n    exceptions: [{name: e1, fields: [a, b], comps: ['=']}, {name: e2, fields: proc.name, values: ['x l1']}]\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "sysdig"
+     ],
+     "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_exception_shape",
+     "input": null,
+     "ctx": {
+      "error": "SysdigConfig validation failed with code(s): sysdig_exception_shape"
+     },
+     "span": [
+      11,
+      3,
+      9,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-sysdig-name-gates-order",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    macros: [{name: m1, condition: m2}, {name: m2, condition: proc.name = sh}]\n    lists: [{name: 1bad, items: [a]}, {name: l1, items: [b]}]\n    exceptions: [{name: e, fields: proc.name, values: ['x l1']}]\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "sysdig"
+     ],
+     "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_definition_name",
+     "input": null,
+     "ctx": {
+      "error": "SysdigConfig validation failed with code(s): sysdig_definition_name"
+     },
+     "span": [
+      11,
+      3,
+      9,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-sysdig-list-named-true",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    lists: [{name: 'true', items: [a]}]\n    exceptions: [{name: e, fields: [proc.name], comps: ['='], values: [[true]]}]\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "sysdig"
+     ],
+     "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_list_in_value",
+     "input": null,
+     "ctx": {
+      "error": "SysdigConfig validation failed with code(s): sysdig_list_in_value"
+     },
+     "span": [
+      11,
+      3,
+      9,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-sysdig-macro-form-feed",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    macros: [{name: m1, condition: \"m2\\fand proc.name = x\"}, {name: m2, condition: proc.name = sh}]\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "sysdig"
+     ],
+     "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_definition_order",
+     "input": null,
+     "ctx": {
+      "error": "SysdigConfig validation failed with code(s): sysdig_definition_order"
+     },
+     "span": [
+      11,
+      3,
+      9,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-sysdig-macro-line-separator",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    macros: [{name: m1, condition: \"m2\\u2028and proc.name = x\"}, {name: m2, condition: proc.name = sh}]\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "sysdig"
+     ],
+     "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_definition_order",
+     "input": null,
+     "ctx": {
+      "error": "SysdigConfig validation failed with code(s): sysdig_definition_order"
+     },
+     "span": [
+      11,
+      3,
+      9,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "platform-sysdig-macro-unparsed",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    macros: [{name: m1, condition: 'm2 and ('}, {name: m2, condition: proc.name = sh}]\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "sysdig"
+     ],
+     "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_definition_order",
+     "input": null,
+     "ctx": {
+      "error": "SysdigConfig validation failed with code(s): sysdig_definition_order"
+     },
+     "span": [
+      11,
+      3,
+      9,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
    "id": "file:tests/fixtures/tide_corpus/current/Objects/Detection Objectives/objective-0001-credential-access.yaml",
    "family": "objective",
    "yaml": "name: Credential Access Objective\n\nmetadata:\n  uuid: 00000000-0000-4000-8002-000000000001\n  schema: objective::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n\nobjective:\n  priority: High\n  type: Threat\n  description: Detect credential access techniques\n  composition:\n    strategy: Combined\n    description: Compose signals for credential access detection\n  threats:\n    - 00000000-0000-4000-8001-000000000001\n  signals:\n    - name: Suspicious logon signal\n      uuid: 00000000-0000-4000-8099-000000000001\n      description: Suspicious authentication activity\n      severity: Medium\n      methodology: Statistical\n      entities:\n        - Host::Hostname\n      data:\n        availability: Complete\n        requirements: Security event logs\n",
@@ -2910,7 +9331,27 @@
      "alert_severity": "High"
     },
     "configurations": {
-     "sentinel": {}
+     "sentinel": {
+      "enabled": true,
+      "name": "Sentinel KQL Rule",
+      "status": "STAGING",
+      "query": "SecurityEvent\n| where EventID == 4688\n| take 1\n",
+      "scheduling": {
+       "frequency": "PT1H",
+       "lookback": "PT2H"
+      },
+      "alert": {
+       "title": "Sentinel KQL Rule",
+       "suppression": false,
+       "create_incident": true
+      },
+      "grouping": {
+       "event": "SingleAlert",
+       "alert": {
+        "enabled": false
+       }
+      }
+     }
     }
    }
   },
@@ -2940,7 +9381,22 @@
      "alert_severity": "High"
     },
     "configurations": {
-     "defender_for_endpoint": {}
+     "defender_for_endpoint": {
+      "enabled": true,
+      "name": "Defender KQL Rule",
+      "status": "STAGING",
+      "query": "DeviceProcessEvents\n| take 1\n",
+      "alert": {
+       "category": "Execution"
+      },
+      "impacted_entities": {
+       "device": "device_id"
+      },
+      "scheduling": "1H",
+      "scope": {
+       "selection": "All"
+      }
+     }
     }
    }
   },
@@ -2970,7 +9426,17 @@
      "alert_severity": "High"
     },
     "configurations": {
-     "splunk": {}
+     "splunk": {
+      "enabled": true,
+      "name": "Splunk SPL Rule",
+      "status": "STAGING",
+      "query": "index=main | head 1",
+      "scheduling": {
+       "schedule": {
+        "cron": "0 * * * *"
+       }
+      }
+     }
     }
    }
   },
@@ -3000,7 +9466,29 @@
      "alert_severity": "High"
     },
     "configurations": {
-     "sentinel_one": {}
+     "sentinel_one": {
+      "enabled": true,
+      "name": "SentinelOne S1QL Rule",
+      "status": "STAGING",
+      "condition": {
+       "type": "Correlation",
+       "correlation": {
+        "entity": "host",
+        "match_in_order": true,
+        "time_window": "1h",
+        "sub_queries": [
+         {
+          "query": "EventType = \"Process Create\"",
+          "matches_required": 1
+         }
+        ]
+       }
+      },
+      "response": {
+       "treat_as_threat": "Malicious",
+       "network_quarantine": false
+      }
+     }
     }
    }
   },
@@ -3030,7 +9518,12 @@
      "alert_severity": "High"
     },
     "configurations": {
-     "carbon_black_cloud": {}
+     "carbon_black_cloud": {
+      "enabled": true,
+      "name": "Carbon Black Lucene Rule",
+      "status": "STAGING",
+      "query": "process_name:cmd.exe"
+     }
     }
    }
   },
@@ -3060,7 +9553,20 @@
      "alert_severity": "High"
     },
     "configurations": {
-     "crowdstrike": {}
+     "crowdstrike": {
+      "enabled": true,
+      "name": "CrowdStrike Deploy Rule",
+      "status": "STAGING",
+      "details": {
+       "trigger": "event",
+       "outcome": "detection"
+      },
+      "schedule": {
+       "frequency": "1h",
+       "lookback": "2h"
+      },
+      "query": "index=main"
+     }
     }
    }
   },
@@ -3090,7 +9596,28 @@
      "alert_severity": "High"
     },
     "configurations": {
-     "harfanglab": {}
+     "harfanglab": {
+      "enabled": true,
+      "name": "HarfangLab Deploy Rule",
+      "status": "STAGING",
+      "maturity": "Experimental",
+      "confidence": "Moderate",
+      "action": "Alert",
+      "sigma": {
+       "logsource": {
+        "category": "process_creation",
+        "product": "windows"
+       },
+       "selections": [
+        {
+         "name": "selection",
+         "field": "Image",
+         "value": "cmd.exe"
+        }
+       ],
+       "condition": "selection"
+      }
+     }
     }
    }
   },
@@ -3120,7 +9647,27 @@
      "alert_severity": "Medium"
     },
     "configurations": {
-     "sentinel": {}
+     "sentinel": {
+      "enabled": true,
+      "name": "Staging Promote Rule",
+      "status": "STAGING",
+      "query": "SecurityEvent | take 1\n",
+      "scheduling": {
+       "frequency": "PT1H",
+       "lookback": "PT2H"
+      },
+      "alert": {
+       "title": "Staging Promote Rule",
+       "suppression": false,
+       "create_incident": true
+      },
+      "grouping": {
+       "event": "SingleAlert",
+       "alert": {
+        "enabled": false
+       }
+      }
+     }
     }
    }
   },
@@ -3150,7 +9697,23 @@
      "alert_severity": "High"
     },
     "configurations": {
-     "elastic": {}
+     "elastic": {
+      "enabled": true,
+      "name": "",
+      "schema": "platform::elastic::1.0",
+      "status": "STAGING",
+      "type": "query",
+      "query": "process.name: \"powershell.exe\"\n",
+      "language": "kuery",
+      "index": [
+       "logs-*"
+      ],
+      "scheduling": {
+       "interval": "5m",
+       "lookback": "1m"
+      },
+      "building_block": false
+     }
     }
    }
   },
@@ -3180,7 +9743,27 @@
      "alert_severity": "Medium"
     },
     "configurations": {
-     "sysdig": {}
+     "sysdig": {
+      "enabled": true,
+      "name": "",
+      "schema": "platform::sysdig::1.0",
+      "status": "STAGING",
+      "condition": "spawned_process and container and proc.name in (corpus_shells)\n",
+      "tags": [
+       "container",
+       "shell"
+      ],
+      "lists": [
+       {
+        "name": "corpus_shells",
+        "items": [
+         "bash",
+         "sh",
+         "zsh"
+        ]
+       }
+      ]
+     }
     }
    }
   },

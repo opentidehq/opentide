@@ -2,105 +2,68 @@
 //! (`models/rule.py`), with the `configurations` container
 //! (`models/platform.py` `RuleConfigurations`).
 //!
-//! The platform blocks are UC-1.4's (#810). Until they arrive each block is an
-//! [`UncheckedBlock`]: the node the file holds, unchecked. Reading one is
-//! behind the `unchecked-platform-blocks` feature, which only the oracle
-//! comparisons (xtask) turn on, and the crate's own unit tests (`cfg(test)`),
-//! so nothing ships that accepts a rule with unchecked blocks: without it,
-//! the rule models and the container serialise and give their schema, and do
-//! not read.
+//! The platform blocks are [`crate::objects::platform`]'s (UC-1.4, #810).
 
 use std::collections::BTreeMap;
 
 use garde::Validate;
 use schemars::{JsonSchema, Schema, SchemaGenerator, json_schema};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-#[cfg(any(test, feature = "unchecked-platform-blocks"))]
-use serde::Deserialize;
-
-#[cfg(any(test, feature = "unchecked-platform-blocks"))]
 use crate::FromNode;
 use crate::objects::any::Any;
 use crate::objects::metadata::{ObjectMetadata, ObjectReferences, RuleMetadata};
+use crate::objects::platform::{
+    CarbonBlackConfig, CrowdstrikeConfig, DefenderConfig, ElasticConfig, HarfangLabConfig,
+    PlatformBlock, SentinelConfig, SentinelOneConfig, SplunkConfig, SysdigConfig,
+};
 use crate::objects::response::RuleResponse;
 use crate::pins::Pins;
 use crate::revision::revisions;
 
-/// A platform block, unchecked until its model arrives (UC-1.4, #810).
-#[derive(Debug, Clone, PartialEq, Serialize)]
-#[cfg_attr(any(test, feature = "unchecked-platform-blocks"), derive(Deserialize))]
-#[serde(transparent)]
-pub struct UncheckedBlock(pub Any);
-
-#[cfg(any(test, feature = "unchecked-platform-blocks"))]
-impl FromNode for UncheckedBlock {
-    fn from_node(node: &crate::node::Node, cx: &mut crate::from_node::Context) -> Option<Self> {
-        Any::from_node(node, cx).map(Self)
-    }
-}
-
-impl JsonSchema for UncheckedBlock {
-    fn schema_name() -> std::borrow::Cow<'static, str> {
-        "UncheckedBlock".into()
-    }
-
-    fn inline_schema() -> bool {
-        true
-    }
-
-    fn json_schema(_: &mut SchemaGenerator) -> Schema {
-        json_schema!({"type": "object"})
-    }
-}
-
 /// Dynamically composed rule platform configurations.
-#[derive(Debug, Clone, PartialEq, Serialize, JsonSchema, Validate)]
-#[cfg_attr(
-    any(test, feature = "unchecked-platform-blocks"),
-    derive(Deserialize, FromNode),
-    from_node(model = "RuleConfigurations")
-)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, Validate, FromNode)]
+#[from_node(model = "RuleConfigurations")]
 #[serde(deny_unknown_fields)]
 #[garde(context(Pins))]
 #[schemars(rename = "RuleConfigurations")]
 pub struct RuleConfigurations {
     /// Microsoft Sentinel analytics rule (`platform::sentinel::1.0`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[garde(skip)]
-    pub sentinel: Option<UncheckedBlock>,
+    #[garde(dive)]
+    pub sentinel: Option<SentinelConfig>,
     /// Microsoft Defender for Endpoint custom detection (`platform::defender_for_endpoint::1.0`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[garde(skip)]
-    pub defender_for_endpoint: Option<UncheckedBlock>,
+    #[garde(dive)]
+    pub defender_for_endpoint: Option<DefenderConfig>,
     /// Splunk saved search (`platform::splunk::1.0`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[garde(skip)]
-    pub splunk: Option<UncheckedBlock>,
+    #[garde(dive)]
+    pub splunk: Option<SplunkConfig>,
     /// SentinelOne STAR rule (`platform::sentinel_one::1.0`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[garde(skip)]
-    pub sentinel_one: Option<UncheckedBlock>,
+    #[garde(dive)]
+    pub sentinel_one: Option<SentinelOneConfig>,
     /// CrowdStrike Falcon correlation rule (`platform::crowdstrike::1.0`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[garde(skip)]
-    pub crowdstrike: Option<UncheckedBlock>,
+    #[garde(dive)]
+    pub crowdstrike: Option<CrowdstrikeConfig>,
     /// HarfangLab Sigma or YARA rule (`platform::harfanglab::1.0`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[garde(skip)]
-    pub harfanglab: Option<UncheckedBlock>,
+    #[garde(dive)]
+    pub harfanglab: Option<HarfangLabConfig>,
     /// Carbon Black Cloud watchlist report (`platform::carbon_black_cloud::1.0`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[garde(skip)]
-    pub carbon_black_cloud: Option<UncheckedBlock>,
+    #[garde(dive)]
+    pub carbon_black_cloud: Option<CarbonBlackConfig>,
     /// Elastic Security detection rule (`platform::elastic::1.0`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[garde(skip)]
-    pub elastic: Option<UncheckedBlock>,
+    #[garde(dive)]
+    pub elastic: Option<ElasticConfig>,
     /// Sysdig Secure or Falco rule (`platform::sysdig::1.0`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[garde(skip)]
-    pub sysdig: Option<UncheckedBlock>,
+    #[garde(dive)]
+    pub sysdig: Option<SysdigConfig>,
 }
 
 impl RuleConfigurations {
@@ -117,23 +80,27 @@ impl RuleConfigurations {
         "sysdig",
     ];
 
-    /// Each block the rule has, with its platform, in the container's order.
-    pub fn blocks(&self) -> Vec<(&'static str, &UncheckedBlock)> {
-        let blocks = [
-            &self.sentinel,
-            &self.defender_for_endpoint,
-            &self.splunk,
-            &self.sentinel_one,
-            &self.crowdstrike,
-            &self.harfanglab,
-            &self.carbon_black_cloud,
-            &self.elastic,
-            &self.sysdig,
+    /// Each block's `status`, keyed by platform, in the container's order,
+    /// for the blocks that are set and have one: what deploy and promotion
+    /// use (`platform_statuses`).
+    pub fn platform_statuses(&self) -> Vec<(&'static str, &str)> {
+        let statuses = [
+            self.sentinel.as_ref().map(PlatformBlock::status),
+            self.defender_for_endpoint
+                .as_ref()
+                .map(PlatformBlock::status),
+            self.splunk.as_ref().map(PlatformBlock::status),
+            self.sentinel_one.as_ref().map(PlatformBlock::status),
+            self.crowdstrike.as_ref().map(PlatformBlock::status),
+            self.harfanglab.as_ref().map(PlatformBlock::status),
+            self.carbon_black_cloud.as_ref().map(PlatformBlock::status),
+            self.elastic.as_ref().map(PlatformBlock::status),
+            self.sysdig.as_ref().map(PlatformBlock::status),
         ];
         Self::PLATFORMS
             .into_iter()
-            .zip(blocks)
-            .filter_map(|(platform, block)| Some((platform, block.as_ref()?)))
+            .zip(statuses)
+            .filter_map(|(platform, status)| Some((platform, status.filter(|s| !s.is_empty())?)))
             .collect()
     }
 }
@@ -205,12 +172,8 @@ revisions! {
     ]
 
     /// Code-first detection rule with registry-backed delegation helpers.
-    #[derive(Debug, Clone, PartialEq, Serialize, JsonSchema, Validate)]
-    #[cfg_attr(
-        any(test, feature = "unchecked-platform-blocks"),
-        derive(Deserialize, FromNode),
-        from_node(model = "DetectionRule")
-    )]
+    #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, Validate, FromNode)]
+    #[from_node(model = "DetectionRule")]
     #[serde(deny_unknown_fields)]
     #[garde(context(Pins))]
     #[schemars(rename = "DetectionRule")]
@@ -224,12 +187,8 @@ revisions! {
     }
 
     /// Detection rule schema ``rule::1.1`` with optional ``metadata.reviewed``.
-    #[derive(Debug, Clone, PartialEq, Serialize, JsonSchema, Validate)]
-    #[cfg_attr(
-        any(test, feature = "unchecked-platform-blocks"),
-        derive(Deserialize, FromNode),
-        from_node(model = "DetectionRule_v1_1")
-    )]
+    #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, Validate, FromNode)]
+    #[from_node(model = "DetectionRule_v1_1")]
     #[serde(deny_unknown_fields)]
     #[garde(context(Pins))]
     #[schemars(rename = "DetectionRule_v1_1")]

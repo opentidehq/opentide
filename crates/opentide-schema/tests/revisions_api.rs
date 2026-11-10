@@ -1,9 +1,9 @@
 //! The revision registry as a dependent crate sees it (UC-1.7, #813): built
-//! without `cfg(test)`, so a rule is not read until its platform blocks have
-//! models (UC-1.4, #810), and threats and objectives are.
+//! without `cfg(test)`; rules, with their platform blocks (UC-1.4, #810),
+//! threats and objectives are all read.
 
 use opentide_schema::node;
-use opentide_schema::revisions::{self, Rejection, Selection, TideObject};
+use opentide_schema::revisions::{self, Selection, TideObject};
 
 const THREAT: &str = "name: Threat\ncriticality: High\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000002\n  \
                       schema: threat::1.0\n  version: 1\n  created: '2026-01-01'\n  modified: '2026-01-02'\n  \
@@ -37,7 +37,7 @@ fn an_unknown_threat_revision_is_checked_against_the_newest() {
 }
 
 #[test]
-fn a_rule_revision_is_selected_but_not_read_until_its_platform_blocks_have_models() {
+fn a_rule_revision_dispatches_to_its_struct() {
     let document = node::load(RULE).unwrap();
     assert_eq!(
         revisions::select(&document, "rule"),
@@ -45,17 +45,6 @@ fn a_rule_revision_is_selected_but_not_read_until_its_platform_blocks_have_model
             revisions::lookup("rule::1.1").unwrap()
         ))
     );
-    let read = revisions::read(&document, "rule");
-    // `cargo test --workspace` unifies xtask's `unchecked-platform-blocks`
-    // into this crate; without it a rule is not read.
-    if cfg!(feature = "unchecked-platform-blocks") {
-        assert!(matches!(read.unwrap().result, Ok(TideObject::RuleV1_1(_))));
-    } else {
-        assert_eq!(
-            read,
-            Err(Rejection::Unchecked {
-                identifier: "rule::1.1"
-            })
-        );
-    }
+    let read = revisions::read(&document, "rule").unwrap();
+    assert!(matches!(read.result, Ok(TideObject::RuleV1_1(_))));
 }

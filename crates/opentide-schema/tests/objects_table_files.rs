@@ -3,7 +3,8 @@
 //! `tests/oracle/objects_table.json` holds every object file of
 //! `tests/fixtures/tide_corpus` and of the VS Code fixture workspace, each as
 //! it is on disk, and every `[[difference]]` of
-//! `tests/oracle/objects_cases.toml` has its CHANGELOG.md entry. When one
+//! `tests/oracle/objects_cases.toml` and `tests/oracle/platform_cases.toml`
+//! has its CHANGELOG.md entry. When one
 //! fails, run `objects_table.py` (or write the entry).
 
 use std::collections::BTreeSet;
@@ -13,6 +14,7 @@ use serde_json::Value as Json;
 
 const TABLE: &str = include_str!("oracle/objects_table.json");
 const CASES: &str = include_str!("oracle/objects_cases.toml");
+const PLATFORM_CASES: &str = include_str!("oracle/platform_cases.toml");
 
 fn repo() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -89,11 +91,14 @@ struct Difference {
 
 #[test]
 fn each_difference_has_its_changelog_entry() {
-    let cases: Cases = toml::from_str(CASES).unwrap();
-    assert!(!cases.difference.is_empty());
     let changelog = std::fs::read_to_string(repo().join("CHANGELOG.md")).unwrap();
-    let missing: Vec<String> = cases
-        .difference
+    let mut differences = Vec::new();
+    for text in [CASES, PLATFORM_CASES] {
+        let cases: Cases = toml::from_str(text).unwrap();
+        assert!(!cases.difference.is_empty());
+        differences.extend(cases.difference);
+    }
+    let missing: Vec<String> = differences
         .iter()
         .filter(|difference| !changelog.contains(&difference.changelog))
         .map(|difference| format!("{}: {:?}", difference.id, difference.changelog))

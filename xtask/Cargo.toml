@@ -17,8 +17,8 @@ workspace = true
 anyhow.workspace = true
 opentide-compare.workspace = true
 # The object models' oracle comparisons (`corpus faults --engine rust`,
-# `schema diff`) read rules, whose platform blocks are unchecked until UC-1.4.
-opentide-schema = { workspace = true, features = ["unchecked-platform-blocks"] }
+# `schema diff`), the rules' platform blocks included (UC-1.4).
+opentide-schema = { workspace = true }
 # `registry diff` (UC-2.1, #816) and the `load` benchmark.
 opentide-workspace.workspace = true
 # xtask payloads (src/payloads/): the deploy compile against the oracle.
@@ -42,5 +42,8 @@ indexmap = "2"
 rustix = { version = "1.1", features = ["fs", "process", "pty", "termios"] }
 
 [dev-dependencies]
+# tests/sysdig_engines.rs: the language server's Sysdig findings against the
+# model's, on the model's oracle cases.
+opentide-tide = { workspace = true }
 trycmd.workspace = true
 strsim.workspace = true

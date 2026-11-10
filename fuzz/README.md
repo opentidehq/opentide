@@ -34,8 +34,8 @@ clap tree, hoisting, the output modes and the usage errors of
 the run catches its own panics), and `from_node` (UC-1.2, #808): a Tide object
 from arbitrary YAML, through the YAML loader and the structural conversion of
 every model in `opentide-schema` (`fuzz/src/lib.rs::from_node`: the samples
-and UC-1.3's object models, the rules read with `unchecked-platform-blocks`
-until UC-1.4; each new model is added there). For an input added later, the item that writes the code adds
+and UC-1.3's object models, the rules with UC-1.4's platform blocks; each new
+model is added there). For an input added later, the item that writes the code adds
 the target:
 
 | Input | Target arrives with |

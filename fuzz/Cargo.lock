@@ -808,6 +808,7 @@ dependencies = [
 name = "opentide-core"
 version = "0.12.0"
 dependencies = [
+ "regex",
  "serde",
  "strsim",
  "thiserror",
