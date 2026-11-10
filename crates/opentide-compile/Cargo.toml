@@ -40,6 +40,10 @@ gix-revision = { version = "0.49", default-features = false, features = ["merge_
 # Paths without Windows' verbatim prefix (`\\?\`), which git, the oracle
 # and a user's own paths do not use: the messages name paths that way.
 dunce = "1"
+# CrowdStrike's delete names the rule in its query string, encoded as a form.
+form_urlencoded = "1"
+# HarfangLab's Sigma rule is YAML (the crate opentide-schema writes models with).
+serde-saphyr.workspace = true
 # Request bodies keep the order their keys are built in, as the oracle's dicts do.
 indexmap = { version = "2", features = ["serde"] }
 # generate: a phase's files written in parallel (UC-3.2).
