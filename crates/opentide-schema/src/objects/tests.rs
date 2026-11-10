@@ -510,12 +510,16 @@ fn the_severity_a_page_shows() {
 
 #[test]
 fn configurations_hold_each_block_in_order() {
-    let text =
-        format!("{RULE}configurations:\n  sysdig: {{condition: x}}\n  sentinel: {{query: q}}\n");
+    let text = format!(
+        "{RULE}configurations:\n  sysdig: {{status: PROD, condition: x}}\n  \
+         splunk: {{status: STAGING, query: q}}\n"
+    );
     let rule: RuleV1_1 = read(&text).unwrap();
     let configurations = rule.configurations.unwrap();
-    let platforms: Vec<&str> = configurations.blocks().iter().map(|(p, _)| *p).collect();
-    assert_eq!(platforms, ["sentinel", "sysdig"]);
+    assert_eq!(
+        configurations.platform_statuses(),
+        [("splunk", "STAGING"), ("sysdig", "PROD")]
+    );
     let errors =
         read::<RuleV1_1>(&format!("{RULE}configurations:\n  sentinal: {{}}\n")).unwrap_err();
     assert_eq!(errors[0].field_path(), ["configurations", "sentinal"]);
@@ -528,7 +532,11 @@ fn a_model_round_trips_through_yaml() {
     let text = format!(
         "{RULE}techniques: [T1059]\nreferences:\n  public:\n    1: https://example.org\n\
          response:\n  procedure:\n    analysis: look\nconfigurations:\n  sentinel:\n    \
-         query: |\n      SecurityEvent\n    status: STAGING\n"
+         query: |\n      SecurityEvent\n    status: STAGING\n    scheduling: {{frequency: PT1H}}\n    \
+         alert: {{suppression: PT1H, techniques: [T1059]}}\n  elastic:\n    status: PROD\n    \
+         type: query\n    query: a\n    risk: {{score: 5}}\n    integration: [windows]\n  \
+         sentinel_one:\n    status: PROD\n    condition: {{type: Single Event}}\n    \
+         response: {{treat_as_threat: false, network_quarantine: true}}\n"
     );
     let rule: RuleV1_1 = read(&text).unwrap();
     let written = node::to_yaml(&rule).unwrap();

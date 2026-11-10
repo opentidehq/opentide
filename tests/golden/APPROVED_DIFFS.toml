@@ -91,6 +91,26 @@
 # - `strict-types`: `version: 1.5` is `int_type`, not `int_from_float`
 #   ("**Field types are checked as declared**").
 #
+# The platform blocks (UC-1.4, #810), decided and checked case by case in
+# crates/opentide-schema/tests/oracle/platform_cases.toml (`[[difference]]`,
+# run by crates/opentide-schema/src/objects/platform/table.rs); entered here
+# when `validate` routes to Rust (UC-2.x):
+#
+# - `yaml-1-2-booleans`, `strict-types`, `positions`: as for the object
+#   models above, inside the blocks (`sentinel: on` is a string;
+#   `network_quarantine: no` and `enabled: 1` are `bool_type`;
+#   `threshold.value: true` and `risk: true` are `int_type`; a key missing
+#   from a one-line mapping is spanned over the mapping).
+# - `suggestions`: a rejected Sentinel ATT&CK id's hint is
+#   `opentide_core::suggest`'s (`T1059.01` suggests `T1059.001`, where
+#   difflib chose `T1059.013`) ("**"Did you mean" suggests what a typo meant,
+#   not a word that shares letters**").
+# - `sentinel-durations`: `scheduling.frequency`, `scheduling.lookback`,
+#   `grouping.alert.grouping_lookback` and a string `alert.suppression` that
+#   deploy cannot convert (`frequency: hourly`) are `schema_validation`
+#   (`value_error`) on the field, where the oracle accepted them (KG-01)
+#   ("**Sentinel durations are checked when the rule is validated**").
+#
 # The revision registry (UC-1.7, #813; docs/internal/adr/0009-revision-registry.md),
 # decided and checked case by case in the same cases file and entered here
 # when `validate` routes to Rust (UC-2.x, UC-3.5):

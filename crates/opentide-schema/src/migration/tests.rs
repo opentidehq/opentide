@@ -95,8 +95,9 @@ fn empty_configurations() -> RuleConfigurations {
     }
 }
 
-/// A `rule::1.0` object of any content the model accepts. The platform
-/// blocks are UC-1.4's: `configurations` is absent or empty.
+/// A `rule::1.0` object of any content the model accepts. `configurations`
+/// is absent or empty: migration copies it whole, and the platform blocks'
+/// own content is proved by `objects::platform`'s table.
 fn rule_v1_0() -> impl Strategy<Value = RuleV1_0> {
     (
         (text(), metadata_v1_0(), text()),
@@ -258,7 +259,7 @@ const RULE_1_0: &str = "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-0
                         organisation: {uuid: o, name: Org}\ndescription: d\nstatus: s\n\
                         severity: High\ntechniques: [T1059]\nplatforms: {splunk: {a: 1}}\n\
                         references: {public: {1: https://x}}\ndetection_model: m\n\
-                        response: {alert_severity: Low}\nconfigurations: {splunk: {x: 1}}\n";
+                        response: {alert_severity: Low}\nconfigurations: {splunk: {status: STAGING, query: q}}\n";
 
 fn read_object(text: &str, family: &str) -> TideObject {
     let document = node::load(text).unwrap();

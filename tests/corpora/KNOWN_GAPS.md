@@ -38,6 +38,17 @@ is silent; `lint` never reports it. The engine has no Sentinel duration check.
 Options: a schema-level duration check (always reported, `schema_validation` or a new code); or
 keep it in the compile check and make that check independent of other findings.
 
+**Decided (UC-1.4, #810): a schema-level check.** The Rust Sentinel model refuses a
+`scheduling.frequency`, `scheduling.lookback`, `grouping.alert.grouping_lookback` or string
+`alert.suppression` that deploy cannot convert, as `schema_validation` (`value_error`, "Duration
+'hourly' is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand duration (30m, 1h, 1d,
+1h10m)", deploy's own words) on the field, from every run and from `lint`'s schema check, whatever
+else the workspace holds. The difference is `sentinel-durations` in
+`crates/opentide-schema/tests/oracle/platform_cases.toml`, listed in
+`tests/golden/APPROVED_DIFFS.toml` and announced in CHANGELOG.md ("**Sentinel durations are
+checked when the rule is validated**"); `compile-invalid-rule-frequency` keeps pinning the oracle
+until `validate` routes to Rust (UC-2.x), which adds `schema_validation` to its codes.
+
 ## KG-02: `metadata.reviewed`
 
 The engine has no `reviewed` check. In the oracle, on `rule::1.1`: a word (`yesterday`) or a

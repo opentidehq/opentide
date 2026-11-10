@@ -56,14 +56,8 @@ fn from_node(data: &[u8]) {
     };
     convert::<SampleV1_0>(&document);
     convert::<SampleV1_1>(&document);
-    // The rule models read only with `unchecked-platform-blocks` until
-    // UC-1.4 (#810): a workspace build has it (xtask turns it on), and so
-    // does the fuzz crate.
-    #[cfg(feature = "unchecked-platform-blocks")]
-    {
-        convert::<opentide_schema::objects::RuleV1_0>(&document);
-        convert::<opentide_schema::objects::RuleV1_1>(&document);
-    }
+    convert::<opentide_schema::objects::RuleV1_0>(&document);
+    convert::<opentide_schema::objects::RuleV1_1>(&document);
     convert::<ThreatVectorV1_0>(&document);
     convert::<ObjectiveV1_0>(&document);
 }

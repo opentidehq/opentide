@@ -29,12 +29,6 @@ python = ["dep:pyo3"]
 # the TypeScript types arrive with UC-5.3 (#838). CI builds the crate for
 # wasm32 with it so that no dependency of the model stops compiling there.
 wasm = []
-# Reading a rule whose platform blocks are not checked yet: the blocks are
-# UC-1.4's (#810), and until they arrive `RuleV1_0`, `RuleV1_1` and
-# `RuleConfigurations` read only with this feature, or in the crate's unit
-# tests (`cfg(test)`). xtask's oracle comparisons turn it on; nothing that
-# ships may (UC-1.4 removes it).
-unchecked-platform-blocks = []
 
 [dependencies]
 opentide-core.workspace = true

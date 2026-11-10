@@ -6,13 +6,12 @@
 //!   Pydantic's `model_json_schema(by_alias=True)`, structurally equal after
 //!   normalisation (byte equality is UC-1.8's, #814), and the registry's
 //!   schema identifiers against `objects::checks::REGISTERED`. The platform
-//!   blocks under `configurations` are UC-1.4's (#810): only their
-//!   annotations are compared.
+//!   blocks (UC-1.4, #810) are compared whole, in the rules and on their own.
 //! - **objects**: every object file of every corpus (the fixtures of
 //!   `tests/golden/cases.toml` and the heavy workspace, seed 20261107) read
 //!   by the object models and validated by the oracle (`validate --json`):
-//!   the same findings, code, field path, message and position, outside the
-//!   platform blocks. A difference must be one of the fault runner's
+//!   the same findings, code, field path, message and position, the platform
+//!   blocks' included. A difference must be one of the fault runner's
 //!   approved differences (`corpus::structural::APPROVED`), which name their
 //!   reason and CHANGELOG entry.
 
@@ -24,6 +23,7 @@ use std::process::{Command, ExitCode};
 
 use anyhow::{Context, Result, bail, ensure};
 use opentide_schema::objects;
+use opentide_schema::objects::platform;
 use serde_json::{Value, json};
 
 use crate::corpus::structural;
@@ -167,21 +167,16 @@ pub fn rust_schemas() -> Vec<(&'static str, Value)> {
         ("RuleConfigurations", of::<objects::RuleConfigurations>()),
         ("DetectionRule", of::<objects::RuleV1_0>()),
         ("DetectionRule_v1_1", of::<objects::RuleV1_1>()),
+        ("SentinelConfig", of::<platform::SentinelConfig>()),
+        ("DefenderConfig", of::<platform::DefenderConfig>()),
+        ("SplunkConfig", of::<platform::SplunkConfig>()),
+        ("SentinelOneConfig", of::<platform::SentinelOneConfig>()),
+        ("CrowdstrikeConfig", of::<platform::CrowdstrikeConfig>()),
+        ("HarfangLabConfig", of::<platform::HarfangLabConfig>()),
+        ("CarbonBlackConfig", of::<platform::CarbonBlackConfig>()),
+        ("ElasticConfig", of::<platform::ElasticConfig>()),
+        ("SysdigConfig", of::<platform::SysdigConfig>()),
     ]
-}
-
-/// The paths whose schema is not compared in model `name`: the platform
-/// blocks (UC-1.4).
-fn excluded(name: &str) -> Vec<Vec<&'static str>> {
-    let platforms = objects::RuleConfigurations::PLATFORMS;
-    match name {
-        "RuleConfigurations" => platforms.iter().map(|p| vec![*p]).collect(),
-        "DetectionRule" | "DetectionRule_v1_1" => platforms
-            .iter()
-            .map(|p| vec!["configurations", *p])
-            .collect(),
-        _ => Vec::new(),
-    }
 }
 
 /// Compares the oracle's schemas (`probe.py schemas`) with the models'. The
@@ -207,10 +202,8 @@ pub fn compare_schemas(oracle: &Value) -> Result<Vec<(String, Vec<String>)>> {
         let pydantic = oracle["schemas"]
             .get(name)
             .with_context(|| format!("the probe wrote no schema for {name}"))?;
-        let paths = excluded(name);
-        let paths: Vec<&[&str]> = paths.iter().map(Vec::as_slice).collect();
-        let a = normalise(pydantic, Side::Pydantic, &paths);
-        let b = normalise(&rust, Side::Schemars, &paths);
+        let a = normalise(pydantic, Side::Pydantic, &[]);
+        let b = normalise(&rust, Side::Schemars, &[]);
         out.push((name.to_owned(), differences(&a, &b)));
     }
     Ok(out)
@@ -267,7 +260,7 @@ pub struct Corpus {
     pub name: String,
     /// Object files compared.
     pub files: usize,
-    /// The oracle's findings compared (outside the platform blocks).
+    /// The oracle's findings compared.
     pub findings: usize,
     /// Files whose findings differ by an approved difference.
     pub approved: usize,
@@ -445,10 +438,15 @@ mod tests {
     }
 
     #[test]
-    fn every_model_has_a_schema_and_the_rules_exclude_only_the_blocks() {
+    fn every_model_and_every_platform_block_has_a_schema() {
         let schemas = rust_schemas();
-        assert_eq!(schemas.len(), 20);
-        assert_eq!(excluded("DetectionRule").len(), 9);
-        assert!(excluded("ThreatVector").is_empty());
+        assert_eq!(schemas.len(), 29);
+        for entry in platform::PLATFORM_CONFIG_MODELS {
+            assert!(
+                schemas.iter().any(|(name, _)| *name == entry.model),
+                "{}",
+                entry.model
+            );
+        }
     }
 }
