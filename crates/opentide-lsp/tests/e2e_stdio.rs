@@ -685,6 +685,119 @@ fn yara_over_stdio() {
 }
 
 #[test]
+fn yara_editor_features_over_stdio() {
+    let mut lsp = Lsp::spawn();
+    lsp.request("initialize", json!({ "capabilities": {} }));
+    lsp.notify("initialized", json!({}));
+    let uri = "file:///tmp/editor.yar";
+    let text = "import \"pe\"\nrule loader {\n  strings:\n    $cfg = \"CFG!\"\n  condition:\n    #cfg > 1 and pe.number_of_sections > 2 and pe.exports(\"x\")\n}\n";
+    let codes = published_codes(&mut lsp, uri, "yara", text);
+    assert!(codes.is_empty(), "{codes:?}");
+    let pos = |needle: &str, delta: usize| {
+        let at = text.find(needle).unwrap() + delta;
+        let line = text[..at].matches('\n').count();
+        let col = at - text[..at].rfind('\n').map_or(0, |i| i + 1);
+        json!({ "textDocument": { "uri": uri }, "position": { "line": line, "character": col } })
+    };
+    // Hover: a module member, then a string count.
+    let hover = lsp.request("textDocument/hover", pos("number_of_sections", 3));
+    let value = hover["result"]["contents"]["value"]
+        .as_str()
+        .unwrap_or_default();
+    assert!(
+        value.contains("pe.number_of_sections") && value.contains("integer"),
+        "{hover}"
+    );
+    let hover = lsp.request("textDocument/hover", pos("#cfg", 2));
+    let value = hover["result"]["contents"]["value"]
+        .as_str()
+        .unwrap_or_default();
+    assert!(value.contains("number of matches"), "{hover}");
+    // Definition and references of `$cfg`.
+    let def = lsp.request("textDocument/definition", pos("#cfg", 2));
+    assert_eq!(def["result"]["range"]["start"]["line"], 3, "{def}");
+    let mut refs = pos("#cfg", 2);
+    refs["context"] = json!({ "includeDeclaration": true });
+    let refs = lsp.request("textDocument/references", refs);
+    assert_eq!(refs["result"].as_array().map(Vec::len), Some(2), "{refs}");
+    // Signature help in `pe.exports(`.
+    let sig = lsp.request("textDocument/signatureHelp", pos("\"x\")", 0));
+    let sig_labels: Vec<&str> = sig["result"]["signatures"]
+        .as_array()
+        .map(|a| a.iter().filter_map(|s| s["label"].as_str()).collect())
+        .unwrap_or_default();
+    assert!(sig_labels.contains(&"exports(string) -> integer"), "{sig}");
+    // Rename: prepared on the name, refused for a clash, applied with sigils.
+    let prepared = lsp.request("textDocument/prepareRename", pos("#cfg", 2));
+    assert_eq!(prepared["result"]["start"]["character"], 5, "{prepared}");
+    let mut rename = pos("#cfg", 2);
+    rename["newName"] = json!("bad name");
+    let refused = lsp.request("textDocument/rename", rename.clone());
+    assert_eq!(refused["error"]["code"], -32803, "{refused}");
+    rename["newName"] = json!("config");
+    let renamed = lsp.request("textDocument/rename", rename);
+    let edits = renamed["result"]["changes"][uri]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    assert_eq!(edits.len(), 2, "{renamed}");
+    assert!(edits.iter().all(|e| e["newText"] == "config"), "{renamed}");
+    // Formatting the whole file with yara-x-fmt.
+    let messy = "rule   a{condition:true}";
+    published_codes(&mut lsp, "file:///tmp/messy.yar", "yara", messy);
+    let formatted = lsp.request(
+        "textDocument/formatting",
+        json!({ "textDocument": { "uri": "file:///tmp/messy.yar" }, "options": { "tabSize": 2, "insertSpaces": true } }),
+    );
+    assert_eq!(
+        formatted["result"][0]["newText"], "rule a {\n  condition:\n    true\n}\n",
+        "{formatted}"
+    );
+    // Folding: the rule and its sections.
+    let folds = lsp.request(
+        "textDocument/foldingRange",
+        json!({ "textDocument": { "uri": uri } }),
+    );
+    assert!(
+        folds["result"].as_array().is_some_and(|f| f.len() >= 3),
+        "{folds}"
+    );
+    // Completion after `pe.`.
+    let partial = "import \"pe\"\nrule b { condition: pe.";
+    published_codes(&mut lsp, "file:///tmp/partial.yar", "yara", partial);
+    let items = lsp.request(
+        "textDocument/completion",
+        json!({ "textDocument": { "uri": "file:///tmp/partial.yar" }, "position": { "line": 1, "character": partial.lines().nth(1).unwrap().len() } }),
+    );
+    let l = labels(items["result"].as_array().map_or(&[][..], |a| a.as_slice()));
+    assert!(l.contains(&"imphash".to_string()), "{l:?}");
+}
+
+/// A rename in HarfangLab's decomposed form edits `strings` and `condition`.
+#[test]
+fn yara_rename_across_decomposed_fragments_over_stdio() {
+    let mut lsp = Lsp::spawn();
+    lsp.request("initialize", json!({ "capabilities": {} }));
+    lsp.notify("initialized", json!({}));
+    let uri = "file:///w/objects/rules/cmd-string.yaml";
+    let text = "name: Cmd String\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000001\n  schema: rule::1.0\nconfigurations:\n  harfanglab:\n    yara:\n      meta:\n        context:\n          - file\n        os: Windows\n      strings: |\n        $cmd = \"cmd.exe\" ascii\n      condition: |\n        $cmd and #cmd > 1\n";
+    published_codes(&mut lsp, uri, "opentide-yaml", text);
+    let renamed = lsp.request(
+        "textDocument/rename",
+        json!({ "textDocument": { "uri": uri }, "position": { "line": 14, "character": 17 }, "newName": "shell" }),
+    );
+    let edits = renamed["result"]["changes"][uri]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    let lines: Vec<u64> = edits
+        .iter()
+        .filter_map(|e| e["range"]["start"]["line"].as_u64())
+        .collect();
+    assert_eq!(lines, [12, 14, 14], "{renamed}");
+}
+
+#[test]
 fn cql_over_stdio() {
     let mut lsp = Lsp::spawn();
     lsp.request("initialize", json!({ "capabilities": {} }));

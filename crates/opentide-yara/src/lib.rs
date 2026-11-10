@@ -22,6 +22,7 @@
 mod atoms;
 pub mod catalog;
 mod check;
+pub mod editor;
 pub mod regexp;
 mod syntax;
 
