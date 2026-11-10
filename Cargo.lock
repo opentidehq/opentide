@@ -1405,6 +1405,7 @@ dependencies = [
  "insta",
  "jiff",
  "opentide-analysis",
+ "opentide-compile",
  "opentide-core",
  "opentide-schema",
  "opentide-workspace",
@@ -1458,6 +1459,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "toml 0.8.23",
+ "tracing",
 ]
 
 [[package]]

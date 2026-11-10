@@ -409,6 +409,10 @@ pub fn run(
         }
         Err(PlanError::Failed(message)) => {
             let mut outcome = Outcome::failed(message, 1);
+            if selecting {
+                // `run_deploy` names a selection's scope on a failed plan too.
+                outcome.payload.insert("scope".into(), "selected".into());
+            }
             let mut warnings: Vec<String> = no_commits.into_iter().collect();
             if !scope.nested.is_empty() {
                 warnings.push(plan::nested_warning(&scope.nested, &folder));

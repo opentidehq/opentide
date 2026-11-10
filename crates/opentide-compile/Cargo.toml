@@ -45,6 +45,8 @@ indexmap = { version = "2", features = ["serde"] }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+# Log events (a rule without a status), written by the host's layer.
+tracing = "0.1"
 
 [dev-dependencies]
 # The approved differences the oracle test honours (tests/golden/payloads/APPROVED.toml).
