@@ -1058,4 +1058,99 @@ mod tests {
             &[]
         ));
     }
+
+    /// `id`'s recorded case and a fresh copy of its fixture, as `run` lays a
+    /// `--fix` case out.
+    fn laid_out(id: &str, dir: &Path) -> (RecordedCase, PathBuf) {
+        let repo = repo_root();
+        let spec =
+            Spec::parse(&std::fs::read_to_string(repo.join("tests/golden/cases.toml")).unwrap())
+                .unwrap();
+        let recorded = recorded_cases(&repo)
+            .unwrap()
+            .into_iter()
+            .find(|(case, _, _)| case.id == id)
+            .unwrap_or_else(|| panic!("no recorded case {id}"));
+        let ws = dir.join("ws");
+        std::fs::create_dir_all(&ws).unwrap();
+        spec.fixtures[&recorded.0.fixture]
+            .materialise(&repo, &ws)
+            .unwrap();
+        crate::golden::fixture::fix_modes(&ws).unwrap();
+        (recorded, ws.canonicalize().unwrap())
+    }
+
+    fn parts(differences: &[Difference]) -> std::collections::BTreeSet<&str> {
+        differences.iter().map(|d| d.what.as_str()).collect()
+    }
+
+    #[test]
+    fn a_fix_that_differs_from_its_recording_is_reported() {
+        let dir = tempfile::tempdir().unwrap();
+        let ((case, recorded, files), ws) =
+            laid_out("validate/json/tide-corpus-typo/fix-typo", dir.path());
+        assert_eq!(recorded["fixed"][0]["after"], json!("High"));
+        // As recorded: the fix, the summary and the file written agree.
+        let clean = run_case(&case, &ws, &recorded, &files).unwrap();
+        assert!(
+            parts(&clean).iter().all(|part| !FIX_PARTS.contains(part)),
+            "{clean:?}"
+        );
+        let written =
+            std::fs::read_to_string(ws.join("Objects/Detection Rules/rule-0001-sentinel-kql.yaml"))
+                .unwrap();
+        assert!(written.contains("severity: High\n"), "{written}");
+        // Another fix, count and file on a fresh copy: each is reported.
+        let ((case, mut recorded, _), ws) = laid_out(
+            "validate/json/tide-corpus-typo/fix-typo",
+            &dir.path().join("doctored"),
+        );
+        recorded["fixed"][0]["after"] = json!("Low");
+        recorded["summary"]["fixed"] = json!(2);
+        recorded["summary"]["fixable"] = json!(5);
+        let differences = run_case(&case, &ws, &recorded, &json!({})).unwrap();
+        let found = parts(&differences);
+        for part in ["fixed", "summary.fixed", "summary.fixable", "files"] {
+            assert!(found.contains(part), "{part} not reported: {found:?}");
+        }
+        assert!(!found.contains("diff") && !found.contains("would_fix"));
+        let files = differences.iter().find(|d| d.what == "files").unwrap();
+        assert_eq!(
+            files.rust.as_ref().unwrap()["Objects/Detection Rules/rule-0001-sentinel-kql.yaml"]["change"],
+            json!("modified")
+        );
+    }
+
+    #[test]
+    fn a_dry_run_writes_nothing_and_its_diff_is_compared() {
+        let dir = tempfile::tempdir().unwrap();
+        let ((case, mut recorded, files), ws) = laid_out(
+            "validate/json/tide-corpus-typo/fix-typo-dry-run",
+            dir.path(),
+        );
+        assert_eq!(files, json!({}));
+        let clean = run_case(&case, &ws, &recorded, &files).unwrap();
+        assert!(
+            parts(&clean).iter().all(|part| !FIX_PARTS.contains(part)),
+            "{clean:?}"
+        );
+        recorded["diff"] = json!("");
+        recorded["would_fix"] = json!([]);
+        let found_owned = run_case(&case, &ws, &recorded, &files).unwrap();
+        let found = parts(&found_owned);
+        assert!(
+            found.contains("diff") && found.contains("would_fix"),
+            "{found:?}"
+        );
+        assert!(
+            !found.contains("files") && !found.contains("fixed"),
+            "{found:?}"
+        );
+    }
+
+    #[test]
+    fn the_fix_cases_agree_with_their_recordings() {
+        let args = ["diff", "--filter", "validate/json/*/fix*"].map(str::to_owned);
+        assert_eq!(run(&args).unwrap(), 0);
+    }
 }

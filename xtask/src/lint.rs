@@ -742,4 +742,271 @@ mod tests {
         list_differences("k", &[item("a", 1)], &[Item::new(&reordered)], &mut out);
         assert_eq!(out.len(), 1);
     }
+
+    #[test]
+    fn the_verdict_leaves_fixed_findings_out_and_strict_fails() {
+        let finding = |severity: &str, fixed: bool| json!({"severity": severity, "fixed": fixed});
+        let findings = [
+            finding("error", false),
+            finding("warning", false),
+            finding("info", false),
+            finding("info", false),
+            finding("warning", true),
+        ];
+        let (status, message, exit, summary) = verdict(&findings, false, &json!(7));
+        assert_eq!(status, "issues");
+        assert_eq!(message, "Catalogue lint found issues");
+        assert_eq!(exit, 0);
+        assert_eq!(
+            summary,
+            json!({"files": 7, "findings": 4, "errors": 1, "warnings": 1, "notes": 2, "fixed": 1})
+        );
+        let (status, _, exit, _) = verdict(&findings, true, &json!(7));
+        assert_eq!((status.as_str(), exit), ("failed", 1));
+        // Everything fixed: completed, but the oracle still says it found issues.
+        let (status, message, exit, summary) = verdict(&[finding("error", true)], true, &json!(1));
+        assert_eq!(
+            (status.as_str(), message.as_str(), exit),
+            ("completed", "Catalogue lint found issues", 0)
+        );
+        assert_eq!(summary["fixed"], json!(1));
+        assert_eq!(summary["findings"], json!(0));
+        let (status, message, exit, _) = verdict(&[], true, &json!(0));
+        assert_eq!(
+            (status.as_str(), message.as_str(), exit),
+            ("completed", "Catalogue lint passed", 0)
+        );
+    }
+
+    #[test]
+    fn changed_needs_a_git_checkout() {
+        let dir = tempfile::tempdir().unwrap();
+        let ws = dir.path().canonicalize().unwrap();
+        match changed_for(&ws) {
+            Changed::Failed(message) => {
+                assert!(
+                    message.contains("--changed needs a git checkout"),
+                    "{message}"
+                );
+                assert!(message.contains(&ws.display().to_string()), "{message}");
+            }
+            Changed::Files { .. } => panic!("a directory outside git has no changed files"),
+        }
+        std::fs::create_dir(ws.join(".git")).unwrap();
+        assert!(matches!(
+            changed_for(&ws),
+            Changed::Files { files, warning: None } if files.is_empty()
+        ));
+    }
+
+    /// `id`'s recording and a fresh copy of its fixture, as `run` lays it out.
+    fn laid_out(id: &str, dir: &Path) -> (Recording, PathBuf) {
+        let repo = repo_root();
+        let spec =
+            Spec::parse(&std::fs::read_to_string(repo.join("tests/golden/cases.toml")).unwrap())
+                .unwrap();
+        let recording = recorded_cases(&repo)
+            .unwrap()
+            .into_iter()
+            .find(|recording| recording.case.id == id)
+            .unwrap_or_else(|| panic!("no recorded case {id}"));
+        let ws = dir.join("ws");
+        std::fs::create_dir_all(&ws).unwrap();
+        spec.fixtures[&recording.case.fixture]
+            .materialise(&repo, &ws)
+            .unwrap();
+        crate::golden::fixture::fix_modes(&ws).unwrap();
+        (recording, ws.canonicalize().unwrap())
+    }
+
+    fn parts(differences: &[Difference]) -> std::collections::BTreeSet<String> {
+        differences.iter().map(|d| d.what.clone()).collect()
+    }
+
+    #[test]
+    fn a_fix_case_that_matches_its_recording_differs_only_in_approved_findings() {
+        let dir = tempfile::tempdir().unwrap();
+        let (recording, ws) = laid_out("lint/json/tide-corpus/fix", dir.path());
+        let differences = run_case(&recording, &ws).unwrap();
+        for difference in &differences {
+            assert_eq!(difference.what, "findings", "{difference:?}");
+            assert!(
+                APPROVED.iter().any(|rule| (rule.applies)(
+                    difference.oracle.as_ref(),
+                    difference.rust.as_ref(),
+                    &difference.oracle_list
+                )),
+                "{difference:?}"
+            );
+        }
+        // The renames --fix made are the recording's, byte for byte.
+        assert!(!recording.files.is_empty());
+        assert!(
+            ws.join("Objects/Detection Rules/carbon-black-lucene-rule.yaml")
+                .is_file()
+        );
+    }
+
+    /// `recording` with `from`, which its stdout holds once, read as `to`:
+    /// text, so the keys keep the recording's order.
+    fn edit(recording: &mut Recording, from: &str, to: &str) {
+        let text = String::from_utf8(recording.stdout.clone()).unwrap();
+        assert_eq!(text.matches(from).count(), 1, "{from}");
+        recording.stdout = text.replacen(from, to, 1).into_bytes();
+    }
+
+    #[test]
+    fn every_part_of_a_case_that_differs_is_reported() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut recording, ws) = laid_out("lint/json/tide-corpus/fix", dir.path());
+        edit(
+            &mut recording,
+            "\"yaml_line\":3,\"uuid\":\"00000000-0000-4000-8001-000000000001\"",
+            "\"yaml_line\":30,\"uuid\":\"00000000-0000-4000-8001-000000000001\"",
+        );
+        edit(&mut recording, "\"fixed\":12,\"ok\"", "\"fixed\":0,\"ok\"");
+        edit(
+            &mut recording,
+            "\"checks\":[\"filenames\",\"metadata\",\"placeholders\",\"queries\"]",
+            "\"checks\":[\"filenames\"]",
+        );
+        edit(
+            &mut recording,
+            "\"path\":\"<WS>\",",
+            "\"path\":\"<WS>\",\"scope\":\"files\",\"unmatched\":[\"nowhere.yaml\"],",
+        );
+        edit(
+            &mut recording,
+            "\"next_actions\":[]",
+            "\"next_actions\":[{\"command\":\"opentide --json lint\",\"reason\":\"again\"}]",
+        );
+        recording.files.clear();
+        let differences = run_case(&recording, &ws).unwrap();
+        let found = parts(&differences);
+        assert_eq!(
+            found,
+            [
+                "findings",
+                "fixed",
+                "checks",
+                "scope",
+                "unmatched",
+                "next_actions",
+                "files",
+            ]
+            .map(str::to_owned)
+            .into_iter()
+            .collect(),
+        );
+        // The moved finding is one difference: the oracle's and the Rust run's.
+        let moved: Vec<_> = differences
+            .iter()
+            .filter(|d| d.what == "findings")
+            .collect();
+        assert_eq!(moved.len(), 1, "{moved:?}");
+        assert_eq!(moved[0].oracle.as_ref().unwrap()["yaml_line"], json!(30));
+        assert_eq!(moved[0].rust.as_ref().unwrap()["yaml_line"], json!(3));
+        let next = differences
+            .iter()
+            .find(|d| d.what == "next_actions")
+            .unwrap();
+        assert_eq!(
+            next.oracle,
+            Some(json!([{"command": "opentide lint", "reason": "again"}]))
+        );
+    }
+
+    #[test]
+    fn a_verdict_that_differs_is_reported() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut recording, ws) = laid_out("lint/json/vscode/strict", dir.path());
+        // Without --strict, the recording's findings leave lint at "issues":
+        // the verdict is recomputed from them, so only the file count differs.
+        recording.case.argv.retain(|arg| arg != "--strict");
+        edit(&mut recording, "\"files\":2,", "\"files\":99,");
+        let differences = run_case(&recording, &ws).unwrap();
+        assert_eq!(
+            parts(&differences),
+            ["summary"].map(str::to_owned).into_iter().collect()
+        );
+        assert_eq!(differences[0].oracle.as_ref().unwrap()["files"], json!(99));
+        assert_eq!(differences[0].rust.as_ref().unwrap()["files"], json!(2));
+        // A refusal is compared as recorded: its status, message and exit code.
+        let (mut refused, ws) = laid_out(
+            "lint/json/tide-corpus/file-missing",
+            &dir.path().join("refused"),
+        );
+        let clean = run_case(&refused, &ws).unwrap();
+        assert!(clean.is_empty(), "{clean:?}");
+        edit(&mut refused, "\"exit_code\":1", "\"exit_code\":0");
+        edit(
+            &mut refused,
+            "\"status\":\"failed\"",
+            "\"status\":\"completed\"",
+        );
+        let differences = run_case(&refused, &ws).unwrap();
+        assert_eq!(
+            parts(&differences),
+            ["exit_code", "status"]
+                .map(str::to_owned)
+                .into_iter()
+                .collect()
+        );
+    }
+
+    #[test]
+    fn a_case_with_other_options_is_not_run() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut recording, ws) = laid_out("lint/json/vscode/default", dir.path());
+        recording.case.argv.push("--format".to_owned());
+        recording.stdout = b"not json".to_vec();
+        assert!(run_case(&recording, &ws).unwrap().is_empty());
+    }
+
+    fn strings(args: &[&str]) -> Vec<String> {
+        args.iter().map(|s| (*s).to_owned()).collect()
+    }
+
+    #[test]
+    fn the_command_line_is_checked() {
+        assert_eq!(run(&[]).unwrap(), 0);
+        assert_eq!(run(&strings(&["help"])).unwrap(), 0);
+        for bad in [
+            &["check"][..],
+            &["diff", "--nope"],
+            &["diff", "--filter"],
+            &["diff", "--keep"],
+            &["diff", "--filter", "["],
+        ] {
+            assert!(run(&strings(bad)).is_err(), "{bad:?}");
+        }
+        let error = run(&strings(&["diff", "--filter", "lint/json/nowhere/*"])).unwrap_err();
+        assert!(error.to_string().contains("no recorded lint case matches"));
+    }
+
+    #[test]
+    fn a_kept_filtered_run_passes_and_keeps_its_cases() {
+        let dir = tempfile::tempdir().unwrap();
+        let keep = dir.path().join("kept");
+        let code = run(&strings(&[
+            "diff",
+            "--filter",
+            "lint/json/fault/*",
+            "--show-approved",
+            "--keep",
+            keep.to_str().unwrap(),
+        ]))
+        .unwrap();
+        assert_eq!(code, 0);
+        assert!(keep.join("fixtures/fault").is_dir());
+        assert!(keep.join("cases/0/ws").is_dir());
+    }
+
+    /// The whole of `cargo xtask lint diff`, as CI's corpus job runs it: every
+    /// recorded case agrees with the oracle or an approved rule, and every
+    /// rule explains something.
+    #[test]
+    fn every_recorded_case_agrees_with_the_oracle() {
+        assert_eq!(run(&strings(&["diff"])).unwrap(), 0);
+    }
 }
