@@ -581,12 +581,14 @@ def _query_findings(root: Path, records: list[_ObjectRecord]) -> list[dict[str, 
     from opentide.analysis import (
         DECLARED_DATASET_CODES,
         ELASTIC_ADVISORY_CODES,
+        HARFANGLAB_ADVISORY_CODES,
         SYSDIG_ADVISORY_CODES,
         check_file,
         install_workspace_visibility,
         workspace,
     )
     from opentide.cli.ui.diagnostics import diagnostic_from_engine, engine_reference
+    from opentide.platforms.harfanglab.yara import ADVISORY_CODES, SIGNATURE_PATH
 
     # The datasets visibility.toml declares, as validate and the editor see them.
     install_workspace_visibility(root)
@@ -600,10 +602,13 @@ def _query_findings(root: Path, records: list[_ObjectRecord]) -> list[dict[str, 
         for finding in check_file(space, record.path, record.text):
             if finding.severity == "error" or _in_placeholder(finding, lines, marked):
                 continue
+            if finding.code in ADVISORY_CODES and finding.field_path[:4] == SIGNATURE_PATH:
+                continue  # _harfanglab_yara_findings reports it, with or without the engine
             if (
                 engine_reference(finding.code) is None
                 and finding.code not in ELASTIC_ADVISORY_CODES
                 and finding.code not in SYSDIG_ADVISORY_CODES
+                and finding.code not in HARFANGLAB_ADVISORY_CODES
                 and finding.code not in DECLARED_DATASET_CODES
             ):
                 continue
@@ -622,7 +627,6 @@ def _query_findings(root: Path, records: list[_ObjectRecord]) -> list[dict[str, 
                     ),
                 }
             )
-        findings.extend(_harfanglab_yara_findings(record))
     return findings
 
 
@@ -634,16 +638,14 @@ def _harfanglab_yara_findings(record: _ObjectRecord) -> list[dict[str, object]]:
     """
     from opentide.platforms.harfanglab.yara import SIGNATURE_PATH, advisories, signature_in
 
-    if record.text is None or "harfanglab" not in record.text:
+    if record.parse_error or record.text is None or "harfanglab" not in record.text:
         return []
-    found = signature_in(record.text)
-    if found is None:
+    site = signature_in(record.text)
+    if site is None:
         return []
-    signature, first_line = found
     findings: list[dict[str, object]] = []
-    for advisory in advisories(signature):
-        before = signature[: advisory.offset]
-        line = first_line + before.count("\n")
+    for advisory in advisories(site.value):
+        line = site.line_of(advisory.offset)
         findings.append(
             _finding(
                 LintCheck.queries,
@@ -842,13 +844,18 @@ def run_lint(
     if LintCheck.queries in selected:
         from opentide.analysis import EngineUnavailableError
 
+        # The HarfangLab YARA advisories need no engine: reported whether it loads or not.
+        advisories = [finding for record in shown for finding in _harfanglab_yara_findings(record)]
+        findings.extend(advisories)
         try:
             findings.extend(_query_findings(target, shown))
         except EngineUnavailableError as exc:
             from opentide.cli.services.engine import engine_unavailable_result
 
+            _apply_severity(advisories, config)
+            _add_diagnostic_fields(target, advisories)
             return engine_unavailable_result(
-                exc, path=str(target), checks=[item.value for item in selected], findings=[]
+                exc, path=str(target), checks=[item.value for item in selected], findings=advisories
             )
     if LintCheck.filenames in selected:
         findings.extend(

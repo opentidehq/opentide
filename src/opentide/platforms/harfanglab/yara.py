@@ -114,7 +114,7 @@ _INCLUDE = re.compile(r"(?<![\w$#@!])include\s*\"")
 _RULE = re.compile(r"(?<![\w$#@!])((?:(?:private|global)\s+)*)rule\s+([A-Za-z_][A-Za-z0-9_]*)")
 _META = re.compile(r"(?<![\w$#@!])meta\s*:")
 _SECTION_AFTER_META = re.compile(r"(?<![\w$#@!])(?:strings|condition)\s*:")
-_CONTEXT = re.compile(r"(?<![\w$#@!])context\s*=\s*\"")
+_CONTEXT = re.compile(r"(?<![\w$#@!])context\s*=\s*")
 _ASCII_NAME = re.compile(r"[A-Za-z0-9_]+")
 
 
@@ -214,9 +214,12 @@ def rule_name_refused(name: str) -> bool:
 
 
 def deployed_signature(signature: str) -> str:
-    """*signature* as deploy sends it: ``\\n`` line endings and one trailing newline."""
+    """*signature* as deploy sends it: ``\\n`` line endings, and a trailing newline if it has none.
+
+    yara-1.0 allows nothing else: blank lines, at the end or anywhere, are sent as written.
+    """
     text = signature.replace("\r\n", "\n").replace("\r", "\n")
-    return text.rstrip("\n") + "\n"
+    return text if text.endswith("\n") else text + "\n"
 
 
 def _set(value: object) -> bool:
@@ -236,11 +239,12 @@ def block_codes(block: Mapping[str, Any]) -> set[str]:
         codes.add("harfanglab_rule_kind")
     if not isinstance(yara, Mapping):
         return codes
-    signature = yara.get("signature")
-    if _set(signature):
-        if any(_set(yara.get(key)) for key in DECOMPOSED_KEYS):
+    # A key written in the block chooses its form, even with an empty value:
+    # `signature` with `imports: null` is still both forms (harfanglab_yara_form).
+    if "signature" in yara:
+        if any(key in yara for key in DECOMPOSED_KEYS):
             codes.add("harfanglab_yara_form")
-        codes |= signature_codes(signature)
+        codes |= signature_codes(yara["signature"])
         return codes
     for key in ("strings", "condition"):
         body = yara.get(key)
@@ -271,15 +275,25 @@ def _meta_span(code: str, header: YaraRuleHeader) -> tuple[int, int] | None:
     return meta.end(), after.start() if after else header.end
 
 
-def _context_value(signature: str, code: str, span: tuple[int, int]) -> tuple[str, int] | None:
+def _context_value(
+    signature: str, code: str, span: tuple[int, int]
+) -> tuple[str | None, str, int] | None:
+    """``(string value or None, the value as written, offset of the key)`` of meta ``context``.
+
+    A value that is not a string (``context = 1``, ``context = true``) is ``None``.
+    """
     found = _CONTEXT.search(code, *span)
     if found is None:
         return None
     start = found.end()
-    end = start
-    while end < len(signature) and signature[end] not in '"\n':
-        end += 2 if signature[end] == "\\" else 1
-    return signature[start:end], found.start()
+    if start < len(signature) and signature[start] == '"':
+        end = start + 1
+        while end < len(signature) and signature[end] not in '"\n':
+            end += 2 if signature[end] == "\\" else 1
+        return signature[start + 1 : end], signature[start : end + 1], found.start()
+    line_end = signature.find("\n", start)
+    written = signature[start : len(signature) if line_end < 0 else line_end].strip()
+    return None, written, found.start()
 
 
 def advisories(signature: str) -> Iterator[YaraAdvisory]:
@@ -297,8 +311,15 @@ def advisories(signature: str) -> Iterator[YaraAdvisory]:
                 header.start,
             )
             continue
-        value, offset = found
-        if value not in HARFANGLAB_CONTEXTS:
+        value, written, offset = found
+        if value is None:
+            yield YaraAdvisory(
+                "harfanglab_yara_context",
+                f"YARA rule {header.name!r} sets meta context to {written}, not a string; "
+                "HarfangLab's rules use " + ", ".join(sorted(HARFANGLAB_CONTEXTS)),
+                offset,
+            )
+        elif value not in HARFANGLAB_CONTEXTS:
             yield YaraAdvisory(
                 "harfanglab_yara_context",
                 f"YARA rule {header.name!r} sets meta context {value!r}; HarfangLab's rules use "
@@ -320,12 +341,18 @@ def _compose(text: str) -> Any:
         return None
 
 
+_MERGE_TAG = "tag:yaml.org,2002:merge"
+
+
 def aliased_paths(text: str) -> list[tuple[str, ...]]:
-    """The key paths whose value is a YAML alias of a scalar written earlier in *text*.
+    """The key paths whose scalar value comes from a YAML alias in *text*.
 
     ``yaml.safe_load`` gives an alias the same value as its anchor, so whether
-    ``signature`` was written in the block is only seen in the node graph:
-    an alias is the anchored node object itself, met a second time.
+    ``signature`` was written in place is only seen in the node graph: an alias
+    is the anchored node object itself, met a second time. A scalar under an
+    aliased mapping or sequence is aliased too (``yara: *shared``), and so is
+    one a merge key brings in (``<<: *shared``), at the path it takes in the
+    mapping it is merged into, unless that mapping writes the key itself.
     """
     import yaml
 
@@ -333,21 +360,39 @@ def aliased_paths(text: str) -> list[tuple[str, ...]]:
     seen: set[int] = set()
     found: list[tuple[str, ...]] = []
 
-    def walk(node: Any, path: tuple[str, ...]) -> None:
-        if id(node) in seen:
-            if isinstance(node, yaml.ScalarNode):
-                found.append(path)
+    def walk(node: Any, path: tuple[str, ...], aliased: bool, stack: frozenset[int]) -> None:
+        if id(node) in stack:  # a recursive alias: nothing new below it
             return
+        aliased = aliased or id(node) in seen
         seen.add(id(node))
-        if isinstance(node, yaml.MappingNode):
-            for key, value in node.value:
-                walk(value, (*path, str(key.value)))
+        stack = stack | {id(node)}
+        if isinstance(node, yaml.ScalarNode):
+            if aliased:
+                found.append(path)
+        elif isinstance(node, yaml.MappingNode):
+            walk_mapping(node, path, aliased, stack, frozenset())
         elif isinstance(node, yaml.SequenceNode):
             for index, value in enumerate(node.value):
-                walk(value, (*path, str(index)))
+                walk(value, (*path, str(index)), aliased, stack)
+
+    def walk_mapping(
+        node: Any, path: tuple[str, ...], aliased: bool, stack: frozenset[int], written: frozenset
+    ) -> None:
+        own = frozenset(str(key.value) for key, _ in node.value if key.tag != _MERGE_TAG) | written
+        for key, value in node.value:
+            if key.tag == _MERGE_TAG:
+                merged = value.value if isinstance(value, yaml.SequenceNode) else [value]
+                for source in merged:
+                    if not isinstance(source, yaml.MappingNode) or id(source) in stack:
+                        continue
+                    from_alias = aliased or id(source) in seen
+                    seen.add(id(source))
+                    walk_mapping(source, path, from_alias, stack | {id(source)}, own)
+            elif str(key.value) not in written:
+                walk(value, (*path, str(key.value)), aliased, stack)
 
     if root is not None:
-        walk(root, ())
+        walk(root, (), False, frozenset())
     return found
 
 
@@ -356,12 +401,43 @@ def signature_is_aliased(text: str) -> bool:
     return SIGNATURE_PATH in aliased_paths(text)
 
 
-def signature_in(text: str) -> tuple[str, int] | None:
-    """The HarfangLab signature in a rule file's *text*, and the 0-based line its text starts on.
+@dataclass(frozen=True)
+class SignatureSite:
+    """A HarfangLab signature as a rule file writes it."""
 
-    A block scalar (``|``) starts on the line after its indicator; any other
-    scalar on the indicator's own line. ``None`` when the file has no signature.
-    """
+    #: The signature's value.
+    value: str
+    #: The file's text.
+    text: str
+    #: Where the scalar is written in the file: its first and past-the-last character.
+    start: int
+    end: int
+    #: The scalar style: ``|`` literal, ``>`` folded, ``'``, ``"``, or ``""`` plain.
+    style: str
+
+    def line_of(self, offset: int) -> int:
+        """The 0-based file line of the character at *offset* into the value.
+
+        A literal block maps the value's lines one to one onto the lines after
+        its indicator. Folding and quoting join lines and change escapes, so in
+        any other style the words at *offset* are found in the written scalar
+        (the same occurrence of them), and the scalar's first line is the
+        answer only when they are not.
+        """
+        if self.style == "|":
+            return self.text.count("\n", 0, self.start) + 1 + self.value.count("\n", 0, offset)
+        words = re.findall(r"\S+", self.value[offset:])[:2]
+        if words:
+            pattern = re.compile(r"\s+".join(re.escape(word) for word in words))
+            before = sum(1 for match in pattern.finditer(self.value) if match.start() < offset)
+            written = list(pattern.finditer(self.text, self.start, self.end))
+            if before < len(written):
+                return self.text.count("\n", 0, written[before].start())
+        return self.text.count("\n", 0, self.start)
+
+
+def signature_in(text: str) -> SignatureSite | None:
+    """The HarfangLab signature in a rule file's *text*; ``None`` when it has none."""
     import yaml
 
     node = _compose(text)
@@ -371,5 +447,10 @@ def signature_in(text: str) -> tuple[str, int] | None:
         node = next((value for k, value in node.value if k.value == key), None)
     if not isinstance(node, yaml.ScalarNode) or node.tag != "tag:yaml.org,2002:str":
         return None
-    line = node.start_mark.line
-    return str(node.value), line + 1 if node.style == "|" else line
+    return SignatureSite(
+        value=str(node.value),
+        text=text,
+        start=node.start_mark.index,
+        end=node.end_mark.index,
+        style=node.style or "",
+    )

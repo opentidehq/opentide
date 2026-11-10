@@ -102,7 +102,7 @@ def test_validate_query_live_calls_the_tenant(monkeypatch: pytest.MonkeyPatch) -
     assert result["mode"] == "live"
 
 
-@pytest.mark.parametrize("platform", ["crowdstrike", "harfanglab"])
+@pytest.mark.parametrize("platform", ["crowdstrike"])
 def test_validate_query_never_fakes_an_unsupported_platform(platform: str) -> None:
     result = tools.tool_validate_query("anything at all", platform)
     assert result["supported"] is False
@@ -236,3 +236,24 @@ def test_run_query_default_limit_is_the_row_cap() -> None:
     import inspect
 
     assert inspect.signature(tools.tool_run_query).parameters["limit"].default == MAX_QUERY_ROWS
+
+
+def test_validate_query_checks_a_harfanglab_yara_rule_offline() -> None:
+    """HarfangLab has no tenant check, but the engine checks YARA offline (harfanglab-1.0)."""
+    good = tools.tool_validate_query(
+        'rule a {\n  meta:\n    context = "file"\n  condition:\n    true\n}\n', "harfanglab"
+    )
+    assert good["mode"] == "offline"
+    assert good["valid"] is True
+    bad = tools.tool_validate_query(
+        'import "nosuchmodule"\nrule a {\n  strings:\n    $a = { 4G }\n  condition:\n    $a\n}\n',
+        "harfanglab",
+    )
+    assert bad["valid"] is False
+    assert {"yara_hex_string", "yara_unknown_module"} <= {e["code"] for e in bad["errors"]}
+
+
+def test_validate_query_harfanglab_live_is_unsupported() -> None:
+    result = tools.tool_validate_query("rule a { condition: true }", "harfanglab", live=True)
+    assert result["supported"] is False
+    assert result["valid"] is None

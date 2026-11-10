@@ -57,6 +57,11 @@ ELASTIC_ADVISORY_CODES = frozenset(
 #: with the query warnings; they never reject a rule.
 SYSDIG_ADVISORY_CODES = frozenset({"sysdig_list_self_reference"})
 
+#: The HarfangLab YARA profile's advisory (harfanglab-1.0, YARA profile): HarfangLab
+#: takes the rule, but may not scan where the author meant. ``opentide lint``
+#: reports it with the query warnings; it never rejects a rule.
+HARFANGLAB_ADVISORY_CODES = frozenset({"harfanglab_yara_context"})
+
 #: The engine's warnings about a dataset a query reads that ``visibility.toml``
 #: does not declare, where the workspace has a log source for the platform:
 #: ``opentide lint`` reports them with the query warnings, and their help is
@@ -664,7 +669,17 @@ def check_query(
 
 
 #: Extensions of a query file: one query in the language its extension names.
-QUERY_FILE_SUFFIXES = (".kql", ".spl", ".esql", ".eql", ".kuery", ".lucene", ".falco")
+QUERY_FILE_SUFFIXES = (
+    ".kql",
+    ".spl",
+    ".esql",
+    ".eql",
+    ".kuery",
+    ".lucene",
+    ".falco",
+    ".yar",
+    ".yara",
+)
 
 
 def is_query_file(path: Path | str) -> bool:

@@ -18,14 +18,14 @@ opentide integrates with **nine detection platforms** through built-in adapters 
 | SentinelOne | `sentinel_one` | yes | yes | no | yes | S1QL |
 | Carbon Black Cloud | `carbon_black_cloud` | yes | yes | yes | yes | Lucene |
 | CrowdStrike Falcon | `crowdstrike` | yes | no | no | yes | correlation filter (CQL) |
-| HarfangLab | `harfanglab` | yes | no | no | telemetry filters | Sigma or YARA |
+| HarfangLab | `harfanglab` | yes | no | YARA | telemetry filters | Sigma or YARA |
 | Sysdig Secure (Falco) | `sysdig` | yes | no | yes | no | Falco condition |
 
 The offline check is the analysis engine that ships with `pip install opentide` (`opentide validate`, `opentide validate query`, `opentide lint`, [`opentide lsp`](../../cli/lsp.md)): it parses each query in its language, with the platform's tables or dialect, and needs no tenant.
 
 CLI `--platform` uses **registry keys** (`defender_for_endpoint`, `carbon_black_cloud`, `sentinel_one`). These are runtime identifiers; every platform ships with `pip install opentide`.
 
-CrowdStrike stores a correlation filter. HarfangLab stores a Sigma rule or a YARA rule. Neither language is syntax-checked: `opentide validate query` reports `supported: false`.
+CrowdStrike stores a correlation filter, which is not syntax-checked: `opentide validate query` reports `supported: false`. HarfangLab stores a Sigma rule or a YARA rule. Its YARA is checked offline, as libyara 4.5 compiles it, and Sigma is not; `--live` reports `supported: false`.
 
 A HarfangLab block is one kind: `sigma` or `yara`, never both (`harfanglab_rule_kind`). A `yara` block is either `signature`, a whole YARA text deploy sends verbatim, or the decomposed `meta`, `strings`, `condition` and `imports` deploy assembles into one rule, never both (`harfanglab_yara_form`):
 
@@ -48,7 +48,7 @@ configurations:
         }
 ```
 
-`opentide validate` checks what needs no YARA parser: an `include` (`yara_include`), a signature with no rule that is neither private nor global (`yara_empty_signature`), a rule name used twice (`yara_duplicate_rule`), a signature written as a YAML alias (`yara_signature_alias`), and, in the decomposed form, a section or rule header in `strings` or `condition`, an unknown module in `imports`, and a rule `name` that derives a YARA keyword or a non-ASCII rule name. `opentide lint` warns when a rule in a signature has no meta `context` (`yara_meta_missing`), or one HarfangLab's rules do not use (`harfanglab_yara_context`).
+`opentide validate` checks `signature`, and the rule the decomposed form assembles, against the YARA language (its `queries` check, the `yara_*` codes): a YARA error fails the rule. Its `schema` check fails an `include` (`yara_include`), a signature with no rule that is neither private nor global (`yara_empty_signature`), a rule name used twice (`yara_duplicate_rule`), a signature written as a YAML alias (`yara_signature_alias`), and, in the decomposed form, a section or rule header in `strings` or `condition`, an unknown module in `imports`, and a rule `name` that derives a YARA keyword or a non-ASCII rule name. `opentide lint` reports YARA warnings, and warns when a rule in a signature has no meta `context` (`yara_meta_missing`), or one HarfangLab's rules do not use (`harfanglab_yara_context`). A `.yar` or `.yara` file is checked with `opentide validate query --file`.
 
 Every platform but Sysdig answers [`opentide query`](../../cli/query.md), which runs a read-only query on its tenants and returns the rows. CrowdStrike queries run on Next-Gen SIEM. HarfangLab has no query language for telemetry: a query names a telemetry source and field filters, and a HarfangLab rule has no query to run.
 
@@ -70,7 +70,7 @@ Every key on `configurations.<platform>`, required and optional, is specified un
   <Card title="SentinelOne" href="/docs/specifications/specs/platforms/sentinel-one-1.0/" description="STAR rule: one S1QL query or a correlation of sub-queries." />
   <Card title="Carbon Black Cloud" href="/docs/specifications/specs/platforms/carbon-black-cloud-1.0/" description="Lucene IOC on an existing watchlist report." />
   <Card title="CrowdStrike" href="/docs/specifications/specs/platforms/crowdstrike-1.0/" description="Correlation filter. No query validator." />
-  <Card title="HarfangLab" href="/docs/specifications/specs/platforms/harfanglab-1.0/" description="Sigma or YARA, never both. YARA as a whole signature or decomposed. No query validator." />
+  <Card title="HarfangLab" href="/docs/specifications/specs/platforms/harfanglab-1.0/" description="Sigma or YARA, never both. YARA as a whole signature or decomposed, checked offline." />
   <Card title="Sysdig Secure" href="/docs/specifications/specs/platforms/sysdig-1.0/" description="Custom Falco rule through the Sysdig Secure API. Block macros and lists are expanded at deploy." />
 </Cards>
 
@@ -92,7 +92,7 @@ for name, plat in Opentide.Platforms.items():
 
 ## Query validation policy
 
-Only platforms with `can_validate=True` run syntax validation. For CrowdStrike, HarfangLab and Sysdig, CLI and MCP return `supported: false` — **never fake validation**.
+Only platforms with `can_validate=True` run live validation. For CrowdStrike, HarfangLab and Sysdig, CLI and MCP return `supported: false` for `--live` — **never fake validation**. HarfangLab's YARA and Sysdig's Falco are checked offline.
 
 ```bash
 opentide validate query --platform crowdstrike   # reports unsupported

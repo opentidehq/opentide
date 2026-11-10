@@ -104,6 +104,10 @@ def test_the_specification_invalid_fixtures_fail_with_their_code(fixture: str, c
         ("harfanglab_rule_kind", _block(sigma=SIGMA, yara=DECOMPOSED)),
         ("harfanglab_yara_form", _block(yara={"signature": SIGNATURE, **DECOMPOSED})),
         ("harfanglab_yara_form", _block(yara={"signature": SIGNATURE, "imports": ["pe"]})),
+        # A key written in the block chooses its form, even empty (m4).
+        ("harfanglab_yara_form", _block(yara={"signature": SIGNATURE, "imports": None})),
+        ("harfanglab_yara_form", _block(yara={"signature": SIGNATURE, "meta": None})),
+        ("yara_empty_signature", _block(yara={"signature": None})),
         (
             "harfanglab_yara_section_header",
             _block(yara={**DECOMPOSED, "strings": 'strings:\n  $a = "x"\n'}),
@@ -160,8 +164,8 @@ def test_each_code_fails_the_block(code: str, block: dict[str, Any]) -> None:
         _block(yara={"signature": "rule a { condition: #rule in (0..10) }\n"}),
         # A rule written after a closing brace on one line is still read.
         _block(yara={"signature": "rule a { condition: true } rule b { condition: true }"}),
-        # A key set to null is not set.
-        _block(sigma=None, yara={"signature": SIGNATURE, "meta": None}),
+        # A kind set to null is not set.
+        _block(sigma=None, yara={"signature": SIGNATURE}),
     ],
 )
 def test_a_block_of_one_kind_and_one_form_validates(block: dict[str, Any]) -> None:
@@ -226,13 +230,63 @@ def test_the_signature_is_aliased_only_when_written_as_an_alias() -> None:
     assert not yara.signature_is_aliased("key: [unclosed\n")
 
 
-def test_the_signature_is_found_with_its_first_line() -> None:
-    text = (FIXTURES / "harfanglab-yara-signature.yaml").read_text(encoding="utf-8")
-    found = yara.signature_in(text)
-    assert found is not None
-    signature, line = found
-    assert text.splitlines()[line].strip() == signature.splitlines()[0]
+@pytest.mark.parametrize(
+    "text",
+    [
+        # An alias of the whole yara mapping (m1).
+        "x: &y\n  signature: |\n    rule a { condition: true }\n"
+        "configurations:\n  harfanglab:\n    yara: *y\n",
+        # An alias of the harfanglab block.
+        "x: &h\n  yara:\n    signature: rule a\nconfigurations:\n  harfanglab: *h\n",
+        # A merge key brings the signature in.
+        "x: &y\n  signature: rule a\nconfigurations:\n  harfanglab:\n    yara:\n      <<: *y\n",
+        "x: &y\n  signature: rule a\nconfigurations:\n  harfanglab:\n    yara:\n      <<: [*y]\n",
+    ],
+    ids=["yara-mapping", "block", "merge", "merge-list"],
+)
+def test_a_signature_under_an_aliased_node_is_aliased(text: str) -> None:
+    assert yaml.safe_load(text)["configurations"]["harfanglab"]
+    assert yara.signature_is_aliased(text)
+
+
+def test_a_merge_key_does_not_alias_a_signature_written_in_place() -> None:
+    text = (
+        "x: &y\n  signature: rule a\n"
+        "configurations:\n  harfanglab:\n    yara:\n      <<: *y\n"
+        "      signature: rule b\n"
+    )
+    assert not yara.signature_is_aliased(text)
+
+
+#: One signature, written in each scalar style: where lint points the context advisory.
+_BODY = 'rule a {\n  meta:\n    context = "disk"\n  condition:\n    true\n}\n'
+_BLOCK = "".join(f"        {line}\n" for line in _BODY.splitlines())
+_STYLED = {
+    "literal": "signature: |\n" + _BLOCK,
+    "literal-strip": "signature: |-\n" + _BLOCK,
+    "literal-keep": "signature: |+\n\n" + _BLOCK,
+    "folded": "signature: >\n" + _BLOCK,
+    "folded-strip": "signature: >-\n" + _BLOCK,
+    "single": 'signature: \'rule a { meta:\n        context = "disk"\n'
+    "        condition: true }'\n",
+    "double": 'signature: "rule a { meta:\n        context = \\"disk\\"\n'
+    '        condition: true }"\n',
+}
+
+
+@pytest.mark.parametrize("style", list(_STYLED))
+def test_the_advisory_line_is_right_in_every_scalar_style(style: str) -> None:
+    text = "configurations:\n  harfanglab:\n    yara:\n      " + _STYLED[style]
+    site = yara.signature_in(text)
+    assert site is not None
+    [advisory] = list(yara.advisories(site.value))
+    assert advisory.code == "harfanglab_yara_context"
+    assert "context" in text.splitlines()[site.line_of(advisory.offset)]
+
+
+def test_no_signature_is_found_without_one() -> None:
     assert yara.signature_in("configurations:\n  harfanglab:\n    sigma: {}\n") is None
+    assert yara.signature_in("key: [unclosed\n") is None
 
 
 @pytest.mark.parametrize(
@@ -257,6 +311,15 @@ def test_the_signature_is_found_with_its_first_line() -> None:
             'rule a {\n  meta:\n    context = "file, memory"\n  condition:\n    true\n}',
             ["harfanglab_yara_context"],
         ),
+        # A context that is not a string is set, and wrong (m2).
+        (
+            "rule a {\n  meta:\n    context = 1\n  condition:\n    true\n}",
+            ["harfanglab_yara_context"],
+        ),
+        (
+            "rule a {\n  meta:\n    context = true\n  condition:\n    true\n}",
+            ["harfanglab_yara_context"],
+        ),
     ],
 )
 def test_the_profile_advisories(signature: str, expected: list[str]) -> None:
@@ -268,7 +331,10 @@ def test_the_profile_advisories(signature: str, expected: list[str]) -> None:
     [
         ("rule a { condition: true }", "rule a { condition: true }\n"),
         ("rule a { condition: true }\n", "rule a { condition: true }\n"),
-        ("rule a { condition: true }\n\n\n", "rule a { condition: true }\n"),
+        # Trailing blank lines are content: sent as written (m6).
+        ("rule a { condition: true }\n\n\n", "rule a { condition: true }\n\n\n"),
+        ("rule a { condition: true }\r\n\r\n", "rule a { condition: true }\n\n"),
+        ("rule a { condition: true }  ", "rule a { condition: true }  \n"),
         ("rule a {\r\n condition: true\r\n}\r\n", "rule a {\n condition: true\n}\n"),
         ("rule a {\r condition: true\r}", "rule a {\n condition: true\n}\n"),
         ("\n// lead\nrule a { condition: true }", "\n// lead\nrule a { condition: true }\n"),
