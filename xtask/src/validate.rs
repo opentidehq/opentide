@@ -12,11 +12,11 @@
 //! compared with the recording. The workspace's path reads `<WS>`, as the
 //! recordings write it.
 //!
-//! The queries check is UC-2.5's (#820): its findings (`context.source` is
-//! `engine`) are left out of the oracle's lists, and its status and counts
-//! are not compared. Any other difference fails the run unless an approved
-//! rule ([`APPROVED`]) explains it; a rule that explains nothing on the
-//! whole run is stale and fails it too.
+//! The queries check runs on the query engines (`opentide_cli::queries`,
+//! UC-2.5, #820): its findings (`context.source` is `engine`), its status
+//! and `stats.queries_checked` are compared like the others. Any difference
+//! fails the run unless an approved rule ([`APPROVED`]) explains it; a rule
+//! that explains nothing on the whole run is stale and fails it too.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -96,7 +96,84 @@ pub const APPROVED: &[Approved] = &[
         changelog: "**Every file with an invalid UUID is reported**",
         applies: invalid_uuid_every_file,
     },
+    Approved {
+        id: "engine-suggestions",
+        reason: "the query engines suggest by opentide_core::suggest's one rule (#812): a name \
+                 far from every choice (ES|QL `::foo`) suggests nothing, where the oracle's \
+                 engine offered an unrelated one (`bool`); the finding, its code and place are \
+                 the same, and its help is the language reference",
+        changelog: "**The query engines suggest by the same rule**",
+        applies: engine_suggestions,
+    },
+    Approved {
+        id: "crowdstrike-cql",
+        reason: "CrowdStrike queries are checked as CQL (language-server 0.12.0): each one \
+                 counts in `queries_checked`, and a query Next-Gen SIEM would refuse is a \
+                 `cql_*` error the oracle, which never checked them, does not report; the \
+                 count also holds the queries of a file the oracle could not read and the \
+                 Rust run reads (`yaml-1-2-dates`), never otherwise",
+        changelog: "**`opentide validate` checks CrowdStrike queries, and fails a rule whose \
+                    query Next-Gen SIEM would refuse**",
+        applies: crowdstrike_cql,
+    },
 ];
+
+/// The difference in `stats.queries_checked`, as a rule reads it: the
+/// oracle's count, and the Rust run's with how many of its queries were
+/// CrowdStrike's.
+/// CrowdStrike's, and how many were in files the oracle could not read
+/// (`yaml-1-2-dates`).
+fn queries_checked(
+    oracle: &Json,
+    rust: &Json,
+    crowdstrike: usize,
+    yaml_1_2: usize,
+) -> (Json, Json) {
+    (
+        json!({"queries_checked": oracle}),
+        json!({"queries_checked": rust, "crowdstrike": crowdstrike, "yaml_1_2": yaml_1_2}),
+    )
+}
+
+fn engine_suggestions(oracle: Option<&Json>, rust: Option<&Json>, _: &[Json]) -> bool {
+    let (Some(oracle), Some(rust)) = (oracle, rust) else {
+        return false;
+    };
+    let reference = opentide_cli::queries::engine_help(
+        code(rust),
+        rust["message"].as_str().unwrap_or(""),
+        None,
+    );
+    oracle.pointer("/context/source") == Some(&json!("engine"))
+        && !oracle["suggestion"].is_null()
+        && rust["suggestion"].is_null()
+        && rust["help"] == json!(reference)
+        && without(oracle, &["suggestion", "help"]) == without(rust, &["suggestion", "help"])
+}
+
+pub(crate) fn crowdstrike_cql(oracle: Option<&Json>, rust: Option<&Json>, _: &[Json]) -> bool {
+    match (oracle, rust) {
+        // A CrowdStrike query's finding, which the oracle did not check.
+        (None, Some(rust)) => {
+            code(rust).starts_with("cql_")
+                && rust.pointer("/context/source") == Some(&json!("engine"))
+                && rust.pointer("/context/platform") == Some(&json!("crowdstrike"))
+        }
+        // The count: the oracle's, and the CrowdStrike queries.
+        (Some(oracle), Some(rust)) => {
+            let (Some(before), Some(after), Some(added), Some(read)) = (
+                oracle["queries_checked"].as_u64(),
+                rust["queries_checked"].as_u64(),
+                rust["crowdstrike"].as_u64(),
+                rust["yaml_1_2"].as_u64(),
+            ) else {
+                return false;
+            };
+            added > 0 && before + added + read == after
+        }
+        _ => false,
+    }
+}
 
 /// `finding` without the keys `drop` names.
 fn without(finding: &Json, drop: &[&str]) -> Json {
@@ -202,14 +279,16 @@ fn invalid_uuid_every_file(
 
 /// The arguments of a recorded case, as `validate` options.
 #[derive(Debug, Default)]
-struct Args {
-    check: Option<Check>,
-    selection: Selection,
-    strict: bool,
-    queries: QueriesMode,
+pub(crate) struct Args {
+    pub(crate) check: Option<Check>,
+    pub(crate) selection: Selection,
+    pub(crate) strict: bool,
+    pub(crate) queries: QueriesMode,
 }
 
-fn parse_args(argv: &[String]) -> Option<Args> {
+/// `argv`'s `validate` options; `None` when it holds another (`--fix`,
+/// `--format`, ...) or no `validate`.
+pub(crate) fn parse_args(argv: &[String]) -> Option<Args> {
     let rest = argv.iter().skip_while(|arg| *arg != "validate").skip(1);
     let mut parsed = Args::default();
     let mut rest = rest.peekable();
@@ -242,9 +321,8 @@ fn parse_args(argv: &[String]) -> Option<Args> {
     Some(parsed)
 }
 
-fn is_engine(finding: &Json) -> bool {
-    finding.pointer("/context/source").and_then(Json::as_str) == Some("engine")
-}
+/// The difference in the number of queries checked.
+const QUERIES_CHECKED: &str = "stats.queries_checked";
 
 /// One difference between the two runs of a case.
 #[derive(Debug)]
@@ -378,32 +456,24 @@ fn run_case(case: &Case, ws: &Path, recorded: &Json) -> Result<Vec<Difference>> 
         return Ok(out);
     };
     let workspace = workspace.map_err(|error| anyhow::anyhow!("{}: open: {error}", case.id))?;
+    let counting = crate::corpus::queries::CountingQueries::default();
     let validation = workspace.validate(&Options {
         check: args.check,
         selection: Some(&args.selection),
         strict: args.strict,
         queries: args.queries,
-        query_check: None,
+        query_check: Some(&counting),
     });
     let root = ws.to_string_lossy().into_owned();
     let text = serde_json::to_string(&validation.report)?.replace(&root, "<WS>");
     let rust: Json = serde_json::from_str(&text)?;
-    let list = |report: &Json, key: &str, engine: bool| -> Vec<Json> {
-        report[key]
-            .as_array()
-            .map(|items| {
-                items
-                    .iter()
-                    .filter(|item| !engine || !is_engine(item))
-                    .cloned()
-                    .collect()
-            })
-            .unwrap_or_default()
+    let list = |report: &Json, key: &str| -> Vec<Json> {
+        report[key].as_array().cloned().unwrap_or_default()
     };
-    let oracle_issues = list(oracle_report, "issues", true);
-    let oracle_warnings = list(oracle_report, "warnings", true);
-    let rust_issues = list(&rust, "issues", false);
-    let rust_warnings = list(&rust, "warnings", false);
+    let oracle_issues = list(oracle_report, "issues");
+    let oracle_warnings = list(oracle_report, "warnings");
+    let rust_issues = list(&rust, "issues");
+    let rust_warnings = list(&rust, "warnings");
     list_differences(&case.id, "issues", &oracle_issues, &rust_issues, &mut out);
     list_differences(
         &case.id,
@@ -428,6 +498,32 @@ fn run_case(case: &Case, ws: &Path, recorded: &Json) -> Result<Vec<Difference>> 
         oracle_report["stats"]["objects_checked"].clone(),
         rust["stats"]["objects_checked"].clone(),
     );
+    let oracle_queries = &oracle_report["stats"]["queries_checked"];
+    let rust_queries = &rust["stats"]["queries_checked"];
+    if oracle_queries != rust_queries {
+        // Files the oracle could not read (YAML 1.1) and the Rust run read.
+        let unread = |report: &Json| -> std::collections::BTreeSet<PathBuf> {
+            report["issues"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter(|issue| code(issue) == "yaml_parse")
+                .filter_map(|issue| issue["file_path"].as_str())
+                .map(|file| PathBuf::from(file.replace("<WS>", &root)))
+                .collect()
+        };
+        let read_here: std::collections::BTreeSet<PathBuf> = unread(oracle_report)
+            .difference(&unread(&rust))
+            .cloned()
+            .collect();
+        let (oracle, rust) = queries_checked(
+            oracle_queries,
+            rust_queries,
+            counting.crowdstrike(),
+            counting.others_in(&read_here),
+        );
+        scalar(QUERIES_CHECKED, oracle, rust);
+    }
     scalar(
         "summary",
         summary_of(&oracle_issues, &oracle_warnings),
@@ -455,20 +551,15 @@ fn run_case(case: &Case, ws: &Path, recorded: &Json) -> Result<Vec<Difference>> 
     let mut oracle_checks = BTreeMap::new();
     if let Some(checks) = recorded["checks"].as_object() {
         for (name, check) in checks {
-            if name != "queries" {
-                oracle_checks.insert(name.clone(), check["status"].clone());
-            }
+            oracle_checks.insert(name.clone(), check["status"].clone());
         }
     }
     let rust_checks: BTreeMap<String, Json> = validation
         .checks
         .iter()
-        .filter(|(check, _)| *check != Check::Queries)
         .map(|(check, status)| (check.name().to_owned(), json!(status)))
         .collect();
     scalar("checks", json!(oracle_checks), json!(rust_checks));
-    // Without the engine's findings, the oracle's verdict is the one its
-    // other findings give.
     let oracle_failed = !oracle_issues.is_empty()
         || (args.strict
             && oracle_warnings
@@ -600,12 +691,13 @@ pub fn run(args: &[String]) -> Result<u8> {
             .or_insert(true) &= explained;
     }
     for difference in &differences {
-        let rule = if is_list(difference) {
+        let rule = if is_list(difference) || difference.what == QUERIES_CHECKED {
             rule_of(difference)
         } else {
             None
         };
         let derived = !is_list(difference)
+            && difference.what != QUERIES_CHECKED
             && difference.what != "summary (self)"
             && explained_cases.get(difference.case.as_str()) == Some(&true);
         if derived || rule.is_some() {

@@ -1676,6 +1676,11 @@ fn handle_code_action(
                 actions.extend(rename_action(session, &uri, finding, suggestion));
                 continue;
             }
+            let text = session.docs.get(uri.as_str()).map(|doc| doc.text.as_str());
+            let range = finding.diagnostic.range;
+            let start = Position::new(range.start.line, range.start.character);
+            let end = Position::new(range.end.line, range.end.character);
+            let replaced = suggestion_range(&finding.code, Range::new(start, end), text);
             actions.push(lsp::CodeActionOrCommand::CodeAction(lsp::CodeAction {
                 title: format!("Apply suggestion: {suggestion}"),
                 kind: Some(lsp::CodeActionKind::QUICKFIX),
@@ -1684,7 +1689,7 @@ fn handle_code_action(
                     changes: Some(HashMap::from([(
                         uri.clone(),
                         vec![lsp::TextEdit {
-                            range: finding.diagnostic.range,
+                            range: lsp_range(replaced),
                             new_text: suggestion.clone(),
                         }],
                     )])),
@@ -1892,6 +1897,40 @@ fn declare_actions(
     actions
 }
 
+/// What a suggestion replaces: the diagnostic's range, but for the codes
+/// whose range is a whole pipe stage (an unknown KQL operator, an unknown SPL
+/// command), only the word the stage starts with, so applying the suggestion
+/// keeps the stage's arguments (#887). Without the text, the range.
+fn suggestion_range(code: &str, range: Range, text: Option<&str>) -> Range {
+    if code != codes::KQL_UNKNOWN_OPERATOR && code != codes::SPL_UNKNOWN_COMMAND {
+        return range;
+    }
+    let Some(text) = text else {
+        return range;
+    };
+    let start = opentide_core::position_to_offset(text, range.start);
+    let word = text[start..]
+        .split(|c: char| !(c.is_alphanumeric() || c == '_' || c == '-'))
+        .next()
+        .unwrap_or_default();
+    if word.is_empty() {
+        return range;
+    }
+    let units: usize = word.chars().map(char::len_utf16).sum();
+    let end = Position::new(
+        range.start.line,
+        range
+            .start
+            .character
+            .saturating_add(u32::try_from(units).unwrap_or(u32::MAX)),
+    );
+    // Never past the diagnostic's own end.
+    if (end.line, end.character) > (range.end.line, range.end.character) {
+        return range;
+    }
+    Range::new(range.start, end)
+}
+
 /// Every suggestion of the document as one edit; overlapping ones after the
 /// first are left for another run.
 fn fix_all(session: &Session, uri: &lsp::Uri) -> Option<lsp::CodeActionOrCommand> {
@@ -1901,7 +1940,13 @@ fn fix_all(session: &Session, uri: &lsp::Uri) -> Option<lsp::CodeActionOrCommand
         .iter()
         // A file name is not an edit of the text (#215).
         .filter(|d| d.code != codes::FILENAME_SLUG)
-        .filter_map(|d| Some((d.range, d.suggestion.clone()?)))
+        .filter_map(|d| {
+            let text = session.docs.get(uri.as_str()).map(|doc| doc.text.as_str());
+            Some((
+                suggestion_range(&d.code, d.range, text),
+                d.suggestion.clone()?,
+            ))
+        })
         .collect();
     fixes.sort_by_key(|(range, _)| (range.start.line, range.start.character));
     let mut edits: Vec<lsp::TextEdit> = Vec::new();
@@ -2278,6 +2323,36 @@ mod tests {
 
     fn at(text: &str, line: u32, character: u32) -> usize {
         offset(text, lsp::Position::new(line, character))
+    }
+
+    #[test]
+    fn a_suggestion_replaces_the_stage_s_first_word_hyphens_included() {
+        let stage =
+            |start: u32, end: u32| Range::new(Position::new(0, start), Position::new(0, end));
+        let text = "T | project-awy a, b";
+        // A hyphenated operator is one word (#887): `project-awy`, not `project`.
+        assert_eq!(
+            suggestion_range(codes::KQL_UNKNOWN_OPERATOR, stage(4, 20), Some(text)),
+            stage(4, 15)
+        );
+        assert_eq!(
+            suggestion_range(codes::SPL_UNKNOWN_COMMAND, stage(4, 20), Some(text)),
+            stage(4, 15)
+        );
+        // Never past the diagnostic's own end.
+        assert_eq!(
+            suggestion_range(codes::KQL_UNKNOWN_OPERATOR, stage(4, 8), Some(text)),
+            stage(4, 8)
+        );
+        // Another code, or no text: the diagnostic's range.
+        assert_eq!(
+            suggestion_range(codes::KQL_UNKNOWN_TABLE, stage(4, 20), Some(text)),
+            stage(4, 20)
+        );
+        assert_eq!(
+            suggestion_range(codes::KQL_UNKNOWN_OPERATOR, stage(4, 20), None),
+            stage(4, 20)
+        );
     }
 
     #[test]

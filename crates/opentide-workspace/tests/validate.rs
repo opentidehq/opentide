@@ -850,7 +850,12 @@ mod validate {
     }
 
     impl QueryCheck for StubQueries {
-        fn check(&self, objects: &[QueryObject<'_>], as_warnings: bool) -> QueryFindings {
+        fn check(
+            &self,
+            _ws: &Workspace,
+            objects: &[QueryObject<'_>],
+            as_warnings: bool,
+        ) -> QueryFindings {
             self.calls.lock().unwrap().push((
                 objects.iter().map(|o| o.uuid.to_owned()).collect(),
                 as_warnings,

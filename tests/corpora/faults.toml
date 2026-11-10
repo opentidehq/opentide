@@ -1190,6 +1190,18 @@ ops = [
 ]
 
 [[kind]]
+id = "spl-empty-command-hunt"
+codes = ["spl_empty_command"]
+severity = "error"
+command = ["validate"]
+target = { family = "rule", tags = ["hunt"] }
+ops = [
+    { op = "set", path = "response.procedure.searches.1.query", value = "index=a | stats\n" },
+]
+isolated = true
+note = "a response hunt's query, checked in its `system`'s language (#696); isolated so the combined workspace the goldens record stays as it was"
+
+[[kind]]
 id = "spl-parse-error"
 codes = ["spl_parse_error"]
 severity = "error"
