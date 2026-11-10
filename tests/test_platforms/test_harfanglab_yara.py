@@ -25,7 +25,10 @@ from opentide.platforms.harfanglab.deployer import HarfangLabDeploy
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "harfanglab"
 TENANT: Any = SimpleNamespace(setup=SimpleNamespace(source_id="source-1"))
 
-SIGNATURE = 'rule Cmd_String {\n  meta:\n    context = "file"\n  strings:\n    $a = "cmd.exe"\n  condition:\n    $a\n}\n'
+SIGNATURE = (
+    'rule Cmd_String {\n  meta:\n    context = "file"\n'
+    '  strings:\n    $a = "cmd.exe"\n  condition:\n    $a\n}\n'
+)
 DECOMPOSED = {
     "meta": {"context": ["file"], "os": "Windows"},
     "strings": '$a = "cmd.exe" ascii\n',
