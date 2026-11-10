@@ -93,6 +93,9 @@ sys.exit(1 if errors else 0)
 PY
 if [[ $? -ne 0 ]]; then ERRORS=$((ERRORS + 1)); fi
 
+# Prose MDX cannot parse (a bare `<=>`, `a < b` or `{`) stops opentide.org's docs sync.
+if ! python3 "$ROOT/scripts/build/check_docs_mdx.py" "$DOCS"; then ERRORS=$((ERRORS + 1)); fi
+
 if [[ "$ERRORS" -gt 0 ]]; then
   echo "validate-docs: $ERRORS error(s)" >&2
   exit 1

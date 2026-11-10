@@ -8,11 +8,13 @@ on:
     paths:
       - 'docs/**'
       - 'scripts/validate-docs.sh'
+      - 'scripts/build/check_docs_mdx.py'
       - '.github/workflows/docs.yml'
   pull_request:
     paths:
       - 'docs/**'
       - 'scripts/validate-docs.sh'
+      - 'scripts/build/check_docs_mdx.py'
       - '.github/workflows/docs.yml'
   workflow_dispatch:
 
