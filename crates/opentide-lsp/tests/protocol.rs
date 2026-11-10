@@ -516,6 +516,43 @@ fn code_actions_follow_the_context() {
     assert!(found.iter().all(|a| a["kind"] == "quickfix"), "{found:#?}");
 }
 
+/// #887: an unknown SPL command's fix replaces the command, not its stage.
+#[test]
+fn an_spl_command_fix_keeps_the_stage_s_arguments() {
+    let (mut lsp, _) = start(json!({ "capabilities": {} }));
+    let uri = "file:///tmp/typo.spl";
+    let text = "index=main | stast count by host";
+    open(&mut lsp, uri, "spl", text);
+    let diagnostics = published_for(&mut lsp, uri);
+    let typo: Vec<&Value> = diagnostics
+        .iter()
+        .filter(|d| d["code"] == "spl_unknown_command")
+        .collect();
+    assert_eq!(typo.len(), 1, "{diagnostics:#?}");
+    let found = lsp.request(
+        "textDocument/codeAction",
+        json!({
+            "textDocument": { "uri": uri },
+            "range": typo[0]["range"],
+            "context": { "diagnostics": [typo[0]] },
+        }),
+    )["result"]
+        .as_array()
+        .unwrap()
+        .clone();
+    assert_eq!(found.len(), 1, "{found:#?}");
+    assert_eq!(found[0]["title"], "Apply suggestion: stats");
+    let edit = &found[0]["edit"]["changes"][uri][0];
+    assert_eq!(edit["newText"], "stats");
+    assert_eq!(edit["range"]["start"]["character"], 13, "{edit}");
+    assert_eq!(edit["range"]["end"]["character"], 18, "{edit}");
+    // Applied, the edit keeps `count by host`.
+    let start = usize::try_from(edit["range"]["start"]["character"].as_u64().unwrap()).unwrap();
+    let end = usize::try_from(edit["range"]["end"]["character"].as_u64().unwrap()).unwrap();
+    let fixed = format!("{}stats{}", &text[..start], &text[end..]);
+    assert_eq!(fixed, "index=main | stats count by host");
+}
+
 /// P2.5: loads are logged, and a broken `visibility.toml` is shown once.
 #[test]
 fn a_broken_visibility_file_is_logged_and_shown_once() {

@@ -6,9 +6,17 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ## [Unreleased]
 
+### Upgrade
+
+- If you build an `opentide_analysis::QueryReport` with a struct literal, set its new `placeholder` field (`false` for a query you checked).
+
+### Breaking
+
+- **`opentide_analysis::QueryReport` has a public `placeholder` field** ([opentide#820](https://github.com/opentidehq/opentide/issues/820)). `analyze_queries` says which query is still the stand-in `opentide new` wrote, so a host need not read the file again to skip it. A struct literal of `QueryReport` without the field no longer compiles.
+
 ### Added
 
-- **`QueryReport::placeholder` and `LineStarts`** ([opentide#820](https://github.com/opentidehq/opentide/issues/820)). `opentide_analysis::analyze_queries` says which query is still the stand-in `opentide new` wrote (`opentide_tide::is_placeholder_query`, now public), so a host need not read the file again to skip it, and `LineStarts` converts the engine's LSP ranges to the CLI's 1-based code-point positions for every host, the Python binding included.
+- **`LineStarts` and `opentide_tide::is_placeholder_query`** ([opentide#820](https://github.com/opentidehq/opentide/issues/820)). `opentide_analysis::LineStarts` converts the engine's LSP ranges to the CLI's 1-based code-point positions for every host, the Python binding included, and `is_placeholder_query`, now public, tells the stand-in query `opentide new` writes from a real one.
 
 - **`opentide_core::suggest`: one "did you mean" rule for the engine** ([#812](https://github.com/opentidehq/opentide/issues/812)). The same word without case, whitespace, `-` or `_` wins outright; otherwise the candidate with the fewest edits (strsim's optimal string alignment distance: a transposition is one edit), within a third of the value's length and of the words that hold the part that differs, so two edits side by side or two characters cut from a long name are found (`SecurityEve` → `SecurityEvent`) while a phrase that shares words with a choice is not a typo of it (`Big incident` is not `Minor incident`). It uses an edit distance rather than a port of Python's `difflib`: an edit distance suggests what a typo meant, where a ratio of shared letters also suggests unrelated words.
 

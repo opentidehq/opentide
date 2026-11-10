@@ -218,6 +218,100 @@ fn line_endings_count_as_a_text_mode_read_counts_them() {
         )
     };
     assert_eq!(place(&crlf), place(&lf));
+    // A lone `\r` ends a line too, as a text-mode read reads it.
+    let cr = lf.replace('\n', "\r");
+    assert_eq!(place(&cr), place(&lf));
+}
+
+#[test]
+fn a_broken_visibility_toml_declares_nothing_not_the_last_workspace_s_datasets() {
+    let text = rule("  defender_for_endpoint:\n    query: MyCustomTable | take 1\n");
+    let unknown_in = |fs: &MemoryFs| {
+        let _engine = opentide_cli::queries::ENGINE.lock().unwrap();
+        let profiles = Profiles::install(fs, Some(std::path::Path::new("/ws")));
+        let unknown = profiles.check_object(&text)[0]
+            .findings
+            .iter()
+            .filter(|finding| finding.code == "kql_unknown_table")
+            .count();
+        (unknown, profiles.visibility_problem)
+    };
+    let visibility_path = "/ws/.opentide/configurations/visibility.toml";
+    // One workspace declares the table, in the same process as the next.
+    let declared = MemoryFs::new();
+    declared.write(
+        visibility_path,
+        "[[logsources]]\nname = \"MyCustomTable\"\nsystem = \"defender_for_endpoint\"\n",
+    );
+    let (unknown, problem) = unknown_in(&declared);
+    assert_eq!(unknown, 0);
+    assert!(problem.is_none(), "{problem:?}");
+    // The next one's visibility.toml is not TOML: it declares nothing.
+    let broken = MemoryFs::new();
+    broken.write(
+        visibility_path,
+        "[[logsources]\nname = = \"MyCustomTable\"\n",
+    );
+    let (unknown, problem) = unknown_in(&broken);
+    assert_eq!(unknown, 1);
+    let problem = problem.unwrap();
+    assert!(
+        problem.starts_with("the declared datasets could not be read: "),
+        "{problem}"
+    );
+}
+
+/// An ES|QL `RLIKE (…)` pattern list: Elasticsearch 9.2 and later.
+const ESQL_9_2: &str = "  elastic:\n    type: esql\n    query: 'FROM logs-* | WHERE process.name RLIKE (\"a.*\", \"b.*\")'\n";
+
+/// The `esql_unavailable` findings of the rule's query, with the workspace's
+/// `elastic.toml` (`None`: none).
+fn esql_unavailable(elastic: Option<&str>) -> Vec<(opentide_analysis::Severity, String)> {
+    let text = rule(ESQL_9_2);
+    let mut files = vec![(FILE, text.as_str())];
+    if let Some(elastic) = elastic {
+        files.push((
+            "/ws/.opentide/configurations/platforms/elastic.toml",
+            elastic,
+        ));
+    }
+    let ws = workspace(&files);
+    let _engine = opentide_cli::queries::ENGINE.lock().unwrap();
+    let profiles = Profiles::install(ws.fs().as_ref(), Some(ws.root()));
+    let checked = profiles.check_object(&text);
+    assert_eq!(checked.len(), 1);
+    assert_eq!(checked[0].language, "esql");
+    checked[0]
+        .findings
+        .iter()
+        .filter(|finding| finding.code == "esql_unavailable")
+        .map(|finding| (finding.severity, finding.message.clone()))
+        .collect()
+}
+
+#[test]
+fn es_ql_is_checked_against_the_lowest_stack_its_tenants_declare() {
+    let tenants = "[[tenants]]\nname = \"old\"\n[tenants.setup]\nversion = \"9.1\"\n\n\
+                   [[tenants]]\nname = \"new\"\n[tenants.setup]\nversion = \"9.3\"\n";
+    let found = esql_unavailable(Some(tenants));
+    assert_eq!(found.len(), 1, "{found:#?}");
+    assert_eq!(found[0].0, opentide_analysis::Severity::Warning);
+    assert!(
+        found[0].1.contains("Elasticsearch 9.1 rejects it"),
+        "{}",
+        found[0].1
+    );
+    // Without the file: every supported line from the 8.19 floor, and the
+    // newest accepts it, so it is information, naming no declared stack.
+    let found = esql_unavailable(None);
+    assert_eq!(found.len(), 1, "{found:#?}");
+    assert_eq!(found[0].0, opentide_analysis::Severity::Information);
+    assert!(!found[0].1.contains("rejects it"), "{}", found[0].1);
+    // Tenants on a stack that has it: nothing to say.
+    let found = esql_unavailable(Some(
+        "[[tenants]]\nname = \"new\"\n[tenants.setup]\nversion = \"9.3\"\n",
+    ));
+    assert!(found.is_empty(), "{found:#?}");
 }
 
 #[test]

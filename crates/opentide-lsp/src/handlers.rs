@@ -2326,6 +2326,36 @@ mod tests {
     }
 
     #[test]
+    fn a_suggestion_replaces_the_stage_s_first_word_hyphens_included() {
+        let stage =
+            |start: u32, end: u32| Range::new(Position::new(0, start), Position::new(0, end));
+        let text = "T | project-awy a, b";
+        // A hyphenated operator is one word (#887): `project-awy`, not `project`.
+        assert_eq!(
+            suggestion_range(codes::KQL_UNKNOWN_OPERATOR, stage(4, 20), Some(text)),
+            stage(4, 15)
+        );
+        assert_eq!(
+            suggestion_range(codes::SPL_UNKNOWN_COMMAND, stage(4, 20), Some(text)),
+            stage(4, 15)
+        );
+        // Never past the diagnostic's own end.
+        assert_eq!(
+            suggestion_range(codes::KQL_UNKNOWN_OPERATOR, stage(4, 8), Some(text)),
+            stage(4, 8)
+        );
+        // Another code, or no text: the diagnostic's range.
+        assert_eq!(
+            suggestion_range(codes::KQL_UNKNOWN_TABLE, stage(4, 20), Some(text)),
+            stage(4, 20)
+        );
+        assert_eq!(
+            suggestion_range(codes::KQL_UNKNOWN_OPERATOR, stage(4, 20), None),
+            stage(4, 20)
+        );
+    }
+
+    #[test]
     fn incremental_edits_apply_in_order_and_full_replace_wins() {
         let text = "name: Rule\n";
         let edited =
