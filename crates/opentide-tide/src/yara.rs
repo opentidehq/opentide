@@ -24,6 +24,9 @@ use opentide_yara::catalog::Catalog;
 /// The platforms whose `yara` block holds a YaraSignature.
 pub(crate) const PLATFORMS: &[&str] = &["harfanglab", "bitdefender"];
 
+/// The longest identifier libyara 4.5 accepts.
+const MAX_IDENTIFIER: usize = 128;
+
 /// The keys of HarfangLab's decomposed form.
 const DECOMPOSED: &[&str] = &["meta", "strings", "condition", "imports"];
 
@@ -83,6 +86,12 @@ fn rule_name_problem(name: &str) -> Option<String> {
             "deploy derives the YARA rule name `{name}`, a YARA keyword"
         ));
     }
+    if name.len() > MAX_IDENTIFIER {
+        return Some(format!(
+            "deploy derives a YARA rule name of {} characters from the rule `name`: libyara refuses an identifier longer than {MAX_IDENTIFIER}",
+            name.len()
+        ));
+    }
     None
 }
 
@@ -131,6 +140,21 @@ impl Builder {
     }
 }
 
+/// The deployer's `SEVERITY_TO_SCORE` (and `SCORE_OVERRIDE_MAP`, the same
+/// table): `response.alert_severity` when `meta.score` names none.
+fn score_of(value: &str) -> Option<&'static str> {
+    SCORES.iter().find(|(k, _)| *k == value).map(|(_, v)| *v)
+}
+
+/// `HarfangLabService.map_confidence`.
+fn confidence_of(value: &str) -> &'static str {
+    match value {
+        "Weak" => "weak",
+        "Strong" => "strong",
+        _ => "moderate",
+    }
+}
+
 fn path(parts: &[&str]) -> Vec<String> {
     parts.iter().map(|p| p.to_string()).collect()
 }
@@ -139,9 +163,28 @@ fn find<'a>(keys: &'a [YamlKey], p: &[&str]) -> Option<&'a YamlKey> {
     keys.iter().find(|k| k.path_is(p))
 }
 
+/// A scalar's value as a YAML loader gives it to deploy: a block scalar keeps
+/// its final line break unless chomped with `-` (`|`, `|+`), which
+/// [`scalar_at`] leaves out.
+fn deployed_text(source: &str, keys: &[YamlKey], p: &[&str]) -> Option<String> {
+    let key = find(keys, p)?;
+    let at = key.scalar?;
+    let mut text = scalar_at(source, at, key.column)?.text;
+    let header = source[at..].lines().next().unwrap_or("");
+    if header.starts_with(['|', '>']) && !header.contains('-') && !text.is_empty() {
+        text.push('\n');
+    }
+    Some(text)
+}
+
 fn text_of(source: &str, keys: &[YamlKey], p: &[&str]) -> Option<String> {
     let key = find(keys, p)?;
     scalar_at(source, key.scalar?, key.column).map(|s| s.text)
+}
+
+/// `p` as the `&str` path the lookups take.
+fn strs(p: &[String]) -> Vec<&str> {
+    p.iter().map(String::as_str).collect()
 }
 
 /// The scalar items of the sequence at `p`, each with its source map and
@@ -220,8 +263,10 @@ fn stripped(text: &str, map: &[usize]) -> (String, Vec<usize>) {
 /// A section header deploy writes itself, if a fragment has one: the byte
 /// range of that line in the fragment's text.
 fn section_header(text: &str) -> Option<(usize, usize, &str)> {
+    // Comments and text strings are not sections: `/* rule of thumb */`.
+    let masked = mask_comments_and_strings(text);
     let mut offset = 0;
-    for line in text.split('\n') {
+    for line in masked.split('\n') {
         let trimmed = line.trim_start();
         let lead = line.len() - trimmed.len();
         let word: String = trimmed
@@ -255,6 +300,49 @@ fn section_header(text: &str) -> Option<(usize, usize, &str)> {
         offset += line.len() + 1;
     }
     None
+}
+
+/// `text` with its comments (`//`, `/* */`) and text strings (`"..."`)
+/// blanked, byte for byte, newlines kept.
+fn mask_comments_and_strings(text: &str) -> String {
+    let bytes = text.as_bytes();
+    let mut out = bytes.to_vec();
+    let mut i = 0;
+    let blank = |out: &mut Vec<u8>, from: usize, to: usize| {
+        for b in &mut out[from..to] {
+            if *b != b'\n' {
+                *b = b' ';
+            }
+        }
+    };
+    while i < bytes.len() {
+        match bytes[i] {
+            b'/' if bytes.get(i + 1) == Some(&b'/') => {
+                let end = text[i..].find('\n').map_or(bytes.len(), |n| i + n);
+                blank(&mut out, i, end);
+                i = end;
+            }
+            b'/' if bytes.get(i + 1) == Some(&b'*') => {
+                let end = text[i + 2..]
+                    .find("*/")
+                    .map_or(bytes.len(), |n| i + 2 + n + 2);
+                blank(&mut out, i, end);
+                i = end;
+            }
+            b'"' => {
+                let mut j = i + 1;
+                while j < bytes.len() && bytes[j] != b'"' && bytes[j] != b'\n' {
+                    j += if bytes[j] == b'\\' { 2 } else { 1 };
+                }
+                let end = (j + 1).min(bytes.len());
+                blank(&mut out, i, end);
+                i = end;
+            }
+            _ => i += 1,
+        }
+    }
+    // Only ASCII bytes were replaced, with ASCII: still UTF-8.
+    String::from_utf8(out).unwrap_or_else(|_| text.to_string())
 }
 
 /// HarfangLab's decomposed `yara` block as the rule deploy assembles, or
@@ -298,76 +386,225 @@ pub(crate) fn decomposed_injection(source: &str, keys: &[YamlKey]) -> Option<Inj
         b.synthetic("\n", host, &yara_path);
     }
 
+    // Where a piece of generated text points: the value of the field it
+    // stands for (its key, for a collection), else the `yara` key.
+    let host_of = |p: &[&str]| find(keys, p).map_or(host, |k| k.scalar.unwrap_or(k.key_start));
+    // A scalar as written, with its source map; `None` when absent or blank.
+    let scalar = |p: &[&str]| {
+        let key = find(keys, p)?;
+        let s = scalar_at(source, key.scalar?, key.column)?;
+        (!s.text.is_empty()).then_some((s.text, s.map))
+    };
+
     let name = text_of(source, keys, &["name"]).unwrap_or_default();
     let mut rule_name = derived_rule_name(&name);
     if rule_name_problem(&rule_name).is_some() {
         // `harfanglab_yara_rule_name` reports it; the bodies are still checked.
         rule_name = "opentide_rule".into();
     }
-    b.synthetic(&format!("rule {rule_name} {{\n"), host, &path(&["name"]));
+    let name_path = path(&["name"]);
+    b.synthetic(
+        &format!("rule {rule_name} {{\n"),
+        host_of(&["name"]),
+        &name_path,
+    );
 
-    let meta = ["configurations", "harfanglab", "yara", "meta"];
-    let os = text_of(source, keys, &[meta[0], meta[1], meta[2], meta[3], "os"]).unwrap_or_default();
-    let contexts: Vec<String> = items(
-        keys,
-        source,
-        &[meta[0], meta[1], meta[2], meta[3], "context"],
-    )
-    .into_iter()
-    .map(
-        |(c, _, _)| match OS_TO_FILE_CONTEXT.iter().find(|(o, _)| *o == os) {
-            Some((_, file)) if c == "file" => file.to_string(),
-            _ => c,
-        },
-    )
-    .collect();
-    let uuid = text_of(source, keys, &["metadata", "uuid"]).unwrap_or_default();
-    let score = text_of(source, keys, &[meta[0], meta[1], meta[2], meta[3], "score"])
-        .and_then(|s| {
-            SCORES
-                .iter()
-                .find(|(k, _)| *k == s)
-                .map(|(_, v)| v.to_string())
+    // The meta lines `compile_yara_deployment` writes, in its order. What it
+    // escapes cannot break the rule and is generated text; what it writes
+    // as it is (`id`, the dates, `references`, `tags`, `context`, `os`,
+    // `arch`) keeps its map, so a `"` in a tag is the parse error the
+    // tenant reports, on that tag.
+    let meta_path = path(&["configurations", "harfanglab", "yara", "meta"]);
+    let meta_field = |name: &str| {
+        let mut p = meta_path.clone();
+        p.push(name.into());
+        p
+    };
+    b.synthetic("    meta:\n", host_of(&strs(&meta_path)), &meta_path);
+    // `key = "value"` with the value as written.
+    let verbatim = |b: &mut Builder, key: &str, p: &[&str], value: Option<(String, Vec<usize>)>| {
+        let field = path(p);
+        let at = host_of(p);
+        b.synthetic(&format!("        {key} = \""), at, &field);
+        if let Some((text, map)) = value {
+            b.push(&text, &map, &field, false);
+        }
+        b.synthetic("\"\n", at, &field);
+    };
+    // `key = "value"` with the value escaped.
+    let escaped = |b: &mut Builder, key: &str, p: &[&str], value: &str| {
+        b.synthetic(
+            &format!("        {key} = \"{}\"\n", escape(value)),
+            host_of(p),
+            &path(p),
+        );
+    };
+    verbatim(
+        &mut b,
+        "id",
+        &["metadata", "uuid"],
+        scalar(&["metadata", "uuid"]),
+    );
+    let title = deployed_text(source, keys, &["name"]).unwrap_or_default();
+    escaped(&mut b, "title", &["name"], &title);
+    let description = deployed_text(source, keys, &["description"]).unwrap_or_default();
+    escaped(&mut b, "description", &["description"], &description);
+    let author = deployed_text(source, keys, &["metadata", "author"])
+        .filter(|t| !t.is_empty())
+        .map(|t| (t, vec!["metadata", "author"]))
+        .or_else(|| {
+            deployed_text(source, keys, &["metadata", "organisation", "name"])
+                .filter(|t| !t.is_empty())
+                .map(|t| (t, vec!["metadata", "organisation", "name"]))
         })
-        .unwrap_or_else(|| "50".into());
-    let mut generated = String::from("    meta:\n");
-    generated.push_str(&format!("        id = \"{}\"\n", escape(&uuid)));
-    generated.push_str(&format!("        title = \"{}\"\n", escape(&name)));
-    if !contexts.is_empty() {
-        generated.push_str(&format!(
-            "        context = \"{}\"\n",
-            escape(&contexts.join(","))
-        ));
+        .unwrap_or_else(|| (String::new(), vec!["metadata", "author"]));
+    escaped(&mut b, "author", &author.1, &author.0);
+    for (key, field) in [("date", "created"), ("modified", "modified")] {
+        let p = ["metadata", field];
+        if let Some(value) = scalar(&p) {
+            verbatim(&mut b, key, &p, Some(value));
+        }
     }
-    generated.push_str(&format!("        os = \"{}\"\n", escape(&os)));
-    generated.push_str(&format!("        score = {score}\n"));
-    generated.push_str("    strings:\n");
-    b.synthetic(&generated, host, &path(&meta));
+    // `references.public` values, joined with `\n` (the two characters).
+    let public: Vec<&YamlKey> = keys
+        .iter()
+        .filter(|k| k.path.len() == 3 && k.path[0] == "references" && k.path[1] == "public")
+        .collect();
+    let refs: Vec<(String, Vec<usize>, Vec<String>)> = public
+        .iter()
+        .filter_map(|k| {
+            let s = scalar_at(source, k.scalar?, k.column)?;
+            Some((s.text, s.map, k.path.clone()))
+        })
+        .collect();
+    let joined = |b: &mut Builder,
+                  key: &str,
+                  p: &[&str],
+                  values: &[(String, Vec<usize>, Vec<String>)],
+                  sep: &str| {
+        let field = path(p);
+        let at = host_of(p);
+        b.synthetic(&format!("        {key} = \""), at, &field);
+        for (i, (text, map, item_path)) in values.iter().enumerate() {
+            if i > 0 {
+                b.synthetic(sep, at, &field);
+            }
+            b.push(text, map, item_path, false);
+        }
+        b.synthetic("\"\n", at, &field);
+    };
+    if !refs.is_empty() {
+        joined(
+            &mut b,
+            "references",
+            &["references", "public"],
+            &refs,
+            "\\n",
+        );
+    }
+    let tags = items(keys, source, &["configurations", "harfanglab", "tags"]);
+    if !tags.is_empty() {
+        joined(
+            &mut b,
+            "tags",
+            &["configurations", "harfanglab", "tags"],
+            &tags,
+            ";",
+        );
+    }
+    let os = scalar(&["configurations", "harfanglab", "yara", "meta", "os"]);
+    let os_text = os.as_ref().map(|(t, _)| t.clone()).unwrap_or_default();
+    let context_path = meta_field("context");
+    let contexts: Vec<(String, Vec<usize>, Vec<String>)> =
+        items(keys, source, &strs(&context_path))
+            .into_iter()
+            .map(|(c, map, item_path)| {
+                match OS_TO_FILE_CONTEXT.iter().find(|(o, _)| *o == os_text) {
+                    // Deploy writes `file` as the os's file context.
+                    Some((_, file)) if c == "file" => {
+                        let file = file.to_string();
+                        let map = vec![map[0]; file.len()];
+                        (file, map, item_path)
+                    }
+                    _ => (c, map, item_path),
+                }
+            })
+            .collect();
+    if !contexts.is_empty() {
+        joined(&mut b, "context", &strs(&context_path), &contexts, ",");
+    }
+    verbatim(&mut b, "os", &strs(&meta_field("os")), os);
+    let arch_path = meta_field("arch");
+    let arch_items = items(keys, source, &strs(&arch_path));
+    if !arch_items.is_empty() {
+        joined(&mut b, "arch", &strs(&arch_path), &arch_items, ",");
+    } else if let Some(arch) = scalar(&strs(&arch_path)) {
+        verbatim(&mut b, "arch", &strs(&arch_path), Some(arch));
+    }
+    let classification_path = meta_field("classification");
+    if let Some(c) =
+        deployed_text(source, keys, &strs(&classification_path)).filter(|c| !c.is_empty())
+    {
+        escaped(&mut b, "classification", &strs(&classification_path), &c);
+    }
+    let score_path = meta_field("score");
+    let score = scalar(&strs(&score_path))
+        .and_then(|(s, _)| score_of(&s))
+        .or_else(|| {
+            let severity = text_of(source, keys, &["response", "alert_severity"])
+                .unwrap_or_else(|| "Informational".into());
+            Some(score_of(&severity).unwrap_or("50"))
+        })
+        .unwrap_or("50");
+    b.synthetic(
+        &format!("        score = {score}\n"),
+        host_of(&strs(&score_path)),
+        &score_path,
+    );
+    let confidence_path = ["configurations", "harfanglab", "confidence"];
+    let confidence = text_of(source, keys, &confidence_path).unwrap_or_default();
+    b.synthetic(
+        &format!("        confidence = \"{}\"\n", confidence_of(&confidence)),
+        host_of(&confidence_path),
+        &path(&confidence_path),
+    );
 
-    let strings_path = path(&["configurations", "harfanglab", "yara", "strings"]);
-    let condition_path = path(&["configurations", "harfanglab", "yara", "condition"]);
-    for (text, map, field, header) in [
+    let strings_p = ["configurations", "harfanglab", "yara", "strings"];
+    let condition_p = ["configurations", "harfanglab", "yara", "condition"];
+    let strings_path = path(&strings_p);
+    let condition_path = path(&condition_p);
+    b.synthetic("    strings:\n", host_of(&strings_p), &strings_path);
+    // `condition:` closes the strings: an unclosed hex string is found there.
+    for (text, map, field, at, header) in [
         (
             &strings,
             &strings_map,
             &strings_path,
+            host_of(&strings_p),
             Some("    condition:\n"),
         ),
-        (&condition, &condition_map, &condition_path, None),
+        (
+            &condition,
+            &condition_map,
+            &condition_path,
+            host_of(&condition_p),
+            None,
+        ),
     ] {
         let (text, map) = stripped(text, map);
         let mut offset = 0;
         for line in text.split('\n') {
-            b.synthetic("        ", host, field);
+            b.synthetic("        ", at, field);
             b.push(line, &map[offset..offset + line.len()], field, false);
-            b.synthetic("\n", host, field);
+            b.synthetic("\n", at, field);
             offset += line.len() + 1;
         }
         if let Some(h) = header {
-            b.synthetic(h, host, &yara_path);
+            b.synthetic(h, at, field);
         }
     }
-    b.synthetic("}", host, &yara_path);
+    // The closing brace ends the condition: a condition cut short is found here.
+    b.synthetic("}", host_of(&condition_p), &condition_path);
     // The assembled text covers the bodies' scalars and what lies between.
     let real: Vec<usize> = b
         .parts
@@ -389,28 +626,56 @@ pub(crate) fn decomposed_injection(source: &str, keys: &[YamlKey]) -> Option<Inj
 }
 
 /// A finding of the YARA engine on an assembled rule, as the block reports
-/// it: what the constraint codes report instead is dropped, a finding is
-/// moved to the first byte the author wrote, and one wholly inside
-/// generated text is dropped.
+/// it: what the constraint codes report instead is dropped, and the rest is
+/// kept, on the bytes the author wrote. A finding inside generated text (an
+/// unclosed condition found at the closing brace) moves to the nearest byte
+/// of the field it belongs to, or, when that field has none, onto its key.
+/// No error is lost.
 pub(crate) fn on_assembled(inj: &InjectedQuery, mut d: Diagnostic) -> Option<Diagnostic> {
     if inj.parts.is_empty() {
         return Some(d);
     }
     if matches!(
         d.code.as_str(),
-        codes::YARA_UNKNOWN_MODULE
-            | codes::YARA_RULE_IDENTIFIER_CONFLICT
-            | codes::YARA_EMPTY_SIGNATURE
+        // `harfanglab_yara_import` and the block's own checks report these.
+        codes::YARA_UNKNOWN_MODULE | codes::YARA_EMPTY_SIGNATURE
     ) {
         return None;
     }
-    let start = opentide_core::position_to_offset(&inj.inner, d.range.start);
-    let end = opentide_core::position_to_offset(&inj.inner, d.range.end).max(start + 1);
-    let first = (start..end.min(inj.inner.len())).find(|&i| !inj.is_synthetic(i))?;
-    let last = (first..end.min(inj.inner.len()))
-        .take_while(|&i| !inj.is_synthetic(i))
-        .last()
-        .unwrap_or(first);
+    let len = inj.inner.len();
+    if len == 0 {
+        return Some(d);
+    }
+    let start = opentide_core::position_to_offset(&inj.inner, d.range.start).min(len - 1);
+    let end = opentide_core::position_to_offset(&inj.inner, d.range.end)
+        .max(start + 1)
+        .min(len);
+    let (first, last) = match (start..end).find(|&i| !inj.is_synthetic(i)) {
+        Some(first) => {
+            let last = (first..end)
+                .take_while(|&i| !inj.is_synthetic(i))
+                .last()
+                .unwrap_or(first);
+            (first, last)
+        }
+        None => {
+            let field = inj.part_at(start).map(|p| p.field_path.clone());
+            // Text the field wrote, or one of its items (`tags.1` for `tags`).
+            let same = |i: usize| {
+                inj.part_at(i).is_some_and(|p| {
+                    !p.synthetic && field.as_ref().is_some_and(|f| p.field_path.starts_with(f))
+                })
+            };
+            let at = (0..start)
+                .rev()
+                .find(|&i| same(i))
+                .or_else(|| (start..len).find(|&i| same(i)))
+                // The field wrote nothing: the generated byte, which maps
+                // onto the field's key.
+                .unwrap_or(start);
+            (at, at)
+        }
+    };
     d.range = opentide_core::Range::new(
         opentide_core::offset_to_position(&inj.inner, first),
         opentide_core::offset_to_position(&inj.inner, last + 1),
@@ -569,6 +834,8 @@ mod tests {
         assert!(rule_name_problem("détection").is_some());
         assert!(rule_name_problem("condition").is_some());
         assert!(rule_name_problem("cmd_string").is_none());
+        assert!(rule_name_problem(&"a".repeat(128)).is_none());
+        assert!(rule_name_problem(&"a".repeat(129)).is_some());
     }
 
     #[test]
@@ -577,5 +844,10 @@ mod tests {
         assert!(section_header("rule x {").is_some());
         assert!(section_header("$a = \"rule x\"").is_none());
         assert!(section_header("$a and pe.is_dll()").is_none());
+        // Comments and text strings hold no header.
+        assert!(section_header("/* rule of thumb */\n$a").is_none());
+        assert!(section_header("$a // condition: below\nand $b").is_none());
+        assert!(section_header("/*\nrule x {\n*/ $a").is_none());
+        assert!(section_header("$a = \"x\" /* c */\ncondition:\n  $a").is_some());
     }
 }

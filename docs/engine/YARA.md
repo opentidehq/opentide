@@ -31,7 +31,7 @@ Errors are what libyara 4.5 refuses to compile. **Source** is the libyara 4.5.4 
 
 | Code | Condition | Source | Test |
 |------|-----------|--------|------|
-| `yara_parse_error` | Syntax error; YARA-X-only syntax, named; an empty text string | `grammar.y`, `lexer.l`; `parser.c` `ERROR_EMPTY_STRING` | `RAW`: `true and }`, `with`, `1_000`, `f = 1.5`, `[0x2-0x4]`, `of (true, false)` |
+| `yara_parse_error` | Syntax error; YARA-X-only syntax, named (`.len()` included); an empty text string; a rule name, tag or meta key longer than 128 characters | `grammar.y`, `lexer.l`; `parser.c` `ERROR_EMPTY_STRING` | `RAW`: `true and }`, `with`, `1_000`, `f = 1.5`, `[0x2-0x4]`, `of (true, false)`, `pe.sections.len()`, a 129-character rule name |
 | `yara_include` | An `include` directive | `lexer.l` `include` | `RAW`: `include "x.yar"` |
 | `yara_signature_alias` | `signature` is a YAML alias | yara-1.0 (Tide) | `crates/opentide-tide/tests/yara.rs` `spec_fixtures` |
 | `yara_empty_signature` | No rule, or only `private` or `global` rules | yara-1.0 | `RAW`: `private rule a`, `""` |
@@ -41,9 +41,9 @@ Errors are what libyara 4.5 refuses to compile. **Source** is the libyara 4.5.4 
 | `yara_undefined_string` | `$id`, `#id`, `@id`, `!id`, `$prefix*` matching no string; `$` outside `for … of`; `them` in a rule with no strings | `parser.c` `ERROR_UNDEFINED_STRING` | `RAW`: `$b`, `#b`, `($c*)`, `$`, `any of them` |
 | `yara_unreferenced_string` | A string the condition never uses, without `them` (`$_name` excepted) | `parser.c` `yr_parser_reduce_rule_declaration_phase_2` | `RAW`: `$b` unused; `$_x` clean |
 | `yara_undefined_identifier` | A bare name that is neither an earlier rule nor a module; a call that is not a module function or integer reader; a rule wildcard matching no earlier rule | `grammar.y` `identifier` | `RAW`: `b`, `b` defined later, `foo(1)` |
-| `yara_rule_identifier_conflict` | A rule named like an imported module or a reserved word | `parser.c` `ERROR_DUPLICATED_IDENTIFIER`; `lexer.l` | `RAW`: `rule pe`, `rule uint8` |
+| `yara_rule_identifier_conflict` | A rule named like a reserved word, or defined after a rule wildcard an earlier condition uses that matches it. A rule named like an imported module is `yara_x_incompatible`: libyara 4.5 accepts it | `lexer.l`; `parser.c` `ERROR_DUPLICATED_IDENTIFIER` | `RAW`: `rule uint8` |
 | `yara_unknown_module` | `import` of a module outside yara-1.0's 13 | `modules/module_list` | `RAW`: `import "foo"` |
-| `yara_module_not_imported` | A module member used without its `import` | `grammar.y` `identifier` | `RAW`: `pe.number_of_sections` |
+| `yara_module_not_imported` | A module member used without its `import`, or above it: libyara reads the signature top to bottom | `grammar.y` `identifier` | `RAW`: `pe.number_of_sections`, a rule above `import "pe"` |
 | `yara_unknown_module_member` | A member the module lacks (or only YARA-X has), or arguments no overload takes | `modules/*/*.c` `begin_declarations`; `parser.c` `yr_parser_check_types` | `RAW`: `pe.nonexistent`, `pe.exports(1, 2)`, `math.entropy("a", "b")` |
 | `yara_type` | An operator or function on the wrong type; a boolean where libyara wants a `primary_expression` | `grammar.y` `check_type` | `RAW`: `filesize contains "a"`, `"a" + 1`, `filesize matches "x"` |
 | `yara_regexp` | An invalid regular expression | `re_lexer.l`, `re_grammar.y` | `RAW`: `/a(b/`, `/[z-a]bc/`, `/a{3,1}/`; `regexp.rs` `libyara_errors` |
@@ -55,10 +55,10 @@ Errors are what libyara 4.5 refuses to compile. **Source** is the libyara 4.5.4 
 
 | Code | Condition | Source | Test |
 |------|-----------|--------|------|
-| `yara_x_incompatible` | libyara compiles it, YARA-X 1.x refuses it: unknown regexp escapes, a `{` outside a repetition, `base64` under 3 bytes, a negative string index, a repeated rule modifier, rule wildcards in `of`, escapes in a base64 alphabet, a module member YARA-X lacks | YARA-X's [differences with YARA](https://virustotal.github.io/yara-x/docs/writing_rules/differences/) | `RAW`: `/\\Release/`, `/abc{/`, `"ab" base64`, `@a[-1]`, `global global`, `any of (base*)`, `base64("…\\x09…")` |
+| `yara_x_incompatible` | libyara compiles it, YARA-X 1.x refuses it: unknown regexp escapes, a `{` outside a repetition, `base64` under 3 bytes, a negative string index, a repeated rule modifier, rule wildcards in `of`, escapes in a base64 alphabet, a module member YARA-X lacks, a rule named like an imported module | YARA-X's [differences with YARA](https://virustotal.github.io/yara-x/docs/writing_rules/differences/) | `RAW`: `/\\Release/`, `/abc{/`, `"ab" base64`, `@a[-1]`, `global global`, `any of (base*)`, `base64("…\\x09…")` |
 | `yara_slow_pattern` | libyara's "string may slow down scanning": no atom of the string scores 38 | `atoms.c` `yr_atoms_heuristic_quality`; `parser.c` | `RAW`: `"a"`, `{ ?? ?? ?? }`, `/a.b/`; `atoms.rs` `libyara_examples` |
 | `yara_entrypoint_deprecated` | `entrypoint` | `grammar.y` | `RAW`: `entrypoint == 0` |
-| `yara_suspicious_expression` | libyara's warnings: a literal string in a boolean operation, "expression always false - requesting N of M", "consider using none", "multiple strings at an offset is usually false"; a non-boolean condition; an integer compared with a boolean | `grammar.y` `yywarning` | `RAW`: `"abc" and true`, `condition: filesize`, `2 of them`, `0 of them`, `all of them at 0` |
+| `yara_suspicious_expression` | libyara's warnings: a literal string in a boolean operation, "expression always false - requesting N of M", "consider using none", "multiple strings at an offset is usually false"; a non-boolean condition; an integer compared with a boolean; yara-1.0's invariant or unsatisfiable comparison (two constants, or `filesize` with a constant that decides it) | `grammar.y` `yywarning` | `RAW`: `"abc" and true`, `condition: filesize`, `2 of them`, `0 of them`, `all of them at 0`, `1 == 1`, `filesize < 0` |
 | `yara_module_unconfirmed` | A known module outside the profile's confirmed set | yara-1.0 profiles | `profiles`: `import "dotnet"` under HarfangLab |
 | `yara_meta_missing` | A recommended meta key missing on a non-private rule | yara-1.0 profiles | `profiles`: no `context` under HarfangLab |
 
@@ -71,7 +71,7 @@ Errors are what libyara 4.5 refuses to compile. **Source** is the libyara 4.5.4 
 | `harfanglab_yara_section_header` | error | HarfangLab | A `strings:`, `condition:`, `meta:` or `rule` header in a fragment | `tests/yara.rs` `decomposed_imports_and_headers_and_rule_names` |
 | `harfanglab_yara_import` | error | HarfangLab | An `imports` entry that is not a known module | same |
 | `harfanglab_yara_rule_name` | error | HarfangLab | The derived rule name is a keyword or keeps a character other than an ASCII letter, digit or `_` | same (`Condition`, `Détection`) |
-| `harfanglab_yara_context` | warning | HarfangLab | Meta `context` outside `file`, `memory`, `file,memory`, `file.pe`, `file.elf`, `file.macho` | `profiles` |
+| `harfanglab_yara_context` | warning | HarfangLab | Meta `context` that is not a comma-joined list of `file`, `memory`, `file.pe`, `file.elf`, `file.macho`, on the unknown value | `profiles`; `tests/yara.rs` `decomposed_unescaped_meta_is_checked_where_it_is_written` |
 | `bitdefender_yara_ascii` | error | Bitdefender | A character that is not ASCII | `profiles` |
 | `bitdefender_yara_size` | error | Bitdefender | More than 30,000 characters | `profiles` |
 
@@ -84,6 +84,8 @@ The codes are constants in `opentide_core::codes`; `opentide explain <code>` pri
 | `configurations.harfanglab.yara.signature` | a whole signature, HarfangLab profile |
 | `configurations.bitdefender.yara.signature` | a whole signature, Bitdefender profile |
 | `configurations.harfanglab.yara.strings`, `.condition`, `.imports` | the one rule deploy assembles, HarfangLab profile: each finding lands in `strings`, `condition` or the `imports` item where it is written |
+
+The decomposed form is assembled exactly as opentide's `compile_yara_deployment` writes it (`tests/yara.rs` `decomposed_assembly_is_what_deploy_writes` compares the two): the imports, `rule <name> {`, every meta line (`id`, `title`, `description`, `author`, `date`, `modified`, `references`, `tags`, `context` with `file` as the os's file context, `os`, `arch`, `classification`, `score`, `confidence`), then the bodies. What deploy escapes is generated text; what it writes as it is (`id`, the dates, `references`, `tags`, `context`, `os`, `arch`) keeps its place in the object, so a `"` in a tag is the parse error the tenant reports, on that tag. No finding is dropped: one inside generated text, such as a condition cut short and found at the closing brace, is reported on the nearest text of its field, or on the field itself when the field wrote nothing (`condition: ""`).
 
 The pinned opentide's catalogue does not have `yara.signature` or the Bitdefender block yet (opentide's HarfangLab `signature` branch and RFC 0016): until it does, the schema check may also report those keys.
 

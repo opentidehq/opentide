@@ -133,7 +133,7 @@ const RAW: &[(&str, &[(&str, Severity)])] = &[
     ),
     (
         "import \"pe\" rule pe { condition: true }",
-        &[("yara_rule_identifier_conflict", E)],
+        &[("yara_x_incompatible", W)],
     ),
     (
         "rule uint8 { condition: true }",
@@ -321,6 +321,70 @@ const RAW: &[(&str, &[(&str, Severity)])] = &[
     (
         "rule a { strings: $a = \"abcd\" $b = \"efgh\" condition: all of them at 0 }",
         &[("yara_suspicious_expression", W)],
+    ), // Review of #165 (libyara 4.5.4 and YARA-X 1.23.0 checked on each).
+    // libyara's identifiers stop at 128 characters: rule names, tags, meta keys.
+    (
+        "rule aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa { condition: true }",
+        &[],
+    ),
+    (
+        "rule aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa { condition: true }",
+        &[("yara_parse_error", E)],
+    ),
+    (
+        "rule r : aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa { condition: true }",
+        &[("yara_parse_error", E)],
+    ),
+    (
+        "rule r { meta: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa = 1 condition: true }",
+        &[("yara_parse_error", E)],
+    ),
+    // A module used above its import is undefined there.
+    (
+        "rule a { condition: pe.is_dll() }\nimport \"pe\"",
+        &[("yara_module_not_imported", E)],
+    ),
+    (
+        "import \"pe\"\nrule a { condition: pe.number_of_sections > 1 }",
+        &[],
+    ),
+    // `.len()` is YARA-X's.
+    (
+        "import \"pe\"\nrule a { condition: pe.sections.len() > 1 }",
+        &[("yara_parse_error", E)],
+    ),
+    // Invariant and unsatisfiable conditions.
+    (
+        "rule a { condition: 1 == 1 }",
+        &[("yara_suspicious_expression", W)],
+    ),
+    (
+        "rule a { condition: filesize < 0 }",
+        &[("yara_suspicious_expression", W)],
+    ),
+    (
+        "rule a { condition: filesize >= 0 }",
+        &[("yara_suspicious_expression", W)],
+    ),
+    ("rule a { condition: filesize > 0 }", &[]),
+    // A negative number after an earlier `xor(a-b)` is a number, not a modifier.
+    (
+        "rule a { strings: $a = \"abcd\" xor(1-2) condition: $a and -99999999999999999999 }",
+        &[("yara_number_out_of_range", E)],
+    ),
+    // A rule named like an imported module: libyara accepts it, YARA-X does not.
+    (
+        "import \"pe\"\nrule pe { condition: true }",
+        &[("yara_x_incompatible", W)],
+    ),
+    // An undefined string is the finding; libyara stops before unused ones.
+    (
+        "rule a { strings: $c = \"abcd\" condition: $ }",
+        &[("yara_undefined_string", E)],
+    ),
+    (
+        "rule a { strings: $d = \"abcd\" condition: any of ($c*) }",
+        &[("yara_undefined_string", E)],
     ),
 ];
 
@@ -366,6 +430,21 @@ fn profiles() {
         codes("rule a { meta: context = \"disk\" condition: true }", &hl),
         [("harfanglab_yara_context".to_string(), W)]
     );
+    // Deploy joins the block's contexts with commas.
+    assert_eq!(
+        codes(
+            "rule a { meta: context = \"file.pe,memory\" condition: true }",
+            &hl
+        ),
+        []
+    );
+    assert_eq!(
+        codes(
+            "rule a { meta: context = \"file.pe,disk\" condition: true }",
+            &hl
+        ),
+        [("harfanglab_yara_context".to_string(), W)]
+    );
     assert_eq!(
         codes(
             "import \"dotnet\" rule a { meta: context = \"file\" condition: true }",
@@ -398,7 +477,13 @@ fn yara_x_dialect_accepts_its_syntax_and_refuses_libyara_only() {
     assert_eq!(
         codes("rule a { strings: $r = /\\Release/ condition: $r }", &yx),
         [("yara_x_incompatible".to_string(), E)]
+    ); // A parse-phase refusal (a jump bound past u32) follows the dialect too.
+    let jump = "rule a { strings: $h = { 01 02 [0-4294967296] 03 04 } condition: $h }";
+    assert_eq!(
+        codes(jump, &raw()),
+        [("yara_x_incompatible".to_string(), W)]
     );
+    assert_eq!(codes(jump, &yx), [("yara_x_incompatible".to_string(), E)]);
 }
 
 /// yara-1.0's example, and the fixtures the spec ships for it.

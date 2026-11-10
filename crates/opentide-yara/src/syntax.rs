@@ -128,12 +128,17 @@ pub fn classify(error: &ParseError, source: &str) -> Finding {
         }
         ParseError::InvalidInteger { message, span } => {
             let before = source[..span.start()].trim_end();
-            let code =
-                if before.ends_with("xor(") || before.ends_with('-') && before.contains("xor(") {
-                    codes::YARA_STRING_MODIFIER
-                } else {
-                    codes::YARA_NUMBER_OUT_OF_RANGE
-                };
+            // A bound of `xor(a-b)`: the number follows `xor(` or the `-`
+            // of a range whose `xor(` is still open. A `-` elsewhere is a
+            // negative number, whatever came earlier in the text.
+            let open_xor = before
+                .rfind("xor(")
+                .is_some_and(|i| !before[i..].contains(')'));
+            let code = if open_xor && (before.ends_with("xor(") || before.ends_with('-')) {
+                codes::YARA_STRING_MODIFIER
+            } else {
+                codes::YARA_NUMBER_OUT_OF_RANGE
+            };
             (code, message.clone(), span)
         }
         ParseError::InvalidRegexpModifier { message, span } => {

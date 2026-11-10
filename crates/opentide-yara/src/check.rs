@@ -131,7 +131,11 @@ pub struct Checker<'a> {
     source: &'a str,
     ctx: &'a Context,
     catalog: &'static Catalog,
+    /// Modules imported before the current rule: libyara reads a signature
+    /// top to bottom, so a module used above its `import` is undefined.
     imports: BTreeSet<String>,
+    /// Every import and where it is.
+    import_at: Vec<(String, usize)>,
     /// Rules defined before the current one.
     earlier_rules: BTreeSet<String>,
     rule_wildcards: &'a [(usize, usize)],
@@ -147,6 +151,9 @@ pub struct Checker<'a> {
     pub findings: Vec<Finding>,
 }
 
+/// The longest rule name, tag or meta key libyara 4.5's lexer accepts.
+const MAX_IDENTIFIER: usize = 128;
+
 fn span(s: &Span) -> (usize, usize) {
     (s.start(), s.end())
 }
@@ -158,6 +165,7 @@ impl<'a> Checker<'a> {
             ctx,
             catalog: Catalog::cached(),
             imports: BTreeSet::new(),
+            import_at: Vec::new(),
             earlier_rules: BTreeSet::new(),
             rule_wildcards,
             scopes: Vec::new(),
@@ -252,7 +260,7 @@ impl<'a> Checker<'a> {
                 );
                 continue;
             }
-            self.imports.insert(name.to_string());
+            self.import_at.push((name.to_string(), at.0));
             if let Some(p) = profile
                 && !p.confirmed_modules.iter().any(|m| m == name)
             {
@@ -285,6 +293,12 @@ impl<'a> Checker<'a> {
             if !rule.flags.contains(RuleFlags::Private) && !rule.flags.contains(RuleFlags::Global) {
                 public += 1;
             }
+            self.imports = self
+                .import_at
+                .iter()
+                .filter(|(_, offset)| *offset < at.0)
+                .map(|(m, _)| m.clone())
+                .collect();
             if broken(at) {
                 // A rule with a syntax error: libyara stops there.
                 self.earlier_rules.insert(name.to_string());
@@ -325,9 +339,9 @@ impl<'a> Checker<'a> {
             );
         }
         if self.imports.contains(name) {
-            self.error(
-                codes::YARA_RULE_IDENTIFIER_CONFLICT,
-                format!("the rule `{name}` has the name of the imported module `{name}`"),
+            // libyara 4.5 accepts it; the module is then unreachable by name.
+            self.yara_x(
+                format!("YARA-X refuses a rule named like the imported module `{name}`"),
                 name_at,
             );
         } else if self.catalog.keywords.contains(name) {
@@ -337,9 +351,11 @@ impl<'a> Checker<'a> {
                 name_at,
             );
         }
+        self.identifier_length("rule name", name, name_at);
         if let Some(tags) = &rule.tags {
             let mut seen = BTreeSet::new();
             for tag in tags {
+                self.identifier_length("tag", tag.name, span(&tag.span()));
                 if !seen.insert(tag.name) {
                     self.error(
                         codes::YARA_DUPLICATE_TAG,
@@ -350,6 +366,7 @@ impl<'a> Checker<'a> {
             }
         }
         self.meta(rule, name_at);
+        let findings_before = self.findings.len();
         self.rule = RuleState {
             patterns: Vec::new(),
             uses_them: false,
@@ -378,7 +395,12 @@ impl<'a> Checker<'a> {
             ),
             _ => {}
         }
-        if !self.rule.uses_them {
+        // A condition naming a string the rule lacks is already an error;
+        // libyara stops there, so the strings it then leaves unused are not.
+        let undefined = self.findings[findings_before..]
+            .iter()
+            .any(|f| f.code == codes::YARA_UNDEFINED_STRING);
+        if !self.rule.uses_them && !undefined {
             let unreferenced: Vec<(String, (usize, usize))> = self
                 .rule
                 .patterns
@@ -398,9 +420,31 @@ impl<'a> Checker<'a> {
         }
     }
 
+    /// libyara's lexer takes an identifier of at most 128 characters
+    /// (a longer rule name, tag or meta key ends its token); a longer
+    /// one is a syntax error there. YARA-X has no limit.
+    fn identifier_length(&mut self, kind: &str, name: &str, at: (usize, usize)) {
+        if self.libyara() && name.len() > MAX_IDENTIFIER {
+            self.error(
+                codes::YARA_PARSE_ERROR,
+                format!(
+                    "the {kind} `{}…` is {} characters long: libyara 4.5 refuses an identifier longer than {MAX_IDENTIFIER}",
+                    &name[..24.min(name.len())],
+                    name.len()
+                ),
+                at,
+            );
+        }
+    }
+
     fn meta(&mut self, rule: &Rule, name_at: (usize, usize)) {
         let metas = rule.meta.as_deref().unwrap_or(&[]);
         for meta in metas {
+            self.identifier_length(
+                "meta key",
+                meta.identifier.name,
+                span(&meta.identifier.span()),
+            );
             match &meta.value {
                 MetaValue::Float((_, s)) => self.yara_x_only("A float meta value", span(s)),
                 MetaValue::String((raw, s)) if raw.starts_with("\"\"\"") => {
@@ -435,12 +479,24 @@ impl<'a> Checker<'a> {
                     MetaValue::Bytes((b, s)) => (b.to_string(), span(s)),
                     other => (other.to_string(), span(&meta.identifier.span())),
                 };
-                if !data.context_values.contains(&value) {
+                // A comma-joined list of known contexts (`file.pe,memory`).
+                if let Some(bad) = value
+                    .split(',')
+                    .find(|part| !data.context_values.iter().any(|v| v == part.trim()))
+                {
+                    // On the unknown part of the list, when it is there as written.
+                    let written = self.text(at);
+                    let part = bad.trim();
+                    let at = match written.find(part).filter(|_| !part.is_empty()) {
+                        Some(i) => (at.0 + i, at.0 + i + part.len()),
+                        None => at,
+                    };
                     self.warn(
                         codes::HARFANGLAB_YARA_CONTEXT,
                         format!(
-                            "HarfangLab's YARA rules use context {}; `{value}` is none of them",
-                            data.context_values.join(", ")
+                            "HarfangLab's YARA rules use contexts from {}, joined with commas; `{}` is none of them",
+                            data.context_values.join(", "),
+                            bad.trim()
                         ),
                         at,
                     );
@@ -1062,6 +1118,33 @@ impl<'a> Checker<'a> {
             }
             Expr::Eq(b) | Expr::Ne(b) | Expr::Lt(b) | Expr::Gt(b) | Expr::Le(b) | Expr::Ge(b) => {
                 let (l, r) = (self.primary(&b.lhs), self.primary(&b.rhs));
+                let op = match e {
+                    Expr::Eq(_) => Cmp::Eq,
+                    Expr::Ne(_) => Cmp::Ne,
+                    Expr::Lt(_) => Cmp::Lt,
+                    Expr::Gt(_) => Cmp::Gt,
+                    Expr::Le(_) => Cmp::Le,
+                    _ => Cmp::Ge,
+                };
+                // A YARA-X literal (`1_000`) is reported on its own.
+                let separators = [&b.lhs, &b.rhs]
+                    .iter()
+                    .any(|e| self.text(span(&e.span())).contains('_'));
+                if let Some(always) = constant_comparison(op, &b.lhs, &b.rhs)
+                    && !separators
+                {
+                    self.warn(
+                        codes::YARA_SUSPICIOUS_EXPRESSION,
+                        if always {
+                            "this comparison is always true: it does not depend on the scanned data"
+                                .to_string()
+                        } else {
+                            "this comparison is always false: the rule can never match through it"
+                                .to_string()
+                        },
+                        at,
+                    );
+                }
                 let comparable = (l.is_numeric() && r.is_numeric())
                     || (l.is_str() && r.is_str())
                     || l == Ty::Unknown
@@ -1592,6 +1675,10 @@ impl<'a> Checker<'a> {
             return Ty::Unknown;
         };
         let base = self.expr(object);
+        if name == "len" && matches!(base, Ty::Array { .. } | Ty::Dict { .. }) {
+            self.yara_x_only("`.len()` on an array or a dictionary", name_at);
+            return Ty::Int;
+        }
         let Ty::Func { module, path } = self.member(base, name, name_at) else {
             return Ty::Unknown;
         };
@@ -1738,8 +1825,65 @@ fn const_value(e: &Expr) -> Option<i64> {
     }
 }
 
-/// A regexp that starts with `.*`, `.+` or `.{n,}`, possibly after `.`s or
-/// inside a group (`(a|.+)foo`): YARA-X refuses its arbitrary prefix.
+#[derive(Clone, Copy)]
+enum Cmp {
+    Eq,
+    Ne,
+    Lt,
+    Gt,
+    Le,
+    Ge,
+}
+
+impl Cmp {
+    fn eval(self, a: i64, b: i64) -> bool {
+        match self {
+            Cmp::Eq => a == b,
+            Cmp::Ne => a != b,
+            Cmp::Lt => a < b,
+            Cmp::Gt => a > b,
+            Cmp::Le => a <= b,
+            Cmp::Ge => a >= b,
+        }
+    }
+
+    /// `b op a` as `a op' b`.
+    fn swapped(self) -> Self {
+        match self {
+            Cmp::Lt => Cmp::Gt,
+            Cmp::Gt => Cmp::Lt,
+            Cmp::Le => Cmp::Ge,
+            Cmp::Ge => Cmp::Le,
+            other => other,
+        }
+    }
+}
+
+/// yara-1.0's invariant or unsatisfiable condition: a comparison of two
+/// constants (`1 == 1`), or of `filesize`, never negative, with a constant
+/// that decides it (`filesize < 0`, `filesize >= 0`). `Some(result)` when
+/// the comparison does not depend on the scanned data.
+fn constant_comparison(op: Cmp, lhs: &Expr, rhs: &Expr) -> Option<bool> {
+    if let (Some(a), Some(b)) = (const_value(lhs), const_value(rhs)) {
+        return Some(op.eval(a, b));
+    }
+    let (op, c) = match (lhs, rhs) {
+        (Expr::Filesize { .. }, other) => (op, const_value(other)?),
+        (other, Expr::Filesize { .. }) => (op.swapped(), const_value(other)?),
+        _ => return None,
+    };
+    // `filesize op c` for every filesize >= 0.
+    match op {
+        Cmp::Lt if c <= 0 => Some(false),
+        Cmp::Le if c < 0 => Some(false),
+        Cmp::Eq if c < 0 => Some(false),
+        Cmp::Gt if c < 0 => Some(true),
+        Cmp::Ge if c <= 0 => Some(true),
+        Cmp::Ne if c < 0 => Some(true),
+        _ => None,
+    }
+}
+
 /// libyara's product check (`grammar.y`): `|a| > INT64_MAX / |b|` is an
 /// overflow, so `4611686018427387904 * -2` is one though `i64::MIN` fits.
 fn libyara_mul(a: i64, b: i64) -> Option<i64> {
