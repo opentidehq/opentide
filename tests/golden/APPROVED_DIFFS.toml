@@ -60,3 +60,37 @@
 #   group on stdout, exit 2 as before (the `--help` difference above).
 # - `-h` (and `-Vh`): clap's short help flag shows the help, exit 0, where the
 #   oracle had no `-h` (`No such option: -h`, exit 2).
+#
+# Intended differences decided but not yet entered (#790, the engine crates'
+# one suggestion rule, `opentide_core::suggest`): the engine's suggestions
+# reach the recordings only through `validate` and `validate query` on the
+# `fault` fixture, and no golden case reaches those commands through
+# `OPENTIDE_ENGINE=rust` until they run on the Rust CLI (UC-2.7, UC-3.5), so
+# an entry now would apply to no case and fail `golden check --engine
+# compare` as stale. They are entered, with these rules, in the change that
+# routes `validate` and `validate query` to Rust; the CHANGELOG already
+# announces them under "**The query engines suggest by the same rule**".
+# Codes, severities and ranges do not change. The one recorded difference:
+# `process.pid::foo` (objects/rules/encoded-downgrade-rule-0170.yaml:53:56,
+# `esql_unknown_type`) is three edits from `bool`, more than a third of its
+# length, so the shared rule suggests nothing and the help falls back to the
+# finding's reference link:
+#
+# [[diff]]
+# command = "validate"
+# case = "json/fault/*"
+# target = "stdout"
+# rule = "json:/report/issues/29/suggestion"
+# oracle = '"bool"'
+# candidate = "null"
+# reason = "the engines' one suggestion rule (opentide_core::suggest) suggests nothing three edits from a three-letter word"
+# issue = "https://github.com/opentidehq/opentide/issues/790"
+# changelog = "**The query engines suggest by the same rule**"
+#
+# with the same rule for `json:/report/issues/29/help` ('"try: bool"' →
+# '"the ES|QL reference: https://www.elastic.co/docs/reference/query-languages/esql"'),
+# a text rule for `validate` in `human/fault/*`, `plain/fault/*` and
+# `agent/fault/*` (`   ╰─ help: try: bool` → `   ╰─ help: the ES|QL reference:
+# https://www.elastic.co/docs/reference/query-languages/esql`), and the same
+# four for `validate query` (`*/fault/default`; its JSON is an array of
+# findings, the 0170 one with `"help":"try: bool"`).

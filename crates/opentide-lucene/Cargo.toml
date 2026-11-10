@@ -15,6 +15,7 @@ workspace = true
 
 [dependencies]
 opentide-core.workspace = true
+strsim.workspace = true
 opentide-ecs.workspace = true
 opentide-syntax.workspace = true
 opentide-highlight.workspace = true

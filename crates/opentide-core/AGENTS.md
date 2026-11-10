@@ -18,7 +18,10 @@ crate depends on it.
 - A diagnostic code is a constant in `codes`, listed in `codes::ALL`, with a sentence in `codes::describe` and a section in `docs/cli/diagnostics.md` (`tests/diagnostics_docs.rs`). Never a second string at the call site.
 - `LanguageId` changes `as_str`, `parse` and `Display` together; a new language follows the add-language skill.
 - Suggestions go through `suggest` (vocabulary values, configuration choices, CLI commands and
-  options), never a second similarity rule. It uses strsim; never port a Python library instead.
+  options, every engine crate's "did you mean"), never a second similarity rule. It uses strsim;
+  never port a Python library instead. A check that reports only near misses (whether it reports
+  at all, or at which severity, is invariant 3) may keep its own threshold, measured with strsim,
+  and picks among the names within it with `suggest::best`.
 - Codes, severities, field paths and position rules are invariant 3 of the plan: a change is a recorded decision, not a refactor.
 
 ## Test

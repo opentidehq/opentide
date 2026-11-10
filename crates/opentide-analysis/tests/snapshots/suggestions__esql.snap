@@ -9,7 +9,7 @@ FROM logs-* | STAST count = COUNT(*)
   error esql_unknown_command `STAST` => STATS
   warning esql_metadata_id `FROM` => METADATA _id, _version, _index
 FROM logs-* | WHR process.pid > 1
-  error esql_unknown_command `WHR` => MMR
+  error esql_unknown_command `WHR` => (none)
   warning esql_metadata_id `FROM` => METADATA _id, _version, _index
 FROM logs-* | EVAL a = DATEDIFF("day", @timestamp, @timestamp)
   error esql_unknown_function `DATEDIFF` => DATE_DIFF

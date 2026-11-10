@@ -7,7 +7,7 @@
 
 use opentide_core::{
     ByteSpan, CompletionItem, Diagnostic, LanguageId, ParameterInformation, Range, SignatureHelp,
-    SignatureInformation, codes, span_to_range,
+    SignatureInformation, codes, span_to_range, suggest,
 };
 use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
 mod cim;
@@ -251,24 +251,20 @@ impl Catalog {
             .collect()
     }
 
+    /// The catalogued command `name` most likely means
+    /// ([`opentide_core::suggest`]).
     pub fn suggest_command(&self, name: &str) -> Option<String> {
-        self.closest_command(name).map(|(n, _)| n.to_string())
+        suggest::closest(name, self.commands.iter().map(|c| c.name.as_str())).map(str::to_string)
     }
 
-    /// The catalogued command nearest to `name`, within three edits, and its
-    /// [`edit_cost`].
-    fn closest_command(&self, name: &str) -> Option<(&str, usize)> {
+    /// Whether `name` is one typo from a catalogued command ([`one_typo`]):
+    /// then `spl_unknown_command` is an error, not a warning an app may
+    /// explain.
+    fn is_command_typo(&self, name: &str) -> bool {
         let lower = name.to_ascii_lowercase();
         self.commands
             .iter()
-            .map(|c| {
-                (
-                    c.name.as_str(),
-                    edit_cost(&c.name.to_ascii_lowercase(), &lower),
-                )
-            })
-            .filter(|(_, cost)| *cost <= 3 * ONE_EDIT)
-            .min_by_key(|(_, cost)| *cost)
+            .any(|c| one_typo(&c.name.to_ascii_lowercase(), &lower))
     }
 
     pub fn field(&self, name: &str) -> Option<&FieldRow> {
@@ -299,34 +295,36 @@ impl Catalog {
     }
 }
 
-/// [`edit_cost`] of one insertion, deletion or substitution.
-const ONE_EDIT: usize = 2;
+/// Whether `a` and `b` are one typo apart: one insertion, deletion or
+/// substitution, or swapped neighbours, once or twice (`stast` and `tsast`
+/// are `stats`). Equal strings are not.
+fn one_typo(a: &str, b: &str) -> bool {
+    match strsim::osa_distance(a, b) {
+        1 => true,
+        2 => only_swaps(a, b),
+        _ => false,
+    }
+}
 
-/// Edit distance in which swapping two adjacent characters costs half an
-/// edit, so `stast` is nearer `stats` (a swap) than `stash` (a substitution).
-fn edit_cost(a: &str, b: &str) -> usize {
+/// Whether `b` is `a` with disjoint pairs of neighbours swapped and nothing
+/// else changed.
+fn only_swaps(a: &str, b: &str) -> bool {
     let a: Vec<char> = a.chars().collect();
     let b: Vec<char> = b.chars().collect();
-    // Rows i-2, i-1 and i of the optimal-string-alignment matrix.
-    let mut before: Vec<usize> = vec![0; b.len() + 1];
-    let mut prev: Vec<usize> = (0..=b.len()).map(|j| j * ONE_EDIT).collect();
-    let mut cur = vec![0; b.len() + 1];
-    for i in 1..=a.len() {
-        cur[0] = i * ONE_EDIT;
-        for j in 1..=b.len() {
-            let substitute = if a[i - 1] == b[j - 1] { 0 } else { ONE_EDIT };
-            let mut cost = (prev[j] + ONE_EDIT)
-                .min(cur[j - 1] + ONE_EDIT)
-                .min(prev[j - 1] + substitute);
-            if i > 1 && j > 1 && a[i - 1] == b[j - 2] && a[i - 2] == b[j - 1] {
-                cost = cost.min(before[j - 2] + ONE_EDIT / 2);
-            }
-            cur[j] = cost;
-        }
-        std::mem::swap(&mut before, &mut prev);
-        std::mem::swap(&mut prev, &mut cur);
+    if a.len() != b.len() {
+        return false;
     }
-    prev[b.len()]
+    let mut i = 0;
+    while i < a.len() {
+        if a[i] == b[i] {
+            i += 1;
+        } else if i + 1 < a.len() && a[i] == b[i + 1] && a[i + 1] == b[i] {
+            i += 2;
+        } else {
+            return false;
+        }
+    }
+    true
 }
 
 pub struct AnalyzeResult {
@@ -448,14 +446,12 @@ fn unknown_command(name: &str, range: Range, catalog: &Catalog) -> Diagnostic {
     let message = format!(
         "'{name}' is not a command opentide knows; if an app on the search head provides it, declare it"
     );
-    let closest = catalog.closest_command(name);
-    let mut d = match closest {
-        Some((_, cost)) if cost <= ONE_EDIT => {
-            Diagnostic::error(codes::SPL_UNKNOWN_COMMAND, message, range)
-        }
-        _ => Diagnostic::warning(codes::SPL_UNKNOWN_COMMAND, message, range),
+    let mut d = if catalog.is_command_typo(name) {
+        Diagnostic::error(codes::SPL_UNKNOWN_COMMAND, message, range)
+    } else {
+        Diagnostic::warning(codes::SPL_UNKNOWN_COMMAND, message, range)
     };
-    if let Some((suggestion, _)) = closest {
+    if let Some(suggestion) = catalog.suggest_command(name) {
         d = d.with_suggestion(suggestion);
     }
     d
@@ -1375,20 +1371,47 @@ mod tests {
         assert_eq!(typo.len(), 1, "{typo:?}");
         assert_eq!(typo[0].severity, opentide_core::Severity::Error, "{typo:?}");
         assert_eq!(typo[0].suggestion.as_deref(), Some("stats"));
-        // Further away it may be an app's command: a warning, still with a hint.
-        let far = unknown_commands("index=a | stattz count");
+        // Two swaps are still one typo.
+        let swaps = unknown_commands("index=a | tsast count");
+        assert_eq!(
+            swaps[0].severity,
+            opentide_core::Severity::Error,
+            "{swaps:?}"
+        );
+        // Further away it may be an app's command: a warning, still with a
+        // hint while the shared rule finds one (two edits in a long name).
+        let far = unknown_commands("index=a | evntstatss count");
         assert_eq!(far[0].severity, opentide_core::Severity::Warning, "{far:?}");
-        assert!(far[0].suggestion.is_some(), "{far:?}");
+        assert_eq!(far[0].suggestion.as_deref(), Some("eventstats"), "{far:?}");
+        // Two edits in a short name: a warning, and no hint (#790: a third
+        // of the length, rustc's bound, before 3 edits whatever the length).
+        let short = unknown_commands("index=a | stattz count");
+        assert_eq!(
+            short[0].severity,
+            opentide_core::Severity::Warning,
+            "{short:?}"
+        );
+        assert_eq!(short[0].suggestion, None, "{short:?}");
     }
 
     #[test]
-    fn edit_cost_counts_a_swap_as_half_an_edit() {
-        assert_eq!(edit_cost("stats", "stats"), 0);
-        assert_eq!(edit_cost("stats", "stast"), 1);
-        assert_eq!(edit_cost("stash", "stast"), ONE_EDIT);
-        assert_eq!(edit_cost("stats", "statz"), ONE_EDIT);
-        assert_eq!(edit_cost("", "abc"), 3 * ONE_EDIT);
-        assert_eq!(edit_cost("head", "tail"), 4 * ONE_EDIT);
+    fn one_typo_is_one_edit_or_swapped_neighbours() {
+        assert!(!one_typo("stats", "stats"));
+        assert!(one_typo("stats", "stast"));
+        assert!(one_typo("stats", "tsast"));
+        assert!(one_typo("stats", "tsats"));
+        assert!(one_typo("stats", "statz"));
+        assert!(one_typo("stats", "stat"));
+        assert!(one_typo("stats", "sstats"));
+        // Two edits, one of them not a swap: not one typo.
+        assert!(!one_typo("stats", "tsatz"));
+        assert!(!one_typo("stats", "stattz"));
+        assert!(!one_typo("stats", "sats1"));
+        assert!(!one_typo("", "abc"));
+        assert!(!one_typo("head", "tail"));
+        assert!(only_swaps("abcd", "badc"));
+        assert!(!only_swaps("abc", "cba"));
+        assert!(!only_swaps("abc", "ab"));
     }
 
     #[test]

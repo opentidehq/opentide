@@ -23,6 +23,10 @@
 //!    ([`strsim::jaro_winkler`]), then to the one that sorts first, so the
 //!    result never depends on the order the candidates came in.
 //!
+//! [`best`] applies rules 1 and 3, with the fewest edits between them, and no
+//! bound: for a check whose own threshold decides whether a near miss is
+//! reported at all.
+//!
 //! This is deliberately not Python's `difflib.get_close_matches`: a ratio of
 //! matching blocks suggests unrelated words that share letters (`Big
 //! incident` → `Substantial incident`), and an edit distance does not.
@@ -84,6 +88,37 @@ pub fn ranked<'a>(
         .into_iter()
         .map(|index| candidates[index])
         .collect()
+}
+
+/// The candidate the shared order (rules 1 and 3, with the fewest edits
+/// between) puts first, with no bound on the edits: for a check whose own
+/// threshold decides whether a near miss is reported at all, and which only
+/// needs this rule to choose among the candidates it accepted.
+///
+/// Whether a diagnostic is reported, and at what severity, is a contract
+/// (plan §3, invariant 3), so a check that reports only near misses (an ECS
+/// field, a CIM data model, a KQL column of a documented table) keeps its own
+/// threshold; what it suggests comes from here, as everywhere else. `Some`
+/// whenever `candidates` is not empty, even when the value itself is among
+/// them.
+pub fn best<'a>(value: &str, candidates: impl IntoIterator<Item = &'a str>) -> Option<&'a str> {
+    let lower = value.to_lowercase();
+    let folded = fold(value);
+    candidates
+        .into_iter()
+        .map(|candidate| {
+            let other = candidate.to_lowercase();
+            let (a, b) = middles(&lower, &other);
+            Scored {
+                candidate,
+                index: 0,
+                same_word: fold(candidate) == folded,
+                distance: strsim::osa_distance(a, b),
+                prefix: strsim::jaro_winkler(&lower, &other),
+            }
+        })
+        .min_by(Scored::order)
+        .map(|s| s.candidate)
 }
 
 /// Candidates prepared once (lower-cased, folded, measured) for many
@@ -332,6 +367,28 @@ mod tests {
     #[test]
     fn the_value_itself_and_duplicates_are_not_suggested() {
         assert_eq!(suggestions("red", ["red", "rad", "rad"], 5), ["rad"]);
+    }
+
+    #[test]
+    fn best_orders_without_a_bound() {
+        // The same word first, then the fewest edits, then the best start.
+        assert_eq!(
+            best("Process_Name", ["process_title", "process_name"]),
+            Some("process_name")
+        );
+        assert_eq!(best("stast", ["stash", "stats"]), Some("stats"));
+        assert_eq!(best("bat", ["hat", "cat", "bad"]), Some("bad"));
+        assert_eq!(best("bat", ["hat", "cat"]), Some("cat"));
+        // No bound: a far candidate is still the best of one.
+        assert_eq!(best("planet", ["glands"]), Some("glands"));
+        // The value itself is not skipped: the caller's check chose it.
+        assert_eq!(best("red", ["red"]), Some("red"));
+        assert_eq!(best("red", []), None);
+        // The order of the candidates does not matter.
+        assert_eq!(
+            best("tabel", ["label", "table"]),
+            best("tabel", ["table", "label"])
+        );
     }
 
     #[test]

@@ -16,7 +16,10 @@ use std::fmt::Write as _;
 
 /// The text `d` covers in `source` (its first line, when it spans more).
 fn covered(source: &str, d: &Diagnostic) -> String {
-    let line = source.lines().nth(d.range.start.line as usize).unwrap_or("");
+    let line = source
+        .lines()
+        .nth(d.range.start.line as usize)
+        .unwrap_or("");
     let units: Vec<u16> = line.encode_utf16().collect();
     let start = (d.range.start.character as usize).min(units.len());
     let end = if d.range.end.line == d.range.start.line {
@@ -47,12 +50,7 @@ fn render(source: &str, diagnostics: &[Diagnostic], codes: &[&str]) -> String {
 }
 
 /// Each query of `cases`, analysed on its own, and what it suggests.
-fn queries(
-    language: LanguageId,
-    platform: Option<&str>,
-    codes: &[&str],
-    cases: &[&str],
-) -> String {
+fn queries(language: LanguageId, platform: Option<&str>, codes: &[&str], cases: &[&str]) -> String {
     let mut out = String::new();
     for text in cases {
         let found = analyze_query(&QueryRequest {
@@ -125,7 +123,11 @@ fn spl() {
     insta::assert_snapshot!(queries(
         LanguageId::Spl,
         None,
-        &["spl_unknown_command", "spl_unknown_datamodel", "spl_unknown_datamodel_field"],
+        &[
+            "spl_unknown_command",
+            "spl_unknown_datamodel",
+            "spl_unknown_datamodel_field"
+        ],
         &[
             "index=main | stast count by host",
             "index=main | statz count by host",
@@ -133,6 +135,7 @@ fn spl() {
             "index=main | evall x=1",
             "index=main | rexx field=_raw \"(?<a>.)\"",
             "index=main | sats count",
+            "index=main | stas count",
             "index=main | tsast count",
             "| tstats count from datamodel=Endpointz.Processes by Processes.process_name",
             "| tstats count from datamodel=Endpoint.Procesess by Processes.process_name",
@@ -147,7 +150,12 @@ fn esql() {
     insta::assert_snapshot!(queries(
         LanguageId::Esql,
         None,
-        &["esql_unknown_command", "esql_unknown_function", "esql_unknown_type", "ecs_unknown_field"],
+        &[
+            "esql_unknown_command",
+            "esql_unknown_function",
+            "esql_unknown_type",
+            "ecs_unknown_field"
+        ],
         &[
             "FROM logs-* | WEHRE process.pid > 1",
             "FROM logs-* | STAST count = COUNT(*)",
@@ -185,7 +193,11 @@ fn cql() {
     insta::assert_snapshot!(queries(
         LanguageId::Cql,
         None,
-        &["cql_unknown_function", "cql_unknown_parameter", "cql_unknown_event"],
+        &[
+            "cql_unknown_function",
+            "cql_unknown_parameter",
+            "cql_unknown_event"
+        ],
         &[
             "groupBi([ComputerName])",
             "groupby([ComputerName], functin=count())",
@@ -202,7 +214,11 @@ fn falco() {
     insta::assert_snapshot!(queries(
         LanguageId::Falco,
         None,
-        &["falco_unknown_field", "falco_unknown_event", "falco_unknown_macro"],
+        &[
+            "falco_unknown_field",
+            "falco_unknown_event",
+            "falco_unknown_macro"
+        ],
         &[
             "evt.typ = execve",
             "evt.type = execvee",

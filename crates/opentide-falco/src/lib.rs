@@ -773,46 +773,10 @@ pub(crate) fn unknown_field_finding(
     }
 }
 
-/// The closest name within one edit (two for names of ten characters or more).
+/// The candidate `name` most likely means ([`opentide_core::suggest`]): a
+/// field, an event, a macro or a rule of the Falco default rules.
 pub fn near_miss<'a>(name: &str, candidates: impl Iterator<Item = &'a str>) -> Option<String> {
-    let limit = if name.len() >= 10 { 2 } else { 1 };
-    let mut best: Option<(usize, &str)> = None;
-    for candidate in candidates {
-        if candidate == name || candidate.len().abs_diff(name.len()) > limit {
-            continue;
-        }
-        let d = edit_distance(name, candidate);
-        if d <= limit && best.is_none_or(|(bd, _)| d < bd) {
-            best = Some((d, candidate));
-        }
-    }
-    best.map(|(_, c)| c.to_string())
-}
-
-/// Optimal string alignment distance: a swapped pair of characters is one edit.
-fn edit_distance(a: &str, b: &str) -> usize {
-    let a: Vec<char> = a.chars().collect();
-    let b: Vec<char> = b.chars().collect();
-    let mut d = vec![vec![0usize; b.len() + 1]; a.len() + 1];
-    for (i, row) in d.iter_mut().enumerate() {
-        row[0] = i;
-    }
-    for (j, cell) in d[0].iter_mut().enumerate() {
-        *cell = j;
-    }
-    for i in 1..=a.len() {
-        for j in 1..=b.len() {
-            let cost = usize::from(a[i - 1] != b[j - 1]);
-            let mut best = (d[i - 1][j] + 1)
-                .min(d[i][j - 1] + 1)
-                .min(d[i - 1][j - 1] + cost);
-            if i > 1 && j > 1 && a[i - 1] == b[j - 2] && a[i - 2] == b[j - 1] {
-                best = best.min(d[i - 2][j - 2] + 1);
-            }
-            d[i][j] = best;
-        }
-    }
-    d[a.len()][b.len()]
+    opentide_core::suggest::closest(name, candidates).map(str::to_string)
 }
 
 fn range(text: &str, span: ByteSpan) -> Range {

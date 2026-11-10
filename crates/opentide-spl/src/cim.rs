@@ -386,9 +386,14 @@ fn keyword_at(source: &str, i: usize, end: usize, keyword: &str) -> bool {
     (i == 0 || !ident(bytes[i - 1])) && (stop >= bytes.len() || !ident(bytes[stop]))
 }
 
-/// The smallest edit that turns `name` into a candidate, when `name` is a
-/// near miss: one edit for names of up to five characters, two for longer
-/// ones, nothing for names shorter than four. Exact matches are not misses.
+/// The candidate `name` most likely means, when `name` is a near miss of
+/// one: within one edit for names of up to five characters, two for longer
+/// ones (strsim's optimal string alignment distance, a swapped pair one
+/// edit), nothing for names shorter than four. Exact matches are not misses.
+///
+/// The threshold decides whether a CIM diagnostic is reported at all, so it
+/// is this check's own; among the candidates within it, the shared rule
+/// ([`opentide_core::suggest::best`]) chooses.
 pub(crate) fn near_miss<'a>(
     name: &str,
     candidates: impl IntoIterator<Item = &'a str>,
@@ -407,47 +412,20 @@ pub(crate) fn near_miss<'a>(
         }
     };
     let wanted = norm(name);
-    let mut best: Option<(&str, usize)> = None;
+    let mut near = Vec::new();
     for candidate in candidates {
         if candidate.chars().count() < 4 {
             continue;
         }
-        let dist = edit_distance(&wanted, &norm(candidate));
+        let dist = strsim::osa_distance(&wanted, &norm(candidate));
         if dist == 0 {
             return None;
         }
-        if dist <= budget && best.is_none_or(|(_, d)| dist < d) {
-            best = Some((candidate, dist));
+        if dist <= budget {
+            near.push(candidate);
         }
     }
-    best.map(|(c, _)| c)
-}
-
-/// Edits (insert, delete, substitute, or swap two adjacent characters) that
-/// turn `a` into `b`: a swapped pair (`qeury`) is one typo, not two.
-fn edit_distance(a: &str, b: &str) -> usize {
-    let a: Vec<char> = a.chars().collect();
-    let b: Vec<char> = b.chars().collect();
-    let mut d = vec![vec![0usize; b.len() + 1]; a.len() + 1];
-    for (i, row) in d.iter_mut().enumerate() {
-        row[0] = i;
-    }
-    for (j, cell) in d[0].iter_mut().enumerate() {
-        *cell = j;
-    }
-    for i in 1..=a.len() {
-        for j in 1..=b.len() {
-            let cost = usize::from(a[i - 1] != b[j - 1]);
-            let mut best = (d[i - 1][j] + 1)
-                .min(d[i][j - 1] + 1)
-                .min(d[i - 1][j - 1] + cost);
-            if i > 1 && j > 1 && a[i - 1] == b[j - 2] && a[i - 2] == b[j - 1] {
-                best = best.min(d[i - 2][j - 2] + 1);
-            }
-            d[i][j] = best;
-        }
-    }
-    d[a.len()][b.len()]
+    opentide_core::suggest::best(name, near)
 }
 
 fn range(source: &str, start: usize, end: usize) -> opentide_core::Range {

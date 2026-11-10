@@ -13,7 +13,7 @@ SecurityEvent | extend a = strlenn(Account)
 SecurityEvent | evaluate bag_unpak(x)
   error kql_unknown_function `bag_unpak` => bag_unpack
 SecurityEvent | prjct Account
-  error kql_unknown_operator `prjct Account` => project
+  error kql_unknown_operator `prjct Account` => (none)
 SecurityEvent | extend a = to_lower(Account)
   error kql_unknown_function `to_lower` => tolower
 SecurityEvnt | take 1

@@ -7,6 +7,7 @@
 //! LogScale is schemaless, so fields are hover and completion data, never a
 //! reason for a finding.
 
+use opentide_core::suggest;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::sync::OnceLock;
@@ -285,62 +286,31 @@ impl Catalog {
             .filter(|f| f.kind == "namespace")
     }
 
+    /// The available function `name` most likely means
+    /// ([`opentide_core::suggest`]).
     pub fn suggest_function(&self, name: &str) -> Option<&str> {
-        closest(
+        suggest::closest(
+            name,
             self.functions
                 .iter()
                 .filter(|f| !f.removed && !f.unavailable)
                 .map(|f| f.name.as_str()),
-            name,
-            2,
         )
     }
 
-    /// An event whose name differs only in case, else one within two edits.
+    /// The event `name` most likely means: the same name in another case, or
+    /// one within one edit ([`opentide_core::suggest`]).
     pub fn suggest_event(&self, name: &str) -> Option<&str> {
-        if let Some(e) = self
-            .events
-            .iter()
-            .find(|e| e.name.eq_ignore_ascii_case(name))
-        {
-            return Some(e.name.as_str());
-        }
         // One edit only: event names are long and alike, so two edits suggest
         // a different event (`XzFileWritten` is not `DxfFileWritten`).
-        closest(self.events.iter().map(|e| e.name.as_str()), name, 1)
+        suggest::closest_within(name, self.events.iter().map(|e| e.name.as_str()), 1)
     }
 
+    /// The parameter of `function` that `name` most likely means
+    /// ([`opentide_core::suggest`]).
     pub fn suggest_parameter<'f>(&self, function: &'f Function, name: &str) -> Option<&'f str> {
-        closest(function.parameters.iter().map(|p| p.name.as_str()), name, 2)
+        suggest::closest(name, function.parameters.iter().map(|p| p.name.as_str()))
     }
-}
-
-/// The candidate nearest to `target` (case-insensitive), within `max` edits.
-pub(crate) fn closest<'a>(
-    names: impl Iterator<Item = &'a str>,
-    target: &str,
-    max: usize,
-) -> Option<&'a str> {
-    let target = target.to_ascii_lowercase();
-    names
-        .map(|n| (n, edit_distance(&n.to_ascii_lowercase(), &target)))
-        .filter(|(_, d)| *d > 0 && *d <= max)
-        .min_by_key(|(_, d)| *d)
-        .map(|(n, _)| n)
-}
-
-fn edit_distance(a: &str, b: &str) -> usize {
-    let b: Vec<char> = b.chars().collect();
-    let mut prev: Vec<usize> = (0..=b.len()).collect();
-    for (i, ca) in a.chars().enumerate() {
-        let mut cur = vec![i + 1; b.len() + 1];
-        for (j, cb) in b.iter().enumerate() {
-            let cost = usize::from(ca != *cb);
-            cur[j + 1] = (prev[j] + cost).min(prev[j + 1] + 1).min(cur[j] + 1);
-        }
-        prev = cur;
-    }
-    prev[b.len()]
 }
 
 #[cfg(test)]
@@ -379,5 +349,10 @@ mod tests {
         assert_eq!(c.suggest_function("groupBi"), Some("groupBy"));
         assert_eq!(c.suggest_function("groupBy"), None);
         assert_eq!(c.suggest_event("processrollup2"), Some("ProcessRollup2"));
+        assert_eq!(c.suggest_event("ProcessRollup3"), Some("ProcessRollup2"));
+        assert_eq!(c.suggest_event("XzFileWritten"), None);
+        assert_eq!(c.suggest_function("selct"), Some("select"));
+        let group_by = c.function("groupBy").expect("groupBy");
+        assert_eq!(c.suggest_parameter(group_by, "functin"), Some("function"));
     }
 }

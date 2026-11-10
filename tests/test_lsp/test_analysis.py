@@ -506,7 +506,9 @@ def test_an_app_command_finding_promises_no_declaration() -> None:
 def test_a_typo_of_a_command_is_still_named() -> None:
     from opentide.cli.ui.diagnostics import diagnostic_from_engine
 
-    [finding] = check_query("index=main | stas count", language="spl", platform="splunk")
+    # `stast`, one swap from `stats`: `stas` is one edit from `stats` and from
+    # `stash`, and the shared rule (#790) suggests `stash`, whose start matches.
+    [finding] = check_query("index=main | stast count", language="spl", platform="splunk")
 
     assert finding.severity == "error"
     diagnostic = diagnostic_from_engine(finding, file_path=Path("q.spl"), workspace=None)

@@ -331,22 +331,17 @@ fn detection_model_targets(workspace: &[IndexedObject]) -> impl Iterator<Item = 
 
 /// The objective or signal UUID a dangling `detection_model` most plausibly
 /// meant: one within two edits of it, ignoring case (a mistyped or swapped
-/// character). `None` when nothing is that close, rather than an unrelated
-/// objective that would re-parent the rule if applied (#213).
+/// character), by the shared rule ([`opentide_core::suggest`]). `None` when
+/// nothing is that close, rather than an unrelated objective that would
+/// re-parent the rule if applied (#213).
 fn closest_detection_model(workspace: &[IndexedObject], value: &str) -> Option<String> {
     const MAX_EDITS: usize = 2;
-    let needle = value.trim().to_ascii_lowercase();
-    if needle.is_empty() {
+    if value.trim().is_empty() {
         return None;
     }
-    let mut best: Option<(usize, &str)> = None;
-    for target in detection_model_targets(workspace) {
-        let distance = vocabs::levenshtein(&target.to_ascii_lowercase(), &needle);
-        if distance <= MAX_EDITS && best.is_none_or(|(d, _)| distance < d) {
-            best = Some((distance, target));
-        }
-    }
-    best.map(|(_, target)| target.to_string())
+    // Untrimmed: ` <uuid> ` is not the indexed `<uuid>`, but the same word.
+    opentide_core::suggest::closest_within(value, detection_model_targets(workspace), MAX_EDITS)
+        .map(str::to_string)
 }
 
 /// The stem and the suffix of an object file at `path`, as opentide's
@@ -2002,6 +1997,50 @@ mod tests {
         ));
         assert!(super::same_file("/w/objects/x.yaml", "/w/objects/x.yaml"));
         assert!(!super::same_file("/w/objects/x.yaml", "/w/objects/y.yaml"));
+    }
+
+    /// The shared rule (#790) picks the UUID a dangling `detection_model`
+    /// meant: two edits at most, the same UUID in another case or padded,
+    /// and nothing for an unrelated one (#213).
+    #[test]
+    fn closest_detection_model_uses_the_shared_rule() {
+        let objective = |uuid: &str| IndexedObject {
+            path: format!("objects/objectives/{uuid}.yaml"),
+            object_type: "objective".into(),
+            uuid: uuid.into(),
+            name: uuid.into(),
+            body: serde_yaml::Value::Null,
+            schema: "objective::1.0".into(),
+            name_range: Range::point(0, 0),
+            refs: Vec::new(),
+        };
+        let a = "6f1c2a3b-0000-4000-8000-000000000001";
+        let b = "6f1c2a3b-0000-4000-8000-0000000000a2";
+        let workspace = [objective(a), objective(b)];
+        let closest = |v: &str| closest_detection_model(&workspace, v);
+        assert_eq!(
+            closest("6f1c2a3b-0000-4000-8000-00000000001").as_deref(),
+            Some(a)
+        );
+        assert_eq!(
+            closest("6F1C2A3B-0000-4000-8000-000000000001").as_deref(),
+            Some(a)
+        );
+        assert_eq!(closest(&format!(" {a} ")).as_deref(), Some(a));
+        assert_eq!(
+            closest("6f1c2a3b-0000-4000-8000-0000000000a3").as_deref(),
+            Some(b)
+        );
+        assert_eq!(closest("99999999-9999-4999-8999-999999999999"), None);
+        assert_eq!(closest("  "), None);
+    }
+
+    #[test]
+    fn vocabularies_suggest_by_the_shared_rule() {
+        let tlp = vocab_for_field("tlp").expect("the tlp vocabulary");
+        assert_eq!(tlp.suggest("ambr").as_deref(), Some("amber"));
+        assert_eq!(tlp.suggest("AMBER").as_deref(), Some("amber"));
+        assert_eq!(tlp.suggest("whitish"), None);
     }
     use super::*;
 
