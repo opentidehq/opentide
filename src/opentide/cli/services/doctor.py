@@ -455,10 +455,10 @@ def check_configuration(ctx: DoctorContext) -> list[Check]:
 
 
 def check_templates(ctx: DoctorContext) -> list[Check]:
+    from opentide._models.object_types import CORE_OBJECT_TYPES
+    from opentide._models.schema_registry import identifiers_for_families, resolve_model
     from opentide.core.lint_config import LintConfigError, parse_lint_config
     from opentide.generation.pydantic_skeleton import render_model_template
-    from opentide.models.object_types import CORE_OBJECT_TYPES
-    from opentide.models.schema_registry import identifiers_for_families, resolve_model
     from opentide.registry.artifacts import template_artifact_name
     from opentide.registry.paths import resolve_workspace_paths
 
@@ -515,8 +515,8 @@ def check_templates(ctx: DoctorContext) -> list[Check]:
 
 
 def check_schemas(ctx: DoctorContext) -> list[Check]:
-    from opentide.models.object_types import CORE_OBJECT_TYPES
-    from opentide.models.schema_registry import identifiers_for_families
+    from opentide._models.object_types import CORE_OBJECT_TYPES
+    from opentide._models.schema_registry import identifiers_for_families
     from opentide.registry.artifacts import schema_artifact_name
     from opentide.registry.paths import resolve_workspace_paths, workspace_config
 

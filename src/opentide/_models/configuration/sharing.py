@@ -13,7 +13,7 @@ from typing import Annotated, Any, ClassVar, Literal
 
 from pydantic import ConfigDict, Field, model_validator
 
-from opentide.models.configuration.base import ConfigurationModel, ObjectFamily
+from opentide._models.configuration.base import ConfigurationModel, ObjectFamily
 
 # The sharing 1.0 rules. `opentide.sharing.constants` re-exports them.
 NAME_PATTERN = r"^[a-z0-9_-]{1,64}$"

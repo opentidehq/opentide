@@ -175,8 +175,10 @@ together.
 - [`schema.yml`](workflows/schema.yml), on every pull request and push: `opentide-schema` (UC-1.1)
   built for the native target, abi3-py310 (feature `python`) and `wasm32-unknown-unknown`
   (feature `wasm`), clippy on the last two (ci.yml's engine jobs build no features), and its tests
-  with the Python class on CPython 3.10, the abi3 floor. Written before ci.yml became one
-  workflow; not a required check.
+  with the Python class on CPython 3.10, the abi3 floor; clippy with feature `stubs`, and
+  `cargo xtask stubs --check`, which fails when the generated `src/opentide/_native/models.pyi`
+  differs from the extension (UC-1.9). Written before ci.yml became one workflow; not a required
+  check.
 - [`oracle.yml`](workflows/oracle.yml) checks the query parsers against Kusto.Language, Splunk,
   Elasticsearch, Lucene, Kibana and Falco (`OPENTIDE_ORACLE_REQUIRED`) on every push to
   `development`, on an `engine-v*` tag, on a pull request that changes `crates/`, `grammars/`,

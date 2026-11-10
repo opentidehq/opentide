@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from opentide._models.objective import DetectionObjective
+from opentide._models.rule import DetectionRule
+from opentide._models.threat import ThreatVector
 from opentide.documentation.catalog import DocumentationCatalog, build_catalog
 from opentide.documentation.config import load_settings
 from opentide.documentation.context import DocumentationContext
@@ -15,9 +18,6 @@ from opentide.documentation.publish.paths import page_path, targets
 from opentide.documentation.publish.prune import prune_stale_pages
 from opentide.documentation.publish.writer import write_page
 from opentide.documentation.types import DocumentFlavor
-from opentide.models.objective import DetectionObjective
-from opentide.models.rule import DetectionRule
-from opentide.models.threat import ThreatVector
 
 
 def _context(*, output: str | None = None, flavor: str | None = None) -> DocumentationContext:

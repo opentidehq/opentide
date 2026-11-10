@@ -8,6 +8,11 @@ import pytest
 from pydantic import ValidationError
 from tests.corpus_support import TIDE_CORPUS_ROOT
 
+from opentide._models.platform import (
+    PLATFORM_CONFIG_MODELS,
+    CarbonBlackConfig,
+    SentinelConfig,
+)
 from opentide.core.io import load_yaml
 from opentide.loading.platform_loader import (
     load_carbon_black_config,
@@ -18,11 +23,6 @@ from opentide.loading.platform_loader import (
     load_sentinel_config,
     load_sentinel_one_config,
     load_splunk_config,
-)
-from opentide.models.platform import (
-    PLATFORM_CONFIG_MODELS,
-    CarbonBlackConfig,
-    SentinelConfig,
 )
 
 
@@ -104,7 +104,7 @@ def test_elastic_config_loader_drops_legacy_external_ids() -> None:
 
 
 def test_defender_config_loader_drops_legacy_external_ids() -> None:
-    from opentide.models.platform import DefenderConfig
+    from opentide._models.platform import DefenderConfig
 
     assert "rule_id" not in DefenderConfig.model_fields
 

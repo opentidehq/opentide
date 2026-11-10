@@ -5,10 +5,10 @@ from __future__ import annotations
 import copy
 from typing import Any
 
+from opentide._models.deployment_enums import StatusStrategy
+from opentide._models.rule import DetectionRule
+from opentide._models.system_config import ConfigurationModels
 from opentide.deployment.utils import check_status
-from opentide.models.deployment_enums import StatusStrategy
-from opentide.models.rule import DetectionRule
-from opentide.models.system_config import ConfigurationModels
 from opentide.platforms.elastic.attack import resolve_elastic_threat
 from opentide.platforms.elastic.durations import (
     date_math,

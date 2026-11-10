@@ -12,7 +12,7 @@ from tests.corpus_support import (
     CORPUS_THREAT_UUID,
 )
 
-from opentide.models.metadata import ObjectMetadata, ObjectReferences, Organisation
+from opentide._models.metadata import ObjectMetadata, ObjectReferences, Organisation
 
 
 def test_object_references_coerce_public_keys() -> None:

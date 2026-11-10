@@ -25,6 +25,17 @@ macro_rules! optional_model {
         #[garde(allow_unvalidated)]
         #[schemars(rename = $model, description = "")]
         #[from_node(model = $model)]
+        #[cfg_attr(
+            feature = "python",
+            pyo3::pyclass(frozen, get_all, eq, name = $model, module = "opentide._native.models")
+        )]
+        #[cfg_attr(
+            feature = "python",
+            expect(
+                clippy::unsafe_derive_deserialize,
+                reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+            )
+        )]
         pub struct $name {
             $(
                 $(#[doc = $doc])*
@@ -148,6 +159,23 @@ optional_model! {
 #[garde(allow_unvalidated)]
 #[schemars(rename = "SplunkRiskObject", description = "")]
 #[from_node(model = "SplunkRiskObject")]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(
+        frozen,
+        get_all,
+        eq,
+        name = "SplunkRiskObject",
+        module = "opentide._native.models"
+    )
+)]
+#[cfg_attr(
+    feature = "python",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+    )
+)]
 pub struct SplunkRiskObject {
     /// Result field holding the risk object.
     pub field: String,
@@ -164,6 +192,23 @@ pub struct SplunkRiskObject {
 #[garde(allow_unvalidated)]
 #[schemars(rename = "SplunkThreatObject", description = "")]
 #[from_node(model = "SplunkThreatObject")]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(
+        frozen,
+        get_all,
+        eq,
+        name = "SplunkThreatObject",
+        module = "opentide._native.models"
+    )
+)]
+#[cfg_attr(
+    feature = "python",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+    )
+)]
 pub struct SplunkThreatObject {
     /// Result field holding the threat object.
     pub field: String,
@@ -247,6 +292,8 @@ platform_block! {
     #[garde(allow_unvalidated)]
     #[schemars(rename = "SplunkConfig", description = "")]
     #[from_node(model = "SplunkConfig")]
+    #[cfg_attr(feature = "python", pyo3::pyclass(frozen, get_all, eq, name = "SplunkConfig", module = "opentide._native.models"))]
+    #[cfg_attr(feature = "python", expect(clippy::unsafe_derive_deserialize, reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"))]
     pub struct SplunkConfig ["platform::splunk::1.0"] {
         /// SPL. Multiline.
         #[schemars(extend("tide.template.multiline" = true, "tide.template.spacer" = true))]

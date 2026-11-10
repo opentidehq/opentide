@@ -146,9 +146,9 @@ def _object_models() -> set[type]:
     import typing
     from typing import get_args, get_origin
 
-    from opentide.models.base import TideModel
-    from opentide.models.object_types import CORE_OBJECT_TYPES
-    from opentide.models.schema_registry import identifiers_for_families, resolve_model
+    from opentide._models.base import TideModel
+    from opentide._models.object_types import CORE_OBJECT_TYPES
+    from opentide._models.schema_registry import identifiers_for_families, resolve_model
 
     def models_in(annotation: object) -> list[type[TideModel]]:
         if isinstance(annotation, type) and issubclass(annotation, TideModel):

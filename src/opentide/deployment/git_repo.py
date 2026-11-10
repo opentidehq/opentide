@@ -6,6 +6,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
+from opentide._models.deployment_enums import StatusStrategy
 from opentide.core import registry
 from opentide.core.logging import get_logger
 from opentide.deployment.ci import CIEnvironment
@@ -16,7 +17,6 @@ from opentide.deployment.git_backend import (
     key_text,
     open_repo,
 )
-from opentide.models.deployment_enums import StatusStrategy
 from opentide.registry.discovery import discover_workspace
 
 DEPRECATED_STATUSES = (StatusStrategy.DELETION, StatusStrategy.DISABLEMENT)

@@ -6,12 +6,12 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any, cast
 
+from opentide._models.metadata import ObjectReferences
+from opentide._models.platform import PLATFORM_CONFIG_MODELS, RuleConfigurations
+from opentide._models.response import ResponseProcedure, ResponseSearch, RuleResponse
+from opentide._models.rule import DetectionRule
 from opentide.loading.object_loader import resolve_family_model, schema_id_from_body
 from opentide.loading.platform_loader import load_platform_config
-from opentide.models.metadata import ObjectReferences
-from opentide.models.platform import PLATFORM_CONFIG_MODELS, RuleConfigurations
-from opentide.models.response import ResponseProcedure, ResponseSearch, RuleResponse
-from opentide.models.rule import DetectionRule
 
 
 def _load_response(response_config: dict[str, Any]) -> RuleResponse:

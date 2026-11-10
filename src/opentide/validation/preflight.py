@@ -7,10 +7,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from opentide._models.object_types import CORE_OBJECT_TYPES
 from opentide.core.index_manager import IndexManager
 from opentide.generation.vocabulary import VocabularyDefinition, VocabularyLoader
 from opentide.indexing.object_vocab import build_object_vocabularies
-from opentide.models.object_types import CORE_OBJECT_TYPES
 from opentide.validation.vocab_resolver import RuntimeEnumResolver
 
 

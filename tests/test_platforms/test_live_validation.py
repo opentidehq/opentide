@@ -14,8 +14,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from opentide.models.system_config import ConfigurationModels as C
-from opentide.models.system_config import SystemConfig
+from opentide._models.system_config import ConfigurationModels as C
+from opentide._models.system_config import SystemConfig
 from opentide.platforms.live_validation import LiveQueryValidator, refusal_text
 from opentide.query.check import CHECK_WINDOW, LiveCheckReport, RuleCheck, check_window
 from opentide.query.models import (

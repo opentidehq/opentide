@@ -85,7 +85,7 @@ def _rule_status(rule: Any, platform: str) -> str:
 
 
 def _action(platform: str, tenant: str | None, uuid: str, status: str) -> Action:
-    from opentide.models.deployment_enums import StatusStrategy
+    from opentide._models.deployment_enums import StatusStrategy
     from opentide.states.deployment import STATE_PLATFORMS, DeploymentState
 
     try:

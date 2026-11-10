@@ -4,8 +4,6 @@
 //! idempotent on the newest revision, and a valid object migrates to a valid
 //! object of the target revision.
 
-use std::collections::BTreeMap;
-
 use garde::Validate;
 use proptest::prelude::*;
 
@@ -65,7 +63,7 @@ fn references() -> impl Strategy<Value = ObjectReferences> {
     )
         .prop_map(|(public, internal, reports)| ObjectReferences {
             public,
-            internal,
+            internal: internal.map(|internal| internal.into_iter().collect()),
             reports,
         })
 }
@@ -124,7 +122,7 @@ fn rule_v1_0() -> impl Strategy<Value = RuleV1_0> {
                 status,
                 severity,
                 techniques,
-                platforms: BTreeMap::new(),
+                platforms: indexmap::IndexMap::new(),
                 references,
                 detection_model,
                 response,

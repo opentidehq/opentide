@@ -2,7 +2,7 @@
 
 The extraction is anchored to the Pydantic models: the technique / actor /
 configuration fields are DERIVED from the models that declare them (tagged with
-:class:`~opentide.models.base.FieldRole`), selected per object by the body's
+:class:`~opentide._models.base.FieldRole`), selected per object by the body's
 ``metadata.schema`` identifier. These tests pin that contract — including that
 the legacy ``attack`` key and the flat ``tags`` tolerance are gone (0.14.1) — and
 that the field names are derived rather than hardcoded.
@@ -15,6 +15,7 @@ from typing import Any
 import pytest
 from pydantic import BaseModel
 
+from opentide._models.base import FieldRole, TideField, TideModel
 from opentide.core.object_fields import (
     as_body,
     matched_techniques,
@@ -26,7 +27,6 @@ from opentide.core.object_fields import (
     object_techniques,
     technique_covers,
 )
-from opentide.models.base import FieldRole, TideField, TideModel
 
 
 class _Rule(BaseModel):
@@ -108,7 +108,7 @@ def test_object_techniques_derives_field_names_without_a_hardcoded_tuple() -> No
     "mitre_attack")`` tuple could not see ``ttp_refs`` and would return an empty
     set here, failing the test.
     """
-    from opentide.models.schema_registry import register_model, unregister_model
+    from opentide._models.schema_registry import register_model, unregister_model
 
     class _TrialRule(TideModel):
         __schema_identifier__ = "trial::9.9"

@@ -6,8 +6,8 @@ from typing import Annotated, Literal
 
 from pydantic import BeforeValidator, Field, Strict, WithJsonSchema
 
+from opentide._models.configuration.base import ConfigurationModel, ObjectFamily
 from opentide.documentation.types import DocumentFlavor
-from opentide.models.configuration.base import ConfigurationModel, ObjectFamily
 
 #: A flavor written by name (`default = "gitlab"`). `azure-devops` is read as
 #: `azure_devops`, as `--flavor` does, and the schema accepts it too.

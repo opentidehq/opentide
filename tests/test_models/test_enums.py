@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from opentide.models.enums import EnumEntry, EnumRegistry
+from opentide._models.enums import EnumEntry, EnumRegistry
 
 
 def test_enum_entry_validate_lengths_ok() -> None:

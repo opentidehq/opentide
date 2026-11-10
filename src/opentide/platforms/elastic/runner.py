@@ -14,8 +14,8 @@ from urllib.parse import quote
 
 import requests
 
+from opentide._models.system_config import ConfigurationModels, SystemConfig
 from opentide.core.time import format_utc_z
-from opentide.models.system_config import ConfigurationModels, SystemConfig
 from opentide.platforms.elastic.client import ElasticClient
 from opentide.platforms.elastic.query_text import mask_query
 from opentide.platforms.transport import not_json_detail

@@ -21,8 +21,8 @@ import yaml
 from requests.adapters import BaseAdapter
 from tests.corpus_support import TIDE_CORPUS_ROOT
 
+from opentide._models.rule import DetectionRule
 from opentide.loading.rule_loader import load_rule_from_dict
-from opentide.models.rule import DetectionRule
 from opentide.platforms.sentinel import deployer as deployer_module
 from opentide.platforms.sentinel.client import (
     ALERT_RULES_API_VERSION,

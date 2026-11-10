@@ -5,12 +5,12 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from opentide._models.objective import DetectionObjective
+from opentide._models.platform import PLATFORM_CONFIG_MODELS
+from opentide._models.platform_schema import platform_model_for_key
+from opentide._models.rule import DetectionRule
+from opentide._models.threat import ThreatVector
 from opentide.generation.pydantic_skeleton import render_model_template, write_model_template
-from opentide.models.objective import DetectionObjective
-from opentide.models.platform import PLATFORM_CONFIG_MODELS
-from opentide.models.platform_schema import platform_model_for_key
-from opentide.models.rule import DetectionRule
-from opentide.models.threat import ThreatVector
 
 _PINNED_MODELS = {
     "threat": ThreatVector,

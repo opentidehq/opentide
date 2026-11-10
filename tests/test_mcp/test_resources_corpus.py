@@ -18,10 +18,10 @@ from tests.corpus_support import (
     clear_runtime_caches,
 )
 
+from opentide._models.schema_registry import latest_identifier
 from opentide.cli.services.generation import run_generate_phase
 from opentide.core.registry import Opentide
 from opentide.mcp_server import resources
-from opentide.models.schema_registry import latest_identifier
 
 
 @pytest.fixture
