@@ -23,7 +23,7 @@ pub use ecs::ecs_diagnostics;
 
 use opentide_core::{
     ByteSpan, CompletionItem, Diagnostic, LanguageId, ParameterInformation, Range, Severity,
-    SignatureHelp, SignatureInformation, codes, span_to_range,
+    SignatureHelp, SignatureInformation, codes, span_to_range, suggest,
 };
 use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
 use opentide_syntax::{first_error, node_span, parse as ts_parse};
@@ -613,17 +613,10 @@ fn check_function(node: Node, source: &str, catalog: &Catalog, out: &mut Vec<Dia
                 format!("unknown EQL function `{name}`"),
                 range(source, span),
             );
-            if let Some(s) = catalog
-                .functions
-                .iter()
-                .map(|f| (f.name.as_str(), edit_distance(&f.name, name)))
-                .filter(|(_, d)| *d <= 2)
-                .min_by_key(|(_, d)| *d)
-                .map(|(n, _)| n)
+            if let Some(s) =
+                suggest::closest(name, catalog.functions.iter().map(|f| f.name.as_str()))
             {
-                if s != name {
-                    d = d.with_suggestion(s);
-                }
+                d = d.with_suggestion(s);
             }
             out.push(d);
             false
@@ -1015,21 +1008,6 @@ fn range(source: &str, span: ByteSpan) -> Range {
 
 fn text<'a>(node: Node, source: &'a str) -> &'a str {
     source.get(node.start_byte()..node.end_byte()).unwrap_or("")
-}
-
-fn edit_distance(a: &str, b: &str) -> usize {
-    let a: Vec<char> = a.chars().collect();
-    let b: Vec<char> = b.chars().collect();
-    let mut prev: Vec<usize> = (0..=b.len()).collect();
-    for (i, ca) in a.iter().enumerate() {
-        let mut cur = vec![i + 1];
-        for (j, cb) in b.iter().enumerate() {
-            let cost = usize::from(!ca.eq_ignore_ascii_case(cb));
-            cur.push((prev[j] + cost).min(prev[j + 1] + 1).min(cur[j] + 1));
-        }
-        prev = cur;
-    }
-    prev[b.len()]
 }
 
 /// `parsed` is `source` with nested comments blanked; offsets are the same.

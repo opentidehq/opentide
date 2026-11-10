@@ -22,7 +22,7 @@
 //!
 //! The pass never reports on a query that does not parse.
 
-use crate::{Catalog, Profile, strsim_distance, tables};
+use crate::{Catalog, Profile, tables};
 use opentide_core::{ByteSpan, Diagnostic, codes, span_to_range};
 use std::collections::{BTreeSet, HashMap};
 use tree_sitter::Node;
@@ -1820,18 +1820,20 @@ impl<'a> Pass<'a> {
             ));
             return;
         }
-        let suggestion = schema
-            .columns
-            .iter()
-            .map(|c| {
-                (
-                    c,
-                    strsim_distance(&c.name.to_ascii_lowercase(), &name.to_ascii_lowercase()),
-                )
-            })
-            .filter(|(_, d)| *d <= 2 && *d * 2 < name.len())
-            .min_by_key(|(_, d)| *d)
-            .map(|(c, _)| c.name.clone());
+        // A near miss is within two edits (strsim's Levenshtein distance,
+        // ignoring case) and less than half the name: the threshold decides
+        // whether a documented table reports the column at all
+        // (`Known::Typos`). Among the columns within it, the shared rule
+        // chooses ([`opentide_core::suggest::best`]).
+        let lower = name.to_ascii_lowercase();
+        let suggestion = opentide_core::suggest::best(
+            name,
+            schema.columns.iter().map(|c| c.name.as_str()).filter(|c| {
+                let d = strsim::levenshtein(&c.to_ascii_lowercase(), &lower);
+                d <= 2 && d * 2 < name.len()
+            }),
+        )
+        .map(str::to_string);
         let report = match schema.known {
             Known::Closed => true,
             Known::Typos => suggestion.is_some(),

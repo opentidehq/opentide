@@ -10,7 +10,7 @@
 //! fields, Elastic Defend's `*.Ext.*`) and integration namespaces
 //! (`azure.*`, `okta.*`, `winlog.*`) are never checked.
 
-use crate::{EcsField, field, fields, version, with_prefix};
+use crate::{field, fields, version, with_prefix};
 use opentide_core::datasets::{self, DatasetKind};
 use opentide_core::{Diagnostic, Range, Severity, codes};
 use std::cell::RefCell;
@@ -281,44 +281,17 @@ fn near_miss(name: &str) -> Option<&'static str> {
     if (1..segments.len()).any(|end| field(&segments[..end].join(".")).is_some()) {
         return None;
     }
+    // Whether a near miss is reported at all is this check's threshold
+    // (strsim's optimal string alignment distance, a swapped pair one edit);
+    // among the fields within it, the shared rule chooses
+    // ([`opentide_core::suggest::best`]).
     let limit = if name.len() >= 16 { 2 } else { 1 };
-    let mut best: Option<(&'static EcsField, usize)> = None;
-    for candidate in with_prefix(&format!("{root}.")) {
-        if candidate.name.len().abs_diff(name.len()) > limit {
-            continue;
-        }
-        let d = osa_distance(&candidate.name, name);
-        if d <= limit && best.is_none_or(|(_, b)| d < b) {
-            best = Some((candidate, d));
-        }
-    }
-    best.filter(|(_, d)| *d > 0).map(|(f, _)| f.name.as_str())
-}
-
-/// Optimal string alignment distance: edits plus adjacent transpositions.
-fn osa_distance(a: &str, b: &str) -> usize {
-    let a: Vec<char> = a.chars().collect();
-    let b: Vec<char> = b.chars().collect();
-    let mut d = vec![vec![0usize; b.len() + 1]; a.len() + 1];
-    for (i, row) in d.iter_mut().enumerate() {
-        row[0] = i;
-    }
-    for (j, cell) in d[0].iter_mut().enumerate() {
-        *cell = j;
-    }
-    for i in 1..=a.len() {
-        for j in 1..=b.len() {
-            let cost = usize::from(a[i - 1] != b[j - 1]);
-            let mut v = (d[i - 1][j] + 1)
-                .min(d[i][j - 1] + 1)
-                .min(d[i - 1][j - 1] + cost);
-            if i > 1 && j > 1 && a[i - 1] == b[j - 2] && a[i - 2] == b[j - 1] {
-                v = v.min(d[i - 2][j - 2] + 1);
-            }
-            d[i][j] = v;
-        }
-    }
-    d[a.len()][b.len()]
+    let near = with_prefix(&format!("{root}."))
+        .iter()
+        .filter(|candidate| candidate.name.len().abs_diff(name.len()) <= limit)
+        .map(|candidate| candidate.name.as_str())
+        .filter(|candidate| strsim::osa_distance(candidate, name) <= limit);
+    opentide_core::suggest::best(name, near)
 }
 
 /// `ecs_unknown_field` (warning) for `name` at `range`, when

@@ -48,47 +48,22 @@ pub fn field(name: &str) -> Option<&'static Field> {
     fields().iter().find(|f| f.name == name)
 }
 
-/// Edit distance, an adjacent swap counting one.
-fn distance(a: &str, b: &str) -> usize {
-    let a: Vec<char> = a.chars().collect();
-    let b: Vec<char> = b.chars().collect();
-    let mut d = vec![vec![0usize; b.len() + 1]; a.len() + 1];
-    for (i, row) in d.iter_mut().enumerate() {
-        row[0] = i;
-    }
-    for (j, cell) in d[0].iter_mut().enumerate() {
-        *cell = j;
-    }
-    for i in 1..=a.len() {
-        for j in 1..=b.len() {
-            let cost = usize::from(a[i - 1] != b[j - 1]);
-            d[i][j] = (d[i - 1][j] + 1)
-                .min(d[i][j - 1] + 1)
-                .min(d[i - 1][j - 1] + cost);
-            if i > 1 && j > 1 && a[i - 1] == b[j - 2] && a[i - 2] == b[j - 1] {
-                d[i][j] = d[i][j].min(d[i - 2][j - 2] + 1);
-            }
-        }
-    }
-    d[a.len()][b.len()]
-}
-
-/// The catalog field a name is a near miss of: within two edits, and closer
-/// than any other. A name far from every field may be one the catalog lacks,
-/// and is left alone.
+/// The catalog field a name is a near miss of: within two edits (strsim's
+/// optimal string alignment distance, a swapped pair one edit, ignoring
+/// case), chosen among those by the shared rule
+/// ([`opentide_core::suggest::best`]). A name far from every field may be one
+/// the catalog lacks, and is left alone.
 pub fn near_miss(name: &str) -> Option<&'static Field> {
     if field(name).is_some() || name.contains('*') || name.len() < 4 {
         return None;
     }
     let lower = name.to_ascii_lowercase();
-    let mut best: Option<(usize, &'static Field)> = None;
-    for f in fields() {
-        let d = distance(&lower, &f.name);
-        if d <= 2 && best.is_none_or(|(b, _)| d < b) {
-            best = Some((d, f));
-        }
-    }
-    best.map(|(_, f)| f)
+    let near = fields()
+        .iter()
+        .filter(|f| strsim::osa_distance(&lower, &f.name) <= 2)
+        .map(|f| f.name.as_str());
+    let best = opentide_core::suggest::best(name, near)?;
+    field(best)
 }
 
 /// `cbc_unknown_field` on a `field_name` node that misspells a catalog field.

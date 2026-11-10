@@ -8,7 +8,7 @@
 use opentide_core::datasets::{Declaration, DeclaredSource};
 use opentide_core::{
     ByteSpan, CompletionItem, Diagnostic, LanguageId, ParameterInformation, Range, SignatureHelp,
-    SignatureInformation, codes, span_to_range,
+    SignatureInformation, codes, span_to_range, suggest,
 };
 use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
 mod perf;
@@ -694,18 +694,10 @@ impl Catalog {
             .find(|p| p.name.eq_ignore_ascii_case(name))
     }
 
+    /// The catalogued table `name` most likely means
+    /// ([`opentide_core::suggest`]).
     pub fn suggest_table(&self, name: &str) -> Option<String> {
-        self.tables
-            .iter()
-            .map(|t| {
-                (
-                    t.name.clone(),
-                    strsim_distance(&t.name.to_ascii_lowercase(), &name.to_ascii_lowercase()),
-                )
-            })
-            .filter(|(_, d)| *d <= 4)
-            .min_by_key(|(_, d)| *d)
-            .map(|(n, _)| n)
+        suggest::closest(name, self.tables.iter().map(|t| t.name.as_str())).map(str::to_string)
     }
 
     pub fn operator_names(&self) -> Vec<String> {
@@ -791,23 +783,6 @@ fn identifiers(source: &str) -> impl Iterator<Item = &str> {
                 .next()
                 .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
         })
-}
-
-fn strsim_distance(a: &str, b: &str) -> usize {
-    // Tiny Levenshtein for suggestions.
-    let a_chars: Vec<char> = a.chars().collect();
-    let b_chars: Vec<char> = b.chars().collect();
-    let mut prev: Vec<usize> = (0..=b_chars.len()).collect();
-    let mut cur = vec![0; b_chars.len() + 1];
-    for (i, ca) in a_chars.iter().enumerate() {
-        cur[0] = i + 1;
-        for (j, cb) in b_chars.iter().enumerate() {
-            let cost = usize::from(ca != cb);
-            cur[j + 1] = (prev[j + 1] + 1).min(cur[j] + 1).min(prev[j] + cost);
-        }
-        std::mem::swap(&mut prev, &mut cur);
-    }
-    prev[b_chars.len()]
 }
 
 /// Lowered HIR (snapshots via Display).
@@ -1059,13 +1034,8 @@ fn collect_operator_diagnostics(
                 format!("unknown tabular operator '{name}'"),
                 node_range(source, node),
             );
-            if let Some(s) = catalog
-                .operators
-                .iter()
-                .map(|o| (o.name.clone(), strsim_distance(&o.name, &name)))
-                .filter(|(_, d)| *d <= 3)
-                .min_by_key(|(_, d)| *d)
-                .map(|(n, _)| n)
+            if let Some(s) =
+                suggest::closest(&name, catalog.operators.iter().map(|o| o.name.as_str()))
             {
                 d = d.with_suggestion(s);
             }
@@ -1143,13 +1113,8 @@ fn collect_function_diagnostics(
                         format!("unknown evaluate plugin '{name}'"),
                         call_name_range(source, node),
                     );
-                    if let Some(s) = catalog
-                        .plugins
-                        .iter()
-                        .map(|p| (p.name.clone(), strsim_distance(&p.name, &name)))
-                        .filter(|(_, d)| *d <= 2)
-                        .min_by_key(|(_, d)| *d)
-                        .map(|(n, _)| n)
+                    if let Some(s) =
+                        suggest::closest(&name, catalog.plugins.iter().map(|p| p.name.as_str()))
                     {
                         d = d.with_suggestion(s);
                     }
@@ -1166,16 +1131,18 @@ fn collect_function_diagnostics(
                 );
             } else if function.is_none() && catalog.operator(&name).is_none() {
                 // Operators used as functions are fine; unknown names get a diagnostic.
-                // Many scalar functions are not yet catalogued — only flag if it looks like a typo of a known one.
-                if let Some(suggestion) = catalog
-                    .functions
-                    .iter()
-                    .filter(|f| f.deprecated.is_none())
-                    .map(|f| (f.name.clone(), strsim_distance(&f.name, &name)))
-                    .filter(|(_, d)| *d > 0 && *d <= 2)
-                    .min_by_key(|(_, d)| *d)
-                    .map(|(n, _)| n)
-                {
+                // Many scalar functions are not yet catalogued — only flag if it looks like a typo of a known one:
+                // within two edits (strsim's Levenshtein distance), the check's own threshold. Among those,
+                // the shared rule chooses.
+                if let Some(suggestion) = suggest::best(
+                    &name,
+                    catalog
+                        .functions
+                        .iter()
+                        .filter(|f| f.deprecated.is_none())
+                        .map(|f| f.name.as_str())
+                        .filter(|f| (1..=2).contains(&strsim::levenshtein(f, &name))),
+                ) {
                     out.push(
                         Diagnostic::error(
                             codes::KQL_UNKNOWN_FUNCTION,
@@ -1401,20 +1368,16 @@ fn check_table(
     let status = datasets.status(platform, table);
     // A near miss of a declared table, else of a catalog table.
     let suggest = |catalog_too: bool| {
-        datasets
-            .names(platform)
-            .iter()
-            .filter(|d| !d.contains('*'))
-            .map(|d| {
-                (
-                    d,
-                    strsim_distance(&d.to_ascii_lowercase(), &table.to_ascii_lowercase()),
-                )
-            })
-            .filter(|(_, d)| *d <= 2)
-            .min_by_key(|(_, d)| *d)
-            .map(|(n, _)| n.clone())
-            .or_else(|| catalog_too.then(|| catalog.suggest_table(table)).flatten())
+        suggest::closest(
+            table,
+            datasets
+                .names(platform)
+                .iter()
+                .filter(|d| !d.contains('*'))
+                .map(String::as_str),
+        )
+        .map(str::to_string)
+        .or_else(|| catalog_too.then(|| catalog.suggest_table(table)).flatten())
     };
     // The spec's precedence (visibility::1.0, Query checks): only a name the
     // catalog knows is "not declared"; one it does not know is unknown,

@@ -910,6 +910,7 @@ dependencies = [
  "opentide-core",
  "serde",
  "serde_json",
+ "strsim",
 ]
 
 [[package]]
@@ -975,6 +976,7 @@ dependencies = [
  "opentide-syntax",
  "regex",
  "serde",
+ "strsim",
  "toml 0.8.23",
  "tree-sitter",
 ]
@@ -1022,6 +1024,7 @@ dependencies = [
  "opentide-highlight",
  "opentide-syntax",
  "serde",
+ "strsim",
  "toml 0.8.23",
  "tree-sitter",
 ]
@@ -1082,6 +1085,7 @@ dependencies = [
  "opentide-highlight",
  "opentide-syntax",
  "serde",
+ "strsim",
  "toml 0.8.23",
  "tree-sitter",
 ]

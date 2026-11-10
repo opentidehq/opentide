@@ -17,6 +17,7 @@ workspace = true
 opentide-core.workspace = true
 opentide-syntax.workspace = true
 opentide-highlight.workspace = true
+strsim.workspace = true
 serde.workspace = true
 tree-sitter.workspace = true
 toml.workspace = true
