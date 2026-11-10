@@ -42,6 +42,11 @@ gix-revision = { version = "0.49", default-features = false, features = ["merge_
 dunce = "1"
 # Request bodies keep the order their keys are built in, as the oracle's dicts do.
 indexmap = { version = "2", features = ["serde"] }
+# generate: a phase's files written in parallel (UC-3.2).
+rayon.workspace = true
+# generate exports: the Navigator layer lists objects by name under full
+# Unicode case folding, as the oracle's `str.casefold()` sorts them.
+caseless = "0.2"
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

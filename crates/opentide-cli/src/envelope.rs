@@ -3,7 +3,8 @@
 //! Key order is the oracle's: the command's own keys, then `ok`, `status`,
 //! `message`, `warnings` when there are any, then `schema_version`,
 //! `command`, `duration_ms`, `exit_code`, `summary`, `next_actions` and
-//! `failure`. A non-zero exit always carries `error`, first.
+//! `failure`. A non-zero exit always carries `error`: where the command put it,
+//! else after `message`.
 
 use crate::json::Json;
 
@@ -148,6 +149,11 @@ impl Outcome {
     /// The document, with `duration_ms` as given.
     pub fn document(&self, duration_ms: i64) -> Json {
         let mut members: Vec<(String, Json)> = self.data.clone();
+        members.push(("ok".into(), Json::Bool(self.ok())));
+        members.push(("status".into(), Json::str(&self.status)));
+        members.push(("message".into(), Json::str(&self.message)));
+        // The oracle's `envelope` adds `error` to the payload it was given,
+        // after the command's own keys and its message.
         if self.exit_code != 0 && !members.iter().any(|(k, _)| k == "error") {
             let message = if self.message.is_empty() {
                 self.failure
@@ -157,11 +163,8 @@ impl Outcome {
             } else {
                 self.message.clone()
             };
-            members.insert(0, ("error".into(), Json::Str(message)));
+            members.push(("error".into(), Json::Str(message)));
         }
-        members.push(("ok".into(), Json::Bool(self.ok())));
-        members.push(("status".into(), Json::str(&self.status)));
-        members.push(("message".into(), Json::str(&self.message)));
         members.push(("schema_version".into(), Json::Int(SCHEMA_VERSION)));
         members.push(("command".into(), Json::str(&self.command)));
         members.push(("duration_ms".into(), Json::Int(duration_ms)));
@@ -207,6 +210,24 @@ mod tests {
              \"duration_ms\":0,\"exit_code\":2,\"summary\":{},\"next_actions\":[],\
              \"failure\":{\"code\":\"usage_unknown_command\",\"message\":\"No such command 'valdiate'.\",\
              \"argument\":\"valdiate\",\"suggestion\":\"validate\",\"crash_log\":null}}\n"
+        );
+    }
+
+    #[test]
+    fn framework_envelope_error_follows_the_message_when_the_command_set_none() {
+        let mut outcome = Outcome::failed(
+            "generate exports",
+            1,
+            Failure::new("command_failed", "exports: broken"),
+        );
+        outcome.data = vec![("phase".into(), Json::str("exports"))];
+        let text = document_text(&outcome.document(0), false);
+        assert!(
+            text.starts_with(
+                "{\"phase\":\"exports\",\"ok\":false,\"status\":\"failed\",\
+                 \"message\":\"exports: broken\",\"error\":\"exports: broken\",\"schema_version\":1,"
+            ),
+            "{text}"
         );
     }
 
