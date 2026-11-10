@@ -72,7 +72,13 @@ commands:
   validate diff [--filter GLOB] [--keep DIR] [--show-approved]
                  run opentide-workspace's validate on every recorded
                  `validate --json` case that only checks, and compare its
-                 report, checks and summary with the recording (UC-2.2, #817)
+                 report, checks and summary with the recording (UC-2.2, #817),
+                 and its --fix and --fix --dry-run cases: what they fixed,
+                 the diff and the files written (UC-2.3, #818)
+  lint diff [--filter GLOB] [--keep DIR] [--show-approved]
+                 run opentide-workspace's lint on every recorded `lint --json`
+                 case and compare its findings, verdict, next steps and the
+                 files --fix renamed with the recording (UC-2.3, #818)
   codegen        generate schemas, stubs, types and references (UC-1.8, #814)
   golden <record|check|diff|lock|coverage> [options]
                  record what the frozen Python CLI does, and check an engine
@@ -164,6 +170,13 @@ fn main() -> ExitCode {
             Ok(code) => ExitCode::from(code),
             Err(error) => {
                 eprintln!("xtask validate: {error:#}");
+                ExitCode::from(2)
+            }
+        },
+        "lint" => match xtask::lint::run(rest) {
+            Ok(code) => ExitCode::from(code),
+            Err(error) => {
+                eprintln!("xtask lint: {error:#}");
                 ExitCode::from(2)
             }
         },
