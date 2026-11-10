@@ -43,7 +43,12 @@ pub fn object_vocabularies(index: &Index, config: &Node) -> Vec<Vocabulary> {
     let mut out = Vec::new();
     for family in OBJECT_TYPES {
         let mut keys = Vec::new();
-        for object in index.objects.get(family).into_iter().flat_map(|objects| objects.values()) {
+        for object in index
+            .objects
+            .get(family)
+            .into_iter()
+            .flat_map(|objects| objects.values())
+        {
             let Some(root) = object.root() else {
                 continue;
             };
@@ -65,9 +70,17 @@ pub fn object_vocabularies(index: &Index, config: &Node) -> Vec<Vocabulary> {
                 toml::Value::String(name.replace("\n ", " ")),
             );
             put(&mut entry, "tlp", metadata.get("tlp").map(AsRef::as_ref));
-            put(&mut entry, "criticality", root.get("criticality").map(AsRef::as_ref));
+            put(
+                &mut entry,
+                "criticality",
+                root.get("criticality").map(AsRef::as_ref),
+            );
             if let Some(actor) = root.get("actor") {
-                put(&mut entry, "aliases", actor.get("aliases").map(AsRef::as_ref));
+                put(
+                    &mut entry,
+                    "aliases",
+                    actor.get("aliases").map(AsRef::as_ref),
+                );
             }
             let body = match family {
                 "threat" => root.get("threat"),
@@ -79,7 +92,11 @@ pub fn object_vocabularies(index: &Index, config: &Node) -> Vec<Vocabulary> {
                 _ => body.and_then(|body| body.get("description")),
             };
             if family == "objective" {
-                put(&mut entry, "priority", body.and_then(|b| b.get("priority")).map(AsRef::as_ref));
+                put(
+                    &mut entry,
+                    "priority",
+                    body.and_then(|b| b.get("priority")).map(AsRef::as_ref),
+                );
             }
             put(&mut entry, "description", description.map(AsRef::as_ref));
             keys.push(toml::Value::Table(entry));
@@ -108,8 +125,16 @@ pub fn object_vocabularies(index: &Index, config: &Node) -> Vec<Vocabulary> {
                     toml::Value::String(object.uuid.clone()),
                 );
                 put(&mut entry, "tlp", metadata.get("tlp").map(AsRef::as_ref));
-                put(&mut entry, "severity", signal.get("severity").map(AsRef::as_ref));
-                put(&mut entry, "description", signal.get("description").map(AsRef::as_ref));
+                put(
+                    &mut entry,
+                    "severity",
+                    signal.get("severity").map(AsRef::as_ref),
+                );
+                put(
+                    &mut entry,
+                    "description",
+                    signal.get("description").map(AsRef::as_ref),
+                );
                 keys.push(toml::Value::Table(entry));
             }
         }
@@ -129,4 +154,72 @@ pub fn object_vocabularies(index: &Index, config: &Node) -> Vec<Vocabulary> {
         }
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::index::Object;
+    use indexmap::IndexMap;
+    use std::path::PathBuf;
+    use std::sync::Arc;
+
+    fn object(family: &str, uuid: &str, text: &str) -> Object {
+        Object {
+            uuid: uuid.to_owned(),
+            family: family.to_owned(),
+            path: PathBuf::from(format!("{uuid}.yaml")),
+            document: Arc::new(opentide_schema::node::load(text).unwrap()),
+        }
+    }
+
+    #[test]
+    fn objects_and_signals_become_entries_by_uuid() {
+        let mut index = Index::default();
+        let mut objectives = IndexMap::new();
+        objectives.insert(
+            "o1".to_owned(),
+            object(
+                "objective",
+                "o1",
+                "name: Credential access\nmetadata:\n  tlp: amber\nobjective:\n  description: Finds it.\n  priority: High\n  signals:\n    - uuid: s1\n      name: Logon\n      severity: Low\n    - name: no uuid\n",
+            ),
+        );
+        objectives.insert(
+            "o2".to_owned(),
+            object("objective", "o2", "name: No metadata\n"),
+        );
+        index.objects.insert("objective".to_owned(), objectives);
+        let config = opentide_schema::configuration::toml::parse(
+            "[documentation.object_names]\nobjective = \"Detection Objectives\"\n",
+        )
+        .unwrap();
+        let vocabularies = object_vocabularies(&index, &config);
+        let fields: Vec<&str> = vocabularies.iter().map(Vocabulary::field).collect();
+        assert_eq!(fields, ["threat", "objective", "rule"]);
+        let objective = &vocabularies[1];
+        assert_eq!(objective.metadata.name, "Detection Objectives");
+        assert_eq!(vocabularies[0].metadata.name, "threat");
+        let keys: Vec<&String> = objective.entries.keys().collect();
+        assert_eq!(keys, ["o1", "s1"]);
+        assert_eq!(objective.entries["o1"].name, "Credential access");
+        assert_eq!(objective.entries["o1"].description, "Finds it.");
+        assert_eq!(
+            objective.entries["o1"]
+                .extra
+                .get("priority")
+                .and_then(toml::Value::as_str),
+            Some("High")
+        );
+        let signal = &objective.entries["s1"];
+        assert_eq!(signal.name, "Credential access::Logon");
+        assert_eq!(
+            signal
+                .extra
+                .get(opentide_schema::keys::OBJECT_PARENT)
+                .and_then(toml::Value::as_str),
+            Some("o1")
+        );
+        assert!(vocabularies[2].entries.is_empty());
+    }
 }

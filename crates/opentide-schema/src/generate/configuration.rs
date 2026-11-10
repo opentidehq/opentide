@@ -216,11 +216,11 @@ mod tests {
         assert_eq!(files["visibility.toml"]["schema_id"], VISIBILITY_SCHEMA_ID);
         assert_eq!(files["deployment.toml"]["merge"], "deep");
         assert!(files["deployment.toml"].get("schema_id").is_none());
-        assert_eq!(
-            files["platforms/*.toml"]["schema"],
-            "platforms.schema.json"
-        );
-        let names: Vec<String> = configuration_schemas().into_iter().map(|(n, _)| n).collect();
+        assert_eq!(files["platforms/*.toml"]["schema"], "platforms.schema.json");
+        let names: Vec<String> = configuration_schemas()
+            .into_iter()
+            .map(|(n, _)| n)
+            .collect();
         assert_eq!(names.len(), 16);
         assert_eq!(names.last().map(String::as_str), Some(ROUTER_NAME));
     }

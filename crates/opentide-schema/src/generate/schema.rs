@@ -50,7 +50,7 @@ use crate::objects::platform::{PLATFORM_CONFIG_MODELS, Registered};
 use crate::objects::rule::{RuleV1_0, RuleV1_1};
 use crate::objects::threat::ThreatVectorV1_0;
 use crate::pins::{PinTable, Pins};
-use crate::vocab::{Entry, KeyKind, OBJECT_TYPES, Vocabularies, Vocabulary, VocabRef};
+use crate::vocab::{Entry, KeyKind, OBJECT_TYPES, VocabRef, Vocabularies, Vocabulary};
 
 use super::annotate::{annotate_editor_schema, first_sentence, plain_text};
 use super::json::Json;
@@ -213,7 +213,13 @@ impl Transform for RootExtras<'_> {
             "rule" => (
                 "Detection Rule Schema",
                 Some("A detection rule defines how a detection opportunity is implemented."),
-                &["name", "metadata", "response", "description", "configurations"],
+                &[
+                    "name",
+                    "metadata",
+                    "response",
+                    "description",
+                    "configurations",
+                ],
             ),
             "objective" => (
                 "Detection Objective Schema",
@@ -425,10 +431,7 @@ impl Transform for Recompose<'_> {
         if let Some(Value::Object(properties)) = schema.get_mut("properties") {
             for target in targets {
                 if let Some(Value::Object(field)) = properties.get_mut(&target) {
-                    field.insert(
-                        "properties".to_owned(),
-                        Value::Object(recomposed.clone()),
-                    );
+                    field.insert("properties".to_owned(), Value::Object(recomposed.clone()));
                 }
             }
         }
@@ -436,7 +439,12 @@ impl Transform for Recompose<'_> {
 }
 
 /// One enabled platform's property under `configurations`.
-fn platform_property(defs: &Value, registered: &Registered, title: &str, description: &str) -> Value {
+fn platform_property(
+    defs: &Value,
+    registered: &Registered,
+    title: &str,
+    description: &str,
+) -> Value {
     let mut block = defs
         .get(registered.model)
         .and_then(Value::as_object)
@@ -488,7 +496,12 @@ impl Transform for ResolveValues<'_> {
 }
 
 /// The keywords whose values are maps of property names to subschemas.
-const SCHEMA_MAPS: [&str; 4] = ["properties", "$defs", "patternProperties", "dependentSchemas"];
+const SCHEMA_MAPS: [&str; 4] = [
+    "properties",
+    "$defs",
+    "patternProperties",
+    "dependentSchemas",
+];
 
 fn resolve_node(node: &mut Value, key: Option<&str>, sources: &Sources) {
     match node {
@@ -531,12 +544,18 @@ impl Offer {
         map.insert("enum".to_owned(), Value::Array(self.values.clone()));
         map.insert(
             "markdownEnumDescriptions".to_owned(),
-            self.markdown.iter().map(|text| Value::from(text.as_str())).collect(),
+            self.markdown
+                .iter()
+                .map(|text| Value::from(text.as_str()))
+                .collect(),
         );
         if plain && self.plain.len() == self.values.len() {
             map.insert(
                 "enumDescriptions".to_owned(),
-                self.plain.iter().map(|text| Value::from(text.as_str())).collect(),
+                self.plain
+                    .iter()
+                    .map(|text| Value::from(text.as_str()))
+                    .collect(),
             );
         }
         map
@@ -779,7 +798,8 @@ fn vocabulary_offer(vocabularies: &Vocabularies, reference: &str, options: &Voca
         offer.values.push("".into());
         return offer;
     };
-    let model = vocabulary.metadata.key == KeyKind::Id || OBJECT_TYPES.contains(&vocab.field.as_str());
+    let model =
+        vocabulary.metadata.key == KeyKind::Id || OBJECT_TYPES.contains(&vocab.field.as_str());
     let hints = model && vocabulary.search_hints();
     let mut hint_offer = Offer::default();
     let active = vocabulary
@@ -788,7 +808,11 @@ fn vocabulary_offer(vocabularies: &Vocabularies, reference: &str, options: &Voca
         .filter(|entry| vocab.pin.is_none_or(|pin| entry.active_at(pin)));
     for entry in active {
         let emit = |offer: &mut Offer, value: String, stages: &[String]| -> bool {
-            if offer.values.iter().any(|known| known == &Value::from(value.as_str())) {
+            if offer
+                .values
+                .iter()
+                .any(|known| known == &Value::from(value.as_str()))
+            {
                 return false;
             }
             offer.markdown.push(dropdown(&vocabulary, entry, stages));
@@ -802,7 +826,9 @@ fn vocabulary_offer(vocabularies: &Vocabularies, reference: &str, options: &Voca
                 _ => entry.key.clone(),
             };
             if emit(&mut offer, value.clone(), &entry.stages) && hints {
-                hint_offer.values.push(search_hint(&value, entry, options.no_wrap).into());
+                hint_offer
+                    .values
+                    .push(search_hint(&value, entry, options.no_wrap).into());
                 hint_offer.markdown.extend(offer.markdown.last().cloned());
                 hint_offer.plain.extend(offer.plain.last().cloned());
             }
@@ -853,7 +879,11 @@ fn search_hint(value: &str, entry: &Entry, no_wrap: bool) -> String {
     {
         let aliases: Vec<String> = aliases
             .iter()
-            .map(|alias| alias.as_str().map_or_else(|| alias.to_string(), str::to_owned))
+            .map(|alias| {
+                alias
+                    .as_str()
+                    .map_or_else(|| alias.to_string(), str::to_owned)
+            })
             .collect();
         tips.push_str(", ");
         tips.push_str(&aliases.join(", "));
@@ -934,16 +964,23 @@ fn dropdown(vocabulary: &Vocabulary, entry: &Entry, stages: &[String]) -> String
                 entry
                     .extra
                     .get(*key)
-                    .map(|value| value.as_str().map_or_else(|| value.to_string(), str::to_owned))
+                    .map(|value| {
+                        value
+                            .as_str()
+                            .map_or_else(|| value.to_string(), str::to_owned)
+                    })
                     .filter(|value| !value.is_empty())
                     .map(|value| format!("**{label}**: {value}"))
             })
             .unwrap_or_else(|| "**Criticality**: No Criticality Assigned".to_owned());
     }
     if let Some(tlp) = extra(entry, "tlp") {
-        level = format!("{level} | **TLP:{}**", tlp.to_uppercase())
-            .trim_start_matches(" | ")
-            .to_owned();
+        let tlp = format!("**TLP:{}**", tlp.to_uppercase());
+        level = if level.is_empty() {
+            tlp
+        } else {
+            format!("{level} | {tlp}")
+        };
     }
     if !level.is_empty() {
         parts.push(level);
@@ -978,7 +1015,12 @@ fn stage_doc(vocabulary: &Vocabulary, stages: &[String]) -> String {
             continue;
         };
         let name = found.name.as_deref().unwrap_or(stage);
-        let mut description = found.description.as_deref().unwrap_or_default().trim().to_owned();
+        let mut description = found
+            .description
+            .as_deref()
+            .unwrap_or_default()
+            .trim()
+            .to_owned();
         if description.chars().count() > STAGE_DESCRIPTION_LIMIT {
             description = description.chars().take(STAGE_DESCRIPTION_LIMIT).collect();
             description.push_str("...");
@@ -1085,7 +1127,10 @@ fn format_asset(name: &str, assets: &[Arc<Node>]) -> String {
     {
         out.push_str("\n  - _Custom Details_:");
         for detail in details {
-            out.push_str(&format!("\n    - {}: {}", detail.key.value, detail.value.value));
+            out.push_str(&format!(
+                "\n    - {}: {}",
+                detail.key.value, detail.value.value
+            ));
         }
     }
     out
@@ -1204,7 +1249,7 @@ fn parameter_list(config: &Node, path: &str) -> Vec<Value> {
             for tenant in sequence(node.get("tenants")) {
                 let name = display(tenant.get("name"));
                 let parameters = tenant.get("parameters");
-                for value in strings(parameters.and_then(|parameters| parameters.get(*key))) {
+                for value in strings(parameters.and_then(|parameters| parameters.get(key))) {
                     values.push(format!("{}::{}", name.trim(), value.trim()).into());
                 }
             }
@@ -1276,7 +1321,10 @@ impl Transform for PinIdentifier<'_> {
 
 impl PinIdentifier<'_> {
     fn pin(&self, value: &mut Value) {
-        if !value.pointer("/properties/metadata").is_some_and(Value::is_object) {
+        if !value
+            .pointer("/properties/metadata")
+            .is_some_and(Value::is_object)
+        {
             return;
         }
         let metadata = deref_pointer(value, "/properties/metadata");
