@@ -69,6 +69,10 @@ commands:
                  load every corpus with opentide-workspace and compare its
                  index (objects, UUIDs, types, paths, load errors, references,
                  signals), as JSON, with the Python registry's (UC-2.1, #816)
+  validate diff [--filter GLOB] [--keep DIR] [--show-approved]
+                 run opentide-workspace's validate on every recorded
+                 `validate --json` case that only checks, and compare its
+                 report, checks and summary with the recording (UC-2.2, #817)
   codegen        generate schemas, stubs, types and references (UC-1.8, #814)
   golden <record|check|diff|lock|coverage> [options]
                  record what the frozen Python CLI does, and check an engine
@@ -156,6 +160,13 @@ fn main() -> ExitCode {
             Ok(code) => ExitCode::from(code),
             Err(error) => {
                 eprintln!("xtask registry: {error:#}");
+                ExitCode::from(2)
+            }
+        },
+        "validate" => match xtask::validate::run(rest) {
+            Ok(code) => ExitCode::from(code),
+            Err(error) => {
+                eprintln!("xtask validate: {error:#}");
                 ExitCode::from(2)
             }
         },

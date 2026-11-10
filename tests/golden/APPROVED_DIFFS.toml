@@ -245,3 +245,42 @@
 #   file), and
 #   a non-empty list or mapping `uuid` is `missing_uuid` where the oracle
 #   crashed ("**The workspace is loaded by the Rust engine**").
+#
+# Validation and the one diagnostic model (UC-2.2, #817;
+# docs/internal/adr/0010-one-diagnostic-model.md), decided and checked case by
+# case by `cargo xtask validate diff` (xtask/src/validate.rs `APPROVED`; run
+# by CI's `corpus` job, where none may go stale); entered here, each with its rule, when
+# `validate` routes to Rust (UC-2.7, UC-3.5):
+#
+# - `suggestions`: `vocab_unknown` on `Host::Gizmo` (signal.entities) and
+#   `Big incident` (severity) in `*/fault/*` carry no suggestion, help or fix,
+#   where the oracle suggested `Host::File` and `Substantial incident`
+#   ("**"Did you mean" suggests what a typo meant, not a word that shares
+#   letters**").
+# - `yaml-error-text`: a `yaml_parse` finding's message is saphyr's, at the
+#   line and column the oracle names (one column later only where saphyr's
+#   message names a tab) ("**Tide objects are read as YAML 1.2**").
+# - `yaml-1-2-dates`: `reviewed: 2026-02-30` unquoted is the field's
+#   `schema_validation` at `metadata.reviewed`, and the object is checked (one
+#   more object in `summary.objects`), where the oracle refused the file as
+#   `yaml_parse` (KG-02; "**Tide objects are read as YAML 1.2**").
+# - `invalid-uuid-every-file`: `invalid_uuid` on every file whose UUID is not
+#   a UUID v4, also one a later file with the same UUID displaced from the
+#   index; approved only where the oracle reported the same value, in the same
+#   words, on another file (KG-04; `*/fault/*`: one more error and one more file;
+#   "**Every file with an invalid UUID is reported**").
+# - debug output: the UUID scan no longer reads `*.debug.yaml`, so a copy
+#   left there is neither a duplicate nor a parse error (no recording holds
+#   one; "**Every file with an invalid UUID is reported**").
+#
+# Decided by UC-2.2 for the language server (UC-2.6, #821), once a
+# maintainer approves retiring the engine's codes (plan §3 invariant 3); no
+# golden case records the editor:
+#
+# - KG-03: `filename_slug` gives way to lint's `filename_mismatch` ("**One
+#   rule names object files, in the editor and in CI**").
+# - KG-05: `missing_author`, `missing_organisation` and
+#   `recommended_field_missing` give way to lint's `metadata_recommended`
+#   ("**Metadata recommendations have one code, in the editor and in CI**").
+# - KG-02: the editor checks `metadata.reviewed` through the Rust model
+#   ("**The editor checks `metadata.reviewed` as `validate` does**").

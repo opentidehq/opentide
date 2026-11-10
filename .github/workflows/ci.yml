@@ -797,6 +797,12 @@ jobs:
         run: >-
           cargo xtask payloads git --against python
           --python "$RUNNER_TEMP/oracle/bin/python"
+      # opentide-workspace's validate against the recordings of `validate
+      # --json` (UC-2.2, #817): every recorded case that only checks; each
+      # difference is explained by an approved rule (xtask/src/validate.rs
+      # `APPROVED`), none stale. It reads tests/golden/cases, not the oracle.
+      - name: Validate against the recordings (validate diff)
+        run: cargo xtask validate diff
       - name: The code inventory is the oracle's
         run: |
           cargo xtask corpus codes --engine python > "$RUNNER_TEMP/codes.toml"
