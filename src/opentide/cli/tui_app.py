@@ -654,7 +654,7 @@ class OpentideTui(App[None]):
             node = tree.root.children[0]
             self.selected = node.data
         if node is not None:
-            self.call_after_refresh(tree.move_cursor, node)
+            self.call_after_refresh(_move_cursor, tree, node)
 
     def _find(self, node: TreeNode[Any], data: Any) -> TreeNode[Any] | None:
         for child in node.children:
@@ -875,6 +875,22 @@ class OpentideTui(App[None]):
             if row.technique == technique and row.rules:
                 self.select(row.rules[0])
                 return
+
+
+def _move_cursor(tree: Tree[Any], node: TreeNode[Any]) -> None:
+    """Put *tree*'s cursor on *node*, laying the tree's lines out first.
+
+    ``Tree`` lays its lines out lazily, on its own idle or render, and a node
+    added since has line -1 until then. The screen may run this callback before
+    the tree's idle; ``move_cursor`` would then clamp -1 to line 0 and highlight
+    the first threat instead of the object that was selected. ``last_line``
+    lays the lines out. A node still without a line sits under a collapsed
+    ancestor and is not shown: leave the cursor where it is. The tree the TUI
+    builds expands every branch, so this guard is defensive; a test reaches it
+    with a collapsed branch.
+    """
+    if tree.last_line >= 0 and node.line >= 0:
+        tree.move_cursor(node)
 
 
 def coverage_count(row: TechniqueCoverage) -> Text:
