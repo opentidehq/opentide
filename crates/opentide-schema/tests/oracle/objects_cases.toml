@@ -45,6 +45,11 @@ id = "strict-types"
 reason = "As crates/opentide-schema/tests/oracle/from_node_cases.toml `strict-types`: a field takes its declared type. `version: 1.5` was Pydantic's `int_from_float` in the `int` member; it is `int_type`."
 changelog = "**Field types are checked as declared**"
 
+[[difference]]
+id = "unknown-revision"
+reason = "A `metadata.schema` that names a revision of the object's family the registry does not hold (`rule::7.0`, `Rule::1.1`, `threat::1.5`) is checked against the family's newest revision (`rule::1.1`), without the unknown-key check, as the language server already did (ADR 0009). The object still fails: the error at `metadata.schema` stays (`value_error`, `unknown schema identifier: 'rule::7.0'; checked against rule::1.1, the newest rule revision, without the unknown-key check`), followed by every other error the newest revision finds. The oracle stopped at the identifier (`unknown schema identifier: 'rule::7.0'`) and reported nothing else. An identifier of another family, or one that is not `family::major.minor`, is refused as before."
+changelog = "**An unknown schema revision is checked against the newest revision of its family**"
+
 [[case]]
 id = "rule-1-1-minimal"
 family = "rule"
@@ -1827,4 +1832,265 @@ objective:
         availability: Complete
         requirements: logs
   mitre_attack: T1059
+'''
+
+# The revision registry (UC-1.7, #813; ADR 0009): what `metadata.schema`
+# selects. A revision of the expected family that the registry does not hold
+# is checked against the family's newest revision without the unknown-key
+# check (`unknown-revision`); every other verdict is the oracle's.
+
+[[case]]
+id = "revision-unknown-rule"
+family = "rule"
+difference = ["unknown-revision"]
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::7.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+  future_field: 1
+description: d
+added_in_7: true
+'''
+
+[[case]]
+id = "revision-unknown-rule-reports-the-newest-revisions-errors"
+family = "rule"
+difference = ["unknown-revision"]
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.2
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+  reviewed: someday
+'''
+
+[[case]]
+id = "revision-unknown-family-spelling"
+family = "rule"
+difference = ["unknown-revision"]
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: Rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+'''
+
+[[case]]
+id = "revision-unknown-objective"
+family = "objective"
+difference = ["unknown-revision"]
+yaml = '''
+name: Objective
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000003
+  schema: objective::2.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+objective:
+  priority: High
+'''
+
+[[case]]
+id = "revision-unknown-threat"
+family = "threat"
+difference = ["unknown-revision"]
+yaml = '''
+name: Threat
+criticality: High
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000002
+  schema: threat::1.5
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+threat:
+  description: d
+  severity: High
+  impact: [Data Breach]
+'''
+
+[[case]]
+id = "revision-other-family"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: threat::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+'''
+
+[[case]]
+id = "revision-visibility-is-another-family"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: visibility::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+'''
+
+[[case]]
+id = "revision-platform-identifier"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: platform::sentinel::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+'''
+
+[[case]]
+id = "revision-unknown-other-family"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: threat::9.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+'''
+
+[[case]]
+id = "revision-not-an-identifier"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+'''
+
+[[case]]
+id = "revision-bad-version"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.x
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+'''
+
+[[case]]
+id = "revision-number"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: 1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+'''
+
+[[case]]
+id = "revision-missing"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+'''
+
+[[case]]
+id = "revision-empty"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: ''
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+'''
+
+[[case]]
+id = "revision-null"
+family = "threat"
+yaml = '''
+name: Threat
+metadata:
+  schema:
+'''
+
+[[case]]
+id = "revision-no-metadata"
+family = "objective"
+yaml = '''
+name: Objective
+'''
+
+[[case]]
+id = "revision-metadata-not-a-mapping"
+family = "rule"
+yaml = '''
+name: Rule
+metadata: rule::1.1
+description: d
+'''
+
+[[case]]
+id = "revision-metadata-list"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  - schema: rule::1.1
+description: d
 '''

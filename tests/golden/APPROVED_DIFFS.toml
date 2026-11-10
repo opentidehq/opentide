@@ -91,6 +91,20 @@
 # - `strict-types`: `version: 1.5` is `int_type`, not `int_from_float`
 #   ("**Field types are checked as declared**").
 #
+# The revision registry (UC-1.7, #813; docs/internal/adr/0009-revision-registry.md),
+# decided and checked case by case in the same cases file and entered here
+# when `validate` routes to Rust (UC-2.x, UC-3.5):
+#
+# - `unknown-revision`: a `metadata.schema` naming an unregistered revision of
+#   the object's family (`rule::7.0`) is checked against the family's newest
+#   revision without the unknown-key check. The `schema_validation` error at
+#   `metadata.schema` stays, worded `unknown schema identifier: 'rule::7.0';
+#   checked against rule::1.1, the newest rule revision, without the
+#   unknown-key check`, and the newest revision's other errors follow, where
+#   the oracle reported only `unknown schema identifier: 'rule::7.0'`. Codes
+#   and exit codes are unchanged ("**An unknown schema revision is checked
+#   against the newest revision of its family**").
+#
 # Intended differences decided but not yet entered (#790, the engine crates'
 # one suggestion rule, `opentide_core::suggest`): the engine's suggestions
 # reach the recordings only through `validate` and `validate query` on the

@@ -9,6 +9,7 @@
     "0005-opentide-facade-crate",
     "0006-npm-packages",
     "0007-vscode-extension-stays-separate",
-    "0008-connectors-in-rust"
+    "0008-connectors-in-rust",
+    "0009-revision-registry"
   ]
 }
