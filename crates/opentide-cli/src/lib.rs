@@ -23,6 +23,7 @@ pub mod hoist;
 pub mod json;
 pub mod logging;
 pub mod mode;
+pub mod queries;
 pub mod redact;
 pub mod render;
 pub mod schemas;

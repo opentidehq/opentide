@@ -6,7 +6,17 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ## [Unreleased]
 
+### Upgrade
+
+- If you build an `opentide_analysis::QueryReport` with a struct literal, set its new `placeholder` field (`false` for a query you checked).
+
+### Breaking
+
+- **`opentide_analysis::QueryReport` has a public `placeholder` field** ([opentide#820](https://github.com/opentidehq/opentide/issues/820)). `analyze_queries` says which query is still the stand-in `opentide new` wrote, so a host need not read the file again to skip it. A struct literal of `QueryReport` without the field no longer compiles.
+
 ### Added
+
+- **`LineStarts` and `opentide_tide::is_placeholder_query`** ([opentide#820](https://github.com/opentidehq/opentide/issues/820)). `opentide_analysis::LineStarts` converts the engine's LSP ranges to the CLI's 1-based code-point positions for every host, the Python binding included, and `is_placeholder_query`, now public, tells the stand-in query `opentide new` writes from a real one.
 
 - **`opentide_core::suggest`: one "did you mean" rule for the engine** ([#812](https://github.com/opentidehq/opentide/issues/812)). The same word without case, whitespace, `-` or `_` wins outright; otherwise the candidate with the fewest edits (strsim's optimal string alignment distance: a transposition is one edit), within a third of the value's length and of the words that hold the part that differs, so two edits side by side or two characters cut from a long name are found (`SecurityEve` → `SecurityEvent`) while a phrase that shares words with a choice is not a typo of it (`Big incident` is not `Minor incident`). It uses an edit distance rather than a port of Python's `difflib`: an edit distance suggests what a typo meant, where a ratio of shared letters also suggests unrelated words.
 
@@ -21,6 +31,8 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 - **Releases come from opentidehq/opentide, tagged `engine-vX.Y.Z`** ([opentide#801](https://github.com/opentidehq/opentide/issues/801)). The engine moved there with its history; its GitHub Releases carry the same assets under the same names (`highlights-vX.Y.Z.zip`, `opentide-wasm-web-vX.Y.Z.zip`, `opentide-lsp-vX.Y.Z-<target>`, the licences and `SHA256SUMS`), so an editor that pins them changes only the URL: `https://github.com/opentidehq/opentide/releases/download/engine-vX.Y.Z/<asset>`. Their build provenance is signed by `opentidehq/opentide/.github/workflows/engine-release.yml`: verify with `gh attestation verify <asset> --repo opentidehq/opentide` and the identity in `crates/opentide-lsp/README.md`. A release candidate (`engine-vX.Y.Z-rc.N`) is a GitHub pre-release with every asset and nothing on crates.io or npm. Releases up to 0.12.0 stay on opentidehq/language-server.
 
 ### Fixed
+
+- **"Apply suggestion" keeps a pipe stage's arguments** ([opentide#887](https://github.com/opentidehq/opentide/issues/887)). `kql_unknown_operator` and `spl_unknown_command` cover the whole pipe stage, and the quick fix (and `source.fixAll.opentide`) replaced it all with the suggestion: `index=main | stast count by host` became `index=main | stats`. The edit now replaces only the word the stage starts with (`index=main | stats count by host`); the diagnostics' ranges do not change.
 
 - **`sysdig_list_in_value` sees a value through the block's lists** ([#810](https://github.com/opentidehq/opentide/issues/810)). An exception value that names a block list is that list's items, and a list naming an earlier list is that list's items too, as Falco's loader expands them; an item holding another block list's name inside it (`items: ['x l0']`) is now reported, as `opentide validate` reports it, where the editor said nothing.
 

@@ -655,6 +655,19 @@ changelog = "**`info` draws its tables with comfy-table**"
 #   left there is neither a duplicate nor a parse error (no recording holds
 #   one; "**Every file with an invalid UUID is reported**").
 #
+# The queries check on the query engines (UC-2.5, #820), decided and checked
+# kind by kind by `cargo xtask corpus faults --check --engine rust --only
+# queries` (xtask/src/corpus/queries.rs `APPROVED`; a complete run fails on a
+# rule that explains nothing), as no recorded `validate --json` case holds a
+# hunt finding; entered here, with its rule, when `validate` routes to Rust
+# (UC-2.7, UC-3.5):
+#
+# - `hunt-platform`: a finding in `response.procedure.searches[N].query`
+#   carries the hunt's `system` (`splunk`, `elastic`, ...) as
+#   `context.platform`, where the oracle wrote `null`; the code, place, field
+#   path and message are the same (#696; fault kind `spl-empty-command-hunt`;
+#   "**A hunt's findings name the platform it runs on**").
+#
 # Decided by UC-2.2 for the language server (UC-2.6, #821), and approved by
 # the maintainer on #893 (plan §3 invariant 3). UC-2.3 (#818) gives lint's
 # side, `opentide_workspace::lint::lint_file`: the filenames and metadata

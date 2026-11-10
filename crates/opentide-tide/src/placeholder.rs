@@ -29,7 +29,7 @@ const STAND_IN: &str = "...";
 /// Whether `query`, injected into `source`, is still the stand-in `opentide
 /// new` wrote under its marker. `source` is the text the query's offsets are
 /// in (after a byte-order mark).
-pub(crate) fn is_placeholder_query(source: &str, query: &InjectedQuery) -> bool {
+pub fn is_placeholder_query(source: &str, query: &InjectedQuery) -> bool {
     let start = query.host_span.start;
     let Some(before) = source.get(..start) else {
         return false;
