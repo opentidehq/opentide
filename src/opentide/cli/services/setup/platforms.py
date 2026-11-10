@@ -24,6 +24,7 @@ _PLATFORM_TOML: dict[DetectionPlatform, str] = {
     DetectionPlatform.harfanglab: "harfanglab.toml",
     DetectionPlatform.elastic: "elastic.toml",
     DetectionPlatform.sysdig: "sysdig.toml",
+    DetectionPlatform.bitdefender: "bitdefender.toml",
 }
 
 

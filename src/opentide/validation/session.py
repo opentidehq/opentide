@@ -260,6 +260,21 @@ def run_validation(
         if not object_checks:
             stats["objects_checked"] = len(work_items)
 
+    if ValidateCheck.schema in checks:
+        from opentide.validation.bitdefender_names import bitdefender_name_issues
+
+        def _file_of(uuid: str) -> Path | None:
+            ref = graph.resolve(uuid)
+            return ref.file_path if ref else None
+
+        issues.extend(
+            bitdefender_name_issues(
+                objects.get("rule", {}),
+                (item.uuid for item in work_items if item.object_type == "rule"),
+                _file_of,
+            )
+        )
+
     if ValidateCheck.schema in checks and scope.mode == "full":
         # Shards outlive their rules: an orphan is still the only handle on a
         # remote rule, so the whole directory is checked, not only shards a
@@ -564,6 +579,16 @@ def _validate_work_item(
                 object_type=item.object_type,
                 file_path=file_path,
                 check_shard=check_shard,
+            )
+        )
+        from opentide.validation.yara_signature import yara_signature_alias_issues
+
+        issues.extend(
+            yara_signature_alias_issues(
+                item.body,
+                object_uuid=item.uuid,
+                object_type=item.object_type,
+                file_path=file_path,
             )
         )
         issues.extend(check_references_for_object(item.uuid, item.object_type, item.body, graph))

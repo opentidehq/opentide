@@ -62,6 +62,10 @@
       "schema": "platforms.sysdig.schema.json",
       "merge": "deep"
     },
+    "platforms/bitdefender.toml": {
+      "schema": "platforms.bitdefender.schema.json",
+      "merge": "deep"
+    },
     "platforms/*.toml": {
       "schema": "platforms.schema.json",
       "merge": "deep"

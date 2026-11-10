@@ -23,9 +23,10 @@ class DetectionPlatform(str, Enum):
     harfanglab = "harfanglab"
     elastic = "elastic"
     sysdig = "sysdig"
+    bitdefender = "bitdefender"
 
 
-#: ``--platform`` shows this in help instead of nine values run together.
+#: ``--platform`` shows this in help instead of ten values run together.
 PLATFORM_METAVAR = "PLATFORM"
 
 #: The values ``--platform`` takes, for its help text.
@@ -142,6 +143,7 @@ def platform_label(platform: DetectionPlatform) -> str:
         DetectionPlatform.harfanglab: "HarfangLab",
         DetectionPlatform.elastic: "Elastic Security",
         DetectionPlatform.sysdig: "Sysdig Secure",
+        DetectionPlatform.bitdefender: "Bitdefender GravityZone",
     }
     return labels.get(platform, platform.value)
 

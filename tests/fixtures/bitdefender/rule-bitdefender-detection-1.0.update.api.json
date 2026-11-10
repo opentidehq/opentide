@@ -1,0 +1,87 @@
+{
+  "jsonrpc": "2.0",
+  "method": "updateCustomRule",
+  "params": {
+    "ruleId": "6372b7a3897aaa77ee021642",
+    "type": 1,
+    "name": "Office application spawns encoded PowerShell",
+    "description": "Detects an Office application starting PowerShell with an ”-enc” (encoded) command line, a common ‹macro› dropper pattern.",
+    "tags": [
+      "office",
+      "initial-access",
+      "T1059.001",
+      "T1566.001",
+      "opentide",
+      "opentide:00000000-0000-4000-8003-000000000051",
+      "managed-by-opentide"
+    ],
+    "settings": {
+      "status": 1,
+      "severity": 3,
+      "target": "process",
+      "criteriaList": [
+        {
+          "field": "Process.Parent.Name",
+          "relation": "any",
+          "value": [
+            "winword.exe",
+            "excel.exe",
+            "powerpnt.exe"
+          ]
+        },
+        {
+          "field": "Process.Name",
+          "relation": "is",
+          "value": "powershell.exe"
+        },
+        {
+          "field": "Process.CommandLine",
+          "relation": "contains",
+          "value": "*-enc*"
+        }
+      ],
+      "automaticActions": [
+        {
+          "type": 1,
+          "enabled": false
+        },
+        {
+          "type": 2,
+          "enabled": true
+        },
+        {
+          "type": 3,
+          "enabled": false
+        },
+        {
+          "type": 4,
+          "enabled": true,
+          "settings": {
+            "includeParent": false,
+            "includeChildren": true
+          }
+        },
+        {
+          "type": 5,
+          "enabled": false
+        },
+        {
+          "type": 6,
+          "enabled": false
+        },
+        {
+          "type": 7,
+          "enabled": false
+        }
+      ]
+    },
+    "targets": {
+      "endpointTags": [
+        {
+          "tagId": "5b680f6fb1a43d860a7b23c8",
+          "companyId": "61827b8036492c2fc0718722"
+        }
+      ]
+    }
+  }
+}

@@ -49,7 +49,7 @@ Six platforms register validators (see `QUERY_VALIDATION_PLATFORMS` in `opentide
 - `carbon_black_cloud` → Lucene
 - `elastic` → Kuery, Lucene, EQL, ES|QL (live tenant check only)
 
-CrowdStrike, HarfangLab and Sysdig have deployers only.
+CrowdStrike, HarfangLab, Sysdig and Bitdefender have deployers only.
 
 ## Rule deployment
 

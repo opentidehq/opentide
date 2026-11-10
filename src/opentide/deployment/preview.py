@@ -87,7 +87,7 @@ def _compile_failure(rule: DetectionRule, exc: Exception) -> dict[str, Any]:
 #: Platforms whose request body opentide builds from the rule alone, with no
 #: tenant: ``validate`` compiles each rule they would deploy, so a rule that
 #: validates compiles.
-OFFLINE_COMPILERS = frozenset({"sentinel", "elastic", "sysdig"})
+OFFLINE_COMPILERS = frozenset({"sentinel", "elastic", "sysdig", "bitdefender"})
 
 
 def compile_offline(platform: str, rule: DetectionRule) -> dict[str, Any]:
@@ -108,6 +108,12 @@ def compile_offline(platform: str, rule: DetectionRule) -> dict[str, Any]:
         from opentide.platforms.sysdig.deployer import SysdigDeploy
 
         return api_body(SysdigDeploy().compile_deployment(rule))
+    if platform == "bitdefender":
+        from opentide.platforms.bitdefender.compile import create_params, request_body
+        from opentide.platforms.bitdefender.deployer import BitdefenderDeploy
+
+        compiled = BitdefenderDeploy().compile_deployment(rule)
+        return request_body("createCustomRule", create_params(compiled))
     raise ValueError(f"{platform} has no offline compiler")
 
 
@@ -149,12 +155,23 @@ def _sysdig_compile_preview(rule: DetectionRule) -> dict[str, Any]:
     return {"uuid": rule.metadata.uuid, "name": rule.name, "api_request": api_body(compiled)}
 
 
+def _bitdefender_compile_preview(rule: DetectionRule) -> dict[str, Any]:
+    """The GravityZone ``createCustomRule`` request the deploy would send, without a tenant."""
+    try:
+        payload = compile_offline("bitdefender", rule)
+    except Exception as exc:
+        return _compile_failure(rule, exc)
+    return {"uuid": rule.metadata.uuid, "name": rule.name, "api_request": payload}
+
+
 def preview_rule_deployment(platform: str, rule: DetectionRule) -> dict[str, Any]:
     """Return a serialisable preview of the API payload for one rule on a platform."""
     if platform == "sentinel":
         return _sentinel_compile_preview(rule)
     if platform == "sysdig":
         return _sysdig_compile_preview(rule)
+    if platform == "bitdefender":
+        return _bitdefender_compile_preview(rule)
     if platform == "elastic":
         compiled = _elastic_compile_preview(rule)
         if compiled is not None:

@@ -17,6 +17,7 @@ SYSTEM_KEYS = (
     "carbon_black_cloud",
     "elastic",
     "sysdig",
+    "bitdefender",
 )
 
 

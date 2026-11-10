@@ -70,7 +70,8 @@ PLACEHOLDER_MARKER = "# opentide:placeholder"
 #: detection logic and deploys: Elastic's validator wants a ``query`` for
 #: ``type: query``, the Defender loader reads ``scope`` unconditionally, a
 #: SentinelOne ``Single Event`` condition needs its query, HarfangLab needs a
-#: sigma (or yara) detection, Sysdig needs a Falco ``condition``, and Sentinel's
+#: sigma (or yara) detection, Sysdig needs a Falco ``condition``, Bitdefender a
+#: ``detection`` (or ``yara``) kind, and Sentinel's
 #: compile needs grouping and, unless ``nrt`` is true, a schedule.
 PLATFORM_EXTRA_KEYS: dict[str, tuple[tuple[str, ...], ...]] = {
     "defender_for_endpoint": (("scope",), ("scope", "selection")),
@@ -84,6 +85,7 @@ PLATFORM_EXTRA_KEYS: dict[str, tuple[tuple[str, ...], ...]] = {
     "sentinel_one": (("condition", "single_event"), ("condition", "single_event", "query")),
     "harfanglab": (("sigma",),),
     "sysdig": (("condition",),),
+    "bitdefender": (("detection",),),
 }
 
 #: Values for those keys that compile, as ``(value, is_placeholder)``. A

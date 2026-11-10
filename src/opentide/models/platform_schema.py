@@ -7,6 +7,7 @@ from typing import Any
 from opentide.models.base import TideModel
 from opentide.models.platform import (
     PLATFORM_CONFIG_MODELS,
+    BitdefenderConfig,
     CarbonBlackConfig,
     CrowdstrikeConfig,
     DefenderConfig,
@@ -44,6 +45,7 @@ _REQUIRED: dict[type[TideModel], list[str]] = {
     CarbonBlackConfig: ["status", "query"],
     ElasticConfig: ["status"],
     SysdigConfig: ["status"],
+    BitdefenderConfig: ["status"],
 }
 
 

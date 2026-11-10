@@ -6,6 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Added
+
+- **Bitdefender GravityZone is a tenth deploy platform.** A `configurations.bitdefender` block (`platform::bitdefender::1.0`) is a GravityZone custom detection rule: Basic `detection` criteria, or a `yara` signature, with severity, tags, endpoint-tag or company targets and automatic actions. Deploy creates, updates (always the whole payload), disables and deletes it through the Incidents API, keeps the rule id in `.opentide/states/deployment/`, and never touches exclusion rules. Enable it with `opentide setup platforms --bitdefender` ([#898](https://github.com/opentidehq/opentide/issues/898)).
+- **`validate` checks Bitdefender blocks and YARA signatures.** It reports every `bitdefender_*` constraint code of the spec (criteria catalogue, actions, targets, severity, ASCII and 30,000-character YARA limits), two blocks sharing a GravityZone name (`bitdefender_name_duplicate`), and the YARA checks `yara_include`, `yara_empty_signature`, `yara_duplicate_rule` and `yara_signature_alias`. `validate query --platform bitdefender` reports `supported: false` ([#898](https://github.com/opentidehq/opentide/issues/898)).
+
 ### Fixed
 
 - **`pip install opentide` no longer installs a Typer that crashes it.** Typer 0.29.0 removed private modules and options opentide's CLI is built on, so `opentide setup` failed with `No module named 'typer._types'` and `opentide commands` crashed. opentide now requires `typer>=0.27.0,<0.29`, and `setup ci` declares its providers with Typer's public API. An invalid provider names the valid ones and suggests the closest.

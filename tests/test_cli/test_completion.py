@@ -320,7 +320,7 @@ def test_platform_outside_a_workspace(tmp_path: Path, monkeypatch: pytest.Monkey
     monkeypatch.setenv("OPENTIDE_REPO_ROOT", str(tmp_path))
     values = _values("deploy --platform ")
     assert values[0] == "sentinel"
-    assert len(values) == 9
+    assert len(values) == 10
 
 
 def test_enabled_platforms_agree_with_ci_discovery(workspace: Path) -> None:

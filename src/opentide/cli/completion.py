@@ -60,6 +60,7 @@ PLATFORMS = (
     "harfanglab",
     "elastic",
     "sysdig",
+    "bitdefender",
 )
 
 #: ``--strategy`` values and what each deploys, as

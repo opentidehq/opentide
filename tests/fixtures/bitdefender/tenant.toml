@@ -1,0 +1,24 @@
+# The tenant the fixtures/valid/rule-bitdefender-*.yaml rules deploy to, and
+# whose JSON-RPC bodies are the *.api.json files beside this one.
+[platform]
+enabled = true
+identifier = "bitdefender"
+name = "Bitdefender GravityZone"
+subschema = "Bitdefender GravityZone"
+description = "Custom detection and YARA detection rules for GravityZone EDR/XDR."
+flags = []
+
+[[tenants]]
+name = "gravityzone-eu"
+description = "GravityZone cloud instance 1 (EU)"
+strategies = ["RELEASE"]
+[tenants.setup]
+ssl = true
+url = "https://cloudgz.gravityzone.bitdefender.com/api"
+api_key = "$GRAVITYZONE_API_KEY"
+key_type = "personal"
+automatic_actions = true
+tags = ["managed-by-opentide"]
+
+[tenants.setup.endpoint_tags]
+tier0-servers = { tag_id = "5b680f6fb1a43d860a7b23c8", company_id = "61827b8036492c2fc0718722" }

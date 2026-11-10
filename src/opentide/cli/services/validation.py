@@ -117,6 +117,8 @@ _CHECK_ISSUE_CODES: dict[str, frozenset[str]] = {
             "deployment_state_uuid_mismatch",
             "deployment_state_platform",
             "deployment_state_shape",
+            "yara_signature_alias",
+            "bitdefender_name_duplicate",
         }
     ),
     ValidateCheck.cve.value: frozenset({"invalid_cve"}),

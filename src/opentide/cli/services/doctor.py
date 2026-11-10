@@ -60,6 +60,7 @@ PLATFORM_SDKS: dict[str, tuple[str, ...]] = {
     "carbon_black_cloud": ("cbc_sdk",),
     "elastic": ("requests",),
     "sysdig": ("requests",),
+    "bitdefender": ("requests",),
 }
 
 #: How the checklist names each host ``opentide setup mcp`` writes for; the

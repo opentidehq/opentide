@@ -24,6 +24,7 @@ class DetectionPlatforms(Enum):
     HARFANGLAB = auto()
     ELASTIC = auto()
     SYSDIG = auto()
+    BITDEFENDER = auto()
 
 
 #: What a run deploys, and what a tenant accepts: ``--strategy`` and a tenant's

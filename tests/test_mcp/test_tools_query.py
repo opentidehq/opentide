@@ -131,6 +131,14 @@ def test_validate_query_sysdig_live_is_unsupported() -> None:
     assert result["valid"] is None
 
 
+@pytest.mark.parametrize("live", [False, True])
+def test_validate_query_bitdefender_is_unsupported(live: bool) -> None:
+    """GravityZone has no dry run, and opentide never fakes one (bitdefender-1.0)."""
+    result = tools.tool_validate_query("rule A { condition: true }", "bitdefender", live=live)
+    assert result["supported"] is False
+    assert result["valid"] is None
+
+
 def test_validate_query_truncates_the_preview() -> None:
     result = tools.tool_validate_query("A" * 500, "sentinel_one")
     assert len(result["query_preview"]) == 200

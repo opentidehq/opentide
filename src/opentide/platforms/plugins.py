@@ -299,6 +299,7 @@ _PLATFORM_PKG: dict[str, str] = {
     "splunk": "splunk",
     "elastic": "elastic",
     "sysdig": "sysdig",
+    "bitdefender": "bitdefender",
 }
 
 

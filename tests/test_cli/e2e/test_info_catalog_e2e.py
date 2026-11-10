@@ -137,7 +137,7 @@ def test_catalog_lists_every_object_with_its_location(
     assert rule["load_error"] is None
     summary = catalog["summary"]
     assert summary["threats"] == 2 and summary["objectives"] == 1
-    assert summary["rules"] == 12  # the corpus ten, and two added here
+    assert summary["rules"] == 13  # the corpus eleven, and two added here
     assert summary["signals"] == 2
     assert summary["edges"] == len(catalog["edges"])
     assert summary["objects"] == len(catalog["objects"])

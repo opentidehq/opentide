@@ -801,3 +801,75 @@ class SysdigList(TideModel):
     """List name, matching `^[A-Za-z_][A-Za-z0-9_]*$`."""
     items: list[str | int | float]
     """List items. An item may name another list of this block."""
+
+
+# --- Bitdefender GravityZone (platform::bitdefender::1.0) ------------------------------
+
+
+class BitdefenderCriterion(TideModel):
+    field: str
+    """API field name (`Process.CommandLine`) from the criteria catalogue for the `target`."""
+    is_: str | int | None = Field(default=None, alias="is")
+    """Exact match. Sent as `relation: "is"`."""
+    contains: str | None = None
+    """Substring, with `*` and `?` wildcards. Sent as `relation: "contains"`."""
+    any_: list[str | int] | None = Field(default=None, alias="any")
+    """Any of the values. Sent as `relation: "any"`."""
+
+
+class BitdefenderDetection(TideModel):
+    target: str
+    """A GravityZone detection target, as the API spells it: `process`, `file`, `connection`,
+    `registry`, `user connection`, `email`, `application`, `key vault`, `role`, `policy`,
+    `sharing link`, `url`, `ssh key`, `launch template`, `service principal`, `user group`,
+    `automation account`, `automation account hook`, `certificate authority`, `api`, `bucket`,
+    `jira project`, or `confluence page`."""
+    criteria: list[BitdefenderCriterion] = Field(min_length=1)
+    """At least one. All criteria must match (AND)."""
+    alert: str | None = None
+    """A GravityZone alert (detection) name. Sent as
+    `filters: [{"field": "detection", "value": <alert>}]`."""
+
+
+class BitdefenderYara(TideModel):
+    signature: str = TideField(
+        schema_extra={"tide.template.multiline": True, "tide.template.required": True}
+    )
+    """The YARA signature: imports, then one or more YARA rules, written out in the block. Sent as
+    `settings.yaraQuery`, verbatim."""
+    on_access: bool = True
+    """On-access scanning with this rule (`settings.status`). With `false`, the rule serves
+    on-demand scans only."""
+
+
+class BitdefenderTargets(TideModel):
+    endpoint_tags: list[str] | None = None
+    """Aliases from the tenant's `endpoint_tags` table. Each resolves to `{tagId, companyId}`."""
+    companies: list[str] | None = None
+    """Partner tenants: aliases from the tenant's `companies` table. Each resolves to a company
+    id."""
+
+
+class BitdefenderProcessScope(TideModel):
+    include_parent: bool = False
+    """Also act on the parent process."""
+    include_children: bool = False
+    """Also act on the child processes."""
+
+
+class BitdefenderActions(TideModel):
+    isolate: Literal[True] | None = None
+    """Isolate the endpoint (type 1)."""
+    collect_investigation_package: Literal[True] | None = None
+    """Collect an investigation package (type 2)."""
+    sandbox: Literal[True] | None = None
+    """Submit to the Sandbox Analyzer (type 3)."""
+    kill_process: Literal[True] | BitdefenderProcessScope | None = None
+    """Kill the process (type 4): `true`, or `{include_parent, include_children}`. Basic rules
+    only."""
+    antimalware_scan: Literal["quick", "full"] | None = None
+    """Run an antimalware scan (type 5): `quick` or `full`."""
+    quarantine: Literal[True] | BitdefenderProcessScope | None = None
+    """Quarantine the file (type 6): `true`, or `{include_parent, include_children}`."""
+    risk_scan: Literal[True] | None = None
+    """Run a risk scan (type 7)."""

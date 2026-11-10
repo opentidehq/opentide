@@ -20,6 +20,10 @@ from pydantic import AfterValidator, Field, field_validator, model_validator
 
 from opentide.models.base import TideField, TideModel
 from opentide.models.platform_configs import (
+    BitdefenderActions,
+    BitdefenderDetection,
+    BitdefenderTargets,
+    BitdefenderYara,
     CrowdstrikeDetails,
     CrowdstrikeSchedule,
     DefenderAlert,
@@ -799,6 +803,48 @@ class SysdigConfig(PlatformConfigBase):
         return raw
 
 
+class BitdefenderConfig(PlatformConfigBase):
+    __schema_identifier__: ClassVar[str] = "platform::bitdefender::1.0"
+    # Its before-validator reports the constraint codes; it accepts no extra key.
+    __legacy_keys__: ClassVar[Mapping[str, str | None]] = {}
+
+    severity: Literal["Low", "Medium", "High"] | None = None
+    """`Low`, `Medium`, or `High`. Derived from `response.alert_severity` when omitted."""
+    tags: list[str] | None = None
+    """Extra GravityZone tags. Deploy adds the derived tags."""
+    targets: BitdefenderTargets | None = None
+    """Endpoint tags, or companies on a partner tenant, the rule applies to. Neither means the
+    whole company. Default: the tenant `targets`."""
+    actions: BitdefenderActions | None = None
+    """Automatic actions."""
+    detection: BitdefenderDetection | None = None
+    """A Basic detection rule (`type: 1`, `subtype: 0`). Exactly one of `detection` and `yara`."""
+    yara: BitdefenderYara | None = None
+    """A YARA detection rule (`type: 1`, `subtype: 1`). Exactly one of `detection` and `yara`."""
+
+    @property
+    def kind(self) -> Literal["detection", "yara"]:
+        """The rule kind the block deploys."""
+        return "yara" if self.yara is not None else "detection"
+
+    @model_validator(mode="before")
+    @classmethod
+    def _validate_raw_bitdefender_block(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        raw = dict(data)
+        if "status" not in raw or raw["status"] is None:
+            return raw
+        from opentide.platforms.bitdefender.catalog import block_codes
+
+        codes = block_codes(raw)
+        if codes:
+            raise ValueError(
+                f"BitdefenderConfig validation failed with code(s): {', '.join(sorted(codes))}"
+            )
+        return raw
+
+
 PLATFORM_CONFIG_MODELS: dict[str, type[PlatformConfigBase]] = {
     "sentinel": SentinelConfig,
     "defender_for_endpoint": DefenderConfig,
@@ -809,6 +855,7 @@ PLATFORM_CONFIG_MODELS: dict[str, type[PlatformConfigBase]] = {
     "carbon_black_cloud": CarbonBlackConfig,
     "elastic": ElasticConfig,
     "sysdig": SysdigConfig,
+    "bitdefender": BitdefenderConfig,
 }
 
 
@@ -840,6 +887,8 @@ class RuleConfigurations(TideModel):
     """Elastic Security detection rule (`platform::elastic::1.0`)."""
     sysdig: SysdigConfig | None = None
     """Sysdig Secure or Falco rule (`platform::sysdig::1.0`)."""
+    bitdefender: BitdefenderConfig | None = None
+    """Bitdefender GravityZone custom detection rule (`platform::bitdefender::1.0`)."""
 
     @classmethod
     def from_platforms_dict(cls, platforms: dict[str, dict[str, Any]]) -> RuleConfigurations:

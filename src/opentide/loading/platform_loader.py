@@ -7,6 +7,7 @@ from copy import deepcopy
 from typing import Any, cast
 
 from opentide.models.platform import (
+    BitdefenderConfig,
     CarbonBlackConfig,
     CrowdstrikeConfig,
     DefenderConfig,
@@ -60,6 +61,7 @@ load_harfanglab_config = _loader(HarfangLabConfig)
 load_carbon_black_config = _loader(CarbonBlackConfig)
 load_elastic_config = _loader(ElasticConfig)
 load_sysdig_config = _loader(SysdigConfig)
+load_bitdefender_config = _loader(BitdefenderConfig)
 
 
 _PLATFORM_LOADERS = {
@@ -72,6 +74,7 @@ _PLATFORM_LOADERS = {
     "carbon_black_cloud": load_carbon_black_config,
     "elastic": load_elastic_config,
     "sysdig": load_sysdig_config,
+    "bitdefender": load_bitdefender_config,
 }
 
 

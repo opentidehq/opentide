@@ -5,7 +5,7 @@
 
 **opentide** — spec-driven development for agentic detection engineering.
 
-opentide gives every detection an ontology and a taxonomy, so it stays threat-aligned, maintainable and fast to ship, with or without agents. It validates objects, generates schemas, deploys rules, and documents content across nine security platforms.
+opentide gives every detection an ontology and a taxonomy, so it stays threat-aligned, maintainable and fast to ship, with or without agents. It validates objects, generates schemas, deploys rules, and documents content across ten security platforms.
 
 ## Install
 

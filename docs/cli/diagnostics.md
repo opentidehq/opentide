@@ -16,6 +16,9 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`api_key_literal`](#api_key_literal) | A `sharing.toml` block holds its API key as a literal. |
 | [`api_key_unset`](#api_key_unset) | An enabled sharing target has no API key. |
 | [`asset_unknown`](#asset_unknown) | A `visibility.toml` log source or detector names an asset that `[[assets]]` does not declare. |
+| [`bitdefender_create_unconfirmed`](#bitdefender_create_unconfirmed) | A GravityZone create got no answer, and its retry found the name already taken. |
+| [`bitdefender_name_conflict`](#bitdefender_name_conflict) | GravityZone refused a create because a rule with the same name exists in the company. |
+| [`bitdefender_rule_kind`](#bitdefender_rule_kind) | A Bitdefender block sets both `detection` and `yara`, or neither. |
 | [`cbc_unknown_field`](#cbc_unknown_field) | A field in a Carbon Black Cloud query is one or two letters away from a Carbon Black process search field, and is not that field. |
 | [`chaining_relation_unknown`](#chaining_relation_unknown) | A threat's chaining relation is not a known relation. |
 | [`changed_diff`](#changed_diff) | `share push --changed` could not calculate which objects changed. |
@@ -258,6 +261,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`workspace`](#workspace) | Where the workspace is, and how it was found. |
 | [`workspace_not_found`](#workspace_not_found) | `opentide new` ran outside a workspace: neither `.opentide/` nor `objects/` is there. Or the MCP server was started in an Agent Plugin's directory, which is not a workspace, and nothing named one. |
 | [`yaml_parse`](#yaml_parse) | An object file is not valid YAML, or not one mapping, so it could not be loaded. |
+| [`yara_signature_alias`](#yara_signature_alias) | A `yara.signature` is a YAML alias instead of its own text. |
 
 ## analysis_engine
 
@@ -332,6 +336,68 @@ assets = ["domain-controller"]   # declared as domain-controllers
 ### How to fix
 
 Correct the asset name, or declare the asset under `[[assets]]`.
+
+## bitdefender_create_unconfirmed
+
+A GravityZone create got no answer, and its retry found the name already taken.
+
+Severity: error. Reported by `opentide deploy` on a `bitdefender` tenant. The first `createCustomRule` timed out or lost its connection, so deploy sent it once more; GravityZone refused the retry because a rule of that name exists. The first create may have succeeded, but its rule id never reached opentide, so nothing was recorded in `.opentide/states/deployment/`. Deploy never lists rules to find the id.
+
+### Example
+
+```text illustrative
+bitdefender_create_unconfirmed: the first create of 'Office application spawns encoded PowerShell'
+got no answer and the retry found the name taken
+```
+
+### How to fix
+
+Find the rule by its name in the GravityZone console (Incidents, Custom rules). Delete it and deploy again, or record its 24-hex id under `platforms.bitdefender.<tenant>` in the rule's `.opentide/states/deployment/<uuid>.json` and commit it.
+
+## bitdefender_name_conflict
+
+GravityZone refused a create because a rule with the same name exists in the company.
+
+Severity: error. Reported by `opentide deploy` on a `bitdefender` tenant. GravityZone names are unique per company, and deploy never adopts a rule it did not create: it has no id for it in `.opentide/states/deployment/`. `opentide validate` reports two opentide rules with one GravityZone name as `bitdefender_name_duplicate`; this code is a rule created outside opentide, or by another workspace.
+
+### Example
+
+```yaml
+name: Office application spawns encoded PowerShell   # a console rule has this name
+configurations:
+  bitdefender:
+    status: PRODUCTION
+```
+
+### How to fix
+
+Set a distinct `configurations.bitdefender.name`, or delete the other rule in the console. To take over a rule opentide created and lost track of, record its id in the rule's deployment state shard.
+
+## bitdefender_rule_kind
+
+A Bitdefender block sets both `detection` and `yara`, or neither.
+
+Severity: error. Reported by `opentide validate` on a `bitdefender` block (bitdefender-1.0). A GravityZone custom rule is one kind: a Basic rule (`detection`, a list of criteria) or a YARA rule (`yara`, a signature). An `exclusion` key is unknown: GravityZone exclusion rules are not opentide rules, and deploy never creates, updates or deletes one.
+
+### Example
+
+```yaml
+configurations:
+  bitdefender:
+    status: STAGING
+    detection:
+      target: process
+      criteria:
+        - field: Process.Name
+          is: mshta.exe
+    yara:
+      signature: |
+        rule A { condition: filesize < 10 }
+```
+
+### How to fix
+
+Keep one kind per rule. Split a Basic rule and a YARA rule into two opentide rules; manage exclusions in the GravityZone console.
 
 ## cbc_unknown_field
 
@@ -4374,3 +4440,26 @@ metadata:
 ### How to fix
 
 Open the file at the line and column the diagnostic names. The note says what the parser was reading when it gave up, and where that started: an unclosed `[` or `{`, a missing quote, a tab used for indentation, or a key indented under a scalar. A key repeated in the same mapping is reported here too. A file whose top level is a list (`- name: …`) or a single value is reported as "expected a mapping at the top of the file": an object file is one mapping of keys such as `name`, `metadata` and `description`. The file is not indexed until it parses, so no other check can see it.
+
+## yara_signature_alias
+
+A `yara.signature` is a YAML alias instead of its own text.
+
+Severity: error. Reported by `opentide validate` on any platform `yara` block (yara-1.0). Each block writes out the signature it deploys, so a change to one platform's YARA rule cannot silently change another's, and each is checked under its own platform profile.
+
+### Example
+
+```yaml
+configurations:
+  harfanglab:
+    yara:
+      signature: &loader |
+        rule Loader { condition: uint16(0) == 0x5A4D }
+  bitdefender:
+    yara:
+      signature: *loader
+```
+
+### How to fix
+
+Write the signature out in each block.
