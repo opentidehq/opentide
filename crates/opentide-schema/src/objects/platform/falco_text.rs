@@ -140,23 +140,32 @@ enum Expect {
     Value,
 }
 
-/// The bare identifiers in check positions of `text`: the macros it uses.
-/// Values (after an operator: a word, a string, a value list, `val(...)` or
-/// a transformer), field names, field arguments, transformer calls on the
-/// left-hand side and quoted strings are not names.
-pub fn check_position_names(text: &str) -> Vec<String> {
+/// `text` with each bare identifier in a check position replaced by what
+/// `resolve` gives for it, or kept when it gives `None` (the oracle's
+/// `substitute_macros`). Values (after an operator: a word, a string, a value
+/// list, `val(...)` or a transformer), field names, field arguments,
+/// transformer calls on the left-hand side and quoted strings are never
+/// touched; every other character is kept.
+pub fn substitute_macros(text: &str, mut resolve: impl FnMut(&str) -> Option<String>) -> String {
     let tokens = tokenize(text);
-    let mut names = Vec::new();
+    let mut out = String::with_capacity(text.len());
     let mut expect = Expect::Check;
     let mut i = 0;
+    let span = |out: &mut String, from: usize, to: usize| {
+        for token in &tokens[from..=to] {
+            out.push_str(&token.text);
+        }
+    };
     while i < tokens.len() {
         let token = &tokens[i];
         if token.kind == Kind::Space {
+            out.push_str(&token.text);
             i += 1;
             continue;
         }
         if expect == Expect::Value {
             if token.kind == Kind::Word && MODIFIERS.contains(&token.text.as_str()) {
+                out.push_str(&token.text);
                 i += 1;
                 continue;
             }
@@ -165,7 +174,9 @@ pub fn check_position_names(text: &str) -> Vec<String> {
                 Kind::Word => call_end(&tokens, i),
                 _ => None,
             };
-            i = end.unwrap_or(i) + 1;
+            let last = end.unwrap_or(i);
+            span(&mut out, i, last);
+            i = last + 1;
             expect = Expect::Check;
             continue;
         }
@@ -173,6 +184,7 @@ pub fn check_position_names(text: &str) -> Vec<String> {
             if token.kind == Kind::Symbol
                 || (token.kind == Kind::Word && word_operator(&token.text))
             {
+                out.push_str(&token.text);
                 expect = if token.text == "exists" {
                     Expect::Check
                 } else {
@@ -185,26 +197,76 @@ pub fn check_position_names(text: &str) -> Vec<String> {
         }
         if token.kind == Kind::Word {
             if matches!(token.text.as_str(), "and" | "or" | "not") {
+                out.push_str(&token.text);
                 i += 1;
                 continue;
             }
             if TRANSFORMERS.contains(&token.text.as_str())
                 && let Some(end) = call_end(&tokens, i)
             {
+                span(&mut out, i, end);
                 i = end + 1;
                 expect = Expect::Operator;
                 continue;
             }
             if token.text.contains('.') {
+                out.push_str(&token.text);
                 expect = Expect::Operator;
                 i += 1;
                 continue;
             }
-            names.push(token.text.clone());
+            match resolve(&token.text) {
+                Some(replacement) => out.push_str(&replacement),
+                None => out.push_str(&token.text),
+            }
+            i += 1;
+            continue;
         }
+        out.push_str(&token.text);
         i += 1;
     }
+    out
+}
+
+/// The bare identifiers in check positions of `text`: the macros it uses
+/// (the names [`substitute_macros`] would offer).
+pub fn check_position_names(text: &str) -> Vec<String> {
+    let mut names = Vec::new();
+    substitute_macros(text, |name| {
+        names.push(name.to_owned());
+        None
+    });
     names
+}
+
+/// `join_lines`: multiline text as one line, each line stripped. Lines end
+/// where Python's `str.splitlines` ends them ([`is_line_boundary`]), not only
+/// at `\n` and `\r\n`: `m2\x0cand x` is the words `m2` and `and x`.
+pub fn join_lines(text: &str) -> String {
+    text.split(is_line_boundary)
+        .map(opentide_core::falco::python_strip)
+        .filter(|line| !line.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// A line boundary of the oracle's `str.splitlines`: `\n`, `\r` (and so
+/// `\r\n`, whose empty middle line [`join_lines`] drops), vertical tab,
+/// form feed, the file, group and record separators, NEL, and the Unicode
+/// line and paragraph separators.
+fn is_line_boundary(c: char) -> bool {
+    matches!(
+        c,
+        '\n' | '\r'
+            | '\x0b'
+            | '\x0c'
+            | '\x1c'
+            | '\x1d'
+            | '\x1e'
+            | '\u{85}'
+            | '\u{2028}'
+            | '\u{2029}'
+    )
 }
 
 #[cfg(test)]
@@ -236,5 +298,25 @@ mod tests {
             check_position_names("proc.name = \"a\\\" m9\" and m8"),
             ["m8"]
         );
+    }
+
+    #[test]
+    fn macros_are_substituted_in_check_positions_only() {
+        let text =
+            "m1 and proc.name = m1 and not (m2) and tolower(proc.name) in (m1, \"m1\") and m3";
+        let out = substitute_macros(text, |name| (name != "m3").then(|| format!("<{name}>")));
+        assert_eq!(
+            out,
+            "<m1> and proc.name = m1 and not (<m2>) and tolower(proc.name) in (m1, \"m1\") and m3"
+        );
+        // Every character a name does not replace is kept.
+        let kept = "a  and\t(b)or c.d exists and x startswith oneof (y) ";
+        assert_eq!(substitute_macros(kept, |_| None), kept);
+    }
+
+    #[test]
+    fn lines_are_joined_where_python_splits_them() {
+        assert_eq!(join_lines("  a\n b \r\n\n c\x0cd\u{2028}e "), "a b c d e");
+        assert_eq!(join_lines(""), "");
     }
 }
