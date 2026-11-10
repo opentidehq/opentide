@@ -105,11 +105,21 @@ mod validate {
             duplicate.notes,
             [("also".to_owned(), "objects/rules/a.yaml:3:9".to_owned())]
         );
+        // `original.file_path` is the native path string (`\ws\objects\...`
+        // on Windows), so it is compared as a path; the rest of the context,
+        // key order included, is compared as the serialised text.
         let context = serde_json::to_string(&duplicate.context).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&context).unwrap();
+        let original_path = parsed["original"]["file_path"].as_str().unwrap();
         assert_eq!(
-            context,
+            Path::new(original_path),
+            Path::new("/ws/objects/rules/a.yaml")
+        );
+        let encoded_path = serde_json::to_string(original_path).unwrap();
+        assert_eq!(
+            context.replacen(&encoded_path, r#""<a.yaml>""#, 1),
             format!(
-                r#"{{"value":"{U1}","original":{{"name":"A","file_name":"a.yaml","file_path":"/ws/objects/rules/a.yaml","field_path":["metadata","uuid"]}}}}"#
+                r#"{{"value":"{U1}","original":{{"name":"A","file_name":"a.yaml","file_path":"<a.yaml>","field_path":["metadata","uuid"]}}}}"#
             )
         );
         assert_eq!(status(&validation, Check::IdUniqueness), "failed");
