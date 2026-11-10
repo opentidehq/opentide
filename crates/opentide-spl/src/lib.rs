@@ -252,10 +252,10 @@ impl Catalog {
     }
 
     /// The catalogued command `name` most likely means
-    /// ([`opentide_core::suggest`]). A name one typo from a command
-    /// ([`one_typo`], which reports it as an error) names the best of those
-    /// commands, so an error that calls the name a typo always says of what
-    /// (`tsast`, two swaps, is `stats`).
+    /// ([`opentide_core::suggest`]). A name one typo from a command (one
+    /// edit, or swapped neighbours, which `spl_unknown_command` reports as an
+    /// error) names the best of those commands, so an error that calls the
+    /// name a typo always says of what (`tsast`, two swaps, is `stats`).
     pub fn suggest_command(&self, name: &str) -> Option<String> {
         let typos = self.command_typos(name);
         if typos.is_empty() {
