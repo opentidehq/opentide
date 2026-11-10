@@ -726,13 +726,6 @@ reason = "Pydantic's model_dump writes every field, an unset optional one as nul
 issue = "https://github.com/opentidehq/opentide/issues/895"
 changelog = "**A dry run's preview leaves out unset fields**"
 
-[[dump]]
-rule = "order"
-platforms = ["defender_for_endpoint"]
-reason = "An exclusion's `let` is a BTreeMap in opentide-schema's model, so serde writes its names sorted; Pydantic's dict keeps the file's order. The preview is display output and shows the same bindings. The body sent to Defender is unaffected: the compile reads the block as written, so the `let` statements keep the file's order."
-issue = "https://github.com/opentidehq/opentide/issues/895"
-changelog = "**A dry run's preview leaves out unset fields**"
-
 [[diff]]
 corpus = "payloads"
 uuid = "00000000-0000-4000-8005-000000000601"
