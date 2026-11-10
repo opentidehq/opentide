@@ -24,7 +24,9 @@ use super::faults::{Catalogue, Kind};
 use crate::validate::Approved;
 
 /// The queries check on the engines, counting the CrowdStrike queries it
-/// checked (the oracle checked none).
+/// checked (the oracle checked none). The counts are the last check's: a
+/// `validate --fix` that writes validates twice, and its report is the second
+/// run's.
 #[derive(Default)]
 pub struct CountingQueries {
     crowdstrike: std::sync::atomic::AtomicUsize,
@@ -65,6 +67,9 @@ impl QueryCheck for CountingQueries {
             .others
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+        others.clear();
+        self.crowdstrike
+            .store(0, std::sync::atomic::Ordering::Relaxed);
         for object in objects {
             let checked = profiles.check_object(object.source);
             let checked: Vec<_> = checked.iter().filter(|query| !query.placeholder).collect();
@@ -137,6 +142,7 @@ pub fn engine_findings(report: &Json) -> (Vec<Json>, Json) {
 /// the workspace does not open.
 pub fn rust_report(dir: &Path, command: &[String]) -> Result<(Json, usize)> {
     let args = crate::validate::parse_args(command)
+        .filter(|args| args.fix.is_none())
         .ok_or_else(|| anyhow!("`{}` is not a checking validate", command.join(" ")))?;
     let workspace = Workspace::open(
         Arc::new(OsFs),
@@ -240,6 +246,44 @@ mod tests {
              ops = []\n[target]\nfamily = \"rule\"\n"
         );
         toml::from_str(&text).unwrap()
+    }
+
+    #[test]
+    fn the_counts_are_the_last_check_s() {
+        use opentide_workspace::{FileSystem, MemoryFs};
+        let text = "name: A\nmetadata:\n  uuid: 11111111-1111-4111-8111-111111111111\n  \
+                    schema: rule::1.1\nconfigurations:\n  crowdstrike:\n    query: |\n      \
+                    #event_simpleName=ProcessRollup2\n  sentinel:\n    query: |\n      \
+                    SecurityEvent\n";
+        let fs = Arc::new(MemoryFs::new());
+        fs.create_dir("/ws/.opentide/configurations");
+        fs.create_dir("/ws/objects/rules");
+        fs.write("/ws/objects/rules/a.yaml", text);
+        let ws = Workspace::open(
+            fs as Arc<dyn FileSystem>,
+            opentide_workspace::Options {
+                roots: RootOptions {
+                    repo: Some(PathBuf::from("/ws")),
+                    cwd: PathBuf::from("/ws"),
+                    ..RootOptions::default()
+                },
+            },
+        )
+        .unwrap();
+        let path = PathBuf::from("/ws/objects/rules/a.yaml");
+        let objects = [QueryObject {
+            path: &path,
+            uuid: "11111111-1111-4111-8111-111111111111",
+            family: "rule",
+            source: text,
+        }];
+        let counting = CountingQueries::default();
+        let files = std::collections::BTreeSet::from([path.clone()]);
+        for _ in 0..2 {
+            counting.check(&ws, &objects, false);
+            assert_eq!(counting.crowdstrike(), 1);
+            assert_eq!(counting.others_in(&files), 1);
+        }
     }
 
     #[test]
