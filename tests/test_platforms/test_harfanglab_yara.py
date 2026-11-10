@@ -527,14 +527,74 @@ def test_an_include_inside_a_regexp_is_not_an_include() -> None:
     assert yara.signature_codes(signature) == set()
 
 
-def test_a_regexp_after_matches_is_blanked_and_division_is_not_a_regexp() -> None:
+def test_a_regexp_after_matches_is_blanked_and_backslash_divides() -> None:
+    """YARA divides with `\\`; every `/` outside a string or comment opens a regexp."""
     signature = (
         'rule a {\n  meta:\n    context = "file"\n  condition:\n'
-        "    pe.sections[0].name matches /rule b \\/x/ and filesize / 2 > 1\n}\n"
-        'rule c {\n  meta:\n    context = "file"\n  condition:\n    filesize / 4 > 2\n}\n'
+        "    pe.sections[0].name matches /rule b \\/x/ and filesize \\ 2 > 1\n}\n"
+        'rule c {\n  meta:\n    context = "file"\n  condition:\n    filesize \\ 4 > 2\n}\n'
     )
     assert [header.name for header in yara.rule_headers(signature)] == ["a", "c"]
     assert yara.signature_codes(signature) == set()
+
+
+_RULE_R = 'rule r {\n  meta:\n    context = "file"\n  condition:\n    true\n}\n'
+
+
+@pytest.mark.parametrize(
+    ("signature", "names", "codes"),
+    [
+        # `/*` inside a regexp argument is not a comment: rule r is still there (R1).
+        (
+            'import "pe"\nprivate rule p { condition: pe.exports(/a\\/*b/) }\n' + _RULE_R,
+            ["p", "r"],
+            set(),
+        ),
+        (
+            'import "pe"\nprivate rule p { condition: pe.exports(/a\\/*b/) }\n'
+            "private rule p { condition: true }\n" + _RULE_R,
+            ["p", "p", "r"],
+            {"yara_duplicate_rule"},
+        ),
+        # A regexp argument holding `include "x"` or `rule b` is text.
+        ('import "pe"\n' + _RULE_R.replace("true", 'pe.exports(/include "x"/)'), ["r"], set()),
+        ('import "pe"\n' + _RULE_R.replace("true", "pe.exports(/rule b/)"), ["r"], set()),
+        (
+            'import "pe"\n' + _RULE_R.replace("true", "pe.imports(/k32/i, /rule b/)"),
+            ["r"],
+            set(),
+        ),
+        # A quote inside a regexp does not open a string that hides the next rule.
+        (
+            'import "pe"\nrule a { meta: context = "file" condition: pe.exports(/"/) } '
+            'rule b { meta: context = "file" condition: true }\n',
+            ["a", "b"],
+            set(),
+        ),
+        # No look-back: a regexp after a long comment is still a regexp.
+        (
+            'rule a {\n  meta:\n    context = "file"\n  strings:\n    $a = /* '
+            + "x" * 80
+            + " */ /rule b/\n  condition:\n    $a\n}\n",
+            ["a"],
+            set(),
+        ),
+    ],
+    ids=[
+        "slash-star-in-regexp",
+        "duplicate-after-regexp",
+        "include-in-argument",
+        "rule-in-argument",
+        "rule-in-second-argument",
+        "quote-in-regexp",
+        "after-long-comment",
+    ],
+)
+def test_every_slash_outside_strings_and_comments_opens_a_regexp(
+    signature: str, names: list[str], codes: set[str]
+) -> None:
+    assert [header.name for header in yara.rule_headers(signature)] == names
+    assert yara.signature_codes(signature) == codes
 
 
 def test_an_include_after_a_regexp_is_still_found() -> None:
@@ -606,3 +666,34 @@ def test_a_long_rule_name_names_the_rule_and_the_limit() -> None:
     assert f"rule {name!r}" in message
     assert "keyword" in yara.rule_name_problem("Condition")
     assert "'é'" in yara.rule_name_problem("Détection")
+
+
+def test_an_inline_merge_sequence_is_not_an_alias() -> None:
+    """R2a: `<<: [{signature: ...}]` written in place was compared with the sequence's end."""
+    inline = (
+        "configurations:\n  harfanglab:\n    yara:\n"
+        "      <<: [{signature: 'rule r { condition: true }'}]\n"
+    )
+    assert not yara.signature_is_aliased(inline)
+    mixed = "b: &b {}\n" + inline.replace("}]", "}, *b]")
+    assert not yara.signature_is_aliased(mixed)
+    from_alias = (
+        "s: &s {signature: 'rule r { condition: true }'}\n"
+        "configurations:\n  harfanglab:\n    yara:\n      <<: [{other: 1}, *s]\n"
+    )
+    assert yara.signature_is_aliased(from_alias)
+
+
+def test_the_alias_check_is_linear_in_merge_chains() -> None:
+    """R2b: each mapping merging the one before twice made the lookup exponential."""
+    import time
+
+    lines = ["e0: &e0 {}"]
+    for level in range(1, 31):
+        lines.append(f"e{level}: &e{level} {{<<: [*e{level - 1}, *e{level - 1}]}}")
+    lines.append("s: &s {signature: 'rule r { condition: true }'}")
+    lines.append("configurations:\n  harfanglab:\n    yara: {<<: [*e30, *s]}")
+    text = "\n".join(lines) + "\n"
+    started = time.perf_counter()
+    assert yara.signature_is_aliased(text)
+    assert time.perf_counter() - started < 2

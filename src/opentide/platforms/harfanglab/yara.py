@@ -126,33 +126,24 @@ _CONTEXT = re.compile(r"(?<![\w$#@!])context\s*=\s*")
 _ASCII_NAME = re.compile(r"[A-Za-z0-9_]+")
 
 
-_MATCHES = re.compile(r"(?<![\w$#@!])matches\s*$")
-
-
-def _regexp_starts(out: list[str], index: int) -> bool:
-    """Whether a ``/`` at *index* opens a regular expression rather than dividing.
-
-    A regexp is an operand: a string's value (``$r = /.../``) or the right of
-    ``matches``. *out* is the text scanned so far, comments and strings blanked.
-    """
-    before = "".join(out[max(0, index - 64) : index]).rstrip()
-    if before.endswith("=") and not before.endswith(("==", "!=", "<=", ">=")):
-        return True
-    return bool(_MATCHES.search(before))
-
-
 def _blank(text: str) -> str:
     """*text* with comments and the insides of string and regexp literals turned into spaces.
 
     Offsets and line breaks are kept, so a position in the result is the same
     position in *text*. The quotes of a string and the slashes of a regexp
     stay, so ``include "x"`` still reads as an include.
+
+    It tokenises as libyara's lexer does: outside a string or a comment, every
+    ``/`` that does not start ``//`` or ``/*`` opens a regexp (YARA divides
+    with ``\\``, never ``/``), wherever it stands: a string's value, the right
+    of ``matches``, a module function's argument. The regexp ends at the next
+    ``/`` that ``\\`` does not escape; its modifiers are letters and stay.
     """
     out = list(text)
     index, size = 0, len(text)
     while index < size:
         char = text[index]
-        if char == "/" and not text.startswith(("//", "/*"), index) and _regexp_starts(out, index):
+        if char == "/" and not text.startswith(("//", "/*"), index):
             end = index + 1
             while end < size and text[end] not in "/\n":
                 end += 2 if text[end] == "\\" else 1
@@ -442,7 +433,12 @@ def _aliased(value: Any, key: Any) -> bool:
     return value.start_mark.index < key.end_mark.index
 
 
-def _lookup(node: Any, key: str, stack: frozenset[int]) -> tuple[Any, bool] | None:
+def _lookup(
+    node: Any,
+    key: str,
+    stack: frozenset[int],
+    memo: dict[tuple[int, str], tuple[Any, bool] | None],
+) -> tuple[Any, bool] | None:
     """``(value, aliased)`` of *key* in mapping *node*, through merge keys as PyYAML merges.
 
     A key the mapping writes wins over a merged one; among ``<<`` sources the
@@ -454,20 +450,34 @@ def _lookup(node: Any, key: str, stack: frozenset[int]) -> tuple[Any, bool] | No
 
     if not isinstance(node, yaml.MappingNode) or id(node) in stack:
         return None
+    if (id(node), key) in memo:  # a node merged many times is looked up once
+        return memo[id(node), key]
     stack = stack | {id(node)}
+    result: tuple[Any, bool] | None = None
     for k, value in node.value:
         if k.tag != _MERGE_TAG and str(k.value) == key:
-            return value, _aliased(value, k)
-    for k, value in node.value:
-        if k.tag != _MERGE_TAG:
-            continue
-        sources = value.value if isinstance(value, yaml.SequenceNode) else [value]
-        for source in sources:
-            found = _lookup(source, key, stack)
-            if found is not None:
-                via = _aliased(source, k) if source is value else _aliased(source, value)
-                return found[0], found[1] or via
-    return None
+            result = value, _aliased(value, k)
+            break
+    else:
+        for k, value in node.value:
+            if k.tag != _MERGE_TAG:
+                continue
+            if isinstance(value, yaml.SequenceNode):
+                # An element is an alias when it starts before the sequence does.
+                sources = [
+                    (item, item.start_mark.index < value.start_mark.index) for item in value.value
+                ]
+            else:
+                sources = [(value, _aliased(value, k))]
+            for source, via in sources:
+                found = _lookup(source, key, stack, memo)
+                if found is not None:
+                    result = found[0], found[1] or via
+                    break
+            if result is not None:
+                break
+    memo[id(node), key] = result
+    return result
 
 
 def signature_is_aliased(text: str) -> bool:
@@ -483,7 +493,7 @@ def signature_is_aliased(text: str) -> bool:
     node = _compose(text)
     aliased = False
     for key in SIGNATURE_PATH:
-        found = _lookup(node, key, frozenset())
+        found = _lookup(node, key, frozenset(), {})
         if found is None:
             return False
         node, step = found

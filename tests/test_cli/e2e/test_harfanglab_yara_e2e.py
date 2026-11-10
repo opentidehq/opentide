@@ -290,3 +290,44 @@ def test_a_rule_header_inside_a_regexp_passes_validate_and_lint(
     assert_json_ok(invoke_cli("validate", "--file", name))
     payload = parse_cli_json(invoke_cli("lint", "--check", "queries", "--file", name))
     assert not [item for item in payload["findings"] if item["code"] in ADVISORIES]
+
+
+def _signature_rule(signature: str) -> str:
+    text = (FIXTURES / SIGNATURE_RULE).read_text(encoding="utf-8")
+    head = text[: text.index("      signature: |\n") + len("      signature: |\n")]
+    return head + "".join(f"        {line}\n" for line in signature.splitlines())
+
+
+@pytest.mark.parametrize(
+    "signature",
+    [
+        'import "pe"\nprivate rule p { condition: pe.exports(/a\\/*b/) }\n'
+        'rule r {\n  meta:\n    context = "file"\n  condition:\n    p\n}',
+        'import "pe"\nrule r {\n  meta:\n    context = "file"\n'
+        '  condition:\n    pe.exports(/include "x"/)\n}',
+    ],
+    ids=["slash-star-in-regexp", "include-in-regexp-argument"],
+)
+def test_a_regexp_argument_passes_validate(
+    invoke_cli, tide_corpus_repo: Path, signature: str
+) -> None:
+    """R1: valid YARA with a regexp module argument failed yara_empty_signature/yara_include."""
+    name = _add(tide_corpus_repo, SIGNATURE_RULE, text=_signature_rule(signature))
+    assert_json_ok(invoke_cli("validate", "--file", name))
+
+
+def test_an_inline_merge_signature_passes_validate(invoke_cli, tide_corpus_repo: Path) -> None:
+    """R2a: an inline `<<: [{signature: ...}]` was a false yara_signature_alias."""
+    text = (FIXTURES / SIGNATURE_RULE).read_text(encoding="utf-8")
+    head = text[: text.index("    yara:\n") + len("    yara:\n")]
+    text = head + (
+        '      <<: [{signature: "rule r {\\n  meta:\\n    context = \\"file\\"\\n'
+        '  condition:\\n    true\\n}\\n"}]\n'
+    )
+    import yaml
+
+    assert "rule r" in yaml.safe_load(text)["configurations"]["harfanglab"]["yara"]["signature"]
+    name = _add(tide_corpus_repo, SIGNATURE_RULE, text=text)
+    result = invoke_cli("validate", "--file", name)
+    payload = parse_cli_json(result)
+    assert "yara_signature_alias" not in [issue["code"] for issue in payload["report"]["issues"]]
