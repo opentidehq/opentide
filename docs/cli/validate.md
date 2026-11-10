@@ -401,8 +401,10 @@ The engine is [opentidehq/language-server](https://github.com/opentidehq/languag
 | `elastic` | ES\|QL, EQL, Kibana KQL or Lucene, by the block's `type` and `language`; ES\|QL against the lowest `setup.version` of the block's tenants |
 | `carbon_black_cloud` | Lucene, Carbon Black dialect |
 | `sysdig` | Falco: the block's `condition`, its `exceptions`, and the macros and lists of the block (and of the Falco default rules) it names |
+| `harfanglab` | YARA, HarfangLab profile: `yara.signature`, and the rule the decomposed form assembles |
+| `bitdefender` | YARA, Bitdefender profile: `yara.signature`, ASCII only, at most 30,000 characters, the modules GravityZone confirms |
 
-SentinelOne's S1QL has no offline parser: `--platform sentinel_one` exits `2` (`failure.code` `usage_missing_option`, `failure.argument` `--live`) and names `--live`. CrowdStrike is never validated by `validate query`, and Sysdig and HarfangLab only offline: `--platform sysdig --live` and `--platform harfanglab --live` report `supported: false`, because neither has a rule preview or a YARA dry run (see [Supported platforms](#supported-platforms)).
+SentinelOne's S1QL has no offline parser: `--platform sentinel_one` exits `2` (`failure.code` `usage_missing_option`, `failure.argument` `--live`) and names `--live`. CrowdStrike is never validated by `validate query`, and Sysdig, HarfangLab and Bitdefender only offline: `--platform sysdig --live`, `--platform harfanglab --live` and `--platform bitdefender --live` report `supported: false`, because none has a rule preview or a YARA dry run (see [Supported platforms](#supported-platforms)). `--platform bitdefender` checks YARA under the Bitdefender profile: ASCII only (`bitdefender_yara_ascii`), at most 30,000 characters (`bitdefender_yara_size`), and a module GravityZone has not confirmed is a warning (`yara_module_unconfirmed`).
 
 ```bash
 opentide --json validate query --platform sentinel_one
@@ -578,7 +580,7 @@ there is nothing to check.
 
 ### Supported platforms
 
-Live query validation works on **six platforms**; the offline engine on seven, five of them the same:
+Live query validation works on **six platforms**; the offline engine on eight, five of them the same:
 
 | Platform | `--live` | Offline |
 |----------|:--------:|:-------:|
@@ -590,7 +592,7 @@ Live query validation works on **six platforms**; the offline engine on seven, f
 | `carbon_black_cloud` (Lucene) | ✅ | ✅ |
 | `sysdig` (Falco) | ❌ `supported: false` | ✅ |
 | `harfanglab` (YARA) | ❌ `supported: false` | ✅ |
-| `bitdefender` (criteria, YARA) | ❌ `supported: false` | ❌ `supported: false` |
+| `bitdefender` (YARA; criteria by `validate`) | ❌ `supported: false` | ✅ YARA |
 | `crowdstrike` | ❌ `supported: false` | ❌ |
 
 ### Elastic live validation and deploy
@@ -624,7 +626,7 @@ The same Elasticsearch and Kibana checks run before every `opentide deploy` to E
 
 A rule that fails is not created or updated, and the command exits `1`. Later rules are still checked. An index pattern that matches nothing still deploys, with a warning.
 
-CrowdStrike (correlation filter), HarfangLab (Sigma, or YARA checked offline), Sysdig (Falco, which has no rule preview) and Bitdefender (GravityZone has no dry run; `validate` checks its blocks offline) return unsupported for `--live` — never fake validation. The fields on each `configurations` block, required and optional, are the [platform specs](/docs/specifications/specs/platforms/). [Platforms](../usage/concepts/platforms.md#platform-block-schemas) links each one.
+CrowdStrike (correlation filter), HarfangLab (Sigma, or YARA checked offline), Sysdig (Falco, which has no rule preview) and Bitdefender (GravityZone has no dry run; its YARA is checked offline) return unsupported for `--live` — never fake validation. The fields on each `configurations` block, required and optional, are the [platform specs](/docs/specifications/specs/platforms/). [Platforms](../usage/concepts/platforms.md#platform-block-schemas) links each one.
 
 The result is a normal failure envelope, so `--json` shape does not change between
 supported and unsupported platforms:

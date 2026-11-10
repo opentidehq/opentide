@@ -117,12 +117,12 @@ def test_deploy_dry_run_previews_the_create_request(
     deployer.deploy.assert_not_called()
 
 
-def test_validate_query_reports_bitdefender_unsupported(invoke_cli) -> None:
-    for extra in ((), ("--live",)):
-        result = invoke_cli("validate", "query", "--platform", "bitdefender", *extra)
-        payload = parse_cli_json(result)
-        assert payload["supported"] is False
-        assert payload["platform"] == "bitdefender"
+def test_validate_query_live_reports_bitdefender_unsupported(invoke_cli) -> None:
+    """GravityZone has no dry run: --live is never faked (YARA is checked offline)."""
+    result = invoke_cli("validate", "query", "--platform", "bitdefender", "--live")
+    payload = parse_cli_json(result)
+    assert payload["supported"] is False
+    assert payload["platform"] == "bitdefender"
 
 
 def test_setup_platforms_enables_bitdefender(invoke_cli, tmp_path: Path) -> None:
