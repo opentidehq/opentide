@@ -53,6 +53,26 @@ def test_rule_11_accepts_date_and_datetime() -> None:
     )
 
 
+@pytest.mark.parametrize(
+    ("text", "microsecond"),
+    [
+        ("2026-09-01T15:04:05.25-05:30", 250000),
+        ("2026-09-01T15:04:05.1+00:00", 100000),
+        ("2026-09-01T15:04:05.1234Z", 123400),
+        ("2026-09-01T15:04:05.123456Z", 123456),
+        ("2026-09-01T15:04:05.12345678Z", 123456),
+    ],
+)
+def test_review_instant_reads_any_number_of_fractional_digits(text: str, microsecond: int) -> None:
+    # Python 3.10's `fromisoformat` reads only three or six digits; the
+    # instant must not depend on the interpreter (abi3 floor is 3.10).
+    instant = parse_review_instant(text)
+    assert instant.microsecond == microsecond
+    assert instant.tzinfo == timezone.utc
+    rule = DetectionRule_v1_1.model_validate(_rule(reviewed=text))
+    assert rule.metadata.reviewed == text
+
+
 def test_rule_11_omitted_reviewed_is_valid() -> None:
     rule = DetectionRule_v1_1.model_validate(_rule())
     assert rule.metadata.reviewed is None
