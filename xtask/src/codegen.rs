@@ -206,7 +206,7 @@ const DOC_CAP: usize = 160;
 
 /// A committed editor schema's text: two-space indentation, each enum's
 /// Markdown descriptions cut to their summary, or dropped past
-/// [`ENUM_DOC_MAX`] values (the ATT&CK and actor essays would make the
+/// `ENUM_DOC_MAX` values (the ATT&CK and actor essays would make the
 /// files tens of megabytes).
 pub fn editor_reference_text(schema: &Value) -> String {
     let mut shortened = schema.clone();
