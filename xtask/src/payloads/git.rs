@@ -130,6 +130,32 @@ pub fn run(python: &Path) -> Result<bool> {
     Ok(passed)
 }
 
+/// Replaces the fixture's `objects/` links with real folders, and drops its
+/// legacy `Objects/` tree. git would track a link alone, and on a
+/// case-insensitive file system (macOS) `objects` and `Objects` are one
+/// folder, which git indexes as `Objects/`: `git mv objects/rules/...` would
+/// then name a path the index does not have.
+fn flatten_objects(repo: &Path) -> Result<()> {
+    let staged = repo.join("objects-staged");
+    fs::create_dir_all(&staged)?;
+    for family in ["threats", "objectives", "rules"] {
+        let link = repo.join("objects").join(family);
+        if fs::symlink_metadata(&link).is_err() {
+            continue;
+        }
+        let target = fs::canonicalize(&link)?;
+        fs::rename(&target, staged.join(family))?;
+    }
+    for old in ["objects", "Objects"] {
+        let old = repo.join(old);
+        if fs::symlink_metadata(&old).is_ok() {
+            fs::remove_dir_all(&old)?;
+        }
+    }
+    fs::rename(&staged, repo.join("objects"))?;
+    Ok(())
+}
+
 /// Builds the scripted history under `root` (git's `HOME` is `home`): each
 /// state, named, with the directory the baseline reads it in.
 pub fn history(repo_root: &Path, root: &Path, home: &Path) -> Result<Vec<(String, PathBuf)>> {
@@ -141,14 +167,7 @@ pub fn history(repo_root: &Path, root: &Path, home: &Path) -> Result<Vec<(String
         .get("tide-corpus")
         .context("cases.toml has no fixture tide-corpus")?
         .materialise(repo_root, &repo)?;
-    // The fixture links objects/rules to its folder; git would track the link
-    // alone, so the rules move into a real folder.
-    let link = repo.join("objects/rules");
-    if fs::symlink_metadata(&link).is_ok_and(|meta| meta.file_type().is_symlink()) {
-        let target = fs::canonicalize(&link)?;
-        fs::remove_file(&link)?;
-        fs::rename(&target, &link)?;
-    }
+    flatten_objects(&repo)?;
     let mut states: Vec<(String, PathBuf)> = Vec::new();
     let check = |name: &str, dir: &Path, states: &mut Vec<(String, PathBuf)>| {
         // Each state is copied, so later commits do not change it.
@@ -262,6 +281,38 @@ pub fn history(repo_root: &Path, root: &Path, home: &Path) -> Result<Vec<(String
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_history_lays_out_real_lowercase_object_folders() {
+        // On a case-insensitive file system `objects` is the fixture's
+        // `Objects`, which git indexes by that name; no legacy tree and no
+        // link may be left for git to index.
+        let (repo_root, _) = crate::vocab::diff::workspace().unwrap();
+        let scratch = tempfile::tempdir().unwrap();
+        let repo = scratch.path().canonicalize().unwrap().join("repo");
+        let golden = repo_root.join("tests/golden");
+        let spec = crate::golden::case::Spec::parse(
+            &fs::read_to_string(golden.join("cases.toml")).unwrap(),
+        )
+        .unwrap();
+        spec.fixtures["tide-corpus"]
+            .materialise(&repo_root, &repo)
+            .unwrap();
+        flatten_objects(&repo).unwrap();
+        let mut top: Vec<String> = fs::read_dir(&repo)
+            .unwrap()
+            .flatten()
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .collect();
+        top.sort();
+        assert!(!top.contains(&"Objects".to_owned()), "{top:?}");
+        assert!(top.contains(&"objects".to_owned()), "{top:?}");
+        for family in ["threats", "objectives", "rules"] {
+            let meta = fs::symlink_metadata(repo.join("objects").join(family)).unwrap();
+            assert!(meta.is_dir(), "objects/{family} is a real folder");
+        }
+        assert!(rules(&repo).unwrap().len() >= 5);
+    }
 
     #[test]
     fn the_scripted_history_reads_each_state() {
