@@ -365,15 +365,34 @@ fn annotate_one(
             }
         ));
     }
+    if diagnostic.code == "schema_validation"
+        && let Some((missing, parents)) = diagnostic.field_path.split_last()
+    {
+        if message == "Field required" {
+            let place = if parents.is_empty() {
+                String::new()
+            } else {
+                format!(" in {}", parents.join("."))
+            };
+            message = format!("missing required field {}{place}", quote(missing));
+        } else {
+            message = format!("{}: {message}", diagnostic.field_path.join("."));
+        }
+    } else if let Some(value) = &value
+        && let Some(own) = value_message(diagnostic, value)
+    {
+        message = own;
+    }
     if let Some(place) = &span {
         line = Some(place.line);
     }
     let mut help = diagnostic.suggestion.clone();
     if diagnostic.code == "platform_not_enabled"
         && help.is_none()
-        && let Some((_, step)) = message.rsplit_once("; ")
+        && let Some((sentence, step)) = message.clone().rsplit_once("; ")
     {
         help = Some(step.to_owned());
+        message = sentence.to_owned();
     }
     let mut fix = None;
     if VALUE_SUGGESTION_CODES.contains(&diagnostic.code.as_str())
@@ -423,10 +442,13 @@ fn annotate_one(
     } else if help.is_none() {
         help = default_help(&diagnostic.code).map(str::to_owned);
     }
-    if diagnostic.code == "duplicate_id"
-        && let Some(also) = duplicate_also(diagnostic, value.as_deref(), sources, workspace)
-    {
-        notes.push(("also".to_owned(), also));
+    if diagnostic.code == "duplicate_id" {
+        if let Some(own) = duplicate_message(diagnostic, value.as_deref()) {
+            message = own;
+        }
+        if let Some(also) = duplicate_also(diagnostic, value.as_deref(), sources, workspace) {
+            notes.push(("also".to_owned(), also));
+        }
     }
     if diagnostic.code == "config_enum_unknown"
         && let Some(ContextValue::List(allowed)) = diagnostic.context.get("allowed")
@@ -450,6 +472,52 @@ fn annotate_one(
     diagnostic.fix = fix;
     diagnostic.label = label;
     diagnostic.notes = notes;
+    diagnostic.headline = (message != diagnostic.message).then_some(message);
+}
+
+/// `'clearr' is not a TLP value`, `'x' is not a configured status`: the
+/// sentence a person reads for a finding about one value.
+fn value_message(diagnostic: &Diagnostic, value: &str) -> Option<String> {
+    let context = |key: &str| diagnostic.context.get(key).and_then(ContextValue::as_str);
+    match diagnostic.code.as_str() {
+        "vocab_unknown" => {
+            let vocab = context("vocab")?;
+            let name = vocab.split("::").next().unwrap_or(vocab);
+            let noun = if ["tlp", "pap", "rsit"].contains(&name) {
+                name.to_uppercase()
+            } else {
+                name.split(['.', '_'])
+                    .filter(|part| !part.is_empty())
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            };
+            Some(format!("{} is not a {noun} value", quote(value)))
+        }
+        "config_enum_unknown" => {
+            let setting = context("setting")?;
+            let noun = match setting {
+                "statuses" => "status",
+                "responders" => "responder",
+                other => other,
+            };
+            Some(format!("{} is not a configured {noun}", quote(value)))
+        }
+        _ => None,
+    }
+}
+
+/// `UUID … is also used by 'Name'` (or `another object`).
+fn duplicate_message(diagnostic: &Diagnostic, value: Option<&str>) -> Option<String> {
+    let ContextValue::Map(original) = diagnostic.context.get("original")? else {
+        return None;
+    };
+    let value = value?;
+    let other = original
+        .get("name")
+        .and_then(ContextValue::as_str)
+        .filter(|name| !name.is_empty())
+        .map_or_else(|| "another object".to_owned(), quote);
+    Some(format!("UUID {value} is also used by {other}"))
 }
 
 fn label(diagnostic: &Diagnostic) -> Option<String> {

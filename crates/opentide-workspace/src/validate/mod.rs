@@ -144,6 +144,52 @@ impl Check {
     }
 }
 
+/// Every code a `validate` finding can carry (`VALIDATION_CODES`): each
+/// check's issue and warning codes, `scope_no_match` and
+/// `nested_object_file`, sorted. The engine's own query codes are not here.
+pub const VALIDATION_CODES: &[&str] = &[
+    "api_key_literal",
+    "asset_unknown",
+    "chaining_relation_unknown",
+    "config_enum_unknown",
+    "config_parse",
+    "cve_lookup_unavailable",
+    "deployment_state_platform",
+    "deployment_state_shape",
+    "deployment_state_uuid_mismatch",
+    "deprecated_field",
+    "duplicate_id",
+    "duplicate_name",
+    "engine_unavailable",
+    "external_id_in_rule",
+    "external_id_shape",
+    "invalid_cve",
+    "invalid_ref",
+    "invalid_uuid",
+    "invalid_value",
+    "max_tlp_unknown",
+    "missing_field",
+    "missing_uuid",
+    "name_invalid",
+    "nested_object_file",
+    "not_a_configuration_file",
+    "object_type_unknown",
+    "organisation_uuid_invalid",
+    "platform_not_enabled",
+    "promotion_target_unknown",
+    "retired_configuration_file",
+    "rule_status_unknown",
+    "schema_missing",
+    "schema_validation",
+    "scope_no_match",
+    "sharing_directory",
+    "unknown_connector",
+    "unknown_key",
+    "url_invalid",
+    "vocab_unknown",
+    "yaml_parse",
+];
+
 /// `--queries`: how the queries check reports a query the engine rejects.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum QueriesMode {
@@ -930,5 +976,23 @@ impl Workspace {
     /// Runs `validate` ([`validate`]).
     pub fn validate(&self, options: &Options<'_>) -> Validation {
         validate(self, options)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn validation_codes_hold_every_checks_codes_sorted() {
+        for check in Check::ALL {
+            for code in check.issue_codes() {
+                assert!(VALIDATION_CODES.contains(code), "{code}");
+            }
+        }
+        for code in STRICT_EXEMPT_WARNINGS {
+            assert!(VALIDATION_CODES.contains(&code), "{code}");
+        }
+        assert!(VALIDATION_CODES.windows(2).all(|pair| pair[0] < pair[1]));
     }
 }
