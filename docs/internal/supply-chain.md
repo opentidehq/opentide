@@ -20,8 +20,8 @@ Each gate below runs in CI; the required ones are in `.github/AGENTS.md` ("Requi
 ## deny.toml
 
 **Licences.** The allow-list is `about.toml`'s, which cargo-about uses to render
-`THIRD-PARTY-LICENSES.html` for each release: permissive licences and EUPL-1.2 itself, every one
-compatible with distributing the engine under EUPL-1.2. `tests/test_ci/test_supply_chain.py` keeps
+`THIRD-PARTY-LICENSES.html` for each release: permissive licences, CC0-1.0 (a public-domain dedication; notify uses it) and EUPL-1.2 itself,
+every one compatible with distributing the engine under EUPL-1.2. `tests/test_ci/test_supply_chain.py` keeps
 the two lists equal. Only what ships is checked: dev-dependencies (test tools) never leave a
 checkout, and build dependencies (`cc`) run at build time and link nothing in, as `about.toml`'s
 `ignore-build-dependencies` says.

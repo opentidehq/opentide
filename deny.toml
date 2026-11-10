@@ -58,6 +58,9 @@ allow = [
   "Unicode-DFS-2016",
   "Zlib",
   "EUPL-1.2",
+  # A public-domain dedication: notify, which --watch uses, is CC0-1.0 in every
+  # release. Approved for any crate by the maintainer (UC-2.3, #818).
+  "CC0-1.0",
 ]
 confidence-threshold = 0.93
 # Only crates we ship need a licence on this list. dev-dependencies (test
