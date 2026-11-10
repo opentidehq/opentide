@@ -72,7 +72,14 @@ copied as published. testdata/conformance/yara-x/parser/ holds yara-x-parser's
 own parser inputs, unchanged (BSD-3-Clause). crates/opentide-yara follows
 libyara's grammar.y, lexer.l, hex_grammar.y, re_lexer.l, parser.c and
 atoms.c in its checks (crates/opentide-yara/src/atoms.rs ports
-yr_atoms_heuristic_quality).
+yr_atoms_heuristic_quality). testdata/conformance/yara/cases.json holds rules
+from YARA-X's lib/src/tests and compiler test inputs and libyara's
+tests/test-rules.c (BSD-3-Clause, testdata/conformance/yara/SOURCES.md).
+testdata/conformance/external/yara/ holds public rules from
+ReversingLabs/reversinglabs-yara-rules (MIT, Copyright ReversingLabs) and
+Neo23x0/signature-base (Detection Rule License 1.1), unmodified, beside
+modified copies with one injected fault each
+(testdata/conformance/external/SOURCES.md).
 
 libsinsp and the Falco rule loader (crates/opentide-falco/src/parser.rs ports
 libsinsp's filter parser and escaping, falcosecurity/libs

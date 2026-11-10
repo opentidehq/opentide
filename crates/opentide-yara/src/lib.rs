@@ -165,7 +165,11 @@ pub fn diagnostics(source: &str, ctx: &Context) -> Vec<Diagnostic> {
         })
         .collect();
     for error in ast.errors() {
-        findings.push(syntax::classify(error, &prepared.text));
+        let mut f = syntax::classify(error, &prepared.text);
+        if f.code == codes::YARA_X_INCOMPATIBLE && ctx.dialect == Dialect::YaraX {
+            f.severity = Severity::Error;
+        }
+        findings.push(f);
     }
     // A rule runs from its name to the next rule's: a parse error there
     // stops libyara before the semantic checks.

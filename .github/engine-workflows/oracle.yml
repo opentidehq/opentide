@@ -2,7 +2,7 @@ name: Oracle
 
 # CI-only differential oracles (scripts/oracles/README.md). The engine is
 # compared with Microsoft Kusto.Language, Splunk's search parser, Falco's own
-# `falco --validate`, and the Elastic and Lucene parsers (@elastic/esql, EqlBase.g4, Kibana's kuery
+# `falco --validate`, libyara and YARA-X (yara-python, the yara-x wheel), and the Elastic and Lucene parsers (@elastic/esql, EqlBase.g4, Kibana's kuery
 # grammar, Lucene's QueryParser). A
 # disagreement not listed in testdata/oracles/exceptions.toml is a red build,
 # and so is a listed one that is gone. The references never ship; release.yml
@@ -21,6 +21,7 @@ on:
       - "catalogs/eql/**"
       - "catalogs/carbon_black/**"
       - "catalogs/falco/**"
+      - "catalogs/yara/**"
       - "testdata/**"
       - "scripts/oracles/**"
       - "scripts/ci-oracle.sh"
@@ -119,6 +120,34 @@ jobs:
         with:
           name: falco-oracle-report-${{ matrix.falco }}
           path: falco-oracle-report.json
+
+  yara:
+    # Every recorded verdict of testdata/conformance/yara/cases.json, and every
+    # YARA file of the repository through the engine, libyara 4.5.4
+    # (yara-python) and YARA-X 1.23.0 (the yara-x wheel). The pins are in
+    # scripts/oracles/yara/oracle.py and scripts/oracles/README.md.
+    name: libyara and YARA-X
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: oracle
+          save-if: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install yara-python==4.5.4 yara-x==1.23.0
+      - run: bash scripts/ci-oracle.sh --manifests-only
+      - run: cargo build -p opentide-lsp
+      - name: YARA oracle
+        run: python3 scripts/oracles/yara/oracle.py --report yara-oracle-report.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: yara-oracle-report
+          path: yara-oracle-report.json
 
   elastic:
     name: Elastic and Lucene

@@ -116,6 +116,16 @@ pub fn classify(error: &ParseError, source: &str) -> Finding {
             };
             (code, format!("YARA syntax error: {message}"), span)
         }
+        // A jump bound past `u32`: libyara reads it, YARA-X refuses it.
+        ParseError::InvalidInteger { message, span } if in_hex_string(source, span.start()) => {
+            return Finding::new(
+                codes::YARA_X_INCOMPATIBLE,
+                Severity::Warning,
+                format!("YARA-X refuses this jump bound: {message}"),
+                span.start(),
+                span.end(),
+            );
+        }
         ParseError::InvalidInteger { message, span } => {
             let before = source[..span.start()].trim_end();
             let code =

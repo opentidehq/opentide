@@ -149,3 +149,51 @@ paths = [
 id = "lucene-elasticsearch-fuzziness"
 reason = "Lucene's QueryParser reads `~0.7` as a legacy similarity; Elasticsearch's query_string parses fuzziness with Fuzziness.fromString and fails on a fraction, so ours reports lucene_fuzzy."
 paths = ["testdata/conformance/external/lucene-queryparser/cases.tsv:61"]
+
+# ---------------------------------------------------------------------------
+# YARA: libyara 4.5.4 (yara-python) and YARA-X 1.23.0 (the yara-x wheel)
+# (scripts/oracles/yara/oracle.py). A [[yara]] entry also has `check`: the
+# verdict that differs, `libyara` (an error where libyara has none, or the
+# reverse), `yara_x` (`yara_x_incompatible` against YARA-X's verdict) or
+# `both`. A `cases.json#<origin>` path is a case of
+# testdata/conformance/yara/cases.json; crates/opentide-yara/tests/
+# conformance.rs reads those entries and fails on one that agrees.
+# ---------------------------------------------------------------------------
+
+[[yara]]
+id = "yara-unterminated-block-comment"
+check = "both"
+reason = "An unterminated `/*`: libyara drops the rest of the text silently and compiles what came before; the engine reports it as YARA-X does (yara_parse_error)."
+paths = [
+  "testdata/conformance/yara/cases.json#yara-x:lib/src/compiler/tests/testdata/errors/128.in",
+  "testdata/conformance/yara/cases.json#yara-x:lib/src/compiler/tests/testdata/errors/129.in",
+  "testdata/corpus/yara/comment__invalid.yar",
+]
+
+[[yara]]
+id = "yara-libyara-out-of-memory"
+check = "libyara"
+reason = "Sixteen nested `{4}` repetitions: libyara runs out of memory compiling it. Nothing in the text is invalid."
+paths = ["testdata/conformance/yara/cases.json#yara-x:lib/src/compiler/tests/testdata/errors/167.in"]
+
+[[yara]]
+id = "yara-x-regexp-size-limit"
+check = "yara_x"
+reason = "Nested repetitions whose product passes YARA-X's regexp size limit. The limit is YARA-X's own and is not modelled."
+paths = [
+  "testdata/conformance/yara/cases.json#yara-x:lib/src/compiler/tests/testdata/errors/138.in",
+  "testdata/conformance/yara/cases.json#yara-x:lib/src/compiler/tests/testdata/errors/156.in",
+]
+
+[[yara]]
+id = "yara-tests-module"
+check = "both"
+reason = "`import \"tests\"`: libyara's test-only module, built into yara-python but not one of yara-1.0's 13 modules, so the engine reports yara_unknown_module."
+paths = [
+  "testdata/conformance/yara/cases.json#libyara:tests/test-rules.c:86",
+  "testdata/conformance/yara/cases.json#libyara:tests/test-rules.c:89",
+  "testdata/conformance/yara/cases.json#libyara:tests/test-rules.c:92",
+  "testdata/conformance/yara/cases.json#libyara:tests/test-rules.c:96",
+  "testdata/conformance/yara/cases.json#libyara:tests/test-rules.c:100",
+  "testdata/conformance/yara/cases.json#libyara:tests/test-rules.c:104",
+]
