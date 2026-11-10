@@ -93,11 +93,10 @@ pub fn compare_case(case_dir: &Path, ws: &Path) -> Result<(Vec<String>, usize)> 
     };
     let is_set = |name: &str| case.env.contains_key(name);
     let outcome = dry_run::run(&workspace, &owned, &request, &changed, &is_set);
-    let ws_text = ws.to_string_lossy().into_owned();
-    let candidate: Value = serde_json::from_str(
-        &serde_json::to_string(&opentide_compile::Json::Object(outcome.payload.clone()))?
-            .replace(&ws_text, "<WS>"),
-    )?;
+    let candidate: Value = serde_json::from_str(&super::placeholder(
+        &serde_json::to_string(&opentide_compile::Json::Object(outcome.payload.clone()))?,
+        ws,
+    ))?;
     let mut differences = Vec::new();
     for key in KEYS {
         let oracle = document.get(key).filter(|value| !value.is_null());
@@ -245,7 +244,7 @@ pub fn run(filter: Option<&str>) -> Result<bool> {
             let ws = scratch.path().join("ws");
             fs::create_dir_all(&ws)?;
             fixture.materialise(&repo, &ws)?;
-            let ws = ws.canonicalize()?;
+            let ws = dunce::canonicalize(&ws)?;
             let (differences, waiting) = compare_case(&case_dir, &ws)?;
             let differences: Vec<String> = differences
                 .into_iter()

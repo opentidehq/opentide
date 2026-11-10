@@ -37,6 +37,9 @@ gix-ref = "0.67"
 gix-diff = { version = "0.67", default-features = false, features = ["sha1"] }
 gix-revwalk = "0.35"
 gix-revision = { version = "0.49", default-features = false, features = ["merge_base"] }
+# Paths without Windows' verbatim prefix (`\\?\`), which git, the oracle
+# and a user's own paths do not use: the messages name paths that way.
+dunce = "1"
 # Request bodies keep the order their keys are built in, as the oracle's dicts do.
 indexmap = { version = "2", features = ["serde"] }
 serde.workspace = true
@@ -44,9 +47,6 @@ serde_json.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
-# Paths without Windows' verbatim prefix (`\\?\`), which git and the oracle's
-# paths do not use.
-dunce = "1"
 # The approved differences the oracle test honours (tests/golden/payloads/APPROVED.toml).
 toml.workspace = true
 proptest.workspace = true

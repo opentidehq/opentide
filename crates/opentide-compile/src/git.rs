@@ -111,7 +111,7 @@ impl GitError {
                 "deploy reads the rule files the last commit, push or pull request changed, \
                  which needs a git checkout; no .git was found from {}. Run inside the \
                  repository, or pass --all to read every rule file.",
-                searched.display()
+                dunce::simplified(searched).display()
             ),
             Self::Failed(message) => message.clone(),
         }
@@ -782,6 +782,20 @@ mod tests {
             "deploy reads the rule files the last commit, push or pull request changed, which \
              needs a git checkout; no .git was found from /w. Run inside the repository, or pass \
              --all to read every rule file."
+        );
+    }
+
+    #[test]
+    fn a_missing_checkout_names_the_path_without_a_verbatim_prefix() {
+        let dir = tempfile::tempdir().unwrap();
+        // `\\?\C:\...` on Windows, as `std::fs::canonicalize` answers there.
+        let verbatim = std::fs::canonicalize(dir.path()).unwrap();
+        let message = GitError::MissingCheckout(verbatim).message();
+        assert!(!message.contains(r"\\?\"), "{message}");
+        let plain = dunce::canonicalize(dir.path()).unwrap();
+        assert!(
+            message.contains(&format!("no .git was found from {}.", plain.display())),
+            "{message}"
         );
     }
 }

@@ -2882,6 +2882,7 @@ name = "xtask"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "dunce",
  "glob",
  "indexmap",
  "opentide-compare",

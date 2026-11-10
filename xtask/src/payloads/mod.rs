@@ -352,6 +352,44 @@ pub fn request(ws: &Path, workspace: &Workspace) -> serde_json::Value {
     serde_json::json!({"repo": ws, "rules": rules})
 }
 
+/// `text`, a JSON document or a compact value, with the workspace `ws`
+/// written `<WS>`, and the path that follows it written with `/`: a Windows
+/// run names its files with `\`, which JSON escapes, and the recorded oracle
+/// (recorded on Unix) with `/`. The comparison is of what the files are, in
+/// one form on every host.
+pub fn placeholder(text: &str, ws: &Path) -> String {
+    placeholder_for(text, &ws.to_string_lossy(), cfg!(windows))
+}
+
+/// [`placeholder`] for a workspace spelled `ws`, with Windows' separator
+/// when `windows`.
+fn placeholder_for(text: &str, ws: &str, windows: bool) -> String {
+    let quoted = serde_json::to_string(ws).unwrap_or_default();
+    let escaped = quoted
+        .strip_prefix('"')
+        .and_then(|inner| inner.strip_suffix('"'))
+        .unwrap_or(ws);
+    if escaped.is_empty() {
+        return text.to_owned();
+    }
+    if !windows {
+        return text.replace(escaped, "<WS>");
+    }
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(at) = rest.find(escaped) {
+        out.push_str(&rest[..at]);
+        out.push_str("<WS>");
+        rest = &rest[at + escaped.len()..];
+        // The path runs to the end of its JSON string.
+        let end = rest.find('"').unwrap_or(rest.len());
+        out.push_str(&rest[..end].replace(r"\\", "/"));
+        rest = &rest[end..];
+    }
+    out.push_str(rest);
+    out
+}
+
 /// Compares the oracle's result on a corpus with opentide-compile's.
 pub fn compare(corpus: &str, workspace: &Workspace, text: &str) -> Result<Tally> {
     let result: ProbeResult = serde_json::from_str(text).context("read the probe's result")?;
@@ -396,8 +434,11 @@ pub fn compare(corpus: &str, workspace: &Workspace, text: &str) -> Result<Tally>
             continue;
         };
         let rule = Rule::new(root, Some(object.path.to_string_lossy().into_owned()));
+        let root = workspace.root();
         let mut check = |what: String, oracle: String, candidate: String| {
             tally.compared += 1;
+            let oracle = placeholder(&oracle, root);
+            let candidate = placeholder(&candidate, root);
             if oracle != candidate {
                 tally.differences.push(Difference {
                     corpus: corpus.to_owned(),
@@ -564,7 +605,7 @@ pub fn run(options: &DiffOptions) -> Result<bool> {
         let ws = root.join("ws");
         fs::create_dir_all(&ws)?;
         materialise(&spec, &repo, corpus, &ws)?;
-        let ws = ws.canonicalize()?;
+        let ws = dunce::canonicalize(&ws)?;
         let workspace = open(&ws)?;
         let request = root.join("request.json");
         let response = root.join("result.json");
@@ -609,14 +650,9 @@ pub fn run(options: &DiffOptions) -> Result<bool> {
                 );
             }
         }
-        let mut tally = compare(corpus, &workspace, &text)?;
-        // An approval names the workspace `<WS>`: the corpus is laid out in
-        // a new directory on every run.
-        let here = ws.to_string_lossy().into_owned();
-        for difference in &mut tally.differences {
-            difference.oracle = difference.oracle.replace(&here, "<WS>");
-            difference.candidate = difference.candidate.replace(&here, "<WS>");
-        }
+        // An approval names the workspace `<WS>`, as `compare` writes it:
+        // the corpus is laid out in a new directory on every run.
+        let tally = compare(corpus, &workspace, &text)?;
         let mut report = format!(
             "{corpus}: {} bodies compared, {} differ, {} not compared\n",
             tally.compared,
@@ -729,18 +765,45 @@ mod tests {
     }
 
     #[test]
+    fn a_workspace_path_is_written_the_same_on_every_host() {
+        // Unix: the path, as it is.
+        assert_eq!(
+            placeholder_for(r#"{"file":"/t/ws/objects/rules/a.yaml"}"#, "/t/ws", false),
+            r#"{"file":"<WS>/objects/rules/a.yaml"}"#
+        );
+        // Windows: the path JSON escapes, its separators up to the end of
+        // its string written `/`, and nothing after the string touched.
+        assert_eq!(
+            placeholder_for(
+                r#"{"file":"C:\\t\\ws\\objects\\rules\\a.yaml","x":"a\\b"}"#,
+                r"C:\t\ws",
+                true
+            ),
+            r#"{"file":"<WS>/objects/rules/a.yaml","x":"a\\b"}"#
+        );
+        assert_eq!(
+            placeholder_for(r#""from C:\\ws. Run inside it.""#, r"C:\ws", true),
+            r#""from <WS>. Run inside it.""#
+        );
+        assert_eq!(placeholder_for("{}", "", true), "{}");
+        let here = std::env::current_dir().unwrap();
+        let text = serde_json::to_string(&here.join("objects").join("a.yaml")).unwrap();
+        assert_eq!(placeholder(&text, &here), "\"<WS>/objects/a.yaml\"");
+    }
+
+    #[test]
     fn the_recorded_oracle_agrees_with_the_compile_corpus() {
         let (repo, _) = crate::vocab::diff::workspace().unwrap();
         let scratch = tempfile::tempdir().unwrap();
         let ws = scratch.path().join("ws");
         crate::golden::fixture::copy_tree(&repo.join(COMPILE_CORPUS), &ws).unwrap();
-        let ws = ws.canonicalize().unwrap();
+        let ws = dunce::canonicalize(&ws).unwrap();
         let workspace = open(&ws).unwrap();
         let request = request(&ws, &workspace);
         assert!(request["rules"].as_array().unwrap().len() >= 20);
-        let recorded = fs::read_to_string(repo.join(ORACLE_RECORD))
-            .unwrap()
-            .replace("<WS>", &ws.to_string_lossy());
+        // The record names the workspace `<WS>`, as `compare` does: no path is
+        // put back into it, so the record reads the same on every host.
+        let recorded = fs::read_to_string(repo.join(ORACLE_RECORD)).unwrap();
         let tally = compare("payloads", &workspace, &recorded).unwrap();
         assert!(tally.compared >= 80, "{}", tally.compared);
         assert!(tally.skipped.is_empty(), "{:?}", tally.skipped);
@@ -780,7 +843,7 @@ mod tests {
              status: STAGING\n  crowdstrike: null\n",
         )
         .unwrap();
-        let ws = ws.canonicalize().unwrap();
+        let ws = dunce::canonicalize(&ws).unwrap();
         let workspace = open(&ws).unwrap();
         let tally = compare("c", &workspace, r#"{"rules":[],"unloadable":[]}"#).unwrap();
         let skipped: Vec<&str> = tally.skipped.iter().map(|(_, why)| why.as_str()).collect();

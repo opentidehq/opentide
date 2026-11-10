@@ -15,6 +15,9 @@ workspace = true
 
 [dependencies]
 anyhow.workspace = true
+# Workspace paths without Windows' verbatim prefix (`\\?\`): a path joined
+# with `/` does not resolve under it, and the oracle names no such path.
+dunce = "1"
 opentide-compare.workspace = true
 # The object models' oracle comparisons (`corpus faults --engine rust`,
 # `schema diff`), the rules' platform blocks included (UC-1.4).

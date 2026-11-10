@@ -110,7 +110,7 @@ fn candidate(repo: &Path) -> Value {
 pub fn run(python: &Path) -> Result<bool> {
     let (repo_root, _) = crate::vocab::diff::workspace()?;
     let scratch = tempfile::tempdir()?;
-    let root = scratch.path().canonicalize()?;
+    let root = dunce::canonicalize(scratch.path())?;
     let home = root.join("home");
     fs::create_dir_all(&home)?;
     let probe = root.join("git_probe.py");
@@ -143,7 +143,7 @@ fn flatten_objects(repo: &Path) -> Result<()> {
         if fs::symlink_metadata(&link).is_err() {
             continue;
         }
-        let target = fs::canonicalize(&link)?;
+        let target = dunce::canonicalize(&link)?;
         fs::rename(&target, staged.join(family))?;
     }
     for old in ["objects", "Objects"] {
@@ -289,7 +289,7 @@ mod tests {
         // link may be left for git to index.
         let (repo_root, _) = crate::vocab::diff::workspace().unwrap();
         let scratch = tempfile::tempdir().unwrap();
-        let repo = scratch.path().canonicalize().unwrap().join("repo");
+        let repo = dunce::canonicalize(scratch.path()).unwrap().join("repo");
         let golden = repo_root.join("tests/golden");
         let spec = crate::golden::case::Spec::parse(
             &fs::read_to_string(golden.join("cases.toml")).unwrap(),
@@ -318,7 +318,7 @@ mod tests {
     fn the_scripted_history_reads_each_state() {
         let (repo_root, _) = crate::vocab::diff::workspace().unwrap();
         let scratch = tempfile::tempdir().unwrap();
-        let root = scratch.path().canonicalize().unwrap();
+        let root = dunce::canonicalize(scratch.path()).unwrap();
         let home = root.join("home");
         fs::create_dir_all(&home).unwrap();
         let states = history(&repo_root, &root, &home).unwrap();
