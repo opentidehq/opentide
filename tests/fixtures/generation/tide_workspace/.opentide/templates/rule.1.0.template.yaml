@@ -333,6 +333,8 @@ configurations:
       #false_positives:
         #- 
     #yara:
+      #signature: |
+        #...
       #meta:
         #context:
           #- 

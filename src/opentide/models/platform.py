@@ -232,6 +232,8 @@ class CrowdstrikeConfig(PlatformConfigBase):
 
 class HarfangLabConfig(PlatformConfigBase):
     __schema_identifier__: ClassVar[str] = "platform::harfanglab::1.0"
+    # Its before-validator reports the constraint codes; it accepts no extra key.
+    __legacy_keys__: ClassVar[Mapping[str, str | None]] = {}
     maturity: str = "Experimental"
     """Rule maturity. Mapped to HarfangLab `hl_status`."""
     confidence: str = "Moderate"
@@ -239,11 +241,25 @@ class HarfangLabConfig(PlatformConfigBase):
     action: str = "Alert"
     """What the agent does on a match. Mapped to `global_state`."""
     tags: list[str] | None = None
-    """Sigma tags, and the YARA `tags` meta line."""
+    """Sigma tags, and the YARA `tags` meta line of the decomposed form."""
     sigma: HarfangLabSigma | None = None
-    """Behavioural rule. Preferred when `yara` is also set."""
+    """Behavioural rule. Not with `yara`."""
     yara: HarfangLabYara | None = None
-    """File or memory scan rule."""
+    """File or memory scan rule. Not with `sigma`."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _validate_raw_harfanglab_block(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        from opentide.platforms.harfanglab.yara import block_codes
+
+        codes = block_codes(data)
+        if codes:
+            raise ValueError(
+                f"HarfangLabConfig validation failed with code(s): {', '.join(sorted(codes))}"
+            )
+        return data
 
 
 class CarbonBlackConfig(PlatformConfigBase):

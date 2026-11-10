@@ -1,7 +1,7 @@
 """Platforms whose queries can be checked against a tenant.
 
-CrowdStrike and HarfangLab expose no query language, so their capability
-entry is ``can_validate False``.
+CrowdStrike and HarfangLab have no tenant check, so their capability entry is
+``can_validate False``. HarfangLab's YARA is checked offline.
 """
 
 from __future__ import annotations
@@ -19,8 +19,10 @@ QUERY_VALIDATION_PLATFORMS: frozenset[str] = frozenset(
 
 #: Platforms whose rule queries the analysis engine checks offline, and their languages.
 #: Sysdig's Falco condition is checked offline only: Sysdig has no rule preview.
+#: HarfangLab's YARA (``yara.signature`` and the rule the decomposed form assembles) is
+#: checked offline only: HarfangLab has no YARA dry run (harfanglab-1.0, yara-1.0).
 #: SentinelOne (S1QL) is checked on the tenant only (``validate query --live``).
-#: CrowdStrike and HarfangLab are never checked: no fake validation.
+#: CrowdStrike is never checked: no fake validation.
 OFFLINE_QUERY_LANGUAGES: dict[str, tuple[str, ...]] = {
     "sentinel": ("kql",),
     "defender_for_endpoint": ("kql",),
@@ -28,5 +30,6 @@ OFFLINE_QUERY_LANGUAGES: dict[str, tuple[str, ...]] = {
     "elastic": ("esql", "eql", "kuery", "lucene"),
     "carbon_black_cloud": ("lucene",),
     "sysdig": ("falco",),
+    "harfanglab": ("yara",),
 }
 OFFLINE_QUERY_PLATFORMS = frozenset(OFFLINE_QUERY_LANGUAGES)

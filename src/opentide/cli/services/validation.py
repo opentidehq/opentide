@@ -117,6 +117,7 @@ _CHECK_ISSUE_CODES: dict[str, frozenset[str]] = {
             "deployment_state_uuid_mismatch",
             "deployment_state_platform",
             "deployment_state_shape",
+            "yara_signature_alias",
         }
     ),
     ValidateCheck.cve.value: frozenset({"invalid_cve"}),
@@ -867,8 +868,8 @@ def _validate_query_platform(
     ctx.apply_environment()
     from opentide.validation.query_platforms import OFFLINE_QUERY_PLATFORMS
 
-    # Sysdig has no tenant check but an offline one (the Falco engine): only
-    # --live is unsupported there. CrowdStrike and HarfangLab have neither.
+    # Sysdig and HarfangLab have no tenant check but an offline one (the Falco
+    # and YARA engines): only --live is unsupported there. CrowdStrike has neither.
     if (
         platform is not None
         and platform not in QUERY_VALIDATION_PLATFORMS

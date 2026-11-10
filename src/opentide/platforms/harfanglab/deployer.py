@@ -8,6 +8,7 @@ from opentide.core.registry import DetectionPlatforms, Opentide
 from opentide.deployment import TideDeployment, check_status
 from opentide.deployment.external_ids import without_legacy_external_ids
 from opentide.models.deployment_enums import RunStrategies, StatusStrategy
+from opentide.models.platform import HarfangLabConfig
 from opentide.models.rule import DetectionRule
 from opentide.models.system_config import ConfigurationModels, batch_tenant
 from opentide.platforms.harfanglab.client import (
@@ -16,6 +17,7 @@ from opentide.platforms.harfanglab.client import (
     SigmaRuleBuilder,
     YaraRule,
 )
+from opentide.platforms.harfanglab.yara import deployed_signature, derived_rule_name
 from opentide.platforms.plugins import RuleDeployer
 
 logger = structlog.get_logger("opentide.platforms.harfanglab.deployer")
@@ -119,10 +121,61 @@ class HarfangLabDeploy(RuleDeployer):
             raise Exception("Missing YARA configuration")
         yara_config = mdr_config.yara
         rule_name = data.name
-        yara_rule_name = data.name.lower().replace(" ", "_").replace("-", "_")
-        yara_rule_name = "".join(c if c.isalnum() or c == "_" else "_" for c in yara_rule_name)
-        if yara_rule_name and yara_rule_name[0].isdigit():
-            yara_rule_name = f"rule_{yara_rule_name}"
+        if yara_config.signature is not None:
+            # The signature form: the author's YARA text, verbatim (harfanglab-1.0, Deploy).
+            yara_content = deployed_signature(yara_config.signature)
+        else:
+            yara_content = self._assemble_yara(data, mdr_config)
+        logger.debug("compiled_yara_rule_content", detail=f"\n{yara_content}")
+        source_id = tenant_config.setup.source_id
+        hl_status = HarfangLabService.map_maturity_to_hl_status(mdr_config.maturity)
+        logger.debug(
+            "event", detail=f"Maturity mapping: '{mdr_config.maturity}' -> hl_status='{hl_status}'"
+        )
+        rule_confidence = HarfangLabService.map_confidence(mdr_config.confidence)
+        logger.debug(
+            "event",
+            detail=(
+                f"Confidence mapping: '{mdr_config.confidence}' -> "
+                f"rule_confidence_override='{rule_confidence}'"
+            ),
+        )
+        global_state = HarfangLabService.map_action_to_global_state(mdr_config.action)
+        logger.debug(
+            "event",
+            detail=f"Action mapping: '{mdr_config.action}' -> global_state='{global_state}'",
+        )
+        rule_level = HarfangLabService.map_level(data.alert_severity)
+        logger.debug(
+            "event",
+            detail=(
+                f"Severity mapping: '{data.alert_severity}' -> rule_level_override='{rule_level}'"
+            ),
+        )
+        return YaraRule(
+            name=rule_name,
+            content=yara_content,
+            source_id=source_id,
+            global_state=global_state,
+            hl_status=hl_status,
+            rule_confidence_override=rule_confidence,
+            rule_level_override=rule_level,
+        )
+
+    @staticmethod
+    def _assemble_yara(data: DetectionRule, mdr_config: HarfangLabConfig) -> str:
+        """The one YARA rule the decomposed form builds: imports, derived name, meta, bodies."""
+        yara_config = mdr_config.yara
+        if (
+            yara_config is None
+            or yara_config.meta is None
+            or yara_config.strings is None
+            or yara_config.condition is None
+        ):
+            # The model requires all three without a signature.
+            raise ValueError("the decomposed YARA form needs meta, strings and condition")
+        meta = yara_config.meta
+        yara_rule_name = derived_rule_name(data.name)
 
         def escape_yara_string(s: str) -> str:
             if not s:
@@ -160,8 +213,8 @@ class HarfangLabDeploy(RuleDeployer):
         if mdr_config.tags:
             tags_str = ";".join(mdr_config.tags)
             yara_lines.append(f'        tags = "{tags_str}"')
-        os_value = yara_config.meta.os
-        contexts = yara_config.meta.context
+        os_value = meta.os
+        contexts = meta.context
         compiled_contexts = []
         for ctx in contexts:
             if ctx == "file" and os_value in OS_TO_FILE_CONTEXT:
@@ -171,20 +224,16 @@ class HarfangLabDeploy(RuleDeployer):
         if compiled_contexts:
             yara_lines.append(f'''        context = "{",".join(compiled_contexts)}"''')
         yara_lines.append(f'        os = "{os_value}"')
-        if yara_config.meta.arch:
-            arch_str = (
-                ",".join(yara_config.meta.arch)
-                if isinstance(yara_config.meta.arch, list)
-                else yara_config.meta.arch
-            )
+        if meta.arch:
+            arch_str = ",".join(meta.arch) if isinstance(meta.arch, list) else meta.arch
             yara_lines.append(f'        arch = "{arch_str}"')
-        if yara_config.meta.classification:
+        if meta.classification:
             yara_lines.append(
-                f'        classification = "{escape_yara_string(yara_config.meta.classification)}"'
+                f'        classification = "{escape_yara_string(meta.classification)}"'
             )
         score = None
-        if yara_config.meta.score:
-            score = SCORE_OVERRIDE_MAP.get(yara_config.meta.score)
+        if meta.score:
+            score = SCORE_OVERRIDE_MAP.get(meta.score)
         if score is None:
             score = SEVERITY_TO_SCORE.get(data.alert_severity, 50)
         yara_lines.append(f"        score = {score}")
@@ -197,42 +246,7 @@ class HarfangLabDeploy(RuleDeployer):
         for line in yara_config.condition.strip().split("\n"):
             yara_lines.append(f"        {line}")
         yara_lines.append("}")
-        yara_content = "\n".join(yara_lines)
-        logger.debug("compiled_yara_rule_content", detail=f"\n{yara_content}")
-        source_id = tenant_config.setup.source_id
-        hl_status = HarfangLabService.map_maturity_to_hl_status(mdr_config.maturity)
-        logger.debug(
-            "event", detail=f"Maturity mapping: '{mdr_config.maturity}' -> hl_status='{hl_status}'"
-        )
-        rule_confidence = HarfangLabService.map_confidence(mdr_config.confidence)
-        logger.debug(
-            "event",
-            detail=(
-                f"Confidence mapping: '{mdr_config.confidence}' -> "
-                f"rule_confidence_override='{rule_confidence}'"
-            ),
-        )
-        global_state = HarfangLabService.map_action_to_global_state(mdr_config.action)
-        logger.debug(
-            "event",
-            detail=f"Action mapping: '{mdr_config.action}' -> global_state='{global_state}'",
-        )
-        rule_level = HarfangLabService.map_level(data.alert_severity)
-        logger.debug(
-            "event",
-            detail=(
-                f"Severity mapping: '{data.alert_severity}' -> rule_level_override='{rule_level}'"
-            ),
-        )
-        return YaraRule(
-            name=rule_name,
-            content=yara_content,
-            source_id=source_id,
-            global_state=global_state,
-            hl_status=hl_status,
-            rule_confidence_override=rule_confidence,
-            rule_level_override=rule_level,
-        )
+        return "\n".join(yara_lines)
 
     def deploy_mdr(
         self,

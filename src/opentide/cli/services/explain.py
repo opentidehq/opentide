@@ -64,7 +64,12 @@ _OBJECT_CODES = frozenset(
 
 def engine_page(code: str) -> ExplainPage | None:
     """A page for an analysis-engine code, from the engine's sentence; ``None`` for another code."""
-    from opentide.analysis import ELASTIC_ADVISORY_CODES, SYSDIG_ADVISORY_CODES, describe
+    from opentide.analysis import (
+        ELASTIC_ADVISORY_CODES,
+        HARFANGLAB_ADVISORY_CODES,
+        SYSDIG_ADVISORY_CODES,
+        describe,
+    )
     from opentide.cli.ui.diagnostics import engine_reference
 
     sentence = describe(code)
@@ -111,6 +116,17 @@ def engine_page(code: str) -> ExplainPage | None:
         example = "opentide lint --check queries"
         fix = (
             "Change the block's macros or lists where the frame points, then run "
+            "`opentide lint --check queries` again."
+        )
+    elif code in HARFANGLAB_ADVISORY_CODES:
+        where = (
+            "Reported on a HarfangLab YARA signature (harfanglab-1.0): `opentide lint` (its "
+            "`queries` check) and an editor running `opentide lsp start` show it. It is an "
+            "advisory: HarfangLab takes the rule, and `opentide validate` does not fail on it."
+        )
+        example = "opentide lint --check queries"
+        fix = (
+            "Change the YARA rule's meta where the frame points, then run "
             "`opentide lint --check queries` again."
         )
     else:

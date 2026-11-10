@@ -1,0 +1,38 @@
+name: HarfangLab Sigma platform block
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000017
+  schema: rule::1.0
+  version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
+  tlp: clear
+description: |
+  HarfangLab Sigma behavioural rule.
+status: STAGING
+severity: High
+response:
+  alert_severity: High
+configurations:
+  harfanglab:
+    enabled: true
+    schema: platform::harfanglab::1.0
+    status: STAGING
+    maturity: Testing
+    confidence: Strong
+    action: Alert
+    tags:
+      - attack.execution
+      - attack.t1059
+    sigma:
+      logsource:
+        category: process_creation
+        product: windows
+      selections:
+        - name: selection
+          field: Image
+          value: cmd.exe
+          modifiers:
+            - endswith
+      condition: selection
+      false_positives:
+        - Administrative scripts

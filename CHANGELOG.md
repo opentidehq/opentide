@@ -6,13 +6,25 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Upgrade
+
+- If a HarfangLab block sets both `sigma` and `yara`, split it into two rules, one per kind, then run `opentide validate`.
+
+### Breaking
+
+- **A HarfangLab block is a Sigma rule or a YARA rule, not both** ([#899](https://github.com/opentidehq/opentide/issues/899)). Such a block deployed only its `sigma` and dropped the `yara`; `validate` now fails it with `harfanglab_rule_kind` (harfanglab-1.0 1.2). The decomposed YARA form also fails a `strings:`, `condition:` or `rule` header in `strings` or `condition` (`harfanglab_yara_section_header`), a module the YARA language does not know in `imports` (`harfanglab_yara_import`), and a rule `name` whose derived YARA name is a keyword, keeps a non-ASCII letter or is longer than 128 characters (`harfanglab_yara_rule_name`): libyara refused each at deploy.
+
 ### Added
 
-- **The editor and `opentide tui` check YARA rules**, as libyara 4.5 compiles them, with a warning where YARA-X 1.x refuses what libyara accepts. `opentide lsp start` adds hover and completion for the 13 modules, highlighting, outline, folding, rename and formatting. `configurations.harfanglab.yara` (the `signature` and the `strings`, `condition` and `imports` fragments deploy assembles) and `configurations.bitdefender.yara.signature` get the `yara_*`, `harfanglab_*` and `bitdefender_yara_*` diagnostics. `opentide validate`, `lint` and MCP `validate_query` do not check YARA yet, so no pipeline fails on them. See [Diagnostics](docs/cli/diagnostics.md#yara_parse_error).
+- **HarfangLab YARA as a whole signature: `yara.signature`** ([#899](https://github.com/opentidehq/opentide/issues/899)). Write imports and one or more YARA rules, private helpers included, and deploy sends the text verbatim as the YaraFile `content`, with `\n` line endings and one trailing newline; the endpoint, payload, name and identity by `metadata.uuid` are the decomposed form's. `validate` fails `yara_include`, `yara_empty_signature`, `yara_duplicate_rule`, a signature that sets decomposed keys too (`harfanglab_yara_form`), and one written as a YAML alias (`yara_signature_alias`). See [Platforms](docs/usage/concepts/platforms.md).
+- **`opentide validate` checks HarfangLab YARA** ([#899](https://github.com/opentidehq/opentide/issues/899)). `yara.signature`, and the rule the decomposed form assembles, are checked as libyara 4.5 compiles them: a `yara_*` error (a bad hex string, an unknown module) fails the `queries` check, and `opentide lint` reports the YARA warnings. `validate query --platform harfanglab`, a `.yar` or `.yara` file and MCP `validate_query` check YARA offline; `--live` reports `supported: false`.
+- **`opentide lint` warns about a HarfangLab YARA rule's meta `context`.** A rule that is not private and has no `context` is `yara_meta_missing`; a value that is not a comma-joined list of `file`, `memory`, `file.pe`, `file.elf` and `file.macho` (`file,memory`, `file.pe,memory`), or not a string, is `harfanglab_yara_context`, which also checks the `context` the decomposed form deploys (harfanglab-1.0 1.3); an empty decomposed `meta.context: []` deploys no `context` and is `yara_meta_missing`. Both are `queries` check warnings with an `opentide explain` page, reported even when the analysis engine does not load, and never fail `validate`.
+- **The editor and `opentide tui` check YARA rules**, as libyara 4.5 compiles them, with a warning where YARA-X 1.x refuses what libyara accepts. `opentide lsp start` adds hover and completion for the 13 modules, highlighting, outline, folding, rename and formatting. `configurations.harfanglab.yara` (the `signature` and the `strings`, `condition` and `imports` fragments deploy assembles) and `configurations.bitdefender.yara.signature` get the `yara_*`, `harfanglab_*` and `bitdefender_yara_*` diagnostics. See [Diagnostics](docs/cli/diagnostics.md#yara_parse_error).
 
 ### Changed
 
 - **The analysis engine is language-server at the head of its YARA work ([#165](https://github.com/opentidehq/language-server/issues/165))**, pinned by git revision until the release that ships it. Building opentide from source needs Rust 1.95 or later, which the engine's YARA parser requires.
+- **The analysis engine checks the HarfangLab YARA rule deploy assembles, byte for byte** (language-server [#235](https://github.com/opentidehq/language-server/pull/235) and [#236](https://github.com/opentidehq/language-server/pull/236), pinned at `d8a7c66`). A `"` in a reference, a tag, `arch`, `meta.context` or `os`, which deploy writes into the rule unescaped, is `yara_parse_error` at that field, as libyara refuses it. The engine's Tide catalog knows `yara.signature`, so `opentide-lsp` run on its own agrees with `opentide validate`. `lint` shows `harfanglab_yara_context` and `yara_meta_missing` once per YARA rule, where both opentide and the engine find it.
 
 ## [0.24.1] — 2026-11-10
 

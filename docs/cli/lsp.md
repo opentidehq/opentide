@@ -165,7 +165,8 @@ Then add `opentide` to the `language-servers` of the languages you edit. Zed tak
 | Carbon Black Cloud | Lucene (Carbon Black dialect) | ✅ |
 | Sysdig Secure | Falco (the block's `condition`, exceptions, macros and lists) | ✅ |
 | SentinelOne | S1QL | ❌ tenant only: `opentide validate query --platform sentinel_one --live` |
-| CrowdStrike, HarfangLab | — | ❌ never validated |
+| HarfangLab | YARA (`yara.signature`, and the rule the decomposed form assembles) | ✅ |
+| CrowdStrike | — | ❌ never validated |
 
 ## opentide lsp start and opentide-lsp
 

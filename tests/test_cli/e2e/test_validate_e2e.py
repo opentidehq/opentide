@@ -102,7 +102,6 @@ def test_validate_scoped_by_uuid(invoke_cli, corpus_rule_uuids) -> None:
         ("sentinel_one", 2),
         # Never validated, never faked.
         ("crowdstrike", 1),
-        ("harfanglab", 1),
     ],
 )
 def test_validate_query_platform_matrix(invoke_cli, platform: str, expected_exit: int) -> None:
@@ -121,6 +120,15 @@ def test_validate_query_platform_matrix(invoke_cli, platform: str, expected_exit
     else:
         assert body["supported"] is False
         assert "not supported" in body["message"]
+
+
+def test_validate_query_harfanglab_is_offline_yara(invoke_cli) -> None:
+    """HarfangLab's YARA is checked offline; the corpus HarfangLab rule is Sigma, which is not."""
+    payload = assert_json_ok(invoke_cli("validate", "query", "--platform", "harfanglab"))
+    assert payload["mode"] == "offline"
+    assert payload["supported"] is True
+    assert payload["status"] == "skipped"
+    assert payload["queries_validated"] == 0
 
 
 def test_validate_query_strategy_and_wide_need_live(invoke_cli) -> None:
