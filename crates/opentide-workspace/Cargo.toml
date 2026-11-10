@@ -39,8 +39,9 @@ thiserror.workspace = true
 # patterns; lint's placeholder markers and top-level keys; watch's UUID scan.
 regex.workspace = true
 # `validate --fix --dry-run`'s unified diff (the user's rule: a crate, never a
-# port of Python's difflib).
-similar = "3"
+# port of Python's difflib). Version 2, as xtask uses: `similar` 3 would be
+# a second shipped copy, which cargo-deny's bans refuse.
+similar = "2.7"
 # `validate --fix` writes through a temporary file renamed into place.
 tempfile = "3"
 # `lint --fix`'s next step quotes its flags as a shell would read them.

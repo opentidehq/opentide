@@ -38,7 +38,9 @@ list (`scripts/engine/audit.py ignores`). Today there is one:
 left out, as cargo-deny leaves them out by default. These test tools duplicate a shipped crate,
 reviewed and harmless because none of them ships: `trycmd`'s `toml_edit` 0.25 (with `winnow` 1,
 `toml_datetime` 1 and `serde_spanned` 1) beside the engine's `toml` 0.8 and `toml_edit` 0.22;
-`trycmd`'s `shlex` 1 beside `cc`'s `shlex` 2; `insta`'s `similar` 2 beside `snapbox`'s `similar` 3;
+`trycmd`'s `shlex` 1 beside `cc`'s `shlex` 2; `insta`'s `similar` 2 beside `snapbox`'s `similar` 3
+(the shipped `opentide-workspace`, for `validate --fix --dry-run`'s diff, and xtask use `similar` 2,
+so the shipped graph holds one `similar`);
 `tempfile`'s `bitflags` 2 beside `lsp-types`'s `bitflags` 1. `trybuild`'s `toml` 1 (with its `toml_*` crates) beside the engine's `toml` 0.8, for `opentide-schema`'s compile-fail tests. xtask (tooling, never shipped) uses `rustix` (the golden runner's pseudo-terminals) and `tempfile` at run time, and `opentide-workspace` uses `tempfile` (`validate --fix`'s writes) and `notify` (`--watch`), whose `inotify` brings `bitflags` 2 while `kqueue-sys` (BSD, macOS) keeps `bitflags` 1: `skip` names `bitflags@2.13.2` with that reason. `openssl-sys`, `openssl` and
 `native-tls` are banned: TLS is rustls (plan D-8; per-tenant TLS settings are a §3 invariant), with
 no system library to link on every wheel target. Wildcard version requirements fail.

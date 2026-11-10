@@ -405,9 +405,16 @@ mod watch {
         let dir = tempfile::tempdir().unwrap();
         let rules = dir.path().join("rules");
         std::fs::create_dir(&rules).unwrap();
+        // Nothing can happen without a watched folder: the wait times out,
+        // and only after its timeout. (On a watched folder a quiet wait is
+        // not guaranteed: macOS's FSEvents may still deliver the folder's own
+        // creation just after the watch starts. That wake is harmless, as
+        // the snapshot comparison that follows decides.)
+        let quiet = Events::watch(&OsFs, &[]).unwrap();
+        let started = std::time::Instant::now();
+        assert!(!quiet.wait(Duration::from_millis(50)));
+        assert!(started.elapsed() >= Duration::from_millis(50));
         let events = Events::watch(&OsFs, std::slice::from_ref(&rules)).unwrap();
-        // Nothing happened: the wait times out.
-        assert!(!events.wait(Duration::from_millis(50)));
         std::fs::write(rules.join("a.yaml"), format!("uuid: {U1}\n")).unwrap();
         assert!(events.wait(Duration::from_secs(10)));
         // A folder that does not exist is left out, not an error.

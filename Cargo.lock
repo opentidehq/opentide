@@ -1837,7 +1837,7 @@ dependencies = [
  "serde",
  "serde_json",
  "shlex 2.0.1",
- "similar 3.2.1",
+ "similar 2.7.0",
  "tempfile",
  "thiserror",
  "toml 0.8.23",
