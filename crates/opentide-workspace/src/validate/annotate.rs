@@ -110,7 +110,7 @@ fn fold(value: &str) -> String {
 }
 
 /// A file that does not parse: the problem, where, and the frame's notes.
-type Problem = (String, Span, Vec<(String, String)>);
+pub(crate) type Problem = (String, Span, Vec<(String, String)>);
 
 /// What makes two findings about one written value the same occurrence.
 type OccurrenceKey = (String, Option<PathBuf>, Vec<String>, Option<String>);
@@ -140,6 +140,25 @@ impl<'a> Sources<'a> {
             by_path,
             texts: HashMap::new(),
         }
+    }
+
+    /// No document read yet: every file is read through `fs` when a
+    /// finding needs it (lint, which reads no index).
+    pub fn files(fs: &'a dyn FileSystem) -> Self {
+        Self {
+            fs,
+            by_path: HashMap::new(),
+            texts: HashMap::new(),
+        }
+    }
+
+    /// The text of line `number` (from 1) of `path`, lines broken where YAML
+    /// breaks them.
+    pub(crate) fn line(&mut self, path: &Path, number: usize) -> Option<String> {
+        let text = self.text(path)?;
+        crate::fix::split_keeping_breaks(&text)
+            .get(number.checked_sub(1)?)
+            .map(|line| line.trim_end_matches(['\r', '\n']).to_owned())
     }
 
     fn text(&mut self, path: &Path) -> Option<String> {
@@ -197,7 +216,7 @@ impl<'a> Sources<'a> {
     }
 
     /// The problem of a file that does not parse, with its position.
-    fn yaml_problem(&mut self, path: &Path) -> Option<Problem> {
+    pub(crate) fn yaml_problem(&mut self, path: &Path) -> Option<Problem> {
         let text = self.text(path)?;
         match node::load(&text) {
             Err(error) => {

@@ -30,6 +30,7 @@ mod export;
 pub mod fix;
 pub mod fs;
 pub mod index;
+pub mod lint;
 pub mod load;
 pub mod registry;
 pub mod root;
