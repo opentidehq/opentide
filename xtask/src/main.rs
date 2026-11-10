@@ -72,8 +72,9 @@ commands:
   codegen [--check]
                  write the artifacts generated from the Rust model (the
                  platform templates); --check compares them, and what
-                 `opentide generate` writes with each golden recording of a
-                 bare `opentide generate` that exited 0 (UC-1.8, #814)
+                 `opentide generate` writes with each golden recording of an
+                 `opentide generate` that ran its schemas, templates and
+                 snippets phases and exited 0 (UC-1.8, #814)
   golden <record|check|diff|lock|coverage> [options]
                  record what the frozen Python CLI does, and check an engine
                  against the recordings (tests/golden/README.md);

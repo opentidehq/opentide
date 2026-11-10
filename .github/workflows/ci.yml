@@ -210,8 +210,9 @@ jobs:
       # The artifacts generated from the Rust model (opentide-schema's
       # `generate`): the committed platform templates are current, and the
       # templates, snippets and router schema are byte for byte what the oracle
-      # wrote in each golden recording of a bare `opentide generate` that
-      # exited 0 (phase subsets and failed runs are not compared; UC-1.8, #814).
+      # wrote in each golden recording of an `opentide generate` that ran the
+      # schemas, templates and snippets phases and exited 0 (runs missing one
+      # of them, and failed runs, are not compared; UC-1.8, #814).
       - name: generated artifacts
         run: cargo xtask codegen --check
 

@@ -6,13 +6,16 @@
 //!   which the package ships and `generate snippets` falls back to. Without
 //!   `--check` they are written; with it, a difference fails.
 //! - **Golden parity** (`--check` only): each recording in
-//!   `tests/golden/cases` of a bare `opentide generate` (no phase named)
-//!   that exited 0 holds the templates, the snippets and the router schema
-//!   the oracle wrote; recordings of one phase, and of a failed run, are not
-//!   compared (today that leaves the tide-corpus cases: every vscode-workspace
-//!   recording exits 1). In each compared case the same files, generated
-//!   from the fixture's resolved configuration, must be byte-identical, and
-//!   neither side may hold one the other has not.
+//!   `tests/golden/cases` of an `opentide generate` that exited 0 and ran
+//!   the `schemas`, `templates` and `snippets` phases (a bare `generate`,
+//!   or those phases named with others) holds the templates, the snippets
+//!   and the router schema the oracle wrote. Recordings missing one of those
+//!   phases, and of a failed run, are not compared: every bare `generate`
+//!   on vscode-workspace exits 1 in the docs phase, so that fixture is
+//!   compared through `generate schemas templates vocabs snippets`. In each
+//!   compared case the same files, generated from the fixture's resolved
+//!   configuration, must be byte-identical, and neither side may hold one
+//!   the other has not.
 //!
 //! The JSON Schema of each revision, the configuration schemas and the
 //! language server's field catalog are not generated from Rust yet (#814).
@@ -39,8 +42,8 @@ pub const USAGE: &str = "usage: cargo xtask codegen [--check]
                src/opentide/schemas/data/platform_templates/*.template.yaml
   --check      compare them instead of writing, and compare what `opentide
                generate` writes (templates, snippets, the router schema) with
-               each golden recording of a bare `opentide generate` that
-               exited 0; exit 1 on a difference
+               each golden recording of an `opentide generate` that ran
+               those phases and exited 0; exit 1 on a difference
 ";
 
 /// Where the committed platform templates live, relative to the repository.
@@ -145,16 +148,36 @@ fn stale_templates(names: &[String], artifacts: &[(String, String)]) -> Vec<Stri
     stale
 }
 
-/// Whether a case's argv runs every phase of `opentide generate`: the
-/// command alone, with global flags only (`--json`, `--no-color`).
-fn is_full_pipeline(argv: &[String]) -> bool {
+/// The phases of `opentide generate` that write the files this generator
+/// covers: `schemas` the router, `templates` the templates and `snippets`
+/// the snippets.
+const COMPARED_PHASES: [&str; 3] = ["schemas", "templates", "snippets"];
+
+/// The phases a recording can name besides those: they write other files.
+const OTHER_PHASES: [&str; 5] = ["vocabs", "docs", "explorer", "exports", "inflight"];
+
+/// Whether a case's argv runs every phase that writes the files this
+/// generator covers: a bare `opentide generate`, or phases named as words
+/// after it that include all of [`COMPARED_PHASES`]. Only global flags
+/// (`--json`, `--no-color`) may come with it.
+fn writes_compared_phases(argv: &[String]) -> bool {
+    if argv.iter().any(|arg| arg == "--help" || arg == "-h") {
+        return false;
+    }
     let words: Vec<&str> = argv
         .iter()
         .skip(1)
         .map(String::as_str)
         .filter(|arg| !arg.starts_with('-'))
         .collect();
-    words == ["generate"] && !argv.iter().any(|arg| arg == "--help" || arg == "-h")
+    let Some((&"generate", phases)) = words.split_first() else {
+        return false;
+    };
+    phases.is_empty()
+        || (COMPARED_PHASES.iter().all(|phase| phases.contains(phase))
+            && phases
+                .iter()
+                .all(|phase| COMPARED_PHASES.contains(phase) || OTHER_PHASES.contains(phase)))
 }
 
 /// Whether a workspace path is one of the files this generator writes.
@@ -201,7 +224,7 @@ fn golden_parity(root: &Path) -> Result<(usize, Vec<String>)> {
             continue;
         }
         let recording = Recording::read(&cases.join(&id), &blobs)?;
-        if !is_full_pipeline(&recording.case.argv) || recording.exit_code != 0 {
+        if !writes_compared_phases(&recording.case.argv) || recording.exit_code != 0 {
             continue;
         }
         let fixture = recording.case.fixture.clone();
@@ -284,24 +307,58 @@ mod tests {
     }
 
     #[test]
-    fn only_the_whole_pipeline_is_compared() {
+    fn only_runs_of_every_compared_phase_are_compared() {
         let argv = |args: &[&str]| -> Vec<String> {
             std::iter::once("opentide")
                 .chain(args.iter().copied())
                 .map(str::to_owned)
                 .collect()
         };
-        assert!(is_full_pipeline(&argv(&["generate"])));
-        assert!(is_full_pipeline(&argv(&[
+        assert!(writes_compared_phases(&argv(&["generate"])));
+        assert!(writes_compared_phases(&argv(&[
             "--json",
             "--no-color",
             "generate"
         ])));
-        assert!(!is_full_pipeline(&argv(&["generate", "--help"])));
-        assert!(!is_full_pipeline(&argv(&["generate", "schemas"])));
-        assert!(!is_full_pipeline(&argv(&[
+        assert!(writes_compared_phases(&argv(&[
+            "generate",
+            "schemas",
+            "templates",
+            "vocabs",
+            "snippets"
+        ])));
+        assert!(writes_compared_phases(&argv(&[
+            "generate",
+            "snippets",
+            "templates",
+            "schemas"
+        ])));
+        assert!(!writes_compared_phases(&argv(&["generate", "--help"])));
+        assert!(!writes_compared_phases(&argv(&["generate", "schemas"])));
+        // One compared phase missing: its files would be absent.
+        assert!(!writes_compared_phases(&argv(&[
+            "generate",
+            "schemas",
+            "templates"
+        ])));
+        assert!(!writes_compared_phases(&argv(&[
+            "generate",
+            "templates",
+            "snippets",
+            "vocabs"
+        ])));
+        // A word that is no phase: a different command or a positional.
+        assert!(!writes_compared_phases(&argv(&[
+            "generate",
+            "schemas",
+            "templates",
+            "snippets",
+            "x"
+        ])));
+        assert!(!writes_compared_phases(&argv(&[
             "generate", "docs", "--output", "x"
         ])));
+        assert!(!writes_compared_phases(&argv(&["info"])));
     }
 
     fn artifact(path: &str, text: &str) -> Artifact {
