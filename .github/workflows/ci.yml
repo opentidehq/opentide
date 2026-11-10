@@ -395,11 +395,17 @@ jobs:
       # are published (crates/opentide-schema/Cargo.toml says when). A crate
       # left out of the package step is scanned as its source directory
       # instead (tests/test_ci/test_own_ci_workflow.py holds both to it).
-      - run: cargo package --locked --workspace --exclude opentide-native --exclude xtask --exclude opentide-compare --exclude opentide-schema --exclude opentide-workspace --allow-dirty
+      # opentide-cli (publish = false) depends on opentide-schema and
+      # opentide-workspace for the commands ported onto it (UC-2.4), so it
+      # cannot be packaged either: its scan reads the files `cargo package
+      # --list` names, as its package would hold them (its CI-only oracle
+      # data under tests/render/ is excluded from the package, as before).
+      - run: cargo package --locked --workspace --exclude opentide-native --exclude xtask --exclude opentide-compare --exclude opentide-schema --exclude opentide-workspace --exclude opentide-cli --allow-dirty
       - name: license scan (no oracle references)
         run: |
           bash scripts/engine/license-scan.sh target/package/*.crate
           bash scripts/engine/license-scan.sh crates/opentide-schema crates/opentide-schema-derive crates/opentide-compare crates/opentide-workspace
+          cargo package --list --locked --allow-dirty -p opentide-cli | (cd crates/opentide-cli && while IFS= read -r f; do if [ -f "$f" ]; then printf '%s\0' "$f"; fi; done | xargs -0 bash ../../scripts/engine/license-scan.sh)
 
   # The supply-chain gate (#843, deny.toml): licences of what we ship,
   # RustSec advisories (vulnerable, unsound, unmaintained, yanked), a second
