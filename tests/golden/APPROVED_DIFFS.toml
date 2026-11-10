@@ -269,7 +269,13 @@
 #   `explain` and SARIF changes ("**The editor reports what `opentide
 #   validate` reports**").
 # - `filename_pattern` leaves the engine's code list (`opentide._native.CODES`):
-#   it is `opentide lint`'s alone, as it always was on the command line.
+#   the editor no longer reports it (it did from language-server 0.11.0); it is
+#   `opentide lint`'s alone, as it always was on the command line ("**The
+#   editor reports what `opentide validate` reports**", and the Upgrade entry).
+# - The editor's `schema_validation` quick fix for a string where a list is
+#   required (`- {text}`) is gone: `validate`'s finding carries no fix there,
+#   and a quick fix is now the one edit `validate --fix` would write ("**The
+#   editor reports what `opentide validate` reports**").
 # - The editor's object findings are `validate`'s: their messages, ranges
 #   (the value or key `validate` places, not the engine's guess) and codes
 #   (a file that is not YAML is `yaml_parse`, not `schema_validation`; a

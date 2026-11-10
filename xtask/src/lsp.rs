@@ -199,19 +199,23 @@ fn validate(dir: &Path, files: &[PathBuf]) -> Option<ByFile> {
 }
 
 /// The UTF-16 offset of the code-point column `column` (from 1) of `line`,
-/// the line's end when it is past it.
+/// the line's end when it is past it: the line's prefix of that many code
+/// points, encoded as UTF-16 by the standard library and counted.
 fn utf16(line: &str, column: usize) -> u32 {
-    let units: usize = line
-        .chars()
-        .take(column.saturating_sub(1))
-        .map(char::len_utf16)
-        .sum();
-    u32::try_from(units).unwrap_or(u32::MAX)
+    let prefix = line
+        .char_indices()
+        .nth(column.saturating_sub(1))
+        .map_or(line, |(at, _)| &line[..at]);
+    u32::try_from(prefix.encode_utf16().count()).unwrap_or(u32::MAX)
 }
 
 /// A `validate` finding in LSP's coordinates, computed here, apart from the
-/// server's own conversion: a finding without a line is at the start of the
-/// file, one without columns covers its line.
+/// server's own conversion (`opentide-lsp`'s `checks::finding_range`). The
+/// placement of a finding that lacks a line or an end is the contract
+/// `docs/engine/EDITORS.md` states ("Tide diagnostics"), which both follow: a
+/// finding without a line is at the start of the file; one with a column
+/// and no end column on its own line is a point; otherwise a missing end
+/// column is the end line's end.
 fn expected(text: &str, finding: &opentide_workspace::Diagnostic) -> Key {
     let lines: Vec<&str> = text
         .split('\n')

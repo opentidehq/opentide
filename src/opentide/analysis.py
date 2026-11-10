@@ -685,10 +685,22 @@ def check_query_file(path: Path, *, platform: str | None = None) -> QueryCheck |
 
 
 def check_file(
-    space: Workspace, path: Path, text: str, *, language: str | None = None
+    space: Workspace,
+    path: Path,
+    text: str,
+    *,
+    language: str | None = None,
+    objects: bool = True,
 ) -> list[Finding]:
-    """What the language server reports for one file (an object or a query file)."""
-    return [Finding.from_engine(item, text) for item in space.analyze(str(path), text, language)]
+    """What the language server reports for one file (an object or a query file).
+
+    *objects* false leaves out ``validate``'s findings on an object, and the
+    ``validate`` run that makes them: the engine's query and block checks alone.
+    """
+    return [
+        Finding.from_engine(item, text)
+        for item in space.analyze(str(path), text, language, objects)
+    ]
 
 
 @dataclass(frozen=True)

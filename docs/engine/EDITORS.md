@@ -7,6 +7,10 @@ description: "How an editor hosts the opentide language server: language ids, th
 
 The opentide LSP owns Tide diagnostics. Disable yamlls / Red Hat YAML on `objects/**`.
 
+### Tide diagnostics
+
+An object's diagnostics are `opentide validate`'s findings on it (the queries check is the engine's own analysis of the same text): the same codes and severities, placed from the finding's 1-based line and code-point columns (end column exclusive) to LSP's 0-based lines and UTF-16 columns. A finding without a line is at the start of the file; one with a column and no end column, on its own line, is a point at that column; one with no column covers its line (to its end line's end when it names one). `cargo xtask lsp parity --corpus faults` (CI's corpus job) compares the two on every fault kind `validate` reports.
+
 Languages: `opentide-yaml`, `kql`, `spl`, `esql`, `eql`, `kuery` (Kibana KQL), `lucene`, `falco`, `cql` (CrowdStrike Query Language) and `opentide-config`. There is no `sql`.
 
 Semantic tokens come from the server. TextMate grammars must be **copied from the language-server highlight zip**, never hand-authored.
@@ -17,7 +21,7 @@ The Tide grammar (`tide.tmLanguage.json`, `source.opentide-yaml`) marks the quer
 
 `.opentide/configurations/**/*.toml` is `opentide-config`, whatever language id the editor sends. Any other `.toml` (`Cargo.toml`, `pyproject.toml`) is not read.
 
-- **opentide checks it.** The findings are opentide's own (`configuration_text_issues`, the check `opentide validate` runs), placed on the keys they name. Only `opentide lsp start` has them. `opentide-lsp` on its own has no checker, so it reports nothing for these files and never guesses. Hover and completion come from the schemas `opentide lsp start` hands the server, so they need it too. See [ARCHITECTURE.md](ARCHITECTURE.md#configuration-toml).
+- **opentide checks it.** The findings are the configuration checks `opentide validate` runs (`opentide-schema`'s), placed on the keys they name. `opentide-lsp` runs them itself, on its own, in the WASI build and in the browser too (UC-2.6). Hover and completion come from the schemas `opentide lsp start` hands the server, so they need it. See [ARCHITECTURE.md](ARCHITECTURE.md#configuration-toml).
 - **The editor's TOML grammar highlights it.** The server sends no semantic tokens for `opentide-config`, and there is no opentide TOML grammar.
 - **Keep generic TOML language servers off `.opentide/configurations/**`** (taplo, Even Better TOML, tombi), so a file is not reported twice. Give the glob its own language (`opentide-config`), as the samples do.
 - Editing one configuration file re-checks the others that are open: a status added to `deployment.toml` is one `sharing.toml` may name. `visibility.toml` still declares datasets live, and is checked like the other files.

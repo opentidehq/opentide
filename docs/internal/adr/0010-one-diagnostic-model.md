@@ -114,7 +114,11 @@ KG-03 and KG-05 (on #893) and by this item for publishing:
    `opentide-analysis` and `opentide-tide` stay publishable (neither depends on the new crates).
    The field metadata the editor reads (`data/catalogs/tide/generated/fields.json`) moves to
    `opentide-schema` in a later change: `opentide-tide`, which reads it, is published, and
-   would stop being so.
+   would stop being so. `opentide-lsp` being unpublished does not change that: it only hands a
+   workspace's `fields.json` to `opentide-analysis`'s `install_catalog`; hover, completion and
+   highlighting read the catalog in `opentide-tide` and `opentide-analysis`, both published.
+   Building the catalog from `opentide-schema` in `opentide-lsp` instead (and handing it to
+   the engine) is the way to move it without unpublishing them, and is left open on #821.
 
 ## Evidence
 

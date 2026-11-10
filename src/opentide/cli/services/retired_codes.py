@@ -63,7 +63,10 @@ RETIRED_CODES: MappingProxyType[str, RetiredCode] = MappingProxyType(
             RetiredCode(
                 code="filename_slug",
                 retired_in="opentide 0.24.0",
-                successor="`opentide lint` reports a file name that is not the object's as `filename_mismatch`",
+                successor=(
+                    "`opentide lint` reports a file name that is not the object's"
+                    " as `filename_mismatch`"
+                ),
                 meaning=(
                     "The file name was not the one `lint.toml`'s `[filenames]` style derives "
                     "from the object's name."
@@ -81,7 +84,10 @@ RETIRED_CODES: MappingProxyType[str, RetiredCode] = MappingProxyType(
             RetiredCode(
                 code="missing_author",
                 retired_in="opentide 0.24.0",
-                successor="`opentide lint` reports a missing recommended metadata field as `metadata_recommended`",
+                successor=(
+                    "`opentide lint` reports a missing recommended metadata field"
+                    " as `metadata_recommended`"
+                ),
                 meaning="The recommended `metadata.author` field was missing.",
                 reported_by=(
                     "Until opentide 0.24.0, the language server reported it as a warning on "
@@ -94,7 +100,10 @@ RETIRED_CODES: MappingProxyType[str, RetiredCode] = MappingProxyType(
             RetiredCode(
                 code="missing_organisation",
                 retired_in="opentide 0.24.0",
-                successor="`opentide lint` reports a missing recommended metadata field as `metadata_recommended`",
+                successor=(
+                    "`opentide lint` reports a missing recommended metadata field"
+                    " as `metadata_recommended`"
+                ),
                 meaning="The recommended `metadata.organisation` field was missing.",
                 reported_by=(
                     "Until opentide 0.24.0, the language server reported it as a warning on "
@@ -107,7 +116,10 @@ RETIRED_CODES: MappingProxyType[str, RetiredCode] = MappingProxyType(
             RetiredCode(
                 code="recommended_field_missing",
                 retired_in="opentide 0.24.0",
-                successor="`opentide lint` reports a missing recommended metadata field as `metadata_recommended`",
+                successor=(
+                    "`opentide lint` reports a missing recommended metadata field"
+                    " as `metadata_recommended`"
+                ),
                 meaning=(
                     "A field the templates ask for was missing; `opentide validate` accepted "
                     "the object without it."

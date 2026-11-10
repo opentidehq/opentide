@@ -133,6 +133,7 @@ impl Default for RootChecks {
 
 impl RootChecks {
     /// What the workspace read and parsed so far, once loaded.
+    #[cfg(all(debug_assertions, not(fuzzing)))]
     pub(crate) fn stats(&self) -> Option<opentide_workspace::Stats> {
         self.workspace.as_ref().map(Workspace::stats)
     }
@@ -504,6 +505,54 @@ mod tests {
                 end: Position::new(1, 6),
             }
         );
+    }
+
+    #[test]
+    fn a_column_without_an_end_column_is_a_point() {
+        // `𝄞` is two UTF-16 units: column 4 (from 1) is UTF-16 unit 4.
+        let text = "a𝄞 key: value\n";
+        let mut finding = Diagnostic::error("schema_validation", "point");
+        finding.line = Some(1);
+        finding.column = Some(4);
+        let point = Range::point(0, 4);
+        assert_eq!(finding_range(text, &finding), point);
+        // The same with the end line named, on the start's line.
+        finding.end_line = Some(1);
+        assert_eq!(finding_range(text, &finding), point);
+        // An end line further down and no end column: to that line's end.
+        let text = "a𝄞 key: value\nnext line\n";
+        finding.end_line = Some(2);
+        assert_eq!(
+            finding_range(text, &finding),
+            Range {
+                start: Position::new(0, 4),
+                end: Position::new(1, 9),
+            }
+        );
+    }
+
+    /// A nested workspace's configuration buffer is merged with the parent
+    /// instance's file of the same name before it is checked, as `validate`
+    /// resolves it: a key only the parent supplies is not a finding.
+    #[test]
+    fn a_configuration_buffer_takes_the_parent_instance_s_file() {
+        let child = "/w/child/.opentide/configurations/deployment.toml";
+        let text = "[promotion]\npromotion_target = \"NOPE\"\n";
+        let parent_folder = PathBuf::from("/w/.opentide/configurations");
+        let parent_file = parent_folder.join("deployment.toml");
+        let read = |path: &Path| {
+            (path == parent_file).then(|| "[promotion]\npromotion_target = \"DESIGN\"\n".to_owned())
+        };
+        let codes = |is_dir: &dyn Fn(&Path) -> bool| {
+            configuration_issues(child, text, &[], &read, is_dir)
+                .into_iter()
+                .map(|issue| issue.code)
+                .collect::<Vec<_>>()
+        };
+        // No parent instance: the child's own value is checked.
+        assert_eq!(codes(&|_| false), ["promotion_target_unknown"]);
+        // The parent instance's file is the later layer.
+        assert_eq!(codes(&|path| path == parent_folder), Vec::<String>::new());
     }
 
     #[test]

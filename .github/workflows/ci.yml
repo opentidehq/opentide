@@ -710,8 +710,9 @@ jobs:
     name: Corpus (generator, faults, coverage) against opentide 0.23.0
     runs-on: ubuntu-latest
     # 45: the object models' comparison (UC-1.3) validates every corpus again;
-    # 60: the index comparison (UC-2.1) loads every corpus and fault kind again.
-    timeout-minutes: 60
+    # 60: the index comparison (UC-2.1) loads every corpus and fault kind again;
+    # 70: the editor's comparison with validate (UC-2.6) serves every fault kind.
+    timeout-minutes: 70
     permissions:
       contents: read
     env:
@@ -821,6 +822,13 @@ jobs:
       # `APPROVED`), none stale. It reads tests/golden/cases, not the oracle.
       - name: Validate against the recordings (validate diff)
         run: cargo xtask validate diff
+      # The language server's diagnostics against validate's findings (UC-2.6,
+      # #821): every fault kind `validate` alone reports, applied to the clean
+      # workspace and opened in opentide-lsp in process; per file the same
+      # codes, severities and ranges (code points converted to UTF-16). It
+      # needs neither the oracle nor the recordings.
+      - name: The editor's diagnostics are validate's (lsp parity)
+        run: cargo xtask lsp parity --corpus faults
       - name: The code inventory is the oracle's
         run: |
           cargo xtask corpus codes --engine python > "$RUNNER_TEMP/codes.toml"

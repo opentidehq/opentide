@@ -597,7 +597,9 @@ def _query_findings(root: Path, records: list[_ObjectRecord]) -> list[dict[str, 
             continue
         lines = record.text.splitlines()
         marked = {marked.line + 1 for marked in record.placeholder_lines}
-        for finding in check_file(space, record.path, record.text):
+        # The engine's query checks alone: validate's object findings would
+        # be dropped below, and making them runs a whole-workspace validate.
+        for finding in check_file(space, record.path, record.text, objects=False):
             if finding.severity == "error" or _in_placeholder(finding, lines, marked):
                 continue
             if (

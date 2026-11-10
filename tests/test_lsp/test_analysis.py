@@ -330,6 +330,64 @@ configurations:
 """
 
 
+def _shape(tmp_path: Path, text: str) -> list[tuple[str, tuple[str, ...], int]]:
+    from opentide.analysis import check_file, workspace
+
+    path = tmp_path / "objects" / "rules" / "revision-rule.yaml"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+    return [
+        (finding.message, finding.field_path, finding.line)
+        for finding in check_file(workspace(tmp_path, [path]), path, text)
+        if finding.code == "schema_validation"
+    ]
+
+
+def test_the_language_server_checks_the_revision_an_object_names(
+    tmp_path: Path, bundled_catalog: None
+) -> None:
+    """#676: what validate reports, the language server reports: a rule::1.1
+    without description, a rule::1.0 carrying the 1.1-only metadata.reviewed.
+    Since UC-2.6 (#821) the findings are validate's own, its messages included."""
+    assert install_workspace_catalog(tmp_path).source == "opentide"
+    assert _shape(tmp_path, REVISION_RULE) == []
+    assert _shape(tmp_path, REVISION_RULE.replace("description: |\n  test\n", "")) == [
+        ("Field required", ("description",), 1)
+    ]
+    older = REVISION_RULE.replace("rule::1.1", "rule::1.0").replace(
+        "  author: Someone\n", "  author: Someone\n  reviewed: 2026-01-03\n"
+    )
+    assert _shape(tmp_path, older) == [
+        ("Extra inputs are not permitted", ("metadata", "reviewed"), 10)
+    ]
+    assert _shape(tmp_path, older.replace("rule::1.0", "rule::1.1")) == []
+    # A splunk::2.x spelling is an unknown key, in the editor as in validate.
+    legacy = REVISION_RULE.replace("    query: index=main\n", "    search: index=main\n")
+    assert _shape(tmp_path, legacy) == [
+        ("Field required", ("configurations", "splunk", "query"), 15),
+        ("Extra inputs are not permitted", ("configurations", "splunk", "search"), 17),
+    ]
+
+
+def test_the_queries_check_asks_the_engine_without_validate(tmp_path: Path) -> None:
+    """lint's queries check takes the engine's query findings alone
+    (``objects=False``): validate's object findings, and the run that makes
+    them, are left out."""
+    from opentide.analysis import check_file, workspace
+
+    path = tmp_path / "objects" / "rules" / "revision-rule.yaml"
+    path.parent.mkdir(parents=True)
+    text = REVISION_RULE.replace("description: |\n  test\n", "")
+    path.write_text(text, encoding="utf-8")
+    codes = {finding.code for finding in check_file(workspace(tmp_path, [path]), path, text)}
+    assert "schema_validation" in codes
+    alone = check_file(workspace(tmp_path, [path]), path, text, objects=False)
+    assert {finding.code for finding in alone} & {
+        "schema_validation",
+        "platform_not_enabled",
+    } == set()
+
+
 # Declared datasets (#695, #718) -------------------------------------------------
 
 DECLARING = """\

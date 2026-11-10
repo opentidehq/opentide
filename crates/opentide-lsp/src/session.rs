@@ -903,6 +903,7 @@ impl Session {
     }
 
     /// What the roots' workspaces read, parsed and resolved, summed.
+    #[cfg(all(debug_assertions, not(fuzzing)))]
     pub(crate) fn workspace_stats(&self) -> opentide_workspace::Stats {
         let mut sum = opentide_workspace::Stats::default();
         for r in &self.roots {

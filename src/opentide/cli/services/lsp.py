@@ -106,6 +106,7 @@ def _supply_configuration_schemas() -> None:
         install_configuration_schemas()
     except Exception as exc:  # the server still starts, without hover and completion there
         print(  # noqa: T201 -- stderr, outside the protocol
-            f"warning: configuration files get no hover or completion ({type(exc).__name__}: {exc})",
+            "warning: configuration files get no hover or completion "
+            f"({type(exc).__name__}: {exc})",
             file=sys.stderr,
         )

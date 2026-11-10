@@ -1023,3 +1023,142 @@ fn a_file_name_finding_is_a_rename_never_a_text_edit() {
         assert!(!edits.contains(".yaml\""), "{fix_all:#}");
     }
 }
+
+/// A client that pulls diagnostics, with `extra` capabilities.
+fn pulling(extra: Value) -> Value {
+    let mut caps = json!({ "textDocument": { "diagnostic": { "dynamicRegistration": false } } });
+    if let (Some(caps), Some(extra)) = (caps.as_object_mut(), extra.as_object()) {
+        for (key, value) in extra {
+            caps.insert(key.clone(), value.clone());
+        }
+    }
+    caps
+}
+
+/// The codes of the document's diagnostics, pulled now.
+fn pulled(lsp: &mut Lsp, uri: &str) -> Vec<String> {
+    let reply = lsp.request(
+        "textDocument/diagnostic",
+        json!({ "textDocument": { "uri": uri } }),
+    );
+    let items = reply["result"]["items"]
+        .as_array()
+        .unwrap_or_else(|| panic!("{reply}"));
+    codes_of(items)
+}
+
+/// `[[statuses]]` without `STAGING`, the status the rule's block has: what
+/// `validate` reports as `config_enum_unknown` on it.
+const DESIGN_ONLY: &str =
+    "[[statuses]]\nname = \"DESIGN\"\ndescription = \"d\"\nstrategy = \"INERT\"\n";
+
+/// UC-2.6: an open configuration buffer is the configuration `validate`
+/// resolves for the objects, saved or not; closed, the disk is again.
+#[test]
+fn an_unsaved_configuration_buffer_changes_the_objects_findings() {
+    let scratch = workspace("config-buffer", true);
+    let root = &scratch.0;
+    let rule_uri = file_uri(&root.join("objects/rules/rule-1.0.yaml"));
+    let deployment = root.join(".opentide/configurations/deployment.toml");
+    let deployment_uri = file_uri(&deployment);
+    let (mut lsp, _) =
+        start(json!({ "capabilities": pulling(json!({})), "rootUri": file_uri(root) }));
+    open(&mut lsp, &rule_uri, "opentide-yaml", &fixture(RULE));
+    let unknown = "config_enum_unknown".to_string();
+    assert!(!pulled(&mut lsp, &rule_uri).contains(&unknown));
+
+    // Not on disk: the buffer alone declares the statuses.
+    open(&mut lsp, &deployment_uri, "toml", DESIGN_ONLY);
+    let codes = pulled(&mut lsp, &rule_uri);
+    assert!(codes.contains(&unknown), "{codes:?}");
+    assert!(!deployment.exists());
+
+    // An unsaved edit that declares STAGING clears it.
+    lsp.notify(
+        "textDocument/didChange",
+        json!({ "textDocument": { "uri": deployment_uri },
+                "contentChanges": [{ "text": format!(
+                    "{DESIGN_ONLY}\n[[statuses]]\nname = \"STAGING\"\ndescription = \"s\"\nstrategy = \"PREVIEW\"\n"
+                ) }] }),
+    );
+    let codes = pulled(&mut lsp, &rule_uri);
+    assert!(!codes.contains(&unknown), "{codes:?}");
+
+    // Back to DESIGN alone, then closed: the bundled statuses again.
+    lsp.notify(
+        "textDocument/didChange",
+        json!({ "textDocument": { "uri": deployment_uri },
+                "contentChanges": [{ "text": DESIGN_ONLY }] }),
+    );
+    assert!(pulled(&mut lsp, &rule_uri).contains(&unknown));
+    lsp.notify(
+        "textDocument/didClose",
+        json!({ "textDocument": { "uri": deployment_uri } }),
+    );
+    let codes = pulled(&mut lsp, &rule_uri);
+    assert!(!codes.contains(&unknown), "{codes:?}");
+}
+
+/// UC-2.6: a client with no file watcher has the disk read again on each
+/// request, and the configuration resolved again with it.
+#[test]
+fn without_a_watcher_a_configuration_changed_on_disk_is_read_again() {
+    let scratch = workspace("config-poll", true);
+    let root = &scratch.0;
+    let rule_uri = file_uri(&root.join("objects/rules/rule-1.0.yaml"));
+    let (mut lsp, _) =
+        start(json!({ "capabilities": pulling(json!({})), "rootUri": file_uri(root) }));
+    open(&mut lsp, &rule_uri, "opentide-yaml", &fixture(RULE));
+    let unknown = "config_enum_unknown".to_string();
+    assert!(!pulled(&mut lsp, &rule_uri).contains(&unknown));
+
+    let configurations = root.join(".opentide/configurations");
+    std::fs::create_dir_all(&configurations).unwrap();
+    std::fs::write(configurations.join("deployment.toml"), DESIGN_ONLY).unwrap();
+    let codes = pulled(&mut lsp, &rule_uri);
+    assert!(codes.contains(&unknown), "{codes:?}");
+
+    std::fs::remove_file(configurations.join("deployment.toml")).unwrap();
+    let codes = pulled(&mut lsp, &rule_uri);
+    assert!(!codes.contains(&unknown), "{codes:?}");
+}
+
+/// UC-2.6: a folder under `objects/` deleted or created, which a watcher
+/// reports as one event, reaches `validate`: the rule's objective goes and
+/// comes back with its folder.
+#[test]
+fn a_folder_event_under_objects_reaches_the_findings() {
+    let scratch = workspace("folder-event", true);
+    let root = &scratch.0;
+    let rule_uri = file_uri(&root.join("objects/rules/rule-1.0.yaml"));
+    let (mut lsp, _) =
+        start(json!({ "capabilities": pulling(watch()), "rootUri": file_uri(root) }));
+    let register = lsp.read();
+    assert_eq!(
+        register["method"], "client/registerCapability",
+        "{register}"
+    );
+    lsp.write(&json!({ "jsonrpc": "2.0", "id": register["id"], "result": null }));
+    open(&mut lsp, &rule_uri, "opentide-yaml", &fixture(RULE));
+    let invalid = "invalid_ref".to_string();
+    let codes = pulled(&mut lsp, &rule_uri);
+    assert!(!codes.contains(&invalid), "{codes:?}");
+
+    let objectives = root.join("objects/objectives");
+    std::fs::remove_dir_all(&objectives).unwrap();
+    lsp.notify(
+        "workspace/didChangeWatchedFiles",
+        json!({ "changes": [{ "uri": file_uri(&objectives), "type": 3 }] }),
+    );
+    let codes = pulled(&mut lsp, &rule_uri);
+    assert!(codes.contains(&invalid), "{codes:?}");
+
+    std::fs::create_dir_all(&objectives).unwrap();
+    std::fs::write(objectives.join("objective-1.0.yaml"), fixture(OBJECTIVE)).unwrap();
+    lsp.notify(
+        "workspace/didChangeWatchedFiles",
+        json!({ "changes": [{ "uri": file_uri(&objectives), "type": 1 }] }),
+    );
+    let codes = pulled(&mut lsp, &rule_uri);
+    assert!(!codes.contains(&invalid), "{codes:?}");
+}

@@ -135,14 +135,17 @@ impl Workspace {
     /// (what `opentide validate` reports on it, when it is in a workspace on
     /// disk, and the engine's query and block checks), or a standalone query
     /// file. *language* defaults to the one the file name implies (`.yaml` is
-    /// a Tide object).
-    #[pyo3(signature = (path, text, language=None))]
+    /// a Tide object). *objects* false leaves `validate`'s findings out (and
+    /// the run that makes them): the engine's own checks alone, for `lint`'s
+    /// queries check.
+    #[pyo3(signature = (path, text, language=None, objects=true))]
     fn analyze(
         &self,
         py: Python<'_>,
         path: String,
         text: String,
         language: Option<&str>,
+        objects: bool,
     ) -> PyResult<Vec<Diagnostic>> {
         let language = match language {
             Some(name) => parse_language(name)?,
@@ -153,7 +156,7 @@ impl Workspace {
             })?,
         };
         Ok(py.detach(|| {
-            let mut diagnostics = if language == LanguageId::TideYaml {
+            let mut diagnostics = if objects && language == LanguageId::TideYaml {
                 self.object_findings(&path, &text)
             } else {
                 Vec::new()
