@@ -49,6 +49,29 @@ pub fn prepare(source: &str) -> Prepared {
                     ));
                 }
                 "rule" => blank_repeated_modifiers(node, source, &mut bytes, &mut findings),
+                "hex_jump_bound" => {
+                    let (start, end) = (node.start_byte(), node.end_byte());
+                    // libyara reads a bound past `u32` modulo 2^32; YARA-X
+                    // refuses it. Writing the bound libyara reads, as long
+                    // as the original, lets yara-x-parser read the string,
+                    // so its atoms and its jumps are checked as libyara's.
+                    if let Ok(value) = source[start..end].parse::<u128>()
+                        && value > u128::from(u32::MAX)
+                    {
+                        let wrapped = (value % (1u128 << 32)) as u32;
+                        let text = format!("{wrapped:0>width$}", width = end - start);
+                        if text.len() == end - start {
+                            bytes[start..end].copy_from_slice(text.as_bytes());
+                            findings.push(Finding::new(
+                                codes::YARA_X_INCOMPATIBLE,
+                                Severity::Warning,
+                                format!("YARA-X refuses a jump bound above {}; libyara reads `{value}` as {wrapped}", u32::MAX),
+                                start,
+                                end,
+                            ));
+                        }
+                    }
+                }
                 "base64_modifier" => {
                     if let Some(alphabet) = node.child_by_field_name("alphabet") {
                         let (start, end) = (alphabet.start_byte(), alphabet.end_byte());

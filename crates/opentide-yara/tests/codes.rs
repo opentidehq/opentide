@@ -372,6 +372,19 @@ const RAW: &[(&str, &[(&str, Severity)])] = &[
         "rule a { strings: $a = \"abcd\" xor(1-2) condition: $a and -99999999999999999999 }",
         &[("yara_number_out_of_range", E)],
     ),
+    // A non-boolean condition, as YARA-X's non_bool_expr reads it: a
+    // predicate YARA-X types as boolean is none; an integer member is.
+    ("import \"pe\" rule a { condition: pe.is_dll() }", &[]),
+    ("import \"pe\" rule a { condition: pe.is_32bit() }", &[]),
+    ("import \"pe\" rule a { condition: pe.exports(\"x\") }", &[]),
+    (
+        "import \"pe\" rule a { condition: pe.number_of_sections }",
+        &[("yara_suspicious_expression", W)],
+    ),
+    (
+        "import \"math\" rule a { condition: math.entropy(0, filesize) }",
+        &[("yara_suspicious_expression", W)],
+    ),
     // libyara reads a jump bound as a 32-bit signed int: 2^31 is negative.
     (
         "rule a { strings: $h = { 4D 5A 90 00 [0-2147483647] 50 45 00 00 } condition: $h }",
@@ -384,6 +397,22 @@ const RAW: &[(&str, &[(&str, Severity)])] = &[
     (
         "rule a { strings: $h = { 4D 5A 90 00 [3000000000] 50 45 00 00 } condition: $h }",
         &[("yara_hex_string", E)],
+    ),
+    // A bound past u32: libyara wraps it modulo 2^32 (then warns on the
+    // one-byte atoms), YARA-X refuses it.
+    (
+        "rule a { strings: $h = { 01 [0-4294967296] 02 } condition: $h }",
+        &[("yara_slow_pattern", W), ("yara_x_incompatible", W)],
+    ),
+    // `[4294967296]` wraps to `[0]`, which libyara refuses.
+    (
+        "rule a { strings: $h = { 01 02 03 04 [4294967296] 05 06 07 08 } condition: $h }",
+        &[("yara_hex_string", E), ("yara_x_incompatible", W)],
+    ),
+    // `[0-0]`: libyara reads it, YARA-X refuses it.
+    (
+        "rule a { strings: $h = { 01 02 03 04 [0-0] 05 06 07 08 } condition: $h }",
+        &[("yara_x_incompatible", W)],
     ),
     // A rule named like an imported module: libyara accepts it, YARA-X does not.
     (

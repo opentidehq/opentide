@@ -438,3 +438,82 @@ fn decomposed_rule_names_libyara_and_yara_x_refuse() {
     .replacen("name: Cmd String", "name: PE", 1);
     assert_eq!(yara(&source), [row("yara_x_incompatible", "name", "P")]);
 }
+
+/// `(name, text replaced in DEPLOYED_RULE, replacement, compile_yara_deployment's
+/// output)`: YAML items and block scalars as a loader decodes them, rendered by
+/// the deployer itself (opentide 0.24).
+const DEPLOY_VARIANTS: &[(&str, &str, &str, &str)] = &[
+    (
+        "tags_escaped_quote",
+        "    tags:\n      - attack.t1059\n      - cmd\n",
+        "    tags: [\"a\\\"b\", cmd]\n",
+        "import \"pe\"\n\nrule cmd_string {\n    meta:\n        id = \"00000000-0000-4000-8003-000000000018\"\n        title = \"Cmd String\"\n        description = \"Finds \\\"cmd.exe\\\".\\n\"\n        author = \"Jane \\\"J\\\" Doe\"\n        date = \"2026-01-01\"\n        modified = \"2026-01-02\"\n        references = \"https://example.com/a\\nhttps://example.com/b\"\n        tags = \"a\"b;cmd\"\n        context = \"file.pe,memory\"\n        os = \"Windows\"\n        arch = \"x86,x64\"\n        classification = \"trojan\"\n        score = 70\n        confidence = \"strong\"\n    strings:\n        $a = \"cmd.exe\" ascii\n    condition:\n        $a and pe.is_dll()\n}",
+    ),
+    (
+        "tags_backslash",
+        "    tags:\n      - attack.t1059\n      - cmd\n",
+        "    tags: [\"c\\\\d\"]\n",
+        "import \"pe\"\n\nrule cmd_string {\n    meta:\n        id = \"00000000-0000-4000-8003-000000000018\"\n        title = \"Cmd String\"\n        description = \"Finds \\\"cmd.exe\\\".\\n\"\n        author = \"Jane \\\"J\\\" Doe\"\n        date = \"2026-01-01\"\n        modified = \"2026-01-02\"\n        references = \"https://example.com/a\\nhttps://example.com/b\"\n        tags = \"c\\d\"\n        context = \"file.pe,memory\"\n        os = \"Windows\"\n        arch = \"x86,x64\"\n        classification = \"trojan\"\n        score = 70\n        confidence = \"strong\"\n    strings:\n        $a = \"cmd.exe\" ascii\n    condition:\n        $a and pe.is_dll()\n}",
+    ),
+    (
+        "tags_comma_in_quotes",
+        "    tags:\n      - attack.t1059\n      - cmd\n",
+        "    tags: ['a,\"b']\n",
+        "import \"pe\"\n\nrule cmd_string {\n    meta:\n        id = \"00000000-0000-4000-8003-000000000018\"\n        title = \"Cmd String\"\n        description = \"Finds \\\"cmd.exe\\\".\\n\"\n        author = \"Jane \\\"J\\\" Doe\"\n        date = \"2026-01-01\"\n        modified = \"2026-01-02\"\n        references = \"https://example.com/a\\nhttps://example.com/b\"\n        tags = \"a,\"b\"\n        context = \"file.pe,memory\"\n        os = \"Windows\"\n        arch = \"x86,x64\"\n        classification = \"trojan\"\n        score = 70\n        confidence = \"strong\"\n    strings:\n        $a = \"cmd.exe\" ascii\n    condition:\n        $a and pe.is_dll()\n}",
+    ),
+    (
+        "tags_doubled_quote",
+        "    tags:\n      - attack.t1059\n      - cmd\n",
+        "    tags: ['it''s']\n",
+        "import \"pe\"\n\nrule cmd_string {\n    meta:\n        id = \"00000000-0000-4000-8003-000000000018\"\n        title = \"Cmd String\"\n        description = \"Finds \\\"cmd.exe\\\".\\n\"\n        author = \"Jane \\\"J\\\" Doe\"\n        date = \"2026-01-01\"\n        modified = \"2026-01-02\"\n        references = \"https://example.com/a\\nhttps://example.com/b\"\n        tags = \"it's\"\n        context = \"file.pe,memory\"\n        os = \"Windows\"\n        arch = \"x86,x64\"\n        classification = \"trojan\"\n        score = 70\n        confidence = \"strong\"\n    strings:\n        $a = \"cmd.exe\" ascii\n    condition:\n        $a and pe.is_dll()\n}",
+    ),
+    (
+        "tags_quoted_comma",
+        "    tags:\n      - attack.t1059\n      - cmd\n",
+        "    tags: ['a,b', c]\n",
+        "import \"pe\"\n\nrule cmd_string {\n    meta:\n        id = \"00000000-0000-4000-8003-000000000018\"\n        title = \"Cmd String\"\n        description = \"Finds \\\"cmd.exe\\\".\\n\"\n        author = \"Jane \\\"J\\\" Doe\"\n        date = \"2026-01-01\"\n        modified = \"2026-01-02\"\n        references = \"https://example.com/a\\nhttps://example.com/b\"\n        tags = \"a,b;c\"\n        context = \"file.pe,memory\"\n        os = \"Windows\"\n        arch = \"x86,x64\"\n        classification = \"trojan\"\n        score = 70\n        confidence = \"strong\"\n    strings:\n        $a = \"cmd.exe\" ascii\n    condition:\n        $a and pe.is_dll()\n}",
+    ),
+    (
+        "tags_hash_in_quotes",
+        "    tags:\n      - attack.t1059\n      - cmd\n",
+        "    tags:\n      - \"x #y\"\n      - cmd # a comment\n",
+        "import \"pe\"\n\nrule cmd_string {\n    meta:\n        id = \"00000000-0000-4000-8003-000000000018\"\n        title = \"Cmd String\"\n        description = \"Finds \\\"cmd.exe\\\".\\n\"\n        author = \"Jane \\\"J\\\" Doe\"\n        date = \"2026-01-01\"\n        modified = \"2026-01-02\"\n        references = \"https://example.com/a\\nhttps://example.com/b\"\n        tags = \"x #y;cmd\"\n        context = \"file.pe,memory\"\n        os = \"Windows\"\n        arch = \"x86,x64\"\n        classification = \"trojan\"\n        score = 70\n        confidence = \"strong\"\n    strings:\n        $a = \"cmd.exe\" ascii\n    condition:\n        $a and pe.is_dll()\n}",
+    ),
+    (
+        "description_keep",
+        "description: |\n  Finds \"cmd.exe\".\n",
+        "description: |+\n  Finds \"cmd.exe\".\n\n\n",
+        "import \"pe\"\n\nrule cmd_string {\n    meta:\n        id = \"00000000-0000-4000-8003-000000000018\"\n        title = \"Cmd String\"\n        description = \"Finds \\\"cmd.exe\\\".\\n\\n\\n\"\n        author = \"Jane \\\"J\\\" Doe\"\n        date = \"2026-01-01\"\n        modified = \"2026-01-02\"\n        references = \"https://example.com/a\\nhttps://example.com/b\"\n        tags = \"attack.t1059;cmd\"\n        context = \"file.pe,memory\"\n        os = \"Windows\"\n        arch = \"x86,x64\"\n        classification = \"trojan\"\n        score = 70\n        confidence = \"strong\"\n    strings:\n        $a = \"cmd.exe\" ascii\n    condition:\n        $a and pe.is_dll()\n}",
+    ),
+    (
+        "description_comment_dash",
+        "description: |\n  Finds \"cmd.exe\".\n",
+        "description: | # a-b note\n  Finds \"cmd.exe\".\n",
+        "import \"pe\"\n\nrule cmd_string {\n    meta:\n        id = \"00000000-0000-4000-8003-000000000018\"\n        title = \"Cmd String\"\n        description = \"Finds \\\"cmd.exe\\\".\\n\"\n        author = \"Jane \\\"J\\\" Doe\"\n        date = \"2026-01-01\"\n        modified = \"2026-01-02\"\n        references = \"https://example.com/a\\nhttps://example.com/b\"\n        tags = \"attack.t1059;cmd\"\n        context = \"file.pe,memory\"\n        os = \"Windows\"\n        arch = \"x86,x64\"\n        classification = \"trojan\"\n        score = 70\n        confidence = \"strong\"\n    strings:\n        $a = \"cmd.exe\" ascii\n    condition:\n        $a and pe.is_dll()\n}",
+    ),
+];
+
+#[test]
+fn decomposed_assembly_decodes_yaml_as_deploy_does() {
+    for (name, old, new, expected) in DEPLOY_VARIANTS {
+        assert!(DEPLOYED_RULE.contains(old), "{name}");
+        let source = DEPLOYED_RULE.replace(old, new);
+        let injected = opentide_tide::extract_injections(&source)
+            .into_iter()
+            .find(|q| q.language == opentide_core::LanguageId::Yara)
+            .expect("a YARA injection");
+        assert_eq!(&injected.inner, expected, "{name}");
+    }
+    // What the deployer writes unescaped is checked as the tenant reads it:
+    // `"a\"b"` deploys `tags = "a"b;cmd"`, refused, in `tags` (the parser
+    // fails after the `"` that closed the string early).
+    let source = DEPLOYED_RULE.replace(DEPLOY_VARIANTS[0].1, DEPLOY_VARIANTS[0].2);
+    let found = yara(&source);
+    assert!(
+        found
+            .iter()
+            .any(|(code, path, _)| code == "yara_parse_error"
+                && path.starts_with("configurations.harfanglab.tags.")),
+        "{found:?}"
+    );
+}

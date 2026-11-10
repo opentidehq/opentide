@@ -38,6 +38,10 @@ pub struct Overload {
     pub ret: String,
     pub libyara: bool,
     pub yara_x: bool,
+    /// YARA-X's return type where it differs from `ret` (a predicate libyara
+    /// declares as an integer is a boolean in YARA-X).
+    #[serde(default)]
+    pub yara_x_ret: Option<String>,
     #[serde(default)]
     pub doc: Option<String>,
 }
@@ -52,6 +56,9 @@ pub struct Member {
     pub element: Option<Kind>,
     pub libyara: bool,
     pub yara_x: bool,
+    /// YARA-X's type for a field where it differs from `kind`.
+    #[serde(default)]
+    pub yara_x_kind: Option<String>,
     #[serde(default)]
     pub doc: Option<String>,
     #[serde(default, rename = "overload")]

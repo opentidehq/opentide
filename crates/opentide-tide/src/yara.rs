@@ -163,16 +163,42 @@ fn find<'a>(keys: &'a [YamlKey], p: &[&str]) -> Option<&'a YamlKey> {
     keys.iter().find(|k| k.path_is(p))
 }
 
-/// A scalar's value as a YAML loader gives it to deploy: a block scalar keeps
-/// its final line break unless chomped with `-` (`|`, `|+`), which
-/// [`scalar_at`] leaves out.
+/// A scalar's value as a YAML loader gives it to deploy. [`scalar_at`]
+/// leaves a block scalar's final line breaks out; chomping decides them:
+/// clip (`|`) keeps one, strip (`|-`) none, keep (`|+`) every one,
+/// including the empty lines after the text.
 fn deployed_text(source: &str, keys: &[YamlKey], p: &[&str]) -> Option<String> {
     let key = find(keys, p)?;
     let at = key.scalar?;
-    let mut text = scalar_at(source, at, key.column)?.text;
-    let header = source[at..].lines().next().unwrap_or("");
-    if header.starts_with(['|', '>']) && !header.contains('-') && !text.is_empty() {
-        text.push('\n');
+    let scalar = scalar_at(source, at, key.column)?;
+    let mut text = scalar.text;
+    let line_end = source[at..].find('\n').map_or(source.len(), |n| at + n);
+    // The header token: `|` or `>`, then indicators up to a blank or comment.
+    let header: String = source[at..line_end]
+        .chars()
+        .take_while(|c| !c.is_whitespace() && *c != '#')
+        .collect();
+    if !header.starts_with(['|', '>']) || text.is_empty() {
+        return Some(text);
+    }
+    let indicators = &header[1..];
+    if indicators.contains('-') {
+        return Some(text);
+    }
+    text.push('\n');
+    if indicators.contains('+') {
+        // Every empty line after the last line of text, up to the next
+        // line with text (less indented: the scalar has ended) or the end.
+        let last = scalar.map.last().copied().unwrap_or(at);
+        let after = source[last..]
+            .find('\n')
+            .map_or(source.len(), |n| last + n + 1);
+        for line in source[after..].split_inclusive('\n') {
+            if !line.trim().is_empty() || !line.ends_with('\n') {
+                break;
+            }
+            text.push('\n');
+        }
     }
     Some(text)
 }
@@ -187,9 +213,10 @@ fn strs(p: &[String]) -> Vec<&str> {
     p.iter().map(String::as_str).collect()
 }
 
-/// The scalar items of the sequence at `p`, each with its source map and
-/// its path (`p.0`, `p.1`, ...): a block sequence (`- pe`) or a flow one
-/// (`[pe, elf]`), items plain or quoted.
+/// The scalar items of the sequence at `p`, each decoded as a YAML loader
+/// decodes it (escapes, `''`, comments), with its source map and its path
+/// (`p.0`, `p.1`, ...): a block sequence (`- pe`) or a flow one
+/// (`[pe, "a,b"]`), whose commas inside quotes do not split items.
 fn items(keys: &[YamlKey], source: &str, p: &[&str]) -> Vec<(String, Vec<usize>, Vec<String>)> {
     let Some(i) = keys.iter().position(|k| k.path_is(p)) else {
         return Vec::new();
@@ -204,51 +231,84 @@ fn items(keys: &[YamlKey], source: &str, p: &[&str]) -> Vec<(String, Vec<usize>,
         .filter(|next| next.key_start > from)
         .map_or(source.len(), |next| next.key_start);
     let region = &source[from..end];
-    let mut raw: Vec<(usize, &str)> = Vec::new();
+    let mut out = Vec::new();
+    let mut add = |index: usize, text: String, map: Vec<usize>| {
+        if text.is_empty() {
+            return;
+        }
+        let mut item_path = path(p);
+        item_path.push(index.to_string());
+        out.push((text, map, item_path));
+    };
     let trimmed = region.trim_start_matches([' ', '\t']);
-    if let Some(flow) = trimmed.strip_prefix('[') {
-        let base = from + (region.len() - trimmed.len()) + 1;
-        let close = flow.find(']').unwrap_or(flow.len());
-        let mut at = 0;
-        for part in flow[..close].split(',') {
-            raw.push((base + at, part));
-            at += part.len() + 1;
+    if trimmed.starts_with('[') {
+        let bytes = source.as_bytes();
+        let mut at = from + (region.len() - trimmed.len()) + 1;
+        let mut index = 0;
+        while at < end {
+            while at < end && matches!(bytes[at], b' ' | b'\t' | b'\n' | b'\r') {
+                at += 1;
+            }
+            if at >= end || bytes[at] == b']' {
+                break;
+            }
+            if matches!(bytes[at], b'"' | b'\'') {
+                // A quoted item: the decoder unescapes it and finds its end.
+                let Some(item) = scalar_at(source, at, key.column) else {
+                    break;
+                };
+                at = item.end;
+                add(index, item.text, item.map);
+            } else {
+                // A plain item runs to `,`, `]` or a comment.
+                let start = at;
+                while at < end
+                    && !matches!(bytes[at], b',' | b']' | b'\n')
+                    && !(bytes[at] == b'#' && at > start && bytes[at - 1] == b' ')
+                {
+                    at += 1;
+                }
+                let raw = &source[start..at];
+                let value = raw.trim_end();
+                add(
+                    index,
+                    value.to_string(),
+                    (start..start + value.len()).collect(),
+                );
+                if at < end && bytes[at] == b'#' {
+                    at = source[at..end].find('\n').map_or(end, |n| at + n);
+                }
+            }
+            while at < end && matches!(bytes[at], b' ' | b'\t' | b'\n' | b'\r') {
+                at += 1;
+            }
+            if at < end && bytes[at] == b',' {
+                at += 1;
+            }
+            index += 1;
         }
     } else {
         let mut at = from;
+        let mut index = 0;
         for line in region.split_inclusive('\n') {
             let content = line.trim_start_matches([' ', '\t']);
+            let dash = at + (line.len() - content.len());
             if let Some(item) = content
                 .strip_prefix("- ")
                 .or_else(|| content.strip_prefix('-'))
             {
-                let item_at = at + (line.len() - content.len()) + (content.len() - item.len());
-                raw.push((item_at, item.trim_end_matches(['\n', '\r'])));
+                let lead = item.len() - item.trim_start_matches([' ', '\t']).len();
+                let item_at = dash + (content.len() - item.len()) + lead;
+                let column = dash - source[..dash].rfind('\n').map_or(0, |n| n + 1);
+                // The item as a YAML loader reads it: quoted or plain, with
+                // its comment dropped.
+                if let Some(s) = scalar_at(source, item_at, column) {
+                    add(index, s.text, s.map);
+                }
+                index += 1;
             }
             at += line.len();
         }
-    }
-    let mut out = Vec::new();
-    for (index, (at, text)) in raw.into_iter().enumerate() {
-        // Drop a trailing comment and the blanks around the value.
-        let text = text.split(" #").next().unwrap_or(text);
-        let lead = text.len() - text.trim_start().len();
-        let value = text.trim();
-        let (value, offset) = match value.as_bytes().first() {
-            Some(b'"') | Some(b'\'') if value.len() >= 2 => (&value[1..value.len() - 1], 1),
-            _ => (value, 0),
-        };
-        if value.is_empty() {
-            continue;
-        }
-        let start = at + lead + offset;
-        let mut item_path = path(p);
-        item_path.push(index.to_string());
-        out.push((
-            value.to_string(),
-            (start..start + value.len()).collect(),
-            item_path,
-        ));
     }
     out
 }

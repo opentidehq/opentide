@@ -136,6 +136,11 @@ pub struct Checker<'a> {
     imports: BTreeSet<String>,
     /// Every import and where it is.
     import_at: Vec<(String, usize)>,
+    /// Module calls and fields YARA-X types as boolean though libyara
+    /// declares an integer (`pe.is_dll()`): not a non-boolean condition.
+    yara_x_bool: BTreeSet<(usize, usize)>,
+    /// Whether the last field `member` resolved is such a boolean.
+    last_member_yara_x_bool: bool,
     /// Rules defined before the current one.
     earlier_rules: BTreeSet<String>,
     rule_wildcards: &'a [(usize, usize)],
@@ -166,6 +171,8 @@ impl<'a> Checker<'a> {
             catalog: Catalog::cached(),
             imports: BTreeSet::new(),
             import_at: Vec::new(),
+            yara_x_bool: BTreeSet::new(),
+            last_member_yara_x_bool: false,
             earlier_rules: BTreeSet::new(),
             rule_wildcards,
             scopes: Vec::new(),
@@ -383,6 +390,8 @@ impl<'a> Checker<'a> {
                 "YARA-X refuses a regular expression as a condition; libyara reads it as true".to_string(),
                 cond_at,
             ),
+            // YARA-X's non_bool_expr: a predicate it types as boolean is not one.
+            Ty::Int | Ty::Float if self.yara_x_bool.contains(&cond_at) => {}
             Ty::Int | Ty::Float => self.warn(
                 codes::YARA_SUSPICIOUS_EXPRESSION,
                 format!("the condition is {}, not a boolean: libyara reads any non-zero value as true", ty.name()),
@@ -761,6 +770,21 @@ impl<'a> Checker<'a> {
                     }
                     match (jump.start, jump.end) {
                         _ if negative => {}
+                        // `[0]` is refused; `[0-0]` libyara reads, YARA-X refuses.
+                        // A bound past u32 that wrapped to 0 is reported already.
+                        (Some(0), Some(0))
+                            if text.contains('-')
+                                && !text
+                                    .split(|c: char| !c.is_ascii_digit())
+                                    .filter_map(|d| d.parse::<u128>().ok())
+                                    .any(|v| v > u128::from(u32::MAX)) =>
+                        {
+                            self.yara_x(
+                                "YARA-X refuses the empty jump range `[0-0]`".to_string(),
+                                at,
+                            )
+                        }
+                        (Some(0), Some(0)) if text.contains('-') => {}
                         (Some(0), Some(0)) => self.error(
                             codes::YARA_HEX_STRING,
                             "invalid jump length: [0]".to_string(),
@@ -1050,6 +1074,9 @@ impl<'a> Checker<'a> {
                             Ty::Unknown
                         }
                     };
+                }
+                if self.last_member_yara_x_bool {
+                    self.yara_x_bool.insert(at);
                 }
                 ty
             }
@@ -1603,6 +1630,7 @@ impl<'a> Checker<'a> {
         if !self.available(m, &shown, at) {
             return Ty::Unknown;
         }
+        self.last_member_yara_x_bool = m.yara_x_kind.as_deref() == Some("boolean");
         match m.kind {
             Kind::Struct => Ty::Object {
                 module,
@@ -1717,7 +1745,12 @@ impl<'a> Checker<'a> {
                 })
         });
         match found {
-            Some(o) => ret_ty(&o.ret),
+            Some(o) => {
+                if o.yara_x_ret.as_deref() == Some("boolean") {
+                    self.yara_x_bool.insert(at);
+                }
+                ret_ty(&o.ret)
+            }
             None => {
                 let shown: Vec<String> = candidates
                     .iter()

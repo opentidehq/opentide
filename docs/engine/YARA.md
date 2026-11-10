@@ -31,7 +31,7 @@ Errors are what libyara 4.5 refuses to compile. **Source** is the libyara 4.5.4 
 
 | Code | Condition | Source | Test |
 |------|-----------|--------|------|
-| `yara_parse_error` | Syntax error; YARA-X-only syntax, named (`.len()` included); an empty text string; a rule name, tag or meta key longer than 128 characters | `grammar.y`, `lexer.l`; `parser.c` `ERROR_EMPTY_STRING` | `RAW`: `true and }`, `with`, `1_000`, `f = 1.5`, `[0x2-0x4]`, `of (true, false)`, `pe.sections.len()`, a 129-character rule name |
+| `yara_parse_error` | Syntax error; YARA-X-only syntax, named (`.len()` included); an empty text string; a rule name, rule tag or meta key longer than 128 characters (string identifiers have no limit) | `grammar.y`, `lexer.l`; `parser.c` `ERROR_EMPTY_STRING` | `RAW`: `true and }`, `with`, `1_000`, `f = 1.5`, `[0x2-0x4]`, `of (true, false)`, `pe.sections.len()`, a 129-character rule name |
 | `yara_include` | An `include` directive | `lexer.l` `include` | `RAW`: `include "x.yar"` |
 | `yara_signature_alias` | `signature` is a YAML alias | yara-1.0 (Tide) | `crates/opentide-tide/tests/yara.rs` `spec_fixtures` |
 | `yara_empty_signature` | No rule, or only `private` or `global` rules | yara-1.0 | `RAW`: `private rule a`, `""` |
@@ -58,7 +58,7 @@ Errors are what libyara 4.5 refuses to compile. **Source** is the libyara 4.5.4 
 | `yara_x_incompatible` | libyara compiles it, YARA-X 1.x refuses it: unknown regexp escapes, a `{` outside a repetition, `base64` under 3 bytes, a negative string index, a repeated rule modifier, rule wildcards in `of`, escapes in a base64 alphabet, a module member YARA-X lacks, a rule named like an imported module | YARA-X's [differences with YARA](https://virustotal.github.io/yara-x/docs/writing_rules/differences/) | `RAW`: `/\\Release/`, `/abc{/`, `"ab" base64`, `@a[-1]`, `global global`, `any of (base*)`, `base64("…\\x09…")` |
 | `yara_slow_pattern` | libyara's "string may slow down scanning": no atom of the string scores 38 | `atoms.c` `yr_atoms_heuristic_quality`; `parser.c` | `RAW`: `"a"`, `{ ?? ?? ?? }`, `/a.b/`; `atoms.rs` `libyara_examples` |
 | `yara_entrypoint_deprecated` | `entrypoint` | `grammar.y` | `RAW`: `entrypoint == 0` |
-| `yara_suspicious_expression` | libyara's warnings: a literal string in a boolean operation, "expression always false - requesting N of M", "consider using none", "multiple strings at an offset is usually false"; a non-boolean condition; an integer compared with a boolean; yara-1.0's invariant or unsatisfiable comparison (two constants, or `filesize` with a constant that decides it) | `grammar.y` `yywarning` | `RAW`: `"abc" and true`, `condition: filesize`, `2 of them`, `0 of them`, `all of them at 0`, `1 == 1`, `filesize < 0` |
+| `yara_suspicious_expression` | libyara's warnings: a literal string in a boolean operation, "expression always false - requesting N of M", "consider using none", "multiple strings at an offset is usually false"; a non-boolean condition, as YARA-X's `non_bool_expr` reads it (a module predicate YARA-X types as boolean, such as `pe.is_dll()`, is none, though libyara declares an integer); an integer compared with a boolean; yara-1.0's invariant or unsatisfiable comparison (two constants, or `filesize` with a constant that decides it) | `grammar.y` `yywarning` | `RAW`: `"abc" and true`, `condition: filesize`, `2 of them`, `0 of them`, `all of them at 0`, `1 == 1`, `filesize < 0` |
 | `yara_module_unconfirmed` | A known module outside the profile's confirmed set | yara-1.0 profiles | `profiles`: `import "dotnet"` under HarfangLab |
 | `yara_meta_missing` | A recommended meta key missing on a non-private rule | yara-1.0 profiles | `profiles`: no `context` under HarfangLab |
 
@@ -106,7 +106,7 @@ In `.yar` files, and in `yara.signature` and HarfangLab's decomposed fragments i
 
 ## Modules
 
-`catalogs/yara/modules.toml` has every member of the 13 modules, generated from libyara 4.5.4's module declarations and YARA-X 1.23.0's module reflection (`skills/catalogs/SKILL.md`). Each row says which engine has it, so a member only one engine knows is reported as above. **libyara 4.5.4 ships no `lnk` module**, though yara-1.0 lists it among the 13: importing it is allowed as the spec says, and its members are checked against YARA-X's.
+`catalogs/yara/modules.toml` has every member of the 13 modules, generated from libyara 4.5.4's module declarations and YARA-X 1.23.0's module reflection (`skills/catalogs/SKILL.md`). Each row says which engine has it, so a member only one engine knows is reported as above. Where YARA-X types a member differently, the row records it (`yara_x_ret` for a function, `yara_x_kind` for a field). **libyara 4.5.4 ships no `lnk` module**, though yara-1.0 lists it among the 13: importing it is allowed as the spec says, and its members are checked against YARA-X's.
 
 ## Verified against the engines
 
