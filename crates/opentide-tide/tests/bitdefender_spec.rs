@@ -5,13 +5,13 @@
 //! `detection` and "Criteria catalogue" sections, verbatim. Its EDR table and
 //! enum table must match the generated catalogue exactly:
 //!
-//! - `process`, `file` and `registry`: the table lists every detection field;
-//! - `connection`: the table lists every field the EDR sensor evaluates (EDR
-//!   only or both). The catalogue adds the XDR-only ones (the XDR resources and
-//!   users), which the spec leaves to the catalogue, so each extra must be XDR
-//!   only;
-//! - the enum table: every enumerated field of those targets the EDR sensor
-//!   evaluates, with its values in page order and File.Operation's sensors.
+//! - `process`, `file`, `connection` and `registry`: the table lists every
+//!   detection field. `connection` writes its XDR resources as
+//!   `Connection.<Resource>.Name` for the resources named after it, and
+//!   `Connection.<Resource>.Operation` for those and the ones after it;
+//! - the enum table: every enumerated detection field of those targets: the
+//!   EDR ones with their values in page order and File.Operation's sensors,
+//!   and `Connection.<Resource>.Operation`: every XDR resource operation.
 
 use opentide_tide::bitdefender::criteria;
 use opentide_tide::{AnalyzeInput, analyze};
@@ -78,6 +78,38 @@ fn detection_targets_match_the_spec() {
     }
 }
 
+/// The field names of a table cell, with `X.<Resource>.Name` and
+/// `X.<Resource>.Operation` expanded over the bare resource names after them:
+/// `.Name` for the resources after the first placeholder, `.Operation` for
+/// those and the ones after the second.
+fn expand(names: &[String]) -> BTreeSet<String> {
+    let mut out = BTreeSet::new();
+    let mut placeholders: Vec<(String, String)> = Vec::new();
+    let mut resources: Vec<Vec<String>> = Vec::new();
+    for name in names {
+        if let Some((head, tail)) = name.split_once(".<Resource>.") {
+            placeholders.push((head.to_string(), tail.to_string()));
+            resources.push(Vec::new());
+        } else if !name.contains('.') {
+            resources
+                .last_mut()
+                .expect("a resource name after a placeholder")
+                .push(name.clone());
+        } else {
+            out.insert(name.clone());
+        }
+    }
+    for (i, (head, tail)) in placeholders.iter().enumerate() {
+        // A later placeholder covers the resources of the earlier ones too.
+        for list in &resources[..=i] {
+            for resource in list {
+                out.insert(format!("{head}.{resource}.{tail}"));
+            }
+        }
+    }
+    out
+}
+
 #[test]
 fn edr_table_matches_the_catalogue() {
     let text = tables();
@@ -90,21 +122,12 @@ fn edr_table_matches_the_catalogue() {
             criteria().target(&target).is_some_and(|t| t.closed),
             "{target} is a closed target"
         );
-        let spec: BTreeSet<String> = ticked(&row[1]).into_iter().collect();
-        let all: Vec<_> = criteria().detection_fields(&target).collect();
-        let edr: BTreeSet<String> = all
-            .iter()
-            // TEMPORARY: bitdefender-1.0 1.0 leaves connection's XDR fields
-            // out of its table. 1.1 lists them (opentidehq/specifications PR
-            // pending); once it merges, paste its tables into spec-tables.md
-            // and drop this exemption and the XDR-only loop below.
-            .filter(|f| target != "connection" || f.availability != "xdr")
+        let spec = expand(&ticked(&row[1]));
+        let catalogue: BTreeSet<String> = criteria()
+            .detection_fields(&target)
             .map(|f| f.name.clone())
             .collect();
-        assert_eq!(edr, spec, "{target}");
-        for extra in all.iter().filter(|f| !spec.contains(&f.name)) {
-            assert_eq!(extra.availability, "xdr", "{}", extra.name);
-        }
+        assert_eq!(catalogue, spec, "{target}");
     }
     // No other target is closed.
     let closed: Vec<&str> = criteria()
@@ -123,6 +146,29 @@ fn enum_table_matches_the_catalogue() {
     let mut spec_fields = BTreeSet::new();
     for row in &rows {
         let name = ticked(&row[0]).remove(0);
+        // `Connection.<Resource>.Operation` (XDR): every resource operation,
+        // with the values the catalogue lists.
+        if let Some((head, tail)) = name.split_once(".<Resource>.") {
+            assert!(row[0].contains("(XDR)"), "{}", row[0]);
+            let operations: Vec<_> = criteria()
+                .fields
+                .iter()
+                .filter(|f| {
+                    f.detection
+                        && f.name.split('.').count() == 3
+                        && f.name.starts_with(&format!("{head}."))
+                        && f.name.ends_with(&format!(".{tail}"))
+                })
+                .collect();
+            assert!(!operations.is_empty(), "{name}");
+            for field in operations {
+                assert_eq!(field.kind, "enum", "{}", field.name);
+                assert_eq!(field.availability, "xdr", "{}", field.name);
+                assert!(!field.values.is_empty(), "{}", field.name);
+                spec_fields.insert(field.name.clone());
+            }
+            continue;
+        }
         let field = criteria().field(&name).expect(&name);
         assert_eq!(field.kind, "enum", "{name}");
         // Groups: `a`, `b` (EDR only); `c` (XDR only); `d`, ...
@@ -154,7 +200,6 @@ fn enum_table_matches_the_catalogue() {
             f.kind == "enum"
                 && f.detection
                 && ["process", "file", "connection", "registry"].contains(&f.target.as_str())
-                && f.availability != "xdr"
         })
         .map(|f| f.name.clone())
         .collect();

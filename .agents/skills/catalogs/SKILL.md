@@ -103,6 +103,13 @@ ECS is never a closed list: elastic-1.0 says field names MUST NOT be checked aga
 
 `scripts/sync_yara_modules.py --libyara <yara at v4.5.4> --yara-x-json <dump>` regenerates `modules.toml` (`--check` compares); never hand-edit it. The dump comes from `scripts/yara-modules`, a separate Cargo project (its own `[workspace]` and `Cargo.lock`, seeded from YARA-X's) that prints `yara_x::mods::reflect` as JSON: the `yara-x` crate must never enter the workspace lock. libyara's `begin_declarations` blocks decide `libyara = true`; YARA-X's reflection decides `yara_x = true`. A member only YARA-X has is `yara_unknown_module_member` under libyara 4.5; one only libyara has is `yara_x_incompatible`. libyara 4.5.4 has no `lnk` module, which yara-1.0 lists: its members are checked against YARA-X's. Both sources are BSD-3-Clause (`catalogs/yara/NOTICE`).
 
+YARA conformance data is generated too, never hand-edited:
+
+- `scripts/sync_yara_conformance.py --yara-x <yara-x at v1.23.0> --libyara <yara at v4.5.4>` writes `testdata/conformance/yara/cases.json`, the cases with both engines' recorded verdicts (`--check` compares). It needs `yara-python` 4.5.4 and the `yara-x` 1.23.0 wheel, and runs each verdict in a child process with 2 GB and 20 s.
+- `scripts/sync_yara_corpus.py --reversinglabs <checkout> --signature-base <checkout>` writes `testdata/conformance/external/yara/` and its `.broken.` twins (`--check` compares). It takes a signature-base file only when every `license` meta is the DRL 1.1. Nothing GPL or Elastic License is vendored.
+
+A difference from either engine is a `[[yara]]` entry of `testdata/oracles/exceptions.toml` (`check = "libyara" | "yara_x" | "both"`). `conformance.rs` and `scripts/oracles/yara/oracle.py` both read it.
+
 ## Bitdefender catalogue
 
 | Path | Contents |

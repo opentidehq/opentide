@@ -139,6 +139,11 @@ pub struct Checker<'a> {
     /// Depth of `for … of` bodies, where the anonymous `$` is the current string.
     in_for_of: usize,
     rule: RuleState,
+    /// The current rule's name: a rule wildcard may match it.
+    current_rule: String,
+    /// Rule wildcards conditions used (`a*` as `a`): libyara refuses a rule
+    /// defined after them that they would match.
+    used_wildcards: Vec<String>,
     pub findings: Vec<Finding>,
 }
 
@@ -161,6 +166,8 @@ impl<'a> Checker<'a> {
                 patterns: Vec::new(),
                 uses_them: false,
             },
+            current_rule: String::new(),
+            used_wildcards: Vec::new(),
             findings: Vec::new(),
         }
     }
@@ -305,6 +312,18 @@ impl<'a> Checker<'a> {
     fn rule(&mut self, rule: &Rule) {
         let name = rule.identifier.name;
         let name_at = span(&rule.identifier.span());
+        self.current_rule = name.to_string();
+        if let Some(prefix) = self
+            .used_wildcards
+            .iter()
+            .find(|p| name.starts_with(p.as_str()))
+        {
+            self.error(
+                codes::YARA_RULE_IDENTIFIER_CONFLICT,
+                format!("the rule `{name}` matches the rule wildcard `{prefix}*` an earlier condition uses: libyara refuses it"),
+                name_at,
+            );
+        }
         if self.imports.contains(name) {
             self.error(
                 codes::YARA_RULE_IDENTIFIER_CONFLICT,
@@ -343,6 +362,10 @@ impl<'a> Checker<'a> {
         let ty = self.expr(&rule.condition);
         let cond_at = span(&rule.condition.span());
         match ty {
+            Ty::Regexp => self.yara_x(
+                "YARA-X refuses a regular expression as a condition; libyara reads it as true".to_string(),
+                cond_at,
+            ),
             Ty::Int | Ty::Float => self.warn(
                 codes::YARA_SUSPICIOUS_EXPRESSION,
                 format!("the condition is {}, not a boolean: libyara reads any non-zero value as true", ty.name()),
@@ -476,7 +499,36 @@ impl<'a> Checker<'a> {
             }
             Pattern::Regexp(re) => {
                 let re_at = span(&re.regexp.span());
+                self.regexp_flags(re.regexp.literal, re_at);
                 let check = regexp::check(re.regexp.src);
+                if check.greedy && check.lazy {
+                    self.error(
+                        codes::YARA_REGEXP,
+                        "greedy and ungreedy quantifiers can't be mixed in a regular expression"
+                            .to_string(),
+                        re_at,
+                    );
+                }
+                if check.can_match_empty {
+                    self.yara_x(
+                        "YARA-X refuses a regular expression that can match the empty string"
+                            .to_string(),
+                        re_at,
+                    );
+                }
+                if check.leading_unbounded_dot && re.regexp.dot_matches_new_line {
+                    self.yara_x(
+                        "YARA-X refuses a regular expression that starts with an arbitrary prefix (`.*`, `.+`, `.{n,}` under `/s`)".to_string(),
+                        re_at,
+                    );
+                }
+                if check.unbounded_dot {
+                    self.warn(
+                        codes::YARA_SLOW_PATTERN,
+                        format!("libyara: {name} contains .*, .+ or .{{x,}}: consider .{{,N}}, .{{1,N}} or .{{x,N}} with a reasonable N"),
+                        re_at,
+                    );
+                }
                 let base = re_at.0 + 1;
                 for f in &check.errors {
                     self.error(
@@ -499,9 +551,12 @@ impl<'a> Checker<'a> {
             }
             Pattern::Hex(hex) => {
                 self.hex(&hex.sub_patterns, false);
-                let mut runs = Vec::new();
-                hex_runs(&hex.sub_patterns, &mut runs);
-                if atoms::is_slow(&runs) {
+                // libyara splits a string at a long or unbounded jump and
+                // needs an atom in every fragment.
+                if hex_fragments(&hex.sub_patterns)
+                    .iter()
+                    .any(|runs| atoms::is_slow(runs))
+                {
                     self.slow(name, at);
                 }
             }
@@ -665,6 +720,11 @@ impl<'a> Checker<'a> {
                         self.hex(branch, true);
                     }
                 }
+                HexToken::NotByte(b) if b.mask == 0 => self.error(
+                    codes::YARA_HEX_STRING,
+                    "invalid not operator (~) in hex string: `~??` matches nothing".to_string(),
+                    span(&b.span()),
+                ),
                 HexToken::Byte(_) | HexToken::NotByte(_) => {}
             }
         }
@@ -799,6 +859,9 @@ impl<'a> Checker<'a> {
                     "`entrypoint` is deprecated in libyara and refused by YARA-X: use `pe.entry_point` or `elf.entry_point`".to_string(),
                     at,
                 );
+                if !self.libyara() {
+                    self.yara_x("YARA-X does not support `entrypoint`".to_string(), at);
+                }
                 Ty::Int
             }
             Expr::LiteralString(s) => {
@@ -811,6 +874,13 @@ impl<'a> Checker<'a> {
                 if i.literal.contains('_') {
                     self.yara_x_only("A digit separator (`_`)", at);
                 }
+                if (i.is_unsigned || literal_magnitude(i.literal).is_none()) && self.libyara() {
+                    self.error(
+                        codes::YARA_NUMBER_OUT_OF_RANGE,
+                        format!("`{}` does not fit libyara's signed 64-bit integers (YARA-X reads it unsigned)", i.literal),
+                        at,
+                    );
+                }
                 Ty::Int
             }
             Expr::LiteralFloat(f) => {
@@ -820,6 +890,7 @@ impl<'a> Checker<'a> {
                 Ty::Float
             }
             Expr::Regexp(re) => {
+                self.regexp_flags(re.literal, at);
                 let check = regexp::check(re.src);
                 let base = at.0 + 1;
                 for f in &check.errors {
@@ -851,20 +922,22 @@ impl<'a> Checker<'a> {
                 self.use_pattern(&p.identifier);
                 if let Some(index) = &p.index {
                     let ty = self.primary(index);
+                    // libyara takes a string too (`@a["1"]`).
                     self.expect(
                         &ty,
-                        ty.is_int(),
+                        ty.is_int() || ty == Ty::Str,
                         "a string index is an integer",
                         span(&index.span()),
                     );
-                    let negative = match index {
-                        Expr::Minus(m) => matches!(m.operand, Expr::LiteralInteger(_)),
-                        Expr::LiteralInteger(i) => i.value < 0,
-                        _ => false,
-                    };
-                    if negative {
+                    if ty == Ty::Str {
                         self.yara_x(
-                            "YARA-X refuses a negative string index; in libyara it is always undefined".to_string(),
+                            "YARA-X refuses a string as a string index".to_string(),
+                            span(&index.span()),
+                        );
+                    }
+                    if const_value(index).is_some_and(|v| v < 1) {
+                        self.yara_x(
+                            "YARA-X refuses a string index below 1; in libyara it is always undefined".to_string(),
                             span(&index.span()),
                         );
                     }
@@ -908,7 +981,7 @@ impl<'a> Checker<'a> {
             }
             Expr::FuncCall(call) => self.call(call, at),
             Expr::Defined(u) => {
-                self.expr(&u.operand);
+                self.boolean_operand(&u.operand);
                 Ty::Bool
             }
             Expr::Not(u) => {
@@ -922,6 +995,7 @@ impl<'a> Checker<'a> {
                 Ty::Bool
             }
             Expr::Minus(u) => {
+                self.fold(e, at);
                 let ty = self.primary(&u.operand);
                 self.expect(
                     &ty,
@@ -942,6 +1016,7 @@ impl<'a> Checker<'a> {
                 Ty::Int
             }
             Expr::Add(n) | Expr::Sub(n) | Expr::Mul(n) | Expr::Div(n) => {
+                self.fold(e, at);
                 let mut float = false;
                 for operand in n.operands() {
                     let ty = self.primary(operand);
@@ -956,6 +1031,7 @@ impl<'a> Checker<'a> {
                 if float { Ty::Float } else { Ty::Int }
             }
             Expr::Mod(n) => {
+                self.fold(e, at);
                 for operand in n.operands() {
                     let ty = self.primary(operand);
                     self.expect(
@@ -972,6 +1048,7 @@ impl<'a> Checker<'a> {
             | Expr::BitwiseAnd(b)
             | Expr::BitwiseOr(b)
             | Expr::BitwiseXor(b) => {
+                self.fold(e, at);
                 for operand in [&b.lhs, &b.rhs] {
                     let ty = self.primary(operand);
                     self.expect(
@@ -1052,6 +1129,9 @@ impl<'a> Checker<'a> {
                         Some(items.len())
                     }
                 };
+                if let (Quantifier::Percentage(e), Some(_)) = (&of.quantifier, &of.anchor) {
+                    self.yara_x_only("A percentage with `at` or `in`", span(&e.span()));
+                }
                 self.quantifier(&of.quantifier, size);
                 if let Some(MatchAnchor::At(a)) = &of.anchor {
                     let many = match &of.quantifier {
@@ -1071,6 +1151,9 @@ impl<'a> Checker<'a> {
                 Ty::Bool
             }
             Expr::ForOf(f) => {
+                if let Quantifier::Percentage(e) = &f.quantifier {
+                    self.yara_x_only("A percentage in `for … of`", span(&e.span()));
+                }
                 let size = self.pattern_set(&f.pattern_set);
                 self.quantifier(&f.quantifier, Some(size));
                 self.in_for_of += 1;
@@ -1079,6 +1162,9 @@ impl<'a> Checker<'a> {
                 Ty::Bool
             }
             Expr::ForIn(f) => {
+                if let Quantifier::Percentage(e) = &f.quantifier {
+                    self.yara_x_only("A percentage in `for … in`", span(&e.span()));
+                }
                 self.quantifier(&f.quantifier, None);
                 let mut scope = BTreeMap::new();
                 let vars: Vec<&Ident> = f.variables.iter().collect();
@@ -1165,7 +1251,11 @@ impl<'a> Checker<'a> {
         let at = span(&ident.span());
         let wildcard = self.rule_wildcards.contains(&at);
         if wildcard {
-            if !self.earlier_rules.iter().any(|r| r.starts_with(ident.name)) {
+            self.used_wildcards.push(ident.name.to_string());
+            // libyara matches the rule being defined too.
+            if !self.earlier_rules.iter().any(|r| r.starts_with(ident.name))
+                && !self.current_rule.starts_with(ident.name)
+            {
                 self.error(
                     codes::YARA_UNDEFINED_IDENTIFIER,
                     format!(
@@ -1189,6 +1279,16 @@ impl<'a> Checker<'a> {
     }
 
     fn quantifier(&mut self, q: &Quantifier, size: Option<usize>) {
+        if let Quantifier::Expr(e) | Quantifier::Percentage(e) = q
+            && let Some(v) = const_value(e)
+            && v < 0
+        {
+            self.error(
+                codes::YARA_NUMBER_OUT_OF_RANGE,
+                format!("invalid value in condition: a quantifier of {v}"),
+                span(&e.span()),
+            );
+        }
         match q {
             Quantifier::Percentage(e) => {
                 let ty = self.primary(e);
@@ -1248,6 +1348,13 @@ impl<'a> Checker<'a> {
                     "`at` takes an integer offset",
                     span(&a.expr.span()),
                 );
+                if const_value(&a.expr).is_some_and(|v| v < 0) {
+                    self.yara_x(
+                        "YARA-X refuses a negative offset; libyara never matches at one"
+                            .to_string(),
+                        span(&a.expr.span()),
+                    );
+                }
             }
             Some(MatchAnchor::In(i)) => self.range(&i.range),
             None => {}
@@ -1262,6 +1369,45 @@ impl<'a> Checker<'a> {
                 ty.is_int(),
                 "a range bound is an integer",
                 span(&bound.span()),
+            );
+        }
+        let at = span(&range.lower_bound.span().combine(&range.upper_bound.span()));
+        match (const_value(&range.lower_bound), const_value(&range.upper_bound)) {
+            (Some(lo), _) if lo < 0 => self.error(
+                codes::YARA_NUMBER_OUT_OF_RANGE,
+                "invalid value in condition: a range lower bound can not be negative".to_string(),
+                at,
+            ),
+            (Some(lo), Some(hi)) if lo > hi => self.error(
+                codes::YARA_NUMBER_OUT_OF_RANGE,
+                format!("invalid value in condition: the range lower bound {lo} is greater than its upper bound {hi}"),
+                at,
+            ),
+            _ => {}
+        }
+    }
+
+    /// libyara folds constant integer arithmetic and refuses what overflows
+    /// 64 bits, a division by zero and a negative shift. Reported on the
+    /// operation that fails, not on the ones around it.
+    fn fold(&mut self, e: &Expr, at: (usize, usize)) {
+        if let Err(problem) = fold_step(e) {
+            let text = self.text(at).to_string();
+            self.error(
+                codes::YARA_NUMBER_OUT_OF_RANGE,
+                format!("{problem} in `{text}`"),
+                at,
+            );
+        }
+    }
+
+    /// Regexp modifiers libyara reads: `i`, `s`, `is`, in that order.
+    fn regexp_flags(&mut self, literal: &str, at: (usize, usize)) {
+        let flags = literal.rsplit_once('/').map_or("", |(_, f)| f);
+        if !matches!(flags, "" | "i" | "s" | "is") {
+            self.yara_x_only(
+                &format!("The regexp modifiers `{flags}` (libyara reads `i`, `s` or `is`)"),
+                at,
             );
         }
     }
@@ -1583,24 +1729,148 @@ fn unescaped_len(literal: &str) -> usize {
     n
 }
 
-/// The runs of fixed or masked bytes a hex string surely contains: a jump
-/// or an alternative ends a run.
-fn hex_runs(sub: &HexSubPattern, out: &mut Vec<Vec<MaskedByte>>) {
+/// The value of a constant integer expression, as libyara folds it; `None`
+/// when it is not one or does not fold.
+fn const_value(e: &Expr) -> Option<i64> {
+    match e {
+        Expr::LiteralInteger(i) if !i.is_unsigned => Some(i.value),
+        _ => fold_step(e).ok().flatten(),
+    }
+}
+
+/// A regexp that starts with `.*`, `.+` or `.{n,}`, possibly after `.`s or
+/// inside a group (`(a|.+)foo`): YARA-X refuses its arbitrary prefix.
+/// libyara's product check (`grammar.y`): `|a| > INT64_MAX / |b|` is an
+/// overflow, so `4611686018427387904 * -2` is one though `i64::MIN` fits.
+fn libyara_mul(a: i64, b: i64) -> Option<i64> {
+    if b != 0 && a.unsigned_abs() > i64::MAX as u64 / b.unsigned_abs() {
+        return None;
+    }
+    Some(a.wrapping_mul(b))
+}
+
+/// The magnitude of an integer literal as libyara's lexer reads it, before
+/// any sign: `None` when it does not fit `i64::MAX`.
+fn literal_magnitude(literal: &str) -> Option<i64> {
+    // Digit separators are YARA-X syntax, reported on their own.
+    let digits = literal.trim_start_matches('-').replace('_', "");
+    let digits = digits.as_str();
+    let (digits, scale) = if let Some(d) = digits.strip_suffix("KB") {
+        (d, 1024)
+    } else if let Some(d) = digits.strip_suffix("MB") {
+        (d, 1024 * 1024)
+    } else {
+        (digits, 1)
+    };
+    let value = if let Some(h) = digits.strip_prefix("0x") {
+        i64::from_str_radix(h, 16).ok()
+    } else if let Some(o) = digits.strip_prefix("0o") {
+        i64::from_str_radix(o, 8).ok()
+    } else {
+        digits.parse::<i64>().ok()
+    };
+    value?.checked_mul(scale)
+}
+
+/// One folding step: `Ok(Some(v))` the value, `Ok(None)` not constant (or
+/// an operand that fails on its own), `Err` this operation fails.
+fn fold_step(e: &Expr) -> Result<Option<i64>, &'static str> {
+    let nary = |operands: &[Expr], op: fn(i64, i64) -> Option<i64>, what: &'static str| {
+        let mut values = operands.iter().map(const_value);
+        let Some(Some(mut acc)) = values.next() else {
+            return Ok(None);
+        };
+        for v in values {
+            let Some(v) = v else {
+                return Ok(None);
+            };
+            acc = op(acc, v).ok_or(what)?;
+        }
+        Ok(Some(acc))
+    };
+    let binary = |l: &Expr, r: &Expr| match (const_value(l), const_value(r)) {
+        (Some(a), Some(b)) => Some((a, b)),
+        _ => None,
+    };
+    match e {
+        Expr::LiteralInteger(i) if !i.is_unsigned => Ok(Some(i.value)),
+        Expr::Minus(u) => match const_value(&u.operand) {
+            Some(v) => v.checked_neg().map(Some).ok_or("integer overflow"),
+            None => Ok(None),
+        },
+        Expr::BitwiseNot(u) => Ok(const_value(&u.operand).map(|v| !v)),
+        Expr::Add(n) => nary(n.as_slice(), i64::checked_add, "integer overflow"),
+        Expr::Sub(n) => nary(n.as_slice(), i64::checked_sub, "integer overflow"),
+        Expr::Mul(n) => nary(n.as_slice(), libyara_mul, "integer overflow"),
+        Expr::Div(n) => nary(
+            n.as_slice(),
+            i64::checked_div,
+            "division by zero or overflow",
+        ),
+        Expr::Mod(n) => nary(
+            n.as_slice(),
+            i64::checked_rem,
+            "division by zero or overflow",
+        ),
+        Expr::Shl(b) | Expr::Shr(b) => match binary(&b.lhs, &b.rhs) {
+            Some((_, s)) if s < 0 => Err("a negative shift"),
+            Some((a, s)) if s >= 64 => Ok(Some(if matches!(e, Expr::Shr(_)) && a < 0 {
+                -1
+            } else {
+                0
+            })),
+            Some((a, s)) => Ok(Some(if matches!(e, Expr::Shl(_)) {
+                a << s
+            } else {
+                a >> s
+            })),
+            None => Ok(None),
+        },
+        Expr::BitwiseAnd(b) => Ok(binary(&b.lhs, &b.rhs).map(|(x, y)| x & y)),
+        Expr::BitwiseOr(b) => Ok(binary(&b.lhs, &b.rhs).map(|(x, y)| x | y)),
+        Expr::BitwiseXor(b) => Ok(binary(&b.lhs, &b.rhs).map(|(x, y)| x ^ y)),
+        _ => Ok(None),
+    }
+}
+
+/// A hex string's chain fragments, as libyara splits it at a jump that is
+/// unbounded or spans more than `YR_STRING_CHAINING_THRESHOLD` bytes: each
+/// fragment's runs of fixed or masked bytes.
+fn hex_fragments(sub: &HexSubPattern) -> Vec<Vec<Vec<MaskedByte>>> {
+    let mut fragments = vec![Vec::new()];
     let mut current = Vec::new();
     for token in sub.iter() {
         match token {
             HexToken::Byte(b) => current.push((b.value, b.mask)),
             HexToken::NotByte(b) => current.push((b.value, 0x00)),
-            HexToken::Jump(_) | HexToken::Alternative(_) => {
+            HexToken::Jump(j) => {
                 if !current.is_empty() {
-                    out.push(std::mem::take(&mut current));
+                    fragments
+                        .last_mut()
+                        .unwrap()
+                        .push(std::mem::take(&mut current));
+                }
+                let long = j.end.is_none_or(|end| {
+                    end.saturating_sub(j.start.unwrap_or(0)) > CHAINING_THRESHOLD
+                });
+                if long {
+                    fragments.push(Vec::new());
+                }
+            }
+            HexToken::Alternative(_) => {
+                if !current.is_empty() {
+                    fragments
+                        .last_mut()
+                        .unwrap()
+                        .push(std::mem::take(&mut current));
                 }
             }
         }
     }
     if !current.is_empty() {
-        out.push(current);
+        fragments.last_mut().unwrap().push(current);
     }
+    fragments
 }
 
 #[cfg(test)]

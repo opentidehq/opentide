@@ -234,6 +234,10 @@ const RAW: &[(&str, &[(&str, Severity)])] = &[
     ),
     // YARA-X-only syntax: errors under libyara.
     (
+        "rule a { strings: $a = \"abcd\" condition: for 50% of them : ( $ ) }",
+        &[("yara_parse_error", E)],
+    ),
+    (
         "rule a { condition: with x = 1 : ( x == 1 ) }",
         &[("yara_parse_error", E)],
     ),

@@ -2,7 +2,7 @@
 
 Everything in this directory comes from
 [opentidehq/specifications](https://github.com/opentidehq/specifications) at
-commit `a6378a8787a19a47ee05cc2eb3987c75961d6237` (2026-11-10), licensed under
+commit `29f28259f593d5cdf47a3482e040ab680a57474e` (2026-11-10, bitdefender-1.0 1.1), licensed under
 the Creative Commons Attribution 4.0 International License
 (<https://creativecommons.org/licenses/by/4.0/>). Copyright the opentide authors.
 

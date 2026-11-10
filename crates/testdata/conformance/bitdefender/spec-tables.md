@@ -1,7 +1,7 @@
 <!--
 Copied verbatim from opentidehq/specifications specs/platforms/bitdefender-1.0.md
-(sections "`detection` (BitdefenderDetection)" and "Criteria catalogue"),
-commit a6378a8787a19a47ee05cc2eb3987c75961d6237. CC BY 4.0, see SOURCES.md.
+(version 1.1; sections "`detection` (BitdefenderDetection)" and "Criteria catalogue"),
+commit 29f28259f593d5cdf47a3482e040ab680a57474e. CC BY 4.0, see SOURCES.md.
 crates/opentide-tide/tests/bitdefender_spec.rs holds catalogs/bitdefender/criteria.toml
 to these tables. When the spec changes, paste the new sections here.
 -->
@@ -22,7 +22,7 @@ The fields per target, their kinds, their enum values, and the pairing rules are
 |--------|--------|
 | `process` | `Process.Name`, `Process.Path`, `Process.FullPathName`, `Process.CommandLine`, `Process.Parent.Name`, `Process.Parent.Path`, `Process.Parent.FullPathName`, `Process.Parent.CommandLine`, `Process.User`, `Process.MD5`, `Process.SHA2` |
 | `file` | `File.Name`, `File.Path`, `File.FullPathName`, `File.Operation`, `File.CreatedBy.Name`, `File.CreatedBy.Path`, `File.CreatedBy.FullPathName`, `File.CreatedBy.CommandLine`, `File.CreatedBy.User`, `File.CertificateSigner`, `File.CertificateIssuer`, `File.CertificateSignedStatus`, and the XDR fields `File.MD5`, `File.SHA2`, `File.Url`, `File.SourceIP`, `File.DestinationIP` |
-| `connection` | `Connection.SourceIP`, `Connection.DestinationIP`, `Connection.SourcePort`, `Connection.DestinationPort`, `Connection.Process.Name`, `Connection.Process.Path`, `Connection.Process.FullPathName`, `Connection.Process.CommandLine`, `Connection.Process.User`, `Connection.URL`, `Connection.Domain`, `Connection.Protocol`, `Connection.HTTPUser`, `Connection.HTTPDownloadedFile`, `Connection.HTTPUploadedFile`, `Connection.FTPUser`, `Connection.SSHUser`, `Connection.TelnetUser`, `Connection.SMBDomain`, `Connection.SMBSharePath`, `Connection.SMBUser`, `Connection.WMIExecQuery`, `Connection.FileRemotePath`, `Connection.FileRemoteOperation` |
+| `connection` | `Connection.SourceIP`, `Connection.DestinationIP`, `Connection.SourcePort`, `Connection.DestinationPort`, `Connection.Process.Name`, `Connection.Process.Path`, `Connection.Process.FullPathName`, `Connection.Process.CommandLine`, `Connection.Process.User`, `Connection.URL`, `Connection.Domain`, `Connection.Protocol`, `Connection.HTTPUser`, `Connection.HTTPDownloadedFile`, `Connection.HTTPUploadedFile`, `Connection.FTPUser`, `Connection.SSHUser`, `Connection.TelnetUser`, `Connection.SMBDomain`, `Connection.SMBSharePath`, `Connection.SMBUser`, `Connection.WMIExecQuery`, `Connection.FileRemotePath`, `Connection.FileRemoteOperation`, and the XDR fields `Connection.SourceUser`, `Connection.DestinationUser`, `Connection.Email.Subject`, `Connection.<Resource>.Name` for the resources `File`, `Application`, `KeyVault`, `Role`, `Policy`, `SharingLink`, `Url`, `SshKey`, `LaunchTemplate`, `ServicePrincipal`, `UserGroup`, `AutomationAccount`, `AutomationAccountHook`, `Api`, `CertificateAuthority`, `Bucket`, `ConfluencePage`, `JiraProject`, and `Connection.<Resource>.Operation` for those resources and `Email` |
 | `registry` | `Registry.Key`, `Registry.Value`, `Registry.Data`, `Registry.DataType`, `Registry.Operation`, `Registry.CreatedBy.Name`, `Registry.CreatedBy.Path`, `Registry.CreatedBy.FullPathName`, `Registry.CreatedBy.CommandLine` |
 
 | Enum field | Values |
@@ -33,3 +33,4 @@ The fields per target, their kinds, their enum values, and the pairing rules are
 | `Connection.FileRemoteOperation` | `create`, `rem_delete`, `read`, `write`, `move` |
 | `Registry.Operation` | `key_created`, `key_deleted`, `key_renamed`, `value_created`, `value_deleted`, `value_written` |
 | `Registry.DataType` | `string`, `expandablestring`, `dword`, `qword`, `binary`, `none`, `link`, `resource_list`, `full_resource_descriptor`, `resource_requirements_list` |
+| `Connection.<Resource>.Operation` (XDR) | the values the catalogue lists for each resource |
