@@ -99,7 +99,14 @@ class BitdefenderDeploy(RuleDeployer):
     ) -> GravityZoneRule:
         """What *data* deploys on *tenant_config* (no tenant: an offline preview)."""
         setup = tenant_config.setup if tenant_config is not None else None
-        return compile_rule(data, strategy or _strategy(data), setup)
+        try:
+            return compile_rule(data, strategy or _strategy(data), setup)
+        except BitdefenderTargetError as exc:
+            if tenant_config is None or exc.tenant is not None:
+                raise
+            raise BitdefenderTargetError(
+                exc.reason, code=exc.code, tenant=tenant_config.name
+            ) from exc
 
     def deploy_rule(
         self,

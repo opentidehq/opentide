@@ -213,14 +213,16 @@
     },
     "BitdefenderTenantTargets": {
       "additionalProperties": false,
-      "description": "`[tenants.setup.targets]`: default targets for blocks that set none.",
+      "description": "`[tenants.setup.targets]`: default targets for blocks that set none.\n\nThe same shape as a block's `targets` (`bitdefender_targets_shape`): exactly\none of the two lists, non-empty. A default never means \"no targets\": a tenant\nthat applies rules to the whole company leaves `targets` out.",
       "properties": {
         "endpoint_tags": {
           "anyOf": [
             {
               "items": {
+                "pattern": "\\S",
                 "type": "string"
               },
+              "minItems": 1,
               "type": "array"
             },
             {
@@ -235,8 +237,10 @@
           "anyOf": [
             {
               "items": {
+                "pattern": "\\S",
                 "type": "string"
               },
+              "minItems": 1,
               "type": "array"
             },
             {

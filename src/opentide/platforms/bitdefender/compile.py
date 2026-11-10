@@ -54,9 +54,25 @@ _REPLACEMENTS = (("<", LEFT_ANGLE), (">", RIGHT_ANGLE), ("'", APOSTROPHE), ('"',
 
 
 class BitdefenderTargetError(ValueError):
-    """``bitdefender_target_unknown``: a ``targets`` alias the tenant does not define."""
+    """A ``targets`` the tenant cannot resolve: an unknown alias, or no alias at all.
 
-    code = "bitdefender_target_unknown"
+    ``code``, ``reason`` and ``hint`` are what a deploy reports and a dry run's
+    compile diagnostic reads, so both name the same code.
+    """
+
+    def __init__(
+        self, reason: str, *, code: str = "bitdefender_target_unknown", tenant: str | None = None
+    ) -> None:
+        self.code = code
+        self.tenant = tenant
+        self.reason = f"tenant {tenant!r}: {reason}" if tenant else reason
+        self.hint = (
+            "add the alias to the tenant's endpoint_tags or companies table, or change the "
+            "block's targets"
+            if code == "bitdefender_target_unknown"
+            else "set exactly one of endpoint_tags and companies, or leave targets out"
+        )
+        super().__init__(f"{code}: {self.reason}")
 
 
 @dataclass(frozen=True)
@@ -215,16 +231,29 @@ def resolve_targets(
     endpoint_tags: Mapping[str, Mapping[str, str]] | None,
     companies: Mapping[str, str] | None,
 ) -> dict[str, Any] | None:
-    """``targets`` aliases to GravityZone ids; ``bitdefender_target_unknown`` for an unknown one."""
-    if not targets:
+    """``targets`` aliases to GravityZone ids; ``bitdefender_target_unknown`` for an unknown one.
+
+    ``None`` only when there are no targets at all. Targets that hold no alias
+    (``{}``, an empty or null list) are refused: they must never resolve to the
+    whole company (``bitdefender_targets_shape``).
+    """
+    if targets is None:
         return None
+    from opentide.platforms.bitdefender.catalog import targets_codes
+
+    if targets_codes(targets) or not isinstance(targets, Mapping) or not targets:
+        raise BitdefenderTargetError(
+            "targets sets exactly one of endpoint_tags and companies, a non-empty list of "
+            "aliases; leave targets out for the whole company",
+            code="bitdefender_targets_shape",
+        )
     if targets.get("endpoint_tags"):
         known = endpoint_tags or {}
         missing = [alias for alias in targets["endpoint_tags"] if alias not in known]
         if missing:
             raise BitdefenderTargetError(
-                f"bitdefender_target_unknown: endpoint tag alias(es) {', '.join(missing)} "
-                "are not in the tenant's endpoint_tags table"
+                f"endpoint tag alias(es) {', '.join(missing)} are not in the tenant's "
+                "endpoint_tags table"
             )
         return {
             "endpointTags": [
@@ -237,8 +266,7 @@ def resolve_targets(
         missing = [alias for alias in targets["companies"] if alias not in known_companies]
         if missing:
             raise BitdefenderTargetError(
-                f"bitdefender_target_unknown: company alias(es) {', '.join(missing)} "
-                "are not in the tenant's companies table"
+                f"company alias(es) {', '.join(missing)} are not in the tenant's companies table"
             )
         return {"companiesIds": [known_companies[alias] for alias in targets["companies"]]}
     return None

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any, Literal
 
-from pydantic import ConfigDict, Field
+from pydantic import ConfigDict, Field, model_validator
 
 from opentide.models.configuration.base import (
     ConfigurationModel,
@@ -399,15 +399,33 @@ class BitdefenderEndpointTag(ConfigurationModel):
     company_id: GravityZoneId = Field(description="Company id of the tag, 24 hex.")
 
 
-class BitdefenderTenantTargets(ConfigurationModel):
-    """`[tenants.setup.targets]`: default targets for blocks that set none."""
+#: An alias in a `targets` list: a non-blank name from the tenant's tables.
+TargetAlias = Annotated[str, Field(pattern=r"\S")]
 
-    endpoint_tags: list[str] | None = Field(
+
+class BitdefenderTenantTargets(ConfigurationModel):
+    """`[tenants.setup.targets]`: default targets for blocks that set none.
+
+    The same shape as a block's `targets` (`bitdefender_targets_shape`): exactly
+    one of the two lists, non-empty. A default never means "no targets": a tenant
+    that applies rules to the whole company leaves `targets` out.
+    """
+
+    endpoint_tags: Annotated[list[TargetAlias], Field(min_length=1)] | None = Field(
         default=None, description="Aliases from the tenant's endpoint_tags table."
     )
-    companies: list[str] | None = Field(
+    companies: Annotated[list[TargetAlias], Field(min_length=1)] | None = Field(
         default=None, description="Aliases from the tenant's companies table."
     )
+
+    @model_validator(mode="after")
+    def _exactly_one_list(self) -> BitdefenderTenantTargets:
+        if (self.endpoint_tags is None) == (self.companies is None):
+            raise ValueError(
+                "targets sets exactly one of endpoint_tags and companies "
+                "(bitdefender_targets_shape); leave targets out for the whole company"
+            )
+        return self
 
 
 class BitdefenderSetup(TenantSetup):

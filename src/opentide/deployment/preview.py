@@ -181,13 +181,15 @@ def _bitdefender_tenant(name: str | None) -> Any | None:
     return next((tenant for tenant in tenants if tenant.name == name), None)
 
 
-def _bitdefender_compile_preview(rule: DetectionRule, tenant_name: str | None) -> dict[str, Any]:
+def _bitdefender_compile_preview(rule: DetectionRule, tenant_names: list[str]) -> dict[str, Any]:
     """The GravityZone ``createCustomRule`` request the deploy would send.
 
-    *tenant_name* is the first tenant this run sends the rule to. Targets, tags
-    and ``companyId`` are resolved against it, and the preview names it. With
-    none, the request leaves them out and ``unresolved`` lists the block's
-    target aliases, never presented as GravityZone ids.
+    *tenant_names* are the tenants this run sends the rule to. The rule is
+    compiled for each, as a deploy would: one that cannot resolve its targets
+    fails the dry run, naming that tenant. The request shown is the first
+    tenant's. With no tenant, the request leaves targets, tenant tags and
+    ``companyId`` out and ``unresolved`` lists the block's target aliases, never
+    presented as GravityZone ids.
     """
     from opentide.platforms.bitdefender.compile import (
         create_params,
@@ -196,18 +198,20 @@ def _bitdefender_compile_preview(rule: DetectionRule, tenant_name: str | None) -
     )
     from opentide.platforms.bitdefender.deployer import BitdefenderDeploy
 
-    tenant = _bitdefender_tenant(tenant_name)
+    tenants = [tenant for name in tenant_names if (tenant := _bitdefender_tenant(name))]
+    compiled = []
     try:
-        compiled = BitdefenderDeploy().compile_deployment(rule, tenant)
+        for tenant in tenants or [None]:
+            compiled.append(BitdefenderDeploy().compile_deployment(rule, tenant))
     except Exception as exc:
         return _compile_failure(rule, exc, "bitdefender")
     preview: dict[str, Any] = {
         "uuid": rule.metadata.uuid,
         "name": rule.name,
-        "api_request": request_body("createCustomRule", create_params(compiled)),
+        "api_request": request_body("createCustomRule", create_params(compiled[0])),
     }
-    if tenant is not None:
-        preview["tenant"] = tenant.name
+    if tenants:
+        preview["tenant"] = tenants[0].name
     else:
         preview["unresolved"] = {
             "reason": "this run deploys the rule to no bitdefender tenant: targets, tenant "
@@ -218,19 +222,19 @@ def _bitdefender_compile_preview(rule: DetectionRule, tenant_name: str | None) -
 
 
 def preview_rule_deployment(
-    platform: str, rule: DetectionRule, tenant: str | None = None
+    platform: str, rule: DetectionRule, tenants: list[str] | None = None
 ) -> dict[str, Any]:
     """A serialisable preview of the API payload for one rule on a platform.
 
-    *tenant* is the first tenant the run sends the rule to, for platforms whose
-    request depends on it (Bitdefender).
+    *tenants* are the tenants the run sends the rule to, for platforms whose
+    request depends on the tenant (Bitdefender).
     """
     if platform == "sentinel":
         return _sentinel_compile_preview(rule)
     if platform == "sysdig":
         return _sysdig_compile_preview(rule)
     if platform == "bitdefender":
-        return _bitdefender_compile_preview(rule, tenant)
+        return _bitdefender_compile_preview(rule, list(tenants or []))
     if platform == "elastic":
         compiled = _elastic_compile_preview(rule)
         if compiled is not None:
@@ -248,8 +252,8 @@ def preview_platform_deployment(
     """Preview deployment payloads for a list of rule UUIDs on one platform.
 
     *tenant_targets* maps each tenant the run reaches to the rules it sends
-    there, after the run's strategies: a rule's request is resolved against the
-    first of them that receives it.
+    there, after the run's strategies: a rule is resolved against every one of
+    them that receives it.
     """
     from opentide.core.registry import Opentide
 
@@ -260,10 +264,8 @@ def preview_platform_deployment(
         if rule is None:
             continue
         if isinstance(rule, DetectionRule):
-            tenant = next(
-                (name for name, sent in (tenant_targets or {}).items() if uuid in sent), None
-            )
-            previews.append(preview_rule_deployment(platform, rule, tenant))
+            reached = [name for name, sent in (tenant_targets or {}).items() if uuid in sent]
+            previews.append(preview_rule_deployment(platform, rule, reached))
         else:
             previews.append(cast(dict[str, Any], rule))
     return previews

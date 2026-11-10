@@ -135,10 +135,7 @@ def test_a_dry_run_resolves_against_the_tenant_the_run_reaches(
     invoke_cli, tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Not the first configured tenant: a manual one the rule does not list is never reached."""
-    platforms = tide_corpus_repo / ".opentide" / "configurations" / "platforms"
-    path = next(platforms.glob("bitdefender.toml"), None) or next(
-        tide_corpus_repo.rglob("platforms/bitdefender.toml")
-    )
+    path = _platform_file(tide_corpus_repo)
     text = path.read_text(encoding="utf-8")
     first = (
         '[[tenants]]\nname = "manual-only"\nmanual = true\n[tenants.setup]\nssl = true\n'
@@ -187,7 +184,48 @@ def test_a_rule_that_cannot_compile_names_bitdefender(monkeypatch: pytest.Monkey
 
     rule = SimpleNamespace(metadata=SimpleNamespace(uuid=UUID), name="R")
     monkeypatch.setenv("DEPLOYMENT_ERROR_RAISED", "")
-    result = preview_module.preview_rule_deployment("bitdefender", rule, None)  # type: ignore[arg-type]
+    result = preview_module.preview_rule_deployment("bitdefender", rule, [])  # type: ignore[arg-type]
     assert result["code"] == "compile_failed"
     assert result["error"].startswith("Bitdefender GravityZone cannot compile this rule")
     assert "Sentinel" not in result["error"]
+
+
+def _platform_file(repo: Path) -> Path:
+    """The platform file the workspace loads (the corpus also keeps a legacy copy)."""
+    path = repo / ".opentide" / "configurations" / "platforms" / "bitdefender.toml"
+    assert path.is_file()
+    return path
+
+
+def _add_tenant(repo: Path, block: str) -> None:
+    path = _platform_file(repo)
+    path.write_text(path.read_text(encoding="utf-8") + "\n" + block, encoding="utf-8")
+
+
+def test_a_dry_run_fails_on_any_reached_tenant_that_lacks_an_alias(
+    invoke_cli, tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A rule that dry-runs must deploy: every tenant it reaches is resolved, not the first."""
+    _add_tenant(
+        tide_corpus_repo,
+        '[[tenants]]\nname = "second"\nstrategies = ["PREVIEW"]\n[tenants.setup]\nssl = true\n'
+        'url = "https://other.example/api"\napi_key = "$GRAVITYZONE_API_KEY"\n',
+    )
+    _mock_deployer(monkeypatch)
+    result = invoke_cli(
+        "deploy",
+        "--dry-run",
+        "--platform",
+        "bitdefender",
+        *EVERY_RULE,
+        "--wide",
+        "--skip-promotion",
+    )
+    payload = parse_cli_json(result)
+    assert result.exit_code == 1
+    assert set(payload["tenants"]["bitdefender"]) == {"staging", "second"}
+    preview = next(item for item in payload["payloads"]["bitdefender"] if item["uuid"] == UUID)
+    assert preview["status"] == "failed"
+    assert preview["code"] == "bitdefender_target_unknown"
+    assert "'second'" in preview["error"]
+    assert "corpus-servers" in preview["error"]

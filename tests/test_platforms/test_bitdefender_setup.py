@@ -88,3 +88,32 @@ def test_defaults() -> None:
 def test_a_bad_tenant_fails_configuration_load(setup: dict[str, Any], message: str) -> None:
     with pytest.raises(ValueError, match=message):
         _config(setup)
+
+
+@pytest.mark.parametrize(
+    "targets",
+    [
+        {},
+        {"endpoint_tags": []},
+        {"companies": []},
+        {"endpoint_tags": ["a"], "companies": ["b"]},
+        {"endpoint_tags": [" "]},
+    ],
+)
+def test_tenant_default_targets_have_the_block_shape(targets: dict[str, Any]) -> None:
+    """A tenant default never means "no targets": that would widen a rule to the company."""
+    setup = _setup(targets=targets, endpoint_tags={"a": {"tag_id": TAG, "company_id": COMPANY}})
+    with pytest.raises(ValueError, match="targets must be"):
+        _config(setup)
+    raw = {"platform": {"enabled": True}, "tenants": [{"name": "gz", "setup": setup}]}
+    with pytest.raises(ValueError, match="targets"):
+        BitdefenderConfiguration.model_validate(raw)
+
+
+def test_a_tenant_default_with_one_list_is_valid() -> None:
+    setup = _setup(
+        targets={"endpoint_tags": ["a"]},
+        endpoint_tags={"a": {"tag_id": TAG, "company_id": COMPANY}},
+    )
+    raw = {"platform": {"enabled": True}, "tenants": [{"name": "gz", "setup": setup}]}
+    BitdefenderConfiguration.model_validate(raw)

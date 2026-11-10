@@ -313,6 +313,8 @@ def targets_codes(targets: Any) -> set[str]:
         value = targets[key]
         if not isinstance(value, list) or not value:
             return {"bitdefender_targets_shape"}
+        if not all(isinstance(alias, str) and alias.strip() for alias in value):
+            return {"bitdefender_targets_shape"}
     return set()
 
 

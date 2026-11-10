@@ -282,3 +282,25 @@ def test_without_a_tenant_aliases_are_never_sent_as_ids() -> None:
     assert "targets" not in params
     assert unresolved_targets(rule) == {"endpoint_tags": ["tier0-servers"]}
     assert unresolved_targets(_block_rule({})) is None
+
+
+@pytest.mark.parametrize("default", [{}, {"endpoint_tags": []}, {"companies": None}])
+def test_an_empty_tenant_default_never_resolves_to_the_whole_company(
+    default: dict[str, Any],
+) -> None:
+    with pytest.raises(BitdefenderTargetError) as caught:
+        compile_rule(_block_rule({}), StatusStrategy.RELEASE, _setup(targets=default))
+    assert caught.value.code == "bitdefender_targets_shape"
+
+
+def test_a_target_error_is_its_own_compile_diagnostic() -> None:
+    """A dry run reports the code a real deploy reports, so explain finds its page."""
+    from opentide.deployment.preview import compile_diagnostic
+
+    rule = _block_rule({"targets": {"endpoint_tags": ["nowhere"]}})
+    with pytest.raises(BitdefenderTargetError) as caught:
+        compile_rule(rule, StatusStrategy.RELEASE, _setup())
+    code, message, hint = compile_diagnostic(caught.value, "Bitdefender GravityZone")
+    assert code == "bitdefender_target_unknown"
+    assert "nowhere" in message
+    assert hint is not None and "endpoint_tags" in hint
