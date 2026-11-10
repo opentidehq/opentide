@@ -33,6 +33,7 @@ pub mod load;
 pub mod registry;
 pub mod root;
 pub mod validate;
+pub mod vocabularies;
 mod workspace;
 
 pub use config::{ConfigError, Configuration};
