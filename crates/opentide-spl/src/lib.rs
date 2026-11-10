@@ -252,19 +252,35 @@ impl Catalog {
     }
 
     /// The catalogued command `name` most likely means
-    /// ([`opentide_core::suggest`]).
+    /// ([`opentide_core::suggest`]). A name one typo from a command
+    /// ([`one_typo`], which reports it as an error) names the best of those
+    /// commands, so an error that calls the name a typo always says of what
+    /// (`tsast`, two swaps, is `stats`).
     pub fn suggest_command(&self, name: &str) -> Option<String> {
-        suggest::closest(name, self.commands.iter().map(|c| c.name.as_str())).map(str::to_string)
+        let typos = self.command_typos(name);
+        if typos.is_empty() {
+            suggest::closest(name, self.commands.iter().map(|c| c.name.as_str()))
+        } else {
+            suggest::best(name, typos)
+        }
+        .map(str::to_string)
+    }
+
+    /// The catalogued commands `name` is one typo from ([`one_typo`]).
+    fn command_typos(&self, name: &str) -> Vec<&str> {
+        let lower = name.to_ascii_lowercase();
+        self.commands
+            .iter()
+            .filter(|c| one_typo(&c.name.to_ascii_lowercase(), &lower))
+            .map(|c| c.name.as_str())
+            .collect()
     }
 
     /// Whether `name` is one typo from a catalogued command ([`one_typo`]):
     /// then `spl_unknown_command` is an error, not a warning an app may
     /// explain.
     fn is_command_typo(&self, name: &str) -> bool {
-        let lower = name.to_ascii_lowercase();
-        self.commands
-            .iter()
-            .any(|c| one_typo(&c.name.to_ascii_lowercase(), &lower))
+        !self.command_typos(name).is_empty()
     }
 
     pub fn field(&self, name: &str) -> Option<&FieldRow> {
@@ -1371,27 +1387,31 @@ mod tests {
         assert_eq!(typo.len(), 1, "{typo:?}");
         assert_eq!(typo[0].severity, opentide_core::Severity::Error, "{typo:?}");
         assert_eq!(typo[0].suggestion.as_deref(), Some("stats"));
-        // Two swaps are still one typo.
+        // Two swaps are still one typo, and the error names the command.
         let swaps = unknown_commands("index=a | tsast count");
         assert_eq!(
             swaps[0].severity,
             opentide_core::Severity::Error,
             "{swaps:?}"
         );
+        assert_eq!(swaps[0].suggestion.as_deref(), Some("stats"), "{swaps:?}");
         // Further away it may be an app's command: a warning, still with a
         // hint while the shared rule finds one (two edits in a long name).
         let far = unknown_commands("index=a | evntstatss count");
         assert_eq!(far[0].severity, opentide_core::Severity::Warning, "{far:?}");
         assert_eq!(far[0].suggestion.as_deref(), Some("eventstats"), "{far:?}");
-        // Two edits in a short name: a warning, and no hint (#790: a third
-        // of the length, rustc's bound, before 3 edits whatever the length).
+        // Two edits side by side in a six-letter name: a warning (not one
+        // typo), still with its hint (a third of the word, two edits).
         let short = unknown_commands("index=a | stattz count");
         assert_eq!(
             short[0].severity,
             opentide_core::Severity::Warning,
             "{short:?}"
         );
-        assert_eq!(short[0].suggestion, None, "{short:?}");
+        assert_eq!(short[0].suggestion.as_deref(), Some("stats"), "{short:?}");
+        // Three edits in a five-letter name: no hint.
+        let far = unknown_commands("index=a | xtatzz count");
+        assert_eq!(far[0].suggestion, None, "{far:?}");
     }
 
     #[test]
