@@ -27,6 +27,7 @@ pub mod config;
 pub mod diagnostic;
 pub mod discover;
 mod export;
+pub mod fix;
 pub mod fs;
 pub mod index;
 pub mod load;
@@ -37,7 +38,7 @@ mod workspace;
 
 pub use config::{ConfigError, Configuration};
 pub use diagnostic::{Diagnostic, Fix, Severity, TextEdit};
-pub use fs::{FileSystem, MemoryFs, OsFs};
+pub use fs::{FileSystem, MemoryFs, OsFs, Stamp, WriteError, WriteFs};
 pub use index::{Index, Object};
 pub use registry::Registry;
 pub use root::RootOptions;

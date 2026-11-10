@@ -58,6 +58,9 @@ allow = [
   "Unicode-DFS-2016",
   "Zlib",
   "EUPL-1.2",
+  # notify (opentide-workspace `--watch`, UC-2.3 #818): a public-domain
+  # dedication, distributable with EUPL-1.2 code. Pending maintainer approval.
+  "CC0-1.0",
 ]
 confidence-threshold = 0.93
 # Only crates we ship need a licence on this list. dev-dependencies (test
@@ -96,7 +99,7 @@ skip = [
   # xtask (never published or shipped) needs rustix for the golden runner's
   # pseudo-terminals, and tempfile: both bring bitflags 2, beside the bitflags
   # 1 of lsp-types (fluent-uri 0.1). No shipped crate depends on bitflags 2.
-  { crate = "bitflags@2.13.2", reason = "only xtask (tooling, never shipped) uses it at run time, through rustix and tempfile; the shipped crates use bitflags 1 through lsp-types" },
+  { crate = "bitflags@2.13.2", reason = "xtask (rustix, tempfile) and opentide-workspace (tempfile; inotify through notify, `--watch`) use bitflags 2; lsp-types (fluent-uri 0.1) and kqueue-sys (notify on BSD and macOS) still use bitflags 1" },
   { crate = "syn@2.0.119", reason = "garde_derive 0.23 (opentide-schema's validation derive, plan D-2) depends on syn 2 and no garde release uses syn 3 yet; every other proc macro uses syn 3. Drop this when garde moves" },
 ]
 
