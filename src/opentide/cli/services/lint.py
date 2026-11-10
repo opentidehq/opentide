@@ -581,12 +581,14 @@ def _query_findings(root: Path, records: list[_ObjectRecord]) -> list[dict[str, 
     from opentide.analysis import (
         DECLARED_DATASET_CODES,
         ELASTIC_ADVISORY_CODES,
+        HARFANGLAB_ADVISORY_CODES,
         SYSDIG_ADVISORY_CODES,
         check_file,
         install_workspace_visibility,
         workspace,
     )
     from opentide.cli.ui.diagnostics import diagnostic_from_engine, engine_reference
+    from opentide.platforms.harfanglab.yara import ADVISORY_CODES
 
     # The datasets visibility.toml declares, as validate and the editor see them.
     install_workspace_visibility(root)
@@ -600,10 +602,13 @@ def _query_findings(root: Path, records: list[_ObjectRecord]) -> list[dict[str, 
         for finding in check_file(space, record.path, record.text):
             if finding.severity == "error" or _in_placeholder(finding, lines, marked):
                 continue
+            if finding.code in ADVISORY_CODES and _reported_by_opentide(record, finding):
+                continue  # one finding per code, form and rule: opentide's, placed by key
             if (
                 engine_reference(finding.code) is None
                 and finding.code not in ELASTIC_ADVISORY_CODES
                 and finding.code not in SYSDIG_ADVISORY_CODES
+                and finding.code not in HARFANGLAB_ADVISORY_CODES
                 and finding.code not in DECLARED_DATASET_CODES
             ):
                 continue
@@ -662,6 +667,68 @@ def _bitdefender_findings(records: list[_ObjectRecord]) -> list[dict[str, object
                     "_field_path": list(issue.field_path),
                 }
             )
+    return findings
+
+
+def _reported_by_opentide(record: _ObjectRecord, finding: Finding) -> bool:
+    """Whether opentide's own check reports the engine *finding*'s HarfangLab advisory too.
+
+    Both check the HarfangLab YARA profile. opentide's copy is placed on the
+    key a merge brings in and is there without the engine, so it is the one
+    shown, matched by code, form (signature or decomposed) and YARA rule. An
+    advisory only the engine reports is kept.
+    """
+    from opentide.platforms.harfanglab.yara import advisory_keys, engine_advisory_key
+
+    if record.text is None or "harfanglab" not in record.text:
+        return False
+    key = engine_advisory_key(record.text, finding.code, finding.line - 1)
+    return key in advisory_keys(record.text)
+
+
+def _harfanglab_yara_findings(record: _ObjectRecord) -> list[dict[str, object]]:
+    """The HarfangLab profile's advisories on a ``yara.signature`` (harfanglab-1.0).
+
+    ``harfanglab_yara_context`` and ``yara_meta_missing`` are warnings: HarfangLab
+    takes the rule, but may not scan where the author meant.
+    """
+    from opentide.platforms.harfanglab.yara import (
+        CONTEXT_PATH,
+        SIGNATURE_PATH,
+        advisories,
+        decomposed_advisory,
+        decomposed_context_in,
+        signature_in,
+    )
+
+    if record.parse_error or record.text is None or "harfanglab" not in record.text:
+        return []
+    site = signature_in(record.text)
+    if site is None:
+        decomposed = decomposed_context_in(record.text)
+        found = decomposed_advisory(*decomposed[:2]) if decomposed else None
+        if decomposed is None or found is None:
+            return []
+        code, message = found
+        finding = _finding(
+            LintCheck.queries, "warning", record, message, code=code, yaml_line=decomposed[2]
+        )
+        finding["_field_path"] = list(CONTEXT_PATH)
+        return [finding]
+    findings: list[dict[str, object]] = []
+    for advisory in advisories(site.value):
+        line = site.line_of(advisory.offset)
+        findings.append(
+            _finding(
+                LintCheck.queries,
+                "warning",
+                record,
+                advisory.message,
+                code=advisory.code,
+                yaml_line=line,
+            )
+        )
+        findings[-1]["_field_path"] = list(SIGNATURE_PATH)
     return findings
 
 
@@ -849,8 +916,11 @@ def run_lint(
     if LintCheck.queries in selected:
         from opentide.analysis import EngineUnavailableError
 
-        # Pure Python: reported whether or not the engine loads.
-        advisories = _bitdefender_findings(shown)
+        # The HarfangLab YARA and Bitdefender advisories need no engine: reported whether
+        # it loads or not.
+        advisories = [finding for record in shown for finding in _harfanglab_yara_findings(record)]
+        advisories.extend(_bitdefender_findings(shown))
+        findings.extend(advisories)
         try:
             findings.extend(_query_findings(target, shown))
         except EngineUnavailableError as exc:
@@ -861,7 +931,6 @@ def run_lint(
             return engine_unavailable_result(
                 exc, path=str(target), checks=[item.value for item in selected], findings=advisories
             )
-        findings.extend(advisories)
     if LintCheck.filenames in selected:
         findings.extend(
             _filename_findings(

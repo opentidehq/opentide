@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import Field, SerializerFunctionWrapHandler, model_serializer
+from pydantic import Field, SerializerFunctionWrapHandler, model_serializer, model_validator
 
 from opentide.models.base import TideField, TideModel
 from opentide.models.sentinel_attack import SentinelTechnique
@@ -362,14 +362,34 @@ class HarfangLabYaraMeta(TideModel):
 
 
 class HarfangLabYara(TideModel):
-    meta: HarfangLabYaraMeta
-    """Scan context, OS, and optional score override."""
-    strings: str
-    """YARA string section body, one definition per line, without the `strings:` header."""
-    condition: str
-    """YARA condition body, without the `condition:` header."""
+    """One form: `signature`, or the decomposed `meta`, `strings`, `condition`, and `imports`."""
+
+    signature: str | None = TideField(None, schema_extra={"tide.template.multiline": True})
+    """A whole YARA text: imports, then one or more YARA rules, written out in the block. Deploy
+    sends it as the YaraFile `content`, verbatim."""
+    meta: HarfangLabYaraMeta | None = None
+    """Decomposed form: scan context, OS, and optional score override. Required without
+    `signature`."""
+    strings: str | None = None
+    """Decomposed form: YARA string section body, one definition per line, without the
+    `strings:` header. Required without `signature`."""
+    condition: str | None = None
+    """Decomposed form: YARA condition body, without the `condition:` header. Required without
+    `signature`."""
     imports: list[str] | None = None
-    """YARA modules (`pe`, `elf`). Each becomes `import "<module>"`."""
+    """Decomposed form: YARA modules (`pe`, `elf`). Each becomes `import "<module>"`."""
+
+    @model_validator(mode="after")
+    def _decomposed_form_is_complete(self) -> HarfangLabYara:
+        if self.signature is not None:
+            return self
+        missing = [key for key in ("meta", "strings", "condition") if getattr(self, key) is None]
+        if missing:
+            raise ValueError(
+                "a yara object sets signature, or the decomposed meta, strings and condition; "
+                f"missing {', '.join(missing)}"
+            )
+        return self
 
 
 class SplunkSchedule(TideModel):

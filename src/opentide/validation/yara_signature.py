@@ -19,12 +19,18 @@ from opentide.validation.issues import ValidationIssue
 CODE = "yara_signature_alias"
 
 
+#: Platforms whose own check reports the alias (HarfangLab, in ``validation.session``).
+_OWN_CHECK = frozenset({"harfanglab"})
+
+
 def _signature_platforms(body: Mapping[str, Any]) -> list[str]:
     configurations = body.get("configurations")
     if not isinstance(configurations, Mapping):
         return []
     found: list[str] = []
     for platform, block in configurations.items():
+        if platform in _OWN_CHECK:
+            continue
         yara_block = block.get("yara") if isinstance(block, Mapping) else None
         if isinstance(yara_block, Mapping) and "signature" in yara_block:
             found.append(str(platform))

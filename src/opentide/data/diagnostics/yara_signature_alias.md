@@ -1,8 +1,8 @@
 # yara_signature_alias
 
-A `yara.signature` is a YAML alias instead of its own text.
+A `yara.signature` is a YAML alias of text anchored elsewhere in the file instead of YARA written in the block.
 
-Severity: error. Reported by `opentide validate` on any platform `yara` block (yara-1.0). Each block writes out the signature it deploys, so a change to one platform's YARA rule cannot silently change another's, and each is checked under its own platform profile.
+Severity: error. Reported by `opentide validate` (its `schema` check) on a rule whose `configurations.harfanglab.yara.signature` or `configurations.bitdefender.yara.signature` is `*name` (yara-1.0). What a block deploys must be readable in the block: an alias makes a change to the anchored text, under any other key, change the deployed rule too, and a signature in two platform blocks is checked once under each platform's profile. The YAML loader cannot tell an alias from text written in place, so `opentide validate` reads the file's node graph.
 
 ## Example
 
@@ -10,13 +10,24 @@ Severity: error. Reported by `opentide validate` on any platform `yara` block (y
 configurations:
   harfanglab:
     yara:
-      signature: &loader |
-        rule Loader { condition: uint16(0) == 0x5A4D }
+      signature: &shared_yara |
+        rule Cmd_String { condition: true }
   bitdefender:
     yara:
-      signature: *loader
+      signature: *shared_yara
 ```
 
 ## How to fix
 
-Write the signature out in each block.
+Write the YARA text under each `signature` with a block scalar (`|`), then run `opentide validate` again.
+
+```yaml
+configurations:
+  bitdefender:
+    yara:
+      signature: |
+        rule Cmd_String {
+          condition:
+            true
+        }
+```

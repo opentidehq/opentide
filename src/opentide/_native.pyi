@@ -4,7 +4,7 @@ from collections.abc import Callable, Sequence
 from typing import Final, Literal, final
 
 Severity = Literal["error", "warning", "information", "hint"]
-Language = Literal["kql", "spl", "esql", "eql", "kuery", "lucene", "falco", "opentide-yaml"]
+Language = Literal["kql", "spl", "esql", "eql", "kuery", "lucene", "falco", "yara", "opentide-yaml"]
 
 #: The version of the language-server crates (opentide-analysis) compiled in.
 ENGINE_VERSION: Final[str]

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import time
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -253,8 +254,19 @@ def run_validation(
             for issue in issues
             if issue.field_path and issue.field_path[-1] == "query"
         }
+        # A YARA code the model and the engine both find is shown once. Only an
+        # engine *error* replaces the model's: with --queries warn the model's
+        # error stays, so validate fails the rule as deploy would, and the
+        # engine's warning for the same code is dropped instead.
+        issues = _without_engine_reported_yara(issues, found.errors)
+        modelled = _model_yara_codes(issues)
+        engine_warnings = [
+            item
+            for item in found.warnings
+            if (item.file_path, tuple(item.field_path[:2]), item.code) not in modelled
+        ]
         issues.extend(_not_in(found.errors, rejected))
-        warnings.extend(_not_in(found.warnings, rejected))
+        warnings.extend(_not_in(engine_warnings, rejected))
         stats["queries_checked"] = found.queries
         progress_events.progress("queries", found.queries, found.queries)
         if not object_checks:
@@ -287,6 +299,71 @@ def run_validation(
     stats["wall_ms"] = round((time.perf_counter() - started) * 1000, 2)
 
     return ValidationReport(ok=not issues, issues=issues, warnings=warnings, stats=stats)
+
+
+#: The codes a coded model validator names in its message (``HarfangLabConfig
+#: validation failed with code(s): yara_include``).
+_MODEL_CODES = re.compile(r"validation failed with code\(s\): ([a-z0-9_]+(?:, [a-z0-9_]+)*)")
+
+
+#: Codes both a platform model and the engine's YARA language report.
+_YARA_PREFIXES = ("yara_", "bitdefender_yara_")
+
+
+def _model_codes(issue: ValidationIssue) -> list[str]:
+    """The codes a coded model validator's finding carries.
+
+    HarfangLab names them in a ``schema_validation`` message; Bitdefender reports
+    each as its own finding, under its code (bitdefender-1.0).
+    """
+    if issue.code.startswith(_YARA_PREFIXES):
+        return [issue.code]
+    match = _MODEL_CODES.search(issue.message) if issue.code == "schema_validation" else None
+    return match.group(1).split(", ") if match else []
+
+
+def _model_yara_codes(
+    issues: list[ValidationIssue],
+) -> set[tuple[Path | None, tuple[str, ...], str]]:
+    """``(file, configurations block, code)`` of each ``yara_*`` code the model reports."""
+    return {
+        (issue.file_path, tuple(issue.field_path[:2]), code)
+        for issue in issues
+        for code in _model_codes(issue)
+        if code.startswith(_YARA_PREFIXES)
+    }
+
+
+def _without_engine_reported_yara(
+    issues: list[ValidationIssue], engine: list[ValidationIssue]
+) -> list[ValidationIssue]:
+    """*issues*, without a model finding the engine already reported with its place.
+
+    The HarfangLab model checks the YARA-language codes a scan decides
+    (``yara_include``, ...) so deploy and the paths without the engine keep
+    them; the engine reports the same code at its line and column. A
+    ``schema_validation`` finding on a ``configurations`` block is dropped when
+    every code it carries is a ``yara_*`` code the engine reported as an error
+    (*engine*) in that block of that file. A ``harfanglab_*`` constraint code
+    keeps it, and so does an engine that did not run (``engine_unavailable``).
+    """
+    reported = {
+        (item.file_path, tuple(item.field_path[:2]), item.code)
+        for item in engine
+        if item.code.startswith(_YARA_PREFIXES)
+    }
+    if not reported:
+        return issues
+    kept: list[ValidationIssue] = []
+    for issue in issues:
+        block = (issue.file_path, tuple(issue.field_path[:2]))
+        codes = _model_codes(issue)
+        if codes and all(
+            code.startswith(_YARA_PREFIXES) and (*block, code) in reported for code in codes
+        ):
+            continue
+        kept.append(issue)
+    return kept
 
 
 def _query_place(issue: ValidationIssue) -> tuple[Path | None, tuple[str, ...]]:
@@ -581,6 +658,7 @@ def _validate_work_item(
                 check_shard=check_shard,
             )
         )
+        issues.extend(_yara_signature_alias_issues(item, file_path))
         from opentide.validation.yara_signature import yara_signature_alias_issues
 
         issues.extend(
@@ -611,6 +689,44 @@ def _validate_work_item(
         warnings = attach_yaml_lines(warnings, item.body, file_path=file_path)
 
     return issues, warnings
+
+
+def _yara_signature_alias_issues(
+    item: ObjectWorkItem, file_path: Path | None
+) -> list[ValidationIssue]:
+    """``yara_signature_alias``: a HarfangLab ``yara.signature`` that is a YAML alias.
+
+    The loaded body cannot tell an alias from text written in the block, so the
+    file's node graph is read, and only for a rule that has a signature.
+    """
+    configurations = item.body.get("configurations")
+    block = configurations.get("harfanglab") if isinstance(configurations, dict) else None
+    yara = block.get("yara") if isinstance(block, dict) else None
+    if file_path is None or not isinstance(yara, dict) or yara.get("signature") is None:
+        return []
+    from opentide.platforms.harfanglab.yara import SIGNATURE_PATH, signature_is_aliased
+
+    try:
+        text = file_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):  # the loader reports an unreadable file
+        return []
+    if not signature_is_aliased(text):
+        return []
+    return [
+        ValidationIssue(
+            code="yara_signature_alias",
+            severity="error",
+            object_uuid=item.uuid,
+            object_type=item.object_type,
+            file_path=file_path,
+            field_path=SIGNATURE_PATH,
+            message=(
+                "configurations.harfanglab.yara.signature is a YAML alias; what the block "
+                "deploys must be written in the block"
+            ),
+            suggestion="Write the YARA text under signature instead of aliasing an anchor",
+        )
+    ]
 
 
 def _uuid_issue_for_object(

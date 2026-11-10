@@ -102,11 +102,11 @@ scripts/ci-local.sh --full       # + coverage gate (pyproject.toml) — use befo
 | SentinelOne | ✅ | ✅ S1QL | ❌ | ✅ PowerQuery |
 | Carbon Black | ✅ | ✅ Lucene | ✅ Lucene | ✅ Lucene |
 | CrowdStrike | ✅ | ❌ | ❌ | ✅ CQL (Next-Gen SIEM) |
-| HarfangLab | ✅ | ❌ | ❌ | ✅ telemetry filters (no `--rule`) |
+| HarfangLab | ✅ | ❌ | ✅ YARA | ✅ telemetry filters (no `--rule`) |
 | Sysdig Secure (Falco) | ✅ | ❌ | ✅ Falco | ❌ |
 | Bitdefender GravityZone | ✅ | ❌ | ❌ | ❌ |
 
-CrowdStrike, HarfangLab, Sysdig and Bitdefender: `can_validate is False` — return `supported: False`, never fake validation.
+CrowdStrike, HarfangLab, Sysdig and Bitdefender: `can_validate is False` — return `supported: False` for `--live`, never fake validation. HarfangLab's YARA and Sysdig's Falco are checked offline only; Bitdefender blocks are checked by `opentide validate`.
 Sysdig (`src/opentide/platforms/sysdig/`) deploys through the Sysdig Secure runtime API only, with the rule
 id in deployment state; block macros and lists are expanded into the condition.
 Bitdefender (`src/opentide/platforms/bitdefender/`) deploys GravityZone custom detection rules over

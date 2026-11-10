@@ -6,7 +6,7 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, Protocol, cast
 
-from pydantic import PrivateAttr
+from pydantic import PrivateAttr, model_validator
 
 from opentide.models.base import FieldRole, TideField, TideModel
 from opentide.models.deployment_enums import DEPLOYABLE_STRATEGIES
@@ -80,6 +80,23 @@ class DetectionRule(TideModel):
     file: Path | None = TideField(None, schema_extra={"tide.template.hide": True})
     """Path of the file the rule was loaded from. Set by the loader, not written by authors."""
     _registry: TideRegistry | None = PrivateAttr(default=None)
+
+    @model_validator(mode="after")
+    def _harfanglab_yara_rule_name(self) -> DetectionRule:
+        # The decomposed HarfangLab YARA form names its YARA rule after `name`
+        # (harfanglab-1.0, Constraints): libyara refuses a keyword or a non-ASCII letter.
+        block = self.configurations.harfanglab if self.configurations else None
+        if block is None or block.yara is None or block.yara.signature is not None:
+            return self
+        from opentide.platforms.harfanglab.yara import rule_name_problem
+
+        problem = rule_name_problem(self.name)
+        if problem is not None:
+            raise ValueError(
+                "DetectionRule validation failed with code(s): harfanglab_yara_rule_name "
+                f"(rule {self.name!r}: {problem})"
+            )
+        return self
 
     def platform_configs(self) -> RuleConfigurations:
         """``configurations``, or an error naming the rule when it has none.
