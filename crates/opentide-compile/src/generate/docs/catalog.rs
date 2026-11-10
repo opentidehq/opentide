@@ -1062,8 +1062,8 @@ mod tests {
             slugs,
             [
                 ("cccccccc-3", "alpha"),
-                ("bbbbbbbb-2", "sentinel-kql-rule-bbbbbbbb"),
                 ("aaaaaaaa-1", "sentinel-kql-rule"),
+                ("bbbbbbbb-2", "sentinel-kql-rule-bbbbbbbb"),
             ]
         );
     }

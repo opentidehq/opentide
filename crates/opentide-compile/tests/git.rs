@@ -508,3 +508,151 @@ fn the_checkout_is_found_from_a_subfolder_and_a_bare_repository_is_none() {
         Err(GitError::MissingCheckout(lone_bare.clone()))
     );
 }
+
+/// `generate docs --changed`: the object files that differ from the default
+/// branch's merge base, committed on the branch, edited, added (untracked)
+/// or deleted; files of other folders and nested files are not read.
+#[test]
+fn docs_read_the_object_files_changed_against_the_default_branch() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dunce::canonicalize(dir.path()).unwrap();
+    git_cmd(&root, &["init", "-q", "-b", "main"]);
+    write(&root, "objects/rules/kept.yaml", "name: kept\n");
+    write(&root, "objects/rules/edited.yaml", "name: edited\n");
+    write(&root, "objects/rules/deleted.yaml", "name: deleted\n");
+    write(&root, "objects/rules/committed.yaml", "name: committed\n");
+    write(&root, "other/elsewhere.yaml", "name: elsewhere\n");
+    commit(&root, "base");
+    git_cmd(&root, &["checkout", "-q", "-b", "feature"]);
+    write(
+        &root,
+        "objects/rules/committed.yaml",
+        "name: committed on the branch\n",
+    );
+    commit(&root, "on the branch");
+    write(
+        &root,
+        "objects/rules/edited.yaml",
+        "name: edited in the work tree\n",
+    );
+    write(&root, "objects/rules/added.yaml", "name: added\n");
+    write(&root, "objects/rules/notes.md", "not an object\n");
+    write(&root, "objects/rules/sub/nested.yaml", "name: nested\n");
+    write(&root, "other/elsewhere.yaml", "name: changed elsewhere\n");
+    std::fs::remove_file(root.join("objects/rules/deleted.yaml")).unwrap();
+    let keep = |name: &str| {
+        std::path::Path::new(name)
+            .extension()
+            .is_some_and(|ext| ext == "yaml")
+    };
+    let changed = git::changed_in_folders(&root, &[root.join("objects/rules")], &keep).unwrap();
+    let found: Vec<(&str, Option<&[u8]>)> = changed
+        .iter()
+        .map(|file| (file.relative.as_str(), file.baseline.as_deref()))
+        .collect();
+    assert_eq!(
+        found,
+        [
+            ("objects/rules/added.yaml", None),
+            (
+                "objects/rules/committed.yaml",
+                Some(b"name: committed\n".as_slice())
+            ),
+            (
+                "objects/rules/deleted.yaml",
+                Some(b"name: deleted\n".as_slice())
+            ),
+            (
+                "objects/rules/edited.yaml",
+                Some(b"name: edited\n".as_slice())
+            ),
+        ]
+    );
+    assert_eq!(changed[0].absolute, root.join("objects/rules/added.yaml"));
+}
+
+/// On the default branch with nothing else to compare with, the baseline is
+/// HEAD: only work not committed yet counts.
+#[test]
+fn docs_on_a_lone_branch_compare_with_head() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dunce::canonicalize(dir.path()).unwrap();
+    git_cmd(&root, &["init", "-q", "-b", "trunk"]);
+    write(&root, "rules/a.yaml", "a: 1\n");
+    commit(&root, "a");
+    write(&root, "rules/b.yaml", "b: 1\n");
+    commit(&root, "b");
+    let keep = |_: &str| true;
+    assert!(
+        git::changed_in_folders(&root, &[root.join("rules")], &keep)
+            .unwrap()
+            .is_empty()
+    );
+    write(&root, "rules/b.yaml", "b: 2\n");
+    let changed = git::changed_in_folders(&root, &[root.join("rules")], &keep).unwrap();
+    assert_eq!(changed.len(), 1);
+    assert_eq!(changed[0].relative, "rules/b.yaml");
+}
+
+/// No commit, or no checkout: the run says what it needs.
+#[test]
+fn docs_changes_need_a_commit() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dunce::canonicalize(dir.path()).unwrap();
+    let keep = |_: &str| true;
+    let error = git::changed_in_folders(&root, std::slice::from_ref(&root), &keep).unwrap_err();
+    assert_eq!(error.message(), git::NO_GIT_MESSAGE);
+    git_cmd(&root, &["init", "-q", "-b", "main"]);
+    let error = git::changed_in_folders(&root, std::slice::from_ref(&root), &keep).unwrap_err();
+    assert_eq!(error.message(), git::NO_GIT_MESSAGE);
+}
+
+/// The `origin` remote's URL picks the Markdown flavour of a local run.
+#[test]
+fn the_origin_url_is_read_from_the_configuration() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dunce::canonicalize(dir.path()).unwrap();
+    git_cmd(&root, &["init", "-q", "-b", "main"]);
+    assert_eq!(git::origin_url(&root), None);
+    git_cmd(
+        &root,
+        &[
+            "remote",
+            "add",
+            "origin",
+            "git@gitlab.example.org:team/detections.git",
+        ],
+    );
+    std::fs::create_dir_all(root.join("nested")).unwrap();
+    assert_eq!(
+        git::origin_url(&root.join("nested")).as_deref(),
+        Some("git@gitlab.example.org:team/detections.git")
+    );
+}
+
+/// A feature branch tracking its own remote copy still compares with the
+/// default branch, not with what it already pushed.
+#[test]
+fn docs_on_a_pushed_feature_branch_compare_with_the_default_branch() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dunce::canonicalize(dir.path()).unwrap();
+    git_cmd(&root, &["init", "-q", "-b", "main"]);
+    write(&root, "rules/a.yaml", "a: 1\n");
+    commit(&root, "a");
+    git_cmd(&root, &["checkout", "-q", "-b", "feature"]);
+    write(&root, "rules/a.yaml", "a: 2\n");
+    let head = commit(&root, "on the branch");
+    git_cmd(
+        &root,
+        &["update-ref", "refs/remotes/origin/feature", head.as_str()],
+    );
+    git_cmd(&root, &["config", "branch.feature.remote", "origin"]);
+    git_cmd(
+        &root,
+        &["config", "branch.feature.merge", "refs/heads/feature"],
+    );
+    let keep = |_: &str| true;
+    let changed = git::changed_in_folders(&root, &[root.join("rules")], &keep).unwrap();
+    assert_eq!(changed.len(), 1, "{changed:?}");
+    assert_eq!(changed[0].baseline.as_deref(), Some(b"a: 1\n".as_slice()));
+}

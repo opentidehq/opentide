@@ -14,7 +14,7 @@ locally, byte for byte what the Python CLI (the oracle, opentide 0.23.0) sends.
 | `dry_run.rs` | `deploy --dry-run`'s result payload, in the oracle's key order; `--uuid`/`--file` selection (#753) | `cli/services/deploy.py` |
 | `git.rs` | The git baseline: the run's changed files through gitoxide's crates (`gix-discover` finds the checkout, `gix-ref`, `gix-odb`, `gix-diff`, `gix-revision` for rev-specs and the merge base), CI diff sources | `deployment/git_repo.py`, `deployment/ci.py` |
 | `kql.rs`, `duration.rs`, `attack.rs` | Exclusions and `let` statements; Sentinel and Elastic durations; techniques a rule inherits, `att&ck` entries | `platforms/kql.py`, `sentinel/client.py`, `elastic/durations.py`, `generation/framework.py` |
-| `generate/` | Generation (UC-3.2, #824): `exports.rs` the Navigator layer, objects table and revisions snapshot; `relations.rs` parents and children; `json_text.rs` JSON files as `json.dumps(indent=n)` lays them out, ASCII only; `files.rs` parallel writes (rayon) and the written-file count by modification time and size | `export/`, `generation/framework.py`, `cli/services/generation.py` |
+| `generate/` | Generation (UC-3.2, #824): `exports.rs` the Navigator layer, objects table and revisions snapshot; `relations.rs` parents and children; `json_text.rs` JSON files as `json.dumps(indent=n)` lays them out, ASCII only; `files.rs` parallel writes (rayon), removals and the written-file count by modification time and size; `docs/` (UC-3.2b, #915) the documentation pages: `catalog.rs` the objects in their models and the relations walk (active rules, coverage and chaining graphs), `render.rs` each section's data, `templates/*.md.j2` the minijinja templates that lay the pages out, `flavor.rs` the four Markdown flavours, `mermaid.rs` diagrams (labels wrapped by textwrap), `cve.rs` CVE links, `inflight.rs` the inflight preview overlay, `changed.rs` `--changed` | `export/`, `generation/framework.py`, `cli/services/generation.py`, `documentation/`, `indexing/inflight.py` |
 | `json.rs` | `Json`: an ordered JSON value, so a body keeps the oracle's key order without `serde_json`'s `preserve_order` (a workspace-wide feature) | |
 
 ## Place
@@ -26,7 +26,9 @@ domain, tier 1 (`xtask/layers.toml`), beside `opentide-analysis`: it reads the i
 
 - The caller loads the workspace. Reads go through `opentide-workspace`'s `FileSystem`
   (`plan::local_scope`, `plan::state_id`, `dry_run`), except `git.rs`, which reads the
-  repository through gitoxide and the CI event file. Nothing reaches the network. Only
+  repository through gitoxide (`gix-config` for the `origin` remote and a branch's upstream)
+  and the CI event file, and `generate/docs` reads the inflight shards and, for the pages no
+  object writes any more, the docs folders. Nothing reaches the network. Only
   `generate/files.rs` writes: rendering is pure (a phase returns its `Output`s), and the
   command line writes them with `files::write_all`.
 - A generated file the oracle writes is byte for byte the oracle's on every recorded fixture
@@ -49,6 +51,7 @@ domain, tier 1 (`xtask/layers.toml`), beside `opentide-analysis`: it reads the i
 ```bash
 cargo nextest run -p opentide-compile
 cargo nextest run -p opentide-cli generate_goldens         # every recorded generate case, in-process
+cargo nextest run -p opentide-compile generate_docs         # every page of the tide corpus, generic and GitHub
 cargo xtask payloads diff --against python --corpus all   # every body, every corpus
 cargo xtask payloads plan                                  # the dry run's plan against the recordings
 cargo xtask payloads git --against python                  # a scripted git history

@@ -32,6 +32,9 @@ gix-discover = "0.55"
 gix-error = "0.3"
 gix-hash = { version = "0.26", features = ["sha1"] }
 gix-object = "0.64"
+# The checkout's configuration (`generate docs`: the origin remote's host picks the
+# Markdown flavour; a branch's upstream is a `--changed` baseline).
+gix-config = { version = "0.60", default-features = false }
 gix-odb = "0.84"
 gix-ref = "0.67"
 gix-diff = { version = "0.67", default-features = false, features = ["sha1"] }

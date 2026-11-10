@@ -10,6 +10,8 @@
 //! - [`flavor`]: what GitHub, GitLab, Azure DevOps and plain Markdown change.
 //! - [`mermaid`]: diagrams as nodes and edges; [`vocab`]: vocabulary labels;
 //!   [`cve`]: CVE links.
+//! - [`inflight`]: the open pull requests' objects, overlaid on the index for
+//!   the run (the inflight preview).
 //! - [`changed`]: `--changed`, the objects git reports as changed against the
 //!   default branch.
 //!
@@ -21,6 +23,7 @@ pub mod catalog;
 pub mod changed;
 pub mod cve;
 pub mod flavor;
+pub mod inflight;
 pub mod mermaid;
 pub mod render;
 pub mod vocab;

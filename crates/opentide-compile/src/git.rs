@@ -720,6 +720,269 @@ pub fn no_commits_warning(workspace: &Path, env: Env<'_>, advice: &str) -> Optio
     ))
 }
 
+// --- the default-branch baseline (`core/git_baseline.py`) ---------------------
+
+/// The message of a run that needs a commit to compare with
+/// (`NO_GIT_MESSAGE`).
+pub const NO_GIT_MESSAGE: &str =
+    "changed-object discovery requires a git repository with at least one commit";
+
+/// Default-branch names tried as `origin/<name>`, then `<name>`.
+pub const DEFAULT_BRANCH_NAMES: [&str; 3] = ["development", "main", "master"];
+
+/// The configuration of the repository `git_dir` belongs to.
+fn config(git_dir: &Path) -> Option<gix_config::File> {
+    let common =
+        match gix_discover::path::from_plain_file_relative_to_file(&git_dir.join("commondir")) {
+            Some(Ok(common)) => common,
+            _ => git_dir.to_path_buf(),
+        };
+    gix_config::File::from_path_no_includes(common.join("config"), gix_config::Source::Local).ok()
+}
+
+/// The URL of the `origin` remote of the checkout at or above `start`.
+pub fn origin_url(start: &Path) -> Option<String> {
+    let (_, git_dir) = discover(start)?;
+    let url = config(&git_dir)?.string("remote.origin.url")?;
+    Some(String::from_utf8_lossy(&url).into_owned())
+}
+
+/// A file changed against the baseline: where it is, and its bytes at the
+/// baseline, when the baseline has it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChangedFile {
+    /// Its path from the git top level, `/`-separated.
+    pub relative: String,
+    /// Where it is (or was) on disk.
+    pub absolute: PathBuf,
+    /// Its content at the baseline.
+    pub baseline: Option<Vec<u8>>,
+}
+
+/// The name of the branch HEAD is on, if any.
+fn current_branch(repo: &Repo) -> Option<String> {
+    let head = repo.refs.try_find("HEAD").ok()??;
+    match head.target {
+        gix_ref::Target::Symbolic(name) => name
+            .as_bstr()
+            .to_str()
+            .ok()?
+            .strip_prefix("refs/heads/")
+            .map(str::to_owned),
+        gix_ref::Target::Object(_) => None,
+    }
+}
+
+/// The branch `origin/HEAD` names.
+fn remote_default_branch(repo: &Repo) -> Option<String> {
+    let reference = repo.refs.try_find("refs/remotes/origin/HEAD").ok()??;
+    match reference.target {
+        gix_ref::Target::Symbolic(name) => name
+            .as_bstr()
+            .to_str()
+            .ok()?
+            .strip_prefix("refs/remotes/origin/")
+            .map(str::to_owned),
+        gix_ref::Target::Object(_) => None,
+    }
+}
+
+/// The upstream `branch` tracks (`@{upstream}`): `origin/<branch>` for a
+/// remote's branch, the local branch for `remote = .`, and whether it is the
+/// branch's own copy.
+fn upstream(git_dir: &Path, branch: &str) -> Option<(String, bool)> {
+    let config = config(git_dir)?;
+    let remote = config.string(format!("branch.{branch}.remote").as_str())?;
+    let merge = config.string(format!("branch.{branch}.merge").as_str())?;
+    let remote = remote.to_str().ok()?;
+    let merge = merge.to_str().ok()?;
+    let name = merge.strip_prefix("refs/heads/")?;
+    let own = merge == format!("refs/heads/{branch}");
+    if remote == "." {
+        Some((name.to_owned(), own))
+    } else {
+        Some((format!("{remote}/{name}"), own))
+    }
+}
+
+/// The baseline refs to try, most specific first (`candidate_refs`).
+fn candidate_refs(repo: &Repo, git_dir: &Path) -> Vec<String> {
+    let head_branch = current_branch(repo);
+    let remote_default = remote_default_branch(repo);
+    let tracked = head_branch
+        .as_deref()
+        .and_then(|branch| upstream(git_dir, branch));
+    let mut candidates: Vec<String> = Vec::new();
+    let mut last_resort = None;
+    if let (Some((upstream, own)), Some(branch)) = (&tracked, &head_branch) {
+        let is_default = match &remote_default {
+            Some(default) => branch == default,
+            None => DEFAULT_BRANCH_NAMES.contains(&branch.as_str()),
+        };
+        if !own || is_default {
+            candidates.push(upstream.clone());
+        } else {
+            last_resort = Some(upstream.clone());
+        }
+    }
+    if let Some(default) = &remote_default {
+        candidates.push(format!("origin/{default}"));
+    }
+    candidates.extend(
+        DEFAULT_BRANCH_NAMES
+            .iter()
+            .map(|name| format!("origin/{name}")),
+    );
+    candidates.extend(DEFAULT_BRANCH_NAMES.iter().map(|name| (*name).to_owned()));
+    candidates.extend(last_resort);
+    let mut ordered: Vec<String> = Vec::new();
+    for candidate in candidates {
+        if Some(&candidate) == head_branch.as_ref() || ordered.contains(&candidate) {
+            continue;
+        }
+        ordered.push(candidate);
+    }
+    ordered
+}
+
+/// The commit the work is compared with (`resolve_baseline`): HEAD's merge
+/// base with the first candidate ref that has one, else HEAD itself.
+fn baseline(repo: &Repo, git_dir: &Path) -> Result<ObjectId, GitError> {
+    let head = head_commit(repo).ok_or_else(|| failed(NO_GIT_MESSAGE))?;
+    for candidate in candidate_refs(repo, git_dir) {
+        if let Some(id) = commit_id(repo, &candidate)
+            && let Some(base) = merge_base(repo, head, id)
+        {
+            return Ok(base);
+        }
+    }
+    Ok(head)
+}
+
+/// The entries of the tree at `path` (`/`-separated, from the top level) in
+/// the commit `id`: name, object and whether it is a blob.
+fn tree_entries(repo: &Repo, id: ObjectId, path: &str) -> Vec<(String, ObjectId, bool)> {
+    let Some(commit) = repo.commit(id) else {
+        return Vec::new();
+    };
+    let mut tree = commit.tree;
+    let mut buf = Vec::new();
+    for part in path.split('/').filter(|part| !part.is_empty()) {
+        let Ok(iter) = repo.odb.find_tree_iter(&tree, &mut buf) else {
+            return Vec::new();
+        };
+        let next = iter
+            .filter_map(Result::ok)
+            .find(|entry| entry.filename == part.as_bytes().as_bstr() && entry.mode.is_tree());
+        match next {
+            Some(entry) => tree = entry.oid.to_owned(),
+            None => return Vec::new(),
+        }
+    }
+    let Ok(iter) = repo.odb.find_tree_iter(&tree, &mut buf) else {
+        return Vec::new();
+    };
+    iter.filter_map(Result::ok)
+        .map(|entry| {
+            (
+                String::from_utf8_lossy(entry.filename).into_owned(),
+                entry.oid.to_owned(),
+                entry.mode.is_blob(),
+            )
+        })
+        .collect()
+}
+
+/// The files directly in each of `folders` that differ from the default
+/// branch's baseline: changed, added (untracked included) or deleted
+/// (`changed_paths` read for the object folders only). `keep` picks the file
+/// names that count. Sorted by path.
+///
+/// # Errors
+///
+/// No checkout holds `workspace`, or HEAD names no commit:
+/// [`NO_GIT_MESSAGE`].
+pub fn changed_in_folders(
+    workspace: &Path,
+    folders: &[PathBuf],
+    keep: &dyn Fn(&str) -> bool,
+) -> Result<Vec<ChangedFile>, GitError> {
+    let (top, git_dir) = discover(workspace).ok_or_else(|| failed(NO_GIT_MESSAGE))?;
+    let repo = open(workspace).map_err(|_| failed(NO_GIT_MESSAGE))?;
+    let base = baseline(&repo, &git_dir)?;
+    let top = dunce::canonicalize(&top).unwrap_or(top);
+    let mut changed = Vec::new();
+    for folder in folders {
+        let Ok(real) = dunce::canonicalize(folder) else {
+            continue;
+        };
+        let Ok(relative) = real.strip_prefix(&top) else {
+            continue;
+        };
+        let prefix: String = relative
+            .components()
+            .map(|part| part.as_os_str().to_string_lossy().into_owned())
+            .collect::<Vec<_>>()
+            .join("/");
+        let committed: std::collections::BTreeMap<String, ObjectId> =
+            tree_entries(&repo, base, &prefix)
+                .into_iter()
+                .filter(|(name, _, blob)| *blob && keep(name))
+                .map(|(name, id, _)| (name, id))
+                .collect();
+        let mut on_disk: std::collections::BTreeMap<String, Vec<u8>> =
+            std::collections::BTreeMap::new();
+        if let Ok(entries) = std::fs::read_dir(&real) {
+            for entry in entries.filter_map(Result::ok) {
+                let name = entry.file_name().to_string_lossy().into_owned();
+                if !keep(&name) || !entry.file_type().is_ok_and(|kind| kind.is_file()) {
+                    continue;
+                }
+                if let Ok(bytes) = std::fs::read(entry.path()) {
+                    on_disk.insert(name, bytes);
+                }
+            }
+        }
+        let mut names: Vec<&String> = committed.keys().chain(on_disk.keys()).collect();
+        names.sort();
+        names.dedup();
+        for name in names {
+            let before = committed.get(name);
+            let now = on_disk.get(name);
+            let same = match (before, now) {
+                (Some(id), Some(bytes)) => {
+                    gix_object::compute_hash(gix_hash::Kind::Sha1, gix_object::Kind::Blob, bytes)
+                        .is_ok_and(|hash| hash == *id)
+                }
+                _ => false,
+            };
+            if same {
+                continue;
+            }
+            let baseline = before.and_then(|id| {
+                let mut buf = Vec::new();
+                repo.odb
+                    .find_blob(id, &mut buf)
+                    .ok()
+                    .map(|blob| blob.data.to_vec())
+            });
+            let relative = if prefix.is_empty() {
+                name.clone()
+            } else {
+                format!("{prefix}/{name}")
+            };
+            changed.push(ChangedFile {
+                absolute: top.join(&relative),
+                relative,
+                baseline,
+            });
+        }
+    }
+    changed.sort_by(|a, b| a.relative.cmp(&b.relative));
+    changed.dedup_by(|a, b| a.relative == b.relative);
+    Ok(changed)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
