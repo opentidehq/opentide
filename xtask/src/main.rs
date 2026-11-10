@@ -79,7 +79,12 @@ commands:
                  run opentide-workspace's lint on every recorded `lint --json`
                  case and compare its findings, verdict, next steps and the
                  files --fix renamed with the recording (UC-2.3, #818)
-  codegen        generate schemas, stubs, types and references (UC-1.8, #814)
+  codegen [--check]
+                 write the artifacts generated from the Rust model (the
+                 platform templates); --check compares them, and what
+                 `opentide generate` writes with each golden recording of an
+                 `opentide generate` that ran its schemas, templates and
+                 snippets phases and exited 0 (UC-1.8, #814)
   golden <record|check|diff|lock|coverage> [options]
                  record what the frozen Python CLI does, and check an engine
                  against the recordings (tests/golden/README.md);
@@ -180,7 +185,13 @@ fn main() -> ExitCode {
                 ExitCode::from(2)
             }
         },
-        "codegen" => not_yet("codegen", "UC-1.8", 814),
+        "codegen" => match xtask::codegen::run(rest) {
+            Ok(code) => ExitCode::from(code),
+            Err(error) => {
+                eprintln!("xtask codegen: {error:#}");
+                ExitCode::from(2)
+            }
+        },
         "golden" => xtask::golden::main(rest),
         "bench" => xtask::bench::main(rest),
         "vocab" => xtask::vocab::main(rest),
@@ -194,16 +205,6 @@ fn main() -> ExitCode {
             ExitCode::from(2)
         }
     }
-}
-
-/// A command whose work item has not landed: it fails, so that no script or
-/// CI job can mistake it for a check that passed.
-fn not_yet(command: &str, item: &str, issue: u32) -> ExitCode {
-    eprintln!(
-        "xtask {command}: not implemented yet; {item} \
-         (https://github.com/opentidehq/opentide/issues/{issue}) implements it"
-    );
-    ExitCode::FAILURE
 }
 
 /// `compare`: whether the runs are equal, or the ledger is valid.

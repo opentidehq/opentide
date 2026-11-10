@@ -932,3 +932,19 @@ fn a_block_larger_than_the_budget_is_left_to_the_conversion() {
     };
     assert!(!errors.is_empty());
 }
+
+/// An optional `Literal` is Pydantic's `anyOf [literal, null]`: its `enum`
+/// holds the literal's values only, never a `null` (the schema diff
+/// against the oracle, `cargo xtask schema diff`).
+#[test]
+fn an_optional_literal_keeps_null_out_of_its_enum() {
+    let schema = serde_json::to_value(schemars::schema_for!(ElasticConfig)).unwrap();
+    let language = &schema["properties"]["language"];
+    assert_eq!(
+        language["anyOf"],
+        json!([{"type": "string", "enum": ["kuery", "lucene"]}, {"type": "null"}]),
+        "{language}"
+    );
+    let threat = &schema["$defs"]["ElasticThreatMatch"]["properties"]["language"];
+    assert_eq!(threat["anyOf"], language["anyOf"], "{threat}");
+}

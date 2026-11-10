@@ -155,8 +155,10 @@ cargo xtask check-layers
   set `[lints] workspace = true`, place it in `xtask/layers.toml` in the same change, and give it an
   `AGENTS.md`. `check-layers` fails until the crate is placed. Moving a crate between layers is a
   design decision for the maintainer, never a fix for a red check.
-- `codegen`, `golden` and `bench` are stubs that exit 1 and name the work item that implements them:
-  UC-1.8 (#814), UC-0.5 (#803) and UC-0.8 (#806). A stub never exits 0.
+- `codegen [--check]` writes the artifacts generated from the Rust model and, with `--check`,
+  compares them and what `opentide generate` writes with the golden recordings (UC-1.8, #814).
+  A new command whose work item has not landed is a stub that exits 1 and names it; a stub never
+  exits 0.
 
 ## Worktrees and target pools
 
