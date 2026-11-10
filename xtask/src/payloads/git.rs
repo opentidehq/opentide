@@ -291,6 +291,16 @@ mod tests {
         );
         assert!(read("no checkout").get("error").is_some());
         assert_eq!(
+            read("a rename and a delete")["files"],
+            json!(["renamed-rule.yaml"])
+        );
+        assert_eq!(read("a detached HEAD")["files"], edited["files"]);
+        assert_eq!(
+            read("a merge commit")["files"].as_array().map(Vec::len),
+            Some(1)
+        );
+        assert!(read("a shallow clone").get("error").is_some());
+        assert_eq!(
             read("a workspace below the git top level")["files"]
                 .as_array()
                 .map(Vec::len),
