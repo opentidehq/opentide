@@ -16,7 +16,9 @@ that retry as ``bitdefender_create_unconfirmed``.
 
 from __future__ import annotations
 
+import hashlib
 import re
+import secrets
 import threading
 import time
 import uuid
@@ -26,6 +28,7 @@ from typing import Any
 
 import requests
 
+from opentide.core.environment import reject_unsubstituted_placeholders
 from opentide.platforms.transport import TenantSession
 
 API_PATH = "/v1.0/jsonrpc/incidents"
@@ -48,9 +51,8 @@ MAX_RATE_LIMITED = 10
 #: GravityZone's ``error.data.details`` for a create refused because the name is
 #: taken. The exact text is unconfirmed (RFC 0016, open questions): tighten this
 #: one pattern, and its test, after a tenant check.
-_NAME_CONFLICT = re.compile(
-    r"already exists?|duplicate|name[^.]*(?:exists|taken|in use|unique)", re.IGNORECASE
-)
+_NAME = re.compile(r"\bnames?\b", re.IGNORECASE)
+_TAKEN = re.compile(r"duplicat|already exists?|\bexists\b|taken|in use|unique", re.IGNORECASE)
 _TYPE_MISMATCH = re.compile(
     r"\b(?:sub)?type\b[^.]*(?:mismatch|does not match|differ|cannot be changed)"
     r"|(?:mismatch|cannot change)[^.]*\b(?:sub)?type\b",
@@ -101,7 +103,8 @@ def is_name_conflict(details: str | None) -> bool:
     The spec maps ``bitdefender_name_conflict`` by ``error.data.details``, not
     by the error code, which GravityZone shares with other invalid parameters.
     """
-    return bool(details) and bool(_NAME_CONFLICT.search(details or ""))
+    text = details or ""
+    return bool(_NAME.search(text)) and bool(_TAKEN.search(text))
 
 
 class _Pacer:
@@ -133,6 +136,18 @@ class _Pacer:
 
 #: Shared by every client of the process, so tenants sharing a key share its budget.
 PACER = _Pacer()
+
+#: A per-process salt: the pacer's keys mean nothing outside this process.
+_PACE_SALT = secrets.token_bytes(16)
+
+
+def pace_key(api_key: str) -> str:
+    """The pacer's key for *api_key*: a salted key-derivation digest, never the key.
+
+    PBKDF2 rather than a bare hash, because the input is a credential.
+    """
+    digest = hashlib.pbkdf2_hmac("sha256", api_key.encode("utf-8"), _PACE_SALT, 1000)
+    return digest.hex()
 
 
 def _retry_after(response: requests.Response | None) -> float:
@@ -167,14 +182,15 @@ class BitdefenderClient:
         sleep: Callable[[float], None] = time.sleep,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
+        # An unset $GRAVITYZONE_API_KEY stays the literal placeholder: refuse it
+        # rather than send it as a key.
+        reject_unsubstituted_placeholders(url, api_key, client="Bitdefender GravityZone")
         self.endpoint = url.rstrip("/") + API_PATH
         self.tenant = tenant
         self.timeout = timeout
         self._sleep = sleep
         self._clock = clock
-        # The budget is per API key, shared by every client of the process that
-        # holds it. The key is already in this session's auth for the process's life.
-        self._pace_key = api_key
+        self._pace_key = pace_key(api_key)
         self.session = TenantSession(verify=verify_ssl)
         self.session.headers.update(
             {"Accept": "application/json", "Content-Type": "application/json"}

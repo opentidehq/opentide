@@ -182,6 +182,8 @@ _CHECK_WARNING_CODES: dict[str, frozenset[str]] = {
             "bitdefender_registry_full_hive",
             "bitdefender_contains_no_wildcard",
             "bitdefender_severity_collapsed",
+            # An unknown field on a target outside the spec's table.
+            "bitdefender_criterion_field",
         }
     ),
     ValidateCheck.sharing_config.value: frozenset({"api_key_literal", "unknown_connector"}),

@@ -105,6 +105,15 @@ def test_deploy_dry_run_previews_the_create_request(
     assert params["settings"]["severity"] == 3
     assert "T1059.005" in params["tags"]
     assert f"opentide:{UUID}" in params["tags"]
+    # The corpus tenant resolves the alias and adds its tags; the preview names it.
+    assert preview["tenant"] == "staging"
+    assert params["targets"] == {
+        "endpointTags": [
+            {"tagId": "5b680f6fb1a43d860a7b23c8", "companyId": "61827b8036492c2fc0718722"}
+        ]
+    }
+    assert "managed-by-opentide" in params["tags"]
+    assert "unresolved" not in preview
     deployer.deploy.assert_not_called()
 
 

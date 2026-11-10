@@ -30,6 +30,7 @@ from opentide.platforms.bitdefender.client import (
     BitdefenderApiError,
     BitdefenderClient,
     is_name_conflict,
+    pace_key,
 )
 from opentide.platforms.bitdefender.deployer import BitdefenderDeploy, returned_rule_id
 from opentide.states.deployment import (
@@ -457,6 +458,9 @@ def test_personal_and_service_keys(run: Run) -> None:
         (None, False),
         ("", False),
         ("Invalid value for parameter severity", False),
+        ("Duplicate value in criteriaList", False),
+        ("The tag already exists", False),
+        ("Invalid value for parameter name", False),
     ],
 )
 def test_name_conflicts_are_read_from_the_error_details(
@@ -521,3 +525,50 @@ def test_bitdefender_ids_are_24_lower_case_hex(value: Any) -> None:
     with pytest.raises(DeploymentStateError, match="external_id_shape"):
         normalise_external_id("bitdefender", value)
     assert normalise_external_id("bitdefender", FIRST_ID) == FIRST_ID
+
+
+def test_a_create_cut_off_mid_answer_is_retried_once(run: Run, tide_corpus_repo: Path) -> None:
+    def truncated(body: dict[str, Any]) -> requests.Response:
+        raise requests.exceptions.ChunkedEncodingError("connection broken: incomplete read")
+
+    run.fake.script.append(truncated)
+    fake = run()
+    assert fake.methods() == ["createCustomRule", "createCustomRule"]
+    assert _bound(tide_corpus_repo) == FIRST_ID
+    assert not _failed()
+
+
+def test_two_creates_without_an_answer_fail_that_rule_only(
+    run: Run, tide_corpus_repo: Path
+) -> None:
+    def lost(body: dict[str, Any]) -> requests.Response:
+        raise requests.Timeout("read timed out")
+
+    run.fake.script.extend([lost, lost])
+    other = _rule(name="rule-bitdefender-yara-1.0.yaml")
+    BitdefenderDeploy().deploy_tenant([_rule(), other], _tenant(), RELEASE, client=run.client())
+    # The first rule is unconfirmed; the tenant goes on to the second.
+    assert run.fake.methods() == ["createCustomRule"] * 3
+    assert _bound(tide_corpus_repo) is None
+    assert _failed()
+
+
+def test_an_unset_api_key_variable_is_refused_before_any_call(
+    run: Run, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("GRAVITYZONE_API_KEY", raising=False)
+    with pytest.raises(ValueError, match="GRAVITYZONE_API_KEY"):
+        BitdefenderClient(URL, "$GRAVITYZONE_API_KEY", tenant="t")
+    posted: list[Any] = []
+    monkeypatch.setattr(requests.Session, "post", lambda *a, **k: posted.append(a))
+    BitdefenderDeploy().deploy_tenant([_rule()], _tenant(api_key="$GRAVITYZONE_API_KEY"), RELEASE)
+    assert posted == []
+    assert _failed()
+
+
+def test_the_pacer_never_holds_the_key() -> None:
+    assert pace_key("secret") == pace_key("secret")
+    assert pace_key("secret") != pace_key("other")
+    assert "secret" not in pace_key("secret")
+    client = BitdefenderClient(URL, "secret", tenant="t")
+    assert client._pace_key == pace_key("secret")

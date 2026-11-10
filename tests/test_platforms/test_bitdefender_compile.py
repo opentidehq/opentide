@@ -241,3 +241,44 @@ def test_an_unknown_target_alias_fails_before_any_call() -> None:
     rule = _block_rule({"targets": {"companies": ["nowhere"]}})
     with pytest.raises(BitdefenderTargetError, match="bitdefender_target_unknown"):
         compile_rule(rule, StatusStrategy.RELEASE, _setup())
+
+
+def test_an_update_leaves_nothing_to_the_stored_rule() -> None:
+    """bitdefender-1.0 1.1: no alert sends filters: [], no targets sends targets: {}."""
+    compiled = compile_rule(_block_rule({}), StatusStrategy.RELEASE, _setup(endpoint_tags={}))
+    params = update_params(compiled, RULE_ID)
+    assert params["targets"] == {}
+    assert params["settings"]["filters"] == []
+    assert list(params["settings"])[-2:] == ["filters", "automaticActions"]
+    created = create_params(compiled)
+    assert "targets" not in created
+    assert "filters" not in created["settings"]
+
+
+def test_an_update_keeps_an_alert_filter_and_a_yara_rule_has_none() -> None:
+    rule = _block_rule(
+        {
+            "detection": {
+                "target": "process",
+                "criteria": [{"field": "Process.Name", "is": "x.exe"}],
+                "alert": "Suspicious",
+            }
+        }
+    )
+    params = update_params(compile_rule(rule, StatusStrategy.RELEASE), RULE_ID)
+    assert params["settings"]["filters"] == [{"field": "detection", "value": "Suspicious"}]
+    yara = _block_rule({"detection": None, "yara": {"signature": "rule A { condition: true }"}})
+    assert (
+        "filters"
+        not in update_params(compile_rule(yara, StatusStrategy.RELEASE), RULE_ID)["settings"]
+    )
+
+
+def test_without_a_tenant_aliases_are_never_sent_as_ids() -> None:
+    from opentide.platforms.bitdefender.compile import unresolved_targets
+
+    rule = _block_rule({"targets": {"endpoint_tags": ["tier0-servers"]}})
+    params = create_params(compile_rule(rule, StatusStrategy.RELEASE))
+    assert "targets" not in params
+    assert unresolved_targets(rule) == {"endpoint_tags": ["tier0-servers"]}
+    assert unresolved_targets(_block_rule({})) is None

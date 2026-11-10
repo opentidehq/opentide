@@ -251,8 +251,9 @@ def compile_rule(
 ) -> GravityZoneRule:
     """What *rule* deploys under *strategy* on the tenant whose ``setup`` is given.
 
-    Without a tenant (an offline preview) there are no tenant tags or default
-    targets, block target aliases stay unresolved, and actions are sent.
+    Without a tenant (an offline preview) there are no tenant tags, default
+    targets or ``companyId``, and ``targets`` is left out: its aliases resolve
+    only against a tenant (:func:`unresolved_targets` names them).
     """
     block = block_of(rule)
     automatic = bool(getattr(setup, "automatic_actions", True)) if setup is not None else True
@@ -266,12 +267,6 @@ def compile_rule(
             getattr(setup, "endpoint_tags", None),
             getattr(setup, "companies", None),
         )
-    elif block_targets:
-        targets = {
-            "endpointTags" if "endpoint_tags" in block_targets else "companiesIds": next(
-                iter(block_targets.values())
-            )
-        }
     return GravityZoneRule(
         uuid=str(rule.metadata.uuid),
         kind=block.kind,
@@ -282,6 +277,14 @@ def compile_rule(
         targets=targets,
         company_id=getattr(setup, "company_id", None) if setup is not None else None,
     )
+
+
+def unresolved_targets(rule: DetectionRule) -> dict[str, list[str]] | None:
+    """The block's ``targets`` aliases, which only a tenant resolves."""
+    block = block_of(rule)
+    if block.targets is None:
+        return None
+    return {key: list(value) for key, value in block.targets.model_dump(exclude_none=True).items()}
 
 
 def create_params(compiled: GravityZoneRule) -> dict[str, Any]:
@@ -302,19 +305,40 @@ def create_params(compiled: GravityZoneRule) -> dict[str, Any]:
     return params
 
 
+def _update_settings(compiled: GravityZoneRule) -> dict[str, Any]:
+    """``settings`` with ``filters: []`` on a Basic rule without ``alert``.
+
+    GravityZone keeps the stored value of any parameter an update leaves out,
+    so a removed alert filter must be sent empty, not omitted (bitdefender-1.0
+    1.1, Deploy). It goes where a create puts ``filters``: before the actions.
+    """
+    if compiled.kind != "detection" or "filters" in compiled.settings:
+        return compiled.settings
+    settings: dict[str, Any] = {}
+    for key, value in compiled.settings.items():
+        if key == "automaticActions":
+            settings["filters"] = []
+        settings[key] = value
+    settings.setdefault("filters", [])
+    return settings
+
+
 def update_params(compiled: GravityZoneRule, rule_id: str) -> dict[str, Any]:
-    """``updateCustomRule`` params: ``ruleId`` and the whole payload."""
-    params: dict[str, Any] = {
+    """``updateCustomRule`` params: ``ruleId`` and the whole payload.
+
+    Nothing is left to the stored rule: without targets the update sends
+    ``targets: {}`` (the whole company), and without ``alert`` a Basic rule
+    sends ``filters: []``.
+    """
+    return {
         "ruleId": rule_id,
         "type": RULE_TYPE,
         "name": compiled.name,
         "description": compiled.description,
         "tags": list(compiled.tags),
-        "settings": compiled.settings,
+        "settings": _update_settings(compiled),
+        "targets": compiled.targets or {},
     }
-    if compiled.targets:
-        params["targets"] = compiled.targets
-    return params
 
 
 def delete_params(rule_id: str) -> dict[str, Any]:

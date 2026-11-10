@@ -182,25 +182,34 @@ class BitdefenderDeploy(RuleDeployer):
         object_uuid = str(rule.metadata.uuid)
         fields = {"uuid": object_uuid, "tenant": tenant.name, "name": compiled.name}
         params = create_params(compiled)
+        unconfirmed = (
+            f"the first create of {compiled.name!r} got no answer, so it may have succeeded with "
+            "an id opentide does not know. Resolve it in the GravityZone console (delete the "
+            "rule, or record its id in .opentide/states/deployment/)"
+        )
         try:
             try:
                 result = client.create_rule(params)
-            except (requests.Timeout, requests.ConnectionError) as first:
-                # The create may or may not have happened: send it once more.
+            except requests.RequestException as first:
+                # No answer (a timeout, a reset, a truncated body): the create may or
+                # may not have happened. Send it once more, never more.
                 logger.warning("bitdefender_create_retried", error=str(first), **fields)
                 try:
                     result = client.create_rule(params)
+                except requests.RequestException as second:
+                    # Two creates may have landed: this rule only, the tenant goes on.
+                    _deployment_error(
+                        "bitdefender_create_unconfirmed",
+                        error=f"{unconfirmed}; the retry got no answer either",
+                        detail=str(second),
+                        **fields,
+                    )
+                    return
                 except BitdefenderApiError as exc:
                     if exc.name_conflict:
                         _deployment_error(
                             "bitdefender_create_unconfirmed",
-                            error=(
-                                f"the first create of {compiled.name!r} got no answer and the "
-                                "retry found the name taken: the first create may have "
-                                "succeeded with an id opentide does not know. Resolve it in the "
-                                "GravityZone console (delete the rule, or record its id in "
-                                ".opentide/states/deployment/)"
-                            ),
+                            error=f"{unconfirmed}; the retry found the name taken",
                             detail=str(exc),
                             **fields,
                         )
@@ -339,15 +348,24 @@ class BitdefenderDeploy(RuleDeployer):
         if not planned:
             return
         if client is None:
-            client = BitdefenderClient(
-                tenant.setup.url,
-                tenant.setup.api_key,
-                tenant=tenant.name,
-                key_type=tenant.setup.key_type,
-                verify_ssl=tenant_tls_verify(
-                    tenant.setup.ssl, platform=PLATFORM, tenant=tenant.name
-                ),
-            )
+            try:
+                client = BitdefenderClient(
+                    tenant.setup.url,
+                    tenant.setup.api_key,
+                    tenant=tenant.name,
+                    key_type=tenant.setup.key_type,
+                    verify_ssl=tenant_tls_verify(
+                        tenant.setup.ssl, platform=PLATFORM, tenant=tenant.name
+                    ),
+                )
+            except ValueError as exc:
+                # An unset credential variable: no rule on the tenant can deploy.
+                logger.critical(
+                    "bitdefender_tenant_deployment_failed", tenant=tenant.name, error=str(exc)
+                )
+                os.environ["DEPLOYMENT_ERROR_RAISED"] = "1"
+                deploy_events.note_failure(str(exc))
+                return
         for rule, action in planned:
             with deploy_events.deploying(PLATFORM, tenant.name, rule.metadata.uuid, rule.name):
                 try:

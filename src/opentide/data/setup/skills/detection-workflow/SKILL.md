@@ -43,8 +43,9 @@ opentide deploy --dry-run --strategy PREVIEW --all
 | CrowdStrike | yes | no |
 | HarfangLab | yes | no |
 | Sysdig Secure (Falco) | yes | no |
+| Bitdefender GravityZone | yes | no |
 
-Never fake query validation for CrowdStrike or HarfangLab.
+Never fake query validation for CrowdStrike, HarfangLab or Bitdefender.
 
 ## Workflow
 

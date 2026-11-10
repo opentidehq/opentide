@@ -849,15 +849,19 @@ def run_lint(
     if LintCheck.queries in selected:
         from opentide.analysis import EngineUnavailableError
 
+        # Pure Python: reported whether or not the engine loads.
+        advisories = _bitdefender_findings(shown)
         try:
             findings.extend(_query_findings(target, shown))
-            findings.extend(_bitdefender_findings(shown))
         except EngineUnavailableError as exc:
             from opentide.cli.services.engine import engine_unavailable_result
 
+            _apply_severity(advisories, config)
+            _add_diagnostic_fields(target, advisories)
             return engine_unavailable_result(
-                exc, path=str(target), checks=[item.value for item in selected], findings=[]
+                exc, path=str(target), checks=[item.value for item in selected], findings=advisories
             )
+        findings.extend(advisories)
     if LintCheck.filenames in selected:
         findings.extend(
             _filename_findings(

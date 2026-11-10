@@ -155,13 +155,52 @@ def _sysdig_compile_preview(rule: DetectionRule) -> dict[str, Any]:
     return {"uuid": rule.metadata.uuid, "name": rule.name, "api_request": api_body(compiled)}
 
 
-def _bitdefender_compile_preview(rule: DetectionRule) -> dict[str, Any]:
-    """The GravityZone ``createCustomRule`` request the deploy would send, without a tenant."""
+def _bitdefender_tenant() -> Any | None:
+    """The first configured GravityZone tenant, or ``None`` when there is none."""
     try:
-        payload = compile_offline("bitdefender", rule)
+        from opentide.core.registry import Opentide
+
+        tenants = Opentide.Configurations.Systems.Bitdefender.tenants
+    except Exception as exc:
+        logger.debug("bitdefender_preview_no_tenant", error=str(exc))
+        return None
+    return tenants[0] if tenants else None
+
+
+def _bitdefender_compile_preview(rule: DetectionRule) -> dict[str, Any]:
+    """The GravityZone ``createCustomRule`` request the deploy would send.
+
+    With a configured tenant, targets, tags and ``companyId`` are resolved
+    against it, and the preview names it. Without one, the request leaves them
+    out and ``unresolved`` lists the block's target aliases, never presented as
+    GravityZone ids.
+    """
+    from opentide.platforms.bitdefender.compile import (
+        create_params,
+        request_body,
+        unresolved_targets,
+    )
+    from opentide.platforms.bitdefender.deployer import BitdefenderDeploy
+
+    tenant = _bitdefender_tenant()
+    try:
+        compiled = BitdefenderDeploy().compile_deployment(rule, tenant)
     except Exception as exc:
         return _compile_failure(rule, exc)
-    return {"uuid": rule.metadata.uuid, "name": rule.name, "api_request": payload}
+    preview: dict[str, Any] = {
+        "uuid": rule.metadata.uuid,
+        "name": rule.name,
+        "api_request": request_body("createCustomRule", create_params(compiled)),
+    }
+    if tenant is not None:
+        preview["tenant"] = tenant.name
+    else:
+        preview["unresolved"] = {
+            "reason": "no bitdefender tenant is configured: targets, tenant tags and "
+            "companyId are resolved at deploy",
+            "targets": unresolved_targets(rule),
+        }
+    return preview
 
 
 def preview_rule_deployment(platform: str, rule: DetectionRule) -> dict[str, Any]:

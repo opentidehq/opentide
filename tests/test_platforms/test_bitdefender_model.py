@@ -453,7 +453,9 @@ def test_validate_reports_the_code_at_its_path() -> None:
 
 
 def test_the_catalogue_lists_the_specification_connection_fields() -> None:
-    from opentide.platforms.bitdefender.catalog import TARGET_FIELDS
+    from opentide.platforms.bitdefender.criteria import catalogue
+
+    connection = catalogue().target_fields("connection")
 
     resources = [
         "File",
@@ -479,5 +481,65 @@ def test_the_catalogue_lists_the_specification_connection_fields() -> None:
         f"Connection.{r}.Operation" for r in [*resources, "Email"]
     }
     expected |= {"Connection.SourceUser", "Connection.DestinationUser", "Connection.Email.Subject"}
-    assert expected <= TARGET_FIELDS["connection"]
-    assert len(TARGET_FIELDS["connection"]) == 24 + len(expected)
+    assert expected <= connection
+    assert len(connection) == 24 + len(expected)
+
+
+@pytest.mark.parametrize(
+    ("code", "block"),
+    [
+        ("bitdefender_targets_shape", _block(detection=PROCESS, targets={})),
+        (
+            "bitdefender_criteria_combination",
+            _block(
+                detection=_detection(
+                    "connection",
+                    {"field": "Connection.URL", "is": "u"},
+                    {"field": "Connection.SMBDomain", "is": "d"},
+                )
+            ),
+        ),
+        (
+            "bitdefender_criteria_combination",
+            _block(detection=_detection("file", {"field": "File.MD5", "is": "a" * 32})),
+        ),
+        (
+            "bitdefender_criteria_combination",
+            _block(
+                detection=_detection(
+                    "file",
+                    {"field": "File.Name", "is": "a.exe"},
+                    {"field": "File.CertificateSigner", "is": "x"},
+                    {"field": "File.CertificateSignedStatus", "is": "is_unsigned"},
+                )
+            ),
+        ),
+        (
+            "bitdefender_criterion_value",
+            _block(
+                detection=_detection(
+                    "email", {"field": "Email.Operation", "is": "teleported"}, alert="x"
+                )
+            ),
+        ),
+    ],
+)
+def test_the_catalogue_pairing_rules_hold(code: str, block: dict[str, Any]) -> None:
+    assert _codes(block) == {code}
+
+
+def test_an_unknown_field_is_an_error_on_a_closed_target_and_a_warning_elsewhere() -> None:
+    from opentide.platforms.bitdefender.advisories import bitdefender_advisories
+
+    closed = _block(detection=_detection("process", {"field": "Email.Sender", "is": "x"}))
+    assert _errors(closed) == [("bitdefender_criterion_field", ("detection", "criteria", "0"))]
+    open_target = _detection("email", {"field": "Email.Nonexistent", "is": "x"}, alert="a")
+    BitdefenderConfig.model_validate(_block(detection=open_target))
+    rule = {"configurations": {"bitdefender": _block(detection=open_target)}}
+    warned = [(a.code, a.field_path) for a in bitdefender_advisories(rule)]
+    assert warned == [
+        (
+            "bitdefender_criterion_field",
+            ("configurations", "bitdefender", "detection", "criteria", "0"),
+        )
+    ]

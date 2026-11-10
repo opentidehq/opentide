@@ -23,6 +23,16 @@ class RulePayload(ResultModel):
     code: str | None = Field(None, description="compile_* code, when the rule could not compile")
     help: str | None = Field(None, description="What fixes it, when known")
     file: str | None = Field(None, description="The rule's file, absolute")
+    tenant: str | None = Field(
+        None, description="The tenant the request was resolved against (Bitdefender)"
+    )
+    unresolved: dict[str, Any] | None = Field(
+        None,
+        description=(
+            "What the request leaves out because no tenant resolves it: its reason and the "
+            "block's target aliases (Bitdefender)"
+        ),
+    )
 
 
 class CompileDiagnostic(ResultModel):

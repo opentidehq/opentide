@@ -21,38 +21,8 @@ import re
 from collections.abc import Mapping
 from typing import Any
 
-from opentide.platforms.bitdefender.criteria import ALERT_OR_OPERATION, FIELDS, ONE_RESOURCE_TARGETS
 from opentide.platforms.bitdefender.criteria import Field as CatalogueField
-
-#: Detection targets, as the API spells them (bitdefender-1.0, ``detection``).
-DETECTION_TARGETS: frozenset[str] = frozenset(
-    {
-        "process",
-        "file",
-        "connection",
-        "registry",
-        "user connection",
-        "email",
-        "application",
-        "key vault",
-        "role",
-        "policy",
-        "sharing link",
-        "url",
-        "ssh key",
-        "launch template",
-        "service principal",
-        "user group",
-        "automation account",
-        "automation account hook",
-        "certificate authority",
-        "api",
-        "bucket",
-        "jira project",
-        "confluence page",
-    }
-)
-
+from opentide.platforms.bitdefender.criteria import catalogue
 
 #: A code and the path it is reported at, relative to ``configurations.bitdefender``.
 Finding = tuple[str, tuple[str, ...]]
@@ -82,11 +52,6 @@ CODE_MESSAGES: dict[str, str] = {
 #: Every constraint code :func:`block_findings` reports.
 CONSTRAINT_CODES: frozenset[str] = frozenset(CODE_MESSAGES)
 
-#: The EDR targets the catalogue lists, each with its detection fields.
-TARGET_FIELDS: dict[str, frozenset[str]] = {
-    target: frozenset(name for name, item in FIELDS.items() if item.target == target)
-    for target in ("process", "file", "connection", "registry")
-}
 
 _CRITERIA = ("detection", "criteria")
 
@@ -160,13 +125,22 @@ def _value_ok(item: CatalogueField, value: Any) -> bool:
     return True
 
 
+def unknown_field(target: str, criterion: Mapping[str, Any]) -> bool:
+    """Whether the criterion's field is not one of *target*'s in the catalogue."""
+    item = catalogue().fields.get(str(criterion["field"]))
+    return item is None or item.target != target
+
+
 def _criterion_codes(target: str, criterion: Mapping[str, Any]) -> set[str]:
-    """``bitdefender_criterion_field``, ``_relation`` and ``_value`` for one criterion."""
-    if target not in TARGET_FIELDS:
-        return set()
-    item = FIELDS.get(str(criterion["field"]))
-    if item is None or item.target != target:
-        return {"bitdefender_criterion_field"}
+    """``bitdefender_criterion_field``, ``_relation`` and ``_value`` for one criterion.
+
+    An unknown field is an error on a target whose field list the spec states,
+    and a warning elsewhere (:func:`unknown_field_paths`).
+    """
+    if unknown_field(target, criterion):
+        closed = target in catalogue().closed_targets
+        return {"bitdefender_criterion_field"} if closed else set()
+    item = catalogue().fields[str(criterion["field"])]
     relation = _relation(criterion)
     if relation not in item.relations or (relation == "contains" and item.kind == "hash"):
         return {"bitdefender_criterion_relation"}
@@ -179,7 +153,7 @@ def _sensors(criteria: list[Mapping[str, Any]]) -> set[str]:
     """The sensors the criteria need: a field's, or each enum value's."""
     sensors: set[str] = set()
     for criterion in criteria:
-        item = FIELDS.get(str(criterion["field"]))
+        item = catalogue().fields.get(str(criterion["field"]))
         if item is None:
             continue
         if item.kind == "enum":
@@ -199,7 +173,7 @@ def _combination_ok(target: str, criteria: list[Mapping[str, Any]], alert: Any) 
     if {"edr", "xdr"} <= sensors:
         return False
     for criterion in criteria:
-        item = FIELDS.get(str(criterion["field"]))
+        item = catalogue().fields.get(str(criterion["field"]))
         if item is None:
             continue
         if item.requires_any and not set(item.requires_any) & present:
@@ -211,13 +185,15 @@ def _combination_ok(target: str, criteria: list[Mapping[str, Any]], alert: Any) 
         for value in _values(criterion):
             if set(item.value_incompatible.get(str(value), ())) & fields:
                 return False
-    if target in ONE_RESOURCE_TARGETS:
-        resources = {FIELDS[f].resource for f in fields if f in FIELDS and FIELDS[f].resource}
+    known = catalogue().fields
+    if target in catalogue().one_resource_targets:
+        resources = {known[f].resource for f in fields if f in known and known[f].resource}
         if len(resources) > 1:
             return False
-    xdr = "xdr" in sensors or target not in TARGET_FIELDS
+    # Every target but the four EDR ones is an XDR sensor's.
+    xdr = "xdr" in sensors or target not in catalogue().closed_targets
     operation = any(name.endswith("Operation") for name in fields)
-    for rule_target, rule_field, scope, require in ALERT_OR_OPERATION:
+    for rule_target, rule_field, scope, require in catalogue().alert_or_operation:
         if rule_target is not None and rule_target != target:
             continue
         if scope == "xdr" and not xdr:
@@ -236,7 +212,7 @@ def detection_findings(detection: Any) -> tuple[list[Finding], str | None, list[
         return [], None, []
     found: list[Finding] = []
     target = detection.get("target")
-    if not isinstance(target, str) or target not in DETECTION_TARGETS:
+    if not isinstance(target, str) or target not in catalogue().detection_targets:
         found.append(("bitdefender_target", ("detection", "target")))
         target = None
     criteria = detection.get("criteria")
@@ -264,6 +240,26 @@ def detection_findings(detection: Any) -> tuple[list[Finding], str | None, list[
     return found, target, fields
 
 
+def unknown_field_paths(detection: Any) -> list[tuple[str, ...]]:
+    """Criteria whose field a target outside the spec's table does not list: warnings."""
+    if not isinstance(detection, Mapping):
+        return []
+    target = detection.get("target")
+    criteria = detection.get("criteria")
+    if (
+        not isinstance(target, str)
+        or target not in catalogue().detection_targets
+        or target in catalogue().closed_targets
+        or not isinstance(criteria, list)
+    ):
+        return []
+    return [
+        (*_CRITERIA, str(index))
+        for index, criterion in enumerate(criteria)
+        if _criterion_shape_ok(criterion) and unknown_field(target, criterion)
+    ]
+
+
 def action_scope_findings(
     actions: Any, *, kind: str, target: str | None, fields: list[str]
 ) -> list[Finding]:
@@ -285,7 +281,8 @@ def targets_codes(targets: Any) -> set[str]:
     if not isinstance(targets, Mapping):
         return set()
     present = [key for key in ("endpoint_tags", "companies") if key in targets]
-    if len(present) > 1:
+    if len(present) != 1:
+        # Neither list means the whole company: leave targets out to say that.
         return {"bitdefender_targets_shape"}
     for key in present:
         value = targets[key]
@@ -331,6 +328,11 @@ def yara_signature_codes(signature: Any) -> set[str]:
 _FIELD_NAMES = {"is_": "is", "any_": "any"}
 
 
+def _all_unset(value: Any) -> bool:
+    """A dumped table whose every key is ``None``: the author wrote none of them."""
+    return isinstance(value, Mapping) and bool(value) and all(v is None for v in value.values())
+
+
 def _as_authored(value: Any) -> Any:
     """*value* without ``None`` members, with field names read as their keys.
 
@@ -342,7 +344,7 @@ def _as_authored(value: Any) -> Any:
         return {
             _FIELD_NAMES.get(str(key), key): _as_authored(item)
             for key, item in value.items()
-            if item is not None
+            if item is not None and not _all_unset(item)
         }
     if isinstance(value, list):
         return [_as_authored(item) for item in value]

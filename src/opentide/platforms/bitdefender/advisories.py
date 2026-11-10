@@ -13,11 +13,14 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from opentide.platforms.bitdefender.criteria import REGISTRY_HIVES
+from opentide.platforms.bitdefender.criteria import catalogue
 
 REGISTRY_FULL_HIVE = "bitdefender_registry_full_hive"
 CONTAINS_NO_WILDCARD = "bitdefender_contains_no_wildcard"
 SEVERITY_COLLAPSED = "bitdefender_severity_collapsed"
+
+#: An unknown field on a target outside the spec's table: the constraint code, as a warning.
+UNKNOWN_FIELD = "bitdefender_criterion_field"
 
 ADVISORY_CODES = frozenset({REGISTRY_FULL_HIVE, CONTAINS_NO_WILDCARD, SEVERITY_COLLAPSED})
 
@@ -40,7 +43,7 @@ def short_hive(key: str) -> str | None:
     upper = hive.upper()
     if upper == "HKEY_USERS":
         return "HKU" if _USER_SID.match(rest) else "HKLU"
-    return REGISTRY_HIVES.get(upper)
+    return catalogue().registry_hives.get(upper)
 
 
 @dataclass(frozen=True)
@@ -101,6 +104,19 @@ def bitdefender_advisories(rule: Mapping[str, Any]) -> list[Advisory]:
     detection = block.get("detection")
     if isinstance(detection, Mapping):
         found.extend(_criteria_advisories(detection))
+        from opentide.platforms.bitdefender.catalog import unknown_field_paths
+
+        # On a target whose field list the spec does not state, an unknown field
+        # is a warning until the catalogue covers it (bitdefender-1.0).
+        found.extend(
+            Advisory(
+                UNKNOWN_FIELD,
+                (*_BLOCK, *path),
+                f"the criteria catalogue lists no such field for target {detection['target']!r}; "
+                "GravityZone may refuse it",
+            )
+            for path in unknown_field_paths(detection)
+        )
     response = rule.get("response")
     severity = response.get("alert_severity") if isinstance(response, Mapping) else None
     collapsed = _COLLAPSED.get(str(severity).strip().lower()) if severity else None

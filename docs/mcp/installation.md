@@ -31,7 +31,7 @@ The launcher tells that case apart from a missing `mcp` rather than reporting
 both as missing.
 </Callout>
 
-All nine platform adapters ship in the same wheel — enable them in the repo with `opentide setup platforms`.
+All ten platform adapters ship in the same wheel — enable them in the repo with `opentide setup platforms`.
 
 ## Verify
 
