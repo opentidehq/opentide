@@ -30,13 +30,15 @@ def _block(**keys: Any) -> dict[str, Any]:
     return {"enabled": True, "schema": "platform::bitdefender::1.0", "status": "STAGING", **keys}
 
 
-def _codes(block: dict[str, Any]) -> set[str]:
+def _errors(block: dict[str, Any]) -> list[tuple[str, tuple[str, ...]]]:
+    """``(code, field_path)`` for each finding, as validate reports them."""
     with pytest.raises(ValidationError) as caught:
         BitdefenderConfig.model_validate(block)
-    message = str(caught.value)
-    marker = "code(s): "
-    assert marker in message, message
-    return set(message.split(marker, 1)[1].split("[", 1)[0].strip().split(", "))
+    return [(error["type"], tuple(map(str, error["loc"]))) for error in caught.value.errors()]
+
+
+def _codes(block: dict[str, Any]) -> set[str]:
+    return {code for code, _ in _errors(block)}
 
 
 def _detection(target: str, *criteria: dict[str, Any], **extra: Any) -> dict[str, Any]:
@@ -182,7 +184,11 @@ def test_omitted_status_is_the_missing_field_not_a_code() -> None:
         (
             "bitdefender_action_scope",
             _block(
-                detection=_detection("connection", {"field": "Connection.Domain", "is": "x"}),
+                detection=_detection(
+                    "connection",
+                    {"field": "Connection.Domain", "is": "x"},
+                    {"field": "Connection.Protocol", "is": "smb"},
+                ),
                 actions={"kill_process": True},
             ),
         ),
@@ -239,7 +245,18 @@ def test_each_constraint_reports_its_code(code: str, block: dict[str, Any]) -> N
             {"field": "Connection.Protocol", "is": "http/https"},
             {"field": "Connection.DestinationPort", "any": [80, 443]},
         ),
-        _detection("email", {"field": "Email.Sender", "is": "x@example.com"}),
+        _detection("email", {"field": "Email.Sender", "is": "x@example.com"}, alert="Phishing"),
+        _detection(
+            "connection",
+            {"field": "Connection.Email.Subject", "contains": "*invoice*"},
+            {"field": "Connection.Email.Operation", "is": "received"},
+        ),
+        _detection("connection", {"field": "Connection.SourceUser", "is": "alice"}, alert="x"),
+        _detection(
+            "connection",
+            {"field": "Connection.Bucket.Name", "is": "backups"},
+            {"field": "Connection.Bucket.Operation", "any": ["deleted", "download"]},
+        ),
         _detection("file", {"field": "File.Operation", "is": "downloaded"}),
         _detection("file", {"field": "File.Name", "is": "a.exe"}, alert="Suspicious download"),
     ],
@@ -285,3 +302,182 @@ def test_a_signature_alias_is_found_and_its_anchor_is_not() -> None:
     assert aliased_signatures(text, ["harfanglab", "bitdefender"]) == ["bitdefender"]
     written = text.replace("*sig", "|\n        rule A { condition: true }")
     assert aliased_signatures(written, ["harfanglab", "bitdefender"]) == []
+
+
+@pytest.mark.parametrize(
+    ("code", "block"),
+    [
+        (
+            "bitdefender_criterion_relation",
+            _block(
+                detection=_detection(
+                    "file",
+                    {"field": "File.Name", "is": "a.exe"},
+                    {"field": "File.CertificateSignedStatus", "any": ["is_signed"]},
+                )
+            ),
+        ),
+        (
+            "bitdefender_criterion_relation",
+            _block(
+                detection=_detection(
+                    "connection",
+                    {"field": "Connection.Domain", "is": "x"},
+                    {"field": "Connection.Protocol", "any": ["smb"]},
+                )
+            ),
+        ),
+        (
+            "bitdefender_criterion_relation",
+            _block(
+                detection=_detection("registry", {"field": "Registry.DataType", "any": ["dword"]})
+            ),
+        ),
+        (
+            "bitdefender_criterion_shape",
+            _block(detection=_detection("process", {"field": "Process.Name", "is": True})),
+        ),
+        (
+            "bitdefender_criterion_shape",
+            _block(detection=_detection("process", {"field": "Process.Name", "any": ["a", False]})),
+        ),
+        (
+            "bitdefender_criteria_combination",
+            _block(
+                detection=_detection(
+                    "connection",
+                    {"field": "Connection.Bucket.Name", "is": "b"},
+                    {"field": "Connection.Role.Name", "is": "r"},
+                    alert="x",
+                )
+            ),
+        ),
+        (
+            "bitdefender_criteria_combination",
+            _block(
+                detection=_detection("connection", {"field": "Connection.Bucket.Name", "is": "b"})
+            ),
+        ),
+        (
+            "bitdefender_criteria_combination",
+            _block(
+                detection=_detection(
+                    "connection",
+                    {"field": "Connection.Domain", "is": "x"},
+                    {"field": "Connection.Protocol", "is": "smb"},
+                    {"field": "Connection.URL", "is": "u"},
+                )
+            ),
+        ),
+        (
+            "bitdefender_criteria_combination",
+            _block(detection=_detection("email", {"field": "Email.Sender", "is": "x"})),
+        ),
+    ],
+)
+def test_specification_1_1_rules(code: str, block: dict[str, Any]) -> None:
+    assert _codes(block) == {code}
+
+
+@pytest.mark.parametrize(
+    ("block", "expected"),
+    [
+        (_block(), [("bitdefender_rule_kind", ())]),
+        (
+            _block(detection={**PROCESS, "target": "flow"}),
+            [("bitdefender_target", ("detection", "target"))],
+        ),
+        (
+            _block(
+                detection=_detection(
+                    "process",
+                    {"field": "Process.Name", "is": "a"},
+                    {"field": "Process.Hash", "is": "b"},
+                    {"field": "Process.Name"},
+                )
+            ),
+            [
+                ("bitdefender_criterion_field", ("detection", "criteria", "1")),
+                ("bitdefender_criterion_shape", ("detection", "criteria", "2")),
+            ],
+        ),
+        (
+            _block(detection={"target": "process", "criteria": []}),
+            [("bitdefender_criterion_shape", ("detection", "criteria"))],
+        ),
+        (
+            _block(
+                detection=_detection("connection", {"field": "Connection.Protocol", "is": "smb"})
+            ),
+            [("bitdefender_criteria_combination", ("detection", "criteria"))],
+        ),
+        (
+            _block(detection=PROCESS, severity="Critical", targets={"companies": []}),
+            [("bitdefender_severity", ("severity",)), ("bitdefender_targets_shape", ("targets",))],
+        ),
+        (
+            _block(
+                detection=_detection("registry", {"field": "Registry.Key", "is": "HKLM\\x"}),
+                actions={"isolate": True, "quarantine": True},
+            ),
+            [("bitdefender_action_scope", ("actions", "quarantine"))],
+        ),
+        (
+            _block(yara={"signature": YARA["signature"] + "// \u00e9\n"}),
+            [("bitdefender_yara_ascii", ("yara", "signature"))],
+        ),
+    ],
+)
+def test_each_code_is_reported_at_its_field_path(
+    block: dict[str, Any], expected: list[tuple[str, tuple[str, ...]]]
+) -> None:
+    assert sorted(_errors(block)) == sorted(expected)
+
+
+def test_validate_reports_the_code_at_its_path() -> None:
+    from opentide.loading.object_loader import load_object_for_validation
+    from opentide.validation.errors import issues_from_pydantic
+
+    document = yaml.safe_load(
+        (FIXTURES / "invalid" / "rule-bitdefender-criterion-field.yaml").read_text(encoding="utf-8")
+    )
+    with pytest.raises(ValidationError) as caught:
+        load_object_for_validation(document, "rule")
+    issues = issues_from_pydantic(caught.value)
+    assert [(issue.code, issue.field_path) for issue in issues] == [
+        (
+            "bitdefender_criterion_field",
+            ("configurations", "bitdefender", "detection", "criteria", "0"),
+        )
+    ]
+
+
+def test_the_catalogue_lists_the_specification_connection_fields() -> None:
+    from opentide.platforms.bitdefender.catalog import TARGET_FIELDS
+
+    resources = [
+        "File",
+        "Application",
+        "KeyVault",
+        "Role",
+        "Policy",
+        "SharingLink",
+        "Url",
+        "SshKey",
+        "LaunchTemplate",
+        "ServicePrincipal",
+        "UserGroup",
+        "AutomationAccount",
+        "AutomationAccountHook",
+        "Api",
+        "CertificateAuthority",
+        "Bucket",
+        "ConfluencePage",
+        "JiraProject",
+    ]
+    expected = {f"Connection.{r}.Name" for r in resources} | {
+        f"Connection.{r}.Operation" for r in [*resources, "Email"]
+    }
+    expected |= {"Connection.SourceUser", "Connection.DestinationUser", "Connection.Email.Subject"}
+    assert expected <= TARGET_FIELDS["connection"]
+    assert len(TARGET_FIELDS["connection"]) == 24 + len(expected)

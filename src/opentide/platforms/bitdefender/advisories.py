@@ -8,9 +8,12 @@ advisory is reported.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
+
+from opentide.platforms.bitdefender.criteria import REGISTRY_HIVES
 
 REGISTRY_FULL_HIVE = "bitdefender_registry_full_hive"
 CONTAINS_NO_WILDCARD = "bitdefender_contains_no_wildcard"
@@ -22,6 +25,22 @@ ADVISORY_CODES = frozenset({REGISTRY_FULL_HIVE, CONTAINS_NO_WILDCARD, SEVERITY_C
 _COLLAPSED = {"critical": "High", "informational": "Low"}
 
 _BLOCK = ("configurations", "bitdefender")
+
+#: ``HKEY_USERS\\<SID>``: a user's hive, which GravityZone names ``HKU``.
+_USER_SID = re.compile(r"S-\d+-\d+(?:-\d+)*(?:\\|$)", re.IGNORECASE)
+
+
+def short_hive(key: str) -> str | None:
+    """The short hive name GravityZone matches for *key*'s full hive name, or ``None``.
+
+    Compared case-insensitively. ``HKEY_USERS\\<SID>…`` is ``HKU``; any other
+    ``HKEY_USERS\\…`` key is ``HKLU`` (bitdefender-1.0, Advisories).
+    """
+    hive, _, rest = key.partition("\\")
+    upper = hive.upper()
+    if upper == "HKEY_USERS":
+        return "HKU" if _USER_SID.match(rest) else "HKLU"
+    return REGISTRY_HIVES.get(upper)
 
 
 @dataclass(frozen=True)
@@ -48,15 +67,16 @@ def _criteria_advisories(detection: Mapping[str, Any]) -> list[Advisory]:
         for relation in ("is", "contains", "any"):
             if relation not in criterion:
                 continue
-            path = (*_BLOCK, "detection", "criteria", str(index), relation)
+            path = (*_BLOCK, "detection", "criteria", str(index))
             values = [v for v in _values(criterion, relation) if isinstance(v, str)]
-            if field == "Registry.Key" and any(v.upper().startswith("HKEY_") for v in values):
+            hints = [hint for v in values if field == "Registry.Key" and (hint := short_hive(v))]
+            if hints:
                 found.append(
                     Advisory(
                         REGISTRY_FULL_HIVE,
                         path,
                         "Registry.Key starts with a full hive name, which GravityZone accepts "
-                        "and never matches; write HKLM, HKCU, HKU, HKCR, HKCC or HKLU",
+                        f"and never matches; write {hints[0]}",
                     )
                 )
             if relation == "contains" and values and not any(c in values[0] for c in "*?"):
@@ -88,7 +108,7 @@ def bitdefender_advisories(rule: Mapping[str, Any]) -> list[Advisory]:
         found.append(
             Advisory(
                 SEVERITY_COLLAPSED,
-                ("response", "alert_severity"),
+                _BLOCK,
                 f"GravityZone has three severities: alert_severity {severity} is sent as "
                 f"{collapsed}; set configurations.bitdefender.severity to choose",
             )

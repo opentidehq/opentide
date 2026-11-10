@@ -8,9 +8,11 @@ under the Bitdefender profile (``bitdefender_yara_ascii``,
 :class:`~opentide.models.platform.BitdefenderConfig` can report every code at
 once, before the field types run.
 
-The catalogue covers the EDR targets the spec tables list. A field on any other
-detection target is not checked here: the spec makes an unknown field there a
-warning until the catalogue covers it.
+Each code is reported at the ``field_path`` the spec fixes for it (bitdefender-1.0,
+Constraints), relative to the block, so opentide and the editor name the same
+finding. The catalogue (:mod:`~opentide.platforms.bitdefender.criteria`) covers
+the EDR targets; a field of another target is not checked here, because the
+spec makes an unknown field there a warning.
 """
 
 from __future__ import annotations
@@ -18,6 +20,9 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping
 from typing import Any
+
+from opentide.platforms.bitdefender.criteria import ALERT_OR_OPERATION, FIELDS, ONE_RESOURCE_TARGETS
+from opentide.platforms.bitdefender.criteria import Field as CatalogueField
 
 #: Detection targets, as the API spells them (bitdefender-1.0, ``detection``).
 DETECTION_TARGETS: frozenset[str] = frozenset(
@@ -48,132 +53,42 @@ DETECTION_TARGETS: frozenset[str] = frozenset(
     }
 )
 
-#: Fields per EDR target (bitdefender-1.0, Criteria catalogue).
+
+#: A code and the path it is reported at, relative to ``configurations.bitdefender``.
+Finding = tuple[str, tuple[str, ...]]
+
+#: What each constraint code says, for the finding's message (bitdefender-1.0, Constraints).
+CODE_MESSAGES: dict[str, str] = {
+    "bitdefender_rule_kind": "a Bitdefender block sets exactly one of detection and yara",
+    "bitdefender_target": "target is not a GravityZone detection target",
+    "bitdefender_criterion_shape": (
+        "a criterion has field and exactly one of is (a string or an integer), contains "
+        "(a string) and any (a non-empty list of strings or integers)"
+    ),
+    "bitdefender_criterion_field": "the field is not one of the target's in the criteria catalogue",
+    "bitdefender_criterion_relation": "the field does not take this relation",
+    "bitdefender_criterion_value": "the value is not one the field accepts",
+    "bitdefender_criteria_combination": "the criteria break a pairing rule of the catalogue",
+    "bitdefender_action_scope": "the action is not allowed for the rule's kind and target",
+    "bitdefender_targets_shape": "targets sets one of endpoint_tags and companies, non-empty",
+    "bitdefender_severity": "severity is Low, Medium or High",
+    "bitdefender_yara_ascii": "the YARA signature holds ASCII characters only",
+    "bitdefender_yara_size": "the YARA signature is at most 30,000 characters",
+    "yara_include": "the YARA signature has an include directive",
+    "yara_empty_signature": "the YARA signature has no rule that is neither private nor global",
+    "yara_duplicate_rule": "two YARA rules in the signature have one name",
+}
+
+#: Every constraint code :func:`block_findings` reports.
+CONSTRAINT_CODES: frozenset[str] = frozenset(CODE_MESSAGES)
+
+#: The EDR targets the catalogue lists, each with its detection fields.
 TARGET_FIELDS: dict[str, frozenset[str]] = {
-    "process": frozenset(
-        {
-            "Process.Name",
-            "Process.Path",
-            "Process.FullPathName",
-            "Process.CommandLine",
-            "Process.Parent.Name",
-            "Process.Parent.Path",
-            "Process.Parent.FullPathName",
-            "Process.Parent.CommandLine",
-            "Process.User",
-            "Process.MD5",
-            "Process.SHA2",
-        }
-    ),
-    "file": frozenset(
-        {
-            "File.Name",
-            "File.Path",
-            "File.FullPathName",
-            "File.Operation",
-            "File.CreatedBy.Name",
-            "File.CreatedBy.Path",
-            "File.CreatedBy.FullPathName",
-            "File.CreatedBy.CommandLine",
-            "File.CreatedBy.User",
-            "File.CertificateSigner",
-            "File.CertificateIssuer",
-            "File.CertificateSignedStatus",
-            "File.MD5",
-            "File.SHA2",
-            "File.Url",
-            "File.SourceIP",
-            "File.DestinationIP",
-        }
-    ),
-    "connection": frozenset(
-        {
-            "Connection.SourceIP",
-            "Connection.DestinationIP",
-            "Connection.SourcePort",
-            "Connection.DestinationPort",
-            "Connection.Process.Name",
-            "Connection.Process.Path",
-            "Connection.Process.FullPathName",
-            "Connection.Process.CommandLine",
-            "Connection.Process.User",
-            "Connection.URL",
-            "Connection.Domain",
-            "Connection.Protocol",
-            "Connection.HTTPUser",
-            "Connection.HTTPDownloadedFile",
-            "Connection.HTTPUploadedFile",
-            "Connection.FTPUser",
-            "Connection.SSHUser",
-            "Connection.TelnetUser",
-            "Connection.SMBDomain",
-            "Connection.SMBSharePath",
-            "Connection.SMBUser",
-            "Connection.WMIExecQuery",
-            "Connection.FileRemotePath",
-            "Connection.FileRemoteOperation",
-        }
-    ),
-    "registry": frozenset(
-        {
-            "Registry.Key",
-            "Registry.Value",
-            "Registry.Data",
-            "Registry.DataType",
-            "Registry.Operation",
-            "Registry.CreatedBy.Name",
-            "Registry.CreatedBy.Path",
-            "Registry.CreatedBy.FullPathName",
-            "Registry.CreatedBy.CommandLine",
-        }
-    ),
+    target: frozenset(name for name, item in FIELDS.items() if item.target == target)
+    for target in ("process", "file", "connection", "registry")
 }
 
-#: Enum fields and their values (bitdefender-1.0, Criteria catalogue).
-ENUM_VALUES: dict[str, frozenset[str]] = {
-    "File.Operation": frozenset(
-        {"rename", "copy", "create", "shared", "downloaded", "uploaded", "read", "write", "move"}
-    ),
-    "File.CertificateSignedStatus": frozenset({"is_signed", "is_unsigned"}),
-    "Connection.Protocol": frozenset({"http/https", "smb"}),
-    "Connection.FileRemoteOperation": frozenset({"create", "rem_delete", "read", "write", "move"}),
-    "Registry.Operation": frozenset(
-        {
-            "key_created",
-            "key_deleted",
-            "key_renamed",
-            "value_created",
-            "value_deleted",
-            "value_written",
-        }
-    ),
-    "Registry.DataType": frozenset(
-        {
-            "string",
-            "expandablestring",
-            "dword",
-            "qword",
-            "binary",
-            "none",
-            "link",
-            "resource_list",
-            "full_resource_descriptor",
-            "resource_requirements_list",
-        }
-    ),
-}
-
-PORT_FIELDS: frozenset[str] = frozenset({"Connection.SourcePort", "Connection.DestinationPort"})
-
-#: XDR-only fields of the ``file`` target.
-XDR_FIELDS: frozenset[str] = frozenset(
-    {"File.MD5", "File.SHA2", "File.Url", "File.SourceIP", "File.DestinationIP"}
-)
-#: ``File.Operation`` values for EDR only, and for XDR only.
-EDR_OPERATIONS: frozenset[str] = frozenset({"rename", "copy", "create"})
-XDR_OPERATIONS: frozenset[str] = frozenset({"shared", "downloaded", "uploaded"})
-#: Fields an EDR sensor reports and XDR does not.
-EDR_FIELD_PREFIXES: tuple[str, ...] = ("File.CreatedBy.", "File.Certificate")
+_CRITERIA = ("detection", "criteria")
 
 RELATIONS: tuple[str, ...] = ("is", "contains", "any")
 
@@ -206,14 +121,23 @@ _YARA_RULE = re.compile(
 
 
 def _scalar(value: Any) -> bool:
+    """A string or an integer: a boolean is neither."""
     return isinstance(value, (str, int)) and not isinstance(value, bool)
 
 
-def _port(value: Any) -> bool:
-    return isinstance(value, int) and not isinstance(value, bool) and 0 <= value <= 65535
+def _relation(criterion: Mapping[str, Any]) -> str:
+    return next(key for key in RELATIONS if key in criterion)
+
+
+def _values(criterion: Mapping[str, Any]) -> list[Any]:
+    relation = _relation(criterion)
+    value = criterion[relation]
+    return list(value) if relation == "any" else [value]
 
 
 def _criterion_shape_ok(criterion: Any) -> bool:
+    """``field`` and one relation: ``is`` a string or integer, ``contains`` a string,
+    ``any`` a non-empty list of strings or integers."""
     if not isinstance(criterion, Mapping) or not isinstance(criterion.get("field"), str):
         return False
     relations = [key for key in RELATIONS if key in criterion]
@@ -227,92 +151,133 @@ def _criterion_shape_ok(criterion: Any) -> bool:
     return _scalar(value)
 
 
+def _value_ok(item: CatalogueField, value: Any) -> bool:
+    if item.kind == "enum":
+        return isinstance(value, str) and value in item.values
+    if item.kind == "port":
+        low, high = item.minimum or 0, item.maximum if item.maximum is not None else 65535
+        return isinstance(value, int) and not isinstance(value, bool) and low <= value <= high
+    return True
+
+
 def _criterion_codes(target: str, criterion: Mapping[str, Any]) -> set[str]:
-    codes: set[str] = set()
-    field = str(criterion["field"])
-    relation = next(key for key in RELATIONS if key in criterion)
-    value = criterion[relation]
-    values = value if relation == "any" else [value]
-    known = TARGET_FIELDS.get(target)
-    if known is not None and field not in known:
-        codes.add("bitdefender_criterion_field")
-    enum = ENUM_VALUES.get(field)
-    if enum is not None:
-        if relation == "contains":
-            codes.add("bitdefender_criterion_relation")
-        elif not all(isinstance(item, str) and item in enum for item in values):
-            codes.add("bitdefender_criterion_value")
-    if relation == "contains" and field.endswith((".MD5", ".SHA2")):
-        codes.add("bitdefender_criterion_relation")
-    if field in PORT_FIELDS and not all(map(_port, values)):
-        codes.add("bitdefender_criterion_value")
-    return codes
+    """``bitdefender_criterion_field``, ``_relation`` and ``_value`` for one criterion."""
+    if target not in TARGET_FIELDS:
+        return set()
+    item = FIELDS.get(str(criterion["field"]))
+    if item is None or item.target != target:
+        return {"bitdefender_criterion_field"}
+    relation = _relation(criterion)
+    if relation not in item.relations or (relation == "contains" and item.kind == "hash"):
+        return {"bitdefender_criterion_relation"}
+    if not all(_value_ok(item, value) for value in _values(criterion)):
+        return {"bitdefender_criterion_value"}
+    return set()
+
+
+def _sensors(criteria: list[Mapping[str, Any]]) -> set[str]:
+    """The sensors the criteria need: a field's, or each enum value's."""
+    sensors: set[str] = set()
+    for criterion in criteria:
+        item = FIELDS.get(str(criterion["field"]))
+        if item is None:
+            continue
+        if item.kind == "enum":
+            sensors.update(
+                item.values.get(str(value), item.availability) for value in _values(criterion)
+            )
+        else:
+            sensors.add(item.availability)
+    return sensors - {"both"}
 
 
 def _combination_ok(target: str, criteria: list[Mapping[str, Any]], alert: Any) -> bool:
-    fields = [str(c["field"]) for c in criteria]
-    operations: set[Any] = set()
+    """The catalogue's pairing rules (bitdefender-1.0, ``bitdefender_criteria_combination``)."""
+    fields = {str(c["field"]) for c in criteria}
+    present = fields | ({"detection"} if alert else set())
+    sensors = _sensors(criteria)
+    if {"edr", "xdr"} <= sensors:
+        return False
     for criterion in criteria:
-        if criterion["field"] == "File.Operation":
-            relation = next(key for key in RELATIONS if key in criterion)
-            value = criterion[relation]
-            operations.update(value if relation == "any" else [value])
-    xdr = any(field in XDR_FIELDS for field in fields) or bool(operations & XDR_OPERATIONS)
-    edr = any(field.startswith(EDR_FIELD_PREFIXES) for field in fields) or bool(
-        operations & EDR_OPERATIONS
-    )
-    if xdr and edr:
-        return False
-    if any(field.startswith("File.Certificate") for field in fields) and not (
-        {"File.Name", "File.FullPathName"} & set(fields)
-    ):
-        return False
-    if "Connection.Protocol" in fields and "Connection.Domain" not in fields:
-        return False
-    xdr_detection = xdr or target not in TARGET_FIELDS
-    has_operation = any(field.endswith("Operation") for field in fields)
-    return not (xdr_detection and alert and has_operation)
+        item = FIELDS.get(str(criterion["field"]))
+        if item is None:
+            continue
+        if item.requires_any and not set(item.requires_any) & present:
+            return False
+        if item.detection_requires_any and not set(item.detection_requires_any) & present:
+            return False
+        if set(item.incompatible) & fields:
+            return False
+        for value in _values(criterion):
+            if set(item.value_incompatible.get(str(value), ())) & fields:
+                return False
+    if target in ONE_RESOURCE_TARGETS:
+        resources = {FIELDS[f].resource for f in fields if f in FIELDS and FIELDS[f].resource}
+        if len(resources) > 1:
+            return False
+    xdr = "xdr" in sensors or target not in TARGET_FIELDS
+    operation = any(name.endswith("Operation") for name in fields)
+    for rule_target, rule_field, scope, require in ALERT_OR_OPERATION:
+        if rule_target is not None and rule_target != target:
+            continue
+        if scope == "xdr" and not xdr:
+            continue
+        has_operation = rule_field in fields if rule_field else operation
+        if alert and has_operation:
+            return False
+        if require and not (alert or has_operation):
+            return False
+    return True
 
 
-def detection_codes(detection: Any) -> tuple[set[str], str | None, list[str]]:
-    """The codes of a ``detection`` table, its target, and its criteria fields."""
+def detection_findings(detection: Any) -> tuple[list[Finding], str | None, list[str]]:
+    """The findings of a ``detection`` table, its target, and its criteria fields."""
     if not isinstance(detection, Mapping):
-        return set(), None, []
-    codes: set[str] = set()
+        return [], None, []
+    found: list[Finding] = []
     target = detection.get("target")
     if not isinstance(target, str) or target not in DETECTION_TARGETS:
-        codes.add("bitdefender_target")
+        found.append(("bitdefender_target", ("detection", "target")))
         target = None
     criteria = detection.get("criteria")
-    if not isinstance(criteria, list):
-        return codes, target, []
-    shaped = [c for c in criteria if _criterion_shape_ok(c)]
-    if len(shaped) != len(criteria):
-        codes.add("bitdefender_criterion_shape")
+    if not isinstance(criteria, list) or not criteria:
+        found.append(("bitdefender_criterion_shape", _CRITERIA))
+        return found, target, []
+    shaped: list[Mapping[str, Any]] = []
+    for index, criterion in enumerate(criteria):
+        path = (*_CRITERIA, str(index))
+        if not _criterion_shape_ok(criterion):
+            found.append(("bitdefender_criterion_shape", path))
+            continue
+        shaped.append(criterion)
+        if target is not None:
+            found.extend((code, path) for code in sorted(_criterion_codes(target, criterion)))
     fields = [str(c["field"]) for c in shaped]
-    if target is None:
-        return codes, target, fields
-    for criterion in shaped:
-        codes |= _criterion_codes(target, criterion)
-    if shaped and not _combination_ok(target, shaped, detection.get("alert")):
-        codes.add("bitdefender_criteria_combination")
-    return codes, target, fields
+    if (
+        target is not None
+        and shaped
+        and len(shaped) == len(criteria)
+        and not any(path[:2] == _CRITERIA and len(path) == 3 for _, path in found)
+        and not _combination_ok(target, shaped, detection.get("alert"))
+    ):
+        found.append(("bitdefender_criteria_combination", _CRITERIA))
+    return found, target, fields
 
 
-def action_scope_codes(
+def action_scope_findings(
     actions: Any, *, kind: str, target: str | None, fields: list[str]
-) -> set[str]:
-    """``bitdefender_action_scope`` when an action is not allowed for the kind and target."""
+) -> list[Finding]:
+    """``bitdefender_action_scope`` at ``actions.<key>`` for each action the rule cannot take."""
     if not isinstance(actions, Mapping):
-        return set()
-    keys = {key for key in actions if key in ACTION_TYPES}
+        return []
+    keys = [key for key in actions if key in ACTION_TYPES]
     if kind == "yara":
-        return {"bitdefender_action_scope"} if keys & NOT_ON_YARA else set()
-    if not keys & PROCESS_ACTIONS:
-        return set()
-    if target in ("process", "file") or any(".CreatedBy." in field for field in fields):
-        return set()
-    return {"bitdefender_action_scope"}
+        refused = [key for key in keys if key in NOT_ON_YARA]
+    elif target in ("process", "file") or any(".CreatedBy." in field for field in fields):
+        refused = []
+    else:
+        refused = [key for key in keys if key in PROCESS_ACTIONS]
+    return [("bitdefender_action_scope", ("actions", str(key))) for key in refused]
 
 
 def targets_codes(targets: Any) -> set[str]:
@@ -384,31 +349,40 @@ def _as_authored(value: Any) -> Any:
     return value
 
 
-def block_codes(block: Mapping[str, Any]) -> set[str]:
-    """Every bitdefender-1.0 constraint code a block, as authored, breaks."""
+def block_findings(block: Mapping[str, Any]) -> list[Finding]:
+    """Every bitdefender-1.0 constraint finding of a block, as authored, at its path."""
     raw = _as_authored(block)
-    codes: set[str] = set()
+    found: list[Finding] = []
     detection = raw.get("detection")
     yara = raw.get("yara")
     if (detection is None) == (yara is None):
-        codes.add("bitdefender_rule_kind")
+        found.append(("bitdefender_rule_kind", ()))
     severity = raw.get("severity")
     if severity is not None and severity not in SEVERITIES:
-        codes.add("bitdefender_severity")
-    codes |= targets_codes(raw.get("targets"))
+        found.append(("bitdefender_severity", ("severity",)))
+    found.extend((code, ("targets",)) for code in targets_codes(raw.get("targets")))
     target: str | None = None
     fields: list[str] = []
     if detection is not None:
-        found, target, fields = detection_codes(detection)
-        codes |= found
-    if yara is not None and isinstance(yara, Mapping):
+        detection_found, target, fields = detection_findings(detection)
+        found.extend(detection_found)
+    if isinstance(yara, Mapping):
         signature = yara.get("signature")
-        if isinstance(signature, str) and not signature.strip():
-            codes.add("yara_empty_signature")
-        else:
-            codes |= yara_signature_codes(signature)
+        codes = (
+            {"yara_empty_signature"}
+            if isinstance(signature, str) and not signature.strip()
+            else yara_signature_codes(signature)
+        )
+        found.extend((code, ("yara", "signature")) for code in sorted(codes))
     if (detection is None) != (yara is None):
         kind = "detection" if detection is not None else "yara"
         if kind == "yara" or target is not None:
-            codes |= action_scope_codes(raw.get("actions"), kind=kind, target=target, fields=fields)
-    return codes
+            found.extend(
+                action_scope_findings(raw.get("actions"), kind=kind, target=target, fields=fields)
+            )
+    return found
+
+
+def block_codes(block: Mapping[str, Any]) -> set[str]:
+    """Every bitdefender-1.0 constraint code a block, as authored, breaks."""
+    return {code for code, _ in block_findings(block)}

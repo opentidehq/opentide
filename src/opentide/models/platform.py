@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping
-from typing import Annotated, Any, ClassVar, Literal, cast
+from typing import TYPE_CHECKING, Annotated, Any, ClassVar, Literal, cast
 
 from pydantic import AfterValidator, Field, field_validator, model_validator
 
@@ -67,6 +67,9 @@ from opentide.models.platform_configs import (
     SysdigMacro,
 )
 from opentide.platforms.elastic.durations import duration_seconds
+
+if TYPE_CHECKING:
+    from typing_extensions import LiteralString
 
 
 def _query_not_blank(value: str) -> str:
@@ -835,13 +838,27 @@ class BitdefenderConfig(PlatformConfigBase):
         raw = dict(data)
         if "status" not in raw or raw["status"] is None:
             return raw
-        from opentide.platforms.bitdefender.catalog import block_codes
+        from pydantic import ValidationError
+        from pydantic_core import InitErrorDetails, PydanticCustomError
 
-        codes = block_codes(raw)
-        if codes:
-            raise ValueError(
-                f"BitdefenderConfig validation failed with code(s): {', '.join(sorted(codes))}"
-            )
+        from opentide.platforms.bitdefender.catalog import CODE_MESSAGES, block_findings
+
+        findings = block_findings(raw)
+        if findings:
+            # One error per finding, typed by its code and placed at the path the
+            # spec fixes for it, so validate and the editor name the same finding.
+            errors = [
+                InitErrorDetails(
+                    # The codes are CONSTRAINT_CODES, a fixed set of literals.
+                    type=PydanticCustomError(
+                        cast("LiteralString", code), "{message}", {"message": CODE_MESSAGES[code]}
+                    ),
+                    loc=path,
+                    input=raw,
+                )
+                for code, path in findings
+            ]
+            raise ValidationError.from_exception_data(cls.__name__, errors)
         return raw
 
 

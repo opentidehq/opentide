@@ -15,6 +15,7 @@ from opentide.platforms.bitdefender.advisories import (
     REGISTRY_FULL_HIVE,
     SEVERITY_COLLAPSED,
     bitdefender_advisories,
+    short_hive,
 )
 from opentide.validation.bitdefender_advisories import bitdefender_advisory_issues
 
@@ -58,7 +59,6 @@ def test_contains_without_a_wildcard_is_an_advisory() -> None:
         "detection",
         "criteria",
         "0",
-        "contains",
     )
     for value in ("*Run*", "Ru?"):
         assert _codes(_rule({"field": "Registry.Value", "contains": value})) == []
@@ -117,8 +117,9 @@ def test_lint_reports_advisories_at_their_line(tmp_path: Path) -> None:
     record = _ObjectRecord(path=path, relative="objects/rules/rule.yaml", text=text)
     found = _bitdefender_findings([record])
     assert {(item["_code"], item["severity"], item["yaml_line"]) for item in found} == {
-        (SEVERITY_COLLAPSED, "warning", 2),
-        (REGISTRY_FULL_HIVE, "warning", 10),
+        # The block, and the criterion: the paths bitdefender-1.0 fixes for them.
+        (SEVERITY_COLLAPSED, "warning", 5),
+        (REGISTRY_FULL_HIVE, "warning", 9),
     }
     assert all(item["check"] == "queries" for item in found)
 
@@ -128,3 +129,29 @@ def test_every_advisory_has_an_explain_page(code: str) -> None:
     page = explain.load_page(code)
     assert page is not None
     assert "## How to fix" in page.markdown
+
+
+@pytest.mark.parametrize(
+    ("key", "hint"),
+    [
+        ("HKEY_LOCAL_MACHINE\\Software", "HKLM"),
+        ("hkey_current_user\\Software", "HKCU"),
+        ("HKEY_CLASSES_ROOT\\.exe", "HKCR"),
+        ("HKEY_CURRENT_CONFIG\\System", "HKCC"),
+        ("HKEY_USERS\\S-1-5-21-1004336348-1177238915-682003330-512\\Software", "HKU"),
+        ("HKEY_USERS\\.DEFAULT\\Software", "HKLU"),
+        ("HKLM\\Software", None),
+    ],
+)
+def test_the_hint_names_the_short_hive(key: str, hint: str | None) -> None:
+    assert short_hive(key) == hint
+    advisories = bitdefender_advisories(_rule({"field": "Registry.Key", "is": key}))
+    if hint is None:
+        assert advisories == []
+    else:
+        assert advisories[0].message.endswith(f"write {hint}")
+
+
+def test_severity_collapsed_is_reported_on_the_block() -> None:
+    (advisory,) = bitdefender_advisories(_rule(response={"alert_severity": "Critical"}))
+    assert advisory.field_path == ("configurations", "bitdefender")

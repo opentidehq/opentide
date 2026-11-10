@@ -18,4 +18,4 @@ configurations:
 
 ## How to fix
 
-Write the short hive name: `HKLM`, `HKCU`, `HKU`, `HKCR`, `HKCC` or `HKLU`, as in `HKLM\Software\Microsoft\Windows\CurrentVersion\Run*`.
+Write the short hive name, as in `HKLM\Software\Microsoft\Windows\CurrentVersion\Run*`: `HKLM`, `HKCU`, `HKCR` or `HKCC`; `HKU` for a user's hive, `HKEY_USERS\<SID>…`; and `HKLU` for any other `HKEY_USERS\…` key. The hive name is compared case-insensitively.
