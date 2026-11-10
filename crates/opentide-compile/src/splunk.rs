@@ -3,7 +3,7 @@
 //! `_build_actions_config`, `_apply_saved_search`; `client.py`
 //! `create_query`, `cron_to_timeframe`, `splunk_timerange`).
 //!
-//! splunklib builds the URLs: a write's `url` is the REST path under the
+//! The Splunk client builds the URLs: a write's `url` is the REST path under the
 //! tenant's app namespace (`saved/searches`). The saved search is created
 //! (it is not there yet), then updated with its settings, then with the
 //! settings Splunk takes only once the others are set (`alert.suppress`,
@@ -22,7 +22,7 @@ pub const PLATFORM: &str = "splunk";
 pub const DISPLAY: &str = "Splunk";
 
 /// The minute and hour a frequency schedule runs at: drawn at random
-/// (`frequency_scheduling = "random"`, splunklib's `randrange`) or the
+/// (`frequency_scheduling = "random"`, the client's `randrange`) or the
 /// clock's (`"current"`), as the caller reads them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Clock {
