@@ -242,8 +242,8 @@ jobs:
 
   # Every test of the workspace with nextest (.config/nextest.toml, profile
   # `ci`) on Linux, macOS and Windows; the doctests (which nextest does not
-  # run) on Linux. pydantic_object_issues_are_subset_of_lsp runs src/opentide's
-  # models with the interpreter `uv sync` installs (.venv), so every OS syncs.
+  # run) on Linux. Tests that run src/opentide's models use the interpreter
+  # `uv sync` installs (.venv), so every OS syncs.
   engine-test:
     name: Engine tests (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -409,11 +409,14 @@ jobs:
       # cannot be packaged either: its scan reads the files `cargo package
       # --list` names, as its package would hold them (its CI-only oracle
       # data under tests/render/ is excluded from the package, as before).
-      - run: cargo package --locked --workspace --exclude opentide-native --exclude xtask --exclude opentide-compare --exclude opentide-schema --exclude opentide-workspace --exclude opentide-compile --exclude opentide-cli --allow-dirty
+      # opentide-lsp and opentide-wasm (publish = false) take their checks
+      # from opentide-workspace and opentide-schema (UC-2.6, ADR 0010's
+      # addendum): left out of the package step too, their sources scanned.
+      - run: cargo package --locked --workspace --exclude opentide-native --exclude xtask --exclude opentide-compare --exclude opentide-schema --exclude opentide-workspace --exclude opentide-compile --exclude opentide-cli --exclude opentide-lsp --exclude opentide-wasm --allow-dirty
       - name: license scan (no oracle references)
         run: |
           bash scripts/engine/license-scan.sh target/package/*.crate
-          bash scripts/engine/license-scan.sh crates/opentide-schema crates/opentide-schema-derive crates/opentide-compare crates/opentide-workspace crates/opentide-compile
+          bash scripts/engine/license-scan.sh crates/opentide-schema crates/opentide-schema-derive crates/opentide-compare crates/opentide-workspace crates/opentide-compile crates/opentide-lsp crates/opentide-wasm
           cargo package --list --locked --allow-dirty -p opentide-cli | (cd crates/opentide-cli && while IFS= read -r f; do if [ -f "$f" ]; then printf '%s\0' "$f"; fi; done | xargs -0 bash ../../scripts/engine/license-scan.sh)
 
   # The supply-chain gate (#843, deny.toml): licences of what we ship,

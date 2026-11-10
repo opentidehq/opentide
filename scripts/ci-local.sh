@@ -86,11 +86,13 @@ rust_jobs() {
   # exit, an interrupted push included.
   trap 'python3 scripts/engine/release.py vendor --clean >/dev/null' EXIT
   python3 scripts/engine/release.py vendor
-  cargo package --locked --workspace --exclude opentide-native --exclude opentide-schema --exclude opentide-workspace --exclude opentide-compile --allow-dirty --quiet
+  cargo package --locked --workspace --exclude opentide-native --exclude opentide-schema --exclude opentide-workspace --exclude opentide-compile --exclude opentide-lsp --exclude opentide-wasm --allow-dirty --quiet
   # opentide-schema cannot be packaged until its derive is published, nor
-  # opentide-workspace and opentide-compile, which build on it: scan their sources.
+  # opentide-workspace and opentide-compile, which build on it, nor the
+  # language server and its WebAssembly build, which check with them
+  # (UC-2.6): scan their sources.
   bash scripts/engine/license-scan.sh target/package/*.crate
-  bash scripts/engine/license-scan.sh crates/opentide-schema crates/opentide-schema-derive crates/opentide-workspace crates/opentide-compile
+  bash scripts/engine/license-scan.sh crates/opentide-schema crates/opentide-schema-derive crates/opentide-workspace crates/opentide-compile crates/opentide-lsp crates/opentide-wasm
   python3 scripts/engine/release.py vendor --clean
   trap - EXIT
 
