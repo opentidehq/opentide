@@ -105,55 +105,33 @@ pub fn sentinel(duration: &str) -> Result<String, String> {
 }
 
 /// An Elastic duration in seconds (`duration_seconds`): `<n>s|m|h|d`, compound
-/// shorthand (`1h10m`), or ISO 8601 (`PT1H`, `P14D`). Zero only with
-/// `allow_zero`. The error is the oracle's message.
-pub fn elastic_seconds(value: &str, allow_zero: bool) -> Result<u64, String> {
-    let short = parts(value, &[('d', DAY), ('h', HOUR), ('m', MINUTE), ('s', 1)]);
-    let total = match short {
-        Some((total, _)) if !value.is_empty() => Some(total),
-        _ => elastic_iso(value),
-    };
-    let Some(total) = total else {
-        return Err(format!(
+/// shorthand (`1h10m`), or ISO 8601 (`PT1H`, `P14D`), read by
+/// `opentide_core::duration`, the one grammar the model and the language
+/// server use too. Zero only with `allow_zero`. The error is the oracle's
+/// message.
+pub fn elastic_seconds(value: &str, allow_zero: bool) -> Result<u128, String> {
+    opentide_core::duration::duration_seconds(value, allow_zero).map_err(|error| match error {
+        opentide_core::duration::DurationError::Format => format!(
             "Invalid duration format: {}",
             crate::strategy::python_repr(value)
-        ));
-    };
-    if total == 0 && !allow_zero {
-        return Err(format!(
+        ),
+        opentide_core::duration::DurationError::NotPositive => format!(
             "Duration must be positive (or zero if allowed): {}",
             crate::strategy::python_repr(value)
-        ));
-    }
-    Ok(total)
-}
-
-/// `P(nD)?(T(nH)?(nM)?(nS)?)?`, a `T` followed by a digit, not `P` alone.
-fn elastic_iso(value: &str) -> Option<u64> {
-    let body = value.strip_prefix('P')?;
-    if body.is_empty() {
-        return None;
-    }
-    let (date, time) = match body.split_once('T') {
-        Some((date, time)) => (date, Some(time)),
-        None => (body, None),
-    };
-    let (days, _) = parts(date, &[('D', DAY)])?;
-    let seconds = match time {
-        Some(time) if time.starts_with(|c: char| c.is_ascii_digit()) => {
-            parts(time, &[('H', HOUR), ('M', MINUTE), ('S', 1)])?.0
-        }
-        Some(_) => return None,
-        None => 0,
-    };
-    days.checked_add(seconds)
+        ),
+    })
 }
 
 /// The units Elastic writes, largest first.
-const ELASTIC_UNITS: [(char, u64); 4] = [('d', DAY), ('h', HOUR), ('m', MINUTE), ('s', 1)];
+const ELASTIC_UNITS: [(char, u128); 4] = [
+    ('d', DAY as u128),
+    ('h', HOUR as u128),
+    ('m', MINUTE as u128),
+    ('s', 1),
+];
 
 /// Total seconds in the largest exact unit (`format_duration`): `0s` for zero.
-pub fn elastic_format(total: u64) -> String {
+pub fn elastic_format(total: u128) -> String {
     if total == 0 {
         return "0s".to_owned();
     }
@@ -167,7 +145,7 @@ pub fn elastic_format(total: u64) -> String {
 
 /// A duration as `(amount, unit)` in the largest exact unit of `units`
 /// (`elastic_duration`).
-pub fn elastic_amount(value: &str, units: &str) -> Result<(u64, char), String> {
+pub fn elastic_amount(value: &str, units: &str) -> Result<(u128, char), String> {
     let total = elastic_seconds(value, false)?;
     for unit in units.chars() {
         if let Some((_, size)) = ELASTIC_UNITS.iter().find(|(name, _)| *name == unit)
@@ -225,10 +203,11 @@ mod tests {
         assert_eq!(elastic_seconds("5m", false), Ok(300));
         assert_eq!(elastic_seconds("1h10m", false), Ok(4200));
         assert_eq!(elastic_seconds("PT1H", false), Ok(3600));
-        assert_eq!(elastic_seconds("P14D", false), Ok(14 * DAY));
+        assert_eq!(elastic_seconds("P14D", false), Ok(u128::from(14 * DAY)));
         assert_eq!(elastic_seconds("0s", true), Ok(0));
         assert!(elastic_seconds("0s", false).is_err());
         assert!(elastic_seconds("PT", false).is_err());
+        assert!(elastic_seconds("PTH", false).is_err());
         assert!(elastic_seconds("P", false).is_err());
         assert!(elastic_seconds("", true).is_err());
         assert!(elastic_seconds("5M", false).is_err());
