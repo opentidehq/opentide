@@ -18,8 +18,10 @@ need no `unsafe` of its own.
 - A thin wrapper: each function converts arguments, calls one engine function and converts the
   result. Logic in a binding fails review (plan §4).
 - abi3 from CPython 3.10 (`abi3-py310`): one wheel per platform; no API outside the stable ABI.
-- The stub `src/opentide/_native.pyi` matches the module: update it with every change to
-  `src/lib.rs` (ty checks the Python side against it).
+- The stub `src/opentide/_native/__init__.pyi` matches the module: update it with every change to
+  `src/lib.rs` (ty checks the Python side against it). The submodule `models`
+  (`opentide-schema`'s classes, UC-1.9, ADR 0011) has a generated stub,
+  `src/opentide/_native/models.pyi`: `cargo xtask stubs` rewrites it, never by hand.
 - Positions leave the binding as opentide's CLI counts them (1-based lines, code-point columns;
   `tests` in `src/lib.rs`): a change there is plan invariant 3.
 - A missing engine is `engine_unavailable` on the Python side, never a skipped check.

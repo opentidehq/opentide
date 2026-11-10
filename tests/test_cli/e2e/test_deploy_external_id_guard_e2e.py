@@ -119,8 +119,8 @@ def test_dry_run_plan_excludes_the_rule_and_fails(
 
 
 def test_live_query_validation_plan_excludes_the_rule(tide_corpus_repo: Path) -> None:
+    from opentide._models.deployment_enums import DEPLOYABLE_STRATEGIES
     from opentide.deployment import make_deploy_plan
-    from opentide.models.deployment_enums import DEPLOYABLE_STRATEGIES
 
     _give_sentinel_rule_a_defender_rule_id(tide_corpus_repo)
     write_rule_variant(_rules(tide_corpus_repo), "rule-0301-clean.yaml", CLEAN)
@@ -204,7 +204,7 @@ def test_direct_deployer_calls_refuse_a_legacy_key(
 
     from tests.corpus_support import clear_runtime_caches
 
-    from opentide.models.deployment_enums import DEPLOYABLE_STRATEGIES
+    from opentide._models.deployment_enums import DEPLOYABLE_STRATEGIES
 
     _give_sentinel_rule_a_defender_rule_id(tide_corpus_repo)
     clear_runtime_caches()

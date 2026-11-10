@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+from opentide._models.objective import DetectionObjective
+from opentide._models.rule import DetectionRule, DetectionRule_v1_1
+from opentide._models.threat import ThreatVector
 from opentide.generation import pydantic_metaschema as meta
-from opentide.models.objective import DetectionObjective
-from opentide.models.rule import DetectionRule, DetectionRule_v1_1
-from opentide.models.threat import ThreatVector
 
 
 def test_build_definition_index_contains_metadata() -> None:

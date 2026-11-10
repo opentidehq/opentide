@@ -5,7 +5,7 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any, cast
 
-from opentide.models.objective import DetectionObjective, DetectionSignal
+from opentide._models.objective import DetectionObjective, DetectionSignal
 
 
 def load_signal_from_dict(signal: dict[str, Any]) -> DetectionSignal:

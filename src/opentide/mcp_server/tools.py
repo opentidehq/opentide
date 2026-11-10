@@ -106,8 +106,8 @@ def _run_strategies(rule: Any, platform: str) -> list[str]:
     the deployment configuration does not define falls back to ``PREVIEW``,
     so the command still runs.
     """
+    from opentide._models.deployment_enums import deployed_by
     from opentide.deployment.utils import check_status
-    from opentide.models.deployment_enums import deployed_by
 
     block = getattr(getattr(rule, "configurations", None), platform, None)
     status = str(getattr(block, "status", None) or getattr(rule, "status", ""))

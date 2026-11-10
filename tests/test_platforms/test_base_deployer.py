@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from opentide.models.deployment_enums import StatusStrategy
+from opentide._models.deployment_enums import StatusStrategy
 from opentide.platforms.base import BaseRuleDeployer
 
 

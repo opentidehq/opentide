@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from opentide.models.platform_configs import DefenderExclusion, SentinelExclusion
+from opentide._models.platform_configs import DefenderExclusion, SentinelExclusion
 from opentide.platforms.kql import compile_kql_query
 
 

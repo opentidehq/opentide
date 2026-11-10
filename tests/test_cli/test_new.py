@@ -342,7 +342,7 @@ def test_platform_blocks_hold_detection_logic(workspace: Path) -> None:
 
 
 def test_new_objects_start_on_the_latest_revision(workspace: Path) -> None:
-    from opentide.models.schema_registry import latest_identifier
+    from opentide._models.schema_registry import latest_identifier
 
     payload = parse_cli_json(_new(workspace, "rule", "--name", "Latest"))
     assert payload["schema"] == latest_identifier("rule")

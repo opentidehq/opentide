@@ -9,10 +9,10 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from opentide._models.deployment_enums import DetectionPlatforms
+from opentide._models.system_config import SystemConfig
 from opentide.deployment.planning import TideDeployment, modifier_applies
 from opentide.loading.rule_loader import load_rule_from_dict
-from opentide.models.deployment_enums import DetectionPlatforms
-from opentide.models.system_config import SystemConfig
 
 Conditions = SystemConfig.Modifiers.Conditions
 

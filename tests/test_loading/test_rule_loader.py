@@ -7,9 +7,9 @@ from typing import Any
 import pytest
 
 import opentide.loading.rule_loader as rule_loader_module
+from opentide._models.platform import RuleConfigurations
+from opentide._models.rule import DetectionRule
 from opentide.loading.object_loader import SchemaMissingError
-from opentide.models.platform import RuleConfigurations
-from opentide.models.rule import DetectionRule
 
 
 def test_load_rule_compat_removed() -> None:

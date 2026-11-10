@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+from opentide._models.objective import DetectionObjective
 from opentide.documentation.catalog import DocumentationCatalog
 from opentide.documentation.context import DocumentationContext
 from opentide.documentation.objects.base import ObjectRenderer
 from opentide.documentation.parts import sections
-from opentide.models.objective import DetectionObjective
 
 
 class ObjectiveRenderer(ObjectRenderer):

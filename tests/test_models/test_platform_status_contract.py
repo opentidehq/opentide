@@ -21,8 +21,8 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from opentide.models.platform import PLATFORM_CONFIG_MODELS
-from opentide.models.platform_schema import platform_root_extras
+from opentide._models.platform import PLATFORM_CONFIG_MODELS
+from opentide._models.platform_schema import platform_root_extras
 
 
 @pytest.mark.parametrize("key", sorted(PLATFORM_CONFIG_MODELS))

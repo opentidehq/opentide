@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from opentide.models.system_config import SystemConfig
+from opentide._models.system_config import SystemConfig
 
 #: ``--tenant all`` runs the query on every configured tenant.
 ALL_TENANTS = "all"

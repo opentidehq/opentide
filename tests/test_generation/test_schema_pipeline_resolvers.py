@@ -6,8 +6,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from opentide._models.visibility import VisibilityConfig
 from opentide.generation import schema_pipeline as sp
-from opentide.models.visibility import VisibilityConfig
 
 
 def _visibility(*logsources: dict, assets: list | None = None) -> VisibilityConfig:

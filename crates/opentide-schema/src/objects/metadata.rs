@@ -3,6 +3,7 @@
 use std::collections::BTreeMap;
 
 use garde::Validate;
+use indexmap::IndexMap;
 use schemars::{JsonSchema, Schema, SchemaGenerator, json_schema};
 use serde::{Deserialize, Serialize};
 
@@ -16,6 +17,23 @@ use crate::revision::revisions;
 #[serde(deny_unknown_fields)]
 #[garde(context(Pins))]
 #[schemars(rename = "Organisation", description = "")]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(
+        frozen,
+        get_all,
+        eq,
+        name = "Organisation",
+        module = "opentide._native.models"
+    )
+)]
+#[cfg_attr(
+    feature = "python",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+    )
+)]
 pub struct Organisation {
     /// Organisation UUID. Sharing uses it as the default publishing organisation.
     #[garde(skip)]
@@ -104,6 +122,8 @@ revisions! {
     #[garde(context(Pins))]
     #[schemars(rename = "ObjectMetadata", description = "")]
     #[from_node(model = "ObjectMetadata")]
+    #[cfg_attr(feature = "python", pyo3::pyclass(frozen, get_all, eq, name = "ObjectMetadata", module = "opentide._native.models"))]
+    #[cfg_attr(feature = "python", expect(clippy::unsafe_derive_deserialize, reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"))]
     pub struct ObjectMetadata {
         @0,
     }
@@ -114,6 +134,8 @@ revisions! {
     #[garde(context(Pins))]
     #[schemars(rename = "RuleMetadata")]
     #[from_node(model = "RuleMetadata")]
+    #[cfg_attr(feature = "python", pyo3::pyclass(frozen, get_all, eq, name = "RuleMetadata", module = "opentide._native.models"))]
+    #[cfg_attr(feature = "python", expect(clippy::unsafe_derive_deserialize, reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"))]
     pub struct RuleMetadata {
         @0,
         /// Last human review of this rule, as an ISO 8601 date or datetime. Omitted means no recorded
@@ -146,6 +168,23 @@ impl RuleMetadata {
 #[garde(context(Pins))]
 #[schemars(rename = "ObjectReferences", description = "")]
 #[from_node(model = "ObjectReferences")]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(
+        frozen,
+        get_all,
+        eq,
+        name = "ObjectReferences",
+        module = "opentide._native.models"
+    )
+)]
+#[cfg_attr(
+    feature = "python",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+    )
+)]
 pub struct ObjectReferences {
     /// Public reference IDs to URLs (YAML int keys coerced on load).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -156,7 +195,7 @@ pub struct ObjectReferences {
     /// Internal reference keys to URLs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[garde(skip)]
-    pub internal: Option<BTreeMap<String, String>>,
+    pub internal: Option<IndexMap<String, String>>,
     /// Report links.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[garde(skip)]

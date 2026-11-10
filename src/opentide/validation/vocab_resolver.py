@@ -7,6 +7,7 @@ import re
 from collections.abc import Iterable
 from typing import Any
 
+from opentide._models.object_types import CORE_OBJECT_TYPES
 from opentide.core.logging import get_logger
 from opentide.generation.vocabulary import (
     VocabularyDefinition,
@@ -15,7 +16,6 @@ from opentide.generation.vocabulary import (
     split_vocab_reference,
 )
 from opentide.indexing.object_vocab import entry_level
-from opentide.models.object_types import CORE_OBJECT_TYPES
 
 logger = get_logger(__name__)
 

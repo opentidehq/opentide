@@ -5,21 +5,34 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
+from opentide._models.configuration.deployment import DeploymentConfiguration
+from opentide._models.objective import DetectionObjective
+from opentide._models.results import ValidationResult
+from opentide._models.rule import DetectionRule
+from opentide._models.threat import ThreatVector
+from opentide._models.visibility import VisibilityConfig
 from opentide.core import index_manager as index_mod
 from opentide.core import runtime
 from opentide.core.types import IndexSnapshot
-from opentide.models.configuration.deployment import DeploymentConfiguration
-from opentide.models.objective import DetectionObjective
-from opentide.models.results import ValidationResult
-from opentide.models.rule import DetectionRule
-from opentide.models.threat import ThreatVector
-from opentide.models.visibility import VisibilityConfig
 from opentide.platforms.registry import PlatformsRegistry
+
+if TYPE_CHECKING:
+    from opentide.models.delegation import Rule as RustRule
 
 IndexManager = index_mod.IndexManager
 TideObject = DetectionRule | DetectionObjective | ThreatVector
+
+
+def _pydantic_rule(rule: DetectionRule | RustRule) -> DetectionRule:
+    """*rule* as the Pydantic rule the CLI's code reads: a Rust rule
+    (``opentide.models``) is converted, a Pydantic one returned as it is."""
+    if isinstance(rule, DetectionRule):
+        return rule
+    from opentide.models.delegation import to_pydantic
+
+    return to_pydantic(rule)  # ty: ignore[invalid-return-type]  # a Rust rule converts to a Pydantic DetectionRule
 
 
 class OpentideRegistry:
@@ -141,20 +154,23 @@ class OpentideRegistry:
             return self._objectives[uuid]
         return None
 
-    def validate_rule(self, rule: DetectionRule) -> ValidationResult:
+    def validate_rule(self, rule: DetectionRule | RustRule) -> ValidationResult:
+        """Schema and cross-object checks of *rule*: a Pydantic rule, or a Rust
+        one (``opentide.models``, ADR 0011)."""
         from opentide.validation.pipeline import validate_object
 
-        return validate_object(rule, "rule")
+        return validate_object(_pydantic_rule(rule), "rule")
 
-    def document_rule(self, rule: DetectionRule) -> str:
+    def document_rule(self, rule: DetectionRule | RustRule) -> str:
         from opentide.documentation.api import render_rule
 
-        return render_rule(rule)
+        return render_rule(_pydantic_rule(rule))
 
-    def render_rule(self, rule: DetectionRule) -> str:
+    def render_rule(self, rule: DetectionRule | RustRule) -> str:
+        """*rule*'s documentation page; *rule* is a Pydantic or a Rust rule."""
         from opentide.documentation.api import render_rule
 
-        return render_rule(rule)
+        return render_rule(_pydantic_rule(rule))
 
     def promote_rule(self, rule: DetectionRule, target_status: str) -> None:
         raise NotImplementedError("promote_rule requires Orchestration/mutate integration")
@@ -663,7 +679,7 @@ def _snake_case(class_name: str) -> str:
 _LEGACY_EXPORT_MODULES = {
     "DebugHelpers": "opentide.core.environment",
     "ObjectLoader": "opentide.loading.compat",
-    "DetectionPlatforms": "opentide.models.deployment_enums",
+    "DetectionPlatforms": "opentide._models.deployment_enums",
 }
 
 

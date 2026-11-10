@@ -13,7 +13,7 @@ from collections.abc import Mapping, Set
 from pathlib import Path
 from typing import Any
 
-from opentide.models.deployment_enums import StatusStrategy
+from opentide._models.deployment_enums import StatusStrategy
 from opentide.validation.issues import ValidationIssue
 
 #: Strategies whose rules a deploy compiles; an inert rule is never sent and a

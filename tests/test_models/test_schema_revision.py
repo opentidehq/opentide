@@ -9,10 +9,8 @@ from typing import ClassVar
 import pytest
 from pydantic import ConfigDict
 
-from opentide.generation.router_schema import build_opentide_router
-from opentide.loading.object_loader import load_object
-from opentide.models.base import TideModel
-from opentide.models.schema_registry import (
+from opentide._models.base import TideModel
+from opentide._models.schema_registry import (
     get_chain,
     models_for_family,
     register_migration,
@@ -20,7 +18,9 @@ from opentide.models.schema_registry import (
     reset_registry,
     resolve_model,
 )
-from opentide.models.version import SchemaVersion
+from opentide._models.version import SchemaVersion
+from opentide.generation.router_schema import build_opentide_router
+from opentide.loading.object_loader import load_object
 from opentide.registry.artifacts import schema_artifact_name
 from opentide.registry.builder import build_registry
 
@@ -83,7 +83,7 @@ def test_load_object_migrates_across_schema_revisions(example_registry: None) ->
 
 
 def test_stamp_schema_identifier_updates_metadata() -> None:
-    from opentide.models.migration import stamp_schema_identifier
+    from opentide._models.migration import stamp_schema_identifier
 
     body = {"metadata": {"schema": "rule::1.0", "uuid": "x"}}
     stamped = stamp_schema_identifier(body, "rule::1.1")

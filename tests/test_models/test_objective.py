@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from opentide.models.objective import DetectionObjective
+from opentide._models.objective import DetectionObjective
 
 
 def test_detection_objective_from_yaml_dict(metadata: dict[str, Any]) -> None:

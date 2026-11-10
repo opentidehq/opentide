@@ -22,6 +22,11 @@ if sys.version_info >= (3, 11):
 else:
     import tomli as tomllib
 
+from opentide._models.configuration import (
+    configuration_file_key,
+    configuration_files,
+    configuration_model_for,
+)
 from opentide.generation.configuration_schemas import (
     ROUTER_NAME,
     build_configuration_router,
@@ -31,11 +36,6 @@ from opentide.generation.configuration_schemas import (
     generate_configuration_schemas,
     main,
     render_schema,
-)
-from opentide.models.configuration import (
-    configuration_file_key,
-    configuration_files,
-    configuration_model_for,
 )
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "configuration_schemas"

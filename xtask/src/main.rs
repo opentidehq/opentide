@@ -95,6 +95,10 @@ commands:
                  the object models against the oracle: their JSON Schemas,
                  and their verdict on every object file of every corpus
                  (UC-1.3, #809); `cargo xtask schema help` lists the options
+  stubs [--check] [--library FILE]
+                 generate src/opentide/_native/models.pyi, the stubs of the
+                 Tide models' Python classes, from the extension's
+                 introspection data (UC-1.9, #815); --check fails on drift
   help           print this message
 
 exit status: 0 passed, 1 check failed or not implemented yet,
@@ -187,6 +191,7 @@ fn main() -> ExitCode {
         "payloads" => xtask::payloads::main(rest),
         "vocab" => xtask::vocab::main(rest),
         "schema" => xtask::schema::main(rest),
+        "stubs" => xtask::stubs::main(rest),
         "help" | "--help" | "-h" => {
             print!("{USAGE}");
             ExitCode::SUCCESS

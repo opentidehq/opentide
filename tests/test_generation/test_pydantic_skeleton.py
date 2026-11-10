@@ -11,6 +11,13 @@ from typing import ClassVar, Literal
 import pytest
 import yaml
 
+from opentide._models.base import TideField, TideModel, VocabField
+from opentide._models.metadata import ObjectMetadata
+from opentide._models.objective import DetectionObjective
+from opentide._models.platform import RuleConfigurations, SentinelConfig
+from opentide._models.response import RuleResponse
+from opentide._models.rule import DetectionRule, DetectionRule_v1_1
+from opentide._models.threat import ThreatVector
 from opentide.generation.pydantic_metaschema import _CORE_ROOT_EXTRAS_BASE
 from opentide.generation.pydantic_skeleton import (
     render_model_template,
@@ -18,13 +25,6 @@ from opentide.generation.pydantic_skeleton import (
     write_model_template,
 )
 from opentide.generation.pydantic_templates import generate_core_template
-from opentide.models.base import TideField, TideModel, VocabField
-from opentide.models.metadata import ObjectMetadata
-from opentide.models.objective import DetectionObjective
-from opentide.models.platform import RuleConfigurations, SentinelConfig
-from opentide.models.response import RuleResponse
-from opentide.models.rule import DetectionRule, DetectionRule_v1_1
-from opentide.models.threat import ThreatVector
 
 _FILE_KEY = re.compile(r"(?m)^[ ]*#?file:")
 _NULL_TOKEN = re.compile(r"(?m)(?<![A-Za-z0-9_])null(?![A-Za-z0-9_])")

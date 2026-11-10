@@ -1,8 +1,8 @@
 import structlog
 
+from opentide._models.system_config import ConfigurationModels
 from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import Opentide
-from opentide.models.system_config import ConfigurationModels
 from opentide.platforms.transport import DEFAULT_TIMEOUT, tenant_tls_verify
 
 logger = structlog.get_logger("opentide.platforms.carbon_black.client")

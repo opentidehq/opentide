@@ -18,8 +18,8 @@ import pytest
 import requests
 from tests.corpus_support import CORPUS_RULE_UUIDS, clear_runtime_caches
 
-from opentide.models.deployment_enums import StatusStrategy
-from opentide.models.system_config import ConfigurationModels
+from opentide._models.deployment_enums import StatusStrategy
+from opentide._models.system_config import ConfigurationModels
 from opentide.platforms.sysdig import deployer as module
 from opentide.platforms.sysdig.client import SysdigClient, SysdigTenantError
 from opentide.states.deployment import record_external_id, shard_path

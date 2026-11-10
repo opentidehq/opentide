@@ -12,8 +12,8 @@ from types import SimpleNamespace
 
 import pytest
 
+from opentide._models.vocab_pins import get_pins
 from opentide.core.responders import resolve_responders
-from opentide.models.vocab_pins import get_pins
 
 
 class TestResponderPinRemoved:

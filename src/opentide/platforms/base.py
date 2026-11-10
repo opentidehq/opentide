@@ -6,9 +6,9 @@ from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from typing import cast
 
+from opentide._models.deployment_enums import RunStrategies
+from opentide._models.rule import DetectionRule
 from opentide.core.logging import get_logger
-from opentide.models.deployment_enums import RunStrategies
-from opentide.models.rule import DetectionRule
 
 logger = get_logger(__name__)
 

@@ -20,13 +20,13 @@ import yaml
 from jsonschema import Draft202012Validator, FormatChecker
 from pydantic import ValidationError
 
+from opentide._models.object_types import CORE_OBJECT_TYPES
+from opentide._models.schema_registry import identifiers_for_families
+from opentide._models.visibility import VisibilityConfig
 from opentide.core.io import load_toml
 from opentide.core.root import get_data_root
 from opentide.generation.pydantic_schemas import generate_schema_for_identifier
 from opentide.loading.object_loader import load_object
-from opentide.models.object_types import CORE_OBJECT_TYPES
-from opentide.models.schema_registry import identifiers_for_families
-from opentide.models.visibility import VisibilityConfig
 
 REVIEWED = [
     "2026-10-15",
