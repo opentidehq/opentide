@@ -8,11 +8,11 @@ from typing import Any, Literal
 import requests
 import structlog
 
+from opentide._models.system_config import ConfigurationModels
 from opentide.core.debug import DebugEnvironment
 from opentide.core.errors import Errors
 from opentide.core.registry import Opentide
 from opentide.core.typing import Never
-from opentide.models.system_config import ConfigurationModels
 from opentide.platforms.transport import DEFAULT_TIMEOUT, TenantSession, tenant_tls_verify
 
 logger = structlog.get_logger("opentide.platforms.defender_for_endpoint.client")

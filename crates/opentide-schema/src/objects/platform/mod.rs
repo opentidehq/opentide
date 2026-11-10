@@ -157,6 +157,9 @@ macro_rules! literal_enum {
             )*
         }
 
+        #[cfg(feature = "python")]
+        $crate::python::py_value! { $name => ::pyo3::type_hint_identifier!("builtins", "str") }
+
         impl ::schemars::JsonSchema for $name {
             fn schema_name() -> ::std::borrow::Cow<'static, str> {
                 stringify!($name).into()

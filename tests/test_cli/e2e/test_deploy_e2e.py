@@ -24,8 +24,8 @@ from tests.corpus_support import (
 from tests.test_cli.conftest import LOCAL_SHELL_UNSET, assert_json_ok, without_envelope
 from tests.test_cli.e2e.helpers import EVERY_RULE, uncomment_tenants
 
+from opentide._models.deployment_enums import StatusStrategy
 from opentide.core.root import find_repo_root
-from opentide.models.deployment_enums import StatusStrategy
 
 pytestmark = pytest.mark.cli_e2e
 

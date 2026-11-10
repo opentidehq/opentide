@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, ClassVar
 
-from opentide.models.system_config import ConfigurationModels, SystemConfig
+from opentide._models.system_config import ConfigurationModels, SystemConfig
 from opentide.platforms.transport import tenant_tls_verify
 from opentide.query.models import QueryColumn, QueryRefused, QueryRequest, QueryResult
 from opentide.query.runner import QueryRunner, kql_with_limit

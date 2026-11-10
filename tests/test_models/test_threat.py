@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from opentide.models.threat import ThreatActor, ThreatVector
+from opentide._models.threat import ThreatActor, ThreatVector
 
 
 def test_threat_vector_from_yaml_dict(metadata: dict[str, Any]) -> None:

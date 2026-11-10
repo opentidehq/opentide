@@ -23,9 +23,9 @@ from typing import Annotated, Any, Literal, Union, get_args, get_origin
 from pydantic.fields import FieldInfo
 from pydantic_core import PydanticUndefined
 
+from opentide._models.base import TideModel, field_json_schema_extra
+from opentide._models.metadata import ObjectMetadata
 from opentide.core.lint_config import DEFAULT_REQUIRED_METADATA
-from opentide.models.base import TideModel, field_json_schema_extra
-from opentide.models.metadata import ObjectMetadata
 
 _YAML_UNQUOTED = re.compile(r"^[A-Za-z0-9_./:+-]+$")
 _YAML_RESERVED = frozenset({"true", "false", "null", "yes", "no", "on", "off", "y", "n", "~"})

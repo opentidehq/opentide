@@ -19,9 +19,9 @@ from dataclasses import dataclass
 
 import pytest
 
+from opentide._models.deployment_enums import StatusStrategy
+from opentide._models.system_config import DeploymentStatus
 from opentide.deployment.utils import check_status
-from opentide.models.deployment_enums import StatusStrategy
-from opentide.models.system_config import DeploymentStatus
 
 
 @dataclass

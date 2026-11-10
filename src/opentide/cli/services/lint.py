@@ -268,7 +268,7 @@ def _schema_metadata_keys(schema_id: str) -> frozenset[str] | None:
     """YAML keys the ``metadata`` block of *schema_id* accepts, or ``None`` if unknown."""
     from pydantic import BaseModel
 
-    from opentide.models.schema_registry import is_registered, resolve_model
+    from opentide._models.schema_registry import is_registered, resolve_model
 
     if not is_registered(schema_id):
         return None

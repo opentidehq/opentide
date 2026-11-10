@@ -2,9 +2,8 @@
 //! `platform::defender_for_endpoint::1.0` (`DefenderConfig` and its nested
 //! models).
 
-use std::collections::BTreeMap;
-
 use garde::Validate;
+use indexmap::IndexMap;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -20,6 +19,23 @@ use crate::pins::Pins;
 #[garde(allow_unvalidated)]
 #[schemars(rename = "DefenderAlert", description = "")]
 #[from_node(model = "DefenderAlert")]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(
+        frozen,
+        get_all,
+        eq,
+        name = "DefenderAlert",
+        module = "opentide._native.models"
+    )
+)]
+#[cfg_attr(
+    feature = "python",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+    )
+)]
 pub struct DefenderAlert {
     /// Defender alert category. Deploy removes spaces (`Suspicious Activity` is sent as
     /// `SuspiciousActivity`).
@@ -49,6 +65,23 @@ pub struct DefenderAlert {
 #[garde(allow_unvalidated)]
 #[schemars(rename = "DefenderImpactedEntities", description = "")]
 #[from_node(model = "DefenderImpactedEntities")]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(
+        frozen,
+        get_all,
+        eq,
+        name = "DefenderImpactedEntities",
+        module = "opentide._native.models"
+    )
+)]
+#[cfg_attr(
+    feature = "python",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+    )
+)]
 pub struct DefenderImpactedEntities {
     /// Device column.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -73,6 +106,23 @@ literal_enum! {
 #[garde(allow_unvalidated)]
 #[schemars(rename = "DefenderGroupScoping", description = "")]
 #[from_node(model = "DefenderGroupScoping")]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(
+        frozen,
+        get_all,
+        eq,
+        name = "DefenderGroupScoping",
+        module = "opentide._native.models"
+    )
+)]
+#[cfg_attr(
+    feature = "python",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+    )
+)]
 pub struct DefenderGroupScoping {
     /// `All` or `Specific`.
     pub selection: Selection,
@@ -88,6 +138,23 @@ pub struct DefenderGroupScoping {
 #[garde(allow_unvalidated)]
 #[schemars(rename = "DefenderAllowBlockGroupScoping", description = "")]
 #[from_node(model = "DefenderAllowBlockGroupScoping")]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(
+        frozen,
+        get_all,
+        eq,
+        name = "DefenderAllowBlockGroupScoping",
+        module = "opentide._native.models"
+    )
+)]
+#[cfg_attr(
+    feature = "python",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+    )
+)]
 pub struct DefenderAllowBlockGroupScoping {
     /// `All` or `Specific`.
     pub selection: Selection,
@@ -108,6 +175,23 @@ literal_enum! {
 #[garde(allow_unvalidated)]
 #[schemars(rename = "DefenderAllowBlockAction", description = "")]
 #[from_node(model = "DefenderAllowBlockAction")]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(
+        frozen,
+        get_all,
+        eq,
+        name = "DefenderAllowBlockAction",
+        module = "opentide._native.models"
+    )
+)]
+#[cfg_attr(
+    feature = "python",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+    )
+)]
 pub struct DefenderAllowBlockAction {
     /// `Allow` or `Block`.
     pub action: AllowBlock,
@@ -125,6 +209,23 @@ pub struct DefenderAllowBlockAction {
 #[garde(allow_unvalidated)]
 #[schemars(rename = "DefenderFileActions", description = "")]
 #[from_node(model = "DefenderFileActions")]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(
+        frozen,
+        get_all,
+        eq,
+        name = "DefenderFileActions",
+        module = "opentide._native.models"
+    )
+)]
+#[cfg_attr(
+    feature = "python",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+    )
+)]
 pub struct DefenderFileActions {
     /// Allow or block a file identifier.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -144,6 +245,23 @@ pub struct DefenderFileActions {
 #[expect(
     clippy::struct_excessive_bools,
     reason = "the model's fields, as the oracle declares them"
+)]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(
+        frozen,
+        get_all,
+        eq,
+        name = "DefenderDeviceActions",
+        module = "opentide._native.models"
+    )
+)]
+#[cfg_attr(
+    feature = "python",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+    )
 )]
 pub struct DefenderDeviceActions {
     /// Isolation type. Deploy lowercases the first character (`Full` is sent as `full`).
@@ -170,6 +288,23 @@ pub struct DefenderDeviceActions {
 #[garde(allow_unvalidated)]
 #[schemars(rename = "DefenderUserActions", description = "")]
 #[from_node(model = "DefenderUserActions")]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(
+        frozen,
+        get_all,
+        eq,
+        name = "DefenderUserActions",
+        module = "opentide._native.models"
+    )
+)]
+#[cfg_attr(
+    feature = "python",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+    )
+)]
 pub struct DefenderUserActions {
     /// User column.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -189,6 +324,23 @@ pub struct DefenderUserActions {
 #[garde(allow_unvalidated)]
 #[schemars(rename = "DefenderResponseActions", description = "")]
 #[from_node(model = "DefenderResponseActions")]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(
+        frozen,
+        get_all,
+        eq,
+        name = "DefenderResponseActions",
+        module = "opentide._native.models"
+    )
+)]
+#[cfg_attr(
+    feature = "python",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+    )
+)]
 pub struct DefenderResponseActions {
     /// Device actions: isolate, collect an investigation package, scan, investigate or restrict app
     /// execution.
@@ -209,6 +361,23 @@ pub struct DefenderResponseActions {
 #[garde(allow_unvalidated)]
 #[schemars(rename = "DefenderExclusion", description = "")]
 #[from_node(model = "DefenderExclusion")]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(
+        frozen,
+        get_all,
+        eq,
+        name = "DefenderExclusion",
+        module = "opentide._native.models"
+    )
+)]
+#[cfg_attr(
+    feature = "python",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+    )
+)]
 pub struct DefenderExclusion {
     /// KQL fragment appended after the base query. The key is required. An empty string is
     /// accepted.
@@ -221,7 +390,7 @@ pub struct DefenderExclusion {
     pub tenant: Option<String>,
     /// KQL `let` bindings. String, number, or boolean.
     #[serde(rename = "let", default, skip_serializing_if = "Option::is_none")]
-    pub r#let: Option<BTreeMap<String, Any>>,
+    pub r#let: Option<IndexMap<String, Any>>,
 }
 
 literal_enum! {
@@ -237,6 +406,8 @@ platform_block! {
     #[garde(allow_unvalidated)]
     #[schemars(rename = "DefenderConfig", description = "")]
     #[from_node(model = "DefenderConfig")]
+    #[cfg_attr(feature = "python", pyo3::pyclass(frozen, get_all, eq, name = "DefenderConfig", module = "opentide._native.models"))]
+    #[cfg_attr(feature = "python", expect(clippy::unsafe_derive_deserialize, reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"))]
     pub struct DefenderConfig ["platform::defender_for_endpoint::1.0"] {
         /// KQL. Multiline. Compiled with matching `exclusions` before deploy.
         #[schemars(extend("tide.template.multiline" = true, "tide.template.spacer" = true))]

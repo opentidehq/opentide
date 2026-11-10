@@ -10,15 +10,15 @@ import pytest
 import yaml
 from pydantic import ValidationError
 
+from opentide._models.metadata import ObjectMetadata
+from opentide._models.review import parse_review_instant, unreviewed_reason
+from opentide._models.rule import DetectionRule, DetectionRule_v1_1
+from opentide._models.schema_registry import latest_identifier, resolve_model
+from opentide._models.vocab_pins import get_pins
 from opentide.generation.pydantic_schemas import generate_schema_for_identifier
 from opentide.generation.pydantic_skeleton import render_model_template
 from opentide.loading.object_loader import load_object
 from opentide.loading.rule_loader import load_rule_from_dict
-from opentide.models.metadata import ObjectMetadata
-from opentide.models.review import parse_review_instant, unreviewed_reason
-from opentide.models.rule import DetectionRule, DetectionRule_v1_1
-from opentide.models.schema_registry import latest_identifier, resolve_model
-from opentide.models.vocab_pins import get_pins
 
 
 def _metadata(**overrides: Any) -> dict[str, Any]:
@@ -51,6 +51,26 @@ def test_rule_11_accepts_date_and_datetime() -> None:
     assert parse_review_instant("2026-09-01T15:04:05Z") == datetime(
         2026, 9, 1, 15, 4, 5, tzinfo=timezone.utc
     )
+
+
+@pytest.mark.parametrize(
+    ("text", "microsecond"),
+    [
+        ("2026-09-01T15:04:05.25-05:30", 250000),
+        ("2026-09-01T15:04:05.1+00:00", 100000),
+        ("2026-09-01T15:04:05.1234Z", 123400),
+        ("2026-09-01T15:04:05.123456Z", 123456),
+        ("2026-09-01T15:04:05.12345678Z", 123456),
+    ],
+)
+def test_review_instant_reads_any_number_of_fractional_digits(text: str, microsecond: int) -> None:
+    # Python 3.10's `fromisoformat` reads only three or six digits; the
+    # instant must not depend on the interpreter (abi3 floor is 3.10).
+    instant = parse_review_instant(text)
+    assert instant.microsecond == microsecond
+    assert instant.tzinfo == timezone.utc
+    rule = DetectionRule_v1_1.model_validate(_rule(reviewed=text))
+    assert rule.metadata.reviewed == text
 
 
 def test_rule_11_omitted_reviewed_is_valid() -> None:

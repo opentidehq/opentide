@@ -14,9 +14,9 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from opentide.models.deployment_enums import StatusStrategy
-from opentide.models.platform import SysdigConfig
-from opentide.models.rule import DetectionRule
+from opentide._models.deployment_enums import StatusStrategy
+from opentide._models.platform import SysdigConfig
+from opentide._models.rule import DetectionRule
 from opentide.platforms.sysdig.expansion import Expander, join_lines
 
 #: ``response.alert_severity`` → Falco priority (sysdig-1.0, Priority).

@@ -103,7 +103,7 @@ jobs:
           fi
           # Model field docstrings are the editor hovers; they are checked against
           # the field tables in the specifications repository.
-          if grep -qE "^(src/opentide/models/.*|tests/test_models/test_spec_field_descriptions\\.py|\\.github/workflows/ci\\.yml)$" <<<"$changed_files"; then
+          if grep -qE "^(src/opentide/_models/.*|tests/test_models/test_spec_field_descriptions\\.py|\\.github/workflows/ci\\.yml)$" <<<"$changed_files"; then
             echo "fields=true" >> "$GITHUB_OUTPUT"
           else
             echo "fields=false" >> "$GITHUB_OUTPUT"

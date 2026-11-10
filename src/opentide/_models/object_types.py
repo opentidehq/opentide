@@ -12,6 +12,6 @@ CORE_OBJECT_TYPES = (THREAT, OBJECTIVE, RULE)
 
 def latest_identifier(family: str) -> str:
     """Latest registered schema identifier for a core object family."""
-    from opentide.models.schema_registry import latest_identifier as registry_latest
+    from opentide._models.schema_registry import latest_identifier as registry_latest
 
     return registry_latest(family)

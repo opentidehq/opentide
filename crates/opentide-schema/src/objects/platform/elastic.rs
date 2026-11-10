@@ -4,9 +4,10 @@
 //! oracle's `_validate_raw_elastic_block`, judged on the raw block before its
 //! fields, in the oracle's terms (Python's truthiness and `isinstance`).
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
 use garde::Validate;
+use indexmap::IndexMap;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -109,6 +110,17 @@ macro_rules! model {
         #[garde(allow_unvalidated)]
         #[schemars(rename = $model, description = "")]
         #[from_node(model = $model)]
+        #[cfg_attr(
+            feature = "python",
+            pyo3::pyclass(frozen, get_all, eq, name = $model, module = "opentide._native.models")
+        )]
+        #[cfg_attr(
+            feature = "python",
+            expect(
+                clippy::unsafe_derive_deserialize,
+                reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+            )
+        )]
         pub struct $name { $($body)* }
     };
 }
@@ -371,10 +383,10 @@ model! {
         /// Rule actions: connector `id`, `action_type_id`, `group`, `params`, and `frequency`, in
         /// Kibana's shape. Copied unchanged.
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        pub notify: Option<Vec<BTreeMap<String, Any>>>,
+        pub notify: Option<Vec<IndexMap<String, Any>>>,
         /// Response actions: `{endpoint: <command>, field?, comment?}` or `{osquery: {...}}`.
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        pub respond: Option<Vec<BTreeMap<String, Any>>>,
+        pub respond: Option<Vec<IndexMap<String, Any>>>,
         /// Timeline template attached to the rule: `id` and `title`, both optional strings.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         pub timeline: Option<ElasticTimeline>,
@@ -395,10 +407,10 @@ model! {
         pub negate: bool,
         /// Raw detection-engine filter `meta`.
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        pub meta: Option<BTreeMap<String, Any>>,
+        pub meta: Option<IndexMap<String, Any>>,
         /// Raw detection-engine filter query.
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        pub query: Option<BTreeMap<String, Any>>,
+        pub query: Option<IndexMap<String, Any>>,
     }
 }
 
@@ -442,7 +454,7 @@ model! {
         pub mapping: Vec<ElasticThreatGroup>,
         /// Indicator filters, in the same two shapes as the block `filters`.
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        pub filters: Option<Vec<BTreeMap<String, Any>>>,
+        pub filters: Option<Vec<IndexMap<String, Any>>>,
         /// Indicator prefix override. Kibana's default is `threat.indicator`.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         pub indicator_path: Option<String>,
@@ -538,6 +550,8 @@ platform_block! {
     #[garde(custom(garde_block))]
     #[schemars(rename = "ElasticConfig", description = "")]
     #[from_node(model = "ElasticConfig", before = "raw_block")]
+    #[cfg_attr(feature = "python", pyo3::pyclass(frozen, get_all, eq, name = "ElasticConfig", module = "opentide._native.models"))]
+    #[cfg_attr(feature = "python", expect(clippy::unsafe_derive_deserialize, reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"))]
     pub struct ElasticConfig ["platform::elastic::1.0"] {
         /// Rule type: `query`, `eql`, `esql`, `threshold`, `new_terms`, `threat_match` or
         /// `machine_learning`. Kibana cannot change the type of an existing rule in place.

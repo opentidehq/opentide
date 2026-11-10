@@ -11,23 +11,23 @@ from pathlib import PurePosixPath
 
 from pydantic import BaseModel
 
-from opentide.models.configuration.base import ConfigurationModel
-from opentide.models.configuration.deployment import (
+from opentide._models.configuration.base import ConfigurationModel
+from opentide._models.configuration.deployment import (
     DebugSettings,
     DeploymentConfiguration,
     DeploymentResponder,
     DeploymentStatusEntry,
     PromotionSettings,
 )
-from opentide.models.configuration.documentation import DocumentationConfiguration
-from opentide.models.configuration.paths import PathsConfiguration
-from opentide.models.configuration.platforms import (
+from opentide._models.configuration.documentation import DocumentationConfiguration
+from opentide._models.configuration.paths import PathsConfiguration
+from opentide._models.configuration.platforms import (
     PLATFORM_CONFIGURATION_MODELS,
     PlatformConfiguration,
     PlatformConfigurationBase,
 )
-from opentide.models.configuration.sharing import MispIntegration, SharingConfiguration
-from opentide.models.visibility import VisibilityConfig
+from opentide._models.configuration.sharing import MispIntegration, SharingConfiguration
+from opentide._models.visibility import VisibilityConfig
 
 #: Model of each top-level configuration file, keyed by file name.
 CONFIGURATION_FILE_MODELS: dict[str, type[BaseModel]] = {

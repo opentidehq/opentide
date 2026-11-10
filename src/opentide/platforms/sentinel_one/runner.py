@@ -9,8 +9,8 @@ from typing import Any, ClassVar
 
 import requests
 
+from opentide._models.system_config import ConfigurationModels, SystemConfig
 from opentide.core.time import format_utc_z
-from opentide.models.system_config import ConfigurationModels, SystemConfig
 from opentide.platforms.transport import not_json_detail
 from opentide.query.models import (
     QueryColumn,

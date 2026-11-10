@@ -185,7 +185,7 @@ core-metadata-version = "2.4"
 # generates parser.c from, and the reference Tide schemas. rust-toolchain.toml
 # stays out too, so a build from the sdist uses the toolchain it finds instead of
 # asking rustup for components.
-# An editable install's compiled module is left out; its stub (_native.pyi) ships.
+# An editable install's compiled module is left out; its stubs (_native/*.pyi) ship.
 exclude = [
     "/target",
     "/src/opentide/_native.so",
@@ -212,7 +212,7 @@ exclude = [
 packages = ["src/opentide"]
 core-metadata-version = "2.4"
 # An editable install's compiled module, in src/; a wheel gets its own build.
-# The stub (_native.pyi) ships, for type checkers.
+# The stubs (_native/*.pyi) ship, for type checkers.
 exclude = [
     "src/opentide/_native.so",
     "src/opentide/_native.*.so",

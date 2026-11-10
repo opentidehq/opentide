@@ -3,6 +3,9 @@
 from collections.abc import Sequence
 from typing import Final, Literal, final
 
+# The Tide models (UC-1.9), whose stub `cargo xtask stubs` generates.
+from opentide._native import models as models
+
 Severity = Literal["error", "warning", "information", "hint"]
 Language = Literal["kql", "spl", "esql", "eql", "kuery", "lucene", "falco", "cql", "opentide-yaml"]
 

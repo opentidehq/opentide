@@ -5,15 +5,15 @@ from typing import TYPE_CHECKING
 
 import structlog
 
+from opentide._models.deployment_enums import RunStrategies, StatusStrategy
+from opentide._models.rule import DetectionRule
+from opentide._models.system_config import ConfigurationModels, batch_tenant
 from opentide.core import deploy_events
 from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import DetectionPlatforms, Opentide
 from opentide.deployment import TideDeployment, check_status
 from opentide.deployment.external_ids import without_legacy_external_ids
 from opentide.generation.framework import techniques_resolver
-from opentide.models.deployment_enums import RunStrategies, StatusStrategy
-from opentide.models.rule import DetectionRule
-from opentide.models.system_config import ConfigurationModels, batch_tenant
 from opentide.platforms.carbon_black.client import (
     CarbonBlackCloudConnection,
     CarbonBlackCloudService,

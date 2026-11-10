@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from opentide.models.platform import (
+from opentide._models.platform import (
     PLATFORM_CONFIG_MODELS,
     RuleConfigurations,
     SentinelConfig,

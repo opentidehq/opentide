@@ -17,8 +17,7 @@ from tests.corpus_support import (
     real_rules_folder,
 )
 
-from opentide.deployment.git_repo import DiffSource
-from opentide.models.deployment_enums import (
+from opentide._models.deployment_enums import (
     DEPLOYABLE_STRATEGIES,
     REMOVED_PLAN_ENV,
     StatusStrategy,
@@ -27,6 +26,7 @@ from opentide.models.deployment_enums import (
     parse_strategies,
     removed_plan_message,
 )
+from opentide.deployment.git_repo import DiffSource
 
 CI_VARIABLES = ("CI", "GITHUB_ACTIONS", "TF_BUILD")
 LoggedEvent = tuple[str, str, dict[str, object]]
@@ -848,7 +848,7 @@ def test_make_deploy_plan_drops_retired_rules_only_when_asked(
 
 
 def _tenant(name: str, *strategies: StatusStrategy, manual: bool = False):
-    from opentide.models.system_config import SystemConfig
+    from opentide._models.system_config import SystemConfig
 
     if strategies:
         return SystemConfig.Tenant(
@@ -908,9 +908,9 @@ def _resolve(
     from types import SimpleNamespace
     from unittest.mock import MagicMock
 
+    from opentide._models.deployment_enums import DetectionPlatforms
     from opentide.deployment.planning import TideDeployment, wide_scope
     from opentide.loading.rule_loader import load_rule_from_dict
-    from opentide.models.deployment_enums import DetectionPlatforms
 
     block: dict[str, object] = {
         "schema": "platform::splunk::1.0",

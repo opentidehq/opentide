@@ -8,8 +8,8 @@ from typing import Any
 
 import yaml
 
+from opentide._models.review import parse_window, reviewed_text, unreviewed_reason
 from opentide.core.io import load_yaml
-from opentide.models.review import parse_window, reviewed_text, unreviewed_reason
 from opentide.registry.catalogue import catalogue_files
 
 

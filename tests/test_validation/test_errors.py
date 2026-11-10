@@ -10,7 +10,7 @@ from unittest.mock import MagicMock
 import pytest
 from pydantic import BaseModel, Field, ValidationError
 
-from opentide.models.threat import ThreatVector
+from opentide._models.threat import ThreatVector
 from opentide.validation.errors import (
     attach_yaml_lines,
     format_issues_for_console,

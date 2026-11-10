@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from opentide.models.version import SchemaVersion, SchemaVersionChain
+from opentide._models.version import SchemaVersion, SchemaVersionChain
 
 
 def test_schema_version_parse() -> None:

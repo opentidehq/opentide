@@ -1,11 +1,20 @@
 ---
 title: Models
-description: Pydantic models for rules, objectives, and threats — key fields, delegation methods, results, and errors.
+description: The Tide models for rules, objectives, and threats — frozen Rust classes with the Pydantic methods, key fields, delegation helpers, results, and errors.
 ---
 
 # Models
 
-Core objects are Pydantic v2 models with explicit schema identifiers. This page is the Python-side field reference; the full normative field contract lives in the [specifications](/docs/specifications/).
+The classes in `opentide.models` are the Tide models compiled into opentide: frozen Rust classes under the names the Pydantic models had, with explicit schema identifiers. This page is the Python-side field reference; the full normative field contract lives in the [specifications](/docs/specifications/).
+
+They keep the Pydantic methods SDK code calls: `model_validate`, `model_validate_json`, `model_dump`, `model_dump_json`, `model_copy` and `model_json_schema`, field access, `==`, `hash`, `repr` and pickling. They are frozen: setting an attribute raises, and `model_copy(update=...)` gives a validated copy. `model_validate` raises `opentide.models.ValidationError`, a `ValueError` whose `errors()` lists every error with Pydantic's `type`, `loc` and `msg`. `model_fields`, `model_construct`, `model_rebuild` and `model_post_init` still work, with a `DeprecationWarning`, for one minor release. Importing `opentide.models` loads no Pydantic.
+
+```python
+from opentide.models import DetectionRule, DetectionRule_v1_1, ValidationError
+DetectionRule_v1_1.__schema_identifier__  # "rule::1.1"
+DetectionRule.__module__                   # "opentide._native.models"
+issubclass(ValidationError, ValueError)    # True
+```
 
 ## Core objects
 
@@ -36,7 +45,7 @@ DetectionRule.__schema_identifier__  # "rule::1.0"
 | `detection_model` | `str \| None` | UUID of the objective, or of a signal under it, that this rule implements |
 | `response` | `RuleResponse \| None` | Alert + response playbook |
 
-The YAML you author maps one-to-one onto these attributes:
+The YAML you author maps one-to-one onto these attributes. The [registry](./registry.md) still loads the CLI's Pydantic models, which have the same attributes; `opentide.models.delegation.from_yaml_dict(document)` reads a document into the Rust class its `metadata.schema` names:
 
 ```python
 rule = Opentide.Rules["00000000-0000-4000-8003-000000000001"]
@@ -108,7 +117,7 @@ threat.threat.actors            # list[ThreatActor] | None; name is scoped (att&
 
 ## Delegation methods
 
-Rules loaded through the [registry](./registry.md) are bound to it and expose operations directly:
+Rules loaded through the [registry](./registry.md) are bound to it and expose operations directly. A Rust class cannot carry them (it is frozen and cannot be subclassed): for a rule from `opentide.models`, `opentide.models.delegation` has each one as a function, `validate(rule)`, `validate_query(rule, platform)`, `run_query(rule, platform, ...)`, `deploy(rule, platform, dry_run=False, *, strategies=None)`, `document(rule)` and `promote(rule, status)`, each taking an optional `registry=` (default `Opentide`). `Opentide.render_rule(rule)` and `Opentide.validate_rule(rule)` take either kind of rule.
 
 ```python
 rule = Opentide.Rules[uuid]
@@ -130,7 +139,7 @@ rule.document() -> str                                   # or Opentide.render_ru
 
 ## Results
 
-Delegation methods return small Pydantic result models (`opentide.models.results`):
+Delegation methods and helpers return small Pydantic result models (`opentide.models.results`):
 
 ```python
 class ValidationResult(BaseModel):
@@ -193,4 +202,4 @@ Both pick the model from `metadata.schema`. A missing identifier raises `SchemaM
 
 ## Source
 
-`src/opentide/models/`, `src/opentide/models/results.py`, `src/opentide/core/errors.py`
+`src/opentide/models/` (the public package), `crates/opentide-schema/src/python.rs` (the classes), `src/opentide/_models/` (the CLI's Pydantic models, `results.py`), `src/opentide/core/errors.py`

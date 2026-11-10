@@ -5,21 +5,21 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable
 from typing import Literal, cast
 
+from opentide._models.metadata import ObjectMetadata, ObjectReferences
+from opentide._models.objective import (
+    DetectionExample,
+    DetectionObjective,
+    DetectionSignal,
+    ExternalDetector,
+)
+from opentide._models.rule import DetectionRule
+from opentide._models.threat import ThreatBody, ThreatVector
 from opentide.core.responders import resolve_responders
 from opentide.documentation.catalog import DocumentationCatalog
 from opentide.documentation.format.protocol import MarkdownFormatter
 from opentide.documentation.markdown.links import object_link
 from opentide.documentation.vocabulary import EnrichedEntry, enrich, enrich_technique
 from opentide.generation import framework as fw
-from opentide.models.metadata import ObjectMetadata, ObjectReferences
-from opentide.models.objective import (
-    DetectionExample,
-    DetectionObjective,
-    DetectionSignal,
-    ExternalDetector,
-)
-from opentide.models.rule import DetectionRule
-from opentide.models.threat import ThreatBody, ThreatVector
 from opentide.vulnerability_lookup import (
     CveSettings,
     VulnerabilityLookupClient,

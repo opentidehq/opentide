@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from opentide._models.threat import ThreatVector
 from opentide.documentation.catalog import DocumentationCatalog
 from opentide.documentation.context import DocumentationContext
 from opentide.documentation.diagram.builders import render_chaining_diagram
@@ -9,7 +10,6 @@ from opentide.documentation.markdown.links import object_link
 from opentide.documentation.objects.base import ObjectRenderer
 from opentide.documentation.parts import sections
 from opentide.documentation.vocabulary import enrich
-from opentide.models.threat import ThreatVector
 
 
 class ThreatRenderer(ObjectRenderer):

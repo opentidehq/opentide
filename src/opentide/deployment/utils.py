@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from opentide._models.deployment_enums import RunStrategies, StatusStrategy, deployed_by, deploys
 from opentide.core import registry
 from opentide.core.errors import ObjectFileError
 from opentide.core.io import first_content_span, load_yaml, root_mapping_problem
@@ -15,7 +16,6 @@ from opentide.deployment.git_repo import (
     no_commits_warning,
     rules_folder_in_repo,
 )
-from opentide.models.deployment_enums import RunStrategies, StatusStrategy, deployed_by, deploys
 from opentide.platforms.enabled import enable_platform_command, enabled_systems
 
 logger = get_logger(__name__)

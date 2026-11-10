@@ -26,8 +26,8 @@ def rules_unreviewed(
     is absent or strictly earlier than now minus the window. This command does not
     modify rules.
     """
+    from opentide._models.review import parse_window
     from opentide.cli.services.rules import render_unreviewed, run_unreviewed
-    from opentide.models.review import parse_window
 
     cli = get_context(ctx)
     cli.apply_environment()

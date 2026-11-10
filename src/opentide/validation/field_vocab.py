@@ -305,7 +305,7 @@ def validate_object_vocab_from_metaschema(
 
 
 #: A platform block's ``status``. The keyword lives on the platform models'
-#: schema extras (``opentide.models.platform_schema``), which the rule
+#: schema extras (``opentide._models.platform_schema``), which the rule
 #: metaschema in the index does not carry, so the field is checked here.
 _PLATFORM_STATUS_SCHEMA: dict[str, Any] = {"tide.config.statuses": True}
 

@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+from opentide._models.rule import DetectionRule
 from opentide.documentation.catalog import DocumentationCatalog
 from opentide.documentation.context import DocumentationContext
 from opentide.documentation.format.factory import formatter_for
 from opentide.documentation.objects.rule import RuleRenderer
 from opentide.documentation.types import DocumentFlavor
-from opentide.models.rule import DetectionRule
 
 
 def test_rule_renderer_uses_context_formatter(rule_payload: dict) -> None:

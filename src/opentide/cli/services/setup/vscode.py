@@ -21,6 +21,7 @@ from typing import Any
 
 import structlog
 
+from opentide._models.object_types import CORE_OBJECT_TYPES
 from opentide.cli.services.setup.jsonc_edit import (
     JsoncError,
     JsoncText,
@@ -33,7 +34,6 @@ from opentide.cli.services.setup.jsonc_edit import (
 )
 from opentide.cli.services.setup.jsonc_edit import members as jsonc_members
 from opentide.core.files import resolve_configurations
-from opentide.models.object_types import CORE_OBJECT_TYPES
 from opentide.registry.discovery import OPENTIDE_DIR
 
 logger = structlog.get_logger("opentide.cli.services.setup.vscode")

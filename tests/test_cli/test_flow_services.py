@@ -10,6 +10,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from opentide._models.deployment_enums import StatusStrategy
 from opentide.cli.services import deploy_plan
 from opentide.cli.services.generation import WrittenFiles, generation_result, generation_step
 from opentide.cli.services.share import share_outcome
@@ -18,7 +19,6 @@ from opentide.cli.ui.mode import OutputMode
 from opentide.cli.ui.progress import Checklist
 from opentide.cli.ui.setup import setup_outcome, shell_quote
 from opentide.core.root import get_repo_root
-from opentide.models.deployment_enums import StatusStrategy
 from opentide.sharing.report import ShareRecord, ShareRun
 
 # --------------------------------------------------------------------------

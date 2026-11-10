@@ -6,9 +6,9 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
+from opentide._models.object_types import CORE_OBJECT_TYPES
 from opentide.generation.pydantic_metaschema import build_core_schema_source, core_schema_models
 from opentide.generation.pydantic_skeleton import write_model_template
-from opentide.models.object_types import CORE_OBJECT_TYPES
 
 CORE_TEMPLATE_MODELS: frozenset[str] = frozenset(CORE_OBJECT_TYPES)
 

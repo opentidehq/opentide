@@ -594,11 +594,17 @@ mod _native {
         serve_stdio, set_default_catalog, set_host_info, use_host_catalogs,
     };
 
+    /// The Tide models (UC-1.9, #815): `opentide._native.models`.
+    #[pymodule_export]
+    use opentide_schema::python::models;
+
     #[pymodule_init]
     fn init(module: &Bound<'_, PyModule>) -> PyResult<()> {
         module.add("ENGINE_VERSION", opentide_analysis::VERSION)?;
         module.add("CODES", codes::ALL.to_vec())?;
         module.add("LANGUAGES", languages())?;
+        // Importable by name, as pickling needs for the classes it rebuilds.
+        opentide_schema::python::register(&module.getattr("models")?.cast_into()?)?;
         Ok(())
     }
 }

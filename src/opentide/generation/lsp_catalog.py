@@ -39,7 +39,7 @@ from opentide.core.logging import get_logger
 if TYPE_CHECKING:
     from typing import TypeGuard
 
-    from opentide.models.base import TideModel
+    from opentide._models.base import TideModel
 
 logger = get_logger(__name__)
 
@@ -153,9 +153,9 @@ def _describe_difference(ours: object, theirs: object) -> str:
 
 def fields_catalog(version: str) -> dict[str, Any]:
     """The ``fields.json`` document for the registered object schemas."""
+    from opentide._models.object_types import CORE_OBJECT_TYPES
+    from opentide._models.schema_registry import identifiers_for_families, resolve_model
     from opentide.generation.pydantic_schemas import generate_schema_for_identifier
-    from opentide.models.object_types import CORE_OBJECT_TYPES
-    from opentide.models.schema_registry import identifiers_for_families, resolve_model
     from opentide.validation.errors import _REF_LEAF_TO_TYPE
 
     schemas = {
@@ -216,9 +216,9 @@ def _closed(node: object) -> bool:
 
 def deprecations_catalog(version: str) -> dict[str, Any]:
     """The ``deprecations.json`` document: root and platform fields marked deprecated."""
+    from opentide._models.platform import PLATFORM_CONFIG_MODELS
+    from opentide._models.platform_schema import platform_root_extras
     from opentide.generation.pydantic_metaschema import CORE_ROOT_EXTRAS
-    from opentide.models.platform import PLATFORM_CONFIG_MODELS
-    from opentide.models.platform_schema import platform_root_extras
 
     rows: list[dict[str, str]] = []
     for family, extras in CORE_ROOT_EXTRAS.items():
@@ -267,7 +267,7 @@ def _model_facts(model: type[TideModel]) -> ModelFacts:
     """
     from pydantic_core import PydanticUndefined
 
-    from opentide.models.base import TideModel
+    from opentide._models.base import TideModel
 
     extras: dict[str, dict[str, Any]] = {}
     defaults: dict[str, str] = {}

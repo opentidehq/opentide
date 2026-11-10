@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from opentide._models.objective import DetectionObjective, DetectionSignal
 from opentide.loading.objective_loader import load_objective_from_dict, load_signal_from_dict
-from opentide.models.objective import DetectionObjective, DetectionSignal
 
 
 def _objective_metadata() -> dict[str, Any]:

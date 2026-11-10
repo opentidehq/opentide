@@ -96,10 +96,10 @@ def test_no_model_accepts_a_key_it_does_not_define() -> None:
     Elastic and Sysdig normalise their own opentide spellings (an empty map each);
     nothing else may declare legacy keys.
     """
-    from opentide.models.objective import DetectionObjective
-    from opentide.models.platform import PLATFORM_CONFIG_MODELS
-    from opentide.models.rule import DetectionRule
-    from opentide.models.threat import ThreatVector
+    from opentide._models.objective import DetectionObjective
+    from opentide._models.platform import PLATFORM_CONFIG_MODELS
+    from opentide._models.rule import DetectionRule
+    from opentide._models.threat import ThreatVector
 
     for model in (
         DetectionRule,
@@ -112,10 +112,10 @@ def test_no_model_accepts_a_key_it_does_not_define() -> None:
 
 
 def test_configuration_models_have_no_retired_table() -> None:
-    from opentide.models.configuration import CONFIGURATION_FILE_MODELS
-    from opentide.models.configuration.deployment import DebugSettings
-    from opentide.models.configuration.paths import PathsConfiguration, WorkspacePaths
-    from opentide.models.configuration.platforms import (
+    from opentide._models.configuration import CONFIGURATION_FILE_MODELS
+    from opentide._models.configuration.deployment import DebugSettings
+    from opentide._models.configuration.paths import PathsConfiguration, WorkspacePaths
+    from opentide._models.configuration.platforms import (
         PLATFORM_CONFIGURATION_MODELS,
         PlatformIdentity,
     )

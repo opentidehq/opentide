@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from opentide._models.rule import DetectionRule
 from opentide.generation import pydantic_metaschema as meta
-from opentide.models.rule import DetectionRule
 
 
 def test_lookup_schema_extra_with_scope_and_nested() -> None:

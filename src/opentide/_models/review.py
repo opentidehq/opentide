@@ -12,6 +12,8 @@ from typing import Any
 
 _DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _DATETIME = re.compile(r"^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$")
+#: The fractional seconds of a datetime, with what follows them.
+_FRACTION = re.compile(r"\.(\d+)")
 _WINDOW = re.compile(r"^(\d+)([dhm])?$")
 
 RULE_10 = "rule::1.0"
@@ -31,6 +33,10 @@ def parse_review_instant(value: str) -> datetime:
     if not _DATETIME.fullmatch(text):
         raise ValueError("metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime")
     normalized = text.replace("Z", "+00:00").replace(" ", "T")
+    # `datetime.fromisoformat` reads any number of fractional digits from
+    # Python 3.11 (beyond six they are dropped); 3.10 reads only three or six.
+    # Pad or cut them to six so every supported Python reads the same instant.
+    normalized = _FRACTION.sub(lambda match: "." + match.group(1)[:6].ljust(6, "0"), normalized)
     parsed = datetime.fromisoformat(normalized)
     if parsed.tzinfo is None:
         raise ValueError("metadata.reviewed datetime must include a timezone offset")
