@@ -12,7 +12,8 @@ They keep the Pydantic methods SDK code calls: `model_validate`, `model_validate
 ```python
 from opentide.models import DetectionRule, DetectionRule_v1_1, ValidationError
 DetectionRule_v1_1.__schema_identifier__  # "rule::1.1"
-DetectionRule.model_validate               # dict → DetectionRule, or ValidationError
+DetectionRule.__module__                   # "opentide._native.models"
+issubclass(ValidationError, ValueError)    # True
 ```
 
 ## Core objects
