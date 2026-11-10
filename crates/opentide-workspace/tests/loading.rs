@@ -712,7 +712,8 @@ mod loading {
     }
 
     /// An object file that is a symbolic link to a file in the workspace is
-    /// read again when a change is reported through the link or its target.
+    /// read again when a change is reported through the link or its target,
+    /// and when the link is pointed at another file.
     #[cfg(unix)]
     #[test]
     fn a_linked_object_is_read_again_through_the_link_or_its_target() {
@@ -751,6 +752,22 @@ mod loading {
             assert_eq!(rule_name(&workspace).as_deref(), Some(name.as_str()));
             assert_eq!(workspace.index().to_json(workspace.root()), on_disk(&dir));
         }
+
+        // The link pointed elsewhere: only the link names the cached file,
+        // since neither its old target nor its new one is a cache key.
+        let other = dir.join("shared/y.yaml");
+        std::fs::write(&other, body("retargeted")).unwrap();
+        let link = dir.join("objects/rules/link.yaml");
+        std::fs::remove_file(&link).unwrap();
+        std::os::unix::fs::symlink(&other, &link).unwrap();
+        let done = workspace.invalidate(&[Change::changed(&link)]).unwrap();
+        assert!(!done.full, "{done:?}");
+        assert_eq!(
+            done.reparsed,
+            [dir.canonicalize().unwrap().join("objects/rules/link.yaml")]
+        );
+        assert_eq!(rule_name(&workspace).as_deref(), Some("retargeted"));
+        assert_eq!(workspace.index().to_json(workspace.root()), on_disk(&dir));
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
