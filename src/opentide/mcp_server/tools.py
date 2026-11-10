@@ -67,7 +67,9 @@ def _validation_next_actions(
     writes the safe fixes and validates again in one step (#646); the MCP call
     stays the report, for an agent that applies the edits itself.
     """
-    first = next((item.code for item in diagnostics if item.severity == "error"), None)
+    first = next(
+        (_field(item, "code") for item in diagnostics if _field(item, "severity") == "error"), None
+    )
     if first is None:
         return []
     explain = next_action(
@@ -77,15 +79,59 @@ def _validation_next_actions(
         reason=f"what {first} means and how to fix it",
     )
     rerun = {**again, "reason": "validate again after fixing the issues"}
-    if any(item.fix is not None and item.fix.safe for item in diagnostics):
+    if any(_fix_is_safe(_field(item, "fix")) for item in diagnostics):
         prefix = "opentide --json validate"
         command = str(again["command"])
         if command.startswith(prefix):
             command = f"{prefix} --fix{command[len(prefix) :]}"
         rerun.update(command=command, reason="apply the safe fixes, then validate again")
-    elif any(item.fix is not None for item in diagnostics):
+    elif any(_field(item, "fix") is not None for item in diagnostics):
         rerun["reason"] = "validate again after applying the fix edits"
     return [explain, rerun]
+
+
+def _field(item: Any, name: str) -> Any:
+    """A diagnostic's field: an attribute of the Python one, a key of the Rust report's JSON."""
+    return item.get(name) if isinstance(item, dict) else getattr(item, name, None)
+
+
+def _fix_is_safe(fix: Any) -> bool:
+    if fix is None:
+        return False
+    return bool(fix.get("safe") if isinstance(fix, dict) else getattr(fix, "safe", False))
+
+
+def _validation_engine() -> str:
+    """The engine ``OPENTIDE_ENGINE`` selects for ``validate`` (#822); a bad one is a ToolError."""
+    from opentide.validation.engine import EngineSelectionError, validation_engine
+
+    try:
+        return validation_engine()
+    except EngineSelectionError as exc:
+        from mcp.server.mcpserver.exceptions import ToolError
+
+        raise ToolError(f"{exc.code}: {exc}") from exc
+
+
+def _rust_validation(**options: Any) -> dict[str, Any]:
+    """``validate`` on the Rust workspace, from this server's directory and environment."""
+    from mcp.server.mcpserver.exceptions import ToolError
+
+    from opentide.analysis import EngineUnavailableError
+    from opentide.validation.engine import RustRequest, RustValidationError, run_rust
+
+    try:
+        return run_rust(RustRequest(**options))
+    except (EngineUnavailableError, RustValidationError) as exc:
+        raise ToolError(f"{exc.code}: {exc}") from exc
+
+
+def _shadow(surface: str, python: Any, rust: dict[str, Any]) -> None:
+    """``OPENTIDE_ENGINE=compare``: log and record how the Rust report differs from *python*."""
+    from opentide.registry.discovery import discover_workspace
+    from opentide.validation.engine import compared, report_from
+
+    compared(python, report_from(rust["report"]), surface=surface, workspace=discover_workspace())
 
 
 def _rule_platforms(uuid: str) -> list[str]:
@@ -126,7 +172,6 @@ def tool_validate_rule(uuid: str) -> dict[str, Any]:
     # start-up would report the content the author has already changed.
     Opentide.reload()
     from opentide.validation.scope import ValidationScope
-    from opentide.validation.session import run_validation
 
     # The raw index, not ``Opentide.Rules``: typed loading raises for the whole
     # catalogue when one rule does not load, which is what validation reports.
@@ -148,9 +193,23 @@ def tool_validate_rule(uuid: str) -> dict[str, Any]:
                 )
             ],
         }
-    report = run_validation(scope=ValidationScope.narrow(uuids=frozenset({uuid})))
-    dumped = report.model_dump_json_ready()
-    diagnostics = _annotate(dumped, report, ("issues",))
+    engine = _validation_engine()
+    if engine == "rust":
+        rust = _rust_validation(uuids=(uuid,))["report"]
+        ok = bool(rust["ok"])
+        dumped = {"issues": rust["issues"]}
+        diagnostics: list[Any] = list(rust["issues"])
+        errors = [_legacy(entry) for entry in rust["issues"] if entry["severity"] == "error"]
+        warnings = [_legacy(entry) for entry in rust["warnings"]]
+    else:
+        report = _python_validation(engine, scope=ValidationScope.narrow(uuids=frozenset({uuid})))
+        if engine == "compare":
+            _shadow("validate_rule", report, _rust_validation(uuids=(uuid,)))
+        ok = report.ok
+        dumped = report.model_dump_json_ready()
+        diagnostics = _annotate(dumped, report, ("issues",))
+        errors = [issue.to_legacy_string() for issue in report.errors]
+        warnings = [issue.to_legacy_string() for issue in report.warnings]
     again = next_action(
         "validate_rule",
         {"uuid": uuid},
@@ -158,7 +217,7 @@ def tool_validate_rule(uuid: str) -> dict[str, Any]:
         reason="",
     )
     actions = _validation_next_actions(diagnostics, again=again)
-    if report.ok:
+    if ok:
         try:
             rule = Opentide.Rules.get(uuid)
         except Exception:
@@ -183,12 +242,31 @@ def tool_validate_rule(uuid: str) -> dict[str, Any]:
                 )
             )
     return {
-        "valid": report.ok,
-        "errors": [issue.to_legacy_string() for issue in report.errors],
-        "warnings": [issue.to_legacy_string() for issue in report.warnings],
+        "valid": ok,
+        "errors": errors,
+        "warnings": warnings,
         "issues": dumped.get("issues", []),
         "next_actions": actions,
     }
+
+
+def _legacy(entry: dict[str, Any]) -> str:
+    from opentide.validation.engine import legacy_string
+
+    return legacy_string(entry)
+
+
+def _python_validation(engine: str, **options: Any) -> Any:
+    """``run_validation`` on the Python implementation: the MCP tools pick the engine themselves.
+
+    Under ``python`` it is the SDK's own call, which runs Python then; under
+    ``compare`` the Python half, whose result the tool compares and returns.
+    """
+    from opentide.validation import session
+
+    if engine == "python":
+        return session.run_validation(**options)
+    return session._run_python(**options)
 
 
 def tool_validation_report(
@@ -210,26 +288,40 @@ def tool_validation_report(
     except ValueError:
         choices = ", ".join(item.value for item in QueriesMode)
         return {"ok": False, "error": f"queries must be one of {choices}, got {queries!r}"}
-    # Re-read the workspace, as ``tool_validate_rule`` does.
-    Opentide.reload()
     from opentide.validation.checks.kinds import ValidateCheck
     from opentide.validation.scope import ValidationScope
-    from opentide.validation.session import run_validation
 
-    scope = ValidationScope.full()
-    if file or uuid or object_type:
-        scope = ValidationScope.narrow(
-            files=frozenset({file}) if file else None,
-            uuids=frozenset({uuid}) if uuid else None,
-            types=frozenset({object_type}) if object_type else None,
+    engine = _validation_engine()
+    rust_options = {
+        "files": (file,) if file else (),
+        "uuids": (uuid,) if uuid else (),
+        "types": (object_type,) if object_type else (),
+        "queries": mode.value,
+    }
+    if engine == "rust":
+        payload = dict(_rust_validation(**rust_options)["report"])
+        diagnostics: list[Any] = [*payload["issues"], *payload["warnings"]]
+    else:
+        # Re-read the workspace, as ``tool_validate_rule`` does (the Rust run
+        # reads it afresh each time).
+        Opentide.reload()
+        scope = ValidationScope.full()
+        if file or uuid or object_type:
+            scope = ValidationScope.narrow(
+                files=frozenset({file}) if file else None,
+                uuids=frozenset({uuid}) if uuid else None,
+                types=frozenset({object_type}) if object_type else None,
+            )
+        report = _python_validation(
+            engine,
+            scope=scope,
+            checks=frozenset(ValidateCheck(name) for name in default_check_names(mode)),
+            queries_as_warnings=mode is QueriesMode.warn,
         )
-    report = run_validation(
-        scope=scope,
-        checks=frozenset(ValidateCheck(name) for name in default_check_names(mode)),
-        queries_as_warnings=mode is QueriesMode.warn,
-    )
-    payload = report.model_dump_json_ready()
-    diagnostics = _annotate(payload, report, ("issues", "warnings"))
+        if engine == "compare":
+            _shadow("validation_report", report, _rust_validation(**rust_options))
+        payload = report.model_dump_json_ready()
+        diagnostics = _annotate(payload, report, ("issues", "warnings"))
     arguments = {
         key: value
         for key, value in (("file", file), ("uuid", uuid), ("object_type", object_type))
