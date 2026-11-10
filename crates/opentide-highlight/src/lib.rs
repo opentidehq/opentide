@@ -56,6 +56,10 @@ pub const CQL_HIGHLIGHTS_SCM: &str = include_str!(concat!(
     env!("OPENTIDE_ASSETS"),
     "/highlights/queries/cql/highlights.scm"
 ));
+pub const YARA_HIGHLIGHTS_SCM: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/highlights/queries/yara/highlights.scm"
+));
 
 /// The tree-sitter highlight query for a language. Configuration TOML has
 /// none: the editor's TOML grammar highlights it.
@@ -71,8 +75,7 @@ pub fn highlights_scm(language: LanguageId) -> &'static str {
         LanguageId::Config => "",
         LanguageId::Falco => FALCO_HIGHLIGHTS_SCM,
         LanguageId::Cql => CQL_HIGHLIGHTS_SCM,
-        // No grammar yet (#165): no tree-sitter highlighting.
-        LanguageId::Yara => "",
+        LanguageId::Yara => YARA_HIGHLIGHTS_SCM,
     }
 }
 
@@ -774,12 +777,14 @@ pub fn tokens_from_spans(
 /// `source.<id>`: no known extension owns those scopes (`docs/EDITORS.md`).
 /// CQL is `source.opentide.cql` for the same reason: Cassandra's CQL
 /// extensions own `source.cql`.
+/// YARA is `source.opentide.yara`: the YARA extensions own `source.yara`.
 /// This is not a HighlightSpec capture, so the rename does not bump
 /// `highlights/spec.toml`.
 pub fn tm_scope_name(language: LanguageId) -> String {
     match language {
         LanguageId::Esql => "source.opentide.esql".to_string(),
         LanguageId::Cql => "source.opentide.cql".to_string(),
+        LanguageId::Yara => "source.opentide.yara".to_string(),
         other => format!("source.{}", other.as_str()),
     }
 }
@@ -1232,6 +1237,13 @@ mod tests {
                 include_str!(concat!(
                     env!("OPENTIDE_ASSETS"),
                     "/grammars/tree-sitter-opentide-cql/queries/highlights.scm"
+                )),
+            ),
+            (
+                LanguageId::Yara,
+                include_str!(concat!(
+                    env!("OPENTIDE_ASSETS"),
+                    "/grammars/tree-sitter-opentide-yara/queries/highlights.scm"
                 )),
             ),
         ];

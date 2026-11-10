@@ -459,3 +459,28 @@ fn cql_corpus_gate() {
         ],
     });
 }
+
+#[test]
+fn yara_corpus_gate() {
+    check_gate(&ElasticGate {
+        language: LanguageId::Yara,
+        id: "yara",
+        // Leaf tokens and keyword choices: every fixture that tags a
+        // production contains them.
+        structural: &[
+            "source_file",
+            "identifier",
+            "integer",
+            "boolean",
+            "text_string",
+            "string_identifier",
+            "tag",
+            "hex_byte",
+            "hex_jump_bound",
+            "hex_alternative_branch",
+            "quantifier_keyword",
+            "them",
+            "loop_variables",
+        ],
+    });
+}

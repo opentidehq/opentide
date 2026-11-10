@@ -98,7 +98,7 @@ impl LanguageId {
     }
 
     /// Query languages with a tree-sitter grammar and an engine.
-    pub const QUERY_LANGUAGES: [Self; 8] = [
+    pub const QUERY_LANGUAGES: [Self; 9] = [
         Self::Kql,
         Self::Spl,
         Self::Esql,
@@ -107,6 +107,7 @@ impl LanguageId {
         Self::Lucene,
         Self::Falco,
         Self::Cql,
+        Self::Yara,
     ];
 }
 

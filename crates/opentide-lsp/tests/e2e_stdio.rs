@@ -673,6 +673,15 @@ fn yara_over_stdio() {
     let clean = "import \"pe\"\n\nrule a : tag {\n  strings:\n    $a = \"x\" wide\n  condition:\n    $a and pe.is_dll()\n}\n";
     let codes = published_codes(&mut lsp, "file:///tmp/clean.yar", "yara", clean);
     assert!(codes.is_empty(), "{codes:?}");
+    let tokens = lsp.request(
+        "textDocument/semanticTokens/full",
+        json!({ "textDocument": { "uri": "file:///tmp/clean.yar" } }),
+    );
+    let data = tokens["result"]["data"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    assert!(data.len() >= 5 * 12, "semantic tokens for .yar: {tokens}");
 }
 
 #[test]

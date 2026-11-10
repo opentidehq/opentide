@@ -10,8 +10,8 @@
 //! semantic pass for the rest of the spec's code tables, the dialects and the
 //! platform profiles build on it.
 
-use opentide_core::{ByteSpan, Diagnostic, codes, span_to_range};
-use opentide_highlight::HighlightToken;
+use opentide_core::{ByteSpan, Diagnostic, LanguageId, codes, span_to_range};
+use opentide_highlight::{HighlightSpec, HighlightToken, YARA_HIGHLIGHTS_SCM, tokens_from_spans};
 use yara_x_parser::Parser;
 use yara_x_parser::ast::{AST, Error as ParseError};
 
@@ -24,8 +24,22 @@ pub struct AnalyzeResult {
 pub fn analyze(source: &str) -> AnalyzeResult {
     AnalyzeResult {
         diagnostics: parse_diagnostics(source),
-        tokens: Vec::new(),
+        tokens: highlight(source),
     }
+}
+
+/// Semantic tokens from the tree-sitter grammar and `highlights.scm`. The
+/// grammar only colours; verdicts are `yara-x-parser`'s.
+pub fn highlight(source: &str) -> Vec<HighlightToken> {
+    let Ok(spec) = HighlightSpec::load() else {
+        return Vec::new();
+    };
+    let Ok(spans) = opentide_syntax::query_captures(LanguageId::Yara, source, YARA_HIGHLIGHTS_SCM)
+    else {
+        return Vec::new();
+    };
+    let spans: Vec<(ByteSpan, &str)> = spans.iter().map(|(s, c)| (*s, c.as_str())).collect();
+    tokens_from_spans(&spec, source, &spans).unwrap_or_default()
 }
 
 /// The parser's errors, one diagnostic each. The parser recovers after an
@@ -144,6 +158,25 @@ rule Loader_Stage1 : loader {
     fn integer_overflow_is_out_of_range() {
         let codes = codes_of("rule a { condition: filesize == 99999999999999999999 }");
         assert_eq!(codes, [codes::YARA_NUMBER_OUT_OF_RANGE]);
+    }
+
+    #[test]
+    fn highlight_colours_rules_strings_and_modules() {
+        let source = "import \"pe\"\nrule r : t {\n  strings:\n    $a = \"x\" wide\n  condition:\n    $a and pe.is_dll()\n}\n";
+        let tokens = analyze(source).tokens;
+        let at = |text: &str| {
+            let start = source.find(text).unwrap();
+            tokens
+                .iter()
+                .find(|t| t.span.start == start)
+                .map(|t| t.capture.clone())
+        };
+        assert_eq!(at("rule").as_deref(), Some("keyword"));
+        assert_eq!(at("r :").as_deref(), Some("type"));
+        assert_eq!(at("$a =").as_deref(), Some("variable"));
+        assert_eq!(at("wide").as_deref(), Some("keyword"));
+        assert_eq!(at("pe.").as_deref(), Some("type"));
+        assert_eq!(at("is_dll").as_deref(), Some("function"));
     }
 
     #[test]
