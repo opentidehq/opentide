@@ -15,6 +15,10 @@ use opentide_analysis::{
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
+use std::collections::HashMap;
+use std::path::PathBuf;
+
+use opentide_cli::env::Env;
 
 /// One finding, in the CLI's coordinates.
 #[pyclass(frozen, get_all, module = "opentide._native")]
@@ -224,6 +228,98 @@ fn analyze_query(
 #[pyfunction]
 fn cli_main(py: Python<'_>, argv: Vec<String>, version: String) -> i32 {
     py.detach(|| opentide_cli::main(&argv, &version))
+}
+
+/// Runs the Rust command line with *argv* (without the program name) in this
+/// process, with exactly the variables *env* and from *cwd*, its streams
+/// captured as pipes: `(exit_code, stdout, stderr)`. `opentide serve` runs a
+/// request this way. *warm*: a workspace the run opens stays loaded for the
+/// next warm run, which re-reads only what changed (a read-only run only).
+#[pyfunction]
+#[pyo3(signature = (argv, env, cwd, version, warm=false))]
+fn run_cli(
+    py: Python<'_>,
+    argv: Vec<String>,
+    env: HashMap<String, String>,
+    cwd: PathBuf,
+    version: String,
+    warm: bool,
+) -> (i32, Py<PyBytes>, Py<PyBytes>) {
+    let captured = py.detach(|| {
+        opentide_cli::embed::run_captured(&argv, &Env::from_pairs(env), &cwd, &version, warm)
+    });
+    (
+        captured.exit_code,
+        PyBytes::new(py, &captured.stdout).unbind(),
+        PyBytes::new(py, &captured.stderr).unbind(),
+    )
+}
+
+/// Interrupts the `run_cli` in progress as Ctrl-C would (it exits 130);
+/// whether one was running.
+#[pyfunction]
+fn interrupt_cli() -> bool {
+    opentide_cli::embed::interrupt()
+}
+
+/// Tells the warm workspaces that *paths* changed: each is taken into
+/// account at the workspace's next warm run. The number of warm workspaces.
+#[pyfunction]
+fn invalidate_workspaces(paths: Vec<PathBuf>) -> usize {
+    opentide_cli::embed::invalidate_workspaces(&paths)
+}
+
+/// Forgets every warm workspace.
+#[pyfunction]
+fn clear_workspaces() {
+    opentide_cli::embed::clear_workspaces();
+}
+
+/// What the warm workspaces have done: `opens`, `hits`, `refreshes`, `kept`
+/// and `file_reads` (object files the kept ones read).
+#[pyfunction]
+fn workspace_stats() -> HashMap<&'static str, usize> {
+    let stats = opentide_cli::embed::workspace_stats();
+    HashMap::from([
+        ("opens", stats.opens),
+        ("hits", stats.hits),
+        ("refreshes", stats.refreshes),
+        ("kept", stats.kept),
+        ("file_reads", stats.file_reads),
+    ])
+}
+
+/// `validate` on the workspace *cwd* and *env* place (and *repo*, `--repo`),
+/// as JSON: `{"report", "checks", "summary", "failed"}`, the report as
+/// `validate --json` writes it, or `{"error": {"code", "message"}}`.
+#[pyfunction]
+#[pyo3(signature = (cwd, env, *, repo=None, check=None, files=Vec::new(), uuids=Vec::new(), types=Vec::new(), queries=String::from("error"), strict=false))]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "validate's options, one keyword each, as the CLI has them"
+)]
+fn validate_report(
+    py: Python<'_>,
+    cwd: PathBuf,
+    env: HashMap<String, String>,
+    repo: Option<String>,
+    check: Option<String>,
+    files: Vec<String>,
+    uuids: Vec<String>,
+    types: Vec<String>,
+    queries: String,
+    strict: bool,
+) -> String {
+    let request = opentide_cli::embed::ValidateRequest {
+        repo,
+        check,
+        files,
+        uuids,
+        types,
+        queries,
+        strict,
+    };
+    py.detach(|| opentide_cli::embed::validate_json(&request, &Env::from_pairs(env), &cwd))
 }
 
 /// `(line, column, end_line, end_column, capture)`.
@@ -604,10 +700,11 @@ mod _native {
     #[pymodule_export]
     use super::{
         Diagnostic, QueryReport, Workspace, analyze_query, bundled_catalog, catalog_is_workspace,
-        catalog_version, cli_main, compare_runs, dataset_status, describe_code, highlight,
-        install_catalog, install_configuration_schemas, install_lint, install_visibility,
-        language_for_path, serve_stdio, set_configuration_checker, set_default_catalog,
-        set_host_info, use_host_catalogs,
+        catalog_version, clear_workspaces, cli_main, compare_runs, dataset_status, describe_code,
+        highlight, install_catalog, install_configuration_schemas, install_lint,
+        install_visibility, interrupt_cli, invalidate_workspaces, language_for_path, run_cli,
+        serve_stdio, set_configuration_checker, set_default_catalog, set_host_info,
+        use_host_catalogs, validate_report, workspace_stats,
     };
 
     /// The Tide models (UC-1.9, #815): `opentide._native.models`.

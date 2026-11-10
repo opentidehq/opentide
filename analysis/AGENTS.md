@@ -9,7 +9,9 @@ only through `src/opentide/analysis.py`. [`README.md`](README.md) describes the 
 ## Place
 
 bindings (`xtask/layers.toml`): depends on opentide-analysis, opentide-lsp and opentide-compare
-(`compare_runs`, for the CLI's `OPENTIDE_ENGINE=compare`); nothing depends on it. The plan's `bindings/python` (§4): after the facade (UC-5.1, #836) it depends on `opentide`
+(`compare_runs`, for the CLI's `OPENTIDE_ENGINE=compare`), opentide-schema (`models`) and
+opentide-cli (`cli_main`; `opentide_cli::embed` for `run_cli`, `interrupt_cli`, the warm
+workspaces of `serve` and `validate_report`, UC-2.7); nothing depends on it. The plan's `bindings/python` (§4): after the facade (UC-5.1, #836) it depends on `opentide`
 alone (D-5). It inherits the workspace lints, `unsafe_code = "forbid"` included: PyO3's macros
 need no `unsafe` of its own.
 
