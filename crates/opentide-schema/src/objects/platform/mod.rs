@@ -28,7 +28,9 @@ pub mod carbon_black;
 pub mod crowdstrike;
 pub mod defender;
 pub mod deprecation;
-pub mod durations;
+/// Elastic Security durations: `opentide_core::duration`, the grammar the
+/// language server's advisories share.
+pub use opentide_core::duration as durations;
 pub mod elastic;
 pub mod falco_text;
 pub mod harfanglab;
@@ -448,17 +450,9 @@ pub(crate) fn json_node(value: &serde_json::Value) -> Node {
     }
 }
 
-/// Python's `str.isspace()` for one character: Unicode's `White_Space`
-/// (Rust's `char::is_whitespace`) and the four separators U+001C to U+001F,
-/// which Python counts as whitespace too.
-pub fn is_python_space(ch: char) -> bool {
-    ch.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&ch)
-}
-
-/// Python's `text.strip()`.
-pub fn python_strip(text: &str) -> &str {
-    text.trim_matches(is_python_space)
-}
+/// Python's `str.isspace()` and `text.strip()`: `opentide_core::falco`'s,
+/// which the language server's Sysdig findings use too.
+pub use opentide_core::falco::{is_python_space, python_strip};
 
 /// `QueryText`: a query must not be blank. Every deployer treats a falsy query
 /// as "nothing to deploy" and moves on, so `query: ""` is the same silent skip

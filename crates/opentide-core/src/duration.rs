@@ -2,6 +2,10 @@
 //! `duration_seconds`): what the Elastic block's `duration` constraint
 //! accepts.
 //!
+//! One grammar for both engines: opentide-schema's `elastic_rule_shape` (the
+//! CLI's model) and opentide-tide's `duration_millis` (the language server's
+//! maxspan advisories) call [`duration_seconds`].
+//!
 //! A duration is shorthand, one or more of `<n>d`, `<n>h`, `<n>m`, `<n>s` in
 //! that order (`5m`, `1h10m`, `1d2h`), or ISO 8601 with days and a time part
 //! (`PT1H`, `P14D`, `P1DT2H`). Digits are ASCII only: Kibana refuses others.

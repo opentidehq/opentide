@@ -1,116 +1,25 @@
 //! The text side of a Sysdig block's own macros and lists, as Falco's rule
 //! loader treats them (`platforms/sysdig/expansion.py`): Falco's
 //! `resolve_list` (textual: a list name between delimiters becomes its
-//! items), and the bare names in check positions of a condition, the macros
-//! it uses. No crate does either: they are Falco's loader rules and the
-//! oracle's token scan over them, which `sysdig_definition_order` and
-//! `sysdig_list_in_value` are defined by. The condition's grammar is
+//! items; `opentide_core::falco`'s, shared with the language server), and the
+//! bare names in check positions of a condition, the macros it uses. No crate
+//! does either: they are Falco's loader rules and the oracle's token scan over
+//! them, which `sysdig_definition_order` and `sysdig_list_in_value` are
+//! defined by. The condition's grammar is
 //! `opentide-falco`'s (the `falco_*` findings); this module needs no parser,
 //! so the model builds wherever the crate does (wasm32 included).
 //!
 //! Text is handled in Unicode code points, as the oracle's Python strings
 //! index it.
 
-/// `resolve_list`'s blanks.
-const BLANKS: [char; 4] = [' ', '\t', '\n', '\r'];
+use opentide_core::falco::{BLANKS, MODIFIERS, OPERATORS};
+
+/// Falco's `resolve_list` and `occurs`: `opentide_core::falco`'s, which the
+/// language server's Sysdig findings use too.
+pub use opentide_core::falco::{occurs, resolve_list};
 
 fn blank(ch: char) -> bool {
     BLANKS.contains(&ch)
-}
-
-/// `resolve_list`'s delimiters: the blanks, `(`, `)`, `,` and `=`.
-fn delimiter(ch: char) -> bool {
-    blank(ch) || matches!(ch, '(' | ')' | ',' | '=')
-}
-
-/// The first index at or after `from` where `name` occurs in `text`.
-fn find(text: &[char], name: &[char], from: usize) -> Option<usize> {
-    if name.is_empty() || from > text.len() {
-        return None;
-    }
-    (from..=text.len().saturating_sub(name.len()))
-        .find(|&at| at + name.len() <= text.len() && text[at..at + name.len()] == *name)
-}
-
-/// Whether `name` at `start..end` has a delimiter (or the text's edge) on
-/// each side.
-fn delimited(text: &[char], start: usize, end: usize) -> bool {
-    (start == 0 || delimiter(text[start - 1])) && (end >= text.len() || delimiter(text[end]))
-}
-
-/// Falco's `quote_item`: double-quoted when it holds a space and is not
-/// quoted already.
-fn quote_item(item: &str) -> String {
-    if item.contains(' ') && !item.starts_with(['"', '\'']) {
-        format!("\"{item}\"")
-    } else {
-        item.to_owned()
-    }
-}
-
-/// Falco's `resolve_list`: `name` replaced by `items` in `condition`, where it
-/// occurs between delimiters. The blanks around an occurrence are consumed
-/// and it becomes `" " + items + " "` (no leading blank at the start of the
-/// text); an empty list removes one comma beside it, the left one first.
-pub fn resolve_list(condition: &str, name: &str, items: &[String]) -> String {
-    let name: Vec<char> = name.chars().collect();
-    let mut text: Vec<char> = condition.chars().collect();
-    let substitute: Vec<char> = items
-        .iter()
-        .map(|item| quote_item(item))
-        .collect::<Vec<_>>()
-        .join(", ")
-        .chars()
-        .collect();
-    let mut next = find(&text, &name, 0);
-    while let Some(found) = next {
-        let mut start = found;
-        let mut end = start + name.len();
-        if delimited(&text, start, end) {
-            while start > 0 && blank(text[start - 1]) {
-                start -= 1;
-            }
-            while end < text.len() && blank(text[end]) {
-                end += 1;
-            }
-            if substitute.is_empty() {
-                if start > 0 && text[start - 1] == ',' {
-                    start -= 1;
-                } else if end < text.len() && text[end] == ',' {
-                    end += 1;
-                }
-            }
-            let mut replaced = Vec::with_capacity(text.len() + substitute.len() + 2);
-            if start > 0 {
-                replaced.extend_from_slice(&text[..start]);
-                replaced.push(' ');
-            }
-            replaced.extend_from_slice(&substitute);
-            replaced.push(' ');
-            if end <= text.len() {
-                replaced.extend_from_slice(&text[end..]);
-            }
-            text = replaced;
-            start += substitute.len() + 1;
-        }
-        next = find(&text, &name, start + 1);
-    }
-    text.into_iter().collect()
-}
-
-/// `occurs`: whether [`resolve_list`] would replace an occurrence of `name`
-/// in `text`.
-pub fn occurs(text: &str, name: &str) -> bool {
-    let name: Vec<char> = name.chars().collect();
-    let text: Vec<char> = text.chars().collect();
-    let mut next = find(&text, &name, 0);
-    while let Some(start) = next {
-        if delimited(&text, start, start + name.len()) {
-            return true;
-        }
-        next = find(&text, &name, start + 1);
-    }
-    false
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -131,24 +40,11 @@ struct Token {
 
 /// Operators written as symbols, longest first.
 const SYMBOLS: [&str; 7] = ["!=", "<=", ">=", "==", "=", "<", ">"];
-/// Falco's operators written as words; the token after one is a value.
-const WORD_OPERATORS: [&str; 13] = [
-    "exists",
-    "glob",
-    "iglob",
-    "contains",
-    "icontains",
-    "bcontains",
-    "startswith",
-    "bstartswith",
-    "endswith",
-    "regex",
-    "intersects",
-    "in",
-    "pmatch",
-];
-/// `oneof`, `anyof`, `allof`.
-const MODIFIERS: [&str; 3] = ["oneof", "anyof", "allof"];
+/// One of Falco's operators written as a word (`in`, `contains`): the token
+/// after one is a value.
+fn word_operator(word: &str) -> bool {
+    OPERATORS.contains(&word) && word.chars().all(char::is_alphabetic)
+}
 /// Field transformers, and `val`.
 const TRANSFORMERS: [&str; 9] = [
     "tolower", "toupper", "b64", "basename", "len", "join", "concat", "getopt", "val",
@@ -275,7 +171,7 @@ pub fn check_position_names(text: &str) -> Vec<String> {
         }
         if expect == Expect::Operator {
             if token.kind == Kind::Symbol
-                || (token.kind == Kind::Word && WORD_OPERATORS.contains(&token.text.as_str()))
+                || (token.kind == Kind::Word && word_operator(&token.text))
             {
                 expect = if token.text == "exists" {
                     Expect::Check
@@ -315,36 +211,6 @@ pub fn check_position_names(text: &str) -> Vec<String> {
 mod tests {
     use super::*;
 
-    fn items(values: &[&str]) -> Vec<String> {
-        values.iter().map(|value| (*value).to_owned()).collect()
-    }
-
-    /// The expected texts are the oracle's (`expansion.resolve_list`).
-    #[test]
-    fn resolve_list_follows_falco() {
-        assert_eq!(
-            resolve_list("proc.name in (shells)", "shells", &items(&["bash", "sh"])),
-            "proc.name in ( bash, sh )"
-        );
-        assert_eq!(
-            resolve_list("shells", "shells", &items(&["a b"])),
-            "\"a b\" "
-        );
-        // Not between delimiters: kept.
-        assert_eq!(
-            resolve_list("my_shells.x = 1", "shells", &items(&["bash"])),
-            "my_shells.x = 1"
-        );
-        // An empty list removes a comma beside it, the left one first.
-        assert_eq!(
-            resolve_list("x in (a, shells)", "shells", &[]),
-            "x in (a  )"
-        );
-        assert!(occurs("run shells", "shells"));
-        assert!(!occurs("run_shells", "shells"));
-        assert!(!occurs("", "shells"));
-    }
-
     #[test]
     fn check_positions_are_the_macros_a_condition_uses() {
         assert_eq!(
@@ -364,6 +230,11 @@ mod tests {
         assert_eq!(
             check_position_names("proc.env[\"HOME\"] = \"m6\" and (m7)"),
             ["m7"]
+        );
+        // A backslash escapes the quote after it: `m9` is inside the string.
+        assert_eq!(
+            check_position_names("proc.name = \"a\\\" m9\" and m8"),
+            ["m8"]
         );
     }
 }

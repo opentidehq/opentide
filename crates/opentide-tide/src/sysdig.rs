@@ -10,70 +10,30 @@
 //! condition for every list in order; a list naming itself keeps the name as a
 //! literal (`sysdig_list_self_reference`, a warning). Each code is reported on
 //! the field path it is about.
+//!
+//! Falco's terms (operators, modifiers, priorities, keywords, the name rule)
+//! are `opentide_core::falco`'s, the one copy opentide-schema's
+//! `sysdig_rule_shape` (the CLI's model) uses too; this module walks
+//! `serde_yaml` values and places each finding.
+//! `the_editor_and_the_model_agree_on_the_sysdig_cases` runs both on the
+//! model's oracle cases and compares the codes.
 
+use opentide_core::falco::{
+    TUNING_FORBIDDEN, definition_name_ok, flatten_lists, is_blank, is_exception_operator,
+    is_list_comparison, list_inside, normalize_comp, priority_ok, source_ok, value_passes,
+};
 use opentide_core::{Diagnostic, codes};
 use opentide_falco::Context;
 use serde_yaml::Value;
 
 const BLOCK: [&str; 2] = ["configurations", "sysdig"];
-/// Keys a tuning inherits from the rule it tunes (`sysdig_tuning_keys`).
-const TUNING_FORBIDDEN: [&str; 5] = ["output", "priority", "policies", "source", "name"];
-const PRIORITIES: [&str; 9] = [
-    "emergency",
-    "alert",
-    "critical",
-    "error",
-    "warning",
-    "notice",
-    "informational",
-    "info",
-    "debug",
-];
-const LIST_COMPS: [&str; 3] = ["in", "pmatch", "intersects"];
-const MODIFIABLE: [&str; 12] = [
-    "=",
-    "==",
-    "!=",
-    "contains",
-    "icontains",
-    "bcontains",
-    "startswith",
-    "bstartswith",
-    "endswith",
-    "glob",
-    "iglob",
-    "regex",
-];
-const OTHER_OPERATORS: [&str; 8] = ["exists", "<", "<=", ">", ">=", "in", "intersects", "pmatch"];
-const MODIFIERS: [&str; 3] = ["oneof", "anyof", "allof"];
-const RESERVED: [&str; 6] = ["and", "or", "not", "in", "exists", "val"];
 
 fn non_blank(v: Option<&Value>) -> bool {
-    v.and_then(Value::as_str)
-        .is_some_and(|s| !s.trim().is_empty())
+    v.and_then(Value::as_str).is_some_and(|s| !is_blank(s))
 }
 
 fn set(v: Option<&Value>) -> bool {
     !matches!(v, None | Some(Value::Null)) && v.and_then(Value::as_str) != Some("")
-}
-
-/// Falco's `normalize_comp`.
-fn normalize(comp: &str) -> &str {
-    comp.trim_matches([' ', '\t', '\r', '\n'])
-}
-
-/// Falco's `is_str_operator_with_modifier`: split at the first space.
-fn modified(op: &str) -> bool {
-    op.split_once(' ')
-        .is_some_and(|(head, m)| MODIFIABLE.contains(&head) && MODIFIERS.contains(&m))
-}
-
-fn exception_operator(op: &str) -> bool {
-    MODIFIABLE.contains(&op) || OTHER_OPERATORS.contains(&op) || modified(op)
-}
-
-fn list_comparison(op: &str) -> bool {
-    LIST_COMPS.contains(&op) || modified(op)
 }
 
 fn scalar(v: &Value) -> bool {
@@ -110,15 +70,14 @@ fn exception_ok(entry: &Value) -> bool {
         .cloned()
         .unwrap_or_default();
     if let Some(field) = fields.and_then(Value::as_str) {
-        if field.trim().is_empty() {
+        if is_blank(field) {
             return false;
         }
         if let Some(comp) = comps {
             let Some(comp) = comp.as_str() else {
                 return false; // "Fields and comps must both be strings"
             };
-            let comp = normalize(comp);
-            if !LIST_COMPS.contains(&comp) && !modified(comp) {
+            if !is_list_comparison(normalize_comp(comp)) {
                 return false;
             }
         }
@@ -137,10 +96,10 @@ fn exception_ok(entry: &Value) -> bool {
         if comps.len() != fields.len() {
             return false; // "Fields and comps lists must have equal length"
         }
-        if !comps
-            .iter()
-            .all(|c| c.as_str().is_some_and(|c| exception_operator(normalize(c))))
-        {
+        if !comps.iter().all(|c| {
+            c.as_str()
+                .is_some_and(|c| is_exception_operator(normalize_comp(c)))
+        }) {
             return false;
         }
     }
@@ -191,14 +150,7 @@ fn definitions(source: &str, block: &Value, out: &mut Vec<Diagnostic>) -> Defini
                 continue;
             };
             let at = index.to_string();
-            let valid = name
-                .chars()
-                .next()
-                .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
-                && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
-                && !RESERVED.contains(&name)
-                && !exception_operator(name);
-            if !valid {
+            if !definition_name_ok(name) {
                 out.push(err(
                     source,
                     codes::SYSDIG_DEFINITION_NAME,
@@ -315,16 +267,20 @@ fn order(source: &str, defs: &Definitions, out: &mut Vec<Diagnostic>) -> bool {
 /// `sysdig_list_in_value`: a block list name in an exception value where
 /// Falco's expansion would not produce a value list.
 fn list_in_value(source: &str, block: &Value, defs: &Definitions, out: &mut Vec<Diagnostic>) {
-    let names: Vec<&str> = defs.lists.iter().map(|(_, n, _)| n.as_str()).collect();
-    if names.is_empty() {
+    if defs.lists.is_empty() {
         return;
     }
-    let inside = |text: &str| {
-        names
+    // Falco's `compile_list_infos`, then the oracle's `_passes` and
+    // `_list_in` (`opentide_core::falco`, as the model judges them).
+    let flat = flatten_lists(
+        &defs
+            .lists
             .iter()
-            .find(|n| opentide_falco::occurs_delimited(text, n))
-            .copied()
-    };
+            .map(|(_, n, items)| (n.clone(), items.clone()))
+            .collect::<Vec<_>>(),
+    );
+    let names: Vec<&str> = flat.iter().map(|(n, _)| n.as_str()).collect();
+    let inside = |text: &str| list_inside(&flat, text);
     let Some(entries) = block.get("exceptions").and_then(Value::as_sequence) else {
         return;
     };
@@ -341,13 +297,18 @@ fn list_in_value(source: &str, block: &Value, defs: &Definitions, out: &mut Vec<
                 &["exceptions", &at, "values"],
             ));
         };
+        // A value list: each member through the passes (a member naming a
+        // block list becomes its items), then no block list inside one.
         let members = |values: &[Value], out: &mut Vec<Diagnostic>| -> bool {
-            for v in values {
-                let text = text_of(v);
-                if scalar(v) && names.contains(&text.as_str()) {
-                    continue;
-                }
-                if let Some(list) = inside(&text) {
+            let passed = value_passes(
+                &flat,
+                values
+                    .iter()
+                    .map(|v| scalar(v).then(|| text_of(v)))
+                    .collect(),
+            );
+            for text in passed.iter().flatten() {
+                if let Some(list) = inside(text) {
                     report(list, out);
                     return true;
                 }
@@ -372,7 +333,7 @@ fn list_in_value(source: &str, block: &Value, defs: &Definitions, out: &mut Vec<
         let comps: Vec<String> = match entry.get("comps").and_then(Value::as_sequence) {
             Some(cs) => cs
                 .iter()
-                .map(|c| normalize(&text_of(c)).to_string())
+                .map(|c| normalize_comp(&text_of(c)).to_string())
                 .collect(),
             None => vec!["=".into(); width],
         };
@@ -386,8 +347,12 @@ fn list_in_value(source: &str, block: &Value, defs: &Definitions, out: &mut Vec<
                 }
                 let text = text_of(item);
                 if names.contains(&text.as_str()) {
-                    if !list_comparison(comp) {
+                    if !is_list_comparison(comp) {
                         report(&text, out);
+                        return;
+                    }
+                    // Falco wraps it in parentheses: one value list, then the passes.
+                    if members(std::slice::from_ref(item), out) {
                         return;
                     }
                     continue;
@@ -452,9 +417,7 @@ pub(crate) fn constraint_diagnostics(source: &str, block: &Value) -> Vec<Diagnos
         }
     }
     if let Some(p) = block.get("priority").filter(|v| !v.is_null()) {
-        let ok = p
-            .as_str()
-            .is_some_and(|s| PRIORITIES.contains(&s.trim().to_ascii_lowercase().as_str()));
+        let ok = p.as_str().is_some_and(priority_ok);
         if !ok {
             out.push(err(
                 source,
@@ -468,11 +431,7 @@ pub(crate) fn constraint_diagnostics(source: &str, block: &Value) -> Vec<Diagnos
         }
     }
     if let Some(s) = block.get("source").filter(|v| !v.is_null()) {
-        let ok = s.as_str().is_some_and(|s| {
-            s.chars().next().is_some_and(|c| c.is_ascii_lowercase())
-                && s.chars()
-                    .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
-        });
+        let ok = s.as_str().is_some_and(source_ok);
         if !ok {
             out.push(err(
                 source,
@@ -686,5 +645,37 @@ mod tests {
             only_codes(&block("[['x ci']]", "in")),
             ["sysdig_list_in_value"]
         );
+    }
+
+    /// A value naming a block list is that list's items (the oracle's
+    /// `_passes`, after Falco's `compile_list_infos` flattened the lists):
+    /// an item holding another list's name inside it is `sysdig_list_in_value`,
+    /// as `opentide validate` reports it (`platform-sysdig-list-pass` and
+    /// `platform-sysdig-list-flattened` in opentide-schema's oracle cases).
+    #[test]
+    fn a_value_list_is_judged_after_the_lists_expand() {
+        let lists = "    lists:
+    - {name: l0, items: [a]}
+    - {name: l1, items: ['x l0']}
+    - {name: l2, items: [l1, y]}
+";
+        for value in ["l1", "l2"] {
+            let block = format!(
+                "    status: STAGING
+    condition: spawned_process
+{lists}    exceptions:
+    - {{name: e, fields: proc.name, comps: in, values: [{value}]}}
+"
+            );
+            assert_eq!(only_codes(&block), ["sysdig_list_in_value"], "{value}");
+        }
+        let block = format!(
+            "    status: STAGING
+    condition: spawned_process
+{lists}    exceptions:
+    - {{name: e, fields: [proc.name], comps: [in], values: [[l2]]}}
+"
+        );
+        assert_eq!(only_codes(&block), ["sysdig_list_in_value"]);
     }
 }

@@ -10,6 +10,11 @@
 use std::collections::BTreeSet;
 
 use garde::Validate;
+use opentide_core::falco::{
+    EXPANSION_LIMIT, LIST_OPERATORS, TUNING_FORBIDDEN, definition_name_ok, flatten_lists, is_blank,
+    is_exception_operator, is_list_comparison, is_modified_operator, list_inside, normalize_comp,
+    priority_ok, source_ok, upsert, value_passes,
+};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -229,102 +234,18 @@ platform_block! {
 
 // ---------------------------------------------------------------------------
 // The named check `sysdig_rule_shape`.
+//
+// Falco's terms (operators, modifiers, priorities, keywords, names) are
+// `opentide_core::falco`'s, the one copy the language server's Sysdig
+// findings (`opentide-tide`'s `sysdig` module) use too; `opentide-tide`'s
+// `the_editor_and_the_model_agree_on_the_sysdig_cases` runs both on
+// `tests/oracle/platform_cases.toml`.
 // ---------------------------------------------------------------------------
-
-const FALCO_PRIORITIES: [&str; 9] = [
-    "emergency",
-    "alert",
-    "critical",
-    "error",
-    "warning",
-    "notice",
-    "informational",
-    "info",
-    "debug",
-];
-/// Keys a tuning inherits from the rule it tunes (`sysdig_tuning_keys`).
-const TUNING_FORBIDDEN: [&str; 5] = ["output", "priority", "policies", "source", "name"];
-/// `parser::supported_operators()`: Falco's comparison operators.
-const FALCO_OPERATORS: [&str; 20] = [
-    "exists",
-    "<=",
-    "<",
-    ">=",
-    ">",
-    "==",
-    "=",
-    "!=",
-    "glob",
-    "iglob",
-    "contains",
-    "icontains",
-    "bcontains",
-    "startswith",
-    "bstartswith",
-    "endswith",
-    "regex",
-    "intersects",
-    "in",
-    "pmatch",
-];
-/// Operators whose right-hand side is a value list.
-const LIST_OPERATORS: [&str; 3] = ["intersects", "in", "pmatch"];
-/// `cmpop_supports_modifier`.
-const MODIFIABLE_OPERATORS: [&str; 12] = [
-    "=",
-    "==",
-    "!=",
-    "contains",
-    "icontains",
-    "bcontains",
-    "startswith",
-    "bstartswith",
-    "endswith",
-    "glob",
-    "iglob",
-    "regex",
-];
-const MODIFIERS: [&str; 3] = ["oneof", "anyof", "allof"];
-/// Words that never name a block macro or list: the keywords and the
-/// operators written as words.
-const RESERVED_WORDS: [&str; 6] = ["and", "or", "not", "in", "exists", "val"];
-/// How many items a list or a value list may expand to here, and (times 16)
-/// how many bytes a macro's condition may grow to with the lists resolved:
-/// a block whose lists name earlier lists over and over grows exponentially
-/// (the oracle grew with it, without bound). Far above any rule; a bound so
-/// a crafted file cannot exhaust memory.
-const EXPANSION_LIMIT: usize = 100_000;
-
-/// `resolve_list`'s blanks.
-const BLANKS: &[char] = &[' ', '\t', '\n', '\r'];
-
-/// Falco's `normalize_comp`: leading and trailing ASCII blanks stripped.
-fn normalize_comp(comp: &str) -> &str {
-    comp.trim_matches(BLANKS)
-}
-
-/// Falco's `is_str_operator_with_modifier`: `<op> oneof|anyof|allof`, split
-/// at the first space.
-fn is_modified_operator(op: &str) -> bool {
-    op.split_once(' ').is_some_and(|(head, modifier)| {
-        MODIFIABLE_OPERATORS.contains(&head) && MODIFIERS.contains(&modifier)
-    })
-}
-
-/// An operator an exception may use.
-fn is_exception_operator(op: &str) -> bool {
-    FALCO_OPERATORS.contains(&op) || is_modified_operator(op)
-}
-
-/// Falco's `is_operator_for_list`.
-fn is_list_comparison(op: &str) -> bool {
-    LIST_OPERATORS.contains(&op) || is_modified_operator(op)
-}
 
 /// `_non_blank`: a string with something besides whitespace.
 fn non_blank(node: Option<&Node>) -> bool {
     node.and_then(|node| node.value.as_str())
-        .is_some_and(|text| !python_strip(text).is_empty())
+        .is_some_and(|text| !is_blank(text))
 }
 
 /// `_sysdig_scalar`: neither a list nor a mapping.
@@ -382,7 +303,7 @@ fn exception_ok(entry: &Node) -> bool {
                 return false;
             };
             let comp = normalize_comp(comp);
-            if !["in", "pmatch", "intersects"].contains(&comp) && !is_modified_operator(comp) {
+            if !LIST_OPERATORS.contains(&comp) && !is_modified_operator(comp) {
                 return false;
             }
         }
@@ -426,17 +347,6 @@ fn exception_ok(entry: &Node) -> bool {
         }
     }
     true
-}
-
-/// `DEFINITION_NAME` and `RESERVED_WORDS`: a macro or list name.
-fn definition_name_ok(name: &str) -> bool {
-    let mut chars = name.chars();
-    chars
-        .next()
-        .is_some_and(|first| first.is_ascii_alphabetic() || first == '_')
-        && chars.all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
-        && !RESERVED_WORDS.contains(&name)
-        && !(FALCO_OPERATORS.contains(&name) && name.chars().all(char::is_alphabetic))
 }
 
 /// The block's macros and lists, in block order, each name once (a later
@@ -492,20 +402,6 @@ fn definitions(raw: &Node, codes: &mut BTreeSet<&'static str>) -> Definitions {
     out
 }
 
-/// A dictionary's `d[name] = value`: replaced in place, or appended.
-fn upsert<T>(entries: &mut Vec<(String, T)>, name: &str, value: T) {
-    match entries.iter_mut().find(|(known, _)| known == name) {
-        Some(entry) => entry.1 = value,
-        None => entries.push((name.to_owned(), value)),
-    }
-}
-
-/// `occurs`: whether `resolve_list` would replace an occurrence of `name` in
-/// `text`.
-fn occurs(text: &str, name: &str) -> bool {
-    super::falco_text::occurs(text, name)
-}
-
 /// `join_lines`: multiline text as one line, each line stripped.
 fn join_lines(text: &str) -> String {
     text.lines()
@@ -523,29 +419,14 @@ struct Expander {
 
 impl Expander {
     fn new(definitions: &Definitions) -> Self {
-        // `compile_list_infos`: an item naming an earlier block list is its items.
-        let mut lists: Vec<(String, Vec<String>)> = Vec::new();
-        for (name, raw) in &definitions.lists {
-            let mut items = Vec::new();
-            for item in raw {
-                match lists.iter().find(|(known, _)| known == item) {
-                    Some((_, earlier)) => items.extend(earlier.iter().cloned()),
-                    None => items.push(item.clone()),
-                }
-                // Lists that name earlier lists twice over double at each
-                // step: past the bound the rest cannot change a finding a
-                // file of sane size can have.
-                items.truncate(EXPANSION_LIMIT);
-            }
-            upsert(&mut lists, name, items);
-        }
         Self {
             macro_order: definitions
                 .macros
                 .iter()
                 .map(|(name, _)| name.clone())
                 .collect(),
-            lists,
+            // `compile_list_infos`: an item naming an earlier block list is its items.
+            lists: flatten_lists(&definitions.lists),
         }
     }
 
@@ -575,33 +456,19 @@ impl Expander {
     /// `_list_in`: a block list whose name occurs inside a value (not as all
     /// of it).
     fn list_in(&self, text: &str) -> bool {
-        self.lists
-            .iter()
-            .any(|(name, _)| text != name && occurs(text, name))
+        list_inside(&self.lists, text).is_some()
     }
 
-    /// `_passes`: a value list after Falco's `resolve_list` passes, one per
-    /// block list in block order; a member equal to the list's name becomes
-    /// its items. Each member as its text, or `None` for a list or mapping.
+    /// `_passes`: each member as its text, or `None` for a list or mapping,
+    /// through `opentide_core::falco::value_passes`.
     fn passes(&self, values: &[&Node]) -> Vec<Option<String>> {
-        let mut out: Vec<Option<String>> = values
-            .iter()
-            .map(|value| scalar(value).then(|| item_text(value)))
-            .collect();
-        for (name, items) in &self.lists {
-            let mut current = Vec::with_capacity(out.len());
-            for value in out {
-                match value {
-                    Some(text) if &text == name => {
-                        current.extend(items.iter().cloned().map(Some));
-                    }
-                    other => current.push(other),
-                }
-            }
-            current.truncate(EXPANSION_LIMIT);
-            out = current;
-        }
-        out
+        value_passes(
+            &self.lists,
+            values
+                .iter()
+                .map(|value| scalar(value).then(|| item_text(value)))
+                .collect(),
+        )
     }
 
     /// `_members`: false when a member names a block list inside it.
@@ -704,18 +571,12 @@ pub fn block_codes(raw: &Node) -> BTreeSet<&'static str> {
         }
     }
     if let Some(priority) = field("priority").filter(|node| present(Some(node)))
-        && !priority.value.as_str().is_some_and(|text| {
-            FALCO_PRIORITIES.contains(&python_strip(text).to_lowercase().as_str())
-        })
+        && !priority.value.as_str().is_some_and(priority_ok)
     {
         codes.insert("sysdig_priority");
     }
     if let Some(source) = field("source").filter(|node| present(Some(node)))
-        && !source.value.as_str().is_some_and(|text| {
-            let mut chars = text.chars();
-            chars.next().is_some_and(|first| first.is_ascii_lowercase())
-                && chars.all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '_')
-        })
+        && !source.value.as_str().is_some_and(source_ok)
     {
         codes.insert("sysdig_source");
     }

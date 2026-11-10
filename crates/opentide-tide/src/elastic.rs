@@ -46,58 +46,13 @@ pub(crate) fn elastic_search_language(language: Option<&str>) -> Option<Language
 
 /// A duration in the [elastic-1.0] Durations grammar, in milliseconds:
 /// shorthand `[n d][n h][n m][n s]` (lower case, in that order) or ISO 8601
-/// `P[nD][T[nH][nM][nS]]`. Zero is returned as `Some(0)`; the caller decides.
+/// `P[nD][T[nH][nM][nS]]`, around whitespace. Zero is returned as `Some(0)`;
+/// the caller decides. The grammar is `opentide_core::duration`'s, the one
+/// opentide-schema's `elastic_rule_shape` judges a block by; a duration too
+/// long for a `u64` of milliseconds is `None`.
 pub fn duration_millis(text: &str) -> Option<u64> {
-    let text = text.trim();
-    if let Some(rest) = text.strip_prefix('P') {
-        let (days, time) = match rest.split_once('T') {
-            Some((d, t)) => {
-                if t.is_empty() {
-                    return None;
-                }
-                (d, Some(t))
-            }
-            None => (rest, None),
-        };
-        let mut total = parts(days, &[('D', 86_400_000)])?;
-        if let Some(t) = time {
-            total += parts(t, &[('H', 3_600_000), ('M', 60_000), ('S', 1_000)])?;
-        }
-        return (!rest.is_empty()).then_some(total);
-    }
-    if text.is_empty() {
-        return None;
-    }
-    parts(
-        text,
-        &[
-            ('d', 86_400_000),
-            ('h', 3_600_000),
-            ('m', 60_000),
-            ('s', 1_000),
-        ],
-    )
-}
-
-/// `1h10m`-style parts in the given unit order, each unit at most once.
-fn parts(text: &str, units: &[(char, u64)]) -> Option<u64> {
-    let mut total = 0u64;
-    let mut next_unit = 0usize;
-    let mut digits = String::new();
-    for c in text.chars() {
-        if c.is_ascii_digit() {
-            digits.push(c);
-            continue;
-        }
-        let pos = units[next_unit..].iter().position(|(u, _)| *u == c)? + next_unit;
-        if digits.is_empty() {
-            return None;
-        }
-        total = total.checked_add(digits.parse::<u64>().ok()?.checked_mul(units[pos].1)?)?;
-        digits.clear();
-        next_unit = pos + 1;
-    }
-    digits.is_empty().then_some(total)
+    let seconds = opentide_core::duration::duration_seconds(text.trim(), true).ok()?;
+    u64::try_from(seconds).ok()?.checked_mul(1_000)
 }
 
 /// `eql_maxspan_window`: an EQL `sequence ... with maxspan=` longer than the
