@@ -5,10 +5,10 @@
 //!
 //! The Rust engine's `validate` comes with UC-2.x. Until then this is the
 //! narrowest runner the items' verification needs: each object file is read
-//! with `opentide_schema::node` and converted with
-//! `opentide_schema::from_node` into the object model its `metadata.schema`
-//! names (`opentide_schema::objects`: `rule::1.0`, `rule::1.1`,
-//! `threat::1.0`, `objective::1.0`). The platform blocks under
+//! with `opentide_schema::node` and dispatched by the revision registry
+//! (`opentide_schema::revisions::read`, UC-1.7) into the object model its
+//! `metadata.schema` names (`opentide_schema::objects`: `rule::1.0`,
+//! `rule::1.1`, `threat::1.0`, `objective::1.0`). The platform blocks under
 //! `configurations` are UC-1.4's (#810): they are read unchecked, and the
 //! oracle's findings inside one are left out ([`in_platform_block`]).
 //!
@@ -16,11 +16,9 @@
 //! oracle.
 
 use opentide_schema::Surface;
-use opentide_schema::from_node;
 use opentide_schema::node;
-use opentide_schema::objects::{
-    ObjectiveV1_0, RuleConfigurations, RuleV1_0, RuleV1_1, ThreatVectorV1_0,
-};
+use opentide_schema::objects::RuleConfigurations;
+use opentide_schema::revisions;
 use serde_json::{Value as Json, json};
 
 /// The structural fault kinds of `tests/corpora/faults.toml` (UC-1.2), each
@@ -199,22 +197,12 @@ pub fn check_object_as(family: &str, bytes: &[u8]) -> Vec<Json> {
     let Ok(document) = node::load_bytes(bytes) else {
         return vec![json!({ "code": "yaml_parse" })];
     };
-    let schema = document
-        .root()
-        .and_then(|root| root.get("metadata"))
-        .and_then(|metadata| metadata.get("schema"))
-        .and_then(|schema| schema.value.as_str().map(str::to_owned));
-    let errors = match (family, schema.as_deref()) {
-        ("rule", Some("rule::1.0")) => from_node::from_document::<RuleV1_0>(&document).err(),
-        ("rule", Some("rule::1.1")) => from_node::from_document::<RuleV1_1>(&document).err(),
-        ("threat", Some("threat::1.0")) => {
-            from_node::from_document::<ThreatVectorV1_0>(&document).err()
-        }
-        ("objective", Some("objective::1.0")) => {
-            from_node::from_document::<ObjectiveV1_0>(&document).err()
-        }
-        // A missing or unknown identifier is the workspace's finding.
-        _ => return Vec::new(),
+    // `metadata.schema` selects the revision (UC-1.7, ADR 0009). A missing or
+    // refused identifier, or a `metadata` that is not a mapping, is the
+    // workspace's finding.
+    let errors = match revisions::read(&document, family) {
+        Ok(read) => read.result.err(),
+        Err(_) => return Vec::new(),
     };
     errors
         .unwrap_or_default()
