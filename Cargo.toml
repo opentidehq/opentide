@@ -75,6 +75,9 @@ lsp-server = "0.10"
 lsp-types = "0.97"
 url = "2.5"
 regex = "1"
+# Look-around and back-references, which `regex` has not: the oracle's
+# Markdown-to-text patterns of the generated schemas (opentide-schema, UC-1.8).
+fancy-regex = "0.14"
 # Dates and times (opentide-schema `metadata.reviewed`): the calendar, the
 # clock and UTC offsets, without the time zone database.
 jiff = { version = "0.2", default-features = false, features = ["std"] }

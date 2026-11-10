@@ -162,6 +162,12 @@ macro_rules! literal_enum {
                 stringify!($name).into()
             }
 
+            // Pydantic writes a `Literal` in place, never under `$defs`; the
+            // templates offer its first value only so (generate::template).
+            fn inline_schema() -> bool {
+                true
+            }
+
             fn json_schema(_: &mut ::schemars::SchemaGenerator) -> ::schemars::Schema {
                 $crate::objects::platform::literal_schema(&[$($value),*])
             }
