@@ -1,0 +1,30 @@
+name: Defender Disabled
+
+metadata:
+  uuid: 00000000-0000-4000-8005-000000000202
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+
+description: Defender Disabled for the compile corpus.
+
+configurations:
+  defender_for_endpoint:
+    status: DISABLED
+    query: DeviceEvents | take 1
+    scheduling: 24H
+    alert:
+      category: Initial Access
+    impacted_entities:
+      device: DeviceId
+    actions:
+      files:
+        allow_block:
+          action: Allow
+          identifier: SHA256
+          groups:
+            selection: All
+    scope:
+      selection: All

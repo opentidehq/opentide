@@ -1,0 +1,25 @@
+name: HarfangLab Sigma Quarantine
+
+metadata:
+  uuid: 00000000-0000-4000-8005-000000000605
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+
+description: HarfangLab Sigma Quarantine for the compile corpus.
+
+configurations:
+  harfanglab:
+    status: PRODUCTION
+    action: Alert, Block & Quarantine
+    sigma:
+      logsource:
+        category: network_connection
+        product: linux
+      selections:
+        - name: selection
+          field: DestinationPort
+          value: 4444
+      condition: selection

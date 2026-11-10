@@ -10,7 +10,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use opentide_compile::preview::{self, Preview};
+use opentide_compile::preview;
 use opentide_compile::strategy::StatusStrategy;
 use opentide_compile::{Json, Owned, Rule, sysdig};
 use opentide_schema::vocab::Vocabularies;
@@ -284,9 +284,7 @@ fn a_rule_without_a_block_fails() {
     {
         block.insert("status".into(), "NOPE".into());
     }
-    let Preview::Entry(entry) = preview::preview(&cx, "sysdig", &unknown) else {
-        panic!("a Sysdig preview is always an entry")
-    };
+    let entry = preview::preview(&cx, "sysdig", &unknown);
     assert_eq!(entry.get("status").and_then(Json::as_str), Some("failed"));
     assert!(
         entry

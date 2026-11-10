@@ -123,9 +123,11 @@ fn a_preview_run_plans_creates_and_updates_from_the_deployment_state() {
         r#"["a real deploy would need $DEFENDER_TENANT, which is unset"]"#
     );
     assert_eq!(outcome.outcome_kind, Some("plan"));
-    assert!(
-        !outcome.payloads_complete,
-        "Defender's preview is the block's model dump"
+    // Defender's preview is the block's model dump; a block its model
+    // refuses (no query, alert, ...) is shown as written.
+    assert_eq!(
+        text(&outcome, "payloads"),
+        r#"{"defender_for_endpoint":[{"uuid":"00000000-0000-4000-8000-00000000000a","name":"Rule 00000000-0000-4000-8000-00000000000a","api_request":{"status":"STAGING"}},{"uuid":"00000000-0000-4000-8000-00000000000b","name":"Rule 00000000-0000-4000-8000-00000000000b","api_request":{"status":"STAGING"}}]}"#
     );
 }
 
