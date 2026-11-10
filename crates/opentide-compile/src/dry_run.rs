@@ -13,7 +13,7 @@ use opentide_workspace::{FileSystem, Workspace};
 
 use crate::json::{Json, Object};
 use crate::plan::{self, Change, PlanError, Scope, SelectOptions, Tenant};
-use crate::preview::{self, Preview};
+use crate::preview;
 use crate::rule::Rule;
 use crate::strategy::{self, RunStrategies, StatusStrategy};
 use crate::{Context, Owned};
@@ -104,12 +104,6 @@ pub struct Outcome {
     pub outcome_line: Option<String>,
     /// A usage failure (exit 2).
     pub usage: Option<Usage>,
-    /// Whether every payload entry was compiled. An entry the oracle shows
-    /// as the block's model dump (`_config_preview`: Defender, Splunk,
-    /// SentinelOne, Carbon Black, CrowdStrike, HarfangLab, Sysdig, and an
-    /// Elastic rule that does not compile) needs the platform models (UC-1.4,
-    /// #810) and is `null` until then.
-    pub payloads_complete: bool,
 }
 
 impl Outcome {
@@ -124,7 +118,6 @@ impl Outcome {
             outcome_kind: None,
             outcome_line: None,
             usage: None,
-            payloads_complete: true,
         }
     }
 
@@ -584,7 +577,6 @@ pub fn run(
     let mut deployed: Vec<String> = Vec::new();
     let mut failing: Vec<(String, String)> = Vec::new();
     let mut diagnostics: Vec<Json> = Vec::new();
-    let mut previews_complete = true;
     for (platform, uuids) in &deployment {
         let mut entries = Vec::new();
         for uuid in uuids {
@@ -595,19 +587,12 @@ pub fn run(
                 continue;
             };
             let rule = Rule::new(root, Some(object.path.to_string_lossy().into_owned()));
-            match preview::preview(&cx, platform, &rule) {
-                Preview::Entry(entry) => {
-                    if entry.get("status").and_then(Json::as_str) == Some("failed") {
-                        failing.push((platform.clone(), rule.uuid.clone()));
-                        diagnostics.push(diagnostic(platform, &entry, workspace.root()));
-                    }
-                    entries.push(entry);
-                }
-                Preview::ConfigDump => {
-                    previews_complete = false;
-                    entries.push(Json::Null);
-                }
+            let entry = preview::preview(&cx, platform, &rule);
+            if entry.get("status").and_then(Json::as_str) == Some("failed") {
+                failing.push((platform.clone(), rule.uuid.clone()));
+                diagnostics.push(diagnostic(platform, &entry, workspace.root()));
             }
+            entries.push(entry);
         }
         payloads.insert(platform.clone(), Json::Array(entries));
         if !tenantless.contains(&platform) {
@@ -688,7 +673,6 @@ pub fn run(
         outcome_kind: Some("plan"),
         outcome_line: None,
         usage: None,
-        payloads_complete: previews_complete,
     };
     finish(
         &mut outcome,
@@ -797,7 +781,6 @@ fn nothing(
         outcome_kind: None,
         outcome_line: None,
         usage: None,
-        payloads_complete: true,
     };
     let mut own = Vec::new();
     finish(

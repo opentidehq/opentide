@@ -1,0 +1,72 @@
+name: Defender Full
+
+metadata:
+  uuid: 00000000-0000-4000-8005-000000000201
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+  author: Detection Team
+
+description: |
+  Defender Full for the compile corpus.
+techniques:
+  - T1059.001
+detection_model: 00000000-0000-4000-8099-000000000001
+
+response:
+  alert_severity: Critical
+
+configurations:
+  defender_for_endpoint:
+    enabled: true
+    status: STAGING
+    query: |
+      DeviceProcessEvents
+      | where FileName == "powershell.exe"
+    scheduling: NRT
+    alert:
+      category: Suspicious Activity
+      title: Encoded PowerShell
+      description: An encoded command line ran.
+      severity: Medium
+      recommendation: Isolate the device.
+    impacted_entities:
+      device: DeviceId
+      user: AccountObjectId
+      mailbox: RecipientEmailAddress
+    actions:
+      devices:
+        isolate_device: Full
+        collect_investigation_package: true
+        run_antivirus_scan: true
+        initiate_investigation: true
+        restrict_app_execution: true
+      files:
+        allow_block:
+          action: Block
+          identifier: SHA1
+          groups:
+            selection: Specific
+            device_groups:
+              - Servers
+              - Workstations
+        quarantine_file: SHA1
+      users:
+        mark_as_compromised: AccountObjectId
+        disable_user: AccountSid
+        force_password_reset: AccountSid
+    scope:
+      selection: All
+    exclusions:
+      - query: '| where DeviceName != "build-01"'
+        reason: Build server
+        tenant: contoso
+        let:
+          threshold: 5
+          label: build
+      - query: '| where AccountName !in (admins)'
+        reason: Administrators
+        let:
+          admins: admin

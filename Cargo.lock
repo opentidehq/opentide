@@ -2020,6 +2020,7 @@ version = "0.12.0"
 dependencies = [
  "caseless",
  "dunce",
+ "form_urlencoded",
  "garde",
  "gix-attributes",
  "gix-command",
@@ -2049,6 +2050,7 @@ dependencies = [
  "rayon",
  "regex",
  "serde",
+ "serde-saphyr",
  "serde_json",
  "tempfile",
  "textwrap",
