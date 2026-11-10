@@ -9,6 +9,7 @@ use opentide_yara::editor;
 
 /// Rules and strings of a `.yar` file, for the document outline.
 pub(crate) fn symbols(text: &str) -> Vec<DocumentSymbol> {
+    let lines = opentide_core::LineIndex::new(text);
     editor::symbols(text)
         .into_iter()
         .map(|s| DocumentSymbol {
@@ -17,7 +18,7 @@ pub(crate) fn symbols(text: &str) -> Vec<DocumentSymbol> {
                 editor::SymbolKind::Rule => "rule".into(),
                 editor::SymbolKind::String => "string".into(),
             },
-            range: opentide_core::span_to_range(text, ByteSpan::new(s.selection.0, s.selection.1)),
+            range: lines.range(ByteSpan::new(s.selection.0, s.selection.1)),
             detail: s.detail,
         })
         .collect()

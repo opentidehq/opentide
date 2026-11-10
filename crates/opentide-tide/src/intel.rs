@@ -6,7 +6,7 @@
 
 use crate::IndexedObject;
 use crate::yaml_path::{YamlCursor, document_schema_id, yaml_cursor};
-use opentide_core::{CompletionItem, Position, offset_to_position};
+use opentide_core::{CompletionItem, Position};
 use opentide_highlight::{TideField, load_tide_fields, tide_children, tide_field_at};
 
 #[derive(Debug, Clone)]
@@ -381,13 +381,14 @@ pub fn inlay_hints(source: &str, workspace: &[IndexedObject]) -> Vec<TideInlay> 
     )
     .expect("uuid");
     let mut out = Vec::new();
+    let lines = opentide_core::LineIndex::new(source);
     for m in re.find_iter(source) {
         if self_uuid.as_deref() == Some(m.as_str()) {
             continue;
         }
         if let Some(obj) = workspace.iter().find(|o| o.uuid == m.as_str()) {
             out.push(TideInlay {
-                position: offset_to_position(source, m.end()),
+                position: lines.position(m.end()),
                 label: format!("{} {}", obj.object_type, obj.name),
                 uuid: obj.uuid.clone(),
                 path: obj.path.clone(),

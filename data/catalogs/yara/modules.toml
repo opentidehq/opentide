@@ -1506,18 +1506,21 @@ yara_x = true
 [[member.overload]]
 args = "i"
 ret = "integer"
+yara_x_ret = "boolean"
 libyara = true
 yara_x = true
 doc = "Returns true if the PE file exports a function with the given ordinal."
 [[member.overload]]
 args = "r"
 ret = "integer"
+yara_x_ret = "boolean"
 libyara = true
 yara_x = true
 doc = "Returns true if the PE file exports a function with a name that matches\n the given regular expression."
 [[member.overload]]
 args = "s"
 ret = "integer"
+yara_x_ret = "boolean"
 libyara = true
 yara_x = true
 doc = "Returns true if the PE file exports a function with the given name."
@@ -1698,12 +1701,14 @@ doc = "Returns the number of functions imported by the PE from `dll_name`.\n\n `
 [[member.overload]]
 args = "isi"
 ret = "integer"
+yara_x_ret = "boolean"
 libyara = true
 yara_x = true
 doc = "Returns true if the PE imports `ordinal` from `dll_name`.\n\n `dll_name` is case-insensitive. See [`imports_dll`] for details about\n the `import_flags` argument."
 [[member.overload]]
 args = "iss"
 ret = "integer"
+yara_x_ret = "boolean"
 libyara = true
 yara_x = true
 doc = "Returns true if the PE imports `func_name` from `dll_name`.\n\n Both `func_name` and `dll_name` are case-insensitive. See [`imports_dll`]\n for details about the `import_flags` argument."
@@ -1728,6 +1733,7 @@ doc = "Returns true if the PE imports `ordinal` from `dll_name`.\n\n `dll_name` 
 [[member.overload]]
 args = "ss"
 ret = "integer"
+yara_x_ret = "boolean"
 libyara = true
 yara_x = true
 doc = "Returns true if the PE imports `func_name` from `dll_name`.\n\n Both `func_name` and `dll_name` are case-insensitive."
@@ -1741,6 +1747,7 @@ yara_x = true
 [[member.overload]]
 args = ""
 ret = "integer"
+yara_x_ret = "boolean"
 libyara = true
 yara_x = true
 doc = "Returns true if the file is a 32-bit PE."
@@ -1754,6 +1761,7 @@ yara_x = true
 [[member.overload]]
 args = ""
 ret = "integer"
+yara_x_ret = "boolean"
 libyara = true
 yara_x = true
 doc = "Returns true if the file is a 64-bit PE."
@@ -1767,6 +1775,7 @@ yara_x = true
 [[member.overload]]
 args = ""
 ret = "integer"
+yara_x_ret = "boolean"
 libyara = true
 yara_x = true
 doc = "Returns true if the file is dynamic link library (DLL)"
@@ -1777,6 +1786,7 @@ path = "is_pe"
 kind = "integer"
 libyara = true
 yara_x = true
+yara_x_kind = "boolean"
 doc = "True if the file is a valid PE binary."
 
 [[member]]
@@ -1785,6 +1795,7 @@ path = "is_signed"
 kind = "integer"
 libyara = true
 yara_x = true
+yara_x_kind = "boolean"
 doc = "True if the executable contains a recognized digital signature."
 
 [[member]]
@@ -1796,6 +1807,7 @@ yara_x = true
 [[member.overload]]
 args = "i"
 ret = "integer"
+yara_x_ret = "boolean"
 libyara = true
 yara_x = true
 doc = "Returns true if the PE contains some resource with the specified language\n identifier.\n\n Language identifiers are the lowest 8-bit of locale identifiers and can\n be found here:\n https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/available-language-packs-for-windows?view=windows-11"
@@ -1841,6 +1853,7 @@ yara_x = true
 [[member.overload]]
 args = "i"
 ret = "integer"
+yara_x_ret = "boolean"
 libyara = true
 yara_x = true
 doc = "Returns true if the PE contains some resource with the specified locale\n identifier.\n\n Locale identifiers are 16-bit integers and can be found here:\n https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/available-language-packs-for-windows?view=windows-11"
@@ -2635,6 +2648,7 @@ path = "signatures[].countersignatures[].verified"
 kind = "integer"
 libyara = true
 yara_x = true
+yara_x_kind = "boolean"
 doc = "True if the countersignature successfully verified."
 
 [[member]]
@@ -2862,12 +2876,8 @@ yara_x = true
 [[member.overload]]
 args = "i"
 ret = "integer"
+yara_x_ret = "boolean"
 libyara = true
-yara_x = false
-[[member.overload]]
-args = "ii"
-ret = "boolean"
-libyara = false
 yara_x = true
 doc = "Returns true if the signature was valid on the date indicated by `timestamp`."
 
@@ -2877,6 +2887,7 @@ path = "signatures[].verified"
 kind = "integer"
 libyara = true
 yara_x = true
+yara_x_kind = "boolean"
 doc = "True if the cryptographic verification of the signature succeeded."
 
 [[member]]
@@ -4586,6 +4597,7 @@ yara_x = true
 [[member.overload]]
 args = "fff"
 ret = "integer"
+yara_x_ret = "boolean"
 libyara = true
 yara_x = true
 doc = "Returns true if the given float is mostly within the [min, max] range."
@@ -5001,6 +5013,7 @@ path = "classes[].abstract"
 kind = "integer"
 libyara = true
 yara_x = true
+yara_x_kind = "boolean"
 doc = "True if the class is marked as abstract."
 
 [[member]]
@@ -5044,6 +5057,7 @@ path = "classes[].methods[].abstract"
 kind = "integer"
 libyara = true
 yara_x = true
+yara_x_kind = "boolean"
 doc = "True if the function is an abstract definition."
 
 [[member]]
@@ -5052,6 +5066,7 @@ path = "classes[].methods[].final"
 kind = "integer"
 libyara = true
 yara_x = true
+yara_x_kind = "boolean"
 doc = "True if the function is restricted as final."
 
 [[member]]
@@ -5126,6 +5141,7 @@ path = "classes[].methods[].static"
 kind = "integer"
 libyara = true
 yara_x = true
+yara_x_kind = "boolean"
 doc = "True if the function is marked as static."
 
 [[member]]
@@ -5134,6 +5150,7 @@ path = "classes[].methods[].virtual"
 kind = "integer"
 libyara = true
 yara_x = true
+yara_x_kind = "boolean"
 doc = "True if the function acts as a virtual method."
 
 [[member]]
@@ -5190,6 +5207,7 @@ path = "classes[].sealed"
 kind = "integer"
 libyara = true
 yara_x = true
+yara_x_kind = "boolean"
 doc = "True if the class is marked as sealed."
 
 [[member]]
@@ -5241,6 +5259,7 @@ path = "is_dotnet"
 kind = "integer"
 libyara = true
 yara_x = true
+yara_x_kind = "boolean"
 doc = "True if the file is a valid .NET framework executable."
 
 [[member]]
@@ -8729,12 +8748,14 @@ yara_x = true
 [[member.overload]]
 args = "i"
 ret = "integer"
+yara_x_ret = "boolean"
 libyara = true
 yara_x = true
 doc = "Logs an integer value as a hexadecimal string to the console."
 [[member.overload]]
 args = "si"
 ret = "integer"
+yara_x_ret = "boolean"
 libyara = true
 yara_x = true
 doc = "Logs an integer value as a hexadecimal string with a message to the console."
@@ -8753,12 +8774,14 @@ yara_x = true
 [[member.overload]]
 args = "f"
 ret = "integer"
+yara_x_ret = "boolean"
 libyara = true
 yara_x = true
 doc = "Logs a float value to the console."
 [[member.overload]]
 args = "i"
 ret = "integer"
+yara_x_ret = "boolean"
 libyara = true
 yara_x = true
 doc = "Logs an integer value to the console."
@@ -8770,6 +8793,7 @@ yara_x = true
 [[member.overload]]
 args = "s"
 ret = "integer"
+yara_x_ret = "boolean"
 libyara = true
 yara_x = true
 doc = "Logs a string to the console."
@@ -8782,12 +8806,14 @@ doc = "Logs a boolean value with a message to the console."
 [[member.overload]]
 args = "sf"
 ret = "integer"
+yara_x_ret = "boolean"
 libyara = true
 yara_x = true
 doc = "Logs a float value with a message to the console."
 [[member.overload]]
 args = "si"
 ret = "integer"
+yara_x_ret = "boolean"
 libyara = true
 yara_x = true
 doc = "Logs an integer value with a message to the console."
@@ -8799,6 +8825,7 @@ yara_x = true
 [[member.overload]]
 args = "ss"
 ret = "integer"
+yara_x_ret = "boolean"
 libyara = true
 yara_x = true
 doc = "Logs a string with a message to the console."
@@ -10202,6 +10229,7 @@ path = "header.magic"
 kind = "string"
 libyara = true
 yara_x = true
+yara_x_kind = "integer"
 doc = "Magic identifier characterizing the file type."
 
 [[member]]

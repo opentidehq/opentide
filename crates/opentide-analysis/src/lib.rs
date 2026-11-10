@@ -275,13 +275,14 @@ pub struct QueryReport {
 pub fn analyze_queries(host: &dyn WorkspaceHost, text: &str) -> Vec<QueryReport> {
     // Ranges are those of the text after a byte-order mark, as an editor shows them.
     let text = opentide_core::strip_bom(text);
+    let lines = opentide_core::LineIndex::new(text);
     opentide_tide::analyze_queries(text, &elastic_tenants(host))
         .into_iter()
         .map(|query| QueryReport {
             language: query.query.language,
             platform: query.query.platform,
             field_path: query.query.field_path,
-            range: opentide_core::span_to_range(text, query.query.host_span),
+            range: lines.range(query.query.host_span),
             diagnostics: query.diagnostics,
         })
         .collect()

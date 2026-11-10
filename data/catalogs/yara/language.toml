@@ -25,8 +25,9 @@ dialect = "libyara4"
 ascii_only = false
 confirmed_modules = ["pe", "elf", "math", "hash", "time"]
 recommended_meta = ["context"]
-# harfanglab-1.0 "YARA profile": meta `context` values.
-context_values = ["file", "memory", "file,memory", "file.pe", "file.elf", "file.macho"]
+# harfanglab-1.0 "YARA profile": the values a meta `context` joins with
+# commas (`file.pe,memory`); deploy writes the block's contexts that way.
+context_values = ["file", "memory", "file.pe", "file.elf", "file.macho"]
 
 [profile.bitdefender]
 dialect = "libyara4"
