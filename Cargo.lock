@@ -1453,6 +1453,7 @@ dependencies = [
  "opentide-schema",
  "opentide-workspace",
  "proptest",
+ "rayon",
  "serde",
  "serde_json",
  "tempfile",
