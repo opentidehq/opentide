@@ -69,7 +69,11 @@ commands:
                  load every corpus with opentide-workspace and compare its
                  index (objects, UUIDs, types, paths, load errors, references,
                  signals), as JSON, with the Python registry's (UC-2.1, #816)
-  codegen        generate schemas, stubs, types and references (UC-1.8, #814)
+  codegen [--check]
+                 write the artifacts generated from the Rust model (the
+                 platform templates); --check compares them, and what
+                 `opentide generate` writes with every golden recording of it
+                 (UC-1.8, #814)
   golden <record|check|diff|lock|coverage> [options]
                  record what the frozen Python CLI does, and check an engine
                  against the recordings (tests/golden/README.md);
@@ -156,7 +160,13 @@ fn main() -> ExitCode {
                 ExitCode::from(2)
             }
         },
-        "codegen" => not_yet("codegen", "UC-1.8", 814),
+        "codegen" => match xtask::codegen::run(rest) {
+            Ok(code) => ExitCode::from(code),
+            Err(error) => {
+                eprintln!("xtask codegen: {error:#}");
+                ExitCode::from(2)
+            }
+        },
         "golden" => xtask::golden::main(rest),
         "bench" => xtask::bench::main(rest),
         "vocab" => xtask::vocab::main(rest),
@@ -170,16 +180,6 @@ fn main() -> ExitCode {
             ExitCode::from(2)
         }
     }
-}
-
-/// A command whose work item has not landed: it fails, so that no script or
-/// CI job can mistake it for a check that passed.
-fn not_yet(command: &str, item: &str, issue: u32) -> ExitCode {
-    eprintln!(
-        "xtask {command}: not implemented yet; {item} \
-         (https://github.com/opentidehq/opentide/issues/{issue}) implements it"
-    );
-    ExitCode::FAILURE
 }
 
 /// `compare`: whether the runs are equal, or the ledger is valid.

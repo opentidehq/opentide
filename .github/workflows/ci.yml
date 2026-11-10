@@ -207,6 +207,13 @@ jobs:
       - name: crate layers
         run: cargo xtask check-layers
 
+      # The artifacts generated from the Rust model (opentide-schema's
+      # `generate`): the committed platform templates are current, and the
+      # templates, snippets and router schema are byte for byte what the oracle
+      # wrote in every golden recording of `opentide generate` (UC-1.8, #814).
+      - name: generated artifacts
+        run: cargo xtask codegen --check
+
       # Broken intra-doc links and the like fail the build.
       - name: rustdoc
         env:
