@@ -73,11 +73,18 @@
 # - `date-fields-are-strings`: `created`/`modified` written as a number, a
 #   boolean or null are `string_type` ("**`created` and `modified` are text**").
 # - `reviewed-validity-message`: an impossible `reviewed` is explained in
-#   jiff's words ("**An impossible `reviewed` date is explained by the date
-#   library**").
-# - `public-reference-keys`: a word as a `references.public` key is
-#   `int_parsing` at the key, where the oracle crashed ("**A word as a public
-#   reference number is reported**").
+#   jiff's words; year 0000 and an instant outside the years 0001 to 9999 in
+#   UTC are refused (the oracle crashed on the offset case); other digits than
+#   ASCII's, and padding with U+001C to U+001F (which Python's `strip()`
+#   removed), get the shape message ("**An impossible `reviewed` date is
+#   explained by the date library**").
+# - `public-reference-keys`: a `references.public` key is an integer, or a
+#   string of ASCII digits with an optional sign, within i64. A word,
+#   whitespace, `_` separators, other digits than ASCII's, a float (which the
+#   oracle truncated) or a boolean is `int_parsing` or `int_type` at the
+#   key, and an unquoted integer wider than i64 is `yaml_parse`, where the
+#   oracle crashed on a word and accepted the rest through `int()` ("**A public reference number must be written as an
+#   integer**").
 # - `positions`: a `null` value has a `yaml_line`; an error under an integer
 #   key is placed at that key ("**Findings point at the key or value they are
 #   about**").

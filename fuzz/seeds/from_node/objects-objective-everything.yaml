@@ -1,0 +1,43 @@
+name: Objective
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000003
+  schema: objective::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+objective:
+  priority: High
+  type: Threat
+  description: obj
+  composition:
+    strategy: synergetic
+    description: compose
+  signals:
+    - name: Signal
+      uuid: 00000000-0000-4000-8000-000000000099
+      description: sig
+      severity: Medium
+      methodology: analytics
+      entities: [Host::Process]
+      data:
+        availability: Complete
+        requirements: logs
+        logsources: [Windows Security]
+      effort: 3
+      detectors:
+        - name: EDR
+          technology: edr
+          description: d
+          link: https://example.org
+      examples:
+        - description: e
+          link: https://example.org
+          language: kql
+          query: SecurityEvent
+      parent: 00000000-0000-4000-8000-000000000098
+  investment: Medium
+  threats: [00000000-0000-4000-8000-000000000002]
+  mitre_attack: [T1059]
+references:
+  reports: [https://example.org]

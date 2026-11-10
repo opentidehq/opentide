@@ -144,7 +144,9 @@ fn review_patterns() -> &'static (Regex, Regex) {
 /// (`2026-09-01`) or a datetime with `Z` or a numeric offset
 /// (`2026-09-01T15:04:05Z`, `2026-09-01 15:04:05.5+02:00`), as the oracle's
 /// `parse_review_instant` accepts them, and one that exists: jiff checks the
-/// calendar, the clock and the offset.
+/// calendar, the clock and the offset. The year is 0001 to 9999, and so is
+/// the instant in UTC, as Python's `datetime` holds them (the oracle refused
+/// year 0, and crashed on an offset that moved the instant out of range).
 pub fn check_reviewed(text: &str) -> Result<(), Violation> {
     let (date, datetime) = review_patterns();
     let number = |capture: Option<regex::Match<'_>>| -> i32 {
@@ -206,21 +208,37 @@ pub fn check_reviewed(text: &str) -> Result<(), Violation> {
         } else {
             1
         };
-        let offset = jiff::tz::Offset::from_seconds(sign * (hours * 3600 + minutes * 60))
-            .map_err(|error| invalid(&error))?;
-        offset
-            .to_timestamp(day.to_datetime(time))
-            .map_err(|error| invalid(&error))?;
+        // The instant in UTC, on the civil calendar (years -9999 to 9999):
+        // jiff's `Timestamp` stops a day short of 9999-12-31 in UTC, which
+        // Python's `datetime` holds.
+        let offset =
+            jiff::SignedDuration::from_secs(i64::from(sign * (hours * 3600 + minutes * 60)));
+        let utc = day
+            .to_datetime(time)
+            .checked_sub(offset)
+            .ok()
+            .filter(|utc| utc.year() >= 1);
+        if utc.is_none() {
+            return Err(invalid(
+                &"the time in UTC is not between the years 0001 and 9999",
+            ));
+        }
     }
     Ok(())
 }
 
-fn civil_date(year: i32, month: i32, day: i32) -> Result<jiff::civil::Date, jiff::Error> {
+/// A date of the calendar Python's `datetime` holds: years 0001 to 9999
+/// (jiff's own go back to -9999, and include year 0).
+fn civil_date(year: i32, month: i32, day: i32) -> Result<jiff::civil::Date, String> {
+    if !(1..=9999).contains(&year) {
+        return Err(format!("the year {year:04} is not between 0001 and 9999"));
+    }
     jiff::civil::Date::new(
         i16::try_from(year).unwrap_or(i16::MAX),
         to_i8(month),
         to_i8(day),
     )
+    .map_err(|error| error.to_string())
 }
 
 /// Two decimal digits always fit; anything else is out of every range.
@@ -317,8 +335,12 @@ pub fn vocab_names(node: &Node, cx: &mut Context) -> Option<Vec<String>> {
 /// `references.public`: reference numbers to URLs. The oracle turns every
 /// key into an integer with `int()` before the model sees it
 /// (`coerce_public_keys`); here a key is an integer, or a string that is one
-/// (`"12"`, `"-1"`, `"+3"`). Any other key is `int_parsing` (a string) or
-/// `int_type`, at the key's `[key]`, as Pydantic reports a dictionary key.
+/// (`"12"`, `"-1"`, `"+3"`: ASCII digits, an optional sign, within i64). Any
+/// other key is `int_parsing` (a string: a word, whitespace, `_`, other
+/// digits, a number wider than i64) or `int_type` (a float, which the oracle
+/// truncated, a boolean, an integer wider than i64), at the key's `[key]`, as
+/// Pydantic reports a dictionary key (`public-reference-keys` in
+/// tests/oracle/objects_cases.toml).
 pub fn public_references(node: &Node, cx: &mut Context) -> Option<Option<BTreeMap<i64, String>>> {
     let entries = match &node.value {
         Value::Null => return Some(None),
@@ -410,6 +432,17 @@ mod tests {
             "2026-09-01T15:04:05.123456789123Z",
             "2024-02-29",
             "2026-01-01T23:59:59+23:59",
+            // The ends of Python's calendar, in UTC too.
+            "0001-01-01",
+            "9999-12-31",
+            "0001-01-01T00:00:00Z",
+            "0001-01-01T00:00:00-01:00",
+            "0001-01-01T23:58:00+23:58",
+            "9999-12-31T23:59:59Z",
+            "9999-12-31T23:59:59+00:00",
+            "9999-12-31T23:59:59.999999999+00:00",
+            "9999-12-31T00:00:00-00:00",
+            "9999-12-30T00:01:00-23:59",
         ] {
             assert_eq!(check_reviewed(text), Ok(()), "{text}");
         }
@@ -425,13 +458,71 @@ mod tests {
             "2026-9-01",
             "2026-09-01t15:04:05Z",
             "2026-09-01T15:04:05+0200",
-            "٢٠٢٦-٠٩-٠١",
         ] {
             let violation = check_reviewed(text).unwrap_err();
             assert_eq!(violation.kind, "value_error");
             assert_eq!(
                 violation.message,
                 format!("Value error, {REVIEWED_SHAPE}"),
+                "{text}"
+            );
+        }
+    }
+
+    /// Where the shape message is intended and the oracle's differs
+    /// (`reviewed-validity-message` in tests/oracle/objects_cases.toml): a
+    /// date in other digits than ASCII's (the oracle's `\d` took them, and
+    /// `date.fromisoformat` refused them, `Invalid isoformat string`), and a
+    /// date after a control character Python's `strip()` removes and Rust's
+    /// `trim()`, Unicode's `White_Space`, keeps (U+001C to U+001F; the oracle
+    /// accepted the date).
+    #[test]
+    fn reviewed_refuses_other_digits_and_control_padding_with_the_shape_message() {
+        for text in [
+            "\u{662}\u{660}\u{662}\u{666}-\u{660}\u{669}-\u{660}\u{661}",
+            "\u{1c}2026-09-01",
+            "2026-09-01\u{1f}",
+        ] {
+            let violation = check_reviewed(text).unwrap_err();
+            assert_eq!(violation.kind, "value_error");
+            assert_eq!(
+                violation.message,
+                format!("Value error, {REVIEWED_SHAPE}"),
+                "{text:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn reviewed_refuses_a_year_or_an_instant_outside_0001_to_9999() {
+        for (text, why) in [
+            ("0000-01-01", "the year 0000 is not between 0001 and 9999"),
+            (
+                "0000-01-01T00:00:00Z",
+                "the year 0000 is not between 0001 and 9999",
+            ),
+            (
+                "0001-01-01T00:00:00+23:59",
+                "the time in UTC is not between the years 0001 and 9999",
+            ),
+            (
+                "0001-01-01T00:00:00+00:01",
+                "the time in UTC is not between the years 0001 and 9999",
+            ),
+            (
+                "9999-12-31T23:59:59-23:59",
+                "the time in UTC is not between the years 0001 and 9999",
+            ),
+            (
+                "9999-12-31T23:59:59-00:01",
+                "the time in UTC is not between the years 0001 and 9999",
+            ),
+        ] {
+            let violation = check_reviewed(text).unwrap_err();
+            assert_eq!(violation.kind, "value_error", "{text}");
+            assert_eq!(
+                violation.message,
+                format!("Value error, metadata.reviewed is not a valid date or time: {why}"),
                 "{text}"
             );
         }
@@ -450,6 +541,10 @@ mod tests {
             "2026-02-30T10:00:00Z",
             "2026-01-01T10:00:00+24:00",
             "2026-01-01T10:00:00+02:60",
+            "0000-01-01",
+            "0000-01-01T00:00:00Z",
+            "0001-01-01T00:00:00+23:59",
+            "9999-12-31T23:59:59-23:59",
         ] {
             let violation = check_reviewed(text).unwrap_err();
             assert_eq!(violation.kind, "value_error", "{text}");

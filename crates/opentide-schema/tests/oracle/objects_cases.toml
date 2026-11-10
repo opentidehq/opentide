@@ -27,13 +27,13 @@ changelog = "**`created` and `modified` are text**"
 
 [[difference]]
 id = "reviewed-validity-message"
-reason = "A `metadata.reviewed` of the right shape whose date, time or offset cannot exist is refused as before (`value_error`), with jiff's explanation (`metadata.reviewed is not a valid date or time: parameter 'day' for `2026-02` is invalid, must be in range `1..=28``) instead of Python's `datetime` message (`day 30 must be in range 1..28 for month 2 in year 2026`)."
+reason = "A `metadata.reviewed` of the right shape whose date, time or offset cannot exist is refused as before (`value_error`), with jiff's explanation (`metadata.reviewed is not a valid date or time: parameter 'day' for `2026-02` is invalid, must be in range `1..=28``) instead of Python's `datetime` message (`day 30 must be in range 1..28 for month 2 in year 2026`). The year, and the instant in UTC, are 0001 to 9999, as Python's `datetime` holds them: year 0 is refused in the Rust model's words (`the year 0000 is not between 0001 and 9999`, where Python said `year must be in 1..9999, not 0`), and an offset that moves the instant out of those years (`0001-01-01T00:00:00+23:59`, `9999-12-31T23:59:59-23:59`) is `the time in UTC is not between the years 0001 and 9999`, where the oracle crashed (`OverflowError`, no finding). A date written in other digits than ASCII's (`٢٠٢٦-٠٩-٠١`) has the shape message (`must be an ISO 8601 date (YYYY-MM-DD) or datetime`) where Python said `Invalid isoformat string`, and a date padded with a control character U+001C to U+001F, which Python's `strip()` removed and Unicode's `White_Space` (Rust's `trim()`) does not include, is refused with the shape message where the oracle accepted it."
 changelog = "**An impossible `reviewed` date is explained by the date library**"
 
 [[difference]]
 id = "public-reference-keys"
-reason = "A key of `references.public` is a reference number: an integer, or a string that is one (`\"2\"`). The oracle ran Python's `int()` on every key before validating and crashed on a word (`ValueError`, no finding); the Rust model reports `int_parsing` at the key (`references.public.abc.[key]`), as Pydantic reports a dictionary key."
-changelog = "**A word as a public reference number is reported**"
+reason = "A key of `references.public` is a reference number: an integer, or a string of ASCII decimal digits with an optional sign (`\"2\"`, `\"-1\"`, `\"+3\"`), within a 64-bit signed integer. The oracle ran Python's `int()` on every key before validating: it crashed on a word (`ValueError`, no finding) and accepted, and rewrote, keys that are not reference numbers as written: a padded string (`' 12 '`), `_` separators (`'1_000'`), other digits than ASCII's (`'١٢'`), a float, which it truncated (`1.5` became `1`), a boolean (`true` became `1`) and an integer wider than 64 bits. The Rust model reports each of these at the key (`references.public.<key>.[key]`), as Pydantic reports a dictionary key: a string (`'9223372036854775808'` too) is `int_parsing`, a float or a boolean `int_type`; an integer wider than 64 bits written as a number refuses the file (`yaml_parse`, crates/opentide-schema/YAML.md `integer-range`)."
+changelog = "**A public reference number must be written as an integer**"
 
 [[difference]]
 id = "positions"
@@ -776,6 +776,290 @@ description: d
 references:
   public:
     abc: https://example.org
+'''
+
+[[case]]
+id = "rule-reviewed-year-zero"
+family = "rule"
+difference = ["reviewed-validity-message"]
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+  reviewed: '0000-01-01'
+description: d
+'''
+
+[[case]]
+id = "rule-reviewed-year-zero-datetime"
+family = "rule"
+difference = ["reviewed-validity-message"]
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+  reviewed: '0000-01-01T00:00:00Z'
+description: d
+'''
+
+[[case]]
+id = "rule-reviewed-offset-before-year-one"
+family = "rule"
+difference = ["reviewed-validity-message"]
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+  reviewed: '0001-01-01T00:00:00+23:59'
+description: d
+'''
+
+[[case]]
+id = "rule-reviewed-offset-after-year-9999"
+family = "rule"
+difference = ["reviewed-validity-message"]
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+  reviewed: '9999-12-31T23:59:59-23:59'
+description: d
+'''
+
+[[case]]
+id = "rule-reviewed-first-instant"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+  reviewed: '0001-01-01T00:00:00Z'
+description: d
+'''
+
+[[case]]
+id = "rule-reviewed-last-instant-with-offset"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+  reviewed: '9999-12-31T23:59:59+00:00'
+description: d
+'''
+
+[[case]]
+id = "rule-reviewed-arabic-indic-digits"
+family = "rule"
+difference = ["reviewed-validity-message"]
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+  reviewed: '٢٠٢٦-٠٩-٠١'
+description: d
+'''
+
+[[case]]
+id = "rule-reviewed-control-padding"
+family = "rule"
+difference = ["reviewed-validity-message"]
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+  reviewed: "\x1c2026-09-01"
+description: d
+'''
+
+[[case]]
+id = "rule-reviewed-control-padding-after"
+family = "rule"
+difference = ["reviewed-validity-message"]
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+  reviewed: "2026-09-01\x1f"
+description: d
+'''
+
+[[case]]
+id = "rule-references-public-padded-key"
+family = "rule"
+difference = ["public-reference-keys"]
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+references:
+  public:
+    ' 12 ': https://example.org
+'''
+
+[[case]]
+id = "rule-references-public-underscore-key"
+family = "rule"
+difference = ["public-reference-keys"]
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+references:
+  public:
+    '1_000': https://example.org
+'''
+
+[[case]]
+id = "rule-references-public-arabic-indic-key"
+family = "rule"
+difference = ["public-reference-keys"]
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+references:
+  public:
+    '١٢': https://example.org
+'''
+
+[[case]]
+id = "rule-references-public-float-key"
+family = "rule"
+difference = ["public-reference-keys"]
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+references:
+  public:
+    1.5: https://example.org
+'''
+
+[[case]]
+id = "rule-references-public-bool-key"
+family = "rule"
+difference = ["public-reference-keys"]
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+references:
+  public:
+    true: https://example.org
+'''
+
+[[case]]
+id = "rule-references-public-wide-integer-key"
+family = "rule"
+difference = ["public-reference-keys"]
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+references:
+  public:
+    9223372036854775808: https://example.org
+'''
+
+[[case]]
+id = "rule-references-public-wide-string-key"
+family = "rule"
+difference = ["public-reference-keys"]
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+references:
+  public:
+    '9223372036854775808': https://example.org
 '''
 
 [[case]]

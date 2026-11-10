@@ -463,7 +463,11 @@ fn garde_runs_the_same_validators() {
     assert!(report.contains("not a valid date or time"), "{report}");
     let mut untrimmed = rule;
     untrimmed.metadata.reviewed = Some(" 2026-09-01".to_owned());
-    assert!(untrimmed.validate_with(&pins).is_err());
+    let report = untrimmed.validate_with(&pins).unwrap_err().to_string();
+    assert!(report.contains("is held trimmed and not empty"), "{report}");
+    untrimmed.metadata.reviewed = Some(String::new());
+    let report = untrimmed.validate_with(&pins).unwrap_err().to_string();
+    assert!(report.contains("is held trimmed and not empty"), "{report}");
 
     let mut threat: ThreatVector = read(THREAT).unwrap();
     assert!(threat.validate_with(&pins).is_ok());

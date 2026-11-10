@@ -1261,6 +1261,344 @@
    "crash": "ValueError"
   },
   {
+   "id": "rule-reviewed-year-zero",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: '0000-01-01'\ndescription: d\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "metadata",
+      "reviewed"
+     ],
+     "msg": "Value error, year must be in 1..9999, not 0",
+     "input": "0000-01-01",
+     "ctx": {
+      "error": "year must be in 1..9999, not 0"
+     },
+     "span": [
+      9,
+      14,
+      24,
+      true
+     ],
+     "yaml_line": 8
+    }
+   ]
+  },
+  {
+   "id": "rule-reviewed-year-zero-datetime",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: '0000-01-01T00:00:00Z'\ndescription: d\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "metadata",
+      "reviewed"
+     ],
+     "msg": "Value error, year must be in 1..9999, not 0",
+     "input": "0000-01-01T00:00:00Z",
+     "ctx": {
+      "error": "year must be in 1..9999, not 0"
+     },
+     "span": [
+      9,
+      14,
+      34,
+      true
+     ],
+     "yaml_line": 8
+    }
+   ]
+  },
+  {
+   "id": "rule-reviewed-offset-before-year-one",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: '0001-01-01T00:00:00+23:59'\ndescription: d\n",
+   "crash": "OverflowError"
+  },
+  {
+   "id": "rule-reviewed-offset-after-year-9999",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: '9999-12-31T23:59:59-23:59'\ndescription: d\n",
+   "crash": "OverflowError"
+  },
+  {
+   "id": "rule-reviewed-first-instant",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: '0001-01-01T00:00:00Z'\ndescription: d\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear",
+     "reviewed": "0001-01-01T00:00:00Z"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {}
+   }
+  },
+  {
+   "id": "rule-reviewed-last-instant-with-offset",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: '9999-12-31T23:59:59+00:00'\ndescription: d\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear",
+     "reviewed": "9999-12-31T23:59:59+00:00"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {}
+   }
+  },
+  {
+   "id": "rule-reviewed-arabic-indic-digits",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: '٢٠٢٦-٠٩-٠١'\ndescription: d\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "metadata",
+      "reviewed"
+     ],
+     "msg": "Value error, Invalid isoformat string: '٢٠٢٦-٠٩-٠١'",
+     "input": "٢٠٢٦-٠٩-٠١",
+     "ctx": {
+      "error": "Invalid isoformat string: '٢٠٢٦-٠٩-٠١'"
+     },
+     "span": [
+      9,
+      14,
+      24,
+      true
+     ],
+     "yaml_line": 8
+    }
+   ]
+  },
+  {
+   "id": "rule-reviewed-control-padding",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: \"\\x1c2026-09-01\"\ndescription: d\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear",
+     "reviewed": "2026-09-01"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {}
+   }
+  },
+  {
+   "id": "rule-reviewed-control-padding-after",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: \"2026-09-01\\x1f\"\ndescription: d\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear",
+     "reviewed": "2026-09-01"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {}
+   }
+  },
+  {
+   "id": "rule-references-public-padded-key",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nreferences:\n  public:\n    ' 12 ': https://example.org\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "references": {
+     "public": {
+      "12": "https://example.org"
+     }
+    }
+   }
+  },
+  {
+   "id": "rule-references-public-underscore-key",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nreferences:\n  public:\n    '1_000': https://example.org\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "references": {
+     "public": {
+      "1000": "https://example.org"
+     }
+    }
+   }
+  },
+  {
+   "id": "rule-references-public-arabic-indic-key",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nreferences:\n  public:\n    '١٢': https://example.org\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "references": {
+     "public": {
+      "12": "https://example.org"
+     }
+    }
+   }
+  },
+  {
+   "id": "rule-references-public-float-key",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nreferences:\n  public:\n    1.5: https://example.org\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "references": {
+     "public": {
+      "1": "https://example.org"
+     }
+    }
+   }
+  },
+  {
+   "id": "rule-references-public-bool-key",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nreferences:\n  public:\n    true: https://example.org\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "references": {
+     "public": {
+      "1": "https://example.org"
+     }
+    }
+   }
+  },
+  {
+   "id": "rule-references-public-wide-integer-key",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nreferences:\n  public:\n    9223372036854775808: https://example.org\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "references": {
+     "public": {
+      "9223372036854775808": "https://example.org"
+     }
+    }
+   }
+  },
+  {
+   "id": "rule-references-public-wide-string-key",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nreferences:\n  public:\n    '9223372036854775808': https://example.org\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "references": {
+     "public": {
+      "9223372036854775808": "https://example.org"
+     }
+    }
+   }
+  },
+  {
    "id": "rule-references-public-null",
    "family": "rule",
    "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nreferences:\n  public: null\n",

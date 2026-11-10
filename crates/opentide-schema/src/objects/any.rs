@@ -211,6 +211,30 @@ mod tests {
         assert_ne!(a, Any(Arc::clone(c.root().unwrap())));
     }
 
+    /// A shorter list or map is not equal to a longer one that starts the
+    /// same (`zip` alone stops at the shorter side).
+    #[test]
+    fn a_prefix_is_not_equal_to_the_longer_tree() {
+        let any = |text: &str| Any(Arc::clone(load(text).unwrap().root().unwrap()));
+        assert_ne!(any("[1]\n"), any("[1, 2]\n"));
+        assert_ne!(any("[1, 2]\n"), any("[1]\n"));
+        assert_ne!(any("{a: 1}\n"), any("{a: 1, b: 2}\n"));
+        assert_ne!(any("{a: 1, b: 2}\n"), any("{a: 1}\n"));
+        assert_ne!(any("[]\n"), any("[1]\n"));
+    }
+
+    #[test]
+    fn an_integer_beyond_i64_does_not_read() {
+        let error = serde_json::from_value::<Any>(serde_json::json!(u64::MAX)).unwrap_err();
+        assert!(
+            error.to_string().contains("an integer beyond 64 bits"),
+            "{error}"
+        );
+        let edge =
+            serde_json::from_value::<Any>(serde_json::json!(i64::MAX.unsigned_abs())).unwrap();
+        assert_eq!(edge, Any(node(Value::Int(i64::MAX))));
+    }
+
     #[test]
     fn written_and_read_back_through_serde() {
         let document = load("a: 1\nb: [true, null, 1.5, text]\nc: {d: e}\n").unwrap();

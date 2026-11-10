@@ -16,6 +16,7 @@ use std::time::{Duration, Instant};
 
 use opentide_schema::from_node::from_document;
 use opentide_schema::node::{self, Document};
+use opentide_schema::objects::{ObjectiveV1_0, ThreatVectorV1_0};
 use opentide_schema::sample::{SampleV1_0, SampleV1_1};
 
 /// The fuzzer's `-timeout` in CI is 10 s per input; a debug build gets more.
@@ -55,6 +56,16 @@ fn from_node(data: &[u8]) {
     };
     convert::<SampleV1_0>(&document);
     convert::<SampleV1_1>(&document);
+    // The rule models read only with `unchecked-platform-blocks` until
+    // UC-1.4 (#810): a workspace build has it (xtask turns it on), and so
+    // does the fuzz crate.
+    #[cfg(feature = "unchecked-platform-blocks")]
+    {
+        convert::<opentide_schema::objects::RuleV1_0>(&document);
+        convert::<opentide_schema::objects::RuleV1_1>(&document);
+    }
+    convert::<ThreatVectorV1_0>(&document);
+    convert::<ObjectiveV1_0>(&document);
 }
 
 fn inputs(directory: &str) -> Vec<PathBuf> {

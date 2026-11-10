@@ -1371,6 +1371,75 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
       }
     ]
   },
+  "rule-references-public-arabic-indic-key": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "references",
+          "public",
+          "١٢",
+          "[key]"
+        ],
+        "input": "١٢",
+        "msg": "Input should be a valid integer, unable to parse string as an integer",
+        "span": [
+          12,
+          6,
+          8,
+          false
+        ],
+        "type": "int_parsing",
+        "yaml_line": null
+      }
+    ]
+  },
+  "rule-references-public-bool-key": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "references",
+          "public",
+          "true",
+          "[key]"
+        ],
+        "input": null,
+        "msg": "Input should be a valid integer",
+        "span": [
+          12,
+          5,
+          9,
+          false
+        ],
+        "type": "int_type",
+        "yaml_line": null
+      }
+    ]
+  },
+  "rule-references-public-float-key": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "references",
+          "public",
+          "1.5",
+          "[key]"
+        ],
+        "input": null,
+        "msg": "Input should be a valid integer",
+        "span": [
+          12,
+          5,
+          8,
+          false
+        ],
+        "type": "int_type",
+        "yaml_line": null
+      }
+    ]
+  },
   "rule-references-public-null": {
     "value": {
       "description": "d",
@@ -1387,6 +1456,52 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
       "references": {},
       "techniques": []
     }
+  },
+  "rule-references-public-padded-key": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "references",
+          "public",
+          " 12 ",
+          "[key]"
+        ],
+        "input": " 12 ",
+        "msg": "Input should be a valid integer, unable to parse string as an integer",
+        "span": [
+          12,
+          6,
+          10,
+          false
+        ],
+        "type": "int_parsing",
+        "yaml_line": null
+      }
+    ]
+  },
+  "rule-references-public-underscore-key": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "references",
+          "public",
+          "1_000",
+          "[key]"
+        ],
+        "input": "1_000",
+        "msg": "Input should be a valid integer, unable to parse string as an integer",
+        "span": [
+          12,
+          6,
+          11,
+          false
+        ],
+        "type": "int_parsing",
+        "yaml_line": null
+      }
+    ]
   },
   "rule-references-public-value": {
     "errors": [
@@ -1407,6 +1522,32 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
         ],
         "type": "string_type",
         "yaml_line": 11
+      }
+    ]
+  },
+  "rule-references-public-wide-integer-key": {
+    "yaml_error": true
+  },
+  "rule-references-public-wide-string-key": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "references",
+          "public",
+          "9223372036854775808",
+          "[key]"
+        ],
+        "input": "9223372036854775808",
+        "msg": "Input should be a valid integer, unable to parse string as an integer",
+        "span": [
+          12,
+          6,
+          25,
+          false
+        ],
+        "type": "int_parsing",
+        "yaml_line": null
       }
     ]
   },
@@ -1550,6 +1691,29 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
       }
     ]
   },
+  "rule-reviewed-arabic-indic-digits": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime"
+        },
+        "field_path": [
+          "metadata",
+          "reviewed"
+        ],
+        "input": "٢٠٢٦-٠٩-٠١",
+        "msg": "Value error, metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime",
+        "span": [
+          9,
+          14,
+          24,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 8
+      }
+    ]
+  },
   "rule-reviewed-boolean": {
     "errors": [
       {
@@ -1566,6 +1730,52 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           9,
           13,
           17,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 8
+      }
+    ]
+  },
+  "rule-reviewed-control-padding": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime"
+        },
+        "field_path": [
+          "metadata",
+          "reviewed"
+        ],
+        "input": "\u001c2026-09-01",
+        "msg": "Value error, metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime",
+        "span": [
+          9,
+          14,
+          28,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 8
+      }
+    ]
+  },
+  "rule-reviewed-control-padding-after": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime"
+        },
+        "field_path": [
+          "metadata",
+          "reviewed"
+        ],
+        "input": "2026-09-01\u001f",
+        "msg": "Value error, metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime",
+        "span": [
+          9,
+          14,
+          28,
           true
         ],
         "type": "value_error",
@@ -1596,6 +1806,23 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
       "metadata": {
         "created": "2026-01-01",
         "modified": "2026-01-02",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
+  },
+  "rule-reviewed-first-instant": {
+    "value": {
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "reviewed": "0001-01-01T00:00:00Z",
         "schema": "rule::1.1",
         "tlp": "clear",
         "uuid": "00000000-0000-4000-8000-000000000001",
@@ -1691,6 +1918,23 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
         "yaml_line": 8
       }
     ]
+  },
+  "rule-reviewed-last-instant-with-offset": {
+    "value": {
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "reviewed": "9999-12-31T23:59:59+00:00",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
   },
   "rule-reviewed-list": {
     "errors": [
@@ -1794,6 +2038,52 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
       "techniques": []
     }
   },
+  "rule-reviewed-offset-after-year-9999": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "metadata.reviewed is not a valid date or time: the time in UTC is not between the years 0001 and 9999"
+        },
+        "field_path": [
+          "metadata",
+          "reviewed"
+        ],
+        "input": "9999-12-31T23:59:59-23:59",
+        "msg": "Value error, metadata.reviewed is not a valid date or time: the time in UTC is not between the years 0001 and 9999",
+        "span": [
+          9,
+          14,
+          39,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 8
+      }
+    ]
+  },
+  "rule-reviewed-offset-before-year-one": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "metadata.reviewed is not a valid date or time: the time in UTC is not between the years 0001 and 9999"
+        },
+        "field_path": [
+          "metadata",
+          "reviewed"
+        ],
+        "input": "0001-01-01T00:00:00+23:59",
+        "msg": "Value error, metadata.reviewed is not a valid date or time: the time in UTC is not between the years 0001 and 9999",
+        "span": [
+          9,
+          14,
+          39,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 8
+      }
+    ]
+  },
   "rule-reviewed-padded": {
     "value": {
       "description": "d",
@@ -1861,6 +2151,52 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           9,
           13,
           22,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 8
+      }
+    ]
+  },
+  "rule-reviewed-year-zero": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "metadata.reviewed is not a valid date or time: the year 0000 is not between 0001 and 9999"
+        },
+        "field_path": [
+          "metadata",
+          "reviewed"
+        ],
+        "input": "0000-01-01",
+        "msg": "Value error, metadata.reviewed is not a valid date or time: the year 0000 is not between 0001 and 9999",
+        "span": [
+          9,
+          14,
+          24,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 8
+      }
+    ]
+  },
+  "rule-reviewed-year-zero-datetime": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "metadata.reviewed is not a valid date or time: the year 0000 is not between 0001 and 9999"
+        },
+        "field_path": [
+          "metadata",
+          "reviewed"
+        ],
+        "input": "0000-01-01T00:00:00Z",
+        "msg": "Value error, metadata.reviewed is not a valid date or time: the year 0000 is not between 0001 and 9999",
+        "span": [
+          9,
+          14,
+          34,
           true
         ],
         "type": "value_error",
