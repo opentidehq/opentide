@@ -384,7 +384,39 @@ impl Run<'_> {
                 self.emit_report(&report, out, err)
             }
             "validate" => {
-                let (args, report) = self.validate(&matches);
+                // A person at a terminal sees what runs until the result
+                // replaces it.
+                let status = self.mode == Mode::Human
+                    && self.host.stderr_tty
+                    && !self.globals.quiet
+                    && self.console(true).colour != Colour::None;
+                // Log lines follow under `--debug`: the line stays above them.
+                let logging = self.globals.debug || self.env.debug_requested();
+                // A report on stdout is whole: no status line then either.
+                let status = status
+                    && !leaf(&matches).get_flag("watch")
+                    && leaf(&matches)
+                        .get_one::<crate::tree::ReportFormat>("report_format")
+                        .is_none_or(|format| *format == crate::tree::ReportFormat::Text);
+                if status {
+                    let mut line = Text::styled("⠋", &Style::new("bold cyan"));
+                    line.push_str(" Validating objects");
+                    err.write_all(b"\x1b[?25l")?;
+                    err.write_all(line.render(Colour::Full, false).as_bytes())?;
+                    if logging {
+                        err.write_all(b"\n")?;
+                    }
+                    err.flush()?;
+                }
+                let (parsed, report) = self.validate(&matches);
+                if status {
+                    err.write_all(if logging {
+                        b"\x1b[?25h".as_slice()
+                    } else {
+                        b"\r\x1b[2K\x1b[?25h".as_slice()
+                    })?;
+                    err.flush()?;
+                }
                 if let Some(report) = report {
                     return self.emit_report(&report, out, err);
                 }
@@ -392,7 +424,7 @@ impl Run<'_> {
                 let terminal = self.terminal();
                 let interrupt = self.host.interrupt.clone();
                 let code = crate::commands::watch::run(
-                    &args,
+                    &parsed,
                     &crate::commands::validate::Context {
                         repo: self.globals.repo.as_deref(),
                         env: self.env,
@@ -407,6 +439,10 @@ impl Run<'_> {
                 // Ctrl-C is how a watch stops.
                 self.host.interrupt.consume();
                 Ok(code)
+            }
+            "lint" => {
+                let report = self.lint(&matches);
+                self.emit_report(&report, out, err)
             }
             "explain" => {
                 let code = leaf(&matches).get_one::<String>("code").cloned();
@@ -533,6 +569,44 @@ impl Run<'_> {
             },
         );
         (parsed, Some(report))
+    }
+
+    /// `opentide lint`, from its parsed arguments.
+    fn lint(&self, matches: &clap::ArgMatches) -> crate::commands::Report {
+        use clap::ValueEnum;
+        let args = leaf(matches);
+        let parsed = crate::commands::lint::Args {
+            fix: args.get_flag("fix"),
+            strict: args.get_flag("strict"),
+            checks: args
+                .get_many::<crate::tree::Check2>("check")
+                .into_iter()
+                .flatten()
+                .filter_map(|check| check.to_possible_value())
+                .filter_map(|value| opentide_workspace::lint::LintCheck::parse(value.get_name()))
+                .collect(),
+            changed: args.get_flag("changed"),
+            files: args
+                .get_many::<String>("file")
+                .map(|values| values.cloned().collect())
+                .unwrap_or_default(),
+            format: args
+                .get_one::<crate::tree::ReportFormat>("report_format")
+                .map(|format| report_format(*format)),
+            output: args.get_one::<PathBuf>("output").cloned(),
+        };
+        let cwd = self.host.cwd.clone().unwrap_or_default();
+        let terminal = self.terminal();
+        crate::commands::lint::run(
+            &parsed,
+            &crate::commands::lint::Context {
+                repo: self.globals.repo.as_deref(),
+                env: self.env,
+                cwd: &cwd,
+                version: &self.host.version,
+                terminal: &terminal,
+            },
+        )
     }
 
     /// The streams, as a command lays its text out for them.
@@ -715,6 +789,15 @@ impl Run<'_> {
         }
         out.extend(self.host.cwd.clone());
         out
+    }
+}
+
+/// `--format`'s value as the renderers name it.
+fn report_format(format: crate::tree::ReportFormat) -> crate::render::report::ReportFormat {
+    match format {
+        crate::tree::ReportFormat::Text => crate::render::report::ReportFormat::Text,
+        crate::tree::ReportFormat::Sarif => crate::render::report::ReportFormat::Sarif,
+        crate::tree::ReportFormat::Codequality => crate::render::report::ReportFormat::Codequality,
     }
 }
 

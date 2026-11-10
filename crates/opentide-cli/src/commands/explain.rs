@@ -110,7 +110,7 @@ pub fn render_markdown(markdown: &str, terminal: &Terminal) -> String {
     let mut code: Option<Vec<String>> = None;
     let mut lists: Vec<Option<u64>> = Vec::new();
     let mut bullet = String::new();
-    let mut link: Option<String> = None;
+    let mut target: Option<String> = None;
     let style = |styles: &[Style]| {
         styles
             .iter()
@@ -161,11 +161,11 @@ pub fn render_markdown(markdown: &str, terminal: &Terminal) -> String {
             }
             Event::Start(Tag::Link { dest_url, .. }) => {
                 styles.push(Style::new("underline"));
-                link = Some(dest_url.to_string());
+                target = Some(dest_url.to_string());
             }
             Event::End(TagEnd::Link) => {
                 styles.pop();
-                if let Some(url) = link.take() {
+                if let Some(url) = target.take() {
                     current.append(&format!(" ({url})"), &Style::new("dim"));
                 }
             }

@@ -396,6 +396,13 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         ws.validate(&options)
     };
     let root = ws.root().to_path_buf();
+    tracing::debug!(
+        objects = validation.summary.objects,
+        errors = validation.summary.errors,
+        warnings = validation.summary.warnings,
+        queries = validation.summary.queries.unwrap_or_default(),
+        "Validated the workspace"
+    );
     let run = run_of(validation, &root);
     let validation = &run.validation;
     let summary = validation.summary;

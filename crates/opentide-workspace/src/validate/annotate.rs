@@ -392,7 +392,7 @@ fn annotate_one(
         && let Some((sentence, step)) = message.clone().rsplit_once("; ")
     {
         help = Some(step.to_owned());
-        message = sentence.to_owned();
+        sentence.clone_into(&mut message);
     }
     let mut fix = None;
     if VALUE_SUGGESTION_CODES.contains(&diagnostic.code.as_str())

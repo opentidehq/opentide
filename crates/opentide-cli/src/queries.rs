@@ -259,6 +259,129 @@ impl Profiles {
     }
 }
 
+impl Profiles {
+    /// Everything the engine reports for the object file `text` at `path`,
+    /// as the language server does (`check_file`): its queries' findings and
+    /// the platform blocks' advisories.
+    pub fn check_file(&self, path: &Path, text: &str) -> Vec<Finding> {
+        let text = universal_newlines(text);
+        let lines = LineStarts::new(&text);
+        let response = opentide_analysis::analyze(
+            &self.host,
+            opentide_analysis::AnalyzeRequest {
+                uri: path.to_string_lossy().into_owned(),
+                language: opentide_analysis::LanguageId::TideYaml,
+                text: text.clone().into_owned(),
+            },
+        );
+        response
+            .diagnostics
+            .into_iter()
+            .map(|diagnostic| finding(&text, &lines, diagnostic))
+            .collect()
+    }
+}
+
+/// The marker `opentide new` writes after a value to fill in.
+static PLACEHOLDER_MARK: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+    #[expect(clippy::expect_used, reason = "a literal pattern")]
+    regex::Regex::new(r"\s#\s*opentide:placeholder\s*$").expect("valid regex")
+});
+
+/// Whether `line`, from a value's start, is the `...` stand-in `opentide
+/// new` writes (`is_stand_in`).
+pub fn is_stand_in(line: &str) -> bool {
+    PLACEHOLDER_MARK.replace(line, "").trim() == "..."
+}
+
+/// Whether `finding` sits in a `...` stand-in under a marked key
+/// (`_in_placeholder`); `marked` holds the 1-based marked lines.
+fn in_placeholder(finding: &Finding, lines: &[&str], marked: &[usize]) -> bool {
+    let line = finding.line;
+    if !(marked.contains(&line) || marked.contains(&(line.wrapping_sub(1))))
+        || line == 0
+        || line > lines.len()
+    {
+        return false;
+    }
+    let mut text = lines[line - 1];
+    if marked.contains(&line) {
+        text = text.split_once(':').map_or(text, |(_, value)| value);
+    }
+    is_stand_in(text.trim_start())
+}
+
+/// The query engines' advisories that are lint's: Elastic's block settings.
+const ELASTIC_ADVISORIES: [&str; 5] = [
+    "lookback_zero",
+    "lookback_long",
+    "threshold_lookback",
+    "risk_band",
+    "technique_not_enterprise",
+];
+
+/// `lint`'s queries check on the query engines (`_query_findings`): each
+/// object's query warnings and notes and its platform blocks' advisories. A
+/// query the engine rejects is `validate`'s; a placeholder query is the
+/// placeholders check's. Build it with [`EngineLintQueries::install`] and
+/// hold [`ENGINE`] while lint runs.
+pub struct EngineLintQueries {
+    profiles: Profiles,
+}
+
+impl EngineLintQueries {
+    /// The profiles of the workspace at `root`, installed.
+    pub fn install(fs: &dyn FileSystem, root: &Path) -> Self {
+        Self {
+            profiles: Profiles::install(fs, Some(root)),
+        }
+    }
+}
+
+impl opentide_workspace::lint::LintQueryCheck for EngineLintQueries {
+    fn check(
+        &self,
+        file: &Path,
+        relative: &str,
+        uuid: Option<&str>,
+        text: &str,
+    ) -> Result<Vec<opentide_workspace::lint::LintFinding>, String> {
+        let text = universal_newlines(text);
+        let lines: Vec<&str> = text.lines().collect();
+        let marked: Vec<usize> = lines
+            .iter()
+            .enumerate()
+            .filter(|(_, line)| PLACEHOLDER_MARK.is_match(line))
+            .map(|(number, _)| number + 1)
+            .collect();
+        let mut out = Vec::new();
+        for item in self.profiles.check_file(file, &text) {
+            if item.severity == EngineSeverity::Error || in_placeholder(&item, &lines, &marked) {
+                continue;
+            }
+            let lint_owned = ENGINE_REFERENCES
+                .iter()
+                .any(|(prefix, _, _)| item.code.starts_with(prefix))
+                || ELASTIC_ADVISORIES.contains(&item.code.as_str())
+                || item.code == "sysdig_list_self_reference"
+                || DECLARED_DATASET_CODES.contains(&item.code.as_str());
+            if !lint_owned {
+                continue;
+            }
+            let severity = if item.severity == EngineSeverity::Warning {
+                Severity::Warning
+            } else {
+                Severity::Info
+            };
+            let diagnostic = engine_diagnostic(&item, severity, file, relative.to_owned());
+            out.push(opentide_workspace::lint::LintFinding::from_engine(
+                relative, uuid, diagnostic,
+            ));
+        }
+        Ok(out)
+    }
+}
+
 /// `bytes` as Python's `read_text(encoding="utf-8-sig")` reads them: without
 /// a byte-order mark, every line ending a `\n`.
 ///

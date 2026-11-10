@@ -11,6 +11,7 @@ pub mod explain;
 pub mod findings;
 pub mod generate;
 pub mod info;
+pub mod lint;
 pub mod rules;
 pub mod validate;
 pub mod watch;
