@@ -32,6 +32,7 @@ Read `references/crates.md` before adding a dependency or a new crate. Read `ref
 | `opentide-ecs` | no | `Diagnostic` | ECS field catalog (`OnceLock`), ECS-index detection, the ECS type and near-miss helpers the Elastic engines share |
 | `opentide-schema` | no | `thiserror` (`SchemaError`) | The Tide model as code: serde, garde, schemars, PyO3 (UC-1.1, ADR 0001) |
 | `opentide-tide` | no | `Diagnostic` | Tide YAML, UUID graph, injection |
+| `opentide-workspace` | through `FileSystem` (`OsFs` only in `fs.rs`) | `thiserror` (`ConfigError`) | Workspace loading: roots, configuration once, parallel parse (rayon), the index, invalidation (UC-2.1) |
 | `opentide-analysis` | no | — | `WorkspaceHost` orchestrator |
 | `opentide-lsp` | yes | `anyhow` | stdio host and CLI |
 | `opentide-wasm` | no (host is JS) | `JsValue` | `highlight` / `legend`, and `LanguageServer` over `opentide-lsp`'s `MessageSession` |

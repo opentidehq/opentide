@@ -163,3 +163,22 @@
 #   written raw; a line break inside a message, a note or a label continues
 #   on an indented row (under the frame's bar), so no printed line starts
 #   with text from a file.
+#
+# The workspace index (UC-2.1, #816), decided and checked corpus by corpus by
+# `cargo xtask registry diff --against python` (xtask/src/registry.rs
+# `APPROVED`, `INVALID_DATES`; none may go stale on `--corpus all`); entered
+# here when a command reads the Rust index (UC-2.x):
+#
+# - `yaml-error-text`: a `yaml_parse` load error's text is saphyr's, at the
+#   line the oracle names or where the construct it names starts ("**Tide
+#   objects are read as YAML 1.2**").
+# - `yaml-1-2-scalars`: bodies and signals hold `yes`/`no`/`on`/`off` and
+#   timestamps as written ("**Tide objects are read as YAML 1.2**").
+# - `yaml-1-2-dates`: a file with an unquoted impossible date is indexed, and
+#   its field's check reports it, where the oracle refused the file ("**Tide
+#   objects are read as YAML 1.2**").
+# - an unreadable file's text is the operating system's as Rust reports it
+#   (the corpora hold none: root, which the check may run as, reads every
+#   file), and
+#   a non-empty list or mapping `uuid` is `missing_uuid` where the oracle
+#   crashed ("**The workspace is loaded by the Rust engine**").

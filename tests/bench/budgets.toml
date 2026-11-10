@@ -130,6 +130,13 @@ label = "generate exports navigator"
 baseline_s = 0.889
 baseline_rss_mib = 76.3
 
+[commands.load]
+label = "load and index the workspace (SDK: Opentide.initialise())"
+# UC-2.1 (#816): heavy workspace load and index in 80 ms or less on 4 cores.
+# The oracle side is the SDK's registry load; its baseline is recorded from
+# the Benchmarks workflow on CI's runner class.
+target_s = 0.08
+
 [commands.rules_unreviewed]
 label = "rules unreviewed"
 baseline_s = 0.359

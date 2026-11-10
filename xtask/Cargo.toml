@@ -19,6 +19,8 @@ opentide-compare.workspace = true
 # The object models' oracle comparisons (`corpus faults --engine rust`,
 # `schema diff`) read rules, whose platform blocks are unchecked until UC-1.4.
 opentide-schema = { workspace = true, features = ["unchecked-platform-blocks"] }
+# `registry diff` (UC-2.1, #816) and the `load` benchmark.
+opentide-workspace.workspace = true
 schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true

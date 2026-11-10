@@ -64,6 +64,11 @@ commands:
                  resolve every fixture and generated workspace's configuration
                  with opentide-schema and compare it, as JSON, and its
                  configuration findings with the oracle's (UC-1.5, #811)
+  registry diff --against python [--oracle BIN]
+                [--corpus all|fixtures|generated|faults]
+                 load every corpus with opentide-workspace and compare its
+                 index (objects, UUIDs, types, paths, load errors, references,
+                 signals), as JSON, with the Python registry's (UC-2.1, #816)
   codegen        generate schemas, stubs, types and references (UC-1.8, #814)
   golden <record|check|diff|lock|coverage> [options]
                  record what the frozen Python CLI does, and check an engine
@@ -141,6 +146,13 @@ fn main() -> ExitCode {
             Ok(code) => ExitCode::from(code),
             Err(error) => {
                 eprintln!("xtask config: {error:#}");
+                ExitCode::from(2)
+            }
+        },
+        "registry" => match xtask::registry::run(rest) {
+            Ok(code) => ExitCode::from(code),
+            Err(error) => {
+                eprintln!("xtask registry: {error:#}");
                 ExitCode::from(2)
             }
         },
