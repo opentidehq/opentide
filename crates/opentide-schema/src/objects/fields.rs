@@ -60,41 +60,41 @@ pub fn newest_model_schema(family: &str) -> Option<&'static Value> {
 /// The paths of the fields that play `role` in the revision `identifier`,
 /// sorted as Python sorts tuples. A revision without a model (or `None`)
 /// takes the union of every model's paths, as the oracle does for a body
-/// whose `metadata.schema` it cannot resolve.
-pub fn role_paths(identifier: Option<&str>, role: FieldRole) -> Vec<Vec<String>> {
-    type Table = Vec<(Option<&'static str>, Vec<(Vec<String>, FieldRole)>)>;
+/// whose `metadata.schema` it cannot resolve. Computed once, on first use.
+pub fn role_paths(identifier: Option<&str>, role: FieldRole) -> &'static [Vec<String>] {
+    type Table = Vec<(Option<&'static str>, FieldRole, Vec<Vec<String>>)>;
     static TABLE: OnceLock<Table> = OnceLock::new();
     let table = TABLE.get_or_init(|| {
-        let mut table: Table = models()
+        type Found = Vec<(&'static str, Vec<(Vec<String>, FieldRole)>)>;
+        let found: Found = models()
             .iter()
-            .map(|(id, schema)| (Some(*id), fields_with_roles(schema)))
+            .map(|(id, schema)| (*id, fields_with_roles(schema)))
             .collect();
-        let mut union: Vec<(Vec<String>, FieldRole)> = Vec::new();
-        for (_, paths) in &table {
-            for path in paths {
-                if !union.contains(path) {
-                    union.push(path.clone());
-                }
+        let mut table: Table = Vec::new();
+        for role in FieldRole::ALL {
+            let mut union: Vec<Vec<String>> = Vec::new();
+            for (id, paths) in &found {
+                let mut own: Vec<Vec<String>> = paths
+                    .iter()
+                    .filter(|(_, found)| *found == role)
+                    .map(|(path, _)| path.clone())
+                    .collect();
+                own.sort();
+                own.dedup();
+                union.extend(own.iter().cloned());
+                table.push((Some(*id), role, own));
             }
+            union.sort();
+            union.dedup();
+            table.push((None, role, union));
         }
-        table.push((None, union));
         table
     });
     let wanted = identifier.filter(|id| model_schema(id).is_some());
-    let mut paths: Vec<Vec<String>> = table
+    table
         .iter()
-        .find(|(id, _)| *id == wanted)
-        .map(|(_, paths)| {
-            paths
-                .iter()
-                .filter(|(_, found)| *found == role)
-                .map(|(path, _)| path.clone())
-                .collect()
-        })
-        .unwrap_or_default();
-    paths.sort();
-    paths.dedup();
-    paths
+        .find(|(id, found, _)| *id == wanted && *found == role)
+        .map_or(&[], |(_, _, paths)| paths.as_slice())
 }
 
 /// The schema of the property at `path` (field names as files write them)
@@ -151,8 +151,8 @@ fn find_property<'s>(
 mod tests {
     use super::*;
 
-    fn joined(paths: Vec<Vec<String>>) -> Vec<String> {
-        paths.into_iter().map(|path| path.join(".")).collect()
+    fn joined(paths: &[Vec<String>]) -> Vec<String> {
+        paths.iter().map(|path| path.join(".")).collect()
     }
 
     /// The oracle's `_role_paths` for each revision and for none.

@@ -633,6 +633,15 @@ impl Builder<'_> {
     }
 }
 
+/// Parses what the catalogue reads besides the workspace, once per process:
+/// the bundled `att&ck` vocabulary, the pins and the models' field roles. A
+/// host calls it on another thread while the workspace loads.
+pub fn warm() {
+    let _ = Vocabularies::bundled().get("att&ck");
+    let _ = PinTable::bundled();
+    let _ = opentide_schema::objects::fields::role_paths(None, FieldRole::Techniques);
+}
+
 /// The catalogue of `workspace`.
 pub fn build(workspace: &Workspace) -> Catalogue {
     build_from(

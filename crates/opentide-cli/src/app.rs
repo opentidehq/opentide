@@ -341,7 +341,11 @@ impl Run<'_> {
             }
             "info" => {
                 let report = self.info(&matches);
-                self.emit_report(&report, out, err)
+                let code = self.emit_report(&report, out, err);
+                // `info catalog`'s document is large: left to the exit, as
+                // the workspace is (`commands::info::run`).
+                std::mem::forget(report);
+                code
             }
             "rules unreviewed" => {
                 let older_than = leaf(&matches)

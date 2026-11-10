@@ -53,9 +53,11 @@ stdout (progress goes to stderr); --out writes it to FILE as well.
   --engine python   the oracle: opentide 0.23.0 from its PyPI wheel
                     (tests/bench/oracle-requirements.txt, hashes verified),
                     installed with uv under the target directory (default)
-  --engine rust     the Rust implementations: today the language server
-                    and `load` (opentide-workspace's load example), built
-                    --release; every other command reports \"no Rust yet\"
+  --engine rust     the Rust implementations: the language server, `load`
+                    (opentide-workspace's load example) and the commands
+                    the Rust CLI runs (info, info catalog, rules
+                    unreviewed), built --release; every other command
+                    reports \"no Rust yet\"
   --scale 1|10      the heavy workspace's size (default 1)
   --only ID,...     run only these commands (ids as in the report)
   --workspace DIR   benchmark this workspace instead of generating one
@@ -617,6 +619,12 @@ enum Program {
     Missing(String),
 }
 
+/// The commands the Rust CLI (opentide-cli) runs, by scenario id: `--engine
+/// rust` measures its `opentide` binary on them (UC-2.4, #819).
+const RUST_CLI: &[&str] = &["info", "info_catalog", "rules_unreviewed"];
+
+/// The program a scenario runs. For `--engine rust`, `opentide` is the Rust
+/// CLI's binary.
 fn program(
     scenario: &Scenario,
     engine: Engine,
@@ -666,9 +674,17 @@ fn program(
             Some(bin) => Program::Run(bin.to_owned(), Vec::new()),
             None => Program::Missing("no load example".into()),
         },
-        (Engine::Rust, Kind::Cli) => Program::Missing(
-            "no Rust yet: the Rust CLI (opentide-cli) is UC-3; the command runs in Python".into(),
-        ),
+        (Engine::Rust, Kind::Cli) => match opentide {
+            Some(cli) if RUST_CLI.contains(&scenario.id) => {
+                Program::Run(cli.to_owned(), args(&["--json"]))
+            }
+            Some(_) | None if RUST_CLI.contains(&scenario.id) => {
+                Program::Missing("no Rust CLI built".into())
+            }
+            _ => Program::Missing(
+                "no Rust yet: the command runs in Python until it is ported to opentide-cli".into(),
+            ),
+        },
     }
 }
 
@@ -734,7 +750,9 @@ fn run_in(options: &Options, root: &Path, base: &Path, work: &Path) -> Result<()
                 .is_none_or(|only| only.iter().any(|id| id == s.id))
         })
         .collect();
-    let runnable = |s: &&&Scenario| options.engine == Engine::Python || s.kind != Kind::Cli;
+    let runnable = |s: &&&Scenario| {
+        options.engine == Engine::Python || s.kind != Kind::Cli || RUST_CLI.contains(&s.id)
+    };
     let needs_workspace = selected
         .iter()
         .filter(runnable)
@@ -745,6 +763,9 @@ fn run_in(options: &Options, root: &Path, base: &Path, work: &Path) -> Result<()
         (Engine::Python, None) => {
             let (path, version) = oracle::ensure_oracle(root, &base.join("oracle"))?;
             (Some(path), Some(version))
+        }
+        (Engine::Rust, _) if selected.iter().any(|s| RUST_CLI.contains(&s.id)) => {
+            (Some(oracle::build_cli(root)?), None)
         }
         (Engine::Rust, _) => (None, None),
     };
@@ -1208,7 +1229,7 @@ mod tests {
     }
 
     #[test]
-    fn rust_has_only_the_language_server_and_says_no_rust_yet_for_the_rest() {
+    fn rust_runs_what_it_has_and_says_no_rust_yet_for_the_rest() {
         for scenario in SCENARIOS {
             let program = program(
                 scenario,
@@ -1223,6 +1244,9 @@ mod tests {
                 (Kind::Load, Program::Run(bin, args)) => {
                     assert_eq!(bin, Path::new("load"));
                     assert!(args.is_empty());
+                }
+                (Kind::Cli, Program::Missing(why)) if RUST_CLI.contains(&scenario.id) => {
+                    assert_eq!(why, "no Rust CLI built");
                 }
                 (Kind::Cli, Program::Missing(why)) => assert!(why.starts_with("no Rust yet")),
                 (kind, _) => panic!("{}: {kind:?}", scenario.id),

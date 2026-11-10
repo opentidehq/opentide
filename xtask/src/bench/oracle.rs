@@ -181,6 +181,37 @@ pub fn build_load(root: &Path) -> Result<PathBuf> {
         .context("cargo built no load executable")
 }
 
+/// Builds the Rust CLI (opentide-cli's `opentide`, release): the Rust
+/// engine of the commands it runs.
+pub fn build_cli(root: &Path) -> Result<PathBuf> {
+    let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
+    eprintln!("bench: building opentide-cli (release)");
+    let output = Command::new(cargo)
+        .current_dir(root)
+        .args([
+            "build",
+            "--release",
+            "--locked",
+            "--package",
+            "opentide-cli",
+            "--bin",
+            "opentide",
+            "--message-format=json-render-diagnostics",
+        ])
+        .stderr(std::process::Stdio::inherit())
+        .output()
+        .context("run cargo build")?;
+    if !output.status.success() {
+        bail!("cargo build -p opentide-cli failed ({})", output.status);
+    }
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
+        .filter(|m| m["reason"] == "compiler-artifact" && m["target"]["name"] == "opentide")
+        .find_map(|m| m["executable"].as_str().map(PathBuf::from))
+        .context("cargo built no opentide executable")
+}
+
 /// Builds the language server from this workspace (release profile, the
 /// lock file as it is) and returns the binary.
 pub fn build_lsp(root: &Path) -> Result<PathBuf> {

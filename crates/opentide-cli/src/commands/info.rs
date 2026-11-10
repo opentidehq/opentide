@@ -110,7 +110,15 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         );
     }
     let (repo, options) = placement(cx.repo, cx.env, cx.cwd);
-    let workspace = match super::open(options) {
+    // The catalogue's ATT&CK matrix and field roles are parsed while the
+    // workspace loads: both are cached for the run.
+    let opened = std::thread::scope(|scope| {
+        if section == Some("catalog") {
+            scope.spawn(catalogue::warm);
+        }
+        super::open(options)
+    });
+    let workspace = match opened {
         Ok(workspace) => workspace,
         Err(message) => return Report::error(COMMAND, message),
     };
@@ -161,6 +169,8 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
             out.push(("edges".into(), json(&catalogue.edges)));
             out.push(("signals".into(), json(&catalogue.signals)));
             out.push(("attack".into(), json(&catalogue.attack)));
+            // Left to the process's exit, as the workspace is (below).
+            let catalogue = std::mem::ManuallyDrop::new(catalogue);
             if let Json::Object(members) = json(&catalogue.summary) {
                 for (key, value) in members {
                     match summary.iter_mut().find(|(k, _)| *k == key) {
@@ -254,6 +264,9 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     if cx.text {
         report.body = body;
     }
+    // A run ends with the process: freeing the index (a document tree per
+    // object) takes longer than reading it, so it is left to the exit.
+    std::mem::forget(workspace);
     report
 }
 
