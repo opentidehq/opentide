@@ -1543,11 +1543,13 @@ args = ["generate", "schemas"]
 fixtures = ["tide-corpus"]
 
 # docs/cli/generate.md: several phases at once (unknown to 0.23.0 likewise).
+# On vscode too: every bare `generate` there fails in the docs phase, so this
+# is the run `cargo xtask codegen --check` compares on that fixture (#814).
 [[case]]
 command = "generate"
 variant = "schemas-templates-vocabs-snippets"
 args = ["generate", "schemas", "templates", "vocabs", "snippets"]
-fixtures = ["tide-corpus"]
+fixtures = ["tide-corpus", "vscode"]
 
 [[case]]
 command = "generate docs"
