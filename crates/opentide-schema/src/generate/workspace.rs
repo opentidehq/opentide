@@ -382,6 +382,39 @@ pub fn schema_paths(config: &Node) -> Vec<(SchemaId, String)> {
         .collect()
 }
 
+/// Where `generate schemas` writes `visibility.toml`'s schema: the
+/// `[artifacts.schemas] visibility` name, `visibility.1.0.schema.json` by
+/// default, in the schemas folder.
+pub fn visibility_schema_path(config: &Node) -> String {
+    let settings = Settings::of(config);
+    let name = settings
+        .schema_map
+        .iter()
+        .find(|(key, _)| key == "visibility")
+        .and_then(|(_, value)| value.clone())
+        .unwrap_or_else(|| "visibility.1.0.schema.json".to_owned());
+    join(&settings.schemas_dir, &name)
+}
+
+/// The JSON Schemas of the `generate schemas` phase but the router
+/// ([`router_artifact`]): each registered object revision's editor schema
+/// ([`super::schema::revision_schema`]) and `visibility.toml`'s, from the
+/// workspace's resolved configuration and vocabularies (UC-1.8b, #900).
+pub fn schema_artifacts(sources: &super::schema::Sources) -> Vec<Artifact> {
+    let mut artifacts = Vec::new();
+    for (id, path) in schema_paths(&sources.config) {
+        if let Some(schema) = super::schema::revision_schema(&id.to_string(), sources) {
+            push(&mut artifacts, path, super::schema::editor_text(&schema));
+        }
+    }
+    push(
+        &mut artifacts,
+        visibility_schema_path(&sources.config),
+        super::schema::editor_text(&super::schema::visibility_schema()),
+    );
+    artifacts
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
