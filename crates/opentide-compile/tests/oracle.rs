@@ -1,8 +1,9 @@
-//! Every Sentinel, Elastic and Sysdig body of the compile corpus
-//! (`tests/golden/payloads/corpus`) against what the oracle compiled from it
-//! (`tests/golden/payloads/oracle.json`, written by `cargo xtask payloads diff
-//! --against python --corpus payloads --record`): the dry run's body, each
-//! tenant's, and the dry run's payload entry, byte for byte.
+//! Every body of the compile corpus (`tests/golden/payloads/corpus`) against
+//! what the oracle compiled from it (`tests/golden/payloads/oracle.json`,
+//! written by `cargo xtask payloads diff --against python --corpus payloads
+//! --record`): the dry run's body, each tenant's (the writes a deployer
+//! sends, for the six platforms whose body is built from the tenant), and
+//! the dry run's payload entry, byte for byte.
 #![expect(
     clippy::unwrap_used,
     reason = "test helpers: the corpus and the record are in the repository"
@@ -12,8 +13,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use opentide_compile::json::Json;
-use opentide_compile::preview::{self, Preview};
-use opentide_compile::{CompileError, Owned, Rule, elastic, sentinel, sysdig};
+use opentide_compile::preview::{self, Inputs, PROBE_CLOCK, PROBE_TIMESTAMP};
+use opentide_compile::{CompileError, Owned, Rule};
 use opentide_schema::vocab::Vocabularies;
 use opentide_workspace::{FileSystem, Options, OsFs, RootOptions, Workspace};
 use serde_json::Value;
@@ -85,6 +86,60 @@ fn a_windows_path_reads_as_the_record_writes_it() {
     );
 }
 
+/// The `[[dump]]` classes of `tests/golden/payloads/APPROVED.toml`: rule and
+/// platforms.
+fn dump_classes() -> Vec<(String, Vec<String>)> {
+    let text = std::fs::read_to_string(repo().join("tests/golden/payloads/APPROVED.toml")).unwrap();
+    let file: toml::Table = toml::from_str(&text).unwrap();
+    file.get("dump")
+        .and_then(toml::Value::as_array)
+        .map(Vec::as_slice)
+        .unwrap_or_default()
+        .iter()
+        .map(|entry| {
+            (
+                entry["rule"].as_str().unwrap().to_owned(),
+                entry["platforms"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|platform| platform.as_str().unwrap().to_owned())
+                    .collect(),
+            )
+        })
+        .collect()
+}
+
+fn without_nulls(value: Json) -> Json {
+    match value {
+        Json::Object(object) => Json::Object(
+            object
+                .into_iter()
+                .filter(|(_, value)| !value.is_null())
+                .map(|(key, value)| (key, without_nulls(value)))
+                .collect(),
+        ),
+        Json::Array(items) => Json::Array(items.into_iter().map(without_nulls).collect()),
+        other => other,
+    }
+}
+
+/// The class a model-dump preview that differs falls in: `nulls` (the
+/// oracle's `null` members left out, it is the candidate) or `order` (the
+/// same value, keys in another order); `None` for any other difference.
+fn dump_class(oracle: &str, mine: &str) -> Option<&'static str> {
+    let oracle: Json = serde_json::from_str(oracle).ok()?;
+    if oracle.get("status").is_some() || oracle.get("api_request").is_none() {
+        return None;
+    }
+    let trimmed = without_nulls(oracle).to_compact();
+    if trimmed == mine {
+        return Some("nulls");
+    }
+    let value = |text: &str| serde_json::from_str::<Value>(text).ok();
+    (value(&trimmed)? == value(mine)?).then_some("order")
+}
+
 /// The approved differences of the compile corpus (`[[diff]]` entries of
 /// `tests/golden/payloads/APPROVED.toml` for the corpus `payloads`): uuid,
 /// platform, what, oracle and candidate.
@@ -134,17 +189,15 @@ fn the_compile_corpus_compiles_as_the_oracle_compiles_it() {
     );
     let index = workspace.index().clone();
     let cx = owned.context(&index);
-    let config = Json::from_node(&workspace.configuration().resolved.tree);
-    let elastic_tenants = opentide_compile::plan::tenants(&config, "elastic");
-    let sysdig_tenants = opentide_compile::plan::tenants(&config, "sysdig");
     let ws = corpus.to_string_lossy().into_owned();
     let approved = approved();
+    let classes = dump_classes();
     let mut used = vec![false; approved.len()];
     let mut compared = 0;
     let mut differences = Vec::new();
     let rules = record["rules"].as_array().unwrap();
     assert!(
-        rules.len() >= 15,
+        rules.len() >= 40,
         "the record holds every rule of the corpus"
     );
     assert!(record["unloadable"].as_array().unwrap().is_empty());
@@ -163,50 +216,47 @@ fn the_compile_corpus_compiles_as_the_oracle_compiles_it() {
                 u == uuid && p == platform && *w == what && *o == oracle && *c == mine
             }) {
                 used[at] = true;
-            } else if oracle != mine {
+            } else if oracle != mine
+                && !(what == "preview"
+                    && dump_class(&oracle, &mine).is_some_and(|class| {
+                        classes.iter().any(|(rule, platforms)| {
+                            rule == class && platforms.iter().any(|known| known == platform)
+                        })
+                    }))
+            {
                 differences.push(format!(
                     "{uuid} {platform} {what}\n  oracle:    {oracle}\n  candidate: {mine}"
                 ));
             }
         };
-        let compiled = preview::compile_offline(&cx, platform, &rule).unwrap();
-        check(
-            "compile".into(),
-            describe(&entry["compile"]),
-            candidate(compiled),
-        );
+        if let Some(compiled) = preview::compile_offline(&cx, platform, &rule) {
+            check(
+                "compile".into(),
+                describe(&entry["compile"]),
+                candidate(compiled),
+            );
+        }
         for tenant in entry["tenants"].as_array().unwrap() {
             let name = tenant["tenant"].as_str().unwrap();
-            let named = |known: &&Json| known.get("name").and_then(Json::as_str) == Some(name);
-            let mine = if platform == "sentinel" {
-                candidate(sentinel::compile(&cx, &rule, name))
-            } else if platform == "sysdig" {
-                let tenant = sysdig_tenants.iter().copied().find(named);
-                assert!(tenant.is_some(), "{name} is a configured Sysdig tenant");
-                candidate(sysdig::compile_body(&cx, &rule, tenant))
-            } else {
-                let setup = elastic_tenants
-                    .iter()
-                    .find(|known| known.get("name").and_then(Json::as_str) == Some(name))
-                    .map(|known| elastic::Setup::from_tenant(known))
-                    .unwrap();
-                candidate(elastic::compile(&cx, &rule, &setup))
+            let inputs = Inputs {
+                known: opentide_compile::plan::state_id(&OsFs, &corpus, uuid, platform, name),
+                clock: PROBE_CLOCK,
+                timestamp: PROBE_TIMESTAMP,
             };
-            check(format!("tenant {name}"), describe(tenant), mine);
+            let mine =
+                candidate(preview::compile_tenant(&cx, platform, &rule, name, &inputs).unwrap());
+            check(format!("tenant:{name}"), describe(tenant), mine);
         }
-        match preview::preview(&cx, platform, &rule) {
-            Preview::Entry(preview) => check(
-                "preview".into(),
-                entry["preview"].as_str().unwrap().to_owned(),
-                preview.to_compact(),
-            ),
-            Preview::ConfigDump => differences.push(format!("{uuid} {platform}: no preview")),
-        }
+        check(
+            "preview".into(),
+            entry["preview"].as_str().unwrap().to_owned(),
+            preview::preview(&cx, platform, &rule).to_compact(),
+        );
     }
     assert!(differences.is_empty(), "{}", differences.join("\n"));
     assert!(
         used.iter().all(|used| *used),
         "an approval of the compile corpus matches nothing (stale)"
     );
-    assert!(compared >= 60, "{compared} comparisons");
+    assert!(compared >= 150, "{compared} comparisons");
 }

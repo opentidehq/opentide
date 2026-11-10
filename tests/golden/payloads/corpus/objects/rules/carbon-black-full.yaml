@@ -1,0 +1,30 @@
+name: Carbon Black Full
+
+metadata:
+  uuid: 00000000-0000-4000-8005-000000000701
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+
+description: |
+  Carbon Black Full for the compile corpus.
+techniques:
+  - T1059.001
+detection_model: 00000000-0000-4000-8099-000000000001
+
+response:
+  alert_severity: High
+
+configurations:
+  carbon_black_cloud:
+    status: STAGING
+    query: |
+      process_name:powershell.exe
+      AND process_cmdline:-enc
+    watchlist: Rule Watchlist
+    report: Shared Report
+    tags:
+      - powershell
+      - encoded

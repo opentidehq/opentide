@@ -1,0 +1,26 @@
+name: Defender Removed
+
+metadata:
+  uuid: 00000000-0000-4000-8005-000000000203
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+
+description: Defender Removed for the compile corpus.
+
+response:
+  alert_severity: Low
+
+configurations:
+  defender_for_endpoint:
+    status: REMOVED
+    query: DeviceEvents | take 1
+    scheduling: 3H
+    alert:
+      category: Execution
+    impacted_entities:
+      user: AccountSid
+    scope:
+      selection: All
