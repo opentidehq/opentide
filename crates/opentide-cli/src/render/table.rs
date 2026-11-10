@@ -1,13 +1,14 @@
 //! Tables and aligned columns, as `info` prints them.
 //!
-//! A [`Table`] is the oracle's: a centred title, a heavy-headed box
-//! (`┏━┳┓`, `┃`, `┡━╇┩`, then `│` and `└─┴┘`), a bold header row, cells
-//! padded one space each side, an optional centred caption. Each column is as
-//! wide as its widest cell; when the table is wider than the stream, the
-//! widest columns that may wrap give up width first, then every column
-//! evenly. A cell wraps at words by textwrap's first-fit algorithm, and a word
-//! wider than its column is cut into column-wide pieces (`fold`) or ends in
-//! `…`. [`columns`] lays rows out as label and value columns without a box.
+//! A [`Table`] is drawn by comfy-table: a box of UTF-8 lines (heavy above
+//! the header row, which is bold, light around the rows, the look `info` has
+//! always had), each column as wide as its widest cell, and the table no
+//! wider than the stream: comfy-table wraps the cells of the columns that
+//! may wrap to fit. A centred title goes above it and an
+//! optional centred caption below. [`columns`] lays rows out as label and
+//! value columns without a box.
+
+use comfy_table::{CellAlignment, ColumnConstraint, ContentArrangement, Width};
 
 use crate::render::text::{Style, Text, cell_len, char_width};
 
@@ -30,21 +31,17 @@ pub struct Column {
     /// Whether the column keeps its width: it never wraps.
     pub no_wrap: bool,
     /// The narrowest the column's text may be.
-    pub min_width: Option<usize>,
-    /// Whether a word wider than the column is cut into pieces (else it
-    /// ends in `…`).
-    pub fold: bool,
+    pub min_width: Option<u16>,
 }
 
 impl Column {
-    /// A column that wraps, left-aligned, a long word ending in `…`.
+    /// A column that wraps, left-aligned.
     pub fn new(header: &str) -> Column {
         Column {
             header: header.to_owned(),
             justify: Justify::Left,
             no_wrap: false,
             min_width: None,
-            fold: false,
         }
     }
 
@@ -61,14 +58,8 @@ impl Column {
     }
 
     /// At least `width` cells of text.
-    pub fn min_width(mut self, width: usize) -> Column {
+    pub fn min_width(mut self, width: u16) -> Column {
         self.min_width = Some(width);
-        self
-    }
-
-    /// A long word is cut, not shortened.
-    pub fn fold(mut self) -> Column {
-        self.fold = true;
         self
     }
 }
@@ -86,420 +77,175 @@ pub struct Table {
     pub rows: Vec<Vec<String>>,
 }
 
-/// Cell padding: one space each side.
-const PADDING: usize = 2;
+/// comfy-table's preset: the characters of each part of the box, in its
+/// order (borders, the header's rule, cell lines, the rules between rows,
+/// which are blank, then the intersections and corners).
+const PRESET: &str = "││━─┡━╇┩│    ┳┴┏┓└┘";
+/// The rule under the header row.
+const HEADER_RULE: char = '┡';
+/// The vertical line around and between cells.
+const VERTICAL: char = '│';
 
-/// The smallest and largest width a text takes: its longest word and its
-/// longest line.
-fn measure(text: &str) -> (usize, usize) {
-    let widest = text.lines().map(cell_len).max().unwrap_or(0);
-    let word = text
-        .split_whitespace()
-        .map(cell_len)
-        .max()
-        .unwrap_or(widest);
-    (word.min(widest), widest)
+/// The top border's corners and the mark where two columns meet.
+const TOP: [char; 3] = ['┏', '┳', '┓'];
+
+/// A cell's text wrapped to `width` cells by textwrap: at spaces, first
+/// fit, a word wider than the column on a line of its own and cut there.
+fn wrapped(text: &str, width: usize) -> String {
+    let options = textwrap::Options::new(width.max(1))
+        .break_words(true)
+        .word_splitter(textwrap::WordSplitter::NoHyphenation)
+        .wrap_algorithm(textwrap::WrapAlgorithm::FirstFit);
+    textwrap::wrap(text, options).join("\n")
 }
 
-/// `(minimum, maximum)` of a column at most `limit` wide, padding included.
-fn measure_column(
-    column: &Column,
-    rows: &[Vec<String>],
-    index: usize,
-    limit: usize,
-) -> (usize, usize) {
-    if limit < 1 {
-        return (0, 0);
-    }
-    let cell = |text: &str| -> (usize, usize) {
-        if limit < 1 + PADDING {
-            return (limit, limit);
-        }
-        let inner = limit - PADDING;
-        let (low, high) = measure(text);
-        let (low, high) = (low.min(inner), high.min(inner));
-        if high < 1 {
-            return (PADDING, PADDING);
-        }
-        ((low + PADDING).min(limit), (high + PADDING).min(limit))
-    };
-    let mut low = 0;
-    let mut high = 0;
-    for text in std::iter::once(column.header.as_str()).chain(
-        rows.iter()
-            .map(|row| row.get(index).map_or("", String::as_str)),
-    ) {
-        let (a, b) = cell(text);
-        low = low.max(a);
-        high = high.max(b);
-    }
-    let (mut low, mut high) = (low.min(limit), high.min(limit));
-    if let Some(min) = column.min_width {
-        let min = min + PADDING;
-        low = low.max(min);
-        high = high.max(min);
-    }
-    (low, high)
-}
-
-/// Takes `total` from `values`, in proportion to `ratios`, at most each
-/// `maximums`, rounding halves to even.
-fn ratio_reduce(
-    total: usize,
-    ratios: &[usize],
-    maximums: &[usize],
-    values: &[usize],
-) -> Vec<usize> {
-    let ratios: Vec<usize> = ratios
-        .iter()
-        .zip(maximums)
-        .map(|(ratio, max)| if *max > 0 { *ratio } else { 0 })
-        .collect();
-    let mut total_ratio: usize = ratios.iter().sum();
-    if total_ratio == 0 {
-        return values.to_vec();
-    }
-    let mut remaining = total;
-    let mut out = Vec::with_capacity(values.len());
-    for ((ratio, maximum), value) in ratios.iter().zip(maximums).zip(values) {
-        if *ratio > 0 && total_ratio > 0 {
-            let distributed = (*maximum).min(round_half_even(ratio * remaining, total_ratio));
-            out.push(value.saturating_sub(distributed));
-            remaining = remaining.saturating_sub(distributed);
-            total_ratio -= ratio;
-        } else {
-            out.push(*value);
-        }
-    }
-    out
-}
-
-/// `numerator / denominator` rounded to the nearest whole number, a half to
-/// the even one.
-fn round_half_even(numerator: usize, denominator: usize) -> usize {
-    let quotient = numerator / denominator;
-    let remainder = numerator % denominator;
-    match (remainder * 2).cmp(&denominator) {
-        std::cmp::Ordering::Less => quotient,
-        std::cmp::Ordering::Greater => quotient + 1,
-        std::cmp::Ordering::Equal => quotient + quotient % 2,
-    }
-}
-
-/// The widths that fit `limit`: the widest wrapping columns shrink first.
-fn collapse(widths: &[usize], wrapable: &[bool], limit: usize) -> Vec<usize> {
-    let mut widths = widths.to_vec();
-    let mut total: usize = widths.iter().sum();
-    if !wrapable.iter().any(|w| *w) {
-        return widths;
-    }
-    while total > 0 && total > limit {
-        let excess = total - limit;
-        let widest = widths
-            .iter()
-            .zip(wrapable)
-            .filter(|(_, w)| **w)
-            .map(|(width, _)| *width)
-            .max()
-            .unwrap_or(0);
-        let second = widths
-            .iter()
-            .zip(wrapable)
-            .map(|(width, w)| if *w && *width != widest { *width } else { 0 })
-            .max()
-            .unwrap_or(0);
-        let difference = widest - second;
-        let ratios: Vec<usize> = widths
-            .iter()
-            .zip(wrapable)
-            .map(|(width, w)| usize::from(*width == widest && *w))
-            .collect();
-        if ratios.iter().all(|r| *r == 0) || difference == 0 {
-            break;
-        }
-        let maximums = vec![excess.min(difference); widths.len()];
-        widths = ratio_reduce(excess, &ratios, &maximums, &widths);
-        total = widths.iter().sum();
-    }
-    widths
+/// The width of each column of a drawn table, padding included, read from
+/// its top border.
+fn column_widths(top: &str) -> Vec<usize> {
+    top.trim_start_matches(TOP[0])
+        .trim_end_matches(TOP[2])
+        .split(TOP[1])
+        .map(|part| part.chars().count())
+        .collect()
 }
 
 impl Table {
-    fn widths(&self, limit: usize) -> Vec<usize> {
-        let measured: Vec<(usize, usize)> = self
-            .columns
-            .iter()
-            .enumerate()
-            .map(|(index, column)| measure_column(column, &self.rows, index, limit))
-            .collect();
-        let mut widths: Vec<usize> = measured.iter().map(|(_, high)| (*high).max(1)).collect();
-        let total: usize = widths.iter().sum();
-        if total > limit {
-            let wrapable: Vec<bool> = self.columns.iter().map(|c| !c.no_wrap).collect();
-            widths = collapse(&widths, &wrapable, limit);
-            let total: usize = widths.iter().sum();
-            if total > limit {
-                let ones = vec![1; widths.len()];
-                widths = ratio_reduce(total - limit, &ones, &widths.clone(), &widths);
+    /// The comfy-table that draws this table at most `width` cells wide;
+    /// with `fixed`, each column exactly that wide and the cells of the
+    /// columns that wrap wrapped to it first.
+    fn drawn(&self, width: usize, fixed: Option<&[usize]>) -> comfy_table::Table {
+        let cell = |at: usize, text: &str| -> String {
+            match fixed.and_then(|widths| widths.get(at)) {
+                Some(width) if !self.columns[at].no_wrap => wrapped(text, width.saturating_sub(2)),
+                _ => text.to_owned(),
             }
-            widths = self
-                .columns
-                .iter()
-                .enumerate()
-                .zip(&widths)
-                .map(|((index, column), width)| measure_column(column, &self.rows, index, *width).1)
-                .collect();
+        };
+        let mut table = comfy_table::Table::new();
+        table
+            .load_preset(PRESET)
+            .set_content_arrangement(ContentArrangement::Dynamic)
+            .set_width(u16::try_from(width).unwrap_or(u16::MAX))
+            .set_header(
+                self.columns
+                    .iter()
+                    .enumerate()
+                    .map(|(at, column)| cell(at, &column.header)),
+            );
+        for row in &self.rows {
+            table.add_row(
+                (0..self.columns.len()).map(|at| cell(at, row.get(at).map_or("", String::as_str))),
+            );
         }
-        widths
+        for (at, column) in self.columns.iter().enumerate() {
+            let Some(drawn) = table.column_mut(at) else {
+                continue;
+            };
+            if column.justify == Justify::Right {
+                drawn.set_cell_alignment(CellAlignment::Right);
+            }
+            if let Some(width) = fixed.and_then(|widths| widths.get(at)) {
+                let width = u16::try_from(*width).unwrap_or(u16::MAX);
+                drawn.set_constraint(ColumnConstraint::Absolute(Width::Fixed(width)));
+            } else if column.no_wrap {
+                drawn.set_constraint(ColumnConstraint::ContentWidth);
+            } else if let Some(min) = column.min_width {
+                // The bound counts the cell's padding, one space each side.
+                drawn.set_constraint(ColumnConstraint::LowerBoundary(Width::Fixed(
+                    min.saturating_add(2),
+                )));
+            }
+        }
+        table
     }
 
     /// The table's lines at `width` cells.
+    ///
+    /// comfy-table chooses the column widths. Where a column is narrower
+    /// than its text, the table is drawn again with each cell wrapped at
+    /// words by textwrap to that width, so a long word is cut only when it
+    /// is wider than the column, never because the line is full.
     pub fn render(&self, width: usize) -> Vec<Text> {
-        let count = self.columns.len();
-        if count == 0 {
+        if self.columns.is_empty() {
             return vec![Text::default()];
         }
-        let extra = 2 + count - 1;
-        let widths = self.widths(width.saturating_sub(extra));
-        let table_width: usize = widths.iter().sum::<usize>() + extra;
+        let first = self.drawn(width, None);
+        let widths = first
+            .lines()
+            .next()
+            .map(|top| column_widths(&top))
+            .unwrap_or_default();
+        let narrow = self
+            .columns
+            .iter()
+            .zip(&widths)
+            .enumerate()
+            .any(|(at, (column, width))| {
+                !column.no_wrap
+                    && std::iter::once(column.header.as_str())
+                        .chain(
+                            self.rows
+                                .iter()
+                                .map(|row| row.get(at).map_or("", String::as_str)),
+                        )
+                        .flat_map(str::lines)
+                        .any(|line| cell_len(line) > width.saturating_sub(2))
+            });
+        let lines: Vec<String> = if narrow && widths.len() == self.columns.len() {
+            self.drawn(width, Some(&widths)).lines().collect()
+        } else {
+            first.lines().collect()
+        };
+        let table_width = lines.iter().map(|line| cell_len(line)).max().unwrap_or(0);
+        let header_end = lines
+            .iter()
+            .position(|line| line.starts_with(HEADER_RULE))
+            .unwrap_or(0);
         let mut out = Vec::new();
         if let Some(title) = &self.title {
-            out.extend(centred(title, table_width, &Style::new("italic")));
+            out.push(centred(title, table_width, &Style::new("italic")));
         }
-        let rule = |left: &str, fill: &str, cross: &str, right: &str| -> Text {
-            let parts: Vec<String> = widths.iter().map(|w| fill.repeat(*w)).collect();
-            Text::plain(&format!("{left}{}{right}", parts.join(cross)))
-        };
-        out.push(rule("┏", "━", "┳", "┓"));
         let bold = Style::new("bold");
-        let header: Vec<String> = self.columns.iter().map(|c| c.header.clone()).collect();
-        out.extend(self.row(&header, &widths, &bold, "┃", true));
-        out.push(rule("┡", "━", "╇", "┩"));
-        for row in &self.rows {
-            out.extend(self.row(row, &widths, &Style::default(), "│", false));
+        for (at, line) in lines.iter().enumerate() {
+            if at > 0 && at < header_end {
+                out.push(header_line(line, &bold));
+            } else {
+                out.push(Text::plain(line));
+            }
         }
-        out.push(rule("└", "─", "┴", "┘"));
         if let Some(caption) = &self.caption {
-            out.extend(centred(caption, table_width, &Style::new("italic dim")));
+            out.push(centred(caption, table_width, &Style::new("italic dim")));
         }
         out
     }
-
-    fn row(
-        &self,
-        cells: &[String],
-        widths: &[usize],
-        style: &Style,
-        edge: &str,
-        header: bool,
-    ) -> Vec<Text> {
-        let rendered: Vec<Vec<String>> = self
-            .columns
-            .iter()
-            .zip(widths)
-            .enumerate()
-            .map(|(index, (column, width))| {
-                let text = cells.get(index).map_or("", String::as_str);
-                cell_lines(text, width.saturating_sub(PADDING), column)
-            })
-            .collect();
-        let height = rendered.iter().map(Vec::len).max().unwrap_or(1).max(1);
-        (0..height)
-            .map(|line| {
-                let mut text = Text::plain(edge);
-                for (index, (lines, width)) in rendered.iter().zip(widths).enumerate() {
-                    if index > 0 {
-                        text.push_str(edge);
-                    }
-                    // A header aligns to the bottom, a cell to the top.
-                    let offset = if header { height - lines.len() } else { 0 };
-                    match line.checked_sub(offset).and_then(|at| lines.get(at)) {
-                        Some(content) if *width >= PADDING => {
-                            text.append(" ", style);
-                            text.append(content, style);
-                            text.append(" ", style);
-                        }
-                        Some(content) => {
-                            text.append(&crop(content, *width), style);
-                        }
-                        None => {
-                            text.append(&" ".repeat(*width), style);
-                        }
-                    }
-                }
-                text.push_str(edge);
-                text
-            })
-            .collect()
-    }
 }
 
-/// `text` centred in `width` cells, every line in `style`.
-fn centred(text: &str, width: usize, style: &Style) -> Vec<Text> {
-    wrap(text, width, true)
-        .into_iter()
-        .map(|line| {
-            let excess = width.saturating_sub(cell_len(&line));
-            let left = excess / 2;
-            let padded = format!("{}{line}{}", " ".repeat(left), " ".repeat(excess - left));
-            Text::styled(&padded, style)
-        })
-        .collect()
-}
-
-/// The first `width` cells of `text`.
-fn crop(text: &str, width: usize) -> String {
-    let mut out = String::new();
-    let mut cells = 0;
-    for ch in text.chars() {
-        let w = char_width(ch);
-        if cells + w > width {
-            break;
-        }
-        cells += w;
-        out.push(ch);
-    }
-    out
-}
-
-/// `text` in `width` cells, ending in `…` when it is wider.
-fn ellipsis(text: &str, width: usize) -> String {
-    if cell_len(text) <= width {
-        return text.to_owned();
-    }
-    let mut out = crop(text, width.saturating_sub(1));
-    out.push('…');
-    out
-}
-
-/// A cell's lines, each exactly `width` cells.
-fn cell_lines(text: &str, width: usize, column: &Column) -> Vec<String> {
-    let lines = if column.no_wrap {
-        text.lines().map(str::to_owned).collect()
-    } else {
-        wrap(text, width, column.fold)
-    };
-    let lines = if lines.is_empty() {
-        vec![String::new()]
-    } else {
-        lines
-    };
-    lines
-        .into_iter()
-        .map(|line| {
-            let line = if column.fold {
-                crop(&line, width)
-            } else {
-                ellipsis(&line, width)
-            };
-            let pad = " ".repeat(width.saturating_sub(cell_len(&line)));
-            match column.justify {
-                Justify::Left => format!("{line}{pad}"),
-                Justify::Right => format!("{pad}{line}"),
+/// A header line: its cells in `style`, its lines plain.
+fn header_line(line: &str, style: &Style) -> Text {
+    let mut text = Text::default();
+    let mut cell = String::new();
+    for ch in line.chars() {
+        if ch == VERTICAL {
+            if !cell.is_empty() {
+                text.append(&cell, style);
+                cell.clear();
             }
-        })
-        .collect()
-}
-
-/// A word of a line: its text, its cells and the whitespace after it.
-#[derive(Debug)]
-struct Word {
-    text: String,
-    cells: usize,
-    space: usize,
-}
-
-impl textwrap::core::Fragment for Word {
-    #[expect(clippy::cast_precision_loss, reason = "a terminal's columns")]
-    fn width(&self) -> f64 {
-        self.cells as f64
-    }
-
-    #[expect(clippy::cast_precision_loss, reason = "a terminal's columns")]
-    fn whitespace_width(&self) -> f64 {
-        self.space as f64
-    }
-
-    fn penalty_width(&self) -> f64 {
-        0.0
-    }
-}
-
-/// `text` wrapped at words in `width` cells by textwrap's first-fit
-/// algorithm, each line without trailing whitespace. A word wider than
-/// `width` starts a line; with `fold` it is cut into `width`-cell pieces,
-/// otherwise it is left whole (and later shortened with `…`).
-pub fn wrap(text: &str, width: usize, fold: bool) -> Vec<String> {
-    let mut out = Vec::new();
-    for line in text.split('\n') {
-        let mut words: Vec<Word> = Vec::new();
-        let chars: Vec<char> = line.chars().collect();
-        let mut index = 0;
-        // Leading whitespace stays with the first word.
-        let lead: String = chars.iter().take_while(|c| c.is_whitespace()).collect();
-        index += lead.chars().count();
-        let mut first = true;
-        while index < chars.len() {
-            let start = index;
-            while index < chars.len() && !chars[index].is_whitespace() {
-                index += 1;
-            }
-            let mut word: String = chars[start..index].iter().collect();
-            let space_start = index;
-            while index < chars.len() && chars[index].is_whitespace() {
-                index += 1;
-            }
-            let space = chars[space_start..index]
-                .iter()
-                .copied()
-                .map(char_width)
-                .sum();
-            if first {
-                word = format!("{lead}{word}");
-                first = false;
-            }
-            let cells = cell_len(&word);
-            if fold && width > 0 && cells > width {
-                let pieces = chop(&word, width);
-                let last = pieces.len() - 1;
-                for (at, piece) in pieces.into_iter().enumerate() {
-                    let cells = cell_len(&piece);
-                    words.push(Word {
-                        text: piece,
-                        cells,
-                        space: if at == last { space } else { 0 },
-                    });
-                }
-            } else {
-                words.push(Word {
-                    text: word,
-                    cells,
-                    space,
-                });
-            }
-        }
-        if words.is_empty() {
-            out.push(lead);
-            continue;
-        }
-        #[expect(clippy::cast_precision_loss, reason = "a terminal's columns")]
-        let widths = [width.max(1) as f64];
-        for row in textwrap::wrap_algorithms::wrap_first_fit(&words, &widths) {
-            let joined: Vec<String> = row
-                .iter()
-                .enumerate()
-                .map(|(at, word)| {
-                    if at + 1 == row.len() {
-                        word.text.clone()
-                    } else {
-                        format!("{}{}", word.text, " ".repeat(word.space))
-                    }
-                })
-                .collect();
-            out.push(joined.concat());
+            text.push_str(ch.encode_utf8(&mut [0; 4]));
+        } else {
+            cell.push(ch);
         }
     }
-    out
+    if !cell.is_empty() {
+        text.append(&cell, style);
+    }
+    text
+}
+
+/// `text` centred in `width` cells (whole when it is wider), in `style`.
+fn centred(text: &str, width: usize, style: &Style) -> Text {
+    let excess = width.saturating_sub(cell_len(text));
+    let left = excess / 2;
+    let padded = format!("{}{text}{}", " ".repeat(left), " ".repeat(excess - left));
+    Text::styled(&padded, style)
 }
 
 /// A positioned word of a styled line: characters `start..end`, and the
@@ -584,24 +330,6 @@ pub fn wrap_text(line: &Text, width: usize) -> Vec<Text> {
         .collect()
 }
 
-/// `word` in pieces of at most `width` cells.
-fn chop(word: &str, width: usize) -> Vec<String> {
-    let mut pieces = vec![String::new()];
-    let mut cells = 0;
-    for ch in word.chars() {
-        let w = char_width(ch);
-        if cells + w > width && !pieces.last().is_some_and(String::is_empty) {
-            pieces.push(String::new());
-            cells = 0;
-        }
-        cells += w;
-        if let Some(last) = pieces.last_mut() {
-            last.push(ch);
-        }
-    }
-    pieces
-}
-
 /// Rows as aligned columns, `gap` cells apart, each line without trailing
 /// blanks; the columns in `right` are right-aligned. A column empty on every
 /// row takes no room, nor its gap.
@@ -651,17 +379,15 @@ mod tests {
         lines.iter().map(Text::as_plain).collect()
     }
 
-    /// The oracle's `info rules` at 80 columns: the UUID column keeps its
-    /// width, the others share what is left, and a long word is folded.
     #[test]
-    fn a_narrow_table_wraps_and_folds() {
+    fn a_narrow_table_wraps_to_the_stream() {
         let table = Table {
             title: Some("Rules (2)".into()),
             caption: None,
             columns: vec![
-                Column::new("UUID").no_wrap().min_width(36),
-                Column::new("Name").fold(),
-                Column::new("Platforms").fold(),
+                Column::new("UUID").no_wrap(),
+                Column::new("Name"),
+                Column::new("Platforms"),
             ],
             rows: vec![
                 vec![
@@ -676,16 +402,14 @@ mod tests {
                 ],
             ],
         };
-        let lines = plain(&table.render(80));
-        // The title is centred over the table: 35 cells before it, 36 after.
+        // At 80 cells the UUID keeps its width; the others wrap at words, a
+        // word wider than its column on a line of its own and cut there.
         assert_eq!(
-            lines[0],
-            format!("{}Rules (2){}", " ".repeat(35), " ".repeat(36))
-        );
-        assert_eq!(
-            lines[1..].join("\n"),
-            "┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━┓
-┃ UUID                                 ┃ Name              ┃ Platforms         ┃
+            plain(&table.render(80)).join("\n"),
+            format!("{}Rules (2){}\n", " ".repeat(35), " ".repeat(36))
+                + "\
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━┓
+│ UUID                                 │ Name              │ Platforms         │
 ┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━┩
 │ 00000000-0000-4000-8003-000000000002 │ Defender KQL Rule │ defender_for_endp │
 │                                      │                   │ oint              │
@@ -695,58 +419,57 @@ mod tests {
 │                                      │                   │ oint, elastic     │
 └──────────────────────────────────────┴───────────────────┴───────────────────┘"
         );
-        // Wide enough, every column takes its widest cell.
-        let wide = table.render(120);
-        assert_eq!(wide[1].cell_len(), 38 + 25 + 52 + 4);
+        // Wide enough, every column takes its widest cell and nothing wraps.
+        let wide = plain(&table.render(200));
+        assert_eq!(wide.len(), 7);
+        assert_eq!(cell_len(&wide[1]), 38 + 25 + 52 + 4);
+        // No stream width at all: the UUID still keeps its width.
+        assert!(
+            plain(&table.render(10))
+                .iter()
+                .any(|line| line.contains("00000000-0000-4000-8003-000000000002"))
+        );
     }
 
     #[test]
-    fn header_and_title_are_styled_cell_by_cell() {
+    fn cells_wrap_at_words_and_widths_come_from_the_border() {
+        assert_eq!(wrapped("a b-c defghijk", 4), "a\nb-c\ndefg\nhijk");
+        assert_eq!(
+            wrapped("SentinelOne S1QL Rule", 17),
+            "SentinelOne S1QL\nRule"
+        );
+        assert_eq!(wrapped("", 4), "");
+        assert_eq!(column_widths("┏━━━┳━┳━━━━━┓"), [3, 1, 5]);
+    }
+
+    #[test]
+    fn header_and_title_are_styled() {
         let table = Table {
             title: Some("T".into()),
             caption: Some("none".into()),
-            columns: vec![Column::new("A"), Column::new("Count").right()],
-            rows: Vec::new(),
+            columns: vec![Column::new("A"), Column::new("Count").right().min_width(8)],
+            rows: vec![vec!["x".into(), "3".into()]],
         };
-        let lines = table.render(80);
+        let lines: Vec<String> = table
+            .render(80)
+            .iter()
+            .map(|line| line.render(Colour::Full, false))
+            .collect();
+        // The title and caption centred over the table, the header's cells
+        // bold and its lines plain, a right-aligned column at its least width.
         assert_eq!(
-            lines
-                .iter()
-                .map(|l| l.render(Colour::Full, false))
-                .collect::<Vec<_>>(),
+            lines,
             [
-                "\u{1b}[3m      T      \u{1b}[0m",
-                "┏━━━┳━━━━━━━┓",
-                "┃\u{1b}[1m \u{1b}[0m\u{1b}[1mA\u{1b}[0m\u{1b}[1m \u{1b}[0m┃\u{1b}[1m \u{1b}[0m\u{1b}[1mCount\u{1b}[0m\u{1b}[1m \u{1b}[0m┃",
-                "┡━━━╇━━━━━━━┩",
-                "└───┴───────┘",
-                "\u{1b}[2;3m    none     \u{1b}[0m",
+                "\u{1b}[3m       T        \u{1b}[0m",
+                "┏━━━┳━━━━━━━━━━┓",
+                "│\u{1b}[1m A \u{1b}[0m│\u{1b}[1m    Count \u{1b}[0m│",
+                "┡━━━╇━━━━━━━━━━┩",
+                "│ x │        3 │",
+                "└───┴──────────┘",
+                "\u{1b}[2;3m      none      \u{1b}[0m",
             ]
         );
-    }
-
-    #[test]
-    fn ratio_reduce_rounds_halves_to_even() {
-        assert_eq!(round_half_even(5, 2), 2);
-        assert_eq!(round_half_even(7, 2), 4);
-        assert_eq!(round_half_even(7, 3), 2);
-        assert_eq!(ratio_reduce(3, &[1, 1], &[5, 5], &[10, 10]), [8, 9]);
-        assert_eq!(
-            collapse(&[38, 26, 23], &[false, true, true], 74),
-            [38, 18, 18]
-        );
-    }
-
-    #[test]
-    fn words_wrap_first_fit() {
-        assert_eq!(
-            wrap("SentinelOne S1QL Rule", 17, true),
-            ["SentinelOne S1QL", "Rule"]
-        );
-        assert_eq!(wrap("abcdefghij", 4, true), ["abcd", "efgh", "ij"]);
-        assert_eq!(wrap("abcdefghij x", 4, false), ["abcdefghij", "x"]);
-        assert_eq!(ellipsis("abcdefghij", 4), "abc…");
-        assert_eq!(wrap("", 4, true), [""]);
+        assert_eq!(Table::default().render(80).len(), 1);
     }
 
     #[test]

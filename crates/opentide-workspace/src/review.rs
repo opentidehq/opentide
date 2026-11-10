@@ -159,7 +159,7 @@ fn reviewed_text(node: Option<&Node>) -> Option<String> {
     let node = node?;
     let text = match &node.value {
         Value::Null => return None,
-        _ => crate::fields::py_str(node),
+        _ => node.value.to_string(),
     };
     let text = text.trim();
     (!text.is_empty()).then(|| text.to_owned())

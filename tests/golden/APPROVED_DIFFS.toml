@@ -460,3 +460,149 @@ candidate = "\"metadata.reviewed is not a valid date or time: parameter 'day' fo
 reason = "The same file's `reviewed: 2026-02-30`: under YAML 1.2 it is text, so `rules unreviewed` checks it and stops on it, first in file order, in jiff's words; PyYAML refused the file, which was skipped, and the run stopped on the next bad value (`reviewed: yesterday`)"
 issue = "https://github.com/opentidehq/opentide/issues/819"
 changelog = "**An impossible `reviewed` date is explained by the date library**"
+
+# UC-2.4 (#819): `info` draws its tables with comfy-table, its cells wrapped by
+# textwrap, rather than a port of Rich's table layout (render/table.rs).
+
+[[diff]]
+command = "info"
+case = "info/plain/*"
+target = "stdout"
+rule = "text"
+oracle = "┃ UUID                                 ┃ Name              ┃ Platforms         ┃"
+candidate = "│ UUID                                 │ Name              │ Platforms         │"
+reason = "comfy-table draws the header row with the light side lines (`│`) it draws every row with, where Rich drew it with heavy ones (`┃`)"
+issue = "https://github.com/opentidehq/opentide/issues/819"
+changelog = "**`info` draws its tables with comfy-table**"
+
+[[diff]]
+command = "info"
+case = "info/agent/*"
+target = "stdout"
+rule = "text"
+oracle = "┃ UUID                                 ┃ Name              ┃ Platforms         ┃"
+candidate = "│ UUID                                 │ Name              │ Platforms         │"
+reason = "comfy-table draws the header row with the light side lines (`│`) it draws every row with, where Rich drew it with heavy ones (`┃`)"
+issue = "https://github.com/opentidehq/opentide/issues/819"
+changelog = "**`info` draws its tables with comfy-table**"
+
+[[diff]]
+command = "info"
+case = "info/plain/vscode/rules"
+target = "stdout"
+rule = "text"
+oracle = "┃ UUID                                 ┃ Name                    ┃ Platforms ┃"
+candidate = "│ UUID                                 │ Name                    │ Platforms │"
+reason = "comfy-table draws the header row with the light side lines (`│`) it draws every row with, where Rich drew it with heavy ones (`┃`)"
+issue = "https://github.com/opentidehq/opentide/issues/819"
+changelog = "**`info` draws its tables with comfy-table**"
+
+[[diff]]
+command = "info"
+case = "info/agent/vscode/rules"
+target = "stdout"
+rule = "text"
+oracle = "┃ UUID                                 ┃ Name                    ┃ Platforms ┃"
+candidate = "│ UUID                                 │ Name                    │ Platforms │"
+reason = "comfy-table draws the header row with the light side lines (`│`) it draws every row with, where Rich drew it with heavy ones (`┃`)"
+issue = "https://github.com/opentidehq/opentide/issues/819"
+changelog = "**`info` draws its tables with comfy-table**"
+
+[[diff]]
+command = "info"
+case = "info/plain/tide-corpus/vocab"
+target = "stdout"
+rule = "text"
+oracle = "┃ Name                  ┃ Entries ┃ Removed ┃ Latest revision ┃ Staged ┃"
+candidate = "│ Name                  │ Entries │ Removed │ Latest revision │ Staged │"
+reason = "comfy-table draws the header row with the light side lines (`│`) it draws every row with, where Rich drew it with heavy ones (`┃`)"
+issue = "https://github.com/opentidehq/opentide/issues/819"
+changelog = "**`info` draws its tables with comfy-table**"
+
+[[diff]]
+command = "info"
+case = "info/agent/tide-corpus/vocab"
+target = "stdout"
+rule = "text"
+oracle = "┃ Name                  ┃ Entries ┃ Removed ┃ Latest revision ┃ Staged ┃"
+candidate = "│ Name                  │ Entries │ Removed │ Latest revision │ Staged │"
+reason = "comfy-table draws the header row with the light side lines (`│`) it draws every row with, where Rich drew it with heavy ones (`┃`)"
+issue = "https://github.com/opentidehq/opentide/issues/819"
+changelog = "**`info` draws its tables with comfy-table**"
+
+[[diff]]
+command = "info"
+case = "info/human/tide-corpus/*"
+target = "stdout"
+rule = "text"
+oracle = "┃\u001b[1m \u001b[0m\u001b[1mUUID                                \u001b[0m\u001b[1m \u001b[0m┃\u001b[1m \u001b[0m\u001b[1mName                    \u001b[0m\u001b[1m \u001b[0m┃\u001b[1m \u001b[0m\u001b[1mPlatforms            \u001b[0m\u001b[1m \u001b[0m┃"
+candidate = "│\u001b[1m UUID                                 \u001b[0m│\u001b[1m Name                     \u001b[0m│\u001b[1m Platforms             \u001b[0m│"
+reason = "comfy-table draws the header row with the light side lines (`│`) it draws every row with, where Rich drew it with heavy ones (`┃`); the bold covers each header cell, its padding included, as one span where Rich styled the padding and the text apart"
+issue = "https://github.com/opentidehq/opentide/issues/819"
+changelog = "**`info` draws its tables with comfy-table**"
+
+[[diff]]
+command = "info"
+case = "info/human/tide-corpus/vocab"
+target = "stdout"
+rule = "text"
+oracle = "┃\u001b[1m \u001b[0m\u001b[1mName                 \u001b[0m\u001b[1m \u001b[0m┃\u001b[1m \u001b[0m\u001b[1mEntries\u001b[0m\u001b[1m \u001b[0m┃\u001b[1m \u001b[0m\u001b[1mRemoved\u001b[0m\u001b[1m \u001b[0m┃\u001b[1m \u001b[0m\u001b[1mLatest revision\u001b[0m\u001b[1m \u001b[0m┃\u001b[1m \u001b[0m\u001b[1mStaged\u001b[0m\u001b[1m \u001b[0m┃"
+candidate = "│\u001b[1m Name                  \u001b[0m│\u001b[1m Entries \u001b[0m│\u001b[1m Removed \u001b[0m│\u001b[1m Latest revision \u001b[0m│\u001b[1m Staged \u001b[0m│"
+reason = "comfy-table draws the header row with the light side lines (`│`) it draws every row with, where Rich drew it with heavy ones (`┃`); the bold covers each header cell, its padding included, as one span where Rich styled the padding and the text apart"
+issue = "https://github.com/opentidehq/opentide/issues/819"
+changelog = "**`info` draws its tables with comfy-table**"
+
+[[diff]]
+command = "info"
+case = "info/human/vscode/rules"
+target = "stdout"
+rule = "text"
+oracle = "┃\u001b[1m \u001b[0m\u001b[1mUUID                                \u001b[0m\u001b[1m \u001b[0m┃\u001b[1m \u001b[0m\u001b[1mName                   \u001b[0m\u001b[1m \u001b[0m┃\u001b[1m \u001b[0m\u001b[1mPlatforms\u001b[0m\u001b[1m \u001b[0m┃"
+candidate = "│\u001b[1m UUID                                 \u001b[0m│\u001b[1m Name                    \u001b[0m│\u001b[1m Platforms \u001b[0m│"
+reason = "comfy-table draws the header row with the light side lines (`│`) it draws every row with, where Rich drew it with heavy ones (`┃`); the bold covers each header cell, its padding included, as one span where Rich styled the padding and the text apart"
+issue = "https://github.com/opentidehq/opentide/issues/819"
+changelog = "**`info` draws its tables with comfy-table**"
+
+[[diff]]
+command = "info"
+case = "info/human/*/rules"
+target = "stdout"
+rule = "text"
+oracle = "┃\u001b[1m \u001b[0m\u001b[1mUUID                                \u001b[0m\u001b[1m \u001b[0m┃\u001b[1m \u001b[0m\u001b[1mName                       \u001b[0m\u001b[1m \u001b[0m┃\u001b[1m \u001b[0m\u001b[1mPlatforms                  \u001b[0m\u001b[1m \u001b[0m┃"
+candidate = "│\u001b[1m UUID                                 \u001b[0m│\u001b[1m Name                        \u001b[0m│\u001b[1m Platforms                   \u001b[0m│"
+reason = "comfy-table draws the header row with the light side lines (`│`) it draws every row with, where Rich drew it with heavy ones (`┃`); the bold covers each header cell, its padding included, as one span where Rich styled the padding and the text apart"
+issue = "https://github.com/opentidehq/opentide/issues/819"
+changelog = "**`info` draws its tables with comfy-table**"
+
+[[diff]]
+command = "info"
+case = "info/plain/tide-corpus/vocab-surface"
+target = "stdout"
+rule = "lines"
+oracle = "                               Vocabulary surface                               \n┏━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n┃ Key             ┃ Value                                                      ┃\n┡━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩\n│ Title           │ Threat Surface                                             │\n│ Keyed by        │ name                                                       │\n│ Entries         │ 895                                                        │\n│ Removed keys    │ 0                                                          │\n│ Latest revision │ 1.0                                                        │\n│ Staged          │ yes                                                        │\n│ Stages          │ OS, Application, Authentication, Cloud, Infrastructure,    │\n│                 │ Security, IoT, Protocol                                    │\n└─────────────────┴────────────────────────────────────────────────────────────┘\n                  Revisions                   \n┏━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━┓\n┃ Revision ┃ Introduced ┃ Removed ┃ Admitted ┃\n┡━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━┩\n│ 1.0      │        895 │       0 │      895 │\n└──────────┴────────────┴─────────┴──────────┘\n                             Pins                              \n┏━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━┓\n┃ Schema      ┃ Field          ┃ Revision ┃ Admitted ┃ Scoped ┃"
+candidate = "                             Vocabulary surface                              \n┏━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n│ Key             │ Value                                                   │\n┡━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩\n│ Title           │ Threat Surface                                          │\n│ Keyed by        │ name                                                    │\n│ Entries         │ 895                                                     │\n│ Removed keys    │ 0                                                       │\n│ Latest revision │ 1.0                                                     │\n│ Staged          │ yes                                                     │\n│ Stages          │ OS, Application, Authentication, Cloud, Infrastructure, │\n│                 │ Security, IoT, Protocol                                 │\n└─────────────────┴─────────────────────────────────────────────────────────┘\n                  Revisions                   \n┏━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━┓\n│ Revision │ Introduced │ Removed │ Admitted │\n┡━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━┩\n│ 1.0      │        895 │       0 │      895 │\n└──────────┴────────────┴─────────┴──────────┘\n                             Pins                              \n┏━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━┓\n│ Schema      │ Field          │ Revision │ Admitted │ Scoped │"
+reason = "comfy-table fits a table whose content is wider than the stream a few cells narrower than Rich did (the Value column, whose text wraps at the same word), so the title is centred over fewer cells; and the header rows of this table and the two after it have light side lines (`│`) where Rich drew heavy ones (`┃`)"
+issue = "https://github.com/opentidehq/opentide/issues/819"
+changelog = "**`info` draws its tables with comfy-table**"
+
+[[diff]]
+command = "info"
+case = "info/agent/tide-corpus/vocab-surface"
+target = "stdout"
+rule = "lines"
+oracle = "                               Vocabulary surface                               \n┏━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n┃ Key             ┃ Value                                                      ┃\n┡━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩\n│ Title           │ Threat Surface                                             │\n│ Keyed by        │ name                                                       │\n│ Entries         │ 895                                                        │\n│ Removed keys    │ 0                                                          │\n│ Latest revision │ 1.0                                                        │\n│ Staged          │ yes                                                        │\n│ Stages          │ OS, Application, Authentication, Cloud, Infrastructure,    │\n│                 │ Security, IoT, Protocol                                    │\n└─────────────────┴────────────────────────────────────────────────────────────┘\n                  Revisions                   \n┏━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━┓\n┃ Revision ┃ Introduced ┃ Removed ┃ Admitted ┃\n┡━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━┩\n│ 1.0      │        895 │       0 │      895 │\n└──────────┴────────────┴─────────┴──────────┘\n                             Pins                              \n┏━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━┓\n┃ Schema      ┃ Field          ┃ Revision ┃ Admitted ┃ Scoped ┃"
+candidate = "                             Vocabulary surface                              \n┏━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n│ Key             │ Value                                                   │\n┡━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩\n│ Title           │ Threat Surface                                          │\n│ Keyed by        │ name                                                    │\n│ Entries         │ 895                                                     │\n│ Removed keys    │ 0                                                       │\n│ Latest revision │ 1.0                                                     │\n│ Staged          │ yes                                                     │\n│ Stages          │ OS, Application, Authentication, Cloud, Infrastructure, │\n│                 │ Security, IoT, Protocol                                 │\n└─────────────────┴─────────────────────────────────────────────────────────┘\n                  Revisions                   \n┏━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━┓\n│ Revision │ Introduced │ Removed │ Admitted │\n┡━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━┩\n│ 1.0      │        895 │       0 │      895 │\n└──────────┴────────────┴─────────┴──────────┘\n                             Pins                              \n┏━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━┓\n│ Schema      │ Field          │ Revision │ Admitted │ Scoped │"
+reason = "comfy-table fits a table whose content is wider than the stream a few cells narrower than Rich did (the Value column, whose text wraps at the same word), so the title is centred over fewer cells; and the header rows of this table and the two after it have light side lines (`│`) where Rich drew heavy ones (`┃`)"
+issue = "https://github.com/opentidehq/opentide/issues/819"
+changelog = "**`info` draws its tables with comfy-table**"
+
+[[diff]]
+command = "info"
+case = "info/human/tide-corpus/vocab-surface"
+target = "stdout"
+rule = "lines"
+oracle = "\u001b[3m                                         Vocabulary surface                                         \u001b[0m\n┏━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n┃\u001b[1m \u001b[0m\u001b[1mKey            \u001b[0m\u001b[1m \u001b[0m┃\u001b[1m \u001b[0m\u001b[1mValue                                                                         \u001b[0m\u001b[1m \u001b[0m┃\n┡━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩\n│ Title           │ Threat Surface                                                                 │\n│ Keyed by        │ name                                                                           │\n│ Entries         │ 895                                                                            │\n│ Removed keys    │ 0                                                                              │\n│ Latest revision │ 1.0                                                                            │\n│ Staged          │ yes                                                                            │\n│ Stages          │ OS, Application, Authentication, Cloud, Infrastructure, Security, IoT,         │\n│                 │ Protocol                                                                       │\n└─────────────────┴────────────────────────────────────────────────────────────────────────────────┘\n\u001b[3m                  Revisions                   \u001b[0m\n┏━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━┓\n┃\u001b[1m \u001b[0m\u001b[1mRevision\u001b[0m\u001b[1m \u001b[0m┃\u001b[1m \u001b[0m\u001b[1mIntroduced\u001b[0m\u001b[1m \u001b[0m┃\u001b[1m \u001b[0m\u001b[1mRemoved\u001b[0m\u001b[1m \u001b[0m┃\u001b[1m \u001b[0m\u001b[1mAdmitted\u001b[0m\u001b[1m \u001b[0m┃\n┡━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━┩\n│ 1.0      │        895 │       0 │      895 │\n└──────────┴────────────┴─────────┴──────────┘\n\u001b[3m                             Pins                              \u001b[0m\n┏━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━┓\n┃\u001b[1m \u001b[0m\u001b[1mSchema     \u001b[0m\u001b[1m \u001b[0m┃\u001b[1m \u001b[0m\u001b[1mField         \u001b[0m\u001b[1m \u001b[0m┃\u001b[1m \u001b[0m\u001b[1mRevision\u001b[0m\u001b[1m \u001b[0m┃\u001b[1m \u001b[0m\u001b[1mAdmitted\u001b[0m\u001b[1m \u001b[0m┃\u001b[1m \u001b[0m\u001b[1mScoped\u001b[0m\u001b[1m \u001b[0m┃"
+candidate = "\u001b[3m                                     Vocabulary surface                                     \u001b[0m\n┏━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n│\u001b[1m Key             \u001b[0m│\u001b[1m Value                                                                  \u001b[0m│\n┡━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩\n│ Title           │ Threat Surface                                                         │\n│ Keyed by        │ name                                                                   │\n│ Entries         │ 895                                                                    │\n│ Removed keys    │ 0                                                                      │\n│ Latest revision │ 1.0                                                                    │\n│ Staged          │ yes                                                                    │\n│ Stages          │ OS, Application, Authentication, Cloud, Infrastructure, Security, IoT, │\n│                 │ Protocol                                                               │\n└─────────────────┴────────────────────────────────────────────────────────────────────────┘\n\u001b[3m                  Revisions                   \u001b[0m\n┏━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━┓\n│\u001b[1m Revision \u001b[0m│\u001b[1m Introduced \u001b[0m│\u001b[1m Removed \u001b[0m│\u001b[1m Admitted \u001b[0m│\n┡━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━┩\n│ 1.0      │        895 │       0 │      895 │\n└──────────┴────────────┴─────────┴──────────┘\n\u001b[3m                             Pins                              \u001b[0m\n┏━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━┓\n│\u001b[1m Schema      \u001b[0m│\u001b[1m Field          \u001b[0m│\u001b[1m Revision \u001b[0m│\u001b[1m Admitted \u001b[0m│\u001b[1m Scoped \u001b[0m│"
+reason = "comfy-table fits a table whose content is wider than the stream a few cells narrower than Rich did (the Value column, whose text wraps at the same word), so the title is centred over fewer cells; and the header rows of this table and the two after it have light side lines (`│`) where Rich drew heavy ones (`┃`)"
+issue = "https://github.com/opentidehq/opentide/issues/819"
+changelog = "**`info` draws its tables with comfy-table**"

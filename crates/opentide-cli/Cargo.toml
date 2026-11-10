@@ -28,6 +28,8 @@ path = "src/main.rs"
 
 [dependencies]
 clap = { workspace = true, features = ["env", "string"] }
+# The boxed tables of `info` (the rows, columns and wrapping are the crate's).
+comfy-table = { version = "7.2", default-features = false }
 ctrlc = "3.4"
 # The query lines of a code frame, coloured as the editor colours them.
 opentide-analysis.workspace = true

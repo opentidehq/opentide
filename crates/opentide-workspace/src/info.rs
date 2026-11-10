@@ -14,7 +14,7 @@ use opentide_schema::vocab::{Version, Vocabularies, Vocabulary};
 use regex::Regex;
 use serde::Serialize;
 
-use crate::fields::{get, mapping, py_str};
+use crate::fields::{get, mapping};
 
 /// One platform the CLI knows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -144,13 +144,13 @@ fn strategies(raw: Option<&Node>) -> Vec<String> {
     };
     let mut chosen = Vec::new();
     for value in &values {
-        for part in py_str(value).split(',') {
+        for part in value.value.to_string().split(',') {
             let name = part.trim().to_uppercase();
             if name.is_empty() {
                 continue;
             }
             if !DEPLOYABLE_STRATEGIES.contains(&name.as_str()) {
-                return values.iter().map(|value| py_str(value)).collect();
+                return values.iter().map(|value| value.value.to_string()).collect();
             }
             chosen.push(name);
         }
@@ -163,7 +163,8 @@ fn strategies(raw: Option<&Node>) -> Vec<String> {
 }
 
 fn truthy_text(node: Option<&Node>) -> Option<String> {
-    node.filter(|node| crate::index::truthy(node)).map(py_str)
+    node.filter(|node| crate::index::truthy(node))
+        .map(|node| node.value.to_string())
 }
 
 /// Each `[[tenants]]` entry as written. `is_set` says whether the
@@ -483,6 +484,32 @@ mod tests {
         assert_eq!(tenants[2].name, "tenant 4");
         assert_eq!(tenants[2].strategies, ["PREVIEW", "RELEASE"]);
         assert!(!platforms(None, Some("sentinel"), &set)[0].enabled);
+    }
+
+    #[test]
+    fn strategies_come_in_deployable_order_once_each() {
+        let strategies_of = |text: &str| -> Vec<String> {
+            let node = root(text);
+            strategies(get(&node, "strategies"))
+        };
+        // Out of order, repeated, in any case: each once, in deployable order.
+        assert_eq!(
+            strategies_of("strategies: 'release, preview, PREVIEW'\n"),
+            ["PREVIEW", "RELEASE"]
+        );
+        assert_eq!(
+            strategies_of("strategies: [Release, ' preview', release]\n"),
+            ["PREVIEW", "RELEASE"]
+        );
+        assert_eq!(strategies_of("strategies: 'release,,'\n"), ["RELEASE"]);
+        // Absent: every one; not a list or text: none.
+        assert_eq!(strategies_of("other: 1\n"), ["PREVIEW", "RELEASE"]);
+        assert!(strategies_of("strategies: {a: 1}\n").is_empty());
+        // One that is not deployable: every value as written.
+        assert_eq!(
+            strategies_of("strategies: [release, true]\n"),
+            ["release", "true"]
+        );
     }
 
     #[test]

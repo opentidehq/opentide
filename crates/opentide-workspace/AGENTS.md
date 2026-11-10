@@ -27,7 +27,7 @@ source (`ci.yml` `engine-package`, `scripts/ci-local.sh`).
 | `src/index.rs` | `assemble`: the index from the scans and parses, in discovery order: objects, `file_paths`, duplicates, load errors (`yaml_parse`, `missing_uuid`), nested files, signals, references, chaining |
 | `src/workspace.rs` | `Workspace::open` (parallel read and parse with rayon), `Stats`, `invalidate` |
 | `src/registry.rs` | `Registry`: the SDK lifecycle (`initialise` once, `reload`, accessors, `lookup`) |
-| `src/fields.rs` | Reading fields by their model role (`core/object_fields.py`): role paths from `opentide_schema::objects::fields`, Python's `str()` of a value |
+| `src/fields.rs` | Reading fields by their model role (`core/object_fields.py`): role paths from `opentide_schema::objects::fields`; a scalar's text as YAML 1.2 writes it (`true`, `null`) |
 | `src/coverage.rs` | Own and inherited techniques of each rule, `info coverage`'s match (`core/technique_coverage.py`) |
 | `src/catalogue.rs` | `info catalog`'s document (UC-2.4): object rows, load-error rows read from the text, edges (`covers`, `implements`, `parent`, `chains`, `technique`, `logsource`), signals, the ATT&CK matrix, the summary |
 | `src/state.rs` | The deployment state shards, read only, for the catalogue's `deployment` |

@@ -10,24 +10,13 @@ use opentide_schema::node::{Node, Value};
 use opentide_schema::objects::FieldRole;
 use opentide_schema::objects::fields::role_paths;
 
-/// A YAML value as Python's `str()` prints the value PyYAML loads: `True`
-/// and `False`, `None`, numbers and text as written.
-pub fn py_str(node: &Node) -> String {
-    match &node.value {
-        Value::Null => "None".to_owned(),
-        Value::Bool(true) => "True".to_owned(),
-        Value::Bool(false) => "False".to_owned(),
-        other => other.to_string(),
-    }
-}
-
 /// `_text`: `None` for a missing, `null` or empty value, else its text.
 pub fn text(node: Option<&Node>) -> Option<String> {
     let node = node?;
     match &node.value {
         Value::Null => None,
         Value::Str(text) if text.is_empty() => None,
-        _ => Some(py_str(node)),
+        _ => Some(node.value.to_string()),
     }
 }
 
@@ -161,7 +150,7 @@ pub fn platforms(root: &Node) -> BTreeSet<String> {
                 out.extend(
                     entries
                         .iter()
-                        .map(|entry| py_str(&entry.key).to_lowercase()),
+                        .map(|entry| entry.key.value.to_string().to_lowercase()),
                 );
             }
         }
@@ -207,9 +196,9 @@ mod tests {
     }
 
     #[test]
-    fn scalars_print_as_python_prints_them() {
+    fn scalars_print_as_yaml_writes_them() {
         let node = root("a: true\nb: ~\nc: 1.5\nd: ''\ne: x\n");
-        assert_eq!(py_str(get(&node, "a").unwrap()), "True");
+        assert_eq!(text(get(&node, "a")).as_deref(), Some("true"));
         assert_eq!(text(get(&node, "b")), None);
         assert_eq!(text(get(&node, "c")).as_deref(), Some("1.5"));
         assert_eq!(text(get(&node, "d")), None);

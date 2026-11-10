@@ -8,14 +8,14 @@ use std::path::Path;
 use opentide_schema::vocab::Vocabularies;
 use opentide_workspace::catalogue::{self, EDGE_KINDS};
 use opentide_workspace::coverage::{match_technique, rule_technique_index};
-use opentide_workspace::fields::{get, platforms as object_platforms, py_str};
+use opentide_workspace::fields::{get, platforms as object_platforms};
 use opentide_workspace::index::truthy;
 use opentide_workspace::info::{self as data, PlatformInfo};
 use opentide_workspace::{Index, Workspace};
 
 use super::{
     Block, ISSUES_FOUND, Report, USAGE_INVALID_CHOICE, USAGE_INVALID_VALUE, USAGE_MISSING_OPTION,
-    counted, json, placement, py_repr,
+    counted, json, placement,
 };
 use crate::env::Env;
 use crate::envelope::Failure;
@@ -99,9 +99,8 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         return Report::usage(
             COMMAND,
             format!(
-                "Only the vocab section takes a name; got {} after {}",
-                py_repr(name),
-                section.map_or_else(|| "None".to_owned(), py_repr)
+                "Only the vocab section takes a name; got {name:?} after {}",
+                section.map_or_else(|| "no section".to_owned(), |section| format!("{section:?}"))
             ),
             USAGE_INVALID_VALUE,
             "name",
@@ -357,12 +356,9 @@ fn title(section: &str) -> &str {
 /// UUID and name per object; rules also list their platforms.
 fn objects_table(index: &Index, section: &str, uuids: &[String]) -> Table {
     let family = singular(section);
-    let mut columns = vec![
-        Column::new("UUID").no_wrap().min_width(36),
-        Column::new("Name").fold(),
-    ];
+    let mut columns = vec![Column::new("UUID").no_wrap(), Column::new("Name")];
     if family == "rule" {
-        columns.push(Column::new("Platforms").fold());
+        columns.push(Column::new("Platforms"));
     }
     let rows = uuids
         .iter()
@@ -375,7 +371,7 @@ fn objects_table(index: &Index, section: &str, uuids: &[String]) -> Table {
             let name = root
                 .and_then(|root| get(root, "name"))
                 .filter(|node| truthy(node))
-                .map(py_str)
+                .map(|node| node.value.to_string())
                 .unwrap_or_default();
             let mut row = vec![uuid.clone(), name];
             if family == "rule" {
@@ -529,7 +525,7 @@ fn vocab_detail_tables(vocab: &data::VocabDetail) -> Vec<Table> {
         Table {
             title: Some(format!("Vocabulary {}", overview.name)),
             caption: None,
-            columns: vec![Column::new("Key"), Column::new("Value").fold()],
+            columns: vec![Column::new("Key"), Column::new("Value")],
             rows: summary,
         },
         Table {
@@ -562,7 +558,7 @@ fn vocab_detail_tables(vocab: &data::VocabDetail) -> Vec<Table> {
                 .then(|| "No object schema pins this vocabulary".to_owned()),
             columns: vec![
                 Column::new("Schema").no_wrap(),
-                Column::new("Field").fold(),
+                Column::new("Field"),
                 Column::new("Revision"),
                 Column::new("Admitted").right(),
                 Column::new("Scoped"),
@@ -648,7 +644,20 @@ mod tests {
         );
         assert_eq!(
             report.outcome.message,
-            "Only the vocab section takes a name; got \"it's\" after None"
+            "Only the vocab section takes a name; got \"it's\" after no section"
         );
+        let report = run(
+            &Args {
+                section: Some("rules".into()),
+                name: Some("a\nb".into()),
+                ..Args::default()
+            },
+            &cx,
+        );
+        assert_eq!(
+            report.outcome.message,
+            "Only the vocab section takes a name; got \"a\\nb\" after \"rules\""
+        );
+        assert_eq!(report.outcome.failure.unwrap().code, USAGE_INVALID_VALUE);
     }
 }

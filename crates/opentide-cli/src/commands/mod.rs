@@ -8,7 +8,7 @@
 pub mod info;
 pub mod rules;
 
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use opentide_workspace::{OsFs, RootOptions, Workspace, root};
@@ -125,24 +125,6 @@ pub fn json<T: serde::Serialize>(value: &T) -> Json {
         .unwrap_or(Json::Null)
 }
 
-/// A path as Python's `Path(text)` prints it: separators collapsed, `.`
-/// parts dropped (but a lone `.`), no trailing separator.
-pub fn python_path(text: &str) -> String {
-    let path = Path::new(text);
-    let mut out = PathBuf::new();
-    for component in path.components() {
-        if component != Component::CurDir {
-            out.push(component.as_os_str());
-        }
-    }
-    let shown = out.to_string_lossy().into_owned();
-    if shown.is_empty() {
-        ".".to_owned()
-    } else {
-        shown
-    }
-}
-
 /// Where a run's workspace is, as the oracle's context places it: the
 /// repository (`--repo`, else `OPENTIDE_REPO_ROOT`, else the nearest
 /// workspace root) as it prints it, and the options that open it, with
@@ -152,7 +134,7 @@ pub fn placement(repo: Option<&str>, env: &Env, cwd: &Path) -> (String, RootOpti
     let from_env = |name: &str| env.get(name).filter(|value| !value.is_empty());
     let given = repo.or_else(|| from_env("OPENTIDE_REPO_ROOT"));
     let shown = match given {
-        Some(text) => python_path(text),
+        Some(text) => text.to_owned(),
         None => root::find_workspace_root(&OsFs, cwd)
             .to_string_lossy()
             .into_owned(),
@@ -185,36 +167,6 @@ pub fn open(options: RootOptions) -> Result<Workspace, String> {
     .map_err(|error| error.to_string())
 }
 
-/// Python's `repr` of a string: single quotes unless it holds one and no
-/// double quote.
-pub fn py_repr(text: &str) -> String {
-    let quote = if text.contains('\'') && !text.contains('"') {
-        '"'
-    } else {
-        '\''
-    };
-    let mut out = String::new();
-    out.push(quote);
-    for ch in text.chars() {
-        match ch {
-            '\\' => out.push_str("\\\\"),
-            '\n' => out.push_str("\\n"),
-            '\r' => out.push_str("\\r"),
-            '\t' => out.push_str("\\t"),
-            c if c == quote => {
-                out.push('\\');
-                out.push(c);
-            }
-            c if (c as u32) < 0x20 || c as u32 == 0x7f => {
-                out.push_str(&format!("\\x{:02x}", c as u32));
-            }
-            c => out.push(c),
-        }
-    }
-    out.push(quote);
-    out
-}
-
 /// `count noun`, with an `s` unless the count is one.
 pub fn counted(count: usize, noun: &str) -> String {
     if count == 1 {
@@ -229,19 +181,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn paths_print_as_python_prints_them() {
-        assert_eq!(python_path("."), ".");
-        assert_eq!(python_path("./ws/"), "ws");
-        assert_eq!(python_path("a//b/./c"), "a/b/c");
-        assert_eq!(python_path("/tmp/x/"), "/tmp/x");
-    }
-
-    #[test]
-    fn reprs() {
-        assert_eq!(py_repr("x"), "'x'");
-        assert_eq!(py_repr("it's"), "\"it's\"");
-        assert_eq!(py_repr("a'\"b"), "'a\\'\"b'");
-        assert_eq!(py_repr("a\nb\u{1}"), "'a\\nb\\x01'");
+    fn counts() {
         assert_eq!(counted(1, "rule"), "1 rule");
         assert_eq!(counted(0, "rule"), "0 rules");
     }

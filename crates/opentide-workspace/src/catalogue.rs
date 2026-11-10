@@ -19,7 +19,7 @@ use regex::Regex;
 use serde::Serialize;
 
 use crate::coverage::{bucket, inherited_techniques};
-use crate::fields::{as_list, get, mapping, py_str, role_values, str_at, string, text};
+use crate::fields::{as_list, get, mapping, role_values, str_at, string, text};
 use crate::fs::FileSystem;
 use crate::index::{DUPLICATE_ID, Index, YAML_PARSE, posix};
 use crate::state::{self, Binding};
@@ -281,41 +281,6 @@ pub fn name_line(text: &str) -> usize {
         .map_or(1, |found| text[..found.start()].matches('\n').count() + 1)
 }
 
-/// Python's `str.splitlines`.
-fn split_lines(text: &str) -> Vec<&str> {
-    let mut lines = Vec::new();
-    let mut start = 0;
-    let mut chars = text.char_indices().peekable();
-    while let Some((at, ch)) = chars.next() {
-        let breaks = matches!(
-            ch,
-            '\n' | '\r'
-                | '\u{b}'
-                | '\u{c}'
-                | '\u{1c}'
-                | '\u{1d}'
-                | '\u{1e}'
-                | '\u{85}'
-                | '\u{2028}'
-                | '\u{2029}'
-        );
-        if !breaks {
-            continue;
-        }
-        lines.push(&text[start..at]);
-        let mut next = at + ch.len_utf8();
-        if ch == '\r' && chars.peek().map(|(_, c)| *c) == Some('\n') {
-            chars.next();
-            next += 1;
-        }
-        start = next;
-    }
-    if start < text.len() {
-        lines.push(&text[start..]);
-    }
-    lines
-}
-
 /// A plain or quoted YAML scalar written on one line, without its comment.
 fn scalar(raw: Option<&str>) -> Option<String> {
     let raw = raw?;
@@ -368,7 +333,8 @@ pub fn text_fields(text: &str) -> HashMap<&'static str, String> {
     let mut metadata: HashMap<String, String> = HashMap::new();
     let mut in_metadata = false;
     let mut child_indent: Option<String> = None;
-    for line in split_lines(text) {
+    // YAML's line breaks: LF, CR, and CRLF (whose empty middle is skipped).
+    for line in text.split(['\r', '\n']) {
         let stripped = line.trim();
         if stripped.is_empty() || stripped.starts_with('#') {
             continue;
@@ -474,7 +440,7 @@ fn platform_blocks(rule: &Node, strategies: &HashMap<String, String>) -> Vec<Pla
         .map(|entry| {
             let status = text(get(&entry.value, "status"));
             PlatformBlock {
-                id: py_str(&entry.key),
+                id: entry.key.value.to_string(),
                 enabled: matches!(
                     get(&entry.value, "enabled").map(|n| &n.value),
                     Some(Value::Bool(true))
@@ -590,7 +556,7 @@ impl Builder<'_> {
             let Some(signal_uuid) = get(signal, "uuid").filter(|n| crate::index::truthy(n)) else {
                 continue;
             };
-            let signal_uuid = py_str(signal_uuid);
+            let signal_uuid = signal_uuid.value.to_string();
             // A signal UUID another objective defined first is indexed under that one.
             if self
                 .index
@@ -964,8 +930,13 @@ mod tests {
     }
 
     #[test]
-    fn python_line_breaks() {
-        assert_eq!(split_lines("a\r\nb\rc\u{2028}d\n"), ["a", "b", "c", "d"]);
-        assert_eq!(split_lines(""), Vec::<&str>::new());
+    fn fields_across_yaml_line_breaks() {
+        // CRLF and a lone CR end lines; a Unicode line separator does not.
+        let fields = text_fields("name: a\r\nmetadata:\r  schema: rule::1.1\n");
+        assert_eq!(fields["name"], "a");
+        assert_eq!(fields["schema"], "rule::1.1");
+        let fields = text_fields("name: a\u{2028}b\n");
+        assert_eq!(fields["name"], "a\u{2028}b");
+        assert!(text_fields("").is_empty());
     }
 }
