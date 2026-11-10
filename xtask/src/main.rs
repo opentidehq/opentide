@@ -59,6 +59,11 @@ commands:
                  generate the heavy workspace, run the fault catalogue
                  against the oracle, report coverage (UC-0.6, #804);
                  `cargo xtask corpus help` lists its commands
+  config diff --against python [--oracle BIN]
+              [--corpus all|fixtures|generated]
+                 resolve every fixture and generated workspace's configuration
+                 with opentide-schema and compare it, as JSON, and its
+                 configuration findings with the oracle's (UC-1.5, #811)
   codegen        generate schemas, stubs, types and references (UC-1.8, #814)
   golden <record|check|diff|lock|coverage> [options]
                  record what the frozen Python CLI does, and check an engine
@@ -125,6 +130,13 @@ fn main() -> ExitCode {
             Ok(code) => ExitCode::from(code),
             Err(error) => {
                 eprintln!("xtask corpus: {error:#}");
+                ExitCode::from(2)
+            }
+        },
+        "config" => match xtask::config::run(rest) {
+            Ok(code) => ExitCode::from(code),
+            Err(error) => {
+                eprintln!("xtask config: {error:#}");
                 ExitCode::from(2)
             }
         },

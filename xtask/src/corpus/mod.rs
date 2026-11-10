@@ -3,11 +3,13 @@
 //! `tests/corpora/README.md`).
 //!
 //! [`generate`], [`yaml`], [`rng`], [`workspace`], [`faults`] and
-//! [`structural`] (the Rust engine's structural check, UC-1.2) compute and
+//! [`structural`] (the Rust engine's structural check, UC-1.2) and
+//! [`configuration`] (its configuration check, UC-1.5) compute and
 //! never touch the file system; [`cli`] writes workspaces, runs the oracle
 //! and prints.
 
 pub mod cli;
+pub mod configuration;
 pub mod coverage;
 pub mod faults;
 pub mod generate;
