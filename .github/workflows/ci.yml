@@ -404,11 +404,11 @@ jobs:
       # are published (crates/opentide-schema/Cargo.toml says when). A crate
       # left out of the package step is scanned as its source directory
       # instead (tests/test_ci/test_own_ci_workflow.py holds both to it).
-      - run: cargo package --locked --workspace --exclude opentide-native --exclude xtask --exclude opentide-compare --exclude opentide-schema --exclude opentide-workspace --allow-dirty
+      - run: cargo package --locked --workspace --exclude opentide-native --exclude xtask --exclude opentide-compare --exclude opentide-schema --exclude opentide-workspace --exclude opentide-compile --allow-dirty
       - name: license scan (no oracle references)
         run: |
           bash scripts/engine/license-scan.sh target/package/*.crate
-          bash scripts/engine/license-scan.sh crates/opentide-schema crates/opentide-schema-derive crates/opentide-compare crates/opentide-workspace
+          bash scripts/engine/license-scan.sh crates/opentide-schema crates/opentide-schema-derive crates/opentide-compare crates/opentide-workspace crates/opentide-compile
 
   # The supply-chain gate (#843, deny.toml): licences of what we ship,
   # RustSec advisories (vulnerable, unsound, unmaintained, yanked), a second
@@ -791,6 +791,21 @@ jobs:
       # kind alone; the approved differences are listed in the run, none stale.
       - name: Workspace index against the oracle (registry diff)
         run: cargo xtask registry diff --against python --corpus all
+      # opentide-compile's request bodies against the oracle's (UC-3.1, #823):
+      # every Sentinel, Elastic and Sysdig block of every rule of every corpus,
+      # the dry run's body, each tenant's and the dry run's payload entry, byte
+      # for byte. The blocks of the platforms opentide-compile does not compile
+      # yet are listed as "not compared", per corpus.
+      - name: Deploy compile against the oracle (payloads diff)
+        run: >-
+          cargo xtask payloads diff --against python --corpus all
+          --python "$RUNNER_TEMP/oracle/bin/python"
+      - name: Deploy dry-run plan against the oracle's recordings
+        run: cargo xtask payloads plan
+      - name: Changed rules of a scripted git history against the oracle
+        run: >-
+          cargo xtask payloads git --against python
+          --python "$RUNNER_TEMP/oracle/bin/python"
       # opentide-workspace's validate against the recordings of `validate
       # --json` (UC-2.2, #817): every recorded case that only checks; each
       # difference is explained by an approved rule (xtask/src/validate.rs
