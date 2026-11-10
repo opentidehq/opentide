@@ -1,7 +1,10 @@
 //! The git baseline: the rule files a run changed (`deployment/git_repo.py`
 //! `diff_calculation`, `split_changed_rule_paths`, `deployment/ci.py`), read
-//! with gitoxide's crates (`gix-ref`, `gix-odb`, `gix-diff`, `gix-revision`),
-//! the git implementation in Rust, without the `git` program.
+//! with gitoxide's crates (`gix-discover`, `gix-ref`, `gix-odb`, `gix-diff`,
+//! `gix-revision`), the git implementation in Rust, without the `git` program.
+//! `gix-discover` finds the checkout and its git directory (linked worktrees
+//! included); `gix-revision`'s rev-spec parser reads the revisions a run
+//! names, resolved against the reference store and the object database.
 //!
 //! The diff is the run's commits: a pull or merge request against its target
 //! branch, a push against the branch's previous tip, outside CI the last
@@ -14,9 +17,12 @@
 
 use std::path::{Path, PathBuf};
 
+use gix_error::bstr::{BStr, ByteSlice as _};
+use gix_error::{ErrorExt as _, Exn};
 use gix_hash::ObjectId;
-use gix_object::FindExt as _;
+use gix_object::{Find as _, FindExt as _};
 use gix_ref::file::ReferenceExt as _;
+use gix_revision::spec::parse::delegate;
 
 /// Which commits the changed files come from (`DiffSource`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -112,12 +118,23 @@ impl GitError {
     }
 }
 
-/// The first folder at or above `start` that holds `.git`.
+/// The checkout at or above `start`: its work tree and its git directory
+/// (for a linked worktree, the worktree's own one). A bare repository is no
+/// checkout. Discovery crosses file systems, as the oracle's did.
+fn discover(start: &Path) -> Option<(PathBuf, PathBuf)> {
+    let options = gix_discover::upwards::Options {
+        cross_fs: true,
+        dot_git_only: true,
+        ..Default::default()
+    };
+    let (path, _trust) = gix_discover::upwards_opts(start, options).ok()?;
+    let (git_dir, work_dir) = path.into_repository_and_work_tree_directories();
+    Some((work_dir?, git_dir))
+}
+
+/// The work tree of the checkout at or above `start`.
 pub fn worktree(start: &Path) -> Option<PathBuf> {
-    start
-        .ancestors()
-        .find(|candidate| candidate.join(".git").exists())
-        .map(Path::to_path_buf)
+    discover(start).map(|(work_dir, _)| work_dir)
 }
 
 fn failed(message: impl Into<String>) -> GitError {
@@ -130,24 +147,22 @@ struct Repo {
     odb: gix_odb::Handle,
 }
 
-/// The git directory a checkout's `.git` names: the folder itself, or the
-/// one a linked worktree's `.git` file points at (`gitdir: <path>`).
-fn git_dir(top: &Path) -> Option<PathBuf> {
-    let dot = top.join(".git");
-    if dot.is_dir() {
-        return Some(dot);
-    }
-    let text = std::fs::read_to_string(&dot).ok()?;
-    let target = text.strip_prefix("gitdir:")?.trim();
-    Some(top.join(target))
-}
-
-fn open(top: &Path) -> Result<Repo, GitError> {
-    let git_dir = git_dir(top).ok_or_else(|| GitError::MissingCheckout(top.to_path_buf()))?;
-    let common = match std::fs::read_to_string(git_dir.join("commondir")) {
-        Ok(text) => git_dir.join(text.trim()),
-        Err(_) => git_dir.clone(),
-    };
+/// Opens the checkout at or above `start`.
+fn open(start: &Path) -> Result<Repo, GitError> {
+    let (top, git_dir) =
+        discover(start).ok_or_else(|| GitError::MissingCheckout(start.to_path_buf()))?;
+    // A linked worktree's git directory names the repository it shares.
+    let common =
+        match gix_discover::path::from_plain_file_relative_to_file(&git_dir.join("commondir")) {
+            Some(Ok(common)) => common,
+            Some(Err(error)) => {
+                return Err(failed(format!(
+                    "Could not open the git repository at {}: {error}",
+                    top.display()
+                )));
+            }
+            None => git_dir.clone(),
+        };
     let kind = gix_hash::Kind::Sha1;
     let refs = if common == git_dir {
         gix_ref::file::Store::at(git_dir, kind)
@@ -188,19 +203,169 @@ impl Repo {
     }
 }
 
-/// The commit `rev` names: a full id, or a reference (`origin/main`,
-/// `refs/...`), an annotated tag peeled.
-fn commit_id(repo: &Repo, rev: &str) -> Option<ObjectId> {
-    if let Ok(id) = ObjectId::from_hex(rev.as_bytes()) {
-        return repo.commit(id).map(|_| id);
+/// An error for the rev-spec parser.
+fn refused(message: String) -> Exn {
+    gix_error::Message::new(message).raise().erased()
+}
+
+/// Resolves the revisions `gix_revision::spec::parse` reads: references
+/// (partial names searched as git does: `refs/`, tags, heads, remotes),
+/// object ids and their prefixes, and parent and ancestor steps. Reflogs,
+/// upstreams, message searches, index paths and ranges name no commit a run
+/// diffs and are refused.
+struct Resolve<'r> {
+    repo: &'r Repo,
+    current: Option<ObjectId>,
+}
+
+impl Resolve<'_> {
+    /// `id` with its annotated tags peeled, when that is a commit.
+    fn peel_to_commit(&self, mut id: ObjectId) -> Option<ObjectId> {
+        let mut buf = Vec::new();
+        loop {
+            let data = self.repo.odb.try_find(&id, &mut buf).ok()??;
+            match data.kind {
+                gix_object::Kind::Commit => return Some(id),
+                gix_object::Kind::Tag => {
+                    id = gix_object::TagRefIter::from_bytes(data.data, gix_hash::Kind::Sha1)
+                        .target_id()
+                        .ok()?;
+                }
+                _ => return None,
+            }
+        }
     }
-    [
-        rev.to_owned(),
-        format!("refs/remotes/{rev}"),
-        format!("refs/{rev}"),
-    ]
-    .iter()
-    .find_map(|name| repo.reference(name))
+
+    fn current(&self) -> Result<ObjectId, Exn> {
+        self.current
+            .ok_or_else(|| refused("no revision to start from".to_owned()))
+    }
+
+    fn unsupported(what: &str) -> Result<(), Exn> {
+        Err(refused(format!("{what} names no commit a run diffs")))
+    }
+}
+
+impl delegate::Revision for Resolve<'_> {
+    fn find_ref(&mut self, name: &BStr) -> Result<(), Exn> {
+        let found = self
+            .repo
+            .refs
+            .try_find(name)
+            .map_err(|error| refused(format!("reference {name}: {error}")))?
+            .ok_or_else(|| refused(format!("no reference {name}")))?;
+        let mut found = found;
+        let id = found
+            .peel_to_id(&self.repo.refs, &self.repo.odb)
+            .map_err(|error| refused(format!("reference {name}: {error}")))?;
+        self.current = Some(id);
+        Ok(())
+    }
+
+    fn disambiguate_prefix(
+        &mut self,
+        prefix: gix_hash::Prefix,
+        _hint: Option<delegate::PrefixHint<'_>>,
+    ) -> Result<(), Exn> {
+        match self.repo.odb.lookup_prefix(prefix, None) {
+            Ok(Some(Ok(id))) => {
+                self.current = Some(id);
+                Ok(())
+            }
+            Ok(Some(Err(()))) => Err(refused(format!("{prefix} is ambiguous"))),
+            Ok(None) => Err(refused(format!("no object {prefix}"))),
+            Err(error) => Err(refused(format!("{prefix}: {error}"))),
+        }
+    }
+
+    fn reflog(&mut self, _query: delegate::ReflogLookup) -> Result<(), Exn> {
+        Self::unsupported("a reflog entry")
+    }
+
+    fn nth_checked_out_branch(&mut self, _branch_no: usize) -> Result<(), Exn> {
+        Self::unsupported("a checked-out branch")
+    }
+
+    fn sibling_branch(&mut self, _kind: delegate::SiblingBranch) -> Result<(), Exn> {
+        Self::unsupported("an upstream branch")
+    }
+}
+
+impl delegate::Navigate for Resolve<'_> {
+    fn traverse(&mut self, kind: delegate::Traversal) -> Result<(), Exn> {
+        let mut id = self.current()?;
+        let (steps, parent) = match kind {
+            delegate::Traversal::NthParent(n) => (1, n.saturating_sub(1)),
+            delegate::Traversal::NthAncestor(n) => (n, 0),
+        };
+        for _ in 0..steps {
+            let commit = self
+                .peel_to_commit(id)
+                .and_then(|commit| self.repo.commit(commit))
+                .ok_or_else(|| refused(format!("no commit {id}")))?;
+            id = *commit
+                .parents
+                .get(parent)
+                .ok_or_else(|| refused(format!("commit {id} has no such parent")))?;
+        }
+        self.current = Some(id);
+        Ok(())
+    }
+
+    fn peel_until(&mut self, kind: delegate::PeelTo<'_>) -> Result<(), Exn> {
+        let id = self.current()?;
+        match kind {
+            delegate::PeelTo::ObjectKind(gix_object::Kind::Commit)
+            | delegate::PeelTo::RecursiveTagObject => {
+                self.current = Some(
+                    self.peel_to_commit(id)
+                        .ok_or_else(|| refused(format!("{id} is not a commit")))?,
+                );
+                Ok(())
+            }
+            delegate::PeelTo::ValidObject => {
+                let mut buf = Vec::new();
+                match self.repo.odb.try_find(&id, &mut buf) {
+                    Ok(Some(_)) => Ok(()),
+                    _ => Err(refused(format!("no object {id}"))),
+                }
+            }
+            _ => Self::unsupported("a tree, blob or path"),
+        }
+    }
+
+    fn find(&mut self, _regex: &BStr, _negated: bool) -> Result<(), Exn> {
+        Self::unsupported("a message search")
+    }
+
+    fn index_lookup(&mut self, _path: &BStr, _stage: u8) -> Result<(), Exn> {
+        Self::unsupported("an index path")
+    }
+}
+
+impl delegate::Kind for Resolve<'_> {
+    fn kind(&mut self, _kind: gix_revision::spec::Kind) -> Result<(), Exn> {
+        Self::unsupported("a range")
+    }
+}
+
+impl gix_revision::spec::parse::Delegate for Resolve<'_> {
+    fn done(&mut self) -> Result<(), Exn> {
+        Ok(())
+    }
+}
+
+/// The commit `rev` names, as `git rev-parse` reads it: an object id, a
+/// reference (`origin/main`, `refs/...`), a parent step; an annotated tag
+/// peeled.
+fn commit_id(repo: &Repo, rev: &str) -> Option<ObjectId> {
+    let mut resolve = Resolve {
+        repo,
+        current: None,
+    };
+    gix_revision::spec::parse(rev.as_bytes().as_bstr(), &mut resolve).ok()?;
+    let id = resolve.current?;
+    resolve.peel_to_commit(id)
 }
 
 fn has_commit(repo: &Repo, id: &str) -> bool {
@@ -359,9 +524,7 @@ pub fn changed_paths(
         if source == DiffSource::ChangeRequest {
             return Err(failed("A pull or merge request diff needs a CI run"));
         }
-        let top = worktree(workspace)
-            .ok_or_else(|| GitError::MissingCheckout(workspace.to_path_buf()))?;
-        let repo = open(&top)?;
+        let repo = open(workspace)?;
         let Some(head) = head_commit(&repo) else {
             return Ok(Vec::new());
         };
@@ -377,8 +540,7 @@ pub fn changed_paths(
         Ci::Local => "",
     };
     let searched = set(env, variable).map_or_else(|| cwd.to_path_buf(), |dir| cwd.join(dir));
-    let top = worktree(&searched).ok_or(GitError::MissingCheckout(searched))?;
-    let repo = open(&top)?;
+    let repo = open(&searched)?;
     let head = head_commit(&repo);
     let (tip_name, mut latest) = match platform {
         Ci::GitHub => ("GITHUB_SHA", set(env, "GITHUB_SHA")),
@@ -548,7 +710,7 @@ pub fn no_commits_warning(workspace: &Path, env: Env<'_>, advice: &str) -> Optio
     if ci(env) != Ci::Local {
         return None;
     }
-    let repo = open(&worktree(workspace)?).ok()?;
+    let repo = open(workspace).ok()?;
     if head_commit(&repo).is_some() {
         return None;
     }

@@ -22,10 +22,14 @@ opentide-core.workspace = true
 opentide-schema.workspace = true
 opentide-workspace.workspace = true
 # The git baseline (UC-3.1): gitoxide's crates read the repository without
-# the git program: the reference store, the object database, the tree diff
-# (without its blob diff: filters, attributes) and the merge base. The
+# the git program: the checkout's discovery, the reference store, the object
+# database, the tree diff (without its blob diff: filters, attributes), the
+# rev-spec parser and the merge base. The
 # crates, not the `gix` facade, whose object cache brings a second hashbrown
 # (clru), which deny.toml's multiple-versions ban refuses.
+gix-discover = "0.55"
+# The rev-spec parser's delegate reports failures as gix-error's Exn.
+gix-error = "0.3"
 gix-hash = { version = "0.26", features = ["sha1"] }
 gix-object = "0.64"
 gix-odb = "0.84"

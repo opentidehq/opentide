@@ -638,6 +638,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "gix-discover"
+version = "0.55.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ec32a30ec2934735599c2545f30067e80bd255fd3454b52a5d59bc02b52874a3"
+dependencies = [
+ "bstr",
+ "dunce",
+ "gix-fs",
+ "gix-path",
+ "gix-ref",
+ "gix-sec",
+ "thiserror",
+]
+
+[[package]]
 name = "gix-error"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -842,6 +857,18 @@ dependencies = [
  "gix-object",
  "smallvec",
  "thiserror",
+]
+
+[[package]]
+name = "gix-sec"
+version = "0.14.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "af4fe6c152c1d50aea36f299825702cd37e303307832fec1d0fdd5844e47ce2f"
+dependencies = [
+ "bitflags 2.13.2",
+ "gix-path",
+ "libc",
+ "windows-sys",
 ]
 
 [[package]]
@@ -1371,6 +1398,8 @@ version = "0.12.0"
 dependencies = [
  "dunce",
  "gix-diff",
+ "gix-discover",
+ "gix-error",
  "gix-hash",
  "gix-object",
  "gix-odb",

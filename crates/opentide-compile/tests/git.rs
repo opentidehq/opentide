@@ -416,3 +416,95 @@ fn the_dry_run_reads_the_changed_rules_from_the_rules_folder() {
             .is_err()
     );
 }
+
+#[test]
+fn revisions_are_read_as_git_rev_parse_reads_them() {
+    let h = history();
+    // A short id, and a parent step from HEAD (the merge's second parent, c).
+    let short = &h.a[..12];
+    let got = changed(
+        &h.root,
+        &[
+            ("CI", "true"),
+            ("CI_COMMIT_BEFORE_SHA", short),
+            ("CI_COMMIT_SHA", "HEAD^2"),
+        ],
+    );
+    assert_eq!(got.unwrap(), ["objects/rules/r2.yaml"]);
+    // An annotated tag is peeled to its commit; a branch is a partial name.
+    git_cmd(&h.root, &["tag", "-a", "-m", "first", "v1", &h.a]);
+    let got = changed(
+        &h.root,
+        &[
+            ("CI", "true"),
+            ("CI_COMMIT_BEFORE_SHA", "v1"),
+            ("CI_COMMIT_SHA", "feature"),
+        ],
+    );
+    assert_eq!(got.unwrap(), ["objects/rules/r2.yaml"]);
+    // HEAD~1 is the merge's first parent, b.
+    let got = changed(
+        &h.root,
+        &[
+            ("CI", "true"),
+            ("CI_COMMIT_BEFORE_SHA", "HEAD~1"),
+            ("CI_COMMIT_SHA", &h.m),
+        ],
+    );
+    assert_eq!(got.unwrap(), ["objects/rules/r2.yaml"]);
+    // A reflog entry names no commit a run diffs.
+    let got = changed(
+        &h.root,
+        &[
+            ("CI", "true"),
+            ("CI_COMMIT_BEFORE_SHA", "HEAD@{1}"),
+            ("CI_COMMIT_SHA", &h.m),
+        ],
+    );
+    assert_eq!(got, Err(GitError::Failed("No Source Commit Found".into())));
+    // An unknown tip is named.
+    let got = changed(
+        &h.root,
+        &[
+            ("CI", "true"),
+            ("CI_COMMIT_BEFORE_SHA", &h.b),
+            ("CI_COMMIT_SHA", "no-such-branch"),
+        ],
+    );
+    assert_eq!(
+        got,
+        Err(GitError::Failed(
+            "Could not find git commit no-such-branch".into()
+        ))
+    );
+}
+
+#[test]
+fn the_checkout_is_found_from_a_subfolder_and_a_bare_repository_is_none() {
+    let h = history();
+    let below = h.root.join("objects/rules");
+    let env = |_: &str| None::<String>;
+    let got = git::changed_paths(&below, &below, &env, DiffSource::LastCommit).unwrap();
+    assert_eq!(got, ["objects/rules/r2.yaml"]);
+    assert_eq!(git::worktree(&below), Some(h.root.clone()));
+    let bare = h.root.join("bare.git");
+    git_cmd(
+        &h.root,
+        &["clone", "-q", "--bare", ".", bare.to_str().unwrap()],
+    );
+    let inside = bare.join("refs");
+    // The bare repository sits inside the checkout: discovery passes it by
+    // and finds the checkout above.
+    assert_eq!(git::worktree(&inside), Some(h.root.clone()));
+    let lone = tempfile::tempdir().unwrap();
+    let lone_bare = dunce::canonicalize(lone.path()).unwrap().join("b.git");
+    git_cmd(
+        &h.root,
+        &["clone", "-q", "--bare", ".", lone_bare.to_str().unwrap()],
+    );
+    assert_eq!(git::worktree(&lone_bare), None);
+    assert_eq!(
+        git::changed_paths(&lone_bare, &lone_bare, &env, DiffSource::LastCommit),
+        Err(GitError::MissingCheckout(lone_bare.clone()))
+    );
+}
