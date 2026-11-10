@@ -1,0 +1,29 @@
+[package]
+name = "opentide-compile"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+description = "opentide engine component: deploy compile and plan (request bodies per platform, status strategies, rule selection). Internal: depend on the opentide facade."
+readme = "../COMPONENT.md"
+# Not published while opentide-workspace, which it builds on, is not
+# (crates/opentide-schema/Cargo.toml says when that changes).
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+opentide-schema.workspace = true
+opentide-workspace.workspace = true
+# Request bodies keep the order their keys are built in, as the oracle's dicts do.
+indexmap = { version = "2", features = ["serde"] }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true

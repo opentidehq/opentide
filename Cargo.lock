@@ -916,6 +916,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "opentide-compile"
+version = "0.12.0"
+dependencies = [
+ "indexmap",
+ "opentide-schema",
+ "opentide-workspace",
+ "proptest",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "opentide-core"
 version = "0.12.0"
 dependencies = [
