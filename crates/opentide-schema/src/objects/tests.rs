@@ -422,6 +422,29 @@ fn the_schema_keeps_reviewed_on_1_1_only() {
     assert!(!legacy.contains("reviewed"));
 }
 
+#[test]
+fn rule_1_1_pins_rule_1_0s_vocabularies_and_severity_is_unset_unless_written() {
+    // test_pins_match_rule_10, and the pins and default of
+    // test_rule_severity_uses_alert_labels_and_threats_the_incident_scale.
+    let table = crate::pins::PinTable::bundled();
+    let current = table.get("rule::1.1").unwrap();
+    assert_eq!(Some(current), table.get("rule::1.0"));
+    let severity = current.contract("severity").unwrap();
+    assert_eq!(
+        (severity.field.as_str(), severity.version.to_string()),
+        ("alert_severity", "1.0".to_owned())
+    );
+    let threat = table
+        .get("threat::1.0")
+        .unwrap()
+        .contract("threat.severity");
+    assert_eq!(threat.unwrap().field, "severity");
+    let rule: RuleV1_0 = read(&RULE.replace("rule::1.1", "rule::1.0")).unwrap();
+    assert_eq!(rule.severity, None);
+    let rule: RuleV1_1 = read(RULE).unwrap();
+    assert_eq!(rule.severity, None);
+}
+
 // garde: the same checks on a value built in memory.
 
 #[test]
