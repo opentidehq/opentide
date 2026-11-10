@@ -14,6 +14,7 @@ locally, byte for byte what the Python CLI (the oracle, opentide 0.23.0) sends.
 | `dry_run.rs` | `deploy --dry-run`'s result payload, in the oracle's key order; `--uuid`/`--file` selection (#753) | `cli/services/deploy.py` |
 | `git.rs` | The git baseline: the run's changed files through gitoxide's crates (`gix-discover` finds the checkout, `gix-ref`, `gix-odb`, `gix-diff`, `gix-revision` for rev-specs and the merge base), CI diff sources | `deployment/git_repo.py`, `deployment/ci.py` |
 | `kql.rs`, `duration.rs`, `attack.rs` | Exclusions and `let` statements; Sentinel and Elastic durations; techniques a rule inherits, `att&ck` entries | `platforms/kql.py`, `sentinel/client.py`, `elastic/durations.py`, `generation/framework.py` |
+| `generate/` | Generation (UC-3.2, #824): `exports.rs` the Navigator layer, objects table and revisions snapshot; `relations.rs` parents and children; `json_text.rs` JSON files as `json.dumps(indent=n)` lays them out, ASCII only; `files.rs` parallel writes (rayon) and the written-file count by modification time and size | `export/`, `generation/framework.py`, `cli/services/generation.py` |
 | `json.rs` | `Json`: an ordered JSON value, so a body keeps the oracle's key order without `serde_json`'s `preserve_order` (a workspace-wide feature) | |
 
 ## Place
@@ -25,8 +26,12 @@ domain, tier 1 (`xtask/layers.toml`), beside `opentide-analysis`: it reads the i
 
 - The caller loads the workspace. Reads go through `opentide-workspace`'s `FileSystem`
   (`plan::local_scope`, `plan::state_id`, `dry_run`), except `git.rs`, which reads the
-  repository through gitoxide and the CI event file. Nothing is written and nothing reaches the
-  network.
+  repository through gitoxide and the CI event file. Nothing reaches the network. Only
+  `generate/files.rs` writes: rendering is pure (a phase returns its `Output`s), and the
+  command line writes them with `files::write_all`.
+- A generated file the oracle writes is byte for byte the oracle's on every recorded fixture
+  (`tests/generate_exports.rs` reads the golden recordings); a machine-read JSON export matches
+  as bytes, not only as data.
 - gitoxide's crates, never the `gix` facade: its object cache (clru) brings a second `hashbrown`,
   which `deny.toml` bans.
 - A body's key order is the oracle's: build it with `json::Object` (an `IndexMap`) in the order
@@ -43,6 +48,7 @@ domain, tier 1 (`xtask/layers.toml`), beside `opentide-analysis`: it reads the i
 
 ```bash
 cargo nextest run -p opentide-compile
+cargo nextest run -p opentide-cli generate_goldens         # every recorded generate case, in-process
 cargo xtask payloads diff --against python --corpus all   # every body, every corpus
 cargo xtask payloads plan                                  # the dry run's plan against the recordings
 cargo xtask payloads git --against python                  # a scripted git history

@@ -36,6 +36,8 @@ opentide-analysis.workspace = true
 # The commands ported onto the framework (UC-2.4): the workspace, its
 # catalogue, coverage, tenants and review dates, and the one suggestion rule.
 opentide-core.workspace = true
+# `generate` (UC-3.2): the files it writes.
+opentide-compile.workspace = true
 opentide-schema.workspace = true
 opentide-workspace.workspace = true
 indexmap = "2"
@@ -60,6 +62,9 @@ unicode-width = "0.2"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["registry", "std"] }
 
 [dev-dependencies]
+# The goldens' normalisation, for the generate cases (tests/generate_goldens.rs).
+opentide-compare.workspace = true
+tempfile = "3"
 # The goldens' case.toml and outcome.toml (tests/framework_goldens.rs).
 
 # The renderers' snapshots, written by the oracle (tests/render.rs).

@@ -77,10 +77,15 @@ RUST_CLI: tuple[str, ...] = (sys.executable, "-m", "opentide.cli.rust")
 #: Command paths (``("validate",)``, ``("generate", "docs")``) that have a Rust
 #: implementation. Every command has its Python one; a path is added here in
 #: the change that ports it. ``info`` (every section) and ``rules unreviewed``
-#: came with UC-2.4 (#819).
+#: came with UC-2.4 (#819); ``generate exports`` and its three exports with
+#: UC-3.2 (#824).
 RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
     ("info",): RustCommand(launch=RUST_CLI),
     ("rules", "unreviewed"): RustCommand(launch=RUST_CLI),
+    ("generate", "exports"): RustCommand(launch=RUST_CLI),
+    ("generate", "exports", "navigator"): RustCommand(launch=RUST_CLI),
+    ("generate", "exports", "objects"): RustCommand(launch=RUST_CLI),
+    ("generate", "exports", "revisions"): RustCommand(launch=RUST_CLI),
 }
 
 

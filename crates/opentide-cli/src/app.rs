@@ -346,6 +346,28 @@ impl Run<'_> {
                 release(report);
                 code
             }
+            "generate exports"
+            | "generate exports navigator"
+            | "generate exports objects"
+            | "generate exports revisions" => {
+                use opentide_compile::generate::exports::Target;
+                let target = match words.get(2).map(String::as_str) {
+                    Some("navigator") => Some(Target::Navigator),
+                    Some("objects") => Some(Target::Objects),
+                    Some("revisions") => Some(Target::Revisions),
+                    _ => None,
+                };
+                let cwd = self.host.cwd.clone().unwrap_or_default();
+                let report = crate::commands::generate::exports(
+                    target,
+                    &crate::commands::generate::Context {
+                        repo: self.globals.repo.as_deref(),
+                        env: self.env,
+                        cwd: &cwd,
+                    },
+                );
+                self.emit_report(&report, out, err)
+            }
             "rules unreviewed" => {
                 let older_than = leaf(&matches)
                     .get_one::<String>("older_than")
@@ -454,6 +476,27 @@ impl Run<'_> {
             out.write_all(document_text(&document, self.indent).as_bytes())?;
             out.flush()?;
             return Ok(outcome.exit_code);
+        }
+        if !report.steps.is_empty() && self.mode != Mode::Mcp && !self.globals.quiet {
+            let console = self.console(self.host.stderr_tty);
+            if self.mode == Mode::Human && self.host.stderr_tty {
+                err.write_all(
+                    crate::render::progress::live_checklist(
+                        &report.steps,
+                        self.host.width.unwrap_or(80),
+                        console.colour,
+                    )
+                    .as_bytes(),
+                )?;
+            } else {
+                for step in &report.steps {
+                    err.write_all(
+                        console
+                            .line(&crate::render::progress::step_line(step))
+                            .as_bytes(),
+                    )?;
+                }
+            }
         }
         let stdout = self.console(self.host.stdout_tty);
         let width = self.stdout_width();
