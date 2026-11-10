@@ -538,7 +538,10 @@ mod loading {
     fn hidden_configuration_folders_and_other_files_are_never_read() {
         let fs = Arc::new(MemoryFs::new());
         fs.write("/ws/.opentide/configurations/.cache/x.toml", "broken [\n");
-        fs.write("/ws/.opentide/configurations/__pycache__/y.toml", "broken [\n");
+        fs.write(
+            "/ws/.opentide/configurations/__pycache__/y.toml",
+            "broken [\n",
+        );
         fs.write("/ws/.opentide/configurations/notes.md", "# notes\n");
         fs.write("/ws/.opentide/configurations/platforms/notes.txt", "x\n");
         fs.write(
