@@ -4,8 +4,8 @@ The Tide model as Rust code (plan D-2): object, platform and configuration model
 with serde, garde, schemars and PyO3 derives, from which the JSON Schemas, field hints, templates,
 snippets, `.pyi` and `.d.ts` are generated. Today it holds the skeleton (UC-1.1, #807): the
 conventions, the `Pins` validation context, the typed errors, the 23 `tide.*` metadata keys and
-`sample`, their worked example; the vocabularies and pins (UC-1.6, `vocab`); and the object models
-(UC-1.3, `objects`). The conventions are decided in
+`sample`, their worked example; the vocabularies and pins (UC-1.6, `vocab`); the object models
+(UC-1.3, `objects`); and the rule platform blocks (UC-1.4, `objects::platform`). The conventions are decided in
 [ADR 0001](../../docs/internal/adr/0001-tide-model-as-rust-code.md); read it before adding a model.
 
 ## Place
@@ -26,6 +26,8 @@ depends on opentide-core (`codes`, `suggest`). Not published yet (`publish = fal
 | `src/revision.rs` | `revisions!`: one struct per revision, shared fields written once, in groups `@0,` … `@3,` around overridden fields |
 | `src/sample.rs` | Every derive and field convention on a two-revision family; not part of the model |
 | `src/objects/` | The object models (UC-1.3, #809): `metadata` (`ObjectMetadata`, `RuleMetadata`, `ObjectReferences`, `Organisation`), `response`, `threat` (`ThreatVectorV1_0`), `objective` (`ObjectiveV1_0`), `rule` (`RuleV1_0`, `RuleV1_1`, `RuleConfigurations`), `role` (`FieldRole`), `any` (an unchecked value), `checks` (the validators, run by the conversion and by garde), `tests.rs` (the ported `tests/test_models/` tests) |
+| `src/objects/platform/` | The platform blocks (UC-1.4, #810): one module per platform with its nested models (`platform_block!` puts `PlatformConfigBase`'s fields first), `PLATFORM_CONFIG_MODELS` (closed), `LEGACY_KEYS` (the oracle declares none to tolerate), the named checks `elastic_rule_shape` and `sysdig_rule_shape` (`NAMED_CHECKS`, each block's before-validator: codes judged on the raw block, one `value_error` naming them), `QueryText`, the Sentinel ATT&CK v18 and duration checks, `durations` (Elastic), `schema` (`platform_schema.py`), `deprecation` (`deprecated_field`), `table.rs` (`tests/oracle/platform_cases.toml` against the oracle) and `tests.rs` (the ported Python tests) |
+| `tests/platform.rs` | Every block of `tests/fixtures/sysdig` and `tests/fixtures/elastic` |
 | `src/node.rs` | The YAML node tree (UC-1.2): saphyr-parser's events, saphyr's YAML 1.2 core-schema scalars, every node's position; `node/locate.rs` places a field path (span, `yaml_line`), `node/dump.rs` writes a model (serde-saphyr) |
 | `src/from_node.rs` | `FromNode` and what `#[derive(FromNode)]` (`opentide-schema-derive`) expands to: every structural error collected, with its path and position |
 | `src/configuration/` | The configuration TOML files (UC-1.5): `toml` (toml_edit into the node tree, with positions), `models` (one per file, `#[derive(FromNode)]`), `types` (constraints with Pydantic's messages), `errors` (`model_errors`: union branches dropped as the oracle drops them), `merge` and `resolve` (the layering, once per run), `checks` (`configuration_text_issues`, the buffer and workspace checks), `sharing`, `lint`, `repr` (values quoted as the CLI quotes them), `bundled` (the bundled files, compiled in from `src/opentide/data/`) |
@@ -71,9 +73,12 @@ depends on opentide-core (`codes`, `suggest`). Not published yet (`publish = fal
 - A validator is written once (`objects::checks`) and run by both hosts: the structural
   conversion (`#[from_node(with = ...)]`, so its error sits among the others in Pydantic's order)
   and garde (`#[garde(custom(...))]`).
-- The platform blocks are UC-1.4's: until then a block is an `UncheckedBlock`, and the rule models
-  read only with the `unchecked-platform-blocks` feature, which xtask turns on, or in the crate's
-  unit tests (`cfg(test)`); its integration tests cannot read a rule. Nothing that ships may.
+- A platform block's checks are the oracle's, with its messages: a before-validator's codes are
+  judged on the raw block in the oracle's terms (Python's truthiness, `isinstance(x, int)` taking
+  a boolean) and reported as one `value_error` on the block (`<Model> validation failed with
+  code(s): a, b`); a block without `status` is left to "Field required". A case of
+  `tests/oracle/platform_cases.toml` where the result differs from the oracle names its
+  `[[difference]]`.
 
 ## Test
 
@@ -84,6 +89,8 @@ cargo build -p opentide-schema --target wasm32-unknown-unknown --features wasm
 cargo nextest run -p opentide-schema vocab                 # the vocabularies, 13k misspellings
 cargo xtask vocab diff --against python                    # against the oracle, every corpus
 cargo nextest run -p opentide-schema objects::table        # the object models against the oracle's table
+cargo nextest run -p opentide-schema platform              # the platform blocks, against the oracle's table too
+cargo xtask corpus faults --check --engine rust --only platforms
 cargo xtask schema diff --against python                   # JSON Schemas and every corpus, live
 cargo xtask corpus faults --check --engine rust --only objects
 ```

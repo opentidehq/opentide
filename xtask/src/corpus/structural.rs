@@ -8,9 +8,8 @@
 //! with `opentide_schema::node` and converted with
 //! `opentide_schema::from_node` into the object model its `metadata.schema`
 //! names (`opentide_schema::objects`: `rule::1.0`, `rule::1.1`,
-//! `threat::1.0`, `objective::1.0`). The platform blocks under
-//! `configurations` are UC-1.4's (#810): they are read unchecked, and the
-//! oracle's findings inside one are left out ([`in_platform_block`]).
+//! `threat::1.0`, `objective::1.0`), the platform blocks under
+//! `configurations` with them (UC-1.4, #810; `--only platforms`, [`PLATFORMS`]).
 //!
 //! This module computes; [`super::cli`] writes the workspaces and runs the
 //! oracle.
@@ -18,17 +17,16 @@
 use opentide_schema::Surface;
 use opentide_schema::from_node;
 use opentide_schema::node;
-use opentide_schema::objects::{
-    ObjectiveV1_0, RuleConfigurations, RuleV1_0, RuleV1_1, ThreatVectorV1_0,
-};
+use opentide_schema::objects::platform;
+use opentide_schema::objects::{ObjectiveV1_0, RuleV1_0, RuleV1_1, ThreatVectorV1_0};
 use serde_json::{Value as Json, json};
 
 /// The structural fault kinds of `tests/corpora/faults.toml` (UC-1.2), each
 /// with what makes it structural; [`OBJECTS`] adds the object models'
-/// validators. The other `schema_validation` kinds are platform blocks
-/// (`sysdig-constraint-*`: UC-1.4) or configuration files (`config-*`:
-/// UC-1.5); `yaml-parse-empty` is the loader's decision about an empty
-/// document (UC-2.x).
+/// validators and [`PLATFORMS`] the platform blocks'. The other
+/// `schema_validation` kinds are configuration files (`config-*`: UC-1.5);
+/// `yaml-parse-empty` is the loader's decision about an empty document
+/// (UC-2.x).
 pub const STRUCTURAL: &[(&str, &str)] = &[
     (
         "schema-validation-description",
@@ -71,8 +69,36 @@ pub const OBJECTS: &[(&str, &str)] = &[
     ),
 ];
 
-/// The kinds `--only <group>` names: `structural` ([`STRUCTURAL`]) or
-/// `objects` ([`STRUCTURAL`] and [`OBJECTS`]).
+/// The platform fault kinds (UC-1.4): a rule's platform block that its model
+/// refuses. In the catalogue they are Sysdig's constraint codes, the named
+/// check `sysdig_rule_shape`, each reported as one `schema_validation` on
+/// `configurations.sysdig` naming its code.
+pub const PLATFORMS: &[(&str, &str)] = &[
+    ("sysdig-constraint-priority", "sysdig_priority"),
+    ("sysdig-constraint-source", "sysdig_source"),
+    ("sysdig-constraint-rule-shape", "sysdig_rule_shape"),
+    ("sysdig-constraint-tuning-keys", "sysdig_tuning_keys"),
+    (
+        "sysdig-constraint-exception-shape",
+        "sysdig_exception_shape",
+    ),
+    (
+        "sysdig-constraint-definition-name",
+        "sysdig_definition_name",
+    ),
+    (
+        "sysdig-constraint-definition-duplicate",
+        "sysdig_definition_duplicate",
+    ),
+    (
+        "sysdig-constraint-definition-order",
+        "sysdig_definition_order",
+    ),
+    ("sysdig-constraint-list-in-value", "sysdig_list_in_value"),
+];
+
+/// The kinds `--only <group>` names: `structural` ([`STRUCTURAL`]),
+/// `objects` ([`STRUCTURAL`] and [`OBJECTS`]) or `platforms` ([`PLATFORMS`]).
 pub fn group(name: &str) -> Option<Vec<&'static str>> {
     let structural = STRUCTURAL.iter().map(|(id, _)| *id);
     match name {
@@ -82,13 +108,16 @@ pub fn group(name: &str) -> Option<Vec<&'static str>> {
                 .chain(OBJECTS.iter().map(|(id, _)| *id))
                 .collect(),
         ),
+        PLATFORMS_GROUP => Some(PLATFORMS.iter().map(|(id, _)| *id).collect()),
         _ => None,
     }
 }
 
 /// Every kind this runner checks.
 pub fn kinds() -> Vec<&'static str> {
-    group(OBJECTS_GROUP).unwrap_or_default()
+    let mut kinds = group(OBJECTS_GROUP).unwrap_or_default();
+    kinds.extend(group(PLATFORMS_GROUP).unwrap_or_default());
+    kinds
 }
 
 /// An intended difference between the oracle and the Rust conversion on one
@@ -167,13 +196,8 @@ pub const GROUP: &str = "structural";
 /// The group `--only objects` names.
 pub const OBJECTS_GROUP: &str = "objects";
 
-/// Whether a finding's field path is inside a platform block
-/// (`configurations.<platform>…`): UC-1.4's (#810), not compared yet.
-pub fn in_platform_block(field_path: &[String]) -> bool {
-    field_path.len() >= 2
-        && field_path[0] == "configurations"
-        && RuleConfigurations::PLATFORMS.contains(&field_path[1].as_str())
-}
+/// The group `--only platforms` names.
+pub const PLATFORMS_GROUP: &str = "platforms";
 
 /// The findings the Rust conversion gives one object file, as the CLI's JSON
 /// prints them (`code`, `field_path`, `message`, `line`, `column`,
@@ -219,6 +243,9 @@ pub fn check_object_as(family: &str, bytes: &[u8]) -> Vec<Json> {
     errors
         .unwrap_or_default()
         .iter()
+        // `validate` leaves out a schema error on a legacy vendor id key
+        // (`external_id_in_rule` reports it): the session's filter, UC-2.x.
+        .filter(|error| !platform::is_superseded(&error.field_path()))
         .map(|error| {
             let span = error.span.as_ref();
             let line = span
@@ -240,7 +267,7 @@ pub fn check_object_as(family: &str, bytes: &[u8]) -> Vec<Json> {
 }
 
 /// The oracle's findings for `path` that the Rust conversion owns
-/// (`schema_validation` and `yaml_parse`, outside the platform blocks), in
+/// (`schema_validation` and `yaml_parse`), in
 /// the fields [`check_object`] gives (a `yaml_parse` by its code alone: its message is the loader's,
 /// UC-2.x).
 pub fn oracle_findings(document: &Json, path: &str) -> Vec<Json> {
@@ -268,16 +295,7 @@ pub fn oracle_findings(document: &Json, path: &str) -> Vec<Json> {
         }
         match item.get("code").and_then(Json::as_str) {
             Some("yaml_parse") => out.push(json!({ "code": "yaml_parse" })),
-            Some("schema_validation")
-                if !in_platform_block(
-                    &item["field_path"]
-                        .as_array()
-                        .into_iter()
-                        .flatten()
-                        .filter_map(|part| part.as_str().map(str::to_owned))
-                        .collect::<Vec<_>>(),
-                ) =>
-            {
+            Some("schema_validation") => {
                 out.push(json!({
                 "code": "schema_validation",
                 "field_path": item["field_path"],
@@ -372,36 +390,54 @@ mod tests {
             group(OBJECTS_GROUP).unwrap().len(),
             STRUCTURAL.len() + OBJECTS.len()
         );
-        assert_eq!(group("platforms"), None);
+        assert_eq!(group(PLATFORMS_GROUP).unwrap().len(), PLATFORMS.len());
+        assert_eq!(
+            kinds().len(),
+            STRUCTURAL.len() + OBJECTS.len() + PLATFORMS.len()
+        );
+        assert_eq!(group("nothing"), None);
     }
 
     #[test]
-    fn an_objective_is_checked_and_a_platform_block_is_not_compared() {
+    fn every_platform_kind_is_in_the_catalogue_and_names_its_code() {
+        let catalogue = super::super::faults::Catalogue::parse(include_str!(
+            "../../../tests/corpora/faults.toml"
+        ))
+        .unwrap();
+        for (id, code) in PLATFORMS {
+            let kind = catalogue.kind(id).unwrap();
+            assert_eq!(kind.codes, ["schema_validation"], "{id}");
+            assert!(kind.covers.iter().any(|covered| covered == code), "{id}");
+        }
+    }
+
+    #[test]
+    fn an_objective_and_a_platform_block_are_checked() {
         let text = "name: n\nmetadata:\n  uuid: u\n  schema: objective::1.0\n  version: 1\n  \
                     created: '2026-01-01'\n  modified: '2026-01-01'\n  tlp: clear\n";
         let findings = check_object("objects/objectives/o.yaml", text.as_bytes()).unwrap();
         assert_eq!(findings.len(), 1, "{findings:?}");
         assert_eq!(findings[0]["field_path"], json!(["objective"]));
-        assert!(in_platform_block(&[
-            "configurations".into(),
-            "sysdig".into()
-        ]));
-        assert!(in_platform_block(&[
-            "configurations".into(),
-            "sentinel".into(),
-            "query".into()
-        ]));
-        assert!(!in_platform_block(&["configurations".into()]));
-        assert!(!in_platform_block(&[
-            "configurations".into(),
-            "unknown".into()
-        ]));
+        let rule = "name: n\nmetadata:\n  uuid: u\n  schema: rule::1.1\n  version: 1\n  \
+                    created: '2026-01-01'\n  modified: '2026-01-01'\n  tlp: clear\n\
+                    description: d\nconfigurations:\n  sysdig:\n    status: PROD\n    \
+                    condition: x\n    priority: LOUD\n";
+        let findings = comparable(&check_object("objects/rules/r.yaml", rule.as_bytes()).unwrap());
+        assert_eq!(findings.len(), 1, "{findings:?}");
+        assert_eq!(
+            findings[0]["field_path"],
+            json!(["configurations", "sysdig"])
+        );
+        assert_eq!(
+            findings[0]["message"],
+            "Value error, SysdigConfig validation failed with code(s): sysdig_priority"
+        );
         let report = json!({"report": {"issues": [
             {"path": "objects/rules/r.yaml", "code": "schema_validation", "field_path": ["configurations", "sysdig"], "message": "m"},
             {"path": "objects/rules/r.yaml", "code": "schema_validation", "field_path": ["description"], "message": "Field required"},
         ]}});
         let found = oracle_findings(&report, "objects/rules/r.yaml");
-        assert_eq!(found.len(), 1);
-        assert_eq!(found[0]["field_path"], json!(["description"]));
+        assert_eq!(found.len(), 2);
+        assert_eq!(found[0]["field_path"], json!(["configurations", "sysdig"]));
     }
 }

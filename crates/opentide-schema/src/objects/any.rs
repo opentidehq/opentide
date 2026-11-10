@@ -33,7 +33,7 @@ impl PartialEq for Any {
 
 /// Structural equality, without the positions. The tree is at most
 /// [`crate::node::MAX_DEPTH`] deep, so the recursion is bounded.
-fn same(a: &Node, b: &Node) -> bool {
+pub(crate) fn same(a: &Node, b: &Node) -> bool {
     match (&a.value, &b.value) {
         (Value::Seq(left), Value::Seq(right)) => {
             left.len() == right.len() && left.iter().zip(right).all(|(l, r)| same(l, r))

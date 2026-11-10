@@ -306,9 +306,8 @@ pub fn run_cli(argv: &[String]) -> (i32, String, String) {
 
 /// A Tide object from arbitrary bytes (`from_node`, UC-1.2): read them as the
 /// oracle reads an object file, convert the tree into every model (the
-/// samples, and the object models of UC-1.3: both rule revisions, read with
-/// `unchecked-platform-blocks` until UC-1.4, the threat vector and the
-/// detection objective), and check what comes out. An error's span lies in the document; a value that
+/// samples, and the object models of UC-1.3: both rule revisions with their
+/// platform blocks (UC-1.4), the threat vector and the detection objective), and check what comes out. An error's span lies in the document; a value that
 /// converts is written back ([`opentide_schema::node::to_yaml`]) and reads
 /// back equal. `crates/opentide-schema/tests/fuzz_regressions.rs` keeps a
 /// copy of this function for the saved inputs.

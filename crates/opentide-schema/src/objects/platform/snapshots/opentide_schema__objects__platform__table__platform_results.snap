@@ -1,0 +1,5447 @@
+---
+source: crates/opentide-schema/src/objects/platform/table.rs
+expression: "serde_json::to_string_pretty(&results).unwrap()"
+---
+{
+  "platform-all-nine": {
+    "value": {
+      "configurations": {
+        "carbon_black_cloud": {
+          "enabled": false,
+          "name": "",
+          "query": "process_name:cmd.exe",
+          "status": "STAGING"
+        },
+        "crowdstrike": {
+          "details": {
+            "outcome": "detection",
+            "trigger": "verbose"
+          },
+          "enabled": false,
+          "name": "",
+          "query": "#event_simpleName=ProcessRollup2",
+          "schedule": {
+            "frequency": "1h",
+            "lookback": "2h"
+          },
+          "status": "STAGING"
+        },
+        "defender_for_endpoint": {
+          "alert": {
+            "category": "Execution"
+          },
+          "enabled": false,
+          "impacted_entities": {
+            "device": "DeviceId"
+          },
+          "name": "",
+          "query": "DeviceProcessEvents | take 1",
+          "scheduling": "1H",
+          "status": "STAGING"
+        },
+        "elastic": {
+          "building_block": false,
+          "enabled": false,
+          "name": "",
+          "query": "process.name: cmd.exe",
+          "status": "STAGING",
+          "type": "query"
+        },
+        "harfanglab": {
+          "action": "Alert",
+          "confidence": "Moderate",
+          "enabled": false,
+          "maturity": "Experimental",
+          "name": "",
+          "sigma": {
+            "condition": "s",
+            "logsource": {
+              "category": "process_creation",
+              "product": "windows"
+            },
+            "selections": [
+              {
+                "field": "Image",
+                "name": "s",
+                "value": "x.exe"
+              }
+            ]
+          },
+          "status": "STAGING"
+        },
+        "sentinel": {
+          "alert": {
+            "create_incident": true,
+            "suppression": false,
+            "title": "t"
+          },
+          "enabled": false,
+          "name": "",
+          "query": "SecurityEvent | take 1",
+          "scheduling": {
+            "frequency": "PT1H",
+            "lookback": "PT2H"
+          },
+          "status": "STAGING"
+        },
+        "sentinel_one": {
+          "condition": {
+            "single_event": {
+              "query": "EventType = \"Process Creation\""
+            },
+            "type": "Single Event"
+          },
+          "enabled": false,
+          "name": "",
+          "status": "STAGING"
+        },
+        "splunk": {
+          "enabled": false,
+          "name": "",
+          "query": "index=main | head 1",
+          "status": "STAGING"
+        },
+        "sysdig": {
+          "condition": "spawned_process and proc.name = sh",
+          "enabled": false,
+          "name": "",
+          "status": "STAGING"
+        }
+      },
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
+  },
+  "platform-base-fields": {
+    "value": {
+      "configurations": {
+        "carbon_black_cloud": {
+          "contributors": [
+            "c"
+          ],
+          "enabled": true,
+          "flags": [
+            "a"
+          ],
+          "name": "n",
+          "query": "process_name:cmd.exe",
+          "schema": "platform::carbon_black_cloud::1.0",
+          "status": "STAGING",
+          "tenants": [
+            "t1"
+          ]
+        }
+      },
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
+  },
+  "platform-base-missing-status": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "carbon_black_cloud",
+          "status"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          11,
+          3,
+          21,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      }
+    ]
+  },
+  "platform-base-schema-alias": {
+    "value": {
+      "configurations": {
+        "splunk": {
+          "enabled": false,
+          "name": "",
+          "query": "index=main | head 1",
+          "schema": "platform::splunk::1.0",
+          "status": "STAGING"
+        }
+      },
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
+  },
+  "platform-base-schema-null": {
+    "value": {
+      "configurations": {
+        "splunk": {
+          "enabled": false,
+          "name": "",
+          "query": "index=main | head 1",
+          "status": "STAGING"
+        }
+      },
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
+  },
+  "platform-base-schema-quote": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "unknown platform schema \"it's\": this block's schema is 'platform::splunk::1.0'"
+        },
+        "field_path": [
+          "configurations",
+          "splunk",
+          "schema"
+        ],
+        "input": "it's",
+        "msg": "Value error, unknown platform schema \"it's\": this block's schema is 'platform::splunk::1.0'",
+        "span": [
+          14,
+          14,
+          18,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 13
+      }
+    ]
+  },
+  "platform-base-status-number": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "splunk",
+          "status"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          12,
+          13,
+          14,
+          true
+        ],
+        "type": "string_type",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-base-types": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "splunk",
+          "enabled"
+        ],
+        "input": null,
+        "msg": "Input should be a valid boolean",
+        "span": [
+          14,
+          14,
+          15,
+          true
+        ],
+        "type": "bool_type",
+        "yaml_line": 13
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "splunk",
+          "name"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          15,
+          11,
+          12,
+          true
+        ],
+        "type": "string_type",
+        "yaml_line": 14
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "splunk",
+          "tenants"
+        ],
+        "input": "t",
+        "msg": "Input should be a valid list",
+        "span": [
+          16,
+          14,
+          15,
+          true
+        ],
+        "type": "list_type",
+        "yaml_line": 15
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "splunk",
+          "status2"
+        ],
+        "input": "x",
+        "msg": "Extra inputs are not permitted",
+        "span": [
+          17,
+          5,
+          12,
+          true
+        ],
+        "type": "extra_forbidden",
+        "yaml_line": 16
+      }
+    ]
+  },
+  "platform-base-wrong-schema": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "unknown platform schema 'platform::sentinel::1.0': this block's schema is 'platform::splunk::1.0'"
+        },
+        "field_path": [
+          "configurations",
+          "splunk",
+          "schema"
+        ],
+        "input": "platform::sentinel::1.0",
+        "msg": "Value error, unknown platform schema 'platform::sentinel::1.0': this block's schema is 'platform::splunk::1.0'",
+        "span": [
+          14,
+          13,
+          36,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 13
+      }
+    ]
+  },
+  "platform-carbon-black-full": {
+    "value": {
+      "configurations": {
+        "carbon_black_cloud": {
+          "enabled": false,
+          "name": "",
+          "organizations": [
+            "o"
+          ],
+          "query": "process_name:cmd.exe",
+          "report": "r",
+          "status": "STAGING",
+          "tags": [
+            "t"
+          ],
+          "watchlist": "w"
+        }
+      },
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
+  },
+  "platform-crowdstrike-full": {
+    "value": {
+      "configurations": {
+        "crowdstrike": {
+          "details": {
+            "description": "d",
+            "name": "n",
+            "outcome": "detection",
+            "severity": "High",
+            "tactic": "TA0002",
+            "technique": "T1059",
+            "trigger": "verbose"
+          },
+          "enabled": false,
+          "name": "",
+          "query": "#event_simpleName=ProcessRollup2",
+          "schedule": {
+            "end": "2027-01-01T00:00:00Z",
+            "frequency": "1h",
+            "lookback": "2h",
+            "start": "2026-01-01T00:00:00Z"
+          },
+          "status": "STAGING"
+        }
+      },
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
+  },
+  "platform-crowdstrike-missing": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "crowdstrike",
+          "details",
+          "outcome"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          14,
+          5,
+          12,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "crowdstrike",
+          "schedule"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          11,
+          3,
+          14,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      }
+    ]
+  },
+  "platform-defender-full": {
+    "value": {
+      "configurations": {
+        "defender_for_endpoint": {
+          "actions": {
+            "devices": {
+              "collect_investigation_package": true,
+              "initiate_investigation": false,
+              "isolate_device": "Full",
+              "restrict_app_execution": false,
+              "run_antivirus_scan": true
+            },
+            "files": {
+              "allow_block": {
+                "action": "Block",
+                "groups": {
+                  "device_groups": [
+                    "g"
+                  ],
+                  "selection": "Specific"
+                },
+                "identifier": "SHA1"
+              },
+              "quarantine_file": "SHA1"
+            },
+            "users": {
+              "disable_user": "AccountSid",
+              "mark_as_compromised": "AccountSid"
+            }
+          },
+          "alert": {
+            "category": "Execution"
+          },
+          "enabled": false,
+          "exclusions": [
+            {
+              "let": {
+                "a": 1
+              },
+              "query": "| where 1",
+              "reason": "r"
+            }
+          ],
+          "impacted_entities": {
+            "device": "DeviceId"
+          },
+          "name": "",
+          "query": "DeviceProcessEvents | take 1",
+          "scheduling": "1H",
+          "scope": {
+            "selection": "All"
+          },
+          "status": "STAGING"
+        }
+      },
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
+  },
+  "platform-defender-literals": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "defender_for_endpoint",
+          "actions",
+          "devices",
+          "run_antivirus_scan"
+        ],
+        "input": "maybe",
+        "msg": "Input should be a valid boolean",
+        "span": [
+          18,
+          99,
+          104,
+          true
+        ],
+        "type": "bool_type",
+        "yaml_line": 17
+      },
+      {
+        "ctx": {
+          "expected": "'Allow' or 'Block'"
+        },
+        "field_path": [
+          "configurations",
+          "defender_for_endpoint",
+          "actions",
+          "files",
+          "allow_block",
+          "action"
+        ],
+        "input": "allow",
+        "msg": "Input should be 'Allow' or 'Block'",
+        "span": [
+          18,
+          45,
+          50,
+          true
+        ],
+        "type": "literal_error",
+        "yaml_line": 17
+      },
+      {
+        "ctx": {
+          "expected": "'All' or 'Specific'"
+        },
+        "field_path": [
+          "configurations",
+          "defender_for_endpoint",
+          "scope",
+          "selection"
+        ],
+        "input": "Some",
+        "msg": "Input should be 'All' or 'Specific'",
+        "span": [
+          17,
+          24,
+          28,
+          true
+        ],
+        "type": "literal_error",
+        "yaml_line": 16
+      }
+    ]
+  },
+  "platform-defender-missing": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "defender_for_endpoint",
+          "alert",
+          "category"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          14,
+          5,
+          10,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "defender_for_endpoint",
+          "impacted_entities"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          11,
+          3,
+          24,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "defender_for_endpoint",
+          "scheduling"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          11,
+          3,
+          24,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      }
+    ]
+  },
+  "platform-defender-schedule": {
+    "errors": [
+      {
+        "ctx": {
+          "expected": "'NRT', '1H', '3H', '12H' or '24H'"
+        },
+        "field_path": [
+          "configurations",
+          "defender_for_endpoint",
+          "scheduling"
+        ],
+        "input": "2H",
+        "msg": "Input should be 'NRT', '1H', '3H', '12H' or '24H'",
+        "span": [
+          16,
+          17,
+          19,
+          true
+        ],
+        "type": "literal_error",
+        "yaml_line": 15
+      }
+    ]
+  },
+  "platform-defender-schedule-int": {
+    "errors": [
+      {
+        "ctx": {
+          "expected": "'NRT', '1H', '3H', '12H' or '24H'"
+        },
+        "field_path": [
+          "configurations",
+          "defender_for_endpoint",
+          "scheduling"
+        ],
+        "input": null,
+        "msg": "Input should be 'NRT', '1H', '3H', '12H' or '24H'",
+        "span": [
+          16,
+          17,
+          18,
+          true
+        ],
+        "type": "literal_error",
+        "yaml_line": 15
+      }
+    ]
+  },
+  "platform-elastic-actions-list": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "ElasticConfig validation failed with code(s): type_block"
+        },
+        "field_path": [
+          "configurations",
+          "elastic"
+        ],
+        "input": null,
+        "msg": "Value error, ElasticConfig validation failed with code(s): type_block",
+        "span": [
+          11,
+          3,
+          10,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-elastic-duration-number": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "ElasticConfig validation failed with code(s): duration"
+        },
+        "field_path": [
+          "configurations",
+          "elastic"
+        ],
+        "input": null,
+        "msg": "Value error, ElasticConfig validation failed with code(s): duration",
+        "span": [
+          11,
+          3,
+          10,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-elastic-durations": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "ElasticConfig validation failed with code(s): duration"
+        },
+        "field_path": [
+          "configurations",
+          "elastic"
+        ],
+        "input": null,
+        "msg": "Value error, ElasticConfig validation failed with code(s): duration",
+        "span": [
+          11,
+          3,
+          10,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-elastic-durations-iso": {
+    "value": {
+      "configurations": {
+        "elastic": {
+          "building_block": false,
+          "enabled": false,
+          "name": "",
+          "query": "process.name: cmd.exe",
+          "scheduling": {
+            "interval": "PT5M",
+            "lookback": "P1D"
+          },
+          "status": "STAGING",
+          "type": "query"
+        }
+      },
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
+  },
+  "platform-elastic-eql": {
+    "value": {
+      "configurations": {
+        "elastic": {
+          "building_block": false,
+          "enabled": false,
+          "eql": {
+            "event_category_override": "c",
+            "tiebreaker_field": "x",
+            "timestamp_field": "t"
+          },
+          "name": "",
+          "query": "process where true",
+          "status": "STAGING",
+          "type": "eql"
+        }
+      },
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
+  },
+  "platform-elastic-eql-on-query": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "ElasticConfig validation failed with code(s): type_block"
+        },
+        "field_path": [
+          "configurations",
+          "elastic"
+        ],
+        "input": null,
+        "msg": "Value error, ElasticConfig validation failed with code(s): type_block",
+        "span": [
+          11,
+          3,
+          10,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-elastic-esql-language": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "ElasticConfig validation failed with code(s): esql_source, language"
+        },
+        "field_path": [
+          "configurations",
+          "elastic"
+        ],
+        "input": null,
+        "msg": "Value error, ElasticConfig validation failed with code(s): esql_source, language",
+        "span": [
+          11,
+          3,
+          10,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-elastic-exception-lists-string": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "ElasticConfig validation failed with code(s): exception_type"
+        },
+        "field_path": [
+          "configurations",
+          "elastic"
+        ],
+        "input": null,
+        "msg": "Value error, ElasticConfig validation failed with code(s): exception_type",
+        "span": [
+          11,
+          3,
+          10,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-elastic-exception-type": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "ElasticConfig validation failed with code(s): exception_type"
+        },
+        "field_path": [
+          "configurations",
+          "elastic"
+        ],
+        "input": null,
+        "msg": "Value error, ElasticConfig validation failed with code(s): exception_type",
+        "span": [
+          11,
+          3,
+          10,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-elastic-field-errors": {
+    "errors": [
+      {
+        "ctx": {
+          "expected": "'kuery' or 'lucene'"
+        },
+        "field_path": [
+          "configurations",
+          "elastic",
+          "language"
+        ],
+        "input": "KQL",
+        "msg": "Input should be 'kuery' or 'lucene'",
+        "span": [
+          19,
+          15,
+          18,
+          true
+        ],
+        "type": "literal_error",
+        "yaml_line": 18
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "elastic",
+          "integration",
+          "0",
+          "str"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          18,
+          19,
+          20,
+          false
+        ],
+        "type": "string_type",
+        "yaml_line": null
+      },
+      {
+        "ctx": {
+          "class_name": "ElasticIntegration"
+        },
+        "field_path": [
+          "configurations",
+          "elastic",
+          "integration",
+          "0",
+          "ElasticIntegration"
+        ],
+        "input": null,
+        "msg": "Input should be a valid dictionary or instance of ElasticIntegration",
+        "span": [
+          18,
+          19,
+          20,
+          false
+        ],
+        "type": "model_type",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "elastic",
+          "integration",
+          "1",
+          "str"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          18,
+          22,
+          34,
+          false
+        ],
+        "type": "string_type",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "elastic",
+          "integration",
+          "1",
+          "ElasticIntegration",
+          "package"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          18,
+          22,
+          34,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "elastic",
+          "integration",
+          "1",
+          "ElasticIntegration",
+          "version"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          18,
+          22,
+          34,
+          false
+        ],
+        "type": "string_type",
+        "yaml_line": null
+      },
+      {
+        "ctx": {
+          "expected": "'keyword', 'constant_keyword', 'wildcard', 'text', 'match_only_text', 'long', 'integer', 'short', 'byte', 'unsigned_long', 'double', 'float', 'half_float', 'scaled_float', 'date', 'date_nanos', 'boolean', 'ip', 'version', 'binary', 'geo_point', 'geo_shape', 'object', 'flattened' or 'nested'"
+        },
+        "field_path": [
+          "configurations",
+          "elastic",
+          "required_fields",
+          "0",
+          "type"
+        ],
+        "input": "str",
+        "msg": "Input should be 'keyword', 'constant_keyword', 'wildcard', 'text', 'match_only_text', 'long', 'integer', 'short', 'byte', 'unsigned_long', 'double', 'float', 'half_float', 'scaled_float', 'date', 'date_nanos', 'boolean', 'ip', 'version', 'binary', 'geo_point', 'geo_shape', 'object', 'flattened' or 'nested'",
+        "span": [
+          17,
+          39,
+          42,
+          true
+        ],
+        "type": "literal_error",
+        "yaml_line": 16
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "elastic",
+          "tags"
+        ],
+        "input": "t",
+        "msg": "Input should be a valid list",
+        "span": [
+          15,
+          11,
+          12,
+          true
+        ],
+        "type": "list_type",
+        "yaml_line": 14
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "elastic",
+          "building_block"
+        ],
+        "input": null,
+        "msg": "Input should be a valid boolean",
+        "span": [
+          16,
+          21,
+          22,
+          true
+        ],
+        "type": "bool_type",
+        "yaml_line": 15
+      }
+    ]
+  },
+  "platform-elastic-filters": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "ElasticConfig validation failed with code(s): filter_shape"
+        },
+        "field_path": [
+          "configurations",
+          "elastic"
+        ],
+        "input": null,
+        "msg": "Value error, ElasticConfig validation failed with code(s): filter_shape",
+        "span": [
+          11,
+          3,
+          10,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-elastic-filters-string": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "ElasticConfig validation failed with code(s): filter_shape"
+        },
+        "field_path": [
+          "configurations",
+          "elastic"
+        ],
+        "input": null,
+        "msg": "Value error, ElasticConfig validation failed with code(s): filter_shape",
+        "span": [
+          11,
+          3,
+          10,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-elastic-full": {
+    "value": {
+      "configurations": {
+        "elastic": {
+          "actions": {
+            "notify": [
+              {
+                "action_type_id": ".email",
+                "group": "default",
+                "id": "c",
+                "params": {}
+              }
+            ],
+            "respond": [
+              {
+                "comment": "c",
+                "endpoint": "isolate"
+              },
+              {
+                "osquery": {
+                  "query": "select 1"
+                }
+              }
+            ],
+            "timeline": {
+              "id": "t",
+              "title": "T"
+            }
+          },
+          "building_block": true,
+          "enabled": false,
+          "exceptions": {
+            "endpoint": true,
+            "lists": [
+              {
+                "id": "i",
+                "list_id": "l",
+                "namespace_type": "single",
+                "type": "detection"
+              }
+            ]
+          },
+          "false_positives": [
+            "fp"
+          ],
+          "filters": [
+            {
+              "field": "host.name",
+              "negate": true,
+              "value": "h"
+            },
+            {
+              "meta": {
+                "alias": "x"
+              },
+              "negate": false,
+              "query": {
+                "match_phrase": {
+                  "a": "b"
+                }
+              }
+            }
+          ],
+          "guide": {
+            "investigation": "i",
+            "setup": "s"
+          },
+          "highlighted_fields": [
+            "host.name"
+          ],
+          "index": [
+            "logs-*"
+          ],
+          "integration": [
+            "windows",
+            {
+              "integration": "e",
+              "package": "endpoint",
+              "version": "^8.0.0"
+            }
+          ],
+          "language": "kuery",
+          "name": "",
+          "overrides": {
+            "disable_fallback": true,
+            "name": "rule.name",
+            "timestamp": "event.ingested"
+          },
+          "query": "process.name: cmd.exe",
+          "required_fields": [
+            {
+              "name": "host.name",
+              "type": "keyword"
+            }
+          ],
+          "risk": {
+            "mapping": [
+              {
+                "field": "f",
+                "operator": "equals",
+                "value": ""
+              }
+            ],
+            "score": 50
+          },
+          "scheduling": {
+            "interval": "5m",
+            "lookback": "0m",
+            "max_alerts": 100
+          },
+          "severity": {
+            "default": "High",
+            "mapping": [
+              {
+                "field": "f",
+                "operator": "equals",
+                "severity": "critical",
+                "value": "v"
+              }
+            ]
+          },
+          "status": "STAGING",
+          "suppression": {
+            "duration": "1h",
+            "group_by": [
+              "host.name"
+            ],
+            "missing_fields_strategy": "doNotSuppress"
+          },
+          "tags": [
+            "t"
+          ],
+          "type": "query"
+        }
+      },
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
+  },
+  "platform-elastic-index-and-view": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "ElasticConfig validation failed with code(s): index_xor_data_view"
+        },
+        "field_path": [
+          "configurations",
+          "elastic"
+        ],
+        "input": null,
+        "msg": "Value error, ElasticConfig validation failed with code(s): index_xor_data_view",
+        "span": [
+          11,
+          3,
+          10,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-elastic-index-empty-item": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "ElasticConfig validation failed with code(s): index_list"
+        },
+        "field_path": [
+          "configurations",
+          "elastic"
+        ],
+        "input": null,
+        "msg": "Value error, ElasticConfig validation failed with code(s): index_list",
+        "span": [
+          11,
+          3,
+          10,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-elastic-index-string": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "ElasticConfig validation failed with code(s): index_list"
+        },
+        "field_path": [
+          "configurations",
+          "elastic"
+        ],
+        "input": null,
+        "msg": "Value error, ElasticConfig validation failed with code(s): index_list",
+        "span": [
+          11,
+          3,
+          10,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-elastic-integration-dict": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "elastic",
+          "integration",
+          "0",
+          "str"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          15,
+          19,
+          41,
+          false
+        ],
+        "type": "string_type",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "elastic",
+          "integration",
+          "0",
+          "ElasticIntegration",
+          "extra"
+        ],
+        "input": null,
+        "msg": "Extra inputs are not permitted",
+        "span": [
+          15,
+          19,
+          41,
+          false
+        ],
+        "type": "extra_forbidden",
+        "yaml_line": null
+      }
+    ]
+  },
+  "platform-elastic-many-codes": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "ElasticConfig validation failed with code(s): esql_source, index_list, index_xor_data_view, language, risk_score, severity, type_block"
+        },
+        "field_path": [
+          "configurations",
+          "elastic"
+        ],
+        "input": null,
+        "msg": "Value error, ElasticConfig validation failed with code(s): esql_source, index_list, index_xor_data_view, language, risk_score, severity, type_block",
+        "span": [
+          11,
+          3,
+          10,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-elastic-minimal": {
+    "value": {
+      "configurations": {
+        "elastic": {
+          "building_block": false,
+          "enabled": false,
+          "name": "",
+          "query": "process.name: cmd.exe",
+          "status": "STAGING",
+          "type": "query"
+        }
+      },
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
+  },
+  "platform-elastic-ml": {
+    "value": {
+      "configurations": {
+        "elastic": {
+          "building_block": false,
+          "enabled": false,
+          "machine_learning": {
+            "anomaly_threshold": 75,
+            "job_id": [
+              "a",
+              "b"
+            ]
+          },
+          "name": "",
+          "status": "STAGING",
+          "type": "machine_learning"
+        }
+      },
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
+  },
+  "platform-elastic-ml-job-number": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "elastic",
+          "machine_learning",
+          "job_id",
+          "str"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          14,
+          24,
+          30,
+          false
+        ],
+        "type": "string_type",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "elastic",
+          "machine_learning",
+          "job_id",
+          "list[str]"
+        ],
+        "input": null,
+        "msg": "Input should be a valid list",
+        "span": [
+          14,
+          24,
+          30,
+          false
+        ],
+        "type": "list_type",
+        "yaml_line": null
+      }
+    ]
+  },
+  "platform-elastic-ml-missing": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "ElasticConfig validation failed with code(s): esql_source, type_block"
+        },
+        "field_path": [
+          "configurations",
+          "elastic"
+        ],
+        "input": null,
+        "msg": "Value error, ElasticConfig validation failed with code(s): esql_source, type_block",
+        "span": [
+          11,
+          3,
+          10,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-elastic-ml-one-job": {
+    "value": {
+      "configurations": {
+        "elastic": {
+          "building_block": false,
+          "enabled": false,
+          "machine_learning": {
+            "anomaly_threshold": 75,
+            "job_id": "a"
+          },
+          "name": "",
+          "status": "STAGING",
+          "type": "machine_learning"
+        }
+      },
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
+  },
+  "platform-elastic-new-terms": {
+    "value": {
+      "configurations": {
+        "elastic": {
+          "building_block": false,
+          "enabled": false,
+          "name": "",
+          "new_terms": {
+            "fields": [
+              "a"
+            ],
+            "history_window_start": "7d"
+          },
+          "query": "q",
+          "status": "STAGING",
+          "type": "new_terms"
+        }
+      },
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
+  },
+  "platform-elastic-new-terms-bad": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "ElasticConfig validation failed with code(s): duration, new_terms_fields"
+        },
+        "field_path": [
+          "configurations",
+          "elastic"
+        ],
+        "input": null,
+        "msg": "Value error, ElasticConfig validation failed with code(s): duration, new_terms_fields",
+        "span": [
+          11,
+          3,
+          10,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-elastic-new-terms-missing": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "ElasticConfig validation failed with code(s): type_block"
+        },
+        "field_path": [
+          "configurations",
+          "elastic"
+        ],
+        "input": null,
+        "msg": "Value error, ElasticConfig validation failed with code(s): type_block",
+        "span": [
+          11,
+          3,
+          10,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-elastic-no-status": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "elastic",
+          "status"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          11,
+          3,
+          10,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      },
+      {
+        "ctx": {
+          "expected": "'query', 'eql', 'esql', 'threshold', 'new_terms', 'threat_match' or 'machine_learning'"
+        },
+        "field_path": [
+          "configurations",
+          "elastic",
+          "type"
+        ],
+        "input": "bogus",
+        "msg": "Input should be 'query', 'eql', 'esql', 'threshold', 'new_terms', 'threat_match' or 'machine_learning'",
+        "span": [
+          12,
+          11,
+          16,
+          true
+        ],
+        "type": "literal_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-elastic-query-blank": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "query must not be empty"
+        },
+        "field_path": [
+          "configurations",
+          "elastic",
+          "query"
+        ],
+        "input": "  ",
+        "msg": "Value error, query must not be empty",
+        "span": [
+          14,
+          13,
+          15,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 13
+      }
+    ]
+  },
+  "platform-elastic-query-empty": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "ElasticConfig validation failed with code(s): type_block"
+        },
+        "field_path": [
+          "configurations",
+          "elastic"
+        ],
+        "input": null,
+        "msg": "Value error, ElasticConfig validation failed with code(s): type_block",
+        "span": [
+          11,
+          3,
+          10,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-elastic-query-missing": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "ElasticConfig validation failed with code(s): type_block"
+        },
+        "field_path": [
+          "configurations",
+          "elastic"
+        ],
+        "input": null,
+        "msg": "Value error, ElasticConfig validation failed with code(s): type_block",
+        "span": [
+          11,
+          3,
+          10,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-elastic-removed-flat": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "ElasticConfig validation failed with code(s): type_block"
+        },
+        "field_path": [
+          "configurations",
+          "elastic"
+        ],
+        "input": null,
+        "msg": "Value error, ElasticConfig validation failed with code(s): type_block",
+        "span": [
+          11,
+          3,
+          10,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-elastic-respond": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "ElasticConfig validation failed with code(s): response_action"
+        },
+        "field_path": [
+          "configurations",
+          "elastic"
+        ],
+        "input": null,
+        "msg": "Value error, ElasticConfig validation failed with code(s): response_action",
+        "span": [
+          11,
+          3,
+          10,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-elastic-respond-string": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "ElasticConfig validation failed with code(s): response_action"
+        },
+        "field_path": [
+          "configurations",
+          "elastic"
+        ],
+        "input": null,
+        "msg": "Value error, ElasticConfig validation failed with code(s): response_action",
+        "span": [
+          11,
+          3,
+          10,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-elastic-risk-bool": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "elastic",
+          "risk",
+          "int"
+        ],
+        "input": null,
+        "msg": "Input should be a valid integer",
+        "span": [
+          15,
+          5,
+          9,
+          false
+        ],
+        "type": "int_type",
+        "yaml_line": null
+      },
+      {
+        "ctx": {
+          "class_name": "ElasticRisk"
+        },
+        "field_path": [
+          "configurations",
+          "elastic",
+          "risk",
+          "ElasticRisk"
+        ],
+        "input": null,
+        "msg": "Input should be a valid dictionary or instance of ElasticRisk",
+        "span": [
+          15,
+          5,
+          9,
+          false
+        ],
+        "type": "model_type",
+        "yaml_line": null
+      }
+    ]
+  },
+  "platform-elastic-risk-dict": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "ElasticConfig validation failed with code(s): risk_score"
+        },
+        "field_path": [
+          "configurations",
+          "elastic"
+        ],
+        "input": null,
+        "msg": "Value error, ElasticConfig validation failed with code(s): risk_score",
+        "span": [
+          11,
+          3,
+          10,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-elastic-risk-float": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "ElasticConfig validation failed with code(s): risk_score"
+        },
+        "field_path": [
+          "configurations",
+          "elastic"
+        ],
+        "input": null,
+        "msg": "Value error, ElasticConfig validation failed with code(s): risk_score",
+        "span": [
+          11,
+          3,
+          10,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-elastic-risk-range": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "ElasticConfig validation failed with code(s): risk_score"
+        },
+        "field_path": [
+          "configurations",
+          "elastic"
+        ],
+        "input": null,
+        "msg": "Value error, ElasticConfig validation failed with code(s): risk_score",
+        "span": [
+          11,
+          3,
+          10,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-elastic-risk-string": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "ElasticConfig validation failed with code(s): risk_score"
+        },
+        "field_path": [
+          "configurations",
+          "elastic"
+        ],
+        "input": null,
+        "msg": "Value error, ElasticConfig validation failed with code(s): risk_score",
+        "span": [
+          11,
+          3,
+          10,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-elastic-scheduling-string": {
+    "errors": [
+      {
+        "ctx": {
+          "class_name": "ElasticScheduling"
+        },
+        "field_path": [
+          "configurations",
+          "elastic",
+          "scheduling"
+        ],
+        "input": "5m",
+        "msg": "Input should be a valid dictionary or instance of ElasticScheduling",
+        "span": [
+          15,
+          17,
+          19,
+          true
+        ],
+        "type": "model_type",
+        "yaml_line": 14
+      }
+    ]
+  },
+  "platform-elastic-severity-case": {
+    "value": {
+      "configurations": {
+        "elastic": {
+          "building_block": false,
+          "enabled": false,
+          "name": "",
+          "query": "process.name: cmd.exe",
+          "severity": " HIGH ",
+          "status": "STAGING",
+          "type": "query"
+        }
+      },
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
+  },
+  "platform-elastic-severity-mapping-bad": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "ElasticConfig validation failed with code(s): severity"
+        },
+        "field_path": [
+          "configurations",
+          "elastic"
+        ],
+        "input": null,
+        "msg": "Value error, ElasticConfig validation failed with code(s): severity",
+        "span": [
+          11,
+          3,
+          10,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-elastic-severity-mapping-fields": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "elastic",
+          "severity",
+          "str"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          15,
+          5,
+          13,
+          false
+        ],
+        "type": "string_type",
+        "yaml_line": null
+      },
+      {
+        "ctx": {
+          "expected": "'equals'"
+        },
+        "field_path": [
+          "configurations",
+          "elastic",
+          "severity",
+          "ElasticSeverity",
+          "mapping",
+          "0",
+          "operator"
+        ],
+        "input": "is",
+        "msg": "Input should be 'equals'",
+        "span": [
+          15,
+          5,
+          13,
+          false
+        ],
+        "type": "literal_error",
+        "yaml_line": null
+      },
+      {
+        "ctx": {
+          "expected": "'low', 'medium', 'high' or 'critical'"
+        },
+        "field_path": [
+          "configurations",
+          "elastic",
+          "severity",
+          "ElasticSeverity",
+          "mapping",
+          "0",
+          "severity"
+        ],
+        "input": "urgent",
+        "msg": "Input should be 'low', 'medium', 'high' or 'critical'",
+        "span": [
+          15,
+          5,
+          13,
+          false
+        ],
+        "type": "literal_error",
+        "yaml_line": null
+      }
+    ]
+  },
+  "platform-elastic-severity-number": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "ElasticConfig validation failed with code(s): severity"
+        },
+        "field_path": [
+          "configurations",
+          "elastic"
+        ],
+        "input": null,
+        "msg": "Value error, ElasticConfig validation failed with code(s): severity",
+        "span": [
+          11,
+          3,
+          10,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-elastic-severity-unknown": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "ElasticConfig validation failed with code(s): severity"
+        },
+        "field_path": [
+          "configurations",
+          "elastic"
+        ],
+        "input": null,
+        "msg": "Value error, ElasticConfig validation failed with code(s): severity",
+        "span": [
+          11,
+          3,
+          10,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-elastic-suppression-dupe": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "ElasticConfig validation failed with code(s): suppression_shape"
+        },
+        "field_path": [
+          "configurations",
+          "elastic"
+        ],
+        "input": null,
+        "msg": "Value error, ElasticConfig validation failed with code(s): suppression_shape",
+        "span": [
+          11,
+          3,
+          10,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-elastic-suppression-duration": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "ElasticConfig validation failed with code(s): duration"
+        },
+        "field_path": [
+          "configurations",
+          "elastic"
+        ],
+        "input": null,
+        "msg": "Value error, ElasticConfig validation failed with code(s): duration",
+        "span": [
+          11,
+          3,
+          10,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-elastic-suppression-empty-item": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "ElasticConfig validation failed with code(s): suppression_shape"
+        },
+        "field_path": [
+          "configurations",
+          "elastic"
+        ],
+        "input": null,
+        "msg": "Value error, ElasticConfig validation failed with code(s): suppression_shape",
+        "span": [
+          11,
+          3,
+          10,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-elastic-suppression-no-group": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "ElasticConfig validation failed with code(s): suppression_shape"
+        },
+        "field_path": [
+          "configurations",
+          "elastic"
+        ],
+        "input": null,
+        "msg": "Value error, ElasticConfig validation failed with code(s): suppression_shape",
+        "span": [
+          11,
+          3,
+          10,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-elastic-suppression-shape": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "ElasticConfig validation failed with code(s): suppression_shape"
+        },
+        "field_path": [
+          "configurations",
+          "elastic"
+        ],
+        "input": null,
+        "msg": "Value error, ElasticConfig validation failed with code(s): suppression_shape",
+        "span": [
+          11,
+          3,
+          10,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-elastic-suppression-string": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "ElasticConfig validation failed with code(s): suppression_shape"
+        },
+        "field_path": [
+          "configurations",
+          "elastic"
+        ],
+        "input": null,
+        "msg": "Value error, ElasticConfig validation failed with code(s): suppression_shape",
+        "span": [
+          11,
+          3,
+          10,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-elastic-threat-bad": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "ElasticConfig validation failed with code(s): filter_shape, index_list"
+        },
+        "field_path": [
+          "configurations",
+          "elastic"
+        ],
+        "input": null,
+        "msg": "Value error, ElasticConfig validation failed with code(s): filter_shape, index_list",
+        "span": [
+          11,
+          3,
+          10,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-elastic-threat-match": {
+    "value": {
+      "configurations": {
+        "elastic": {
+          "building_block": false,
+          "enabled": false,
+          "name": "",
+          "query": "q",
+          "status": "STAGING",
+          "threat": {
+            "filters": [
+              {
+                "meta": {},
+                "query": {}
+              }
+            ],
+            "index": [
+              "ti-*"
+            ],
+            "indicator_path": "threat.indicator",
+            "language": "lucene",
+            "mapping": [
+              {
+                "entries": [
+                  {
+                    "field": "a",
+                    "negate": false,
+                    "type": "mapping",
+                    "value": "b"
+                  }
+                ]
+              }
+            ],
+            "query": "*"
+          },
+          "type": "threat_match"
+        }
+      },
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
+  },
+  "platform-elastic-threshold": {
+    "value": {
+      "configurations": {
+        "elastic": {
+          "building_block": false,
+          "enabled": false,
+          "name": "",
+          "query": "q",
+          "status": "STAGING",
+          "suppression": {
+            "duration": "1h",
+            "missing_fields_strategy": "suppress"
+          },
+          "threshold": {
+            "cardinality": {
+              "field": "c",
+              "value": 2
+            },
+            "field": [
+              "a",
+              "b"
+            ],
+            "value": 10
+          },
+          "type": "threshold"
+        }
+      },
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
+  },
+  "platform-elastic-threshold-bool": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "elastic",
+          "threshold",
+          "value"
+        ],
+        "input": null,
+        "msg": "Input should be a valid integer",
+        "span": [
+          15,
+          24,
+          28,
+          true
+        ],
+        "type": "int_type",
+        "yaml_line": 14
+      }
+    ]
+  },
+  "platform-elastic-threshold-fields": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "ElasticConfig validation failed with code(s): threshold_fields"
+        },
+        "field_path": [
+          "configurations",
+          "elastic"
+        ],
+        "input": null,
+        "msg": "Value error, ElasticConfig validation failed with code(s): threshold_fields",
+        "span": [
+          11,
+          3,
+          10,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-elastic-threshold-missing": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "ElasticConfig validation failed with code(s): type_block"
+        },
+        "field_path": [
+          "configurations",
+          "elastic"
+        ],
+        "input": null,
+        "msg": "Value error, ElasticConfig validation failed with code(s): type_block",
+        "span": [
+          11,
+          3,
+          10,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-elastic-threshold-suppression": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "ElasticConfig validation failed with code(s): suppression_shape"
+        },
+        "field_path": [
+          "configurations",
+          "elastic"
+        ],
+        "input": null,
+        "msg": "Value error, ElasticConfig validation failed with code(s): suppression_shape",
+        "span": [
+          11,
+          3,
+          10,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-elastic-type-missing": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "ElasticConfig validation failed with code(s): type_block"
+        },
+        "field_path": [
+          "configurations",
+          "elastic"
+        ],
+        "input": null,
+        "msg": "Value error, ElasticConfig validation failed with code(s): type_block",
+        "span": [
+          11,
+          3,
+          10,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-elastic-type-unknown": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "ElasticConfig validation failed with code(s): type_block"
+        },
+        "field_path": [
+          "configurations",
+          "elastic"
+        ],
+        "input": null,
+        "msg": "Value error, ElasticConfig validation failed with code(s): type_block",
+        "span": [
+          11,
+          3,
+          10,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-empty-block": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "splunk",
+          "status"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          11,
+          3,
+          9,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "splunk",
+          "query"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          11,
+          3,
+          9,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      }
+    ]
+  },
+  "platform-external-id": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "splunk",
+          "rule_id"
+        ],
+        "input": "abc",
+        "msg": "Extra inputs are not permitted",
+        "span": [
+          14,
+          5,
+          12,
+          true
+        ],
+        "type": "extra_forbidden",
+        "yaml_line": 13
+      }
+    ]
+  },
+  "platform-harfanglab-defaults": {
+    "value": {
+      "configurations": {
+        "harfanglab": {
+          "action": "Alert",
+          "confidence": "Moderate",
+          "enabled": false,
+          "maturity": "Experimental",
+          "name": "",
+          "status": "STAGING"
+        }
+      },
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
+  },
+  "platform-harfanglab-full": {
+    "value": {
+      "configurations": {
+        "harfanglab": {
+          "action": "Block",
+          "confidence": "High",
+          "enabled": false,
+          "maturity": "Stable",
+          "name": "",
+          "sigma": {
+            "condition": "s and l",
+            "false_positives": [
+              "admin"
+            ],
+            "logsource": {
+              "category": "process_creation",
+              "product": "windows"
+            },
+            "selections": [
+              {
+                "field": "Image",
+                "modifiers": [
+                  "endswith"
+                ],
+                "name": "s",
+                "value": "x.exe"
+              },
+              {
+                "field": "CommandLine",
+                "name": "l",
+                "value": [
+                  "a",
+                  "b"
+                ]
+              },
+              {
+                "field": "Signed",
+                "name": "b",
+                "value": false
+              },
+              {
+                "field": "Pid",
+                "name": "i",
+                "value": 4
+              },
+              {
+                "field": "Score",
+                "name": "f",
+                "value": 1.5
+              }
+            ]
+          },
+          "status": "STAGING",
+          "tags": [
+            "attack.t1059"
+          ],
+          "yara": {
+            "condition": "$a",
+            "imports": [
+              "pe"
+            ],
+            "meta": {
+              "arch": [
+                "x64"
+              ],
+              "classification": "c",
+              "context": [
+                "file"
+              ],
+              "os": "Windows",
+              "score": "High"
+            },
+            "strings": "$a = \"x\""
+          }
+        }
+      },
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
+  },
+  "platform-harfanglab-value-mixed-list": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "harfanglab",
+          "sigma",
+          "selections",
+          "0",
+          "value",
+          "str"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          16,
+          33,
+          38,
+          false
+        ],
+        "type": "string_type",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "harfanglab",
+          "sigma",
+          "selections",
+          "0",
+          "value",
+          "list[str]",
+          "1"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          16,
+          33,
+          38,
+          false
+        ],
+        "type": "string_type",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "harfanglab",
+          "sigma",
+          "selections",
+          "0",
+          "value",
+          "bool"
+        ],
+        "input": null,
+        "msg": "Input should be a valid boolean",
+        "span": [
+          16,
+          33,
+          38,
+          false
+        ],
+        "type": "bool_type",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "harfanglab",
+          "sigma",
+          "selections",
+          "0",
+          "value",
+          "int"
+        ],
+        "input": null,
+        "msg": "Input should be a valid integer",
+        "span": [
+          16,
+          33,
+          38,
+          false
+        ],
+        "type": "int_type",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "harfanglab",
+          "sigma",
+          "selections",
+          "0",
+          "value",
+          "float"
+        ],
+        "input": null,
+        "msg": "Input should be a valid number",
+        "span": [
+          16,
+          33,
+          38,
+          false
+        ],
+        "type": "float_type",
+        "yaml_line": null
+      }
+    ]
+  },
+  "platform-harfanglab-value-union": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "harfanglab",
+          "sigma",
+          "selections",
+          "0",
+          "value",
+          "str"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          16,
+          33,
+          38,
+          false
+        ],
+        "type": "string_type",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "harfanglab",
+          "sigma",
+          "selections",
+          "0",
+          "value",
+          "list[str]"
+        ],
+        "input": null,
+        "msg": "Input should be a valid list",
+        "span": [
+          16,
+          33,
+          38,
+          false
+        ],
+        "type": "list_type",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "harfanglab",
+          "sigma",
+          "selections",
+          "0",
+          "value",
+          "bool"
+        ],
+        "input": null,
+        "msg": "Input should be a valid boolean",
+        "span": [
+          16,
+          33,
+          38,
+          false
+        ],
+        "type": "bool_type",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "harfanglab",
+          "sigma",
+          "selections",
+          "0",
+          "value",
+          "int"
+        ],
+        "input": null,
+        "msg": "Input should be a valid integer",
+        "span": [
+          16,
+          33,
+          38,
+          false
+        ],
+        "type": "int_type",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "harfanglab",
+          "sigma",
+          "selections",
+          "0",
+          "value",
+          "float"
+        ],
+        "input": null,
+        "msg": "Input should be a valid number",
+        "span": [
+          16,
+          33,
+          38,
+          false
+        ],
+        "type": "float_type",
+        "yaml_line": null
+      }
+    ]
+  },
+  "platform-harfanglab-yara-missing": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "harfanglab",
+          "yara",
+          "meta",
+          "context"
+        ],
+        "input": "file",
+        "msg": "Input should be a valid list",
+        "span": [
+          13,
+          28,
+          32,
+          true
+        ],
+        "type": "list_type",
+        "yaml_line": 12
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "harfanglab",
+          "yara",
+          "meta",
+          "os"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          13,
+          12,
+          16,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "harfanglab",
+          "yara",
+          "condition"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          13,
+          5,
+          9,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      }
+    ]
+  },
+  "platform-list-block": {
+    "errors": [
+      {
+        "ctx": {
+          "class_name": "ElasticConfig"
+        },
+        "field_path": [
+          "configurations",
+          "elastic"
+        ],
+        "input": null,
+        "msg": "Input should be a valid dictionary or instance of ElasticConfig",
+        "span": [
+          11,
+          3,
+          10,
+          true
+        ],
+        "type": "model_type",
+        "yaml_line": 10
+      }
+    ]
+  },
+  "platform-null-block": {
+    "value": {
+      "configurations": {},
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
+  },
+  "platform-query-blank": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "query must not be empty"
+        },
+        "field_path": [
+          "configurations",
+          "sentinel",
+          "query"
+        ],
+        "input": "   ",
+        "msg": "Value error, query must not be empty",
+        "span": [
+          13,
+          13,
+          16,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 12
+      }
+    ]
+  },
+  "platform-query-empty": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "query must not be empty"
+        },
+        "field_path": [
+          "configurations",
+          "carbon_black_cloud",
+          "query"
+        ],
+        "input": "",
+        "msg": "Value error, query must not be empty",
+        "span": [
+          13,
+          5,
+          10,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 12
+      }
+    ]
+  },
+  "platform-query-missing": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "defender_for_endpoint",
+          "query"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          11,
+          3,
+          24,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      }
+    ]
+  },
+  "platform-query-nbsp": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "query must not be empty"
+        },
+        "field_path": [
+          "configurations",
+          "splunk",
+          "query"
+        ],
+        "input": " ",
+        "msg": "Value error, query must not be empty",
+        "span": [
+          13,
+          13,
+          19,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 12
+      }
+    ]
+  },
+  "platform-query-number": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "crowdstrike",
+          "query"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          15,
+          12,
+          13,
+          true
+        ],
+        "type": "string_type",
+        "yaml_line": 14
+      }
+    ]
+  },
+  "platform-query-separator": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "query must not be empty"
+        },
+        "field_path": [
+          "configurations",
+          "splunk",
+          "query"
+        ],
+        "input": "\u001c",
+        "msg": "Value error, query must not be empty",
+        "span": [
+          13,
+          13,
+          17,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 12
+      }
+    ]
+  },
+  "platform-s1-correlation-errors": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "sentinel_one",
+          "condition",
+          "correlation",
+          "match_in_order"
+        ],
+        "input": null,
+        "msg": "Input should be a valid boolean",
+        "span": [
+          15,
+          51,
+          52,
+          true
+        ],
+        "type": "bool_type",
+        "yaml_line": 14
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "sentinel_one",
+          "condition",
+          "correlation",
+          "time_window"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          15,
+          7,
+          18,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "sentinel_one",
+          "condition",
+          "correlation",
+          "sub_queries",
+          "0",
+          "matches_required"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          15,
+          68,
+          78,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      }
+    ]
+  },
+  "platform-s1-full": {
+    "value": {
+      "configurations": {
+        "sentinel_one": {
+          "condition": {
+            "cool_off": "30m",
+            "correlation": {
+              "entity": "host",
+              "match_in_order": true,
+              "sub_queries": [
+                {
+                  "matches_required": 1,
+                  "query": "a"
+                },
+                {
+                  "matches_required": 2,
+                  "query": "b"
+                }
+              ],
+              "time_window": "1h"
+            },
+            "type": "Correlation"
+          },
+          "details": {
+            "description": "d",
+            "expiration": "2027-01-01",
+            "name": "n",
+            "severity": "High"
+          },
+          "enabled": false,
+          "name": "",
+          "response": {
+            "network_quarantine": false,
+            "treat_as_threat": "Malicious"
+          },
+          "status": "STAGING"
+        }
+      },
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
+  },
+  "platform-s1-treat-false": {
+    "value": {
+      "configurations": {
+        "sentinel_one": {
+          "condition": {
+            "single_event": {
+              "query": "EventType = \"Process Creation\""
+            },
+            "type": "Single Event"
+          },
+          "enabled": false,
+          "name": "",
+          "response": {
+            "network_quarantine": true,
+            "treat_as_threat": false
+          },
+          "status": "STAGING"
+        }
+      },
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
+  },
+  "platform-s1-treat-true": {
+    "errors": [
+      {
+        "ctx": {
+          "expected": "False, 'Malicious' or 'Suspicious'"
+        },
+        "field_path": [
+          "configurations",
+          "sentinel_one",
+          "response",
+          "treat_as_threat"
+        ],
+        "input": null,
+        "msg": "Input should be False, 'Malicious' or 'Suspicious'",
+        "span": [
+          16,
+          33,
+          37,
+          true
+        ],
+        "type": "literal_error",
+        "yaml_line": 15
+      }
+    ]
+  },
+  "platform-s1-treat-word": {
+    "errors": [
+      {
+        "ctx": {
+          "expected": "False, 'Malicious' or 'Suspicious'"
+        },
+        "field_path": [
+          "configurations",
+          "sentinel_one",
+          "response",
+          "treat_as_threat"
+        ],
+        "input": "malicious",
+        "msg": "Input should be False, 'Malicious' or 'Suspicious'",
+        "span": [
+          16,
+          33,
+          42,
+          true
+        ],
+        "type": "literal_error",
+        "yaml_line": 15
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "sentinel_one",
+          "response",
+          "network_quarantine"
+        ],
+        "input": "no",
+        "msg": "Input should be a valid boolean",
+        "span": [
+          16,
+          64,
+          66,
+          true
+        ],
+        "type": "bool_type",
+        "yaml_line": 15
+      }
+    ]
+  },
+  "platform-s1-type": {
+    "errors": [
+      {
+        "ctx": {
+          "expected": "'Single Event' or 'Correlation'"
+        },
+        "field_path": [
+          "configurations",
+          "sentinel_one",
+          "condition",
+          "type"
+        ],
+        "input": "single event",
+        "msg": "Input should be 'Single Event' or 'Correlation'",
+        "span": [
+          13,
+          23,
+          35,
+          true
+        ],
+        "type": "literal_error",
+        "yaml_line": 12
+      }
+    ]
+  },
+  "platform-sentinel-alert-full": {
+    "value": {
+      "configurations": {
+        "sentinel": {
+          "alert": {
+            "create_incident": false,
+            "custom_details": [
+              {
+                "column": "c",
+                "key": "k"
+              }
+            ],
+            "description": "d",
+            "dynamic_properties": [
+              {
+                "column": "c",
+                "property": "Severity"
+              }
+            ],
+            "severity": "High",
+            "suppression": "PT1H",
+            "tactics": [
+              "Execution"
+            ],
+            "techniques": [
+              "T1059",
+              "T1059.001"
+            ],
+            "title": "t"
+          },
+          "enabled": false,
+          "name": "",
+          "query": "SecurityEvent | take 1",
+          "scheduling": {
+            "frequency": "PT1H",
+            "lookback": "PT2H"
+          },
+          "status": "STAGING"
+        }
+      },
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
+  },
+  "platform-sentinel-durations-bad": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "Duration 'one hour' is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand duration (30m, 1h, 1d, 1h10m)"
+        },
+        "field_path": [
+          "configurations",
+          "sentinel",
+          "alert",
+          "suppression"
+        ],
+        "input": "one hour",
+        "msg": "Value error, Duration 'one hour' is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand duration (30m, 1h, 1d, 1h10m)",
+        "span": [
+          15,
+          27,
+          35,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 14
+      },
+      {
+        "ctx": {
+          "error": "Duration '5 hours' is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand duration (30m, 1h, 1d, 1h10m)"
+        },
+        "field_path": [
+          "configurations",
+          "sentinel",
+          "grouping",
+          "alert",
+          "grouping_lookback"
+        ],
+        "input": "5 hours",
+        "msg": "Value error, Duration '5 hours' is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand duration (30m, 1h, 1d, 1h10m)",
+        "span": [
+          16,
+          78,
+          85,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 15
+      }
+    ]
+  },
+  "platform-sentinel-durations-shorthand": {
+    "value": {
+      "configurations": {
+        "sentinel": {
+          "alert": {
+            "create_incident": true,
+            "suppression": "p1d"
+          },
+          "enabled": false,
+          "name": "",
+          "query": "SecurityEvent | take 1",
+          "scheduling": {
+            "frequency": "1h",
+            "lookback": "1h10m"
+          },
+          "status": "STAGING"
+        }
+      },
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
+  },
+  "platform-sentinel-frequency-hourly": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "Duration 'hourly' is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand duration (30m, 1h, 1d, 1h10m)"
+        },
+        "field_path": [
+          "configurations",
+          "sentinel",
+          "scheduling",
+          "frequency"
+        ],
+        "input": "hourly",
+        "msg": "Value error, Duration 'hourly' is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand duration (30m, 1h, 1d, 1h10m)",
+        "span": [
+          14,
+          29,
+          35,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 13
+      },
+      {
+        "ctx": {
+          "error": "Duration 'daily' is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand duration (30m, 1h, 1d, 1h10m)"
+        },
+        "field_path": [
+          "configurations",
+          "sentinel",
+          "scheduling",
+          "lookback"
+        ],
+        "input": "daily",
+        "msg": "Value error, Duration 'daily' is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand duration (30m, 1h, 1d, 1h10m)",
+        "span": [
+          14,
+          47,
+          52,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 13
+      }
+    ]
+  },
+  "platform-sentinel-full": {
+    "value": {
+      "configurations": {
+        "sentinel": {
+          "alert": {
+            "create_incident": true,
+            "suppression": false,
+            "title": "t"
+          },
+          "enabled": false,
+          "entities": [
+            {
+              "entity": "Host",
+              "mappings": [
+                {
+                  "column": "Computer",
+                  "identifier": "HostName"
+                }
+              ]
+            }
+          ],
+          "exclusions": [
+            {
+              "let": {
+                "a": 1,
+                "b": "x",
+                "c": true
+              },
+              "query": "| where x",
+              "reason": "r",
+              "tenant": "t"
+            },
+            {
+              "query": "",
+              "reason": "empty"
+            }
+          ],
+          "grouping": {
+            "alert": {
+              "enabled": true,
+              "group_by_entities": [
+                "Host"
+              ],
+              "grouping_lookback": "PT5H",
+              "matching": "Selected"
+            },
+            "event": "SingleAlert"
+          },
+          "name": "",
+          "query": "SecurityEvent | take 1",
+          "scheduling": {
+            "frequency": "PT1H",
+            "lookback": "PT2H"
+          },
+          "status": "STAGING",
+          "template": {
+            "uuid": "u",
+            "version": "1.0"
+          },
+          "trigger": {
+            "operator": "GreaterThan",
+            "threshold": 0
+          }
+        }
+      },
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
+  },
+  "platform-sentinel-missing": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "sentinel",
+          "scheduling"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          11,
+          3,
+          11,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "sentinel",
+          "alert"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          11,
+          3,
+          11,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      }
+    ]
+  },
+  "platform-sentinel-nested-errors": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "sentinel",
+          "exclusions",
+          "0",
+          "query"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          16,
+          26,
+          27,
+          true
+        ],
+        "type": "string_type",
+        "yaml_line": 15
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "sentinel",
+          "exclusions",
+          "0",
+          "reason"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          16,
+          18,
+          28,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "sentinel",
+          "template",
+          "version"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          20,
+          34,
+          35,
+          true
+        ],
+        "type": "string_type",
+        "yaml_line": 19
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "sentinel",
+          "template",
+          "extra"
+        ],
+        "input": null,
+        "msg": "Extra inputs are not permitted",
+        "span": [
+          20,
+          37,
+          42,
+          true
+        ],
+        "type": "extra_forbidden",
+        "yaml_line": 19
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "sentinel",
+          "trigger",
+          "threshold"
+        ],
+        "input": "x",
+        "msg": "Input should be a valid integer",
+        "span": [
+          17,
+          49,
+          50,
+          true
+        ],
+        "type": "int_type",
+        "yaml_line": 16
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "sentinel",
+          "grouping",
+          "event"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          18,
+          5,
+          13,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "sentinel",
+          "grouping",
+          "alert",
+          "enabled"
+        ],
+        "input": "yes",
+        "msg": "Input should be a valid boolean",
+        "span": [
+          18,
+          33,
+          36,
+          true
+        ],
+        "type": "bool_type",
+        "yaml_line": 17
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "sentinel",
+          "entities",
+          "0",
+          "mappings",
+          "0",
+          "identifier"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          19,
+          42,
+          53,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      }
+    ]
+  },
+  "platform-sentinel-nrt": {
+    "value": {
+      "configurations": {
+        "sentinel": {
+          "alert": {
+            "create_incident": true,
+            "suppression": false,
+            "title": "t"
+          },
+          "enabled": false,
+          "name": "",
+          "query": "SecurityEvent | take 1",
+          "scheduling": {
+            "nrt": true
+          },
+          "status": "STAGING"
+        }
+      },
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
+  },
+  "platform-sentinel-scheduling-string": {
+    "errors": [
+      {
+        "ctx": {
+          "class_name": "SentinelScheduling"
+        },
+        "field_path": [
+          "configurations",
+          "sentinel",
+          "scheduling"
+        ],
+        "input": "hourly",
+        "msg": "Input should be a valid dictionary or instance of SentinelScheduling",
+        "span": [
+          14,
+          17,
+          23,
+          true
+        ],
+        "type": "model_type",
+        "yaml_line": 13
+      }
+    ]
+  },
+  "platform-sentinel-suppression-int": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "sentinel",
+          "alert",
+          "suppression",
+          "str"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          15,
+          13,
+          24,
+          false
+        ],
+        "type": "string_type",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "sentinel",
+          "alert",
+          "suppression",
+          "bool"
+        ],
+        "input": null,
+        "msg": "Input should be a valid boolean",
+        "span": [
+          15,
+          13,
+          24,
+          false
+        ],
+        "type": "bool_type",
+        "yaml_line": null
+      }
+    ]
+  },
+  "platform-sentinel-suppression-list": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "sentinel",
+          "alert",
+          "suppression",
+          "str"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          15,
+          13,
+          24,
+          false
+        ],
+        "type": "string_type",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "sentinel",
+          "alert",
+          "suppression",
+          "bool"
+        ],
+        "input": null,
+        "msg": "Input should be a valid boolean",
+        "span": [
+          15,
+          13,
+          24,
+          false
+        ],
+        "type": "bool_type",
+        "yaml_line": null
+      }
+    ]
+  },
+  "platform-sentinel-technique-number": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "sentinel",
+          "alert",
+          "techniques",
+          "0"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          15,
+          26,
+          30,
+          true
+        ],
+        "type": "string_type",
+        "yaml_line": 14
+      }
+    ]
+  },
+  "platform-sentinel-technique-string": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "sentinel",
+          "alert",
+          "techniques"
+        ],
+        "input": "T1059",
+        "msg": "Input should be a valid list",
+        "span": [
+          15,
+          25,
+          30,
+          true
+        ],
+        "type": "list_type",
+        "yaml_line": 14
+      }
+    ]
+  },
+  "platform-sentinel-technique-typo": {
+    "errors": [
+      {
+        "ctx": {
+          "hint": "; did you mean T1059.001 (Command and Scripting Interpreter: PowerShell)?",
+          "value": "'T1059.01'",
+          "version": "18"
+        },
+        "field_path": [
+          "configurations",
+          "sentinel",
+          "alert",
+          "techniques",
+          "0"
+        ],
+        "input": "T1059.01",
+        "msg": "'T1059.01' is not an ATT&CK v18 technique or sub-technique id, which is what Sentinel is aligned to; did you mean T1059.001 (Command and Scripting Interpreter: PowerShell)?",
+        "span": [
+          15,
+          26,
+          34,
+          true
+        ],
+        "type": "sentinel_attack_technique",
+        "yaml_line": 14
+      }
+    ]
+  },
+  "platform-sentinel-technique-unknown": {
+    "errors": [
+      {
+        "ctx": {
+          "hint": "",
+          "value": "'T9999'",
+          "version": "18"
+        },
+        "field_path": [
+          "configurations",
+          "sentinel",
+          "alert",
+          "techniques",
+          "0"
+        ],
+        "input": "T9999",
+        "msg": "'T9999' is not an ATT&CK v18 technique or sub-technique id, which is what Sentinel is aligned to",
+        "span": [
+          15,
+          26,
+          31,
+          true
+        ],
+        "type": "sentinel_attack_technique",
+        "yaml_line": 14
+      }
+    ]
+  },
+  "platform-splunk-errors": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "splunk",
+          "scheduling",
+          "schedule",
+          "frequency"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          16,
+          40,
+          41,
+          true
+        ],
+        "type": "string_type",
+        "yaml_line": 15
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "splunk",
+          "trigger",
+          "threshold"
+        ],
+        "input": null,
+        "msg": "Input should be a valid integer",
+        "span": [
+          14,
+          42,
+          45,
+          true
+        ],
+        "type": "int_type",
+        "yaml_line": 13
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "splunk",
+          "trigger",
+          "severity"
+        ],
+        "input": "high",
+        "msg": "Input should be a valid integer",
+        "span": [
+          14,
+          25,
+          29,
+          true
+        ],
+        "type": "int_type",
+        "yaml_line": 13
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "splunk",
+          "actions",
+          "risk",
+          "risk_objects",
+          "0",
+          "score"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          15,
+          37,
+          64,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "splunk",
+          "actions",
+          "email",
+          "send_pdf"
+        ],
+        "input": null,
+        "msg": "Input should be a valid boolean",
+        "span": [
+          15,
+          86,
+          87,
+          true
+        ],
+        "type": "bool_type",
+        "yaml_line": 14
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "splunk",
+          "correlation_search"
+        ],
+        "input": "maybe",
+        "msg": "Input should be a valid boolean",
+        "span": [
+          17,
+          25,
+          30,
+          true
+        ],
+        "type": "bool_type",
+        "yaml_line": 16
+      }
+    ]
+  },
+  "platform-splunk-full": {
+    "value": {
+      "configurations": {
+        "splunk": {
+          "actions": {
+            "email": {
+              "include": {
+                "results_link": true,
+                "trigger_time": false
+              },
+              "send_csv": true,
+              "to": "a@example.org"
+            },
+            "notable": {
+              "drilldown": {
+                "name": "n",
+                "search": "s"
+              },
+              "event": {
+                "description": "d",
+                "title": "t"
+              },
+              "security_domain": "endpoint"
+            },
+            "risk": {
+              "message": "m",
+              "risk_objects": [
+                {
+                  "field": "host",
+                  "score": 50,
+                  "type": "system"
+                }
+              ],
+              "threat_objects": [
+                {
+                  "field": "ip",
+                  "type": "ip_address"
+                }
+              ]
+            }
+          },
+          "correlation_search": false,
+          "enabled": false,
+          "name": "",
+          "query": "index=main | head 1",
+          "scheduling": {
+            "expires": "1d",
+            "schedule": {
+              "cron": "*/5 * * * *",
+              "custom_time": "09h15",
+              "frequency": "5m"
+            },
+            "timerange": {
+              "earliest": "-1h",
+              "latest": "now",
+              "lookback": "1h"
+            },
+            "type": "Scheduled"
+          },
+          "status": "STAGING",
+          "trigger": {
+            "comparator": "greater than",
+            "condition": "number of events",
+            "custom_condition": "search x",
+            "severity": 3,
+            "threshold": 0,
+            "throttling": {
+              "duration": "1h",
+              "fields": [
+                "host"
+              ],
+              "group_name": "g"
+            },
+            "type": "once"
+          }
+        }
+      },
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
+  },
+  "platform-string-block": {
+    "errors": [
+      {
+        "ctx": {
+          "class_name": "SentinelConfig"
+        },
+        "field_path": [
+          "configurations",
+          "sentinel"
+        ],
+        "input": "on",
+        "msg": "Input should be a valid dictionary or instance of SentinelConfig",
+        "span": [
+          11,
+          13,
+          15,
+          true
+        ],
+        "type": "model_type",
+        "yaml_line": 10
+      }
+    ]
+  },
+  "platform-sysdig-condition-blank": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "SysdigConfig validation failed with code(s): sysdig_rule_shape"
+        },
+        "field_path": [
+          "configurations",
+          "sysdig"
+        ],
+        "input": null,
+        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_rule_shape",
+        "span": [
+          11,
+          3,
+          9,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-sysdig-condition-missing": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "SysdigConfig validation failed with code(s): sysdig_rule_shape"
+        },
+        "field_path": [
+          "configurations",
+          "sysdig"
+        ],
+        "input": null,
+        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_rule_shape",
+        "span": [
+          11,
+          3,
+          9,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-sysdig-condition-number": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "SysdigConfig validation failed with code(s): sysdig_rule_shape"
+        },
+        "field_path": [
+          "configurations",
+          "sysdig"
+        ],
+        "input": null,
+        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_rule_shape",
+        "span": [
+          11,
+          3,
+          9,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-sysdig-definition-duplicate": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "SysdigConfig validation failed with code(s): sysdig_definition_duplicate"
+        },
+        "field_path": [
+          "configurations",
+          "sysdig"
+        ],
+        "input": null,
+        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_definition_duplicate",
+        "span": [
+          11,
+          3,
+          9,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-sysdig-definition-name": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "SysdigConfig validation failed with code(s): sysdig_definition_name"
+        },
+        "field_path": [
+          "configurations",
+          "sysdig"
+        ],
+        "input": null,
+        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_definition_name",
+        "span": [
+          11,
+          3,
+          9,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-sysdig-definition-ok-order": {
+    "value": {
+      "configurations": {
+        "sysdig": {
+          "condition": "spawned_process and proc.name = sh",
+          "enabled": false,
+          "lists": [
+            {
+              "items": [
+                "sh"
+              ],
+              "name": "l1"
+            }
+          ],
+          "macros": [
+            {
+              "condition": "proc.name in (l1)",
+              "name": "m1"
+            },
+            {
+              "condition": "m1 and evt.type = execve",
+              "name": "m2"
+            }
+          ],
+          "name": "",
+          "status": "STAGING"
+        }
+      },
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
+  },
+  "platform-sysdig-definition-order": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "SysdigConfig validation failed with code(s): sysdig_definition_order"
+        },
+        "field_path": [
+          "configurations",
+          "sysdig"
+        ],
+        "input": null,
+        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_definition_order",
+        "span": [
+          11,
+          3,
+          9,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-sysdig-definition-self": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "SysdigConfig validation failed with code(s): sysdig_definition_order"
+        },
+        "field_path": [
+          "configurations",
+          "sysdig"
+        ],
+        "input": null,
+        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_definition_order",
+        "span": [
+          11,
+          3,
+          9,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-sysdig-engine-version": {
+    "errors": [
+      {
+        "ctx": {
+          "ge": "0"
+        },
+        "field_path": [
+          "configurations",
+          "sysdig",
+          "minimum_engine_version"
+        ],
+        "input": null,
+        "msg": "Input should be greater than or equal to 0",
+        "span": [
+          14,
+          29,
+          31,
+          true
+        ],
+        "type": "greater_than_equal",
+        "yaml_line": 13
+      }
+    ]
+  },
+  "platform-sysdig-engine-version-float": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "sysdig",
+          "minimum_engine_version"
+        ],
+        "input": null,
+        "msg": "Input should be a valid integer",
+        "span": [
+          14,
+          29,
+          32,
+          true
+        ],
+        "type": "int_type",
+        "yaml_line": 13
+      }
+    ]
+  },
+  "platform-sysdig-engine-version-string": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "sysdig",
+          "minimum_engine_version"
+        ],
+        "input": "3",
+        "msg": "Input should be a valid integer",
+        "span": [
+          14,
+          30,
+          31,
+          true
+        ],
+        "type": "int_type",
+        "yaml_line": 13
+      }
+    ]
+  },
+  "platform-sysdig-exception-ok-forms": {
+    "value": {
+      "configurations": {
+        "sysdig": {
+          "condition": "spawned_process and proc.name = sh",
+          "enabled": false,
+          "exceptions": [
+            {
+              "comps": " startswith anyof ",
+              "fields": "proc.name",
+              "name": "a",
+              "values": [
+                "x"
+              ]
+            },
+            {
+              "comps": [
+                "exists"
+              ],
+              "fields": [
+                "proc.name"
+              ],
+              "name": "b"
+            },
+            {
+              "fields": [
+                "proc.name",
+                "proc.pid"
+              ],
+              "name": "c",
+              "values": [
+                [
+                  "x",
+                  1
+                ],
+                [
+                  [
+                    "a",
+                    "b"
+                  ],
+                  2
+                ]
+              ]
+            }
+          ],
+          "name": "",
+          "status": "STAGING"
+        }
+      },
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
+  },
+  "platform-sysdig-exception-shapes": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "SysdigConfig validation failed with code(s): sysdig_exception_shape"
+        },
+        "field_path": [
+          "configurations",
+          "sysdig"
+        ],
+        "input": null,
+        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_exception_shape",
+        "span": [
+          11,
+          3,
+          9,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-sysdig-exceptions-string": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "SysdigConfig validation failed with code(s): sysdig_exception_shape"
+        },
+        "field_path": [
+          "configurations",
+          "sysdig"
+        ],
+        "input": null,
+        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_exception_shape",
+        "span": [
+          11,
+          3,
+          9,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-sysdig-field-errors": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "SysdigConfig validation failed with code(s): sysdig_exception_shape"
+        },
+        "field_path": [
+          "configurations",
+          "sysdig"
+        ],
+        "input": null,
+        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_exception_shape",
+        "span": [
+          11,
+          3,
+          9,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-sysdig-full": {
+    "value": {
+      "configurations": {
+        "sysdig": {
+          "condition": "spawned_process and proc.name = sh",
+          "enabled": false,
+          "exceptions": [
+            {
+              "comps": "in",
+              "fields": "proc.name",
+              "name": "e1",
+              "values": [
+                "sh",
+                "bash"
+              ]
+            },
+            {
+              "comps": [
+                "=",
+                "startswith oneof"
+              ],
+              "fields": [
+                "proc.pname",
+                "fd.name"
+              ],
+              "name": "e2",
+              "values": [
+                [
+                  "a",
+                  [
+                    "/tmp",
+                    "/var"
+                  ]
+                ]
+              ]
+            }
+          ],
+          "lists": [
+            {
+              "items": [
+                "sh",
+                1,
+                2.5
+              ],
+              "name": "l1"
+            }
+          ],
+          "macros": [
+            {
+              "condition": "proc.name = sh",
+              "name": "m1"
+            }
+          ],
+          "minimum_engine_version": 0,
+          "name": "",
+          "output": "shell %proc.name",
+          "policies": [
+            "p"
+          ],
+          "priority": "WARNING",
+          "source": "syscall",
+          "status": "STAGING",
+          "tags": [
+            "t"
+          ]
+        }
+      },
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
+  },
+  "platform-sysdig-list-in-comp": {
+    "value": {
+      "configurations": {
+        "sysdig": {
+          "condition": "spawned_process and proc.name = sh",
+          "enabled": false,
+          "exceptions": [
+            {
+              "comps": [
+                "in"
+              ],
+              "fields": [
+                "proc.name"
+              ],
+              "name": "e",
+              "values": [
+                [
+                  "parents"
+                ]
+              ]
+            },
+            {
+              "fields": "proc.pname",
+              "name": "f",
+              "values": [
+                "parents",
+                "bash"
+              ]
+            },
+            {
+              "fields": [
+                "proc.name"
+              ],
+              "name": "g",
+              "values": [
+                [
+                  [
+                    "parents",
+                    "x"
+                  ]
+                ]
+              ]
+            }
+          ],
+          "lists": [
+            {
+              "items": [
+                "sshd"
+              ],
+              "name": "parents"
+            }
+          ],
+          "name": "",
+          "status": "STAGING"
+        }
+      },
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
+  },
+  "platform-sysdig-list-in-single": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "SysdigConfig validation failed with code(s): sysdig_list_in_value"
+        },
+        "field_path": [
+          "configurations",
+          "sysdig"
+        ],
+        "input": null,
+        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_list_in_value",
+        "span": [
+          11,
+          3,
+          9,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-sysdig-list-in-value": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "SysdigConfig validation failed with code(s): sysdig_list_in_value"
+        },
+        "field_path": [
+          "configurations",
+          "sysdig"
+        ],
+        "input": null,
+        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_list_in_value",
+        "span": [
+          11,
+          3,
+          9,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-sysdig-list-later": {
+    "value": {
+      "configurations": {
+        "sysdig": {
+          "condition": "spawned_process and proc.name = sh",
+          "enabled": false,
+          "lists": [
+            {
+              "items": [
+                "l2",
+                "zsh"
+              ],
+              "name": "l1"
+            },
+            {
+              "items": [
+                "bash"
+              ],
+              "name": "l2"
+            }
+          ],
+          "name": "",
+          "status": "STAGING"
+        }
+      },
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
+  },
+  "platform-sysdig-list-scalar-comp": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "SysdigConfig validation failed with code(s): sysdig_list_in_value"
+        },
+        "field_path": [
+          "configurations",
+          "sysdig"
+        ],
+        "input": null,
+        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_list_in_value",
+        "span": [
+          11,
+          3,
+          9,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-sysdig-list-self": {
+    "value": {
+      "configurations": {
+        "sysdig": {
+          "condition": "spawned_process and proc.name = sh",
+          "enabled": false,
+          "lists": [
+            {
+              "items": [
+                "l1",
+                "zsh"
+              ],
+              "name": "l1"
+            }
+          ],
+          "name": "",
+          "status": "STAGING"
+        }
+      },
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
+  },
+  "platform-sysdig-macro-unparsed": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "SysdigConfig validation failed with code(s): sysdig_definition_order"
+        },
+        "field_path": [
+          "configurations",
+          "sysdig"
+        ],
+        "input": null,
+        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_definition_order",
+        "span": [
+          11,
+          3,
+          9,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-sysdig-no-status": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "sysdig",
+          "status"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          11,
+          3,
+          9,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      }
+    ]
+  },
+  "platform-sysdig-priority": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "SysdigConfig validation failed with code(s): sysdig_priority"
+        },
+        "field_path": [
+          "configurations",
+          "sysdig"
+        ],
+        "input": null,
+        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_priority",
+        "span": [
+          11,
+          3,
+          9,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-sysdig-priority-info": {
+    "value": {
+      "configurations": {
+        "sysdig": {
+          "condition": "spawned_process and proc.name = sh",
+          "enabled": false,
+          "name": "",
+          "priority": " info ",
+          "status": "STAGING"
+        }
+      },
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
+  },
+  "platform-sysdig-priority-number": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "SysdigConfig validation failed with code(s): sysdig_priority"
+        },
+        "field_path": [
+          "configurations",
+          "sysdig"
+        ],
+        "input": null,
+        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_priority",
+        "span": [
+          11,
+          3,
+          9,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-sysdig-source": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "SysdigConfig validation failed with code(s): sysdig_source"
+        },
+        "field_path": [
+          "configurations",
+          "sysdig"
+        ],
+        "input": null,
+        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_source",
+        "span": [
+          11,
+          3,
+          9,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-sysdig-source-upper": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "SysdigConfig validation failed with code(s): sysdig_source"
+        },
+        "field_path": [
+          "configurations",
+          "sysdig"
+        ],
+        "input": null,
+        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_source",
+        "span": [
+          11,
+          3,
+          9,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-sysdig-tuning": {
+    "value": {
+      "configurations": {
+        "sysdig": {
+          "append_to_rule": "Terminal shell in container",
+          "condition": "and not proc.pname = x",
+          "enabled": false,
+          "name": "",
+          "status": "STAGING"
+        }
+      },
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
+  },
+  "platform-sysdig-tuning-blank": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "SysdigConfig validation failed with code(s): sysdig_rule_shape"
+        },
+        "field_path": [
+          "configurations",
+          "sysdig"
+        ],
+        "input": null,
+        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_rule_shape",
+        "span": [
+          11,
+          3,
+          9,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-sysdig-tuning-exceptions": {
+    "value": {
+      "configurations": {
+        "sysdig": {
+          "append_to_rule": "R",
+          "enabled": false,
+          "exceptions": [
+            {
+              "fields": "proc.name",
+              "name": "e",
+              "values": [
+                "a"
+              ]
+            }
+          ],
+          "name": "",
+          "status": "STAGING"
+        }
+      },
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
+  },
+  "platform-sysdig-tuning-keys": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "SysdigConfig validation failed with code(s): sysdig_source, sysdig_tuning_keys"
+        },
+        "field_path": [
+          "configurations",
+          "sysdig"
+        ],
+        "input": null,
+        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_source, sysdig_tuning_keys",
+        "span": [
+          11,
+          3,
+          9,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-sysdig-tuning-nothing": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "SysdigConfig validation failed with code(s): sysdig_rule_shape"
+        },
+        "field_path": [
+          "configurations",
+          "sysdig"
+        ],
+        "input": null,
+        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_rule_shape",
+        "span": [
+          11,
+          3,
+          9,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "platform-unknown-key": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "sentinal"
+        ],
+        "input": null,
+        "msg": "Extra inputs are not permitted",
+        "span": [
+          11,
+          3,
+          11,
+          true
+        ],
+        "type": "extra_forbidden",
+        "yaml_line": 10
+      }
+    ]
+  }
+}

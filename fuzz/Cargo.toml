@@ -22,7 +22,7 @@ opentide-core = { path = "../crates/opentide-core" }
 opentide-lsp = { path = "../crates/opentide-lsp" }
 # The rule models read their platform blocks unchecked until UC-1.4 (#810);
 # the fuzzer converts into them, and ships nothing.
-opentide-schema = { path = "../crates/opentide-schema", features = ["unchecked-platform-blocks"] }
+opentide-schema = { path = "../crates/opentide-schema" }
 serde = "1"
 opentide-tide = { path = "../crates/opentide-tide" }
 
