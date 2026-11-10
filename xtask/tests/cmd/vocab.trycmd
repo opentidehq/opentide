@@ -1,0 +1,35 @@
+`cargo xtask vocab`: the usage, and its usage errors (exit 2).
+
+```console
+$ xtask vocab help
+usage: cargo xtask vocab <command> [options]
+...
+
+$ xtask vocab
+? 2
+usage: cargo xtask vocab <command> [options]
+...
+
+$ xtask vocab frobnicate
+? 2
+xtask vocab: unknown command `frobnicate`
+...
+
+$ xtask vocab diff
+? 2
+error: vocab diff needs --against python
+
+$ xtask vocab diff --against rust
+? 2
+error: --against rust: only `python` (the oracle) is supported
+
+$ xtask vocab sync --bogus
+? 2
+error: unknown option `--bogus`
+...
+
+$ xtask vocab sentinel-attack --stix-dir
+? 2
+error: --stix-dir needs a directory
+
+```
