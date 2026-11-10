@@ -8,6 +8,9 @@
 //! `opentide-compile`, and compares them byte for byte. A difference fails,
 //! unless `tests/golden/payloads/APPROVED.toml` approves it.
 
+pub mod git;
+pub mod plan;
+
 use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -48,6 +51,15 @@ commands:
                  and with opentide-compile: the dry run's body, each configured
                  tenant's body, and the dry run's payload entry; any difference
                  not in tests/golden/payloads/APPROVED.toml fails
+  git --against python [--python PATH]
+                 the changed rule files of a scripted git history (first commit,
+                 edits, a non-ASCII name, a nested rule, a rename, a delete, a
+                 detached HEAD, a merge, a shallow clone, no commit, no checkout),
+                 read by the oracle and by opentide-compile's gix baseline
+  plan [--filter PREFIX]
+                 make deploy --dry-run's plan with opentide-compile for every
+                 dry-run case recorded in tests/golden/cases/deploy/json and
+                 compare it with the oracle's document
   help           print this message
 
 exit status: 0 passed, 1 a body differs, 2 usage error or the check could not run
@@ -61,6 +73,16 @@ pub fn main(args: &[String]) -> ExitCode {
     };
     let result = match command.as_str() {
         "diff" => parse(rest).and_then(|options| run(&options)),
+        "git" => {
+            parse(rest).and_then(|options| git::run(&oracle_python(options.python.as_deref())?))
+        }
+        "plan" => match rest {
+            [] => plan::run(None),
+            [flag, filter] if flag == "--filter" => plan::run(Some(filter)),
+            _ => Err(anyhow::anyhow!(
+                "usage: cargo xtask payloads plan [--filter PREFIX]"
+            )),
+        },
         "help" | "--help" | "-h" => {
             print!("{USAGE}");
             return ExitCode::SUCCESS;
@@ -153,6 +175,8 @@ pub struct Approved {
 struct ApprovedFile {
     #[serde(default)]
     diff: Vec<Approved>,
+    #[serde(default, rename = "plan")]
+    _plan: Vec<toml::Value>,
 }
 
 /// Reads the approved differences, checking each is complete and announced.
@@ -425,19 +449,24 @@ fn first_line(text: &str) -> &str {
     text.lines().next().unwrap_or_default()
 }
 
-/// Runs the comparison. Whether it passed.
-pub fn run(options: &DiffOptions) -> Result<bool> {
+/// The oracle's Python: `python` when given, else the one
+/// `tests/golden/ORACLE` installs.
+pub fn oracle_python(python: Option<&Path>) -> Result<PathBuf> {
+    if let Some(python) = python {
+        return Ok(python.to_path_buf());
+    }
     let (repo, target) = crate::vocab::diff::workspace()?;
     let golden = repo.join("tests/golden");
-    let python = match &options.python {
-        Some(python) => python.clone(),
-        None => {
-            let oracle =
-                crate::golden::oracle::Oracle::parse(&fs::read_to_string(golden.join("ORACLE"))?)?;
-            let engine = oracle.provision(&golden, &crate::golden::oracle::cache_dir(&target))?;
-            engine.install_dir.join("bin").join("python")
-        }
-    };
+    let oracle = crate::golden::oracle::Oracle::parse(&fs::read_to_string(golden.join("ORACLE"))?)?;
+    let engine = oracle.provision(&golden, &crate::golden::oracle::cache_dir(&target))?;
+    Ok(engine.install_dir.join("bin").join("python"))
+}
+
+/// Runs the comparison. Whether it passed.
+pub fn run(options: &DiffOptions) -> Result<bool> {
+    let (repo, _target) = crate::vocab::diff::workspace()?;
+    let golden = repo.join("tests/golden");
+    let python = oracle_python(options.python.as_deref())?;
     let spec = crate::golden::case::Spec::parse(&fs::read_to_string(golden.join("cases.toml"))?)?;
     let changelog = fs::read_to_string(repo.join("CHANGELOG.md"))?;
     let approved = match fs::read_to_string(repo.join(APPROVED)) {

@@ -789,6 +789,12 @@ jobs:
         run: >-
           cargo xtask payloads diff --against python --corpus all
           --python "$RUNNER_TEMP/oracle/bin/python"
+      - name: Deploy dry-run plan against the oracle's recordings
+        run: cargo xtask payloads plan
+      - name: Changed rules of a scripted git history against the oracle
+        run: >-
+          cargo xtask payloads git --against python
+          --python "$RUNNER_TEMP/oracle/bin/python"
       - name: The code inventory is the oracle's
         run: |
           cargo xtask corpus codes --engine python > "$RUNNER_TEMP/codes.toml"

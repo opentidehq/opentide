@@ -1,0 +1,25 @@
+# Approved differences of `cargo xtask payloads` (UC-3.1, #823): the deploy
+# compile's request bodies (`[[diff]]`, `payloads diff --against python`) and
+# deploy --dry-run's plan (`[[plan]]`, `payloads plan`) where opentide-compile
+# is right and the oracle is not. Every field is required; an entry that
+# matches nothing is stale and fails the run. When deploy runs on the Rust
+# command line, each [[plan]] entry moves to tests/golden/APPROVED_DIFFS.toml
+# as the rule of the deploy cases it applies to.
+
+[[plan]]
+case = "deploy/json/fault/dry-run"
+key = "warnings"
+oracle = '''["1 rule file(s) in subfolders of objects/rules are not deployed (deploy reads only files directly in objects/rules; see https://github.com/opentidehq/opentide/issues/312): objects/rules/nested/hidden-harvest-rule-0020.yaml","6 object files could not be read: objects/threats/encoded-exfiltration-threat-0030.yaml, objects/rules/encoded-relay-rule-0014.yaml, objects/rules/encoded-spray-rule-0023.yaml, objects/rules/lateral-injection-rule-0024.yaml, objects/rules/rogue-relay-rule-0035.yaml, objects/rules/staged-implant-rule-0006.yaml; opentide validate shows where"]'''
+candidate = '''["1 rule file(s) in subfolders of objects/rules are not deployed (deploy reads only files directly in objects/rules; see https://github.com/opentidehq/opentide/issues/312): objects/rules/nested/hidden-harvest-rule-0020.yaml","5 object files could not be read: objects/threats/encoded-exfiltration-threat-0030.yaml, objects/rules/encoded-spray-rule-0023.yaml, objects/rules/lateral-injection-rule-0024.yaml, objects/rules/rogue-relay-rule-0035.yaml, objects/rules/staged-implant-rule-0006.yaml; opentide validate shows where"]'''
+reason = "objects/rules/encoded-relay-rule-0014.yaml writes `reviewed: 2026-02-30` unquoted. PyYAML (YAML 1.1) parses it as a timestamp and refuses the file as unreadable; YAML 1.2 reads the text 2026-02-30, so the file loads and the date field's own check reports it. One unread file fewer."
+issue = "https://github.com/opentidehq/opentide/issues/808"
+changelog = "**Tide objects are read as YAML 1.2**"
+
+[[plan]]
+case = "deploy/json/fault/progress-json"
+key = "warnings"
+oracle = '''["1 rule file(s) in subfolders of objects/rules are not deployed (deploy reads only files directly in objects/rules; see https://github.com/opentidehq/opentide/issues/312): objects/rules/nested/hidden-harvest-rule-0020.yaml","6 object files could not be read: objects/threats/encoded-exfiltration-threat-0030.yaml, objects/rules/encoded-relay-rule-0014.yaml, objects/rules/encoded-spray-rule-0023.yaml, objects/rules/lateral-injection-rule-0024.yaml, objects/rules/rogue-relay-rule-0035.yaml, objects/rules/staged-implant-rule-0006.yaml; opentide validate shows where"]'''
+candidate = '''["1 rule file(s) in subfolders of objects/rules are not deployed (deploy reads only files directly in objects/rules; see https://github.com/opentidehq/opentide/issues/312): objects/rules/nested/hidden-harvest-rule-0020.yaml","5 object files could not be read: objects/threats/encoded-exfiltration-threat-0030.yaml, objects/rules/encoded-spray-rule-0023.yaml, objects/rules/lateral-injection-rule-0024.yaml, objects/rules/rogue-relay-rule-0035.yaml, objects/rules/staged-implant-rule-0006.yaml; opentide validate shows where"]'''
+reason = "objects/rules/encoded-relay-rule-0014.yaml writes `reviewed: 2026-02-30` unquoted. PyYAML (YAML 1.1) parses it as a timestamp and refuses the file as unreadable; YAML 1.2 reads the text 2026-02-30, so the file loads and the date field's own check reports it. One unread file fewer."
+issue = "https://github.com/opentidehq/opentide/issues/808"
+changelog = "**Tide objects are read as YAML 1.2**"
