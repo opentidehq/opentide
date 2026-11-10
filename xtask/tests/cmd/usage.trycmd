@@ -59,6 +59,10 @@ commands:
                  load every corpus with opentide-workspace and compare its
                  index (objects, UUIDs, types, paths, load errors, references,
                  signals), as JSON, with the Python registry's (UC-2.1, #816)
+  lsp parity --corpus faults [--only ID,...] [--keep DIR]
+                 for each fault kind `opentide validate` reports, the
+                 language server's published diagnostics against validate's
+                 findings: codes, severities, ranges in UTF-16 (UC-2.6, #821)
   validate diff [--filter GLOB] [--keep DIR] [--show-approved]
                  run opentide-workspace's validate on every recorded
                  `validate --json` case that only checks, and compare its
@@ -85,6 +89,10 @@ commands:
                  the object models against the oracle: their JSON Schemas,
                  and their verdict on every object file of every corpus
                  (UC-1.3, #809); `cargo xtask schema help` lists the options
+  stubs [--check] [--library FILE]
+                 generate src/opentide/_native/models.pyi, the stubs of the
+                 Tide models' Python classes, from the extension's
+                 introspection data (UC-1.9, #815); --check fails on drift
   help           print this message
 
 exit status: 0 passed, 1 check failed or not implemented yet,

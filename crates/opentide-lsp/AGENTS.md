@@ -32,8 +32,8 @@ cargo run -p opentide-lsp -- generate-highlights --check
 cargo xtask lsp parity --corpus faults                  # published diagnostics = validate's
 ```
 
-`tests/cli.rs` runs `tests/cmd/*.trycmd`. `tests/e2e_stdio.rs`, `protocol.rs`, `catalog.rs` and
-`lint_toml.rs` drive the binary over stdio (`tests/common/`). CI also runs this crate on Windows
+`tests/cli.rs` runs `tests/cmd/*.trycmd`. `tests/e2e_stdio.rs`, `protocol.rs` and `catalog.rs`
+drive the binary over stdio (`tests/common/`). CI also runs this crate on Windows
 and the `scripts/engine/clients` pytest-lsp and Neovim checks.
 
 ## Do not
