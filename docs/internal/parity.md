@@ -14,15 +14,15 @@ The Python CLI at the frozen tag is the oracle ([plan §5](https://github.com/op
 | | |
 |---|---:|
 | Commands | 59 |
-| Commands with a Rust implementation | 2 |
+| Commands with a Rust implementation | 3 |
 | Commands flipped to Rust | 0 |
 | Recordings (command × corpus × mode) | 629 |
-| … no Rust yet | 589 (93.6%) |
+| … no Rust yet | 573 (91.0%) |
 | … compare passing | 0 (0.0%) |
 | … compare failing | 0 (0.0%) |
-| … compare not run | 40 (6.3%) |
+| … compare not run | 56 (8.9%) |
 | … flipped | 0 (0.0%) |
-| Approved diffs (`tests/golden/APPROVED_DIFFS.toml`) | 33 |
+| Approved diffs (`tests/golden/APPROVED_DIFFS.toml`) | 40 |
 | Diagnostic codes with a fault kind | 163 of 175 (93.1%) |
 | … with no fault kind, evidence recorded | 12 |
 | … with neither (missing) | 0 |
@@ -46,12 +46,14 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide deploy`
 
+7 approved diff(s).
+
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
-| fault | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| vscode | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| fault | compare not run | compare not run | compare not run | compare not run |
+| none | compare not run | compare not run | compare not run | compare not run |
+| tide-corpus | compare not run | compare not run | compare not run | compare not run |
+| vscode | compare not run | compare not run | compare not run | compare not run |
 
 ### `opentide deploy migrate-state`
 
