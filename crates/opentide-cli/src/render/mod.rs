@@ -17,6 +17,7 @@
 //! | [`ci`] | GitHub, GitLab and Azure annotations and job summaries |
 //! | [`summary`] | The summaries' Markdown, cut at 256 KiB |
 //! | [`progress`] | The step lines and checklist; `OPENTIDE_PROGRESS=json` events |
+//! | [`table`] | `info`'s tables and aligned columns |
 
 pub mod ci;
 pub mod codeframe;
@@ -26,4 +27,5 @@ pub mod outcome;
 pub mod progress;
 pub mod report;
 pub mod summary;
+pub mod table;
 pub mod text;

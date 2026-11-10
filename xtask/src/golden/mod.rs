@@ -275,6 +275,10 @@ impl Command {
                     self.filter.is_none(),
                     self.report.as_deref(),
                     self.verb == Verb::Diff,
+                    (
+                        &oracle.version,
+                        &crate::compare::candidate_version(&layout.repo)?,
+                    ),
                 )
             }
             _ => self.check(layout, oracle, &all, &selected, &ctx, jobs),

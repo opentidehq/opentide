@@ -1495,7 +1495,9 @@ pub struct InfoArgs {
         value_name = "PLATFORM"
     )]
     pub platform: Option<Platform>,
-    #[arg(value_parser = clap::builder::PossibleValuesParser::new(["rules", "threats", "objectives", "coverage", "vocab", "catalog"]), value_name = "section")]
+    // Checked by the command, with its own message: `tree_meta::CHOICES`
+    // gives the catalogue its choices.
+    #[arg(value_name = "section")]
     pub section: Option<String>,
     #[arg(
         help = "Vocabulary to inspect, with the vocab section (e.g. surface)",

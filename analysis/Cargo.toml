@@ -27,6 +27,9 @@ opentide-analysis.workspace = true
 opentide-lsp.workspace = true
 # The differential comparator, for OPENTIDE_ENGINE=compare (UC-0.7, #805).
 opentide-compare.workspace = true
+# The Rust command line, for the commands ported to it (`cli_main`, run by
+# `python -m opentide.cli.rust`).
+opentide-cli.workspace = true
 
 [build-dependencies]
 pyo3-build-config = "0.30.1"
