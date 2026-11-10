@@ -9,7 +9,7 @@
 //! serialised, to `Deserializer::deserialize_struct`. [`field_order`] reads
 //! them there with a deserializer that stops at that call.
 //!
-//! [`MODELS`] names every model a generated artifact walks, by its schema
+//! [`models`] names every model a generated artifact walks, by its schema
 //! name (the `$defs` key); `generate::tests` fails when a schema reaches a
 //! model it does not name, or when a model's fields are not its schema's
 //! properties.

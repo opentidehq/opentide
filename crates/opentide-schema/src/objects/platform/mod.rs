@@ -186,6 +186,16 @@ pub(crate) fn literal_schema(values: &[&str]) -> schemars::Schema {
     }
 }
 
+/// Pydantic's schema of an optional `Literal` (`Literal[...] | None`):
+/// `anyOf` the literal and `null`. Without it, schemars folds the null into
+/// the inlined literal's `enum` (`[..., null]`), which no Pydantic schema has.
+pub(crate) fn optional_literal<T: schemars::JsonSchema>(
+    generator: &mut schemars::SchemaGenerator,
+) -> schemars::Schema {
+    let literal = generator.subschema_for::<T>();
+    schemars::json_schema!({"anyOf": [literal, {"type": "null"}]})
+}
+
 /// Pydantic's schema of `float`: a number, without schemars' `format`.
 pub(crate) fn number_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
     schemars::json_schema!({"type": "number"})
