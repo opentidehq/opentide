@@ -1,0 +1,5 @@
+---
+source: crates/opentide-cli/tests/render.rs
+expression: validate_fault_ci_gitlab
+---
+

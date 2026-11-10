@@ -1,0 +1,2436 @@
+---
+source: crates/opentide-cli/tests/render.rs
+expression: codes_frames_human
+---
+== analysis_engine
+[1;31merror[analysis_engine][0m[1m: [0m[1mThe analysis engine loads: the Rust module compiled into opentide[0m
+  [1m(`opentide._native`) behind the `queries` checks of `opentide validate` and `opentide lint`,[0m
+  [1m`opentide validate query` and `opentide lsp`.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:2:3]8;;\
+[34m  [0m[34m│[0m
+[34m1 [0m[34m│[0m name: Frame shapes
+[34m2 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain analysis_engine
+
+== api_key_literal
+[1;33mwarning[api_key_literal][0m[1m: [0m[1mA `sharing.toml` block holds its API key as a literal.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:3:3]8;;\
+[34m  [0m[34m│[0m
+[34m2 [0m[34m│[0m metadata:
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m  [0m[34m│[0m   [1;33m━━━━━━[0m[1;33m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain api_key_literal
+
+== api_key_unset
+[1;31merror[api_key_unset][0m[1m: [0m[1mAn enabled sharing target has no API key.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:4:3]8;;\
+[34m  [0m[34m│[0m
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain api_key_unset
+
+== asset_unknown
+[1;33mwarning[asset_unknown][0m[1m: [0m[1mA `visibility.toml` log source or detector names an asset that `[[assets]]`[0m
+  [1mdoes not declare.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:5:3]8;;\
+[34m  [0m[34m│[0m
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m5 [0m[34m│[0m   created: 2026-01-01
+[34m  [0m[34m│[0m   [1;33m━━━━━━[0m[1;33m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain asset_unknown
+
+== cbc_unknown_field
+[1;33mwarning[cbc_unknown_field][0m[1m: [0m[1mA field in a Carbon Black Cloud query is one or two letters away from a[0m
+  [1mCarbon Black process search field, and is not that field.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:6:3]8;;\
+[34m  [0m[34m│[0m
+[34m5 [0m[34m│[0m   created: 2026-01-01
+[34m6 [0m[34m│[0m   modified: 2026-01-02
+[34m  [0m[34m│[0m   [1;33m━━━━━━[0m[1;33m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain cbc_unknown_field
+
+== chaining_relation_unknown
+[1;31merror[chaining_relation_unknown][0m[1m: [0m[1mA threat's chaining relation is not a known relation.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:7:3]8;;\
+[34m  [0m[34m│[0m
+[34m6 [0m[34m│[0m   modified: 2026-01-02
+[34m7 [0m[34m│[0m detection:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain chaining_relation_unknown
+
+== changed_diff
+[1;31merror[changed_diff][0m[1m: [0m[1m`share push --changed` could not calculate which objects changed.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:2:3]8;;\
+[34m  [0m[34m│[0m
+[34m1 [0m[34m│[0m name: Frame shapes
+[34m2 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain changed_diff
+
+== changed_on_pull_request
+[1;31merror[changed_on_pull_request][0m[1m: [0m[1m`share push --changed` does not run on a pull request.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:3:3]8;;\
+[34m  [0m[34m│[0m
+[34m2 [0m[34m│[0m metadata:
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain changed_on_pull_request
+
+== changed_outside_ci
+[1;31merror[changed_outside_ci][0m[1m: [0m[1m`share push --changed` runs only in CI, where the diff it shares is[0m
+  [1mknown.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:4:3]8;;\
+[34m  [0m[34m│[0m
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain changed_outside_ci
+
+== command_failed
+[1;31merror[command_failed][0m[1m: [0m[1mThe command failed for a reason no more specific code covers.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:5:3]8;;\
+[34m  [0m[34m│[0m
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m5 [0m[34m│[0m   created: 2026-01-01
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain command_failed
+
+== compile_empty_block
+[1;31merror[compile_empty_block][0m[1m: [0m[1mA block the rule needs is present but empty, so the platform cannot read[0m
+  [1ma value from it.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:6:3]8;;\
+[34m  [0m[34m│[0m
+[34m5 [0m[34m│[0m   created: 2026-01-01
+[34m6 [0m[34m│[0m   modified: 2026-01-02
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain compile_empty_block
+
+== compile_failed
+[1;31merror[compile_failed][0m[1m: [0m[1mThe platform's compiler rejected the rule for a reason opentide cannot name[0m
+  [1mmore precisely.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:7:3]8;;\
+[34m  [0m[34m│[0m
+[34m6 [0m[34m│[0m   modified: 2026-01-02
+[34m7 [0m[34m│[0m detection:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain compile_failed
+
+== compile_invalid_rule
+[1;31merror[compile_invalid_rule][0m[1m: [0m[1mThe rule does not load as a detection rule the platform can compile.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:2:3]8;;\
+[34m  [0m[34m│[0m
+[34m1 [0m[34m│[0m name: Frame shapes
+[34m2 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain compile_invalid_rule
+
+== compile_invalid_value
+[1;31merror[compile_invalid_value][0m[1m: [0m[1mA setting in the rule's platform block holds a value the platform[0m
+  [1mcannot use.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:3:3]8;;\
+[34m  [0m[34m│[0m
+[34m2 [0m[34m│[0m metadata:
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain compile_invalid_value
+
+== compile_missing_field
+[1;31merror[compile_missing_field][0m[1m: [0m[1mA rule's Sentinel block lacks a setting Sentinel needs to build the[0m
+  [1malert rule.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:4:3]8;;\
+[34m  [0m[34m│[0m
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain compile_missing_field
+
+== config_check_failed
+[1;33mwarning[config_check_failed][0m[1m: [0m[1mopentide could not check this configuration file in the editor; the[0m
+  [1mmessage says why. Its other findings are missing.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:5:3]8;;\
+[34m  [0m[34m│[0m
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m5 [0m[34m│[0m   created: 2026-01-01
+[34m  [0m[34m│[0m   [1;33m━━━━━━[0m[1;33m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain config_check_failed
+
+== config_enum_unknown
+[1;31merror[config_enum_unknown][0m[1m: [0m[1mA value is not one of those your deployment configuration declares.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:6:3]8;;\
+[34m  [0m[34m│[0m
+[34m5 [0m[34m│[0m   created: 2026-01-01
+[34m6 [0m[34m│[0m   modified: 2026-01-02
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain config_enum_unknown
+
+== config_parse
+[1;31merror[config_parse][0m[1m: [0m[1mA configuration file could not be read as TOML.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:7:3]8;;\
+[34m  [0m[34m│[0m
+[34m6 [0m[34m│[0m   modified: 2026-01-02
+[34m7 [0m[34m│[0m detection:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain config_parse
+
+== configuration
+[1;31merror[configuration][0m[1m: [0m[1mThe workspace configuration files under `.opentide/configurations/` load.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:2:3]8;;\
+[34m  [0m[34m│[0m
+[34m1 [0m[34m│[0m name: Frame shapes
+[34m2 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain configuration
+
+== credentials
+[1;31merror[credentials][0m[1m: [0m[1mPer configured tenant, whether every `$VARIABLE` its setup names is set.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:3:3]8;;\
+[34m  [0m[34m│[0m
+[34m2 [0m[34m│[0m metadata:
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain credentials
+
+== crowdstrike_unsupported
+[1;31merror[crowdstrike_unsupported][0m[1m: [0m[1mCrowdStrike queries are not validated; the engine never fakes it.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:4:3]8;;\
+[34m  [0m[34m│[0m
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain crowdstrike_unsupported
+
+== cve_lookup_unavailable
+[1;33mwarning[cve_lookup_unavailable][0m[1m: [0m[1mA threat lists CVE identifiers, but Vulnerability-Lookup could not[0m
+  [1mbe reached to check them.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:5:3]8;;\
+[34m  [0m[34m│[0m
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m5 [0m[34m│[0m   created: 2026-01-01
+[34m  [0m[34m│[0m   [1;33m━━━━━━[0m[1;33m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain cve_lookup_unavailable
+
+== defender_output_columns
+[1;31merror[defender_output_columns][0m[1m: [0m[1mA Defender custom detection must return the columns Defender[0m
+  [1mrequires.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:6:3]8;;\
+[34m  [0m[34m│[0m
+[34m5 [0m[34m│[0m   created: 2026-01-01
+[34m6 [0m[34m│[0m   modified: 2026-01-02
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain defender_output_columns
+
+== deployment_state_platform
+[1;31merror[deployment_state_platform][0m[1m: [0m[1mA deployment state shard names a platform that stores no external[0m
+  [1mids.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:7:3]8;;\
+[34m  [0m[34m│[0m
+[34m6 [0m[34m│[0m   modified: 2026-01-02
+[34m7 [0m[34m│[0m detection:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain deployment_state_platform
+
+== deployment_state_shape
+[1;31merror[deployment_state_shape][0m[1m: [0m[1mA deployment state shard is not the JSON shape opentide writes.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:2:3]8;;\
+[34m  [0m[34m│[0m
+[34m1 [0m[34m│[0m name: Frame shapes
+[34m2 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain deployment_state_shape
+
+== deployment_state_uuid_mismatch
+[1;31merror[deployment_state_uuid_mismatch][0m[1m: [0m[1mA deployment state shard's file name and contents name[0m
+  [1mdifferent rules.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:3:3]8;;\
+[34m  [0m[34m│[0m
+[34m2 [0m[34m│[0m metadata:
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain deployment_state_uuid_mismatch
+
+== deprecated_field
+[1;33mwarning[deprecated_field][0m[1m: [0m[1mAn object uses a field its schema marks as deprecated.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:4:3]8;;\
+[34m  [0m[34m│[0m
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m  [0m[34m│[0m   [1;33m━━━━━━[0m[1;33m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain deprecated_field
+
+== doctor_checks_failed
+[1;31merror[doctor_checks_failed][0m[1m: [0m[1mAt least one `opentide doctor` check failed.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:5:3]8;;\
+[34m  [0m[34m│[0m
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m5 [0m[34m│[0m   created: 2026-01-01
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain doctor_checks_failed
+
+== duplicate_id
+[1;31merror[duplicate_id][0m[1m: [0m[1mTwo object files carry the same UUID.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:6:3]8;;\
+[34m  [0m[34m│[0m
+[34m5 [0m[34m│[0m   created: 2026-01-01
+[34m6 [0m[34m│[0m   modified: 2026-01-02
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain duplicate_id
+
+== duplicate_name
+[1;31merror[duplicate_name][0m[1m: [0m[1mTwo `sharing.toml` blocks share a name.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:7:3]8;;\
+[34m  [0m[34m│[0m
+[34m6 [0m[34m│[0m   modified: 2026-01-02
+[34m7 [0m[34m│[0m detection:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain duplicate_name
+
+== ecs_type_mismatch
+[1;31merror[ecs_type_mismatch][0m[1m: [0m[1mThe operation cannot apply to the field's type, from ECS or from the[0m
+  [1mcolumns visibility.toml declares for the index.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:2:3]8;;\
+[34m  [0m[34m│[0m
+[34m1 [0m[34m│[0m name: [32mFrame shapes[0m
+[34m2 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain ecs_type_mismatch
+
+== ecs_unknown_field
+[1;31merror[ecs_unknown_field][0m[1m: [0m[1mThe field is not in the Elastic Common Schema, on indices that use it, nor[0m
+  [1mdeclared for the index in visibility.toml; ECS allows custom fields.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:3:3]8;;\
+[34m  [0m[34m│[0m
+[34m2 [0m[34m│[0m metadata:
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain ecs_unknown_field
+
+== elastic_dataset_not_declared
+[1;33mwarning[elastic_dataset_not_declared][0m[1m: [0m[1mThe index pattern is not one the workspace declares in[0m
+  [1mvisibility.toml.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:4:3]8;;\
+[34m  [0m[34m│[0m
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m  [0m[34m│[0m   [1;33m━━━━━━[0m[1;33m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain elastic_dataset_not_declared
+
+== engine_unavailable
+[1;31merror[engine_unavailable][0m[1m: [0m[1mThe analysis engine (the Rust module compiled into opentide) does not[0m
+  [1mload, so the command cannot check queries or serve the language server.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:5:3]8;;\
+[34m  [0m[34m│[0m
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m5 [0m[34m│[0m   created: 2026-01-01
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain engine_unavailable
+
+== eql_argument_type
+[1;31merror[eql_argument_type][0m[1m: [0m[1mA literal has a type the EQL verifier rejects in this position.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:6:3]8;;\
+[34m  [0m[34m│[0m
+[34m5 [0m[34m│[0m   created: [32m2026-01-01[0m
+[34m6 [0m[34m│[0m   modified: [32m2026-01-02[0m
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain eql_argument_type
+
+== eql_case_sensitive
+[1;31merror[eql_case_sensitive][0m[1m: [0m[1mThe comparison is case-sensitive; the case-insensitive form may be meant.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:7:3]8;;\
+[34m  [0m[34m│[0m
+[34m6 [0m[34m│[0m   modified: [32m2026-01-02[0m
+[34m7 [0m[34m│[0m detection:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain eql_case_sensitive
+
+== eql_expression_depth
+[1;31merror[eql_expression_depth][0m[1m: [0m[1mThe expression nests deeper than Elasticsearch accepts.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:2:3]8;;\
+[34m  [0m[34m│[0m
+[34m1 [0m[34m│[0m name: [32mFrame shapes[0m
+[34m2 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain eql_expression_depth
+
+== eql_field_comparison
+[1;31merror[eql_field_comparison][0m[1m: [0m[1mBoth sides of a comparison read fields, which EQL does not support.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:3:3]8;;\
+[34m  [0m[34m│[0m
+[34m2 [0m[34m│[0m metadata:
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain eql_field_comparison
+
+== eql_function_arity
+[1;31merror[eql_function_arity][0m[1m: [0m[1mAn EQL function is called with the wrong number of arguments.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:4:3]8;;\
+[34m  [0m[34m│[0m
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain eql_function_arity
+
+== eql_literal_wildcard
+[1;31merror[eql_literal_wildcard][0m[1m: [0m[1mA wildcard character is compared literally; use : or like for a[0m
+  [1mpattern.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:5:3]8;;\
+[34m  [0m[34m│[0m
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m5 [0m[34m│[0m   created: [32m2026-01-01[0m
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain eql_literal_wildcard
+
+== eql_maxspan_lookback
+[1;31merror[eql_maxspan_lookback][0m[1m: [0m[1mA sequence maxspan is longer than the rule's lookback.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:6:3]8;;\
+[34m  [0m[34m│[0m
+[34m5 [0m[34m│[0m   created: [32m2026-01-01[0m
+[34m6 [0m[34m│[0m   modified: [32m2026-01-02[0m
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain eql_maxspan_lookback
+
+== eql_maxspan_missing
+[1;31merror[eql_maxspan_missing][0m[1m: [0m[1mA sequence has no maxspan, so partial sequences are held until they[0m
+  [1mexpire.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:7:3]8;;\
+[34m  [0m[34m│[0m
+[34m6 [0m[34m│[0m   modified: [32m2026-01-02[0m
+[34m7 [0m[34m│[0m detection:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain eql_maxspan_missing
+
+== eql_maxspan_unit
+[1;31merror[eql_maxspan_unit][0m[1m: [0m[1mA sequence maxspan uses a unit Elasticsearch does not accept.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:2:3]8;;\
+[34m  [0m[34m│[0m
+[34m1 [0m[34m│[0m name: [32mFrame shapes[0m
+[34m2 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain eql_maxspan_unit
+
+== eql_maxspan_window
+[1;31merror[eql_maxspan_window][0m[1m: [0m[1mA sequence maxspan is longer than the rule's interval plus lookback, so[0m
+  [1mthe rule cannot see whole sequences.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:3:3]8;;\
+[34m  [0m[34m│[0m
+[34m2 [0m[34m│[0m metadata:
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain eql_maxspan_window
+
+== eql_nested_comment
+[1;31merror[eql_nested_comment][0m[1m: [0m[1mElasticsearch nests /* */ comments; the comment ends later than it looks.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:4:3]8;;\
+[34m  [0m[34m│[0m
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain eql_nested_comment
+
+== eql_not_boolean
+[1;31merror[eql_not_boolean][0m[1m: [0m[1mA string or number literal is used as a condition.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:5:3]8;;\
+[34m  [0m[34m│[0m
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m5 [0m[34m│[0m   created: [32m2026-01-01[0m
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain eql_not_boolean
+
+== eql_parse_error
+[1;31merror[eql_parse_error][0m[1m: [0m[1mThe EQL query does not parse.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:6:3]8;;\
+[34m  [0m[34m│[0m
+[34m5 [0m[34m│[0m   created: [32m2026-01-01[0m
+[34m6 [0m[34m│[0m   modified: [32m2026-01-02[0m
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain eql_parse_error
+
+== eql_regex
+[1;31merror[eql_regex][0m[1m: [0m[1mThe regular expression trips a Lucene RegExp pitfall.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:7:3]8;;\
+[34m  [0m[34m│[0m
+[34m6 [0m[34m│[0m   modified: [32m2026-01-02[0m
+[34m7 [0m[34m│[0m detection:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain eql_regex
+
+== eql_runs_ignored
+[1;31merror[eql_runs_ignored][0m[1m: [0m[1mA decimal runs count is truncated by Elasticsearch.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:2:3]8;;\
+[34m  [0m[34m│[0m
+[34m1 [0m[34m│[0m name: [32mFrame shapes[0m
+[34m2 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain eql_runs_ignored
+
+== eql_unknown_function
+[1;31merror[eql_unknown_function][0m[1m: [0m[1mThe EQL function is not in the Elasticsearch function catalog.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:3:3]8;;\
+[34m  [0m[34m│[0m
+[34m2 [0m[34m│[0m metadata:
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain eql_unknown_function
+
+== eql_unsupported
+[1;31merror[eql_unsupported][0m[1m: [0m[1mElasticsearch EQL does not support this construct (pipes, relationships,[0m
+  [1m...).[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:4:3]8;;\
+[34m  [0m[34m│[0m
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain eql_unsupported
+
+== eql_until_term
+[1;31merror[eql_until_term][0m[1m: [0m[1mruns or a missing-event term ![ ] is not allowed on until.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:5:3]8;;\
+[34m  [0m[34m│[0m
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m5 [0m[34m│[0m   created: [32m2026-01-01[0m
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain eql_until_term
+
+== esql_expression_depth
+[1;31merror[esql_expression_depth][0m[1m: [0m[1mThe expression nests deeper than Elasticsearch accepts.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:6:3]8;;\
+[34m  [0m[34m│[0m
+[34m5 [0m[34m│[0m   created: [32m2026-01-01[0m
+[34m6 [0m[34m│[0m   modified: [32m2026-01-02[0m
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain esql_expression_depth
+
+== esql_group_by_column
+[1;31merror[esql_group_by_column][0m[1m: [0m[1mA suppression group_by field is not a column the ES|QL query returns.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:7:3]8;;\
+[34m  [0m[34m│[0m
+[34m6 [0m[34m│[0m   modified: [32m2026-01-02[0m
+[34m7 [0m[34m│[0m detection:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain esql_group_by_column
+
+== esql_metadata_id
+[1;31merror[esql_metadata_id][0m[1m: [0m[1mA non-aggregating ES|QL rule query has no METADATA _id, so alerts cannot be[0m
+  [1mdeduplicated.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:2:3]8;;\
+[34m  [0m[34m│[0m
+[34m1 [0m[34m│[0m name: [32mFrame shapes[0m
+[34m2 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain esql_metadata_id
+
+== esql_parse_error
+[1;31merror[esql_parse_error][0m[1m: [0m[1mThe ES|QL query does not parse.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:3:3]8;;\
+[34m  [0m[34m│[0m
+[34m2 [0m[34m│[0m metadata:
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain esql_parse_error
+
+== esql_pattern
+[1;31merror[esql_pattern][0m[1m: [0m[1mA LIKE or RLIKE pattern escapes or matches differently than it reads.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:4:3]8;;\
+[34m  [0m[34m│[0m
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain esql_pattern
+
+== esql_unavailable
+[1;31merror[esql_unavailable][0m[1m: [0m[1mThe command, function or form is missing or in preview on a targeted stack[0m
+  [1mversion.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:5:3]8;;\
+[34m  [0m[34m│[0m
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m5 [0m[34m│[0m   created: [32m2026-01-01[0m
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain esql_unavailable
+
+== esql_unknown_command
+[1;31merror[esql_unknown_command][0m[1m: [0m[1mThe ES|QL command is not one Elasticsearch knows.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:6:3]8;;\
+[34m  [0m[34m│[0m
+[34m5 [0m[34m│[0m   created: [32m2026-01-01[0m
+[34m6 [0m[34m│[0m   modified: [32m2026-01-02[0m
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain esql_unknown_command
+
+== esql_unknown_function
+[1;31merror[esql_unknown_function][0m[1m: [0m[1mThe ES|QL function is not in the Elasticsearch function catalog.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:7:3]8;;\
+[34m  [0m[34m│[0m
+[34m6 [0m[34m│[0m   modified: [32m2026-01-02[0m
+[34m7 [0m[34m│[0m detection:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain esql_unknown_function
+
+== esql_unknown_type
+[1;31merror[esql_unknown_type][0m[1m: [0m[1mThe ::type cast names a type no Elasticsearch release can cast to.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:2:3]8;;\
+[34m  [0m[34m│[0m
+[34m1 [0m[34m│[0m name: [32mFrame shapes[0m
+[34m2 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain esql_unknown_type
+
+== external_id_in_rule
+[1;31merror[external_id_in_rule][0m[1m: [0m[1mA rule still carries a vendor rule id key, which belongs in deployment[0m
+  [1mstate.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:3:3]8;;\
+[34m  [0m[34m│[0m
+[34m2 [0m[34m│[0m metadata:
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain external_id_in_rule
+
+== external_id_shape
+[1;31merror[external_id_shape][0m[1m: [0m[1mA vendor rule id in deployment state has the wrong form.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:4:3]8;;\
+[34m  [0m[34m│[0m
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain external_id_shape
+
+== falco_append_condition
+[1;31merror[falco_append_condition][0m[1m: [0m[1mA tuning's condition is appended to the tuned rule's condition and[0m
+  [1mmust start with `and` or `or`; a new rule's condition must not.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:5:3]8;;\
+[34m  [0m[34m│[0m
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m5 [0m[34m│[0m   created: [32m2026-01-01[0m
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain falco_append_condition
+
+== falco_deprecated_field
+[1;31merror[falco_deprecated_field][0m[1m: [0m[1mA field Falco deprecates (`evt.dir`, `evt.latency`): it no longer[0m
+  [1mcarries the value it used to.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:6:3]8;;\
+[34m  [0m[34m│[0m
+[34m5 [0m[34m│[0m   created: [32m2026-01-01[0m
+[34m6 [0m[34m│[0m   modified: [32m2026-01-02[0m
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain falco_deprecated_field
+
+== falco_exception
+[1;31merror[falco_exception][0m[1m: [0m[1mA rule exception Falco refuses: comparison operators, field and value[0m
+  [1mcounts, or a value the field's type cannot hold.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:7:3]8;;\
+[34m  [0m[34m│[0m
+[34m6 [0m[34m│[0m   modified: [32m2026-01-02[0m
+[34m7 [0m[34m│[0m detection:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain falco_exception
+
+== falco_field_argument
+[1;31merror[falco_field_argument][0m[1m: [0m[1mA known Falco field is used with an argument it refuses, or without one[0m
+  [1mit requires (libsinsp's field rules: `proc.aname[N]` takes an index, `evt.arg.NAME` an event[0m
+  [1margument).[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:2:3]8;;\
+[34m  [0m[34m│[0m
+[34m1 [0m[34m│[0m name: [32mFrame shapes[0m
+[34m2 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain falco_field_argument
+
+== falco_field_as_value
+[1;31merror[falco_field_as_value][0m[1m: [0m[1mA constant value that is a field name: compare with `val(field)` to[0m
+  [1mread the field.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:3:3]8;;\
+[34m  [0m[34m│[0m
+[34m2 [0m[34m│[0m metadata:
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain falco_field_as_value
+
+== falco_invalid_regex
+[1;31merror[falco_invalid_regex][0m[1m: [0m[1mThe `regex` pattern does not compile.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:4:3]8;;\
+[34m  [0m[34m│[0m
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain falco_invalid_regex
+
+== falco_misplaced_list
+[1;31merror[falco_misplaced_list][0m[1m: [0m[1mA list is used where its expansion breaks the condition: as a macro, or[0m
+  [1mas a single value; a list belongs inside a value list, `in (name)`.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:5:3]8;;\
+[34m  [0m[34m│[0m
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m5 [0m[34m│[0m   created: [32m2026-01-01[0m
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain falco_misplaced_list
+
+== falco_newer_syntax
+[1;31merror[falco_newer_syntax][0m[1m: [0m[1mSyntax that only recent libsinsp releases parse (operator modifiers,[0m
+  [1m`join`, `concat`, `getopt`, transformer arguments); an older Falco or Sysdig agent refuses the[0m
+  [1mrule.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:6:3]8;;\
+[34m  [0m[34m│[0m
+[34m5 [0m[34m│[0m   created: [32m2026-01-01[0m
+[34m6 [0m[34m│[0m   modified: [32m2026-01-02[0m
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain falco_newer_syntax
+
+== falco_no_evttype
+[1;31merror[falco_no_evttype][0m[1m: [0m[1mThe rule cannot be narrowed to a few event types (`evt.type`), so it runs[0m
+  [1mon every event; Falco and Sysdig warn about the performance penalty.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:7:3]8;;\
+[34m  [0m[34m│[0m
+[34m6 [0m[34m│[0m   modified: [32m2026-01-02[0m
+[34m7 [0m[34m│[0m detection:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain falco_no_evttype
+
+== falco_operator_type
+[1;31merror[falco_operator_type][0m[1m: [0m[1mThe operator does not apply to the field's type (libsinsp[0m
+  [1m`flt_is_comparable`); Falco refuses to load the rule.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:2:3]8;;\
+[34m  [0m[34m│[0m
+[34m1 [0m[34m│[0m name: [32mFrame shapes[0m
+[34m2 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain falco_operator_type
+
+== falco_output_syntax
+[1;31merror[falco_output_syntax][0m[1m: [0m[1mThe output template does not format: a `%` at the end, a length with no[0m
+  [1mfield, or a token that is no field or transformer.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:3:3]8;;\
+[34m  [0m[34m│[0m
+[34m2 [0m[34m│[0m metadata:
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain falco_output_syntax
+
+== falco_parse_error
+[1;31merror[falco_parse_error][0m[1m: [0m[1mThe Falco condition does not parse.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:4:3]8;;\
+[34m  [0m[34m│[0m
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain falco_parse_error
+
+== falco_regex_simple
+[1;31merror[falco_regex_simple][0m[1m: [0m[1mA `regex` check a plain operator (`=`, `contains`, `startswith`,[0m
+  [1m`endswith`) could make, which libsinsp warns about: regex is the slowest check.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:5:3]8;;\
+[34m  [0m[34m│[0m
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m5 [0m[34m│[0m   created: [32m2026-01-01[0m
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain falco_regex_simple
+
+== falco_rhs_field
+[1;31merror[falco_rhs_field][0m[1m: [0m[1mA field cannot be compared with another field here (`val(...)` or a[0m
+  [1mtransformer on the right): not with `pmatch` or `regex`, not on networks, not on fields that[0m
+  [1mrefuse it, and only between fields of the same type.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:6:3]8;;\
+[34m  [0m[34m│[0m
+[34m5 [0m[34m│[0m   created: [32m2026-01-01[0m
+[34m6 [0m[34m│[0m   modified: [32m2026-01-02[0m
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain falco_rhs_field
+
+== falco_transformer
+[1;31merror[falco_transformer][0m[1m: [0m[1mA field transformer cannot apply here: the field's type, a field that[0m
+  [1mrefuses transformers, or the arguments of `join`, `concat`, or `getopt`.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:7:3]8;;\
+[34m  [0m[34m│[0m
+[34m6 [0m[34m│[0m   modified: [32m2026-01-02[0m
+[34m7 [0m[34m│[0m detection:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain falco_transformer
+
+== falco_transformer_as_value
+[1;31merror[falco_transformer_as_value][0m[1m: [0m[1mA constant value that looks like a transformer call, compared as[0m
+  [1mtext.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:2:3]8;;\
+[34m  [0m[34m│[0m
+[34m1 [0m[34m│[0m name: [32mFrame shapes[0m
+[34m2 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain falco_transformer_as_value
+
+== falco_unknown_event
+[1;31merror[falco_unknown_event][0m[1m: [0m[1mThe event type is not in the driver's event table nor a syscall name;[0m
+  [1mlibsinsp refuses it.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:3:3]8;;\
+[34m  [0m[34m│[0m
+[34m2 [0m[34m│[0m metadata:
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain falco_unknown_event
+
+== falco_unknown_field
+[1;31merror[falco_unknown_field][0m[1m: [0m[1mThe field is not one Falco or its plugins define for the rule's event[0m
+  [1msource; a plugin the engine does not know may add it.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:4:3]8;;\
+[34m  [0m[34m│[0m
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain falco_unknown_field
+
+== falco_unknown_list
+[1;31merror[falco_unknown_list][0m[1m: [0m[1mThe name after a list operator, without parentheses, is not a list of the[0m
+  [1mblock or of the Falco default rules, so it is compared as a single value.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:5:3]8;;\
+[34m  [0m[34m│[0m
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m5 [0m[34m│[0m   created: [32m2026-01-01[0m
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain falco_unknown_list
+
+== falco_unknown_macro
+[1;31merror[falco_unknown_macro][0m[1m: [0m[1mThe name is not a macro of the block or of the Falco default rules; the[0m
+  [1mtenant may define it, as Sysdig does for its managed macros.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:6:3]8;;\
+[34m  [0m[34m│[0m
+[34m5 [0m[34m│[0m   created: [32m2026-01-01[0m
+[34m6 [0m[34m│[0m   modified: [32m2026-01-02[0m
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain falco_unknown_macro
+
+== falco_unknown_rule
+[1;31merror[falco_unknown_rule][0m[1m: [0m[1mA tuning (`append_to_rule`) names a rule the Falco default rules do not[0m
+  [1mdefine: Falco refuses the append, and on Sysdig the tenant must have that rule.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:7:3]8;;\
+[34m  [0m[34m│[0m
+[34m6 [0m[34m│[0m   modified: [32m2026-01-02[0m
+[34m7 [0m[34m│[0m detection:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain falco_unknown_rule
+
+== falco_unknown_source
+[1;31merror[falco_unknown_source][0m[1m: [0m[1mThe event source is not one Falco or its published plugins define, so[0m
+  [1mits fields are not checked.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:2:3]8;;\
+[34m  [0m[34m│[0m
+[34m1 [0m[34m│[0m name: [32mFrame shapes[0m
+[34m2 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain falco_unknown_source
+
+== falco_unsafe_na_check
+[1;31merror[falco_unsafe_na_check][0m[1m: [0m[1mA `ka.` or `jevt.` field compared with `<NA>`, which Falco warns[0m
+  [1mabout: the field may hold that text.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:3:3]8;;\
+[34m  [0m[34m│[0m
+[34m2 [0m[34m│[0m metadata:
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain falco_unsafe_na_check
+
+== falco_value_type
+[1;31merror[falco_value_type][0m[1m: [0m[1mThe value cannot be parsed as the field's type (a number, `true` or[0m
+  [1m`false`, an IP address or network, a hex string for `bcontains`); Falco refuses to load the rule.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:4:3]8;;\
+[34m  [0m[34m│[0m
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain falco_value_type
+
+== filename_mismatch
+[1;33mwarning[filename_mismatch][0m[1m: [0m[1mAn object file's name is not the stem `lint.toml` `[filenames].style`[0m
+  [1m(or its kind's `[filenames.<kind>].style`) asks for: `slugify(name)` by default.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:5:3]8;;\
+[34m  [0m[34m│[0m
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m5 [0m[34m│[0m   created: 2026-01-01
+[34m  [0m[34m│[0m   [1;33m━━━━━━[0m[1;33m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain filename_mismatch
+
+== filename_pattern
+[1;33mwarning[filename_pattern][0m[1m: [0m[1mAn object file's name does not match the regular expression `lint.toml`[0m
+  [1msets for it.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:6:3]8;;\
+[34m  [0m[34m│[0m
+[34m5 [0m[34m│[0m   created: 2026-01-01
+[34m6 [0m[34m│[0m   modified: 2026-01-02
+[34m  [0m[34m│[0m   [1;33m━━━━━━[0m[1;33m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain filename_pattern
+
+== filename_slug
+[1;31merror[filename_slug][0m[1m: [0m[1mThe file name is not the one lint.toml's [filenames] style derives from the[0m
+  [1mobject's name.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:7:3]8;;\
+[34m  [0m[34m│[0m
+[34m6 [0m[34m│[0m   modified: 2026-01-02
+[34m7 [0m[34m│[0m detection:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain filename_slug
+
+== git
+[1;31merror[git][0m[1m: [0m[1mgit is on `PATH`.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:2:3]8;;\
+[34m  [0m[34m│[0m
+[34m1 [0m[34m│[0m name: Frame shapes
+[34m2 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain git
+
+== git_repository
+[1;31merror[git_repository][0m[1m: [0m[1mThe workspace is in a git repository, and its default branch (`origin/HEAD`).[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:3:3]8;;\
+[34m  [0m[34m│[0m
+[34m2 [0m[34m│[0m metadata:
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain git_repository
+
+== internal
+[1;31merror[internal][0m[1m: [0m[1mopentide stopped on an exception it did not handle: a bug in opentide, not in your[0m
+  [1minput.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:4:3]8;;\
+[34m  [0m[34m│[0m
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain internal
+
+== interrupted
+[1;31merror[interrupted][0m[1m: [0m[1mThe command was stopped before it finished: an `opentide serve` client cancelled[0m
+  [1mthe run.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:5:3]8;;\
+[34m  [0m[34m│[0m
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m5 [0m[34m│[0m   created: 2026-01-01
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain interrupted
+
+== invalid_cve
+[1;31merror[invalid_cve][0m[1m: [0m[1mA threat lists CVE identifiers Vulnerability-Lookup does not know.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:6:3]8;;\
+[34m  [0m[34m│[0m
+[34m5 [0m[34m│[0m   created: 2026-01-01
+[34m6 [0m[34m│[0m   modified: 2026-01-02
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain invalid_cve
+
+== invalid_ref
+[1;31merror[invalid_ref][0m[1m: [0m[1mA reference names an object that does not exist.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:7:3]8;;\
+[34m  [0m[34m│[0m
+[34m6 [0m[34m│[0m   modified: 2026-01-02
+[34m7 [0m[34m│[0m detection:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain invalid_ref
+
+== invalid_uuid
+[1;31merror[invalid_uuid][0m[1m: [0m[1mAn object's `metadata.uuid` is not a UUID v4.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:2:3]8;;\
+[34m  [0m[34m│[0m
+[34m1 [0m[34m│[0m name: Frame shapes
+[34m2 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain invalid_uuid
+
+== invalid_value
+[1;31merror[invalid_value][0m[1m: [0m[1mA `sharing.toml` value has the wrong type.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:3:3]8;;\
+[34m  [0m[34m│[0m
+[34m2 [0m[34m│[0m metadata:
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain invalid_value
+
+== issues_found
+[1;31merror[issues_found][0m[1m: [0m[1mThe command ran and failed on what it found.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:4:3]8;;\
+[34m  [0m[34m│[0m
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain issues_found
+
+== kql_control_command_unsupported
+[1;31merror[kql_control_command_unsupported][0m[1m: [0m[1mA KQL control command (.show, .create, ...) is not a[0m
+  [1mdetection query; rules cannot run it.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:5:3]8;;\
+[34m  [0m[34m│[0m
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m5 [0m[34m│[0m   created: [32m2026-01-01[0m
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain kql_control_command_unsupported
+
+== kql_deprecated_function
+[1;31merror[kql_deprecated_function][0m[1m: [0m[1mThe KQL function is a deprecated alias; Microsoft Learn names its[0m
+  [1mreplacement.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:6:3]8;;\
+[34m  [0m[34m│[0m
+[34m5 [0m[34m│[0m   created: [32m2026-01-01[0m
+[34m6 [0m[34m│[0m   modified: [32m2026-01-02[0m
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain kql_deprecated_function
+
+== kql_deprecated_operator
+[1;31merror[kql_deprecated_operator][0m[1m: [0m[1mThe KQL scalar operator is a legacy spelling (containscs); use the[0m
+  [1mcurrent name (contains_cs).[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:7:3]8;;\
+[34m  [0m[34m│[0m
+[34m6 [0m[34m│[0m   modified: [32m2026-01-02[0m
+[34m7 [0m[34m│[0m detection:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain kql_deprecated_operator
+
+== kql_join_summarize_before_project
+[1;31merror[kql_join_summarize_before_project][0m[1m: [0m[1mjoin or summarize runs before project, so it carries every[0m
+  [1mcolumn.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:2:3]8;;\
+[34m  [0m[34m│[0m
+[34m1 [0m[34m│[0m name: [32mFrame shapes[0m
+[34m2 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain kql_join_summarize_before_project
+
+== kql_parse_error
+[1;31merror[kql_parse_error][0m[1m: [0m[1mThe KQL query does not parse.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:3:3]8;;\
+[34m  [0m[34m│[0m
+[34m2 [0m[34m│[0m metadata:
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain kql_parse_error
+
+== kql_render_not_valid
+[1;31merror[kql_render_not_valid][0m[1m: [0m[1mrender draws a chart; it has no effect in a detection rule.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:4:3]8;;\
+[34m  [0m[34m│[0m
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain kql_render_not_valid
+
+== kql_table_not_declared
+[1;33mwarning[kql_table_not_declared][0m[1m: [0m[1mThe table is one the engine knows for the platform, but no log[0m
+  [1msource of the workspace declares it in visibility.toml.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:5:3]8;;\
+[34m  [0m[34m│[0m
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m5 [0m[34m│[0m   created: [32m2026-01-01[0m
+[34m  [0m[34m│[0m   [1;33m━━━━━━[0m[1;33m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain kql_table_not_declared
+
+== kql_type_mismatch
+[1;31merror[kql_type_mismatch][0m[1m: [0m[1mThe operator cannot apply to the column's documented or declared type.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:6:3]8;;\
+[34m  [0m[34m│[0m
+[34m5 [0m[34m│[0m   created: [32m2026-01-01[0m
+[34m6 [0m[34m│[0m   modified: [32m2026-01-02[0m
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain kql_type_mismatch
+
+== kql_unknown_column
+[1;31merror[kql_unknown_column][0m[1m: [0m[1mThe column is not in the documented schema of the table or ASIM parser it[0m
+  [1mcomes from, or in the columns visibility.toml declares for the table.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:7:3]8;;\
+[34m  [0m[34m│[0m
+[34m6 [0m[34m│[0m   modified: [32m2026-01-02[0m
+[34m7 [0m[34m│[0m detection:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain kql_unknown_column
+
+== kql_unknown_function
+[1;31merror[kql_unknown_function][0m[1m: [0m[1mThe KQL function is not in the Kusto function catalog.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:2:3]8;;\
+[34m  [0m[34m│[0m
+[34m1 [0m[34m│[0m name: [32mFrame shapes[0m
+[34m2 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain kql_unknown_function
+
+== kql_unknown_operator
+[1;31merror[kql_unknown_operator][0m[1m: [0m[1mThe KQL tabular operator is not one Kusto knows.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:3:3]8;;\
+[34m  [0m[34m│[0m
+[34m2 [0m[34m│[0m metadata:
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain kql_unknown_operator
+
+== kql_unknown_table
+[1;31merror[kql_unknown_table][0m[1m: [0m[1mThe table is neither one the engine knows for the platform nor one the[0m
+  [1mworkspace declares in visibility.toml: a warning under Sentinel, whose workspaces hold tables no[0m
+  [1mcatalog lists; an error under Defender's advanced hunting schema. Declaring it in visibility.toml[0m
+  [1mmakes it known.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:4:3]8;;\
+[34m  [0m[34m│[0m
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain kql_unknown_table
+
+== kql_unscoped_search
+[1;31merror[kql_unscoped_search][0m[1m: [0m[1msearch without a table scans every table in the workspace.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:5:3]8;;\
+[34m  [0m[34m│[0m
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m5 [0m[34m│[0m   created: [32m2026-01-01[0m
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain kql_unscoped_search
+
+== kql_unscoped_union
+[1;31merror[kql_unscoped_union][0m[1m: [0m[1munion * or an unscoped union reads every table.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:6:3]8;;\
+[34m  [0m[34m│[0m
+[34m5 [0m[34m│[0m   created: [32m2026-01-01[0m
+[34m6 [0m[34m│[0m   modified: [32m2026-01-02[0m
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain kql_unscoped_union
+
+== kql_where_not_first
+[1;31merror[kql_where_not_first][0m[1m: [0m[1mA filter comes after a more expensive operator; filtering first scans[0m
+  [1mfewer rows.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:7:3]8;;\
+[34m  [0m[34m│[0m
+[34m6 [0m[34m│[0m   modified: [32m2026-01-02[0m
+[34m7 [0m[34m│[0m detection:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain kql_where_not_first
+
+== kql_wildcard_table
+[1;31merror[kql_wildcard_table][0m[1m: [0m[1mA wildcard table name reads every matching table.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:2:3]8;;\
+[34m  [0m[34m│[0m
+[34m1 [0m[34m│[0m name: [32mFrame shapes[0m
+[34m2 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain kql_wildcard_table
+
+== kuery_escape
+[1;31merror[kuery_escape][0m[1m: [0m[1mA character needs escaping in Kibana KQL (kuery).[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:3:3]8;;\
+[34m  [0m[34m│[0m
+[34m2 [0m[34m│[0m metadata:
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain kuery_escape
+
+== kuery_free_text
+[1;31merror[kuery_free_text][0m[1m: [0m[1mA value with no field searches every field.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:4:3]8;;\
+[34m  [0m[34m│[0m
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain kuery_free_text
+
+== kuery_looks_like_lucene
+[1;31merror[kuery_looks_like_lucene][0m[1m: [0m[1mThe query reads like Lucene; language: lucene may be meant.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:5:3]8;;\
+[34m  [0m[34m│[0m
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m5 [0m[34m│[0m   created: [32m2026-01-01[0m
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain kuery_looks_like_lucene
+
+== kuery_lucene_syntax
+[1;31merror[kuery_lucene_syntax][0m[1m: [0m[1mLucene syntax inside a Kibana KQL (kuery) query.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:6:3]8;;\
+[34m  [0m[34m│[0m
+[34m5 [0m[34m│[0m   created: [32m2026-01-01[0m
+[34m6 [0m[34m│[0m   modified: [32m2026-01-02[0m
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain kuery_lucene_syntax
+
+== kuery_parse_error
+[1;31merror[kuery_parse_error][0m[1m: [0m[1mThe Kibana KQL (kuery) query does not parse.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:7:3]8;;\
+[34m  [0m[34m│[0m
+[34m6 [0m[34m│[0m   modified: [32m2026-01-02[0m
+[34m7 [0m[34m│[0m detection:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain kuery_parse_error
+
+== kuery_question_mark
+[1;31merror[kuery_question_mark][0m[1m: [0m[1m? is a literal in Kibana KQL (kuery), not a single-character wildcard.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:2:3]8;;\
+[34m  [0m[34m│[0m
+[34m1 [0m[34m│[0m name: [32mFrame shapes[0m
+[34m2 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain kuery_question_mark
+
+== kuery_quoted_wildcard
+[1;31merror[kuery_quoted_wildcard][0m[1m: [0m[1mA wildcard inside quotes is a literal * in Kibana KQL (kuery).[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:3:3]8;;\
+[34m  [0m[34m│[0m
+[34m2 [0m[34m│[0m metadata:
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain kuery_quoted_wildcard
+
+== kuery_range_type
+[1;31merror[kuery_range_type][0m[1m: [0m[1mA range compares a value of the wrong type.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:4:3]8;;\
+[34m  [0m[34m│[0m
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain kuery_range_type
+
+== lookback_long
+[1;31merror[lookback_long][0m[1m: [0m[1mThe Elastic rule's lookback exceeds an hour; it is added to the interval, not[0m
+  [1mthe whole window.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:5:3]8;;\
+[34m  [0m[34m│[0m
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m5 [0m[34m│[0m   created: 2026-01-01
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain lookback_long
+
+== lookback_zero
+[1;31merror[lookback_zero][0m[1m: [0m[1mThe Elastic rule's lookback is zero, so events that arrive late are missed.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:6:3]8;;\
+[34m  [0m[34m│[0m
+[34m5 [0m[34m│[0m   created: 2026-01-01
+[34m6 [0m[34m│[0m   modified: 2026-01-02
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain lookback_zero
+
+== lsp_catalog
+[1;31merror[lsp_catalog][0m[1m: [0m[1mopentide can generate the language server's catalog for this workspace, and a[0m
+  [1mcommitted copy is current.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:7:3]8;;\
+[34m  [0m[34m│[0m
+[34m6 [0m[34m│[0m   modified: 2026-01-02
+[34m7 [0m[34m│[0m detection:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain lsp_catalog
+
+== lucene_bare_term
+[1;31merror[lucene_bare_term][0m[1m: [0m[1mA term with no field searches every field.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:2:3]8;;\
+[34m  [0m[34m│[0m
+[34m1 [0m[34m│[0m name: [32mFrame shapes[0m
+[34m2 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain lucene_bare_term
+
+== lucene_elasticsearch_only
+[1;31merror[lucene_elasticsearch_only][0m[1m: [0m[1mThe syntax works in Elasticsearch but not in Carbon Black Cloud.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:3:3]8;;\
+[34m  [0m[34m│[0m
+[34m2 [0m[34m│[0m metadata:
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain lucene_elasticsearch_only
+
+== lucene_escape
+[1;31merror[lucene_escape][0m[1m: [0m[1mA character needs escaping in Lucene.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:4:3]8;;\
+[34m  [0m[34m│[0m
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain lucene_escape
+
+== lucene_fuzzy
+[1;31merror[lucene_fuzzy][0m[1m: [0m[1mElasticsearch accepts only 0, 1, 2 or AUTO as a fuzziness.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:5:3]8;;\
+[34m  [0m[34m│[0m
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m5 [0m[34m│[0m   created: [32m2026-01-01[0m
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain lucene_fuzzy
+
+== lucene_kuery_syntax
+[1;31merror[lucene_kuery_syntax][0m[1m: [0m[1mKibana KQL (kuery) syntax inside a Lucene query.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:6:3]8;;\
+[34m  [0m[34m│[0m
+[34m5 [0m[34m│[0m   created: [32m2026-01-01[0m
+[34m6 [0m[34m│[0m   modified: [32m2026-01-02[0m
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain lucene_kuery_syntax
+
+== lucene_looks_like_kuery
+[1;31merror[lucene_looks_like_kuery][0m[1m: [0m[1mThe query reads like Kibana KQL (kuery); language: kuery may be[0m
+  [1mmeant.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:7:3]8;;\
+[34m  [0m[34m│[0m
+[34m6 [0m[34m│[0m   modified: [32m2026-01-02[0m
+[34m7 [0m[34m│[0m detection:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain lucene_looks_like_kuery
+
+== lucene_lowercase_operator
+[1;31merror[lucene_lowercase_operator][0m[1m: [0m[1mLucene operators are upper case; lowercase and/or/not are search[0m
+  [1mterms.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:2:3]8;;\
+[34m  [0m[34m│[0m
+[34m1 [0m[34m│[0m name: [32mFrame shapes[0m
+[34m2 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain lucene_lowercase_operator
+
+== lucene_mixed_operators
+[1;31merror[lucene_mixed_operators][0m[1m: [0m[1mAND and OR mixed without parentheses do not bind as they read.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:3:3]8;;\
+[34m  [0m[34m│[0m
+[34m2 [0m[34m│[0m metadata:
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain lucene_mixed_operators
+
+== lucene_parse_error
+[1;31merror[lucene_parse_error][0m[1m: [0m[1mThe Lucene query does not parse.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:4:3]8;;\
+[34m  [0m[34m│[0m
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain lucene_parse_error
+
+== lucene_range_operator
+[1;31merror[lucene_range_operator][0m[1m: [0m[1mf:> 10 searches f for the text >; the value must follow the operator.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:5:3]8;;\
+[34m  [0m[34m│[0m
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m5 [0m[34m│[0m   created: [32m2026-01-01[0m
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain lucene_range_operator
+
+== lucene_regexp
+[1;31merror[lucene_regexp][0m[1m: [0m[1mThe /regexp/ body is rejected by, or too costly for, Lucene's RegExp.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:6:3]8;;\
+[34m  [0m[34m│[0m
+[34m5 [0m[34m│[0m   created: [32m2026-01-01[0m
+[34m6 [0m[34m│[0m   modified: [32m2026-01-02[0m
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain lucene_regexp
+
+== lucene_unescaped_slash
+[1;31merror[lucene_unescaped_slash][0m[1m: [0m[1mAn unescaped / starts a regular expression.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:7:3]8;;\
+[34m  [0m[34m│[0m
+[34m6 [0m[34m│[0m   modified: [32m2026-01-02[0m
+[34m7 [0m[34m│[0m detection:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain lucene_unescaped_slash
+
+== max_tlp_unknown
+[1;31merror[max_tlp_unknown][0m[1m: [0m[1mA `sharing.toml` block's `max_tlp` is not a TLP value.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:2:3]8;;\
+[34m  [0m[34m│[0m
+[34m1 [0m[34m│[0m name: Frame shapes
+[34m2 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain max_tlp_unknown
+
+== mcp_config
+[1;31merror[mcp_config][0m[1m: [0m[1mAn MCP configuration from `opentide setup mcp` runs `opentide mcp start`.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:3:3]8;;\
+[34m  [0m[34m│[0m
+[34m2 [0m[34m│[0m metadata:
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain mcp_config
+
+== metadata_recommended
+[1;34mnote[metadata_recommended][0m[1m: [0m[1mAn object has no `metadata.author` or `metadata.organisation`.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:4:3]8;;\
+[34m  [0m[34m│[0m
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m  [0m[34m│[0m   [1;34m━━━━━━[0m[1;34m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain metadata_recommended
+
+== missing_author
+[1;31merror[missing_author][0m[1m: [0m[1mThe recommended metadata.author field is missing.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:5:3]8;;\
+[34m  [0m[34m│[0m
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m5 [0m[34m│[0m   created: 2026-01-01
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain missing_author
+
+== missing_field
+[1;31merror[missing_field][0m[1m: [0m[1mA configuration file is missing a required key, once it is merged with the[0m
+  [1mbundled file and the parent instance.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:6:3]8;;\
+[34m  [0m[34m│[0m
+[34m5 [0m[34m│[0m   created: 2026-01-01
+[34m6 [0m[34m│[0m   modified: 2026-01-02
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain missing_field
+
+== missing_organisation
+[1;31merror[missing_organisation][0m[1m: [0m[1mThe recommended metadata.organisation field is missing.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:7:3]8;;\
+[34m  [0m[34m│[0m
+[34m6 [0m[34m│[0m   modified: 2026-01-02
+[34m7 [0m[34m│[0m detection:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain missing_organisation
+
+== missing_uuid
+[1;31merror[missing_uuid][0m[1m: [0m[1mAn object file has no UUID, so it cannot be indexed.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:2:3]8;;\
+[34m  [0m[34m│[0m
+[34m1 [0m[34m│[0m name: Frame shapes
+[34m2 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain missing_uuid
+
+== name_invalid
+[1;31merror[name_invalid][0m[1m: [0m[1mA `sharing.toml` block name is not 1-64 lowercase letters, digits, `-` or `_`.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:3:3]8;;\
+[34m  [0m[34m│[0m
+[34m2 [0m[34m│[0m metadata:
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain name_invalid
+
+== name_missing
+[1;31merror[name_missing][0m[1m: [0m[1mAn object has no `name`, so lint cannot derive its file name.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:4:3]8;;\
+[34m  [0m[34m│[0m
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain name_missing
+
+== needs_human_decision
+[1;31merror[needs_human_decision][0m[1m: [0m[1m`migrate vocab-scope` left values that only a person can place.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:5:3]8;;\
+[34m  [0m[34m│[0m
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m5 [0m[34m│[0m   created: 2026-01-01
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain needs_human_decision
+
+== nested_object_file
+[1;33mwarning[nested_object_file][0m[1m: [0m[1mA YAML file sits in a subfolder of an object folder, so it is not an[0m
+  [1mobject and no command reads it.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:6:3]8;;\
+[34m  [0m[34m│[0m
+[34m5 [0m[34m│[0m   created: 2026-01-01
+[34m6 [0m[34m│[0m   modified: 2026-01-02
+[34m  [0m[34m│[0m   [1;33m━━━━━━[0m[1;33m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain nested_object_file
+
+== no_tenant_reached
+[1;31merror[no_tenant_reached][0m[1m: [0m[1m`validate query --live` sent no query, because no configured tenant takes[0m
+  [1mthe rules.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:7:3]8;;\
+[34m  [0m[34m│[0m
+[34m6 [0m[34m│[0m   modified: 2026-01-02
+[34m7 [0m[34m│[0m detection:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain no_tenant_reached
+
+== not_a_configuration_file
+[1;33mwarning[not_a_configuration_file][0m[1m: [0m[1mThe file is not one opentide reads as configuration, or it has no[0m
+  [1mconfiguration model to check it against.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:2:3]8;;\
+[34m  [0m[34m│[0m
+[34m1 [0m[34m│[0m name: Frame shapes
+[34m2 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m   [1;33m━━━━━━[0m[1;33m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain not_a_configuration_file
+
+== not_implemented
+[1;31merror[not_implemented][0m[1m: [0m[1mThe command is reserved and does nothing yet.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:3:3]8;;\
+[34m  [0m[34m│[0m
+[34m2 [0m[34m│[0m metadata:
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain not_implemented
+
+== not_run
+[1;31merror[not_run][0m[1m: [0m[1mThe command was skipped, and says why in its message.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:4:3]8;;\
+[34m  [0m[34m│[0m
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain not_run
+
+== object_type_unknown
+[1;31merror[object_type_unknown][0m[1m: [0m[1mA `sharing.toml` block lists an object type opentide cannot share.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:5:3]8;;\
+[34m  [0m[34m│[0m
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m5 [0m[34m│[0m   created: 2026-01-01
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain object_type_unknown
+
+== opentide_latest
+[1;31merror[opentide_latest][0m[1m: [0m[1mWhether PyPI has a newer opentide release than the one installed.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:6:3]8;;\
+[34m  [0m[34m│[0m
+[34m5 [0m[34m│[0m   created: 2026-01-01
+[34m6 [0m[34m│[0m   modified: 2026-01-02
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain opentide_latest
+
+== opentide_version
+[1;31merror[opentide_version][0m[1m: [0m[1mThe installed opentide version.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:7:3]8;;\
+[34m  [0m[34m│[0m
+[34m6 [0m[34m│[0m   modified: 2026-01-02
+[34m7 [0m[34m│[0m detection:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain opentide_version
+
+== organisation_uuid_invalid
+[1;31merror[organisation_uuid_invalid][0m[1m: [0m[1mA `sharing.toml` block's `organisation_uuid` is not a UUID.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:2:3]8;;\
+[34m  [0m[34m│[0m
+[34m1 [0m[34m│[0m name: Frame shapes
+[34m2 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain organisation_uuid_invalid
+
+== organisation_uuid_mismatch
+[1;31merror[organisation_uuid_mismatch][0m[1m: [0m[1mThe organisation configured for a sharing target is not the one[0m
+  [1mits API key belongs to.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:3:3]8;;\
+[34m  [0m[34m│[0m
+[34m2 [0m[34m│[0m metadata:
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain organisation_uuid_mismatch
+
+== path_exists
+[1;31merror[path_exists][0m[1m: [0m[1m`opentide new` would write a file that already exists, and it never overwrites[0m
+  [1mone.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:4:3]8;;\
+[34m  [0m[34m│[0m
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain path_exists
+
+== path_not_writable
+[1;31merror[path_not_writable][0m[1m: [0m[1m`opentide new` could not create the folder or the file it scaffolds,[0m
+  [1mbecause the operating system refused the write: a read-only checkout, a folder another user owns,[0m
+  [1mor a full disk.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:5:3]8;;\
+[34m  [0m[34m│[0m
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m5 [0m[34m│[0m   created: 2026-01-01
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain path_not_writable
+
+== placeholder
+[1;33mwarning[placeholder][0m[1m: [0m[1mA value still holds the stand-in `opentide new` wrote for a required field[0m
+  [1mnobody chose yet.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:6:3]8;;\
+[34m  [0m[34m│[0m
+[34m5 [0m[34m│[0m   created: 2026-01-01
+[34m6 [0m[34m│[0m   modified: 2026-01-02
+[34m  [0m[34m│[0m   [1;33m━━━━━━[0m[1;33m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain placeholder
+
+== platform_not_enabled
+[1;33mwarning[platform_not_enabled][0m[1m: [0m[1mA rule has a block for a platform this workspace has not enabled, so[0m
+  [1mit will not deploy there.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:7:3]8;;\
+[34m  [0m[34m│[0m
+[34m6 [0m[34m│[0m   modified: 2026-01-02
+[34m7 [0m[34m│[0m detection:
+[34m  [0m[34m│[0m   [1;33m━━━━━━[0m[1;33m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain platform_not_enabled
+
+== platform_sdk
+[1;31merror[platform_sdk][0m[1m: [0m[1mEach enabled platform's SDK imports.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:2:3]8;;\
+[34m  [0m[34m│[0m
+[34m1 [0m[34m│[0m name: Frame shapes
+[34m2 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain platform_sdk
+
+== platforms_enabled
+[1;31merror[platforms_enabled][0m[1m: [0m[1mWhich platforms the workspace enables.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:3:3]8;;\
+[34m  [0m[34m│[0m
+[34m2 [0m[34m│[0m metadata:
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain platforms_enabled
+
+== promotion_target_unknown
+[1;31merror[promotion_target_unknown][0m[1m: [0m[1m`deployment.toml` `[promotion] promotion_target` is not the name of[0m
+  [1ma `[[statuses]]` entry.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:4:3]8;;\
+[34m  [0m[34m│[0m
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain promotion_target_unknown
+
+== proxy
+[1;31merror[proxy][0m[1m: [0m[1mThe proxy in `--proxy`, `OPENTIDE_PROXY` or `HTTPS_PROXY` accepts a connection.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:5:3]8;;\
+[34m  [0m[34m│[0m
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m5 [0m[34m│[0m   created: 2026-01-01
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain proxy
+
+== python_version
+[1;31merror[python_version][0m[1m: [0m[1mThe Python interpreter running opentide.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:6:3]8;;\
+[34m  [0m[34m│[0m
+[34m5 [0m[34m│[0m   created: 2026-01-01
+[34m6 [0m[34m│[0m   modified: 2026-01-02
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain python_version
+
+== query_check_timeout
+[1;31merror[query_check_timeout][0m[1m: [0m[1m`validate query --live` failed because a tenant did not answer a query's[0m
+  [1mcheck within the check timeout.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:7:3]8;;\
+[34m  [0m[34m│[0m
+[34m6 [0m[34m│[0m   modified: 2026-01-02
+[34m7 [0m[34m│[0m detection:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain query_check_timeout
+
+== recommended_field_missing
+[1;31merror[recommended_field_missing][0m[1m: [0m[1mA field the templates ask for is missing; opentide validate[0m
+  [1maccepts the object without it.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:2:3]8;;\
+[34m  [0m[34m│[0m
+[34m1 [0m[34m│[0m name: Frame shapes
+[34m2 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain recommended_field_missing
+
+== reference_not_found
+[1;31merror[reference_not_found][0m[1m: [0m[1m`--objective` or `--threat` names a UUID that no object in the catalogue[0m
+  [1mcarries.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:3:3]8;;\
+[34m  [0m[34m│[0m
+[34m2 [0m[34m│[0m metadata:
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain reference_not_found
+
+== retired_configuration_file
+[1;31merror[retired_configuration_file][0m[1m: [0m[1mA file or folder under `.opentide/configurations/` that opentide[0m
+  [1mdoes not read.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:4:3]8;;\
+[34m  [0m[34m│[0m
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain retired_configuration_file
+
+== retract_unconfirmed
+[1;31merror[retract_unconfirmed][0m[1m: [0m[1m`share retract` would delete a remote event, and was not confirmed.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:5:3]8;;\
+[34m  [0m[34m│[0m
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m5 [0m[34m│[0m   created: 2026-01-01
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain retract_unconfirmed
+
+== risk_band
+[1;31merror[risk_band][0m[1m: [0m[1mThe risk score is outside the band of the rule's severity.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:6:3]8;;\
+[34m  [0m[34m│[0m
+[34m5 [0m[34m│[0m   created: 2026-01-01
+[34m6 [0m[34m│[0m   modified: 2026-01-02
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain risk_band
+
+== rule_status_unknown
+[1;31merror[rule_status_unknown][0m[1m: [0m[1mA `sharing.toml` block lists a rule status your configuration does not[0m
+  [1mdeclare.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:7:3]8;;\
+[34m  [0m[34m│[0m
+[34m6 [0m[34m│[0m   modified: 2026-01-02
+[34m7 [0m[34m│[0m detection:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain rule_status_unknown
+
+== schema_missing
+[1;31merror[schema_missing][0m[1m: [0m[1mAn object has no `metadata.schema`, so no schema can check it.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:2:3]8;;\
+[34m  [0m[34m│[0m
+[34m1 [0m[34m│[0m name: Frame shapes
+[34m2 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain schema_missing
+
+== schema_validation
+[1;31merror[schema_validation][0m[1m: [0m[1mAn object does not match the schema its `metadata.schema` names.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:3:3]8;;\
+[34m  [0m[34m│[0m
+[34m2 [0m[34m│[0m metadata:
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain schema_validation
+
+== schemas_fresh
+[1;31merror[schemas_fresh][0m[1m: [0m[1mEvery JSON schema this opentide version generates exists.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:4:3]8;;\
+[34m  [0m[34m│[0m
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain schemas_fresh
+
+== scope_no_match
+[1;31merror[scope_no_match][0m[1m: [0m[1mA `--file`, `--uuid` or `--type` selection matched no object, so nothing was[0m
+  [1mvalidated.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:5:3]8;;\
+[34m  [0m[34m│[0m
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m5 [0m[34m│[0m   created: 2026-01-01
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain scope_no_match
+
+== share_failed
+[1;31merror[share_failed][0m[1m: [0m[1m`share` reached the destination, and every object failed.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:6:3]8;;\
+[34m  [0m[34m│[0m
+[34m5 [0m[34m│[0m   created: 2026-01-01
+[34m6 [0m[34m│[0m   modified: 2026-01-02
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain share_failed
+
+== share_partial
+[1;31merror[share_partial][0m[1m: [0m[1m`share` shared some objects, and others failed.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:7:3]8;;\
+[34m  [0m[34m│[0m
+[34m6 [0m[34m│[0m   modified: 2026-01-02
+[34m7 [0m[34m│[0m detection:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain share_partial
+
+== share_unreachable
+[1;31merror[share_unreachable][0m[1m: [0m[1m`share` could not authenticate to, or reach, any destination.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:2:3]8;;\
+[34m  [0m[34m│[0m
+[34m1 [0m[34m│[0m name: Frame shapes
+[34m2 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain share_unreachable
+
+== sharing_config
+[1;31merror[sharing_config][0m[1m: [0m[1m`sharing.toml` failed validation, so `share` did not run.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:3:3]8;;\
+[34m  [0m[34m│[0m
+[34m2 [0m[34m│[0m metadata:
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain sharing_config
+
+== sharing_directory
+[1;31merror[sharing_directory][0m[1m: [0m[1mA `sharing/` configuration directory exists; sharing is configured in one[0m
+  [1m`sharing.toml` file.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:4:3]8;;\
+[34m  [0m[34m│[0m
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain sharing_directory
+
+== spl_command_without_pipe
+[1;31merror[spl_command_without_pipe][0m[1m: [0m[1mThe query starts with a command name but no |, so Splunk searches[0m
+  [1mfor the word instead of running the command.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:5:3]8;;\
+[34m  [0m[34m│[0m
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m5 [0m[34m│[0m   created: [32m2026-01-01[0m
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain spl_command_without_pipe
+
+== spl_dataset_not_declared
+[1;33mwarning[spl_dataset_not_declared][0m[1m: [0m[1mThe sourcetype is not one the workspace declares in[0m
+  [1mvisibility.toml.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:6:3]8;;\
+[34m  [0m[34m│[0m
+[34m5 [0m[34m│[0m   created: [32m2026-01-01[0m
+[34m6 [0m[34m│[0m   modified: [32m2026-01-02[0m
+[34m  [0m[34m│[0m   [1;33m━━━━━━[0m[1;33m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain spl_dataset_not_declared
+
+== spl_empty_command
+[1;31merror[spl_empty_command][0m[1m: [0m[1mA command with no arguments: Splunk runs it, but it does nothing, returns[0m
+  [1mno results, or fails at run time.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:7:3]8;;\
+[34m  [0m[34m│[0m
+[34m6 [0m[34m│[0m   modified: [32m2026-01-02[0m
+[34m7 [0m[34m│[0m detection:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain spl_empty_command
+
+== spl_empty_stage
+[1;31merror[spl_empty_stage][0m[1m: [0m[1mA trailing | with no command; Splunk ignores it.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:2:3]8;;\
+[34m  [0m[34m│[0m
+[34m1 [0m[34m│[0m name: [32mFrame shapes[0m
+[34m2 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain spl_empty_stage
+
+== spl_leading_not
+[1;31merror[spl_leading_not][0m[1m: [0m[1mA base search that starts with NOT scans every event before excluding any.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:3:3]8;;\
+[34m  [0m[34m│[0m
+[34m2 [0m[34m│[0m metadata:
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain spl_leading_not
+
+== spl_parse_error
+[1;31merror[spl_parse_error][0m[1m: [0m[1mThe SPL search does not parse.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:4:3]8;;\
+[34m  [0m[34m│[0m
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain spl_parse_error
+
+== spl_search_operator
+[1;31merror[spl_search_operator][0m[1m: [0m[1mA search clause compares with an operator search does not have (`==`,[0m
+  [1m`<>`, `=>`, `=<`, `!~`): Splunk accepts it but the comparison never matches, or `=~`, which[0m
+  [1mcompares with a value that starts with `~`.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:5:3]8;;\
+[34m  [0m[34m│[0m
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m5 [0m[34m│[0m   created: [32m2026-01-01[0m
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain spl_search_operator
+
+== spl_subsearch_truncation
+[1;31merror[spl_subsearch_truncation][0m[1m: [0m[1mA subsearch is silently truncated at its result or time limit.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:6:3]8;;\
+[34m  [0m[34m│[0m
+[34m5 [0m[34m│[0m   created: [32m2026-01-01[0m
+[34m6 [0m[34m│[0m   modified: [32m2026-01-02[0m
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain spl_subsearch_truncation
+
+== spl_unknown_command
+[1;31merror[spl_unknown_command][0m[1m: [0m[1mThe SPL command is not in the Splunk Search Reference or a catalogued[0m
+  [1mapp such as MLTK: a warning, since an app on the search head can add commands, or an error when[0m
+  [1mthe name is one edit from a known command.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:7:3]8;;\
+[34m  [0m[34m│[0m
+[34m6 [0m[34m│[0m   modified: [32m2026-01-02[0m
+[34m7 [0m[34m│[0m detection:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain spl_unknown_command
+
+== spl_unknown_datamodel
+[1;31merror[spl_unknown_datamodel][0m[1m: [0m[1mThe CIM data model or dataset is not one Splunk CIM defines.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:2:3]8;;\
+[34m  [0m[34m│[0m
+[34m1 [0m[34m│[0m name: [32mFrame shapes[0m
+[34m2 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain spl_unknown_datamodel
+
+== spl_unknown_datamodel_field
+[1;31merror[spl_unknown_datamodel_field][0m[1m: [0m[1mThe field is not in the CIM data model the search reads.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:3:3]8;;\
+[34m  [0m[34m│[0m
+[34m2 [0m[34m│[0m metadata:
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain spl_unknown_datamodel_field
+
+== spl_wildcard
+[1;31merror[spl_wildcard][0m[1m: [0m[1mA leading or mid-token wildcard in a base search that nothing else narrows (no[0m
+  [1mindex, sourcetype, source, host, TERM() or macro) cannot use the index and scans every event.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:4:3]8;;\
+[34m  [0m[34m│[0m
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain spl_wildcard
+
+== sysdig_definition_duplicate
+[1;31merror[sysdig_definition_duplicate][0m[1m: [0m[1mA name is defined more than once across the block's macros and[0m
+  [1mlists.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:5:3]8;;\
+[34m  [0m[34m│[0m
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m5 [0m[34m│[0m   created: 2026-01-01
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain sysdig_definition_duplicate
+
+== sysdig_definition_name
+[1;31merror[sysdig_definition_name][0m[1m: [0m[1mA block macro or list name is not `[A-Za-z_][A-Za-z0-9_]*`, or is a[0m
+  [1mFalco operator or keyword.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:6:3]8;;\
+[34m  [0m[34m│[0m
+[34m5 [0m[34m│[0m   created: 2026-01-01
+[34m6 [0m[34m│[0m   modified: 2026-01-02
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain sysdig_definition_name
+
+== sysdig_definition_order
+[1;31merror[sysdig_definition_order][0m[1m: [0m[1mA block macro uses itself or a macro defined after it: Falco gives a[0m
+  [1mmacro no view of itself or later macros, and refuses it as an undefined macro.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:7:3]8;;\
+[34m  [0m[34m│[0m
+[34m6 [0m[34m│[0m   modified: 2026-01-02
+[34m7 [0m[34m│[0m detection:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain sysdig_definition_order
+
+== sysdig_exception_shape
+[1;31merror[sysdig_exception_shape][0m[1m: [0m[1mAn exception's fields, comps, and values do not have a shape Falco's[0m
+  [1mrule loader accepts (`validate_exception_info`).[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:2:3]8;;\
+[34m  [0m[34m│[0m
+[34m1 [0m[34m│[0m name: Frame shapes
+[34m2 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain sysdig_exception_shape
+
+== sysdig_list_in_value
+[1;31merror[sysdig_list_in_value][0m[1m: [0m[1mA block list name appears in an exception value where Falco's expansion[0m
+  [1mwould not produce a value list.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:3:3]8;;\
+[34m  [0m[34m│[0m
+[34m2 [0m[34m│[0m metadata:
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain sysdig_list_in_value
+
+== sysdig_list_self_reference
+[1;33mwarning[sysdig_list_self_reference][0m[1m: [0m[1mA block list names itself as one of its items, so its own name[0m
+  [1mstays in the expanded condition.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:4:3]8;;\
+[34m  [0m[34m│[0m
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m  [0m[34m│[0m   [1;33m━━━━━━[0m[1;33m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain sysdig_list_self_reference
+
+== sysdig_priority
+[1;31merror[sysdig_priority][0m[1m: [0m[1m`priority` is not one of Falco's eight priorities (or `INFO`), compared[0m
+  [1mcase-insensitively.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:5:3]8;;\
+[34m  [0m[34m│[0m
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m5 [0m[34m│[0m   created: 2026-01-01
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain sysdig_priority
+
+== sysdig_rule_shape
+[1;31merror[sysdig_rule_shape][0m[1m: [0m[1mA Sysdig block is a new rule with a non-blank `condition`, or a tuning[0m
+  [1m(`append_to_rule`) that appends a condition, exceptions, or both.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:6:3]8;;\
+[34m  [0m[34m│[0m
+[34m5 [0m[34m│[0m   created: 2026-01-01
+[34m6 [0m[34m│[0m   modified: 2026-01-02
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain sysdig_rule_shape
+
+== sysdig_source
+[1;31merror[sysdig_source][0m[1m: [0m[1m`source` is not an event source name (`[a-z][a-z0-9_]*`).[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:7:3]8;;\
+[34m  [0m[34m│[0m
+[34m6 [0m[34m│[0m   modified: 2026-01-02
+[34m7 [0m[34m│[0m detection:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain sysdig_source
+
+== sysdig_tuning_keys
+[1;31merror[sysdig_tuning_keys][0m[1m: [0m[1mA tuning (`append_to_rule`) inherits `output`, `priority`, `policies`,[0m
+  [1m`source`, and `name` from the rule it tunes, so it must not set them.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:2:3]8;;\
+[34m  [0m[34m│[0m
+[34m1 [0m[34m│[0m name: Frame shapes
+[34m2 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain sysdig_tuning_keys
+
+== technique_not_enterprise
+[1;31merror[technique_not_enterprise][0m[1m: [0m[1mThe ATT&CK technique is not in the Enterprise matrix that Elastic[0m
+  [1mmaps.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:3:3]8;;\
+[34m  [0m[34m│[0m
+[34m2 [0m[34m│[0m metadata:
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain technique_not_enterprise
+
+== template_missing
+[1;31merror[template_missing][0m[1m: [0m[1m`opentide new` found no generated template or schema for the object type it[0m
+  [1mwas asked for.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:4:3]8;;\
+[34m  [0m[34m│[0m
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain template_missing
+
+== templates_fresh
+[1;31merror[templates_fresh][0m[1m: [0m[1mEvery template this opentide version generates exists and matches what it[0m
+  [1mwould write.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:5:3]8;;\
+[34m  [0m[34m│[0m
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m5 [0m[34m│[0m   created: 2026-01-01
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain templates_fresh
+
+== threshold_lookback
+[1;31merror[threshold_lookback][0m[1m: [0m[1mA threshold rule's lookback exceeds its interval, so windows overlap and[0m
+  [1malerts repeat.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:6:3]8;;\
+[34m  [0m[34m│[0m
+[34m5 [0m[34m│[0m   created: 2026-01-01
+[34m6 [0m[34m│[0m   modified: 2026-01-02
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain threshold_lookback
+
+== unknown_connector
+[1;33mwarning[unknown_connector][0m[1m: [0m[1m`sharing.toml` has a top-level array that names a sharing connector[0m
+  [1mopentide does not have; it was skipped.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:7:3]8;;\
+[34m  [0m[34m│[0m
+[34m6 [0m[34m│[0m   modified: 2026-01-02
+[34m7 [0m[34m│[0m detection:
+[34m  [0m[34m│[0m   [1;33m━━━━━━[0m[1;33m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain unknown_connector
+
+== unknown_key
+[1;31merror[unknown_key][0m[1m: [0m[1mA configuration file has a key opentide does not read, usually a misspelling.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:2:3]8;;\
+[34m  [0m[34m│[0m
+[34m1 [0m[34m│[0m name: Frame shapes
+[34m2 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain unknown_key
+
+== url_invalid
+[1;31merror[url_invalid][0m[1m: [0m[1mA `sharing.toml` block's `url` is not an http(s) URL.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:3:3]8;;\
+[34m  [0m[34m│[0m
+[34m2 [0m[34m│[0m metadata:
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain url_invalid
+
+== usage_error
+[1;31merror[usage_error][0m[1m: [0m[1mThe command line cannot be used as written, for a reason no other usage code[0m
+  [1mcovers.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:4:3]8;;\
+[34m  [0m[34m│[0m
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain usage_error
+
+== usage_invalid_choice
+[1;31merror[usage_invalid_choice][0m[1m: [0m[1mAn option or argument has a value outside the ones it accepts.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:5:3]8;;\
+[34m  [0m[34m│[0m
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m5 [0m[34m│[0m   created: 2026-01-01
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain usage_invalid_choice
+
+== usage_invalid_value
+[1;31merror[usage_invalid_value][0m[1m: [0m[1mAn option has a value that cannot be used, although it is spelled[0m
+  [1mcorrectly.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:6:3]8;;\
+[34m  [0m[34m│[0m
+[34m5 [0m[34m│[0m   created: 2026-01-01
+[34m6 [0m[34m│[0m   modified: 2026-01-02
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain usage_invalid_value
+
+== usage_missing_option
+[1;31merror[usage_missing_option][0m[1m: [0m[1mA required option or argument is missing.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:7:3]8;;\
+[34m  [0m[34m│[0m
+[34m6 [0m[34m│[0m   modified: 2026-01-02
+[34m7 [0m[34m│[0m detection:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain usage_missing_option
+
+== usage_needs_input
+[1;31merror[usage_needs_input][0m[1m: [0m[1mThe command would ask a question, but nobody can answer it.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:2:3]8;;\
+[34m  [0m[34m│[0m
+[34m1 [0m[34m│[0m name: Frame shapes
+[34m2 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain usage_needs_input
+
+== usage_tui_needs_tty
+[1;31merror[usage_tui_needs_tty][0m[1m: [0m[1m`opentide tui` ran where it cannot draw: it needs a person at a[0m
+  [1mterminal.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:3:3]8;;\
+[34m  [0m[34m│[0m
+[34m2 [0m[34m│[0m metadata:
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain usage_tui_needs_tty
+
+== usage_unknown_command
+[1;31merror[usage_unknown_command][0m[1m: [0m[1mThe command line names a command that does not exist.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:4:3]8;;\
+[34m  [0m[34m│[0m
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain usage_unknown_command
+
+== usage_unknown_option
+[1;31merror[usage_unknown_option][0m[1m: [0m[1mThe command line passes an option the command does not take.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:5:3]8;;\
+[34m  [0m[34m│[0m
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m5 [0m[34m│[0m   created: 2026-01-01
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain usage_unknown_option
+
+== usage_watch_needs_tty
+[1;31merror[usage_watch_needs_tty][0m[1m: [0m[1m`validate --watch` ran where nobody can watch it.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:6:3]8;;\
+[34m  [0m[34m│[0m
+[34m5 [0m[34m│[0m   created: 2026-01-01
+[34m6 [0m[34m│[0m   modified: 2026-01-02
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain usage_watch_needs_tty
+
+== vocab_unknown
+[1;31merror[vocab_unknown][0m[1m: [0m[1mA value is not in the vocabulary its field uses.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:7:3]8;;\
+[34m  [0m[34m│[0m
+[34m6 [0m[34m│[0m   modified: 2026-01-02
+[34m7 [0m[34m│[0m detection:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain vocab_unknown
+
+== vscode_settings
+[1;31merror[vscode_settings][0m[1m: [0m[1mThe workspace recommends the opentide VS Code extension[0m
+  [1m(`opentidehq.opentide`) in `.vscode/extensions.json`, and `.vscode/settings.json` maps no object[0m
+  [1mfiles to opentide's JSON schemas in `yaml.schemas`.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:2:3]8;;\
+[34m  [0m[34m│[0m
+[34m1 [0m[34m│[0m name: Frame shapes
+[34m2 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain vscode_settings
+
+== vscode_snippets
+[1;31merror[vscode_snippets][0m[1m: [0m[1mThe editor snippet file `opentide generate snippets` writes exists.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:3:3]8;;\
+[34m  [0m[34m│[0m
+[34m2 [0m[34m│[0m metadata:
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain vscode_snippets
+
+== workspace
+[1;31merror[workspace][0m[1m: [0m[1mWhere the workspace is, and how it was found.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:4:3]8;;\
+[34m  [0m[34m│[0m
+[34m3 [0m[34m│[0m   uuid: 00000000-0000-4000-8003-000000000001
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain workspace
+
+== workspace_not_found
+[1;31merror[workspace_not_found][0m[1m: [0m[1m`opentide new` ran outside a workspace: neither `.opentide/` nor[0m
+  [1m`objects/` is there. Or the MCP server was started in an Agent Plugin's directory, which is not a[0m
+  [1mworkspace, and nothing named one.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:5:3]8;;\
+[34m  [0m[34m│[0m
+[34m4 [0m[34m│[0m   schema: rule::2.0
+[34m5 [0m[34m│[0m   created: 2026-01-01
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain workspace_not_found
+
+== yaml_parse
+[1;31merror[yaml_parse][0m[1m: [0m[1mAn object file is not valid YAML, or not one mapping, so it could not be loaded.[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:6:3]8;;\
+[34m  [0m[34m│[0m
+[34m5 [0m[34m│[0m   created: 2026-01-01
+[34m6 [0m[34m│[0m   modified: 2026-01-02
+[34m  [0m[34m│[0m   [1;31m━━━━━━[0m[1;31m this value[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m opentide explain yaml_parse
+
+== unknown_key
+[1;31merror[unknown_key][0m[1m: [0m[1mdeployment.toml.x: unknown key[0m
+
+== yaml_parse
+[1;31merror[yaml_parse][0m[1m: [0m[1mfound an empty file[0m
+  [34m╰─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml]8;;\
+
+== vocab_unknown
+[1;31merror[vocab_unknown][0m[1m: [0m[1m'clearr' is not a tlp value[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:9:8]8;;\
+[34m  [0m[34m│[0m
+[34m9 [0m[34m│[0m     tlp: 名前 clearr
+[34m  [0m[34m│[0m            [1;31m━━━━━━━[0m[1;31m not in tlp::1.0[0m
+[34m  [0m[34m│[0m
+  [34m├─[0m [1mexpected:[0m one of clear, green, amber
+  [34m├─[0m [1;34mnote:[0m a second note
+  [34m╰─[0m [1;36mfix:[0m replace with 'clear'
+
+== kql_parse_error
+[1;33mwarning[kql_parse_error][0m[1m: [0m[1ma span that ends two lines further down a span that ends two lines further[0m
+  [1mdown a span that ends two lines further down a span that ends two lines further down [0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:11:5]8;;\
+[34m   [0m[34m│[0m
+[34m10 [0m[34m│[0m query: |
+[34m11 [0m[34m│[0m   [32mSecurityEvent[0m
+[34m   [0m[34m│[0m     [1;33m━[0m
+[34m   [0m[34m│[0m [1;33ma label long enough to pass the right edge of the terminal at its column a label long enough to pass the right edge of the terminal at its column [0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m a help line long enough to wrap at the edge of a terminal of a hundred columns, at a
+   [34m [0m        word:
+   [34m [0m        /very/long/path/segment/very/long/path/segment/very/long/path/segment/very/long/path/
+   [34m [0m        segment/very/long/path/segment/very/long/path/segment
+
+== filename_mismatch
+[1;34mnote[filename_mismatch][0m[1m: [0m[1mthe file name does not match the object's name[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/wide-%E2%86%92-%E5%90%8D%E5%89%8D.yaml\objects/rules/wide-→-名前.yaml:2:40]8;;\
+[34m  [0m[34m│[0m
+[34m1 [0m[34m│[0m name: wide
+[34m2 [0m[34m│[0m description: 🔥 a line with an emoji and 名前
+[34m  [0m[34m│[0m                                         [1;34m━[0m
+
+== schema_validation
+[1;31merror[schema_validation][0m[1m: [0m[1mnothing at this line[0m
+  [34m╰─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/frame-shapes.yaml\objects/rules/frame-shapes.yaml:400:1]8;;\
+
+
