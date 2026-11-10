@@ -666,3 +666,97 @@ changelog = "**`info` draws its tables with comfy-table**"
 #   ("**Metadata recommendations have one code, in the editor and in CI**").
 # - KG-02: the editor checks `metadata.reviewed` through the Rust model
 #   ("**The editor checks `metadata.reviewed` as `validate` does**").
+
+# UC-3.2 (#824): `generate exports` on a terminal in `human` mode prints its
+# checklist row once the exports are written. The Rust engine writes them in
+# milliseconds and draws no spinner while they run; the oracle's first line
+# is Rich's live region and the cursor movements that erase it, then the
+# same row.
+
+[[diff]]
+command = "generate exports"
+case = "generate.exports/human/tide-corpus/default"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mexports\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;32m✓\u001b[0m  \u001b[1mexports\u001b[0m  \u001b[2m3 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2m.opentide/exports/\u001b[0m"
+candidate = "  \u001b[1;32m✓\u001b[0m  \u001b[1mexports\u001b[0m  \u001b[2m3 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2m.opentide/exports/\u001b[0m"
+reason = "the exports are written in milliseconds: the checklist row is printed when they are done, without the spinner Python drew while they ran"
+issue = "https://github.com/opentidehq/opentide/issues/824"
+changelog = "**`generate exports` runs on the Rust engine**"
+
+[[diff]]
+command = "generate exports"
+case = "generate.exports/human/vscode/default"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mexports\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;31m✗\u001b[0m  \u001b[1mexports\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+candidate = "  \u001b[1;31m✗\u001b[0m  \u001b[1mexports\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+reason = "the exports are written in milliseconds: the checklist row is printed when they are done, without the spinner Python drew while they ran"
+issue = "https://github.com/opentidehq/opentide/issues/824"
+changelog = "**`generate exports` runs on the Rust engine**"
+
+[[diff]]
+command = "generate exports navigator"
+case = "generate.exports.navigator/human/tide-corpus/default"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mexports navigator\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;32m✓\u001b[0m  \u001b[1mexports navigator\u001b[0m  \u001b[2m1 file\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2m.opentide/exports/\u001b[0m"
+candidate = "  \u001b[1;32m✓\u001b[0m  \u001b[1mexports navigator\u001b[0m  \u001b[2m1 file\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2m.opentide/exports/\u001b[0m"
+reason = "the exports are written in milliseconds: the checklist row is printed when they are done, without the spinner Python drew while they ran"
+issue = "https://github.com/opentidehq/opentide/issues/824"
+changelog = "**`generate exports` runs on the Rust engine**"
+
+[[diff]]
+command = "generate exports navigator"
+case = "generate.exports.navigator/human/vscode/default"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mexports navigator\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;31m✗\u001b[0m  \u001b[1mexports navigator\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+candidate = "  \u001b[1;31m✗\u001b[0m  \u001b[1mexports navigator\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+reason = "the exports are written in milliseconds: the checklist row is printed when they are done, without the spinner Python drew while they ran"
+issue = "https://github.com/opentidehq/opentide/issues/824"
+changelog = "**`generate exports` runs on the Rust engine**"
+
+[[diff]]
+command = "generate exports objects"
+case = "generate.exports.objects/human/tide-corpus/default"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mexports objects\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;32m✓\u001b[0m  \u001b[1mexports objects\u001b[0m  \u001b[2m1 file\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2m.opentide/exports/\u001b[0m"
+candidate = "  \u001b[1;32m✓\u001b[0m  \u001b[1mexports objects\u001b[0m  \u001b[2m1 file\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2m.opentide/exports/\u001b[0m"
+reason = "the exports are written in milliseconds: the checklist row is printed when they are done, without the spinner Python drew while they ran"
+issue = "https://github.com/opentidehq/opentide/issues/824"
+changelog = "**`generate exports` runs on the Rust engine**"
+
+[[diff]]
+command = "generate exports objects"
+case = "generate.exports.objects/human/vscode/default"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mexports objects\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;31m✗\u001b[0m  \u001b[1mexports objects\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+candidate = "  \u001b[1;31m✗\u001b[0m  \u001b[1mexports objects\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+reason = "the exports are written in milliseconds: the checklist row is printed when they are done, without the spinner Python drew while they ran"
+issue = "https://github.com/opentidehq/opentide/issues/824"
+changelog = "**`generate exports` runs on the Rust engine**"
+
+[[diff]]
+command = "generate exports revisions"
+case = "generate.exports.revisions/human/tide-corpus/default"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mexports revisions\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;32m✓\u001b[0m  \u001b[1mexports revisions\u001b[0m  \u001b[2m1 file\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2m.opentide/exports/\u001b[0m"
+candidate = "  \u001b[1;32m✓\u001b[0m  \u001b[1mexports revisions\u001b[0m  \u001b[2m1 file\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2m.opentide/exports/\u001b[0m"
+reason = "the exports are written in milliseconds: the checklist row is printed when they are done, without the spinner Python drew while they ran"
+issue = "https://github.com/opentidehq/opentide/issues/824"
+changelog = "**`generate exports` runs on the Rust engine**"
+
+[[diff]]
+command = "generate exports revisions"
+case = "generate.exports.revisions/human/vscode/default"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mexports revisions\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;32m✓\u001b[0m  \u001b[1mexports revisions\u001b[0m  \u001b[2m1 file\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2m.opentide/exports/\u001b[0m"
+candidate = "  \u001b[1;32m✓\u001b[0m  \u001b[1mexports revisions\u001b[0m  \u001b[2m1 file\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2m.opentide/exports/\u001b[0m"
+reason = "the exports are written in milliseconds: the checklist row is printed when they are done, without the spinner Python drew while they ran"
+issue = "https://github.com/opentidehq/opentide/issues/824"
+changelog = "**`generate exports` runs on the Rust engine**"
