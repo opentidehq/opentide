@@ -433,51 +433,72 @@ def _aliased(value: Any, key: Any) -> bool:
     return value.start_mark.index < key.end_mark.index
 
 
-def _lookup(
-    node: Any,
-    key: str,
-    stack: frozenset[int],
-    memo: dict[tuple[int, str], tuple[Any, bool] | None],
-) -> tuple[Any, bool] | None:
-    """``(value, aliased)`` of *key* in mapping *node*, through merge keys as PyYAML merges.
+def _own(node: Any, key: str) -> tuple[Any, bool] | None:
+    """``(value, aliased)`` of *key* where mapping *node* writes it itself, else ``None``."""
+    for k, value in node.value:
+        if k.tag != _MERGE_TAG and str(k.value) == key:
+            return value, _aliased(value, k)
+    return None
 
-    A key the mapping writes wins over a merged one; among ``<<`` sources the
-    first that has the key wins. *aliased* is whether reaching the value went
-    through an alias. Only this one key is looked up, so unrelated aliases are
-    never expanded.
+
+def _merge_sources(node: Any) -> list[tuple[Any, bool]]:
+    """The mappings *node*'s ``<<`` keys merge, in PyYAML's order, each with whether it is aliased.
+
+    A merge value that is an alias is aliased, and so is every mapping of an
+    aliased sequence; an element of a sequence written in place is aliased when
+    it starts before the sequence does.
     """
     import yaml
 
-    if not isinstance(node, yaml.MappingNode) or id(node) in stack:
-        return None
-    if (id(node), key) in memo:  # a node merged many times is looked up once
-        return memo[id(node), key]
-    stack = stack | {id(node)}
-    result: tuple[Any, bool] | None = None
+    sources: list[tuple[Any, bool]] = []
     for k, value in node.value:
-        if k.tag != _MERGE_TAG and str(k.value) == key:
-            result = value, _aliased(value, k)
-            break
-    else:
-        for k, value in node.value:
-            if k.tag != _MERGE_TAG:
-                continue
-            if isinstance(value, yaml.SequenceNode):
-                # An element is an alias when it starts before the sequence does.
-                sources = [
-                    (item, item.start_mark.index < value.start_mark.index) for item in value.value
-                ]
-            else:
-                sources = [(value, _aliased(value, k))]
-            for source, via in sources:
-                found = _lookup(source, key, stack, memo)
-                if found is not None:
-                    result = found[0], found[1] or via
-                    break
-            if result is not None:
-                break
-    memo[id(node), key] = result
-    return result
+        if k.tag != _MERGE_TAG:
+            continue
+        if isinstance(value, yaml.SequenceNode):
+            sequence_aliased = _aliased(value, k)
+            sources.extend(
+                (item, sequence_aliased or item.start_mark.index < value.start_mark.index)
+                for item in value.value
+            )
+        else:
+            sources.append((value, _aliased(value, k)))
+    return sources
+
+
+def _lookup(node: Any, key: str) -> tuple[Any, bool] | None:
+    """``(value, aliased)`` of *key* in mapping *node*, through merge keys as PyYAML merges.
+
+    A key the mapping writes wins over a merged one; among ``<<`` sources the
+    first that has the key wins, depth first. *aliased* is whether reaching the
+    value went through an alias. Only this one key is looked up, so unrelated
+    aliases are never expanded. The walk keeps its own stack, so a merge chain
+    of any length is fine, and visits each mapping once, so it is linear.
+    """
+    import yaml
+
+    if not isinstance(node, yaml.MappingNode):
+        return None
+    own = _own(node, key)
+    if own is not None:
+        return own
+    visited = {id(node)}
+    stack: list[tuple[Iterator[tuple[Any, bool]], bool]] = [(iter(_merge_sources(node)), False)]
+    while stack:
+        sources, aliased = stack[-1]
+        following = next(sources, None)
+        if following is None:
+            stack.pop()
+            continue
+        source, via = following
+        if not isinstance(source, yaml.MappingNode) or id(source) in visited:
+            continue
+        visited.add(id(source))
+        reached = aliased or via
+        own = _own(source, key)
+        if own is not None:
+            return own[0], reached or own[1]
+        stack.append((iter(_merge_sources(source)), reached))
+    return None
 
 
 def signature_is_aliased(text: str) -> bool:
@@ -493,7 +514,7 @@ def signature_is_aliased(text: str) -> bool:
     node = _compose(text)
     aliased = False
     for key in SIGNATURE_PATH:
-        found = _lookup(node, key, frozenset(), {})
+        found = _lookup(node, key)
         if found is None:
             return False
         node, step = found
@@ -512,7 +533,8 @@ class SignatureSite:
     #: Where the scalar is written in the file: its first and past-the-last character.
     start: int
     end: int
-    #: The scalar style: ``|`` literal, ``>`` folded, ``'``, ``"``, or ``""`` plain.
+    #: The scalar style: ``|`` literal, ``>`` folded, ``'``, ``"``, ``""`` plain, or ``?``
+    #: when no written scalar holds the value (only its first line is known).
     style: str
 
     def line_of(self, offset: int) -> int:
@@ -598,14 +620,29 @@ def _flow_positions(text: str, start: int, end: int, style: str) -> list[int]:
 
 
 def _node_at(text: str, path: tuple[str, ...]) -> Any:
-    import yaml
-
+    """The node at *path* in *text*, through merge keys as the loaded data has it."""
     node = _compose(text)
     for key in path:
-        if not isinstance(node, yaml.MappingNode):
+        found = _lookup(node, key)
+        if found is None:
             return None
-        node = next((value for k, value in node.value if k.value == key), None)
+        node = found[0]
     return node
+
+
+def _loaded_at(text: str, path: tuple[str, ...]) -> Any:
+    """The value at *path* in *text* as ``yaml.safe_load`` gives it, after merges and aliases."""
+    import yaml
+
+    try:
+        value: Any = yaml.safe_load(text)
+    except yaml.YAMLError:
+        return None
+    for key in path:
+        if not isinstance(value, dict):
+            return None
+        value = value.get(key)
+    return value
 
 
 #: Where the decomposed form's scan contexts and OS sit in a rule file.
@@ -639,20 +676,24 @@ def decomposed_context_in(text: str) -> tuple[Any, Any, int] | None:
 
 
 def signature_in(text: str) -> SignatureSite | None:
-    """The HarfangLab signature in a rule file's *text*; ``None`` when it has none."""
+    """The HarfangLab signature in a rule file's *text*; ``None`` when it has none.
+
+    The value is the one deploy sends: the loaded data's, after merge keys and
+    aliases. The node, found through the same merges, only places it in the
+    file; when it does not hold that value, its first line stands for it.
+    """
     import yaml
 
-    node = _compose(text)
-    for key in SIGNATURE_PATH:
-        if not isinstance(node, yaml.MappingNode):
-            return None
-        node = next((value for k, value in node.value if k.value == key), None)
-    if not isinstance(node, yaml.ScalarNode) or node.tag != "tag:yaml.org,2002:str":
+    value = _loaded_at(text, SIGNATURE_PATH)
+    if not isinstance(value, str):
         return None
+    node = _node_at(text, SIGNATURE_PATH)
+    if not isinstance(node, yaml.ScalarNode):
+        return SignatureSite(value=value, text=text, start=0, end=0, style="?")
     return SignatureSite(
-        value=str(node.value),
+        value=value,
         text=text,
         start=node.start_mark.index,
         end=node.end_mark.index,
-        style=node.style or "",
+        style=(node.style or "") if node.value == value else "?",
     )

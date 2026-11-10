@@ -697,3 +697,45 @@ def test_the_alias_check_is_linear_in_merge_chains() -> None:
     started = time.perf_counter()
     assert yara.signature_is_aliased(text)
     assert time.perf_counter() - started < 2
+
+
+@pytest.mark.parametrize(
+    "items",
+    ["[{signature: 'rule r { condition: true }'}]", "[{other: 1}, {signature: 'rule r'}]"],
+    ids=["one", "second"],
+)
+def test_a_merge_of_an_aliased_sequence_is_an_alias(items: str) -> None:
+    """R2a: `<<: *l` where *l is a sequence of mappings written in place under the anchor."""
+    text = f"x-l: &l {items}\nconfigurations:\n  harfanglab:\n    yara:\n      <<: *l\n"
+    assert yaml.safe_load(text)["configurations"]["harfanglab"]["yara"]["signature"]
+    assert yara.signature_is_aliased(text)
+
+
+def _merge_chain(links: int, tail: str) -> str:
+    lines = ["x-e0: &e0 {}"]
+    lines += [f"x-e{n}: &e{n} {{<<: *e{n - 1}}}" for n in range(1, links + 1)]
+    return "\n".join(lines) + f"\nconfigurations:\n  harfanglab:\n    yara:\n{tail}"
+
+
+def test_a_long_merge_chain_does_not_recurse() -> None:
+    """R2c: one recursion per link raised RecursionError at about 1,200 links."""
+    written = _merge_chain(2000, f"      <<: *e2000\n      signature: |\n{_BLOCK}")
+    assert yaml.safe_load(written)["configurations"]["harfanglab"]["yara"]["signature"]
+    assert not yara.signature_is_aliased(written)
+    assert yara.signature_in(written) is not None
+    merged = _merge_chain(2000, "      <<: *e2000\n")
+    assert not yara.signature_is_aliased(merged)
+    assert yara.signature_in(merged) is None
+
+
+def test_lint_reads_a_merged_signature_as_deploy_does() -> None:
+    """R2d: a signature brought in by `<<` got no advisories, though deploy sends it."""
+    text = (
+        "configurations:\n  harfanglab:\n    yara:\n"
+        "      <<: [{signature: 'rule a { meta: context = \"disk\" condition: true }'}]\n"
+    )
+    site = yara.signature_in(text)
+    assert site is not None
+    [advisory] = list(yara.advisories(site.value))
+    assert advisory.code == "harfanglab_yara_context"
+    assert "disk" in text.splitlines()[site.line_of(advisory.offset)]

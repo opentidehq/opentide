@@ -331,3 +331,30 @@ def test_an_inline_merge_signature_passes_validate(invoke_cli, tide_corpus_repo:
     result = invoke_cli("validate", "--file", name)
     payload = parse_cli_json(result)
     assert "yara_signature_alias" not in [issue["code"] for issue in payload["report"]["issues"]]
+
+
+def test_validate_survives_a_long_merge_chain(invoke_cli, tide_corpus_repo: Path) -> None:
+    """R2c: a 2,000-link merge chain crashed validate with RecursionError (a traceback)."""
+    text = (FIXTURES / SIGNATURE_RULE).read_text(encoding="utf-8")
+    chain = ["x-e0: &e0 {}"] + [f"x-e{n}: &e{n} {{<<: *e{n - 1}}}" for n in range(1, 2001)]
+    text = "\n".join(chain) + "\n" + text.replace("    yara:\n", "    yara:\n      <<: *e2000\n")
+    name = _add(tide_corpus_repo, SIGNATURE_RULE, text=text)
+    result = invoke_cli("validate", "--file", name)
+    assert "RecursionError" not in result.output
+    payload = parse_cli_json(result)
+    assert "yara_signature_alias" not in [i["code"] for i in payload["report"]["issues"]]
+
+
+def test_lint_warns_on_a_merged_signature(invoke_cli, tide_corpus_repo: Path) -> None:
+    """R2d: a signature brought in by `<<:` gets the profile advisory, as deploy sends it."""
+    text = (FIXTURES / SIGNATURE_RULE).read_text(encoding="utf-8")
+    head = text[: text.index("    yara:\n") + len("    yara:\n")]
+    text = head + (
+        '      <<: [{signature: "rule a {\\n  meta:\\n    context = \\"disk\\"\\n'
+        '  condition:\\n    true\\n}\\n"}]\n'
+    )
+    name = _add(tide_corpus_repo, SIGNATURE_RULE, text=text)
+    payload = parse_cli_json(invoke_cli("lint", "--check", "queries", "--file", name))
+    assert [item["code"] for item in payload["findings"] if item["code"] in ADVISORIES] == [
+        "harfanglab_yara_context"
+    ]
