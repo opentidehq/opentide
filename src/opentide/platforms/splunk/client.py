@@ -17,10 +17,10 @@ from opentide.core.time import utc_now
 if TYPE_CHECKING:
     from splunklib.client import Service
 
+from opentide._models.rule import DetectionRule
+from opentide._models.system_config import ConfigurationModels
 from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import DebugHelpers, Opentide
-from opentide.models.rule import DetectionRule
-from opentide.models.system_config import ConfigurationModels
 from opentide.platforms.transport import (
     DEFAULT_TIMEOUT,
     GatewayTimeoutError,

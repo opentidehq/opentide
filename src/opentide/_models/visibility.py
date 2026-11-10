@@ -16,7 +16,7 @@ from typing import Any, ClassVar
 from pydantic import ValidationError, ValidationInfo, field_validator, model_validator
 from pydantic_core import InitErrorDetails, PydanticCustomError
 
-from opentide.models.base import TideField, TideModel
+from opentide._models.base import TideField, TideModel
 
 #: What a log source's `name` declares to the query checks, by `system`.
 #: A system that is not listed declares nothing.

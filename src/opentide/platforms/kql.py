@@ -2,7 +2,7 @@ from collections.abc import Sequence
 
 import structlog
 
-from opentide.models.platform_configs import DefenderExclusion, SentinelExclusion
+from opentide._models.platform_configs import DefenderExclusion, SentinelExclusion
 
 logger = structlog.get_logger("opentide.platforms.kql")
 MDE_Exclusion = DefenderExclusion

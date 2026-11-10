@@ -6,10 +6,10 @@ import json
 from pathlib import Path
 from typing import Any
 
+from opentide._models.object_types import CORE_OBJECT_TYPES
+from opentide._models.schema_registry import identifiers_for_families
+from opentide._models.version import SchemaVersion
 from opentide.generation.schema_annotations import annotate_editor_schema
-from opentide.models.object_types import CORE_OBJECT_TYPES
-from opentide.models.schema_registry import identifiers_for_families
-from opentide.models.version import SchemaVersion
 from opentide.registry.artifacts import schema_artifact_name
 
 ROUTER_TITLE = "opentide Object Router"

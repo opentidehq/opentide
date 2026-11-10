@@ -13,15 +13,15 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from opentide.generation.pydantic_metaschema import build_platform_schema_source
-from opentide.generation.pydantic_skeleton import render_model_template
-from opentide.loading.platform_loader import load_splunk_config
-from opentide.models.platform import (
+from opentide._models.platform import (
     PLATFORM_CONFIG_MODELS,
     CarbonBlackConfig,
     SplunkConfig,
 )
-from opentide.models.platform_schema import platform_root_extras
+from opentide._models.platform_schema import platform_root_extras
+from opentide.generation.pydantic_metaschema import build_platform_schema_source
+from opentide.generation.pydantic_skeleton import render_model_template
+from opentide.loading.platform_loader import load_splunk_config
 
 #: Platforms whose configuration carries a query string at all. SentinelOne
 #: expresses detection through `condition`, HarfangLab through sigma/yara, and

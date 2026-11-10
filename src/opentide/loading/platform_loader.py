@@ -6,7 +6,7 @@ from collections.abc import Callable
 from copy import deepcopy
 from typing import Any, cast
 
-from opentide.models.platform import (
+from opentide._models.platform import (
     CarbonBlackConfig,
     CrowdstrikeConfig,
     DefenderConfig,

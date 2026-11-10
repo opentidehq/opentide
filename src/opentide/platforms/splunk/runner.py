@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 import structlog
 
-from opentide.models.system_config import ConfigurationModels, SystemConfig
+from opentide._models.system_config import ConfigurationModels, SystemConfig
 from opentide.query.models import LiveCheck, QueryColumn, QueryRefused, QueryRequest, QueryResult
 from opentide.query.runner import QueryRunner
 

@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+from opentide._models.rule import DetectionRule
 from opentide.documentation.catalog import DocumentationCatalog
 from opentide.documentation.context import DocumentationContext
 from opentide.documentation.objects.base import ObjectRenderer
 from opentide.documentation.parts import sections
-from opentide.models.rule import DetectionRule
 
 
 class RuleRenderer(ObjectRenderer):

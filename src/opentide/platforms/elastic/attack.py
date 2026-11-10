@@ -7,8 +7,8 @@ from typing import Any
 
 import structlog
 
+from opentide._models.rule import DetectionRule
 from opentide.generation.framework import get_type, get_vocab_entry, techniques_resolver
-from opentide.models.rule import DetectionRule
 from opentide.platforms.elastic.advisories import TECHNIQUE_NOT_ENTERPRISE, warn_advisory
 
 logger = structlog.get_logger(__name__)

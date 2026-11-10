@@ -33,9 +33,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
+from opentide._models.deployment_enums import StatusStrategy
 from opentide.core import deploy_events
 from opentide.core.logging import get_logger, is_json_output
-from opentide.models.deployment_enums import StatusStrategy
 from opentide.states.deployment import (
     DeploymentState,
     DeploymentStateError,
@@ -146,8 +146,8 @@ def unpersisted_error(
     """
     if os.environ.get(PERSIST_EXTERNALLY_ENV):
         return None
+    from opentide._models.deployment_enums import StatusStrategy as _Strategy
     from opentide.deployment.ci import CIEnvironment, is_change_request
-    from opentide.models.deployment_enums import StatusStrategy as _Strategy
 
     environment = CIEnvironment().environment
     if environment is CIEnvironment.CIPlatforms.LocalDebug:

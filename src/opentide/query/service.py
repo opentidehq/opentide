@@ -13,10 +13,10 @@ from dataclasses import dataclass, field, replace
 
 import structlog
 
+from opentide._models.rule import DetectionRule
+from opentide._models.system_config import SystemConfig
 from opentide.core import progress_events
 from opentide.core.errors import Errors
-from opentide.models.rule import DetectionRule
-from opentide.models.system_config import SystemConfig
 from opentide.query.models import (
     DEFAULT_LIMIT,
     DEFAULT_TIMEOUT,

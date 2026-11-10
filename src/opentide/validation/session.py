@@ -11,10 +11,10 @@ from uuid import UUID
 
 from pydantic import ValidationError
 
+from opentide._models.object_types import CORE_OBJECT_TYPES
 from opentide.core import progress_events
 from opentide.core.files import resolve_configurations, resolve_paths
 from opentide.core.registry import Opentide
-from opentide.models.object_types import CORE_OBJECT_TYPES
 from opentide.registry.catalogue import (
     catalogue_files,
     display_path,

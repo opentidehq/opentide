@@ -89,9 +89,9 @@ def main(argv: list[str] | None = None) -> int:
 
 def expected_outputs() -> dict[Path, str]:
     """Every file this script writes, with its content."""
+    from opentide._models.object_types import CORE_OBJECT_TYPES
+    from opentide._models.schema_registry import identifiers_for_families
     from opentide.generation.pydantic_schemas import generate_schema_for_identifier
-    from opentide.models.object_types import CORE_OBJECT_TYPES
-    from opentide.models.schema_registry import identifiers_for_families
 
     outputs: dict[Path, str] = {}
     catalogs = lsp_catalog.catalog_texts()

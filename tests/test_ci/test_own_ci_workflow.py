@@ -153,7 +153,7 @@ def _vocab_gate_pattern(workflow: dict[str, Any]) -> str:
         ("src/opentide/data/pins/threat.toml", True),
         ("data/specifications.lock.json", True),
         ("xtask/src/vocab/sync.rs", True),
-        ("src/opentide/models/vocab_pins.py", False),
+        ("src/opentide/_models/vocab_pins.py", False),
     ],
 )
 def test_vocab_drift_gate_watches_bundle_pins_and_lockfile(
@@ -203,8 +203,8 @@ def _field_gate_pattern(workflow: dict[str, Any]) -> str:
 @pytest.mark.parametrize(
     ("path", "gated"),
     [
-        ("src/opentide/models/platform.py", True),
-        ("src/opentide/models/platform_configs.py", True),
+        ("src/opentide/_models/platform.py", True),
+        ("src/opentide/_models/platform_configs.py", True),
         ("tests/test_models/test_spec_field_descriptions.py", True),
         (".github/workflows/ci.yml", True),
         ("src/opentide/generation/schema_pipeline.py", False),

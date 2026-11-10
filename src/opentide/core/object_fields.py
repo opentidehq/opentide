@@ -7,7 +7,7 @@ threat carries ``threat.mitre_attack`` / ``threat.actors``, an objective carries
 content, so every reader goes through these helpers.
 
 The locations are **not** a hardcoded key list. They are DERIVED from the models:
-each role-bearing field is tagged with a :class:`~opentide.models.base.FieldRole`
+each role-bearing field is tagged with a :class:`~opentide._models.base.FieldRole`
 on the model that declares it, and the paths below are built by walking the
 registered schema models (and their nested sub-models). A new or renamed
 role-bearing field is picked up by tagging it on the model — no edit here. The
@@ -24,7 +24,7 @@ from typing import Any, get_args
 
 from pydantic.fields import FieldInfo
 
-from opentide.models.base import FieldRole, TideModel, field_role
+from opentide._models.base import FieldRole, TideModel, field_role
 
 #: Maximum model-nesting depth walked when deriving role paths. The deepest
 #: role-bearing field today sits one level down (``threat.mitre_attack``); the
@@ -98,7 +98,7 @@ def _role_paths(schema_id: str | None, role: FieldRole) -> frozenset[tuple[str, 
     union of role paths across every registered model is returned, so an
     unidentified body is still read against the models rather than ignored.
     """
-    from opentide.models.schema_registry import SCHEMA_MODELS, resolve_model
+    from opentide._models.schema_registry import SCHEMA_MODELS, resolve_model
 
     if schema_id is not None:
         try:

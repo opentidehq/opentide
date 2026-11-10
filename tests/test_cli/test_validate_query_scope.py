@@ -457,8 +457,8 @@ def test_an_inherited_deployment_plan_fails_the_generated_gate(
     repo: Path, azure_client: MagicMock, plan: str, replacement: str
 ) -> None:
     """``DEPLOYMENT_PLAN`` was removed in 0.17.0: a pipeline still setting it fails loudly."""
+    from opentide._models.deployment_enums import removed_plan_message
     from opentide.ci.stages import query_validation_command
-    from opentide.models.deployment_enums import removed_plan_message
 
     base, head = _change_a_production_rule(repo)
     env = {**_ci_env("gitlab-merge-request", repo, base, head), "DEPLOYMENT_PLAN": plan}

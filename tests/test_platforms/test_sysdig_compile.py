@@ -9,9 +9,9 @@ from typing import Any
 import pytest
 import yaml
 
+from opentide._models.deployment_enums import StatusStrategy
+from opentide._models.rule import DetectionRule
 from opentide.loading.rule_loader import load_rule_from_dict
-from opentide.models.deployment_enums import StatusStrategy
-from opentide.models.rule import DetectionRule
 from opentide.platforms.sysdig.compile import api_body, compile_rule
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "sysdig"

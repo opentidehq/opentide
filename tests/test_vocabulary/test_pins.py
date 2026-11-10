@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from opentide.models.vocab_pins import pin_data_dir
+from opentide._models.vocab_pins import pin_data_dir
 from opentide.vocabulary.pins import (
     vocab_fields_in_pin_contents,
     vocab_fields_in_pin_dir,
@@ -34,7 +34,7 @@ def test_vocab_fields_in_pin_dir_skips_missing(tmp_path: Path) -> None:
 
 
 def test_bundled_object_pins_use_mitre_attack_and_alert_severity() -> None:
-    from opentide.models.vocab_pins import get_pins
+    from opentide._models.vocab_pins import get_pins
 
     threat = get_pins("threat::1.0")
     objective = get_pins("objective::1.0")
@@ -61,8 +61,8 @@ def test_bundled_pins_cover_every_shipped_schema() -> None:
     (``objective::1.1``) before opentide ships it. ``get_pins`` only reads the table of
     the schema being generated, so such a table is unused until then.
     """
-    from opentide.models.schema_registry import identifiers_for_families
-    from opentide.models.vocab_pins import pins_for_family
+    from opentide._models.schema_registry import identifiers_for_families
+    from opentide._models.vocab_pins import pins_for_family
 
     families = ("threat", "objective", "rule")
     pinned = {schema_id for family in families for schema_id in pins_for_family(family)}
@@ -70,8 +70,8 @@ def test_bundled_pins_cover_every_shipped_schema() -> None:
 
 
 def test_bundled_pins_resolve_against_bundled_vocabularies() -> None:
+    from opentide._models.vocab_pins import pins_for_family
     from opentide.generation.vocabulary import VocabularyRevisionResolver, parse_vocab_contract
-    from opentide.models.vocab_pins import pins_for_family
     from opentide.package.paths import bundled_data_root
     from opentide.vocabulary.io import load_vocab_file
 

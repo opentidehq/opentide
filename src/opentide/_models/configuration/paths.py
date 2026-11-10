@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import Field
 
-from opentide.models.configuration.base import ConfigurationModel, ObjectFamily
+from opentide._models.configuration.base import ConfigurationModel, ObjectFamily
 
 _PATH = "Path relative to the workspace root."
 

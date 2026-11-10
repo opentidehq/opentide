@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from opentide.models.rule import DetectionRule
+from opentide._models.rule import DetectionRule
 from opentide.platforms.elastic.attack import (
     NON_ENTERPRISE_PREFIXES,
     TACTIC_MAP,

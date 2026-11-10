@@ -167,8 +167,8 @@ def test_resolver_emits_nothing_when_none_configured(monkeypatch: pytest.MonkeyP
 
 
 def test_resolver_reads_names_and_descriptions(monkeypatch: pytest.MonkeyPatch) -> None:
+    from opentide._models.system_config import DeploymentResponder
     from opentide.generation import schema_pipeline
-    from opentide.models.system_config import DeploymentResponder
 
     monkeypatch.setattr(schema_pipeline, "_ensure_runtime_context", lambda: None)
 
@@ -240,7 +240,7 @@ def test_template_survives_a_user_declaring_responders(tmp_path: Any) -> None:
 
 def test_the_model_declares_the_configuration_keyword() -> None:
     """The field must carry the keyword, or no enum is ever generated."""
-    from opentide.models.response import RuleResponse
+    from opentide._models.response import RuleResponse
 
     extra = RuleResponse.model_fields["responders"].json_schema_extra
     assert isinstance(extra, dict)

@@ -14,10 +14,10 @@ from pathlib import Path
 import yaml
 from pydantic import ValidationError
 
-from opentide.models.objective import DetectionObjective
-from opentide.models.rule import DetectionRule
-from opentide.models.schema_registry import resolve_model
-from opentide.models.threat import ThreatVector
+from opentide._models.objective import DetectionObjective
+from opentide._models.rule import DetectionRule
+from opentide._models.schema_registry import resolve_model
+from opentide._models.threat import ThreatVector
 from opentide.validation.deprecated_fields import walk_deprecated_fields
 from opentide.validation.errors import issues_from_pydantic
 

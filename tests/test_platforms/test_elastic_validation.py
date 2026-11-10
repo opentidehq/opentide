@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 import requests
 
-from opentide.models.system_config import ConfigurationModels
+from opentide._models.system_config import ConfigurationModels
 from opentide.platforms.elastic import advisories as elastic_advisories
 from opentide.platforms.elastic import attack as elastic_attack
 from opentide.platforms.elastic import validator as elastic_validator

@@ -10,15 +10,15 @@ import pytest
 import yaml
 from pydantic import ValidationError
 
+from opentide._models.metadata import ObjectMetadata
+from opentide._models.review import parse_review_instant, unreviewed_reason
+from opentide._models.rule import DetectionRule, DetectionRule_v1_1
+from opentide._models.schema_registry import latest_identifier, resolve_model
+from opentide._models.vocab_pins import get_pins
 from opentide.generation.pydantic_schemas import generate_schema_for_identifier
 from opentide.generation.pydantic_skeleton import render_model_template
 from opentide.loading.object_loader import load_object
 from opentide.loading.rule_loader import load_rule_from_dict
-from opentide.models.metadata import ObjectMetadata
-from opentide.models.review import parse_review_instant, unreviewed_reason
-from opentide.models.rule import DetectionRule, DetectionRule_v1_1
-from opentide.models.schema_registry import latest_identifier, resolve_model
-from opentide.models.vocab_pins import get_pins
 
 
 def _metadata(**overrides: Any) -> dict[str, Any]:

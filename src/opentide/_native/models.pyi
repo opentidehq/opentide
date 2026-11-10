@@ -10,7 +10,7 @@
 
 from typing import Any, Final, SupportsIndex, final
 
-__all__ = ["ValidationError", "CarbonBlackConfig", "CrowdstrikeConfig", "CrowdstrikeDetails", "CrowdstrikeSchedule", "DefenderAlert", "DefenderAllowBlockAction", "DefenderAllowBlockGroupScoping", "DefenderConfig", "DefenderDeviceActions", "DefenderExclusion", "DefenderFileActions", "DefenderGroupScoping", "DefenderImpactedEntities", "DefenderResponseActions", "DefenderUserActions", "DetectionExample", "DetectionObjective", "DetectionRule", "DetectionRule_v1_1", "DetectionSignal", "ElasticActions", "ElasticCardinality", "ElasticConfig", "ElasticEql", "ElasticExceptionList", "ElasticExceptions", "ElasticFilter", "ElasticGuide", "ElasticIntegration", "ElasticMachineLearning", "ElasticNewTerms", "ElasticOverrides", "ElasticRequiredField", "ElasticRisk", "ElasticRiskScoreMapping", "ElasticScheduling", "ElasticSeverity", "ElasticSeverityMapping", "ElasticSuppression", "ElasticThreatEntry", "ElasticThreatGroup", "ElasticThreatMatch", "ElasticThreshold", "ElasticTimeline", "ExternalDetector", "HarfangLabConfig", "HarfangLabSigma", "HarfangLabSigmaLogSource", "HarfangLabSigmaSelection", "HarfangLabYara", "HarfangLabYaraMeta", "ObjectMetadata", "ObjectReferences", "ObjectiveBody", "ObjectiveComposition", "Organisation", "ResponseProcedure", "ResponseSearch", "RuleConfigurations", "RuleMetadata", "RuleResponse", "SentinelAlert", "SentinelAlertGrouping", "SentinelConfig", "SentinelCustomDetails", "SentinelDynamicProperties", "SentinelEntityMapping", "SentinelExclusion", "SentinelGrouping", "SentinelMappingEntry", "SentinelOneCondition", "SentinelOneConfig", "SentinelOneCorrelation", "SentinelOneDetails", "SentinelOneResponse", "SentinelOneSingleEvent", "SentinelOneSubQuery", "SentinelScheduling", "SentinelTemplate", "SentinelTrigger", "SignalData", "SplunkActions", "SplunkConfig", "SplunkEmail", "SplunkEmailInclude", "SplunkNotable", "SplunkNotableDrilldown", "SplunkNotableEvent", "SplunkRisk", "SplunkRiskObject", "SplunkSchedule", "SplunkScheduling", "SplunkThreatObject", "SplunkThrottling", "SplunkTimerange", "SplunkTrigger", "SysdigConfig", "SysdigException", "SysdigList", "SysdigMacro", "ThreatActor", "ThreatBody", "ThreatVector"]
+__all__ = ["ValidationError", "CarbonBlackConfig", "CrowdstrikeConfig", "CrowdstrikeDetails", "CrowdstrikeSchedule", "DefenderAlert", "DefenderAllowBlockAction", "DefenderAllowBlockGroupScoping", "DefenderConfig", "DefenderDeviceActions", "DefenderExclusion", "DefenderFileActions", "DefenderGroupScoping", "DefenderImpactedEntities", "DefenderResponseActions", "DefenderUserActions", "DeprecatedModelFields", "DetectionExample", "DetectionObjective", "DetectionRule", "DetectionRule_v1_1", "DetectionSignal", "ElasticActions", "ElasticCardinality", "ElasticConfig", "ElasticEql", "ElasticExceptionList", "ElasticExceptions", "ElasticFilter", "ElasticGuide", "ElasticIntegration", "ElasticMachineLearning", "ElasticNewTerms", "ElasticOverrides", "ElasticRequiredField", "ElasticRisk", "ElasticRiskScoreMapping", "ElasticScheduling", "ElasticSeverity", "ElasticSeverityMapping", "ElasticSuppression", "ElasticThreatEntry", "ElasticThreatGroup", "ElasticThreatMatch", "ElasticThreshold", "ElasticTimeline", "ExternalDetector", "HarfangLabConfig", "HarfangLabSigma", "HarfangLabSigmaLogSource", "HarfangLabSigmaSelection", "HarfangLabYara", "HarfangLabYaraMeta", "ObjectMetadata", "ObjectReferences", "ObjectiveBody", "ObjectiveComposition", "Organisation", "ResponseProcedure", "ResponseSearch", "RuleConfigurations", "RuleMetadata", "RuleResponse", "SentinelAlert", "SentinelAlertGrouping", "SentinelConfig", "SentinelCustomDetails", "SentinelDynamicProperties", "SentinelEntityMapping", "SentinelExclusion", "SentinelGrouping", "SentinelMappingEntry", "SentinelOneCondition", "SentinelOneConfig", "SentinelOneCorrelation", "SentinelOneDetails", "SentinelOneResponse", "SentinelOneSingleEvent", "SentinelOneSubQuery", "SentinelScheduling", "SentinelTemplate", "SentinelTrigger", "SignalData", "SplunkActions", "SplunkConfig", "SplunkEmail", "SplunkEmailInclude", "SplunkNotable", "SplunkNotableDrilldown", "SplunkNotableEvent", "SplunkRisk", "SplunkRiskObject", "SplunkSchedule", "SplunkScheduling", "SplunkThreatObject", "SplunkThrottling", "SplunkTimerange", "SplunkTrigger", "SysdigConfig", "SysdigException", "SysdigList", "SysdigMacro", "ThreatActor", "ThreatBody", "ThreatVector"]
 
 ValidationError: Final[type[ValueError]]
 """
@@ -28,6 +28,11 @@ class CarbonBlackConfig:
     __tide_fields__: Final[list[tuple[str, str]]]
     """
     Each field's attribute and serialised name, in order.
+    """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
     """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
@@ -48,6 +53,13 @@ class CarbonBlackConfig:
     def flags(self, /) -> list[str] | None:
         """
         Platform flags.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> CarbonBlackConfig:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> CarbonBlackConfig:
         """
@@ -70,6 +82,17 @@ class CarbonBlackConfig:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> CarbonBlackConfig:
@@ -152,6 +175,11 @@ class CrowdstrikeConfig:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -177,6 +205,13 @@ class CrowdstrikeConfig:
         """
         Platform flags.
         """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> CrowdstrikeConfig:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> CrowdstrikeConfig:
         """
         A copy, with `update`'s fields replaced; the result is
@@ -198,6 +233,17 @@ class CrowdstrikeConfig:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> CrowdstrikeConfig:
@@ -262,6 +308,11 @@ class CrowdstrikeDetails:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -271,6 +322,13 @@ class CrowdstrikeDetails:
     def description(self, /) -> str | None:
         """
         Falcon description. Deploy uses the Tide rule `description` when omitted.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> CrowdstrikeDetails:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> CrowdstrikeDetails:
         """
@@ -293,6 +351,17 @@ class CrowdstrikeDetails:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> CrowdstrikeDetails:
@@ -346,6 +415,11 @@ class CrowdstrikeSchedule:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -365,6 +439,13 @@ class CrowdstrikeSchedule:
     def lookback(self, /) -> str:
         """
         How far back each run searches. Sent as the search lookback.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> CrowdstrikeSchedule:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> CrowdstrikeSchedule:
         """
@@ -387,6 +468,17 @@ class CrowdstrikeSchedule:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> CrowdstrikeSchedule:
@@ -414,6 +506,11 @@ class DefenderAlert:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -429,6 +526,13 @@ class DefenderAlert:
     def description(self, /) -> str | None:
         """
         Alert description. Deploy uses the rule `description` when omitted.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DefenderAlert:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DefenderAlert:
         """
@@ -451,6 +555,17 @@ class DefenderAlert:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> DefenderAlert:
@@ -494,6 +609,11 @@ class DefenderAllowBlockAction:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -513,6 +633,13 @@ class DefenderAllowBlockAction:
     def identifier(self, /) -> str:
         """
         Column identifying the file. Deploy lowercases the first character.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DefenderAllowBlockAction:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DefenderAllowBlockAction:
         """
@@ -536,6 +663,17 @@ class DefenderAllowBlockAction:
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
         """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
+        """
     @classmethod
     def model_validate(cls, /, obj: Any) -> DefenderAllowBlockAction:
         """
@@ -557,6 +695,11 @@ class DefenderAllowBlockGroupScoping:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -566,6 +709,13 @@ class DefenderAllowBlockGroupScoping:
     def device_groups(self, /) -> list[str] | None:
         """
         Group names. Used when `selection` is `Specific`.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DefenderAllowBlockGroupScoping:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DefenderAllowBlockGroupScoping:
         """
@@ -588,6 +738,17 @@ class DefenderAllowBlockGroupScoping:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> DefenderAllowBlockGroupScoping:
@@ -615,6 +776,11 @@ class DefenderConfig:
     __tide_fields__: Final[list[tuple[str, str]]]
     """
     Each field's attribute and serialised name, in order.
+    """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
     """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
@@ -656,6 +822,13 @@ class DefenderConfig:
         """
         Columns that identify the impacted device, user, or mailbox.
         """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DefenderConfig:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DefenderConfig:
         """
         A copy, with `update`'s fields replaced; the result is
@@ -677,6 +850,17 @@ class DefenderConfig:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> DefenderConfig:
@@ -746,6 +930,11 @@ class DefenderDeviceActions:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -765,6 +954,13 @@ class DefenderDeviceActions:
     def isolate_device(self, /) -> str | None:
         """
         Isolation type. Deploy lowercases the first character (`Full` is sent as `full`).
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DefenderDeviceActions:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DefenderDeviceActions:
         """
@@ -787,6 +983,17 @@ class DefenderDeviceActions:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> DefenderDeviceActions:
@@ -819,6 +1026,11 @@ class DefenderExclusion:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -828,6 +1040,13 @@ class DefenderExclusion:
     def let(self, /) -> dict[str, Any] | None:
         """
         KQL `let` bindings. String, number, or boolean.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DefenderExclusion:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DefenderExclusion:
         """
@@ -850,6 +1069,17 @@ class DefenderExclusion:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> DefenderExclusion:
@@ -888,6 +1118,11 @@ class DefenderFileActions:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -897,6 +1132,13 @@ class DefenderFileActions:
     def allow_block(self, /) -> DefenderAllowBlockAction | None:
         """
         Allow or block a file identifier.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DefenderFileActions:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DefenderFileActions:
         """
@@ -919,6 +1161,17 @@ class DefenderFileActions:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> DefenderFileActions:
@@ -946,6 +1199,11 @@ class DefenderGroupScoping:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -955,6 +1213,13 @@ class DefenderGroupScoping:
     def device_groups(self, /) -> list[str] | None:
         """
         Group names. Used when `selection` is `Specific`.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DefenderGroupScoping:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DefenderGroupScoping:
         """
@@ -977,6 +1242,17 @@ class DefenderGroupScoping:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> DefenderGroupScoping:
@@ -1004,6 +1280,11 @@ class DefenderImpactedEntities:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -1018,6 +1299,13 @@ class DefenderImpactedEntities:
     def mailbox(self, /) -> str | None:
         """
         Mailbox column.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DefenderImpactedEntities:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DefenderImpactedEntities:
         """
@@ -1040,6 +1328,17 @@ class DefenderImpactedEntities:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> DefenderImpactedEntities:
@@ -1067,6 +1366,11 @@ class DefenderResponseActions:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -1082,6 +1386,13 @@ class DefenderResponseActions:
     def files(self, /) -> DefenderFileActions | None:
         """
         File actions: allow or block, and quarantine.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DefenderResponseActions:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DefenderResponseActions:
         """
@@ -1104,6 +1415,17 @@ class DefenderResponseActions:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> DefenderResponseActions:
@@ -1131,6 +1453,11 @@ class DefenderUserActions:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -1150,6 +1477,13 @@ class DefenderUserActions:
     def mark_as_compromised(self, /) -> str | None:
         """
         User column.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DefenderUserActions:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DefenderUserActions:
         """
@@ -1173,6 +1507,17 @@ class DefenderUserActions:
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
         """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
+        """
     @classmethod
     def model_validate(cls, /, obj: Any) -> DefenderUserActions:
         """
@@ -1186,6 +1531,20 @@ class DefenderUserActions:
         """
 
 @final
+class DeprecatedModelFields:
+    """
+    `Model.model_fields`, kept for one minor release (ADR 0011): reading it
+    warns, and gives each field's attribute name mapped to its serialised
+    name, in order (Pydantic's `FieldInfo` has no Rust equivalent; the
+    field metadata is in `model_json_schema()`).
+    """
+    def __get__(self, instance: Any, owner: Any | None = None, /) -> dict:
+        """
+        The fields, attribute name to serialised name, with a
+        `DeprecationWarning`.
+        """
+
+@final
 class DetectionExample:
     """
     An example query (`DetectionExample`).
@@ -1193,6 +1552,11 @@ class DetectionExample:
     __tide_fields__: Final[list[tuple[str, str]]]
     """
     Each field's attribute and serialised name, in order.
+    """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
     """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
@@ -1213,6 +1577,13 @@ class DetectionExample:
     def link(self, /) -> str:
         """
         Example URL.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DetectionExample:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DetectionExample:
         """
@@ -1235,6 +1606,17 @@ class DetectionExample:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> DetectionExample:
@@ -1263,6 +1645,11 @@ class DetectionObjective:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -1272,6 +1659,13 @@ class DetectionObjective:
     def metadata(self, /) -> ObjectMetadata:
         """
         Object metadata: identifier, schema, version, dates and TLP.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DetectionObjective:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DetectionObjective:
         """
@@ -1294,6 +1688,17 @@ class DetectionObjective:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> DetectionObjective:
@@ -1336,6 +1741,11 @@ class DetectionRule:
     __tide_fields__: Final[list[tuple[str, str]]]
     """
     Each field's attribute and serialised name, in order.
+    """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
     """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
@@ -1380,6 +1790,13 @@ class DetectionRule:
         """
         Object metadata: identifier, schema, version, dates and TLP.
         """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DetectionRule:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DetectionRule:
         """
         A copy, with `update`'s fields replaced; the result is
@@ -1401,6 +1818,17 @@ class DetectionRule:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> DetectionRule:
@@ -1477,6 +1905,11 @@ class DetectionRule_v1_1:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -1521,6 +1954,13 @@ class DetectionRule_v1_1:
         Object metadata: identifier, schema, version, dates and TLP. This revision adds optional
         `reviewed`.
         """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DetectionRule_v1_1:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DetectionRule_v1_1:
         """
         A copy, with `update`'s fields replaced; the result is
@@ -1542,6 +1982,17 @@ class DetectionRule_v1_1:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> DetectionRule_v1_1:
@@ -1617,6 +2068,11 @@ class DetectionSignal:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -1659,6 +2115,13 @@ class DetectionSignal:
         """
         Detection methodology vocabulary.
         """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DetectionSignal:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DetectionSignal:
         """
         A copy, with `update`'s fields replaced; the result is
@@ -1680,6 +2143,17 @@ class DetectionSignal:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> DetectionSignal:
@@ -1722,11 +2196,23 @@ class ElasticActions:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
     def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
     def __repr__(self, /) -> str: ...
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> ElasticActions:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> ElasticActions:
         """
         A copy, with `update`'s fields replaced; the result is
@@ -1748,6 +2234,17 @@ class ElasticActions:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> ElasticActions:
@@ -1786,6 +2283,11 @@ class ElasticCardinality:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -1795,6 +2297,13 @@ class ElasticCardinality:
     def field(self, /) -> str:
         """
         Field whose distinct values are counted.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> ElasticCardinality:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> ElasticCardinality:
         """
@@ -1817,6 +2326,17 @@ class ElasticCardinality:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> ElasticCardinality:
@@ -1844,6 +2364,11 @@ class ElasticConfig:
     __tide_fields__: Final[list[tuple[str, str]]]
     """
     Each field's attribute and serialised name, in order.
+    """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
     """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
@@ -1933,6 +2458,13 @@ class ElasticConfig:
         """
         Anomaly jobs and threshold.
         """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> ElasticConfig:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> ElasticConfig:
         """
         A copy, with `update`'s fields replaced; the result is
@@ -1954,6 +2486,17 @@ class ElasticConfig:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> ElasticConfig:
@@ -2070,6 +2613,11 @@ class ElasticEql:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -2079,6 +2627,13 @@ class ElasticEql:
     def event_category_override(self, /) -> str | None:
         """
         Event category field.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> ElasticEql:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> ElasticEql:
         """
@@ -2101,6 +2656,17 @@ class ElasticEql:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> ElasticEql:
@@ -2133,6 +2699,11 @@ class ElasticExceptionList:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -2147,6 +2718,13 @@ class ElasticExceptionList:
     def list_id(self, /) -> str:
         """
         Exception list `list_id`.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> ElasticExceptionList:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> ElasticExceptionList:
         """
@@ -2169,6 +2747,17 @@ class ElasticExceptionList:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> ElasticExceptionList:
@@ -2201,6 +2790,11 @@ class ElasticExceptions:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -2215,6 +2809,13 @@ class ElasticExceptions:
     def lists(self, /) -> list[ElasticExceptionList] | None:
         """
         Existing exception lists.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> ElasticExceptions:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> ElasticExceptions:
         """
@@ -2238,6 +2839,17 @@ class ElasticExceptions:
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
         """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
+        """
     @classmethod
     def model_validate(cls, /, obj: Any) -> ElasticExceptions:
         """
@@ -2259,6 +2871,11 @@ class ElasticFilter:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -2273,6 +2890,13 @@ class ElasticFilter:
     def meta(self, /) -> dict[str, Any] | None:
         """
         Raw detection-engine filter `meta`.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> ElasticFilter:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> ElasticFilter:
         """
@@ -2295,6 +2919,17 @@ class ElasticFilter:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> ElasticFilter:
@@ -2332,6 +2967,11 @@ class ElasticGuide:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -2341,6 +2981,13 @@ class ElasticGuide:
     def investigation(self, /) -> str | None:
         """
         Investigation guide (Kibana `note`). Markdown.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> ElasticGuide:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> ElasticGuide:
         """
@@ -2363,6 +3010,17 @@ class ElasticGuide:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> ElasticGuide:
@@ -2390,6 +3048,11 @@ class ElasticIntegration:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -2399,6 +3062,13 @@ class ElasticIntegration:
     def integration(self, /) -> str | None:
         """
         Policy template inside the package, for example `cloudtrail`.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> ElasticIntegration:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> ElasticIntegration:
         """
@@ -2421,6 +3091,17 @@ class ElasticIntegration:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> ElasticIntegration:
@@ -2453,6 +3134,11 @@ class ElasticMachineLearning:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -2468,6 +3154,13 @@ class ElasticMachineLearning:
         """
         Existing anomaly detection job id or ids. Sent unchanged, in either shape. The block does not
         create jobs.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> ElasticMachineLearning:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> ElasticMachineLearning:
         """
@@ -2491,6 +3184,17 @@ class ElasticMachineLearning:
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
         """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
+        """
     @classmethod
     def model_validate(cls, /, obj: Any) -> ElasticMachineLearning:
         """
@@ -2512,6 +3216,11 @@ class ElasticNewTerms:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -2526,6 +3235,13 @@ class ElasticNewTerms:
     def history_window_start(self, /) -> str:
         """
         History window size. Sent as `now-<duration>`. Separate from the schedule.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> ElasticNewTerms:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> ElasticNewTerms:
         """
@@ -2549,6 +3265,17 @@ class ElasticNewTerms:
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
         """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
+        """
     @classmethod
     def model_validate(cls, /, obj: Any) -> ElasticNewTerms:
         """
@@ -2570,6 +3297,11 @@ class ElasticOverrides:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -2579,6 +3311,13 @@ class ElasticOverrides:
     def disable_fallback(self, /) -> bool | None:
         """
         "Do not use @timestamp as a fallback timestamp field".
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> ElasticOverrides:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> ElasticOverrides:
         """
@@ -2601,6 +3340,17 @@ class ElasticOverrides:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> ElasticOverrides:
@@ -2633,11 +3383,23 @@ class ElasticRequiredField:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
     def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
     def __repr__(self, /) -> str: ...
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> ElasticRequiredField:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> ElasticRequiredField:
         """
         A copy, with `update`'s fields replaced; the result is
@@ -2659,6 +3421,17 @@ class ElasticRequiredField:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> ElasticRequiredField:
@@ -2694,6 +3467,11 @@ class ElasticRisk:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -2703,6 +3481,13 @@ class ElasticRisk:
     def mapping(self, /) -> list[ElasticRiskScoreMapping] | None:
         """
         Risk score override: the alert takes its score from `field`.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> ElasticRisk:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> ElasticRisk:
         """
@@ -2725,6 +3510,17 @@ class ElasticRisk:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> ElasticRisk:
@@ -2752,6 +3548,11 @@ class ElasticRiskScoreMapping:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -2761,6 +3562,13 @@ class ElasticRiskScoreMapping:
     def field(self, /) -> str:
         """
         Source event field holding a score.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> ElasticRiskScoreMapping:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> ElasticRiskScoreMapping:
         """
@@ -2783,6 +3591,17 @@ class ElasticRiskScoreMapping:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> ElasticRiskScoreMapping:
@@ -2815,6 +3634,11 @@ class ElasticScheduling:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -2834,6 +3658,13 @@ class ElasticScheduling:
     def max_alerts(self, /) -> int | None:
         """
         Max alerts per run (`max_signals`). Omitted leaves the detection engine's default of 100.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> ElasticScheduling:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> ElasticScheduling:
         """
@@ -2857,6 +3688,17 @@ class ElasticScheduling:
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
         """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
+        """
     @classmethod
     def model_validate(cls, /, obj: Any) -> ElasticScheduling:
         """
@@ -2878,6 +3720,11 @@ class ElasticSeverity:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -2892,6 +3739,13 @@ class ElasticSeverity:
     def mapping(self, /) -> list[ElasticSeverityMapping] | None:
         """
         Severity override: alerts whose `field` equals `value` get `severity`.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> ElasticSeverity:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> ElasticSeverity:
         """
@@ -2915,6 +3769,17 @@ class ElasticSeverity:
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
         """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
+        """
     @classmethod
     def model_validate(cls, /, obj: Any) -> ElasticSeverity:
         """
@@ -2936,6 +3801,11 @@ class ElasticSeverityMapping:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -2945,6 +3815,13 @@ class ElasticSeverityMapping:
     def field(self, /) -> str:
         """
         Source event field.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> ElasticSeverityMapping:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> ElasticSeverityMapping:
         """
@@ -2967,6 +3844,17 @@ class ElasticSeverityMapping:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> ElasticSeverityMapping:
@@ -3004,6 +3892,11 @@ class ElasticSuppression:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -3025,6 +3918,13 @@ class ElasticSuppression:
         """
         `suppress` or `doNotSuppress`: whether alerts missing a `group_by` field are suppressed
         together. Not sent for `threshold`.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> ElasticSuppression:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> ElasticSuppression:
         """
@@ -3048,6 +3948,17 @@ class ElasticSuppression:
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
         """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
+        """
     @classmethod
     def model_validate(cls, /, obj: Any) -> ElasticSuppression:
         """
@@ -3069,6 +3980,11 @@ class ElasticThreatEntry:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -3078,6 +3994,13 @@ class ElasticThreatEntry:
     def field(self, /) -> str:
         """
         Event field.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> ElasticThreatEntry:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> ElasticThreatEntry:
         """
@@ -3100,6 +4023,17 @@ class ElasticThreatEntry:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> ElasticThreatEntry:
@@ -3137,6 +4071,11 @@ class ElasticThreatGroup:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -3146,6 +4085,13 @@ class ElasticThreatGroup:
     def entries(self, /) -> list[ElasticThreatEntry]:
         """
         Field mappings in this group. Every entry must match (AND).
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> ElasticThreatGroup:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> ElasticThreatGroup:
         """
@@ -3169,6 +4115,17 @@ class ElasticThreatGroup:
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
         """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
+        """
     @classmethod
     def model_validate(cls, /, obj: Any) -> ElasticThreatGroup:
         """
@@ -3189,6 +4146,11 @@ class ElasticThreatMatch:
     __tide_fields__: Final[list[tuple[str, str]]]
     """
     Each field's attribute and serialised name, in order.
+    """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
     """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
@@ -3220,6 +4182,13 @@ class ElasticThreatMatch:
         """
         Groups are OR. Entries in a group are AND.
         """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> ElasticThreatMatch:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> ElasticThreatMatch:
         """
         A copy, with `update`'s fields replaced; the result is
@@ -3241,6 +4210,17 @@ class ElasticThreatMatch:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> ElasticThreatMatch:
@@ -3268,6 +4248,11 @@ class ElasticThreshold:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -3282,6 +4267,13 @@ class ElasticThreshold:
     def field(self, /) -> list[str]:
         """
         Group by, 0–5 fields. `[]` counts all matches.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> ElasticThreshold:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> ElasticThreshold:
         """
@@ -3304,6 +4296,17 @@ class ElasticThreshold:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> ElasticThreshold:
@@ -3331,6 +4334,11 @@ class ElasticTimeline:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -3340,6 +4348,13 @@ class ElasticTimeline:
     def id(self, /) -> str | None:
         """
         Timeline template id.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> ElasticTimeline:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> ElasticTimeline:
         """
@@ -3362,6 +4377,17 @@ class ElasticTimeline:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> ElasticTimeline:
@@ -3389,6 +4415,11 @@ class ExternalDetector:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -3403,6 +4434,13 @@ class ExternalDetector:
     def link(self, /) -> str | None:
         """
         Reference URL.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> ExternalDetector:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> ExternalDetector:
         """
@@ -3425,6 +4463,17 @@ class ExternalDetector:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> ExternalDetector:
@@ -3457,6 +4506,11 @@ class HarfangLabConfig:
     __tide_fields__: Final[list[tuple[str, str]]]
     """
     Each field's attribute and serialised name, in order.
+    """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
     """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
@@ -3493,6 +4547,13 @@ class HarfangLabConfig:
         """
         Rule maturity. Mapped to HarfangLab `hl_status`.
         """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> HarfangLabConfig:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> HarfangLabConfig:
         """
         A copy, with `update`'s fields replaced; the result is
@@ -3514,6 +4575,17 @@ class HarfangLabConfig:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> HarfangLabConfig:
@@ -3583,6 +4655,11 @@ class HarfangLabSigma:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -3602,6 +4679,13 @@ class HarfangLabSigma:
     def logsource(self, /) -> HarfangLabSigmaLogSource:
         """
         Sigma logsource: `category` and `product`.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> HarfangLabSigma:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> HarfangLabSigma:
         """
@@ -3624,6 +4708,17 @@ class HarfangLabSigma:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> HarfangLabSigma:
@@ -3651,6 +4746,11 @@ class HarfangLabSigmaLogSource:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -3660,6 +4760,13 @@ class HarfangLabSigmaLogSource:
     def category(self, /) -> str:
         """
         Sigma logsource category (`process_creation`).
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> HarfangLabSigmaLogSource:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> HarfangLabSigmaLogSource:
         """
@@ -3682,6 +4789,17 @@ class HarfangLabSigmaLogSource:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> HarfangLabSigmaLogSource:
@@ -3709,6 +4827,11 @@ class HarfangLabSigmaSelection:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -3718,6 +4841,13 @@ class HarfangLabSigmaSelection:
     def field(self, /) -> str:
         """
         Event field (`Image`, `CommandLine`).
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> HarfangLabSigmaSelection:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> HarfangLabSigmaSelection:
         """
@@ -3740,6 +4870,17 @@ class HarfangLabSigmaSelection:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> HarfangLabSigmaSelection:
@@ -3777,6 +4918,11 @@ class HarfangLabYara:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -3796,6 +4942,13 @@ class HarfangLabYara:
     def meta(self, /) -> HarfangLabYaraMeta:
         """
         Scan context, OS, and optional score override.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> HarfangLabYara:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> HarfangLabYara:
         """
@@ -3818,6 +4971,17 @@ class HarfangLabYara:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> HarfangLabYara:
@@ -3845,6 +5009,11 @@ class HarfangLabYaraMeta:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -3865,6 +5034,13 @@ class HarfangLabYaraMeta:
         """
         Scan contexts. The value `file` is rewritten from `os`: `Windows` → `file.pe`, `MacOS` →
         `file.macho`, `Linux` → `file.elf`. Other context values are kept.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> HarfangLabYaraMeta:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> HarfangLabYaraMeta:
         """
@@ -3887,6 +5063,17 @@ class HarfangLabYaraMeta:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> HarfangLabYaraMeta:
@@ -3921,6 +5108,11 @@ class ObjectMetadata:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -3940,6 +5132,13 @@ class ObjectMetadata:
     def created(self, /) -> str:
         """
         Creation date.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> ObjectMetadata:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> ObjectMetadata:
         """
@@ -3962,6 +5161,17 @@ class ObjectMetadata:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> ObjectMetadata:
@@ -4021,6 +5231,11 @@ class ObjectReferences:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -4030,6 +5245,13 @@ class ObjectReferences:
     def internal(self, /) -> dict[str, str] | None:
         """
         Internal reference keys to URLs.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> ObjectReferences:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> ObjectReferences:
         """
@@ -4052,6 +5274,17 @@ class ObjectReferences:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> ObjectReferences:
@@ -4084,6 +5317,11 @@ class ObjectiveBody:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -4109,6 +5347,13 @@ class ObjectiveBody:
         """
         ATT&CK technique ids (`att&ck::1.2`).
         """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> ObjectiveBody:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> ObjectiveBody:
         """
         A copy, with `update`'s fields replaced; the result is
@@ -4130,6 +5375,17 @@ class ObjectiveBody:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> ObjectiveBody:
@@ -4172,6 +5428,11 @@ class ObjectiveComposition:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -4181,6 +5442,13 @@ class ObjectiveComposition:
     def description(self, /) -> str:
         """
         How signals compose.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> ObjectiveComposition:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> ObjectiveComposition:
         """
@@ -4203,6 +5471,17 @@ class ObjectiveComposition:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> ObjectiveComposition:
@@ -4230,11 +5509,23 @@ class Organisation:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
     def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
     def __repr__(self, /) -> str: ...
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> Organisation:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> Organisation:
         """
         A copy, with `update`'s fields replaced; the result is
@@ -4256,6 +5547,17 @@ class Organisation:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> Organisation:
@@ -4288,6 +5590,11 @@ class ResponseProcedure:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -4302,6 +5609,13 @@ class ResponseProcedure:
     def containment(self, /) -> str | None:
         """
         Containment guidance.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> ResponseProcedure:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> ResponseProcedure:
         """
@@ -4324,6 +5638,17 @@ class ResponseProcedure:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> ResponseProcedure:
@@ -4351,11 +5676,23 @@ class ResponseSearch:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
     def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
     def __repr__(self, /) -> str: ...
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> ResponseSearch:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> ResponseSearch:
         """
         A copy, with `update`'s fields replaced; the result is
@@ -4377,6 +5714,17 @@ class ResponseSearch:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> ResponseSearch:
@@ -4414,6 +5762,11 @@ class RuleConfigurations:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -4444,6 +5797,13 @@ class RuleConfigurations:
         """
         HarfangLab Sigma or YARA rule (`platform::harfanglab::1.0`).
         """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> RuleConfigurations:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> RuleConfigurations:
         """
         A copy, with `update`'s fields replaced; the result is
@@ -4465,6 +5825,17 @@ class RuleConfigurations:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> RuleConfigurations:
@@ -4507,6 +5878,11 @@ class RuleMetadata:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -4526,6 +5902,13 @@ class RuleMetadata:
     def created(self, /) -> str:
         """
         Creation date.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> RuleMetadata:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> RuleMetadata:
         """
@@ -4548,6 +5931,17 @@ class RuleMetadata:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> RuleMetadata:
@@ -4613,6 +6007,11 @@ class RuleResponse:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -4622,6 +6021,13 @@ class RuleResponse:
     def alert_severity(self, /) -> str:
         """
         Alert severity vocabulary.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> RuleResponse:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> RuleResponse:
         """
@@ -4644,6 +6050,17 @@ class RuleResponse:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> RuleResponse:
@@ -4682,6 +6099,11 @@ class SentinelAlert:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -4707,6 +6129,13 @@ class SentinelAlert:
         """
         Column-driven alert properties.
         """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> SentinelAlert:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> SentinelAlert:
         """
         A copy, with `update`'s fields replaced; the result is
@@ -4728,6 +6157,17 @@ class SentinelAlert:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> SentinelAlert:
@@ -4783,6 +6223,11 @@ class SentinelAlertGrouping:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -4819,6 +6264,13 @@ class SentinelAlertGrouping:
         """
         Sentinel matching method. Deploy sends `AllEntities` when omitted.
         """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> SentinelAlertGrouping:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> SentinelAlertGrouping:
         """
         A copy, with `update`'s fields replaced; the result is
@@ -4840,6 +6292,17 @@ class SentinelAlertGrouping:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> SentinelAlertGrouping:
@@ -4867,6 +6330,11 @@ class SentinelConfig:
     __tide_fields__: Final[list[tuple[str, str]]]
     """
     Each field's attribute and serialised name, in order.
+    """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
     """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
@@ -4908,6 +6376,13 @@ class SentinelConfig:
         """
         Event grouping and incident grouping. Required at deploy.
         """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> SentinelConfig:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> SentinelConfig:
         """
         A copy, with `update`'s fields replaced; the result is
@@ -4929,6 +6404,17 @@ class SentinelConfig:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> SentinelConfig:
@@ -5003,6 +6489,11 @@ class SentinelCustomDetails:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -5017,6 +6508,13 @@ class SentinelCustomDetails:
     def key(self, /) -> str:
         """
         Alert property name.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> SentinelCustomDetails:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> SentinelCustomDetails:
         """
@@ -5040,6 +6538,17 @@ class SentinelCustomDetails:
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
         """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
+        """
     @classmethod
     def model_validate(cls, /, obj: Any) -> SentinelCustomDetails:
         """
@@ -5061,6 +6570,11 @@ class SentinelDynamicProperties:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -5070,6 +6584,13 @@ class SentinelDynamicProperties:
     def column(self, /) -> str:
         """
         Result column.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> SentinelDynamicProperties:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> SentinelDynamicProperties:
         """
@@ -5092,6 +6613,17 @@ class SentinelDynamicProperties:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> SentinelDynamicProperties:
@@ -5120,6 +6652,11 @@ class SentinelEntityMapping:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -5134,6 +6671,13 @@ class SentinelEntityMapping:
     def mappings(self, /) -> list[SentinelMappingEntry]:
         """
         Column bindings for that entity.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> SentinelEntityMapping:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> SentinelEntityMapping:
         """
@@ -5157,6 +6701,17 @@ class SentinelEntityMapping:
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
         """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
+        """
     @classmethod
     def model_validate(cls, /, obj: Any) -> SentinelEntityMapping:
         """
@@ -5178,6 +6733,11 @@ class SentinelExclusion:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -5188,6 +6748,13 @@ class SentinelExclusion:
         """
         KQL `let` bindings prepended to the query. Values may be string, number, or boolean. Other
         types are skipped. The last definition of a name wins.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> SentinelExclusion:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> SentinelExclusion:
         """
@@ -5210,6 +6777,17 @@ class SentinelExclusion:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> SentinelExclusion:
@@ -5248,6 +6826,11 @@ class SentinelGrouping:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -5263,6 +6846,13 @@ class SentinelGrouping:
         """
         Sentinel `aggregationKind`. `SingleAlert` groups events into one alert. `AlertPerResult`
         emits one alert per row.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> SentinelGrouping:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> SentinelGrouping:
         """
@@ -5286,6 +6876,17 @@ class SentinelGrouping:
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
         """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
+        """
     @classmethod
     def model_validate(cls, /, obj: Any) -> SentinelGrouping:
         """
@@ -5307,6 +6908,11 @@ class SentinelMappingEntry:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -5321,6 +6927,13 @@ class SentinelMappingEntry:
     def identifier(self, /) -> str:
         """
         Entity identifier (`Name`, `Address`, …).
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> SentinelMappingEntry:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> SentinelMappingEntry:
         """
@@ -5344,6 +6957,17 @@ class SentinelMappingEntry:
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
         """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
+        """
     @classmethod
     def model_validate(cls, /, obj: Any) -> SentinelMappingEntry:
         """
@@ -5365,6 +6989,11 @@ class SentinelOneCondition:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -5380,6 +7009,13 @@ class SentinelOneCondition:
     def correlation(self, /) -> SentinelOneCorrelation | None:
         """
         Required at deploy when `type` is `Correlation`.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> SentinelOneCondition:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> SentinelOneCondition:
         """
@@ -5402,6 +7038,17 @@ class SentinelOneCondition:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> SentinelOneCondition:
@@ -5435,6 +7082,11 @@ class SentinelOneConfig:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -5465,6 +7117,13 @@ class SentinelOneConfig:
         """
         Platform flags.
         """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> SentinelOneConfig:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> SentinelOneConfig:
         """
         A copy, with `update`'s fields replaced; the result is
@@ -5486,6 +7145,17 @@ class SentinelOneConfig:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> SentinelOneConfig:
@@ -5545,6 +7215,11 @@ class SentinelOneCorrelation:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -5559,6 +7234,13 @@ class SentinelOneCorrelation:
     def match_in_order(self, /) -> bool:
         """
         Whether sub-queries must match in list order.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> SentinelOneCorrelation:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> SentinelOneCorrelation:
         """
@@ -5581,6 +7263,17 @@ class SentinelOneCorrelation:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> SentinelOneCorrelation:
@@ -5613,6 +7306,11 @@ class SentinelOneDetails:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -5628,6 +7326,13 @@ class SentinelOneDetails:
         """
         When set, the rule is `Temporary` and this value is the expiration. When omitted, the rule is
         `Permanent`.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> SentinelOneDetails:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> SentinelOneDetails:
         """
@@ -5650,6 +7355,17 @@ class SentinelOneDetails:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> SentinelOneDetails:
@@ -5683,11 +7399,23 @@ class SentinelOneResponse:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
     def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
     def __repr__(self, /) -> str: ...
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> SentinelOneResponse:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> SentinelOneResponse:
         """
         A copy, with `update`'s fields replaced; the result is
@@ -5709,6 +7437,17 @@ class SentinelOneResponse:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> SentinelOneResponse:
@@ -5741,11 +7480,23 @@ class SentinelOneSingleEvent:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
     def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
     def __repr__(self, /) -> str: ...
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> SentinelOneSingleEvent:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> SentinelOneSingleEvent:
         """
         A copy, with `update`'s fields replaced; the result is
@@ -5767,6 +7518,17 @@ class SentinelOneSingleEvent:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> SentinelOneSingleEvent:
@@ -5794,6 +7556,11 @@ class SentinelOneSubQuery:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -5803,6 +7570,13 @@ class SentinelOneSubQuery:
     def matches_required(self, /) -> int:
         """
         Number of matches this sub-query needs within the correlation window.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> SentinelOneSubQuery:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> SentinelOneSubQuery:
         """
@@ -5825,6 +7599,17 @@ class SentinelOneSubQuery:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> SentinelOneSubQuery:
@@ -5852,6 +7637,11 @@ class SentinelScheduling:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -5868,6 +7658,13 @@ class SentinelScheduling:
         """
         Duration: ISO 8601, or shorthand converted to ISO 8601. Query window (`PT2H`). Required at
         deploy unless `nrt` is true.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> SentinelScheduling:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> SentinelScheduling:
         """
@@ -5890,6 +7687,17 @@ class SentinelScheduling:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> SentinelScheduling:
@@ -5917,11 +7725,23 @@ class SentinelTemplate:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
     def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
     def __repr__(self, /) -> str: ...
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> SentinelTemplate:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> SentinelTemplate:
         """
         A copy, with `update`'s fields replaced; the result is
@@ -5943,6 +7763,17 @@ class SentinelTemplate:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> SentinelTemplate:
@@ -5975,11 +7806,23 @@ class SentinelTrigger:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
     def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
     def __repr__(self, /) -> str: ...
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> SentinelTrigger:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> SentinelTrigger:
         """
         A copy, with `update`'s fields replaced; the result is
@@ -6001,6 +7844,17 @@ class SentinelTrigger:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> SentinelTrigger:
@@ -6033,6 +7887,11 @@ class SignalData:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -6047,6 +7906,13 @@ class SignalData:
     def logsources(self, /) -> list[str] | None:
         """
         Log source names from the workspace `visibility.toml`.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> SignalData:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> SignalData:
         """
@@ -6069,6 +7935,17 @@ class SignalData:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> SignalData:
@@ -6096,6 +7973,11 @@ class SplunkActions:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -6105,6 +7987,13 @@ class SplunkActions:
     def email(self, /) -> SplunkEmail | None:
         """
         Email action.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> SplunkActions:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> SplunkActions:
         """
@@ -6127,6 +8016,17 @@ class SplunkActions:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> SplunkActions:
@@ -6162,6 +8062,11 @@ class SplunkConfig:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -6193,6 +8098,13 @@ class SplunkConfig:
         """
         Platform flags.
         """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> SplunkConfig:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> SplunkConfig:
         """
         A copy, with `update`'s fields replaced; the result is
@@ -6214,6 +8126,17 @@ class SplunkConfig:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> SplunkConfig:
@@ -6283,6 +8206,11 @@ class SplunkEmail:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -6318,6 +8246,13 @@ class SplunkEmail:
         """
         Body. Deploy key `action.email.message.alert`.
         """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> SplunkEmail:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> SplunkEmail:
         """
         A copy, with `update`'s fields replaced; the result is
@@ -6339,6 +8274,17 @@ class SplunkEmail:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> SplunkEmail:
@@ -6386,11 +8332,23 @@ class SplunkEmailInclude:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
     def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
     def __repr__(self, /) -> str: ...
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> SplunkEmailInclude:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> SplunkEmailInclude:
         """
         A copy, with `update`'s fields replaced; the result is
@@ -6412,6 +8370,17 @@ class SplunkEmailInclude:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> SplunkEmailInclude:
@@ -6454,6 +8423,11 @@ class SplunkNotable:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -6468,6 +8442,13 @@ class SplunkNotable:
     def event(self, /) -> SplunkNotableEvent | None:
         """
         Notable event title and description.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> SplunkNotable:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> SplunkNotable:
         """
@@ -6490,6 +8471,17 @@ class SplunkNotable:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> SplunkNotable:
@@ -6517,11 +8509,23 @@ class SplunkNotableDrilldown:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
     def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
     def __repr__(self, /) -> str: ...
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> SplunkNotableDrilldown:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> SplunkNotableDrilldown:
         """
         A copy, with `update`'s fields replaced; the result is
@@ -6543,6 +8547,17 @@ class SplunkNotableDrilldown:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> SplunkNotableDrilldown:
@@ -6575,6 +8590,11 @@ class SplunkNotableEvent:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -6584,6 +8604,13 @@ class SplunkNotableEvent:
     def description(self, /) -> str | None:
         """
         `action.notable.param.rule_description`.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> SplunkNotableEvent:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> SplunkNotableEvent:
         """
@@ -6606,6 +8633,17 @@ class SplunkNotableEvent:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> SplunkNotableEvent:
@@ -6633,6 +8671,11 @@ class SplunkRisk:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -6642,6 +8685,13 @@ class SplunkRisk:
     def message(self, /) -> str | None:
         """
         `action.risk.param._risk_message`.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> SplunkRisk:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> SplunkRisk:
         """
@@ -6664,6 +8714,17 @@ class SplunkRisk:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> SplunkRisk:
@@ -6696,6 +8757,11 @@ class SplunkRiskObject:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -6705,6 +8771,13 @@ class SplunkRiskObject:
     def field(self, /) -> str:
         """
         Result field holding the risk object.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> SplunkRiskObject:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> SplunkRiskObject:
         """
@@ -6727,6 +8800,17 @@ class SplunkRiskObject:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> SplunkRiskObject:
@@ -6759,6 +8843,11 @@ class SplunkSchedule:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -6780,6 +8869,13 @@ class SplunkSchedule:
         """
         `Nm`, `Nh`, or `Nd` (`5m`, `1h`, `1d`). Expected ranges are 1–59 minutes, 1–23 hours, 1–30
         days. Values outside the range still convert, with a warning.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> SplunkSchedule:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> SplunkSchedule:
         """
@@ -6803,6 +8899,17 @@ class SplunkSchedule:
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
         """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
+        """
     @classmethod
     def model_validate(cls, /, obj: Any) -> SplunkSchedule:
         """
@@ -6824,6 +8931,11 @@ class SplunkScheduling:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -6833,6 +8945,13 @@ class SplunkScheduling:
     def expires(self, /) -> str | None:
         """
         Splunk `alert.expires` (`2h`, `1d`).
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> SplunkScheduling:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> SplunkScheduling:
         """
@@ -6855,6 +8974,17 @@ class SplunkScheduling:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> SplunkScheduling:
@@ -6893,6 +9023,11 @@ class SplunkThreatObject:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -6902,6 +9037,13 @@ class SplunkThreatObject:
     def field(self, /) -> str:
         """
         Result field holding the threat object.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> SplunkThreatObject:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> SplunkThreatObject:
         """
@@ -6924,6 +9066,17 @@ class SplunkThreatObject:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> SplunkThreatObject:
@@ -6951,6 +9104,11 @@ class SplunkThrottling:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -6970,6 +9128,13 @@ class SplunkThrottling:
     def group_name(self, /) -> str | None:
         """
         `alert.suppress.group_name`.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> SplunkThrottling:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> SplunkThrottling:
         """
@@ -6993,6 +9158,17 @@ class SplunkThrottling:
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
         """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
+        """
     @classmethod
     def model_validate(cls, /, obj: Any) -> SplunkThrottling:
         """
@@ -7014,6 +9190,11 @@ class SplunkTimerange:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -7034,6 +9215,13 @@ class SplunkTimerange:
         """
         `Nm`, `Nh`, or `Nd`. Deploy converts it to a Splunk earliest time (`-90m@m`), including the
         tenant skew and offset.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> SplunkTimerange:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> SplunkTimerange:
         """
@@ -7057,6 +9245,17 @@ class SplunkTimerange:
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
         """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
+        """
     @classmethod
     def model_validate(cls, /, obj: Any) -> SplunkTimerange:
         """
@@ -7078,6 +9277,11 @@ class SplunkTrigger:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -7097,6 +9301,13 @@ class SplunkTrigger:
     def custom_condition(self, /) -> str | None:
         """
         Splunk `alert_condition` search.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> SplunkTrigger:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> SplunkTrigger:
         """
@@ -7119,6 +9330,17 @@ class SplunkTrigger:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> SplunkTrigger:
@@ -7161,6 +9383,11 @@ class SysdigConfig:
     __tide_fields__: Final[list[tuple[str, str]]]
     """
     Each field's attribute and serialised name, in order.
+    """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
     """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
@@ -7215,6 +9442,13 @@ class SysdigConfig:
         Minimum Falco engine version the rule needs, as Sysdig's integer
         `minimumEngineVersion`. Omitted when unset.
         """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> SysdigConfig:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> SysdigConfig:
         """
         A copy, with `update`'s fields replaced; the result is
@@ -7236,6 +9470,17 @@ class SysdigConfig:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> SysdigConfig:
@@ -7319,6 +9564,11 @@ class SysdigException:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -7336,6 +9586,13 @@ class SysdigException:
     def fields(self, /) -> str | list[str]:
         """
         One Falco field (the single-field form) or a list of fields (the tuple form).
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> SysdigException:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> SysdigException:
         """
@@ -7358,6 +9615,17 @@ class SysdigException:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> SysdigException:
@@ -7393,6 +9661,11 @@ class SysdigList:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -7402,6 +9675,13 @@ class SysdigList:
     def items(self, /) -> list[str | int | float]:
         """
         List items. An item may name another list of this block.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> SysdigList:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> SysdigList:
         """
@@ -7424,6 +9704,17 @@ class SysdigList:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> SysdigList:
@@ -7451,6 +9742,11 @@ class SysdigMacro:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -7460,6 +9756,13 @@ class SysdigMacro:
     def condition(self, /) -> str:
         """
         Falco condition. It may reference other macros and lists of this block.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> SysdigMacro:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> SysdigMacro:
         """
@@ -7482,6 +9785,17 @@ class SysdigMacro:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> SysdigMacro:
@@ -7509,11 +9823,23 @@ class ThreatActor:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
     def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
     def __repr__(self, /) -> str: ...
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> ThreatActor:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> ThreatActor:
         """
         A copy, with `update`'s fields replaced; the result is
@@ -7535,6 +9861,17 @@ class ThreatActor:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> ThreatActor:
@@ -7571,6 +9908,11 @@ class ThreatBody:
     __tide_fields__: Final[list[tuple[str, str]]]
     """
     Each field's attribute and serialised name, in order.
+    """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
     """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
@@ -7617,6 +9959,13 @@ class ThreatBody:
         """
         MITRE ATT&CK technique ids (`att&ck::1.2`).
         """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> ThreatBody:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> ThreatBody:
         """
         A copy, with `update`'s fields replaced; the result is
@@ -7638,6 +9987,17 @@ class ThreatBody:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> ThreatBody:
@@ -7681,6 +10041,11 @@ class ThreatVector:
     """
     Each field's attribute and serialised name, in order.
     """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self, /) -> int: ...
     def __ne__(self, value: object, /) -> bool: ...
@@ -7695,6 +10060,13 @@ class ThreatVector:
     def metadata(self, /) -> ObjectMetadata:
         """
         Object metadata: identifier, schema, version, dates and TLP.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> ThreatVector:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
         """
     def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> ThreatVector:
         """
@@ -7717,6 +10089,17 @@ class ThreatVector:
         The model's JSON Schema, the fields under their serialised
         names (`by_alias=True` only); `mode` is `"validation"` or
         `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
     def model_validate(cls, /, obj: Any) -> ThreatVector:

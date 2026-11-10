@@ -91,7 +91,7 @@ def test_run_deploy_empty_selection_gitlab_exits_cleanly(
 
 
 def test_run_deploy_dry_run_collects_payloads() -> None:
-    from opentide.models.deployment_enums import StatusStrategy
+    from opentide._models.deployment_enums import StatusStrategy
 
     ctx = CliContext(json_output=True)
     deployer = MagicMock()
@@ -335,7 +335,7 @@ def test_run_deploy_refuses_a_name_that_is_not_a_run_strategy(value: str, hints:
 def test_run_deploy_selects_rules_with_the_run_strategies(
     strategies: list[str], all_files: bool, requested: bool | None, keep: bool
 ) -> None:
-    from opentide.models.deployment_enums import StatusStrategy, parse_strategies
+    from opentide._models.deployment_enums import StatusStrategy, parse_strategies
 
     ctx = CliContext(json_output=True)
     deployer = MagicMock()

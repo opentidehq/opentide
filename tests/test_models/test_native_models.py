@@ -1,6 +1,6 @@
 """The Rust models (``opentide._native.models``, UC-1.9) against the Pydantic ones.
 
-The Pydantic models in ``opentide.models`` are the oracle (ADR 0011): every
+The Pydantic models in ``opentide._models`` are the oracle (ADR 0011): every
 Rust class carries a Pydantic class's name, fields and serialised names; every
 object file of the fixtures reads to the same values; and every case of the
 schema crate's oracle tables that has no recorded difference reports the same
@@ -23,11 +23,11 @@ import yaml
 from pydantic import BaseModel
 from pydantic import ValidationError as PydanticValidationError
 
+from opentide._models.objective import DetectionObjective
+from opentide._models.rule import DetectionRule, DetectionRule_v1_1
+from opentide._models.threat import ThreatVector
 from opentide._native import models as native
 from opentide.core.io import load_toml, stringify_yaml_temporals
-from opentide.models.objective import DetectionObjective
-from opentide.models.rule import DetectionRule, DetectionRule_v1_1
-from opentide.models.threat import ThreatVector
 
 ROOT = Path(__file__).resolve().parents[2]
 ORACLE_TABLES = ROOT / "crates/opentide-schema/tests/oracle"
@@ -72,7 +72,7 @@ DUMPS: tuple[dict[str, bool], ...] = (
 def pydantic_models() -> dict[str, type[BaseModel]]:
     found: dict[str, type[BaseModel]] = {}
     for name in PYDANTIC_MODULES:
-        module = importlib.import_module(f"opentide.models.{name}")
+        module = importlib.import_module(f"opentide._models.{name}")
         for attribute, value in vars(module).items():
             if inspect.isclass(value) and issubclass(value, BaseModel) and value is not BaseModel:
                 found.setdefault(attribute, value)
@@ -221,7 +221,8 @@ def test_the_oracle_cases_compare_inputs_and_contexts() -> None:
 def test_the_generated_stub_declares_every_class() -> None:
     tree = ast.parse(STUB.read_text(encoding="utf-8"))
     declared = {node.name for node in tree.body if isinstance(node, ast.ClassDef)}
-    assert declared == set(rust_classes())
+    # Every model, and the descriptor the deprecated `model_fields` reads.
+    assert declared == set(rust_classes()) | {"DeprecatedModelFields"}
     # The stub is complete: no `__getattr__`, on the module or a class, that
     # would type a misspelt attribute or a missing name as `Any`.
     assert not [
@@ -245,4 +246,7 @@ def test_the_generated_stub_declares_every_class() -> None:
         if isinstance(statement, ast.Assign)
         and [ast.unparse(target) for target in statement.targets] == ["__all__"]
     ]
-    assert set(ast.literal_eval(dunder_all)) == set(rust_classes()) | {"ValidationError"}
+    assert set(ast.literal_eval(dunder_all)) == set(rust_classes()) | {
+        "ValidationError",
+        "DeprecatedModelFields",
+    }

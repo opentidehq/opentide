@@ -373,3 +373,47 @@ for target, key in ((metadata, "schema"), (rule.configurations.sentinel, "schema
 "#
     ));
 }
+
+#[test]
+fn the_dropped_pydantic_methods_warn_and_keep_working() {
+    run(&format!(
+        r#"{RULE}
+import warnings
+
+def warns(name, call):
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        result = call()
+    assert [w.category for w in caught] == [DeprecationWarning], (name, caught)
+    message = str(caught[0].message)
+    assert f"DetectionRule_v1_1.{{name}} is Pydantic's and is deprecated" in message, message
+    return result
+
+fields = warns("model_fields", lambda: m.DetectionRule_v1_1.model_fields)
+assert list(fields) == [a for a, _ in m.DetectionRule_v1_1.__tide_fields__], fields
+assert fields == dict(m.DetectionRule_v1_1.__tide_fields__), fields
+rule = m.DetectionRule_v1_1.model_validate(RULE)
+assert warns("model_fields", lambda: rule.model_fields) == fields
+
+built = warns("model_construct", lambda: m.DetectionRule_v1_1.model_construct(**RULE))
+assert built == rule
+# Unlike Pydantic's, the values are validated.
+try:
+    warns("model_construct", lambda: m.DetectionRule_v1_1.model_construct(name="x"))
+except m.ValidationError as error:
+    assert error.error_count() == 2, error.errors()
+else:
+    raise AssertionError("model_construct accepted a rule with no metadata")
+
+assert warns("model_rebuild", lambda: m.DetectionRule_v1_1.model_rebuild(force=True)) is None
+assert warns("model_post_init", lambda: rule.model_post_init(None)) is None
+assert rule == built
+
+# Each class names itself in the warning.
+with warnings.catch_warnings(record=True) as caught:
+    warnings.simplefilter("always")
+    m.SentinelConfig.model_fields
+assert "SentinelConfig.model_fields" in str(caught[0].message), caught
+"#
+    ));
+}

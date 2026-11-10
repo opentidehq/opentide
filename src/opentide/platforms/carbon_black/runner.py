@@ -5,8 +5,8 @@ from __future__ import annotations
 from itertools import islice
 from typing import TYPE_CHECKING, Any, ClassVar
 
+from opentide._models.system_config import ConfigurationModels, SystemConfig
 from opentide.core.time import format_utc_z
-from opentide.models.system_config import ConfigurationModels, SystemConfig
 from opentide.query.models import (
     LiveCheck,
     QueryRefused,

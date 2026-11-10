@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from opentide._models.deployment_enums import DetectionPlatforms, StatusStrategy
 from opentide.deployment.ci import CIEnvironment
 from opentide.deployment.git_repo import GitRepository, diff_calculation, modified_mdr_files
 from opentide.deployment.utils import (
@@ -13,7 +14,6 @@ from opentide.deployment.utils import (
     enabled_systems,
     make_deploy_plan,
 )
-from opentide.models.deployment_enums import DetectionPlatforms, StatusStrategy
 
 if TYPE_CHECKING:
     from opentide.deployment.planning import TideDeployment

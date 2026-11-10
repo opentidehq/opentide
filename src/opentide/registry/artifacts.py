@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from opentide.models.version import SchemaVersion
+from opentide._models.version import SchemaVersion
 
 
 def schema_artifact_name(identifier: str) -> str:

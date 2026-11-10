@@ -7,10 +7,10 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from opentide._models.deployment_enums import DetectionPlatforms, StatusStrategy
+from opentide._models.system_config import SystemConfig
 from opentide.deployment.planning import TideDeployment, _typed_platform_config_roots
 from opentide.loading.rule_loader import load_rule_from_dict
-from opentide.models.deployment_enums import DetectionPlatforms, StatusStrategy
-from opentide.models.system_config import SystemConfig
 from opentide.platforms.enabled import MissingTenantsError
 
 

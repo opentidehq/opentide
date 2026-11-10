@@ -16,7 +16,8 @@ behaviour only on purpose, with a test and a changelog entry.
 |------|------|
 | `cli/` | The command tree (Typer), output modes, renderers; docs in `docs/cli/` |
 | `mcp_server/` | `opentide mcp start`; skill [mcp-server](../.agents/skills/mcp-server/SKILL.md), docs in `docs/mcp/` |
-| `models/`, `vocabulary/`, `data/pins/` | The Tide model (Pydantic), vocabularies and schema pins |
+| `models/` | The public Tide models: the Rust classes (`opentide._native.models`) under their Pydantic names, the deprecation shims, `models/delegation.py` (ADR 0011). Nothing in the CLI imports it |
+| `_models/`, `vocabulary/`, `data/pins/` | The Tide model the CLI still runs on (Pydantic, private until UC-2 and UC-3 retire it), vocabularies and schema pins. `opentide.models.<name>` of a module `models/` does not define is the `_models` module |
 | `validation/`, `loading/`, `indexing/`, `registry/`, `core/` | Loading, the index, validation and lint |
 | `platforms/` | A module and a package per platform (`client`, `deployer`, `runner`, `validator`, `compile` where it has one); `transport.py` holds `TenantSession`, which the clients build their HTTP session from |
 | `deployment/`, `states/`, `sharing/`, `extraction/`, `query/` | Deploy plans and state, MISP sharing, extraction, `opentide query` |

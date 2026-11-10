@@ -1,7 +1,7 @@
 """JSON Schema of each configuration TOML file, and a router keyed by file name.
 
 Every schema is `model_json_schema()` of the file's model in
-`opentide.models.configuration`; nothing else is a schema source. The router
+`opentide._models.configuration`; nothing else is a schema source. The router
 maps a path under `.opentide/configurations/` (`deployment.toml`,
 `platforms/sentinel.toml`, `sharing.toml`, ...) to its schema file, since a
 TOML file is routed by its name rather than by a key inside it.
@@ -16,11 +16,11 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from opentide.models.configuration import (
+from opentide._models.configuration import (
     GENERIC_PLATFORM_FILE,
     configuration_files,
 )
-from opentide.models.configuration.sharing import MISP_SCHEMA_ID
+from opentide._models.configuration.sharing import MISP_SCHEMA_ID
 
 JSON_SCHEMA_DIALECT = "https://json-schema.org/draft/2020-12/schema"
 ROUTER_NAME = "configurations.router.json"

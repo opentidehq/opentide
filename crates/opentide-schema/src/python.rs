@@ -625,6 +625,61 @@ pub fn json_schema_options(by_alias: bool, mode: &str) -> PyResult<()> {
     }
 }
 
+/// Warns that `class.name` is a Pydantic method kept for one minor release
+/// (ADR 0011): a `DeprecationWarning` naming what replaces it.
+#[doc(hidden)]
+pub fn deprecated(py: Python<'_>, class: &str, name: &str, instead: &str) -> PyResult<()> {
+    let message = std::ffi::CString::new(format!(
+        "{class}.{name} is Pydantic's and is deprecated: the Tide models are Rust classes. \
+         {instead} It will be removed in a later minor release."
+    ))
+    .map_err(|error| PyValueError::new_err(error.to_string()))?;
+    let category = py.get_type::<pyo3::exceptions::PyDeprecationWarning>();
+    PyErr::warn(py, category.as_any(), &message, 1)
+}
+
+/// `Model.model_fields`, kept for one minor release (ADR 0011): reading it
+/// warns, and gives each field's attribute name mapped to its serialised
+/// name, in order (Pydantic's `FieldInfo` has no Rust equivalent; the
+/// field metadata is in `model_json_schema()`).
+#[pyclass(frozen, module = "opentide._native.models")]
+pub struct DeprecatedModelFields {
+    class: &'static str,
+    fields: &'static [(&'static str, &'static str)],
+}
+
+impl DeprecatedModelFields {
+    #[doc(hidden)]
+    pub const fn new(class: &'static str, fields: &'static [(&'static str, &'static str)]) -> Self {
+        Self { class, fields }
+    }
+}
+
+#[pymethods]
+impl DeprecatedModelFields {
+    /// The fields, attribute name to serialised name, with a
+    /// `DeprecationWarning`.
+    fn __get__<'py>(
+        &self,
+        py: Python<'py>,
+        instance: &Bound<'py, PyAny>,
+        owner: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyDict>> {
+        let _ = (instance, owner);
+        deprecated(
+            py,
+            self.class,
+            "model_fields",
+            "Read `__tide_fields__` (attribute and serialised names) or `model_json_schema()`.",
+        )?;
+        let fields = PyDict::new(py);
+        for (attribute, serialised) in self.fields {
+            fields.set_item(*attribute, *serialised)?;
+        }
+        Ok(fields)
+    }
+}
+
 /// The methods of every model class. `Type [identifier]` also gives the
 /// class `__schema_identifier__` and `schema_identifier()`; `(schema =
 /// field: type)` gives it `schema`, the serialised name of `field`, as a
@@ -652,6 +707,71 @@ macro_rules! py_models {
             #[classattr]
             fn __tide_fields__() -> &'static [(&'static str, &'static str)] {
                 <Self as $crate::from_node::Model>::FIELDS
+            }
+
+            /// Deprecated (Pydantic's): each field's attribute name mapped to
+            /// its serialised name, with a `DeprecationWarning`.
+            #[classattr]
+            fn model_fields() -> $crate::python::DeprecatedModelFields {
+                $crate::python::DeprecatedModelFields::new(
+                    <Self as $crate::from_node::Model>::CLASS,
+                    <Self as $crate::from_node::Model>::FIELDS,
+                )
+            }
+
+            /// Deprecated (Pydantic's): `model_validate(values)`, with a
+            /// `DeprecationWarning`. Unlike Pydantic's, the values are
+            /// validated: a Rust model never holds an unchecked value.
+            #[classmethod]
+            #[pyo3(signature = (_fields_set = None, **values))]
+            fn model_construct(
+                class: &::pyo3::Bound<'_, ::pyo3::types::PyType>,
+                _fields_set: Option<&::pyo3::Bound<'_, ::pyo3::PyAny>>,
+                values: Option<&::pyo3::Bound<'_, ::pyo3::types::PyDict>>,
+            ) -> ::pyo3::PyResult<Self> {
+                let py = class.py();
+                $crate::python::deprecated(
+                    py,
+                    <Self as $crate::from_node::Model>::CLASS,
+                    "model_construct",
+                    "Call `model_validate(values)`.",
+                )?;
+                let empty = ::pyo3::types::PyDict::new(py);
+                $crate::python::validate::<Self>(class, values.unwrap_or(&empty).as_any())
+            }
+
+            /// Deprecated (Pydantic's): does nothing, with a
+            /// `DeprecationWarning`; a Rust class is complete when compiled.
+            #[classmethod]
+            #[pyo3(signature = (**kwargs))]
+            fn model_rebuild(
+                class: &::pyo3::Bound<'_, ::pyo3::types::PyType>,
+                kwargs: Option<&::pyo3::Bound<'_, ::pyo3::types::PyDict>>,
+            ) -> ::pyo3::PyResult<Option<bool>> {
+                let _ = kwargs;
+                $crate::python::deprecated(
+                    class.py(),
+                    <Self as $crate::from_node::Model>::CLASS,
+                    "model_rebuild",
+                    "Remove the call: the class is complete.",
+                )?;
+                Ok(None)
+            }
+
+            /// Deprecated (Pydantic's): does nothing, with a
+            /// `DeprecationWarning`; a Rust class cannot be subclassed.
+            #[pyo3(signature = (context = None))]
+            fn model_post_init(
+                slf: &::pyo3::Bound<'_, Self>,
+                context: Option<&::pyo3::Bound<'_, ::pyo3::PyAny>>,
+            ) -> ::pyo3::PyResult<()> {
+                let _ = context;
+                $crate::python::deprecated(
+                    slf.py(),
+                    <Self as $crate::from_node::Model>::CLASS,
+                    "model_post_init",
+                    "Remove the call: there is nothing to initialise.",
+                )
             }
 
             fn __repr__(slf: &::pyo3::Bound<'_, Self>) -> ::pyo3::PyResult<String> {
@@ -1036,6 +1156,9 @@ pub fn register(models: &Bound<'_, PyModule>) -> PyResult<()> {
 /// [`ValidationError`]. The binding exports it as a submodule.
 #[pymodule(submodule)]
 pub mod models {
+    #[pymodule_export]
+    use super::DeprecatedModelFields;
+
     #[pymodule_export]
     use super::{
         CarbonBlackConfig, CrowdstrikeConfig, CrowdstrikeDetails, CrowdstrikeSchedule,

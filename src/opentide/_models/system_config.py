@@ -6,13 +6,13 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, TypeVar
 
-from opentide.models.deployment_enums import (
+from opentide._models.deployment_enums import (
     DEPLOYABLE_STRATEGIES,
     RunStrategies,
     StatusStrategy,
     deploys,
 )
-from opentide.models.rule import DetectionRule
+from opentide._models.rule import DetectionRule
 
 
 @dataclass

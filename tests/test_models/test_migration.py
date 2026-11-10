@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from opentide.models.migration import stamp_schema_identifier
+from opentide._models.migration import stamp_schema_identifier
 
 
 def test_stamp_schema_identifier_empty_id_returns_unchanged() -> None:

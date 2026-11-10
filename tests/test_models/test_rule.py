@@ -9,9 +9,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from opentide.models.deployment_enums import DEPLOYABLE_STRATEGIES
-from opentide.models.metadata import ObjectMetadata
-from opentide.models.rule import DetectionRule
+from opentide._models.deployment_enums import DEPLOYABLE_STRATEGIES
+from opentide._models.metadata import ObjectMetadata
+from opentide._models.rule import DetectionRule
 from opentide.query.check import LiveCheckReport, RuleCheck
 
 
@@ -82,7 +82,7 @@ def _bound(rule: DetectionRule) -> tuple[DetectionRule, MagicMock]:
 
 
 def test_detection_rule_deploy_and_validate_query_success(metadata: dict[str, Any]) -> None:
-    from opentide.models.deployment_enums import StatusStrategy
+    from opentide._models.deployment_enums import StatusStrategy
 
     bound, deployer = _bound(_sentinel_rule(metadata))
     result = bound.deploy("sentinel", dry_run=False, strategies=["release"])
