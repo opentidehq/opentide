@@ -351,8 +351,17 @@ fn block_scalar(source: &str, at: usize, indent: usize) -> Option<Scalar> {
                     scalar.push('\n', *at);
                 }
             }
-            Some(at) if folded && !previous_spaced && !spaced && empties.is_empty() => {
-                scalar.push(' ', at);
+            // Not a guard on `empties.is_empty()`: folded lines separated by
+            // empty lines keep only those empty lines' breaks, never `at`'s.
+            #[allow(clippy::collapsible_match)]
+            Some(at) if folded && !previous_spaced && !spaced => {
+                if empties.is_empty() {
+                    scalar.push(' ', at);
+                } else {
+                    for at in &empties {
+                        scalar.push('\n', *at);
+                    }
+                }
             }
             Some(at) => {
                 scalar.push('\n', at);

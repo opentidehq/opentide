@@ -354,8 +354,12 @@ fn check_node(
         "and_expression" | "or_expression" | "not_expression" | "event_query" => {
             semantics::check_conditions(node, source, out)
         }
-        "function_call" if check_function(node, source, catalog, out) => {
-            semantics::check_types(node, source, out);
+        // check_function reports; it is not a guard.
+        #[allow(clippy::collapsible_match)]
+        "function_call" => {
+            if check_function(node, source, catalog, out) {
+                semantics::check_types(node, source, out);
+            }
         }
         "sequence" => check_sequence(node, source, out),
         "sample" => check_sample(node, source, out),
