@@ -1,0 +1,14 @@
+[platform]
+enabled = true
+name = "Bitdefender GravityZone"
+
+[[tenants]]
+name = "staging"
+strategies = ["PREVIEW"]
+[tenants.setup]
+ssl = true
+url = "https://cloudgz.gravityzone.example/api"
+api_key = "$GRAVITYZONE_API_KEY"
+tags = ["managed-by-opentide"]
+[tenants.setup.endpoint_tags]
+corpus-servers = { tag_id = "5b680f6fb1a43d860a7b23c8", company_id = "61827b8036492c2fc0718722" }

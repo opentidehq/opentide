@@ -114,7 +114,7 @@ def derive_output(name: str, block: SysdigConfig) -> str:
     return name + DEFAULT_OUTPUT_FIELDS.get(block.source or DEFAULT_SOURCE, "")
 
 
-def _rule_techniques(rule: DetectionRule) -> list[str]:
+def rule_techniques(rule: DetectionRule) -> list[str]:
     """The rule's techniques plus the ones inherited through ``detection_model``."""
     from opentide.generation.framework import get_type, techniques_resolver
 
@@ -165,7 +165,7 @@ def derive_tags(
     """Block tags, ATT&CK tags, the maturity tag, tenant tags; de-duplicated, in that order."""
     tags = [
         *(block.tags or []),
-        *attack_tags(_rule_techniques(rule)),
+        *attack_tags(rule_techniques(rule)),
         MATURITY_TAG.get(strategy, SANDBOX_TAG),
         *(tenant_tags or []),
     ]

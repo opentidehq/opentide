@@ -1,0 +1,39 @@
+name: Bitdefender GravityZone Rule
+
+metadata:
+  uuid: 00000000-0000-4000-8003-0000b1d0f001
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+
+description: |
+  Simulated GravityZone custom detection rule for CLI E2E corpus: an Office
+  application starting an encoded PowerShell.
+status: STAGING
+severity: High
+techniques:
+  - T1059.005
+detection_model: 00000000-0000-4000-8002-000000000001
+
+response:
+  alert_severity: High
+
+configurations:
+  bitdefender:
+    enabled: true
+    schema: platform::bitdefender::1.0
+    status: STAGING
+    tags: [office]
+    targets:
+      endpoint_tags: [corpus-servers]
+    actions:
+      kill_process: {include_children: true}
+    detection:
+      target: process
+      criteria:
+        - field: Process.Parent.Name
+          any: [winword.exe, excel.exe]
+        - field: Process.CommandLine
+          contains: "*-enc*"

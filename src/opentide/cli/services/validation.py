@@ -118,6 +118,22 @@ _CHECK_ISSUE_CODES: dict[str, frozenset[str]] = {
             "deployment_state_platform",
             "deployment_state_shape",
             "yara_signature_alias",
+            "bitdefender_name_duplicate",
+            "bitdefender_rule_kind",
+            "bitdefender_target",
+            "bitdefender_criterion_shape",
+            "bitdefender_criterion_field",
+            "bitdefender_criterion_relation",
+            "bitdefender_criterion_value",
+            "bitdefender_criteria_combination",
+            "bitdefender_action_scope",
+            "bitdefender_targets_shape",
+            "bitdefender_severity",
+            "bitdefender_yara_ascii",
+            "bitdefender_yara_size",
+            "yara_include",
+            "yara_empty_signature",
+            "yara_duplicate_rule",
         }
     ),
     ValidateCheck.cve.value: frozenset({"invalid_cve"}),
@@ -159,7 +175,17 @@ _CHECK_ISSUE_CODES: dict[str, frozenset[str]] = {
 
 #: Warning codes each check can report. They never fail the check's status.
 _CHECK_WARNING_CODES: dict[str, frozenset[str]] = {
-    ValidateCheck.schema.value: frozenset({"deprecated_field", "platform_not_enabled"}),
+    ValidateCheck.schema.value: frozenset(
+        {
+            "deprecated_field",
+            "platform_not_enabled",
+            "bitdefender_registry_full_hive",
+            "bitdefender_contains_no_wildcard",
+            "bitdefender_severity_collapsed",
+            # An unknown field on a target outside the spec's table.
+            "bitdefender_criterion_field",
+        }
+    ),
     ValidateCheck.sharing_config.value: frozenset({"api_key_literal", "unknown_connector"}),
     ValidateCheck.configuration.value: frozenset({"asset_unknown", "not_a_configuration_file"}),
     ValidateCheck.cve.value: frozenset({"cve_lookup_unavailable"}),

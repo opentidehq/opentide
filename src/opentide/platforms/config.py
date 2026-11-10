@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import re
 from collections.abc import Mapping
 from types import SimpleNamespace
 from typing import Any
@@ -33,6 +34,7 @@ _SYSTEM_MODELS: dict[str, Any] = {
     "harfanglab": ConfigurationModels.Systems.HarfangLab,
     "elastic": ConfigurationModels.Systems.Elastic,
     "sysdig": ConfigurationModels.Systems.Sysdig,
+    "bitdefender": ConfigurationModels.Systems.Bitdefender,
 }
 
 #: ``SystemConfig.Tenant.Setup`` declares these without defaults, but every
@@ -172,6 +174,77 @@ def _check_sysdig_setup(setup: dict[str, Any], *, where: str) -> None:
     setup["api_token"] = f"${reference.group(1) or reference.group(2)}"
 
 
+#: ``[tenants.setup]`` keys of a Bitdefender tenant (bitdefender-1.0, Tenant setup).
+_BITDEFENDER_SETUP_KEYS = frozenset(
+    {
+        "ssl",
+        "url",
+        "api_key",
+        "key_type",
+        "company_id",
+        "automatic_actions",
+        "targets",
+        "endpoint_tags",
+        "companies",
+        "tags",
+    }
+)
+_GRAVITYZONE_ID = re.compile(r"[0-9a-f]{24}")
+
+
+def _check_gravityzone_id(value: Any, *, where: str, key: str) -> None:
+    if not isinstance(value, str) or not _GRAVITYZONE_ID.fullmatch(value):
+        raise ValueError(f"{where} setup: {key} must be a GravityZone id, 24 lower-case hex digits")
+
+
+def _check_bitdefender_setup(setup: dict[str, Any], *, where: str) -> None:
+    """bitdefender-1.0 tenant setup: known keys, `api_key` as `$VAR`, ids as 24 hex."""
+    unknown = sorted(set(setup) - _BITDEFENDER_SETUP_KEYS)
+    if unknown:
+        raise ValueError(f"{where} setup has unknown key(s): {', '.join(unknown)}")
+    missing = [key for key in ("url", "api_key") if not setup.get(key)]
+    if missing:
+        raise ValueError(f"{where} setup is missing required key(s): {', '.join(missing)}")
+    key = setup["api_key"]
+    reference = _ENV_REFERENCE.fullmatch(key) if isinstance(key, str) else None
+    if reference is None:
+        raise ValueError(
+            f"{where} setup: api_key must be an environment variable reference "
+            "($VAR or ${VAR}, e.g. $GRAVITYZONE_API_KEY)"
+        )
+    setup["api_key"] = f"${reference.group(1) or reference.group(2)}"
+    if setup.get("key_type", "personal") not in ("personal", "service"):
+        raise ValueError(f"{where} setup: key_type must be personal or service")
+    if setup.get("company_id") is not None:
+        _check_gravityzone_id(setup["company_id"], where=where, key="company_id")
+    endpoint_tags = setup.get("endpoint_tags") or {}
+    if not isinstance(endpoint_tags, dict):
+        raise ValueError(f"{where} setup: endpoint_tags must be a table of aliases")
+    for alias, entry in endpoint_tags.items():
+        if not isinstance(entry, dict) or set(entry) != {"tag_id", "company_id"}:
+            raise ValueError(f"{where} setup: endpoint_tags.{alias} must be {{tag_id, company_id}}")
+        for name in ("tag_id", "company_id"):
+            _check_gravityzone_id(entry[name], where=where, key=f"endpoint_tags.{alias}.{name}")
+    companies = setup.get("companies") or {}
+    if not isinstance(companies, dict):
+        raise ValueError(f"{where} setup: companies must be a table of aliases")
+    for alias, company in companies.items():
+        _check_gravityzone_id(company, where=where, key=f"companies.{alias}")
+    targets = setup.get("targets")
+    if targets is not None:
+        from opentide.platforms.bitdefender.catalog import targets_codes
+
+        if (
+            not isinstance(targets, dict)
+            or set(targets) - {"endpoint_tags", "companies"}
+            or not targets
+            or targets_codes(targets)
+        ):
+            raise ValueError(
+                f"{where} setup: targets must be {{endpoint_tags = [...]}} or {{companies = [...]}}"
+            )
+
+
 def _load_tenants(system: str, tenants_config: Any) -> list[Any]:
     """Typed tenants for any system without a bespoke loader."""
     from opentide.core.debug import DebugHelpers
@@ -205,6 +278,8 @@ def _load_tenants(system: str, tenants_config: Any) -> list[Any]:
                 supplied_setup["api_key"] = f"${reference.group(1) or reference.group(2)}"
         if system == "sysdig":
             _check_sysdig_setup(supplied_setup, where=where)
+        if system == "bitdefender":
+            _check_bitdefender_setup(supplied_setup, where=where)
         setup_raw = dict(_SETUP_DEFAULTS)
         setup_raw.update(DebugHelpers.fetch_config_envvar(supplied_setup))
         setup_raw["ssl"] = _tenant_ssl(setup_raw["ssl"], where=where)

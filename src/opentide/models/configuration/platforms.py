@@ -8,9 +8,9 @@ tenant loads, not here.
 
 from __future__ import annotations
 
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
-from pydantic import ConfigDict, Field
+from pydantic import ConfigDict, Field, model_validator
 
 from opentide.models.configuration.base import (
     ConfigurationModel,
@@ -386,6 +386,94 @@ class SysdigConfiguration(PlatformConfigurationBase):
     tenants: list[SysdigTenant] = Field(default_factory=list, description="Sysdig tenants.")
 
 
+# --- Bitdefender GravityZone ----------------------------------------------------------
+
+#: A GravityZone object id: 24 lower-case hex digits.
+GravityZoneId = Annotated[str, Field(pattern=r"^[0-9a-f]{24}$")]
+
+
+class BitdefenderEndpointTag(ConfigurationModel):
+    """An `endpoint_tags` entry: the GravityZone tag and the company that owns it."""
+
+    tag_id: GravityZoneId = Field(description="GravityZone tag id, 24 hex.")
+    company_id: GravityZoneId = Field(description="Company id of the tag, 24 hex.")
+
+
+#: An alias in a `targets` list: a non-blank name from the tenant's tables.
+TargetAlias = Annotated[str, Field(pattern=r"\S")]
+
+
+class BitdefenderTenantTargets(ConfigurationModel):
+    """`[tenants.setup.targets]`: default targets for blocks that set none.
+
+    The same shape as a block's `targets` (`bitdefender_targets_shape`): exactly
+    one of the two lists, non-empty. A default never means "no targets": a tenant
+    that applies rules to the whole company leaves `targets` out.
+    """
+
+    endpoint_tags: Annotated[list[TargetAlias], Field(min_length=1)] | None = Field(
+        default=None, description="Aliases from the tenant's endpoint_tags table."
+    )
+    companies: Annotated[list[TargetAlias], Field(min_length=1)] | None = Field(
+        default=None, description="Aliases from the tenant's companies table."
+    )
+
+    @model_validator(mode="after")
+    def _exactly_one_list(self) -> BitdefenderTenantTargets:
+        if (self.endpoint_tags is None) == (self.companies is None):
+            raise ValueError(
+                "targets sets exactly one of endpoint_tags and companies "
+                "(bitdefender_targets_shape); leave targets out for the whole company"
+            )
+        return self
+
+
+class BitdefenderSetup(TenantSetup):
+    """`[tenants.setup]` for Bitdefender GravityZone."""
+
+    url: str = Field(
+        description="Control Center API Access URL, ending in /api. Calls go to "
+        "<url>/v1.0/jsonrpc/incidents."
+    )
+    api_key: EnvPlaceholder = Field(
+        description="GravityZone API key with the Incidents API. Must be a $NAME placeholder."
+    )
+    key_type: Literal["personal", "service"] = Field(
+        default="personal",
+        description="personal: HTTP Basic with the key as user name; service: X-API-Key header.",
+    )
+    company_id: GravityZoneId | None = Field(
+        default=None, description="Partner tenants: the company that owns created rules."
+    )
+    automatic_actions: bool = Field(
+        default=True, description="false for subscriptions without automatic actions."
+    )
+    targets: BitdefenderTenantTargets | None = Field(
+        default=None, description="Default targets for blocks that set none."
+    )
+    endpoint_tags: dict[str, BitdefenderEndpointTag] = Field(
+        default_factory=dict, description="Alias to {tag_id, company_id}."
+    )
+    companies: dict[str, GravityZoneId] = Field(
+        default_factory=dict, description="Alias to company id."
+    )
+    tags: list[str] = Field(default_factory=list, description="Tags added to every rule.")
+
+
+class BitdefenderTenant(TenantBase):
+    """`[[tenants]]` for Bitdefender GravityZone."""
+
+    setup: BitdefenderSetup = Field(description="Connection settings.")
+
+
+class BitdefenderConfiguration(PlatformConfigurationBase):
+    """Merged `platforms/bitdefender.toml`."""
+
+    tenants: list[BitdefenderTenant] = Field(
+        default_factory=list, description="GravityZone tenants."
+    )
+
+
 # --- Any other platform file ----------------------------------------------------------
 
 
@@ -430,4 +518,5 @@ PLATFORM_CONFIGURATION_MODELS: dict[str, type[PlatformConfigurationBase]] = {
     "harfanglab": HarfangLabConfiguration,
     "elastic": ElasticConfiguration,
     "sysdig": SysdigConfiguration,
+    "bitdefender": BitdefenderConfiguration,
 }

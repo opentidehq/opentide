@@ -654,7 +654,9 @@ def _deploy(
                 )
                 from opentide.deployment.preview import preview_platform_deployment
 
-                payloads[system] = preview_platform_deployment(system, uuids)
+                payloads[system] = preview_platform_deployment(
+                    system, uuids, tenant_targets=targets.get(system)
+                )
                 if system not in missing_tenants:
                     deployed.append(system)
                 # A dry run has no checklist step to report it (OPENTIDE_PROGRESS=json).

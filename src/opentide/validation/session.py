@@ -272,6 +272,21 @@ def run_validation(
         if not object_checks:
             stats["objects_checked"] = len(work_items)
 
+    if ValidateCheck.schema in checks:
+        from opentide.validation.bitdefender_names import bitdefender_name_issues
+
+        def _file_of(uuid: str) -> Path | None:
+            ref = graph.resolve(uuid)
+            return ref.file_path if ref else None
+
+        issues.extend(
+            bitdefender_name_issues(
+                objects.get("rule", {}),
+                (item.uuid for item in work_items if item.object_type == "rule"),
+                _file_of,
+            )
+        )
+
     if ValidateCheck.schema in checks and scope.mode == "full":
         # Shards outlive their rules: an orphan is still the only handle on a
         # remote rule, so the whole directory is checked, not only shards a
@@ -291,8 +306,18 @@ def run_validation(
 _MODEL_CODES = re.compile(r"validation failed with code\(s\): ([a-z0-9_]+(?:, [a-z0-9_]+)*)")
 
 
+#: Codes both a platform model and the engine's YARA language report.
+_YARA_PREFIXES = ("yara_", "bitdefender_yara_")
+
+
 def _model_codes(issue: ValidationIssue) -> list[str]:
-    """The codes a coded model validator's ``schema_validation`` finding carries."""
+    """The codes a coded model validator's finding carries.
+
+    HarfangLab names them in a ``schema_validation`` message; Bitdefender reports
+    each as its own finding, under its code (bitdefender-1.0).
+    """
+    if issue.code.startswith(_YARA_PREFIXES):
+        return [issue.code]
     match = _MODEL_CODES.search(issue.message) if issue.code == "schema_validation" else None
     return match.group(1).split(", ") if match else []
 
@@ -305,7 +330,7 @@ def _model_yara_codes(
         (issue.file_path, tuple(issue.field_path[:2]), code)
         for issue in issues
         for code in _model_codes(issue)
-        if code.startswith("yara_")
+        if code.startswith(_YARA_PREFIXES)
     }
 
 
@@ -325,7 +350,7 @@ def _without_engine_reported_yara(
     reported = {
         (item.file_path, tuple(item.field_path[:2]), item.code)
         for item in engine
-        if item.code.startswith("yara_")
+        if item.code.startswith(_YARA_PREFIXES)
     }
     if not reported:
         return issues
@@ -333,7 +358,9 @@ def _without_engine_reported_yara(
     for issue in issues:
         block = (issue.file_path, tuple(issue.field_path[:2]))
         codes = _model_codes(issue)
-        if codes and all(code.startswith("yara_") and (*block, code) in reported for code in codes):
+        if codes and all(
+            code.startswith(_YARA_PREFIXES) and (*block, code) in reported for code in codes
+        ):
             continue
         kept.append(issue)
     return kept
@@ -632,6 +659,26 @@ def _validate_work_item(
             )
         )
         issues.extend(_yara_signature_alias_issues(item, file_path))
+        from opentide.validation.yara_signature import yara_signature_alias_issues
+
+        issues.extend(
+            yara_signature_alias_issues(
+                item.body,
+                object_uuid=item.uuid,
+                object_type=item.object_type,
+                file_path=file_path,
+            )
+        )
+        from opentide.validation.bitdefender_advisories import bitdefender_advisory_issues
+
+        warnings.extend(
+            bitdefender_advisory_issues(
+                item.body,
+                object_uuid=item.uuid,
+                object_type=item.object_type,
+                file_path=file_path,
+            )
+        )
         issues.extend(check_references_for_object(item.uuid, item.object_type, item.body, graph))
         if item.object_type == "threat":
             issues.extend(check_chaining_for_object(item.uuid, item.body, graph))

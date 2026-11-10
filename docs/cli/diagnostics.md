@@ -16,6 +16,32 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`api_key_literal`](#api_key_literal) | A `sharing.toml` block holds its API key as a literal. |
 | [`api_key_unset`](#api_key_unset) | An enabled sharing target has no API key. |
 | [`asset_unknown`](#asset_unknown) | A `visibility.toml` log source or detector names an asset that `[[assets]]` does not declare. |
+| [`bitdefender_action_scope`](#bitdefender_action_scope) | An automatic action is not allowed for the rule's kind or target. |
+| [`bitdefender_actions_unsupported`](#bitdefender_actions_unsupported) | The block sets `actions`, and the tenant's subscription has no automatic actions. |
+| [`bitdefender_contains_no_wildcard`](#bitdefender_contains_no_wildcard) | A `contains` criterion has neither `*` nor `?`, so GravityZone matches the value as written. |
+| [`bitdefender_create_no_id`](#bitdefender_create_no_id) | A GravityZone create answered something other than a 24-hex rule id. |
+| [`bitdefender_create_unconfirmed`](#bitdefender_create_unconfirmed) | A GravityZone create got no answer, and its retry found the name already taken. |
+| [`bitdefender_criteria_combination`](#bitdefender_criteria_combination) | The criteria combine fields or values GravityZone does not allow together. |
+| [`bitdefender_criterion_field`](#bitdefender_criterion_field) | A criterion's `field` does not belong to the block's `target`. |
+| [`bitdefender_criterion_relation`](#bitdefender_criterion_relation) | A criterion uses a relation its field does not take. |
+| [`bitdefender_criterion_shape`](#bitdefender_criterion_shape) | A criterion does not have `field` and exactly one of `is`, `contains` and `any`. |
+| [`bitdefender_criterion_value`](#bitdefender_criterion_value) | A criterion's value is not one its field accepts. |
+| [`bitdefender_incidents_api_unavailable`](#bitdefender_incidents_api_unavailable) | The tenant has no Incidents API, so it cannot take custom rules. |
+| [`bitdefender_kind_changed`](#bitdefender_kind_changed) | An update was refused because the block's kind differs from the GravityZone rule's. |
+| [`bitdefender_name_conflict`](#bitdefender_name_conflict) | GravityZone refused a create because a rule with the same name exists in the company. |
+| [`bitdefender_name_duplicate`](#bitdefender_name_duplicate) | Two enabled Bitdefender blocks resolve to the same GravityZone rule name. |
+| [`bitdefender_registry_full_hive`](#bitdefender_registry_full_hive) | A `Registry.Key` criterion starts with a full hive name, which GravityZone accepts and never matches. |
+| [`bitdefender_request_failed`](#bitdefender_request_failed) | GravityZone refused a call for this rule with a JSON-RPC error. |
+| [`bitdefender_rule_kind`](#bitdefender_rule_kind) | A Bitdefender block sets both `detection` and `yara`, or neither. |
+| [`bitdefender_rule_missing`](#bitdefender_rule_missing) | A rule to disable is gone from GravityZone, so its recorded id was removed. |
+| [`bitdefender_rule_recreated`](#bitdefender_rule_recreated) | The recorded GravityZone rule was gone, so deploy created it again. |
+| [`bitdefender_severity`](#bitdefender_severity) | The block `severity` is not `Low`, `Medium` or `High`. |
+| [`bitdefender_severity_collapsed`](#bitdefender_severity_collapsed) | `response.alert_severity` is `Critical` or `Informational`, which GravityZone sends as `High` or `Low`. |
+| [`bitdefender_target`](#bitdefender_target) | The `detection.target` is not a GravityZone detection target. |
+| [`bitdefender_target_unknown`](#bitdefender_target_unknown) | A `targets` alias is not in the tenant's `endpoint_tags` or `companies` table. |
+| [`bitdefender_targets_shape`](#bitdefender_targets_shape) | `targets` sets both `endpoint_tags` and `companies`, or an empty list. |
+| [`bitdefender_tenant_unauthorized`](#bitdefender_tenant_unauthorized) | GravityZone refused the tenant's API key, so no rule deploys to it. |
+| [`bitdefender_tenant_unreachable`](#bitdefender_tenant_unreachable) | A call to the GravityZone tenant got no answer, so no further rule deploys to it. |
 | [`bitdefender_yara_ascii`](#bitdefender_yara_ascii) | A Bitdefender YARA signature holds a character that is not ASCII. |
 | [`bitdefender_yara_size`](#bitdefender_yara_size) | A Bitdefender YARA signature is longer than 30,000 characters. |
 | [`cbc_unknown_field`](#cbc_unknown_field) | A field in a Carbon Black Cloud query is one or two letters away from a Carbon Black process search field, and is not that field. |
@@ -279,13 +305,13 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`yara_number_out_of_range`](#yara_number_out_of_range) | A YARA integer, size suffix, jump bound or string index is outside the range libyara accepts. |
 | [`yara_parse_error`](#yara_parse_error) | The YARA signature does not parse as libyara 4.5 reads it. |
 | [`yara_regexp`](#yara_regexp) | A YARA regular expression is invalid. |
-| [`yara_rule_identifier_conflict`](#yara_rule_identifier_conflict) | A YARA rule is named like an imported module or a keyword. |
-| [`yara_signature_alias`](#yara_signature_alias) | A HarfangLab `yara.signature` is a YAML alias of text anchored elsewhere in the file instead of YARA written in the block. |
+| [`yara_rule_identifier_conflict`](#yara_rule_identifier_conflict) | A YARA rule is named like a keyword, or matches a rule wildcard an earlier condition uses; a rule named like an imported module is yara_x_incompatible. |
+| [`yara_signature_alias`](#yara_signature_alias) | A `yara.signature` is a YAML alias of text anchored elsewhere in the file instead of YARA written in the block. |
 | [`yara_slow_pattern`](#yara_slow_pattern) | libyara warns that this YARA string or loop may slow scanning down. |
 | [`yara_string_modifier`](#yara_string_modifier) | libyara refuses this combination of YARA string modifiers, or an xor or base64 argument is out of range. |
 | [`yara_suspicious_expression`](#yara_suspicious_expression) | A YARA condition is invariant, unsatisfiable or not boolean, or compares an integer with a boolean. |
 | [`yara_type`](#yara_type) | A YARA operator or function is applied to a value of the wrong type. |
-| [`yara_undefined_identifier`](#yara_undefined_identifier) | A YARA identifier is neither a rule defined earlier in the signature nor an imported module. |
+| [`yara_undefined_identifier`](#yara_undefined_identifier) | A YARA identifier is neither a rule defined earlier in the signature nor an imported module, or is used as libyara refuses: a module field called as a function, a module function named without a call, or a loop variable a loop already binds. |
 | [`yara_undefined_string`](#yara_undefined_string) | A YARA condition names a string ($id, #id, @id, !id or $prefix*) that the rule does not define. |
 | [`yara_unknown_module`](#yara_unknown_module) | A YARA import names a module libyara does not ship. |
 | [`yara_unknown_module_member`](#yara_unknown_module_member) | The YARA module has no such field or function, or the function takes other arguments. |
@@ -365,6 +391,515 @@ assets = ["domain-controller"]   # declared as domain-controllers
 ### How to fix
 
 Correct the asset name, or declare the asset under `[[assets]]`.
+
+## bitdefender_action_scope
+
+An automatic action is not allowed for the rule's kind or target.
+
+Severity: error. Reported by `opentide validate` on a `bitdefender` block (bitdefender-1.0). `kill_process` is for Basic rules only. `sandbox`, `kill_process` and `quarantine` need a `process` or `file` target or a `*.CreatedBy.*` criterion; a YARA rule takes `sandbox` and `quarantine`.
+
+### Example
+
+```yaml
+configurations:
+  bitdefender:
+    actions:
+      kill_process: true
+    yara:
+      signature: |
+        rule A { condition: true }
+```
+
+### How to fix
+
+Remove the action, or use one the kind and target allow (`isolate`, `collect_investigation_package`, `antimalware_scan`, `risk_scan` are allowed everywhere).
+
+## bitdefender_actions_unsupported
+
+The block sets `actions`, and the tenant's subscription has no automatic actions.
+
+Severity: warning. Reported by `opentide deploy` on a `bitdefender` block (bitdefender-1.0). With `automatic_actions = false` in the tenant setup, deploy omits `automaticActions` and the rule deploys without them.
+
+### Example
+
+```yaml
+configurations:
+  bitdefender:
+    actions:
+      isolate: true   # tenant: automatic_actions = false
+```
+
+### How to fix
+
+Remove the block's `actions`, or set `automatic_actions = true` once the subscription includes them.
+
+## bitdefender_contains_no_wildcard
+
+A `contains` criterion has neither `*` nor `?`, so GravityZone matches the value as written.
+
+Severity: warning. Reported by `opentide validate` and `opentide lint` (its `queries` check) on a `bitdefender` block (bitdefender-1.0). It is an advisory: GravityZone's `contains` relation compares the whole value with `*` and `?` as wildcards, so a value without one is an exact match, and the author most likely meant a substring.
+
+### Example
+
+```yaml
+configurations:
+  bitdefender:
+    detection:
+      target: process
+      criteria:
+        - field: Process.CommandLine
+          contains: -enc
+```
+
+### How to fix
+
+Add the wildcards you mean (`contains: "*-enc*"`), or use `is` for an exact match.
+
+## bitdefender_create_no_id
+
+A GravityZone create answered something other than a 24-hex rule id.
+
+Severity: error. Reported by `opentide deploy` on a `bitdefender` block (bitdefender-1.0). Deploy sends `returnRuleId: true` and records the id it gets back. Without one the rule may exist on the tenant with no binding in `.opentide/states/deployment/`.
+
+### Example
+
+```text illustrative
+bitdefender_create_no_id: createCustomRule for 'Encoded PowerShell' answered True
+```
+
+### How to fix
+
+Find the rule by name in the GravityZone console and record its id in the rule's deployment state shard, or delete it and deploy again.
+
+## bitdefender_create_unconfirmed
+
+A GravityZone create got no answer, and its retry found the name already taken.
+
+Severity: error. Reported by `opentide deploy` on a `bitdefender` tenant. The first `createCustomRule` got no answer (a timeout, a reset or a cut-off response), so deploy sent it once more; the retry got no answer either, or GravityZone refused it because a rule of that name exists. The first create may have succeeded, but its rule id never reached opentide, so nothing was recorded in `.opentide/states/deployment/`. Deploy never lists rules to find the id.
+
+### Example
+
+```text illustrative
+bitdefender_create_unconfirmed: the first create of 'Office application spawns encoded PowerShell'
+got no answer and the retry found the name taken
+```
+
+### How to fix
+
+Find the rule by its name in the GravityZone console (Incidents, Custom rules). Delete it and deploy again, or record its 24-hex id under `platforms.bitdefender.<tenant>` in the rule's `.opentide/states/deployment/<uuid>.json` and commit it.
+
+## bitdefender_criteria_combination
+
+The criteria combine fields or values GravityZone does not allow together.
+
+Severity: error. Reported by `opentide validate` on a `bitdefender` block (bitdefender-1.0). EDR-only and XDR-only fields or values are not mixed (`File.CreatedBy.*` with `File.MD5`, `rename` with `downloaded`). `File.Certificate*` needs `File.Name` or `File.FullPathName`. `Connection.Protocol` needs `Connection.Domain`. An XDR detection uses `alert` or an operation criterion, not both.
+
+### Example
+
+```yaml
+configurations:
+  bitdefender:
+    detection:
+      target: connection
+      criteria:
+        - field: Connection.Protocol
+          is: smb
+```
+
+### How to fix
+
+Add the field the pairing needs (`Connection.Domain`), or split EDR and XDR conditions into two rules.
+
+## bitdefender_criterion_field
+
+A criterion's `field` does not belong to the block's `target`.
+
+Severity: error. Reported by `opentide validate` on a `bitdefender` block (bitdefender-1.0). Each target has its own fields in Bitdefender's criteria catalogue: `process` has `Process.*`, `file` has `File.*`, `connection` has `Connection.*` and `registry` has `Registry.*`. A field the catalogue does not list for any other target is a warning. The alert filter (`detection`) is never a criterion, on any target: write it as the block's `alert`.
+
+### Example
+
+```yaml
+configurations:
+  bitdefender:
+    detection:
+      target: process
+      criteria:
+        - field: Process.Hash
+          is: 44d88612fea8a8f36de82e1278abb02f
+```
+
+### How to fix
+
+Use a field of the target, as the catalogue spells it (`Process.MD5`), or change the target.
+
+## bitdefender_criterion_relation
+
+A criterion uses a relation its field does not take.
+
+Severity: error. Reported by `opentide validate` on a `bitdefender` block (bitdefender-1.0). Enum fields (`File.Operation`, `Registry.Operation`, `Registry.DataType`, `Connection.Protocol`, ...) take `is` or `any` only, and `*.MD5` and `*.SHA2` do not take `contains`.
+
+### Example
+
+```yaml
+configurations:
+  bitdefender:
+    detection:
+      target: registry
+      criteria:
+        - field: Registry.Operation
+          contains: key_*
+```
+
+### How to fix
+
+Use `is` with one value or `any` with several: `any: [key_created, key_renamed]`.
+
+## bitdefender_criterion_shape
+
+A criterion does not have `field` and exactly one of `is`, `contains` and `any`.
+
+Severity: error. Reported by `opentide validate` on a `bitdefender` block (bitdefender-1.0). `is` takes a string or an integer, `contains` a string, and `any` a non-empty list of strings or integers.
+
+### Example
+
+```yaml
+configurations:
+  bitdefender:
+    detection:
+      target: process
+      criteria:
+        - field: Process.Name
+          is: powershell.exe
+          contains: "*shell*"
+```
+
+### How to fix
+
+Keep one relation per criterion. Two conditions on one field are two criteria, which must both match.
+
+## bitdefender_criterion_value
+
+A criterion's value is not one its field accepts.
+
+Severity: error. Reported by `opentide validate` on a `bitdefender` block (bitdefender-1.0). An enum field takes only its catalogue values (`Registry.Operation`: `key_created`, `key_deleted`, ...), and a port is an integer from 0 to 65535.
+
+### Example
+
+```yaml
+configurations:
+  bitdefender:
+    detection:
+      target: connection
+      criteria:
+        - field: Connection.DestinationPort
+          any: [443, 70000]
+```
+
+### How to fix
+
+Use a catalogue value, or a port in range written as a number.
+
+## bitdefender_incidents_api_unavailable
+
+The tenant has no Incidents API, so it cannot take custom rules.
+
+Severity: error. Reported by `opentide deploy` on a `bitdefender` block (bitdefender-1.0). GravityZone answered `-32601` (method not found). On-premises GravityZone has no Incidents API.
+
+### Example
+
+```toml
+url = "https://gravityzone.example.internal/api"   # on-premises
+```
+
+### How to fix
+
+Use a GravityZone cloud or partner console URL, ending in `/api`.
+
+## bitdefender_kind_changed
+
+An update was refused because the block's kind differs from the GravityZone rule's.
+
+Severity: error. Reported by `opentide deploy` on a `bitdefender` block (bitdefender-1.0). GravityZone cannot turn a YARA rule into a Basic rule or back, and `updateCustomRule` takes no `subtype`.
+
+### Example
+
+```yaml
+configurations:
+  bitdefender:
+    # deployed as yara, now a detection block
+    detection:
+      target: process
+```
+
+### How to fix
+
+Deploy the rule with a `DELETION` status first, then deploy it again with the new kind.
+
+## bitdefender_name_conflict
+
+GravityZone refused a create because a rule with the same name exists in the company.
+
+Severity: error. Reported by `opentide deploy` on a `bitdefender` tenant. GravityZone names are unique per company, and deploy never adopts a rule it did not create: it has no id for it in `.opentide/states/deployment/`. `opentide validate` reports two opentide rules with one GravityZone name as `bitdefender_name_duplicate`; this code is a rule created outside opentide, or by another workspace.
+
+### Example
+
+```yaml
+name: Office application spawns encoded PowerShell   # a console rule has this name
+configurations:
+  bitdefender:
+    status: PRODUCTION
+```
+
+### How to fix
+
+Set a distinct `configurations.bitdefender.name`, or delete the other rule in the console. To take over a rule opentide created and lost track of, record its id in the rule's deployment state shard.
+
+## bitdefender_name_duplicate
+
+Two enabled Bitdefender blocks resolve to the same GravityZone rule name.
+
+Severity: error. Reported by `opentide validate` on a `bitdefender` block (bitdefender-1.0). The GravityZone name is the block's `name`, else the rule's `name`, normalised and cut at 128 characters. GravityZone refuses a second rule with one name in a company, so the second deploy would fail with `bitdefender_name_conflict`.
+
+### Example
+
+```yaml
+# rule-a.yaml and rule-b.yaml, both:
+name: Office application spawns encoded PowerShell
+configurations:
+  bitdefender:
+    enabled: true
+```
+
+### How to fix
+
+Give one of the blocks its own `configurations.bitdefender.name`, or rename one of the rules.
+
+## bitdefender_registry_full_hive
+
+A `Registry.Key` criterion starts with a full hive name, which GravityZone accepts and never matches.
+
+Severity: warning. Reported by `opentide validate` and `opentide lint` (its `queries` check) on a `bitdefender` block (bitdefender-1.0). It is an advisory: the rule validates and deploys, but GravityZone stores registry keys under the short hive names, so `HKEY_LOCAL_MACHINE\…` never triggers.
+
+### Example
+
+```yaml
+configurations:
+  bitdefender:
+    detection:
+      target: registry
+      criteria:
+        - field: Registry.Key
+          contains: HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\Run*
+```
+
+### How to fix
+
+Write the short hive name, as in `HKLM\Software\Microsoft\Windows\CurrentVersion\Run*`: `HKLM`, `HKCU`, `HKCR` or `HKCC`; `HKU` for a user's hive, `HKEY_USERS\<SID>…`; and `HKLU` for any other `HKEY_USERS\…` key. The hive name is compared case-insensitively.
+
+## bitdefender_request_failed
+
+GravityZone refused a call for this rule with a JSON-RPC error.
+
+Severity: error. Reported by `opentide deploy` on a `bitdefender` block (bitdefender-1.0). A response with an `error` member is a failure even with HTTP 200; the message carries its code and `error.data.details`. Other rules on the tenant carry on.
+
+### Example
+
+```text illustrative
+bitdefender_request_failed: updateCustomRule: error -32602: Invalid params (Invalid value for parameter settings.criteriaList)
+```
+
+### How to fix
+
+Read `error.data.details` in the message, fix the block it points at, and deploy again. `opentide validate` catches most refusals before any call.
+
+## bitdefender_rule_kind
+
+A Bitdefender block sets both `detection` and `yara`, or neither.
+
+Severity: error. Reported by `opentide validate` on a `bitdefender` block (bitdefender-1.0). A GravityZone custom rule is one kind: a Basic rule (`detection`, a list of criteria) or a YARA rule (`yara`, a signature). An `exclusion` key is unknown: GravityZone exclusion rules are not opentide rules, and deploy never creates, updates or deletes one.
+
+### Example
+
+```yaml
+configurations:
+  bitdefender:
+    status: STAGING
+    detection:
+      target: process
+      criteria:
+        - field: Process.Name
+          is: mshta.exe
+    yara:
+      signature: |
+        rule A { condition: filesize < 10 }
+```
+
+### How to fix
+
+Keep one kind per rule. Split a Basic rule and a YARA rule into two opentide rules; manage exclusions in the GravityZone console.
+
+## bitdefender_rule_missing
+
+A rule to disable is gone from GravityZone, so its recorded id was removed.
+
+Severity: warning. Reported by `opentide deploy` under `DISABLEMENT` on a `bitdefender` block (bitdefender-1.0). `updateCustomRule` answered `-32002`. Nothing exists to disable, so deploy creates nothing and forgets the binding.
+
+### Example
+
+```text illustrative
+bitdefender_rule_missing: the recorded rule no longer exists on the tenant; its id is removed
+```
+
+### How to fix
+
+Commit the updated deployment state.
+
+## bitdefender_rule_recreated
+
+The recorded GravityZone rule was gone, so deploy created it again.
+
+Severity: warning. Reported by `opentide deploy` on a `bitdefender` block (bitdefender-1.0). `updateCustomRule` answered `-32002` (resource not found): someone deleted the rule in the console. Deploy creates it again and replaces the id in `.opentide/states/deployment/`.
+
+### Example
+
+```text illustrative
+bitdefender_rule_recreated: the recorded rule no longer exists on the tenant; creating it again
+```
+
+### How to fix
+
+Commit the updated deployment state. Delete rules through a `DELETION` status, not in the console.
+
+## bitdefender_severity
+
+The block `severity` is not `Low`, `Medium` or `High`.
+
+Severity: error. Reported by `opentide validate` on a `bitdefender` block (bitdefender-1.0). GravityZone has three severities, spelled with a capital letter. Without `severity`, deploy derives it from `response.alert_severity`.
+
+### Example
+
+```yaml
+configurations:
+  bitdefender:
+    severity: Critical
+```
+
+### How to fix
+
+Use `Low`, `Medium` or `High`, or remove the key.
+
+## bitdefender_severity_collapsed
+
+`response.alert_severity` is `Critical` or `Informational`, which GravityZone sends as `High` or `Low`.
+
+Severity: warning. Reported by `opentide validate` and `opentide lint` (its `queries` check) on a rule with a `bitdefender` block that sets no `severity` (bitdefender-1.0). GravityZone has three severities: deploy sends `Critical` as `High` and `Informational` as `Low`. It is an advisory: the rule validates and deploys.
+
+### Example
+
+```yaml
+response:
+  alert_severity: Critical
+configurations:
+  bitdefender:
+    status: PRODUCTION
+```
+
+### How to fix
+
+Set `configurations.bitdefender.severity` to `Low`, `Medium` or `High` to choose the GravityZone level, or accept the mapping.
+
+## bitdefender_target
+
+The `detection.target` is not a GravityZone detection target.
+
+Severity: error. Reported by `opentide validate` on a `bitdefender` block (bitdefender-1.0). The target must be spelled as the API spells it: `process`, `file`, `connection`, `registry`, `user connection`, `email`, `application`, `key vault`, `role`, `policy`, `sharing link`, `url`, `ssh key`, `launch template`, `service principal`, `user group`, `automation account`, `automation account hook`, `certificate authority`, `api`, `bucket`, `jira project` or `confluence page`. The exclusion-only targets `flow` and `bitbucket repository` are refused.
+
+### Example
+
+```yaml
+configurations:
+  bitdefender:
+    detection:
+      target: flow
+      criteria:
+        - field: Flow.Source
+          is: 10.0.0.1
+```
+
+### How to fix
+
+Use one of the detection targets, in lower case with spaces, such as `process`.
+
+## bitdefender_target_unknown
+
+A `targets` alias is not in the tenant's `endpoint_tags` or `companies` table.
+
+Severity: error. Reported by `opentide deploy`, before any call for the rule on a `bitdefender` block (bitdefender-1.0). A rule file carries aliases, because GravityZone ids differ per tenant; each tenant maps them in `platforms/bitdefender.toml`.
+
+### Example
+
+```yaml
+configurations:
+  bitdefender:
+    targets:
+      endpoint_tags: [tier0-servers]   # the tenant has no tier0-servers
+```
+
+### How to fix
+
+Add the alias to the tenant's `[tenants.setup.endpoint_tags]` (or `companies`) table, or change the block's `targets`.
+
+## bitdefender_targets_shape
+
+`targets` sets both `endpoint_tags` and `companies`, or an empty list.
+
+Severity: error. Reported by `opentide validate` on a `bitdefender` block (bitdefender-1.0). A rule applies to endpoint tags or, on a partner tenant, to companies; neither means the whole company. Each list names aliases from the tenant's tables.
+
+### Example
+
+```yaml
+configurations:
+  bitdefender:
+    targets:
+      endpoint_tags: [tier0-servers]
+      companies: [acme]
+```
+
+### How to fix
+
+Keep one of the two lists, with at least one alias, or remove `targets`.
+
+## bitdefender_tenant_unauthorized
+
+GravityZone refused the tenant's API key, so no rule deploys to it.
+
+Severity: error. Reported by `opentide deploy` on a `bitdefender` block (bitdefender-1.0). A `-32001` answer, HTTP 401 or HTTP 403 stops the tenant. The key must be valid and have the Incidents API enabled.
+
+### Example
+
+```text illustrative
+bitdefender_tenant_unauthorized: tenant gravityzone-eu refused the API key: API Key is not allowed to access the selected API: Incidents
+```
+
+### How to fix
+
+Check the variable `api_key` names, and enable the Incidents API for the key in GravityZone (My Account, API keys). `key_type` must match the key: `personal` or `service`.
+
+## bitdefender_tenant_unreachable
+
+A call to the GravityZone tenant got no answer, so no further rule deploys to it.
+
+Severity: error. Reported by `opentide deploy` on a `bitdefender` tenant (bitdefender-1.0). A timeout or a connection error on an update or a delete stops the tenant. A create with no answer is retried once instead; a retry with no answer, or one refused because the name is taken, is `bitdefender_create_unconfirmed` for that rule, and the tenant goes on.
+
+### Example
+
+```text illustrative
+bitdefender_tenant_unreachable: HTTPSConnectionPool(host='cloudgz.gravityzone.bitdefender.com', port=443): Read timed out
+```
+
+### How to fix
+
+Check the tenant `url` (it ends in `/api`), the network path to it, and the tenant's `ssl` setting, then deploy again.
 
 ## bitdefender_yara_ascii
 
@@ -4782,7 +5317,7 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 ## yara_rule_identifier_conflict
 
-A YARA rule is named like an imported module or a keyword.
+A YARA rule is named like a keyword, or matches a rule wildcard an earlier condition uses; a rule named like an imported module is yara_x_incompatible.
 
 Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
@@ -4798,35 +5333,33 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 ## yara_signature_alias
 
-A HarfangLab `yara.signature` is a YAML alias of text anchored elsewhere in the file instead of YARA written in the block.
+A `yara.signature` is a YAML alias of text anchored elsewhere in the file instead of YARA written in the block.
 
-Severity: error. Reported by `opentide validate` (its `schema` check) on a rule whose `configurations.harfanglab.yara.signature` is `*name`. What a block deploys must be readable in the block: an alias makes a change to the anchored text, under any other key, change the deployed rule too. The YAML loader cannot tell an alias from text written in place, so `opentide validate` reads the file's node graph.
+Severity: error. Reported by `opentide validate` (its `schema` check) on a rule whose `configurations.harfanglab.yara.signature` or `configurations.bitdefender.yara.signature` is `*name` (yara-1.0). What a block deploys must be readable in the block: an alias makes a change to the anchored text, under any other key, change the deployed rule too, and a signature in two platform blocks is checked once under each platform's profile. The YAML loader cannot tell an alias from text written in place, so `opentide validate` reads the file's node graph.
 
 ### Example
 
 ```yaml
-references:
-  public:
-    1: &shared_yara |
-      rule Cmd_String { condition: true }
 configurations:
   harfanglab:
+    yara:
+      signature: &shared_yara |
+        rule Cmd_String { condition: true }
+  bitdefender:
     yara:
       signature: *shared_yara
 ```
 
 ### How to fix
 
-Write the YARA text under `signature` with a block scalar (`|`), then run `opentide validate` again.
+Write the YARA text under each `signature` with a block scalar (`|`), then run `opentide validate` again.
 
 ```yaml
 configurations:
-  harfanglab:
+  bitdefender:
     yara:
       signature: |
         rule Cmd_String {
-          meta:
-            context = "file"
           condition:
             true
         }
@@ -4898,7 +5431,7 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 ## yara_undefined_identifier
 
-A YARA identifier is neither a rule defined earlier in the signature nor an imported module.
+A YARA identifier is neither a rule defined earlier in the signature nor an imported module, or is used as libyara refuses: a module field called as a function, a module function named without a call, or a loop variable a loop already binds.
 
 Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 

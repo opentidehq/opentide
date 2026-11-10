@@ -261,6 +261,26 @@ class ConfigurationModels:
 
             tenants: Sequence[Tenant] | None = None
 
+        @dataclass
+        class Bitdefender(SystemConfig):
+            @dataclass
+            class Tenant(SystemConfig.Tenant):
+                @dataclass
+                class Setup(SystemConfig.Tenant.Setup):
+                    url: str = ""
+                    api_key: str = ""
+                    key_type: str = "personal"
+                    company_id: str | None = None
+                    automatic_actions: bool = True
+                    targets: Mapping[str, Sequence[str]] | None = None
+                    endpoint_tags: Mapping[str, Mapping[str, str]] | None = None
+                    companies: Mapping[str, str] | None = None
+                    tags: Sequence[str] | None = None
+
+                setup: Setup
+
+            tenants: Sequence[Tenant] | None = None
+
 
 @dataclass
 class DeploymentBatch:
@@ -319,3 +339,7 @@ class TenantDeployment:
     @dataclass
     class Sysdig(DeploymentBatch):
         tenant: ConfigurationModels.Systems.Sysdig.Tenant
+
+    @dataclass
+    class Bitdefender(DeploymentBatch):
+        tenant: ConfigurationModels.Systems.Bitdefender.Tenant

@@ -1,11 +1,11 @@
 ---
 title: Platforms
-description: Nine deployment platforms, six query validators (five offline), eight query runners, and where each platform block schema is specified.
+description: Ten deployment platforms, six query validators (five offline), eight query runners, and where each platform block schema is specified.
 ---
 
 # Platforms
 
-opentide integrates with **nine detection platforms** through built-in adapters registered at import time (`opentide.platforms` entry points). All ship in the base PyPI package.
+opentide integrates with **ten detection platforms** through built-in adapters registered at import time (`opentide.platforms` entry points). All ship in the base PyPI package.
 
 ## Capability matrix
 
@@ -20,6 +20,7 @@ opentide integrates with **nine detection platforms** through built-in adapters 
 | CrowdStrike Falcon | `crowdstrike` | yes | no | no | yes | correlation filter (CQL) |
 | HarfangLab | `harfanglab` | yes | no | YARA | telemetry filters | Sigma or YARA |
 | Sysdig Secure (Falco) | `sysdig` | yes | no | yes | no | Falco condition |
+| Bitdefender GravityZone | `bitdefender` | yes | no | no | no | GravityZone criteria or YARA |
 
 The offline check is the analysis engine that ships with `pip install opentide` (`opentide validate`, `opentide validate query`, `opentide lint`, [`opentide lsp`](../../cli/lsp.md)): it parses each query in its language, with the platform's tables or dialect, and needs no tenant.
 
@@ -50,11 +51,13 @@ configurations:
 
 `opentide validate` checks `signature`, and the rule the decomposed form assembles, against the YARA language (its `queries` check, the `yara_*` codes): a YARA error fails the rule. Its `schema` check fails an `include` (`yara_include`), a signature with no rule that is neither private nor global (`yara_empty_signature`), a rule name used twice (`yara_duplicate_rule`), a signature written as a YAML alias (`yara_signature_alias`), and, in the decomposed form, a section or rule header in `strings` or `condition`, an unknown module in `imports`, and a rule `name` that derives a YARA keyword, a non-ASCII rule name or one over 128 characters. `opentide lint` reports YARA warnings, and warns when a rule in a signature has no meta `context` (`yara_meta_missing`), or when a rule's `context`, written in a signature or deployed by the decomposed form, is not a comma-joined list of `file`, `memory`, `file.pe`, `file.elf` and `file.macho` (`harfanglab_yara_context`). An empty `meta.context: []` in the decomposed form deploys the rule with no `context` and is `yara_meta_missing`. A `.yar` or `.yara` file is checked with `opentide validate query --file`.
 
-Every platform but Sysdig answers [`opentide query`](../../cli/query.md), which runs a read-only query on its tenants and returns the rows. CrowdStrike queries run on Next-Gen SIEM. HarfangLab has no query language for telemetry: a query names a telemetry source and field filters, and a HarfangLab rule has no query to run.
+Every platform but Sysdig and Bitdefender answers [`opentide query`](../../cli/query.md), which runs a read-only query on its tenants and returns the rows. CrowdStrike queries run on Next-Gen SIEM. HarfangLab has no query language for telemetry: a query names a telemetry source and field filters, and a HarfangLab rule has no query to run.
 
 `validate query --platform elastic --live` previews the compiled rule in Kibana and runs the Elasticsearch pre-flight (ES|QL `LIMIT 0`, then `_field_caps` on aggregation fields). The same pre-flight runs before every Elastic deploy. Offline, the engine parses Kuery, Lucene, EQL and ES|QL, ES|QL against the stack versions of the block's tenants. See [Validate](../../cli/validate.md#elastic-live-validation-and-deploy).
 
 Sysdig Secure runs Falco. A `sysdig` block is a Falco rule (a condition, its exceptions, and the macros and lists only that rule uses), which deploy creates through the Sysdig Secure runtime API and adds to the runtime policies the tenant or block names, keeping Sysdig's rule id in [deployment state](deployment-state.md). Deploy expands the block's own macros and lists into the condition and derives the Falco `desc`, `priority`, MITRE tags and a default `output` from the rule. The analysis engine checks the Falco condition offline; Sysdig has no rule preview, so `validate query --platform sysdig --live` reports `supported: false`. `deploy --dry-run` shows the API body.
+
+Bitdefender GravityZone takes custom detection rules. A `bitdefender` block is one rule of one kind: `detection`, a list of criteria on a process, file, connection, registry or XDR event, or `yara`, a YARA signature written out in the block. Deploy calls the Incidents API (JSON-RPC `createCustomRule`, `updateCustomRule`, `deleteCustomRule`), sends the whole payload on every update, and keeps GravityZone's 24-hex rule id in [deployment state](deployment-state.md); it never lists rules, and never creates, updates or deletes an exclusion rule. It derives the GravityZone name, description, severity and tags from the rule, and resolves `targets` aliases with the tenant's `endpoint_tags` and `companies` tables. `opentide validate` checks the criteria catalogue, the actions each kind allows, and the YARA signature, and warns (as does `opentide lint`) on a full registry hive name, a `contains` value without a wildcard, and a `Critical` or `Informational` severity GravityZone collapses; GravityZone has no dry run, so `validate query --platform bitdefender` reports `supported: false`. `deploy --dry-run` shows the `createCustomRule` request.
 
 Normative capability flags and the shared block: [Platforms spec](/docs/specifications/specs/platforms/).
 
@@ -72,6 +75,7 @@ Every key on `configurations.<platform>`, required and optional, is specified un
   <Card title="CrowdStrike" href="/docs/specifications/specs/platforms/crowdstrike-1.0/" description="Correlation filter. No query validator." />
   <Card title="HarfangLab" href="/docs/specifications/specs/platforms/harfanglab-1.0/" description="Sigma or YARA, never both. YARA as a whole signature or decomposed, checked offline." />
   <Card title="Sysdig Secure" href="/docs/specifications/specs/platforms/sysdig-1.0/" description="Custom Falco rule through the Sysdig Secure API. Block macros and lists are expanded at deploy." />
+  <Card title="Bitdefender GravityZone" href="/docs/specifications/specs/platforms/bitdefender-1.0/" description="Custom detection rule: Basic criteria or a YARA signature, through the Incidents API." />
 </Cards>
 
 ## Inspecting capabilities at runtime
@@ -92,7 +96,7 @@ for name, plat in Opentide.Platforms.items():
 
 ## Query validation policy
 
-Only platforms with `can_validate=True` run live validation. For CrowdStrike, HarfangLab and Sysdig, CLI and MCP return `supported: false` for `--live` — **never fake validation**. HarfangLab's YARA and Sysdig's Falco are checked offline.
+Only platforms with `can_validate=True` run live validation. For CrowdStrike, HarfangLab, Sysdig and Bitdefender, CLI and MCP return `supported: false` for `--live` — **never fake validation**. HarfangLab's YARA and Sysdig's Falco are checked offline; Bitdefender blocks are checked by `opentide validate`.
 
 ```bash
 opentide validate query --platform crowdstrike   # reports unsupported

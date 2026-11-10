@@ -14,12 +14,16 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping
-from typing import Annotated, Any, ClassVar, Literal, cast
+from typing import TYPE_CHECKING, Annotated, Any, ClassVar, Literal, cast
 
 from pydantic import AfterValidator, Field, field_validator, model_validator
 
 from opentide.models.base import TideField, TideModel
 from opentide.models.platform_configs import (
+    BitdefenderActions,
+    BitdefenderDetection,
+    BitdefenderTargets,
+    BitdefenderYara,
     CrowdstrikeDetails,
     CrowdstrikeSchedule,
     DefenderAlert,
@@ -63,6 +67,9 @@ from opentide.models.platform_configs import (
     SysdigMacro,
 )
 from opentide.platforms.elastic.durations import duration_seconds
+
+if TYPE_CHECKING:
+    from typing_extensions import LiteralString
 
 
 def _query_not_blank(value: str) -> str:
@@ -815,6 +822,62 @@ class SysdigConfig(PlatformConfigBase):
         return raw
 
 
+class BitdefenderConfig(PlatformConfigBase):
+    __schema_identifier__: ClassVar[str] = "platform::bitdefender::1.0"
+    # Its before-validator reports the constraint codes; it accepts no extra key.
+    __legacy_keys__: ClassVar[Mapping[str, str | None]] = {}
+
+    severity: Literal["Low", "Medium", "High"] | None = None
+    """`Low`, `Medium`, or `High`. Derived from `response.alert_severity` when omitted."""
+    tags: list[str] | None = None
+    """Extra GravityZone tags. Deploy adds the derived tags."""
+    targets: BitdefenderTargets | None = None
+    """Endpoint tags, or companies on a partner tenant, the rule applies to. Neither means the
+    whole company. Default: the tenant `targets`."""
+    actions: BitdefenderActions | None = None
+    """Automatic actions."""
+    detection: BitdefenderDetection | None = None
+    """A Basic detection rule (`type: 1`, `subtype: 0`). Exactly one of `detection` and `yara`."""
+    yara: BitdefenderYara | None = None
+    """A YARA detection rule (`type: 1`, `subtype: 1`). Exactly one of `detection` and `yara`."""
+
+    @property
+    def kind(self) -> Literal["detection", "yara"]:
+        """The rule kind the block deploys."""
+        return "yara" if self.yara is not None else "detection"
+
+    @model_validator(mode="before")
+    @classmethod
+    def _validate_raw_bitdefender_block(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        raw = dict(data)
+        if "status" not in raw or raw["status"] is None:
+            return raw
+        from pydantic import ValidationError
+        from pydantic_core import InitErrorDetails, PydanticCustomError
+
+        from opentide.platforms.bitdefender.catalog import block_findings
+
+        findings = block_findings(raw)
+        if findings:
+            # One error per finding, typed by its code and placed at the path the
+            # spec fixes for it, so validate and the editor name the same finding.
+            errors = [
+                InitErrorDetails(
+                    # The codes are CONSTRAINT_CODES, a fixed set of literals.
+                    type=PydanticCustomError(
+                        cast("LiteralString", finding.code), "{message}", {"message": finding.text}
+                    ),
+                    loc=finding.path,
+                    input=raw,
+                )
+                for finding in findings
+            ]
+            raise ValidationError.from_exception_data(cls.__name__, errors)
+        return raw
+
+
 PLATFORM_CONFIG_MODELS: dict[str, type[PlatformConfigBase]] = {
     "sentinel": SentinelConfig,
     "defender_for_endpoint": DefenderConfig,
@@ -825,6 +888,7 @@ PLATFORM_CONFIG_MODELS: dict[str, type[PlatformConfigBase]] = {
     "carbon_black_cloud": CarbonBlackConfig,
     "elastic": ElasticConfig,
     "sysdig": SysdigConfig,
+    "bitdefender": BitdefenderConfig,
 }
 
 
@@ -856,6 +920,8 @@ class RuleConfigurations(TideModel):
     """Elastic Security detection rule (`platform::elastic::1.0`)."""
     sysdig: SysdigConfig | None = None
     """Sysdig Secure or Falco rule (`platform::sysdig::1.0`)."""
+    bitdefender: BitdefenderConfig | None = None
+    """Bitdefender GravityZone custom detection rule (`platform::bitdefender::1.0`)."""
 
     @classmethod
     def from_platforms_dict(cls, platforms: dict[str, dict[str, Any]]) -> RuleConfigurations:

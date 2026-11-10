@@ -30,6 +30,7 @@ SCHEMA_ID = "deployment.state::1.0"
 
 #: Platforms whose deployer addresses the remote rule by a vendor-assigned id.
 STATE_PLATFORMS: tuple[str, ...] = (
+    "bitdefender",
     "crowdstrike",
     "defender_for_endpoint",
     "sentinel_one",
@@ -54,6 +55,9 @@ LEGACY_TENANT_PREFIX = "rule_id::"
 SHARING_IGNORE = f"{OPENTIDE_DIR}/states/sharing.jsonl"
 
 _CANONICAL_DECIMAL = re.compile(r"(?:0|[1-9][0-9]*)")
+#: Platforms whose external id is a 24-digit lower-case hex object id.
+OBJECT_ID_PLATFORMS: frozenset[str] = frozenset({"bitdefender"})
+_OBJECT_ID = re.compile(r"[0-9a-f]{24}")
 _ROOT_KEYS = ("object_uuid", "platforms", "schema")
 
 
@@ -116,8 +120,8 @@ def normalise_external_id(platform: str, value: object) -> str:
 
     Integers become canonical decimal strings, so ``12345`` and ``"12345"`` are
     the same id. A Defender or SentinelOne string with a sign or leading zero is
-    refused rather than rewritten to a different number. CrowdStrike ids are
-    copied verbatim.
+    refused rather than rewritten to a different number. A Bitdefender id is
+    24 lower-case hex digits. CrowdStrike ids are copied verbatim.
     """
     if isinstance(value, bool) or not isinstance(value, (int, str)):
         raise DeploymentStateError(
@@ -126,6 +130,12 @@ def normalise_external_id(platform: str, value: object) -> str:
             platform=platform,
         )
     if isinstance(value, int):
+        if platform in OBJECT_ID_PLATFORMS:
+            raise DeploymentStateError(
+                "external_id_shape",
+                f"{platform} external id {value} is a number, not 24 lower-case hex digits",
+                platform=platform,
+            )
         if value < 0:
             raise DeploymentStateError(
                 "external_id_shape",
@@ -142,6 +152,12 @@ def normalise_external_id(platform: str, value: object) -> str:
             "external_id_shape",
             f"{platform} external id {value!r} is not a canonical decimal integer "
             "(no sign, no leading zeroes)",
+            platform=platform,
+        )
+    if platform in OBJECT_ID_PLATFORMS and not _OBJECT_ID.fullmatch(value):
+        raise DeploymentStateError(
+            "external_id_shape",
+            f"{platform} external id {value!r} is not 24 lower-case hex digits",
             platform=platform,
         )
     return value

@@ -590,6 +590,7 @@ Live query validation works on **six platforms**; the offline engine on seven, f
 | `carbon_black_cloud` (Lucene) | ✅ | ✅ |
 | `sysdig` (Falco) | ❌ `supported: false` | ✅ |
 | `harfanglab` (YARA) | ❌ `supported: false` | ✅ |
+| `bitdefender` (criteria, YARA) | ❌ `supported: false` | ❌ `supported: false` |
 | `crowdstrike` | ❌ `supported: false` | ❌ |
 
 ### Elastic live validation and deploy
@@ -623,7 +624,7 @@ The same Elasticsearch and Kibana checks run before every `opentide deploy` to E
 
 A rule that fails is not created or updated, and the command exits `1`. Later rules are still checked. An index pattern that matches nothing still deploys, with a warning.
 
-CrowdStrike (correlation filter), HarfangLab (Sigma, or YARA checked offline) and Sysdig (Falco, which has no rule preview) return unsupported for `--live` — never fake validation. The fields on each `configurations` block, required and optional, are the [platform specs](/docs/specifications/specs/platforms/). [Platforms](../usage/concepts/platforms.md#platform-block-schemas) links each one.
+CrowdStrike (correlation filter), HarfangLab (Sigma, or YARA checked offline), Sysdig (Falco, which has no rule preview) and Bitdefender (GravityZone has no dry run; `validate` checks its blocks offline) return unsupported for `--live` — never fake validation. The fields on each `configurations` block, required and optional, are the [platform specs](/docs/specifications/specs/platforms/). [Platforms](../usage/concepts/platforms.md#platform-block-schemas) links each one.
 
 The result is a normal failure envelope, so `--json` shape does not change between
 supported and unsupported platforms:

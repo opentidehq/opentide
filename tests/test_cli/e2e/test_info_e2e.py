@@ -38,7 +38,7 @@ def test_info_no_color_renders_platform_table(cli_runner, tide_corpus_repo, monk
     # the outcome line's, once (post-merge end-to-end run).
     assert "opentide Info" not in plain and "┏" not in plain
     assert "Parse errors" not in plain
-    assert "10 rules" in plain
+    assert "11 rules" in plain
     rows = [" ".join(line.split()) for line in plain.splitlines()]
     assert any(row.startswith("version ") for row in rows)
     assert "Splunk Enterprise Security enabled · deploy, validate, query" in rows

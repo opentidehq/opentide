@@ -70,7 +70,8 @@ PLACEHOLDER_MARKER = "# opentide:placeholder"
 #: detection logic and deploys: Elastic's validator wants a ``query`` for
 #: ``type: query``, the Defender loader reads ``scope`` unconditionally, a
 #: SentinelOne ``Single Event`` condition needs its query, HarfangLab needs a
-#: sigma (or yara) detection, Sysdig needs a Falco ``condition``, and Sentinel's
+#: sigma (or yara) detection, Sysdig needs a Falco ``condition``, Bitdefender a
+#: ``detection`` (or ``yara``) kind, and Sentinel's
 #: compile needs grouping and, unless ``nrt`` is true, a schedule.
 PLATFORM_EXTRA_KEYS: dict[str, tuple[tuple[str, ...], ...]] = {
     "defender_for_endpoint": (("scope",), ("scope", "selection")),
@@ -84,12 +85,26 @@ PLATFORM_EXTRA_KEYS: dict[str, tuple[tuple[str, ...], ...]] = {
     "sentinel_one": (("condition", "single_event"), ("condition", "single_event", "query")),
     "harfanglab": (("sigma",),),
     "sysdig": (("condition",),),
+    "bitdefender": (
+        ("severity",),
+        ("detection", "target"),
+        ("detection", "criteria", "field"),
+        ("detection", "criteria", "is"),
+    ),
 }
 
 #: Values for those keys that compile, as ``(value, is_placeholder)``. A
 #: placeholder is a detection decision nobody has made yet; the rest are the
 #: platform's own defaults (Sentinel's ``SingleAlert`` grouping).
 PLATFORM_VALUES: dict[str, dict[tuple[str, ...], tuple[Any, bool]]] = {
+    "bitdefender": {
+        # What GravityZone sends for the scaffold's Informational alert severity,
+        # written out so the rule does not earn bitdefender_severity_collapsed.
+        ("severity",): ("Low", False),
+        ("detection", "target"): ("process", True),
+        ("detection", "criteria", "field"): ("Process.Name", True),
+        ("detection", "criteria", "is"): ("...", True),
+    },
     "sentinel": {
         ("scheduling", "frequency"): ("1h", True),
         ("scheduling", "lookback"): ("1h", True),
@@ -763,7 +778,7 @@ def fill_template(
 def keep_platform_blocks(text: str, platforms: Iterable[str], pointer: str) -> str:
     """Drop the commented ``configurations`` blocks of every platform not in *platforms*.
 
-    The template lists all nine platforms, about 400 commented lines; a new
+    The template lists all ten platforms, about 400 commented lines; a new
     rule keeps its own blocks and one comment that points at *pointer*, the
     template, for the others.
     """
