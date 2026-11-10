@@ -40,7 +40,7 @@ mod comparator {
     /// An entry whose values may span lines (TOML multi-line literals).
     fn lines_entry(target: &str, oracle: &str, candidate: &str) -> String {
         format!(
-            "[[diff]]\ncommand = \"info\"\ncase = \"*\"\ntarget = {target:?}\nrule = \"lines\"\n\
+            "[[diff]]\ncommand = \"info\"\ncase = \"json/tide_corpus\"\ntarget = {target:?}\nrule = \"lines\"\n\
              oracle = '''\n{oracle}'''\ncandidate = '''\n{candidate}'''\nreason = \"intended\"\n\
              issue = \"{ISSUE}\"\nchangelog = \"**Intended**\"\n"
         )
@@ -459,6 +459,92 @@ mod comparator {
         let (report, usage) = check(&oracle, &run(0, "title\n| a |\nend\n", ""), &removal);
         assert!(report.equal, "{report:?}");
         assert!(usage.is_used(0));
+    }
+
+    /// A `lines` entry approves its blocks exactly as quoted: a block one
+    /// character off, or one the output extends by a line, is not approved.
+    #[test]
+    fn a_lines_rule_does_not_approve_a_near_miss() {
+        let ledger =
+            Ledger::parse(&lines_entry("stdout", "| a |\n| b |", "| A |\n| B |")).expect("valid");
+        let oracle = run(0, "title\n| a |\n| b |\nend\n", "");
+        let (report, usage) = check(&oracle, &run(0, "title\n| A |\n| B |\nend\n", ""), &ledger);
+        assert!(report.equal, "{report:?}");
+        assert!(usage.is_used(0));
+        // One character different in the candidate's block.
+        let (report, usage) = check(&oracle, &run(0, "title\n| A |\n| B  |\nend\n", ""), &ledger);
+        assert!(!report.equal);
+        assert!(!usage.is_used(0));
+        // One character different in the oracle's block.
+        let near_oracle = run(0, "title\n| a |\n| b. |\nend\n", "");
+        let (report, usage) = check(
+            &near_oracle,
+            &run(0, "title\n| A |\n| B |\nend\n", ""),
+            &ledger,
+        );
+        assert!(!report.equal);
+        assert!(!usage.is_used(0));
+        // The candidate's block one line longer than quoted: the extra line is reported.
+        let longer = run(0, "title\n| A |\n| B |\n| C |\nend\n", "");
+        let (report, _) = check(&oracle, &longer, &ledger);
+        assert!(!report.equal);
+        assert_eq!(report.differences[0].candidate, "| C |");
+        // The oracle's block one line longer than quoted: the extra line is reported.
+        let longer_oracle = run(0, "title\n| a |\n| b |\n| c |\nend\n", "");
+        let (report, _) = check(
+            &longer_oracle,
+            &run(0, "title\n| A |\n| B |\nend\n", ""),
+            &ledger,
+        );
+        assert!(!report.equal);
+        assert_eq!(report.differences[0].oracle, "| c |");
+        // The quoted block one line longer than the output: not approved.
+        let short = Ledger::parse(&lines_entry(
+            "stdout",
+            "| a |\n| b |\nend\nmore",
+            "| A |\n| B |\nend\nmore",
+        ))
+        .expect("valid");
+        let (report, usage) = check(&oracle, &run(0, "title\n| A |\n| B |\nend\n", ""), &short);
+        assert!(!report.equal);
+        assert!(!usage.is_used(0));
+    }
+
+    /// After an approved block of a different length, every line that
+    /// follows is compared at its new place.
+    #[test]
+    fn lines_after_an_approved_block_realign() {
+        let ledger =
+            Ledger::parse(&lines_entry("stdout", "| a |\n| b |\n| c |", "| a |")).expect("valid");
+        let oracle = run(0, "head\n| a |\n| b |\n| c |\nx\ny\nz\n", "");
+        let candidate = run(0, "head\n| a |\nx\ny\nz\n", "");
+        let (report, usage) = check(&oracle, &candidate, &ledger);
+        assert!(report.equal, "{report:?}");
+        assert!(usage.is_used(0));
+        for (at, line) in [(2, "x"), (3, "y"), (4, "z")] {
+            let mut lines: Vec<&str> = vec!["head", "| a |", "x", "y", "z"];
+            let changed_line = line.to_uppercase();
+            lines[at] = &changed_line;
+            let changed = run(0, &(lines.join("\n") + "\n"), "");
+            let (report, _) = check(&oracle, &changed, &ledger);
+            assert!(!report.equal, "{line}");
+            assert_eq!(report.differences[0].oracle, line);
+            assert_eq!(report.differences[0].candidate, changed_line);
+        }
+        // A line dropped after the block is reported, not hidden by the shift.
+        let (report, _) = check(&oracle, &run(0, "head\n| a |\nx\nz\n", ""), &ledger);
+        assert!(!report.equal);
+        assert_eq!(report.differences[0].oracle, "y");
+    }
+
+    #[test]
+    fn a_lines_rule_names_its_case() {
+        let named = lines_entry("stdout", "a", "b");
+        assert!(Ledger::parse(&named).is_ok());
+        for glob in ["*", "json/*", "*/tide_corpus"] {
+            let entry = named.replace("case = \"json/tide_corpus\"", &format!("case = {glob:?}"));
+            assert!(Ledger::parse(&entry).is_err(), "{glob}");
+        }
     }
 
     #[test]

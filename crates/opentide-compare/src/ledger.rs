@@ -101,7 +101,10 @@ pub enum Rule {
     /// `oracle` lines and the candidate, at the same place, the `candidate`
     /// lines, the oracle's read as the candidate's. The two may differ in
     /// number, so a row inserted or removed is one entry, and the lines after
-    /// it are compared at their new place.
+    /// it are compared at their new place. Each block is quoted exactly, every
+    /// line whole, and the entry names its one case (no `*` in `case`): a
+    /// block that differs by one character, or that the output extends by a
+    /// line, is not approved.
     Lines {
         /// The oracle's lines, without their endings.
         oracle: Vec<String>,
@@ -383,6 +386,14 @@ fn check_entry(raw: RawEntry) -> Result<Entry, Vec<String>> {
             problems.push(
                 "a `lines` rule's `oracle` and `candidate` are lines separated by `\\n`".to_owned(),
             );
+            None
+        }
+        (_, "lines") if raw.case.contains('*') => {
+            problems.push(format!(
+                "a `lines` rule names the one case it approves (`case` without `*`), not {:?}: \
+                 a block of rows is a deliberate deviation decided case by case",
+                raw.case
+            ));
             None
         }
         (_, "lines") => Some(Rule::Lines {
