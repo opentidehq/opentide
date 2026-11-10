@@ -1,6 +1,6 @@
 ---
 source: crates/opentide-analysis/tests/suggestions.rs
-expression: "queries(LanguageId::Spl, None,\n&[\"spl_unknown_command\", \"spl_unknown_datamodel\",\n\"spl_unknown_datamodel_field\"],\n&[\"index=main | stast count by host\", \"index=main | statz count by host\",\n\"index=main | tabel host\", \"index=main | evall x=1\",\n\"index=main | rexx field=_raw \\\"(?<a>.)\\\"\", \"index=main | sats count\",\n\"index=main | stas count\", \"index=main | tsast count\",\n\"| tstats count from datamodel=Endpointz.Processes by Processes.process_name\",\n\"| tstats count from datamodel=Endpoint.Procesess by Processes.process_name\",\n\"| tstats count from datamodel=Endpoint.Processes by Processes.process_nam\",\n\"| tstats count from datamodel=Endpoint.Processes by Processes.proces_path\",],)"
+expression: "queries(LanguageId::Spl, None,\n&[\"spl_unknown_command\", \"spl_unknown_datamodel\",\n\"spl_unknown_datamodel_field\"],\n&[\"index=main | stast count by host\", \"index=main | statz count by host\",\n\"index=main | tabel host\", \"index=main | evall x=1\",\n\"index=main | rexx field=_raw \\\"(?<a>.)\\\"\", \"index=main | sats count\",\n\"index=main | stas count\", \"index=main | tsast count\",\n\"index=main | stattz count\",\n\"| tstats count from datamodel=Endpointz.Processes by Processes.process_name\",\n\"| tstats count from datamodel=Endpoint.Procesess by Processes.process_name\",\n\"| tstats count from datamodel=Endpoint.Processes by Processes.process_nam\",\n\"| tstats count from datamodel=Endpoint.Processes by Processes.proces_path\",],)"
 ---
 index=main | stast count by host
   error spl_unknown_command `stast count by host` => stats
@@ -17,7 +17,9 @@ index=main | sats count
 index=main | stas count
   error spl_unknown_command `stas count` => stash
 index=main | tsast count
-  error spl_unknown_command `tsast count` => (none)
+  error spl_unknown_command `tsast count` => stats
+index=main | stattz count
+  warning spl_unknown_command `stattz count` => stats
 | tstats count from datamodel=Endpointz.Processes by Processes.process_name
   error spl_unknown_datamodel `Endpointz.Processes` => Endpoint.Processes
 | tstats count from datamodel=Endpoint.Procesess by Processes.process_name

@@ -1,10 +1,12 @@
 ---
 source: crates/opentide-analysis/tests/suggestions.rs
-expression: "tide(\"  carbon_black_cloud:\\n    query: process_nmae:cmd.exe OR parent_nme:x OR Process_Name:y OR proces_cmdline:z\\n\",\n&[\"cbc_unknown_field\"],)"
+expression: "tide(\"  carbon_black_cloud:\\n    query: process_nmae:cmd.exe OR parent_nme:x OR Process_Name:y OR proces_cmdline:z OR proces_nme:a OR PROCES_NAME:b OR prcs_nme:c\\n\",\n&[\"cbc_unknown_field\"],)"
 ---
   carbon_black_cloud:
-    query: process_nmae:cmd.exe OR parent_nme:x OR Process_Name:y OR proces_cmdline:z
+    query: process_nmae:cmd.exe OR parent_nme:x OR Process_Name:y OR proces_cmdline:z OR proces_nme:a OR PROCES_NAME:b OR prcs_nme:c
   warning cbc_unknown_field `process_nmae` => process_name
   warning cbc_unknown_field `parent_nme` => parent_name
   warning cbc_unknown_field `Process_Name` => process_name
   warning cbc_unknown_field `proces_cmdline` => process_cmdline
+  warning cbc_unknown_field `proces_nme` => process_name
+  warning cbc_unknown_field `PROCES_NAME` => process_name

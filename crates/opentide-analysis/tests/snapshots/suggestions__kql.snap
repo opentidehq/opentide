@@ -20,6 +20,16 @@ SecurityEvnt | take 1
   warning kql_unknown_table `SecurityEvnt` => SecurityEvent
 Securityevent | take 1
   warning kql_unknown_table `Securityevent` => SecurityEvent
+SecurityEve | take 1
+  warning kql_unknown_table `SecurityEve` => SecurityEvent
+SecurityEvent | summari count() by Account
+  error kql_unknown_operator `summari count()` => summarize
+SecurityEvent | extend a = tolwr(Account)
+  error kql_unknown_function `tolwr` => tolower
+SecurityEvent | extend a = tlwr(Account)
+SecurityEvent | extend a = argmaxx(Account)
+  error kql_unknown_function `argmaxx` => arg_max
+SecurityEvent | extend a = totimee(Account)
 DeviceProcesEvents | take 1
   error kql_unknown_table `DeviceProcesEvents` => DeviceProcessEvents
 DeviceProcessEvents | where FileNme == "cmd.exe"
@@ -28,3 +38,12 @@ DeviceProcessEvents | where filename == "cmd.exe"
   error kql_unknown_column `filename` => FileName
 DeviceProcessEvents | where ProcesCommandLine has "x"
   error kql_unknown_column `ProcesCommandLine` => ProcessCommandLine
+DeviceProcessEven | take 1
+  error kql_unknown_table `DeviceProcessEven` => DeviceProcessEvents
+DeviceProcessEvents | where FilNme == "cmd.exe"
+  error kql_unknown_column `FilNme` => FileName
+DeviceProcessEvents | where SHA1xy == "x"
+  error kql_unknown_column `SHA1xy` => SHA1
+DeviceProcessEvents | where SH1x == "x"
+DeviceProcessEvents | where filenme == "cmd.exe"
+  error kql_unknown_column `filenme` => FileName

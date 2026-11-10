@@ -1,6 +1,6 @@
 ---
 source: crates/opentide-analysis/tests/suggestions.rs
-expression: "queries(LanguageId::Cql, None,\n&[\"cql_unknown_function\", \"cql_unknown_parameter\", \"cql_unknown_event\"],\n&[\"groupBi([ComputerName])\", \"groupby([ComputerName], functin=count())\",\n\"#event_simpleName=ProcessRollup3\", \"#event_simpleName=processrollup2\",\n\"#event_simpleName=ProcesRollup2\", \"selct([ComputerName])\",],)"
+expression: "queries(LanguageId::Cql, None,\n&[\"cql_unknown_function\", \"cql_unknown_parameter\", \"cql_unknown_event\"],\n&[\"groupBi([ComputerName])\", \"groupby([ComputerName], functin=count())\",\n\"#event_simpleName=ProcessRollup3\", \"#event_simpleName=processrollup2\",\n\"#event_simpleName=ProcesRollup2\", \"selct([ComputerName])\",\n\"#event_simpleName=PrucessRollup3\", \"holtwinter(x)\", \"rdnz(x)\",\n\"math:spherical2cartesia(x)\",],)"
 ---
 groupBi([ComputerName])
   error cql_unknown_function `groupBi` => groupBy
@@ -14,3 +14,11 @@ groupby([ComputerName], functin=count())
   warning cql_unknown_event `ProcesRollup2` => ProcessRollup2
 selct([ComputerName])
   error cql_unknown_function `selct` => select
+#event_simpleName=PrucessRollup3
+  warning cql_unknown_event `PrucessRollup3` => (none)
+holtwinter(x)
+  error cql_unknown_function `holtwinter` => (none)
+rdnz(x)
+  error cql_unknown_function `rdnz` => (none)
+math:spherical2cartesia(x)
+  error cql_unknown_function `math:spherical2cartesia` => (none)

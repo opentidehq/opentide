@@ -102,6 +102,18 @@ fn kql() {
             "SecurityEvent | extend a = to_lower(Account)",
             "SecurityEvnt | take 1",
             "Securityevent | take 1",
+            // Two letters cut from a long name, or changed side by side:
+            // bound by the whole name, so still found.
+            "SecurityEve | take 1",
+            "SecurityEvent | summari count() by Account",
+            // The scalar-function gate (#790, invariant 3): within two edits
+            // a diagnostic, three edits none.
+            "SecurityEvent | extend a = tolwr(Account)",
+            "SecurityEvent | extend a = tlwr(Account)",
+            // A deprecated function is never the suggestion (`argmax`, one
+            // edit, is deprecated for `arg_max`).
+            "SecurityEvent | extend a = argmaxx(Account)",
+            "SecurityEvent | extend a = totimee(Account)",
         ],
     );
     out.push_str(&queries(
@@ -113,6 +125,13 @@ fn kql() {
             "DeviceProcessEvents | where FileNme == \"cmd.exe\"",
             "DeviceProcessEvents | where filename == \"cmd.exe\"",
             "DeviceProcessEvents | where ProcesCommandLine has \"x\"",
+            "DeviceProcessEven | take 1",
+            // The column gate (invariant 3): within two edits, ignoring case,
+            // and less than half the name.
+            "DeviceProcessEvents | where FilNme == \"cmd.exe\"",
+            "DeviceProcessEvents | where SHA1xy == \"x\"",
+            "DeviceProcessEvents | where SH1x == \"x\"",
+            "DeviceProcessEvents | where filenme == \"cmd.exe\"",
         ],
     ));
     insta::assert_snapshot!(out);
@@ -137,6 +156,7 @@ fn spl() {
             "index=main | sats count",
             "index=main | stas count",
             "index=main | tsast count",
+            "index=main | stattz count",
             "| tstats count from datamodel=Endpointz.Processes by Processes.process_name",
             "| tstats count from datamodel=Endpoint.Procesess by Processes.process_name",
             "| tstats count from datamodel=Endpoint.Processes by Processes.process_nam",
@@ -167,6 +187,13 @@ fn esql() {
             "FROM logs-* | EVAL a = process.pid::keywrd",
             "FROM logs-* | WHERE process.nmae == \"cmd.exe\"",
             "FROM logs-* | WHERE process.parent.nmea == \"cmd.exe\"",
+            // Alias and snapshot-only commands and functions are never the
+            // suggestion (`INLINESTATS` is an alias of `INLINE STATS`;
+            // `FILLNULL`, `TSTEP` and `V_MAGNITUDE` are snapshot-only).
+            "FROM logs-* | INLINESTAT x = COUNT(*)",
+            "FROM logs-* | FILLNUL",
+            "FROM logs-* | EVAL a = TSTE(@timestamp)",
+            "FROM logs-* | EVAL a = V_MAGNITUD(x)",
         ],
     ));
 }
@@ -205,6 +232,14 @@ fn cql() {
             "#event_simpleName=processrollup2",
             "#event_simpleName=ProcesRollup2",
             "selct([ComputerName])",
+            // Two edits apart: not within the one edit events allow.
+            "#event_simpleName=PrucessRollup3",
+            // An unavailable or removed function is never the suggestion
+            // (`holtwinters` and `rdns` are removed,
+            // `math:spherical2cartesian` unavailable).
+            "holtwinter(x)",
+            "rdnz(x)",
+            "math:spherical2cartesia(x)",
         ],
     ));
 }
@@ -233,7 +268,7 @@ fn falco() {
 #[test]
 fn carbon_black_lucene() {
     insta::assert_snapshot!(tide(
-        "  carbon_black_cloud:\n    query: process_nmae:cmd.exe OR parent_nme:x OR Process_Name:y OR proces_cmdline:z\n",
+        "  carbon_black_cloud:\n    query: process_nmae:cmd.exe OR parent_nme:x OR Process_Name:y OR proces_cmdline:z OR proces_nme:a OR PROCES_NAME:b OR prcs_nme:c\n",
         &["cbc_unknown_field"],
     ));
 }
