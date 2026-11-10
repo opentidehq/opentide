@@ -63,15 +63,13 @@
 # - a bare `mcp`, `lsp` or `new` in plain and human mode: clap's help of the
 #   group on stdout, exit 2 as before (the `--help` difference above).
 #
-# Decided by UC-3.1 (#823), entered when `deploy --dry-run` routes to Rust
-# (its payloads wait for the platform models, UC-1.4 #810); the CHANGELOG
-# announces them under "**Deploy compile and plan in Rust, `opentide-compile`**",
-# and `cargo xtask payloads plan` approves the first in
-# tests/golden/payloads/APPROVED.toml until then:
+# Decided by UC-3.1 (#823), to be entered when a golden case reaches them
+# through `deploy --dry-run` on Rust (UC-3.1c routed it: its first one, the
+# fault corpus's five unreadable files, is entered at the end); the CHANGELOG
+# announces them under "**Deploy compile and plan in Rust, `opentide-compile`**"
+# (`cargo xtask payloads plan`, which compares the library's plan alone,
+# keeps its own approval of the five files in tests/golden/payloads/APPROVED.toml):
 #
-# - deploy/*/fault/*: `warnings[1]` counts 5 unreadable object files, not 6:
-#   `reviewed: 2026-02-30` unquoted is text under YAML 1.2, so the file loads
-#   and the date field reports it ("**Tide objects are read as YAML 1.2**").
 # - deploy (changed rules, no --all): the rules a diff selects are read in
 #   path order, not in a Python set's order.
 # - deploy: the unset-variable warning names variables in plan order.
@@ -666,3 +664,82 @@ changelog = "**`info` draws its tables with comfy-table**"
 #   ("**Metadata recommendations have one code, in the editor and in CI**").
 # - KG-02: the editor checks `metadata.reviewed` through the Rust model
 #   ("**The editor checks `metadata.reviewed` as `validate` does**").
+
+# deploy --dry-run on the Rust command line (UC-3.1c, #896).
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/fault/*"
+target = "stdout"
+rule = "json:/warnings/1"
+oracle = "\"6 object files could not be read: objects/threats/encoded-exfiltration-threat-0030.yaml, objects/rules/encoded-relay-rule-0014.yaml, objects/rules/encoded-spray-rule-0023.yaml, objects/rules/lateral-injection-rule-0024.yaml, objects/rules/rogue-relay-rule-0035.yaml, objects/rules/staged-implant-rule-0006.yaml; opentide validate shows where\""
+candidate = "\"5 object files could not be read: objects/threats/encoded-exfiltration-threat-0030.yaml, objects/rules/encoded-spray-rule-0023.yaml, objects/rules/lateral-injection-rule-0024.yaml, objects/rules/rogue-relay-rule-0035.yaml, objects/rules/staged-implant-rule-0006.yaml; opentide validate shows where\""
+reason = "objects/rules/encoded-relay-rule-0014.yaml writes `reviewed: 2026-02-30` unquoted. PyYAML (YAML 1.1) parses it as a timestamp and refuses the file as unreadable; YAML 1.2 reads the text 2026-02-30, so the file loads and the date field's own check reports it. One unread file fewer."
+issue = "https://github.com/opentidehq/opentide/issues/808"
+changelog = "**Tide objects are read as YAML 1.2**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/*/fault/*"
+target = "stderr"
+rule = "text"
+oracle = "warning: 6 object files could not be read: objects/threats/encoded-exfiltration-threat-0030.yaml, objects/rules/encoded-relay-rule-0014.yaml, objects/rules/encoded-spray-rule-0023.yaml, objects/rules/lateral-injection-rule-0024.yaml, objects/rules/rogue-relay-rule-0035.yaml, objects/rules/staged-implant-rule-0006.yaml; opentide validate shows where"
+candidate = "warning: 5 object files could not be read: objects/threats/encoded-exfiltration-threat-0030.yaml, objects/rules/encoded-spray-rule-0023.yaml, objects/rules/lateral-injection-rule-0024.yaml, objects/rules/rogue-relay-rule-0035.yaml, objects/rules/staged-implant-rule-0006.yaml; opentide validate shows where"
+reason = "objects/rules/encoded-relay-rule-0014.yaml writes `reviewed: 2026-02-30` unquoted. PyYAML (YAML 1.1) parses it as a timestamp and refuses the file as unreadable; YAML 1.2 reads the text 2026-02-30, so the file loads and the date field's own check reports it. One unread file fewer."
+issue = "https://github.com/opentidehq/opentide/issues/808"
+changelog = "**Tide objects are read as YAML 1.2**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/human/fault/dry-run"
+target = "stderr"
+rule = "lines"
+oracle = "\u001b[1;33mwarning:\u001b[0m 6 object files could not be read: objects/threats/encoded-exfiltration-threat-0030.yaml,\n         objects/rules/encoded-relay-rule-0014.yaml, objects/rules/encoded-spray-rule-0023.yaml,\n         objects/rules/lateral-injection-rule-0024.yaml, objects/rules/rogue-relay-rule-0035.yaml,\n         objects/rules/staged-implant-rule-0006.yaml; opentide validate shows where"
+candidate = "\u001b[1;33mwarning:\u001b[0m 5 object files could not be read: objects/threats/encoded-exfiltration-threat-0030.yaml,\n         objects/rules/encoded-spray-rule-0023.yaml, objects/rules/lateral-injection-rule-0024.yaml,\n         objects/rules/rogue-relay-rule-0035.yaml, objects/rules/staged-implant-rule-0006.yaml;\n         opentide validate shows where"
+reason = "objects/rules/encoded-relay-rule-0014.yaml writes `reviewed: 2026-02-30` unquoted. PyYAML (YAML 1.1) parses it as a timestamp and refuses the file as unreadable; YAML 1.2 reads the text 2026-02-30, so the file loads and the date field's own check reports it. One unread file fewer. At a terminal the shorter warning wraps over the same four rows at other words."
+issue = "https://github.com/opentidehq/opentide/issues/808"
+changelog = "**Tide objects are read as YAML 1.2**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/vscode/*"
+target = "stderr"
+rule = "json:/level"
+oracle = "\"critical\""
+candidate = "\"error\""
+reason = "The oracle logged a rule without a platform status at structlog's CRITICAL; the Rust CLI logs through tracing, whose highest level is ERROR, and writes it `error` as every other error line."
+issue = "https://github.com/opentidehq/opentide/issues/896"
+changelog = "**`deploy --dry-run` runs on the Rust command line**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/vscode/*"
+target = "stderr"
+rule = "json:/logger"
+oracle = "\"opentide.deployment.utils\""
+candidate = "(absent)"
+reason = "`logger` named the Python module that logged the line (structlog's logger name); the Rust CLI's JSON log lines carry the event, level, timestamp and the event's fields, not a module path."
+issue = "https://github.com/opentidehq/opentide/issues/896"
+changelog = "**`deploy --dry-run` runs on the Rust command line**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/human/vscode/dry-run"
+target = "stderr"
+rule = "lines"
+oracle = "\u001b[1;31merror: \u001b[0mPlatform status missing · detail: Rule 'Suspicious LSASS Access' \n(ff8bf67e-64dc-460d-b5df-48db643f3560) has no 'status' in its sentinel configuration block. Add a \nstatus, e.g. 'status: STAGING', then re-run 'opentide validate'. · system: sentinel · rule: \nSuspicious LSASS Access · uuid: ff8bf67e-64dc-460d-b5df-48db643f3560"
+candidate = "error: Platform status missing · detail: Rule 'Suspicious LSASS Access' (ff8bf67e-64dc-460d-b5df-48db643f3560) has no 'status' in its sentinel configuration block. Add a status, e.g. 'status: STAGING', then re-run 'opentide validate'. · system: sentinel · rule: Suspicious LSASS Access · uuid: ff8bf67e-64dc-460d-b5df-48db643f3560"
+reason = "A log line is written by the Rust CLI's logging layer (UC-3.3), as one unstyled line: Rich coloured its label and wrapped it at the terminal's width. The event, its fields and their order are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/896"
+changelog = "**`deploy --dry-run` runs on the Rust command line**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/human/vscode/uuid"
+target = "stderr"
+rule = "lines"
+oracle = "\u001b[1;31merror: \u001b[0mPlatform status missing · detail: Rule 'Suspicious LSASS Access' \n(ff8bf67e-64dc-460d-b5df-48db643f3560) has no 'status' in its sentinel configuration block. Add a \nstatus, e.g. 'status: STAGING', then re-run 'opentide validate'. · system: sentinel · rule: \nSuspicious LSASS Access · uuid: ff8bf67e-64dc-460d-b5df-48db643f3560"
+candidate = "error: Platform status missing · detail: Rule 'Suspicious LSASS Access' (ff8bf67e-64dc-460d-b5df-48db643f3560) has no 'status' in its sentinel configuration block. Add a status, e.g. 'status: STAGING', then re-run 'opentide validate'. · system: sentinel · rule: Suspicious LSASS Access · uuid: ff8bf67e-64dc-460d-b5df-48db643f3560"
+reason = "A log line is written by the Rust CLI's logging layer (UC-3.3), as one unstyled line: Rich coloured its label and wrapped it at the terminal's width. The event, its fields and their order are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/896"
+changelog = "**`deploy --dry-run` runs on the Rust command line**"
