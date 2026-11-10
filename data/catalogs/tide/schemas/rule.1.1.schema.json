@@ -6155,6 +6155,497 @@
     }
   },
   "$defs": {
+    "BitdefenderActions": {
+      "additionalProperties": false,
+      "properties": {
+        "isolate": {
+          "anyOf": [
+            {
+              "const": true,
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Isolate the endpoint (type 1).",
+          "title": "Isolate"
+        },
+        "collect_investigation_package": {
+          "anyOf": [
+            {
+              "const": true,
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Collect an investigation package (type 2).",
+          "title": "Collect Investigation Package"
+        },
+        "sandbox": {
+          "anyOf": [
+            {
+              "const": true,
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Submit to the Sandbox Analyzer (type 3).",
+          "title": "Sandbox"
+        },
+        "kill_process": {
+          "anyOf": [
+            {
+              "const": true,
+              "type": "boolean"
+            },
+            {
+              "$ref": "#/$defs/BitdefenderProcessScope"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Kill the process (type 4): true, or {include_parent, include_children}. Basic rules only.",
+          "title": "Kill Process",
+          "markdownDescription": "Kill the process (type 4): `true`, or `{include_parent, include_children}`. Basic rules\nonly."
+        },
+        "antimalware_scan": {
+          "anyOf": [
+            {
+              "enum": [
+                "quick",
+                "full"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Run an antimalware scan (type 5): quick or full.",
+          "title": "Antimalware Scan",
+          "markdownDescription": "Run an antimalware scan (type 5): `quick` or `full`."
+        },
+        "quarantine": {
+          "anyOf": [
+            {
+              "const": true,
+              "type": "boolean"
+            },
+            {
+              "$ref": "#/$defs/BitdefenderProcessScope"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Quarantine the file (type 6): true, or {include_parent, include_children}.",
+          "title": "Quarantine",
+          "markdownDescription": "Quarantine the file (type 6): `true`, or `{include_parent, include_children}`."
+        },
+        "risk_scan": {
+          "anyOf": [
+            {
+              "const": true,
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Run a risk scan (type 7).",
+          "title": "Risk Scan"
+        }
+      },
+      "title": "BitdefenderActions",
+      "type": "object"
+    },
+    "BitdefenderConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "default": false,
+          "description": "Whether this platform block is active.",
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "name": {
+          "default": "",
+          "description": "Platform-specific rule name.",
+          "title": "Name",
+          "type": "string"
+        },
+        "schema": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Platform schema identifier, for example platform::sentinel::1.0.",
+          "title": "Schema",
+          "markdownDescription": "Platform schema identifier, for example `platform::sentinel::1.0`."
+        },
+        "status": {
+          "description": "Deployment status of this platform block, from the statuses in deployment.toml. Required: the deploy planner selects on it.",
+          "title": "Status",
+          "type": "string",
+          "markdownDescription": "Deployment status of this platform block, from the statuses in `deployment.toml`. Required:\nthe deploy planner selects on it."
+        },
+        "flags": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Platform flags.",
+          "title": "Flags"
+        },
+        "tenants": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Target tenant identifiers.",
+          "title": "Tenants"
+        },
+        "contributors": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Platform contributors.",
+          "title": "Contributors"
+        },
+        "severity": {
+          "anyOf": [
+            {
+              "enum": [
+                "Low",
+                "Medium",
+                "High"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Low, Medium, or High. Derived from response.alert_severity when omitted.",
+          "title": "Severity",
+          "markdownDescription": "`Low`, `Medium`, or `High`. Derived from `response.alert_severity` when omitted."
+        },
+        "tags": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Extra GravityZone tags. Deploy adds the derived tags.",
+          "title": "Tags"
+        },
+        "targets": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BitdefenderTargets"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Endpoint tags, or companies on a partner tenant, the rule applies to. Neither means the whole company. Default: the tenant targets.",
+          "title": "Targets",
+          "markdownDescription": "Endpoint tags, or companies on a partner tenant, the rule applies to. Neither means the\nwhole company. Default: the tenant `targets`."
+        },
+        "actions": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BitdefenderActions"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Automatic actions.",
+          "title": "Actions"
+        },
+        "detection": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BitdefenderDetection"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "A Basic detection rule (type: 1, subtype: 0). Exactly one of detection and yara.",
+          "title": "Detection",
+          "markdownDescription": "A Basic detection rule (`type: 1`, `subtype: 0`). Exactly one of `detection` and `yara`."
+        },
+        "yara": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BitdefenderYara"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "A YARA detection rule (type: 1, subtype: 1). Exactly one of detection and yara.",
+          "title": "Yara",
+          "markdownDescription": "A YARA detection rule (`type: 1`, `subtype: 1`). Exactly one of `detection` and `yara`."
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "title": "BitdefenderConfig",
+      "type": "object"
+    },
+    "BitdefenderCriterion": {
+      "additionalProperties": false,
+      "properties": {
+        "field": {
+          "description": "API field name (Process.CommandLine) from the criteria catalogue for the target.",
+          "title": "Field",
+          "type": "string",
+          "markdownDescription": "API field name (`Process.CommandLine`) from the criteria catalogue for the `target`."
+        },
+        "is": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Exact match. Sent as relation: \"is\".",
+          "title": "Is",
+          "markdownDescription": "Exact match. Sent as `relation: \"is\"`."
+        },
+        "contains": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Substring, with * and ? wildcards. Sent as relation: \"contains\".",
+          "title": "Contains",
+          "markdownDescription": "Substring, with `*` and `?` wildcards. Sent as `relation: \"contains\"`."
+        },
+        "any": {
+          "anyOf": [
+            {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Any of the values. Sent as relation: \"any\".",
+          "title": "Any",
+          "markdownDescription": "Any of the values. Sent as `relation: \"any\"`."
+        }
+      },
+      "required": [
+        "field"
+      ],
+      "title": "BitdefenderCriterion",
+      "type": "object"
+    },
+    "BitdefenderDetection": {
+      "additionalProperties": false,
+      "properties": {
+        "target": {
+          "description": "A GravityZone detection target, as the API spells it: process, file, connection, registry, user connection, email, application, key vault, role, policy, sharing link, url, ssh key, launch template, service principal, user group, automation account, automation account hook, certificate authority, api, bucket, jira project, or confluence page.",
+          "title": "Target",
+          "type": "string",
+          "markdownDescription": "A GravityZone detection target, as the API spells it: `process`, `file`, `connection`,\n`registry`, `user connection`, `email`, `application`, `key vault`, `role`, `policy`,\n`sharing link`, `url`, `ssh key`, `launch template`, `service principal`, `user group`,\n`automation account`, `automation account hook`, `certificate authority`, `api`, `bucket`,\n`jira project`, or `confluence page`."
+        },
+        "criteria": {
+          "description": "At least one. All criteria must match (AND).",
+          "items": {
+            "$ref": "#/$defs/BitdefenderCriterion"
+          },
+          "minItems": 1,
+          "title": "Criteria",
+          "type": "array"
+        },
+        "alert": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "A GravityZone alert (detection) name. Sent as filters: [{\"field\": \"detection\", \"value\": <alert>}].",
+          "title": "Alert",
+          "markdownDescription": "A GravityZone alert (detection) name. Sent as\n`filters: [{\"field\": \"detection\", \"value\": <alert>}]`."
+        }
+      },
+      "required": [
+        "target",
+        "criteria"
+      ],
+      "title": "BitdefenderDetection",
+      "type": "object"
+    },
+    "BitdefenderProcessScope": {
+      "additionalProperties": false,
+      "properties": {
+        "include_parent": {
+          "default": false,
+          "description": "Also act on the parent process.",
+          "title": "Include Parent",
+          "type": "boolean"
+        },
+        "include_children": {
+          "default": false,
+          "description": "Also act on the child processes.",
+          "title": "Include Children",
+          "type": "boolean"
+        }
+      },
+      "title": "BitdefenderProcessScope",
+      "type": "object"
+    },
+    "BitdefenderTargets": {
+      "additionalProperties": false,
+      "properties": {
+        "endpoint_tags": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Aliases from the tenant's endpoint_tags table. Each resolves to {tagId, companyId}.",
+          "title": "Endpoint Tags",
+          "markdownDescription": "Aliases from the tenant's `endpoint_tags` table. Each resolves to `{tagId, companyId}`."
+        },
+        "companies": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Partner tenants: aliases from the tenant's companies table. Each resolves to a company id.",
+          "title": "Companies",
+          "markdownDescription": "Partner tenants: aliases from the tenant's `companies` table. Each resolves to a company\nid."
+        }
+      },
+      "title": "BitdefenderTargets",
+      "type": "object"
+    },
+    "BitdefenderYara": {
+      "additionalProperties": false,
+      "properties": {
+        "signature": {
+          "description": "The YARA signature: imports, then one or more YARA rules, written out in the block. Sent as settings.yaraQuery, verbatim.",
+          "title": "Signature",
+          "type": "string",
+          "markdownDescription": "The YARA signature: imports, then one or more YARA rules, written out in the block. Sent as\n`settings.yaraQuery`, verbatim."
+        },
+        "on_access": {
+          "default": true,
+          "description": "On-access scanning with this rule (settings.status). With false, the rule serves on-demand scans only.",
+          "title": "On Access",
+          "type": "boolean",
+          "markdownDescription": "On-access scanning with this rule (`settings.status`). With `false`, the rule serves\non-demand scans only."
+        }
+      },
+      "required": [
+        "signature"
+      ],
+      "title": "BitdefenderYara",
+      "type": "object"
+    },
     "CarbonBlackConfig": {
       "additionalProperties": false,
       "properties": {
@@ -9291,6 +9782,20 @@
           "description": "Sysdig Secure or Falco rule (platform::sysdig::1.0).",
           "title": "Sysdig",
           "markdownDescription": "Sysdig Secure or Falco rule (`platform::sysdig::1.0`)."
+        },
+        "bitdefender": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BitdefenderConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Bitdefender GravityZone custom detection rule (platform::bitdefender::1.0).",
+          "title": "Bitdefender",
+          "markdownDescription": "Bitdefender GravityZone custom detection rule (`platform::bitdefender::1.0`)."
         }
       },
       "title": "RuleConfigurations",
