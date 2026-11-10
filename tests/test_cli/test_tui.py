@@ -288,14 +288,39 @@ def test_the_cursor_stays_on_the_object_when_the_tree_is_laid_out_late(
         assert app.selected == RULE
         tree = app.query_one("#tree", Tree)
         assert app.catalogue is not None
+        # Clear() keeps cursor_line, so start elsewhere: a cursor left alone fails here.
+        tree.cursor_line = 0
         with monkeypatch.context() as patch:
             patch.setattr(app, "call_after_refresh", at_once)
             app._show_catalogue(app.catalogue)
-        assert tree.cursor_line == 2
-        assert tree.cursor_node is not None and tree.cursor_node.data == RULE
+        rule = app._find(tree.root, RULE)
+        assert rule is not None
+        assert tree.cursor_line == rule.line == 2
+        assert tree.cursor_node is rule
         await _settle(app, pilot)
         assert app.selected == RULE
         assert "Sentinel KQL Rule" in _text(app, "#heading")
+
+    _drive(tutorial_repo, script)
+
+
+def test_the_cursor_stays_put_for_a_node_that_has_no_line(tutorial_repo: Path) -> None:
+    """A node under a collapsed ancestor has no line: the cursor does not jump to the top.
+
+    ``Tree.move_cursor`` would clamp the node's line -1 and move the cursor off
+    the object that is shown; ``_move_cursor`` leaves it where it is.
+    """
+
+    async def script(app: OpentideTui, pilot: Pilot[None]) -> None:
+        await pilot.press("down", "down")
+        tree = app.query_one("#tree", Tree)
+        before = tree.cursor_node
+        assert before is not None and before.data == RULE
+        hidden = tree.root.add("collapsed", expand=False).add_leaf("hidden")
+        tui_app._move_cursor(tree, hidden)
+        assert hidden.line == -1
+        assert tree.cursor_line == 2
+        assert tree.cursor_node is before
 
     _drive(tutorial_repo, script)
 

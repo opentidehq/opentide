@@ -884,8 +884,10 @@ def _move_cursor(tree: Tree[Any], node: TreeNode[Any]) -> None:
     added since has line -1 until then. The screen may run this callback before
     the tree's idle; ``move_cursor`` would then clamp -1 to line 0 and highlight
     the first threat instead of the object that was selected. ``last_line``
-    lays the lines out. A node still without a line is not shown: leave the
-    cursor where it is.
+    lays the lines out. A node still without a line sits under a collapsed
+    ancestor and is not shown: leave the cursor where it is. The tree the TUI
+    builds expands every branch, so this guard is defensive; a test reaches it
+    with a collapsed branch.
     """
     if tree.last_line >= 0 and node.line >= 0:
         tree.move_cursor(node)
