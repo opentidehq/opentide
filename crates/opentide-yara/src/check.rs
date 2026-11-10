@@ -776,6 +776,8 @@ impl<'a> Checker<'a> {
                             at,
                         );
                     }
+                    // libyara stops at a jump's first error.
+                    let mut refused = negative;
                     match (jump.start, jump.end) {
                         _ if negative => {}
                         // `[0]` is refused; `[0-0]` libyara reads, YARA-X refuses.
@@ -793,19 +795,25 @@ impl<'a> Checker<'a> {
                             )
                         }
                         (Some(0), Some(0)) if text.contains('-') => {}
-                        (Some(0), Some(0)) => self.error(
-                            codes::YARA_HEX_STRING,
-                            "invalid jump length: [0]".to_string(),
-                            at,
-                        ),
-                        (Some(a), Some(b)) if a > b => self.error(
-                            codes::YARA_HEX_STRING,
-                            format!("invalid jump range: {a} is greater than {b}"),
-                            at,
-                        ),
+                        (Some(0), Some(0)) => {
+                            refused = true;
+                            self.error(
+                                codes::YARA_HEX_STRING,
+                                "invalid jump length: [0]".to_string(),
+                                at,
+                            );
+                        }
+                        (Some(a), Some(b)) if a > b => {
+                            refused = true;
+                            self.error(
+                                codes::YARA_HEX_STRING,
+                                format!("invalid jump range: {a} is greater than {b}"),
+                                at,
+                            );
+                        }
                         _ => {}
                     }
-                    if inside_alternative {
+                    if inside_alternative && !refused {
                         if jump.end.is_none() {
                             self.error(
                                 codes::YARA_HEX_STRING,
@@ -916,24 +924,36 @@ impl<'a> Checker<'a> {
         }
     }
 
+    /// An operand of `and`, `or`, `not`, or a loop's body.
     fn boolean_operand(&mut self, e: &Expr) {
+        self.operand(e, true);
+    }
+
+    /// `e` where libyara takes any value as a truth value: a boolean
+    /// operand, or (`non_bool` false) the operand of `defined`, which YARA-X
+    /// does not call a non-boolean.
+    fn operand(&mut self, e: &Expr, non_bool: bool) {
         let ty = self.expr(e);
         let at = span(&e.span());
-        if matches!(ty, Ty::Int | Ty::Float | Ty::Str)
+        if non_bool
+            && matches!(ty, Ty::Int | Ty::Float | Ty::Str)
             && !matches!(e, Expr::LiteralString(_))
             && !self.yara_x_bool.contains(&at)
         {
-            // YARA-X's non_bool_expr, on an operand of `and`, `or`, `not`
-            // or a loop's body (libyara reads any non-zero value as true).
+            // YARA-X's non_bool_expr (libyara reads any non-zero number,
+            // any non-empty string, as true).
             self.warn(
                 codes::YARA_SUSPICIOUS_EXPRESSION,
-                format!(
-                    "{} used as a boolean: libyara reads any non-zero value as true",
-                    match &ty {
-                        Ty::Str => "a string".to_string(),
-                        other => other.name().to_string(),
+                match &ty {
+                    Ty::Str => {
+                        "a string used as a boolean: libyara reads any non-empty string as true"
+                            .to_string()
                     }
-                ),
+                    other => format!(
+                        "{} used as a boolean: libyara reads any non-zero value as true",
+                        other.name()
+                    ),
+                },
                 at,
             );
         }
@@ -961,16 +981,26 @@ impl<'a> Checker<'a> {
     /// F: a member YARA-X types as boolean (`pe.is_dll()`) in arithmetic or
     /// an ordering: libyara computes with its integer, YARA-X refuses it.
     fn yara_x_bool_arithmetic(&mut self, e: &Expr) {
-        let at = span(&e.span());
-        if self.yara_x_bool.contains(&at) {
+        self.yara_x_number(e, "in arithmetic or an ordering");
+    }
+
+    /// `e` where YARA-X needs an integer or a float (an operand of
+    /// arithmetic, an ordering or `!=`, an offset, a range bound, an index,
+    /// a quantifier, a function argument): a member YARA-X types as boolean
+    /// is refused there, though libyara reads its integer.
+    fn yara_x_number(&mut self, e: &Expr, place: &str) -> bool {
+        let refused = self.yara_x_bool.contains(&span(&e.span()));
+        if refused {
+            let at = full_span(e);
             self.yara_x(
                 format!(
-                    "YARA-X refuses arithmetic or an ordering on `{}`: it is a boolean there",
+                    "YARA-X refuses `{}` {place}: it types it as a boolean, where libyara reads an integer",
                     self.text(at)
                 ),
                 at,
             );
         }
+        refused
     }
 
     /// A comparison or arithmetic operand: libyara's `primary_expression`,
@@ -1065,6 +1095,7 @@ impl<'a> Checker<'a> {
                 self.use_pattern(&p.identifier);
                 if let Some(index) = &p.index {
                     let ty = self.primary(index);
+                    self.yara_x_number(index, "as a string index");
                     // libyara takes a string too (`@a["1"]`).
                     self.expect(
                         &ty,
@@ -1137,11 +1168,22 @@ impl<'a> Checker<'a> {
                 if self.last_member_yara_x_bool || last_call_bool {
                     self.yara_x_bool.insert(at);
                 }
+                if let Ty::Func { path, .. } = &ty {
+                    // A function named, not called (`pe.imphash`): libyara's
+                    // "wrong usage of identifier".
+                    let name = path.rsplit('.').next().unwrap_or(path);
+                    self.error(
+                        codes::YARA_UNDEFINED_IDENTIFIER,
+                        format!("wrong usage of identifier `{name}`: it is a function, call it"),
+                        at,
+                    );
+                    return Ty::Unknown;
+                }
                 ty
             }
             Expr::FuncCall(call) => self.call(call, at),
             Expr::Defined(u) => {
-                self.boolean_operand(&u.operand);
+                self.operand(&u.operand, false);
                 Ty::Bool
             }
             Expr::Not(u) => {
@@ -1265,16 +1307,34 @@ impl<'a> Checker<'a> {
                     self.yara_x_bool.contains(&span(&b.rhs.span())),
                 );
                 let (lb, rb) = (l == Ty::Bool || lx, r == Ty::Bool || rx);
-                if (lx || rx) && matches!(op, Cmp::Lt | Cmp::Gt | Cmp::Le | Cmp::Ge) {
-                    self.yara_x_bool_arithmetic(&b.lhs);
-                    self.yara_x_bool_arithmetic(&b.rhs);
-                } else if (lb && !rb && r.is_numeric() && r != Ty::Unknown)
-                    || (rb && !lb && l.is_numeric() && l != Ty::Unknown)
+                // YARA-X types the member as boolean: it orders no boolean,
+                // has no `!=` on one, and compares one with no float.
+                let float = l == Ty::Float || r == Ty::Float;
+                let place = match op {
+                    Cmp::Lt | Cmp::Gt | Cmp::Le | Cmp::Ge => Some("in an ordering"),
+                    Cmp::Ne => Some("in `!=`"),
+                    Cmp::Eq if float => Some("compared with a float"),
+                    Cmp::Eq => None,
+                };
+                // Once per comparison, as YARA-X reports it.
+                if let Some(place) = place
+                    && !self.yara_x_number(&b.lhs, place)
                 {
-                    // YARA-X's bool_int_comparison.
+                    self.yara_x_number(&b.rhs, place);
+                }
+                // An ordering on one is refused above, not also suspicious.
+                let refused = (lx || rx) && matches!(op, Cmp::Lt | Cmp::Gt | Cmp::Le | Cmp::Ge);
+                if !refused
+                    && ((lb && !rb && r.is_numeric() && r != Ty::Unknown)
+                        || (rb && !lb && l.is_numeric() && l != Ty::Unknown))
+                {
+                    // yara-1.0: an integer (or float) compared with a boolean.
                     self.warn(
                         codes::YARA_SUSPICIOUS_EXPRESSION,
-                        "an integer compared with a boolean".to_string(),
+                        format!(
+                            "{} compared with a boolean",
+                            if float { "a float" } else { "an integer" }
+                        ),
                         at,
                     );
                 } else if !comparable {
@@ -1497,6 +1557,7 @@ impl<'a> Checker<'a> {
         match q {
             Quantifier::Percentage(e) => {
                 let ty = self.primary(e);
+                self.yara_x_number(e, "as a percentage");
                 self.expect(
                     &ty,
                     ty.is_int(),
@@ -1515,6 +1576,7 @@ impl<'a> Checker<'a> {
             }
             Quantifier::Expr(e) => {
                 let ty = self.primary(e);
+                self.yara_x_number(e, "as a quantifier");
                 self.expect(
                     &ty,
                     ty.is_int(),
@@ -1547,6 +1609,7 @@ impl<'a> Checker<'a> {
         match anchor {
             Some(MatchAnchor::At(a)) => {
                 let ty = self.primary(&a.expr);
+                self.yara_x_number(&a.expr, "as an offset");
                 self.expect(
                     &ty,
                     ty.is_int(),
@@ -1569,6 +1632,7 @@ impl<'a> Checker<'a> {
     fn range(&mut self, range: &yara_x_parser::ast::Range) {
         for bound in [&range.lower_bound, &range.upper_bound] {
             let ty = self.primary(bound);
+            self.yara_x_number(bound, "as a range bound");
             self.expect(
                 &ty,
                 ty.is_int(),
@@ -1733,6 +1797,7 @@ impl<'a> Checker<'a> {
 
     fn index(&mut self, base: Ty, index: &Expr, at: (usize, usize)) -> Ty {
         let ty = self.primary(index);
+        self.yara_x_number(index, "as an index");
         match base {
             Ty::Array {
                 module,
@@ -1793,6 +1858,9 @@ impl<'a> Checker<'a> {
         let args: Vec<Ty> = call.args.iter().map(|a| self.expr(a)).collect();
         let Some(base) = base else {
             if INTEGER_FUNCTIONS.contains(&name) {
+                for a in &call.args {
+                    self.yara_x_number(a, "as a function argument");
+                }
                 if args.len() != 1 || !args[0].is_int() {
                     self.error(
                         codes::YARA_TYPE,
@@ -1813,8 +1881,18 @@ impl<'a> Checker<'a> {
             self.yara_x_only("`.len()` on an array or a dictionary", name_at);
             return Ty::Int;
         }
-        let Ty::Func { module, path } = self.member(base, name, name_at) else {
-            return Ty::Unknown;
+        let (module, path) = match self.member(base, name, name_at) {
+            Ty::Func { module, path } => (module, path),
+            Ty::Unknown => return Ty::Unknown,
+            other => {
+                // A field, not a function: libyara's "is not a function".
+                self.error(
+                    codes::YARA_UNDEFINED_IDENTIFIER,
+                    format!("`{name}` is not a function: it is {}", other.name()),
+                    name_at,
+                );
+                return Ty::Unknown;
+            }
         };
         let Some(m) = self.catalog.member(&module, &path) else {
             return Ty::Unknown;
@@ -1834,6 +1912,11 @@ impl<'a> Checker<'a> {
         });
         match found {
             Some(o) => {
+                for (want, a) in o.args.chars().zip(&call.args) {
+                    if matches!(want, 'i' | 'f') {
+                        self.yara_x_number(a, "as a function argument");
+                    }
+                }
                 if o.yara_x_ret.as_deref() == Some("boolean") {
                     self.yara_x_bool.insert(at);
                 }
@@ -1862,6 +1945,18 @@ impl<'a> Checker<'a> {
                 Ty::Unknown
             }
         }
+    }
+}
+
+/// `e`'s span, with the object of a method call: yara-x-parser spans
+/// `pe.is_dll()` from `is_dll`.
+fn full_span(e: &Expr) -> (usize, usize) {
+    match e {
+        Expr::FuncCall(call) => match &call.object {
+            Some(object) => span(&object.span().combine(&call.span())),
+            None => span(&call.span()),
+        },
+        other => span(&other.span()),
     }
 }
 

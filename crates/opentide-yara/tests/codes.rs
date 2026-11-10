@@ -509,6 +509,113 @@ const RAW: &[(&str, &[(&str, Severity)])] = &[
         "import \"pe\" rule a { condition: pe.signatures[0].valid_on(0) }",
         &[],
     ),
+    // `defined` takes any value: its operand is no boolean context.
+    (
+        "import \"pe\" rule a { condition: defined pe.number_of_sections }",
+        &[],
+    ),
+    (
+        "import \"pe\" rule a { condition: not defined pe.number_of_sections }",
+        &[],
+    ),
+    ("rule a { condition: defined 1 }", &[]),
+    ("rule a { condition: defined filesize and true }", &[]),
+    (
+        "import \"pe\" rule a { condition: defined pe.sections[0].name }",
+        &[],
+    ),
+    // A field called, or a function named and not called: libyara's "is not a
+    // function" and "wrong usage of identifier".
+    (
+        "import \"pe\" rule a { condition: pe.sections[0].name(0) }",
+        &[("yara_undefined_identifier", E)],
+    ),
+    (
+        "import \"pe\" rule a { condition: pe.sections[0].name() == \"x\" }",
+        &[("yara_undefined_identifier", E)],
+    ),
+    (
+        "import \"pe\" rule a { condition: for any s in pe.sections : ( s.name(0) ) }",
+        &[("yara_undefined_identifier", E)],
+    ),
+    (
+        "import \"pe\" rule a { condition: pe.number_of_sections(0) }",
+        &[("yara_undefined_identifier", E)],
+    ),
+    (
+        "import \"pe\" rule a { condition: pe.signatures[0].valid_on }",
+        &[("yara_undefined_identifier", E)],
+    ),
+    (
+        "import \"pe\" rule a { condition: pe.imphash and true }",
+        &[("yara_undefined_identifier", E)],
+    ),
+    // A YARA-X boolean where YARA-X needs a number: `!=`, a float, an offset,
+    // an index, a range bound, a quantifier, a function argument.
+    (
+        "import \"pe\" rule a { condition: 1 != pe.is_dll() }",
+        &[
+            ("yara_suspicious_expression", W),
+            ("yara_x_incompatible", W),
+        ],
+    ),
+    (
+        "import \"pe\" rule a { condition: pe.is_dll() != pe.is_32bit() }",
+        &[("yara_x_incompatible", W)],
+    ),
+    (
+        "import \"pe\" rule a { condition: pe.is_dll() == pe.is_32bit() }",
+        &[],
+    ),
+    (
+        "import \"pe\" rule a { condition: pe.is_dll() == 1.0 }",
+        &[
+            ("yara_suspicious_expression", W),
+            ("yara_x_incompatible", W),
+        ],
+    ),
+    (
+        "import \"pe\" rule a { strings: $a = \"cmd.exe\" condition: $a at pe.is_dll() }",
+        &[("yara_x_incompatible", W)],
+    ),
+    (
+        "import \"pe\" rule a { strings: $a = \"cmd.exe\" condition: @a[pe.is_dll()] == 0 }",
+        &[("yara_x_incompatible", W)],
+    ),
+    (
+        "import \"pe\" rule a { strings: $a = \"cmd.exe\" condition: pe.is_dll() of ($a) }",
+        &[("yara_x_incompatible", W)],
+    ),
+    (
+        "import \"pe\" rule a { condition: pe.sections[pe.is_dll()].virtual_size == 0 }",
+        &[("yara_x_incompatible", W)],
+    ),
+    (
+        "import \"pe\" rule a { condition: for any i in (0..pe.is_dll()) : (i == 0) }",
+        &[("yara_x_incompatible", W)],
+    ),
+    (
+        "import \"pe\" rule a { condition: uint8(pe.is_dll()) == 0 }",
+        &[("yara_x_incompatible", W)],
+    ),
+    (
+        "import \"pe\" import \"math\" rule a { condition: math.entropy(0, pe.is_dll()) > 1 }",
+        &[("yara_x_incompatible", W)],
+    ),
+    // yara-1.0's integer compared with a boolean, where YARA-X is silent too.
+    (
+        "import \"pe\" rule a { condition: pe.is_dll() == pe.number_of_sections }",
+        &[("yara_suspicious_expression", W)],
+    ),
+    (
+        "import \"pe\" rule a { strings: $a = \"cmd.exe\" condition: #a == pe.is_dll() }",
+        &[("yara_suspicious_expression", W)],
+    ),
+    // libyara reports a jump's first error only.
+    (
+        "rule a { strings: $h = { 01 02 ( 05 [9223372036854775813] 06 | 07 ) } condition: $h }",
+        &[("yara_hex_string", E), ("yara_x_incompatible", W)],
+    ),
 ];
 
 #[test]
