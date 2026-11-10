@@ -1,5 +1,5 @@
-//! `generate` against the oracle's recordings (UC-3.2, #824): every recorded
-//! case of the ported generate commands, run in-process through
+//! `generate` and `setup ci` against the oracle's recordings (UC-3.2, #824;
+//! UC-3.2c, #916): every recorded case of the ported commands, run in-process through
 //! [`opentide_cli::run`] on a fresh copy of its fixture, with the goldens'
 //! normalisation (`opentide-compare`), compared with the recording by the
 //! goldens' comparator (`opentide_compare::compare`, as `cargo xtask golden
@@ -32,6 +32,7 @@ const COMMANDS: &[&str] = &[
     "generate.explorer",
     "generate.inflight",
     "generate.inflight.prune",
+    "setup.ci",
 ];
 
 fn repo() -> PathBuf {
@@ -424,7 +425,12 @@ fn run_json(ws: &Path, words: &[&str]) -> (i32, String) {
         .collect();
     let home = ws.with_file_name("home");
     std::fs::create_dir_all(&home).unwrap();
-    let env = Env::from_pairs([("HOME".to_owned(), home.display().to_string())]);
+    let env = Env::from_pairs([
+        ("HOME".to_owned(), home.display().to_string()),
+        ("PATH".to_owned(), std::env::var("PATH").unwrap_or_default()),
+        ("GIT_CONFIG_NOSYSTEM".to_owned(), "1".to_owned()),
+        ("GIT_CONFIG_GLOBAL".to_owned(), "/dev/null".to_owned()),
+    ]);
     let (mut out, mut err) = (Vec::new(), Buffer::default());
     let exit_code = run(&argv, &env, &host, &mut out, &mut err);
     (exit_code, String::from_utf8(out).unwrap())
@@ -548,4 +554,100 @@ fn inflight_shards_follow_the_branch() {
         "{stdout}"
     );
     assert!(!shard_path.exists());
+}
+
+/// `setup ci` refuses what it cannot do before it writes anything, and
+/// writes the `[promotion]` override a flag asks for beside the pipeline.
+#[test]
+fn setup_ci_refuses_then_writes() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
+    fixture("tide-corpus", &ws);
+    let failure = |stdout: &str| -> serde_json::Value {
+        serde_json::from_str::<serde_json::Value>(stdout).unwrap()["failure"].clone()
+    };
+    let (code, stdout) = run_json(&ws, &["setup", "ci", "azure"]);
+    assert_eq!(code, 2, "{stdout}");
+    assert_eq!(failure(&stdout)["code"], "usage_needs_input");
+    assert_eq!(
+        failure(&stdout)["message"],
+        "--json cannot prompt for confirmation. Add --yes to write to '.'."
+    );
+    let (code, stdout) = run_json(
+        &ws,
+        &["setup", "ci", "github", "--default-branch", "a b", "--yes"],
+    );
+    assert_eq!(code, 2, "{stdout}");
+    assert_eq!(failure(&stdout)["argument"], "--default-branch");
+    assert_eq!(
+        failure(&stdout)["message"],
+        "Invalid value for '--default-branch': 'a b' cannot be written into a pipeline; use letters, digits, '.', '_', '/' and '-'"
+    );
+    let (code, stdout) = run_json(&ws, &["setup", "--name", "x", "ci", "github", "--yes"]);
+    assert_eq!(code, 2, "{stdout}");
+    assert_eq!(
+        failure(&stdout)["message"],
+        "Invalid value: --name configures `opentide setup` itself and would be ignored by `opentide setup ci`."
+    );
+    let (code, stdout) = run_json(
+        &ws,
+        &[
+            "setup",
+            "ci",
+            "github",
+            "--yes",
+            "--promotion-target",
+            "NOPE",
+        ],
+    );
+    assert_eq!(code, 2, "{stdout}");
+    assert!(
+        failure(&stdout)["message"]
+            .as_str()
+            .unwrap()
+            .starts_with("Invalid value for '--promotion-target': 'NOPE' is not a status in this repository's deployment.toml; use one of: DESIGN, "),
+        "{stdout}"
+    );
+    assert!(!ws.join(".github").exists());
+    let (code, stdout) = run_json(
+        &ws,
+        &[
+            "setup",
+            "--yes",
+            "ci",
+            "gitlab",
+            "--no-promotion",
+            "--default-branch",
+            "main",
+        ],
+    );
+    assert_eq!(code, 0, "{stdout}");
+    let document: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(
+        document["files"],
+        serde_json::json!([".gitlab-ci.yml", ".opentide/configurations/deployment.toml"])
+    );
+    assert_eq!(document["message"], "Wrote 2 files");
+    assert_eq!(
+        document["warnings"],
+        serde_json::json!([
+            "GitLab pipelines publish to $CI_DEFAULT_BRANCH; --default-branch is ignored."
+        ])
+    );
+    assert_eq!(
+        std::fs::read_to_string(ws.join(".opentide/configurations/deployment.toml")).unwrap(),
+        "[promotion]\nenabled = false\n"
+    );
+    // Planned again, the pipeline is a change and the override already holds.
+    let (code, stdout) = run_json(&ws, &["setup", "ci", "gitlab", "--plan", "--no-promotion"]);
+    assert_eq!(code, 0, "{stdout}");
+    let plan: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(
+        plan["steps"][0]["files"],
+        serde_json::json!([{"path": ".gitlab-ci.yml", "action": "merge"}])
+    );
+    assert_eq!(
+        plan["message"],
+        "Plan: 1 file to write (0 new, 1 changed) · nothing written"
+    );
 }

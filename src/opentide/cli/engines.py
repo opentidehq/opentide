@@ -79,7 +79,7 @@ RUST_CLI: tuple[str, ...] = (sys.executable, "-m", "opentide.cli.rust")
 #: the change that ports it. ``info`` (every section) and ``rules unreviewed``
 #: came with UC-2.4 (#819); ``generate exports`` and its three exports with
 #: UC-3.2 (#824); ``generate explorer``, ``generate inflight`` and its
-#: ``prune`` with UC-3.2c (#916).
+#: ``prune``, and ``setup ci`` with UC-3.2c (#916).
 RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
     ("info",): RustCommand(launch=RUST_CLI),
     ("rules", "unreviewed"): RustCommand(launch=RUST_CLI),
@@ -90,6 +90,7 @@ RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
     ("generate", "explorer"): RustCommand(launch=RUST_CLI),
     ("generate", "inflight"): RustCommand(launch=RUST_CLI),
     ("generate", "inflight", "prune"): RustCommand(launch=RUST_CLI),
+    ("setup", "ci"): RustCommand(launch=RUST_CLI),
 }
 
 

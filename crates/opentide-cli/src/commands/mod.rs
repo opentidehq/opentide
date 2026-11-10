@@ -8,6 +8,7 @@
 pub mod generate;
 pub mod info;
 pub mod rules;
+pub mod setup;
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;

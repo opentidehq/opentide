@@ -471,7 +471,7 @@ fn changed_object_files(root: &Path, cx: &Context<'_>) -> Vec<PathBuf> {
     }
     let env = |name: &str| cx.env.get(name).map(str::to_owned);
     if git::ci(&env) == git::Ci::Local {
-        let local = work_tree_changes(root);
+        let local = work_tree_changes(cx.env, root);
         if local.is_empty() {
             tracing::warn!("inflight_no_local_git_diff_found");
         }
@@ -485,22 +485,22 @@ fn changed_object_files(root: &Path, cx: &Context<'_>) -> Vec<PathBuf> {
             .collect(),
         Err(error) => {
             tracing::warn!(detail = error.message().as_str(), "inflight_ci_diff_failed");
-            work_tree_changes(root)
+            work_tree_changes(cx.env, root)
         }
     }
 }
 
 /// The object files changed in the work tree against the default branch,
 /// untracked ones included (`_local_git_changed_paths`).
-fn work_tree_changes(root: &Path) -> Vec<PathBuf> {
-    let baseline = match crate::git_baseline::resolve(root) {
+fn work_tree_changes(env: &Env, root: &Path) -> Vec<PathBuf> {
+    let baseline = match crate::git_baseline::resolve(env, root) {
         Ok(baseline) => baseline,
         Err(detail) => {
             tracing::warn!(detail = detail.as_str(), "inflight_no_git_baseline");
             return Vec::new();
         }
     };
-    let top = crate::git_baseline::toplevel(root);
+    let top = crate::git_baseline::toplevel(env, root);
     let canonical =
         |path: &Path| std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
     let prefix = canonical(root)
@@ -513,7 +513,7 @@ fn work_tree_changes(root: &Path) -> Vec<PathBuf> {
     } else {
         format!("{prefix_text}/objects/")
     };
-    crate::git_baseline::changed(root, &baseline, &pathspec)
+    crate::git_baseline::changed(env, root, &baseline, &pathspec)
         .into_iter()
         .filter_map(|relative| {
             let within = Path::new(&relative).strip_prefix(&prefix).ok()?;
