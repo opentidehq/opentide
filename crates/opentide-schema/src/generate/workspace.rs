@@ -386,6 +386,173 @@ pub fn schema_paths(config: &Node) -> Vec<(SchemaId, String)> {
 mod tests {
     use super::*;
 
+    use crate::configuration::lint::LintConfig;
+    use crate::configuration::toml::parse;
+
+    fn config(text: &str) -> Node {
+        parse(text).unwrap()
+    }
+
+    fn rendered(identifier: &str) -> String {
+        let options = Options {
+            required_metadata: LintConfig::default().required_metadata,
+            indent: 0,
+        };
+        object_template(identifier, &options).unwrap().unwrap()
+    }
+
+    fn paths(artifacts: &[Artifact]) -> Vec<&str> {
+        artifacts
+            .iter()
+            .map(|artifact| artifact.path.as_str())
+            .collect()
+    }
+
+    const PLATFORMS: &str = r#"
+[platforms.sentinel.platform]
+enabled = true
+name = "Microsoft Sentinel"
+[platforms.splunk.platform]
+enabled = false
+name = "Splunk"
+[platforms.elastic.platform]
+name = "Elastic"
+[platforms.crowdstrike.platform]
+enabled = "true"
+[platforms.plugin.platform]
+enabled = true
+[platforms.carbon_black_cloud.platform]
+enabled = true
+"#;
+
+    #[test]
+    fn only_platforms_enabled_with_true_are_generated() {
+        let tree = config(PLATFORMS);
+        assert_eq!(
+            enabled_platforms(&tree),
+            [
+                ("sentinel".to_owned(), "Microsoft Sentinel".to_owned()),
+                (
+                    "carbon_black_cloud".to_owned(),
+                    "carbon_black_cloud".to_owned()
+                ),
+            ]
+        );
+        let artifacts = templates(&tree).unwrap();
+        assert_eq!(
+            paths(&artifacts),
+            [
+                ".opentide/templates/platforms/sentinel.template.yaml",
+                ".opentide/templates/platforms/carbon_black_cloud.template.yaml",
+            ]
+        );
+        assert_eq!(
+            artifacts[0].text,
+            platform_template("sentinel").unwrap().unwrap()
+        );
+        let snippet = snippets(&tree, &artifacts).unwrap();
+        assert_eq!(snippet.path, ".vscode/model-templates.code-snippets");
+        assert!(
+            snippet
+                .text
+                .contains("Platform configuration : Microsoft Sentinel Template"),
+            "{}",
+            snippet.text
+        );
+        assert!(
+            snippet
+                .text
+                .contains("Platform configuration : carbon_black_cloud Template")
+        );
+        for absent in ["Splunk", "Elastic", "crowdstrike", "plugin"] {
+            assert!(!snippet.text.contains(absent), "{absent}: {}", snippet.text);
+        }
+    }
+
+    #[test]
+    fn a_snippet_without_its_template_is_an_error() {
+        let tree = config(PLATFORMS);
+        assert_eq!(
+            snippets(&tree, &[]).unwrap_err(),
+            "Missing platform sentinel template for snippets: \
+             .opentide/templates/platforms/sentinel.template.yaml"
+        );
+        let tree = config(
+            "[paths.metaschemas]\nrule = \"rule\"\n\
+             [paths.artifacts.templates]\nrule = \"rule.template.yaml\"\n",
+        );
+        assert_eq!(
+            snippets(&tree, &[]).unwrap_err(),
+            "Missing core rule template for snippets: .opentide/templates/rule.template.yaml"
+        );
+    }
+
+    fn rule_configured(file: &str) -> Node {
+        config(&format!(
+            "[paths.metaschemas]\nrule = \"rule\"\n\
+             [paths.artifacts.templates]\nrule = \"{file}\"\n"
+        ))
+    }
+
+    #[test]
+    fn a_configured_revision_template_is_not_written_twice() {
+        let artifacts = templates(&rule_configured("rule.1.0.template.yaml")).unwrap();
+        assert_eq!(
+            paths(&artifacts),
+            [
+                ".opentide/templates/rule.1.0.template.yaml",
+                ".opentide/templates/rule.1.1.template.yaml",
+            ]
+        );
+        assert_eq!(artifacts[0].text, rendered("rule::1.0"));
+        assert_eq!(artifacts[1].text, rendered("rule::1.1"));
+    }
+
+    #[test]
+    fn a_configured_template_of_no_revision_is_the_newest_revision() {
+        let tree = rule_configured("rule.template.yaml");
+        let artifacts = templates(&tree).unwrap();
+        assert_eq!(
+            paths(&artifacts),
+            [
+                ".opentide/templates/rule.1.0.template.yaml",
+                ".opentide/templates/rule.1.1.template.yaml",
+                ".opentide/templates/rule.template.yaml",
+            ]
+        );
+        assert_eq!(artifacts[2].text, rendered("rule::1.1"));
+        let snippet = snippets(&tree, &artifacts).unwrap();
+        assert!(
+            snippet.text.contains("\"rule Template\""),
+            "{}",
+            snippet.text
+        );
+    }
+
+    #[test]
+    fn a_configured_template_named_for_a_revision_renders_that_revision() {
+        // threat's template configured as a rule revision's file name.
+        let tree = config(
+            "[paths.metaschemas]\nthreat = \"threat\"\n\
+             [paths.artifacts.templates]\nthreat = \"rule.1.0.template.yaml\"\n",
+        );
+        let artifacts = templates(&tree).unwrap();
+        assert_eq!(
+            paths(&artifacts),
+            [
+                ".opentide/templates/threat.1.0.template.yaml",
+                ".opentide/templates/rule.1.0.template.yaml",
+            ]
+        );
+        assert_eq!(artifacts[1].text, rendered("rule::1.0"));
+    }
+
+    #[test]
+    fn a_family_without_a_configured_template_writes_none() {
+        let tree = config("[paths.metaschemas]\nrule = \"rule\"\nvisibility = \"v\"\n");
+        assert!(templates(&tree).unwrap().is_empty());
+    }
+
     #[test]
     fn template_filenames_name_their_revision() {
         assert_eq!(

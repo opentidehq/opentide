@@ -205,3 +205,42 @@ fn a_schema_the_renderer_cannot_walk_is_an_error_not_a_panic() {
     });
     assert!(render_schema(&missing, "ThreatActor", &Options::default()).is_err());
 }
+
+#[test]
+fn a_named_enum_offers_no_placeholder_and_a_literal_its_first_value() {
+    let options = Options::default();
+    let named = serde_json::json!({
+        "properties": {"name": {"$ref": "#/$defs/Colour"}},
+        "required": ["name"],
+        "$defs": {"Colour": {"type": "string", "enum": ["red", "blue"]}},
+    });
+    assert_eq!(
+        render_schema(&named, "ThreatActor", &options).unwrap(),
+        "name: \n"
+    );
+    let optional_named = serde_json::json!({
+        "properties": {"name": {"anyOf": [{"$ref": "#/$defs/Colour"}, {"type": "null"}]}},
+        "required": ["name"],
+        "$defs": {"Colour": {"type": "string", "enum": ["red", "blue"]}},
+    });
+    assert_eq!(
+        render_schema(&optional_named, "ThreatActor", &options).unwrap(),
+        "name: \n"
+    );
+    let literal = serde_json::json!({
+        "properties": {"name": {"type": "string", "enum": ["red", "blue"]}},
+        "required": ["name"],
+    });
+    assert_eq!(
+        render_schema(&literal, "ThreatActor", &options).unwrap(),
+        "name: red\n"
+    );
+    let constant = serde_json::json!({
+        "properties": {"name": {"const": "red"}},
+        "required": ["name"],
+    });
+    assert_eq!(
+        render_schema(&constant, "ThreatActor", &options).unwrap(),
+        "name: red\n"
+    );
+}

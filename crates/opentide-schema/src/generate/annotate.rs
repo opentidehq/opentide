@@ -11,6 +11,7 @@
 //! The patterns are the oracle's, run by `fancy-regex` (the `regex` crate
 //! has no look-around or back-references, which they use).
 
+use std::borrow::Cow;
 use std::sync::OnceLock;
 
 use fancy_regex::Regex;
@@ -80,9 +81,12 @@ fn patterns() -> &'static Patterns {
 }
 
 /// `pattern.sub(replacement, text)`; a pattern that fails at run time (its
-/// backtracking limit) leaves the text as it is.
+/// backtracking limit) leaves the text as it is. `replace_all` would panic
+/// there instead: it unwraps `try_replacen`.
 fn sub(pattern: &Regex, replacement: &str, text: &str) -> String {
-    pattern.replace_all(text, replacement).into_owned()
+    pattern
+        .try_replacen(text, 0, replacement)
+        .map_or_else(|_| text.to_owned(), Cow::into_owned)
 }
 
 fn is_match(pattern: &Regex, text: &str) -> bool {
@@ -307,6 +311,105 @@ mod tests {
             "A tag stays out!"
         );
         assert_eq!(first_sentence("no end"), "no end");
+    }
+
+    #[test]
+    fn a_pattern_over_its_backtracking_limit_leaves_the_text_unchanged() {
+        let pattern = fancy_regex::RegexBuilder::new(r"(a+)+\1b")
+            .backtrack_limit(10)
+            .build()
+            .unwrap();
+        let text = "aaaaaaaaaaaaaaaaaaaaaaaac";
+        assert!(pattern.try_replacen(text, 0, "x").is_err());
+        assert_eq!(sub(&pattern, "x", text), text);
+        // Within the limit it substitutes.
+        assert_eq!(sub(&patterns().emphasis, "$2", "**a** b"), "a b");
+    }
+
+    fn annotated(root: Object) -> Object {
+        let mut schema = Json::Object(root);
+        annotate_editor_schema(&mut schema);
+        schema.as_object().cloned().unwrap_or_default()
+    }
+
+    #[test]
+    fn annotations_already_present_are_kept() {
+        let mut field = Object::new();
+        field.insert("description".to_owned(), Json::from("Plain `x`."));
+        field.insert("markdownDescription".to_owned(), Json::from("Own **md**"));
+        field.insert(
+            "enum".to_owned(),
+            Json::Array(vec![Json::from("a"), Json::from("b")]),
+        );
+        field.insert(
+            "enumDescriptions".to_owned(),
+            Json::Array(vec![Json::from("own a"), Json::from("own b")]),
+        );
+        field.insert(
+            "markdownEnumDescriptions".to_owned(),
+            Json::Array(vec![Json::from("**A**"), Json::from("**B**")]),
+        );
+        field.insert(
+            "x-enumDescriptions".to_owned(),
+            Json::Array(vec![Json::from("x a"), Json::from("x b")]),
+        );
+        let mut properties = Object::new();
+        properties.insert("field".to_owned(), Json::Object(field));
+        let mut root = Object::new();
+        root.insert("$comment".to_owned(), Json::from("own comment"));
+        root.insert("description".to_owned(), Json::from("Own root."));
+        root.insert("properties".to_owned(), Json::Object(properties));
+        let root = annotated(root);
+        assert_eq!(root.get("$comment"), Some(&Json::from("own comment")));
+        assert_eq!(root.get("description"), Some(&Json::from("Own root.")));
+        let field = root
+            .get("properties")
+            .and_then(|properties| properties.get("field"))
+            .cloned()
+            .unwrap();
+        // markdownDescription present: the description is only unwrapped.
+        assert_eq!(field.get("description"), Some(&Json::from("Plain `x`.")));
+        assert_eq!(
+            field.get("markdownDescription"),
+            Some(&Json::from("Own **md**"))
+        );
+        assert_eq!(
+            field.get("enumDescriptions"),
+            Some(&Json::Array(vec![Json::from("own a"), Json::from("own b")]))
+        );
+        assert_eq!(
+            field.get("x-enumDescriptions"),
+            Some(&Json::Array(vec![Json::from("x a"), Json::from("x b")]))
+        );
+    }
+
+    #[test]
+    fn data_is_not_rewritten_and_plain_descriptions_are_unwrapped() {
+        let mut data = Object::new();
+        data.insert("description".to_owned(), Json::from("A `code`\nline"));
+        let mut root = Object::new();
+        root.insert("description".to_owned(), Json::from("a\nb"));
+        root.insert("default".to_owned(), Json::Object(data.clone()));
+        root.insert(
+            "examples".to_owned(),
+            Json::Array(vec![Json::Object(data.clone())]),
+        );
+        root.insert("const".to_owned(), Json::Object(data.clone()));
+        let mut sub_schema = Object::new();
+        sub_schema.insert("description".to_owned(), Json::from("x\n  y\n\nz"));
+        root.insert("items".to_owned(), Json::Object(sub_schema));
+        let root = annotated(root);
+        assert_eq!(root.get("description"), Some(&Json::from("a b")));
+        assert_eq!(root.get("default"), Some(&Json::Object(data.clone())));
+        assert_eq!(
+            root.get("examples"),
+            Some(&Json::Array(vec![Json::Object(data.clone())]))
+        );
+        assert_eq!(root.get("const"), Some(&Json::Object(data)));
+        assert_eq!(
+            root.get("items").and_then(|items| items.get("description")),
+            Some(&Json::from("x y\n\nz"))
+        );
     }
 
     #[test]

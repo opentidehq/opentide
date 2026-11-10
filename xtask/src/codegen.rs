@@ -5,12 +5,14 @@
 //!   `src/opentide/schemas/data/platform_templates/<platform>.template.yaml`,
 //!   which the package ships and `generate snippets` falls back to. Without
 //!   `--check` they are written; with it, a difference fails.
-//! - **Golden parity** (`--check` only): every recording of a successful
-//!   `opentide generate` in `tests/golden/cases` (each fixture, each mode)
-//!   holds the templates, the snippets and the router schema the oracle
-//!   wrote; the same files generated from the fixture's resolved
-//!   configuration must be byte-identical, and neither side may hold one the
-//!   other has not.
+//! - **Golden parity** (`--check` only): each recording in
+//!   `tests/golden/cases` of a bare `opentide generate` (no phase named)
+//!   that exited 0 holds the templates, the snippets and the router schema
+//!   the oracle wrote; recordings of one phase, and of a failed run, are not
+//!   compared (today that leaves the tide-corpus cases: every vscode-workspace
+//!   recording exits 1). In each compared case the same files, generated
+//!   from the fixture's resolved configuration, must be byte-identical, and
+//!   neither side may hold one the other has not.
 //!
 //! The JSON Schema of each revision, the configuration schemas and the
 //! language server's field catalog are not generated from Rust yet (#814).
@@ -37,7 +39,8 @@ pub const USAGE: &str = "usage: cargo xtask codegen [--check]
                src/opentide/schemas/data/platform_templates/*.template.yaml
   --check      compare them instead of writing, and compare what `opentide
                generate` writes (templates, snippets, the router schema) with
-               every golden recording of it; exit 1 on a difference
+               each golden recording of a bare `opentide generate` that
+               exited 0; exit 1 on a difference
 ";
 
 /// Where the committed platform templates live, relative to the repository.
@@ -120,14 +123,26 @@ fn committed(root: &Path, check: bool) -> Result<Vec<String>> {
     }
     // A template of a platform the model no longer has is stale.
     let dir = root.join(PLATFORM_TEMPLATES);
+    let mut names = Vec::new();
     for entry in std::fs::read_dir(&dir).with_context(|| format!("read {}", dir.display()))? {
-        let name = entry?.file_name().to_string_lossy().into_owned();
-        let path = format!("{PLATFORM_TEMPLATES}/{name}");
-        if name.ends_with(".template.yaml") && !artifacts.iter().any(|(known, _)| *known == path) {
-            problems.push(format!("{path}: no platform model generates it"));
-        }
+        names.push(entry?.file_name().to_string_lossy().into_owned());
     }
+    problems.extend(stale_templates(&names, &artifacts));
     Ok(problems)
+}
+
+/// Of the file names in the committed templates' folder, each template no
+/// artifact is: a platform the model no longer has.
+fn stale_templates(names: &[String], artifacts: &[(String, String)]) -> Vec<String> {
+    let mut stale: Vec<String> = names
+        .iter()
+        .filter(|name| name.ends_with(".template.yaml"))
+        .map(|name| format!("{PLATFORM_TEMPLATES}/{name}"))
+        .filter(|path| !artifacts.iter().any(|(known, _)| known == path))
+        .map(|path| format!("{path}: no platform model generates it"))
+        .collect();
+    stale.sort();
+    stale
 }
 
 /// Whether a case's argv runs every phase of `opentide generate`: the
@@ -214,31 +229,42 @@ fn golden_parity(root: &Path) -> Result<(usize, Vec<String>)> {
                 recorded.insert(path.to_owned(), contents);
             }
         }
-        for artifact in artifacts {
-            match recorded.remove(&artifact.path) {
-                Some(bytes) if bytes == artifact.text.as_bytes() => compared += 1,
-                Some(bytes) => problems.push(format!(
-                    "{id}: {} differs from the oracle's\n{}",
-                    artifact.path,
-                    crate::golden::recording::unified(
-                        &String::from_utf8_lossy(bytes),
-                        &artifact.text
-                    )
-                )),
-                None => problems.push(format!(
-                    "{id}: {} is generated, the oracle did not write it",
-                    artifact.path
-                )),
-            }
-        }
-        for path in recorded.keys() {
-            problems.push(format!("{id}: the oracle wrote {path}, Rust does not"));
-        }
+        compared += compare(&id, artifacts, recorded, &mut problems);
     }
     if compared == 0 && problems.is_empty() {
         problems.push("no golden recording of `opentide generate` was compared".to_owned());
     }
     Ok((compared, problems))
+}
+
+/// Compares what Rust generates with what case `id` recorded, by path:
+/// pushes a problem for each file whose bytes differ and each file only one
+/// side has, and returns the number of files that matched.
+fn compare(
+    id: &str,
+    artifacts: &[Artifact],
+    mut recorded: BTreeMap<String, &[u8]>,
+    problems: &mut Vec<String>,
+) -> usize {
+    let mut matched = 0;
+    for artifact in artifacts {
+        match recorded.remove(&artifact.path) {
+            Some(bytes) if bytes == artifact.text.as_bytes() => matched += 1,
+            Some(bytes) => problems.push(format!(
+                "{id}: {} differs from the oracle's\n{}",
+                artifact.path,
+                crate::golden::recording::unified(&String::from_utf8_lossy(bytes), &artifact.text)
+            )),
+            None => problems.push(format!(
+                "{id}: {} is generated, the oracle did not write it",
+                artifact.path
+            )),
+        }
+    }
+    for path in recorded.keys() {
+        problems.push(format!("{id}: the oracle wrote {path}, Rust does not"));
+    }
+    matched
 }
 
 #[cfg(test)]
@@ -276,6 +302,73 @@ mod tests {
         assert!(!is_full_pipeline(&argv(&[
             "generate", "docs", "--output", "x"
         ])));
+    }
+
+    fn artifact(path: &str, text: &str) -> Artifact {
+        Artifact {
+            path: path.to_owned(),
+            text: text.to_owned(),
+        }
+    }
+
+    #[test]
+    fn the_comparison_reports_differing_bytes_and_files_only_one_side_has() {
+        let artifacts = [
+            artifact("same.yaml", "a: 1\n"),
+            artifact("differs.yaml", "a: 1\n"),
+            artifact("rust-only.yaml", "a: 1\n"),
+        ];
+        let recorded: BTreeMap<String, &[u8]> = BTreeMap::from([
+            ("same.yaml".to_owned(), b"a: 1\n".as_slice()),
+            ("differs.yaml".to_owned(), b"a: 2\n".as_slice()),
+            ("oracle-only.yaml".to_owned(), b"a: 1\n".as_slice()),
+        ]);
+        let mut problems = Vec::new();
+        assert_eq!(compare("case", &artifacts, recorded, &mut problems), 1);
+        assert_eq!(problems.len(), 3, "{problems:#?}");
+        assert!(
+            problems[0].starts_with("case: differs.yaml differs from the oracle's\n"),
+            "{problems:#?}"
+        );
+        assert!(problems[0].contains("-a: 2") && problems[0].contains("+a: 1"));
+        assert_eq!(
+            problems[1],
+            "case: rust-only.yaml is generated, the oracle did not write it"
+        );
+        assert_eq!(
+            problems[2],
+            "case: the oracle wrote oracle-only.yaml, Rust does not"
+        );
+    }
+
+    #[test]
+    fn identical_files_compare_clean() {
+        let artifacts = [artifact("a.yaml", "x\n"), artifact("b.json", "{}\n")];
+        let recorded: BTreeMap<String, &[u8]> = BTreeMap::from([
+            ("a.yaml".to_owned(), b"x\n".as_slice()),
+            ("b.json".to_owned(), b"{}\n".as_slice()),
+        ]);
+        let mut problems = Vec::new();
+        assert_eq!(compare("case", &artifacts, recorded, &mut problems), 2);
+        assert!(problems.is_empty(), "{problems:#?}");
+    }
+
+    #[test]
+    fn an_extra_committed_template_is_stale() {
+        let artifacts = committed_artifacts().unwrap();
+        let mut names: Vec<String> = artifacts
+            .iter()
+            .map(|(path, _)| path.rsplit('/').next().unwrap().to_owned())
+            .collect();
+        assert!(stale_templates(&names, &artifacts).is_empty());
+        names.push("retired.template.yaml".to_owned());
+        names.push("README.md".to_owned());
+        assert_eq!(
+            stale_templates(&names, &artifacts),
+            [format!(
+                "{PLATFORM_TEMPLATES}/retired.template.yaml: no platform model generates it"
+            )]
+        );
     }
 
     #[test]
