@@ -10,15 +10,19 @@
 )]
 
 mod validate {
-    use std::path::PathBuf;
-    use std::sync::Arc;
+    use std::path::{Path, PathBuf};
+    use std::sync::{Arc, Mutex};
 
-    use opentide_workspace::validate::{Check, Options, Selection, Validation};
+    use opentide_workspace::validate::objects::merge_reference_findings;
+    use opentide_workspace::validate::{
+        Check, Options, QueriesMode, QueryCheck, QueryFindings, QueryObject, Selection, Validation,
+    };
     use opentide_workspace::{Diagnostic, FileSystem, MemoryFs, RootOptions, Severity, Workspace};
 
     const ROOT: &str = "/ws";
     const U1: &str = "11111111-1111-4111-8111-111111111111";
     const U2: &str = "22222222-2222-4222-8222-222222222222";
+    const U3: &str = "33333333-3333-4333-8333-333333333333";
 
     fn open(fs: &Arc<MemoryFs>) -> Workspace {
         Workspace::open(
@@ -548,6 +552,408 @@ mod validate {
                 .as_deref()
                 .is_some_and(|h| h.starts_with("look at the indentation"))
         );
+    }
+
+    fn narrowed(fs: &Arc<MemoryFs>, check: Option<Check>, selection: &Selection) -> Validation {
+        run(
+            fs,
+            &Options {
+                check,
+                selection: Some(selection),
+                ..Options::default()
+            },
+        )
+    }
+
+    fn uuids(values: &[&str]) -> Selection {
+        Selection {
+            uuids: values.iter().map(|v| (*v).to_owned()).collect(),
+            ..Selection::default()
+        }
+    }
+
+    fn files(values: &[&str]) -> Selection {
+        Selection {
+            files: values.iter().map(|v| (*v).to_owned()).collect(),
+            ..Selection::default()
+        }
+    }
+
+    fn types(values: &[&str]) -> Selection {
+        Selection {
+            types: values.iter().map(|v| (*v).to_owned()).collect(),
+            ..Selection::default()
+        }
+    }
+
+    fn paths_of<'v>(validation: &'v Validation, code: &str) -> Vec<&'v str> {
+        let mut paths: Vec<&str> = with_code(validation, code)
+            .iter()
+            .filter_map(|d| d.path.as_deref())
+            .collect();
+        paths.sort_unstable();
+        paths
+    }
+
+    #[test]
+    fn a_narrowed_run_reports_the_duplicates_it_selects() {
+        let fs = workspace();
+        fs.write("/ws/objects/rules/a.yaml", rule(U1, "A"));
+        fs.write("/ws/objects/rules/b.yaml", rule(U1, "B"));
+        fs.write("/ws/objects/rules/c.yaml", rule(U2, "C"));
+        fs.write("/ws/objects/rules/d.yaml", rule(U2, "D"));
+        fs.write("/ws/objects/rules/e.yaml", rule(U3, "E"));
+        let check = Some(Check::IdUniqueness);
+        // --uuid: the duplicates of that UUID only.
+        let by_uuid = narrowed(&fs, check, &uuids(&[U1]));
+        assert_eq!(paths_of(&by_uuid, "duplicate_id"), ["objects/rules/b.yaml"]);
+        // --file: the later file, or the first one it repeats.
+        let later = narrowed(&fs, check, &files(&["objects/rules/d.yaml"]));
+        assert_eq!(paths_of(&later, "duplicate_id"), ["objects/rules/d.yaml"]);
+        let first = narrowed(&fs, check, &files(&["objects/rules/a.yaml"]));
+        assert_eq!(paths_of(&first, "duplicate_id"), ["objects/rules/b.yaml"]);
+        // A file that repeats nothing selects no duplicate.
+        let other = narrowed(&fs, check, &files(&["objects/rules/e.yaml"]));
+        assert!(with_code(&other, "duplicate_id").is_empty());
+        let other = narrowed(&fs, check, &uuids(&[U3]));
+        assert!(with_code(&other, "duplicate_id").is_empty());
+        // --type alone names no target: every duplicate.
+        let by_type = narrowed(&fs, check, &types(&["rule"]));
+        assert_eq!(
+            paths_of(&by_type, "duplicate_id"),
+            ["objects/rules/b.yaml", "objects/rules/d.yaml"]
+        );
+    }
+
+    #[test]
+    fn a_narrowed_run_reports_the_invalid_uuids_of_the_files_it_selects_kg_04() {
+        let fs = workspace();
+        for (file, name) in [("a", "A"), ("b", "B"), ("c", "C")] {
+            fs.write(
+                format!("/ws/objects/rules/{file}.yaml"),
+                rule("bad-1", name),
+            );
+        }
+        fs.write("/ws/objects/threats/t.yaml", rule("bad-1", "T"));
+        let check = Some(Check::UuidFormat);
+        for file in ["a", "b", "c"] {
+            let path = format!("objects/rules/{file}.yaml");
+            let one = narrowed(&fs, check, &files(&[path.as_str()]));
+            assert_eq!(
+                paths_of(&one, "invalid_uuid"),
+                [path.as_str()],
+                "--file {path}"
+            );
+        }
+        let threats = narrowed(&fs, check, &types(&["threat"]));
+        assert!(
+            paths_of(&threats, "invalid_uuid")
+                .iter()
+                .all(|path| !path.starts_with("objects/rules/")),
+            "--type threat: {:?}",
+            paths_of(&threats, "invalid_uuid")
+        );
+        let rules = narrowed(&fs, check, &types(&["rule"]));
+        assert_eq!(
+            paths_of(&rules, "invalid_uuid"),
+            [
+                "objects/rules/a.yaml",
+                "objects/rules/b.yaml",
+                "objects/rules/c.yaml"
+            ]
+        );
+    }
+
+    #[test]
+    fn a_parse_error_outside_the_selected_types_is_not_reported() {
+        let fs = workspace();
+        fs.write("/ws/objects/rules/a.yaml", "name: [A\n");
+        fs.write(
+            "/ws/objects/threats/t.yaml",
+            format!("name: T\nmetadata:\n  uuid: {U1}\n  schema: threat::1.0\n"),
+        );
+        let threats = narrowed(&fs, None, &types(&["threat"]));
+        assert!(
+            with_code(&threats, "yaml_parse").is_empty(),
+            "{:?}",
+            threats.report
+        );
+        let rules = narrowed(&fs, None, &types(&["rule"]));
+        assert_eq!(paths_of(&rules, "yaml_parse"), ["objects/rules/a.yaml"]);
+    }
+
+    #[test]
+    fn a_scope_that_selects_nothing_fails_the_object_check_that_ran() {
+        let fs = workspace();
+        fs.write("/ws/objects/rules/a.yaml", rule(U1, "A"));
+        let validation = narrowed(&fs, Some(Check::UuidFormat), &uuids(&[U2]));
+        assert_eq!(with_code(&validation, "scope_no_match").len(), 1);
+        assert_eq!(validation.report.issues.len(), 1, "{:?}", validation.report);
+        assert_eq!(validation.checks, [(Check::UuidFormat, "failed")]);
+        // The object itself passes the check.
+        let selected = narrowed(&fs, Some(Check::UuidFormat), &uuids(&[U1]));
+        assert_eq!(selected.checks, [(Check::UuidFormat, "passed")]);
+    }
+
+    #[test]
+    fn a_narrowed_run_reports_the_configuration_only_when_it_is_the_check_asked() {
+        let fs = workspace();
+        fs.write(
+            "/ws/.opentide/configurations/deployment.toml",
+            "colour = 1\n",
+        );
+        fs.write("/ws/objects/rules/a.yaml", rule(U1, "A"));
+        let selection = uuids(&[U1]);
+        let asked = narrowed(&fs, Some(Check::Configuration), &selection);
+        assert_eq!(with_code(&asked, "unknown_key").len(), 1);
+        assert_eq!(asked.checks, [(Check::Configuration, "failed")]);
+        let default = narrowed(&fs, None, &selection);
+        assert!(
+            all(&default)
+                .iter()
+                .all(|d| d.object_type != "configuration"),
+            "{:?}",
+            default.report
+        );
+        assert!(default.checks.contains(&(Check::Configuration, "passed")));
+    }
+
+    #[test]
+    fn errors_of_one_file_follow_its_lines() {
+        let fs = workspace();
+        // `tlp` sorts before `uuid` by field, but is written after it.
+        fs.write(
+            "/ws/objects/rules/a.yaml",
+            "name: A\nmetadata:\n  uuid: bad-a\n  schema: rule::1.1\n  tlp: ambr\n",
+        );
+        let validation = run(&fs, &Options::default());
+        let codes: Vec<&str> = validation
+            .report
+            .issues
+            .iter()
+            .map(|d| d.code.as_str())
+            .collect();
+        let position = |code: &str| codes.iter().position(|c| *c == code).unwrap();
+        assert!(
+            position("invalid_uuid") < position("vocab_unknown"),
+            "{codes:?}"
+        );
+        let lines: Vec<i64> = validation
+            .report
+            .issues
+            .iter()
+            .map(|d| d.yaml_line.map_or(-1, |l| i64::try_from(l).unwrap()))
+            .collect();
+        assert!(lines.windows(2).all(|w| w[0] <= w[1]), "{lines:?}");
+    }
+
+    fn finding(code: &str, value: &str, suggestion: Option<&str>) -> Diagnostic {
+        Diagnostic::error(code, format!("{code} {value}"))
+            .object(U1, "objective")
+            .at(["objective", "threats", "0"])
+            .with("value", value)
+            .suggest(suggestion.map(str::to_owned))
+    }
+
+    #[test]
+    fn a_reference_absorbs_the_vocabulary_finding_on_its_value_and_its_suggestion() {
+        let merged = merge_reference_findings(vec![
+            finding("vocab_unknown", U2, Some(U3)),
+            finding("invalid_ref", U2, None),
+            finding("vocab_unknown", "other", Some("x")),
+        ]);
+        let shown: Vec<(&str, Option<&str>, Option<&str>)> = merged
+            .iter()
+            .map(|d| (d.code.as_str(), d.value(), d.suggestion.as_deref()))
+            .collect();
+        assert_eq!(
+            shown,
+            [
+                ("invalid_ref", Some(U2), Some(U3)),
+                ("vocab_unknown", Some("other"), Some("x"))
+            ]
+        );
+        // A reference's own suggestion stays.
+        let merged = merge_reference_findings(vec![
+            finding("invalid_ref", U2, Some(U1)),
+            finding("vocab_unknown", U2, Some(U3)),
+        ]);
+        assert_eq!(merged.len(), 1);
+        assert_eq!(merged[0].suggestion.as_deref(), Some(U1));
+        // Without a reference finding, nothing changes.
+        let alone = vec![finding("vocab_unknown", U2, Some(U3))];
+        assert_eq!(merge_reference_findings(alone.clone()), alone);
+    }
+
+    #[test]
+    fn a_vocabulary_list_of_the_wrong_shape_is_reported_once() {
+        let fs = workspace();
+        let packed = "Elevation of privilege; Repudiation";
+        fs.write(
+            "/ws/objects/threats/t.yaml",
+            format!(
+                "name: T\nmetadata:\n  uuid: {U1}\n  schema: threat::1.0\nthreat:\n  leverage: [Repudiation, '{packed}']\n"
+            ),
+        );
+        let validation = run(&fs, &Options::default());
+        let on_value: Vec<&Diagnostic> = all(&validation)
+            .into_iter()
+            .filter(|d| d.field_path == ["threat", "leverage", "1"])
+            .collect();
+        assert_eq!(on_value.len(), 1, "{on_value:?}");
+        assert_eq!(on_value[0].code, "schema_validation");
+        assert!(
+            on_value[0]
+                .message
+                .contains("packs several vocabulary names"),
+            "{}",
+            on_value[0].message
+        );
+        assert!(
+            with_code(&validation, "vocab_unknown").is_empty(),
+            "{:?}",
+            with_code(&validation, "vocab_unknown")
+        );
+    }
+
+    #[test]
+    fn a_broken_shard_is_reported_once_and_only_for_the_rule_selected() {
+        let fs = workspace();
+        fs.write("/ws/objects/rules/a.yaml", rule(U1, "A"));
+        fs.write("/ws/objects/rules/b.yaml", rule(U2, "B"));
+        fs.write(
+            format!("/ws/.opentide/states/deployment/{U1}.json"),
+            "{\"schema\": \"deployment.state::1.0\"}",
+        );
+        let full = run(&fs, &Options::default());
+        assert_eq!(with_code(&full, "deployment_state_shape").len(), 1);
+        let own = narrowed(&fs, None, &uuids(&[U1]));
+        assert_eq!(with_code(&own, "deployment_state_shape").len(), 1);
+        let other = narrowed(&fs, None, &uuids(&[U2]));
+        assert!(with_code(&other, "deployment_state_shape").is_empty());
+    }
+
+    /// A query analysis that reports one finding per object at
+    /// `configurations.splunk.query`, and records how it was called.
+    struct StubQueries {
+        calls: Mutex<Vec<(Vec<String>, bool)>>,
+    }
+
+    impl QueryCheck for StubQueries {
+        fn check(&self, objects: &[QueryObject<'_>], as_warnings: bool) -> QueryFindings {
+            self.calls.lock().unwrap().push((
+                objects.iter().map(|o| o.uuid.to_owned()).collect(),
+                as_warnings,
+            ));
+            let mut found = QueryFindings {
+                queries: objects.len(),
+                ..QueryFindings::default()
+            };
+            for object in objects {
+                let make = |field: &[&str]| {
+                    let severity = if as_warnings {
+                        Diagnostic::warning("kql_syntax", "bad query")
+                    } else {
+                        Diagnostic::error("kql_syntax", "bad query")
+                    };
+                    severity
+                        .object(object.uuid, object.family)
+                        .file(object.path)
+                        .at(field.iter().copied())
+                        .with("source", "engine")
+                };
+                let finding = make(&["configurations", "splunk", "query"]);
+                if as_warnings {
+                    found.warnings.push(finding);
+                } else {
+                    found.errors.push(finding);
+                }
+            }
+            found
+        }
+    }
+
+    fn stub() -> StubQueries {
+        StubQueries {
+            calls: Mutex::new(Vec::new()),
+        }
+    }
+
+    fn with_queries(fs: &Arc<MemoryFs>, queries: QueriesMode, check: &StubQueries) -> Validation {
+        run(
+            fs,
+            &Options {
+                queries,
+                query_check: Some(check),
+                ..Options::default()
+            },
+        )
+    }
+
+    fn engine_paths(items: &[Diagnostic]) -> Vec<&Path> {
+        items
+            .iter()
+            .filter(|d| d.code == "kql_syntax")
+            .filter_map(|d| d.file_path.as_deref())
+            .collect()
+    }
+
+    fn engine_findings(validation: &Validation) -> (Vec<&Path>, Vec<&Path>) {
+        (
+            engine_paths(&validation.report.issues),
+            engine_paths(&validation.report.warnings),
+        )
+    }
+
+    #[test]
+    fn the_query_check_reports_the_engine_findings_once_and_as_asked() {
+        let fs = workspace();
+        // a.yaml's query is the schema's to reject (a number); b.yaml's is the engine's.
+        fs.write(
+            "/ws/objects/rules/a.yaml",
+            format!(
+                "{}configurations:\n  splunk:\n    query: 5\n",
+                rule(U1, "A")
+            ),
+        );
+        fs.write("/ws/objects/rules/b.yaml", rule(U2, "B"));
+        let a = Path::new("/ws/objects/rules/a.yaml");
+        let b = Path::new("/ws/objects/rules/b.yaml");
+
+        let check = stub();
+        let errors = with_queries(&fs, QueriesMode::Error, &check);
+        let mut called = check.calls.lock().unwrap().clone();
+        called[0].0.sort();
+        assert_eq!(called, [(vec![U1.to_owned(), U2.to_owned()], false)]);
+        assert!(
+            errors
+                .report
+                .issues
+                .iter()
+                .any(|d| d.file_path.as_deref() == Some(a)
+                    && d.field_path == ["configurations", "splunk", "query"]
+                    && d.code != "kql_syntax"),
+            "the schema rejects a.yaml's query: {:?}",
+            errors.report.issues
+        );
+        assert_eq!(engine_findings(&errors), (vec![b], vec![]));
+        assert_eq!(errors.report.stats.queries_checked, Some(2));
+        assert_eq!(errors.summary.queries, Some(2));
+        assert!(errors.checks.contains(&(Check::Queries, "failed")));
+        assert!(errors.failed);
+
+        let check = stub();
+        let warned = with_queries(&fs, QueriesMode::Warn, &check);
+        assert!(check.calls.lock().unwrap()[0].1, "asked for warnings");
+        assert_eq!(engine_findings(&warned), (vec![], vec![b]));
+        assert!(warned.checks.contains(&(Check::Queries, "passed")));
+        assert!(warned.warned);
+
+        let check = stub();
+        let off = with_queries(&fs, QueriesMode::Off, &check);
+        assert!(check.calls.lock().unwrap().is_empty());
+        assert!(off.checks.iter().all(|(c, _)| *c != Check::Queries));
+        assert_eq!(off.report.stats.queries_checked, None);
     }
 }
 

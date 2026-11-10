@@ -447,15 +447,7 @@ pub fn check_object(
                         .at(field_path),
                 );
             }
-            for deprecated in deprecated_fields(root, schema) {
-                warnings.push(
-                    Diagnostic::warning("deprecated_field", deprecated.message)
-                        .object(subject.uuid, subject.family)
-                        .file(subject.path)
-                        .at(deprecated.field_path)
-                        .with("deprecation", deprecated.deprecation),
-                );
-            }
+            warnings.extend(deprecated_warnings(subject, root, schema));
         }
         if subject.family == "rule"
             && let Some(enabled) = &graph.enabled
@@ -505,6 +497,21 @@ pub fn check_object(
     found.issues = issues;
     found.warnings = warnings;
     found
+}
+
+/// A `deprecated_field` warning for every deprecated field `root` sets, by
+/// `schema` (the bundled models (0.23.0) deprecate none).
+fn deprecated_warnings(subject: &Subject<'_>, root: &Node, schema: &Json) -> Vec<Diagnostic> {
+    deprecated_fields(root, schema)
+        .into_iter()
+        .map(|deprecated| {
+            Diagnostic::warning("deprecated_field", deprecated.message)
+                .object(subject.uuid, subject.family)
+                .file(subject.path)
+                .at(deprecated.field_path)
+                .with("deprecation", deprecated.deprecation)
+        })
+        .collect()
 }
 
 /// Whether a node is a version 4 UUID written `8-4-4-4-12`, hex digits in
@@ -1126,4 +1133,44 @@ pub fn merge_reference_findings(issues: Vec<Diagnostic>) -> Vec<Diagnostic> {
         }
     }
     kept
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::diagnostic::Severity;
+
+    #[test]
+    fn a_deprecated_field_is_a_warning_on_the_object_at_its_field() {
+        let document = Arc::new(opentide_schema::node::load("name: A\nold: x\nkept: y\n").unwrap());
+        let schema = serde_json::json!({
+            "type": "object",
+            "properties": {
+                "old": {"type": "string", "tide.meta.deprecation": "use `new`"},
+                "kept": {"type": "string"},
+            },
+        });
+        let subject = Subject {
+            uuid: "u",
+            family: "rule",
+            path: Path::new("/ws/objects/rules/a.yaml"),
+            document: &document,
+        };
+        let found = deprecated_warnings(&subject, document.root().unwrap(), &schema);
+        assert_eq!(found.len(), 1);
+        let warning = &found[0];
+        assert_eq!(warning.code, "deprecated_field");
+        assert_eq!(warning.severity, Severity::Warning);
+        assert_eq!(warning.message, "Field 'old' is deprecated: use `new`");
+        assert_eq!(warning.field_path, ["old"]);
+        assert_eq!(
+            (warning.object_uuid.as_str(), warning.object_type.as_str()),
+            ("u", "rule")
+        );
+        assert_eq!(warning.file_path.as_deref(), Some(subject.path));
+        assert_eq!(
+            warning.context.get("deprecation").and_then(|v| v.as_str()),
+            Some("use `new`")
+        );
+    }
 }

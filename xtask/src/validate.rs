@@ -50,8 +50,10 @@ pub struct Approved {
     /// The bold lead of its CHANGELOG.md entry.
     pub changelog: &'static str,
     /// Whether it explains this finding of the oracle (`None`: none) and
-    /// this finding of the Rust run (`None`: none) as one difference.
-    pub applies: fn(oracle: Option<&Json>, rust: Option<&Json>) -> bool,
+    /// this finding of the Rust run (`None`: none) as one difference; the
+    /// last argument is the oracle's whole list (issues or warnings) in the
+    /// same case.
+    pub applies: fn(oracle: Option<&Json>, rust: Option<&Json>, oracle_list: &[Json]) -> bool,
 }
 
 /// The approved differences. A count or verdict that differs (`summary`,
@@ -64,15 +66,16 @@ pub const APPROVED: &[Approved] = &[
                  configuration's and the vocabularies'), not difflib's ratio: `Host::Gizmo` \
                  and `Big incident` suggest nothing, where the oracle offered unrelated words \
                  that share letters (`Host::File`, `Substantial incident`); the finding, its \
-                 code and place are the same, without the suggestion's help and fix",
+                 code and place are the same, with no suggestion, help or fix",
         changelog: "**\"Did you mean\" suggests what a typo meant, not a word that shares letters**",
         applies: suggestions,
     },
     Approved {
         id: "yaml-error-text",
         reason: "a file that is not YAML is reported in the words of the YAML 1.2 parser \
-                 (saphyr), at the line the oracle names; the code, the file and the help are \
-                 the same (as in `cargo xtask registry diff`)",
+                 (saphyr), at the line and column the oracle names (one column later where \
+                 saphyr names the tab it refuses); the code, the file and the help are the \
+                 same (as in `cargo xtask registry diff`)",
         changelog: "**Tide objects are read as YAML 1.2**",
         applies: yaml_error_text,
     },
@@ -89,7 +92,7 @@ pub const APPROVED: &[Approved] = &[
         id: "invalid-uuid-every-file",
         reason: "KG-04: every file that writes an invalid UUID gets its `invalid_uuid`, also a \
                  file whose object a later file with the same UUID displaced from the index; \
-                 the oracle reported it once per value",
+                 the oracle reported it once per value, on another file, in the same words",
         changelog: "**Every file with an invalid UUID is reported**",
         applies: invalid_uuid_every_file,
     },
@@ -110,7 +113,7 @@ fn code(finding: &Json) -> &str {
     finding["code"].as_str().unwrap_or("")
 }
 
-fn suggestions(oracle: Option<&Json>, rust: Option<&Json>) -> bool {
+fn suggestions(oracle: Option<&Json>, rust: Option<&Json>, _: &[Json]) -> bool {
     let (Some(oracle), Some(rust)) = (oracle, rust) else {
         return false;
     };
@@ -122,25 +125,41 @@ fn suggestions(oracle: Option<&Json>, rust: Option<&Json>) -> bool {
     ];
     VALUE_CODES.contains(&code(oracle))
         && !oracle["suggestion"].is_null()
-        && oracle["suggestion"] != rust["suggestion"]
+        // Rust suggests nothing: a different suggestion is not this rule's.
+        && rust["suggestion"].is_null()
+        && rust["help"].is_null()
+        && rust["fix"].is_null()
         && without(oracle, &["suggestion", "help", "fix"])
             == without(rust, &["suggestion", "help", "fix"])
 }
 
-fn yaml_error_text(oracle: Option<&Json>, rust: Option<&Json>) -> bool {
+fn yaml_error_text(oracle: Option<&Json>, rust: Option<&Json>, _: &[Json]) -> bool {
     let (Some(oracle), Some(rust)) = (oracle, rust) else {
         return false;
     };
+    let message = rust["message"].as_str().unwrap_or("");
+    // The same column, or one later where saphyr names the tab it refuses
+    // (the oracle placed the error at the tab's line start).
+    let shift = |key: &str| {
+        let (Some(o), Some(r)) = (oracle[key].as_u64(), rust[key].as_u64()) else {
+            return None;
+        };
+        r.checked_sub(o)
+    };
+    let columns = match (shift("column"), shift("end_column")) {
+        (Some(0), Some(0)) => true,
+        (Some(1), Some(1)) => message.contains("tab"),
+        _ => false,
+    };
     code(oracle) == "yaml_parse"
         && code(rust) == "yaml_parse"
-        && rust["message"]
-            .as_str()
-            .is_some_and(|m| m.starts_with("Could not parse object YAML: "))
+        && message.starts_with("Could not parse object YAML: ")
+        && columns
         && without(oracle, &["message", "column", "end_column"])
             == without(rust, &["message", "column", "end_column"])
 }
 
-fn yaml_1_2_dates(oracle: Option<&Json>, rust: Option<&Json>) -> bool {
+fn yaml_1_2_dates(oracle: Option<&Json>, rust: Option<&Json>, _: &[Json]) -> bool {
     match (oracle, rust) {
         (Some(oracle), None) => {
             code(oracle) == "yaml_parse"
@@ -159,8 +178,26 @@ fn yaml_1_2_dates(oracle: Option<&Json>, rust: Option<&Json>) -> bool {
     }
 }
 
-fn invalid_uuid_every_file(oracle: Option<&Json>, rust: Option<&Json>) -> bool {
-    matches!((oracle, rust), (None, Some(rust)) if code(rust) == "invalid_uuid")
+/// A Rust-only `invalid_uuid` whose value the oracle itself reported as
+/// invalid, in the same words, on another file: the UUID is invalid and
+/// shared, and only the file the index kept was reported.
+fn invalid_uuid_every_file(
+    oracle: Option<&Json>,
+    rust: Option<&Json>,
+    oracle_list: &[Json],
+) -> bool {
+    let (None, Some(rust)) = (oracle, rust) else {
+        return false;
+    };
+    code(rust) == "invalid_uuid"
+        && rust["object_uuid"].is_string()
+        && oracle_list.iter().any(|reported| {
+            code(reported) == "invalid_uuid"
+                && reported["object_uuid"] == rust["object_uuid"]
+                && reported["message"] == rust["message"]
+                && reported["field_path"] == rust["field_path"]
+                && reported["file_path"] != rust["file_path"]
+        })
 }
 
 /// The arguments of a recorded case, as `validate` options.
@@ -216,6 +253,9 @@ struct Difference {
     what: String,
     oracle: Option<Json>,
     rust: Option<Json>,
+    /// The oracle's whole list the finding belongs to (empty for the
+    /// counts, statuses and verdict).
+    oracle_list: Arc<[Json]>,
 }
 
 /// The findings of one list that differ: unmatched on either side, paired
@@ -227,6 +267,7 @@ fn list_differences(
     rust: &[Json],
     out: &mut Vec<Difference>,
 ) {
+    let whole: Arc<[Json]> = oracle.into();
     let mut unmatched_rust: Vec<Option<&Json>> = rust.iter().map(Some).collect();
     let mut unmatched_oracle = Vec::new();
     for item in oracle {
@@ -256,6 +297,7 @@ fn list_differences(
             what: list.to_owned(),
             oracle: Some(item.clone()),
             rust,
+            oracle_list: whole.clone(),
         });
     }
     for item in leftover {
@@ -264,6 +306,7 @@ fn list_differences(
             what: list.to_owned(),
             oracle: None,
             rust: Some(item.clone()),
+            oracle_list: whole.clone(),
         });
     }
     if out.iter().all(|d| d.case != case || d.what != list) {
@@ -274,6 +317,7 @@ fn list_differences(
                 what: format!("{list} (order)"),
                 oracle: Some(Json::Array(oracle.to_vec())),
                 rust: Some(Json::Array(rust.to_vec())),
+                oracle_list: whole.clone(),
             });
         }
     }
@@ -328,6 +372,7 @@ fn run_case(case: &Case, ws: &Path, recorded: &Json) -> Result<Vec<Difference>> 
                 what: "report".to_owned(),
                 oracle: None,
                 rust: Some(json!("a report")),
+                oracle_list: Arc::from(Vec::new()),
             });
         }
         return Ok(out);
@@ -374,6 +419,7 @@ fn run_case(case: &Case, ws: &Path, recorded: &Json) -> Result<Vec<Difference>> 
                 what: what.to_owned(),
                 oracle: Some(oracle),
                 rust: Some(rust),
+                oracle_list: Arc::from(Vec::new()),
             });
         }
     };
@@ -536,9 +582,13 @@ pub fn run(args: &[String]) -> Result<u8> {
     let is_list =
         |difference: &Difference| difference.what == "issues" || difference.what == "warnings";
     let rule_of = |difference: &Difference| {
-        APPROVED
-            .iter()
-            .position(|rule| (rule.applies)(difference.oracle.as_ref(), difference.rust.as_ref()))
+        APPROVED.iter().position(|rule| {
+            (rule.applies)(
+                difference.oracle.as_ref(),
+                difference.rust.as_ref(),
+                &difference.oracle_list,
+            )
+        })
     };
     // A case whose differing findings are all approved: its counts and
     // verdict follow from them.
@@ -639,5 +689,110 @@ mod tests {
         list_differences("k", "issues", &[a.clone(), c.clone()], &[c, a], &mut out);
         assert_eq!(out.len(), 1);
         assert_eq!(out[0].what, "issues (order)");
+    }
+
+    fn uuid_finding(file: &str, value: &str) -> Json {
+        json!({
+            "code": "invalid_uuid",
+            "file_path": file,
+            "field_path": ["metadata", "uuid"],
+            "object_uuid": value,
+            "message": format!("UUID '{value}' is not a valid UUIDv4"),
+        })
+    }
+
+    #[test]
+    fn only_a_shared_invalid_uuid_the_oracle_reported_elsewhere_is_approved() {
+        let kept = uuid_finding("a.yaml", "not-a-uuid");
+        let displaced = uuid_finding("b.yaml", "not-a-uuid");
+        let oracle = [kept.clone()];
+        assert!(invalid_uuid_every_file(None, Some(&displaced), &oracle));
+        // A spurious invalid_uuid: no file's value is reported by the oracle.
+        let spurious = uuid_finding("c.yaml", "7b8864a9-890e-4e58-8a56-ae78cd82796b");
+        assert!(!invalid_uuid_every_file(None, Some(&spurious), &oracle));
+        assert!(!invalid_uuid_every_file(None, Some(&spurious), &[]));
+        // The oracle's finding on the same file is not another file's.
+        assert!(!invalid_uuid_every_file(None, Some(&kept), &oracle));
+        // Other words for the same value are not the oracle's.
+        let mut reworded = displaced.clone();
+        reworded["message"] = json!("UUID 'not-a-uuid' is bad");
+        assert!(!invalid_uuid_every_file(None, Some(&reworded), &oracle));
+        // A finding the oracle has too is a different rule's business.
+        assert!(!invalid_uuid_every_file(
+            Some(&kept),
+            Some(&displaced),
+            &oracle
+        ));
+        let spurious_case = Difference {
+            case: "k".to_owned(),
+            what: "issues".to_owned(),
+            oracle: None,
+            rust: Some(spurious),
+            oracle_list: Arc::from(oracle.to_vec()),
+        };
+        assert!(APPROVED.iter().all(|rule| !(rule.applies)(
+            spurious_case.oracle.as_ref(),
+            spurious_case.rust.as_ref(),
+            &spurious_case.oracle_list,
+        )));
+    }
+
+    fn vocab_finding(suggestion: Option<&str>) -> Json {
+        json!({
+            "code": "invalid_ref",
+            "file_path": "a.yaml",
+            "field_path": ["threat", "actors"],
+            "message": "unknown",
+            "suggestion": suggestion,
+            "help": suggestion.map(|s| format!("did you mean '{s}'?")),
+            "fix": suggestion.map(|s| json!({"edits": [{"replacement": s}], "safe": false})),
+        })
+    }
+
+    #[test]
+    fn only_a_lost_suggestion_is_approved() {
+        let oracle = vocab_finding(Some("Host::File"));
+        assert!(suggestions(Some(&oracle), Some(&vocab_finding(None)), &[]));
+        // A different suggestion (another object's UUID) needs review.
+        let other = vocab_finding(Some("e305cca1-c265-4ae9-a34e-2ffaee82a359"));
+        assert!(!suggestions(Some(&oracle), Some(&other), &[]));
+        // A help or fix left without a suggestion is not a lost suggestion.
+        let mut stray = vocab_finding(None);
+        stray["help"] = json!("did you mean 'Host::Gizmo'?");
+        assert!(!suggestions(Some(&oracle), Some(&stray), &[]));
+        let mut stray = vocab_finding(None);
+        stray["fix"] = json!({"edits": [], "safe": false});
+        assert!(!suggestions(Some(&oracle), Some(&stray), &[]));
+    }
+
+    fn yaml_finding(column: u64, message: &str) -> Json {
+        json!({
+            "code": "yaml_parse",
+            "file_path": "a.yaml",
+            "line": 68,
+            "column": column,
+            "end_column": column + 1,
+            "message": format!("Could not parse object YAML: {message}"),
+        })
+    }
+
+    #[test]
+    fn a_yaml_error_keeps_its_column_but_for_a_tab() {
+        let oracle = yaml_finding(1, "found character that cannot start any token");
+        let same = yaml_finding(1, "while parsing a flow sequence, expected ',' or ']'");
+        assert!(yaml_error_text(Some(&oracle), Some(&same), &[]));
+        let tab = yaml_finding(2, "tabs disallowed within this context (block indentation)");
+        assert!(yaml_error_text(Some(&oracle), Some(&tab), &[]));
+        // One column later without a tab, or anywhere else on the line: no.
+        let later = yaml_finding(2, "while parsing a flow sequence, expected ',' or ']'");
+        assert!(!yaml_error_text(Some(&oracle), Some(&later), &[]));
+        let far = yaml_finding(9, "tabs disallowed within this context (block indentation)");
+        assert!(!yaml_error_text(Some(&oracle), Some(&far), &[]));
+        let earlier = yaml_finding(1, "tab");
+        assert!(!yaml_error_text(
+            Some(&yaml_finding(2, "x")),
+            Some(&earlier),
+            &[]
+        ));
     }
 }
