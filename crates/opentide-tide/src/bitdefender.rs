@@ -1037,13 +1037,18 @@ fn targets_shape(source: &str, block: &Value, out: &mut Vec<Diagnostic>) {
                 .all(|k| k.as_str().is_some_and(|k| TARGET_KEYS.contains(&k)))
             && m.get(keys[0])
                 .and_then(Value::as_sequence)
-                .is_some_and(|s| !s.is_empty())
+                .is_some_and(|s| {
+                    // Aliases: non-blank strings (bitdefender-1.0 1.4).
+                    !s.is_empty()
+                        && s.iter()
+                            .all(|a| a.as_str().is_some_and(|a| !a.trim().is_empty()))
+                })
     });
     if !ok {
         out.push(err(
             source,
             codes::BITDEFENDER_TARGETS_SHAPE,
-            "`targets` sets one non-empty list: `endpoint_tags` or `companies`".into(),
+            "`targets` sets one non-empty list of aliases, none blank: `endpoint_tags` or `companies`".into(),
             &["targets"],
         ));
     }
@@ -1797,6 +1802,39 @@ mod tests {
             ),
             ["bitdefender_targets_shape"]
         );
+    }
+
+    #[test]
+    fn targets_hold_no_blank_alias() {
+        let block = |targets: &str| {
+            format!("    status: STAGING\n    targets: {targets}\n    yara:\n      signature: x\n")
+        };
+        for bad in [
+            "{endpoint_tags: [\" \"]}",
+            "{companies: [\"a\", \"\"]}",
+            "{companies: [\"a\", \"\\t\"]}",
+            "{endpoint_tags: [a, 5]}",
+            "{endpoint_tags: [a, null]}",
+            "{endpoint_tags: []}",
+            "{endpoint_tags: [a], companies: [b]}",
+            "{}",
+        ] {
+            assert_eq!(
+                found(&block(bad)),
+                [(
+                    "bitdefender_targets_shape".into(),
+                    "configurations.bitdefender.targets".into(),
+                    true
+                )],
+                "{bad}"
+            );
+        }
+        for good in [
+            "{endpoint_tags: [tier0-servers]}",
+            "{companies: [\" acme \", b]}",
+        ] {
+            assert!(found(&block(good)).is_empty(), "{good}");
+        }
     }
 
     #[test]

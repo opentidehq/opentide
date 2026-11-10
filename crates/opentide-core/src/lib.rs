@@ -1203,7 +1203,7 @@ pub mod codes {
                 "An automatic action is unknown, has a value it does not take, or is not allowed for the rule's kind or target."
             }
             BITDEFENDER_TARGETS_SHAPE => {
-                "`targets` sets one of `endpoint_tags` and `companies`, as a non-empty list."
+                "`targets` sets one of `endpoint_tags` and `companies`, as a non-empty list with no blank alias."
             }
             BITDEFENDER_SEVERITY => "`severity` is not `Low`, `Medium`, or `High`.",
             BITDEFENDER_REGISTRY_FULL_HIVE => {
