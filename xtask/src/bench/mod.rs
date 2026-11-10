@@ -53,9 +53,11 @@ stdout (progress goes to stderr); --out writes it to FILE as well.
   --engine python   the oracle: opentide 0.23.0 from its PyPI wheel
                     (tests/bench/oracle-requirements.txt, hashes verified),
                     installed with uv under the target directory (default)
-  --engine rust     the Rust implementations: today the language server
-                    and `load` (opentide-workspace's load example), built
-                    --release; every other command reports \"no Rust yet\"
+  --engine rust     the Rust implementations: today the language server,
+                    `load` and `validate_*` (opentide-workspace's load and
+                    validate examples; validate without the queries check,
+                    UC-2.5), built --release; every other command reports
+                    \"no Rust yet\"
   --scale 1|10      the heavy workspace's size (default 1)
   --only ID,...     run only these commands (ids as in the report)
   --workspace DIR   benchmark this workspace instead of generating one
@@ -611,6 +613,12 @@ fn cargo_paths() -> Result<(PathBuf, PathBuf)> {
     Ok((PathBuf::from(root), PathBuf::from(target)))
 }
 
+/// Whether the Rust engine runs a CLI scenario: `validate` (UC-2.2, #817),
+/// through opentide-workspace's validate example until the Rust CLI does.
+fn has_rust(scenario: &Scenario) -> bool {
+    scenario.kind == Kind::Cli && scenario.args.first() == Some(&"validate")
+}
+
 /// The engine's program and arguments for a scenario, or why it has none.
 enum Program {
     Run(PathBuf, Vec<OsString>),
@@ -623,6 +631,7 @@ fn program(
     opentide: Option<&Path>,
     lsp: Option<&Path>,
     load_bin: Option<&Path>,
+    validate_bin: Option<&Path>,
     ws: Option<&workspace::Workspaces>,
 ) -> Program {
     let rule = ws.map(|ws| ws.rule.clone()).unwrap_or_default();
@@ -665,6 +674,11 @@ fn program(
         (Engine::Rust, Kind::Load) => match load_bin {
             Some(bin) => Program::Run(bin.to_owned(), Vec::new()),
             None => Program::Missing("no load example".into()),
+        },
+        (Engine::Rust, Kind::Cli) if has_rust(scenario) => match validate_bin {
+            // opentide-workspace's validate example takes validate's options.
+            Some(bin) => Program::Run(bin.to_owned(), args(&[]).into_iter().skip(1).collect()),
+            None => Program::Missing("no validate example".into()),
         },
         (Engine::Rust, Kind::Cli) => Program::Missing(
             "no Rust yet: the Rust CLI (opentide-cli) is UC-3; the command runs in Python".into(),
@@ -734,7 +748,8 @@ fn run_in(options: &Options, root: &Path, base: &Path, work: &Path) -> Result<()
                 .is_none_or(|only| only.iter().any(|id| id == s.id))
         })
         .collect();
-    let runnable = |s: &&&Scenario| options.engine == Engine::Python || s.kind != Kind::Cli;
+    let runnable =
+        |s: &&&Scenario| options.engine == Engine::Python || s.kind != Kind::Cli || has_rust(s);
     let needs_workspace = selected
         .iter()
         .filter(runnable)
@@ -752,6 +767,10 @@ fn run_in(options: &Options, root: &Path, base: &Path, work: &Path) -> Result<()
         Engine::Rust if selected.iter().any(|s| s.kind == Kind::Load) => {
             Some(oracle::build_load(root)?)
         }
+        _ => None,
+    };
+    let validate_bin = match options.engine {
+        Engine::Rust if selected.iter().any(|s| has_rust(s)) => Some(oracle::build_validate(root)?),
         _ => None,
     };
     let lsp = match (options.engine, &options.lsp) {
@@ -809,6 +828,7 @@ fn run_in(options: &Options, root: &Path, base: &Path, work: &Path) -> Result<()
             opentide.as_deref(),
             lsp.as_deref(),
             load_bin.as_deref(),
+            validate_bin.as_deref(),
             workspaces.as_ref(),
         ) {
             Program::Missing(why) => {
@@ -1208,7 +1228,7 @@ mod tests {
     }
 
     #[test]
-    fn rust_has_only_the_language_server_and_says_no_rust_yet_for_the_rest() {
+    fn rust_has_the_language_server_load_and_validate_and_says_no_rust_yet_for_the_rest() {
         for scenario in SCENARIOS {
             let program = program(
                 scenario,
@@ -1216,9 +1236,19 @@ mod tests {
                 None,
                 Some(Path::new("lsp")),
                 Some(Path::new("load")),
+                Some(Path::new("validate")),
                 None,
             );
             match (scenario.kind, program) {
+                (Kind::Cli, Program::Run(bin, args)) if has_rust(scenario) => {
+                    assert_eq!(bin, Path::new("validate"));
+                    // `{rule}` is the workspace's rule file: none here.
+                    let expected: Vec<OsString> = scenario.args[1..]
+                        .iter()
+                        .map(|arg| OsString::from(if *arg == "{rule}" { "" } else { arg }))
+                        .collect();
+                    assert_eq!(args, expected, "{}", scenario.id);
+                }
                 (Kind::Lsp, Program::Run(_, args)) => assert_eq!(args, ["--stdio"]),
                 (Kind::Load, Program::Run(bin, args)) => {
                     assert_eq!(bin, Path::new("load"));
@@ -1312,6 +1342,7 @@ mod tests {
             scenario,
             Engine::Python,
             Some(Path::new("opentide")),
+            None,
             None,
             None,
             Some(&ws),
