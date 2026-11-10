@@ -245,7 +245,13 @@ LOCAL_CI = ROOT / "scripts" / "ci-local.sh"
 
 def _package_and_scan(text: str) -> tuple[set[str], str]:
     """The crates a ``cargo package`` command excludes, and the licence scan commands."""
-    packages = [line for line in text.splitlines() if "cargo package" in line]
+    # `cargo package --list` only names a crate's files (for the scan of a
+    # crate that cannot be packaged); it packages nothing.
+    packages = [
+        line
+        for line in text.splitlines()
+        if "cargo package" in line and "cargo package --list" not in line
+    ]
     scans = [line for line in text.splitlines() if "license-scan.sh" in line and "bash" in line]
     assert len(packages) == 1, packages
     assert scans, text
