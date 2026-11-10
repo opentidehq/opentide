@@ -2913,6 +2913,7 @@ dependencies = [
  "glob",
  "indexmap",
  "opentide-analysis",
+ "opentide-cli",
  "opentide-compare",
  "opentide-compile",
  "opentide-core",

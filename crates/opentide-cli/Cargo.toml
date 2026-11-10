@@ -34,7 +34,9 @@ ctrlc = "3.4"
 # The query lines of a code frame, coloured as the editor colours them.
 opentide-analysis.workspace = true
 # The commands ported onto the framework (UC-2.4): the workspace, its
-# catalogue, coverage, tenants and review dates, and the one suggestion rule.
+# catalogue, coverage, tenants and review dates, and the one suggestion rule;
+# the queries check of validate on the query engines (src/queries.rs, UC-2.5):
+# the workspace and its one Diagnostic, and the quoting of a suggestion.
 opentide-core.workspace = true
 opentide-schema.workspace = true
 opentide-workspace.workspace = true

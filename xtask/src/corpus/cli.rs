@@ -4,9 +4,11 @@ use super::configuration;
 use super::coverage;
 use super::faults::{self, Catalogue, Kind, Verdict};
 use super::generate::{self, Counts, Layout, Options};
+use super::queries;
 use super::structural;
 use super::workspace::Workspace;
 use anyhow::{Context, Result, bail};
+use serde_json::json;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -43,7 +45,13 @@ commands:
                  configuration resolved by opentide-schema, and what validate
                  reports for it compared with the oracle field for field
                  (code, severity, field path, message), or the failure that
-                 stops resolution; without --only, both groups run
+                 stops resolution
+  faults --check --engine rust [--oracle BIN] --only queries|ID,...
+         [--keep DIR] [--catalogue FILE]
+                 the kinds validate reports query findings for (UC-2.5): the
+                 Rust validate with the query engines, every finding of the
+                 queries check compared with the oracle's, every key, and the
+                 number of queries checked; without --only, every group runs
   faults --out DIR [--catalogue FILE]
                  write one workspace ([combined] counts) with every fault
                  kind not marked isolated applied once (twice if cross-file)
@@ -64,8 +72,8 @@ commands:
 The oracle is BIN, else $OPENTIDE_ORACLE, else `opentide` on PATH; it must
 print the version faults.toml names. `--engine rust` covers the object
 kinds (opentide-schema, UC-1.3), the platform kinds (UC-1.4) and the
-configuration kinds (UC-1.5) today;
-every kind comes with the Rust engine's validate (UC-2.x).
+configuration kinds (UC-1.5) and validate's query kinds (UC-2.5) today;
+every kind comes with the Rust engine's validate and lint (UC-2.x).
 ";
 
 /// Runs `corpus <args>`; the process exit status.
@@ -659,16 +667,23 @@ fn rust_check(parsed: &FaultArgs, catalogue: &Catalogue) -> Result<u8> {
         .iter()
         .map(|(id, _)| *id)
         .collect();
+    let query_kinds: BTreeSet<String> = queries::kinds(catalogue).into_iter().collect();
     let Some(only) = &parsed.only else {
         let structural = structural_check(parsed, catalogue)?;
         let all: BTreeSet<String> = config.iter().map(|id| (*id).to_string()).collect();
         let configuration = configuration_check(parsed, catalogue, &all)?;
-        return Ok(structural.max(configuration));
+        let queries = queries_check(parsed, catalogue, &query_kinds)?;
+        return Ok(structural.max(configuration).max(queries));
     };
     let mut config_ids = BTreeSet::new();
+    let mut query_ids = BTreeSet::new();
     let mut rest = BTreeSet::new();
     for id in only {
-        if id == configuration::GROUP {
+        if id == queries::GROUP {
+            query_ids.extend(query_kinds.iter().cloned());
+        } else if query_kinds.contains(id) {
+            query_ids.insert(id.clone());
+        } else if id == configuration::GROUP {
             config_ids.extend(config.iter().map(|id| (*id).to_string()));
         } else if config.contains(id.as_str()) {
             config_ids.insert(id.clone());
@@ -685,7 +700,147 @@ fn rust_check(parsed: &FaultArgs, catalogue: &Catalogue) -> Result<u8> {
     if !config_ids.is_empty() {
         status = status.max(configuration_check(parsed, catalogue, &config_ids)?);
     }
+    if !query_ids.is_empty() {
+        status = status.max(queries_check(parsed, catalogue, &query_ids)?);
+    }
     Ok(status)
+}
+
+/// `faults --check --engine rust --only queries`: the kinds `validate`
+/// reports query findings for, the Rust `validate` with the query engines
+/// against the oracle, finding for finding ([`queries`]).
+fn queries_check(parsed: &FaultArgs, catalogue: &Catalogue, ids: &BTreeSet<String>) -> Result<u8> {
+    let bin = oracle_bin(parsed.oracle.as_deref());
+    check_oracle_version(&bin, &catalogue.oracle)?;
+    let base = generate::generate(&catalogue.base.options()?);
+    let scratch = match &parsed.keep {
+        Some(dir) => dir.join("queries"),
+        None => {
+            std::env::temp_dir().join(format!("opentide-corpus-queries-{}", std::process::id()))
+        }
+    };
+    let scratch = std::path::absolute(&scratch)
+        .with_context(|| format!("cannot resolve {}", scratch.display()))?;
+    if scratch.exists() {
+        bail!(
+            "{} exists; remove it or name another --keep",
+            scratch.display()
+        );
+    }
+    let guard = Scratch {
+        path: scratch.clone(),
+        keep: parsed.keep.is_some(),
+    };
+    let started = Instant::now();
+    let mut failed = 0usize;
+    let mut used = BTreeSet::new();
+    for id in ids {
+        let kind = catalogue
+            .kind(id)
+            .with_context(|| format!("no fault kind `{id}` in the catalogue"))?;
+        let mut workspace = base.clone();
+        let targets = faults::select(&workspace, kind, &BTreeSet::new())?;
+        faults::apply(&mut workspace, kind, &targets)?;
+        let dir = scratch.join(&kind.id);
+        write_workspace(&workspace, &dir)?;
+        let dir = std::fs::canonicalize(&dir)
+            .with_context(|| format!("cannot resolve {}", dir.display()))?;
+        let mut env = kind.env.clone();
+        env.entry("XDG_STATE_HOME".to_string())
+            .or_insert_with(|| scratch.join("_state").to_string_lossy().into_owned());
+        let document = run_oracle(&bin, &dir, &kind.command, &env)?;
+        let (oracle, oracle_count) = queries::engine_findings(&document["report"]);
+        let (rust_report, crowdstrike) = queries::rust_report(&dir, &kind.command)?;
+        let (rust, rust_count) = queries::engine_findings(&rust_report);
+        let mut problems = Vec::new();
+        let mut approved = 0usize;
+        for difference in queries::differences(&oracle, &rust) {
+            let (oracle, rust) = (&difference["oracle"], &difference["rust"]);
+            let (oracle, rust) = (
+                (!oracle.is_null()).then_some(oracle),
+                (!rust.is_null()).then_some(rust),
+            );
+            if let Some(rule) = queries::approved(oracle, rust) {
+                used.insert(rule);
+                approved += 1;
+                continue;
+            }
+            problems.push(format!(
+                "finding differs:\n         oracle: {}\n         rust:   {}",
+                difference["oracle"], difference["rust"]
+            ));
+        }
+        if oracle_count != rust_count {
+            let counted = crate::validate::crowdstrike_cql(
+                Some(&json!({"queries_checked": oracle_count})),
+                Some(&json!({
+                    "queries_checked": rust_count,
+                    "crowdstrike": crowdstrike,
+                    "yaml_1_2": 0,
+                })),
+                &[],
+            );
+            if counted {
+                approved += 1;
+            } else {
+                problems.push(format!(
+                    "queries checked: oracle {oracle_count}, rust {rust_count} \
+                     ({crowdstrike} CrowdStrike)"
+                ));
+            }
+        }
+        // Not vacuous: the kind's codes are among the findings compared.
+        for code in kind
+            .codes
+            .iter()
+            .filter(|code| queries::is_engine_code(code))
+        {
+            if !oracle.iter().any(|item| item["code"] == code.as_str()) {
+                problems.push(format!(
+                    "the oracle reports no `{code}` from the queries check"
+                ));
+            }
+        }
+        let status = if problems.is_empty() { "ok  " } else { "FAIL" };
+        println!(
+            "{status} {id:<48} {} finding(s), {oracle_count} queries compared{}",
+            oracle.len(),
+            if approved > 0 {
+                format!(", {approved} approved difference(s)")
+            } else {
+                String::new()
+            }
+        );
+        for problem in &problems {
+            println!("       - {problem}");
+        }
+        if !problems.is_empty() {
+            failed += 1;
+        }
+    }
+    drop(guard);
+    // On every kind, a rule only the kinds reach must explain something.
+    let mut stale = 0usize;
+    if queries::kinds(catalogue).len() == ids.len() {
+        for rule in queries::APPROVED {
+            if !used.contains(rule.id) {
+                println!(
+                    "FAIL the approved difference `{}` explains nothing: it is stale ({})",
+                    rule.id, rule.reason
+                );
+                stale += 1;
+            }
+        }
+    }
+    println!(
+        "corpus faults --engine rust: {} query kinds, {} passed, {failed} failed, in {:.1} s \
+         against {}",
+        ids.len(),
+        ids.len() - failed,
+        started.elapsed().as_secs_f64(),
+        catalogue.oracle
+    );
+    Ok(u8::from(failed > 0 || stale > 0))
 }
 
 /// A configuration folder as [`configuration::rust_findings`] reads it:

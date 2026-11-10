@@ -24,6 +24,9 @@ opentide-compare.workspace = true
 opentide-schema = { workspace = true }
 # `registry diff` (UC-2.1, #816) and the `load` benchmark.
 opentide-workspace.workspace = true
+# `validate diff` and `corpus faults --only queries` (UC-2.5): the queries
+# check on the query engines, `opentide_cli::queries`.
+opentide-cli.workspace = true
 # xtask payloads (src/payloads/): the deploy compile against the oracle.
 opentide-compile.workspace = true
 # `lsp parity` (UC-2.6): the language server in this process, and the

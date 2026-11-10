@@ -17,6 +17,9 @@ pub use visibility::{DatasetEdit, VISIBILITY_CONFIGURATION, declare_dataset};
 
 mod visibility;
 
+mod position;
+pub use position::LineStarts;
+
 pub mod config;
 pub use config::{
     CONFIGURATIONS_DIRECTORY, ConfigIssue, configuration_completions, configuration_hover,
@@ -249,6 +252,10 @@ pub struct QueryReport {
     pub range: Range,
     /// Ranges are in the object file, like [`AnalyzeResponse::diagnostics`].
     pub diagnostics: Vec<Diagnostic>,
+    /// Whether the query is still the stand-in `opentide new` wrote (`...`
+    /// under `# opentide:placeholder`): it has no diagnostics, and
+    /// `opentide validate` does not count it as checked.
+    pub placeholder: bool,
 }
 
 /// Every query injected into the Tide object `text`, each analyzed in its
@@ -265,6 +272,7 @@ pub fn analyze_queries(host: &dyn WorkspaceHost, text: &str) -> Vec<QueryReport>
     opentide_tide::analyze_queries(text, &elastic_tenants(host))
         .into_iter()
         .map(|query| QueryReport {
+            placeholder: opentide_tide::is_placeholder_query(text, &query.query),
             language: query.query.language,
             platform: query.query.platform,
             field_path: query.query.field_path,

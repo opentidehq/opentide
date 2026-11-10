@@ -40,6 +40,7 @@ pub use outline::{
     LinkTarget, OutlineKind, OutlineNode, ReferenceLens, TideLink, attack_url, document_links,
     outline, reference_lens,
 };
+pub use placeholder::is_placeholder_query;
 pub use refs::{ObjectRef, object_refs};
 pub use vocabs::{Vocab, VocabKey, bundled_vocabs, vocab_for_field};
 pub use yaml_path::{
