@@ -9,6 +9,9 @@ from typing import Any
 import pytest
 from jsonschema import Draft202012Validator
 
+from opentide._models.base import TideModel
+from opentide._models.schema_registry import registered_identifiers, resolve_model
+from opentide._models.visibility import VisibilityConfig
 from opentide.core.io import load_toml
 from opentide.generation.pydantic_schemas import generate_schema_for_identifier
 from opentide.generation.router_schema import build_opentide_router
@@ -19,9 +22,6 @@ from opentide.generation.schema_annotations import (
     first_sentence,
     plain_text,
 )
-from opentide.models.base import TideModel
-from opentide.models.schema_registry import registered_identifiers, resolve_model
-from opentide.models.visibility import VisibilityConfig
 
 ROOT = Path(__file__).resolve().parents[2]
 VOCABULARIES = ROOT / "src" / "opentide" / "data" / "vocabulary"

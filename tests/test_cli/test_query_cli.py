@@ -19,7 +19,7 @@ from click.testing import Result
 from tests.result_models_support import document_problems
 from tests.test_cli.conftest import assert_json_ok, parse_cli_json
 
-from opentide.models.system_config import SystemConfig
+from opentide._models.system_config import SystemConfig
 from opentide.query.models import QueryColumn, QueryRefused, QueryRequest, QueryResult
 from opentide.query.runner import QueryRunner
 

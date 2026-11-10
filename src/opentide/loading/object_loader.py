@@ -8,10 +8,10 @@ from typing import Any, cast
 
 from pydantic import ValidationError
 
-from opentide.models.base import TideModel
-from opentide.models.migration import stamp_schema_identifier
-from opentide.models.schema_registry import get_chain, resolve_model
-from opentide.models.version import SchemaVersion
+from opentide._models.base import TideModel
+from opentide._models.migration import stamp_schema_identifier
+from opentide._models.schema_registry import get_chain, resolve_model
+from opentide._models.version import SchemaVersion
 
 
 class SchemaMissingError(ValueError):

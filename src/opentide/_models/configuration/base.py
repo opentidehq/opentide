@@ -6,7 +6,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, PlainSerializer, WithJsonSchema
 
-from opentide.models.deployment_enums import DEPLOYABLE_STRATEGIES, StatusStrategy
+from opentide._models.deployment_enums import DEPLOYABLE_STRATEGIES, StatusStrategy
 
 
 class ConfigurationModel(BaseModel):

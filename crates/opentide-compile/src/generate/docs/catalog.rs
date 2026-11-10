@@ -793,7 +793,7 @@ impl<'i> Catalog<'i> {
 }
 
 /// The threat a `chaining` entry names: `vector`, `target`, `uuid` or `id`.
-pub fn chain_target(entry: &std::collections::BTreeMap<String, String>) -> Option<&str> {
+pub fn chain_target(entry: &indexmap::IndexMap<String, String>) -> Option<&str> {
     ["vector", "target", "uuid", "id"].iter().find_map(|key| {
         entry
             .get(*key)
@@ -1184,6 +1184,45 @@ mod tests {
         assert!(
             line.ends_with(" (and 1 more); opentide validate shows each finding"),
             "{line}"
+        );
+    }
+
+    /// A `chaining` entry (an insertion-ordered map since the models moved to
+    /// `IndexMap`) names its threat by the first non-empty key of `vector`,
+    /// `target`, `uuid` and `id`, in that order, whatever order its keys were
+    /// written in.
+    #[test]
+    fn a_chaining_entry_names_its_threat_by_key_priority() {
+        let entry = |pairs: &[(&str, &str)]| -> indexmap::IndexMap<String, String> {
+            pairs
+                .iter()
+                .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
+                .collect()
+        };
+        assert_eq!(
+            chain_target(&entry(&[
+                ("id", "i"),
+                ("uuid", "u"),
+                ("target", "t"),
+                ("vector", "v")
+            ])),
+            Some("v")
+        );
+        assert_eq!(
+            chain_target(&entry(&[("id", "i"), ("uuid", "u"), ("target", "t")])),
+            Some("t")
+        );
+        assert_eq!(
+            chain_target(&entry(&[("id", "i"), ("uuid", "u")])),
+            Some("u")
+        );
+        assert_eq!(
+            chain_target(&entry(&[("vector", ""), ("relation", "r"), ("id", "i")])),
+            Some("i")
+        );
+        assert_eq!(
+            chain_target(&entry(&[("vector", ""), ("relation", "r")])),
+            None
         );
     }
 }

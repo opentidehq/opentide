@@ -17,8 +17,8 @@ from typing import TYPE_CHECKING, cast
 
 import structlog
 
-from opentide.models.deployment_enums import RunStrategies
-from opentide.models.rule import DetectionRule
+from opentide._models.deployment_enums import RunStrategies
+from opentide._models.rule import DetectionRule
 
 # CrowdStrike and HarfangLab ship no validator module: `can_validate is False`.
 from opentide.validation.query_platforms import QUERY_VALIDATION_PLATFORMS

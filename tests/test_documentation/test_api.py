@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+from opentide._models.rule import DetectionRule
 from opentide.documentation import api
 from opentide.documentation.types import DocumentFlavor
-from opentide.models.rule import DetectionRule
 
 
 def test_render_rule_delegates_to_renderer(rule_payload: dict) -> None:

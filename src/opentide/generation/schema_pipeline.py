@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from typing import Any, cast
 
+from opentide._models.deployment_enums import StatusStrategy
 from opentide.core.files import resolve_paths
 from opentide.core.io import write_text_atomically
 from opentide.core.logging import get_logger, is_debug_enabled
@@ -19,7 +20,6 @@ from opentide.generation.vocabulary import (
     split_vocab_reference,
 )
 from opentide.indexing.object_vocab import entry_level
-from opentide.models.deployment_enums import StatusStrategy
 from opentide.platforms.enabled import enabled_systems
 
 logger = get_logger(__name__)
@@ -616,9 +616,9 @@ def strip_framework_keywords(dictionary: dict) -> dict:
 
 
 def recomposition_handler(entry_point):
+    from opentide._models.platform import PLATFORM_CONFIG_MODELS
+    from opentide._models.platform_schema import platform_model_for_key
     from opentide.generation.pydantic_metaschema import build_platform_schema_source
-    from opentide.models.platform import PLATFORM_CONFIG_MODELS
-    from opentide.models.platform_schema import platform_model_for_key
 
     _ensure_runtime_context()
     recompositions = CONFIG_INDEX[entry_point]
@@ -957,8 +957,8 @@ def run() -> None:
         ),
     )
 
+    from opentide._models.schema_registry import identifiers_for_families, latest_identifier
     from opentide.generation.pydantic_schemas import generate_schema_for_identifier
-    from opentide.models.schema_registry import identifiers_for_families, latest_identifier
     from opentide.registry.artifacts import schema_artifact_name
 
     configured_families = set(GLOBAL_CONFIG.metaschemas.keys())

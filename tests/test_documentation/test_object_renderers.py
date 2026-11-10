@@ -5,10 +5,10 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import MagicMock, patch
 
+from opentide._models.threat import ThreatVector
 from opentide.documentation.objects.objective import ObjectiveRenderer, render_objective_page
 from opentide.documentation.objects.threat import ThreatRenderer, render_threat_page
 from opentide.loading.objective_loader import load_objective_from_dict
-from opentide.models.threat import ThreatVector
 
 
 def _objective_payload(metadata: dict[str, Any]) -> dict[str, Any]:

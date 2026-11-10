@@ -9,9 +9,9 @@ from unittest.mock import MagicMock
 import pytest
 
 from opentide import Opentide
+from opentide._models.rule import DetectionRule
 from opentide.core import index_manager as index_mod
 from opentide.core.registry import OpentideRegistry
-from opentide.models.rule import DetectionRule
 
 
 def test_opentide_singleton_type() -> None:

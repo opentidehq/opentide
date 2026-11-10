@@ -835,7 +835,7 @@ impl Pages<'_, '_> {
             references: Self::references(objective.references.as_ref()),
             description: body.description.clone(),
             priority: body.priority.clone(),
-            objective_type: self.vocab.enrich("detection.types", &body.kind).label,
+            objective_type: self.vocab.enrich("detection.types", &body.r#type).label,
             investment: body.investment.clone().filter(|text| !text.is_empty()),
             composition: self
                 .vocab

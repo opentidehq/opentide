@@ -7,8 +7,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 from structlog.testing import capture_logs
 
+from opentide._models.system_config import ConfigurationModels, SystemConfig
 from opentide.loading.rule_loader import load_rule_from_dict
-from opentide.models.system_config import ConfigurationModels, SystemConfig
 
 
 @pytest.fixture
@@ -89,7 +89,7 @@ def test_config_mdr_maps_scheduling_and_trigger(
 
 
 def test_should_enable_correlation_search_prefers_mdr_override(splunk_rule_payload: dict) -> None:
-    from opentide.models.platform import SplunkConfig
+    from opentide._models.platform import SplunkConfig
     from opentide.platforms.splunk.deployer import SplunkDeploy
 
     deployer = SplunkDeploy.__new__(SplunkDeploy)
@@ -304,7 +304,7 @@ def test_deploy_without_run_strategies_is_refused(strategies: tuple | None) -> N
 
 
 def test_deploy_routes_tenants_with_the_run_strategies(splunk_rule_payload: dict) -> None:
-    from opentide.models.deployment_enums import StatusStrategy
+    from opentide._models.deployment_enums import StatusStrategy
 
     rule = load_rule_from_dict(splunk_rule_payload)
     run = (StatusStrategy.PREVIEW,)
@@ -346,7 +346,7 @@ def _deploy_to_tenants(
     """Deploy one rule to *tenants*, configured in that order; what each was deployed with."""
     from types import SimpleNamespace
 
-    from opentide.models.deployment_enums import StatusStrategy
+    from opentide._models.deployment_enums import StatusStrategy
     from opentide.platforms.splunk import client as splunk_client
     from opentide.platforms.splunk import deployer as splunk_deployer
 

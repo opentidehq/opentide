@@ -9,7 +9,7 @@ from collections.abc import Callable
 from dataclasses import replace
 from typing import Any, ClassVar, TypeVar, cast
 
-from opentide.models.system_config import SystemConfig
+from opentide._models.system_config import SystemConfig
 from opentide.query.models import LiveCheck, QueryRequest, QueryResult
 
 _Client = TypeVar("_Client")

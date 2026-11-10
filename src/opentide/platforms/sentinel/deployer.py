@@ -6,16 +6,16 @@ from typing import TYPE_CHECKING, Any
 
 import structlog
 
+from opentide._models.deployment_enums import RunStrategies, StatusStrategy
+from opentide._models.rule import DetectionRule
+from opentide._models.sentinel_attack import SENTINEL_ATTACK_VERSION, sentinel_techniques
+from opentide._models.system_config import ConfigurationModels, batch_tenant
 from opentide.core import deploy_events
 from opentide.core.debug import DebugEnvironment
 from opentide.core.errors import Errors
 from opentide.core.registry import DetectionPlatforms, Opentide
 from opentide.deployment import check_status
 from opentide.generation.framework import get_vocab_entry, techniques_resolver
-from opentide.models.deployment_enums import RunStrategies, StatusStrategy
-from opentide.models.rule import DetectionRule
-from opentide.models.sentinel_attack import SENTINEL_ATTACK_VERSION, sentinel_techniques
-from opentide.models.system_config import ConfigurationModels, batch_tenant
 from opentide.platforms.kql import compile_kql_query
 from opentide.platforms.plugins import RuleDeployer
 
@@ -77,7 +77,7 @@ def split_techniques(identifiers: Sequence[str]) -> tuple[list[str], list[str]]:
     makes.
 
     The split keeps every id it is given. ``alert.techniques`` holds ATT&CK v18
-    ids only (``opentide.models.sentinel_attack``, checked at validate); the
+    ids only (``opentide._models.sentinel_attack``, checked at validate); the
     techniques a rule resolves from its objective come from the ``att&ck``
     vocabulary and pass through :func:`v18_sub_techniques` first.
     """

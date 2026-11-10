@@ -15,8 +15,8 @@ from pydantic import ValidationError
 from pydantic.fields import FieldInfo
 from tests.corpus_support import TIDE_CORPUS_ROOT
 
-from opentide.models.platform_configs import SentinelAlert
-from opentide.models.sentinel_attack import (
+from opentide._models.platform_configs import SentinelAlert
+from opentide._models.sentinel_attack import (
     SENTINEL_ATTACK_VERSION,
     SentinelTechnique,
     _data,
@@ -170,7 +170,7 @@ def test_validate_accepts_v18_sentinel_techniques(tide_corpus_repo: Path) -> Non
 
 def test_the_rule_level_techniques_field_still_follows_the_vocabulary() -> None:
     """The constraint is the Sentinel block's: the rule's own `techniques` is not limited to v18."""
-    from opentide.models.rule import DetectionRule
+    from opentide._models.rule import DetectionRule
 
     field = DetectionRule.model_fields["techniques"]
 

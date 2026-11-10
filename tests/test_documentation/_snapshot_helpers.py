@@ -4,6 +4,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from unittest.mock import MagicMock
 
+from opentide._models.objective import DetectionObjective
+from opentide._models.rule import DetectionRule
+from opentide._models.threat import ThreatVector
 from opentide.core.io import load_yaml
 from opentide.documentation.catalog import (
     CoverageEdge,
@@ -17,9 +20,6 @@ from opentide.documentation.context import DocumentationContext
 from opentide.documentation.format.factory import formatter_for
 from opentide.documentation.types import DocumentFlavor, DocumentRecord, DocumentScope
 from opentide.loading.objective_loader import load_objective_from_dict
-from opentide.models.objective import DetectionObjective
-from opentide.models.rule import DetectionRule
-from opentide.models.threat import ThreatVector
 
 FIXTURES_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "documentation"
 THREAT_FIXTURE = FIXTURES_DIR / "threat-azure-gather-victim-data.yaml"

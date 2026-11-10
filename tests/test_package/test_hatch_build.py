@@ -116,7 +116,8 @@ def test_the_stub_ships_while_compiled_modules_stay_out() -> None:
         def dropped(file: str, excluded: list[str] = excluded, prefix: str = prefix) -> bool:
             return any(fnmatch(prefix + file, pattern) for pattern in excluded)
 
-        assert not dropped("_native.pyi"), name
+        for stub in ("_native/__init__.pyi", "_native/models.pyi"):
+            assert not dropped(stub), (name, stub)
         for module in (
             "_native.abi3.so",
             "_native.so",

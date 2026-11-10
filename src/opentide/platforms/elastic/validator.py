@@ -14,13 +14,13 @@ from typing import Any, ClassVar
 
 import structlog
 
+from opentide._models.deployment_enums import RunStrategies
+from opentide._models.rule import DetectionRule
+from opentide._models.system_config import ConfigurationModels, batch_tenant
 from opentide.core.errors import Errors
 from opentide.core.registry import DetectionPlatforms
 from opentide.core.time import utc_now
 from opentide.deployment import TideDeployment
-from opentide.models.deployment_enums import RunStrategies
-from opentide.models.rule import DetectionRule
-from opentide.models.system_config import ConfigurationModels, batch_tenant
 from opentide.platforms.elastic import advisories
 from opentide.platforms.elastic.advisories import warn_advisory
 from opentide.platforms.elastic.attack import find_non_enterprise_techniques

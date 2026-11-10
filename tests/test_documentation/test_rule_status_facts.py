@@ -14,11 +14,11 @@ from typing import Any
 
 import pytest
 
+from opentide._models.rule import DetectionRule
 from opentide.documentation.format.factory import formatter_for
 from opentide.documentation.parts.sections import render_rule_status
 from opentide.documentation.publish.index import _extra_cells
 from opentide.documentation.types import DocumentFlavor, DocumentRecord, DocumentScope
-from opentide.models.rule import DetectionRule
 
 _SENTINEL = {
     "status": "PRODUCTION",

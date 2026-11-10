@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
+from opentide._models.review import parse_window
 from opentide.cli.services.rules import run_unreviewed, window_text
-from opentide.models.review import parse_window
 
 
 def _write(path: Path, schema: str, reviewed: str | None) -> None:

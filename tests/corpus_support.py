@@ -14,8 +14,8 @@ from typing import Any
 
 import pytest
 
+from opentide._models.deployment_enums import StatusStrategy
 from opentide.core.io import load_toml
-from opentide.models.deployment_enums import StatusStrategy
 
 ROOT = Path(__file__).resolve().parents[1]
 TIDE_CORPUS_ROOT = ROOT / "tests/fixtures/tide_corpus/current"

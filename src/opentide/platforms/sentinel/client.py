@@ -22,7 +22,7 @@ import structlog
 from requests.adapters import HTTPAdapter
 from urllib3.util import Retry
 
-from opentide.models.system_config import ConfigurationModels
+from opentide._models.system_config import ConfigurationModels
 from opentide.platforms.transport import TenantSession, tenant_tls_verify
 
 logger = structlog.get_logger("opentide.platforms.sentinel.client")

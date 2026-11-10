@@ -6,9 +6,9 @@ from dataclasses import asdict
 
 import pytest
 
+from opentide._models.deployment_enums import StatusStrategy
+from opentide._models.system_config import ConfigurationModels
 from opentide.loading.rule_loader import load_rule_from_dict
-from opentide.models.deployment_enums import StatusStrategy
-from opentide.models.system_config import ConfigurationModels
 
 Tenant = ConfigurationModels.Systems.SentinelOne.Tenant
 TENANT = Tenant(

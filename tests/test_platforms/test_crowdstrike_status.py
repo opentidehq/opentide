@@ -8,8 +8,8 @@ from types import SimpleNamespace
 import pytest
 import yaml
 
+from opentide._models.deployment_enums import StatusStrategy
 from opentide.loading.rule_loader import load_rule_from_dict
-from opentide.models.deployment_enums import StatusStrategy
 from opentide.platforms.crowdstrike import deployer as module
 
 ROOT = Path(__file__).resolve().parents[2]

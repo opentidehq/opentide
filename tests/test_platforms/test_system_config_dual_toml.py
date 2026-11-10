@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from opentide.models.deployment_enums import DEPLOYABLE_STRATEGIES
+from opentide._models.deployment_enums import DEPLOYABLE_STRATEGIES
 from opentide.platforms.config import _build_cbc_config, _build_splunk_config
 
 
