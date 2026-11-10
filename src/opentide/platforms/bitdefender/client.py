@@ -16,7 +16,6 @@ that retry as ``bitdefender_create_unconfirmed``.
 
 from __future__ import annotations
 
-import hashlib
 import re
 import threading
 import time
@@ -173,8 +172,9 @@ class BitdefenderClient:
         self.timeout = timeout
         self._sleep = sleep
         self._clock = clock
-        # The pacer keys on a digest, so no key is held in a long-lived mapping.
-        self._pace_key = hashlib.sha256(api_key.encode("utf-8")).hexdigest()
+        # The budget is per API key, shared by every client of the process that
+        # holds it. The key is already in this session's auth for the process's life.
+        self._pace_key = api_key
         self.session = TenantSession(verify=verify_ssl)
         self.session.headers.update(
             {"Accept": "application/json", "Content-Type": "application/json"}
