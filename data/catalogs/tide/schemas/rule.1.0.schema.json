@@ -8666,9 +8666,9 @@
             }
           ],
           "default": null,
-          "description": "Sigma tags, and the YARA tags meta line.",
+          "description": "Sigma tags, and the YARA tags meta line of the decomposed form.",
           "title": "Tags",
-          "markdownDescription": "Sigma tags, and the YARA `tags` meta line."
+          "markdownDescription": "Sigma tags, and the YARA `tags` meta line of the decomposed form."
         },
         "sigma": {
           "anyOf": [
@@ -8680,9 +8680,9 @@
             }
           ],
           "default": null,
-          "description": "Behavioural rule. Preferred when yara is also set.",
+          "description": "Behavioural rule. Not with yara.",
           "title": "Sigma",
-          "markdownDescription": "Behavioural rule. Preferred when `yara` is also set."
+          "markdownDescription": "Behavioural rule. Not with `yara`."
         },
         "yara": {
           "anyOf": [
@@ -8694,8 +8694,9 @@
             }
           ],
           "default": null,
-          "description": "File or memory scan rule.",
-          "title": "Yara"
+          "description": "File or memory scan rule. Not with sigma.",
+          "title": "Yara",
+          "markdownDescription": "File or memory scan rule. Not with `sigma`."
         }
       },
       "required": [
@@ -8842,23 +8843,63 @@
     },
     "HarfangLabYara": {
       "additionalProperties": false,
+      "description": "One form: signature, or the decomposed meta, strings, condition, and imports.",
       "properties": {
+        "signature": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "A whole YARA text: imports, then one or more YARA rules, written out in the block. Deploy sends it as the YaraFile content, verbatim.",
+          "title": "Signature",
+          "markdownDescription": "A whole YARA text: imports, then one or more YARA rules, written out in the block. Deploy\nsends it as the YaraFile `content`, verbatim."
+        },
         "meta": {
-          "$ref": "#/$defs/HarfangLabYaraMeta",
-          "description": "Scan context, OS, and optional score override.",
-          "title": "Meta"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HarfangLabYaraMeta"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Decomposed form: scan context, OS, and optional score override. Required without signature.",
+          "title": "Meta",
+          "markdownDescription": "Decomposed form: scan context, OS, and optional score override. Required without\n`signature`."
         },
         "strings": {
-          "description": "YARA string section body, one definition per line, without the strings: header.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Decomposed form: YARA string section body, one definition per line, without the strings: header. Required without signature.",
           "title": "Strings",
-          "type": "string",
-          "markdownDescription": "YARA string section body, one definition per line, without the `strings:` header."
+          "markdownDescription": "Decomposed form: YARA string section body, one definition per line, without the\n`strings:` header. Required without `signature`."
         },
         "condition": {
-          "description": "YARA condition body, without the condition: header.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Decomposed form: YARA condition body, without the condition: header. Required without signature.",
           "title": "Condition",
-          "type": "string",
-          "markdownDescription": "YARA condition body, without the `condition:` header."
+          "markdownDescription": "Decomposed form: YARA condition body, without the `condition:` header. Required without\n`signature`."
         },
         "imports": {
           "anyOf": [
@@ -8873,18 +8914,14 @@
             }
           ],
           "default": null,
-          "description": "YARA modules (pe, elf). Each becomes import \"<module>\".",
+          "description": "Decomposed form: YARA modules (pe, elf). Each becomes import \"<module>\".",
           "title": "Imports",
-          "markdownDescription": "YARA modules (`pe`, `elf`). Each becomes `import \"<module>\"`."
+          "markdownDescription": "Decomposed form: YARA modules (`pe`, `elf`). Each becomes `import \"<module>\"`."
         }
       },
-      "required": [
-        "meta",
-        "strings",
-        "condition"
-      ],
       "title": "HarfangLabYara",
-      "type": "object"
+      "type": "object",
+      "markdownDescription": "One form: `signature`, or the decomposed `meta`, `strings`, `condition`, and `imports`."
     },
     "HarfangLabYaraMeta": {
       "additionalProperties": false,
