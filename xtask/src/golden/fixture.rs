@@ -223,10 +223,23 @@ fn symlink_dir(link: &Path, target: &Path) -> Result<()> {
         .with_context(|| format!("link {} to {}", target.display(), link.display()))
 }
 
-#[cfg(not(unix))]
+/// Windows creates a directory symbolic link; that needs Developer Mode or
+/// an elevated shell, which GitHub's Windows runners have.
+#[cfg(windows)]
+fn symlink_dir(link: &Path, target: &Path) -> Result<()> {
+    std::os::windows::fs::symlink_dir(link, target).with_context(|| {
+        format!(
+            "link {} to {} (directory symbolic links on Windows need Developer Mode or an elevated shell)",
+            target.display(),
+            link.display()
+        )
+    })
+}
+
+#[cfg(not(any(unix, windows)))]
 fn symlink_dir(_link: &Path, target: &Path) -> Result<()> {
     bail!(
-        "{}: golden fixtures with symbolic links need a Unix host",
+        "{}: golden fixtures with symbolic links need a Unix or Windows host",
         target.display()
     )
 }
@@ -251,13 +264,62 @@ fn migrate_tide_corpus_layout(dest: &Path) -> Result<()> {
         if link.exists() || link.is_symlink() {
             continue;
         }
-        symlink_dir(&Path::new("..").join(legacy), &link)?;
+        // One component at a time: Windows does not resolve a link whose
+        // target is spelled with `/`, so `..\Objects/Detection Rules` would
+        // dangle there.
+        let target: PathBuf = std::iter::once("..").chain(legacy.split('/')).collect();
+        symlink_dir(&target, &link)?;
     }
     for dir in ["schemas", "templates", "exports", "inflight"] {
         fs::create_dir_all(opentide.join(dir))
             .with_context(|| format!("create .opentide/{dir}"))?;
     }
     Ok(())
+}
+
+/// Tests that run on every host, Windows included.
+#[cfg(test)]
+mod portable_tests {
+    use super::*;
+
+    #[test]
+    fn tide_corpus_links_resolve_on_every_host() {
+        let repo = tempfile::tempdir().unwrap();
+        let rules = repo.path().join("corpus/Objects/Detection Rules");
+        fs::create_dir_all(&rules).unwrap();
+        fs::write(rules.join("r.yaml"), "name: r\n").unwrap();
+        let dest = tempfile::tempdir().unwrap();
+        let fixture = FixtureSpec {
+            kind: FixtureKind::TideCorpus,
+            source: Some("corpus".into()),
+            dirs: Vec::new(),
+            argv: Vec::new(),
+            vars: BTreeMap::new(),
+            about: String::new(),
+            edits: Vec::new(),
+        };
+        fixture.materialise(repo.path(), dest.path()).unwrap();
+        let link = dest.path().join("objects").join("rules");
+        assert!(link.is_symlink());
+        // The link is followed: a folder, and its file is read through it.
+        assert!(fs::metadata(&link).unwrap().is_dir());
+        assert_eq!(
+            fs::read_to_string(link.join("r.yaml")).unwrap(),
+            "name: r\n"
+        );
+        let names: Vec<String> = fs::read_dir(&link)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, ["r.yaml"]);
+        // The target names its components with the host's separator.
+        let target = fs::read_link(&link).unwrap();
+        let parts: Vec<String> = target
+            .components()
+            .map(|part| part.as_os_str().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(parts, ["..", "Objects", "Detection Rules"]);
+    }
 }
 
 #[cfg(all(test, unix))]

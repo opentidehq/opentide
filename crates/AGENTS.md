@@ -34,7 +34,7 @@ One workspace (root `Cargo.toml`, one `Cargo.lock`; `fuzz/` keeps its own). A cr
 | foundation 2 | [`opentide-kql`](opentide-kql/AGENTS.md), [`opentide-spl`](opentide-spl/AGENTS.md), [`opentide-kuery`](opentide-kuery/AGENTS.md), [`opentide-lucene`](opentide-lucene/AGENTS.md), [`opentide-falco`](opentide-falco/AGENTS.md), [`opentide-cql`](opentide-cql/AGENTS.md) |
 | foundation 3 | [`opentide-esql`](opentide-esql/AGENTS.md), [`opentide-eql`](opentide-eql/AGENTS.md) |
 | foundation 4 | [`opentide-schema`](opentide-schema/AGENTS.md) |
-| domain 0, 1 | [`opentide-tide`](opentide-tide/AGENTS.md) and [`opentide-workspace`](opentide-workspace/AGENTS.md) (loading and the index, UC-2.1), then [`opentide-analysis`](opentide-analysis/AGENTS.md) |
+| domain 0, 1 | [`opentide-tide`](opentide-tide/AGENTS.md) and [`opentide-workspace`](opentide-workspace/AGENTS.md) (loading and the index, UC-2.1), then [`opentide-analysis`](opentide-analysis/AGENTS.md) and [`opentide-compile`](opentide-compile/AGENTS.md) (deploy compile and plan, UC-3.1) |
 | application | [`opentide-lsp`](opentide-lsp/AGENTS.md), [`opentide-cli`](opentide-cli/AGENTS.md) (the command line, UC-3.3) |
 | facade | none yet: the `opentide` crate (UC-5.1, #836) |
 | bindings | [`opentide-native`](../analysis/AGENTS.md) (`analysis/`), [`opentide-wasm`](opentide-wasm/AGENTS.md) |

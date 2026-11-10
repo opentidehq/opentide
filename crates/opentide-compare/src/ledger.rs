@@ -6,7 +6,7 @@
 //! command = "commands"                      # the command path, exactly
 //! case = "json/*"                           # a glob over case ids
 //! target = "stdout"                         # stdout | stderr | exit_code | file:<path>
-//! rule = "json:/environment"                # json:<JSON pointer> | text
+//! rule = "json:/environment"                # json:<JSON pointer> | text | lines
 //! oracle = '[...]'                          # what the oracle has there
 //! candidate = '[...]'                       # what the candidate has instead
 //! reason = "OPENTIDE_ENGINE is read by the launcher (#805)"
@@ -16,7 +16,10 @@
 //!
 //! Every field is required. A `json:` rule's values are JSON texts, or
 //! `(absent)` where that side has no value; a `text` rule's values are
-//! literal text (on `exit_code`, the code in decimal). An entry applies only
+//! literal text (on `exit_code`, the code in decimal); a `lines` rule's are
+//! one or more whole lines, without the last line's ending: the oracle's
+//! lines, consecutive, read as the candidate's where the candidate has them
+//! at the same place, so a row the candidate adds or drops is one entry. An entry applies only
 //! where both values are found as written; an entry that applies nowhere in a
 //! complete run is stale, and a stale entry fails the run.
 
@@ -94,6 +97,20 @@ pub enum Rule {
         /// The candidate's line at the same line number, without its ending.
         candidate: String,
     },
+    /// Consecutive whole lines on each side: where the oracle has the
+    /// `oracle` lines and the candidate, at the same place, the `candidate`
+    /// lines, the oracle's read as the candidate's. The two may differ in
+    /// number, so a row inserted or removed is one entry, and the lines after
+    /// it are compared at their new place. Each block is quoted exactly, every
+    /// line whole, and the entry names its one case (no `*` in `case`): a
+    /// block that differs by one character, or that the output extends by a
+    /// line, is not approved.
+    Lines {
+        /// The oracle's lines, without their endings.
+        oracle: Vec<String>,
+        /// The candidate's lines, without their endings.
+        candidate: Vec<String>,
+    },
     /// The exit code.
     ExitCode {
         /// The oracle's code.
@@ -112,7 +129,7 @@ pub struct Entry {
     pub case: String,
     /// What it applies to.
     pub target: Target,
-    /// The rule, as written in the ledger: `json:/pointer` or `text`.
+    /// The rule, as written in the ledger: `json:/pointer`, `text` or `lines`.
     pub rule_text: String,
     /// What it expects on each side.
     pub rule: Rule,
@@ -365,6 +382,24 @@ fn check_entry(raw: RawEntry) -> Result<Entry, Vec<String>> {
             );
             None
         }
+        (_, "lines") if raw.oracle.contains('\r') || raw.candidate.contains('\r') => {
+            problems.push(
+                "a `lines` rule's `oracle` and `candidate` are lines separated by `\\n`".to_owned(),
+            );
+            None
+        }
+        (_, "lines") if raw.case.contains('*') => {
+            problems.push(format!(
+                "a `lines` rule names the one case it approves (`case` without `*`), not {:?}: \
+                 a block of rows is a deliberate deviation decided case by case",
+                raw.case
+            ));
+            None
+        }
+        (_, "lines") => Some(Rule::Lines {
+            oracle: raw.oracle.split('\n').map(str::to_owned).collect(),
+            candidate: raw.candidate.split('\n').map(str::to_owned).collect(),
+        }),
         (_, "text") => Some(Rule::Text {
             oracle: raw.oracle.clone(),
             candidate: raw.candidate.clone(),
@@ -396,7 +431,9 @@ fn check_entry(raw: RawEntry) -> Result<Entry, Vec<String>> {
             },
             None => {
                 if !rule.trim().is_empty() {
-                    problems.push(format!("`rule` {rule:?} is not `text` or `json:<pointer>`"));
+                    problems.push(format!(
+                        "`rule` {rule:?} is not `text`, `lines` or `json:<pointer>`"
+                    ));
                 }
                 None
             }
@@ -407,6 +444,7 @@ fn check_entry(raw: RawEntry) -> Result<Entry, Vec<String>> {
             oracle, candidate, ..
         }) => oracle == candidate,
         Some(Rule::Text { oracle, candidate }) => oracle == candidate,
+        Some(Rule::Lines { oracle, candidate }) => oracle == candidate,
         Some(Rule::ExitCode { oracle, candidate }) => oracle == candidate,
         None => false,
     };

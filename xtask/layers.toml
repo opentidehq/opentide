@@ -46,6 +46,9 @@
 #   (the node tree, the configuration) and on no other domain crate. The
 #   language server (UC-2.6, #821) and the command line come to it from above;
 #   opentide-analysis and opentide-tide fold into it later (plan §4).
+# - opentide-compile (UC-3.1, #823) is domain tier 1, beside
+#   opentide-analysis: the plan's domain crate that compiles request bodies and
+#   the deploy plan reads the workspace opentide-workspace loads.
 
 [[layer]]
 name = "foundation"
@@ -61,7 +64,7 @@ tiers = [
 name = "domain"
 tiers = [
     ["opentide-tide", "opentide-workspace"],
-    ["opentide-analysis"],
+    ["opentide-analysis", "opentide-compile"],
 ]
 
 [[layer]]

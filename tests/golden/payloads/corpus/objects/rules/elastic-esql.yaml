@@ -1,0 +1,30 @@
+name: Elastic ESQL
+
+metadata:
+  uuid: 00000000-0000-4000-8006-000000000007
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+  author: Detection Team
+  contributors:
+    - Analyst One
+    - Detection Team
+
+description: |
+  Elastic ESQL for the compile corpus.
+  Second line.
+
+response:
+  alert_severity: Medium
+
+configurations:
+  elastic:
+    status: STAGING
+    type: esql
+    query: |
+      FROM logs-* | WHERE process.name == "cmd.exe"
+    scheduling:
+      interval: PT1H
+      lookback: 0s

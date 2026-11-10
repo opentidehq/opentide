@@ -15,6 +15,7 @@
 
 pub mod app;
 pub mod catalog;
+pub mod commands;
 pub mod crash;
 pub mod env;
 pub mod envelope;
@@ -31,4 +32,4 @@ pub mod tree;
 mod tree_meta;
 pub mod usage;
 
-pub use app::{Host, main, run};
+pub use app::{Host, exit, main, run};
