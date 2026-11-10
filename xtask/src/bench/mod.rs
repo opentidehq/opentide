@@ -678,9 +678,7 @@ fn program(
             Some(cli) if RUST_CLI.contains(&scenario.id) => {
                 Program::Run(cli.to_owned(), args(&["--json"]))
             }
-            Some(_) | None if RUST_CLI.contains(&scenario.id) => {
-                Program::Missing("no Rust CLI built".into())
-            }
+            None if RUST_CLI.contains(&scenario.id) => Program::Missing("no Rust CLI built".into()),
             _ => Program::Missing(
                 "no Rust yet: the command runs in Python until it is ported to opentide-cli".into(),
             ),
