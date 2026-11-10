@@ -773,3 +773,152 @@ candidate = "  \u001b[1;32m✓\u001b[0m  \u001b[1mexports revisions\u001b[0m  \u
 reason = "the exports are written in milliseconds: the checklist row is printed when they are done, without the spinner Python drew while they ran"
 issue = "https://github.com/opentidehq/opentide/issues/824"
 changelog = "**`generate exports` runs on the Rust engine**"
+
+# UC-3.2b (#915): `generate docs` on the Rust engine. The pages, index pages and
+# README files are the oracle's byte for byte on every recorded case (no
+# whitespace or Markdown layout difference to approve); what differs is the
+# terminal: the checklist row is printed once the pages are written, without
+# the spinner, and the `--changed` warning outside a checkout is one log line.
+
+[[diff]]
+command = "generate docs"
+case = "generate.docs/human/tide-corpus/*"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mdocs\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;32m✓\u001b[0m  \u001b[1mdocs\u001b[0m  \u001b[2m16 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2mdocs/\u001b[0m"
+candidate = "  \u001b[1;32m✓\u001b[0m  \u001b[1mdocs\u001b[0m  \u001b[2m16 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2mdocs/\u001b[0m"
+reason = "the pages are written in milliseconds: the checklist row is printed when they are done, without the spinner Python drew while they ran"
+issue = "https://github.com/opentidehq/opentide/issues/915"
+changelog = "**`generate docs` runs on the Rust engine**"
+
+[[diff]]
+command = "generate docs"
+case = "generate.docs/human/tide-corpus/rules-only"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mdocs\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;32m✓\u001b[0m  \u001b[1mdocs\u001b[0m  \u001b[2m10 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2mdocs/rules/\u001b[0m"
+candidate = "  \u001b[1;32m✓\u001b[0m  \u001b[1mdocs\u001b[0m  \u001b[2m10 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2mdocs/rules/\u001b[0m"
+reason = "the pages are written in milliseconds: the checklist row is printed when they are done, without the spinner Python drew while they ran"
+issue = "https://github.com/opentidehq/opentide/issues/915"
+changelog = "**`generate docs` runs on the Rust engine**"
+
+[[diff]]
+command = "generate docs"
+case = "generate.docs/human/vscode/default"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mdocs\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;31m✗\u001b[0m  \u001b[1mdocs\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+candidate = "  \u001b[1;31m✗\u001b[0m  \u001b[1mdocs\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+reason = "the pages are written in milliseconds: the checklist row is printed when they are done, without the spinner Python drew while they ran"
+issue = "https://github.com/opentidehq/opentide/issues/915"
+changelog = "**`generate docs` runs on the Rust engine**"
+
+[[diff]]
+command = "generate docs rules"
+case = "generate.docs.rules/human/tide-corpus/default"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mdocs\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;32m✓\u001b[0m  \u001b[1mdocs\u001b[0m  \u001b[2m10 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2mdocs/rules/\u001b[0m"
+candidate = "  \u001b[1;32m✓\u001b[0m  \u001b[1mdocs\u001b[0m  \u001b[2m10 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2mdocs/rules/\u001b[0m"
+reason = "the pages are written in milliseconds: the checklist row is printed when they are done, without the spinner Python drew while they ran"
+issue = "https://github.com/opentidehq/opentide/issues/915"
+changelog = "**`generate docs` runs on the Rust engine**"
+
+[[diff]]
+command = "generate docs rules"
+case = "generate.docs.rules/human/vscode/default"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mdocs\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;31m✗\u001b[0m  \u001b[1mdocs\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+candidate = "  \u001b[1;31m✗\u001b[0m  \u001b[1mdocs\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+reason = "the pages are written in milliseconds: the checklist row is printed when they are done, without the spinner Python drew while they ran"
+issue = "https://github.com/opentidehq/opentide/issues/915"
+changelog = "**`generate docs` runs on the Rust engine**"
+
+[[diff]]
+command = "generate docs objectives"
+case = "generate.docs.objectives/human/tide-corpus/default"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mdocs\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;32m✓\u001b[0m  \u001b[1mdocs\u001b[0m  \u001b[2m1 file\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2mdocs/objectives/\u001b[0m"
+candidate = "  \u001b[1;32m✓\u001b[0m  \u001b[1mdocs\u001b[0m  \u001b[2m1 file\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2mdocs/objectives/\u001b[0m"
+reason = "the pages are written in milliseconds: the checklist row is printed when they are done, without the spinner Python drew while they ran"
+issue = "https://github.com/opentidehq/opentide/issues/915"
+changelog = "**`generate docs` runs on the Rust engine**"
+
+[[diff]]
+command = "generate docs objectives"
+case = "generate.docs.objectives/human/vscode/default"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mdocs\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;31m✗\u001b[0m  \u001b[1mdocs\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+candidate = "  \u001b[1;31m✗\u001b[0m  \u001b[1mdocs\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+reason = "the pages are written in milliseconds: the checklist row is printed when they are done, without the spinner Python drew while they ran"
+issue = "https://github.com/opentidehq/opentide/issues/915"
+changelog = "**`generate docs` runs on the Rust engine**"
+
+[[diff]]
+command = "generate docs threats"
+case = "generate.docs.threats/human/tide-corpus/default"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mdocs\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;32m✓\u001b[0m  \u001b[1mdocs\u001b[0m  \u001b[2m1 file\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2mdocs/threats/\u001b[0m"
+candidate = "  \u001b[1;32m✓\u001b[0m  \u001b[1mdocs\u001b[0m  \u001b[2m1 file\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2mdocs/threats/\u001b[0m"
+reason = "the pages are written in milliseconds: the checklist row is printed when they are done, without the spinner Python drew while they ran"
+issue = "https://github.com/opentidehq/opentide/issues/915"
+changelog = "**`generate docs` runs on the Rust engine**"
+
+[[diff]]
+command = "generate docs threats"
+case = "generate.docs.threats/human/vscode/default"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mdocs\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;31m✗\u001b[0m  \u001b[1mdocs\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+candidate = "  \u001b[1;31m✗\u001b[0m  \u001b[1mdocs\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+reason = "the pages are written in milliseconds: the checklist row is printed when they are done, without the spinner Python drew while they ran"
+issue = "https://github.com/opentidehq/opentide/issues/915"
+changelog = "**`generate docs` runs on the Rust engine**"
+
+[[diff]]
+command = "generate docs index"
+case = "generate.docs.index/human/tide-corpus/default"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mdocs\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;32m✓\u001b[0m  \u001b[1mdocs\u001b[0m  \u001b[2m4 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2mdocs/\u001b[0m"
+candidate = "  \u001b[1;32m✓\u001b[0m  \u001b[1mdocs\u001b[0m  \u001b[2m4 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2mdocs/\u001b[0m"
+reason = "the pages are written in milliseconds: the checklist row is printed when they are done, without the spinner Python drew while they ran"
+issue = "https://github.com/opentidehq/opentide/issues/915"
+changelog = "**`generate docs` runs on the Rust engine**"
+
+[[diff]]
+command = "generate docs index"
+case = "generate.docs.index/human/vscode/default"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mdocs\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;31m✗\u001b[0m  \u001b[1mdocs\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+candidate = "  \u001b[1;31m✗\u001b[0m  \u001b[1mdocs\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+reason = "the pages are written in milliseconds: the checklist row is printed when they are done, without the spinner Python drew while they ran"
+issue = "https://github.com/opentidehq/opentide/issues/915"
+changelog = "**`generate docs` runs on the Rust engine**"
+
+[[diff]]
+command = "generate docs"
+case = "generate.docs/json/tide-corpus/changed"
+target = "stderr"
+rule = "text"
+oracle = "{\"detail\":\"changed-object discovery requires a git repository with at least one commit\",\"event\":\"docs_changed_requires_git\",\"logger\":\"opentide.documentation.cli\",\"level\":\"warning\",\"timestamp\":\"0000-00-00 00:00:00\"}"
+candidate = "warning: Docs changed requires git · detail: changed-object discovery requires a git repository with at least one commit"
+reason = "log lines are JSON only with OPENTIDE_LOG_JSON=1, as docs/cli/json-output.md documents; the oracle's --json also wrote its structlog events as JSON"
+issue = "https://github.com/opentidehq/opentide/issues/915"
+changelog = "**`generate docs` runs on the Rust engine**"
+
+[[diff]]
+command = "generate docs"
+case = "generate.docs/human/tide-corpus/changed"
+target = "stderr"
+rule = "lines"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mdocs\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[1;33mwarning: \u001b[0mDocs changed requires git · detail: changed-object discovery requires a git repository with\nat least one commit\n\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;31m✗\u001b[0m  \u001b[1mdocs\u001b[0m  \u001b[2m0 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+candidate = "warning: Docs changed requires git · detail: changed-object discovery requires a git repository with at least one commit\n  \u001b[1;31m✗\u001b[0m  \u001b[1mdocs\u001b[0m  \u001b[2m0 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+reason = "no spinner while the run looks for git: the warning is one log line, printed before the failed checklist row instead of inside Rich's live region and wrapped at the terminal's width"
+issue = "https://github.com/opentidehq/opentide/issues/915"
+changelog = "**`generate docs` runs on the Rust engine**"

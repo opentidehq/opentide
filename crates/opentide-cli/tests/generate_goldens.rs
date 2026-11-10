@@ -29,6 +29,11 @@ const COMMANDS: &[&str] = &[
     "generate.exports.navigator",
     "generate.exports.objects",
     "generate.exports.revisions",
+    "generate.docs",
+    "generate.docs.rules",
+    "generate.docs.objectives",
+    "generate.docs.threats",
+    "generate.docs.index",
 ];
 
 fn repo() -> PathBuf {
@@ -401,4 +406,190 @@ fn exports_before_a_failure_are_written() {
     assert!(exports.join("attack-navigator.json").is_file());
     assert!(!exports.join("objects.export.json").exists());
     assert!(!exports.join("revisions.export.json").exists());
+}
+
+/// Runs the CLI in-process at `ws`; the exit code and stdout.
+fn run_at(ws: &Path, words: &[&str]) -> (i32, String) {
+    let sink: Sink = Arc::new(Mutex::new(Buffer::default()));
+    let host = Host {
+        version: "0.23.0".into(),
+        stdout_tty: false,
+        stderr_tty: false,
+        log_sink: sink,
+        cwd: Some(ws.to_path_buf()),
+        width: None,
+        interrupt: opentide_cli::app::Interrupt::default(),
+    };
+    let argv: Vec<String> = words.iter().map(|word| (*word).to_owned()).collect();
+    let home = ws.with_file_name("home");
+    std::fs::create_dir_all(&home).unwrap();
+    let env = Env::from_pairs([("HOME".to_owned(), home.display().to_string())]);
+    let (mut out, mut err) = (Vec::new(), Buffer::default());
+    let exit_code = run(&argv, &env, &host, &mut out, &mut err);
+    (exit_code, String::from_utf8(out).unwrap())
+}
+
+fn git(ws: &Path, args: &[&str]) {
+    let status = std::process::Command::new("git")
+        .args(args)
+        .current_dir(ws)
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .env("HOME", ws)
+        .env("GIT_AUTHOR_NAME", "t")
+        .env("GIT_AUTHOR_EMAIL", "t@example.invalid")
+        .env("GIT_COMMITTER_NAME", "t")
+        .env("GIT_COMMITTER_EMAIL", "t@example.invalid")
+        .status()
+        .unwrap();
+    assert!(status.success(), "git {args:?}");
+}
+
+/// `generate docs --changed` after a rule is renamed: its page moves (the old
+/// one is removed), and the pages of the objective and threat above it are
+/// rewritten; nothing else is.
+#[test]
+fn changed_docs_rewrite_a_renamed_rule_and_its_parents() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
+    fixture("tide-corpus", &ws);
+    let (code, stdout) = run_at(&ws, &["--json", "generate", "docs"]);
+    assert_eq!(code, 0, "{stdout}");
+    git(&ws, &["init", "-q", "-b", "main"]);
+    git(&ws, &["add", "-A"]);
+    git(&ws, &["commit", "-q", "-m", "base"]);
+    let rule = ws.join("Objects/Detection Rules/rule-0001-sentinel-kql.yaml");
+    let text = std::fs::read_to_string(&rule).unwrap();
+    std::fs::write(
+        &rule,
+        text.replacen("name: Sentinel KQL Rule", "name: Renamed Sentinel Rule", 1),
+    )
+    .unwrap();
+    let docs = ws.join("docs");
+    let before_defender = std::fs::metadata(docs.join("rules/defender-kql-rule.md"))
+        .unwrap()
+        .modified()
+        .unwrap();
+    let (code, stdout) = run_at(&ws, &["--json", "generate", "docs", "--changed"]);
+    assert_eq!(code, 0, "{stdout}");
+    let document: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(
+        document["changed_paths"],
+        serde_json::json!(["Objects/Detection Rules/rule-0001-sentinel-kql.yaml"])
+    );
+    assert_eq!(
+        document["changed_uuids"],
+        serde_json::json!(["00000000-0000-4000-8003-000000000001"])
+    );
+    assert_eq!(
+        document["targets"],
+        serde_json::json!([
+            "00000000-0000-4000-8001-000000000001",
+            "00000000-0000-4000-8002-000000000001",
+            "00000000-0000-4000-8003-000000000001"
+        ])
+    );
+    assert_eq!(
+        document["scopes"],
+        serde_json::json!(["objective", "rule", "threat"])
+    );
+    assert_eq!(
+        document["counts"],
+        serde_json::json!({"rules": 1, "objectives": 1, "threats": 1})
+    );
+    assert_eq!(document["removed"], 1);
+    assert!(docs.join("rules/renamed-sentinel-rule.md").is_file());
+    assert!(!docs.join("rules/sentinel-kql-rule.md").exists());
+    let objective =
+        std::fs::read_to_string(docs.join("objectives/credential-access-objective.md")).unwrap();
+    assert!(objective.contains("[Renamed Sentinel Rule](../rules/renamed-sentinel-rule.md)"));
+    let after_defender = std::fs::metadata(docs.join("rules/defender-kql-rule.md"))
+        .unwrap()
+        .modified()
+        .unwrap();
+    assert_eq!(
+        before_defender, after_defender,
+        "an unrelated page was rewritten"
+    );
+    // Nothing changed against HEAD once it is committed: nothing is written.
+    git(&ws, &["add", "-A"]);
+    git(&ws, &["commit", "-q", "-m", "renamed"]);
+    let (code, stdout) = run_at(&ws, &["--json", "generate", "docs", "--changed"]);
+    assert_eq!(code, 0, "{stdout}");
+    let document: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(
+        document["message"],
+        "No changed object documentation detected"
+    );
+    assert_eq!(document["changed_paths"], serde_json::json!([]));
+}
+
+/// A scoped run with `--changed` is a usage error, and two flags write both
+/// families (`--rules --threats` used to write rules only).
+#[test]
+fn docs_scopes() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
+    fixture("tide-corpus", &ws);
+    let (code, stdout) = run_at(&ws, &["--json", "generate", "docs", "--rules", "--changed"]);
+    assert_eq!(code, 2, "{stdout}");
+    assert!(stdout.contains("\"code\":\"usage_error\""), "{stdout}");
+    assert!(stdout.contains("\"argument\":\"--changed\""), "{stdout}");
+    let (code, stdout) = run_at(&ws, &["--json", "generate", "docs", "--rules", "--threats"]);
+    assert_eq!(code, 0, "{stdout}");
+    let document: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(document["scopes"], serde_json::json!(["rules", "threats"]));
+    assert_eq!(
+        document["counts"],
+        serde_json::json!({"rules": 10, "objectives": 0, "threats": 1})
+    );
+    assert!(ws.join("docs/threats/simulated-actor.md").is_file());
+    assert!(!ws.join("docs/objectives").exists());
+}
+
+/// Documentation previews open pull requests: a shard of a newer version
+/// replaces the object for the run, a shard of a new object adds its page,
+/// and a raw shard of the same version does not replace the file's object.
+#[test]
+fn docs_preview_the_inflight_shards() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
+    fixture("tide-corpus", &ws);
+    let threat_file = ws.join("Objects/Threat Vectors/threat-0001-simulated-actor.yaml");
+    let rule_file = ws.join("Objects/Detection Rules/rule-0002-defender-kql.yaml");
+    let yaml = |path: &Path| -> serde_json::Value {
+        let text = std::fs::read_to_string(path).unwrap();
+        let document = opentide_schema::node::load(&text).unwrap();
+        let json = opentide_compile::json::Json::from_node(document.root().unwrap());
+        serde_json::from_str(&json.to_compact()).unwrap()
+    };
+    let mut threat = yaml(&threat_file);
+    threat["name"] = "Previewed Actor".into();
+    threat["metadata"]["version"] = 2.into();
+    let mut added = yaml(&rule_file);
+    added["name"] = "Pull Request Rule".into();
+    added["metadata"]["uuid"] = "00000000-0000-4000-8003-00000000aaaa".into();
+    let mut same = yaml(&rule_file);
+    same["name"] = "Not Replaced".into();
+    let inflight = ws.join(".opentide/inflight");
+    std::fs::create_dir_all(&inflight).unwrap();
+    let wrap = |object: serde_json::Value| {
+        serde_json::json!({"schema": "inflight.shard::1.0", "object": object}).to_string()
+    };
+    std::fs::write(inflight.join("a.json"), wrap(threat)).unwrap();
+    std::fs::write(inflight.join("b.json"), wrap(added)).unwrap();
+    std::fs::write(inflight.join("c.json"), same.to_string()).unwrap();
+    std::fs::write(inflight.join("d.json"), "not json").unwrap();
+    let (code, stdout) = run_at(&ws, &["--json", "generate", "docs"]);
+    assert_eq!(code, 0, "{stdout}");
+    let docs = ws.join("docs");
+    assert!(docs.join("threats/previewed-actor.md").is_file());
+    assert!(!docs.join("threats/simulated-actor.md").exists());
+    assert!(docs.join("rules/pull-request-rule.md").is_file());
+    assert!(docs.join("rules/defender-kql-rule.md").is_file());
+    assert!(!docs.join("rules/not-replaced.md").exists());
+    let document: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(
+        document["counts"],
+        serde_json::json!({"rules": 11, "objectives": 1, "threats": 1})
+    );
 }

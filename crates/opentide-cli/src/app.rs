@@ -368,6 +368,47 @@ impl Run<'_> {
                 );
                 self.emit_report(&report, out, err)
             }
+            "generate docs"
+            | "generate docs rules"
+            | "generate docs objectives"
+            | "generate docs threats"
+            | "generate docs index" => {
+                use crate::commands::generate::{DocsArgs, DocsScope};
+                use opentide_compile::generate::docs::catalog::Scope;
+                let docs = leaf(&matches);
+                let flag = |name: &str| {
+                    docs.try_get_one::<bool>(name)
+                        .ok()
+                        .flatten()
+                        .copied()
+                        .unwrap_or(false)
+                };
+                let parsed = DocsArgs {
+                    scope: match words.get(2).map(String::as_str) {
+                        Some("rules") => Some(DocsScope::Objects(Scope::Rules)),
+                        Some("objectives") => Some(DocsScope::Objects(Scope::Objectives)),
+                        Some("threats") => Some(DocsScope::Objects(Scope::Threats)),
+                        Some("index") => Some(DocsScope::Index),
+                        _ => None,
+                    },
+                    output: docs.get_one::<String>("output").cloned(),
+                    flavor: docs.get_one::<String>("flavor").cloned(),
+                    rules: flag("rules"),
+                    threats: flag("threats"),
+                    objectives: flag("objectives"),
+                    changed: flag("changed"),
+                };
+                let cwd = self.host.cwd.clone().unwrap_or_default();
+                let report = crate::commands::generate::docs(
+                    &parsed,
+                    &crate::commands::generate::Context {
+                        repo: self.globals.repo.as_deref(),
+                        env: self.env,
+                        cwd: &cwd,
+                    },
+                );
+                self.emit_report(&report, out, err)
+            }
             "rules unreviewed" => {
                 let older_than = leaf(&matches)
                     .get_one::<String>("older_than")
