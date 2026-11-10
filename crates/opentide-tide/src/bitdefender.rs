@@ -397,21 +397,110 @@ fn diagnostic(
 }
 
 /// The range of a list item (`configurations.bitdefender.detection.criteria.<N>`):
-/// from its first key to the end of its last key's line. `None` for an item
-/// with no key (a scalar, or a flow mapping).
+/// the item itself, whatever its form (a block mapping with nested lists, a
+/// flow mapping, a scalar, or an element of a flow sequence). `None` when the
+/// list cannot be found in the source.
 fn item_range(source: &str, path: &[&str]) -> Option<opentide_core::Range> {
-    let keys: Vec<_> = crate::yaml_scalar::mapping_keys(source)
+    let (index, list) = path.split_last()?;
+    let index: usize = index.parse().ok()?;
+    let key = crate::yaml_scalar::mapping_keys(source)
         .into_iter()
-        .filter(|k| k.path.len() > path.len() && k.path.iter().zip(path).all(|(a, b)| a == b))
-        .collect();
-    let start = keys.iter().map(|k| k.key_start).min()?;
-    let last = keys.iter().map(|k| k.key_start).max()?;
-    let end = source[last..].find('\n').map_or(source.len(), |i| last + i);
-    let end = source[..end].trim_end().len().max(start);
+        .find(|k| k.path_is(list))?;
+    let (start, end) = sequence_items(source, key.key_start, key.column)?
+        .into_iter()
+        .nth(index)?;
     Some(opentide_core::span_to_range(
         source,
         opentide_core::ByteSpan::new(start, end),
     ))
+}
+
+/// The byte spans of the items of the sequence whose key starts at
+/// `key_start` (in column `column`), trimmed of blanks.
+fn sequence_items(source: &str, key_start: usize, column: usize) -> Option<Vec<(usize, usize)>> {
+    let colon = key_start + source[key_start..].find(':')? + 1;
+    let line_end = source[colon..]
+        .find('\n')
+        .map_or(source.len(), |i| colon + i);
+    let inline = &source[colon..line_end];
+    let lead = inline.len() - inline.trim_start().len();
+    if inline.trim_start().starts_with('[') {
+        return Some(flow_items(source, colon + lead));
+    }
+    // A block sequence: `-` items at one indent, each running until the
+    // next item or a line indented no more than the dash.
+    let mut items: Vec<(usize, usize)> = Vec::new();
+    let mut dash: Option<usize> = None;
+    let mut at = (line_end + 1).min(source.len());
+    while at < source.len() {
+        let next = source[at..].find('\n').map_or(source.len(), |i| at + i);
+        let line = &source[at..next];
+        let trimmed = line.trim_start();
+        let indent = line.len() - trimmed.len();
+        let body = trimmed.trim_end();
+        if body.is_empty() || body.starts_with('#') {
+            at = next + 1;
+            continue;
+        }
+        let is_dash = body == "-" || body.starts_with("- ");
+        match dash {
+            None if is_dash && indent >= column => dash = Some(indent),
+            None => break,
+            Some(d) if indent < d || (indent == d && !is_dash) => break,
+            _ => {}
+        }
+        let content_end = at + indent + body.len();
+        if is_dash && Some(indent) == dash {
+            let after = &trimmed[1..];
+            let content = at + indent + 1 + (after.len() - after.trim_start().len());
+            items.push((content.min(content_end), content_end));
+        } else if let Some(last) = items.last_mut() {
+            last.1 = content_end;
+        }
+        at = next + 1;
+    }
+    Some(items)
+}
+
+/// The elements of the flow sequence opening at `open` (`[`), split at
+/// top-level commas, outside quotes, nested brackets and braces.
+fn flow_items(source: &str, open: usize) -> Vec<(usize, usize)> {
+    let mut items = Vec::new();
+    let mut depth = 0usize;
+    let mut quote: Option<char> = None;
+    let mut begin = open + 1;
+    let push = |from: usize, to: usize, items: &mut Vec<(usize, usize)>| {
+        let text = &source[from..to];
+        let lead = text.len() - text.trim_start().len();
+        let trimmed = text.trim();
+        if !trimmed.is_empty() {
+            items.push((from + lead, from + lead + trimmed.len()));
+        }
+    };
+    for (i, c) in source[open + 1..].char_indices() {
+        let at = open + 1 + i;
+        if let Some(q) = quote {
+            if c == q {
+                quote = None;
+            }
+            continue;
+        }
+        match c {
+            '"' | '\'' => quote = Some(c),
+            '[' | '{' => depth += 1,
+            ']' | '}' if depth > 0 => depth -= 1,
+            ']' => {
+                push(begin, at, &mut items);
+                return items;
+            }
+            ',' if depth == 0 => {
+                push(begin, at, &mut items);
+                begin = at + 1;
+            }
+            _ => {}
+        }
+    }
+    items
 }
 
 fn err(source: &str, code: &'static str, message: String, path: &[&str]) -> Diagnostic {
@@ -1218,12 +1307,48 @@ fn block_shape(source: &str) -> (Vec<String>, String) {
     (keys, body.join("\n"))
 }
 
+/// The `field` of each criterion of the block: from the parsed object, or,
+/// while the YAML does not parse, from the `field:` keys written under
+/// `criteria:`. Never from comments or other text.
+fn criteria_fields(source: &str) -> Vec<String> {
+    if let Ok(object) = serde_yaml::from_str::<Value>(source) {
+        return object
+            .get("configurations")
+            .and_then(|c| c.get("bitdefender"))
+            .and_then(|b| b.get("detection"))
+            .and_then(|d| d.get("criteria"))
+            .and_then(Value::as_sequence)
+            .map(|list| {
+                list.iter()
+                    .filter_map(|c| c.get("field").and_then(Value::as_str))
+                    .map(str::to_string)
+                    .collect()
+            })
+            .unwrap_or_default();
+    }
+    let keys = crate::yaml_scalar::mapping_keys(source);
+    keys.iter()
+        .filter(|k| {
+            k.path.len() == 6
+                && k.path[..4] == ["configurations", "bitdefender", "detection", "criteria"]
+                && k.path[5] == "field"
+        })
+        .filter_map(|k| {
+            let line = &source[k.key_start..];
+            let line = &line[..line.find('\n').unwrap_or(line.len())];
+            key_value(line, "field").map(str::to_string)
+        })
+        .collect()
+}
+
 /// The actions the block's kind and target allow (bitdefender-1.0, `actions`).
 fn action_allowed(action: &str, source: &str) -> bool {
-    let (keys, text) = block_shape(source);
+    let (keys, _) = block_shape(source);
     let yara = keys.iter().any(|k| k == "yara") && !keys.iter().any(|k| k == "detection");
     let process_like = matches!(current_target(source).as_deref(), Some("process" | "file"))
-        || text.contains(".CreatedBy.");
+        || criteria_fields(source)
+            .iter()
+            .any(|f| f.contains(".CreatedBy."));
     match action {
         "kill_process" => !yara && process_like,
         "sandbox" | "quarantine" => yara || process_like,
@@ -2121,6 +2246,98 @@ configurations:
         );
         // The range starts at the item's first key, not the `criteria:` key.
         assert_eq!(found[0].range.start.character, 8);
+    }
+
+    /// `(code, start line, start column, end line, end column)` of each
+    /// finding.
+    fn spans(source: &str) -> Vec<(String, u32, u32, u32, u32)> {
+        let object: Value = serde_yaml::from_str(source).unwrap();
+        constraint_diagnostics(source, &object, &object["configurations"]["bitdefender"])
+            .into_iter()
+            .map(|d| {
+                (
+                    d.code,
+                    d.range.start.line,
+                    d.range.start.character,
+                    d.range.end.line,
+                    d.range.end.character,
+                )
+            })
+            .collect()
+    }
+
+    #[test]
+    fn every_item_form_is_ranged_on_the_item() {
+        let head = "configurations:\n  bitdefender:\n    status: STAGING\n    detection:\n      target: process\n";
+        // A flow mapping item.
+        let flow_item = format!("{head}      criteria:\n      - {{field: Process.Bogus, is: a}}\n");
+        assert_eq!(
+            spans(&flow_item),
+            [("bitdefender_criterion_field".into(), 6, 8, 6, 37)]
+        );
+        // A scalar item.
+        let scalar = format!("{head}      criteria:\n      - Process.Name\n");
+        assert_eq!(
+            spans(&scalar),
+            [("bitdefender_criterion_shape".into(), 6, 8, 6, 20)]
+        );
+        // Items of a flow sequence, the second one wrong.
+        let flow_list = format!(
+            "{head}      criteria: [{{field: Process.Name, is: a}}, {{field: Process.Bogus, is: 'x, y'}}]\n"
+        );
+        let found = spans(&flow_list);
+        assert_eq!(found.len(), 1, "{found:?}");
+        let line = flow_list.lines().nth(5).unwrap();
+        let start = line.find("{field: Process.Bogus").unwrap() as u32;
+        assert_eq!(
+            found[0],
+            (
+                "bitdefender_criterion_field".into(),
+                5,
+                start,
+                5,
+                line.len() as u32 - 1
+            )
+        );
+        // A block `any:` list: the range runs over its items.
+        let block_any = format!(
+            "{head}      criteria:\n      - field: Process.Bogus\n        any:\n        - a\n        - b\n      - field: Process.Name\n        is: c\n"
+        );
+        assert_eq!(
+            spans(&block_any),
+            [("bitdefender_criterion_field".into(), 6, 8, 9, 11)]
+        );
+    }
+
+    #[test]
+    fn only_criteria_fields_unlock_process_actions() {
+        let source = "configurations:
+  bitdefender:
+    status: STAGING
+    # field: Registry.CreatedBy.Name
+    detection:
+      target: registry
+      alert: File.CreatedBy.Name
+      criteria:
+      - field: Registry.Key
+        is: HKLM\\Run.CreatedBy.x
+    actions:
+      
+";
+        let actions = complete(source, "actions:\n      ");
+        assert!(
+            !actions
+                .iter()
+                .any(|a| matches!(a.as_str(), "kill_process" | "sandbox" | "quarantine")),
+            "{actions:?}"
+        );
+        let unlocked = source.replace(
+            "      criteria:\n",
+            "      criteria:\n      - field: Registry.CreatedBy.Name\n        is: reg.exe\n",
+        );
+        let actions = complete(&unlocked, "actions:\n      ");
+        assert!(actions.contains(&"kill_process".to_string()), "{actions:?}");
+        assert_eq!(criteria_fields(source), ["Registry.Key"]);
     }
 
     #[test]
