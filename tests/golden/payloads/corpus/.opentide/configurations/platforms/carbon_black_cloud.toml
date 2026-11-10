@@ -1,0 +1,21 @@
+[platform]
+enabled = true
+
+[[tenants]]
+name = "org1"
+description = "Has a default watchlist"
+[tenants.setup]
+ssl = true
+url = "https://defense.example.org"
+org_key = "ORG1KEY"
+token = "$CBC_TOKEN"
+watchlist = "Opentide Watchlist"
+
+[[tenants]]
+name = "org2"
+description = "No default watchlist"
+[tenants.setup]
+ssl = true
+url = "https://defense2.example.org"
+org_key = "ORG2KEY"
+token = "$CBC_TOKEN"

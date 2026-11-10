@@ -9,7 +9,12 @@ locally, byte for byte what the Python CLI (the oracle, opentide 0.23.0) sends.
 | `sentinel.rs` | The `alertRules` PUT body for one tenant | `platforms/sentinel/deployer.py` `compile_deployment` |
 | `elastic.rs` | The Detection Engine rule body, its ATT&CK `threat` | `platforms/elastic/compile.py`, `attack.py` |
 | `sysdig.rs` | The `/api/secure/rules` body: the Falco rule a block deploys, its macros and lists expanded as Falco's loader expands them (`opentide_core::falco`, opentide-schema's `falco_text`), derived name, desc, priority, output and tags | `platforms/sysdig/compile.py`, `expansion.py` |
-| `preview.rs` | A dry run's payload entries; `compile_offline` | `deployment/preview.py` |
+| `defender.rs`, `sentinel_one.rs`, `crowdstrike.rs` | The rule a deploy creates (`POST`), updates or deletes on one tenant, by the id the deployment state records (`deploy.rs` `action`) | `platforms/<platform>/deployer.py` and `client.py` |
+| `splunk.rs` | The saved search's create and two updates: schedule, trigger, actions, `[[modifiers]]`, the tenant's actions and Enterprise Security; `Clock` is the random or current minute and hour a frequency runs at | `platforms/splunk/deployer.py`, `client.py` |
+| `harfanglab.rs` | The Sigma rule (YAML by serde-saphyr) or YARA file for a tenant of its `type`, or the delete | `platforms/harfanglab/deployer.py`, `client.py` |
+| `carbon_black.rs` | The watchlist report a deploy creates when the org holds none of its title (what else it does depends on the org) | `platforms/carbon_black/deployer.py`, the Carbon Black SDK's `Report` |
+| `deploy.rs` | What those six share: `Write` (method, URL, body), `Action`, tenant settings | `deployment/external_ids.py` |
+| `preview.rs` | A dry run's payload entries; `compile_offline`; `compile_tenant` (any platform, one tenant); `config_dump`, the block serialised from opentide-schema's model where the oracle prints `model_dump` | `deployment/preview.py` |
 | `plan.rs` | Rule selection by strategy (`make_deploy_plan`), tenants (`tenants_resolver`), create or update from deployment state, the tally, unset variables | `deployment/utils.py`, `planning.py`, `platforms/enabled.py`, `cli/services/deploy_plan.py` |
 | `dry_run.rs` | `deploy --dry-run`'s result payload, in the oracle's key order; `--uuid`/`--file` selection (#753) | `cli/services/deploy.py` |
 | `git.rs` | The git baseline: the run's changed files through gitoxide's crates (`gix-discover` finds the checkout, `gix-ref`, `gix-odb`, `gix-diff`, `gix-revision` for rev-specs and the merge base), CI diff sources | `deployment/git_repo.py`, `deployment/ci.py` |
@@ -40,9 +45,15 @@ domain, tier 1 (`xtask/layers.toml`), beside `opentide-analysis`: it reads the i
 - A rule a platform cannot compile is a `CompileError` with the oracle's `code`, reason and hint,
   never a panic.
 - `cargo xtask payloads diff --against python --corpus all` compares every body of every rule of
-  every corpus with the oracle's; a difference is a bug or an entry of
+  every corpus with the oracle's, on every platform; a difference is a bug or an entry of
   `tests/golden/payloads/APPROVED.toml` (moved to `tests/golden/APPROVED_DIFFS.toml` when deploy
-  runs on the Rust command line).
+  runs on the Rust command line): one difference (`[[diff]]`), or a class of the model-dump
+  previews (`[[dump]]`: `nulls`, `order`), which serde writes and Pydantic's `model_dump` did not.
+- A request body is the oracle's byte for byte as JSON. A text inside it that another format
+  serialises (Splunk's risk JSON, HarfangLab's Sigma YAML) is the crate's natural output
+  (serde_json, serde-saphyr), never a port of `json.dumps` or PyYAML; its difference is approved.
+- What a deploy reads that is not the rule (a Splunk schedule's random or current minute, Carbon
+  Black's report timestamp, the id the deployment state records) is an input, never read here.
 
 ## Test
 

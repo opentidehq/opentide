@@ -1,0 +1,33 @@
+name: SentinelOne Correlation
+
+metadata:
+  uuid: 00000000-0000-4000-8005-000000000402
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+
+description: SentinelOne Correlation for the compile corpus.
+
+response:
+  alert_severity: Informational
+
+configurations:
+  sentinel_one:
+    status: DISABLED
+    condition:
+      type: Correlation
+      cool_off: 2h
+      correlation:
+        entity: Endpoint
+        match_in_order: true
+        time_window: 2h
+        sub_queries:
+          - query: EventType = "Login"
+            matches_required: 5
+          - query: EventType = "Process Creation"
+            matches_required: 1
+    response:
+      treat_as_threat: false
+      network_quarantine: false

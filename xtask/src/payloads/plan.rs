@@ -5,9 +5,9 @@
 //! The command's result keys are compared value for value: `message`,
 //! `status`, `deployed`, `dry_run`, `plan`, `changes`, `strategies`,
 //! `tenants`, `missing_tenants`, `advice`, `warnings`, `skipped`, `detail`,
-//! `summary`, the exit code, and every payload entry `opentide-compile`
-//! compiles (an entry the oracle shows as the block's model dump waits for
-//! the platform models, UC-1.4, #810, and is counted).
+//! `summary`, the exit code, and every payload entry: a body, a failure, or
+//! the block's model dump (a dump that differs only as a `[[dump]]` class of
+//! `tests/golden/payloads/APPROVED.toml` approves is counted as approved).
 
 use std::fs;
 use std::path::Path;
@@ -74,8 +74,14 @@ pub fn request(argv: &[String], cwd: &Path) -> Request {
     request
 }
 
-/// One case's differences, each `key: oracle != candidate`.
-pub fn compare_case(case_dir: &Path, ws: &Path) -> Result<(Vec<String>, usize)> {
+/// One case's differences, each `key: oracle != candidate`, and the payload
+/// entries `dumps` approves (marked in `dumps_used`).
+pub fn compare_case(
+    case_dir: &Path,
+    ws: &Path,
+    dumps: &[super::DumpApproval],
+    dumps_used: &mut [bool],
+) -> Result<(Vec<String>, usize)> {
     let case: Case = toml::from_str(&fs::read_to_string(case_dir.join("case.toml"))?)
         .context("read case.toml")?;
     let recorded: Recorded = toml::from_str(&fs::read_to_string(case_dir.join("outcome.toml"))?)?;
@@ -128,7 +134,7 @@ pub fn compare_case(case_dir: &Path, ws: &Path) -> Result<(Vec<String>, usize)> 
             recorded.exit_code, outcome.exit_code
         ));
     }
-    let mut waiting = 0;
+    let mut approved_dumps = 0;
     if let (Some(Value::Object(oracle)), Some(Value::Object(mine))) =
         (document.get("payloads"), candidate.get("payloads"))
     {
@@ -144,9 +150,19 @@ pub fn compare_case(case_dir: &Path, ws: &Path) -> Result<(Vec<String>, usize)> 
                 continue;
             }
             for (expected, got) in oracle_entries.iter().zip(mine_entries) {
-                if got.is_null() {
-                    waiting += 1;
-                } else if expected != got {
+                if expected == got {
+                    continue;
+                }
+                // Both sides as serde_json writes a Value, keys sorted: the
+                // plan compares values, the key order is `payloads diff`'s.
+                let oracle_text = expected.to_string();
+                let candidate_text = got.to_string();
+                if let Some(position) =
+                    super::dump_approval(dumps, platform, &oracle_text, &candidate_text)
+                {
+                    dumps_used[position] = true;
+                    approved_dumps += 1;
+                } else {
                     differences.push(format!(
                         "payloads.{platform}: oracle {expected} != candidate {got}"
                     ));
@@ -154,7 +170,7 @@ pub fn compare_case(case_dir: &Path, ws: &Path) -> Result<(Vec<String>, usize)> 
             }
         }
     }
-    Ok((differences, waiting))
+    Ok((differences, approved_dumps))
 }
 
 /// One approved difference of a plan key (`[[plan]]` in
@@ -184,6 +200,8 @@ struct PlanApprovals {
     plan: Vec<ApprovedPlan>,
     #[serde(default, rename = "diff")]
     _diff: Vec<toml::Value>,
+    #[serde(default, rename = "dump")]
+    _dump: Vec<toml::Value>,
 }
 
 /// Reads the approved plan differences, checking each is complete and announced.
@@ -218,6 +236,12 @@ pub fn run(filter: Option<&str>) -> Result<bool> {
         Err(error) => return Err(error.into()),
     };
     let mut used = vec![false; approved.len()];
+    let dumps = match fs::read_to_string(repo.join(super::APPROVED)) {
+        Ok(text) => super::read_dump_approvals(&text, &changelog)?,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+        Err(error) => return Err(error.into()),
+    };
+    let mut dumps_used = vec![false; dumps.len()];
     let golden = repo.join("tests/golden");
     let spec = crate::golden::case::Spec::parse(&fs::read_to_string(golden.join("cases.toml"))?)?;
     let cases = golden.join("cases/deploy/json");
@@ -245,7 +269,7 @@ pub fn run(filter: Option<&str>) -> Result<bool> {
             fs::create_dir_all(&ws)?;
             fixture.materialise(&repo, &ws)?;
             let ws = dunce::canonicalize(&ws)?;
-            let (differences, waiting) = compare_case(&case_dir, &ws)?;
+            let (differences, dumped) = compare_case(&case_dir, &ws, &dumps, &mut dumps_used)?;
             let differences: Vec<String> = differences
                 .into_iter()
                 .filter(|difference| {
@@ -269,7 +293,7 @@ pub fn run(filter: Option<&str>) -> Result<bool> {
                 .collect();
             if differences.is_empty() {
                 println!(
-                    "{}: the plan agrees ({waiting} payload entries wait for UC-1.4)",
+                    "{}: the plan agrees ({dumped} model-dump entries differ as approved)",
                     case.id
                 );
             } else {

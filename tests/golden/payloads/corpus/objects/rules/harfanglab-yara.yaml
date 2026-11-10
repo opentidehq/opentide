@@ -1,0 +1,43 @@
+name: HarfangLab YARA Loader
+
+metadata:
+  uuid: 00000000-0000-4000-8005-000000000603
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+  author: Detection Team
+
+description: HarfangLab "YARA" for the compile corpus.
+
+references:
+  public:
+    1: https://example.org/report
+    2: https://example.org/other
+
+response:
+  alert_severity: Medium
+
+configurations:
+  harfanglab:
+    status: STAGING
+    tags:
+      - loader
+    yara:
+      imports:
+        - pe
+      meta:
+        context:
+          - file
+          - memory
+        os: Windows
+        arch:
+          - x64
+        score: Critical
+        classification: Loader "family"
+      strings: |
+        $a = "loader" ascii
+        $b = { 4D 5A }
+      condition: |
+        $a and $b
