@@ -17,12 +17,19 @@ publish = false
 workspace = true
 
 [dependencies]
+opentide-core.workspace = true
 opentide-schema.workspace = true
+# The revisions' JSON Schemas, whose `tide.vocab` keys the vocabulary check reads.
+schemars.workspace = true
+serde.workspace = true
+# The object vocabularies (threat, objective, rule) are built as vocabulary tables.
+toml.workspace = true
+# UUID v4 and canonical forms (`uuid-format`, deployment state shards).
+uuid.workspace = true
 # Objects in the order the registry meets them, looked up by UUID.
 indexmap = { version = "2", features = ["serde"] }
 # Each object file is read and parsed on its own thread.
 rayon.workspace = true
-serde.workspace = true
 serde_json.workspace = true
 # The catalogue's text fallbacks and `$VAR` references, as the oracle's patterns.
 regex.workspace = true

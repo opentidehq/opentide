@@ -4,9 +4,12 @@ Loading a Tide workspace once, in parallel, into the index the CLI, the SDK, `se
 language server share (plan §4, the `opentide-workspace` domain crate; UC-2.1, #816). It ports the
 oracle's `core/root.py`, `registry/discovery.py`, `registry/paths.py`, `registry/catalogue.py`,
 `registry/builder.py` (object loading), `registry/signals.py`, `core/chaining.py` and the
-references `validation/checks/cross_object.py` follows; the catalogue, coverage, `info`'s data and
-`rules unreviewed` (UC-2.4, `cli/services/catalog.py`, `info.py`, `rules.py`). Validation, lint
-and the language server come next (UC-2.2, UC-2.3, UC-2.5, UC-2.6).
+references `validation/checks/cross_object.py` follows. It runs `validate` (UC-2.2, #817:
+`validation/`, `cli/services/validation.py`, `cli/ui/diagnostics.py`) and reports every finding
+as the one `Diagnostic` ([ADR 0010](../../docs/internal/adr/0010-one-diagnostic-model.md)), and
+builds the catalogue, coverage, `info`'s data and `rules unreviewed` (UC-2.4, #819:
+`cli/services/catalog.py`, `info.py`, `rules.py`). Lint, the queries check and the language
+server come next (UC-2.3, UC-2.5, UC-2.6).
 
 ## Place
 
@@ -33,9 +36,17 @@ source (`ci.yml` `engine-package`, `scripts/ci-local.sh`).
 | `src/state.rs` | The deployment state shards, read only, for the catalogue's `deployment` |
 | `src/info.rs` | `info`: the platforms with their tenants (names of variables, never values), the vocabularies and their pins |
 | `src/review.rs` | `rules unreviewed`: the window, review instants (jiff), the RFC 0008 predicate |
+| `src/diagnostic.rs` | `Diagnostic`, `Severity`, `Fix`, `TextEdit`: the one finding type, serialised exactly as an issue of `validate --json` (keys in order); the frame's label and notes ride along unserialised |
+| `src/validate/mod.rs` | `validate` / `Workspace::validate`: the checks in the oracle's order, `--check`, `--queries`, `--strict`, the report (errors sorted as `sort_issues`), `checks` statuses, `summary`; `QueryCheck`, the host's query analysis (UC-2.5) |
+| `src/validate/scope.rs` | `--file`, `--uuid`, `--type` (`validation/scope.py`) |
+| `src/validate/objects.rs` | One object's checks: UUID format, schema (`revisions::dispatch`), the vocabulary walk over the revision's JSON Schema with its pins, configured values, deprecated fields, `platform_not_enabled`, vendor ids, references, chaining, `merge_reference_findings` |
+| `src/validate/states.rs` | `.opentide/states/deployment/` shards (`states/deployment.py`) |
+| `src/validate/annotate.rs` | `path`, `line`, `column`, `end_*`, `help`, `fix`, label and notes of each finding (`diagnostic_from_issue`) |
 | `src/export.rs` | `Index::to_json`: what `cargo xtask registry diff` compares |
 | `examples/load.rs` | `cargo xtask bench`'s `load` command for the Rust engine |
+| `examples/validate.rs` | `cargo xtask bench`'s `validate_*` commands for the Rust engine |
 | `tests/loading.rs` | Discovery, counts (one read and one parse per file, one resolution), load errors, duplicates, signals, references, the registry lifecycle, invalidation, the disk |
+| `tests/validate.rs` | Each check's findings, places and steps, the scope, the verdict and counts; every recorded `validate --json` finding round-trips through `Diagnostic` byte for byte |
 | `tests/index.rs` | Property test: after any edits, creations, deletions, renames and `paths.toml` changes, the incremental index equals a full rebuild |
 
 ## Invariants
@@ -50,6 +61,12 @@ source (`ci.yml` `engine-package`, `scripts/ci-local.sh`).
   configuration folder changes. `Stats` counts all three; the tests hold them.
 - The index is a pure function of the scans and the parses (`index::assemble`), taken in discovery
   order: a full load and an incremental one build the same index from the same parses.
+- `validate` reports what the oracle's `validate --json` reports: `cargo xtask validate diff`
+  runs every recorded checking case against its recording; a difference is a bug unless a rule of
+  `xtask/src/validate.rs` `APPROVED` explains it, with its CHANGELOG lead (a stale rule fails).
+  The queries check's findings are UC-2.5's and left out of the comparison.
+- A `Diagnostic`'s JSON keys and their order are the CLI contract (plan §3): never add, drop or
+  move one; what only a frame shows goes in `label` and `notes`.
 - YAML is opentide-schema's (YAML 1.2, saphyr); never re-implement a YAML 1.1 rule for parity.
 - No panics on what a file holds. `std::fs` only in `fs.rs` (`OsFs`); the rest reads through the
   `FileSystem`. No environment read but `RootOptions::from_env`.
@@ -57,7 +74,9 @@ source (`ci.yml` `engine-package`, `scripts/ci-local.sh`).
 ## Test
 
 ```bash
-cargo nextest run -p opentide-workspace loading index
+cargo nextest run -p opentide-workspace loading index validate
+cargo xtask validate diff                                 # the recordings; no oracle needed
+cargo xtask bench --engine rust --only validate_clean,validate_warnings,validate_file
 cargo xtask registry diff --against python --corpus all   # needs the oracle (OPENTIDE_ORACLE)
 cargo xtask bench --engine rust --only load
 ```

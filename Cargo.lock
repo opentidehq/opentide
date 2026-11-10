@@ -1198,13 +1198,17 @@ version = "0.12.0"
 dependencies = [
  "indexmap",
  "jiff",
+ "opentide-core",
  "opentide-schema",
  "proptest",
  "rayon",
  "regex",
+ "schemars",
  "serde",
  "serde_json",
  "thiserror",
+ "toml 0.8.23",
+ "uuid",
 ]
 
 [[package]]
