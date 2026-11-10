@@ -70,9 +70,12 @@ pub(crate) const DEFAULTS: &[(&str, &str, &str)] = &[
 ];
 /// `(command path, argument id, choices)`: an argument whose value the
 /// command checks itself, with its own message and suggestion (`info`'s
-/// section), so clap holds no choices for it; the catalogue lists them.
-pub(crate) const CHOICES: &[(&str, &str, &[&str])] =
-    &[("info", "section", &crate::commands::info::SECTIONS)];
+/// section, `deploy --strategy`), so clap holds no choices for it; the
+/// catalogue lists them.
+pub(crate) const CHOICES: &[(&str, &str, &[&str])] = &[
+    ("info", "section", &crate::commands::info::SECTIONS),
+    ("deploy", "strategy", &crate::commands::deploy::STRATEGIES),
+];
 
 /// The catalogue's choices for `id` in the command at `path`, when the
 /// command checks them itself.

@@ -5,6 +5,7 @@
 //! before the outcome line. `app::Run::emit_report` writes it in the run's
 //! mode.
 
+pub mod deploy;
 pub mod info;
 pub mod rules;
 
