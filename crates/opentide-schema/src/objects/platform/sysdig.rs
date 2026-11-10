@@ -70,6 +70,23 @@ pub enum ListItem {
 #[garde(allow_unvalidated)]
 #[schemars(rename = "SysdigException", description = "")]
 #[from_node(model = "SysdigException")]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(
+        frozen,
+        get_all,
+        eq,
+        name = "SysdigException",
+        module = "opentide._native.models"
+    )
+)]
+#[cfg_attr(
+    feature = "python",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+    )
+)]
 pub struct SysdigException {
     /// Exception name. Names SHOULD be unique in the block: Falco warns on a repeated name
     /// (`LOAD_EXCEPTION_NAME_NOT_UNIQUE`) and the engine reports it as a warning.
@@ -97,6 +114,23 @@ pub struct SysdigException {
 #[garde(allow_unvalidated)]
 #[schemars(rename = "SysdigMacro", description = "")]
 #[from_node(model = "SysdigMacro")]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(
+        frozen,
+        get_all,
+        eq,
+        name = "SysdigMacro",
+        module = "opentide._native.models"
+    )
+)]
+#[cfg_attr(
+    feature = "python",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+    )
+)]
 pub struct SysdigMacro {
     /// Macro name, matching `^[A-Za-z_][A-Za-z0-9_]*$`.
     pub name: String,
@@ -112,6 +146,23 @@ pub struct SysdigMacro {
 #[garde(allow_unvalidated)]
 #[schemars(rename = "SysdigList", description = "")]
 #[from_node(model = "SysdigList")]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(
+        frozen,
+        get_all,
+        eq,
+        name = "SysdigList",
+        module = "opentide._native.models"
+    )
+)]
+#[cfg_attr(
+    feature = "python",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+    )
+)]
 pub struct SysdigList {
     /// List name, matching `^[A-Za-z_][A-Za-z0-9_]*$`.
     pub name: String,
@@ -180,6 +231,8 @@ platform_block! {
     #[garde(custom(garde_block))]
     #[schemars(rename = "SysdigConfig", description = "")]
     #[from_node(model = "SysdigConfig", before = "raw_block")]
+    #[cfg_attr(feature = "python", pyo3::pyclass(frozen, get_all, eq, name = "SysdigConfig", module = "opentide._native.models"))]
+    #[cfg_attr(feature = "python", expect(clippy::unsafe_derive_deserialize, reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"))]
     pub struct SysdigConfig ["platform::sysdig::1.0"] {
         /// Falco condition. Required for a new rule. With `append_to_rule`, the text appended to the
         /// tuned rule's condition, usually starting with `and not`. Multiline; deploy joins lines with

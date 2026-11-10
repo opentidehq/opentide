@@ -16,6 +16,23 @@ use crate::pins::Pins;
 #[garde(allow_unvalidated)]
 #[schemars(rename = "HarfangLabSigmaLogSource", description = "")]
 #[from_node(model = "HarfangLabSigmaLogSource")]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(
+        frozen,
+        get_all,
+        eq,
+        name = "HarfangLabSigmaLogSource",
+        module = "opentide._native.models"
+    )
+)]
+#[cfg_attr(
+    feature = "python",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+    )
+)]
 pub struct HarfangLabSigmaLogSource {
     /// Sigma logsource category (`process_creation`).
     pub category: String,
@@ -60,6 +77,23 @@ pub enum SelectionValue {
 #[garde(allow_unvalidated)]
 #[schemars(rename = "HarfangLabSigmaSelection", description = "")]
 #[from_node(model = "HarfangLabSigmaSelection")]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(
+        frozen,
+        get_all,
+        eq,
+        name = "HarfangLabSigmaSelection",
+        module = "opentide._native.models"
+    )
+)]
+#[cfg_attr(
+    feature = "python",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+    )
+)]
 pub struct HarfangLabSigmaSelection {
     /// Selection name used by `condition`.
     pub name: String,
@@ -79,6 +113,23 @@ pub struct HarfangLabSigmaSelection {
 #[garde(allow_unvalidated)]
 #[schemars(rename = "HarfangLabSigma", description = "")]
 #[from_node(model = "HarfangLabSigma")]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(
+        frozen,
+        get_all,
+        eq,
+        name = "HarfangLabSigma",
+        module = "opentide._native.models"
+    )
+)]
+#[cfg_attr(
+    feature = "python",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+    )
+)]
 pub struct HarfangLabSigma {
     /// Sigma logsource: `category` and `product`.
     pub logsource: HarfangLabSigmaLogSource,
@@ -98,6 +149,23 @@ pub struct HarfangLabSigma {
 #[garde(allow_unvalidated)]
 #[schemars(rename = "HarfangLabYaraMeta", description = "")]
 #[from_node(model = "HarfangLabYaraMeta")]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(
+        frozen,
+        get_all,
+        eq,
+        name = "HarfangLabYaraMeta",
+        module = "opentide._native.models"
+    )
+)]
+#[cfg_attr(
+    feature = "python",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+    )
+)]
 pub struct HarfangLabYaraMeta {
     /// Scan contexts. The value `file` is rewritten from `os`: `Windows` → `file.pe`, `MacOS` →
     /// `file.macho`, `Linux` → `file.elf`. Other context values are kept.
@@ -124,6 +192,23 @@ pub struct HarfangLabYaraMeta {
 #[garde(allow_unvalidated)]
 #[schemars(rename = "HarfangLabYara", description = "")]
 #[from_node(model = "HarfangLabYara")]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(
+        frozen,
+        get_all,
+        eq,
+        name = "HarfangLabYara",
+        module = "opentide._native.models"
+    )
+)]
+#[cfg_attr(
+    feature = "python",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+    )
+)]
 pub struct HarfangLabYara {
     /// Scan context, OS, and optional score override.
     pub meta: HarfangLabYaraMeta,
@@ -156,6 +241,8 @@ platform_block! {
     #[garde(allow_unvalidated)]
     #[schemars(rename = "HarfangLabConfig", description = "")]
     #[from_node(model = "HarfangLabConfig")]
+    #[cfg_attr(feature = "python", pyo3::pyclass(frozen, get_all, eq, name = "HarfangLabConfig", module = "opentide._native.models"))]
+    #[cfg_attr(feature = "python", expect(clippy::unsafe_derive_deserialize, reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"))]
     pub struct HarfangLabConfig ["platform::harfanglab::1.0"] {
         /// Rule maturity. Mapped to HarfangLab `hl_status`.
         #[serde(default = "experimental")]

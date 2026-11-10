@@ -16,6 +16,23 @@ use crate::pins::Pins;
 #[garde(allow_unvalidated)]
 #[schemars(rename = "CrowdstrikeDetails", description = "")]
 #[from_node(model = "CrowdstrikeDetails")]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(
+        frozen,
+        get_all,
+        eq,
+        name = "CrowdstrikeDetails",
+        module = "opentide._native.models"
+    )
+)]
+#[cfg_attr(
+    feature = "python",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+    )
+)]
 pub struct CrowdstrikeDetails {
     /// `verbose` or `summary`, any case. Deploy lowercases the value.
     pub trigger: String,
@@ -46,6 +63,23 @@ pub struct CrowdstrikeDetails {
 #[garde(allow_unvalidated)]
 #[schemars(rename = "CrowdstrikeSchedule", description = "")]
 #[from_node(model = "CrowdstrikeSchedule")]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(
+        frozen,
+        get_all,
+        eq,
+        name = "CrowdstrikeSchedule",
+        module = "opentide._native.models"
+    )
+)]
+#[cfg_attr(
+    feature = "python",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+    )
+)]
 pub struct CrowdstrikeSchedule {
     /// Run interval. Deploy sends it as `@every <frequency>` (`@every 1h`).
     pub frequency: String,
@@ -67,6 +101,8 @@ platform_block! {
     #[garde(allow_unvalidated)]
     #[schemars(rename = "CrowdstrikeConfig", description = "")]
     #[from_node(model = "CrowdstrikeConfig")]
+    #[cfg_attr(feature = "python", pyo3::pyclass(frozen, get_all, eq, name = "CrowdstrikeConfig", module = "opentide._native.models"))]
+    #[cfg_attr(feature = "python", expect(clippy::unsafe_derive_deserialize, reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"))]
     pub struct CrowdstrikeConfig ["platform::crowdstrike::1.0"] {
         /// Correlation outcome, trigger mode, and alert metadata.
         pub details: CrowdstrikeDetails,

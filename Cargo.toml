@@ -98,7 +98,7 @@ js-sys = "0.3"
 # The Tide model as code (plan D-2, docs/internal/adr/0001-tide-model-as-rust-code.md):
 # JSON Schema 2020-12 from the structs, and their constraints. garde has no
 # default features; a model that needs one (`regex` for `pattern`) adds it then.
-schemars = "1.2"
+schemars = { version = "1.2", features = ["indexmap2"] }
 # PyO3, for analysis/ (opentide._native) and opentide-schema's `python` feature.
 pyo3 = "0.30.1"
 garde = { version = "0.23", features = ["derive"] }

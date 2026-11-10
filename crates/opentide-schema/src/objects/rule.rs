@@ -4,9 +4,8 @@
 //!
 //! The platform blocks are [`crate::objects::platform`]'s (UC-1.4, #810).
 
-use std::collections::BTreeMap;
-
 use garde::Validate;
+use indexmap::IndexMap;
 use schemars::{JsonSchema, Schema, SchemaGenerator, json_schema};
 use serde::{Deserialize, Serialize};
 
@@ -27,6 +26,23 @@ use crate::revision::revisions;
 #[serde(deny_unknown_fields)]
 #[garde(context(Pins))]
 #[schemars(rename = "RuleConfigurations")]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(
+        frozen,
+        get_all,
+        eq,
+        name = "RuleConfigurations",
+        module = "opentide._native.models"
+    )
+)]
+#[cfg_attr(
+    feature = "python",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+    )
+)]
 pub struct RuleConfigurations {
     /// Microsoft Sentinel analytics rule (`platform::sentinel::1.0`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -143,7 +159,7 @@ revisions! {
             #[serde(default)]
             #[schemars(extend("tide.template.hide" = true, "tide.field.role" = "configurations"))]
             #[garde(skip)]
-            pub platforms: BTreeMap<String, BTreeMap<String, Any>>,
+            pub platforms: IndexMap<String, IndexMap<String, Any>>,
             /// External and internal references.
             #[serde(default, skip_serializing_if = "Option::is_none")]
             #[garde(dive)]
@@ -177,6 +193,8 @@ revisions! {
     #[serde(deny_unknown_fields)]
     #[garde(context(Pins))]
     #[schemars(rename = "DetectionRule")]
+    #[cfg_attr(feature = "python", pyo3::pyclass(frozen, get_all, eq, name = "DetectionRule", module = "opentide._native.models"))]
+    #[cfg_attr(feature = "python", expect(clippy::unsafe_derive_deserialize, reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"))]
     pub struct RuleV1_0 {
         @0,
         /// Object metadata: identifier, schema, version, dates and TLP.
@@ -192,6 +210,8 @@ revisions! {
     #[serde(deny_unknown_fields)]
     #[garde(context(Pins))]
     #[schemars(rename = "DetectionRule_v1_1")]
+    #[cfg_attr(feature = "python", pyo3::pyclass(frozen, get_all, eq, name = "DetectionRule_v1_1", module = "opentide._native.models"))]
+    #[cfg_attr(feature = "python", expect(clippy::unsafe_derive_deserialize, reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"))]
     pub struct RuleV1_1 {
         @0,
         /// Object metadata: identifier, schema, version, dates and TLP. This revision adds optional

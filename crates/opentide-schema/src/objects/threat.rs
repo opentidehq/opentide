@@ -1,8 +1,7 @@
 //! Threat vector (TVM) models, schema `threat::1.0` (`models/threat.py`).
 
-use std::collections::BTreeMap;
-
 use garde::Validate;
+use indexmap::IndexMap;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -17,6 +16,23 @@ use crate::pins::Pins;
 #[garde(context(Pins))]
 #[schemars(rename = "ThreatActor")]
 #[from_node(model = "ThreatActor")]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(
+        frozen,
+        get_all,
+        eq,
+        name = "ThreatActor",
+        module = "opentide._native.models"
+    )
+)]
+#[cfg_attr(
+    feature = "python",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+    )
+)]
 pub struct ThreatActor {
     /// Scoped `actors::1.0` value: `att&ck::<id>` or `misp::<id>`.
     #[schemars(extend("tide.vocab" = "actors", "tide.vocab.scoped" = true))]
@@ -54,6 +70,23 @@ pub enum Killchain {
 #[garde(context(Pins))]
 #[schemars(rename = "ThreatBody", description = "")]
 #[from_node(model = "ThreatBody")]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(
+        frozen,
+        get_all,
+        eq,
+        name = "ThreatBody",
+        module = "opentide._native.models"
+    )
+)]
+#[cfg_attr(
+    feature = "python",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+    )
+)]
 pub struct ThreatBody {
     /// Narrative description.
     #[schemars(extend("tide.template.multiline" = true))]
@@ -110,7 +143,7 @@ pub struct ThreatBody {
     /// Vector chaining relationships.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[garde(skip)]
-    pub chaining: Option<Vec<BTreeMap<String, String>>>,
+    pub chaining: Option<Vec<IndexMap<String, String>>>,
     /// CVE identifiers the threat exploits (`CVE-2024-3400`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schemars(title = "CVE")]
@@ -124,6 +157,23 @@ pub struct ThreatBody {
 #[garde(context(Pins))]
 #[schemars(rename = "ThreatVector")]
 #[from_node(model = "ThreatVector")]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(
+        frozen,
+        get_all,
+        eq,
+        name = "ThreatVector",
+        module = "opentide._native.models"
+    )
+)]
+#[cfg_attr(
+    feature = "python",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+    )
+)]
 pub struct ThreatVectorV1_0 {
     /// Threat vector display name.
     #[garde(skip)]

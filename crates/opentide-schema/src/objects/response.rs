@@ -13,6 +13,23 @@ use crate::pins::Pins;
 #[garde(context(Pins))]
 #[schemars(rename = "ResponseSearch", description = "")]
 #[from_node(model = "ResponseSearch")]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(
+        frozen,
+        get_all,
+        eq,
+        name = "ResponseSearch",
+        module = "opentide._native.models"
+    )
+)]
+#[cfg_attr(
+    feature = "python",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+    )
+)]
 pub struct ResponseSearch {
     /// Why this search is run.
     #[garde(skip)]
@@ -32,6 +49,23 @@ pub struct ResponseSearch {
 #[garde(context(Pins))]
 #[schemars(rename = "ResponseProcedure", description = "")]
 #[from_node(model = "ResponseProcedure")]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(
+        frozen,
+        get_all,
+        eq,
+        name = "ResponseProcedure",
+        module = "opentide._native.models"
+    )
+)]
+#[cfg_attr(
+    feature = "python",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+    )
+)]
 pub struct ResponseProcedure {
     /// Analysis steps narrative.
     #[schemars(extend("tide.template.multiline" = true))]
@@ -53,6 +87,23 @@ pub struct ResponseProcedure {
 #[garde(context(Pins))]
 #[schemars(rename = "RuleResponse", description = "")]
 #[from_node(model = "RuleResponse")]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(
+        frozen,
+        get_all,
+        eq,
+        name = "RuleResponse",
+        module = "opentide._native.models"
+    )
+)]
+#[cfg_attr(
+    feature = "python",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+    )
+)]
 pub struct RuleResponse {
     /// Alert severity vocabulary.
     #[serde(default = "default_alert_severity")]

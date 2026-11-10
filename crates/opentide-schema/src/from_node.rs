@@ -211,6 +211,18 @@ pub trait FromNode: Sized {
     fn from_node(node: &Node, cx: &mut Context) -> Option<Self>;
 }
 
+/// A model's class name and fields, written by `#[derive(FromNode)]` on a
+/// struct: what the Python classes read for `model_dump`, `__repr__` and the
+/// serialised names (UC-1.9, #815).
+pub trait Model {
+    /// The Pydantic class name (`#[from_node(model = "...")]`, else the Rust
+    /// name).
+    const CLASS: &'static str;
+    /// Each field's attribute name and serialised name, in declaration order
+    /// (`("schema_id", "schema")`).
+    const FIELDS: &'static [(&'static str, &'static str)];
+}
+
 /// Converts a document's root into `T`, with every error placed (span and
 /// `yaml_line`) in the document. A document with no node (empty) is `null`.
 pub fn from_document<T: FromNode>(document: &Document) -> Result<T, Vec<SchemaError>> {
@@ -598,35 +610,55 @@ impl<T: FromNode> FromNode for Vec<T> {
     }
 }
 
+/// A mapping with string keys: Pydantic's `dict[str, V]`. The ordered
+/// map keeps the document's order, as a Python `dict` does.
+fn string_map<V: FromNode, M: Default>(
+    node: &Node,
+    cx: &mut Context,
+    insert: impl Fn(&mut M, String, V),
+) -> Option<M> {
+    let Value::Map(entries) = &node.value else {
+        cx.error(
+            ErrorKind::InvalidType("dict_type"),
+            messages::DICT_TYPE,
+            node,
+        );
+        return None;
+    };
+    let mut values = M::default();
+    let mut ok = true;
+    for entry in entries {
+        if !cx.tick() {
+            return None;
+        }
+        let key = entry.key.value.to_string();
+        cx.at_key(&key, |cx| {
+            let name = cx.at_key("[key]", |cx| String::from_node(&entry.key, cx));
+            let value = V::from_node(&entry.value, cx);
+            match (name, value) {
+                (Some(name), Some(value)) => {
+                    insert(&mut values, name, value);
+                }
+                _ => ok = false,
+            }
+        });
+    }
+    ok.then_some(values)
+}
+
 impl<V: FromNode> FromNode for BTreeMap<String, V> {
     fn from_node(node: &Node, cx: &mut Context) -> Option<Self> {
-        let Value::Map(entries) = &node.value else {
-            cx.error(
-                ErrorKind::InvalidType("dict_type"),
-                messages::DICT_TYPE,
-                node,
-            );
-            return None;
-        };
-        let mut values = BTreeMap::new();
-        let mut ok = true;
-        for entry in entries {
-            if !cx.tick() {
-                return None;
-            }
-            let key = entry.key.value.to_string();
-            cx.at_key(&key, |cx| {
-                let name = cx.at_key("[key]", |cx| String::from_node(&entry.key, cx));
-                let value = V::from_node(&entry.value, cx);
-                match (name, value) {
-                    (Some(name), Some(value)) => {
-                        values.insert(name, value);
-                    }
-                    _ => ok = false,
-                }
-            });
-        }
-        ok.then_some(values)
+        string_map(node, cx, |map: &mut Self, key, value| {
+            map.insert(key, value);
+        })
+    }
+}
+
+impl<V: FromNode> FromNode for indexmap::IndexMap<String, V> {
+    fn from_node(node: &Node, cx: &mut Context) -> Option<Self> {
+        string_map(node, cx, |map: &mut Self, key, value| {
+            map.insert(key, value);
+        })
     }
 }
 
