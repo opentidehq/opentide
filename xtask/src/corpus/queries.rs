@@ -4,7 +4,8 @@
 //! engines (`opentide_cli::queries::EngineQueries`), and every finding of
 //! the queries check (`context.source` `engine`, in `issues` and `warnings`)
 //! compared with the oracle's, every key of it, with the number of queries
-//! checked.
+//! checked. A difference fails the kind unless an approved rule explains it:
+//! `xtask validate diff`'s, or one of [`APPROVED`], which only the kinds reach.
 //!
 //! The kinds `opentide lint` reports (`command = ["lint"]`) come with lint
 //! on the Rust engine (UC-2.3): lint's queries check reads the editor's
@@ -20,6 +21,7 @@ use opentide_workspace::{OsFs, RootOptions, Workspace};
 use serde_json::{Value as Json, json};
 
 use super::faults::{Catalogue, Kind};
+use crate::validate::Approved;
 
 /// The queries check on the engines, counting the CrowdStrike queries it
 /// checked (the oracle checked none).
@@ -162,12 +164,45 @@ pub fn rust_report(dir: &Path, command: &[String]) -> Result<(Json, usize)> {
     ))
 }
 
-/// Whether a validate diff rule (`xtask validate diff`'s `APPROVED`)
+/// The approved differences only the fault kinds reach: no recorded
+/// `validate --json` case holds them, so `xtask validate diff` would find
+/// them stale. A complete `--only queries` run fails on one that explains
+/// nothing.
+pub const APPROVED: &[Approved] = &[Approved {
+    id: "hunt-platform",
+    reason: "a response hunt's finding names the platform its `system` runs on as \
+             `context.platform` (#696), where the oracle wrote `null` outside \
+             `configurations`; the finding, its code, place and field path are the same",
+    changelog: "**A hunt's findings name the platform it runs on**",
+    applies: hunt_platform,
+}];
+
+/// The rule, of `xtask validate diff`'s `APPROVED` or of [`APPROVED`], that
 /// explains this pair of findings.
-pub fn approved(oracle: Option<&Json>, rust: Option<&Json>) -> bool {
+pub fn approved(oracle: Option<&Json>, rust: Option<&Json>) -> Option<&'static str> {
     crate::validate::APPROVED
         .iter()
-        .any(|rule| (rule.applies)(oracle, rust, &[]))
+        .chain(APPROVED)
+        .find(|rule| (rule.applies)(oracle, rust, &[]))
+        .map(|rule| rule.id)
+}
+
+/// A hunt's finding with its `system` as `context.platform`, where the
+/// oracle's is `null`, and nothing else different.
+fn hunt_platform(oracle: Option<&Json>, rust: Option<&Json>, _: &[Json]) -> bool {
+    let (Some(oracle), Some(rust)) = (oracle, rust) else {
+        return false;
+    };
+    let platform = |finding: &Json| finding.pointer("/context/platform").cloned();
+    let mut same = rust.clone();
+    if let Some(context) = same.get_mut("context").and_then(Json::as_object_mut) {
+        context.insert("platform".to_owned(), Json::Null);
+    }
+    oracle.pointer("/context/source") == Some(&json!("engine"))
+        && oracle.pointer("/field_path/0") == Some(&json!("response"))
+        && platform(oracle) == Some(Json::Null)
+        && platform(rust).is_some_and(|value| value.as_str().is_some_and(|s| !s.is_empty()))
+        && same == *oracle
 }
 
 /// The differences between the oracle's findings and the Rust run's, each
@@ -234,6 +269,30 @@ mod tests {
         assert_eq!(found[1], json!({"oracle": c, "rust": null}));
         let extra = differences(&[], std::slice::from_ref(&a));
         assert_eq!(extra, vec![json!({"oracle": null, "rust": a})]);
+    }
+
+    #[test]
+    fn a_hunt_s_platform_is_approved_and_nothing_else_with_it() {
+        let oracle = json!({
+            "code": "spl_empty_command", "line": 4,
+            "field_path": ["response", "procedure", "searches", "1", "query"],
+            "context": {"source": "engine", "language": "spl", "platform": null},
+        });
+        let mut rust = oracle.clone();
+        rust["context"]["platform"] = json!("splunk");
+        assert_eq!(approved(Some(&oracle), Some(&rust)), Some("hunt-platform"));
+        // Another difference beside it is not this rule's.
+        let mut moved = rust.clone();
+        moved["line"] = json!(5);
+        assert_eq!(approved(Some(&oracle), Some(&moved)), None);
+        // A rule block's platform is never `null` in the oracle's report.
+        let mut block = oracle.clone();
+        block["field_path"] = json!(["configurations", "splunk", "query"]);
+        let mut block_rust = rust.clone();
+        block_rust["field_path"] = block["field_path"].clone();
+        assert_eq!(approved(Some(&block), Some(&block_rust)), None);
+        // A finding on one side only is not a platform that differs.
+        assert_eq!(approved(None, Some(&rust)), None);
     }
 
     #[test]

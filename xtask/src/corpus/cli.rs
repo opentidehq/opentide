@@ -733,6 +733,7 @@ fn queries_check(parsed: &FaultArgs, catalogue: &Catalogue, ids: &BTreeSet<Strin
     };
     let started = Instant::now();
     let mut failed = 0usize;
+    let mut used = BTreeSet::new();
     for id in ids {
         let kind = catalogue
             .kind(id)
@@ -759,7 +760,8 @@ fn queries_check(parsed: &FaultArgs, catalogue: &Catalogue, ids: &BTreeSet<Strin
                 (!oracle.is_null()).then_some(oracle),
                 (!rust.is_null()).then_some(rust),
             );
-            if queries::approved(oracle, rust) {
+            if let Some(rule) = queries::approved(oracle, rust) {
+                used.insert(rule);
                 approved += 1;
                 continue;
             }
@@ -817,6 +819,19 @@ fn queries_check(parsed: &FaultArgs, catalogue: &Catalogue, ids: &BTreeSet<Strin
         }
     }
     drop(guard);
+    // On every kind, a rule only the kinds reach must explain something.
+    let mut stale = 0usize;
+    if queries::kinds(catalogue).len() == ids.len() {
+        for rule in queries::APPROVED {
+            if !used.contains(rule.id) {
+                println!(
+                    "FAIL the approved difference `{}` explains nothing: it is stale ({})",
+                    rule.id, rule.reason
+                );
+                stale += 1;
+            }
+        }
+    }
     println!(
         "corpus faults --engine rust: {} query kinds, {} passed, {failed} failed, in {:.1} s \
          against {}",
@@ -825,7 +840,7 @@ fn queries_check(parsed: &FaultArgs, catalogue: &Catalogue, ids: &BTreeSet<Strin
         started.elapsed().as_secs_f64(),
         catalogue.oracle
     );
-    Ok(u8::from(failed > 0))
+    Ok(u8::from(failed > 0 || stale > 0))
 }
 
 /// A configuration folder as [`configuration::rust_findings`] reads it:
