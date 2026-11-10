@@ -65,7 +65,7 @@ A body `lsp-server` cannot parse is answered from the bytes it read (`Recording`
 
 `positionEncoding` is always `utf-16`. `capabilities.experimental.opentide` is `host_info()` (#172): `{ host, engine, catalog, configurationChecks, configurationSchemas, workspaceUpdates }`, the same as `--version --json` (`workspaceUpdates`: the server takes `opentide/didChangeWorkspace`); a key is added in a minor release and never removed.
 
-Providers: incremental sync, hover, completion (resolve, trigger characters; a space opens no list in Tide YAML), signature help, definition, references, document symbol (a tree for Tide: object, sections, platform blocks, queries), workspace symbol, document highlight, code action (`quickfix`, `source.fixAll.opentide`), folding, selection range, inlay hints (label parts that lead to the object), document links (ATT&CK ids, object UUIDs), code lens (`opentide.showReferences` with `[uri, position, locations]`), pull and workspace diagnostics, semantic tokens (full).
+Providers: incremental sync, hover, completion (resolve, trigger characters; a space opens no list in Tide YAML), signature help, definition and references (Tide UUIDs; YARA strings and rules), rename with prepare (YARA string identifiers, in `.yar` files and in Tide YARA blocks, across HarfangLab's decomposed `strings` and `condition`; a refusal is `RequestFailed` with its reason, `Dispatcher::on_fallible`), document formatting (`.yar` files, `yara-x-fmt`), document symbol (a tree for Tide: object, sections, platform blocks, queries), workspace symbol, document highlight, code action (`quickfix`, `source.fixAll.opentide`), folding, selection range, inlay hints (label parts that lead to the object), document links (ATT&CK ids, object UUIDs), code lens (`opentide.showReferences` with `[uri, position, locations]`), pull and workspace diagnostics, semantic tokens (full).
 
 Custom methods: `opentide/analyze`, `opentide/highlight`, `opentide/compiledKql`, `opentide/compiledSpl`, `opentide/fs/read`, the notification `opentide/didChangeWorkspace` (a host with no filesystem updates what it supplied on `initialize`: `Supplied::apply`, then `Session::supplied_changed`; a supplied file is its root's, `Session::owning_root`), `opentide/catalog` (#198; the notification `opentide/catalogChanged` goes out from `Session::flush_publishes` when a root's catalog digest changes, once the client asked for that root). An index entry's references are found once in `index_object`; a handler reads `IndexedObject::refs`, never walks bodies.
 
@@ -97,7 +97,7 @@ CrowdStrike queries are CQL (`opentide-cql`). Falcon FQL (the API filter languag
 
 `editors/helix/languages.toml`, `editors/nvim/opentide.lua`, `editors/zed/opentide.json`. VS Code is a separate repository. Samples disable yamlls on `objects/**`. Semantic tokens come from this server. TextMate grammars are generated (`generate-highlights`), never hand-authored in an editor repo.
 
-Language ids in editors: `opentide-yaml`, `kql`, `spl`, `esql`, `eql`, `kuery`, `lucene`, `falco`, `cql`, `opentide-config` (`.opentide/configurations/**/*.toml`, the editor's TOML grammar, generic TOML servers off). Not `sql`. Not `otide`.
+Language ids in editors: `opentide-yaml`, `kql`, `spl`, `esql`, `eql`, `kuery`, `lucene`, `falco`, `cql`, `yara` (`.yar`, `.yara`), `opentide-config` (`.opentide/configurations/**/*.toml`, the editor's TOML grammar, generic TOML servers off). Not `sql`. Not `otide`.
 
 ## Tests
 

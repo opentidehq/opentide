@@ -1,0 +1,33 @@
+# A YARA signature written as a YAML alias of text defined elsewhere in the
+# file. What the block deploys must be written in the block.
+# Expected YARA code: yara_signature_alias.
+name: HarfangLab YARA signature from an alias
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000044
+  schema: rule::1.0
+  version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
+  tlp: clear
+description: |
+  The signature is an alias of an anchor in another key.
+status: STAGING
+severity: Medium
+references:
+  public:
+    1: &shared_yara |
+      rule Cmd_String {
+        meta:
+          context = "file"
+        strings:
+          $a = "cmd.exe" ascii
+        condition:
+          $a
+      }
+configurations:
+  harfanglab:
+    enabled: true
+    schema: platform::harfanglab::1.0
+    status: STAGING
+    yara:
+      signature: *shared_yara

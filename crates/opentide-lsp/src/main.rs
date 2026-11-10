@@ -160,13 +160,13 @@ fn cmd_analyze(file: &Path, language: Option<&str>, platform: Option<&str>) -> R
             // The filename and metadata checks follow the workspace's
             // lint.toml, as the server and `opentide lint` do (#214).
             let lint = workspace.join(opentide_analysis::LINT_CONFIGURATION);
-            if let Ok(text) = std::fs::read_to_string(&lint) {
-                if let Err(err) = opentide_analysis::install_lint(Some(&text)) {
-                    eprintln!(
-                        "opentide-lsp: {}: {err}; opentide lint's defaults apply",
-                        lint.display()
-                    );
-                }
+            if let Ok(text) = std::fs::read_to_string(&lint)
+                && let Err(err) = opentide_analysis::install_lint(Some(&text))
+            {
+                eprintln!(
+                    "opentide-lsp: {}: {err}; opentide lint's defaults apply",
+                    lint.display()
+                );
             }
         }
     }
@@ -235,6 +235,10 @@ fn cmd_generate_highlights(check: bool) -> Result<()> {
         (
             root.join("cql.tmLanguage.json"),
             serde_json::to_string_pretty(&generate_tm_language(LanguageId::Cql, &spec))?,
+        ),
+        (
+            root.join("yara.tmLanguage.json"),
+            serde_json::to_string_pretty(&generate_tm_language(LanguageId::Yara, &spec))?,
         ),
         (
             root.join("monaco.json"),

@@ -364,3 +364,63 @@ Hover explains functions (signature, summary, aggregate, lifecycle, CrowdStrike'
 | cql.link-constraint | `link_constraint` | `link_constraint__valid`, `link_constraint__invalid` | `property`, `operator` |
 | cql.line-comment | `line_comment` | `line_comment__valid`, `line_comment__invalid` | `comment` |
 | cql.block-comment | `block_comment` | `block_comment__valid`, `block_comment__invalid` | `comment` |
+
+## YARA
+
+Language id `yara` (`.yar`, `.yara`). YARA signatures as libyara 4.5 compiles them ([yara-1.0](https://github.com/opentidehq/specifications/blob/main/specs/languages/yara-1.0.md)): HarfangLab and Bitdefender `yara` blocks. `docs/YARA.md` has the codes.
+
+- **Verdicts** come from VirusTotal's `yara-x-parser` (`crates/opentide-yara`), not from this grammar.
+- **The tree-sitter grammar** (`grammars/tree-sitter-opentide-yara`) colours and structures the text. It is written from libyara's `grammar.y`, `lexer.l` and `hex_grammar.y`, with their precedence: `expression` (booleans, comparisons, `of`, `for`) over `primary_expression` (arithmetic, string counts and offsets, module references). `\` is division, so `/` always opens a regexp.
+- **Agreement**: `crates/opentide-yara/tests/tree_sitter_agreement.rs` runs both parsers over yara-x-parser's own 71 inputs and this corpus. They agree on every input but eight, each listed with its reason. Five are YARA-X-only syntax (`with`, digit separators, float meta and `"""` strings, booleans in `of` tuples), which the grammar refuses as libyara does. Three are libyara syntax that YARA-X refuses (an escape in a `base64` alphabet, rule wildcards in `of`).
+
+| id | grammar rule | fixture ids | capture |
+| --- | --- | --- | --- |
+| yara.comment | `comment` | `comment__valid`, `comment__invalid` | `comment` |
+| yara.import | `import` | `import__valid`, `import__invalid` | `keyword`, `string` |
+| yara.include | `include` | `include__valid`, `include__invalid` | `keyword`, `string` |
+| yara.rule | `rule` | `rule__valid`, `rule__invalid` | `keyword`, `type` |
+| yara.rule-modifier | `rule_modifier` | `rule_modifier__valid`, `rule_modifier__invalid` | `keyword` |
+| yara.tags | `tags` | `tags__valid`, `tags__invalid` | `punctuation.delimiter`, `constant` |
+| yara.meta-section | `meta_section` | `meta_section__valid`, `meta_section__invalid` | `keyword` |
+| yara.meta-definition | `meta_definition` | `meta_definition__valid`, `meta_definition__invalid` | `property`, `operator` |
+| yara.negative-integer | `negative_integer` | `negative_integer__valid`, `negative_integer__invalid` | `operator`, `number` |
+| yara.strings-section | `strings_section` | `strings_section__valid`, `strings_section__invalid` | `keyword` |
+| yara.string-definition | `string_definition` | `string_definition__valid`, `string_definition__invalid` | `variable`, `operator` |
+| yara.string-modifier | `string_modifier` | `string_modifier__valid`, `string_modifier__invalid` | `keyword` |
+| yara.xor-modifier | `xor_modifier` | `xor_modifier__valid`, `xor_modifier__invalid` | `keyword`, `number` |
+| yara.base64-modifier | `base64_modifier` | `base64_modifier__valid`, `base64_modifier__invalid` | `keyword`, `string` |
+| yara.hex-string | `hex_string` | `hex_string__valid`, `hex_string__invalid` | `punctuation.bracket`, `number` |
+| yara.hex-not | `hex_not` | `hex_not__valid`, `hex_not__invalid` | `operator`, `number` |
+| yara.hex-jump | `hex_jump` | `hex_jump__valid`, `hex_jump__invalid` | `punctuation.bracket`, `number` |
+| yara.hex-alternative | `hex_alternative` | `hex_alternative__valid`, `hex_alternative__invalid` | `punctuation.bracket`, `operator` |
+| yara.condition-section | `condition_section` | `condition_section__valid`, `condition_section__invalid` | `keyword` |
+| yara.filesize | `filesize` | `filesize__valid`, `filesize__invalid` | `constant` |
+| yara.entrypoint | `entrypoint` | `entrypoint__valid`, `entrypoint__invalid` | `constant` |
+| yara.parenthesized-expression | `parenthesized_expression` | `parenthesized_expression__valid`, `parenthesized_expression__invalid` | `punctuation.bracket` |
+| yara.parenthesized-primary | `parenthesized_primary` | `parenthesized_primary__valid`, `parenthesized_primary__invalid` | `punctuation.bracket` |
+| yara.not-expression | `not_expression` | `not_expression__valid`, `not_expression__invalid` | `keyword` |
+| yara.and-expression | `and_expression` | `and_expression__valid`, `and_expression__invalid` | `keyword` |
+| yara.or-expression | `or_expression` | `or_expression__valid`, `or_expression__invalid` | `keyword` |
+| yara.comparison | `comparison` | `comparison__valid`, `comparison__invalid` | `operator`, `keyword` |
+| yara.unary-expression | `unary_expression` | `unary_expression__valid`, `unary_expression__invalid` | `operator` |
+| yara.arithmetic-expression | `arithmetic_expression` | `arithmetic_expression__valid`, `arithmetic_expression__invalid` | `operator` |
+| yara.string-count-in-range | `string_count_in_range` | `string_count_in_range__valid`, `string_count_in_range__invalid` | `variable`, `keyword` |
+| yara.indexed-string | `indexed_string` | `indexed_string__valid`, `indexed_string__invalid` | `variable`, `punctuation.bracket` |
+| yara.member-expression | `member_expression` | `member_expression__valid`, `member_expression__invalid` | `type` (module), `property` |
+| yara.index-expression | `index_expression` | `index_expression__valid`, `index_expression__invalid` | `punctuation.bracket` |
+| yara.call-expression | `call_expression` | `call_expression__valid`, `call_expression__invalid` | `function.builtin` (`uint16`…), `function` |
+| yara.string-match | `string_match` | `string_match__valid`, `string_match__invalid` | `variable`, `keyword` |
+| yara.range | `range` | `range__valid`, `range__invalid` | `punctuation.bracket`, `operator` |
+| yara.of-expression | `of_expression` | `of_expression__valid`, `of_expression__invalid` | `keyword` |
+| yara.percent-quantifier | `percent_quantifier` | `percent_quantifier__valid`, `percent_quantifier__invalid` | `number`, `operator` |
+| yara.string-set | `string_set` | `string_set__valid`, `string_set__invalid` | `variable` |
+| yara.rule-set | `rule_set` | `rule_set__valid`, `rule_set__invalid` | `type` |
+| yara.for-expression | `for_expression` | `for_expression__valid`, `for_expression__invalid` | `keyword`, `variable` |
+| yara.integer-enumeration | `integer_enumeration` | `integer_enumeration__valid`, `integer_enumeration__invalid` | `number` |
+| yara.rule-wildcard | `rule_wildcard` | `rule_wildcard__valid`, `rule_wildcard__invalid` | `type` |
+| yara.string-wildcard | `string_wildcard` | `string_wildcard__valid`, `string_wildcard__invalid` | `variable` |
+| yara.string-count | `string_count` | `string_count__valid`, `string_count__invalid` | `variable` |
+| yara.string-offset | `string_offset` | `string_offset__valid`, `string_offset__invalid` | `variable` |
+| yara.string-length | `string_length` | `string_length__valid`, `string_length__invalid` | `variable` |
+| yara.float | `float` | `float__valid`, `float__invalid` | `number` |
+| yara.regexp | `regexp` | `regexp__valid`, `regexp__invalid` | `string` |

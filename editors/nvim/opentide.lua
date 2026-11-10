@@ -27,6 +27,14 @@ vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile" }, {
   end,
 })
 
+-- YARA: `.yar` and `.yara`, filetype `yara` (Neovim's own filetype name).
+vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile" }, {
+  pattern = { "*.yar", "*.yara" },
+  callback = function()
+    vim.bo.filetype = "yara"
+  end,
+})
+
 for _, lang in ipairs({ "esql", "eql", "kuery", "lucene", "falco", "cql" }) do
   vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile" }, {
     pattern = { "*." .. lang },
@@ -58,7 +66,7 @@ vim.api.nvim_create_autocmd("FileType", {
 })
 
 vim.api.nvim_create_autocmd("FileType", {
-  pattern = { "opentide-yaml", "kql", "spl", "esql", "eql", "kuery", "lucene", "falco", "cql" },
+  pattern = { "opentide-yaml", "kql", "spl", "esql", "eql", "kuery", "lucene", "falco", "cql", "yara" },
   callback = function()
     vim.lsp.start({
       name = "opentide-lsp",

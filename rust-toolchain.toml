@@ -1,3 +1,5 @@
 [toolchain]
-channel = "stable"
+# The yara-x-parser and yara-x-fmt crates (#165) need Rust 1.95. Pinned so the
+# MSRV in Cargo.toml is the compiler CI builds with; bump both together.
+channel = "1.95.0"
 components = ["rustfmt", "clippy"]

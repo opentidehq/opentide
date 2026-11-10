@@ -11,7 +11,8 @@
 //! `scripts/object_fixtures.py`, its reference checker. As on the Sysdig block,
 //! a block without `status` reports only the missing field.
 //! `bitdefender_name_duplicate` is a workspace check in opentide, not here;
-//! `yara.signature` is the YARA engine's (#165).
+//! `bitdefender_yara_ascii`, `bitdefender_yara_size` and the rest of
+//! `yara.signature` are the YARA engine's (`opentide-yara`, #165).
 
 use crate::yaml_path::YamlCursor;
 use opentide_core::{CompletionItem, Diagnostic, codes};
@@ -27,8 +28,6 @@ const SEVERITIES: [&str; 3] = ["Low", "Medium", "High"];
 const TARGET_KEYS: [&str; 2] = ["endpoint_tags", "companies"];
 const STEP_KEYS: [&str; 2] = ["include_parent", "include_children"];
 const SCAN_TYPES: [&str; 2] = ["quick", "full"];
-/// GravityZone's limit on `settings.yaraQuery`.
-const YARA_MAX_CHARS: usize = 30_000;
 
 /// The automatic actions, in GravityZone `type` order, with what each takes
 /// and where it is allowed (bitdefender-1.0, `actions`).
@@ -487,7 +486,7 @@ fn criterion_checks(
         let bad: Vec<String> = c
             .values
             .iter()
-            .filter(|v| !v.as_str().is_some_and(|s| row.value(s).is_some()))
+            .filter(|v| v.as_str().is_none_or(|s| row.value(s).is_none()))
             .map(|v| text_of(v))
             .collect();
         if !bad.is_empty() {
@@ -670,10 +669,10 @@ fn combination(
             "one_resource" if rule.targets.contains(&target.name) => {
                 let mut resources: Vec<&str> = Vec::new();
                 for (_, row) in &rows {
-                    if let Some(r) = row.resource.as_deref() {
-                        if !resources.contains(&r) {
-                            resources.push(r);
-                        }
+                    if let Some(r) = row.resource.as_deref()
+                        && !resources.contains(&r)
+                    {
+                        resources.push(r);
                     }
                 }
                 if resources.len() > 1 {
@@ -954,30 +953,6 @@ pub(crate) fn constraint_diagnostics(source: &str, rule: &Value, block: &Value) 
         advisories(source, &list, &mut out);
     }
     actions(source, block, kind, &target_name, created_by, &mut out);
-    if let Some(signature) = block
-        .get("yara")
-        .and_then(|y| y.get("signature"))
-        .and_then(Value::as_str)
-    {
-        let path = ["yara", "signature"];
-        if !signature.is_ascii() {
-            out.push(err(
-                source,
-                codes::BITDEFENDER_YARA_ASCII,
-                "GravityZone takes ASCII characters only in a YARA signature".into(),
-                &path,
-            ));
-        }
-        let count = signature.chars().count();
-        if count > YARA_MAX_CHARS {
-            out.push(err(
-                source,
-                codes::BITDEFENDER_YARA_SIZE,
-                format!("the signature has {count} characters; GravityZone takes at most 30,000"),
-                &path,
-            ));
-        }
-    }
     out
 }
 
@@ -1009,19 +984,19 @@ fn advisories(source: &str, list: &[Criterion], out: &mut Vec<Diagnostic>) {
                 );
             }
         }
-        if c.relation == "contains" {
-            if let Some(v) = c.values.first() {
-                let text = text_of(v);
-                if !text.contains(['*', '?']) {
-                    out.push(warn(
-                        source,
-                        codes::BITDEFENDER_CONTAINS_NO_WILDCARD,
-                        format!(
-                            "`contains: {text}` has no `*` or `?`: GravityZone matches it as written; write `*{text}*` for a substring"
-                        ),
-                        &path,
-                    ));
-                }
+        if c.relation == "contains"
+            && let Some(v) = c.values.first()
+        {
+            let text = text_of(v);
+            if !text.contains(['*', '?']) {
+                out.push(warn(
+                    source,
+                    codes::BITDEFENDER_CONTAINS_NO_WILDCARD,
+                    format!(
+                        "`contains: {text}` has no `*` or `?`: GravityZone matches it as written; write `*{text}*` for a substring"
+                    ),
+                    &path,
+                ));
             }
         }
     }
@@ -1762,21 +1737,6 @@ mod tests {
             ))
             .is_empty()
         );
-    }
-
-    #[test]
-    fn yara_ascii_and_size() {
-        assert_eq!(
-            codes_of(
-                "    status: STAGING\n    yara:\n      signature: 'rule Ä { condition: true }'\n"
-            ),
-            ["bitdefender_yara_ascii"]
-        );
-        let long = format!(
-            "    status: STAGING\n    yara:\n      signature: '{}'\n",
-            "a".repeat(30_001)
-        );
-        assert_eq!(codes_of(&long), ["bitdefender_yara_size"]);
     }
 
     #[test]

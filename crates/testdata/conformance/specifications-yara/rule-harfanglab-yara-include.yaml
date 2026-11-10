@@ -1,0 +1,31 @@
+# A YARA signature with an include directive, which no platform resolves.
+# Expected YARA code: yara_include.
+name: HarfangLab YARA with an include
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000043
+  schema: rule::1.0
+  version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
+  tlp: clear
+description: |
+  A YARA signature that includes another file.
+status: STAGING
+severity: Medium
+configurations:
+  harfanglab:
+    enabled: true
+    schema: platform::harfanglab::1.0
+    status: STAGING
+    yara:
+      signature: |
+        include "common/mz.yar"
+
+        rule Cmd_String {
+          meta:
+            context = "file"
+          strings:
+            $a = "cmd.exe" ascii
+          condition:
+            $a
+        }

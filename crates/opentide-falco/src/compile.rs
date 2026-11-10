@@ -374,7 +374,7 @@ fn parse_value(value: &str, ty: &str) -> Result<Option<String>, String> {
 
 /// `sinsp_utils::unhex`: an even number of hex digits.
 fn is_hex(value: &str) -> bool {
-    value.len() % 2 == 0 && value.bytes().all(|b| b.is_ascii_hexdigit())
+    value.len().is_multiple_of(2) && value.bytes().all(|b| b.is_ascii_hexdigit())
 }
 
 /// The libsinsp check classes a source resolves names through, in order.

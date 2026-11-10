@@ -23,6 +23,7 @@ opentide-kuery.workspace = true
 opentide-lucene.workspace = true
 opentide-falco.workspace = true
 opentide-cql.workspace = true
+opentide-yara.workspace = true
 opentide-ecs.workspace = true
 opentide-tide.workspace = true
 serde.workspace = true

@@ -223,16 +223,16 @@ fn placement(
             .map(|n| range(source, n))
             .unwrap_or_else(|| range(source, call))
     };
-    if function.name == "correlate" {
-        if let Some(outer) = above.call.and_then(|i| ancestors.get(i)) {
-            let outer_name = call_name(*outer, source);
-            if !outer_name.eq_ignore_ascii_case("defineTable") {
-                out.push(Diagnostic::error(
-                    codes::CQL_CORRELATE_PLACEMENT,
-                    format!("correlate() cannot be an argument of {outer_name}()"),
-                    at(),
-                ));
-            }
+    if function.name == "correlate"
+        && let Some(outer) = above.call.and_then(|i| ancestors.get(i))
+    {
+        let outer_name = call_name(*outer, source);
+        if !outer_name.eq_ignore_ascii_case("defineTable") {
+            out.push(Diagnostic::error(
+                codes::CQL_CORRELATE_PLACEMENT,
+                format!("correlate() cannot be an argument of {outer_name}()"),
+                at(),
+            ));
         }
     }
     if function.aggregate {
