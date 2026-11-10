@@ -94,6 +94,10 @@ fn edr_table_matches_the_catalogue() {
         let all: Vec<_> = criteria().detection_fields(&target).collect();
         let edr: BTreeSet<String> = all
             .iter()
+            // TEMPORARY: bitdefender-1.0 1.0 leaves connection's XDR fields
+            // out of its table. 1.1 lists them (opentidehq/specifications PR
+            // pending); once it merges, paste its tables into spec-tables.md
+            // and drop this exemption and the XDR-only loop below.
             .filter(|f| target != "connection" || f.availability != "xdr")
             .map(|f| f.name.clone())
             .collect();

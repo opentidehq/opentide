@@ -62,6 +62,99 @@ pub const ACTIONS: [(&str, &str); 7] = [
     ),
 ];
 
+/// The block's own keys (bitdefender-1.0, Block) and the shared platform keys.
+const BLOCK_KEYS: [(&str, &str, &str); 13] = [
+    (
+        "enabled",
+        "boolean",
+        "Whether this platform block is active.",
+    ),
+    ("schema", "string", "`platform::bitdefender::1.0`."),
+    (
+        "status",
+        "string · required",
+        "Deployment status of this platform block.",
+    ),
+    (
+        "name",
+        "string",
+        "The GravityZone rule name. Empty means the opentide rule `name`.",
+    ),
+    ("contributors", "array", "Platform contributors."),
+    ("flags", "array", "Platform flags."),
+    ("tenants", "array", "Target tenant identifiers."),
+    (
+        "severity",
+        "string",
+        "`Low`, `Medium`, or `High`. Without it, from `response.alert_severity`.",
+    ),
+    (
+        "tags",
+        "array",
+        "Extra GravityZone tags. Deploy adds the derived tags.",
+    ),
+    (
+        "targets",
+        "object",
+        "Endpoint tags, or companies on a partner tenant, the rule applies to: `endpoint_tags` or `companies`.",
+    ),
+    ("actions", "object", "Automatic actions."),
+    (
+        "detection",
+        "object",
+        "A Basic detection rule: a `target` and its `criteria`. Not with `yara`.",
+    ),
+    (
+        "yara",
+        "object",
+        "A YARA detection rule: a `signature`. Not with `detection`.",
+    ),
+];
+
+const DETECTION_KEYS: [(&str, &str, &str); 3] = [
+    (
+        "target",
+        "string · required",
+        "A GravityZone detection target, as the API spells it (`process`, `user connection`).",
+    ),
+    (
+        "criteria",
+        "array · required",
+        "At least one criterion: a `field` and one of `is`, `contains`, `any`. All must match.",
+    ),
+    (
+        "alert",
+        "string",
+        "A GravityZone alert (detection) name, sent as the `detection` filter.",
+    ),
+];
+
+const YARA_KEYS: [(&str, &str, &str); 2] = [
+    (
+        "signature",
+        "string · required",
+        "The YARA signature: imports, then one or more YARA rules. Sent verbatim.",
+    ),
+    (
+        "on_access",
+        "boolean · default true",
+        "On-access scanning with this rule. With `false`, on-demand scans only.",
+    ),
+];
+
+const TARGETS_KEYS: [(&str, &str, &str); 2] = [
+    (
+        "endpoint_tags",
+        "array",
+        "Aliases from the tenant's `endpoint_tags` table. Not with `companies`.",
+    ),
+    (
+        "companies",
+        "array",
+        "Partner tenants: aliases from the tenant's `companies` table. Not with `endpoint_tags`.",
+    ),
+];
+
 const RELATION_DOCS: [(&str, &str); 3] = [
     (
         "is",
@@ -289,13 +382,36 @@ fn diagnostic(
     path: &[&str],
 ) -> Diagnostic {
     let full = full_path(path);
-    let range = crate::elastic::path_range(source, &full);
+    let range = match path {
+        ["detection", "criteria", n] if n.parse::<usize>().is_ok() => {
+            item_range(source, &full).unwrap_or_else(|| crate::elastic::path_range(source, &full))
+        }
+        _ => crate::elastic::path_range(source, &full),
+    };
     let d = if error {
         Diagnostic::error(code, message, range)
     } else {
         Diagnostic::warning(code, message, range)
     };
     d.with_field_path(full.iter().map(|p| p.to_string()).collect())
+}
+
+/// The range of a list item (`configurations.bitdefender.detection.criteria.<N>`):
+/// from its first key to the end of its last key's line. `None` for an item
+/// with no key (a scalar, or a flow mapping).
+fn item_range(source: &str, path: &[&str]) -> Option<opentide_core::Range> {
+    let keys: Vec<_> = crate::yaml_scalar::mapping_keys(source)
+        .into_iter()
+        .filter(|k| k.path.len() > path.len() && k.path.iter().zip(path).all(|(a, b)| a == b))
+        .collect();
+    let start = keys.iter().map(|k| k.key_start).min()?;
+    let last = keys.iter().map(|k| k.key_start).max()?;
+    let end = source[last..].find('\n').map_or(source.len(), |i| last + i);
+    let end = source[..end].trim_end().len().max(start);
+    Some(opentide_core::span_to_range(
+        source,
+        opentide_core::ByteSpan::new(start, end),
+    ))
 }
 
 fn err(source: &str, code: &'static str, message: String, path: &[&str]) -> Diagnostic {
@@ -320,8 +436,9 @@ fn text_of(v: &Value) -> String {
     }
 }
 
-fn scalar(v: &Value) -> bool {
-    !matches!(v, Value::Sequence(_) | Value::Mapping(_) | Value::Null)
+/// A string or an integer: what `is` and the items of `any` take.
+fn string_or_integer(v: &Value) -> bool {
+    v.is_string() || v.as_i64().is_some() || v.as_u64().is_some()
 }
 
 /// One well-shaped criterion.
@@ -383,19 +500,26 @@ fn shape<'a>(
         return None;
     };
     let value = map.get(*relation).expect("present");
-    let values: Vec<&Value> = if *relation == "any" {
-        match value.as_sequence() {
-            Some(items) if !items.is_empty() => items.iter().collect(),
+    let values: Vec<&Value> = match *relation {
+        "any" => match value.as_sequence() {
+            Some(items) if !items.is_empty() && items.iter().all(string_or_integer) => {
+                items.iter().collect()
+            }
             _ => {
-                bad("`any` takes a non-empty list", out);
+                bad("`any` takes a non-empty list of strings or integers", out);
                 return None;
             }
+        },
+        "contains" if value.is_string() => vec![value],
+        "contains" => {
+            bad("`contains` takes one string", out);
+            return None;
         }
-    } else if scalar(value) {
-        vec![value]
-    } else {
-        bad(&format!("`{relation}` takes one value"), out);
-        return None;
+        _ if string_or_integer(value) => vec![value],
+        _ => {
+            bad("`is` takes one string or integer", out);
+            return None;
+        }
     };
     Some(Criterion {
         index,
@@ -414,8 +538,7 @@ fn criterion_checks(
 ) {
     let catalogue = criteria();
     let at = c.index.to_string();
-    let field_path = ["detection", "criteria", at.as_str(), "field"];
-    let value_path = ["detection", "criteria", at.as_str(), c.relation];
+    let item = ["detection", "criteria", at.as_str()];
     let row = catalogue.field(c.field);
     if let Some(target) = target {
         let belongs = row.filter(|r| r.target == target.name);
@@ -452,7 +575,7 @@ fn criterion_checks(
                 closed,
                 codes::BITDEFENDER_CRITERION_FIELD,
                 message,
-                &field_path,
+                &item,
             ));
         }
     }
@@ -469,7 +592,7 @@ fn criterion_checks(
                 ticked(&row.relations),
                 c.relation
             ),
-            &value_path,
+            &item,
         ));
     } else if row.kind == "hash" && c.relation == "contains" {
         out.push(err(
@@ -479,7 +602,7 @@ fn criterion_checks(
                 "`contains` is not allowed on the hash `{}`: use `is` or `any`",
                 row.name
             ),
-            &value_path,
+            &item,
         ));
     }
     if row.kind == "enum" {
@@ -503,7 +626,7 @@ fn criterion_checks(
                     row.name,
                     ticked(&names)
                 ),
-                &value_path,
+                &item,
             ));
         }
     }
@@ -518,7 +641,7 @@ fn criterion_checks(
                 source,
                 codes::BITDEFENDER_CRITERION_VALUE,
                 format!("`{}` is a port: an integer from {low} to {high}", row.name),
-                &value_path,
+                &item,
             ));
         }
     }
@@ -591,9 +714,7 @@ fn combination(
             out,
         );
     }
-    for (c, row) in &rows {
-        let at = c.index.to_string();
-        let field_path = ["detection", "criteria", at.as_str(), "field"];
+    for (_, row) in &rows {
         if !row.requires_any.is_empty() && !row.requires_any.iter().any(|n| present(n)) {
             report(
                 format!(
@@ -601,7 +722,7 @@ fn combination(
                     row.name,
                     one_of(&row.requires_any)
                 ),
-                &field_path,
+                &criteria_path,
                 out,
             );
         }
@@ -621,7 +742,7 @@ fn combination(
                 .collect();
             report(
                 format!("`{}` needs {} in the same rule", row.name, one_of(&names)),
-                &field_path,
+                &criteria_path,
                 out,
             );
         }
@@ -632,13 +753,12 @@ fn combination(
             if ri.incompatible.iter().any(|n| n == cj.field)
                 || rj.incompatible.iter().any(|n| n == ci.field)
             {
-                let at = cj.index.to_string();
                 report(
                     format!(
                         "`{}` and `{}` cannot be criteria of the same rule",
                         ci.field, cj.field
                     ),
-                    &["detection", "criteria", at.as_str(), "field"],
+                    &criteria_path,
                     out,
                 );
             }
@@ -651,13 +771,12 @@ fn combination(
                 continue;
             };
             if let Some(other) = value.incompatible.iter().find(|n| present(n)) {
-                let at = c.index.to_string();
                 report(
                     format!(
                         "`{}: {}` cannot be used with `{other}` in the same rule",
                         row.name, value.name
                     ),
-                    &["detection", "criteria", at.as_str(), c.relation],
+                    &criteria_path,
                     out,
                 );
             }
@@ -709,7 +828,7 @@ fn combination(
                             "an XDR detection uses `alert` or the `{}` criterion, not both",
                             operation.map_or("", |c| c.field)
                         ),
-                        &["detection", "alert"],
+                        &criteria_path,
                         out,
                     );
                 }
@@ -956,20 +1075,45 @@ pub(crate) fn constraint_diagnostics(source: &str, rule: &Value, block: &Value) 
     out
 }
 
+/// The full hive name a registry key starts with, and the abbreviation
+/// GravityZone matches. `HKEY_USERS` keys that do not start with a SID take
+/// `HKLU` (`HKEY_USERS\\.DEFAULT`), those that do `HKU`. Compares bytes, so a
+/// key with any character is safe.
+fn full_hive<'a>(key: &str, hives: &'a BTreeMap<String, String>) -> Option<(&'a str, &'a str)> {
+    let bytes = key.as_bytes();
+    hives.iter().find_map(|(name, short)| {
+        let n = name.len();
+        let head = bytes.get(..n)?;
+        if !head.eq_ignore_ascii_case(name.as_bytes())
+            || !matches!(bytes.get(n), None | Some(b'\\'))
+        {
+            return None;
+        }
+        if name == "HKEY_USERS" {
+            let rest = bytes.get(n + 1..).unwrap_or_default();
+            let sid = rest
+                .get(..4)
+                .is_some_and(|p| p.eq_ignore_ascii_case(b"S-1-"));
+            if !rest.is_empty() && !sid {
+                return Some((name.as_str(), "HKLU"));
+            }
+        }
+        Some((name.as_str(), short.as_str()))
+    })
+}
+
 /// `bitdefender_registry_full_hive` and `bitdefender_contains_no_wildcard`.
 fn advisories(source: &str, list: &[Criterion], out: &mut Vec<Diagnostic>) {
     let hives = &criteria().registry_hives;
     for c in list {
         let at = c.index.to_string();
-        let path = ["detection", "criteria", at.as_str(), c.relation];
+        let path = ["detection", "criteria", at.as_str()];
         if c.field == "Registry.Key" {
-            let full = c.values.iter().filter_map(|v| v.as_str()).find_map(|s| {
-                hives.iter().find(|(name, _)| {
-                    s.len() >= name.len()
-                        && s[..name.len()].eq_ignore_ascii_case(name)
-                        && matches!(s.as_bytes().get(name.len()), None | Some(b'\\'))
-                })
-            });
+            let full = c
+                .values
+                .iter()
+                .filter_map(|v| v.as_str())
+                .find_map(|s| full_hive(s, hives));
             if let Some((name, short)) = full {
                 out.push(
                     warn(
@@ -980,7 +1124,7 @@ fn advisories(source: &str, list: &[Criterion], out: &mut Vec<Diagnostic>) {
                         ),
                         &path,
                     )
-                    .with_suggestion(short.clone()),
+                    .with_suggestion(short.to_string()),
                 );
             }
         }
@@ -1044,6 +1188,58 @@ fn current_target(source: &str) -> Option<String> {
         .take_while(|l| l.trim().is_empty() || indent(l) > base)
         .find_map(|l| key_value(l, "target").filter(|v| !v.is_empty()))
         .map(str::to_string)
+}
+
+/// The keys written directly under the block, and its text, read from the
+/// lines so it works while the YAML around the cursor does not parse.
+fn block_shape(source: &str) -> (Vec<String>, String) {
+    let lines: Vec<&str> = source.lines().collect();
+    let Some(start) = lines
+        .iter()
+        .position(|l| l.trim_start().starts_with("bitdefender:") && indent(l) > 0)
+    else {
+        return (Vec::new(), String::new());
+    };
+    let base = indent(lines[start]);
+    let body: Vec<&str> = lines[start + 1..]
+        .iter()
+        .take_while(|l| l.trim().is_empty() || indent(l) > base)
+        .copied()
+        .collect();
+    let child = body
+        .iter()
+        .find(|l| !l.trim().is_empty())
+        .map_or(base + 2, |l| indent(l));
+    let keys = body
+        .iter()
+        .filter(|l| indent(l) == child)
+        .filter_map(|l| l.trim().split_once(':').map(|(k, _)| k.trim().to_string()))
+        .collect();
+    (keys, body.join("\n"))
+}
+
+/// The actions the block's kind and target allow (bitdefender-1.0, `actions`).
+fn action_allowed(action: &str, source: &str) -> bool {
+    let (keys, text) = block_shape(source);
+    let yara = keys.iter().any(|k| k == "yara") && !keys.iter().any(|k| k == "detection");
+    let process_like = matches!(current_target(source).as_deref(), Some("process" | "file"))
+        || text.contains(".CreatedBy.");
+    match action {
+        "kill_process" => !yara && process_like,
+        "sandbox" | "quarantine" => yara || process_like,
+        _ => true,
+    }
+}
+
+fn key_items(keys: &[(&str, &str, &str)], existing: &dyn Fn(&str) -> bool) -> Vec<CompletionItem> {
+    keys.iter()
+        .filter(|(k, _, _)| !existing(k))
+        .map(|(k, detail, doc)| {
+            CompletionItem::new(*k, "property")
+                .with_detail(*detail)
+                .with_docs(*doc)
+        })
+        .collect()
 }
 
 /// The `field` of the list item at `offset`.
@@ -1167,9 +1363,31 @@ pub(crate) fn completions(
                 }
                 items
             }
+            [] => {
+                let kind = |k: &str| existing(k) || cursor.siblings.iter().any(|s| s == k);
+                let mut keys = BLOCK_KEYS.to_vec();
+                // A block sets one kind.
+                if kind("detection") {
+                    keys.retain(|(k, _, _)| *k != "yara");
+                }
+                if kind("yara") {
+                    keys.retain(|(k, _, _)| *k != "detection");
+                }
+                key_items(&keys, &existing)
+            }
+            ["detection"] => key_items(&DETECTION_KEYS, &existing),
+            ["yara"] => key_items(&YARA_KEYS, &existing),
+            ["targets"] => {
+                // One of the two.
+                if TARGETS_KEYS.iter().any(|(k, _, _)| existing(k)) {
+                    Vec::new()
+                } else {
+                    key_items(&TARGETS_KEYS, &existing)
+                }
+            }
             ["actions"] => ACTIONS
                 .iter()
-                .filter(|(a, _)| !existing(a))
+                .filter(|(a, _)| !existing(a) && action_allowed(a, source))
                 .map(|(a, doc)| {
                     CompletionItem::new(*a, "property")
                         .with_detail("automatic action")
@@ -1311,7 +1529,11 @@ pub(crate) fn hover(source: &str, offset: usize, cursor: &YamlCursor) -> Option<
 /// The value word under the cursor (letters, digits, `_`, `/`).
 fn word_at(source: &str, offset: usize) -> Option<String> {
     let ok = |c: char| c.is_ascii_alphanumeric() || matches!(c, '_' | '/');
-    let offset = offset.min(source.len());
+    let mut offset = offset.min(source.len());
+    // A host converts positions to char boundaries; stay safe if one did not.
+    while !source.is_char_boundary(offset) {
+        offset -= 1;
+    }
     let start = source[..offset]
         .char_indices()
         .rev()
@@ -1494,7 +1716,7 @@ mod tests {
             )),
             [(
                 "bitdefender_criterion_field".into(),
-                "configurations.bitdefender.detection.criteria.0.field".into(),
+                "configurations.bitdefender.detection.criteria.0".into(),
                 true
             )]
         );
@@ -1510,7 +1732,7 @@ mod tests {
             found(open),
             [(
                 "bitdefender_criterion_field".into(),
-                "configurations.bitdefender.detection.criteria.0.field".into(),
+                "configurations.bitdefender.detection.criteria.0".into(),
                 false
             )]
         );
@@ -1590,7 +1812,7 @@ mod tests {
             )),
             [(
                 "bitdefender_criteria_combination".into(),
-                "configurations.bitdefender.detection.criteria.0.field".into(),
+                "configurations.bitdefender.detection.criteria".into(),
                 true
             )]
         );
@@ -1646,7 +1868,7 @@ mod tests {
             )),
             [(
                 "bitdefender_criteria_combination".into(),
-                "configurations.bitdefender.detection.criteria.1.field".into(),
+                "configurations.bitdefender.detection.criteria".into(),
                 true
             )]
         );
@@ -1675,7 +1897,7 @@ mod tests {
                 ),
                 (
                     "bitdefender_criteria_combination".to_string(),
-                    "configurations.bitdefender.detection.alert".to_string()
+                    "configurations.bitdefender.detection.criteria".to_string()
                 ),
             ]
         );
@@ -1764,12 +1986,12 @@ configurations:
                 ),
                 (
                     "bitdefender_registry_full_hive".into(),
-                    "configurations.bitdefender.detection.criteria.0.is".into(),
+                    "configurations.bitdefender.detection.criteria.0".into(),
                     false
                 ),
                 (
                     "bitdefender_contains_no_wildcard".into(),
-                    "configurations.bitdefender.detection.criteria.1.contains".into(),
+                    "configurations.bitdefender.detection.criteria.1".into(),
                     false
                 ),
             ]
@@ -1792,6 +2014,181 @@ configurations:
             .into_iter()
             .map(|i| i.label)
             .collect()
+    }
+
+    #[test]
+    fn registry_keys_with_any_character_do_not_panic() {
+        let registry = |key: &str| {
+            format!(
+                "    status: STAGING\n    detection:\n      target: registry\n      criteria:\n      - field: Registry.Key\n        is: '{key}'\n"
+            )
+        };
+        // The 18th byte (HKEY_LOCAL_MACHINE's length) falls inside each of
+        // these characters: é (2 bytes), 日 (3 bytes), 😀 (4 bytes).
+        for key in [
+            "HKEY_LOCAL_MACHINé\\x",
+            "HKEY_LOCAL_MACHI日\\x",
+            "HKEY_LOCAL_MACH😀\\x",
+            "é",
+            "日本",
+            "😀",
+        ] {
+            assert!(codes_of(&registry(key)).is_empty(), "{key}");
+        }
+        assert_eq!(
+            codes_of(&registry("hkey_local_machine\\Software\\日本")),
+            ["bitdefender_registry_full_hive"]
+        );
+    }
+
+    #[test]
+    fn hkey_users_without_a_sid_is_hklu() {
+        let hives = &criteria().registry_hives;
+        assert_eq!(
+            full_hive("HKEY_USERS\\.DEFAULT\\Software", hives),
+            Some(("HKEY_USERS", "HKLU"))
+        );
+        assert_eq!(
+            full_hive("HKEY_USERS\\S-1-5-21-1\\Software", hives),
+            Some(("HKEY_USERS", "HKU"))
+        );
+        assert_eq!(full_hive("HKEY_USERS", hives), Some(("HKEY_USERS", "HKU")));
+        assert_eq!(
+            full_hive("HKEY_LOCAL_MACHINE\\Software", hives),
+            Some(("HKEY_LOCAL_MACHINE", "HKLM"))
+        );
+        assert_eq!(full_hive("HKEY_LOCAL_MACHINEX", hives), None);
+        assert_eq!(full_hive("HKLM\\Software", hives), None);
+    }
+
+    #[test]
+    fn values_have_the_spec_types() {
+        let one = |relation: &str, value: &str| {
+            codes_of(&detection(&format!(
+                "      - field: Process.Name\n        {relation}: {value}\n"
+            )))
+        };
+        assert!(one("is", "cmd.exe").is_empty());
+        assert!(one("is", "4444").is_empty());
+        assert!(one("any", "[cmd.exe, 4444]").is_empty());
+        assert!(one("contains", "'*cmd*'").is_empty());
+        for (relation, value) in [
+            ("is", "true"),
+            ("is", "1.5"),
+            ("is", "null"),
+            ("contains", "4444"),
+            ("contains", "false"),
+            ("any", "[cmd.exe, true]"),
+            ("any", "[[a]]"),
+            ("any", "a"),
+        ] {
+            assert_eq!(
+                one(relation, value),
+                ["bitdefender_criterion_shape"],
+                "{relation}: {value}"
+            );
+        }
+    }
+
+    #[test]
+    fn item_findings_are_placed_on_the_item() {
+        let source = "configurations:
+  bitdefender:
+    status: STAGING
+    detection:
+      target: process
+      criteria:
+      - field: Process.Name
+        is: a
+      - field: Process.Hash
+        is: b
+      - field: Process.User
+        is: true
+";
+        let object: Value = serde_yaml::from_str(source).unwrap();
+        let found =
+            constraint_diagnostics(source, &object, &object["configurations"]["bitdefender"]);
+        let lines: Vec<(String, u32, u32)> = found
+            .iter()
+            .map(|d| (d.code.clone(), d.range.start.line, d.range.end.line))
+            .collect();
+        assert_eq!(
+            lines,
+            [
+                ("bitdefender_criterion_field".to_string(), 8, 9),
+                ("bitdefender_criterion_shape".to_string(), 10, 11),
+            ]
+        );
+        // The range starts at the item's first key, not the `criteria:` key.
+        assert_eq!(found[0].range.start.character, 8);
+    }
+
+    #[test]
+    fn completion_offers_keys_and_filters_actions() {
+        let labels = |source: &str, at: &str| complete(source, at);
+        let yara = "configurations:
+  bitdefender:
+    status: STAGING
+    yara:
+      signature: x
+    actions:
+      ki
+";
+        assert!(labels(yara, "      ki").is_empty());
+        let yara_any = yara.replace("      ki\n", "      \n");
+        let actions = labels(&yara_any, "actions:\n      ");
+        assert!(
+            !actions.contains(&"kill_process".to_string()),
+            "{actions:?}"
+        );
+        assert!(actions.contains(&"quarantine".to_string()), "{actions:?}");
+        let registry = "configurations:
+  bitdefender:
+    status: STAGING
+    detection:
+      target: registry
+      criteria:
+      - field: Registry.Key
+        is: HKLM\\Run
+    actions:
+      
+";
+        let actions = labels(registry, "actions:\n      ");
+        assert!(
+            !actions
+                .iter()
+                .any(|a| matches!(a.as_str(), "kill_process" | "sandbox" | "quarantine")),
+            "{actions:?}"
+        );
+        assert!(actions.contains(&"isolate".to_string()));
+        let root = "configurations:
+  bitdefender:
+    status: STAGING
+    detection:
+      target: process
+    se
+";
+        assert_eq!(labels(root, "    se"), ["severity"]);
+        let root_all = root.replace("    se\n", "    \n");
+        let keys = labels(&root_all, "      target: process\n    ");
+        assert!(keys.contains(&"targets".to_string()), "{keys:?}");
+        assert!(!keys.contains(&"yara".to_string()), "{keys:?}");
+        assert!(!keys.contains(&"status".to_string()), "{keys:?}");
+        let detection = "configurations:
+  bitdefender:
+    status: STAGING
+    detection:
+      target: process
+      al
+";
+        assert_eq!(labels(detection, "      al"), ["alert"]);
+        let targets = "configurations:
+  bitdefender:
+    status: STAGING
+    targets:
+      end
+";
+        assert_eq!(labels(targets, "      end"), ["endpoint_tags"]);
     }
 
     #[test]
