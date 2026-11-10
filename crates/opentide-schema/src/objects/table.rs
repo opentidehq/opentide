@@ -147,7 +147,12 @@ fn every_case_is_compared_with_the_oracle_and_every_difference_is_explained() {
         if let Some(path) = id.strip_prefix("file:") {
             let current = std::fs::read_to_string(repo().join(path))
                 .unwrap_or_else(|error| panic!("{path}: {error}; run objects_table.py"));
-            assert_eq!(current, text, "{path} changed: run objects_table.py");
+            // A Windows checkout may write the fixture with CRLF.
+            assert_eq!(
+                current.replace("\r\n", "\n"),
+                text,
+                "{path} changed: run objects_table.py"
+            );
         }
         let actual = match node::load(text) {
             Err(_) => json!({ "yaml_error": true }),

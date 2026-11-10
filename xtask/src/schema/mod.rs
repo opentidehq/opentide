@@ -2,7 +2,7 @@
 //! models of `opentide_schema::objects` against the oracle (the frozen
 //! Python CLI), two ways.
 //!
-//! - **schemas** ([`normalise`]): each model's schemars output against
+//! - **schemas** ([`mod@normalise`]): each model's schemars output against
 //!   Pydantic's `model_json_schema(by_alias=True)`, structurally equal after
 //!   normalisation (byte equality is UC-1.8's, #814), and the registry's
 //!   schema identifiers against `objects::checks::REGISTERED`. The platform

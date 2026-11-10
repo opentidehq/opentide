@@ -10,7 +10,7 @@
 //! | `RuleMetadata._coerce_reviewed` (before), `_validate_reviewed` (after, `parse_review_instant`) | [`reviewed`] |
 //! | `ObjectMetadata._coerce_dates` (before) | none: `created` and `modified` take a string (`tests/golden/APPROVED_DIFFS.toml`) |
 //! | `ThreatBody._require_vocab_list` (before) | [`crate::from_node::require_vocab_list`] |
-//! | `_single_vocab_name` (`VocabName`, after), `min_length=1` | [`single_vocab_name`], [`at_least_one`] |
+//! | `_single_vocab_name` (`VocabName`, after), `min_length=1` | [`check_single_vocab_name`], [`check_at_least_one`], [`vocab_names`] |
 //! | `ObjectReferences.coerce_public_keys` (`from_yaml_dict`) | [`public_references`] |
 
 use std::collections::BTreeMap;
