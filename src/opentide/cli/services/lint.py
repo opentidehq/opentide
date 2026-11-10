@@ -625,6 +625,46 @@ def _query_findings(root: Path, records: list[_ObjectRecord]) -> list[dict[str, 
     return findings
 
 
+def _bitdefender_findings(records: list[_ObjectRecord]) -> list[dict[str, object]]:
+    """The Bitdefender advisories (bitdefender-1.0), at the value each points at."""
+    import yaml
+
+    from opentide.core.io import parse_yaml
+    from opentide.platforms.bitdefender.advisories import bitdefender_advisories
+    from opentide.validation.errors import attach_yaml_lines
+    from opentide.validation.issues import ValidationIssue
+
+    findings: list[dict[str, object]] = []
+    for record in records:
+        if record.parse_error or not record.text or "bitdefender" not in record.text:
+            continue
+        try:
+            body = parse_yaml(record.text)
+        except yaml.YAMLError:
+            continue  # the parse error is another check's finding
+        if not isinstance(body, dict):
+            continue
+        issues = [
+            ValidationIssue(code=item.code, field_path=item.field_path, message=item.message)
+            for item in bitdefender_advisories(body)
+        ]
+        for issue in attach_yaml_lines(issues, body, file_path=record.path):
+            findings.append(
+                {
+                    **_finding(
+                        LintCheck.queries,
+                        "warning",
+                        record,
+                        issue.message,
+                        code=issue.code,
+                        yaml_line=issue.yaml_line,
+                    ),
+                    "_field_path": list(issue.field_path),
+                }
+            )
+    return findings
+
+
 def _in_placeholder(finding: Finding, lines: list[str], marked: set[int]) -> bool:
     """Whether *finding* is in a ``...`` stand-in under a marked key (1-based *marked* lines)."""
     from opentide.validation.queries import is_stand_in
@@ -811,6 +851,7 @@ def run_lint(
 
         try:
             findings.extend(_query_findings(target, shown))
+            findings.extend(_bitdefender_findings(shown))
         except EngineUnavailableError as exc:
             from opentide.cli.services.engine import engine_unavailable_result
 

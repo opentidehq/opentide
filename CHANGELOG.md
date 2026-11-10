@@ -8,12 +8,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ### Added
 
+- **The editor and `opentide tui` check YARA rules**, as libyara 4.5 compiles them, with a warning where YARA-X 1.x refuses what libyara accepts. `opentide lsp start` adds hover and completion for the 13 modules, highlighting, outline, folding, rename and formatting. `configurations.harfanglab.yara` (the `signature` and the `strings`, `condition` and `imports` fragments deploy assembles) and `configurations.bitdefender.yara.signature` get the `yara_*`, `harfanglab_*` and `bitdefender_yara_*` diagnostics. `opentide validate`, `lint` and MCP `validate_query` do not check YARA yet, so no pipeline fails on them. See [Diagnostics](docs/cli/diagnostics.md#yara_parse_error).
 - **Bitdefender GravityZone is a tenth deploy platform.** A `configurations.bitdefender` block (`platform::bitdefender::1.0`) is a GravityZone custom detection rule: Basic `detection` criteria, or a `yara` signature, with severity, tags, endpoint-tag or company targets and automatic actions. Deploy creates, updates (always the whole payload), disables and deletes it through the Incidents API, keeps the rule id in `.opentide/states/deployment/`, and never touches exclusion rules. Enable it with `opentide setup platforms --bitdefender` ([#898](https://github.com/opentidehq/opentide/issues/898)).
-- **`validate` checks Bitdefender blocks and YARA signatures.** It reports every `bitdefender_*` constraint code of the spec (criteria catalogue, actions, targets, severity, ASCII and 30,000-character YARA limits), two blocks sharing a GravityZone name (`bitdefender_name_duplicate`), and the YARA checks `yara_include`, `yara_empty_signature`, `yara_duplicate_rule` and `yara_signature_alias`. `validate query --platform bitdefender` reports `supported: false` ([#898](https://github.com/opentidehq/opentide/issues/898)).
+- **`validate` checks Bitdefender blocks and YARA signatures.** It reports every `bitdefender_*` constraint code of the spec (criteria catalogue, actions, targets, severity, ASCII and 30,000-character YARA limits), two blocks sharing a GravityZone name (`bitdefender_name_duplicate`), and the YARA checks `yara_include`, `yara_empty_signature`, `yara_duplicate_rule` and `yara_signature_alias`. `validate` and `lint` also warn, without failing, on a full registry hive name, a `contains` value with no wildcard and a severity GravityZone collapses (`bitdefender_registry_full_hive`, `bitdefender_contains_no_wildcard`, `bitdefender_severity_collapsed`). `validate query --platform bitdefender` reports `supported: false` ([#898](https://github.com/opentidehq/opentide/issues/898)).
+
+### Changed
+
+- **The analysis engine is language-server at the head of its YARA work ([#165](https://github.com/opentidehq/language-server/issues/165))**, pinned by git revision until the release that ships it. Building opentide from source needs Rust 1.95 or later, which the engine's YARA parser requires.
+
+## [0.24.1] — 2026-11-10
+
+`pip install opentide` works again: Typer 0.29.0 crashed every opentide on start, and opentide now requires a Typer it runs on. The diagnostic codes reference publishes on opentide.org again.
 
 ### Fixed
 
 - **`pip install opentide` no longer installs a Typer that crashes it.** Typer 0.29.0 removed private modules and options opentide's CLI is built on, so `opentide setup` failed with `No module named 'typer._types'` and `opentide commands` crashed. opentide now requires `typer>=0.27.0,<0.29`, and `setup ci` declares its providers with Typer's public API. An invalid provider names the valid ones and suggests the closest.
+- **The diagnostic codes reference publishes on opentide.org again.** The page for `cql_link_outside_correlate` named the CQL operator `<=>` in plain text, which the site's docs format reads as a broken tag, so the docs and release notes stopped updating. The reference now escapes it, and `scripts/validate-docs.sh` fails on docs text the site cannot render.
 
 ## [0.24.0] — 2026-11-09
 
@@ -1602,7 +1612,8 @@ export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate --strict
 ```
 
-[Unreleased]: https://github.com/opentidehq/opentide/compare/v0.24.0...HEAD
+[Unreleased]: https://github.com/opentidehq/opentide/compare/v0.24.1...HEAD
+[0.24.1]: https://github.com/opentidehq/opentide/releases/tag/v0.24.1
 [0.24.0]: https://github.com/opentidehq/opentide/releases/tag/v0.24.0
 [0.23.0]: https://github.com/opentidehq/opentide/releases/tag/v0.23.0
 [0.22.0]: https://github.com/opentidehq/opentide/releases/tag/v0.22.0

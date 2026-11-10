@@ -160,7 +160,15 @@ _CHECK_ISSUE_CODES: dict[str, frozenset[str]] = {
 
 #: Warning codes each check can report. They never fail the check's status.
 _CHECK_WARNING_CODES: dict[str, frozenset[str]] = {
-    ValidateCheck.schema.value: frozenset({"deprecated_field", "platform_not_enabled"}),
+    ValidateCheck.schema.value: frozenset(
+        {
+            "deprecated_field",
+            "platform_not_enabled",
+            "bitdefender_registry_full_hive",
+            "bitdefender_contains_no_wildcard",
+            "bitdefender_severity_collapsed",
+        }
+    ),
     ValidateCheck.sharing_config.value: frozenset({"api_key_literal", "unknown_connector"}),
     ValidateCheck.configuration.value: frozenset({"asset_unknown", "not_a_configuration_file"}),
     ValidateCheck.cve.value: frozenset({"cve_lookup_unavailable"}),

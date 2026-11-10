@@ -16,10 +16,15 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`api_key_literal`](#api_key_literal) | A `sharing.toml` block holds its API key as a literal. |
 | [`api_key_unset`](#api_key_unset) | An enabled sharing target has no API key. |
 | [`asset_unknown`](#asset_unknown) | A `visibility.toml` log source or detector names an asset that `[[assets]]` does not declare. |
+| [`bitdefender_contains_no_wildcard`](#bitdefender_contains_no_wildcard) | A `contains` criterion has neither `*` nor `?`, so GravityZone matches the value as written. |
 | [`bitdefender_create_unconfirmed`](#bitdefender_create_unconfirmed) | A GravityZone create got no answer, and its retry found the name already taken. |
 | [`bitdefender_name_conflict`](#bitdefender_name_conflict) | GravityZone refused a create because a rule with the same name exists in the company. |
 | [`bitdefender_name_duplicate`](#bitdefender_name_duplicate) | Two enabled Bitdefender blocks resolve to the same GravityZone rule name. |
+| [`bitdefender_registry_full_hive`](#bitdefender_registry_full_hive) | A `Registry.Key` criterion starts with a full hive name, which GravityZone accepts and never matches. |
 | [`bitdefender_rule_kind`](#bitdefender_rule_kind) | A Bitdefender block sets both `detection` and `yara`, or neither. |
+| [`bitdefender_severity_collapsed`](#bitdefender_severity_collapsed) | `response.alert_severity` is `Critical` or `Informational`, which GravityZone sends as `High` or `Low`. |
+| [`bitdefender_yara_ascii`](#bitdefender_yara_ascii) | A Bitdefender YARA signature holds a character that is not ASCII. |
+| [`bitdefender_yara_size`](#bitdefender_yara_size) | A Bitdefender YARA signature is longer than 30,000 characters. |
 | [`cbc_unknown_field`](#cbc_unknown_field) | A field in a Carbon Black Cloud query is one or two letters away from a Carbon Black process search field, and is not that field. |
 | [`chaining_relation_unknown`](#chaining_relation_unknown) | A threat's chaining relation is not a known relation. |
 | [`changed_diff`](#changed_diff) | `share push --changed` could not calculate which objects changed. |
@@ -42,7 +47,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`cql_duplicate_parameter`](#cql_duplicate_parameter) | A CQL function parameter is given more than once. |
 | [`cql_event_function_after_aggregate`](#cql_event_function_after_aggregate) | A CQL eventSize(), eventInternals() or eventFieldCount() call comes after the first aggregate function, which LogScale refuses since 1.190. |
 | [`cql_free_text_after_aggregate`](#cql_free_text_after_aggregate) | A CQL free-text filter comes after the first aggregate function, which LogScale refuses since 1.190. |
-| [`cql_link_outside_correlate`](#cql_link_outside_correlate) | The CQL link operator <=> appears outside the queries of correlate(), the only place it links fields. |
+| [`cql_link_outside_correlate`](#cql_link_outside_correlate) | The CQL link operator &lt;=> appears outside the queries of correlate(), the only place it links fields. |
 | [`cql_match_guard`](#cql_match_guard) | A CQL match guard is an aggregate function; a guard must be a filter. |
 | [`cql_missing_parameter`](#cql_missing_parameter) | A CQL function call leaves out a required parameter. |
 | [`cql_parameter_value`](#cql_parameter_value) | A literal CQL argument is not one of the parameter's allowed values, or is outside its bounds. |
@@ -127,6 +132,12 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`filename_slug`](#filename_slug) | The file name is not the one lint.toml's [filenames] style derives from the object's name. |
 | [`git`](#git) | git is on `PATH`. |
 | [`git_repository`](#git_repository) | The workspace is in a git repository, and its default branch (`origin/HEAD`). |
+| [`harfanglab_rule_kind`](#harfanglab_rule_kind) | A HarfangLab block sets both sigma and yara; a block is one kind. |
+| [`harfanglab_yara_context`](#harfanglab_yara_context) | A HarfangLab YARA rule's meta context is not file, memory, file,memory, file.pe, file.elf or file.macho. |
+| [`harfanglab_yara_form`](#harfanglab_yara_form) | A HarfangLab yara object sets signature together with decomposed keys (meta, strings, condition or imports). |
+| [`harfanglab_yara_import`](#harfanglab_yara_import) | A decomposed HarfangLab YARA imports entry is not a module the YARA language knows. |
+| [`harfanglab_yara_rule_name`](#harfanglab_yara_rule_name) | The YARA rule name deploy derives from the rule name is a YARA keyword or keeps a character other than an ASCII letter, digit or underscore. |
+| [`harfanglab_yara_section_header`](#harfanglab_yara_section_header) | A decomposed HarfangLab YARA fragment contains a strings:, condition: or rule header, which deploy writes itself. |
 | [`internal`](#internal) | opentide stopped on an exception it did not handle: a bug in opentide, not in your input. |
 | [`interrupted`](#interrupted) | The command was stopped before it finished: an `opentide serve` client cancelled the run. |
 | [`invalid_cve`](#invalid_cve) | A threat lists CVE identifiers Vulnerability-Lookup does not know. |
@@ -262,7 +273,31 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`workspace`](#workspace) | Where the workspace is, and how it was found. |
 | [`workspace_not_found`](#workspace_not_found) | `opentide new` ran outside a workspace: neither `.opentide/` nor `objects/` is there. Or the MCP server was started in an Agent Plugin's directory, which is not a workspace, and nothing named one. |
 | [`yaml_parse`](#yaml_parse) | An object file is not valid YAML, or not one mapping, so it could not be loaded. |
+| [`yara_duplicate_rule`](#yara_duplicate_rule) | Two YARA rules in one signature have the same name. |
+| [`yara_duplicate_string`](#yara_duplicate_string) | Two strings of one YARA rule have the same identifier. |
+| [`yara_duplicate_tag`](#yara_duplicate_tag) | A YARA rule repeats a tag. |
+| [`yara_empty_signature`](#yara_empty_signature) | The YARA signature has no rule, or only private or global rules. |
+| [`yara_entrypoint_deprecated`](#yara_entrypoint_deprecated) | entrypoint is deprecated in libyara and refused by YARA-X; use pe.entry_point or elf.entry_point. |
+| [`yara_hex_string`](#yara_hex_string) | A YARA hex string is invalid: an odd number of nibbles, a bad jump, or unbalanced alternatives. |
+| [`yara_include`](#yara_include) | A YARA signature uses an include directive, which no platform resolves: each API takes one text with no file system behind it. |
+| [`yara_meta_missing`](#yara_meta_missing) | A non-private YARA rule lacks a meta key the platform profile recommends. |
+| [`yara_module_not_imported`](#yara_module_not_imported) | A YARA module field or function is used without importing its module. |
+| [`yara_module_unconfirmed`](#yara_module_unconfirmed) | The YARA module is known but not confirmed on the platform's agents. |
+| [`yara_number_out_of_range`](#yara_number_out_of_range) | A YARA integer, size suffix, jump bound or string index is outside the range libyara accepts. |
+| [`yara_parse_error`](#yara_parse_error) | The YARA signature does not parse as libyara 4.5 reads it. |
+| [`yara_regexp`](#yara_regexp) | A YARA regular expression is invalid. |
+| [`yara_rule_identifier_conflict`](#yara_rule_identifier_conflict) | A YARA rule is named like an imported module or a keyword. |
 | [`yara_signature_alias`](#yara_signature_alias) | A `yara.signature` is a YAML alias instead of its own text. |
+| [`yara_slow_pattern`](#yara_slow_pattern) | libyara warns that this YARA string or loop may slow scanning down. |
+| [`yara_string_modifier`](#yara_string_modifier) | libyara refuses this combination of YARA string modifiers, or an xor or base64 argument is out of range. |
+| [`yara_suspicious_expression`](#yara_suspicious_expression) | A YARA condition is invariant, unsatisfiable or not boolean, or compares an integer with a boolean. |
+| [`yara_type`](#yara_type) | A YARA operator or function is applied to a value of the wrong type. |
+| [`yara_undefined_identifier`](#yara_undefined_identifier) | A YARA identifier is neither a rule defined earlier in the signature nor an imported module. |
+| [`yara_undefined_string`](#yara_undefined_string) | A YARA condition names a string ($id, #id, @id, !id or $prefix*) that the rule does not define. |
+| [`yara_unknown_module`](#yara_unknown_module) | A YARA import names a module libyara does not ship. |
+| [`yara_unknown_module_member`](#yara_unknown_module_member) | The YARA module has no such field or function, or the function takes other arguments. |
+| [`yara_unreferenced_string`](#yara_unreferenced_string) | A YARA string is never used in the condition, which libyara refuses unless the condition uses them. |
+| [`yara_x_incompatible`](#yara_x_incompatible) | libyara 4.5 compiles this YARA but YARA-X 1.x refuses it. |
 
 ## analysis_engine
 
@@ -338,6 +373,28 @@ assets = ["domain-controller"]   # declared as domain-controllers
 
 Correct the asset name, or declare the asset under `[[assets]]`.
 
+## bitdefender_contains_no_wildcard
+
+A `contains` criterion has neither `*` nor `?`, so GravityZone matches the value as written.
+
+Severity: warning. Reported by `opentide validate` and `opentide lint` (its `queries` check) on a `bitdefender` block (bitdefender-1.0). It is an advisory: GravityZone's `contains` relation compares the whole value with `*` and `?` as wildcards, so a value without one is an exact match, and the author most likely meant a substring.
+
+### Example
+
+```yaml
+configurations:
+  bitdefender:
+    detection:
+      target: process
+      criteria:
+        - field: Process.CommandLine
+          contains: -enc
+```
+
+### How to fix
+
+Add the wildcards you mean (`contains: "*-enc*"`), or use `is` for an exact match.
+
 ## bitdefender_create_unconfirmed
 
 A GravityZone create got no answer, and its retry found the name already taken.
@@ -394,6 +451,28 @@ configurations:
 
 Give one of the blocks its own `configurations.bitdefender.name`, or rename one of the rules.
 
+## bitdefender_registry_full_hive
+
+A `Registry.Key` criterion starts with a full hive name, which GravityZone accepts and never matches.
+
+Severity: warning. Reported by `opentide validate` and `opentide lint` (its `queries` check) on a `bitdefender` block (bitdefender-1.0). It is an advisory: the rule validates and deploys, but GravityZone stores registry keys under the short hive names, so `HKEY_LOCAL_MACHINE\…` never triggers.
+
+### Example
+
+```yaml
+configurations:
+  bitdefender:
+    detection:
+      target: registry
+      criteria:
+        - field: Registry.Key
+          contains: HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\Run*
+```
+
+### How to fix
+
+Write the short hive name: `HKLM`, `HKCU`, `HKU`, `HKCR`, `HKCC` or `HKLU`, as in `HKLM\Software\Microsoft\Windows\CurrentVersion\Run*`.
+
 ## bitdefender_rule_kind
 
 A Bitdefender block sets both `detection` and `yara`, or neither.
@@ -419,6 +498,58 @@ configurations:
 ### How to fix
 
 Keep one kind per rule. Split a Basic rule and a YARA rule into two opentide rules; manage exclusions in the GravityZone console.
+
+## bitdefender_severity_collapsed
+
+`response.alert_severity` is `Critical` or `Informational`, which GravityZone sends as `High` or `Low`.
+
+Severity: warning. Reported by `opentide validate` and `opentide lint` (its `queries` check) on a rule with a `bitdefender` block that sets no `severity` (bitdefender-1.0). GravityZone has three severities: deploy sends `Critical` as `High` and `Informational` as `Low`. It is an advisory: the rule validates and deploys.
+
+### Example
+
+```yaml
+response:
+  alert_severity: Critical
+configurations:
+  bitdefender:
+    status: PRODUCTION
+```
+
+### How to fix
+
+Set `configurations.bitdefender.severity` to `Low`, `Medium` or `High` to choose the GravityZone level, or accept the mapping.
+
+## bitdefender_yara_ascii
+
+A Bitdefender YARA signature holds a character that is not ASCII.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## bitdefender_yara_size
+
+A Bitdefender YARA signature is longer than 30,000 characters.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
 
 ## cbc_unknown_field
 
@@ -787,7 +918,7 @@ Change the file where the frame points, then run `opentide validate` again.
 
 ## cql_link_outside_correlate
 
-The CQL link operator <=> appears outside the queries of correlate(), the only place it links fields.
+The CQL link operator &lt;=> appears outside the queries of correlate(), the only place it links fields.
 
 Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
 
@@ -2190,6 +2321,102 @@ Reported by `opentide doctor`. Warns when it is not a repository, or `origin/HEA
 ### How to fix
 
 Run the command it prints: `git init` for a new repository, or `git remote set-head origin --auto` when `origin/HEAD` is unset.
+
+## harfanglab_rule_kind
+
+A HarfangLab block sets both sigma and yara; a block is one kind.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## harfanglab_yara_context
+
+A HarfangLab YARA rule's meta context is not file, memory, file,memory, file.pe, file.elf or file.macho.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## harfanglab_yara_form
+
+A HarfangLab yara object sets signature together with decomposed keys (meta, strings, condition or imports).
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## harfanglab_yara_import
+
+A decomposed HarfangLab YARA imports entry is not a module the YARA language knows.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## harfanglab_yara_rule_name
+
+The YARA rule name deploy derives from the rule name is a YARA keyword or keeps a character other than an ASCII letter, digit or underscore.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## harfanglab_yara_section_header
+
+A decomposed HarfangLab YARA fragment contains a strings:, condition: or rule header, which deploy writes itself.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
 
 ## internal
 
@@ -4462,6 +4689,230 @@ metadata:
 
 Open the file at the line and column the diagnostic names. The note says what the parser was reading when it gave up, and where that started: an unclosed `[` or `{`, a missing quote, a tab used for indentation, or a key indented under a scalar. A key repeated in the same mapping is reported here too. A file whose top level is a list (`- name: …`) or a single value is reported as "expected a mapping at the top of the file": an object file is one mapping of keys such as `name`, `metadata` and `description`. The file is not indexed until it parses, so no other check can see it.
 
+## yara_duplicate_rule
+
+Two YARA rules in one signature have the same name.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yara_duplicate_string
+
+Two strings of one YARA rule have the same identifier.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yara_duplicate_tag
+
+A YARA rule repeats a tag.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yara_empty_signature
+
+The YARA signature has no rule, or only private or global rules.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yara_entrypoint_deprecated
+
+entrypoint is deprecated in libyara and refused by YARA-X; use pe.entry_point or elf.entry_point.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yara_hex_string
+
+A YARA hex string is invalid: an odd number of nibbles, a bad jump, or unbalanced alternatives.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yara_include
+
+A YARA signature uses an include directive, which no platform resolves: each API takes one text with no file system behind it.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yara_meta_missing
+
+A non-private YARA rule lacks a meta key the platform profile recommends.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yara_module_not_imported
+
+A YARA module field or function is used without importing its module.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yara_module_unconfirmed
+
+The YARA module is known but not confirmed on the platform's agents.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yara_number_out_of_range
+
+A YARA integer, size suffix, jump bound or string index is outside the range libyara accepts.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yara_parse_error
+
+The YARA signature does not parse as libyara 4.5 reads it.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yara_regexp
+
+A YARA regular expression is invalid.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yara_rule_identifier_conflict
+
+A YARA rule is named like an imported module or a keyword.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
 ## yara_signature_alias
 
 A `yara.signature` is a YAML alias instead of its own text.
@@ -4484,3 +4935,163 @@ configurations:
 ### How to fix
 
 Write the signature out in each block.
+
+## yara_slow_pattern
+
+libyara warns that this YARA string or loop may slow scanning down.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yara_string_modifier
+
+libyara refuses this combination of YARA string modifiers, or an xor or base64 argument is out of range.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yara_suspicious_expression
+
+A YARA condition is invariant, unsatisfiable or not boolean, or compares an integer with a boolean.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yara_type
+
+A YARA operator or function is applied to a value of the wrong type.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yara_undefined_identifier
+
+A YARA identifier is neither a rule defined earlier in the signature nor an imported module.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yara_undefined_string
+
+A YARA condition names a string ($id, #id, @id, !id or $prefix*) that the rule does not define.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yara_unknown_module
+
+A YARA import names a module libyara does not ship.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yara_unknown_module_member
+
+The YARA module has no such field or function, or the function takes other arguments.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yara_unreferenced_string
+
+A YARA string is never used in the condition, which libyara refuses unless the condition uses them.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yara_x_incompatible
+
+libyara 4.5 compiles this YARA but YARA-X 1.x refuses it.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.

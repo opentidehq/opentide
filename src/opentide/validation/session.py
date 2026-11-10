@@ -591,6 +591,16 @@ def _validate_work_item(
                 file_path=file_path,
             )
         )
+        from opentide.validation.bitdefender_advisories import bitdefender_advisory_issues
+
+        warnings.extend(
+            bitdefender_advisory_issues(
+                item.body,
+                object_uuid=item.uuid,
+                object_type=item.object_type,
+                file_path=file_path,
+            )
+        )
         issues.extend(check_references_for_object(item.uuid, item.object_type, item.body, graph))
         if item.object_type == "threat":
             issues.extend(check_chaining_for_object(item.uuid, item.body, graph))

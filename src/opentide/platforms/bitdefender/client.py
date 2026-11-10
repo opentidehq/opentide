@@ -46,6 +46,9 @@ DEFAULT_RETRY_AFTER = 60.0
 #: Rate-limited resends of one request before it fails.
 MAX_RATE_LIMITED = 10
 
+#: GravityZone's ``error.data.details`` for a create refused because the name is
+#: taken. The exact text is unconfirmed (RFC 0016, open questions): tighten this
+#: one pattern, and its test, after a tenant check.
 _NAME_CONFLICT = re.compile(
     r"already exists?|duplicate|name[^.]*(?:exists|taken|in use|unique)", re.IGNORECASE
 )
@@ -85,12 +88,21 @@ class BitdefenderApiError(RuntimeError):
     @property
     def name_conflict(self) -> bool:
         """GravityZone refused a create because the name exists in the company."""
-        return self.method == "createCustomRule" and bool(_NAME_CONFLICT.search(self.text))
+        return self.method == "createCustomRule" and is_name_conflict(self.details)
 
     @property
     def type_mismatch(self) -> bool:
         """GravityZone refused an update because the rule's kind differs."""
         return self.method == "updateCustomRule" and bool(_TYPE_MISMATCH.search(self.text))
+
+
+def is_name_conflict(details: str | None) -> bool:
+    """Whether a refusal's ``error.data.details`` says the rule name is already taken.
+
+    The spec maps ``bitdefender_name_conflict`` by ``error.data.details``, not
+    by the error code, which GravityZone shares with other invalid parameters.
+    """
+    return bool(details) and bool(_NAME_CONFLICT.search(details or ""))
 
 
 class _Pacer:

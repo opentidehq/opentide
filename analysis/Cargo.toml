@@ -4,7 +4,7 @@ name = "opentide-native"
 # whose version comes from its git tag; this crate is never published.
 version = "0.0.0"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.95"
 license = "EUPL-1.2"
 publish = false
 description = "The analysis engine and language server, compiled into the opentide Python package"
@@ -24,8 +24,9 @@ pyo3 = { version = "0.30.1", features = ["abi3-py310", "generate-import-lib"] }
 # language-server releases this may be a git revision, but
 # scripts/build/check_engine_pin.py refuses a git source when a release is
 # published, so a release always builds from crates.io.
-opentide-analysis = "=0.12.1"
-opentide-lsp = "=0.12.1"
+# YARA (opentidehq/language-server#165), ahead of the release that ships it.
+opentide-analysis = { git = "https://github.com/opentidehq/language-server", rev = "bb841a77375c897d5e5204dbec2ccceeef9789b5" }
+opentide-lsp = { git = "https://github.com/opentidehq/language-server", rev = "bb841a77375c897d5e5204dbec2ccceeef9789b5" }
 
 [build-dependencies]
 pyo3-build-config = "0.30.1"

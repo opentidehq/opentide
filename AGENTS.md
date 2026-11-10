@@ -123,7 +123,7 @@ The offline query checks (`validate`'s and `lint`'s `queries` checks, `validate 
 [opentidehq/language-server](https://github.com/opentidehq/language-server), bound with PyO3
 in [`analysis/`](analysis/) and compiled into the opentide package as `opentide._native` by
 [`hatch_build.py`](hatch_build.py): there is no separate engine distribution. `uv sync` builds
-it (develop profile) and needs a Rust toolchain (stable, 1.85+); release wheels are one
+it (develop profile) and needs a Rust toolchain (stable, 1.95+); release wheels are one
 `cp310-abi3` wheel per platform. Python reaches it only through `src/opentide/analysis.py`; a
 missing engine is `engine_unavailable`, never a skipped check.
 

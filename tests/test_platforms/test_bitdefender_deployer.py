@@ -29,6 +29,7 @@ from opentide.platforms.bitdefender.client import (
     PACER,
     BitdefenderApiError,
     BitdefenderClient,
+    is_name_conflict,
 )
 from opentide.platforms.bitdefender.deployer import BitdefenderDeploy, returned_rule_id
 from opentide.states.deployment import (
@@ -444,6 +445,30 @@ def test_personal_and_service_keys(run: Run) -> None:
     run.client(key_type="service")
     assert run.fake.auth is None
     assert run.fake.headers["X-API-Key"] == "key"
+
+
+@pytest.mark.parametrize(
+    ("details", "conflict"),
+    [
+        ("A rule with this name already exists", True),
+        ("Duplicate rule name", True),
+        ("The rule name must be unique", True),
+        ("The name is already in use", True),
+        (None, False),
+        ("", False),
+        ("Invalid value for parameter severity", False),
+    ],
+)
+def test_name_conflicts_are_read_from_the_error_details(
+    details: str | None, conflict: bool
+) -> None:
+    assert is_name_conflict(details) is conflict
+    error = BitdefenderApiError("createCustomRule", -32602, "Invalid params", details)
+    assert error.name_conflict is conflict
+    # Only the details carry the conflict: the message alone never does.
+    assert not BitdefenderApiError("createCustomRule", -32602, "name already exists").name_conflict
+    # Only a create can conflict on its name.
+    assert not BitdefenderApiError("updateCustomRule", -32602, "x", details).name_conflict
 
 
 def test_api_error_text_carries_the_details() -> None:
