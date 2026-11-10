@@ -649,6 +649,14 @@ const RAW: &[(&str, &[(&str, Severity)])] = &[
         &[("yara_undefined_identifier", E)],
     ),
     (
+        "import \"pe\" rule a { condition: for any k, k in pe.version_info : (true) }",
+        &[("yara_undefined_identifier", E)],
+    ),
+    (
+        "import \"pe\" rule a { condition: for any k, v in pe.version_info : (k == v) }",
+        &[],
+    ),
+    (
         "rule a { condition: for any i in (1,2) : (i == 1) and for any i in (3,4) : (i == 3) } rule b { condition: for any i in (1,2) : (i == 1) }",
         &[],
     ),
@@ -763,7 +771,14 @@ fn yara_x_dialect_accepts_its_syntax_and_refuses_libyara_only() {
         [("yara_x_incompatible".to_string(), W)]
     );
     assert_eq!(codes(jump, &yx), [("yara_x_incompatible".to_string(), E)]);
-    // YARA-X shadows an enclosing loop's variable.
+    // YARA-X shadows an enclosing loop's variable, and takes one named twice.
+    assert_eq!(
+        codes(
+            "import \"pe\" rule a { condition: for any k, k in pe.version_info : (true) }",
+            &yx
+        ),
+        []
+    );
     assert_eq!(
         codes(
             "rule a { condition: for any i in (1,2) : (for any i in (3,4) : (i == 3)) }",

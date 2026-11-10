@@ -1471,11 +1471,14 @@ impl<'a> Checker<'a> {
                 let vars: Vec<&Ident> = f.variables.iter().collect();
                 // The variables are what YARA-X types as boolean.
                 let mut bool_vars = false;
-                for v in &vars {
+                for (n, v) in vars.iter().enumerate() {
                     self.identifier_length("loop variable", v.name, span(&v.span()));
-                    // libyara refuses a name an enclosing loop binds; YARA-X
-                    // shadows it.
-                    if self.libyara() && self.lookup_var(v.name).is_some() {
+                    // libyara refuses a name an enclosing loop binds, or the
+                    // loop's own earlier variable; YARA-X shadows it.
+                    if self.libyara()
+                        && (self.lookup_var(v.name).is_some()
+                            || vars[..n].iter().any(|w| w.name == v.name))
+                    {
                         self.error(
                             codes::YARA_UNDEFINED_IDENTIFIER,
                             format!(
