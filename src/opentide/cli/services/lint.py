@@ -622,6 +622,39 @@ def _query_findings(root: Path, records: list[_ObjectRecord]) -> list[dict[str, 
                     ),
                 }
             )
+        findings.extend(_harfanglab_yara_findings(record))
+    return findings
+
+
+def _harfanglab_yara_findings(record: _ObjectRecord) -> list[dict[str, object]]:
+    """The HarfangLab profile's advisories on a ``yara.signature`` (harfanglab-1.0).
+
+    ``harfanglab_yara_context`` and ``yara_meta_missing`` are warnings: HarfangLab
+    takes the rule, but may not scan where the author meant.
+    """
+    from opentide.platforms.harfanglab.yara import SIGNATURE_PATH, advisories, signature_in
+
+    if record.text is None or "harfanglab" not in record.text:
+        return []
+    found = signature_in(record.text)
+    if found is None:
+        return []
+    signature, first_line = found
+    findings: list[dict[str, object]] = []
+    for advisory in advisories(signature):
+        before = signature[: advisory.offset]
+        line = first_line + before.count("\n")
+        findings.append(
+            _finding(
+                LintCheck.queries,
+                "warning",
+                record,
+                advisory.message,
+                code=advisory.code,
+                yaml_line=line,
+            )
+        )
+        findings[-1]["_field_path"] = list(SIGNATURE_PATH)
     return findings
 
 

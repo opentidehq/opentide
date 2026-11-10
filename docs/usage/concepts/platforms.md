@@ -27,6 +27,29 @@ CLI `--platform` uses **registry keys** (`defender_for_endpoint`, `carbon_black_
 
 CrowdStrike stores a correlation filter. HarfangLab stores a Sigma rule or a YARA rule. Neither language is syntax-checked: `opentide validate query` reports `supported: false`.
 
+A HarfangLab block is one kind: `sigma` or `yara`, never both (`harfanglab_rule_kind`). A `yara` block is either `signature`, a whole YARA text deploy sends verbatim, or the decomposed `meta`, `strings`, `condition` and `imports` deploy assembles into one rule, never both (`harfanglab_yara_form`):
+
+```yaml
+configurations:
+  harfanglab:
+    schema: platform::harfanglab::1.0
+    status: STAGING
+    yara:
+      signature: |
+        import "pe"
+
+        rule Loader_Stage1 {
+          meta:
+            context = "file,memory"
+          strings:
+            $cfg = { 43 46 47 21 [4-16] 00 01 }
+          condition:
+            pe.number_of_sections > 3 and $cfg
+        }
+```
+
+`opentide validate` checks what needs no YARA parser: an `include` (`yara_include`), a signature with no rule that is neither private nor global (`yara_empty_signature`), a rule name used twice (`yara_duplicate_rule`), a signature written as a YAML alias (`yara_signature_alias`), and, in the decomposed form, a section or rule header in `strings` or `condition`, an unknown module in `imports`, and a rule `name` that derives a YARA keyword or a non-ASCII rule name. `opentide lint` warns when a rule in a signature has no meta `context` (`yara_meta_missing`), or one HarfangLab's rules do not use (`harfanglab_yara_context`).
+
 Every platform but Sysdig answers [`opentide query`](../../cli/query.md), which runs a read-only query on its tenants and returns the rows. CrowdStrike queries run on Next-Gen SIEM. HarfangLab has no query language for telemetry: a query names a telemetry source and field filters, and a HarfangLab rule has no query to run.
 
 `validate query --platform elastic --live` previews the compiled rule in Kibana and runs the Elasticsearch pre-flight (ES|QL `LIMIT 0`, then `_field_caps` on aggregation fields). The same pre-flight runs before every Elastic deploy. Offline, the engine parses Kuery, Lucene, EQL and ES|QL, ES|QL against the stack versions of the block's tenants. See [Validate](../../cli/validate.md#elastic-live-validation-and-deploy).
@@ -47,7 +70,7 @@ Every key on `configurations.<platform>`, required and optional, is specified un
   <Card title="SentinelOne" href="/docs/specifications/specs/platforms/sentinel-one-1.0/" description="STAR rule: one S1QL query or a correlation of sub-queries." />
   <Card title="Carbon Black Cloud" href="/docs/specifications/specs/platforms/carbon-black-cloud-1.0/" description="Lucene IOC on an existing watchlist report." />
   <Card title="CrowdStrike" href="/docs/specifications/specs/platforms/crowdstrike-1.0/" description="Correlation filter. No query validator." />
-  <Card title="HarfangLab" href="/docs/specifications/specs/platforms/harfanglab-1.0/" description="Sigma or YARA. No query validator. Sigma wins when both are set." />
+  <Card title="HarfangLab" href="/docs/specifications/specs/platforms/harfanglab-1.0/" description="Sigma or YARA, never both. YARA as a whole signature or decomposed. No query validator." />
   <Card title="Sysdig Secure" href="/docs/specifications/specs/platforms/sysdig-1.0/" description="Custom Falco rule through the Sysdig Secure API. Block macros and lists are expanded at deploy." />
 </Cards>
 

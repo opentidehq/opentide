@@ -123,6 +123,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`filename_slug`](#filename_slug) | The file name is not the one lint.toml's [filenames] style derives from the object's name. |
 | [`git`](#git) | git is on `PATH`. |
 | [`git_repository`](#git_repository) | The workspace is in a git repository, and its default branch (`origin/HEAD`). |
+| [`harfanglab_yara_context`](#harfanglab_yara_context) | A YARA rule in a HarfangLab `yara.signature` sets a meta `context` HarfangLab's rules do not use. |
 | [`internal`](#internal) | opentide stopped on an exception it did not handle: a bug in opentide, not in your input. |
 | [`interrupted`](#interrupted) | The command was stopped before it finished: an `opentide serve` client cancelled the run. |
 | [`invalid_cve`](#invalid_cve) | A threat lists CVE identifiers Vulnerability-Lookup does not know. |
@@ -258,6 +259,8 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`workspace`](#workspace) | Where the workspace is, and how it was found. |
 | [`workspace_not_found`](#workspace_not_found) | `opentide new` ran outside a workspace: neither `.opentide/` nor `objects/` is there. Or the MCP server was started in an Agent Plugin's directory, which is not a workspace, and nothing named one. |
 | [`yaml_parse`](#yaml_parse) | An object file is not valid YAML, or not one mapping, so it could not be loaded. |
+| [`yara_meta_missing`](#yara_meta_missing) | A YARA rule in a HarfangLab `yara.signature` has no meta `context`, which the HarfangLab profile recommends on every rule that is not private. |
+| [`yara_signature_alias`](#yara_signature_alias) | A HarfangLab `yara.signature` is a YAML alias of text anchored elsewhere in the file instead of YARA written in the block. |
 
 ## analysis_engine
 
@@ -2103,6 +2106,38 @@ Reported by `opentide doctor`. Warns when it is not a repository, or `origin/HEA
 ### How to fix
 
 Run the command it prints: `git init` for a new repository, or `git remote set-head origin --auto` when `origin/HEAD` is unset.
+
+## harfanglab_yara_context
+
+A YARA rule in a HarfangLab `yara.signature` sets a meta `context` HarfangLab's rules do not use.
+
+Severity: warning. Reported by `opentide lint` (its `queries` check) on a HarfangLab rule (`harfanglab`) written in the signature form: a rule that is not `private` sets meta `context` to a value other than `file`, `memory`, `file,memory`, `file.pe`, `file.elf`, or `file.macho`. `opentide validate` does not fail on it. `file`, `memory`, and `file,memory` are the values HarfangLab's published rules use; `file.pe`, `file.elf`, and `file.macho` are what the decomposed form writes from `meta.os`. No HarfangLab document defines the key, so another value may be accepted and never scanned.
+
+### Example
+
+```yaml
+configurations:
+  harfanglab:
+    yara:
+      signature: |
+        rule Cmd_String {
+          meta:
+            context = "disk"   # not a HarfangLab context
+          strings:
+            $a = "cmd.exe" ascii
+          condition:
+            $a
+        }
+```
+
+### How to fix
+
+Set `context` to where the agent should scan: `file`, `memory`, or `file,memory`, or a file type (`file.pe`, `file.elf`, `file.macho`). Then run `opentide lint --check queries` again.
+
+```yaml
+          meta:
+            context = "file,memory"
+```
 
 ## internal
 
@@ -4374,3 +4409,75 @@ metadata:
 ### How to fix
 
 Open the file at the line and column the diagnostic names. The note says what the parser was reading when it gave up, and where that started: an unclosed `[` or `{`, a missing quote, a tab used for indentation, or a key indented under a scalar. A key repeated in the same mapping is reported here too. A file whose top level is a list (`- name: …`) or a single value is reported as "expected a mapping at the top of the file": an object file is one mapping of keys such as `name`, `metadata` and `description`. The file is not indexed until it parses, so no other check can see it.
+
+## yara_meta_missing
+
+A YARA rule in a HarfangLab `yara.signature` has no meta `context`, which the HarfangLab profile recommends on every rule that is not private.
+
+Severity: warning. Reported by `opentide lint` (its `queries` check) on a HarfangLab rule (`harfanglab`) written in the signature form: a rule that is not `private` has no `meta:` section, or one without `context`. `opentide validate` does not fail on it. Deploy sends the signature verbatim and adds no meta, so the agent receives the rule without saying where to scan.
+
+### Example
+
+```yaml
+configurations:
+  harfanglab:
+    yara:
+      signature: |
+        rule Cmd_String {
+          strings:
+            $a = "cmd.exe" ascii
+          condition:
+            $a
+        }
+```
+
+### How to fix
+
+Add a `meta:` section with `context` to the rule (`file`, `memory`, or `file,memory`), then run `opentide lint --check queries` again. A `private` helper rule needs none.
+
+```yaml
+        rule Cmd_String {
+          meta:
+            context = "file"
+          strings:
+            $a = "cmd.exe" ascii
+          condition:
+            $a
+        }
+```
+
+## yara_signature_alias
+
+A HarfangLab `yara.signature` is a YAML alias of text anchored elsewhere in the file instead of YARA written in the block.
+
+Severity: error. Reported by `opentide validate` (its `schema` check) on a rule whose `configurations.harfanglab.yara.signature` is `*name`. What a block deploys must be readable in the block: an alias makes a change to the anchored text, under any other key, change the deployed rule too. The YAML loader cannot tell an alias from text written in place, so `opentide validate` reads the file's node graph.
+
+### Example
+
+```yaml
+references:
+  public:
+    1: &shared_yara |
+      rule Cmd_String { condition: true }
+configurations:
+  harfanglab:
+    yara:
+      signature: *shared_yara
+```
+
+### How to fix
+
+Write the YARA text under `signature` with a block scalar (`|`), then run `opentide validate` again.
+
+```yaml
+configurations:
+  harfanglab:
+    yara:
+      signature: |
+        rule Cmd_String {
+          meta:
+            context = "file"
+          condition:
+            true
+        }
+```

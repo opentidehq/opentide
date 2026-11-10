@@ -239,11 +239,25 @@ class HarfangLabConfig(PlatformConfigBase):
     action: str = "Alert"
     """What the agent does on a match. Mapped to `global_state`."""
     tags: list[str] | None = None
-    """Sigma tags, and the YARA `tags` meta line."""
+    """Sigma tags, and the YARA `tags` meta line of the decomposed form."""
     sigma: HarfangLabSigma | None = None
-    """Behavioural rule. Preferred when `yara` is also set."""
+    """Behavioural rule. Not with `yara`."""
     yara: HarfangLabYara | None = None
-    """File or memory scan rule."""
+    """File or memory scan rule. Not with `sigma`."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _validate_raw_harfanglab_block(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        from opentide.platforms.harfanglab.yara import block_codes
+
+        codes = block_codes(data)
+        if codes:
+            raise ValueError(
+                f"HarfangLabConfig validation failed with code(s): {', '.join(sorted(codes))}"
+            )
+        return data
 
 
 class CarbonBlackConfig(PlatformConfigBase):

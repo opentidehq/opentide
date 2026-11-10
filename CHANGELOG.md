@@ -6,6 +6,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Upgrade
+
+- If a HarfangLab block sets both `sigma` and `yara`, split it into two rules, one per kind, then run `opentide validate`.
+
+### Breaking
+
+- **A HarfangLab block is a Sigma rule or a YARA rule, not both** ([#899](https://github.com/opentidehq/opentide/issues/899)). Such a block deployed only its `sigma` and dropped the `yara`; `validate` now fails it with `harfanglab_rule_kind` (harfanglab-1.0 1.2). The decomposed YARA form also fails a `strings:`, `condition:` or `rule` header in `strings` or `condition` (`harfanglab_yara_section_header`), a module the YARA language does not know in `imports` (`harfanglab_yara_import`), and a rule `name` whose derived YARA name is a keyword or keeps a non-ASCII letter (`harfanglab_yara_rule_name`): libyara refused each at deploy.
+
+### Added
+
+- **HarfangLab YARA as a whole signature: `yara.signature`** ([#899](https://github.com/opentidehq/opentide/issues/899)). Write imports and one or more YARA rules, private helpers included, and deploy sends the text verbatim as the YaraFile `content`, with `\n` line endings and one trailing newline; the endpoint, payload, name and identity by `metadata.uuid` are the decomposed form's. `validate` fails `yara_include`, `yara_empty_signature`, `yara_duplicate_rule`, a signature that sets decomposed keys too (`harfanglab_yara_form`), and one written as a YAML alias (`yara_signature_alias`). See [Platforms](docs/usage/concepts/platforms.md).
+- **`opentide lint` warns about a signature rule's meta `context`.** A rule that is not private and has no `context` is `yara_meta_missing`; a value other than `file`, `memory`, `file,memory`, `file.pe`, `file.elf` or `file.macho` is `harfanglab_yara_context`. Both are `queries` check warnings with an `opentide explain` page, and never fail `validate`.
+
 ### Fixed
 
 - **`pip install opentide` no longer installs a Typer that crashes it.** Typer 0.29.0 removed private modules and options opentide's CLI is built on, so `opentide setup` failed with `No module named 'typer._types'` and `opentide commands` crashed. opentide now requires `typer>=0.27.0,<0.29`, and `setup ci` declares its providers with Typer's public API. An invalid provider names the valid ones and suggests the closest.

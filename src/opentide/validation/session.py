@@ -566,6 +566,7 @@ def _validate_work_item(
                 check_shard=check_shard,
             )
         )
+        issues.extend(_yara_signature_alias_issues(item, file_path))
         issues.extend(check_references_for_object(item.uuid, item.object_type, item.body, graph))
         if item.object_type == "threat":
             issues.extend(check_chaining_for_object(item.uuid, item.body, graph))
@@ -576,6 +577,44 @@ def _validate_work_item(
         warnings = attach_yaml_lines(warnings, item.body, file_path=file_path)
 
     return issues, warnings
+
+
+def _yara_signature_alias_issues(
+    item: ObjectWorkItem, file_path: Path | None
+) -> list[ValidationIssue]:
+    """``yara_signature_alias``: a HarfangLab ``yara.signature`` that is a YAML alias.
+
+    The loaded body cannot tell an alias from text written in the block, so the
+    file's node graph is read, and only for a rule that has a signature.
+    """
+    configurations = item.body.get("configurations")
+    block = configurations.get("harfanglab") if isinstance(configurations, dict) else None
+    yara = block.get("yara") if isinstance(block, dict) else None
+    if file_path is None or not isinstance(yara, dict) or yara.get("signature") is None:
+        return []
+    from opentide.platforms.harfanglab.yara import SIGNATURE_PATH, signature_is_aliased
+
+    try:
+        text = file_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):  # the loader reports an unreadable file
+        return []
+    if not signature_is_aliased(text):
+        return []
+    return [
+        ValidationIssue(
+            code="yara_signature_alias",
+            severity="error",
+            object_uuid=item.uuid,
+            object_type=item.object_type,
+            file_path=file_path,
+            field_path=SIGNATURE_PATH,
+            message=(
+                "configurations.harfanglab.yara.signature is a YAML alias; what the block "
+                "deploys must be written in the block"
+            ),
+            suggestion="Write the YARA text under signature instead of aliasing an anchor",
+        )
+    ]
 
 
 def _uuid_issue_for_object(
