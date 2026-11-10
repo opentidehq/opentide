@@ -10,7 +10,7 @@ use opentide_core::{Diagnostic as EngineDiagnostic, Position, Range, Severity};
 use opentide_workspace::fs::{DirEntry, EntryKind};
 use opentide_workspace::validate::{Options as ValidateOptions, QueriesMode, Selection};
 use opentide_workspace::{
-    Change, Diagnostic, FileSystem, MemoryFs, Options, OsFs, RootOptions, Workspace,
+    Change, Diagnostic, FileSystem, MemoryFs, OpenError, Options, OsFs, RootOptions, Workspace,
 };
 use std::collections::{BTreeMap, HashMap};
 use std::io;
@@ -97,6 +97,17 @@ pub(crate) struct Buffers {
     pub stubs: Vec<Stub>,
 }
 
+/// How the workspace at `root` is opened: `validate` run there.
+fn open_options(root: &Path) -> Options {
+    Options {
+        roots: RootOptions {
+            repo: Some(root.to_path_buf()),
+            cwd: root.to_path_buf(),
+            ..RootOptions::default()
+        },
+    }
+}
+
 /// A root's workspace, loaded once and kept current: what changed since
 /// (an edit, a watcher's event, a file the host supplied) is handed to
 /// [`Workspace::invalidate`] before the next check.
@@ -105,6 +116,13 @@ pub(crate) struct RootChecks {
     /// The buffers in [`OverlayFs`], by path.
     buffers: BTreeMap<PathBuf, String>,
     workspace: Option<Workspace>,
+    /// The workspace being loaded on a thread of its own, for its root
+    /// ([`prefetch`](Self::prefetch)).
+    #[cfg(not(any(target_family = "wasm", fuzzing)))]
+    opening: Option<(
+        PathBuf,
+        std::thread::JoinHandle<Result<Workspace, OpenError>>,
+    )>,
     /// Paths changed since the workspace last saw them.
     pending: Vec<Change>,
     /// The findings of the last run, by file, for the buffers and generation
@@ -123,6 +141,8 @@ impl Default for RootChecks {
             fs: Arc::new(OverlayFs::new()),
             buffers: BTreeMap::new(),
             workspace: None,
+            #[cfg(not(any(target_family = "wasm", fuzzing)))]
+            opening: None,
             pending: Vec::new(),
             findings: None,
             all: None,
@@ -207,6 +227,46 @@ impl RootChecks {
         self.workspace.as_ref()
     }
 
+    /// Start loading the workspace at `root` on a thread of its own, while
+    /// the server reads the editor's index and answers the first requests:
+    /// [`update`](Self::update) takes it then, with what changed since
+    /// handed to [`Workspace::invalidate`]. Nothing to do once loaded or
+    /// loading, or where a thread cannot start.
+    #[cfg(not(any(target_family = "wasm", fuzzing)))]
+    pub(crate) fn prefetch(&mut self, root: &Path) {
+        if self.workspace.is_some() || self.opening.is_some() {
+            return;
+        }
+        let fs: Arc<dyn FileSystem> = Arc::clone(&self.fs) as Arc<dyn FileSystem>;
+        let options = open_options(root);
+        self.opening = std::thread::Builder::new()
+            .name("opentide-lsp-load".to_owned())
+            .spawn(move || Workspace::open(fs, options))
+            .ok()
+            .map(|handle| (root.to_path_buf(), handle));
+    }
+
+    /// The workspace [`prefetch`](Self::prefetch) loaded for `root`, if it
+    /// did and the load succeeded; `None` otherwise (the caller loads it).
+    #[cfg(not(any(target_family = "wasm", fuzzing)))]
+    fn prefetched(&mut self, root: &Path) -> Option<Workspace> {
+        let (at, handle) = self.opening.take()?;
+        let workspace = handle.join().ok()?.ok()?;
+        (at == root).then_some(workspace)
+    }
+
+    /// Whether `change` names an open buffer whose text is the file's on
+    /// disk: a workspace loaded meanwhile read the same bytes either way.
+    #[cfg(not(any(target_family = "wasm", fuzzing)))]
+    fn is_unchanged_buffer(&self, change: &Change) -> bool {
+        self.buffers.get(&change.path).is_some_and(|text| {
+            self.fs
+                .base
+                .read(&change.path)
+                .is_ok_and(|bytes| bytes == text.as_bytes())
+        })
+    }
+
     /// Hand what changed to the workspace, or load it.
     fn update(&mut self, root: &Path) {
         let current = self.pending.is_empty() && self.workspace.is_some();
@@ -216,19 +276,7 @@ impl RootChecks {
             self.all = None;
             let result = match self.workspace.as_mut() {
                 Some(workspace) => workspace.invalidate(&changes).map(|_| ()),
-                _ => {
-                    let options = Options {
-                        roots: RootOptions {
-                            repo: Some(root.to_path_buf()),
-                            cwd: root.to_path_buf(),
-                            ..RootOptions::default()
-                        },
-                    };
-                    let fs: Arc<dyn FileSystem> = Arc::clone(&self.fs) as Arc<dyn FileSystem>;
-                    Workspace::open(fs, options).map(|workspace| {
-                        self.workspace = Some(workspace);
-                    })
-                }
+                None => self.load(root, changes),
             };
             match result {
                 Ok(()) => self.failure = None,
@@ -240,6 +288,27 @@ impl RootChecks {
                 }
             }
         }
+    }
+
+    /// Load the workspace at `root`: the one [`prefetch`](Self::prefetch)
+    /// loaded, with `changes` (what came in meanwhile) handed to it, but
+    /// for the buffers that hold what the disk does; else read it now.
+    fn load(&mut self, root: &Path, changes: Vec<Change>) -> Result<(), OpenError> {
+        #[cfg(not(any(target_family = "wasm", fuzzing)))]
+        if let Some(mut workspace) = self.prefetched(root) {
+            let changes: Vec<Change> = changes
+                .into_iter()
+                .filter(|change| !self.is_unchanged_buffer(change))
+                .collect();
+            workspace.invalidate(&changes)?;
+            self.workspace = Some(workspace);
+            return Ok(());
+        }
+        // Read now, the buffers in place: what changed is in what it reads.
+        drop(changes);
+        let fs: Arc<dyn FileSystem> = Arc::clone(&self.fs) as Arc<dyn FileSystem>;
+        self.workspace = Some(Workspace::open(fs, open_options(root))?);
+        Ok(())
     }
 
     /// What `validate` reports for `files` (the open Tide documents of the

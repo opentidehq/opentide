@@ -1604,6 +1604,7 @@ dependencies = [
  "opentide-spl",
  "opentide-tide",
  "opentide-workspace",
+ "rayon",
  "regex",
  "serde",
  "serde_json",

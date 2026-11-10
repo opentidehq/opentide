@@ -8,13 +8,15 @@ use crate::uri::uri_to_path;
 use lsp_server::{Message, Notification, ReqQueue, Response};
 use opentide_analysis::{
     AnalyzeRequest, AnalyzeResponse, IndexedObject, VISIBILITY_CONFIGURATION, WorkspaceHost,
-    analyze, install_visibility, is_configuration_path, place_configuration_issues,
+    analyze, analyze_with_index, install_visibility, is_configuration_path,
+    place_configuration_issues,
 };
 use opentide_core::LanguageId;
+use rayon::prelude::*;
 use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 /// An open document.
 pub(crate) struct Document {
@@ -260,16 +262,52 @@ pub(crate) fn root_key(path: &str) -> String {
     trimmed.to_string()
 }
 
-/// Object files under a root: [`path_key`] → (text, index entry).
+/// Whether analysing the Tide object `text` may read the other objects. Of
+/// its analysis only an Elastic block's advisories do (the techniques a rule
+/// inherits through `detection_model`), and a document has such a block
+/// only if it names `elastic`, or spells it with an escape.
+pub(crate) fn may_read_index(text: &str) -> bool {
+    text.contains("elastic") || text.contains('\\')
+}
+
+/// An object file on disk: its path and text, indexed on first use (the
+/// first request that reads the editor's index: a hover, a completion, the
+/// catalog, an Elastic rule's advisories), not when it is read.
+struct DiskFile {
+    path: String,
+    text: String,
+    indexed: OnceLock<Option<IndexedObject>>,
+}
+
+impl DiskFile {
+    fn new(path: String, text: String) -> Self {
+        Self {
+            path,
+            text,
+            indexed: OnceLock::new(),
+        }
+    }
+
+    /// Its index entry ([`opentide_analysis::index_object`]); `None` for a
+    /// file that is no object.
+    fn indexed(&self) -> Option<&IndexedObject> {
+        self.indexed
+            .get_or_init(|| opentide_analysis::index_object(&self.path, &self.text))
+            .as_ref()
+    }
+}
+
+/// Object files under a root, by [`path_key`].
 #[derive(Default)]
 struct DiskObjects {
     loaded: bool,
-    files: BTreeMap<String, (String, Option<IndexedObject>)>,
+    files: BTreeMap<String, DiskFile>,
 }
 
 impl DiskObjects {
-    /// Read every object file again; re-index only those whose text changed.
-    /// The files that changed, came or went (every file on the first read).
+    /// Read every object file again; keep the index entry of those whose
+    /// text did not change. The files that changed, came or went (every
+    /// file on the first read).
     fn refresh(&mut self, root: &Path) -> Vec<PathBuf> {
         let found: BTreeMap<String, (String, String)> = collect_objects(root)
             .into_iter()
@@ -279,7 +317,7 @@ impl DiskObjects {
             .files
             .iter()
             .filter(|(key, _)| !found.contains_key(*key))
-            .filter_map(|(_, (_, indexed))| indexed.as_ref().map(|o| PathBuf::from(&o.path)))
+            .filter_map(|(_, file)| file.indexed().map(|o| PathBuf::from(&o.path)))
             .collect();
         if !self.loaded && found.is_empty() {
             changed.push(root.join("objects"));
@@ -288,23 +326,31 @@ impl DiskObjects {
         self.files.retain(|path, _| found.contains_key(path));
         for (key, (path, text)) in found {
             match self.files.get(&key) {
-                Some((known, _)) if *known == text => {}
+                Some(known) if known.text == text => {}
                 _ => {
-                    let indexed = opentide_analysis::index_object(&path, &text);
-                    self.files.insert(key, (text, indexed));
-                    changed.push(PathBuf::from(path));
+                    changed.push(PathBuf::from(&path));
+                    self.files.insert(key, DiskFile::new(path, text));
                 }
             }
         }
         changed
     }
 
+    /// Index the files not indexed yet, in parallel: on the first request
+    /// that reads the editor's index, every object file of the root.
+    fn index_all(&self) -> &BTreeMap<String, DiskFile> {
+        self.files.par_iter().for_each(|(_, file)| {
+            file.indexed();
+        });
+        &self.files
+    }
+
     fn refresh_path(&mut self, path: &str) {
         match std::fs::read_to_string(path) {
             Ok(text) => {
                 let text = opentide_core::strip_bom(&text).to_string();
-                let indexed = opentide_analysis::index_object(path, &text);
-                self.files.insert(path_key(path), (text, indexed));
+                self.files
+                    .insert(path_key(path), DiskFile::new(path.to_owned(), text));
             }
             Err(_) => {
                 self.files.remove(&path_key(path));
@@ -521,8 +567,8 @@ impl WorkspaceHost for SessionHost<'_> {
             return Some(doc.text.clone());
         }
         for root in &session.roots {
-            if let Some((text, _)) = root.disk.borrow().files.get(&key) {
-                return Some(text.clone());
+            if let Some(file) = root.disk.borrow().files.get(&key) {
+                return Some(file.text.clone());
             }
         }
         if let Some((_, text, _)) = session.supplied.files.get(&key) {
@@ -580,10 +626,10 @@ impl WorkspaceHost for SessionHost<'_> {
             Some(i) => session.roots[i]
                 .disk
                 .borrow()
-                .files
+                .index_all()
                 .iter()
                 .filter(|(path, _)| !open.contains_key(*path))
-                .filter_map(|(_, (_, indexed))| indexed.clone())
+                .filter_map(|(_, file)| file.indexed().cloned())
                 .collect(),
             None => Vec::new(),
         };
@@ -785,14 +831,19 @@ impl Session {
                 return Some(Arc::clone(response));
             }
         }
-        let mut response = analyze(
-            &host,
-            AnalyzeRequest {
-                uri: uri_to_path(uri),
-                language: doc.language,
-                text: doc.text.clone(),
-            },
-        );
+        let request = AnalyzeRequest {
+            uri: uri_to_path(uri),
+            language: doc.language,
+            text: doc.text.clone(),
+        };
+        // A Tide object that cannot read the other objects is analysed
+        // without the editor's index, which is then built on the first
+        // request that reads it, not before the first diagnostics.
+        let mut response = if doc.language == LanguageId::TideYaml && !may_read_index(&doc.text) {
+            analyze_with_index(&host, &[], request)
+        } else {
+            analyze(&host, request)
+        };
         match doc.language {
             LanguageId::TideYaml => {
                 let found = self.object_findings(uri, doc);
@@ -902,6 +953,23 @@ impl Session {
             .unwrap_or_default()
     }
 
+    /// How many object files on disk the editor's index holds an entry
+    /// for, over every root: none until a request reads the index.
+    #[cfg(all(debug_assertions, not(fuzzing)))]
+    pub(crate) fn editor_indexed(&self) -> usize {
+        self.roots
+            .iter()
+            .map(|r| {
+                r.disk
+                    .borrow()
+                    .files
+                    .values()
+                    .filter(|file| file.indexed.get().is_some())
+                    .count()
+            })
+            .sum()
+    }
+
     /// What the roots' workspaces read, parsed and resolved, summed.
     #[cfg(all(debug_assertions, not(fuzzing)))]
     pub(crate) fn workspace_stats(&self) -> opentide_workspace::Stats {
@@ -935,11 +1003,19 @@ impl Session {
         }
         // Objects the host knows by their metadata alone, unless a file
         // holds them: the workspace reads each as a file of its family.
-        let mut stubs: Vec<Stub> = self
-            .host(root)
-            .indexed_objects()
-            .into_iter()
-            .flat_map(|index| index.iter().cloned().collect::<Vec<_>>())
+        // Only a host can supply one: the index is not read for none.
+        let supplies_stubs = self
+            .supplied
+            .files
+            .values()
+            .any(|(path, _, _)| path.starts_with("opentide-object:"));
+        let index = if supplies_stubs {
+            self.host(root).indexed_objects().unwrap_or_default()
+        } else {
+            Arc::default()
+        };
+        let mut stubs: Vec<Stub> = index
+            .iter()
             .filter(|o| o.path.starts_with("opentide-object:"))
             .map(|o| Stub {
                 family: o.object_type.clone(),
@@ -1073,6 +1149,15 @@ impl Session {
             self.add_found_root(&path);
         }
         self.reassign_roots();
+        // Each folder's workspace starts loading now, while the editor's
+        // index is read; a host that supplies the files has them read with
+        // the workspace instead.
+        #[cfg(not(any(target_family = "wasm", fuzzing)))]
+        if self.supplied.files.is_empty() {
+            for r in &self.roots[..self.folders] {
+                r.checks.borrow_mut().prefetch(&r.path);
+            }
+        }
     }
 
     fn reassign_roots(&mut self) {
@@ -1104,9 +1189,9 @@ impl Session {
         };
         r.disk
             .borrow()
-            .files
+            .index_all()
             .values()
-            .filter_map(|(text, indexed)| Some((indexed.as_ref()?.path.clone(), text.clone())))
+            .filter_map(|file| Some((file.indexed()?.path.clone(), file.text.clone())))
             .collect()
     }
 
@@ -1476,7 +1561,60 @@ impl Session {
 
 #[cfg(test)]
 mod tests {
-    use super::root_key;
+    use super::{DiskObjects, may_read_index, root_key};
+
+    /// #914: only a document that can hold an Elastic block reads the
+    /// editor's index; an escape can spell `elastic` too.
+    #[test]
+    fn only_a_document_that_can_hold_an_elastic_block_reads_the_index() {
+        assert!(!may_read_index(
+            "name: r\nconfigurations:\n  sentinel:\n    query: x\n"
+        ));
+        assert!(may_read_index(
+            "name: r\nconfigurations:\n  elastic:\n    query: x\n"
+        ));
+        let escaped = "name: r\nconfigurations:\n  \"\\x65lastic\":\n    query: x\n";
+        assert!(!escaped.contains("elastic"));
+        let value: serde_yaml::Value = serde_yaml::from_str(escaped).unwrap();
+        assert!(
+            value["configurations"].get("elastic").is_some(),
+            "{value:?}"
+        );
+        assert!(may_read_index(escaped));
+    }
+
+    /// #914: reading a root's object files indexes none of them; the first
+    /// request for the index indexes each, as `index_object` does.
+    #[test]
+    fn object_files_are_indexed_when_the_index_is_read() {
+        let root = std::env::temp_dir().join(format!("opentide-lsp-disk-{}", std::process::id()));
+        let rules = root.join("objects/rules");
+        std::fs::create_dir_all(&rules).unwrap();
+        let rule = "name: R\nmetadata:\n  uuid: u-1\n  schema: rule::1.0\n";
+        std::fs::write(rules.join("r.yaml"), rule).unwrap();
+        std::fs::write(rules.join("not-an-object.yaml"), "- a\n").unwrap();
+        let mut disk = DiskObjects::default();
+        let changed = disk.refresh(&root);
+        assert_eq!(changed.len(), 2, "{changed:?}");
+        assert!(disk.files.values().all(|file| file.indexed.get().is_none()));
+        let indexed: Vec<_> = disk
+            .index_all()
+            .values()
+            .map(|file| file.indexed().cloned())
+            .collect();
+        assert!(disk.files.values().all(|file| file.indexed.get().is_some()));
+        let path = rules.join("r.yaml").display().to_string();
+        let expected = opentide_analysis::index_object(&path, rule).unwrap();
+        let found: Vec<_> = indexed.into_iter().flatten().collect();
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].uuid, expected.uuid);
+        assert_eq!(found[0].path, expected.path);
+        assert_eq!(found[0].refs, expected.refs);
+        // Read again unchanged: nothing changed, the entries are kept.
+        assert!(disk.refresh(&root).is_empty());
+        assert!(disk.files.values().all(|file| file.indexed.get().is_some()));
+        std::fs::remove_dir_all(&root).unwrap();
+    }
 
     #[test]
     fn a_root_is_the_same_root_with_or_without_a_trailing_separator() {

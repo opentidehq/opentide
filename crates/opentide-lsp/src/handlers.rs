@@ -263,6 +263,7 @@ pub(crate) fn request(session: &mut Session, request: Request) -> Response {
             let loading = s.workspace_stats();
             json!({
                 "analyses": s.analyses.get(),
+                "editorIndexed": s.editor_indexed(),
                 "workspace": {
                     "fileReads": loading.file_reads,
                     "parses": loading.parses,

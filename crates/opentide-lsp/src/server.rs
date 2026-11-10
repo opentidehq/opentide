@@ -27,6 +27,8 @@ pub fn run_stdio_status() -> Result<bool> {
     let stdout = std::io::stdout();
     let mut writer = stdout.lock();
     let mut session = Session::default();
+    #[cfg(not(target_family = "wasm"))]
+    warm_up();
     #[cfg(not(target_os = "wasi"))]
     let mut source = protocol::Threaded::spawn(|| std::io::stdin().lock())?;
     #[cfg(target_os = "wasi")]
@@ -42,10 +44,28 @@ pub fn run_listen(addr: &str) -> Result<()> {
     eprintln!("opentide-lsp listening on {addr}");
     let (stream, _) = listener.accept()?;
     let reader = stream.try_clone()?;
+    #[cfg(not(target_family = "wasm"))]
+    warm_up();
     let mut source = protocol::Threaded::spawn(move || std::io::BufReader::new(reader))?;
     let mut writer = stream;
     let mut session = Session::default();
     protocol::run(&mut source, &mut writer, &mut session).map(|_| ())
+}
+
+/// Parses, on a thread of its own, what the first check of a process reads
+/// once and keeps: the editor's bundled vocabularies (all of them, on the
+/// first Tide document) and `validate`'s revision schemas, while the server
+/// reads the workspace. (`validate` parses a vocabulary on first use, only
+/// those its objects name: warming all of them costs more than it saves.) A thread
+/// that cannot start leaves them to be parsed on first use, as before.
+#[cfg(not(target_family = "wasm"))]
+fn warm_up() {
+    let _ = std::thread::Builder::new()
+        .name("opentide-lsp-warm-up".to_owned())
+        .spawn(|| {
+            opentide_tide::bundled_vocabs();
+            let _ = opentide_workspace::validate::objects::revision_schema("rule::1.1");
+        });
 }
 
 /// Fails: `--listen` needs sockets, which wasm32-wasip1 does not have.

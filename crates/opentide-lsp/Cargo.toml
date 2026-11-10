@@ -44,6 +44,8 @@ opentide-tide.workspace = true
 # Tide diagnostics are `validate`'s, and configuration checks the models' (UC-2.6).
 opentide-workspace.workspace = true
 opentide-schema.workspace = true
+# The object files of a root are indexed in parallel on start-up.
+rayon.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 clap.workspace = true

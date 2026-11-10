@@ -448,6 +448,110 @@ fn edits_and_watched_files_invalidate_only_what_they_name() {
     assert_eq!(loading(&mut lsp), (4, 2));
 }
 
+fn editor_indexed(lsp: &mut Lsp) -> u64 {
+    lsp.request("opentide/__stats", Value::Null)["result"]["editorIndexed"]
+        .as_u64()
+        .unwrap()
+}
+
+/// #914: the first diagnostics of a Tide object that cannot read the other
+/// objects (no Elastic block) do not wait for the editor's index of the
+/// root: it is built on the first request that reads it, every file then.
+#[test]
+fn the_first_diagnostics_do_not_build_the_editor_index() {
+    let scratch = workspace("lazy-index", true);
+    let root = &scratch.0;
+    let rule_uri = file_uri(&root.join("objects/rules/rule-1.0.yaml"));
+    let (mut lsp, _) = start(json!({ "capabilities": watch(), "rootUri": file_uri(root) }));
+    let register = lsp.read();
+    lsp.write(&json!({ "jsonrpc": "2.0", "id": register["id"], "result": null }));
+    let rule = fixture(RULE);
+    assert!(!rule.contains("elastic"));
+    let codes = codes_for(&mut lsp, &rule_uri, &rule);
+    // validate checked it against the objective on disk.
+    assert!(!codes.contains(&"invalid_ref".to_string()), "{codes:?}");
+    assert_eq!(editor_indexed(&mut lsp), 0);
+
+    let symbols = lsp.request("workspace/symbol", json!({ "query": "Credential" }));
+    let names: Vec<&str> = symbols["result"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|s| s["name"].as_str())
+        .collect();
+    assert_eq!(names, ["Credential Access Objective"], "{symbols}");
+    assert_eq!(editor_indexed(&mut lsp), 2);
+}
+
+/// #914: an Elastic rule's advisories still read the objects on disk: a
+/// technique it inherits through `detection_model` that is not Enterprise
+/// ATT&CK is reported on its first diagnostics.
+#[test]
+fn an_elastic_rule_reads_the_techniques_it_inherits() {
+    let scratch = workspace("lazy-index-elastic", false);
+    let root = &scratch.0;
+    let objective = fixture(OBJECTIVE).replacen(
+        "  threats:\n",
+        "  mitre_attack:\n    - T1626\n  threats:\n",
+        1,
+    );
+    assert_ne!(objective, fixture(OBJECTIVE));
+    std::fs::write(
+        root.join("objects/objectives/objective-1.0.yaml"),
+        objective,
+    )
+    .unwrap();
+    let rule_uri = file_uri(&root.join("objects/rules/rule-1.0.yaml"));
+    let (mut lsp, _) = start(json!({ "capabilities": watch(), "rootUri": file_uri(root) }));
+    let register = lsp.read();
+    lsp.write(&json!({ "jsonrpc": "2.0", "id": register["id"], "result": null }));
+    let rule = format!(
+        "{}  elastic:\n    type: query\n    query: x\n",
+        fixture(RULE)
+    );
+    open(&mut lsp, &rule_uri, "opentide-yaml", &rule);
+    let diagnostics = published_for(&mut lsp, &rule_uri);
+    let inherited = diagnostics
+        .iter()
+        .find(|d| d["code"] == "technique_not_enterprise")
+        .unwrap_or_else(|| panic!("{diagnostics:#?}"));
+    assert!(
+        inherited["message"].as_str().unwrap().contains("T1626"),
+        "{inherited}"
+    );
+}
+
+/// #914: the root's workspace starts loading when the folder is known,
+/// before a document is opened; a buffer opened meanwhile is what
+/// `validate` checks, whether it holds what the disk does or not.
+#[test]
+fn a_buffer_opened_while_the_workspace_loads_is_checked() {
+    let scratch = workspace("prefetch", true);
+    let root = &scratch.0;
+    let path = root.join("objects/rules/rule-1.0.yaml");
+    let rule = fixture(RULE);
+    let broken = rule.replacen("tlp: clear", "tlp: clearr", 1);
+    assert_ne!(broken, rule);
+    // On disk the rule is broken; the editor's buffer is not.
+    std::fs::write(&path, &broken).unwrap();
+    let rule_uri = file_uri(&path);
+    let (mut lsp, _) = start(json!({ "capabilities": watch(), "rootUri": file_uri(root) }));
+    let register = lsp.read();
+    lsp.write(&json!({ "jsonrpc": "2.0", "id": register["id"], "result": null }));
+    let codes = codes_for(&mut lsp, &rule_uri, &rule);
+    assert!(!codes.contains(&"vocab_unknown".to_string()), "{codes:?}");
+    // Loaded once, and the buffer parsed again for what it changed.
+    assert_eq!(loading(&mut lsp), (3, 1));
+
+    // The other way round: the disk is fine, the buffer is not.
+    std::fs::write(&path, &rule).unwrap();
+    let (mut lsp, _) = start(json!({ "capabilities": watch(), "rootUri": file_uri(root) }));
+    let register = lsp.read();
+    lsp.write(&json!({ "jsonrpc": "2.0", "id": register["id"], "result": null }));
+    let codes = codes_for(&mut lsp, &rule_uri, &broken);
+    assert!(codes.contains(&"vocab_unknown".to_string()), "{codes:?}");
+}
+
 /// P2.3: a code's documentation, a `Deprecated` tag and the other file of a
 /// `duplicate_id`, each for a client that reads it.
 #[test]
