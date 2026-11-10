@@ -75,6 +75,10 @@
 #   failure (compile_invalid_rule), as Azure refuses it.
 # - deploy (CI pull or merge request without its merge commit): origin's
 #   branches are read as the checkout holds them, never fetched.
+# - deploy --dry-run: a Sysdig block that cannot compile is described as
+#   "Sysdig cannot compile this rule", where the oracle said "Sentinel"
+#   ("**A Sysdig rule that cannot compile is reported as Sysdig's**";
+#   approved per preview in tests/golden/payloads/APPROVED.toml until then).
 # - `-h` (and `-Vh`): clap's short help flag shows the help, exit 0, where the
 #   oracle had no `-h` (`No such option: -h`, exit 2).
 #
