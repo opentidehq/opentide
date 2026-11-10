@@ -475,7 +475,7 @@ Find the rule by name in the GravityZone console and record its id in the rule's
 
 A GravityZone create got no answer, and its retry found the name already taken.
 
-Severity: error. Reported by `opentide deploy` on a `bitdefender` tenant. The first `createCustomRule` timed out or lost its connection, so deploy sent it once more; GravityZone refused the retry because a rule of that name exists. The first create may have succeeded, but its rule id never reached opentide, so nothing was recorded in `.opentide/states/deployment/`. Deploy never lists rules to find the id.
+Severity: error. Reported by `opentide deploy` on a `bitdefender` tenant. The first `createCustomRule` got no answer (a timeout, a reset or a cut-off response), so deploy sent it once more; the retry got no answer either, or GravityZone refused it because a rule of that name exists. The first create may have succeeded, but its rule id never reached opentide, so nothing was recorded in `.opentide/states/deployment/`. Deploy never lists rules to find the id.
 
 ### Example
 
@@ -514,7 +514,7 @@ Add the field the pairing needs (`Connection.Domain`), or split EDR and XDR cond
 
 A criterion's `field` does not belong to the block's `target`.
 
-Severity: error. Reported by `opentide validate` on a `bitdefender` block (bitdefender-1.0). Each target has its own fields in Bitdefender's criteria catalogue: `process` has `Process.*`, `file` has `File.*`, `connection` has `Connection.*` and `registry` has `Registry.*`. Fields of other targets are not checked yet.
+Severity: error. Reported by `opentide validate` on a `bitdefender` block (bitdefender-1.0). Each target has its own fields in Bitdefender's criteria catalogue: `process` has `Process.*`, `file` has `File.*`, `connection` has `Connection.*` and `registry` has `Registry.*`. A field the catalogue does not list for any other target is a warning. The alert filter (`detection`) is never a criterion, on any target: write it as the block's `alert`.
 
 ### Example
 
@@ -889,7 +889,7 @@ Check the variable `api_key` names, and enable the Incidents API for the key in 
 
 A call to the GravityZone tenant got no answer, so no further rule deploys to it.
 
-Severity: error. Reported by `opentide deploy` on a `bitdefender` tenant (bitdefender-1.0). A timeout or a connection error on an update or a delete stops the tenant. A create with no answer is retried once instead, and a name conflict on that retry is `bitdefender_create_unconfirmed`.
+Severity: error. Reported by `opentide deploy` on a `bitdefender` tenant (bitdefender-1.0). A timeout or a connection error on an update or a delete stops the tenant. A create with no answer is retried once instead; a retry with no answer, or one refused because the name is taken, is `bitdefender_create_unconfirmed` for that rule, and the tenant goes on.
 
 ### Example
 

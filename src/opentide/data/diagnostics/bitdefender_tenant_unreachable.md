@@ -2,7 +2,7 @@
 
 A call to the GravityZone tenant got no answer, so no further rule deploys to it.
 
-Severity: error. Reported by `opentide deploy` on a `bitdefender` tenant (bitdefender-1.0). A timeout or a connection error on an update or a delete stops the tenant. A create with no answer is retried once instead, and a name conflict on that retry is `bitdefender_create_unconfirmed`.
+Severity: error. Reported by `opentide deploy` on a `bitdefender` tenant (bitdefender-1.0). A timeout or a connection error on an update or a delete stops the tenant. A create with no answer is retried once instead; a retry with no answer, or one refused because the name is taken, is `bitdefender_create_unconfirmed` for that rule, and the tenant goes on.
 
 ## Example
 
