@@ -841,7 +841,7 @@ class BitdefenderConfig(PlatformConfigBase):
         from pydantic import ValidationError
         from pydantic_core import InitErrorDetails, PydanticCustomError
 
-        from opentide.platforms.bitdefender.catalog import CODE_MESSAGES, block_findings
+        from opentide.platforms.bitdefender.catalog import block_findings
 
         findings = block_findings(raw)
         if findings:
@@ -851,12 +851,12 @@ class BitdefenderConfig(PlatformConfigBase):
                 InitErrorDetails(
                     # The codes are CONSTRAINT_CODES, a fixed set of literals.
                     type=PydanticCustomError(
-                        cast("LiteralString", code), "{message}", {"message": CODE_MESSAGES[code]}
+                        cast("LiteralString", finding.code), "{message}", {"message": finding.text}
                     ),
-                    loc=path,
+                    loc=finding.path,
                     input=raw,
                 )
-                for code, path in findings
+                for finding in findings
             ]
             raise ValidationError.from_exception_data(cls.__name__, errors)
         return raw

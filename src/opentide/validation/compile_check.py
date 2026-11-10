@@ -27,8 +27,6 @@ _COMPILED_STRATEGIES = frozenset(
     }
 )
 
-_DISPLAY_NAMES = {"sentinel": "Sentinel", "elastic": "Elastic"}
-
 
 def compile_issues(
     rule: Any,
@@ -42,7 +40,12 @@ def compile_issues(
 
     *rule* is the loaded ``DetectionRule``; *body* the YAML it came from.
     """
-    from opentide.deployment.preview import OFFLINE_COMPILERS, compile_diagnostic, compile_offline
+    from opentide.deployment.preview import (
+        OFFLINE_COMPILERS,
+        PLATFORM_LABELS,
+        compile_diagnostic,
+        compile_offline,
+    )
 
     configurations = body.get("configurations")
     if not isinstance(configurations, Mapping):
@@ -55,7 +58,7 @@ def compile_issues(
         try:
             compile_offline(platform, rule)
         except Exception as exc:
-            name = _DISPLAY_NAMES.get(platform, platform)
+            name = PLATFORM_LABELS.get(platform, platform)
             code, message, hint = compile_diagnostic(exc, name)
             field = getattr(exc, "field", None)
             field_path = tuple(field) if field else ("configurations", platform)

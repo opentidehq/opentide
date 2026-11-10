@@ -25,7 +25,18 @@ def _config_preview(platform: str, rule: DetectionRule) -> dict[str, Any]:
 _PREVIEW_TENANT = "corpus-tenant"
 
 
-def compile_diagnostic(exc: Exception, platform: str = "Sentinel") -> tuple[str, str, str | None]:
+#: Each offline compiler's platform, as a diagnostic names it.
+PLATFORM_LABELS: dict[str, str] = {
+    "sentinel": "Sentinel",
+    "elastic": "Elastic",
+    "sysdig": "Sysdig",
+    "bitdefender": "Bitdefender GravityZone",
+}
+
+
+def compile_diagnostic(
+    exc: Exception, platform: str = "the platform"
+) -> tuple[str, str, str | None]:
     """``(code, message, help)`` for a rule that does not compile, in the reader's words.
 
     A compiler error that knows its cause carries ``code``, ``reason`` and
@@ -56,15 +67,16 @@ def compile_diagnostic(exc: Exception, platform: str = "Sentinel") -> tuple[str,
     )
 
 
-def _compile_failure(rule: DetectionRule, exc: Exception) -> dict[str, Any]:
+def _compile_failure(rule: DetectionRule, exc: Exception, platform: str) -> dict[str, Any]:
     """Record a rule that would fail to deploy, and fail the dry-run with it.
 
     The deploy result reports it once, as a diagnostic above the plan tally;
     the Python error stays in the ``--debug`` log.
     """
-    code, message, hint = compile_diagnostic(exc)
+    code, message, hint = compile_diagnostic(exc, PLATFORM_LABELS.get(platform, platform))
     logger.debug(
-        "sentinel_preview_compile_failed",
+        "preview_compile_failed",
+        platform=platform,
         uuid=str(rule.metadata.uuid),
         code=code,
         error=f"{type(exc).__name__}: {exc}",
@@ -125,7 +137,7 @@ def _sentinel_compile_preview(rule: DetectionRule) -> dict[str, Any]:
     try:
         payload = compile_offline("sentinel", rule)
     except Exception as exc:
-        return _compile_failure(rule, exc)
+        return _compile_failure(rule, exc, "sentinel")
     return {"uuid": rule.metadata.uuid, "name": rule.name, "api_request": payload}
 
 
@@ -151,29 +163,31 @@ def _sysdig_compile_preview(rule: DetectionRule) -> dict[str, Any]:
 
         compiled = SysdigDeploy().compile_deployment(rule)
     except Exception as exc:
-        return _compile_failure(rule, exc)
+        return _compile_failure(rule, exc, "sysdig")
     return {"uuid": rule.metadata.uuid, "name": rule.name, "api_request": api_body(compiled)}
 
 
-def _bitdefender_tenant() -> Any | None:
-    """The first configured GravityZone tenant, or ``None`` when there is none."""
+def _bitdefender_tenant(name: str | None) -> Any | None:
+    """The GravityZone tenant named *name*, or ``None``."""
+    if name is None:
+        return None
     try:
         from opentide.core.registry import Opentide
 
-        tenants = Opentide.Configurations.Systems.Bitdefender.tenants
+        tenants = Opentide.Configurations.Systems.Bitdefender.tenants or []
     except Exception as exc:
         logger.debug("bitdefender_preview_no_tenant", error=str(exc))
         return None
-    return tenants[0] if tenants else None
+    return next((tenant for tenant in tenants if tenant.name == name), None)
 
 
-def _bitdefender_compile_preview(rule: DetectionRule) -> dict[str, Any]:
+def _bitdefender_compile_preview(rule: DetectionRule, tenant_name: str | None) -> dict[str, Any]:
     """The GravityZone ``createCustomRule`` request the deploy would send.
 
-    With a configured tenant, targets, tags and ``companyId`` are resolved
-    against it, and the preview names it. Without one, the request leaves them
-    out and ``unresolved`` lists the block's target aliases, never presented as
-    GravityZone ids.
+    *tenant_name* is the first tenant this run sends the rule to. Targets, tags
+    and ``companyId`` are resolved against it, and the preview names it. With
+    none, the request leaves them out and ``unresolved`` lists the block's
+    target aliases, never presented as GravityZone ids.
     """
     from opentide.platforms.bitdefender.compile import (
         create_params,
@@ -182,11 +196,11 @@ def _bitdefender_compile_preview(rule: DetectionRule) -> dict[str, Any]:
     )
     from opentide.platforms.bitdefender.deployer import BitdefenderDeploy
 
-    tenant = _bitdefender_tenant()
+    tenant = _bitdefender_tenant(tenant_name)
     try:
         compiled = BitdefenderDeploy().compile_deployment(rule, tenant)
     except Exception as exc:
-        return _compile_failure(rule, exc)
+        return _compile_failure(rule, exc, "bitdefender")
     preview: dict[str, Any] = {
         "uuid": rule.metadata.uuid,
         "name": rule.name,
@@ -196,21 +210,27 @@ def _bitdefender_compile_preview(rule: DetectionRule) -> dict[str, Any]:
         preview["tenant"] = tenant.name
     else:
         preview["unresolved"] = {
-            "reason": "no bitdefender tenant is configured: targets, tenant tags and "
-            "companyId are resolved at deploy",
+            "reason": "this run deploys the rule to no bitdefender tenant: targets, tenant "
+            "tags and companyId are resolved against a tenant at deploy",
             "targets": unresolved_targets(rule),
         }
     return preview
 
 
-def preview_rule_deployment(platform: str, rule: DetectionRule) -> dict[str, Any]:
-    """Return a serialisable preview of the API payload for one rule on a platform."""
+def preview_rule_deployment(
+    platform: str, rule: DetectionRule, tenant: str | None = None
+) -> dict[str, Any]:
+    """A serialisable preview of the API payload for one rule on a platform.
+
+    *tenant* is the first tenant the run sends the rule to, for platforms whose
+    request depends on it (Bitdefender).
+    """
     if platform == "sentinel":
         return _sentinel_compile_preview(rule)
     if platform == "sysdig":
         return _sysdig_compile_preview(rule)
     if platform == "bitdefender":
-        return _bitdefender_compile_preview(rule)
+        return _bitdefender_compile_preview(rule, tenant)
     if platform == "elastic":
         compiled = _elastic_compile_preview(rule)
         if compiled is not None:
@@ -219,9 +239,18 @@ def preview_rule_deployment(platform: str, rule: DetectionRule) -> dict[str, Any
 
 
 def preview_platform_deployment(
-    platform: str, uuids: list[str], *, rules_by_uuid: dict[str, DetectionRule] | None = None
+    platform: str,
+    uuids: list[str],
+    *,
+    rules_by_uuid: dict[str, DetectionRule] | None = None,
+    tenant_targets: dict[str, list[str]] | None = None,
 ) -> list[dict[str, Any]]:
-    """Preview deployment payloads for a list of rule UUIDs on one platform."""
+    """Preview deployment payloads for a list of rule UUIDs on one platform.
+
+    *tenant_targets* maps each tenant the run reaches to the rules it sends
+    there, after the run's strategies: a rule's request is resolved against the
+    first of them that receives it.
+    """
     from opentide.core.registry import Opentide
 
     Opentide.initialise()
@@ -231,7 +260,10 @@ def preview_platform_deployment(
         if rule is None:
             continue
         if isinstance(rule, DetectionRule):
-            previews.append(preview_rule_deployment(platform, rule))
+            tenant = next(
+                (name for name, sent in (tenant_targets or {}).items() if uuid in sent), None
+            )
+            previews.append(preview_rule_deployment(platform, rule, tenant))
         else:
             previews.append(cast(dict[str, Any], rule))
     return previews

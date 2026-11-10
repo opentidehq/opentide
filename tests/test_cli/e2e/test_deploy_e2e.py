@@ -265,7 +265,7 @@ def test_deploy_dry_run_fails_when_a_sentinel_rule_does_not_compile(
     assert diagnostic["code"] == "compile_invalid_rule"
     assert "TideRuleDataModelErrors" not in diagnostic["message"]
     assert payload["failure"]["message"] == "1 rule would fail to deploy"
-    assert not _log_events(result.stderr, "sentinel_preview_compile_failed")
+    assert not _log_events(result.stderr, "preview_compile_failed")
 
     human = invoke_cli(
         "deploy",

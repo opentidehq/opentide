@@ -19,13 +19,31 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, NamedTuple
 
 from opentide.platforms.bitdefender.criteria import Field as CatalogueField
 from opentide.platforms.bitdefender.criteria import catalogue
 
-#: A code and the path it is reported at, relative to ``configurations.bitdefender``.
-Finding = tuple[str, tuple[str, ...]]
+
+class Finding(NamedTuple):
+    """A code, the path it is reported at relative to ``configurations.bitdefender``,
+    and a message when the code's own does not say enough."""
+
+    code: str
+    path: tuple[str, ...]
+    message: str | None = None
+
+    @property
+    def text(self) -> str:
+        return self.message or CODE_MESSAGES[self.code]
+
+
+#: The alert criterion's API field: the block writes it as ``alert``.
+ALERT_FIELD = "detection"
+ALERT_MESSAGE = (
+    "the alert filter is not a criterion: write it as the block's detection.alert, "
+    "which deploy sends as filters"
+)
 
 #: What each constraint code says, for the finding's message (bitdefender-1.0, Constraints).
 CODE_MESSAGES: dict[str, str] = {
@@ -213,30 +231,35 @@ def detection_findings(detection: Any) -> tuple[list[Finding], str | None, list[
     found: list[Finding] = []
     target = detection.get("target")
     if not isinstance(target, str) or target not in catalogue().detection_targets:
-        found.append(("bitdefender_target", ("detection", "target")))
+        found.append(Finding("bitdefender_target", ("detection", "target")))
         target = None
     criteria = detection.get("criteria")
     if not isinstance(criteria, list) or not criteria:
-        found.append(("bitdefender_criterion_shape", _CRITERIA))
+        found.append(Finding("bitdefender_criterion_shape", _CRITERIA))
         return found, target, []
     shaped: list[Mapping[str, Any]] = []
     for index, criterion in enumerate(criteria):
         path = (*_CRITERIA, str(index))
         if not _criterion_shape_ok(criterion):
-            found.append(("bitdefender_criterion_shape", path))
+            found.append(Finding("bitdefender_criterion_shape", path))
             continue
         shaped.append(criterion)
-        if target is not None:
-            found.extend((code, path) for code in sorted(_criterion_codes(target, criterion)))
+        if criterion["field"] == ALERT_FIELD:
+            # On every target, open ones included (bitdefender-1.0, as language-server).
+            found.append(Finding("bitdefender_criterion_field", path, ALERT_MESSAGE))
+        elif target is not None:
+            found.extend(
+                Finding(code, path) for code in sorted(_criterion_codes(target, criterion))
+            )
     fields = [str(c["field"]) for c in shaped]
     if (
         target is not None
         and shaped
         and len(shaped) == len(criteria)
-        and not any(path[:2] == _CRITERIA and len(path) == 3 for _, path in found)
+        and not any(f.path[:2] == _CRITERIA and len(f.path) == 3 for f in found)
         and not _combination_ok(target, shaped, detection.get("alert"))
     ):
-        found.append(("bitdefender_criteria_combination", _CRITERIA))
+        found.append(Finding("bitdefender_criteria_combination", _CRITERIA))
     return found, target, fields
 
 
@@ -256,7 +279,9 @@ def unknown_field_paths(detection: Any) -> list[tuple[str, ...]]:
     return [
         (*_CRITERIA, str(index))
         for index, criterion in enumerate(criteria)
-        if _criterion_shape_ok(criterion) and unknown_field(target, criterion)
+        if _criterion_shape_ok(criterion)
+        and criterion["field"] != ALERT_FIELD
+        and unknown_field(target, criterion)
     ]
 
 
@@ -273,7 +298,7 @@ def action_scope_findings(
         refused = []
     else:
         refused = [key for key in keys if key in PROCESS_ACTIONS]
-    return [("bitdefender_action_scope", ("actions", str(key))) for key in refused]
+    return [Finding("bitdefender_action_scope", ("actions", str(key))) for key in refused]
 
 
 def targets_codes(targets: Any) -> set[str]:
@@ -324,45 +349,36 @@ def yara_signature_codes(signature: Any) -> set[str]:
     return codes
 
 
-#: Field names of the criterion keys, as a dumped (not by-alias) model spells them.
+#: Field names of the criterion keys, as a dump that is not by alias spells them.
 _FIELD_NAMES = {"is_": "is", "any_": "any"}
 
 
-def _all_unset(value: Any) -> bool:
-    """A dumped table whose every key is ``None``: the author wrote none of them."""
-    return isinstance(value, Mapping) and bool(value) and all(v is None for v in value.values())
-
-
 def _as_authored(value: Any) -> Any:
-    """*value* without ``None`` members, with field names read as their keys.
-
-    A block can come back from ``model_dump()``: every optional key is then
-    present as ``None``, and ``is``/``any`` may be spelled ``is_``/``any_``.
-    Neither is a key the author wrote.
-    """
+    """*value* with the criterion keys' field names read as their YAML keys."""
     if isinstance(value, Mapping):
-        return {
-            _FIELD_NAMES.get(str(key), key): _as_authored(item)
-            for key, item in value.items()
-            if item is not None and not _all_unset(item)
-        }
+        return {_FIELD_NAMES.get(str(key), key): _as_authored(item) for key, item in value.items()}
     if isinstance(value, list):
         return [_as_authored(item) for item in value]
     return value
 
 
 def block_findings(block: Mapping[str, Any]) -> list[Finding]:
-    """Every bitdefender-1.0 constraint finding of a block, as authored, at its path."""
-    raw = _as_authored(block)
+    """Every bitdefender-1.0 constraint finding of a block, as authored, at its path.
+
+    A key present with a null value inside ``targets`` or a criterion is a key
+    the author wrote, and checked as such. At the block's root a null is the key
+    left out: every optional root key reads that way, and a dump writes them so.
+    """
+    raw = {key: value for key, value in _as_authored(block).items() if value is not None}
     found: list[Finding] = []
     detection = raw.get("detection")
     yara = raw.get("yara")
     if (detection is None) == (yara is None):
-        found.append(("bitdefender_rule_kind", ()))
+        found.append(Finding("bitdefender_rule_kind", ()))
     severity = raw.get("severity")
     if severity is not None and severity not in SEVERITIES:
-        found.append(("bitdefender_severity", ("severity",)))
-    found.extend((code, ("targets",)) for code in targets_codes(raw.get("targets")))
+        found.append(Finding("bitdefender_severity", ("severity",)))
+    found.extend(Finding(code, ("targets",)) for code in targets_codes(raw.get("targets")))
     target: str | None = None
     fields: list[str] = []
     if detection is not None:
@@ -375,7 +391,7 @@ def block_findings(block: Mapping[str, Any]) -> list[Finding]:
             if isinstance(signature, str) and not signature.strip()
             else yara_signature_codes(signature)
         )
-        found.extend((code, ("yara", "signature")) for code in sorted(codes))
+        found.extend(Finding(code, ("yara", "signature")) for code in sorted(codes))
     if (detection is None) != (yara is None):
         kind = "detection" if detection is not None else "yara"
         if kind == "yara" or target is not None:
@@ -387,4 +403,4 @@ def block_findings(block: Mapping[str, Any]) -> list[Finding]:
 
 def block_codes(block: Mapping[str, Any]) -> set[str]:
     """Every bitdefender-1.0 constraint code a block, as authored, breaks."""
-    return {code for code, _ in block_findings(block)}
+    return {finding.code for finding in block_findings(block)}

@@ -155,3 +155,40 @@ def test_the_hint_names_the_short_hive(key: str, hint: str | None) -> None:
 def test_severity_collapsed_is_reported_on_the_block() -> None:
     (advisory,) = bitdefender_advisories(_rule(response={"alert_severity": "Critical"}))
     assert advisory.field_path == ("configurations", "bitdefender")
+
+
+def test_lint_keeps_the_advisories_when_the_engine_does_not_load(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The advisories are pure Python: an unavailable engine fails lint, and keeps them."""
+    from opentide import analysis
+    from opentide.analysis import EngineUnavailableError
+    from opentide.cli.services import lint as lint_service
+
+    rules = tmp_path / "objects" / "rules"
+    rules.mkdir(parents=True)
+    (rules / "rule.yaml").write_text(
+        "name: R\n"
+        "metadata:\n"
+        "  uuid: 11111111-2222-4333-8444-555555555555\n"
+        "configurations:\n"
+        "  bitdefender:\n"
+        "    status: STAGING\n"
+        "    detection:\n"
+        "      target: registry\n"
+        "      criteria:\n"
+        "        - field: Registry.Value\n"
+        "          contains: Run\n",
+        encoding="utf-8",
+    )
+
+    def unavailable(root: Path) -> None:
+        raise EngineUnavailableError("the analysis engine does not load")
+
+    monkeypatch.setattr(analysis, "install_workspace_visibility", unavailable)
+    from opentide.cli.enums import LintCheck
+
+    result = lint_service.run_lint(tmp_path, checks=[LintCheck.queries])
+    assert result["_exit_code"] == 1
+    codes = [finding["code"] for finding in result["findings"]]
+    assert codes == [CONTAINS_NO_WILDCARD]

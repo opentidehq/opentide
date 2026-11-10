@@ -543,3 +543,52 @@ def test_an_unknown_field_is_an_error_on_a_closed_target_and_a_warning_elsewhere
             ("configurations", "bitdefender", "detection", "criteria", "0"),
         )
     ]
+
+
+@pytest.mark.parametrize(
+    "targets",
+    [
+        {"endpoint_tags": None},
+        {"endpoint_tags": ["tier0"], "companies": None},
+        {"companies": "acme"},
+        {"endpoint_tags": []},
+    ],
+)
+def test_a_present_targets_key_that_is_not_a_list_never_widens_the_scope(
+    targets: dict[str, Any],
+) -> None:
+    """A null, non-list or empty key fails instead of deploying to the whole company."""
+    assert _errors(_block(detection=PROCESS, targets=targets)) == [
+        ("bitdefender_targets_shape", ("targets",))
+    ]
+
+
+def test_a_dumped_block_validates_again() -> None:
+    """Deploy planning re-validates model_dump(): no null it writes reads as authored."""
+    block = BitdefenderConfig.model_validate(
+        _block(
+            detection=_detection("process", {"field": "Process.Name", "any": ["a.exe"]}),
+            targets={"endpoint_tags": ["tier0"]},
+            actions={"isolate": True},
+        )
+    )
+    for dump in (
+        block.model_dump(),
+        block.model_dump(by_alias=True),
+        block.model_dump(by_alias=True, exclude_none=False),
+    ):
+        assert BitdefenderConfig.model_validate(dump) == block
+    assert block.model_dump(by_alias=True)["targets"] == {"endpoint_tags": ["tier0"]}
+
+
+@pytest.mark.parametrize("target", ["process", "email", "connection", "user connection"])
+def test_the_alert_field_as_a_criterion_is_an_error_on_every_target(target: str) -> None:
+    detection = _detection(target, {"field": "detection", "is": "Suspicious"})
+    with pytest.raises(ValidationError) as caught:
+        BitdefenderConfig.model_validate(_block(detection=detection))
+    (error,) = caught.value.errors()
+    assert (error["type"], error["loc"]) == (
+        "bitdefender_criterion_field",
+        ("detection", "criteria", "0"),
+    )
+    assert "alert" in error["msg"]

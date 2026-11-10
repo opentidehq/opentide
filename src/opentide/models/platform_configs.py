@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import Field
+from pydantic import Field, SerializerFunctionWrapHandler, model_serializer
 
 from opentide.models.base import TideField, TideModel
 from opentide.models.sentinel_attack import SentinelTechnique
@@ -806,7 +806,24 @@ class SysdigList(TideModel):
 # --- Bitdefender GravityZone (platform::bitdefender::1.0) ------------------------------
 
 
-class BitdefenderCriterion(TideModel):
+class _BitdefenderTable(TideModel):
+    """A Bitdefender table that serializes only the keys it holds.
+
+    A dump re-validated (deploy planning dumps a rule to apply modifiers) must
+    not write ``companies: null`` or ``is: null`` the author never wrote: the
+    block's checks read a present key, null included, as authored
+    (bitdefender-1.0, ``bitdefender_targets_shape``, ``bitdefender_criterion_shape``).
+    """
+
+    @model_serializer(mode="wrap")
+    def _without_unset(self, handler: SerializerFunctionWrapHandler) -> Any:
+        data = handler(self)
+        if isinstance(data, dict):
+            return {key: value for key, value in data.items() if value is not None}
+        return data
+
+
+class BitdefenderCriterion(_BitdefenderTable):
     field: str
     """API field name (`Process.CommandLine`) from the criteria catalogue for the `target`."""
     is_: str | int | None = Field(default=None, alias="is")
@@ -817,7 +834,7 @@ class BitdefenderCriterion(TideModel):
     """Any of the values. Sent as `relation: "any"`."""
 
 
-class BitdefenderDetection(TideModel):
+class BitdefenderDetection(_BitdefenderTable):
     target: str
     """A GravityZone detection target, as the API spells it: `process`, `file`, `connection`,
     `registry`, `user connection`, `email`, `application`, `key vault`, `role`, `policy`,
@@ -842,7 +859,7 @@ class BitdefenderYara(TideModel):
     on-demand scans only."""
 
 
-class BitdefenderTargets(TideModel):
+class BitdefenderTargets(_BitdefenderTable):
     endpoint_tags: list[str] | None = None
     """Aliases from the tenant's `endpoint_tags` table. Each resolves to `{tagId, companyId}`."""
     companies: list[str] | None = None
@@ -857,7 +874,7 @@ class BitdefenderProcessScope(TideModel):
     """Also act on the child processes."""
 
 
-class BitdefenderActions(TideModel):
+class BitdefenderActions(_BitdefenderTable):
     isolate: Literal[True] | None = None
     """Isolate the endpoint (type 1)."""
     collect_investigation_package: Literal[True] | None = None

@@ -129,3 +129,65 @@ def test_setup_platforms_enables_bitdefender(invoke_cli, tmp_path: Path) -> None
     assert_json_ok(invoke_cli("setup", "platforms", str(tmp_path), "--bitdefender", "--yes"))
     written = tmp_path / ".opentide" / "configurations" / "platforms" / "bitdefender.toml"
     assert "enabled = true" in written.read_text(encoding="utf-8")
+
+
+def test_a_dry_run_resolves_against_the_tenant_the_run_reaches(
+    invoke_cli, tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Not the first configured tenant: a manual one the rule does not list is never reached."""
+    platforms = tide_corpus_repo / ".opentide" / "configurations" / "platforms"
+    path = next(platforms.glob("bitdefender.toml"), None) or next(
+        tide_corpus_repo.rglob("platforms/bitdefender.toml")
+    )
+    text = path.read_text(encoding="utf-8")
+    first = (
+        '[[tenants]]\nname = "manual-only"\nmanual = true\n[tenants.setup]\nssl = true\n'
+        'url = "https://other.example/api"\napi_key = "$GRAVITYZONE_API_KEY"\n'
+        'tags = ["not-this-tenant"]\n\n'
+    )
+    path.write_text(text.replace("[[tenants]]\n", first + "[[tenants]]\n", 1), encoding="utf-8")
+    _mock_deployer(monkeypatch)
+    result = invoke_cli(
+        "deploy",
+        "--dry-run",
+        "--platform",
+        "bitdefender",
+        *EVERY_RULE,
+        "--wide",
+        "--skip-promotion",
+    )
+    payload = assert_json_ok(result)
+    assert list(payload["tenants"]["bitdefender"]) == ["staging"]
+    preview = next(item for item in payload["payloads"]["bitdefender"] if item["uuid"] == UUID)
+    assert preview["tenant"] == "staging"
+    assert "not-this-tenant" not in preview["api_request"]["params"]["tags"]
+
+
+def test_without_a_reached_tenant_the_preview_names_the_aliases(tide_corpus_repo: Path) -> None:
+    from opentide.core.registry import Opentide
+    from opentide.deployment.preview import preview_platform_deployment
+
+    Opentide.initialise()
+    (preview,) = preview_platform_deployment("bitdefender", [UUID], tenant_targets={})
+    assert "tenant" not in preview
+    assert "targets" not in preview["api_request"]["params"]
+    assert preview["unresolved"]["targets"] == {"endpoint_tags": ["corpus-servers"]}
+
+
+def test_a_rule_that_cannot_compile_names_bitdefender(monkeypatch: pytest.MonkeyPatch) -> None:
+    from opentide.deployment import preview as preview_module
+
+    def broken(*args: object, **kwargs: object) -> object:
+        raise KeyError("tenant")
+
+    monkeypatch.setattr(
+        "opentide.platforms.bitdefender.deployer.BitdefenderDeploy.compile_deployment", broken
+    )
+    from types import SimpleNamespace
+
+    rule = SimpleNamespace(metadata=SimpleNamespace(uuid=UUID), name="R")
+    monkeypatch.setenv("DEPLOYMENT_ERROR_RAISED", "")
+    result = preview_module.preview_rule_deployment("bitdefender", rule, None)  # type: ignore[arg-type]
+    assert result["code"] == "compile_failed"
+    assert result["error"].startswith("Bitdefender GravityZone cannot compile this rule")
+    assert "Sentinel" not in result["error"]
