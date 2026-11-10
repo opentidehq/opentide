@@ -21,7 +21,7 @@ behaviour only on purpose, with a test and a changelog entry.
 | `platforms/` | A module and a package per platform (`client`, `deployer`, `runner`, `validator`, `compile` where it has one); `transport.py` holds `TenantSession`, which the clients build their HTTP session from |
 | `deployment/`, `states/`, `sharing/`, `extraction/`, `query/` | Deploy plans and state, MISP sharing, extraction, `opentide query` |
 | `generation/`, `documentation/`, `export/`, `ci/` | Generated schemas, docs, exports, CI templates |
-| `analysis.py`, `_native/` | The one door to the Rust engine (`opentide._native`, built from `analysis/`); `_native/__init__.pyi` is its stub, `_native/models.pyi` the generated stub of the Rust models (`opentide._native.models`, ADR 0010) |
+| `analysis.py`, `_native/` | The one door to the Rust engine (`opentide._native`, built from `analysis/`); `_native/__init__.pyi` is its stub, `_native/models.pyi` the generated stub of the Rust models (`opentide._native.models`, ADR 0011) |
 | `data/` | Bundled data: vocabularies, pins, configuration and log-source defaults, the `opentide explain` pages (`diagnostics/`), setup templates and skills |
 
 ## Rules of the package

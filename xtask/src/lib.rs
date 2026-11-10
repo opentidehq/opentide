@@ -17,4 +17,5 @@ pub mod parity_inputs;
 pub mod registry;
 pub mod schema;
 pub mod stubs;
+pub mod validate;
 pub mod vocab;

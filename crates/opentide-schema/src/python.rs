@@ -1,4 +1,4 @@
-//! The Python classes (UC-1.9, #815; ADR 0010): every object model and
+//! The Python classes (UC-1.9, #815; ADR 0011): every object model and
 //! platform block as a frozen `#[pyclass]` under its Pydantic name, with the
 //! Pydantic methods SDK users call (`model_dump`, `model_dump_json`,
 //! `model_validate`, `model_validate_json`, `model_copy`,

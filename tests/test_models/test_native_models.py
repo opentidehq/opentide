@@ -1,6 +1,6 @@
 """The Rust models (``opentide._native.models``, UC-1.9) against the Pydantic ones.
 
-The Pydantic models in ``opentide.models`` are the oracle (ADR 0010): every
+The Pydantic models in ``opentide.models`` are the oracle (ADR 0011): every
 Rust class carries a Pydantic class's name, fields and serialised names; every
 object file of the fixtures reads to the same values; and every case of the
 schema crate's oracle tables that has no recorded difference reports the same

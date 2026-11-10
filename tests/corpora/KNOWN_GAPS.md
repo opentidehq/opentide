@@ -58,6 +58,18 @@ the future (`2099-01-01`) is accepted silently. On `rule::1.0` the key is `schem
 ("Extra inputs are not permitted"). Options: report a future review (warning); decide whether an
 impossible date stays a parse error or becomes the field's own finding with its path.
 
+**Decided (UC-2.2, #817; [ADR 0010](../../docs/internal/adr/0010-one-diagnostic-model.md)): the
+model's check, everywhere.** `metadata.reviewed` is checked by the Rust object models (UC-1.3):
+a word, a datetime without an offset and an impossible date (`2026-02-30`, now read as text under
+YAML 1.2) are the field's `schema_validation` with its path, from `validate` and `lint`; on
+`rule::1.0` the key is an unknown key. `opentide-workspace`'s `validate` reports them through that
+model, and the language server reads the same model when it moves onto `opentide-workspace`
+(UC-2.6, #821), so the editor has the check by construction. A review date in the future is
+accepted, as before: it is a date that exists, and a finding for it would be a new code (a plan §3
+decision no gap forces). The impossible-date change is the approved difference `yaml-1-2-dates`
+of `cargo xtask validate diff` ("**Tide objects are read as YAML 1.2**"); the editor's
+("**The editor checks `metadata.reviewed` as `validate` does**").
+
 ## KG-03: `filename_mismatch` and `filename_slug`
 
 `filename_mismatch` (lint, warning) fires on any stem that is not exactly `slugify(name)`; for a
@@ -66,6 +78,15 @@ accepts any stem that starts with `<slug>-` (so `name-v2.yaml` passes the engine
 and the CLI never shows `filename_slug`: lint keeps only engine findings with a query prefix, so it
 is language-server only. The two can disagree on the same file in the editor and in CI.
 Options: one rule and one code for both; or document the editor's looser rule.
+
+**Decided (UC-2.2, #817; ADR 0010): one rule and one code, lint's.** The file name rule is
+`filename_mismatch` (warning): the stem is exactly `slugify(name)`, or `<slug>-<uuid[:8]>` for an
+object whose name another object of its family shares. The CLI's rule is the stricter one, and
+`name-v2.yaml` is a file name a reader cannot tell from a copy. `lint` keeps it (UC-2.3, #818
+ports it); the language server reports the same finding from the same function when it moves onto
+`opentide-workspace` (UC-2.6, #821), and stops reporting `filename_slug`. Retiring the engine's
+code is a plan §3 invariant 3 change, so it waits for a maintainer (the UC-2.2 pull request's
+"Needs a maintainer"). CHANGELOG: "**One rule names object files, in the editor and in CI**".
 
 ## KG-04: Invalid and duplicate UUIDs
 
@@ -82,6 +103,17 @@ The kinds pin these numbers with `counts`.
 Options: report `invalid_uuid` on every file that carries one; report a duplicate on every file of
 the group, or once per group.
 
+**Decided (UC-2.2, #817; ADR 0010): `invalid_uuid` on every file, `duplicate_id` as before.**
+`opentide-workspace`'s `validate` reports `invalid_uuid` on every file whose UUID is not a UUID v4,
+also a file whose object a later file with the same UUID displaced from the index (five files
+sharing `not-a-uuid`: five `invalid_uuid`, four `duplicate_id`). A duplicate stays one finding
+per file written again, on the later file, naming the first, which the frame shows as `also:
+<file>:<line>:<column>`: every file of the group is then named once, and fixing the findings
+leaves one owner of the UUID. The difference is `invalid-uuid-every-file` in `cargo xtask
+validate diff` ("**Every file with an invalid UUID is reported**"); `uuid-duplicate-invalid`
+keeps pinning the oracle's counts until `validate` routes to Rust (UC-2.7), when its `counts`
+become `{ invalid_uuid = 5, duplicate_id = 4 }`.
+
 ## KG-05: Metadata recommendation codes
 
 `validate` reports none. `lint` reports `metadata_recommended` (info, one per object, listing the
@@ -90,6 +122,16 @@ missing keys of `[metadata] required` in `lint.toml`: `author`, `organisation`).
 lint keeps no engine finding without a query prefix. `organisation: ACME` (a string) satisfies
 lint but fails `validate` with `schema_validation`; the `{name, uuid}` form satisfies both.
 Options: one set of codes for the CLI and the editor.
+
+**Decided (UC-2.2, #817; ADR 0010): one code, `metadata_recommended`, lint's.** A missing
+recommended key is a `lint` finding (`metadata_recommended`, info, one per object, naming every
+missing key of `[metadata] required` in `lint.toml`), in the CLI and in the editor: the language
+server reports it from the same function when it moves onto `opentide-workspace` (UC-2.6) and
+stops reporting `missing_author`, `missing_organisation` and `recommended_field_missing`, whose
+2,200 warnings on a clean workspace `validate` never showed. `validate` stays silent: a
+recommendation is not a validation error. `organisation: ACME` stays a `schema_validation` of
+`validate`. Retiring the engine's three codes waits for a maintainer (plan §3 invariant 3).
+CHANGELOG: "**Metadata recommendations have one code, in the editor and in CI**".
 
 ## KG-06: Configuration files that stop the run, or vanish without a finding
 

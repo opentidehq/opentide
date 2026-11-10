@@ -85,7 +85,7 @@ jobs:
           cargo test --locked -p opentide-schema --features python --doc
 
       # The stubs of opentide._native.models are generated from the extension
-      # (UC-1.9, ADR 0010): build it with PyO3's introspection data, as Python
+      # (UC-1.9, ADR 0011): build it with PyO3's introspection data, as Python
       # 3.10 (the abi3 floor) sees it, and fail when the committed stub differs.
       - name: Generated stubs are up to date
         env:

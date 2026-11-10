@@ -45,7 +45,7 @@ depends on opentide-core (`codes`, `suggest`). Not published yet (`publish = fal
 | `tests/roundtrip.rs` | YAML → struct → YAML byte for byte; optional, defaulted, alias, closure, pins |
 | `tests/json_schema.rs` | The derived schema (insta snapshot) and its `tide.*` keys |
 | `tests/adr.rs` | ADR 0001's key table matches `keys::ALL` |
-| `src/python.rs` | Feature `python` (UC-1.9, #815, [ADR 0010](../../docs/internal/adr/0010-python-models.md)): the Pydantic methods of every class (`py_models!`: `model_validate`, `model_dump`, `model_copy`, `model_json_schema`, `__hash__`, `__repr__`, pickling, the serialised names as aliases), the field types that are not classes (`py_value!`, `py_union!`), `ValidationError`, and the `models` module the binding exports as `opentide._native.models`. Feature `stubs`: the type hints of PyO3's introspection, for `cargo xtask stubs` |
+| `src/python.rs` | Feature `python` (UC-1.9, #815, [ADR 0011](../../docs/internal/adr/0011-python-models.md)): the Pydantic methods of every class (`py_models!`: `model_validate`, `model_dump`, `model_copy`, `model_json_schema`, `__hash__`, `__repr__`, pickling, the serialised names as aliases), the field types that are not classes (`py_value!`, `py_union!`), `ValidationError`, and the `models` module the binding exports as `opentide._native.models`. Feature `stubs`: the type hints of PyO3's introspection, for `cargo xtask stubs` |
 | `tests/python.rs` | Feature `python`: the class from Python, frozen, attribute access |
 | `tests/python_models.rs` | Feature `python`: the models module in an embedded CPython: names, identifiers, validation and its errors, dumps, aliases, frozen, equality, hashing, pickling, copies |
 | `tests/ui.rs`, `tests/ui/` | Feature `python`: compile-fail cases (trybuild), e.g. no generic `#[pyclass]` |
@@ -62,7 +62,7 @@ depends on opentide-core (`codes`, `suggest`). Not published yet (`publish = fal
   `models` module); a field's Rust name is the Pydantic attribute (`r#type`, not `kind`), and a
   free-form mapping is an `IndexMap`, in the document's order as a Python `dict` is.
   `tests/test_models/test_native_models.py` compares each class with its Pydantic class, and
-  `cargo xtask stubs` regenerates the stub after a change (ADR 0010).
+  `cargo xtask stubs` regenerates the stub after a change (ADR 0011).
 - A `tide.*` key keeps its name and value: `#[schemars(extend("tide.…" = …))]`, and the key is in
   `keys::ALL`. A new key is a new row in the ADR's table and in `keys.rs` (`tests/adr.rs` checks).
 - Identifiers stay `String`, checked where the oracle checks them (`invalid_uuid` is a workspace

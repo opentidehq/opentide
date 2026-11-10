@@ -1,9 +1,9 @@
 ---
-title: "0010: The Rust models in Python"
+title: "0011: The Rust models in Python"
 description: "UC-1.9: the Tide models are frozen PyO3 classes under their Pydantic names, in opentide._native.models, with the Pydantic methods SDK code calls and generated stubs; opentide.models keeps the Pydantic classes until the CLI stops reading them."
 ---
 
-# 0010: The Rust models in Python
+# 0011: The Rust models in Python
 
 | | |
 |---|---|

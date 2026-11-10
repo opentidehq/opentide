@@ -1,4 +1,4 @@
-//! The Tide models as Python sees them (UC-1.9, #815; ADR 0010): the
+//! The Tide models as Python sees them (UC-1.9, #815; ADR 0011): the
 //! `models` module the binding exports as `opentide._native.models`, run in
 //! an embedded CPython (see `tests/python.rs` for the interpreter it links).
 //! The comparison with the Pydantic models, on every corpus, is the Python
