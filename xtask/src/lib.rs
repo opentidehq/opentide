@@ -12,6 +12,7 @@ pub mod corpus;
 pub mod coverage;
 pub mod golden;
 pub mod layers;
+pub mod lint;
 pub mod mutants;
 pub mod parity;
 pub mod parity_inputs;

@@ -41,7 +41,7 @@ glob = "0.3"
 similar = "2.7"
 tempfile = "3"
 # xtask vocab (src/vocab/) also reads opentide-schema's vocabularies.
-indexmap = "2"
+indexmap = { version = "2", features = ["serde"] }
 # xtask stubs (UC-1.9, #815): the stubs of opentide._native.models, read from
 # the introspection data PyO3 compiles into the extension (`maturin
 # generate-stubs` uses the same crate). Its version is PyO3's.
