@@ -31,4 +31,4 @@ pub mod tree;
 mod tree_meta;
 pub mod usage;
 
-pub use app::{Host, main, run};
+pub use app::{Host, exit, main, run};

@@ -342,9 +342,8 @@ impl Run<'_> {
             "info" => {
                 let report = self.info(&matches);
                 let code = self.emit_report(&report, out, err);
-                // `info catalog`'s document is large: left to the exit, as
-                // the workspace is (`commands::info::run`).
-                std::mem::forget(report);
+                // `info catalog`'s document is large (see `release`).
+                release(report);
                 code
             }
             "rules unreviewed" => {
@@ -772,6 +771,33 @@ pub fn on_interrupt(interrupt: &Interrupt, err: &mut dyn Write) -> Option<i32> {
     }
 }
 
+/// Set by [`exit`]: the process ends when the run returns.
+static PROCESS_ENDS: AtomicBool = AtomicBool::new(false);
+
+/// `opentide` as the whole process: [`main`], then exit with its status.
+/// The `opentide` binary calls it; a host that runs commands in its own
+/// process (the Python package's `cli_main`) calls [`main`] instead.
+pub fn exit(argv: &[String], version: &str) -> ! {
+    PROCESS_ENDS.store(true, Ordering::Relaxed);
+    std::process::exit(main(argv, version))
+}
+
+/// Frees `value`, unless the process ends when this run returns ([`exit`]):
+/// freeing a large document tree (a workspace's index, `info catalog`'s
+/// document) takes longer than building it, and the exit reclaims it at no
+/// cost. In any other process it is dropped here, so nothing leaks.
+pub(crate) fn release<T>(value: T) {
+    release_when(value, PROCESS_ENDS.load(Ordering::Relaxed));
+}
+
+fn release_when<T>(value: T, process_ends: bool) {
+    if process_ends {
+        std::mem::forget(value);
+    } else {
+        drop(value);
+    }
+}
+
 /// `opentide` in this process: the process's environment and streams.
 pub fn main(argv: &[String], version: &str) -> i32 {
     use std::io::IsTerminal;
@@ -799,6 +825,37 @@ pub fn main(argv: &[String], version: &str) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Counts its drops, to tell a freed value from a leaked one.
+    struct Counted(std::rc::Rc<std::cell::Cell<u32>>);
+    impl Drop for Counted {
+        fn drop(&mut self) {
+            self.0.set(self.0.get() + 1);
+        }
+    }
+
+    #[test]
+    fn release_frees_unless_the_process_ends() {
+        let drops = std::rc::Rc::new(std::cell::Cell::new(0));
+        release_when(Counted(drops.clone()), false);
+        assert_eq!(
+            drops.get(),
+            1,
+            "a run inside a host process frees what it built"
+        );
+        release_when(Counted(drops.clone()), true);
+        assert_eq!(drops.get(), 1, "the binary leaves it to the exit");
+    }
+
+    #[test]
+    fn a_run_in_process_frees_what_it_releases() {
+        // Only `exit` (the binary) sets the switch: `main` and `run`, which
+        // the Python package calls in its own process, never leak.
+        assert!(!PROCESS_ENDS.load(Ordering::Relaxed));
+        let drops = std::rc::Rc::new(std::cell::Cell::new(0));
+        release(Counted(drops.clone()));
+        assert_eq!(drops.get(), 1);
+    }
 
     #[test]
     fn framework_utc_dates() {

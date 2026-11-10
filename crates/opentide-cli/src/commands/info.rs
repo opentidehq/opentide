@@ -169,8 +169,6 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
             out.push(("edges".into(), json(&catalogue.edges)));
             out.push(("signals".into(), json(&catalogue.signals)));
             out.push(("attack".into(), json(&catalogue.attack)));
-            // Left to the process's exit, as the workspace is (below).
-            let catalogue = std::mem::ManuallyDrop::new(catalogue);
             if let Json::Object(members) = json(&catalogue.summary) {
                 for (key, value) in members {
                     match summary.iter_mut().find(|(k, _)| *k == key) {
@@ -182,6 +180,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
             if cx.text {
                 body.push(Block::Lines(catalogue_lines(&catalogue)));
             }
+            crate::app::release(catalogue);
         }
         Some("coverage") => {
             let technique = args.technique.clone().unwrap_or_default();
@@ -264,9 +263,8 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     if cx.text {
         report.body = body;
     }
-    // A run ends with the process: freeing the index (a document tree per
-    // object) takes longer than reading it, so it is left to the exit.
-    std::mem::forget(workspace);
+    // The index is a document tree per object (see `release`).
+    crate::app::release(workspace);
     report
 }
 
