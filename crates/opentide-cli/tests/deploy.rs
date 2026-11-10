@@ -82,7 +82,7 @@ fn workspace() -> PathBuf {
 }
 
 fn deploy(ws: &Path, args: &[&str], env: &[(&str, String)]) -> Ran {
-    let argv: Vec<String> = args.iter().map(|arg| (*arg).to_owned()).collect();
+    let words: Vec<String> = args.iter().map(|arg| (*arg).to_owned()).collect();
     let env = Env::from_pairs(
         env.iter()
             .map(|(key, value)| ((*key).to_owned(), value.clone())),
@@ -100,7 +100,7 @@ fn deploy(ws: &Path, args: &[&str], env: &[(&str, String)]) -> Ran {
     };
     let mut out = Vec::new();
     let mut err = stderr.clone();
-    let exit_code = run(&argv, &env, &host, &mut out, &mut err);
+    let exit_code = run(&words, &env, &host, &mut out, &mut err);
     let stderr = String::from_utf8(stderr.0.lock().unwrap().clone()).unwrap();
     Ran {
         exit_code,
