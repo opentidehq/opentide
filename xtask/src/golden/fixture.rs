@@ -223,10 +223,23 @@ fn symlink_dir(link: &Path, target: &Path) -> Result<()> {
         .with_context(|| format!("link {} to {}", target.display(), link.display()))
 }
 
-#[cfg(not(unix))]
+/// Windows creates a directory symbolic link; that needs Developer Mode or
+/// an elevated shell, which GitHub's Windows runners have.
+#[cfg(windows)]
+fn symlink_dir(link: &Path, target: &Path) -> Result<()> {
+    std::os::windows::fs::symlink_dir(link, target).with_context(|| {
+        format!(
+            "link {} to {} (directory symbolic links on Windows need Developer Mode or an elevated shell)",
+            target.display(),
+            link.display()
+        )
+    })
+}
+
+#[cfg(not(any(unix, windows)))]
 fn symlink_dir(_link: &Path, target: &Path) -> Result<()> {
     bail!(
-        "{}: golden fixtures with symbolic links need a Unix host",
+        "{}: golden fixtures with symbolic links need a Unix or Windows host",
         target.display()
     )
 }
