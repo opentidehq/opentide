@@ -1,5 +1,6 @@
 ---
 source: crates/opentide-schema/src/objects/table.rs
+assertion_line: 174
 expression: "serde_json::to_string_pretty(&results).unwrap()"
 ---
 {
@@ -820,6 +821,403 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
         "yaml_line": null
       }
     ]
+  },
+  "revision-bad-version": {
+    "loader": "unknown schema identifier: 'rule::1.x'"
+  },
+  "revision-empty": {
+    "loader": "schema_missing"
+  },
+  "revision-metadata-float-zero": {
+    "loader": "schema_missing"
+  },
+  "revision-metadata-list": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "metadata"
+        ],
+        "input": null,
+        "msg": "Input should be a valid dictionary",
+        "span": [
+          2,
+          1,
+          9,
+          true
+        ],
+        "type": "dict_type",
+        "yaml_line": 2
+      }
+    ]
+  },
+  "revision-metadata-not-a-mapping": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "metadata"
+        ],
+        "input": "rule::1.1",
+        "msg": "Input should be a valid dictionary",
+        "span": [
+          2,
+          11,
+          20,
+          true
+        ],
+        "type": "dict_type",
+        "yaml_line": 1
+      }
+    ]
+  },
+  "revision-missing": {
+    "loader": "schema_missing"
+  },
+  "revision-no-metadata": {
+    "loader": "schema_missing"
+  },
+  "revision-not-an-identifier": {
+    "loader": "unknown schema identifier: 'rule'"
+  },
+  "revision-null": {
+    "loader": "schema_missing"
+  },
+  "revision-number": {
+    "loader": "unknown schema identifier: '1.1'"
+  },
+  "revision-other-family": {
+    "loader": "'threat::1.0' is not a rule schema identifier"
+  },
+  "revision-platform-identifier": {
+    "loader": "unknown schema identifier: 'platform::sentinel::1.0'"
+  },
+  "revision-schema-bool": {
+    "loader": "unknown schema identifier: 'true'"
+  },
+  "revision-schema-float-zero": {
+    "loader": "schema_missing"
+  },
+  "revision-schema-list": {
+    "loader": "unknown schema identifier: '[...]'"
+  },
+  "revision-schema-map": {
+    "loader": "unknown schema identifier: '{...}'"
+  },
+  "revision-schema-negative-float-zero": {
+    "loader": "schema_missing"
+  },
+  "revision-schema-quote": {
+    "loader": "unknown schema identifier: 'rule's::1.1'"
+  },
+  "revision-unknown-family-spelling": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "unknown schema identifier: 'Rule::1.1'; checked against rule::1.1, the newest rule revision, without the unknown-key check"
+        },
+        "field_path": [
+          "metadata",
+          "schema"
+        ],
+        "input": "Rule::1.1",
+        "msg": "Value error, unknown schema identifier: 'Rule::1.1'; checked against rule::1.1, the newest rule revision, without the unknown-key check",
+        "span": [
+          4,
+          11,
+          20,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 3
+      }
+    ]
+  },
+  "revision-unknown-objective": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "unknown schema identifier: 'objective::2.0'; checked against objective::1.0, the newest objective revision, without the unknown-key check"
+        },
+        "field_path": [
+          "metadata",
+          "schema"
+        ],
+        "input": "objective::2.0",
+        "msg": "Value error, unknown schema identifier: 'objective::2.0'; checked against objective::1.0, the newest objective revision, without the unknown-key check",
+        "span": [
+          4,
+          11,
+          25,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 3
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "objective",
+          "type"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          9,
+          1,
+          10,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "objective",
+          "description"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          9,
+          1,
+          10,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "objective",
+          "signals"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          9,
+          1,
+          10,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "objective",
+          "composition"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          9,
+          1,
+          10,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      }
+    ]
+  },
+  "revision-unknown-other-family": {
+    "loader": "unknown schema identifier: 'threat::9.0'"
+  },
+  "revision-unknown-rule": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "unknown schema identifier: 'rule::7.0'; checked against rule::1.1, the newest rule revision, without the unknown-key check"
+        },
+        "field_path": [
+          "metadata",
+          "schema"
+        ],
+        "input": "rule::7.0",
+        "msg": "Value error, unknown schema identifier: 'rule::7.0'; checked against rule::1.1, the newest rule revision, without the unknown-key check",
+        "span": [
+          4,
+          11,
+          20,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 3
+      }
+    ]
+  },
+  "revision-unknown-rule-reports-the-newest-revisions-errors": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "unknown schema identifier: 'rule::1.2'; checked against rule::1.1, the newest rule revision, without the unknown-key check"
+        },
+        "field_path": [
+          "metadata",
+          "schema"
+        ],
+        "input": "rule::1.2",
+        "msg": "Value error, unknown schema identifier: 'rule::1.2'; checked against rule::1.1, the newest rule revision, without the unknown-key check",
+        "span": [
+          4,
+          11,
+          20,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 3
+      },
+      {
+        "ctx": {
+          "error": "metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime"
+        },
+        "field_path": [
+          "metadata",
+          "reviewed"
+        ],
+        "input": "someday",
+        "msg": "Value error, metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime",
+        "span": [
+          9,
+          13,
+          20,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 8
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "description"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          1,
+          1,
+          5,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      }
+    ]
+  },
+  "revision-unknown-threat": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "unknown schema identifier: 'threat::1.5'; checked against threat::1.0, the newest threat revision, without the unknown-key check"
+        },
+        "field_path": [
+          "metadata",
+          "schema"
+        ],
+        "input": "threat::1.5",
+        "msg": "Value error, unknown schema identifier: 'threat::1.5'; checked against threat::1.0, the newest threat revision, without the unknown-key check",
+        "span": [
+          5,
+          11,
+          22,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 4
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "threat",
+          "leverage"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          10,
+          1,
+          7,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "threat",
+          "viability"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          10,
+          1,
+          7,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "threat",
+          "terrain"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          10,
+          1,
+          7,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "threat",
+          "surface"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          10,
+          1,
+          7,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "threat",
+          "mitre_attack"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          10,
+          1,
+          7,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      }
+    ]
+  },
+  "revision-visibility-is-another-family": {
+    "loader": "'visibility::1.0' is not a rule schema identifier"
   },
   "rule-1-0-minimal": {
     "value": {

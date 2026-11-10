@@ -4,8 +4,9 @@ The Tide model as Rust code (plan D-2): object, platform and configuration model
 with serde, garde, schemars and PyO3 derives, from which the JSON Schemas, field hints, templates,
 snippets, `.pyi` and `.d.ts` are generated. Today it holds the skeleton (UC-1.1, #807): the
 conventions, the `Pins` validation context, the typed errors, the 23 `tide.*` metadata keys and
-`sample`, their worked example; the vocabularies and pins (UC-1.6, `vocab`); and the object models
-(UC-1.3, `objects`). The conventions are decided in
+`sample`, their worked example; the vocabularies and pins (UC-1.6, `vocab`); the object models
+(UC-1.3, `objects`); and the revision registry and migrations (UC-1.7, `revisions`, `migration`,
+[ADR 0009](../../docs/internal/adr/0009-revision-registry.md)). The conventions are decided in
 [ADR 0001](../../docs/internal/adr/0001-tide-model-as-rust-code.md); read it before adding a model.
 
 ## Place
@@ -23,6 +24,8 @@ depends on opentide-core (`codes`, `suggest`). Not published yet (`publish = fal
 | `src/pins.rs` | `Pins`: the contracts a revision pins, by field path (`contract`) and by vocabulary (`version`), garde's context; `PinTable`: every revision's, from `src/opentide/data/pins/*.toml` (`bundled`) |
 | `src/vocab/` | Vocabularies (UC-1.6, #812): `Vocabulary` (a `*.vocab.toml` document), `Vocabularies` (the bundle, parsed per file on first use, or a data root's files, plus a workspace's object vocabularies), `Selector`/`Resolved` (what a field accepts: pins, stages, scoped values; `is_valid`, `suggest`, `check` → `Unknown`, the `vocab_unknown` finding), `attack` (the ATT&CK matrix of `info catalog`), `sentinel` (Sentinel's ATT&CK v18 list) |
 | `src/vocab/bundled.rs` | The bundled documents, one `include_str!` each; `tests.rs` fails when it and `src/opentide/data/vocabulary` differ |
+| `src/revisions/` | The revision registry (UC-1.7, #813, ADR 0009): `SchemaId` (`family::major.minor`, `id.rs`), `REVISIONS` (objects, visibility, the platform blocks, MISP), `lookup`, `newest`; `dispatch.rs`: `select`/`read` on `metadata.schema` into `TideObject`, an unknown revision of the family checked against its newest without the unknown-key check; `tests.rs`: the corpora and the dispatch property |
+| `src/migration.rs` | Forward one-step `From` impls (`From<RuleV1_0> for RuleV1_1`), `TideObject::step`, `migrate_to`, `into_newest`, `path` (`SchemaVersionChain`), `stamp_schema_identifier`; `migration/tests.rs`: the migration properties |
 | `src/revision.rs` | `revisions!`: one struct per revision, shared fields written once, in groups `@0,` … `@3,` around overridden fields |
 | `src/sample.rs` | Every derive and field convention on a two-revision family; not part of the model |
 | `src/objects/` | The object models (UC-1.3, #809): `metadata` (`ObjectMetadata`, `RuleMetadata`, `ObjectReferences`, `Organisation`), `response`, `threat` (`ThreatVectorV1_0`), `objective` (`ObjectiveV1_0`), `rule` (`RuleV1_0`, `RuleV1_1`, `RuleConfigurations`), `role` (`FieldRole`), `any` (an unchecked value), `checks` (the validators, run by the conversion and by garde), `tests.rs` (the ported `tests/test_models/` tests) |
@@ -71,6 +74,10 @@ depends on opentide-core (`codes`, `suggest`). Not published yet (`publish = fal
 - A validator is written once (`objects::checks`) and run by both hosts: the structural
   conversion (`#[from_node(with = ...)]`, so its error sits among the others in Pydantic's order)
   and garde (`#[garde(custom(...))]`).
+- `metadata.schema` is read through `revisions` (`select`, `read`), never matched by hand; a new
+  revision is a row of `REVISIONS`, its struct, its `From` step and its arm of `TideObject::step`.
+  `objects::checks::REGISTERED` is the registry's object and configuration rows
+  (`revisions::tests::the_object_registry_is_the_oracles`).
 - The platform blocks are UC-1.4's: until then a block is an `UncheckedBlock`, and the rule models
   read only with the `unchecked-platform-blocks` feature, which xtask turns on, or in the crate's
   unit tests (`cfg(test)`); its integration tests cannot read a rule. Nothing that ships may.
@@ -84,6 +91,7 @@ cargo build -p opentide-schema --target wasm32-unknown-unknown --features wasm
 cargo nextest run -p opentide-schema vocab                 # the vocabularies, 13k misspellings
 cargo xtask vocab diff --against python                    # against the oracle, every corpus
 cargo nextest run -p opentide-schema objects::table        # the object models against the oracle's table
+cargo nextest run -p opentide-schema revision migration    # the registry, dispatch and migrations (properties)
 cargo xtask schema diff --against python                   # JSON Schemas and every corpus, live
 cargo xtask corpus faults --check --engine rust --only objects
 ```

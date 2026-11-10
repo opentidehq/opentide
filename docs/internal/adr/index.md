@@ -21,12 +21,12 @@ The decisions D-1 to D-8 come from the unified-core plan, [§1 Decisions](https:
 | [0006](./0006-npm-packages.md) | D-6 | npm: `@opentide/opentide` is both the SDK and the CLI | Proposed |
 | [0007](./0007-vscode-extension-stays-separate.md) | D-7 | The VS Code extension stays a separate repository | Proposed |
 | [0008](./0008-connectors-in-rust.md) | D-8 | Connectors are Rust, with a Python plugin hook | Proposed |
+| [0009](./0009-revision-registry.md) | UC-1.7 | The revision registry: dispatch on `metadata.schema`, unknown revisions checked against the newest of their family, forward migrations ([#813](https://github.com/opentidehq/opentide/issues/813)) | Proposed |
 
 Work items will add these ADRs, each taking the number after the highest one in the index when it is written:
 
 | Work item | Issue | What its ADR decides |
 |-----------|-------|----------------------|
-| UC-1.7 | [#813](https://github.com/opentidehq/opentide/issues/813) | The revision registry, the unknown-revision policy and the migration chain |
 | UC-1.9 | [#815](https://github.com/opentidehq/opentide/issues/815) | The Python surface of the Rust models: pyclasses under today's names, `.pyi`, `opentide.models.*` compatibility |
 | UC-2.2 | [#817](https://github.com/opentidehq/opentide/issues/817) | Decisions on the parity gaps between the CLI and the engine |
 
