@@ -185,6 +185,31 @@ mod tests {
         assert_eq!(c.profiles["bitdefender"].max_characters, Some(30000));
     }
 
+    /// The checker lets a YARA-X boolean through an argument where a YARA-X
+    /// overload takes one (`console.log(pe.is_dll())`). These are every
+    /// such place: a sync that drops or adds one changes what is reported.
+    #[test]
+    fn yara_x_boolean_overloads_beside_number_ones() {
+        let mut found = Vec::new();
+        for m in Catalog::cached().members.values() {
+            let ovs: Vec<&Overload> = m.overloads.iter().filter(|o| o.yara_x).collect();
+            for o in &ovs {
+                for (k, c) in o.args.chars().enumerate() {
+                    let number = ovs.iter().any(|x| {
+                        x.args.len() == o.args.len()
+                            && matches!(x.args.chars().nth(k), Some('i' | 'f'))
+                    });
+                    if c == 'b' && number {
+                        found.push(format!("{}.{}/{}:{k}", m.module, m.path, o.args.len()));
+                    }
+                }
+            }
+        }
+        found.sort();
+        found.dedup();
+        assert_eq!(found, ["console.log/1:0", "console.log/2:1"]);
+    }
+
     #[test]
     fn paths_split() {
         assert_eq!(parent_of("sections[].name"), "sections[]");

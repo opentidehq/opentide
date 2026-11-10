@@ -111,6 +111,41 @@ pub fn prepare(source: &str) -> Prepared {
     }
 }
 
+/// Every `(`…`)` pair of the libyara grammar's tree, as the byte offsets
+/// of the two parentheses. They are its tokens, so a parenthesis inside a
+/// string, a regexp or a comment is none; pairs are matched in order.
+pub fn paren_pairs(source: &str) -> Vec<(usize, usize)> {
+    let mut pairs = Vec::new();
+    let Some(tree) = opentide_syntax::parse(LanguageId::Yara, source) else {
+        return pairs;
+    };
+    let mut open: Vec<usize> = Vec::new();
+    let mut cursor = tree.walk();
+    'walk: loop {
+        let node = cursor.node();
+        if node.child_count() == 0 && !node.is_missing() {
+            match node.kind() {
+                "(" => open.push(node.start_byte()),
+                ")" => {
+                    if let Some(o) = open.pop() {
+                        pairs.push((o, node.start_byte()));
+                    }
+                }
+                _ => {}
+            }
+        }
+        if cursor.goto_first_child() {
+            continue;
+        }
+        while !cursor.goto_next_sibling() {
+            if !cursor.goto_parent() {
+                break 'walk;
+            }
+        }
+    }
+    pairs
+}
+
 fn blank_repeated_modifiers(rule: Node, source: &str, bytes: &mut [u8], out: &mut Vec<Finding>) {
     let mut seen: Vec<&str> = Vec::new();
     let mut cursor = rule.walk();

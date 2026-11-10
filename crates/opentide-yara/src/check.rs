@@ -143,6 +143,9 @@ pub struct Checker<'a> {
     last_member_yara_x_bool: bool,
     /// Loop variables bound to what YARA-X types as boolean.
     yara_x_bool_vars: BTreeSet<String>,
+    /// The parser's parenthesis pairs: `(` to its `)`, and back.
+    paren_open: BTreeMap<usize, usize>,
+    paren_close: BTreeMap<usize, usize>,
     /// Identifiers past libyara's 128 characters already reported.
     long_identifiers: BTreeSet<String>,
     /// Rules defined before the current one.
@@ -169,7 +172,10 @@ fn span(s: &Span) -> (usize, usize) {
 
 impl<'a> Checker<'a> {
     pub fn new(source: &'a str, ctx: &'a Context, rule_wildcards: &'a [(usize, usize)]) -> Self {
+        let pairs = crate::syntax::paren_pairs(source);
         Self {
+            paren_open: pairs.iter().copied().collect(),
+            paren_close: pairs.iter().map(|&(o, c)| (c, o)).collect(),
             source,
             ctx,
             catalog: Catalog::cached(),
@@ -195,6 +201,32 @@ impl<'a> Checker<'a> {
 
     fn libyara(&self) -> bool {
         self.ctx.dialect == Dialect::Libyara4
+    }
+
+    /// `e`'s range as written: from its leftmost operand to its rightmost
+    /// ([`start_of`], [`end_of`]), widened to the enclosing parentheses it
+    /// cuts through. The pairs are the parser's own `(` and `)` tokens, so a
+    /// parenthesis in a string, a regexp or a comment is none, and a range
+    /// only ever widens to a pair that matches.
+    fn written(&self, e: &Expr) -> (usize, usize) {
+        let (mut start, mut end) = (start_of(e), end_of(e));
+        loop {
+            let open = self
+                .paren_open
+                .range(start..end)
+                .filter_map(|(_, &c)| (c >= end).then_some(c + 1))
+                .max();
+            let close = self
+                .paren_close
+                .range(start..end)
+                .filter_map(|(_, &o)| (o < start).then_some(o))
+                .min();
+            if open.is_none() && close.is_none() {
+                return (start, end);
+            }
+            end = open.unwrap_or(end).max(end);
+            start = close.unwrap_or(start).min(start);
+        }
     }
 
     fn push(
@@ -391,7 +423,7 @@ impl<'a> Checker<'a> {
         }
         let ty = self.expr(&rule.condition);
         let cond_key = span(&rule.condition.span());
-        let cond_at = full_span_in(self.source, &rule.condition);
+        let cond_at = self.written(&rule.condition);
         match ty {
             Ty::Regexp => self.yara_x(
                 "YARA-X refuses a regular expression as a condition; libyara reads it as true".to_string(),
@@ -938,7 +970,7 @@ impl<'a> Checker<'a> {
     /// does not call a non-boolean.
     fn operand(&mut self, e: &Expr, non_bool: bool) {
         let ty = self.expr(e);
-        let at = full_span_in(self.source, e);
+        let at = self.written(e);
         if non_bool
             && matches!(ty, Ty::Int | Ty::Float | Ty::Str)
             && !matches!(e, Expr::LiteralString(_))
@@ -995,7 +1027,7 @@ impl<'a> Checker<'a> {
     fn yara_x_number(&mut self, e: &Expr, place: &str) -> bool {
         let refused = self.yara_x_bool.contains(&span(&e.span()));
         if refused {
-            let at = full_span_in(self.source, e);
+            let at = self.written(e);
             self.yara_x(
                 format!(
                     "YARA-X refuses `{}` {place}: it types it as a boolean, where libyara reads an integer",
@@ -1026,7 +1058,7 @@ impl<'a> Checker<'a> {
         // `key` is the parser's span, which `yara_x_bool` is keyed by; `at`
         // the range as written, which findings use.
         let key = span(&e.span());
-        let at = full_span_in(self.source, e);
+        let at = self.written(e);
         match e {
             Expr::True { .. } | Expr::False { .. } => Ty::Bool,
             Expr::Filesize { .. } => Ty::Int,
@@ -1441,6 +1473,18 @@ impl<'a> Checker<'a> {
                 let mut bool_vars = false;
                 for v in &vars {
                     self.identifier_length("loop variable", v.name, span(&v.span()));
+                    // libyara refuses a name an enclosing loop binds; YARA-X
+                    // shadows it.
+                    if self.libyara() && self.lookup_var(v.name).is_some() {
+                        self.error(
+                            codes::YARA_UNDEFINED_IDENTIFIER,
+                            format!(
+                                "duplicated loop identifier `{}`: an enclosing loop binds it",
+                                v.name
+                            ),
+                            span(&v.span()),
+                        );
+                    }
                 }
                 let bound: Vec<Ty> = match &f.iterable {
                     Iterable::Range(range) => {
@@ -2031,52 +2075,44 @@ fn start_of(e: &Expr) -> usize {
     left.map_or(own, |l| l.min(own))
 }
 
-/// `e`'s range as written in `source`: from [`start_of`], and widened over
-/// the parentheses yara-x-parser leaves out of an operand's span, so it
-/// never holds an unbalanced one (`(pe.is_dll()) == 1`).
-fn full_span_in(source: &str, e: &Expr) -> (usize, usize) {
-    let (mut start, mut end) = (start_of(e), e.span().end());
-    let bytes = source.as_bytes();
-    let depth = |start: usize, end: usize| {
-        let mut depth = 0i64;
-        let mut quote = false;
-        let mut escaped = false;
-        for &b in &bytes[start.min(end)..end.min(bytes.len())] {
-            match b {
-                _ if escaped => escaped = false,
-                b'\\' if quote => escaped = true,
-                b'"' => quote = !quote,
-                b'(' if !quote => depth += 1,
-                b')' if !quote => depth -= 1,
-                _ => {}
-            }
+/// Where `e` ends as written: the mirror of [`start_of`], through the
+/// right operand.
+fn end_of(e: &Expr) -> usize {
+    let own = e.span().end();
+    let right = match e {
+        Expr::FieldAccess(access) => access.operands().last().map(end_of),
+        Expr::And(n)
+        | Expr::Or(n)
+        | Expr::Add(n)
+        | Expr::Sub(n)
+        | Expr::Mul(n)
+        | Expr::Div(n)
+        | Expr::Mod(n) => n.operands().last().map(end_of),
+        Expr::Eq(b)
+        | Expr::Ne(b)
+        | Expr::Lt(b)
+        | Expr::Gt(b)
+        | Expr::Le(b)
+        | Expr::Ge(b)
+        | Expr::Shl(b)
+        | Expr::Shr(b)
+        | Expr::BitwiseAnd(b)
+        | Expr::BitwiseOr(b)
+        | Expr::BitwiseXor(b)
+        | Expr::Contains(b)
+        | Expr::IContains(b)
+        | Expr::StartsWith(b)
+        | Expr::IStartsWith(b)
+        | Expr::EndsWith(b)
+        | Expr::IEndsWith(b)
+        | Expr::IEquals(b)
+        | Expr::Matches(b) => Some(end_of(&b.rhs)),
+        Expr::Not(u) | Expr::Defined(u) | Expr::Minus(u) | Expr::BitwiseNot(u) => {
+            Some(end_of(&u.operand))
         }
-        depth
+        _ => None,
     };
-    let mut d = depth(start, end);
-    while d < 0 {
-        let mut at = start;
-        while at > 0 && bytes[at - 1].is_ascii_whitespace() {
-            at -= 1;
-        }
-        if at == 0 || bytes[at - 1] != b'(' {
-            break;
-        }
-        start = at - 1;
-        d += 1;
-    }
-    while d > 0 {
-        let mut at = end;
-        while at < bytes.len() && bytes[at].is_ascii_whitespace() {
-            at += 1;
-        }
-        if at >= bytes.len() || bytes[at] != b')' {
-            break;
-        }
-        end = at + 1;
-        d -= 1;
-    }
-    (start, end)
+    right.map_or(own, |r| r.max(own))
 }
 
 fn element_ty(module: String, path: String, element: Kind) -> Ty {

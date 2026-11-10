@@ -634,6 +634,24 @@ const RAW: &[(&str, &[(&str, Severity)])] = &[
         "import \"pe\" rule a { condition: for any i in (pe.is_dll(), pe.is_32bit()) : (i) }",
         &[],
     ),
+    // A loop variable an enclosing loop binds: libyara's "duplicated loop
+    // identifier"; YARA-X shadows it. Sibling loops and other rules are fine.
+    (
+        "rule a { condition: for any i in (1,2) : (for any i in (3,4) : (i == 3)) }",
+        &[("yara_undefined_identifier", E)],
+    ),
+    (
+        "import \"pe\" rule a { condition: for any s in pe.sections : (for any s in pe.sections : (s.virtual_size > 0)) }",
+        &[("yara_undefined_identifier", E)],
+    ),
+    (
+        "import \"pe\" rule a { condition: for all i in (pe.is_dll(), pe.is_32bit()) : (for any i in (1, 2) : (i == 1)) }",
+        &[("yara_undefined_identifier", E)],
+    ),
+    (
+        "rule a { condition: for any i in (1,2) : (i == 1) and for any i in (3,4) : (i == 3) } rule b { condition: for any i in (1,2) : (i == 1) }",
+        &[],
+    ),
     // libyara reports a jump's first error only.
     (
         "rule a { strings: $h = { 01 02 ( 05 [9223372036854775813] 06 | 07 ) } condition: $h }",
@@ -745,6 +763,14 @@ fn yara_x_dialect_accepts_its_syntax_and_refuses_libyara_only() {
         [("yara_x_incompatible".to_string(), W)]
     );
     assert_eq!(codes(jump, &yx), [("yara_x_incompatible".to_string(), E)]);
+    // YARA-X shadows an enclosing loop's variable.
+    assert_eq!(
+        codes(
+            "rule a { condition: for any i in (1,2) : (for any i in (3,4) : (i == 3)) }",
+            &yx
+        ),
+        []
+    );
 }
 
 /// yara-1.0's example, and the fixtures the spec ships for it.
@@ -877,8 +903,71 @@ fn ranges_cover_the_expression_as_written() {
             "(pe.is_dll()) == 1".to_string()
         )]
     );
+    for (condition, want) in [
+        ("(1) != (pe.is_dll())", "(1) != (pe.is_dll())"),
+        ("(1) == (pe.is_dll())", "(1) == (pe.is_dll())"),
+        ("(pe.exports(/a\\(/) == 1)", "pe.exports(/a\\(/) == 1"),
+        (
+            "( pe.exports(/\\)/) == 1 ) and true",
+            "pe.exports(/\\)/) == 1",
+        ),
+        ("(pe.is_dll() /* ( */) == 1", "(pe.is_dll() /* ( */) == 1"),
+    ] {
+        let found = ranges(&format!("{head}rule a {{ condition: {condition} }}"));
+        assert!(
+            found
+                .iter()
+                .any(|(code, text)| code == "yara_suspicious_expression" && text == want),
+            "{condition}: {found:?}"
+        );
+    }
     assert_eq!(
         ranges(&format!("{head}rule a {{ condition: pe.is_dll() > 0 }}")),
         [("yara_x_incompatible".to_string(), "pe.is_dll()".to_string())]
     );
+}
+
+/// No finding's range cuts through a pair of parentheses the parser read
+/// (in a string, a regexp or a comment a parenthesis is none), on every
+/// case above.
+#[test]
+fn every_range_is_balanced() {
+    let extra = [
+        "import \"pe\" rule a { condition: (1) != (pe.is_dll()) }",
+        "import \"pe\" rule a { condition: (pe.exports(/a\\(/) == 1) }",
+        "import \"pe\" rule a { condition: ( pe.exports(/\\)/) == 1 ) and true }",
+        "import \"pe\" rule a { condition: (pe.is_dll() /* ( */) == 1 }",
+    ];
+    let mut failures = Vec::new();
+    for source in RAW.iter().map(|(s, _)| *s).chain(extra) {
+        let starts: Vec<usize> = std::iter::once(0)
+            .chain(source.match_indices('\n').map(|(i, _)| i + 1))
+            .collect();
+        let byte = |p: &opentide_core::Position| {
+            let line = starts[p.line as usize];
+            let text = &source[line..];
+            let mut units = 0;
+            for (i, c) in text.char_indices() {
+                if units >= p.character {
+                    return line + i;
+                }
+                units += c.len_utf16() as u32;
+            }
+            source.len()
+        };
+        let pairs = opentide_yara::paren_pairs(source);
+        for d in analyze_with(source, &raw()).diagnostics {
+            let (start, end) = (byte(&d.range.start), byte(&d.range.end));
+            for &(open, close) in &pairs {
+                if (start..end).contains(&open) != (start..end).contains(&close) {
+                    failures.push(format!(
+                        "{source}\n    {} at `{}` cuts `(` {open} / `)` {close}",
+                        d.code,
+                        &source[start..end]
+                    ));
+                }
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
