@@ -13,10 +13,13 @@
 //! UC-1.4's (#810) and are left out on both sides. Every Rust result is the
 //! reviewed snapshot in `src/objects/snapshots/`. A unit test, not an
 //! integration test: reading a rule needs `cfg(test)` or the
-//! `unchecked-platform-blocks` feature until UC-1.4.
+//! `unchecked-platform-blocks` feature until UC-1.4. It reads nothing from
+//! the disk (the crate's sources stay I/O-free,
+//! `scripts/engine/check-io-free.sh`): `tests/objects_table_files.rs` checks
+//! that the table holds every corpus file as it is on disk and that each
+//! difference's CHANGELOG.md entry exists.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::Path;
 
 use crate::SchemaError;
 use crate::from_node;
@@ -87,7 +90,6 @@ fn error_json(error: &SchemaError) -> Json {
 #[derive(Debug, serde::Deserialize)]
 struct Difference {
     id: String,
-    changelog: String,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -101,10 +103,6 @@ struct CaseNote {
 struct Cases {
     difference: Vec<Difference>,
     case: Vec<CaseNote>,
-}
-
-fn repo() -> &'static Path {
-    Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."))
 }
 
 #[test]
@@ -123,7 +121,6 @@ fn every_case_is_compared_with_the_oracle_and_every_difference_is_explained() {
         .iter()
         .map(|case| (case.id.as_str(), case.difference.as_slice()))
         .collect();
-    let changelog = std::fs::read_to_string(repo().join("CHANGELOG.md")).unwrap();
     let cases = table["cases"].as_array().unwrap();
     let written = cases
         .iter()
@@ -131,29 +128,11 @@ fn every_case_is_compared_with_the_oracle_and_every_difference_is_explained() {
         .count();
     assert_eq!(written, named.len(), "run objects_table.py");
     let mut failures = Vec::new();
-    for difference in differences.values() {
-        if !changelog.contains(&difference.changelog) {
-            failures.push(format!(
-                "difference {}: CHANGELOG.md has no {:?}",
-                difference.id, difference.changelog
-            ));
-        }
-    }
     let mut used = BTreeSet::new();
     let mut results = BTreeMap::new();
     for case in cases {
         let id = case["id"].as_str().unwrap();
         let text = case["yaml"].as_str().unwrap();
-        if let Some(path) = id.strip_prefix("file:") {
-            let current = std::fs::read_to_string(repo().join(path))
-                .unwrap_or_else(|error| panic!("{path}: {error}; run objects_table.py"));
-            // A Windows checkout may write the fixture with CRLF.
-            assert_eq!(
-                current.replace("\r\n", "\n"),
-                text,
-                "{path} changed: run objects_table.py"
-            );
-        }
         let actual = match node::load(text) {
             Err(_) => json!({ "yaml_error": true }),
             Ok(document) => convert(case["family"].as_str().unwrap(), &document),
@@ -209,39 +188,4 @@ fn every_case_is_compared_with_the_oracle_and_every_difference_is_explained() {
         "rust_results",
         serde_json::to_string_pretty(&results).unwrap()
     );
-}
-
-#[test]
-fn every_object_file_of_the_corpora_is_in_the_table() {
-    let table: Json = serde_json::from_str(TABLE).unwrap();
-    let listed: BTreeSet<String> = table["cases"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .filter_map(|case| {
-            case["id"]
-                .as_str()?
-                .strip_prefix("file:")
-                .map(str::to_owned)
-        })
-        .collect();
-    let mut found = BTreeSet::new();
-    for source in [
-        "tests/fixtures/tide_corpus/current/Objects",
-        "tests/golden/fixtures/vscode-workspace/objects",
-    ] {
-        let mut stack = vec![repo().join(source)];
-        while let Some(dir) = stack.pop() {
-            for entry in std::fs::read_dir(&dir).expect("a fixture directory") {
-                let path = entry.unwrap().path();
-                if path.is_dir() {
-                    stack.push(path);
-                } else if path.extension().is_some_and(|ext| ext == "yaml") {
-                    let relative = path.strip_prefix(repo()).unwrap();
-                    found.insert(relative.to_string_lossy().replace('\\', "/"));
-                }
-            }
-        }
-    }
-    assert_eq!(found, listed, "run objects_table.py");
 }
