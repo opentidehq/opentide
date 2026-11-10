@@ -1,10 +1,12 @@
 """The engine's bundled Tide catalog is what this checkout's models generate (#800).
 
 The engine crates compile in the Tide catalog under ``data/catalogs/tide/generated/``
-(``fields.json``, ``deprecations.json``), beside the reference schemas in
+(``fields.json``, ``deprecations.json``), beside the router in
 ``data/catalogs/tide/schemas/`` and the key lists of
 ``highlights/queries/tide/highlights.scm``. ``scripts/engine/sync_opentide_schemas.py``
-generates all of them from ``src/opentide``. Until the engine generates them itself
+generates all of them from ``src/opentide``; each revision's reference schema beside the
+router is generated from the Rust models and checked by ``cargo xtask codegen`` (UC-1.8b,
+#900). Until the engine generates them itself
 (UC-1.8), a change to the models, a vocabulary or a pin regenerates them in the same
 change, or these tests fail: they replace the cross-repository gate
 (``scripts/build/check_engine_catalog.py``) and language-server's opentide canary.

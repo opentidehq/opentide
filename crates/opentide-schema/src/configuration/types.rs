@@ -2,9 +2,11 @@
 //! `mode="before"` validator, each reporting Pydantic's error type and
 //! message (`pydantic-core` wording, which the CLI prints as is).
 
+use std::borrow::Cow;
 use std::sync::OnceLock;
 
 use regex::Regex;
+use schemars::{JsonSchema, Schema, SchemaGenerator, json_schema};
 use serde::Serialize;
 
 use crate::error::ErrorKind;
@@ -31,6 +33,20 @@ impl FromNode for NonEmptyString {
     }
 }
 
+impl JsonSchema for NonEmptyString {
+    fn schema_name() -> Cow<'static, str> {
+        "NonEmptyString".into()
+    }
+
+    fn inline_schema() -> bool {
+        true
+    }
+
+    fn json_schema(_: &mut SchemaGenerator) -> Schema {
+        json_schema!({"type": "string", "minLength": 1})
+    }
+}
+
 /// A list with at least one item: `too_short` when empty.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(transparent)]
@@ -51,6 +67,21 @@ impl<T: FromNode> FromNode for NonEmptyList<T> {
     }
 }
 
+impl<T: JsonSchema> JsonSchema for NonEmptyList<T> {
+    fn schema_name() -> Cow<'static, str> {
+        format!("NonEmptyList_{}", T::schema_name()).into()
+    }
+
+    fn inline_schema() -> bool {
+        true
+    }
+
+    fn json_schema(generator: &mut SchemaGenerator) -> Schema {
+        let items = generator.subschema_for::<T>();
+        json_schema!({"type": "array", "items": items, "minItems": 1})
+    }
+}
+
 /// A number greater than 0 (`gt=0`): `float_type`, then `greater_than`.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 #[serde(transparent)]
@@ -68,6 +99,20 @@ impl FromNode for PositiveFloat {
             node,
         );
         None
+    }
+}
+
+impl JsonSchema for PositiveFloat {
+    fn schema_name() -> Cow<'static, str> {
+        "PositiveFloat".into()
+    }
+
+    fn inline_schema() -> bool {
+        true
+    }
+
+    fn json_schema(_: &mut SchemaGenerator) -> Schema {
+        json_schema!({"type": "number", "exclusiveMinimum": 0})
     }
 }
 
@@ -124,6 +169,24 @@ impl<P: Pattern> FromNode for Matching<P> {
             text,
             marker: std::marker::PhantomData,
         })
+    }
+}
+
+impl<P: Pattern> JsonSchema for Matching<P> {
+    fn schema_name() -> Cow<'static, str> {
+        format!("Matching_{}", P::PATTERN).into()
+    }
+
+    fn inline_schema() -> bool {
+        true
+    }
+
+    fn json_schema(_: &mut SchemaGenerator) -> Schema {
+        let mut schema = json_schema!({"type": "string", "pattern": P::PATTERN});
+        if P::NON_EMPTY {
+            schema.insert("minLength".to_owned(), 1.into());
+        }
+        schema
     }
 }
 
@@ -235,6 +298,29 @@ impl StatusStrategy {
         }
     }
 
+    /// What the member does (the oracle's member value), which the editor
+    /// schemas show beside a status.
+    pub const fn description(self) -> &'static str {
+        match self {
+            Self::Inert => "Does not interact with deployment",
+            Self::Release => {
+                "Deployment from the default branch (also called trunk, or main branch)"
+            }
+            Self::Preview => "Deployment from Pull/Merge Requests",
+            Self::Disablement => {
+                "Deployment from the default branch, but only to disable an existing rule. If \
+                 the target system does not have a concept of disabling rules, then defaults to \
+                 deleting them."
+            }
+            Self::Deletion => {
+                "Deployment from the default branch, but removes the rule from the target system."
+            }
+            Self::Universal => {
+                "Deployment from both Pull/Merge Requests, and default branch pipelines."
+            }
+        }
+    }
+
     /// The member named exactly `name`.
     pub fn from_name(name: &str) -> Option<Self> {
         Self::ALL.into_iter().find(|member| member.name() == name)
@@ -278,6 +364,17 @@ impl FromNode for StatusStrategyName {
     }
 }
 
+impl JsonSchema for StatusStrategyName {
+    fn schema_name() -> Cow<'static, str> {
+        "StatusStrategy".into()
+    }
+
+    fn json_schema(_: &mut SchemaGenerator) -> Schema {
+        let names: Vec<&str> = StatusStrategy::ALL.iter().map(|m| m.name()).collect();
+        json_schema!({"type": "string", "enum": names})
+    }
+}
+
 /// A tenant strategy: `PREVIEW` or `RELEASE`, in any case, spaces around
 /// ignored (`RunStrategyName`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -303,6 +400,22 @@ impl FromNode for RunStrategyName {
                 None
             }
         }
+    }
+}
+
+impl JsonSchema for RunStrategyName {
+    fn schema_name() -> Cow<'static, str> {
+        "RunStrategy".into()
+    }
+
+    fn inline_schema() -> bool {
+        true
+    }
+
+    /// Any string: the strategy is read in any case, spaces around ignored,
+    /// which no `enum` says.
+    fn json_schema(_: &mut SchemaGenerator) -> Schema {
+        json_schema!({"type": "string"})
     }
 }
 

@@ -66,6 +66,13 @@ confidence-threshold = 0.93
 include-dev = false
 include-build = false
 unused-allowed-license = "allow"
+# One crate under a licence outside the list, never shipped: borrow-or-share
+# (MIT-0, MIT without the attribution clause) reaches only xtask, through the
+# jsonschema crate `cargo xtask codegen --check` validates the corpora with
+# (UC-1.8b, #900).
+exceptions = [
+  { crate = "borrow-or-share", allow = ["MIT-0"] },
+]
 
 [licenses.private]
 # Unpublished members (publish = false: xtask, the binding in analysis/,
@@ -97,6 +104,13 @@ skip = [
   # pseudo-terminals, and tempfile: both bring bitflags 2, beside the bitflags
   # 1 of lsp-types (fluent-uri 0.1). No shipped crate depends on bitflags 2.
   { crate = "bitflags@2.13.2", reason = "only xtask (tooling, never shipped) uses it at run time, through rustix and tempfile; the shipped crates use bitflags 1 through lsp-types" },
+  # xtask's schema comparison (UC-1.8b, #900; `cargo xtask codegen --check`)
+  # validates the corpora with the jsonschema crate, which brings these second
+  # versions. Only xtask (tooling, never shipped) depends on jsonschema.
+  { crate = "fancy-regex@0.20.1", reason = "only xtask (tooling, never shipped) uses it, through jsonschema; opentide-schema ships fancy-regex 0.14" },
+  { crate = "fluent-uri@0.4.1", reason = "only xtask (tooling, never shipped) uses it, through jsonschema's referencing; the shipped crates use fluent-uri 0.1 through lsp-types" },
+  { crate = "getrandom@0.3.4", reason = "only xtask (tooling, never shipped) uses it, through jsonschema's ahash; the shipped crates use getrandom 0.4 through gix" },
+  { crate = "r-efi@5.3.0", reason = "only xtask (tooling, never shipped) uses it, through getrandom 0.3 (jsonschema's ahash), on UEFI targets" },
   { crate = "syn@2.0.119", reason = "garde_derive 0.23 (opentide-schema's validation derive, plan D-2) depends on syn 2 and no garde release uses syn 3 yet; every other proc macro uses syn 3. Drop this when garde moves" },
 ]
 

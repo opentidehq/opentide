@@ -9,9 +9,9 @@ write the bundled ones. It writes:
 - ``data/catalogs/tide/generated/fields.json`` and ``deprecations.json``: one row per
   field per schema revision (``rule::1.0``, ``rule::1.1``), with required and
   closed (no extra keys) flags, so each object is checked against its revision;
-- ``data/catalogs/tide/schemas/*.schema.json``: each revision's JSON Schema, for
-  reference (vocabulary essays shortened), and the ``opentide.schema.json``
-  router;
+- ``data/catalogs/tide/schemas/opentide.schema.json``: the router. Each
+  revision's JSON Schema beside it is generated from the Rust models by
+  ``cargo xtask codegen`` (UC-1.8b, #900), which also checks it;
 - ``highlights/queries/tide/highlights.scm``: the key list of the static query.
 
 It reads the models of this checkout, ``src/opentide``, never an installed
@@ -77,13 +77,6 @@ def main(argv: list[str] | None = None) -> int:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8")
         print(f"wrote {path.relative_to(ROOT)}")
-    for stale in sorted(SCHEMA_DIR.glob("*.schema.json")):
-        if stale not in outputs:
-            stale.unlink()
-            print(
-                f"removed {stale.relative_to(ROOT)} (not registered in opentide "
-                f"{opentide.__version__})"
-            )
     return 0
 
 
@@ -91,17 +84,13 @@ def expected_outputs() -> dict[Path, str]:
     """Every file this script writes, with its content."""
     from opentide._models.object_types import CORE_OBJECT_TYPES
     from opentide._models.schema_registry import identifiers_for_families
-    from opentide.generation.pydantic_schemas import generate_schema_for_identifier
 
     outputs: dict[Path, str] = {}
     catalogs = lsp_catalog.catalog_texts()
     for name, text in catalogs.items():
         outputs[GENERATED / name] = text
     schema_ids = list(identifiers_for_families(CORE_OBJECT_TYPES))
-    for schema_id in schema_ids:
-        family, revision = schema_id.split("::", 1)
-        schema = generate_schema_for_identifier(schema_id)
-        outputs[SCHEMA_DIR / f"{family}.{revision}.schema.json"] = dump_schema(schema)
+    # Each revision's schema is generated and checked by `cargo xtask codegen`.
     outputs[SCHEMA_DIR / "opentide.schema.json"] = dump_schema(router(schema_ids))
     fields = json.loads(catalogs[lsp_catalog.FIELDS_FILE])["fields"]
     outputs[HIGHLIGHTS] = highlights(fields)
@@ -126,10 +115,6 @@ def check(outputs: dict[Path, str]) -> int:
         current = path.read_text(encoding="utf-8") if path.is_file() else None
         if _unlabelled(path, current) != _unlabelled(path, text):
             problems.append(f"{path.relative_to(ROOT)}: differs")
-    # Writing removes a schema opentide no longer registers: so must checking.
-    for stale in sorted(SCHEMA_DIR.glob("*.schema.json")):
-        if stale not in outputs:
-            problems.append(f"{stale.relative_to(ROOT)}: not registered in opentide")
     for problem in problems:
         print(f"error: {problem}", file=sys.stderr)
     if problems:
