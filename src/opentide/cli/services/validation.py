@@ -117,6 +117,7 @@ _CHECK_ISSUE_CODES: dict[str, frozenset[str]] = {
             "deployment_state_uuid_mismatch",
             "deployment_state_platform",
             "deployment_state_shape",
+            "yara_signature_alias",
         }
     ),
     ValidateCheck.cve.value: frozenset({"invalid_cve"}),
