@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Added
+
+- **The editor and `opentide tui` check YARA rules**, as libyara 4.5 compiles them, with a warning where YARA-X 1.x refuses what libyara accepts. `opentide lsp start` adds hover and completion for the 13 modules, highlighting, outline, folding, rename and formatting. `configurations.harfanglab.yara` (the `signature` and the `strings`, `condition` and `imports` fragments deploy assembles) and `configurations.bitdefender.yara.signature` get the `yara_*`, `harfanglab_*` and `bitdefender_yara_*` diagnostics. `opentide validate`, `lint` and MCP `validate_query` do not check YARA yet, so no pipeline fails on them. See [Diagnostics](docs/cli/diagnostics.md#yara_parse_error).
+
+### Changed
+
+- **The analysis engine is language-server at the head of its YARA work ([#165](https://github.com/opentidehq/language-server/issues/165))**, pinned by git revision until the release that ships it. Building opentide from source needs Rust 1.95 or later, which the engine's YARA parser requires.
+
 ## [0.24.1] — 2026-11-10
 
 `pip install opentide` works again: Typer 0.29.0 crashed every opentide on start, and opentide now requires a Typer it runs on. The diagnostic codes reference publishes on opentide.org again.
