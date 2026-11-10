@@ -240,8 +240,10 @@ pub fn check_position_names(text: &str) -> Vec<String> {
 }
 
 /// `join_lines`: multiline text as one line, each line stripped. Lines end
-/// where Python's `str.splitlines` ends them ([`is_line_boundary`]), not only
-/// at `\n` and `\r\n`: `m2\x0cand x` is the words `m2` and `and x`.
+/// where Python's `str.splitlines` ends them (also at `\r`, vertical tab,
+/// form feed, the file, group and record separators, NEL and the Unicode
+/// line and paragraph separators), not only at `\n` and `\r\n`:
+/// `m2\x0cand x` is the words `m2` and `and x`.
 pub fn join_lines(text: &str) -> String {
     text.split(is_line_boundary)
         .map(opentide_core::falco::python_strip)
