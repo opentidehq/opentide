@@ -5,6 +5,7 @@
 //! before the outcome line. `app::Run::emit_report` writes it in the run's
 //! mode.
 
+pub mod generate;
 pub mod info;
 pub mod rules;
 
@@ -37,6 +38,8 @@ pub struct Report {
     pub outcome_kind: Option<OutcomeKind>,
     /// What the text modes print on stdout before the outcome line.
     pub body: Vec<Block>,
+    /// The checklist's steps, printed on stderr before anything else.
+    pub steps: Vec<crate::render::progress::Step>,
 }
 
 /// One part of a body.
@@ -66,6 +69,7 @@ impl Report {
             outcome_line: None,
             outcome_kind: None,
             body: Vec::new(),
+            steps: Vec::new(),
         }
     }
 
@@ -77,6 +81,7 @@ impl Report {
             outcome_line: None,
             outcome_kind: None,
             body: Vec::new(),
+            steps: Vec::new(),
         }
     }
 
