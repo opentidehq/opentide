@@ -2924,6 +2924,7 @@ dependencies = [
  "dunce",
  "glob",
  "indexmap",
+ "opentide-cli",
  "opentide-compare",
  "opentide-compile",
  "opentide-schema",
