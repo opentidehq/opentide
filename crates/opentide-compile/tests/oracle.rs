@@ -165,6 +165,25 @@ fn approved() -> Vec<[String; 5]> {
         .collect()
 }
 
+/// The approved oracle faults (`[[fault]]` entries of
+/// `tests/golden/payloads/APPROVED.toml`): platform and failure.
+fn fault_approvals() -> Vec<(String, String)> {
+    let text = std::fs::read_to_string(repo().join("tests/golden/payloads/APPROVED.toml")).unwrap();
+    let file: toml::Table = toml::from_str(&text).unwrap();
+    file.get("fault")
+        .and_then(toml::Value::as_array)
+        .map(Vec::as_slice)
+        .unwrap_or_default()
+        .iter()
+        .map(|entry| {
+            (
+                entry["platform"].as_str().unwrap().to_owned(),
+                entry["error"].as_str().unwrap().to_owned(),
+            )
+        })
+        .collect()
+}
+
 #[test]
 fn the_compile_corpus_compiles_as_the_oracle_compiles_it() {
     let corpus = dunce::canonicalize(repo().join("tests/golden/payloads/corpus")).unwrap();
@@ -192,6 +211,8 @@ fn the_compile_corpus_compiles_as_the_oracle_compiles_it() {
     let ws = corpus.to_string_lossy().into_owned();
     let approved = approved();
     let classes = dump_classes();
+    let faults = fault_approvals();
+    let mut faulted = 0;
     let mut used = vec![false; approved.len()];
     let mut compared = 0;
     let mut differences = Vec::new();
@@ -238,6 +259,17 @@ fn the_compile_corpus_compiles_as_the_oracle_compiles_it() {
         }
         for tenant in entry["tenants"].as_array().unwrap() {
             let name = tenant["tenant"].as_str().unwrap();
+            // The oracle's own client failed and the probe worked around it:
+            // the failure is an approved intended difference.
+            if let Some(fault) = tenant.get("fault").and_then(Value::as_str) {
+                faulted += 1;
+                assert!(
+                    faults
+                        .iter()
+                        .any(|(p, error)| p == platform && error == fault),
+                    "{uuid} {platform} {name}: the oracle fails ({fault}) with no [[fault]] approval"
+                );
+            }
             let inputs = Inputs {
                 known: opentide_compile::plan::state_id(&OsFs, &corpus, uuid, platform, name),
                 clock: PROBE_CLOCK,
@@ -259,4 +291,7 @@ fn the_compile_corpus_compiles_as_the_oracle_compiles_it() {
         "an approval of the compile corpus matches nothing (stale)"
     );
     assert!(compared >= 150, "{compared} comparisons");
+    // Every HarfangLab body the corpus sends (four Sigma or YARA writes and
+    // a delete) is one the 0.23.0 client never sent.
+    assert!(faulted >= 5, "{faulted} oracle faults");
 }

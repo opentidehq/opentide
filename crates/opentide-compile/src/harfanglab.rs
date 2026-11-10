@@ -449,6 +449,41 @@ mod tests {
         assert_eq!(escape("a\"b\\c\nd\r"), "a\\\"b\\\\c\\nd");
     }
 
+    /// The YARA content of a rule whose `meta.arch` is written `arch`.
+    fn yara_content(arch: &str) -> String {
+        let text = format!(
+            "name: Loader\nmetadata:\n  uuid: 00000000-0000-4000-8005-000000000699\n\
+             description: d\nconfigurations:\n  harfanglab:\n    status: STAGING\n    \
+             yara:\n      meta:\n        os: Linux\n        arch: {arch}\n      \
+             strings: '$a = \"x\"'\n      condition: $a\n"
+        );
+        let document = opentide_schema::node::load(&text).unwrap();
+        let rule = Rule::new(document.root().unwrap(), None);
+        let block = rule.block(PLATFORM).unwrap();
+        let body = yara(&rule, block, block.get("yara").unwrap(), &Json::Null);
+        body.get("content")
+            .and_then(Json::as_str)
+            .unwrap()
+            .to_owned()
+    }
+
+    #[test]
+    fn a_yara_architecture_is_written_from_a_list_or_one_string() {
+        let os_then = |arch: &str| format!("\n        os = \"Linux\"\n        arch = \"{arch}\"\n");
+        let content = yara_content("[x64, arm64]");
+        assert!(content.contains(&os_then("x64,arm64")), "{content}");
+        // One string, as the oracle's deployer takes it (`isinstance`).
+        let content = yara_content("x86");
+        assert!(content.contains(&os_then("x86")), "{content}");
+        // Empty: no `arch` line.
+        let content = yara_content("[]");
+        assert!(!content.contains("arch ="), "{content}");
+        assert!(
+            content.contains("\n        os = \"Linux\"\n        score = 10\n"),
+            "{content}"
+        );
+    }
+
     #[test]
     fn sigma_lists_indent_under_their_key_and_lines_stay_whole() {
         let rule: Json = serde_json::from_str(

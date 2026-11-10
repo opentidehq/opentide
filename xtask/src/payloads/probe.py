@@ -21,6 +21,13 @@ the probe writes:
   the list of writes it sends, each `{"method", "url", "body"}` (`DEPLOYERS`);
 - `preview`: the dry run's payload entry (`preview_rule_deployment`).
 
+Where the oracle's own client fails before it sends anything, the tenant's
+outcome also has `fault`, the failure (`Type: message`): the probe gives the
+client what it lacked and records the body the deployer builds, and
+`xtask payloads` requires a `[[fault]]` approval of that failure. HarfangLab's
+client reads its identifier as `Systems.HarfangLab`, which the registry has
+no attribute for, so the oracle's HarfangLab deploy fails on every tenant.
+
 A deployer acts on the deployment state's id for the rule on the tenant:
 update (or delete, for a DELETION status) when one is recorded, create when
 none is, and nothing for a DELETION or DISABLEMENT status without one. The
@@ -238,8 +245,14 @@ def action_for(platform: str, rule: Any, tenant: Any, status: object) -> Any:
     return ExternalIdAction("create")
 
 
-def deployer_writes(platform: str, rule: Any, tenant: Any) -> list[dict[str, object]]:
-    """The writes the deployer of *platform* sends for *rule* to *tenant*."""
+def deployer_writes(
+    platform: str, rule: Any, tenant: Any, faults: list[str]
+) -> list[dict[str, object]]:
+    """The writes the deployer of *platform* sends for *rule* to *tenant*.
+
+    A failure of the oracle's own client that the probe works around is
+    appended to *faults*.
+    """
     writes: list[dict[str, object]] = []
     block = getattr(rule.configurations, platform)
     if platform == "defender_for_endpoint":
@@ -285,17 +298,26 @@ def deployer_writes(platform: str, rule: Any, tenant: Any) -> list[dict[str, obj
         kind = "Sigma" if is_sigma else "YARA" if block.yara is not None else None
         if kind != tenant.setup.type:
             return writes
-        # The client reads its identifier as `Systems.HarfangLab`, which the
-        # registry has no attribute for (it snake-cases it `harfang_lab`), so
-        # the oracle's client cannot be built for any tenant. The body is the
-        # deployer's: the client is given the identifier.
-        from types import SimpleNamespace
+        try:
+            service = client.HarfangLabService(tenant)
+        except Exception as exc:  # the oracle's own client fails: a fault
+            # The client reads its identifier as `Systems.HarfangLab`, which
+            # the registry has no attribute for (it snake-cases it
+            # `harfang_lab`). The fault is recorded; the body compared is the
+            # deployer's, with the client given the identifier.
+            from types import SimpleNamespace
 
-        identifier = SimpleNamespace(platform=SimpleNamespace(identifier="harfanglab"))
-        client.Opentide = SimpleNamespace(
-            Configurations=SimpleNamespace(Systems=SimpleNamespace(HarfangLab=identifier))
-        )
-        deployer.HarfangLabDeploy().deploy_mdr(rule, client.HarfangLabService(tenant), tenant)
+            faults.append(f"{type(exc).__name__}: {exc}")
+            identifier = SimpleNamespace(platform=SimpleNamespace(identifier="harfanglab"))
+            registry = client.Opentide
+            client.Opentide = SimpleNamespace(
+                Configurations=SimpleNamespace(Systems=SimpleNamespace(HarfangLab=identifier))
+            )
+            try:
+                service = client.HarfangLabService(tenant)
+            finally:
+                client.Opentide = registry
+        deployer.HarfangLabDeploy().deploy_mdr(rule, service, tenant)
         return writes
     if platform == "splunk":
         from opentide.platforms.splunk import client, deployer
@@ -326,15 +348,18 @@ def outcome(platform: str, rule: Any, tenant: Any = None) -> dict[str, object]:
 
     if platform in DEPLOYERS and tenant is None:
         return {}
+    faults: list[str] = []
     try:
         if platform in DEPLOYERS:
-            body: object = deployer_writes(platform, rule, tenant)
+            body: object = deployer_writes(platform, rule, tenant, faults)
         else:
             body = body_for(platform, rule, tenant)
     except Exception as exc:  # every failure is an outcome to compare
         code, message, hint = compile_diagnostic(exc, DISPLAY[platform])
-        return {"error": {"code": code, "message": message, "help": hint}}
-    return {"body": compact(body)}
+        fault = {"fault": faults[0]} if faults else {}
+        return {**fault, "error": {"code": code, "message": message, "help": hint}}
+    fault = {"fault": faults[0]} if faults else {}
+    return {**fault, "body": compact(body)}
 
 
 def main() -> int:

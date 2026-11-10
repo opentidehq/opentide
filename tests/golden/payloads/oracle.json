@@ -1,6 +1,27 @@
 {
  "rules": [
   {
+   "uuid": "00000000-0000-4000-8005-000000000704",
+   "file": "<WS>/objects/rules/carbon-black-disabled.yaml",
+   "platform": "carbon_black_cloud",
+   "compile": {},
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000704\",\"name\":\"Carbon Black Disabled\",\"api_request\":{\"enabled\":false,\"name\":\"\",\"schema\":null,\"status\":\"DISABLED\",\"flags\":null,\"tenants\":null,\"contributors\":null,\"query\":\"process_name:powershell.exe\",\"organizations\":null,\"watchlist\":null,\"report\":null,\"tags\":null}}",
+   "tenants": [
+    {
+     "tenant": "org1",
+     "body": "[]"
+    },
+    {
+     "tenant": "org2",
+     "error": {
+      "code": "compile_failed",
+      "message": "Carbon Black Cloud cannot compile this rule: The CBC Deployer cannot create a detection in a nonexistent Watchlist: . Create it on the console before retriggering deployment.",
+      "help": null
+     }
+    }
+   ]
+  },
+  {
    "uuid": "00000000-0000-4000-8005-000000000701",
    "file": "<WS>/objects/rules/carbon-black-full.yaml",
    "platform": "carbon_black_cloud",
@@ -65,6 +86,31 @@
    "platform": "crowdstrike",
    "compile": {},
    "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000503\",\"name\":\"CrowdStrike Bad Outcome\",\"api_request\":{\"enabled\":false,\"name\":\"\",\"schema\":null,\"status\":\"STAGING\",\"flags\":null,\"tenants\":null,\"contributors\":null,\"details\":{\"trigger\":\"summary\",\"outcome\":\"alert\",\"name\":null,\"description\":null,\"severity\":null,\"tactic\":null,\"technique\":null},\"schedule\":{\"frequency\":\"30m\",\"lookback\":\"1h\",\"start\":null,\"end\":null},\"query\":\"#event_simpleName=DnsRequest\"}}",
+   "tenants": [
+    {
+     "tenant": "eu",
+     "error": {
+      "code": "compile_failed",
+      "message": "CrowdStrike cannot compile this rule: Invalid Crowdstrike outcome value",
+      "help": null
+     }
+    },
+    {
+     "tenant": "us",
+     "error": {
+      "code": "compile_failed",
+      "message": "CrowdStrike cannot compile this rule: Invalid Crowdstrike outcome value",
+      "help": null
+     }
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-0000-4000-8005-000000000505",
+   "file": "<WS>/objects/rules/crowdstrike-bad-trigger.yaml",
+   "platform": "crowdstrike",
+   "compile": {},
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000505\",\"name\":\"CrowdStrike Bad Trigger\",\"api_request\":{\"enabled\":false,\"name\":\"\",\"schema\":null,\"status\":\"STAGING\",\"flags\":null,\"tenants\":null,\"contributors\":null,\"details\":{\"trigger\":\"always\",\"outcome\":\"detection\",\"name\":null,\"description\":null,\"severity\":null,\"tactic\":null,\"technique\":null},\"schedule\":{\"frequency\":\"30m\",\"lookback\":\"1h\",\"start\":null,\"end\":null},\"query\":\"#event_simpleName=DnsRequest\"}}",
    "tenants": [
     {
      "tenant": "eu",
@@ -166,6 +212,23 @@
     {
      "tenant": "fabrikam",
      "body": "[{\"method\":\"POST\",\"url\":\"https://graph.microsoft.com/beta/security/rules/detectionRules\",\"body\":{\"displayName\":\"Defender Full\",\"queryCondition\":{\"queryText\":\"let admins = \\\"admin\\\";\\nDeviceProcessEvents\\n| where FileName == \\\"powershell.exe\\\"\\n\\n| where AccountName !in (admins)\"},\"schedule\":{\"period\":\"0\"},\"detectionAction\":{\"alertTemplate\":{\"title\":\"Encoded PowerShell\",\"description\":\"An encoded command line ran.\",\"severity\":\"medium\",\"category\":\"SuspiciousActivity\",\"mitreTechniques\":[],\"impactedAssets\":[{\"@odata.type\":\"#microsoft.graph.security.impactedDeviceAsset\",\"identifier\":\"deviceId\"},{\"@odata.type\":\"#microsoft.graph.security.impactedUserAsset\",\"identifier\":\"accountObjectId\"},{\"@odata.type\":\"#microsoft.graph.security.impactedMailboxAsset\",\"identifier\":\"recipientEmailAddress\"}],\"recommendedActions\":\"Isolate the device.\"},\"responseActions\":[{\"@odata.type\":\"#microsoft.graph.security.isolateDeviceResponseAction\",\"identifier\":\"deviceId\",\"isolationType\":\"full\"},{\"@odata.type\":\"#microsoft.graph.security.collectInvestigationPackageResponseAction\",\"identifier\":\"deviceId\"},{\"@odata.type\":\"#microsoft.graph.security.initiateInvestigationResponseAction\",\"identifier\":\"deviceId\"},{\"@odata.type\":\"#microsoft.graph.security.restrictAppExecutionResponseAction\",\"identifier\":\"deviceId\"},{\"@odata.type\":\"#microsoft.graph.security.runAntivirusScanResponseAction\",\"identifier\":\"deviceId\"},{\"@odata.type\":\"#microsoft.graph.security.blockFileResponseAction\",\"identifier\":\"sHA1\",\"deviceGroupNames\":[\"Servers\",\"Workstations\"]},{\"@odata.type\":\"#microsoft.graph.security.stopAndQuarantineFileResponseAction\",\"identifier\":\"SHA1\"},{\"@odata.type\":\"#microsoft.graph.security.markUserAsCompromisedResponseAction\",\"identifier\":\"accountObjectId\"},{\"@odata.type\":\"#microsoft.graph.security.disableUserResponseAction\",\"identifier\":\"accountSid\"},{\"@odata.type\":\"#microsoft.graph.security.forceUserPasswordResetResponseAction\",\"identifier\":\"accountSid\"}],\"organizationalScope\":null},\"isEnabled\":true}}]"
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-0000-4000-8005-000000000204",
+   "file": "<WS>/objects/rules/defender-odata.yaml",
+   "platform": "defender_for_endpoint",
+   "compile": {},
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000204\",\"name\":\"Defender odata_type\",\"api_request\":{\"enabled\":false,\"name\":\"\",\"schema\":null,\"status\":\"STAGING\",\"flags\":null,\"tenants\":null,\"contributors\":null,\"query\":\"CloudAppEvents\\n| where tostring(RawEventData.odata_type) == \\\"Message\\\"\\n\",\"alert\":{\"category\":\"Collection\",\"title\":\"odata_type seen\",\"description\":\"The event's odata_type is Message.\",\"severity\":null,\"recommendation\":null,\"techniques\":null},\"impacted_entities\":{\"device\":null,\"mailbox\":null,\"user\":\"AccountObjectId\"},\"scheduling\":\"1H\",\"actions\":null,\"scope\":{\"selection\":\"All\",\"device_groups\":null},\"exclusions\":null}}",
+   "tenants": [
+    {
+     "tenant": "contoso",
+     "body": "[{\"method\":\"POST\",\"url\":\"https://graph.microsoft.com/beta/security/rules/detectionRules\",\"body\":{\"displayName\":\"Defender @odata.type\",\"queryCondition\":{\"queryText\":\"CloudAppEvents\\n| where tostring(RawEventData.@odata.type) == \\\"Message\\\"\\n\"},\"schedule\":{\"period\":\"1H\"},\"detectionAction\":{\"alertTemplate\":{\"title\":\"@odata.type seen\",\"description\":\"The event's @odata.type is Message.\",\"severity\":\"medium\",\"category\":\"Collection\",\"mitreTechniques\":[],\"impactedAssets\":[{\"@odata.type\":\"#microsoft.graph.security.impactedUserAsset\",\"identifier\":\"accountObjectId\"}],\"recommendedActions\":null},\"responseActions\":[],\"organizationalScope\":null},\"isEnabled\":true}}]"
+    },
+    {
+     "tenant": "fabrikam",
+     "body": "[{\"method\":\"POST\",\"url\":\"https://graph.microsoft.com/beta/security/rules/detectionRules\",\"body\":{\"displayName\":\"Defender @odata.type\",\"queryCondition\":{\"queryText\":\"CloudAppEvents\\n| where tostring(RawEventData.@odata.type) == \\\"Message\\\"\\n\"},\"schedule\":{\"period\":\"1H\"},\"detectionAction\":{\"alertTemplate\":{\"title\":\"@odata.type seen\",\"description\":\"The event's @odata.type is Message.\",\"severity\":\"medium\",\"category\":\"Collection\",\"mitreTechniques\":[],\"impactedAssets\":[{\"@odata.type\":\"#microsoft.graph.security.impactedUserAsset\",\"identifier\":\"accountObjectId\"}],\"recommendedActions\":null},\"responseActions\":[],\"organizationalScope\":null},\"isEnabled\":true}}]"
     }
    ]
   },
@@ -332,6 +395,7 @@
     },
     {
      "tenant": "yara",
+     "fault": "AttributeError: HarfangLab",
      "body": "[{\"method\":\"DELETE\",\"url\":\"https://hl-yara.example.org/api/data/threat_intelligence/YaraFile/00000000-0000-4000-8005-000000000604/\",\"body\":null}]"
     }
    ]
@@ -345,7 +409,26 @@
    "tenants": [
     {
      "tenant": "sigma",
+     "fault": "AttributeError: HarfangLab",
      "body": "[{\"method\":\"PUT\",\"url\":\"https://hl.example.org/api/data/threat_intelligence/SigmaRule/00000000-0000-4000-8005-000000000602/\",\"body\":{\"name\":\"HarfangLab Sigma Disabled\",\"content\":\"title: HarfangLab Sigma Disabled\\nid: 00000000-0000-4000-8005-000000000602\\ndescription: |\\n    HarfangLab Sigma Disabled for the compile corpus.\\n    Second line.\\nstatus: experimental\\nlogsource:\\n    category: network_connection\\n    product: linux\\ndetection:\\n    selection:\\n        DestinationPort: 4444\\n    condition: selection\\nlevel: informational\\n\",\"source_id\":\"sigma-source\",\"enabled\":false,\"global_state\":\"disabled\",\"hl_status\":\"experimental\",\"block_on_agent\":false,\"quarantine_on_agent\":false,\"rule_confidence_override\":\"moderate\",\"rule_level_override\":\"informational\",\"overwrite\":true}}]"
+    },
+    {
+     "tenant": "yara",
+     "body": "[]"
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-0000-4000-8005-000000000605",
+   "file": "<WS>/objects/rules/harfanglab-sigma-quarantine.yaml",
+   "platform": "harfanglab",
+   "compile": {},
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000605\",\"name\":\"HarfangLab Sigma Quarantine\",\"api_request\":{\"enabled\":false,\"name\":\"\",\"schema\":null,\"status\":\"PRODUCTION\",\"flags\":null,\"tenants\":null,\"contributors\":null,\"maturity\":\"Experimental\",\"confidence\":\"Moderate\",\"action\":\"Alert, Block & Quarantine\",\"tags\":null,\"sigma\":{\"logsource\":{\"category\":\"network_connection\",\"product\":\"linux\"},\"selections\":[{\"name\":\"selection\",\"field\":\"DestinationPort\",\"value\":4444,\"modifiers\":null}],\"condition\":\"selection\",\"false_positives\":null},\"yara\":null}}",
+   "tenants": [
+    {
+     "tenant": "sigma",
+     "fault": "AttributeError: HarfangLab",
+     "body": "[{\"method\":\"PUT\",\"url\":\"https://hl.example.org/api/data/threat_intelligence/SigmaRule/00000000-0000-4000-8005-000000000605/\",\"body\":{\"name\":\"HarfangLab Sigma Quarantine\",\"content\":\"title: HarfangLab Sigma Quarantine\\nid: 00000000-0000-4000-8005-000000000605\\ndescription: HarfangLab Sigma Quarantine for the compile corpus.\\nstatus: experimental\\nlogsource:\\n    category: network_connection\\n    product: linux\\ndetection:\\n    selection:\\n        DestinationPort: 4444\\n    condition: selection\\nlevel: informational\\n\",\"source_id\":\"sigma-source\",\"enabled\":true,\"global_state\":\"quarantine\",\"hl_status\":\"experimental\",\"block_on_agent\":true,\"quarantine_on_agent\":true,\"rule_confidence_override\":\"moderate\",\"rule_level_override\":\"informational\",\"overwrite\":true}}]"
     },
     {
      "tenant": "yara",
@@ -362,6 +445,7 @@
    "tenants": [
     {
      "tenant": "sigma",
+     "fault": "AttributeError: HarfangLab",
      "body": "[{\"method\":\"PUT\",\"url\":\"https://hl.example.org/api/data/threat_intelligence/SigmaRule/00000000-0000-4000-8005-000000000601/\",\"body\":{\"name\":\"HarfangLab Sigma: Encoded\",\"content\":\"title: 'HarfangLab Sigma: Encoded'\\nid: 00000000-0000-4000-8005-000000000601\\ndescription: HarfangLab Sigma for the compile corpus.\\nauthor: Detection Team\\nstatus: stable\\ntags:\\n    - attack.execution\\n    - attack.t1059.001\\nlogsource:\\n    category: process_creation\\n    product: windows\\ndetection:\\n    selection_img:\\n        Image|endswith: \\\\powershell.exe\\n        OriginalFileName: PowerShell.EXE\\n    selection_cli:\\n        CommandLine|contains|all:\\n            - ' -enc'\\n            - 'yes'\\n    condition: all of selection_*\\nfalsepositives:\\n    - Administration scripts\\nlevel: high\\n\",\"source_id\":\"sigma-source\",\"enabled\":true,\"global_state\":\"block\",\"hl_status\":\"stable\",\"block_on_agent\":true,\"quarantine_on_agent\":false,\"rule_confidence_override\":\"strong\",\"rule_level_override\":\"high\",\"overwrite\":true}}]"
     },
     {
@@ -383,6 +467,7 @@
     },
     {
      "tenant": "yara",
+     "fault": "AttributeError: HarfangLab",
      "body": "[{\"method\":\"POST\",\"url\":\"https://hl-yara.example.org/api/data/threat_intelligence/YaraFile/\",\"body\":{\"name\":\"HarfangLab YARA Loader\",\"content\":\"import \\\"pe\\\"\\n\\nrule harfanglab_yara_loader {\\n    meta:\\n        id = \\\"00000000-0000-4000-8005-000000000603\\\"\\n        title = \\\"HarfangLab YARA Loader\\\"\\n        description = \\\"HarfangLab \\\\\\\"YARA\\\\\\\" for the compile corpus.\\\"\\n        author = \\\"Detection Team\\\"\\n        date = \\\"2026-01-01\\\"\\n        modified = \\\"2026-01-02\\\"\\n        references = \\\"https://example.org/report\\\\nhttps://example.org/other\\\"\\n        tags = \\\"loader\\\"\\n        context = \\\"file.pe,memory\\\"\\n        os = \\\"Windows\\\"\\n        arch = \\\"x64\\\"\\n        classification = \\\"Loader \\\\\\\"family\\\\\\\"\\\"\\n        score = 90\\n        confidence = \\\"moderate\\\"\\n    strings:\\n        $a = \\\"loader\\\" ascii\\n        $b = { 4D 5A }\\n    condition:\\n        $a and $b\\n}\",\"source_id\":\"yara-source\",\"global_state\":\"alert\",\"hl_status\":\"experimental\",\"rule_confidence_override\":\"moderate\",\"rule_level_override\":\"medium\",\"overwrite\":true}}]"
     }
    ]
@@ -722,6 +807,23 @@
    ]
   },
   {
+   "uuid": "00000000-0000-4000-8005-000000000307",
+   "file": "<WS>/objects/rules/splunk-high.yaml",
+   "platform": "splunk",
+   "compile": {},
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000307\",\"name\":\"Splunk High\",\"api_request\":{\"enabled\":false,\"name\":\"\",\"schema\":null,\"status\":\"STAGING\",\"flags\":null,\"tenants\":null,\"contributors\":null,\"query\":\"index=main high\",\"scheduling\":{\"type\":null,\"expires\":null,\"schedule\":{\"frequency\":null,\"cron\":\"0 * * * *\",\"custom_time\":null},\"timerange\":null},\"trigger\":null,\"actions\":null,\"correlation_search\":null}}",
+   "tenants": [
+    {
+     "tenant": "es",
+     "body": "[{\"method\":\"POST\",\"url\":\"saved/searches\",\"body\":{\"name\":\"Splunk High - Rule\",\"search\":\"index=main high\\n| eval MDR_UUID=\\\"00000000-0000-4000-8005-000000000307\\\", MDR_status=\\\"STAGING\\\" \\n|`soc_macro_auto_mdr_mapping(MDR_UUID)`\"}},{\"method\":\"POST\",\"url\":\"saved/searches/Splunk High - Rule\",\"body\":{\"cron_schedule\":\"0 * * * *\",\"alert.severity\":5,\"action.correlationsearch.enabled\":\"true\",\"action.correlationsearch.label\":\"Splunk High - Rule\",\"alert.managedBy\":\"\",\"description\":\"Splunk High for the compile corpus.\",\"dispatch.latest_time\":\"now\",\"alert.track\":\"1\",\"alert.digest_mode\":\"false\",\"action.notable.param.rule_title\":\"Splunk High - Rule\",\"action.notable.param.rule_description\":\"Splunk High for the compile corpus.\",\"action.notable.param.severity\":\"high\"}},{\"method\":\"POST\",\"url\":\"saved/searches/Splunk High - Rule\",\"body\":{\"is_scheduled\":1,\"actions\":\"notable\",\"search\":\"index=main high\\n| eval MDR_UUID=\\\"00000000-0000-4000-8005-000000000307\\\", MDR_status=\\\"STAGING\\\" \\n|`soc_macro_auto_mdr_mapping(MDR_UUID)`\"}}]"
+    },
+    {
+     "tenant": "core",
+     "body": "[{\"method\":\"POST\",\"url\":\"saved/searches\",\"body\":{\"name\":\"Splunk High\",\"search\":\"index=main high\\n| eval MDR_UUID=\\\"00000000-0000-4000-8005-000000000307\\\", MDR_status=\\\"STAGING\\\" \\n|`soc_macro_auto_mdr_mapping(MDR_UUID)`\"}},{\"method\":\"POST\",\"url\":\"saved/searches/Splunk High\",\"body\":{\"cron_schedule\":\"0 * * * *\",\"alert.severity\":5,\"alert.managedBy\":\"\",\"description\":\"Splunk High for the compile corpus.\",\"dispatch.latest_time\":\"now\",\"alert.track\":\"1\",\"alert.digest_mode\":\"false\",\"alert.expires\":\"7d\"}},{\"method\":\"POST\",\"url\":\"saved/searches/Splunk High\",\"body\":{\"is_scheduled\":1,\"actions\":\"\",\"search\":\"index=main high\\n| eval MDR_UUID=\\\"00000000-0000-4000-8005-000000000307\\\", MDR_status=\\\"STAGING\\\" \\n|`soc_macro_auto_mdr_mapping(MDR_UUID)`\"}}]"
+    }
+   ]
+  },
+  {
    "uuid": "00000000-0000-4000-8005-000000000304",
    "file": "<WS>/objects/rules/splunk-noisy.yaml",
    "platform": "splunk",
@@ -769,6 +871,23 @@
     {
      "tenant": "core",
      "body": "[]"
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-0000-4000-8005-000000000306",
+   "file": "<WS>/objects/rules/splunk-risk.yaml",
+   "platform": "splunk",
+   "compile": {},
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000306\",\"name\":\"Splunk Risk\",\"api_request\":{\"enabled\":false,\"name\":\"\",\"schema\":null,\"status\":\"PRODUCTION\",\"flags\":null,\"tenants\":null,\"contributors\":null,\"query\":\"index=main risk\",\"scheduling\":{\"type\":null,\"expires\":null,\"schedule\":{\"frequency\":\"1d\",\"cron\":null,\"custom_time\":\"06h30\"},\"timerange\":{\"lookback\":null,\"earliest\":\"-2d@d\",\"latest\":null}},\"trigger\":null,\"actions\":{\"notable\":null,\"risk\":{\"message\":\"Risk on $host$\",\"risk_objects\":[{\"field\":\"host\",\"type\":\"system\",\"score\":20}],\"threat_objects\":null},\"email\":null},\"correlation_search\":null}}",
+   "tenants": [
+    {
+     "tenant": "es",
+     "body": "[{\"method\":\"POST\",\"url\":\"saved/searches\",\"body\":{\"name\":\"Splunk Risk - Rule\",\"search\":\"index=main risk\\n| eval MDR_UUID=\\\"00000000-0000-4000-8005-000000000306\\\", MDR_status=\\\"PRODUCTION\\\" \\n|`soc_macro_auto_mdr_mapping(MDR_UUID)`\"}},{\"method\":\"POST\",\"url\":\"saved/searches/Splunk Risk - Rule\",\"body\":{\"cron_schedule\":\"30 06 */1 * *\",\"dispatch.earliest_time\":\"-2d@d\",\"alert.severity\":4,\"action.correlationsearch.enabled\":\"true\",\"action.correlationsearch.label\":\"Splunk Risk - Rule\",\"action.risk.param._risk\":\"[{\\\"risk_object_field\\\": \\\"host\\\", \\\"risk_object_type\\\": \\\"system\\\", \\\"risk_score\\\": 20}]\",\"action.risk.param._risk_message\":\"Risk on $host$\",\"alert.managedBy\":\"\",\"description\":\"Splunk Risk for the compile corpus.\",\"dispatch.latest_time\":\"now\",\"alert.track\":\"1\",\"action.risk\":1,\"action.risk.param._risk_score\":0}},{\"method\":\"POST\",\"url\":\"saved/searches/Splunk Risk - Rule\",\"body\":{\"is_scheduled\":1,\"actions\":\"risk\",\"search\":\"index=main risk\\n| eval MDR_UUID=\\\"00000000-0000-4000-8005-000000000306\\\", MDR_status=\\\"PRODUCTION\\\" \\n|`soc_macro_auto_mdr_mapping(MDR_UUID)`\"}}]"
+    },
+    {
+     "tenant": "core",
+     "body": "[{\"method\":\"POST\",\"url\":\"saved/searches\",\"body\":{\"name\":\"Splunk Risk\",\"search\":\"index=main risk\\n| eval MDR_UUID=\\\"00000000-0000-4000-8005-000000000306\\\", MDR_status=\\\"PRODUCTION\\\" \\n|`soc_macro_auto_mdr_mapping(MDR_UUID)`\"}},{\"method\":\"POST\",\"url\":\"saved/searches/Splunk Risk\",\"body\":{\"cron_schedule\":\"30 06 */1 * *\",\"dispatch.earliest_time\":\"-2d@d\",\"alert.severity\":4,\"alert.managedBy\":\"\",\"description\":\"Splunk Risk for the compile corpus.\",\"dispatch.latest_time\":\"now\",\"alert.track\":\"1\",\"alert.expires\":\"7d\"}},{\"method\":\"POST\",\"url\":\"saved/searches/Splunk Risk\",\"body\":{\"is_scheduled\":1,\"actions\":\"\",\"search\":\"index=main risk\\n| eval MDR_UUID=\\\"00000000-0000-4000-8005-000000000306\\\", MDR_status=\\\"PRODUCTION\\\" \\n|`soc_macro_auto_mdr_mapping(MDR_UUID)`\"}}]"
     }
    ]
   },

@@ -712,6 +712,12 @@ changelog = "**A Sysdig rule that cannot compile is reported as Sysdig's**"
 # `model_dump(mode="json", by_alias=True)`; every value is compared, and only
 # the classes below are approved. `xtask payloads` judges a class by
 # `dump_approval`.
+#
+# A block opentide-schema's model refuses is shown as written
+# (`preview::config_dump`). No entry approves it, since no comparison meets
+# it: Pydantic refuses the same block, so the oracle cannot read the rule and
+# never previews it (the probe reports it `unloadable`, not compared). The
+# CHANGELOG entry below says so.
 
 [[dump]]
 rule = "nulls"
@@ -748,3 +754,48 @@ candidate = '''[{"method":"POST","url":"saved/searches","body":{"name":"Splunk F
 reason = "Splunk's action.risk.param._risk is JSON Splunk parses: written compact by serde_json, without the spaces json.dumps puts after , and :. The value Splunk reads is the same; reproducing json.dumps's spacing is a formatting quirk."
 issue = "https://github.com/opentidehq/opentide/issues/895"
 changelog = "**Splunk's risk objects are compact JSON**"
+
+[[diff]]
+corpus = "payloads"
+uuid = "00000000-0000-4000-8005-000000000204"
+platform = "defender_for_endpoint"
+what = "tenant:contoso"
+oracle = '''[{"method":"POST","url":"https://graph.microsoft.com/beta/security/rules/detectionRules","body":{"displayName":"Defender @odata.type","queryCondition":{"queryText":"CloudAppEvents\n| where tostring(RawEventData.@odata.type) == \"Message\"\n"},"schedule":{"period":"1H"},"detectionAction":{"alertTemplate":{"title":"@odata.type seen","description":"The event's @odata.type is Message.","severity":"medium","category":"Collection","mitreTechniques":[],"impactedAssets":[{"@odata.type":"#microsoft.graph.security.impactedUserAsset","identifier":"accountObjectId"}],"recommendedActions":null},"responseActions":[],"organizationalScope":null},"isEnabled":true}}]'''
+candidate = '''[{"method":"POST","url":"https://graph.microsoft.com/beta/security/rules/detectionRules","body":{"displayName":"Defender odata_type","queryCondition":{"queryText":"CloudAppEvents\n| where tostring(RawEventData.odata_type) == \"Message\"\n"},"schedule":{"period":"1H"},"detectionAction":{"alertTemplate":{"title":"odata_type seen","description":"The event's odata_type is Message.","severity":"medium","category":"Collection","mitreTechniques":[],"impactedAssets":[{"@odata.type":"#microsoft.graph.security.impactedUserAsset","identifier":"accountObjectId"}],"recommendedActions":null},"responseActions":[],"organizationalScope":null},"isEnabled":true}}]'''
+reason = "The oracle's client serialises the detection rule with json.dumps and then replaces the text odata_type with @odata.type across the whole request body, so a rule whose name, query, title or description contains odata_type is sent changed (a KQL column RawEventData.odata_type becomes RawEventData.@odata.type, which Defender refuses or reads as another field). opentide-compile writes @odata.type only as the key of a response action or impacted asset and sends the rule's text as written."
+issue = "https://github.com/opentidehq/opentide/issues/895"
+changelog = "**Defender rules keep `odata_type` in their text**"
+
+[[diff]]
+corpus = "payloads"
+uuid = "00000000-0000-4000-8005-000000000204"
+platform = "defender_for_endpoint"
+what = "tenant:fabrikam"
+oracle = '''[{"method":"POST","url":"https://graph.microsoft.com/beta/security/rules/detectionRules","body":{"displayName":"Defender @odata.type","queryCondition":{"queryText":"CloudAppEvents\n| where tostring(RawEventData.@odata.type) == \"Message\"\n"},"schedule":{"period":"1H"},"detectionAction":{"alertTemplate":{"title":"@odata.type seen","description":"The event's @odata.type is Message.","severity":"medium","category":"Collection","mitreTechniques":[],"impactedAssets":[{"@odata.type":"#microsoft.graph.security.impactedUserAsset","identifier":"accountObjectId"}],"recommendedActions":null},"responseActions":[],"organizationalScope":null},"isEnabled":true}}]'''
+candidate = '''[{"method":"POST","url":"https://graph.microsoft.com/beta/security/rules/detectionRules","body":{"displayName":"Defender odata_type","queryCondition":{"queryText":"CloudAppEvents\n| where tostring(RawEventData.odata_type) == \"Message\"\n"},"schedule":{"period":"1H"},"detectionAction":{"alertTemplate":{"title":"odata_type seen","description":"The event's odata_type is Message.","severity":"medium","category":"Collection","mitreTechniques":[],"impactedAssets":[{"@odata.type":"#microsoft.graph.security.impactedUserAsset","identifier":"accountObjectId"}],"recommendedActions":null},"responseActions":[],"organizationalScope":null},"isEnabled":true}}]'''
+reason = "The oracle's client serialises the detection rule with json.dumps and then replaces the text odata_type with @odata.type across the whole request body, so a rule whose name, query, title or description contains odata_type is sent changed (a KQL column RawEventData.odata_type becomes RawEventData.@odata.type, which Defender refuses or reads as another field). opentide-compile writes @odata.type only as the key of a response action or impacted asset and sends the rule's text as written."
+issue = "https://github.com/opentidehq/opentide/issues/895"
+changelog = "**Defender rules keep `odata_type` in their text**"
+
+[[diff]]
+corpus = "payloads"
+uuid = "00000000-0000-4000-8005-000000000306"
+platform = "splunk"
+what = "tenant:es"
+oracle = '''[{"method":"POST","url":"saved/searches","body":{"name":"Splunk Risk - Rule","search":"index=main risk\n| eval MDR_UUID=\"00000000-0000-4000-8005-000000000306\", MDR_status=\"PRODUCTION\" \n|`soc_macro_auto_mdr_mapping(MDR_UUID)`"}},{"method":"POST","url":"saved/searches/Splunk Risk - Rule","body":{"cron_schedule":"30 06 */1 * *","dispatch.earliest_time":"-2d@d","alert.severity":4,"action.correlationsearch.enabled":"true","action.correlationsearch.label":"Splunk Risk - Rule","action.risk.param._risk":"[{\"risk_object_field\": \"host\", \"risk_object_type\": \"system\", \"risk_score\": 20}]","action.risk.param._risk_message":"Risk on $host$","alert.managedBy":"","description":"Splunk Risk for the compile corpus.","dispatch.latest_time":"now","alert.track":"1","action.risk":1,"action.risk.param._risk_score":0}},{"method":"POST","url":"saved/searches/Splunk Risk - Rule","body":{"is_scheduled":1,"actions":"risk","search":"index=main risk\n| eval MDR_UUID=\"00000000-0000-4000-8005-000000000306\", MDR_status=\"PRODUCTION\" \n|`soc_macro_auto_mdr_mapping(MDR_UUID)`"}}]'''
+candidate = '''[{"method":"POST","url":"saved/searches","body":{"name":"Splunk Risk - Rule","search":"index=main risk\n| eval MDR_UUID=\"00000000-0000-4000-8005-000000000306\", MDR_status=\"PRODUCTION\" \n|`soc_macro_auto_mdr_mapping(MDR_UUID)`"}},{"method":"POST","url":"saved/searches/Splunk Risk - Rule","body":{"cron_schedule":"30 06 */1 * *","dispatch.earliest_time":"-2d@d","alert.severity":4,"action.correlationsearch.enabled":"true","action.correlationsearch.label":"Splunk Risk - Rule","action.risk.param._risk":"[{\"risk_object_field\":\"host\",\"risk_object_type\":\"system\",\"risk_score\":20}]","action.risk.param._risk_message":"Risk on $host$","alert.managedBy":"","description":"Splunk Risk for the compile corpus.","dispatch.latest_time":"now","alert.track":"1","action.risk":1,"action.risk.param._risk_score":0}},{"method":"POST","url":"saved/searches/Splunk Risk - Rule","body":{"is_scheduled":1,"actions":"risk","search":"index=main risk\n| eval MDR_UUID=\"00000000-0000-4000-8005-000000000306\", MDR_status=\"PRODUCTION\" \n|`soc_macro_auto_mdr_mapping(MDR_UUID)`"}}]'''
+reason = "Splunk's action.risk.param._risk is JSON Splunk parses: written compact by serde_json, without the spaces json.dumps puts after , and :. The value Splunk reads is the same; reproducing json.dumps's spacing is a formatting quirk."
+issue = "https://github.com/opentidehq/opentide/issues/895"
+changelog = "**Splunk's risk objects are compact JSON**"
+
+# The oracle faults the probe works around (`fault` in oracle.json): the
+# oracle's own client fails before it sends anything, so its deploy fails
+# where opentide-compile's sends the bodies. The probe records the failure,
+# gives the client what it lacked and compares the bodies the deployer builds.
+
+[[fault]]
+platform = "harfanglab"
+error = "AttributeError: HarfangLab"
+reason = "The 0.23.0 HarfangLab client reads its identifier as Opentide.Configurations.Systems.HarfangLab; the registry snake-cases the name to harfang_lab, but the platform's key is harfanglab, so building the client raises AttributeError on every tenant and no HarfangLab deploy sends anything. opentide-compile builds the Sigma rule or YARA file the deployer means to send; the probe gives the oracle's client its identifier and compares those bodies."
+issue = "https://github.com/opentidehq/opentide/issues/895"
+changelog = "**A HarfangLab deploy sends its rules**"

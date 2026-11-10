@@ -209,6 +209,26 @@ pub struct DumpApproval {
     pub changelog: String,
 }
 
+/// A fault of the oracle the probe works around (`[[fault]]`): the oracle's
+/// own client fails before it sends anything, so the probe records the
+/// failure, gives the client what it lacked, and compares the bodies the
+/// deployer builds. The oracle's deploy fails where opentide-compile's
+/// sends the bodies: an intended difference, announced like the others.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FaultApproval {
+    /// The platform whose client fails.
+    pub platform: String,
+    /// The failure, `Type: message`, as the probe records it.
+    pub error: String,
+    /// Why the candidate's is right.
+    pub reason: String,
+    /// The issue that decided it.
+    pub issue: String,
+    /// The bold lead of the CHANGELOG.md entry that announces it.
+    pub changelog: String,
+}
+
 #[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct ApprovedFile {
@@ -216,6 +236,8 @@ struct ApprovedFile {
     diff: Vec<Approved>,
     #[serde(default)]
     dump: Vec<DumpApproval>,
+    #[serde(default)]
+    fault: Vec<FaultApproval>,
     #[serde(default, rename = "plan")]
     _plan: Vec<toml::Value>,
 }
@@ -242,6 +264,33 @@ pub fn read_dump_approvals(text: &str, changelog: &str) -> Result<Vec<DumpApprov
         );
     }
     Ok(file.dump)
+}
+
+/// Reads the approved oracle faults, checking each is complete and announced.
+pub fn read_fault_approvals(text: &str, changelog: &str) -> Result<Vec<FaultApproval>> {
+    let file: ApprovedFile = toml::from_str(text).context("parse the approved differences")?;
+    for entry in &file.fault {
+        ensure!(
+            !entry.error.is_empty()
+                && !entry.reason.is_empty()
+                && entry.issue.starts_with("https://github.com/opentidehq/"),
+            "{APPROVED}: the [[fault]] of {} needs an error, a reason and an opentidehq issue",
+            entry.platform
+        );
+        ensure!(
+            changelog.contains(&entry.changelog),
+            "{APPROVED}: CHANGELOG.md has no entry `{}`",
+            entry.changelog
+        );
+    }
+    Ok(file.fault)
+}
+
+/// The `[[fault]]` approval of `fault`: same platform, same failure.
+pub fn fault_approval(approvals: &[FaultApproval], fault: &Fault) -> Option<usize> {
+    approvals
+        .iter()
+        .position(|entry| entry.platform == fault.platform && entry.error == fault.error)
 }
 
 /// `value` without its `null` members, at every depth, keys in order.
@@ -335,6 +384,10 @@ pub struct ErrorOutcome {
 #[derive(Debug, Deserialize)]
 struct TenantOutcome {
     tenant: String,
+    /// The failure of the oracle's own client, which the probe worked
+    /// around to record the body (`[[fault]]`).
+    #[serde(default)]
+    fault: Option<String>,
     #[serde(flatten)]
     outcome: Outcome,
 }
@@ -413,9 +466,24 @@ pub struct Difference {
     pub candidate: String,
 }
 
+/// A failure of the oracle's own client that the probe worked around.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Fault {
+    /// The rule's UUID.
+    pub uuid: String,
+    /// The platform.
+    pub platform: String,
+    /// `tenant:<name>`.
+    pub what: String,
+    /// The failure, `Type: message`.
+    pub error: String,
+}
+
 /// What one corpus gave.
 #[derive(Debug, Default)]
 pub struct Tally {
+    /// The oracle faults the probe worked around: each must be approved.
+    pub faults: Vec<Fault>,
     /// Comparisons made.
     pub compared: usize,
     /// Comparisons not made, by reason.
@@ -543,6 +611,14 @@ pub fn compare(corpus: &str, workspace: &Workspace, text: &str) -> Result<Tally>
             );
         }
         for tenant in &probe.tenants {
+            if let Some(error) = &tenant.fault {
+                tally.faults.push(Fault {
+                    uuid: probe.uuid.clone(),
+                    platform: probe.platform.clone(),
+                    what: format!("tenant:{}", tenant.tenant),
+                    error: error.clone(),
+                });
+            }
             let inputs = Inputs {
                 known: opentide_compile::plan::state_id(
                     &OsFs as &dyn FileSystem,
@@ -625,15 +701,19 @@ pub fn run(options: &DiffOptions) -> Result<bool> {
     let python = oracle_python(options.python.as_deref())?;
     let spec = crate::golden::case::Spec::parse(&fs::read_to_string(golden.join("cases.toml"))?)?;
     let changelog = fs::read_to_string(repo.join("CHANGELOG.md"))?;
-    let (approved, dumps) = match fs::read_to_string(repo.join(APPROVED)) {
+    let (approved, dumps, faults) = match fs::read_to_string(repo.join(APPROVED)) {
         Ok(text) => (
             read_approved(&text, &changelog)?,
             read_dump_approvals(&text, &changelog)?,
+            read_fault_approvals(&text, &changelog)?,
         ),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => (Vec::new(), Vec::new()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            (Vec::new(), Vec::new(), Vec::new())
+        }
         Err(error) => return Err(error).context(APPROVED),
     };
     let mut dumps_used = vec![false; dumps.len()];
+    let mut faults_used = vec![false; faults.len()];
     let corpora: Vec<String> = if options.corpora.is_empty() {
         CORPORA.iter().map(|c| (*c).to_owned()).collect()
     } else {
@@ -705,6 +785,24 @@ pub fn run(options: &DiffOptions) -> Result<bool> {
         for (uuid, why) in &tally.skipped {
             let _ = writeln!(report, "  not compared: {uuid}: {why}");
         }
+        for fault in &tally.faults {
+            if let Some(position) = fault_approval(&faults, fault) {
+                faults_used[position] = true;
+                let _ = writeln!(
+                    report,
+                    "  approved (the oracle fails: {}): {} {} {}",
+                    fault.error, fault.uuid, fault.platform, fault.what
+                );
+                continue;
+            }
+            passed = false;
+            let _ = writeln!(
+                report,
+                "  ORACLE FAILS: {} {} {}: {} (worked around by the probe; approve it as a \
+                 [[fault]] or fix the probe)",
+                fault.uuid, fault.platform, fault.what, fault.error
+            );
+        }
         for difference in &tally.differences {
             let approval = approved.iter().position(|entry| {
                 entry.corpus == difference.corpus
@@ -762,6 +860,15 @@ pub fn run(options: &DiffOptions) -> Result<bool> {
                 "error: {APPROVED}: the [[dump]] {} of {} matches nothing (stale)",
                 entry.rule,
                 entry.platforms.join(", ")
+            );
+        }
+    }
+    for (entry, used) in faults.iter().zip(&faults_used) {
+        if !used && every_corpus {
+            passed = false;
+            eprintln!(
+                "error: {APPROVED}: the [[fault]] of {} ({}) matches nothing (stale)",
+                entry.platform, entry.error
             );
         }
     }
@@ -880,12 +987,29 @@ mod tests {
         assert!(tally.compared >= 150, "{}", tally.compared);
         assert!(tally.skipped.is_empty(), "{:?}", tally.skipped);
         // Every difference is approved: one by one (the oracle names
-        // Sentinel in a Sysdig failure, Splunk's risk JSON, HarfangLab's
-        // Sigma quotes), or as a class of the model-dump previews.
+        // Sentinel in a Sysdig failure, Defender's `odata_type` rewrite,
+        // Splunk's risk JSON, HarfangLab's Sigma quotes), or as a class of
+        // the model-dump previews.
         let changelog = fs::read_to_string(repo.join("CHANGELOG.md")).unwrap();
         let text = fs::read_to_string(repo.join(APPROVED)).unwrap();
         let approved = read_approved(&text, &changelog).unwrap();
         let dumps = read_dump_approvals(&text, &changelog).unwrap();
+        // The oracle's HarfangLab client fails on every tenant; each failure
+        // the probe worked around is approved.
+        let faults = read_fault_approvals(&text, &changelog).unwrap();
+        assert!(
+            tally
+                .faults
+                .iter()
+                .filter(|fault| fault.platform == "harfanglab")
+                .count()
+                >= 5,
+            "{:?}",
+            tally.faults
+        );
+        for fault in &tally.faults {
+            assert!(fault_approval(&faults, fault).is_some(), "{fault:?}");
+        }
         let mut one_by_one: Vec<(&str, &str)> = Vec::new();
         for difference in &tally.differences {
             if approved.iter().any(|entry| {
@@ -914,7 +1038,10 @@ mod tests {
         assert_eq!(
             one_by_one,
             [
+                ("defender_for_endpoint", "tenant:contoso"),
+                ("defender_for_endpoint", "tenant:fabrikam"),
                 ("harfanglab", "tenant:sigma"),
+                ("splunk", "tenant:es"),
                 ("splunk", "tenant:es"),
                 ("sysdig", "preview")
             ]
@@ -932,6 +1059,33 @@ mod tests {
                 .ends_with("refuses the rule: ValidationError: no")
         );
         assert!(compare("payloads", &workspace, "not json").is_err());
+    }
+
+    #[test]
+    fn oracle_faults_need_an_approval_of_the_same_failure() {
+        let text = "[[fault]]\nplatform = \"harfanglab\"\nerror = \"AttributeError: X\"\n\
+                    reason = \"r\"\nissue = \"https://github.com/opentidehq/opentide/issues/895\"\n\
+                    changelog = \"**Lead**\"\n";
+        let faults = read_fault_approvals(text, "**Lead**").unwrap();
+        assert!(read_fault_approvals(text, "nothing").is_err());
+        assert!(read_fault_approvals(&text.replace("AttributeError: X", ""), "**Lead**").is_err());
+        let fault = Fault {
+            uuid: "u".into(),
+            platform: "harfanglab".into(),
+            what: "tenant:t".into(),
+            error: "AttributeError: X".into(),
+        };
+        assert_eq!(fault_approval(&faults, &fault), Some(0));
+        let other = Fault {
+            error: "KeyError: X".into(),
+            ..fault.clone()
+        };
+        assert_eq!(fault_approval(&faults, &other), None);
+        let elsewhere = Fault {
+            platform: "splunk".into(),
+            ..fault
+        };
+        assert_eq!(fault_approval(&faults, &elsewhere), None);
     }
 
     #[test]
