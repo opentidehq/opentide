@@ -298,6 +298,32 @@ impl<'a> LineIndex<'a> {
         }
     }
 
+    /// Same result as [`position_to_offset`]: the byte offset of an LSP
+    /// position (UTF-16 columns), a column past its line's end clamping to
+    /// that end, a line past the text's end giving its length.
+    pub fn offset(&self, position: Position) -> usize {
+        let line = position.line as usize;
+        let Some(&start) = self.starts.get(line) else {
+            return self.source.len();
+        };
+        // The line's end: its `\n`, or the end of the text.
+        let end = self
+            .starts
+            .get(line + 1)
+            .map_or(self.source.len(), |next| next - 1);
+        if self.ascii[line] {
+            return (start + position.character as usize).min(end);
+        }
+        let mut col = 0u32;
+        for (i, ch) in self.source[start..end].char_indices() {
+            if col >= position.character {
+                return start + i;
+            }
+            col += ch.len_utf16() as u32;
+        }
+        end
+    }
+
     /// Same result as [`span_to_range`].
     pub fn range(&self, span: ByteSpan) -> Range {
         Range {
@@ -1345,6 +1371,51 @@ mod tests {
                 offset_to_position(text, offset),
                 "{offset}"
             );
+        }
+    }
+
+    /// `LineIndex` gives exactly what the scanning functions give, at every
+    /// offset and every position: multi-byte UTF-8 (2, 3 and 4 bytes, the
+    /// last two UTF-16 units), CRLF, tabs, empty lines, a text with and
+    /// without a final newline, and positions past a line's or the text's end.
+    #[test]
+    fn line_index_agrees_with_the_scans_everywhere() {
+        for text in [
+            "",
+            "\n",
+            "ascii only\nsecond line\n",
+            "ab\n\u{1F600}c\r\n\nd \u{e9}",
+            "\tkey:\t\u{65e5}\u{672c}\u{8a9e}\r\n\t- \u{e9}t\u{e9} \u{1F600}\u{1F600} x\r\n\r\nend",
+            "no final newline \u{e9}",
+            "\u{1F600}",
+        ] {
+            let index = LineIndex::new(text);
+            for offset in 0..=text.len() + 2 {
+                assert_eq!(
+                    index.position(offset),
+                    offset_to_position(text, offset),
+                    "{text:?} @ {offset}"
+                );
+            }
+            let lines = text.split('\n').count() as u32;
+            for line in 0..=lines + 1 {
+                for character in 0..=40 {
+                    let p = Position::new(line, character);
+                    assert_eq!(
+                        index.offset(p),
+                        position_to_offset(text, p),
+                        "{text:?} @ {line}:{character}"
+                    );
+                }
+            }
+            for start in 0..=text.len() {
+                let span = ByteSpan::new(start, (start + 3).min(text.len()));
+                assert_eq!(
+                    index.range(span),
+                    span_to_range(text, span),
+                    "{text:?} {span:?}"
+                );
+            }
         }
     }
 
