@@ -27,6 +27,8 @@ def _script() -> ModuleType:
         "The CQL link operator <=> links fields.",
         "Startup takes < 120 ms.",
         "Set {name} in the config.",
+        "<!-- note --> a < b",
+        "<!--\nnote\n--> {x}",
     ],
 )
 def test_prose_mdx_cannot_parse_is_reported(line: str) -> None:
@@ -42,6 +44,7 @@ def test_prose_mdx_cannot_parse_is_reported(line: str) -> None:
         "<Tabs items={['CLI', 'SDK']}>\n<Tab value=\"CLI\">x</Tab>\n</Tabs>",
         "<!-- a < b {c} -->",
         "<!--\n a < b\n-->",
+        "<!-- a --> ok <!-- b {c}\n d < e -->",
         "The operator &lt;=> links fields.",
         "---\ntitle: a < b\n---",
     ],

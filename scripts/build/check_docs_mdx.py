@@ -18,11 +18,28 @@ from pathlib import Path
 
 FENCE = re.compile(r"^\s{0,3}(`{3,}|~{3,})")
 INLINE_CODE = re.compile(r"(`+)(?:(?!\1).)+?\1")
-COMMENT = re.compile(r"<!--.*?-->")
 STRAY_LT = re.compile(r"<(?![A-Za-z/!>])")
 BRACE = re.compile(r"[{}]")
 #: A JSX/HTML tag on one line: its attributes may hold ``{...}`` expressions.
 TAG = re.compile(r"</?[A-Za-z][^<>]*>")
+
+
+def _outside_comments(line: str, in_comment: bool) -> tuple[str, bool]:
+    """*line* without its ``<!-- ... -->`` parts, and whether a comment is still open after it."""
+    kept: list[str] = []
+    rest = line
+    while True:
+        if in_comment:
+            end = rest.find("-->")
+            if end < 0:
+                return "".join(kept), True
+            rest, in_comment = rest[end + 3 :], False
+        start = rest.find("<!--")
+        if start < 0:
+            kept.append(rest)
+            return "".join(kept), False
+        kept.append(rest[:start])
+        rest, in_comment = rest[start + 4 :], True
 
 
 def problems(text: str) -> list[tuple[int, str]]:
@@ -44,14 +61,8 @@ def problems(text: str) -> list[tuple[int, str]]:
         if marker:
             fence = marker
             continue
-        if in_comment:
-            if "-->" not in line:
-                continue
-            line = line.split("-->", 1)[1]
-            in_comment = False
-        prose = INLINE_CODE.sub("", COMMENT.sub("", line))
-        if "<!--" in prose:
-            prose, in_comment = prose.split("<!--", 1)[0], True
+        uncommented, in_comment = _outside_comments(line, in_comment)
+        prose = INLINE_CODE.sub("", uncommented)
         for match in STRAY_LT.finditer(prose):
             found.append((number, f"bare '<' at {prose[match.start() : match.start() + 6]!r}"))
         for match in BRACE.finditer(TAG.sub("", prose)):
