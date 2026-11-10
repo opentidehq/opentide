@@ -2,9 +2,12 @@
 //! what a run deploys (`--strategy`), what a status maps to
 //! (`deployment.toml` `[[statuses]]`), and which runs act on which rules.
 
+use opentide_schema::FromNode;
+use opentide_schema::configuration::errors::model_errors;
+use opentide_schema::configuration::models::DeploymentConfiguration;
 use opentide_schema::configuration::resolve::Resolved;
 pub use opentide_schema::configuration::types::StatusStrategy;
-use opentide_schema::node::Value;
+use opentide_schema::node::{Node, Value};
 
 /// What a run deploys, and what a tenant accepts: `--strategy` and a tenant's
 /// `strategies` take only these, in this order.
@@ -100,20 +103,49 @@ pub fn python_repr(text: &str) -> String {
 /// The configured statuses, in `[[statuses]]` order: each name with the
 /// strategy it maps to.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Statuses(pub Vec<(String, StatusStrategy)>);
+pub struct Statuses(pub Vec<(String, StatusStrategy)>, pub Option<String>);
+
+/// Why `deployment.toml` does not match its model, as the oracle says it
+/// (`ConfigurationError`): every failing key, never a value.
+pub fn deployment_error(deployment: &Node) -> Option<String> {
+    let mut cx = opentide_schema::from_node::Context::new();
+    let _ = DeploymentConfiguration::from_node(deployment, &mut cx);
+    let errors = cx.into_errors();
+    if errors.is_empty() {
+        return None;
+    }
+    let lines: Vec<String> = model_errors(&errors, deployment)
+        .into_iter()
+        .map(|error| {
+            let message = match error.kind {
+                "extra_forbidden" => "unknown key".to_owned(),
+                "missing" => "required key is missing".to_owned(),
+                _ if error.message.is_empty() => "invalid value".to_owned(),
+                _ => error.message,
+            };
+            let place = if error.path.is_empty() {
+                "(document)".to_owned()
+            } else {
+                error.path.join(".")
+            };
+            format!("{place}: {message}")
+        })
+        .collect();
+    Some(format!("deployment.toml is invalid: {}", lines.join("; ")))
+}
 
 impl Statuses {
-    /// The statuses of a resolved configuration (`deployment.statuses`). An
-    /// entry without a name or with an unknown strategy is left out: the
-    /// configuration check reports it.
+    /// The statuses of a resolved configuration (`deployment.statuses`). When
+    /// `deployment.toml` does not match its model, every lookup fails with
+    /// why, as the oracle's does.
     pub fn from_resolved(resolved: &Resolved) -> Self {
         let mut statuses = Vec::new();
-        let Some(Value::Seq(entries)) = resolved
-            .get("deployment")
-            .and_then(|deployment| deployment.get("statuses"))
-            .map(|node| &node.value)
-        else {
-            return Self(statuses);
+        let Some(deployment) = resolved.get("deployment") else {
+            return Self(statuses, None);
+        };
+        let invalid = deployment_error(deployment);
+        let Some(Value::Seq(entries)) = deployment.get("statuses").map(|node| &node.value) else {
+            return Self(statuses, invalid);
         };
         for entry in entries {
             let name = entry.get("name").and_then(|node| node.value.as_str());
@@ -125,24 +157,27 @@ impl Statuses {
                 statuses.push((name.to_owned(), strategy));
             }
         }
-        Self(statuses)
+        Self(statuses, invalid)
     }
 
     /// The strategy `status` maps to (`check_status`), or the error naming the
     /// statuses there are.
-    pub fn strategy(&self, status: &str) -> Result<StatusStrategy, String> {
+    pub fn strategy(&self, status: &str) -> Result<StatusStrategy, StatusError> {
+        if let Some(invalid) = &self.1 {
+            return Err(StatusError::Invalid(invalid.clone()));
+        }
         self.0
             .iter()
             .find(|(name, _)| name == status)
             .map(|(_, strategy)| *strategy)
             .ok_or_else(|| {
                 let available: Vec<&str> = self.0.iter().map(|(name, _)| name.as_str()).collect();
-                format!(
+                StatusError::Unknown(format!(
                     "Status {} is not defined in deployment configuration. Available statuses: \
                      {}.",
                     python_repr(status),
                     available.join(", ")
-                )
+                ))
             })
     }
 
@@ -154,6 +189,26 @@ impl Statuses {
             .filter(|(_, strategy)| runs.iter().any(|run| deploys(*strategy, *run)))
             .map(|(name, _)| name.as_str())
             .collect()
+    }
+}
+
+/// Why a status has no strategy.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StatusError {
+    /// `deployment.toml` does not match its model (`ConfigurationError`).
+    Invalid(String),
+    /// The status is not configured (the oracle's `KeyError`).
+    Unknown(String),
+}
+
+impl StatusError {
+    /// The text the oracle's exception gives as `str(exc)`: a `KeyError`
+    /// quotes its message.
+    pub fn exception_text(&self) -> String {
+        match self {
+            Self::Invalid(message) => message.clone(),
+            Self::Unknown(message) => python_repr(message),
+        }
     }
 }
 
@@ -255,14 +310,17 @@ mod tests {
     use StatusStrategy::{Deletion, Disablement, Inert, Preview, Release, Universal};
 
     fn statuses() -> Statuses {
-        Statuses(vec![
-            ("DEVELOPMENT".into(), Preview),
-            ("STAGING".into(), Preview),
-            ("PRODUCTION".into(), Release),
-            ("DISABLED".into(), Disablement),
-            ("REMOVED".into(), Deletion),
-            ("DESIGN".into(), Inert),
-        ])
+        Statuses(
+            vec![
+                ("DEVELOPMENT".into(), Preview),
+                ("STAGING".into(), Preview),
+                ("PRODUCTION".into(), Release),
+                ("DISABLED".into(), Disablement),
+                ("REMOVED".into(), Deletion),
+                ("DESIGN".into(), Inert),
+            ],
+            None,
+        )
     }
 
     #[test]
@@ -308,7 +366,14 @@ mod tests {
             statuses()
                 .strategy("NOPE")
                 .unwrap_err()
-                .starts_with("Status 'NOPE' is not defined")
+                .exception_text()
+                .starts_with("\"Status 'NOPE' is not defined")
+        );
+        let mut invalid = statuses();
+        invalid.1 = Some("deployment.toml is invalid: x: unknown key".into());
+        assert_eq!(
+            invalid.strategy("PRODUCTION").unwrap_err().exception_text(),
+            "deployment.toml is invalid: x: unknown key"
         );
         assert_eq!(
             statuses().deployed_by(&[Preview]),

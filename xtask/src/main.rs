@@ -75,6 +75,9 @@ commands:
                  against the recordings (tests/golden/README.md);
                  `cargo xtask golden help` lists the options
   bench          run the benchmarks against their budgets (UC-0.8, #806)
+  payloads diff --against python [--corpus NAME|all]
+                 the deploy compile's request bodies against the oracle's, on
+                 every corpus (UC-3.1, #823); `cargo xtask payloads help`
   vocab <sync|sentinel-attack|diff> [options]
                  the vocabularies: sync and check them against specifications,
                  generate Sentinel's ATT&CK list, compare with the oracle
@@ -159,6 +162,7 @@ fn main() -> ExitCode {
         "codegen" => not_yet("codegen", "UC-1.8", 814),
         "golden" => xtask::golden::main(rest),
         "bench" => xtask::bench::main(rest),
+        "payloads" => xtask::payloads::main(rest),
         "vocab" => xtask::vocab::main(rest),
         "schema" => xtask::schema::main(rest),
         "help" | "--help" | "-h" => {

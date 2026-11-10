@@ -2279,6 +2279,7 @@ dependencies = [
  "glob",
  "indexmap",
  "opentide-compare",
+ "opentide-compile",
  "opentide-schema",
  "opentide-workspace",
  "regex",

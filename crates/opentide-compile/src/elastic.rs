@@ -305,6 +305,30 @@ pub struct Setup {
 }
 
 impl Setup {
+    /// The setup of a configured tenant (`[[tenants]]` of
+    /// `platforms/elastic.toml`): `index` and `tags` when lists of strings,
+    /// `suppression` unless `false`.
+    pub fn from_tenant(tenant: &Json) -> Self {
+        let setup = tenant.get("setup");
+        let list = |key: &str| match setup.and_then(|setup| setup.get(key)) {
+            Some(Json::Array(items)) => Some(
+                items
+                    .iter()
+                    .filter_map(|item| item.as_str().map(str::to_owned))
+                    .collect::<Vec<_>>(),
+            ),
+            _ => None,
+        };
+        Self {
+            index: list("index"),
+            tags: list("tags").unwrap_or_default(),
+            suppression: !matches!(
+                setup.and_then(|setup| setup.get("suppression")),
+                Some(Json::Bool(false))
+            ),
+        }
+    }
+
     /// What a rule compiles with when no tenant is named.
     pub fn none() -> Self {
         Self {
@@ -351,7 +375,7 @@ pub fn compile(cx: &Context<'_>, rule: &Rule, setup: &Setup) -> Result<Json, Com
     let strategy = cx
         .statuses
         .strategy(status)
-        .map_err(|message| failed(crate::strategy::python_repr(&message)))?;
+        .map_err(|error| failed(error.exception_text()))?;
     let enabled = strategy != StatusStrategy::Disablement;
     let level = alert_level(block, rule);
     let (_, severity, default_risk) = SEVERITY_TABLE
