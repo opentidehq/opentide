@@ -31,6 +31,7 @@ source (`ci.yml` `engine-package`, `scripts/ci-local.sh`).
 | `src/index.rs` | `assemble`: the index from the scans and parses, in discovery order: objects, `file_paths`, duplicates, load errors (`yaml_parse`, `missing_uuid`), nested files, signals, references, chaining |
 | `src/workspace.rs` | `Workspace::open` (parallel read and parse with rayon), `Stats`, `invalidate` |
 | `src/registry.rs` | `Registry`: the SDK lifecycle (`initialise` once, `reload`, accessors, `lookup`) |
+| `src/session.rs` | `Session`: workspaces kept warm between runs by their `Options` (UC-2.7, `serve`); each open lists the folders again, compares stamps taken before the last read and invalidates only what changed, plus the paths `invalidate` named; a moved root opens afresh; each open hands out a clone. The process-wide session `activate` turns on makes `Workspace::open` on a `FileSystem::shared` one (the disk) go through it |
 | `src/fields.rs` | Reading fields by their model role (`core/object_fields.py`): role paths from `opentide_schema::objects::fields`; a scalar's text as YAML 1.2 writes it (`true`, `null`) |
 | `src/coverage.rs` | Own and inherited techniques of each rule, `info coverage`'s match (`core/technique_coverage.py`) |
 | `src/catalogue.rs` | `info catalog`'s document (UC-2.4): object rows, load-error rows read from the text, edges (`covers`, `implements`, `parent`, `chains`, `technique`, `logsource`), signals, the ATT&CK matrix, the summary |
@@ -51,6 +52,7 @@ source (`ci.yml` `engine-package`, `scripts/ci-local.sh`).
 | `examples/validate.rs` | `cargo xtask bench`'s `validate_*` commands for the Rust engine |
 | `tests/loading.rs` | Discovery, counts (one read and one parse per file, one resolution), load errors, duplicates, signals, references, the registry lifecycle, invalidation, the disk |
 | `tests/validate.rs` | Each check's findings, places and steps, the scope, the verdict and counts; every recorded `validate --json` finding round-trips through `Diagnostic` byte for byte |
+| `tests/session.rs` | The warm session: a repeat open reads nothing, an edit re-reads one file, creations, deletions, configuration changes, announced paths, a moved root, keys, the process session only while active and only on the disk |
 | `tests/index.rs` | Property test: after any edits, creations, deletions, renames and `paths.toml` changes, the incremental index equals a full rebuild |
 | `tests/lint.rs` | Each lint rule's JSON entry and frame, `lint.toml`, the scope options, `--fix` renames, `lint_file` |
 | `tests/fix.rs` | Property test: any set of fixes changes no byte outside its spans and the result parses; a file changed after it was read is not written |

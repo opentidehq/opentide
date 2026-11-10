@@ -16,7 +16,7 @@ use crate::load::{self, Parsed};
 use crate::root::{self, RootOptions, Roots};
 
 /// How a workspace is opened.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Options {
     /// Where the workspace is ([`RootOptions`]); its working directory is also
     /// where messages show paths from.
@@ -111,7 +111,9 @@ pub struct Invalidation {
     pub affected: BTreeSet<String>,
 }
 
-/// A loaded workspace.
+/// A loaded workspace. A clone shares the parses and the index, and is
+/// cheap: a [`crate::session::Session`] hands out one per run.
+#[derive(Clone)]
 pub struct Workspace {
     fs: Arc<dyn FileSystem>,
     options: Options,
@@ -180,9 +182,27 @@ impl Workspace {
     /// # Errors
     ///
     /// The configuration does not resolve ([`ConfigError`]).
+    ///
+    /// While a host keeps workspaces warm ([`crate::session::activate`],
+    /// `opentide serve`), a workspace on the disk comes from the session,
+    /// brought up to date.
     pub fn open(fs: Arc<dyn FileSystem>, options: Options) -> Result<Self, OpenError> {
+        if let Some(opened) = crate::session::open_global(&fs, &options) {
+            return opened;
+        }
+        Self::open_observed(fs, options, |_, _| {})
+    }
+
+    /// Opens the workspace without a session; `resolved` sees the
+    /// configuration once it resolves, before any object file is read.
+    pub(crate) fn open_observed(
+        fs: Arc<dyn FileSystem>,
+        options: Options,
+        resolved: impl FnOnce(&dyn FileSystem, &Configuration),
+    ) -> Result<Self, OpenError> {
         let roots = root::resolve(fs.as_ref(), &options.roots);
         let config = config::load(fs.as_ref(), &roots)?;
+        resolved(fs.as_ref(), &config);
         let mut workspace = Self {
             stats: Stats {
                 config_resolutions: 1,
@@ -249,6 +269,11 @@ impl Workspace {
             &display_base,
         ));
         missing
+    }
+
+    /// The options it was opened with.
+    pub fn options(&self) -> &Options {
+        &self.options
     }
 
     /// The working directory the workspace was opened from.
@@ -349,7 +374,8 @@ impl Workspace {
         let full = outside || root::resolve(self.fs.as_ref(), &self.options.roots) != self.roots;
         let before = Arc::clone(&self.index);
         if full {
-            let fresh = Self::open(Arc::clone(&self.fs), self.options.clone())?;
+            // Never through a session: this is how a kept one is refreshed.
+            let fresh = Self::open_observed(Arc::clone(&self.fs), self.options.clone(), |_, _| {})?;
             let stats = Stats {
                 file_reads: self.stats.file_reads + fresh.stats.file_reads,
                 parses: self.stats.parses + fresh.stats.parses,
