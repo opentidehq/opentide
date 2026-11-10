@@ -214,3 +214,48 @@ def test_lint_is_quiet_on_a_decomposed_file_and_memory_context(
     name = _add(tide_corpus_repo, "harfanglab-yara.yaml", text=text)
     payload = parse_cli_json(invoke_cli("lint", "--check", "queries", "--file", name))
     assert not [item for item in payload["findings"] if item["code"] in ADVISORIES]
+
+
+INCLUDE_RULE = "invalid/rule-harfanglab-yara-include.yaml"
+
+
+def _issues(payload: dict) -> list[dict]:
+    return payload["report"]["issues"]
+
+
+def test_an_include_is_reported_once_by_the_engine(invoke_cli, tide_corpus_repo: Path) -> None:
+    """The model and the engine both find yara_include; validate shows the engine's, placed."""
+    result = invoke_cli("validate", "--file", _add(tide_corpus_repo, INCLUDE_RULE))
+    assert result.exit_code == 1
+    issues = _issues(parse_cli_json(result))
+    assert [issue["code"] for issue in issues] == ["yara_include"]
+    [issue] = issues
+    assert issue["line"] is not None and issue["column"] is not None
+    text = (FIXTURES / INCLUDE_RULE).read_text(encoding="utf-8")
+    assert "include" in text.splitlines()[issue["line"] - 1]
+
+
+def test_without_the_engine_the_models_include_finding_stays(
+    invoke_cli, tide_corpus_repo: Path, no_engine: None
+) -> None:
+    result = invoke_cli("validate", "--file", _add(tide_corpus_repo, INCLUDE_RULE))
+    assert result.exit_code == 1
+    issues = _issues(parse_cli_json(result))
+    codes = [issue["code"] for issue in issues]
+    assert "engine_unavailable" in codes
+    [model] = [issue for issue in issues if issue["code"] == "schema_validation"]
+    assert "yara_include" in model["message"]
+
+
+def test_a_constraint_code_keeps_the_models_finding(invoke_cli, tide_corpus_repo: Path) -> None:
+    """harfanglab_* codes are never dropped: the model's finding and the engine's both show."""
+    text = (FIXTURES / INCLUDE_RULE).read_text(encoding="utf-8") + "      imports: [pe]\n"
+    result = invoke_cli("validate", "--file", _add(tide_corpus_repo, INCLUDE_RULE, text=text))
+    assert result.exit_code == 1
+    issues = _issues(parse_cli_json(result))
+    [model] = [issue for issue in issues if issue["code"] == "schema_validation"]
+    assert "harfanglab_yara_form" in model["message"]
+    assert "yara_include" in model["message"]
+    assert [issue["code"] for issue in issues if issue["code"] == "yara_include"] == [
+        "yara_include"
+    ]

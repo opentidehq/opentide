@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import time
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -253,6 +254,7 @@ def run_validation(
             for issue in issues
             if issue.field_path and issue.field_path[-1] == "query"
         }
+        issues = _without_engine_reported_yara(issues, [*found.errors, *found.warnings])
         issues.extend(_not_in(found.errors, rejected))
         warnings.extend(_not_in(found.warnings, rejected))
         stats["queries_checked"] = found.queries
@@ -272,6 +274,42 @@ def run_validation(
     stats["wall_ms"] = round((time.perf_counter() - started) * 1000, 2)
 
     return ValidationReport(ok=not issues, issues=issues, warnings=warnings, stats=stats)
+
+
+#: The codes a coded model validator names in its message (``HarfangLabConfig
+#: validation failed with code(s): yara_include``).
+_MODEL_CODES = re.compile(r"validation failed with code\(s\): ([a-z0-9_]+(?:, [a-z0-9_]+)*)")
+
+
+def _without_engine_reported_yara(
+    issues: list[ValidationIssue], engine: list[ValidationIssue]
+) -> list[ValidationIssue]:
+    """*issues*, without a model finding the engine already reported with its place.
+
+    The HarfangLab model checks the YARA-language codes a scan decides
+    (``yara_include``, ...) so deploy and the paths without the engine keep
+    them; the engine reports the same code at its line and column. A
+    ``schema_validation`` finding on a ``configurations`` block is dropped when
+    every code it carries is a ``yara_*`` code the engine reported in that
+    block of that file. A ``harfanglab_*`` constraint code keeps it, and so
+    does an engine that did not run (``engine_unavailable``).
+    """
+    reported = {
+        (item.file_path, tuple(item.field_path[:2]), item.code)
+        for item in engine
+        if item.code.startswith("yara_")
+    }
+    if not reported:
+        return issues
+    kept: list[ValidationIssue] = []
+    for issue in issues:
+        match = _MODEL_CODES.search(issue.message) if issue.code == "schema_validation" else None
+        block = (issue.file_path, tuple(issue.field_path[:2]))
+        codes = match.group(1).split(", ") if match else []
+        if codes and all(code.startswith("yara_") and (*block, code) in reported for code in codes):
+            continue
+        kept.append(issue)
+    return kept
 
 
 def _query_place(issue: ValidationIssue) -> tuple[Path | None, tuple[str, ...]]:
