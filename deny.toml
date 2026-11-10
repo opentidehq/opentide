@@ -58,6 +58,9 @@ allow = [
   "Unicode-DFS-2016",
   "Zlib",
   "EUPL-1.2",
+  # A public-domain dedication: notify, which --watch uses, is CC0-1.0 in every
+  # release. Approved for any crate by the maintainer (UC-2.3, #818).
+  "CC0-1.0",
 ]
 confidence-threshold = 0.93
 # Only crates we ship need a licence on this list. dev-dependencies (test
@@ -103,7 +106,7 @@ skip = [
   # xtask (never published or shipped) needs rustix for the golden runner's
   # pseudo-terminals, and tempfile: both bring bitflags 2, beside the bitflags
   # 1 of lsp-types (fluent-uri 0.1). No shipped crate depends on bitflags 2.
-  { crate = "bitflags@2.13.2", reason = "only xtask (tooling, never shipped) uses it at run time, through rustix and tempfile; the shipped crates use bitflags 1 through lsp-types" },
+  { crate = "bitflags@2.13.2", reason = "xtask (rustix, tempfile) and opentide-workspace (tempfile; inotify through notify, `--watch`) use bitflags 2; lsp-types (fluent-uri 0.1) and kqueue-sys (notify on BSD and macOS) still use bitflags 1" },
   # xtask's schema comparison (UC-1.8b, #900; `cargo xtask codegen --check`)
   # validates the corpora with the jsonschema crate, which brings these second
   # versions. Only xtask (tooling, never shipped) depends on jsonschema.

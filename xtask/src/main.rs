@@ -71,8 +71,14 @@ commands:
                  signals), as JSON, with the Python registry's (UC-2.1, #816)
   validate diff [--filter GLOB] [--keep DIR] [--show-approved]
                  run opentide-workspace's validate on every recorded
-                 `validate --json` case that only checks, and compare its
+                 `validate --json` case that checks or fixes, and compare its
                  report, checks and summary with the recording (UC-2.2, #817)
+                 and, for --fix and --fix --dry-run, what it fixed, the diff
+                 and the files written (UC-2.3, #818)
+  lint diff [--filter GLOB] [--keep DIR] [--show-approved]
+                 run opentide-workspace's lint on every recorded `lint --json`
+                 case and compare its findings, verdict, next steps and the
+                 files --fix renamed with the recording (UC-2.3, #818)
   codegen [--check]
                  write the artifacts generated from the Rust model (the
                  platform templates); --check compares them, and what
@@ -176,6 +182,13 @@ fn main() -> ExitCode {
             Ok(code) => ExitCode::from(code),
             Err(error) => {
                 eprintln!("xtask validate: {error:#}");
+                ExitCode::from(2)
+            }
+        },
+        "lint" => match xtask::lint::run(rest) {
+            Ok(code) => ExitCode::from(code),
+            Err(error) => {
+                eprintln!("xtask lint: {error:#}");
                 ExitCode::from(2)
             }
         },
