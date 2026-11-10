@@ -1,0 +1,8 @@
+warning: a real deploy would need $ELASTIC_API_KEY and $SYSDIG_SECURE_API_TOKEN, which are unset
+warning: sentinel has no tenants configured in .opentide/configurations/platforms/sentinel.toml, so a real deploy would stop
+warning: defender_for_endpoint has no tenants configured in .opentide/configurations/platforms/defender_for_endpoint.toml, so a real deploy would stop
+warning: splunk has no tenants configured in .opentide/configurations/platforms/splunk.toml, so a real deploy would stop
+warning: sentinel_one has no tenants configured in .opentide/configurations/platforms/sentinel_one.toml, so a real deploy would stop
+warning: carbon_black_cloud has no tenants configured in .opentide/configurations/platforms/carbon_black_cloud.toml, so a real deploy would stop
+warning: crowdstrike has no tenants configured in .opentide/configurations/platforms/crowdstrike.toml, so a real deploy would stop
+warning: harfanglab has no tenants configured in .opentide/configurations/platforms/harfanglab.toml, so a real deploy would stop

@@ -1,0 +1,397 @@
+{
+ "cases": [
+  {
+   "kind": "outcome",
+   "outcome": "ok",
+   "message": "3 rules checked",
+   "rendered": {
+    "human": "\u001b[1;32m✓\u001b[0m 3 rules checked\n",
+    "plain": "✓ 3 rules checked\n",
+    "narrow": "\u001b[1;32m✓\u001b[0m 3 rules checked\n"
+   }
+  },
+  {
+   "kind": "outcome",
+   "outcome": "ok",
+   "message": "Plan: 1 to create, 2 to update",
+   "rendered": {
+    "human": "\u001b[1;32m✓\u001b[0m Plan: 1 to create, 2 to update\n",
+    "plain": "✓ Plan: 1 to create, 2 to update\n",
+    "narrow": "\u001b[1;32m✓\u001b[0m Plan: 1 to create, 2 to update\n"
+   }
+  },
+  {
+   "kind": "outcome",
+   "outcome": "ok",
+   "message": "Plan for: x",
+   "rendered": {
+    "human": "\u001b[1;32m✓\u001b[0m Plan for: x\n",
+    "plain": "✓ Plan for: x\n",
+    "narrow": "\u001b[1;32m✓\u001b[0m Plan for: x\n"
+   }
+  },
+  {
+   "kind": "outcome",
+   "outcome": "ok",
+   "message": "101 errors in 89 files · 771 objects checked · 1531 queries · 12.4s, and a tail long enough to wrap",
+   "rendered": {
+    "human": "\u001b[1;32m✓\u001b[0m 101 errors in 89 files · 771 objects checked · 1531 queries · 12.4s, and a tail long enough to\n  wrap\n",
+    "plain": "✓ 101 errors in 89 files · 771 objects checked · 1531 queries · 12.4s, and a tail long enough to wrap\n",
+    "narrow": "\u001b[1;32m✓\u001b[0m 101 errors in 89 files · 771 objects\n  checked · 1531 queries · 12.4s, and a\n  tail long enough to wrap\n"
+   }
+  },
+  {
+   "kind": "outcome",
+   "outcome": "warning",
+   "message": "3 rules checked",
+   "rendered": {
+    "human": "\u001b[1;33m!\u001b[0m 3 rules checked\n",
+    "plain": "! 3 rules checked\n",
+    "narrow": "\u001b[1;33m!\u001b[0m 3 rules checked\n"
+   }
+  },
+  {
+   "kind": "outcome",
+   "outcome": "warning",
+   "message": "Plan: 1 to create, 2 to update",
+   "rendered": {
+    "human": "\u001b[1;33m!\u001b[0m Plan: 1 to create, 2 to update\n",
+    "plain": "! Plan: 1 to create, 2 to update\n",
+    "narrow": "\u001b[1;33m!\u001b[0m Plan: 1 to create, 2 to update\n"
+   }
+  },
+  {
+   "kind": "outcome",
+   "outcome": "warning",
+   "message": "Plan for: x",
+   "rendered": {
+    "human": "\u001b[1;33m!\u001b[0m Plan for: x\n",
+    "plain": "! Plan for: x\n",
+    "narrow": "\u001b[1;33m!\u001b[0m Plan for: x\n"
+   }
+  },
+  {
+   "kind": "outcome",
+   "outcome": "warning",
+   "message": "101 errors in 89 files · 771 objects checked · 1531 queries · 12.4s, and a tail long enough to wrap",
+   "rendered": {
+    "human": "\u001b[1;33m!\u001b[0m 101 errors in 89 files · 771 objects checked · 1531 queries · 12.4s, and a tail long enough to\n  wrap\n",
+    "plain": "! 101 errors in 89 files · 771 objects checked · 1531 queries · 12.4s, and a tail long enough to wrap\n",
+    "narrow": "\u001b[1;33m!\u001b[0m 101 errors in 89 files · 771 objects\n  checked · 1531 queries · 12.4s, and a\n  tail long enough to wrap\n"
+   }
+  },
+  {
+   "kind": "outcome",
+   "outcome": "skipped",
+   "message": "3 rules checked",
+   "rendered": {
+    "human": "\u001b[1mSkipped:\u001b[0m 3 rules checked\n",
+    "plain": "Skipped: 3 rules checked\n",
+    "narrow": "\u001b[1mSkipped:\u001b[0m 3 rules checked\n"
+   }
+  },
+  {
+   "kind": "outcome",
+   "outcome": "skipped",
+   "message": "Plan: 1 to create, 2 to update",
+   "rendered": {
+    "human": "\u001b[1mSkipped:\u001b[0m Plan: 1 to create, 2 to update\n",
+    "plain": "Skipped: Plan: 1 to create, 2 to update\n",
+    "narrow": "\u001b[1mSkipped:\u001b[0m Plan: 1 to create, 2 to update\n"
+   }
+  },
+  {
+   "kind": "outcome",
+   "outcome": "skipped",
+   "message": "Plan for: x",
+   "rendered": {
+    "human": "\u001b[1mSkipped:\u001b[0m Plan for: x\n",
+    "plain": "Skipped: Plan for: x\n",
+    "narrow": "\u001b[1mSkipped:\u001b[0m Plan for: x\n"
+   }
+  },
+  {
+   "kind": "outcome",
+   "outcome": "skipped",
+   "message": "101 errors in 89 files · 771 objects checked · 1531 queries · 12.4s, and a tail long enough to wrap",
+   "rendered": {
+    "human": "\u001b[1mSkipped:\u001b[0m 101 errors in 89 files · 771 objects checked · 1531 queries · 12.4s, and a tail long enough\n         to wrap\n",
+    "plain": "Skipped: 101 errors in 89 files · 771 objects checked · 1531 queries · 12.4s, and a tail long enough to wrap\n",
+    "narrow": "\u001b[1mSkipped:\u001b[0m 101 errors in 89 files · 771\n         objects checked · 1531 queries\n         · 12.4s, and a tail long enough\n         to wrap\n"
+   }
+  },
+  {
+   "kind": "outcome",
+   "outcome": "failed",
+   "message": "3 rules checked",
+   "rendered": {
+    "human": "\u001b[1;31m✗\u001b[0m 3 rules checked\n",
+    "plain": "✗ 3 rules checked\n",
+    "narrow": "\u001b[1;31m✗\u001b[0m 3 rules checked\n"
+   }
+  },
+  {
+   "kind": "outcome",
+   "outcome": "failed",
+   "message": "Plan: 1 to create, 2 to update",
+   "rendered": {
+    "human": "\u001b[1;31m✗\u001b[0m Plan: 1 to create, 2 to update\n",
+    "plain": "✗ Plan: 1 to create, 2 to update\n",
+    "narrow": "\u001b[1;31m✗\u001b[0m Plan: 1 to create, 2 to update\n"
+   }
+  },
+  {
+   "kind": "outcome",
+   "outcome": "failed",
+   "message": "Plan for: x",
+   "rendered": {
+    "human": "\u001b[1;31m✗\u001b[0m Plan for: x\n",
+    "plain": "✗ Plan for: x\n",
+    "narrow": "\u001b[1;31m✗\u001b[0m Plan for: x\n"
+   }
+  },
+  {
+   "kind": "outcome",
+   "outcome": "failed",
+   "message": "101 errors in 89 files · 771 objects checked · 1531 queries · 12.4s, and a tail long enough to wrap",
+   "rendered": {
+    "human": "\u001b[1;31m✗\u001b[0m 101 errors in 89 files · 771 objects checked · 1531 queries · 12.4s, and a tail long enough to\n  wrap\n",
+    "plain": "✗ 101 errors in 89 files · 771 objects checked · 1531 queries · 12.4s, and a tail long enough to wrap\n",
+    "narrow": "\u001b[1;31m✗\u001b[0m 101 errors in 89 files · 771 objects\n  checked · 1531 queries · 12.4s, and a\n  tail long enough to wrap\n"
+   }
+  },
+  {
+   "kind": "outcome",
+   "outcome": "plan",
+   "message": "3 rules checked",
+   "rendered": {
+    "human": "3 rules checked\n",
+    "plain": "3 rules checked\n",
+    "narrow": "3 rules checked\n"
+   }
+  },
+  {
+   "kind": "outcome",
+   "outcome": "plan",
+   "message": "Plan: 1 to create, 2 to update",
+   "rendered": {
+    "human": "\u001b[1mPlan:\u001b[0m 1 to create, 2 to update\n",
+    "plain": "Plan: 1 to create, 2 to update\n",
+    "narrow": "\u001b[1mPlan:\u001b[0m 1 to create, 2 to update\n"
+   }
+  },
+  {
+   "kind": "outcome",
+   "outcome": "plan",
+   "message": "Plan for: x",
+   "rendered": {
+    "human": "Plan for: x\n",
+    "plain": "Plan for: x\n",
+    "narrow": "Plan for: x\n"
+   }
+  },
+  {
+   "kind": "outcome",
+   "outcome": "plan",
+   "message": "101 errors in 89 files · 771 objects checked · 1531 queries · 12.4s, and a tail long enough to wrap",
+   "rendered": {
+    "human": "101 errors in 89 files · 771 objects checked · 1531 queries · 12.4s, and a tail long enough to wrap\n",
+    "plain": "101 errors in 89 files · 771 objects checked · 1531 queries · 12.4s, and a tail long enough to wrap\n",
+    "narrow": "101 errors in 89 files · 771 objects\n    checked · 1531 queries · 12.4s, and\n    a tail long enough to wrap\n"
+   }
+  },
+  {
+   "kind": "warnings",
+   "messages": [
+    "Vocabulary not found · vocab: reviewed",
+    "101 errors in 89 files · 771 objects checked · 1531 queries · 12.4s, and a tail long enough to wrap"
+   ],
+   "rendered": {
+    "human": "\u001b[1;33mwarning:\u001b[0m Vocabulary not found · vocab: reviewed\n\u001b[1;33mwarning:\u001b[0m 101 errors in 89 files · 771 objects checked · 1531 queries · 12.4s, and a tail long enough\n         to wrap\n",
+    "plain": "warning: Vocabulary not found · vocab: reviewed\nwarning: 101 errors in 89 files · 771 objects checked · 1531 queries · 12.4s, and a tail long enough to wrap\n",
+    "narrow": "\u001b[1;33mwarning:\u001b[0m Vocabulary not found · vocab:\n         reviewed\n\u001b[1;33mwarning:\u001b[0m 101 errors in 89 files · 771\n         objects checked · 1531 queries\n         · 12.4s, and a tail long enough\n         to wrap\n"
+   }
+  },
+  {
+   "kind": "notes",
+   "notes": [
+    [
+     "note",
+     "a detail"
+    ],
+    [
+     "help",
+     "101 errors in 89 files · 771 objects checked · 1531 queries · 12.4s, and a tail long enough to wrap"
+    ]
+   ],
+   "rendered": {
+    "human": "  \u001b[1;34mnote:\u001b[0m a detail\n  \u001b[1;36mhelp:\u001b[0m 101 errors in 89 files · 771 objects checked · 1531 queries · 12.4s, and a tail long enough\n        to wrap\n",
+    "plain": "  note: a detail\n  help: 101 errors in 89 files · 771 objects checked · 1531 queries · 12.4s, and a tail long enough to wrap\n",
+    "narrow": "  \u001b[1;34mnote:\u001b[0m a detail\n  \u001b[1;36mhelp:\u001b[0m 101 errors in 89 files · 771\n        objects checked · 1531 queries ·\n        12.4s, and a tail long enough to\n        wrap\n"
+   }
+  },
+  {
+   "kind": "error",
+   "message": "101 errors in 89 files · 771 objects checked · 1531 queries · 12.4s, and a tail long enough to wrap",
+   "notes": [
+    [
+     "help",
+     "did you mean 'x'?"
+    ]
+   ],
+   "rendered": {
+    "human": "\u001b[1;31merror:\u001b[0m 101 errors in 89 files · 771 objects checked · 1531 queries · 12.4s, and a tail long enough\n       to wrap\n  \u001b[1;36mhelp:\u001b[0m did you mean 'x'?\n\u001b[1;36mtip:\u001b[0m add --json for machine-readable output\n",
+    "plain": "error: 101 errors in 89 files · 771 objects checked · 1531 queries · 12.4s, and a tail long enough to wrap\n  help: did you mean 'x'?\ntip: add --json for machine-readable output\n",
+    "narrow": "\u001b[1;31merror:\u001b[0m 101 errors in 89 files · 771\n       objects checked · 1531 queries ·\n       12.4s, and a tail long enough to\n       wrap\n  \u001b[1;36mhelp:\u001b[0m did you mean 'x'?\n\u001b[1;36mtip:\u001b[0m add --json for machine-readable\n     output\n"
+   }
+  },
+  {
+   "kind": "next",
+   "actions": [
+    [
+     "opentide explain unknown_key",
+     "how to fix it"
+    ],
+    [
+     "opentide validate",
+     "check again"
+    ],
+    [
+     "opentide lint --fix",
+     ""
+    ],
+    [
+     "opentide fourth",
+     "never shown"
+    ]
+   ],
+   "rendered": {
+    "human": "\u001b[1;36m→\u001b[0m \u001b[1mopentide explain unknown_key\u001b[0m\u001b[2m · \u001b[0m\u001b[2mhow to fix it\u001b[0m\n\u001b[1;36m→\u001b[0m \u001b[1mopentide validate\u001b[0m\u001b[2m · \u001b[0m\u001b[2mcheck again\u001b[0m\n\u001b[1;36m→\u001b[0m \u001b[1mopentide lint --fix\u001b[0m\n",
+    "plain": "→ opentide explain unknown_key · how to fix it\n→ opentide validate · check again\n→ opentide lint --fix\n",
+    "narrow": "\u001b[1;36m→\u001b[0m \u001b[1mopentide explain unknown_key\u001b[0m\u001b[2m · \u001b[0m\u001b[2mhow to\u001b[0m\n  \u001b[2mfix it\u001b[0m\n\u001b[1;36m→\u001b[0m \u001b[1mopentide validate\u001b[0m\u001b[2m · \u001b[0m\u001b[2mcheck again\u001b[0m\n\u001b[1;36m→\u001b[0m \u001b[1mopentide lint --fix\u001b[0m\n"
+   }
+  },
+  {
+   "kind": "tip",
+   "rendered": {
+    "human": "\u001b[1;36mtip:\u001b[0m add --json for machine-readable output\n",
+    "plain": "tip: add --json for machine-readable output\n",
+    "narrow": "\u001b[1;36mtip:\u001b[0m add --json for machine-readable\n     output\n"
+   }
+  },
+  {
+   "kind": "steps",
+   "steps": [
+    {
+     "name": "schemas",
+     "count": 7,
+     "unit": "file",
+     "where": ".opentide/schemas/",
+     "status": "ok"
+    },
+    {
+     "name": "catalog",
+     "count": 1,
+     "unit": "rule",
+     "where": null,
+     "status": "ok"
+    },
+    {
+     "name": "docs",
+     "count": null,
+     "outcome": "2 deployed, 1 failed",
+     "status": "failed"
+    },
+    {
+     "name": "explorer",
+     "status": "skipped",
+     "detail": "no rules"
+    },
+    {
+     "name": "inflight",
+     "count": 3,
+     "unit": "entry",
+     "plural": "entries",
+     "status": "running"
+    }
+   ],
+   "rendered": {
+    "human": "\u001b[1;32m✓\u001b[0m schemas\u001b[2m · \u001b[0m7 files\u001b[2m · \u001b[0m1.2s\u001b[2m · \u001b[0m.opentide/schemas/\n\u001b[1;32m✓\u001b[0m catalog\u001b[2m · \u001b[0m1 rule\u001b[2m · \u001b[0m1.2s\n\u001b[1;31m✗\u001b[0m docs\u001b[2m · \u001b[0m2 deployed, 1 failed\u001b[2m · \u001b[0m1.2s\n\u001b[2m-\u001b[0m explorer\u001b[2m · \u001b[0mno rules\n\u001b[1;31m✗\u001b[0m inflight\u001b[2m · \u001b[0m3 entries\u001b[2m · \u001b[0m1.2s\n",
+    "plain": "✓ schemas · 7 files · 1.2s · .opentide/schemas/\n✓ catalog · 1 rule · 1.2s\n✗ docs · 2 deployed, 1 failed · 1.2s\n- explorer · no rules\n✗ inflight · 3 entries · 1.2s\n",
+    "narrow": "\u001b[1;32m✓\u001b[0m schemas\u001b[2m · \u001b[0m7 files\u001b[2m · \u001b[0m1.2s\u001b[2m · \u001b[0m.opentide/schemas/\n\u001b[1;32m✓\u001b[0m catalog\u001b[2m · \u001b[0m1 rule\u001b[2m · \u001b[0m1.2s\n\u001b[1;31m✗\u001b[0m docs\u001b[2m · \u001b[0m2 deployed, 1 failed\u001b[2m · \u001b[0m1.2s\n\u001b[2m-\u001b[0m explorer\u001b[2m · \u001b[0mno rules\n\u001b[1;31m✗\u001b[0m inflight\u001b[2m · \u001b[0m3 entries\u001b[2m · \u001b[0m1.2s\n"
+   }
+  }
+ ],
+ "words": {
+  "plural": [
+   [
+    0,
+    "file",
+    "0 files"
+   ],
+   [
+    0,
+    "rule",
+    "0 rules"
+   ],
+   [
+    1,
+    "file",
+    "1 file"
+   ],
+   [
+    1,
+    "rule",
+    "1 rule"
+   ],
+   [
+    2,
+    "file",
+    "2 files"
+   ],
+   [
+    2,
+    "rule",
+    "2 rules"
+   ]
+  ],
+  "seconds": [
+   [
+    0.0,
+    "0.0s"
+   ],
+   [
+    0.04,
+    "0.0s"
+   ],
+   [
+    0.05,
+    "0.1s"
+   ],
+   [
+    1.25,
+    "1.2s"
+   ],
+   [
+    59.94,
+    "59.9s"
+   ],
+   [
+    59.96,
+    "60.0s"
+   ],
+   [
+    60.0,
+    "1m00s"
+   ],
+   [
+    125.4,
+    "2m05s"
+   ],
+   [
+    3600.5,
+    "60m00s"
+   ]
+  ]
+ }
+}

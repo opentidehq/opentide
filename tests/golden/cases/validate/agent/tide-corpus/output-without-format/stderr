@@ -1,0 +1,2 @@
+error: --output needs --format sarif or --format codequality
+tip: add --json for machine-readable output
