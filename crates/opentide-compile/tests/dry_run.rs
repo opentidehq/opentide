@@ -295,8 +295,10 @@ fn a_block_that_cannot_compile_is_a_diagnostic_of_the_plan() {
     assert_eq!(outcome.exit_code, 1);
     assert_eq!(text(&outcome, "status"), "\"failed\"");
     assert_eq!(text(&outcome, "error"), "\"1 rule would fail to deploy\"");
+    // `file_path` is the platform's path, `\ws\objects\rules\bad.yaml` on
+    // Windows, which JSON writes with each backslash doubled.
     assert_eq!(
-        text(&outcome, "diagnostics"),
+        text(&outcome, "diagnostics").replace("\\\\", "/"),
         "[{\"code\":\"compile_failed\",\"severity\":\"error\",\"message\":\"Sysdig cannot \
          compile this rule: 'URGENT'\",\"help\":null,\"path\":\"objects/rules/bad.yaml\",\
          \"file_path\":\"/ws/objects/rules/bad.yaml\",\
