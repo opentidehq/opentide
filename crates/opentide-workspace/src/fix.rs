@@ -671,6 +671,33 @@ mod tests {
     }
 
     #[test]
+    fn a_fix_that_changes_the_length_never_moves_the_next_one_on_its_line() {
+        let fs = MemoryFs::new();
+        fs.write("/w/r.yaml", "a: [high-x, low]\n");
+        // `high-x` -> `HighX` is one character shorter. Applied left to
+        // right, it would move `low` one column to the left, the re-check
+        // would read `ow]` at the recorded span and the second fix would be
+        // dropped.
+        let findings = [
+            finding("/w/r.yaml", true, vec![edit(1, 5, 11, "HighX")]),
+            finding("/w/r.yaml", true, vec![edit(1, 13, 16, "Low")]),
+        ];
+        let plan = plan(&fs, &findings);
+        assert_eq!(
+            plan.files[Path::new("/w/r.yaml")].after,
+            "a: [HighX, Low]\n"
+        );
+        assert_eq!(plan.changes.len(), 2);
+        let changes: Vec<(usize, &str, &str)> = plan
+            .changes
+            .iter()
+            .map(|change| (change.line, change.before.as_str(), change.after.as_str()))
+            .collect();
+        assert!(changes.contains(&(1, "high-x", "HighX")));
+        assert!(changes.contains(&(1, "low", "Low")));
+    }
+
+    #[test]
     fn a_value_saved_since_the_finding_is_not_overwritten() {
         let fs = MemoryFs::new();
         // The finding was made on `high`; the file now holds `medium`.

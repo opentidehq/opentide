@@ -318,6 +318,61 @@ mod lint {
     }
 
     #[test]
+    fn blank_or_empty_metadata_counts_as_missing() {
+        let fs = workspace();
+        for (file, uuid, author) in [
+            ("blank", U1, "\"  \""),
+            ("list", U2, "[]"),
+            ("map", "33333333-3333-4333-8333-333333333333", "{}"),
+        ] {
+            fs.write(
+                format!("/ws/objects/rules/{file}.yaml"),
+                format!(
+                    "name: {file}\nmetadata:\n  uuid: {uuid}\n  schema: rule::1.1\n  author: {author}\n  organisation: us\n"
+                ),
+            );
+        }
+        // A filled-in author is not reported.
+        fs.write(
+            "/ws/objects/rules/kept.yaml",
+            rule("44444444-4444-4444-8444-444444444444", "kept"),
+        );
+        let report = run(&fs, &LintConfig::default(), &options());
+        let mut reported: Vec<(&str, &str, &str)> = report
+            .findings
+            .iter()
+            .map(|finding| {
+                (
+                    finding.code(),
+                    finding.path(),
+                    finding.json["message"].as_str().unwrap(),
+                )
+            })
+            .collect();
+        reported.sort_unstable();
+        assert_eq!(
+            reported,
+            [
+                (
+                    "metadata_recommended",
+                    "objects/rules/blank.yaml",
+                    "Recommended metadata missing: author"
+                ),
+                (
+                    "metadata_recommended",
+                    "objects/rules/list.yaml",
+                    "Recommended metadata missing: author"
+                ),
+                (
+                    "metadata_recommended",
+                    "objects/rules/map.yaml",
+                    "Recommended metadata missing: author"
+                ),
+            ]
+        );
+    }
+
+    #[test]
     fn a_placeholder_points_at_its_value() {
         let fs = workspace();
         fs.write(
@@ -489,6 +544,37 @@ mod lint {
         assert_eq!(
             payload.keys().copied().collect::<Vec<_>>(),
             ["path", "checks", "findings", "count", "fixed", "unmatched"]
+        );
+    }
+
+    #[test]
+    fn stems_that_differ_only_in_case_collide_in_one_folder() {
+        const U3: &str = "33333333-3333-4333-8333-333333333333";
+        const U4: &str = "44444444-4444-4444-8444-444444444444";
+        let fs = workspace();
+        fs.write("/ws/objects/rules/Rule One.yaml", rule(U1, "Rule One"));
+        fs.write("/ws/objects/rules/x.yaml", rule(U2, "RULE ONE"));
+        // Lowercase, not casefold: `ß` and `ss` are two names.
+        fs.write("/ws/objects/rules/Straße.yaml", rule(U3, "Straße"));
+        fs.write("/ws/objects/rules/y.yaml", rule(U4, "STRASSE"));
+        let config = config("[filenames]\nstyle = \"name\"\n");
+        let report = run(&fs, &config, &options());
+        let mut expected: Vec<(&str, &str)> = report
+            .findings
+            .iter()
+            .filter(|finding| finding.code() == "filename_mismatch")
+            .map(|finding| (finding.path(), finding.json["expected"].as_str().unwrap()))
+            .collect();
+        expected.sort_unstable();
+        assert_eq!(
+            expected,
+            [
+                (
+                    "objects/rules/x.yaml",
+                    "objects/rules/RULE ONE-22222222.yaml"
+                ),
+                ("objects/rules/y.yaml", "objects/rules/STRASSE.yaml"),
+            ]
         );
     }
 
