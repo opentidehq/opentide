@@ -236,6 +236,20 @@ def test_the_reference_page_is_generated_from_the_pages() -> None:
     )
 
 
+def test_the_reference_escapes_a_bare_angle_bracket_for_mdx() -> None:
+    # The engine's sentence for this code names the CQL operator <=> in plain prose; MDX on
+    # opentide.org reads that as a broken tag and refuses the whole docs sync.
+    reference = reference_markdown()
+    row = next(
+        line
+        for line in reference.splitlines()
+        if line.startswith("| [`cql_link_outside_correlate`]")
+    )
+    assert "&lt;=>" in row
+    assert "<=>" not in row
+    assert "<=>" in (load_page("cql_link_outside_correlate") or pytest.fail("no page")).markdown
+
+
 @pytest.mark.parametrize("code", ["", "../README", "vocab_unknown.md", "nope", "../VOCAB_UNKNOWN"])
 def test_only_a_page_name_loads(code: str) -> None:
     assert load_page(code) is None
