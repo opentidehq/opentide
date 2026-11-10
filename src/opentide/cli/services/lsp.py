@@ -31,7 +31,7 @@ def serve() -> int:
     if sys.stdin.isatty():
         print(TERMINAL_HINT, file=sys.stderr)  # noqa: T201 -- stderr, outside the protocol
     _supply_catalogs()
-    _supply_configuration_checks()
+    _supply_configuration_schemas()
     _name_the_host()
     failure: list[BaseException] = []
     clean: list[bool] = []
@@ -94,18 +94,18 @@ def _name_the_host() -> None:
     engine().set_host_info("opentide", __version__)
 
 
-def _supply_configuration_checks() -> None:
-    """Have the server check configuration TOML with this opentide's models.
+def _supply_configuration_schemas() -> None:
+    """Hand the server the configuration schemas for hover and completion.
 
-    Without them, the server reports nothing for `.opentide/configurations/`
-    files; stderr says why.
+    The server checks configuration files itself (UC-2.6); without the
+    schemas it answers no hover or completion there, and stderr says why.
     """
-    from opentide.analysis import install_configuration_checks
+    from opentide.analysis import install_configuration_schemas
 
     try:
-        install_configuration_checks()
-    except Exception as exc:  # the server still starts, without configuration checks
+        install_configuration_schemas()
+    except Exception as exc:  # the server still starts, without hover and completion there
         print(  # noqa: T201 -- stderr, outside the protocol
-            f"warning: configuration files will not be checked ({type(exc).__name__}: {exc})",
+            f"warning: configuration files get no hover or completion ({type(exc).__name__}: {exc})",
             file=sys.stderr,
         )

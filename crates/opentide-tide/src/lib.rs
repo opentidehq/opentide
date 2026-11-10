@@ -12,7 +12,6 @@ mod elastic;
 mod falco;
 mod injection;
 mod intel;
-mod lint;
 mod outline;
 mod placeholder;
 mod refs;
@@ -21,27 +20,21 @@ mod vocabs;
 mod yaml_path;
 mod yaml_scalar;
 
-use opentide_core::{ByteSpan, Diagnostic, LanguageId, Range, codes, span_to_range};
+use opentide_core::{ByteSpan, Diagnostic, LanguageId, Range, span_to_range};
 use opentide_highlight::{
     HighlightSpec, HighlightToken, TideField, highlight_markdown_line, tide_field_at,
-    tide_schema_root, tokens_from_spans,
+    tokens_from_spans,
 };
 use opentide_kql::Profile;
 use regex::Regex;
 use serde::Deserialize;
 use std::collections::BTreeMap;
-use std::sync::{OnceLock, RwLock};
-use uuid::Uuid;
 
 pub use elastic::{ElasticTenant, duration_millis, elastic_query_language, elastic_tenants};
 pub use falco::falco_context;
 pub use injection::hunt_query_language;
 pub use intel::{
     TideInlay, completions_tide, field_markdown, hover_tide, inlay_hints, resolve_completion,
-};
-pub use lint::{
-    FilenameRules, FilenameStyle, LINT_CONFIGURATION, LintSettings, install_lint_settings,
-    lint_settings, name_stem, parse_lint_settings,
 };
 pub use outline::{
     LinkTarget, OutlineKind, OutlineNode, ReferenceLens, TideLink, attack_url, document_links,
@@ -300,144 +293,6 @@ pub struct DocumentSymbol {
     pub detail: Option<String>,
 }
 
-/// Whether an [`ObjectRef`] field path is a signal's own UUID
-/// (`objective.signals.<i>.uuid`): what a rule's `detection_model` names
-/// when it implements one signal of an objective.
-fn is_signal_uuid_path(field_path: &str) -> bool {
-    field_path
-        .strip_prefix("objective.signals.")
-        .and_then(|rest| rest.strip_suffix(".uuid"))
-        .is_some_and(|index| !index.is_empty() && index.bytes().all(|b| b.is_ascii_digit()))
-}
-
-/// The UUIDs a rule's `detection_model` may name: each indexed objective's,
-/// and each signal an indexed objective declares (#213). Signals live inside
-/// their objective and are not workspace objects, so they come from the
-/// objective's refs, as opentide validates the field against objectives and
-/// signals alike.
-fn detection_model_targets(workspace: &[IndexedObject]) -> impl Iterator<Item = &str> {
-    workspace
-        .iter()
-        .filter(|o| o.object_type == "objective")
-        .flat_map(|o| {
-            std::iter::once(o.uuid.as_str()).chain(
-                o.refs
-                    .iter()
-                    .filter(|r| is_signal_uuid_path(&r.field_path))
-                    .map(|r| r.uuid.as_str()),
-            )
-        })
-}
-
-/// The objective or signal UUID a dangling `detection_model` most plausibly
-/// meant: one within two edits of it, ignoring case (a mistyped or swapped
-/// character), by the shared rule ([`opentide_core::suggest`]). `None` when
-/// nothing is that close, rather than an unrelated objective that would
-/// re-parent the rule if applied (#213).
-fn closest_detection_model(workspace: &[IndexedObject], value: &str) -> Option<String> {
-    const MAX_EDITS: usize = 2;
-    if value.trim().is_empty() {
-        return None;
-    }
-    // Untrimmed: ` <uuid> ` is not the indexed `<uuid>`, but the same word.
-    opentide_core::suggest::closest_within(value, detection_model_targets(workspace), MAX_EDITS)
-        .map(str::to_string)
-}
-
-/// The stem and the suffix of an object file at `path`, as opentide's
-/// `split_object_name` reads them: `x.debug.yaml` is `("x", ".debug.yaml")`,
-/// so a debug fixture is compared by the stem its name names and keeps its
-/// `.debug` infix when renamed. `None` when `path` is not a filesystem path
-/// (a URI such as `untitled:Untitled-1` or a host's `opentide-object:<uuid>`)
-/// or has no directory: such a document has no file name to check.
-fn object_file_stem(path: &str) -> Option<(&str, &'static str)> {
-    let scheme = path.split_once(':').is_some_and(|(scheme, _)| {
-        scheme.len() > 1
-            && scheme.starts_with(|c: char| c.is_ascii_alphabetic())
-            && scheme
-                .chars()
-                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'))
-    });
-    let file = std::path::Path::new(path);
-    if scheme || file.parent().is_none_or(|dir| dir.as_os_str().is_empty()) {
-        return None;
-    }
-    let name = file.file_name()?.to_str()?;
-    for (suffix, kept) in [
-        (".debug.yaml", ".debug.yaml"),
-        (".debug.yml", ".debug.yaml"),
-        (".yaml", ".yaml"),
-        (".yml", ".yaml"),
-    ] {
-        if let Some(stem) = name.strip_suffix(suffix) {
-            return (!stem.is_empty()).then_some((stem, kept));
-        }
-    }
-    let stem = file.file_stem()?.to_str()?;
-    (!stem.is_empty()).then_some((stem, ".yaml"))
-}
-
-/// `filename_slug` and `filename_pattern` for an object at `path`, under the
-/// `[filenames]` convention of its kind ([`LintSettings::filenames_for`]).
-/// The stem an object should have is `slugify(name)` (`style = "slug"`) or
-/// its name (`"name"`), optionally followed by `-<suffix>`, as `opentide lint`
-/// gives two objects of one name; `"none"` compares no stem. A `pattern` is
-/// matched against the whole stem as the file is named, less a `.debug`
-/// infix ([`object_file_stem`]). Both are on the `name` value (#215).
-fn diagnose_filename(
-    lint: &LintSettings,
-    object_type: &str,
-    path: &str,
-    object: &TideObject,
-    source: &str,
-    diagnostics: &mut Vec<Diagnostic>,
-) {
-    let Some((stem, suffix)) = object_file_stem(path) else {
-        return;
-    };
-    let rules = lint.filenames_for(object_type);
-    let name = object.name.as_deref().unwrap_or_default();
-    let mut push = |mut d: Diagnostic| {
-        if let Some(severity) = lint.filenames_severity {
-            d.severity = severity;
-        }
-        diagnostics.push(d);
-    };
-    if let Some(name) = &object.name {
-        let expected = match rules.style {
-            FilenameStyle::Slug => Some((slugify(name), "slugify of name")),
-            FilenameStyle::Name => lint::name_stem(name).map(|stem| (stem, "the name")),
-            FilenameStyle::None => None,
-        };
-        if let Some((expected, how)) = expected {
-            if stem != expected && !stem.starts_with(&format!("{expected}-")) {
-                push(
-                    Diagnostic::warning(
-                        codes::FILENAME_SLUG,
-                        format!("filename should be {expected}{suffix} ({how})"),
-                        // The name the file is named after (#215). The
-                        // suggestion is a file name: hosts offer it as a
-                        // rename, never as an edit of this text.
-                        name_range(source, name),
-                    )
-                    .with_suggestion(format!("{expected}{suffix}")),
-                );
-            }
-        }
-    }
-    if !rules.matches_pattern(stem) {
-        push(Diagnostic::warning(
-            codes::FILENAME_PATTERN,
-            format!(
-                "filename {stem} does not match {} ('{}')",
-                rules.pattern_key(),
-                rules.pattern.as_deref().unwrap_or_default()
-            ),
-            name_range(source, name),
-        ));
-    }
-}
-
 /// Spans and ranges are in the text after a leading byte-order mark
 /// ([`opentide_core::strip_bom`]).
 #[expect(
@@ -450,334 +305,22 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
         ..input
     };
     let spec = HighlightSpec::load().expect("spec");
-    let vocabs = bundled_vocabs();
-    let lint = lint::lint_settings();
     let mut diagnostics = Vec::new();
-    let parsed: Result<TideObject, _> = serde_yaml::from_str(input.source);
-    let object = match parsed {
-        Ok(o) => o,
-        Err(e) => {
-            diagnostics.push(Diagnostic::error(
-                codes::SCHEMA_VALIDATION,
-                format!("YAML parse error: {e}"),
-                Range::point(0, 0),
-            ));
-            return TideAnalyzeResult {
-                diagnostics,
-                tokens: highlight_tide(&spec, input.source, &[]),
-                symbols: Vec::new(),
-            };
-        }
+    // A file that is not YAML is `validate`'s `yaml_parse`: no finding here.
+    let Ok(object) = serde_yaml::from_str::<TideObject>(input.source) else {
+        return TideAnalyzeResult {
+            diagnostics,
+            tokens: highlight_tide(&spec, input.source, &[]),
+            symbols: Vec::new(),
+        };
     };
 
+    // The object's own checks (schema, vocabularies, UUIDs, references,
+    // chaining, deprecated fields) are `opentide-workspace`'s `validate`:
+    // the language server reports its findings (UC-2.6, #821). What stays
+    // here reads the platform blocks and the queries they carry.
     let schema = object_schema_id(&object);
     let object_type = schema.split("::").next().unwrap_or("").to_string();
-    // Catalog lookups take the schema id, so each revision is checked
-    // against its own fields; a bare family resolves to its newest revision.
-    let catalog_schema = if schema.contains("::") {
-        schema.clone()
-    } else {
-        object_type.clone()
-    };
-
-    if object.name.as_deref().unwrap_or("").is_empty() {
-        diagnostics.push(
-            Diagnostic::error(
-                codes::SCHEMA_VALIDATION,
-                "missing required field 'name'",
-                key_range(input.source, "name"),
-            )
-            .with_field_path(vec!["name".into()]),
-        );
-    }
-    if object.metadata.is_none() {
-        diagnostics.push(
-            Diagnostic::error(
-                codes::SCHEMA_VALIDATION,
-                "missing required field 'metadata'",
-                Range::point(0, 0),
-            )
-            .with_field_path(vec!["metadata".into()]),
-        );
-    }
-
-    if let Some(meta) = &object.metadata {
-        if let Some(uuid) = &meta.uuid {
-            if !is_uuidv4(uuid) {
-                diagnostics.push(
-                    Diagnostic::error(
-                        codes::INVALID_UUID,
-                        format!("invalid UUID '{uuid}'"),
-                        key_range(input.source, "uuid"),
-                    )
-                    .with_field_path(vec!["metadata".into(), "uuid".into()]),
-                );
-            }
-        } else {
-            diagnostics.push(
-                Diagnostic::error(
-                    codes::SCHEMA_VALIDATION,
-                    "missing metadata.uuid",
-                    key_range(input.source, "uuid"),
-                )
-                .with_field_path(vec!["metadata".into(), "uuid".into()]),
-            );
-        }
-        if meta.schema.is_none() {
-            diagnostics.push(
-                Diagnostic::error(
-                    codes::SCHEMA_VALIDATION,
-                    "missing required field 'metadata.schema'",
-                    key_range(input.source, "metadata"),
-                )
-                .with_field_path(vec!["metadata".into(), "schema".into()]),
-            );
-        }
-        if meta.version.is_none() {
-            diagnostics.push(
-                Diagnostic::error(
-                    codes::SCHEMA_VALIDATION,
-                    "missing required field 'metadata.version'",
-                    key_range(input.source, "metadata"),
-                )
-                .with_field_path(vec!["metadata".into(), "version".into()]),
-            );
-        }
-        if meta.created.is_none() {
-            diagnostics.push(
-                Diagnostic::error(
-                    codes::SCHEMA_VALIDATION,
-                    "missing required field 'metadata.created'",
-                    key_range(input.source, "metadata"),
-                )
-                .with_field_path(vec!["metadata".into(), "created".into()]),
-            );
-        }
-        if meta.modified.is_none() {
-            diagnostics.push(
-                Diagnostic::error(
-                    codes::SCHEMA_VALIDATION,
-                    "missing required field 'metadata.modified'",
-                    key_range(input.source, "metadata"),
-                )
-                .with_field_path(vec!["metadata".into(), "modified".into()]),
-            );
-        }
-        if meta.tlp.is_none() {
-            diagnostics.push(
-                Diagnostic::error(
-                    codes::SCHEMA_VALIDATION,
-                    "missing required field 'metadata.tlp'",
-                    key_range(input.source, "metadata"),
-                )
-                .with_field_path(vec!["metadata".into(), "tlp".into()]),
-            );
-        }
-        if let Some(tlp) = &meta.tlp {
-            if let Some(message) = unknown_enum(&object_type, "metadata.tlp", tlp) {
-                diagnostics.push(
-                    Diagnostic::error(
-                        codes::VOCAB_UNKNOWN,
-                        message,
-                        key_range(input.source, "tlp"),
-                    )
-                    .with_field_path(vec!["metadata".into(), "tlp".into()]),
-                );
-            }
-        }
-        // `[metadata]` in lint.toml decides these, as it does `opentide lint`'s (#214).
-        if lint.metadata_enabled {
-            for (key, missing, code) in [
-                ("author", meta.author.is_none(), codes::MISSING_AUTHOR),
-                (
-                    "organisation",
-                    meta.organisation.is_none(),
-                    codes::MISSING_ORGANISATION,
-                ),
-            ] {
-                if missing && lint.requires(key) {
-                    let mut d = Diagnostic::warning(
-                        code,
-                        format!("recommended field metadata.{key} is missing"),
-                        key_range(input.source, "metadata"),
-                    )
-                    .with_field_path(vec!["metadata".into(), key.into()]);
-                    if let Some(severity) = lint.metadata_severity {
-                        d.severity = severity;
-                    }
-                    diagnostics.push(d);
-                }
-            }
-        }
-    }
-
-    if let Some(sev) = &object.severity {
-        if let Some(message) = unknown_enum(&catalog_schema, "severity", sev) {
-            diagnostics.push(
-                Diagnostic::error(
-                    codes::VOCAB_UNKNOWN,
-                    message,
-                    key_range(input.source, "severity"),
-                )
-                .with_field_path(vec!["severity".into()]),
-            );
-        }
-    }
-
-    diagnose_catalog_values(&catalog_schema, &object, input.source, &mut diagnostics);
-    diagnose_shape(&schema, input.source, &mut diagnostics);
-    diagnose_deprecations(&object_type, input.source, &mut diagnostics);
-
-    let uuid = object
-        .metadata
-        .as_ref()
-        .and_then(|m| m.uuid.clone())
-        .unwrap_or_default();
-
-    // duplicate_id across workspace
-    if !uuid.is_empty() {
-        let dups: Vec<_> = input
-            .workspace
-            .iter()
-            .filter(|o| o.uuid == uuid && !same_file(&o.path, input.path))
-            .collect();
-        if !dups.is_empty() {
-            diagnostics.push(
-                Diagnostic::error(
-                    codes::DUPLICATE_ID,
-                    format!("duplicate uuid {uuid} (also in {})", dups[0].path),
-                    key_range(input.source, "uuid"),
-                )
-                .with_field_path(vec!["metadata".into(), "uuid".into()]),
-            );
-        }
-    }
-
-    // Where each reference value sits (#215): `invalid_ref` underlines the
-    // value, not its key, so a quick fix replaces the UUID and the YAML stays
-    // valid. A value the text does not spell out after its key (an alias,
-    // whose UUID is at the anchor before it) keeps the key's range.
-    let own_refs = serde_yaml::from_str::<serde_yaml::Value>(input.source)
-        .map(|body| object_refs(input.source, &body, &uuid))
-        .unwrap_or_default();
-    let ref_range = |field_path: &str, key: &str| {
-        let key = key_range(input.source, key);
-        let after_key = |range: &Range| {
-            (range.start.line, range.start.character) >= (key.end.line, key.end.character)
-        };
-        own_refs
-            .iter()
-            .find(|r| r.field_path == field_path && r.range != Range::point(0, 0))
-            .map(|r| r.range)
-            .filter(|range| key == Range::point(0, 0) || after_key(range))
-            .unwrap_or(key)
-    };
-
-    // invalid_ref
-    if object_type == "rule" {
-        if let Some(parent) = &object.detection_model {
-            if !detection_model_targets(input.workspace).any(|target| target == parent) {
-                let suggestion = closest_detection_model(input.workspace, parent);
-                let mut d = Diagnostic::error(
-                    codes::INVALID_REF,
-                    format!(
-                        "invalid_ref: detection_model {parent} is not an indexed objective or signal"
-                    ),
-                    ref_range("detection_model", "detection_model"),
-                )
-                .with_field_path(vec!["detection_model".into()]);
-                if let Some(s) = suggestion {
-                    d = d.with_suggestion(s);
-                }
-                diagnostics.push(d);
-            }
-        }
-    }
-
-    if let Some(obj) = &object.objective {
-        if let Some(threats) = obj.get("threats").and_then(|v| v.as_sequence()) {
-            for (i, t) in threats.iter().enumerate() {
-                if let Some(id) = t.as_str() {
-                    if !input
-                        .workspace
-                        .iter()
-                        .any(|o| o.object_type == "threat" && o.uuid == id)
-                    {
-                        diagnostics.push(
-                            Diagnostic::error(
-                                codes::INVALID_REF,
-                                format!("invalid_ref: threat {id} is not indexed"),
-                                ref_range(&format!("objective.threats.{i}"), "threats"),
-                            )
-                            .with_field_path(vec!["objective".into(), "threats".into()]),
-                        );
-                    }
-                }
-            }
-        }
-    }
-
-    if let Some(threat) = &object.threat {
-        if let Some(chaining) = threat.get("chaining").and_then(|v| v.as_sequence()) {
-            let vocab = vocabs.get("chaining_relations");
-            for (idx, link) in chaining.iter().enumerate() {
-                if let Some(rel) = link.get("relation").and_then(|v| v.as_str()) {
-                    if let Some(vocab) = vocab {
-                        if !vocab.contains(rel) {
-                            diagnostics.push(
-                                Diagnostic::error(
-                                    codes::CHAINING_RELATION_UNKNOWN,
-                                    format!("Unknown chaining relation '{rel}'"),
-                                    key_range(input.source, "relation"),
-                                )
-                                .with_field_path(vec![
-                                    "threat".into(),
-                                    "chaining".into(),
-                                    idx.to_string(),
-                                    "relation".into(),
-                                ]),
-                            );
-                        }
-                    }
-                }
-                if let Some(vector) = link.get("vector").and_then(|v| v.as_str()) {
-                    if !input
-                        .workspace
-                        .iter()
-                        .any(|o| o.object_type == "threat" && o.uuid == vector)
-                    {
-                        diagnostics.push(
-                            Diagnostic::error(
-                                codes::INVALID_REF,
-                                format!(
-                                    "invalid_ref: chaining vector {vector} is not an indexed threat"
-                                ),
-                                ref_range(&format!("threat.chaining.{idx}.vector"), "vector"),
-                            )
-                            .with_field_path(vec![
-                                "threat".into(),
-                                "chaining".into(),
-                                idx.to_string(),
-                                "vector".into(),
-                            ]),
-                        );
-                    }
-                }
-            }
-        }
-    }
-
-    // Filenames, as `[filenames]` in lint.toml asks (#214).
-    if lint.filenames_enabled {
-        diagnose_filename(
-            &lint,
-            &object_type,
-            input.path,
-            &object,
-            input.source,
-            &mut diagnostics,
-        );
-    }
 
     if object_type == "rule"
         && object
@@ -1387,33 +930,6 @@ struct DeprecationRow {
     deprecated: Option<String>,
 }
 
-fn deprecation_overlay() -> &'static RwLock<Vec<FieldDeprecation>> {
-    static OVERLAY: OnceLock<RwLock<Vec<FieldDeprecation>>> = OnceLock::new();
-    OVERLAY.get_or_init(|| RwLock::new(Vec::new()))
-}
-
-/// Workspace `.opentide/lsp/catalogs/` entries. Replaces the overlay for the
-/// whole process, so a host that analyzes on several threads sees one overlay.
-pub fn install_deprecation_overlay(items: Vec<FieldDeprecation>) {
-    *deprecation_overlay()
-        .write()
-        .unwrap_or_else(|poisoned| poisoned.into_inner()) = items;
-}
-
-fn default_deprecations() -> &'static RwLock<Option<Vec<FieldDeprecation>>> {
-    static DEFAULT: OnceLock<RwLock<Option<Vec<FieldDeprecation>>>> = OnceLock::new();
-    DEFAULT.get_or_init(|| RwLock::new(None))
-}
-
-/// Use `items` instead of the bundled deprecations, under the workspace
-/// overlay ([`install_deprecation_overlay`]). `None` goes back to the bundled
-/// ones. Process-wide.
-pub fn set_default_deprecations(items: Option<Vec<FieldDeprecation>>) {
-    *default_deprecations()
-        .write()
-        .unwrap_or_else(|poisoned| poisoned.into_inner()) = items;
-}
-
 /// Parse `deprecations.json` or a `fields.json` that carries `deprecated` messages.
 pub fn parse_deprecation_overlay(json: &str) -> Result<Vec<FieldDeprecation>, String> {
     let file: DeprecationFile = serde_json::from_str(json).map_err(|err| err.to_string())?;
@@ -1451,415 +967,6 @@ fn object_schema_id(object: &TideObject) -> String {
         .to_string()
 }
 
-#[expect(
-    clippy::expect_used,
-    reason = "parses a catalog compiled in with include_str!: a bad catalog fails the tests, never a user's document"
-)]
-fn bundled_deprecations() -> &'static [FieldDeprecation] {
-    static ROWS: OnceLock<Vec<FieldDeprecation>> = OnceLock::new();
-    ROWS.get_or_init(|| parse_deprecation_overlay(DEPRECATIONS_JSON).expect("deprecations.json"))
-}
-
-fn diagnose_deprecations(object_type: &str, source: &str, diagnostics: &mut Vec<Diagnostic>) {
-    let Some(value) = merged_yaml(source) else {
-        return;
-    };
-    let mut present = Vec::new();
-    collect_mapping_paths(&value, &[], &mut present);
-    let overlay = deprecation_overlay()
-        .read()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .clone();
-    for path in present {
-        let dotted = path.join(".");
-        let message = overlay
-            .iter()
-            .find(|row| row.schema == object_type && row.path == dotted)
-            .map(|row| row.message.clone())
-            .or_else(|| {
-                let default = default_deprecations()
-                    .read()
-                    .unwrap_or_else(|poisoned| poisoned.into_inner());
-                default
-                    .as_deref()
-                    .unwrap_or_else(|| bundled_deprecations())
-                    .iter()
-                    .find(|row| row.schema == object_type && row.path == dotted)
-                    .map(|row| row.message.clone())
-            });
-        let Some(message) = message else {
-            continue;
-        };
-        let leaf = path.last().map(String::as_str).unwrap_or(&dotted);
-        diagnostics.push(
-            Diagnostic::warning(
-                codes::DEPRECATED_FIELD,
-                format!("Field '{dotted}' is deprecated: {message}"),
-                key_range(source, leaf),
-            )
-            .with_field_path(path),
-        );
-    }
-}
-
-fn collect_mapping_paths(value: &serde_yaml::Value, prefix: &[String], out: &mut Vec<Vec<String>>) {
-    let Some(mapping) = value.as_mapping() else {
-        return;
-    };
-    for (key, child) in mapping {
-        let Some(name) = key.as_str() else {
-            continue;
-        };
-        let mut path = prefix.to_vec();
-        path.push(name.to_string());
-        out.push(path.clone());
-        collect_mapping_paths(child, &path, out);
-    }
-}
-
-fn diagnose_catalog_values(
-    schema: &str,
-    object: &TideObject,
-    source: &str,
-    diagnostics: &mut Vec<Diagnostic>,
-) {
-    if let Some(criticality) = &object.criticality {
-        push_unknown_enum(schema, "criticality", criticality, source, diagnostics);
-    }
-    let Some(threat) = object.threat.as_ref().and_then(|v| v.as_mapping()) else {
-        return;
-    };
-    for key in ["impact", "leverage", "severity", "viability"] {
-        let Some(value) = threat.get(serde_yaml::Value::String(key.to_string())) else {
-            continue;
-        };
-        let path = format!("threat.{key}");
-        diagnose_field_value(schema, &path, value, source, diagnostics);
-    }
-}
-
-/// The object's shape against its revision in the field catalog, as
-/// opentide's own validation checks it: every required field present, and
-/// no key a closed object (or the closed document root) does not define.
-///
-/// Required fields are checked against the revision `schema` resolves to.
-/// Unknown keys only when the catalog has that exact revision: a revision it
-/// does not know, or a catalog keyed by family, says nothing about which
-/// keys exist. A field another check already reported is not repeated.
-fn diagnose_shape(schema: &str, source: &str, diagnostics: &mut Vec<Diagnostic>) {
-    let Some((revision, root)) = tide_schema_root(schema) else {
-        return;
-    };
-    let Some(value) = merged_yaml(source) else {
-        return;
-    };
-    let Some(mapping) = value.as_mapping() else {
-        return;
-    };
-    let exact = revision == schema;
-    let mut shape = ShapeCheck {
-        revision,
-        exact,
-        source,
-        reported: diagnostics
-            .iter()
-            .filter_map(|d| d.field_path.clone())
-            .collect(),
-        seen: std::collections::BTreeSet::new(),
-        found: Vec::new(),
-    };
-    shape.mapping(&[], &[], mapping, root.closed, &root.legacy);
-    diagnostics.extend(shape.found);
-}
-
-/// `source` as a YAML value, with `<<` merge keys resolved as opentide's
-/// loader resolves them.
-fn merged_yaml(source: &str) -> Option<serde_yaml::Value> {
-    let mut value = serde_yaml::from_str::<serde_yaml::Value>(source).ok()?;
-    value.apply_merge().ok()?;
-    Some(value)
-}
-
-/// One key of a path, and the item of the list it holds the path goes into.
-type Step = (String, Option<usize>);
-
-struct ShapeCheck<'a> {
-    revision: &'static str,
-    exact: bool,
-    source: &'a str,
-    /// Field paths another check reported: not repeated.
-    reported: std::collections::BTreeSet<Vec<String>>,
-    /// What this check reported, by path with list items: one per place.
-    seen: std::collections::BTreeSet<Vec<Step>>,
-    found: Vec<Diagnostic>,
-}
-
-impl ShapeCheck<'_> {
-    /// Whether nothing was reported at `path` (`steps` with its list items) yet.
-    fn first(&mut self, path: &[String], steps: &[Step]) -> bool {
-        !self.reported.contains(path) && self.seen.insert(steps.to_vec())
-    }
-
-    fn mapping(
-        &mut self,
-        path: &[String],
-        steps: &[Step],
-        mapping: &serde_yaml::Mapping,
-        closed: bool,
-        legacy: &BTreeMap<String, Option<String>>,
-    ) {
-        let dotted = path.join(".");
-        let children = opentide_highlight::tide_children(self.revision, &dotted);
-        if children.is_empty() {
-            return;
-        }
-        for field in &children {
-            let key = serde_yaml::Value::String(field.name.clone());
-            if !(field.required || field.recommended) || mapping.contains_key(&key) {
-                continue;
-            }
-            // A legacy spelling that fills the field counts (`search` for `query`).
-            let filled = legacy.iter().any(|(old, fills)| {
-                fills.as_deref() == Some(field.name.as_str())
-                    && mapping.contains_key(serde_yaml::Value::String(old.clone()))
-            });
-            if filled {
-                continue;
-            }
-            let mut field_path = path.to_vec();
-            field_path.push(field.name.clone());
-            let mut field_steps = steps.to_vec();
-            field_steps.push((field.name.clone(), None));
-            if !self.first(&field_path, &field_steps) {
-                continue;
-            }
-            let dotted = field_path.join(".");
-            let diagnostic = if field.required {
-                Diagnostic::error(
-                    codes::SCHEMA_VALIDATION,
-                    format!("missing required field '{dotted}'"),
-                    self.range(steps),
-                )
-            } else {
-                Diagnostic::warning(
-                    codes::RECOMMENDED_FIELD_MISSING,
-                    format!("recommended field '{dotted}' is missing"),
-                    self.range(steps),
-                )
-            };
-            self.found.push(diagnostic.with_field_path(field_path));
-        }
-        for (key, value) in mapping {
-            // A key that is not a string (`1: x`) is never a field.
-            let name = match key.as_str() {
-                Some(name) => name.to_string(),
-                None => serde_yaml::to_string(key)
-                    .map(|text| text.trim().to_string())
-                    .unwrap_or_default(),
-            };
-            let mut field_path = path.to_vec();
-            field_path.push(name.clone());
-            let mut field_steps = steps.to_vec();
-            field_steps.push((name.clone(), None));
-            let field = key
-                .as_str()
-                .and_then(|name| children.iter().find(|field| field.name == name));
-            let Some(field) = field else {
-                let accepted = legacy.contains_key(&name);
-                if closed && !accepted && self.exact && self.first(&field_path, &field_steps) {
-                    self.found.push(
-                        Diagnostic::error(
-                            codes::SCHEMA_VALIDATION,
-                            format!(
-                                "field '{}' is not defined in {}",
-                                field_path.join("."),
-                                self.revision
-                            ),
-                            self.range(&field_steps),
-                        )
-                        .with_field_path(field_path),
-                    );
-                }
-                continue;
-            };
-            match value {
-                serde_yaml::Value::Mapping(child) => {
-                    self.values(&field_path, &field_steps, field, value);
-                    self.mapping(
-                        &field_path,
-                        &field_steps,
-                        child,
-                        field.closed,
-                        &field.legacy,
-                    );
-                }
-                serde_yaml::Value::Sequence(items) => {
-                    for (index, item) in items.iter().enumerate() {
-                        let mut item_steps = steps.to_vec();
-                        item_steps.push((name.clone(), Some(index)));
-                        if let Some(child) = item.as_mapping() {
-                            self.mapping(
-                                &field_path,
-                                &item_steps,
-                                child,
-                                field.closed,
-                                &field.legacy,
-                            );
-                        } else {
-                            self.values(&field_path, &item_steps, field, item);
-                        }
-                    }
-                }
-                _ => self.values(&field_path, &field_steps, field, value),
-            }
-        }
-    }
-
-    /// A value outside the field's enum (a vocabulary, a fixed set), for a
-    /// scalar or for each item of a list: every enum the catalog has, not a
-    /// hand-picked few.
-    /// A value outside the field's enum (a vocabulary, a fixed set): a scalar,
-    /// or one item of a list (`steps` names which): every enum the catalog
-    /// has, not a hand-picked few.
-    fn values(
-        &mut self,
-        path: &[String],
-        steps: &[Step],
-        field: &TideField,
-        value: &serde_yaml::Value,
-    ) {
-        // A reference is checked against the workspace index (invalid_ref),
-        // never against a list of UUIDs a catalog may carry.
-        if field.enum_values.is_empty() || field.ref_kind.is_some() {
-            return;
-        }
-        let Some(unknown) = value
-            .as_str()
-            .filter(|item| !field.enum_values.iter().any(|known| known == item))
-        else {
-            return;
-        };
-        if !self.first(path, steps) {
-            return;
-        }
-        self.found.push(
-            Diagnostic::error(
-                codes::VOCAB_UNKNOWN,
-                format!("unknown {} value '{unknown}'", field.name),
-                self.range(steps),
-            )
-            .with_field_path(path.to_vec()),
-        );
-    }
-
-    /// The key at `steps`, else the nearest key above it that has a place (a
-    /// flow mapping's keys have none), else the top of the document.
-    fn range(&self, steps: &[Step]) -> Range {
-        (1..=steps.len())
-            .rev()
-            .find_map(|len| {
-                let path: Vec<(&str, Option<usize>)> = steps[..len]
-                    .iter()
-                    .map(|(key, item)| (key.as_str(), *item))
-                    .collect();
-                key_span_in(self.source, &path)
-            })
-            .map_or(Range::point(0, 0), |span| span_to_range(self.source, span))
-    }
-}
-
-fn diagnose_field_value(
-    schema: &str,
-    path: &str,
-    value: &serde_yaml::Value,
-    source: &str,
-    diagnostics: &mut Vec<Diagnostic>,
-) {
-    let Some(field) = tide_field_at(schema, path) else {
-        return;
-    };
-    let field_path: Vec<String> = path.split('.').map(str::to_string).collect();
-    if field.array {
-        match value {
-            serde_yaml::Value::Sequence(items) => {
-                if let Some(min) = field.min_items {
-                    if items.len() < min as usize {
-                        diagnostics.push(
-                            Diagnostic::error(
-                                codes::SCHEMA_VALIDATION,
-                                format!("{path} must contain at least {min} item"),
-                                key_range(source, path.rsplit('.').next().unwrap_or(path)),
-                            )
-                            .with_field_path(field_path.clone()),
-                        );
-                    }
-                }
-                for item in items {
-                    if let Some(text) = item.as_str() {
-                        if let Some(message) = unknown_enum(schema, path, text) {
-                            diagnostics.push(
-                                Diagnostic::error(
-                                    codes::VOCAB_UNKNOWN,
-                                    message,
-                                    key_range(source, path.rsplit('.').next().unwrap_or(path)),
-                                )
-                                .with_field_path(field_path.clone()),
-                            );
-                        }
-                    }
-                }
-            }
-            serde_yaml::Value::String(text) => {
-                diagnostics.push(
-                    Diagnostic::error(
-                        codes::SCHEMA_VALIDATION,
-                        format!(
-                            "{path} must be a YAML list of {} vocabulary names, not a single string",
-                            field.name
-                        ),
-                        key_range(source, path.rsplit('.').next().unwrap_or(path)),
-                    )
-                    .with_field_path(field_path)
-                    .with_suggestion(format!("- {text}")),
-                );
-            }
-            _ => {}
-        }
-        return;
-    }
-    if let Some(text) = value.as_str() {
-        push_unknown_enum(schema, path, text, source, diagnostics);
-    }
-}
-
-fn push_unknown_enum(
-    schema: &str,
-    path: &str,
-    value: &str,
-    source: &str,
-    diagnostics: &mut Vec<Diagnostic>,
-) {
-    if let Some(message) = unknown_enum(schema, path, value) {
-        let field_path: Vec<String> = path.split('.').map(str::to_string).collect();
-        diagnostics.push(
-            Diagnostic::error(
-                codes::VOCAB_UNKNOWN,
-                message,
-                key_range(source, path.rsplit('.').next().unwrap_or(path)),
-            )
-            .with_field_path(field_path),
-        );
-    }
-}
-
-fn unknown_enum(schema: &str, path: &str, value: &str) -> Option<String> {
-    let field = tide_field_at(schema, path)?;
-    if field.enum_values.is_empty() || field.enum_values.iter().any(|item| item == value) {
-        return None;
-    }
-    Some(format!("unknown {} value '{value}'", field.name))
-}
-
 /// Whether two paths name one file: separators and a drive letter's case
 /// do not count, so `C:\\w\\objects/rules/x.yaml` (a path joined with `/`)
 /// and the directory walk's `c:\\w\\objects\\rules\\x.yaml` are the same
@@ -1881,10 +988,6 @@ fn key_range(source: &str, key: &str) -> Range {
     } else {
         Range::point(0, 0)
     }
-}
-
-fn is_uuidv4(value: &str) -> bool {
-    Uuid::parse_str(value).is_ok_and(|u| u.get_version_num() == 4)
 }
 
 fn document_symbols(source: &str, object: &TideObject, object_type: &str) -> Vec<DocumentSymbol> {
@@ -1999,75 +1102,6 @@ mod tests {
         assert!(!super::same_file("/w/objects/x.yaml", "/w/objects/y.yaml"));
     }
 
-    /// The shared rule (#790) picks the UUID a dangling `detection_model`
-    /// meant: two edits at most, the same UUID in another case or padded,
-    /// and nothing for an unrelated one (#213).
-    #[test]
-    fn closest_detection_model_uses_the_shared_rule() {
-        let objective = |uuid: &str| IndexedObject {
-            path: format!("objects/objectives/{uuid}.yaml"),
-            object_type: "objective".into(),
-            uuid: uuid.into(),
-            name: uuid.into(),
-            body: serde_yaml::Value::Null,
-            schema: "objective::1.0".into(),
-            name_range: Range::point(0, 0),
-            refs: Vec::new(),
-        };
-        let a = "6f1c2a3b-0000-4000-8000-000000000001";
-        let b = "6f1c2a3b-0000-4000-8000-0000000000a2";
-        let workspace = [objective(a), objective(b)];
-        let closest = |v: &str| closest_detection_model(&workspace, v);
-        assert_eq!(
-            closest("6f1c2a3b-0000-4000-8000-00000000001").as_deref(),
-            Some(a)
-        );
-        assert_eq!(
-            closest("6F1C2A3B-0000-4000-8000-000000000001").as_deref(),
-            Some(a)
-        );
-        assert_eq!(closest(&format!(" {a} ")).as_deref(), Some(a));
-        assert_eq!(
-            closest("6f1c2a3b-0000-4000-8000-0000000000a3").as_deref(),
-            Some(b)
-        );
-        assert_eq!(closest("99999999-9999-4999-8999-999999999999"), None);
-        assert_eq!(closest("  "), None);
-    }
-
-    /// #213's bound is two edits, wherever they are: side by side, cut or
-    /// added at one place, or apart; three edits apart find nothing.
-    #[test]
-    fn closest_detection_model_takes_two_edits_anywhere() {
-        let objective = |uuid: &str| IndexedObject {
-            path: format!("objects/objectives/{uuid}.yaml"),
-            object_type: "objective".into(),
-            uuid: uuid.into(),
-            name: uuid.into(),
-            body: serde_yaml::Value::Null,
-            schema: "objective::1.0".into(),
-            name_range: Range::point(0, 0),
-            refs: Vec::new(),
-        };
-        let a = "6f1c2a3b-0000-4000-8000-000000000001";
-        let workspace = [objective(a)];
-        let closest = |v: &str| closest_detection_model(&workspace, v);
-        for typo in [
-            // Two characters changed side by side.
-            "6f1c2a3b-0000-4000-8000-0000000000ab",
-            // Two characters dropped at one place.
-            "6f1c2a3b-0000-4000-8000-0000000001",
-            // Two characters appended.
-            "6f1c2a3b-0000-4000-8000-00000000000100",
-            // Two characters changed apart.
-            "7f1c2a3b-0000-4000-8000-000000000002",
-        ] {
-            assert_eq!(closest(typo).as_deref(), Some(a), "{typo}");
-        }
-        // Three characters changed apart: more than #213's two edits.
-        assert_eq!(closest("7f1c2a3b-0000-5000-8000-000000000002"), None);
-    }
-
     #[test]
     fn vocabularies_suggest_by_the_shared_rule() {
         let tlp = vocab_for_field("tlp").expect("the tlp vocabulary");
@@ -2076,6 +1110,45 @@ mod tests {
         assert_eq!(tlp.suggest("whitish"), None);
     }
     use super::*;
+    use opentide_core::codes;
+
+    /// The object checks are `opentide-workspace`'s `validate` (UC-2.6,
+    /// #821): an object with a broken UUID, an unknown TLP, a dangling
+    /// reference, a file name that is not its slug, no author, a duplicate
+    /// UUID and a deprecated key gets none of those findings here.
+    #[test]
+    fn the_object_checks_are_left_to_validate() {
+        let broken = r#"
+name: Some Rule
+metadata:
+  uuid: not-a-uuid
+  schema: rule::1.0
+  tlp: clearr
+detection_model: 00000000-0000-4000-8002-00000000ffff
+meta:
+  tlp: clear
+"#;
+        let twin = index_object("objects/rules/twin.yaml", broken)
+            .map(|o| vec![o])
+            .unwrap_or_default();
+        let diagnostics = analyze(AnalyzeInput {
+            path: "objects/rules/not-the-slug.yaml",
+            source: broken,
+            workspace: &twin,
+            elastic_tenants: &[],
+        })
+        .diagnostics;
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        // A file that is not YAML is validate's `yaml_parse`, not a finding here.
+        let unparsed = analyze(AnalyzeInput {
+            path: "objects/rules/x.yaml",
+            source: "name: [",
+            workspace: &[],
+            elastic_tenants: &[],
+        });
+        assert!(unparsed.diagnostics.is_empty());
+        assert!(!codes::ALL.contains(&"filename_slug"));
+    }
 
     const RULE: &str = r#"
 name: Sentinel KQL Rule
@@ -2150,59 +1223,6 @@ configurations:
     }
 
     #[test]
-    fn every_revision_requires_its_own_fields() {
-        // rule::1.1 requires description as rule::1.0 does: the check was
-        // hard-coded for rule::1.0 only.
-        let source = VALID_RULE.replace("description: |\n  test\n", "");
-        let found = shape_findings(&source);
-        assert_eq!(found.len(), 1, "{found:?}");
-        assert_eq!(found[0].0, "description");
-        assert_eq!(found[0].1, "missing required field 'description'");
-        // Nested: a platform block without its status, under the block's key.
-        let source = VALID_RULE.replace("    status: DESIGN\n", "");
-        let found = shape_findings(&source);
-        assert_eq!(found.len(), 1, "{found:?}");
-        assert_eq!(found[0].0, "configurations.splunk.status");
-        assert_eq!(found[0].2.start.line, 16);
-    }
-
-    #[test]
-    fn a_key_the_revision_does_not_define_is_reported_where_it_is() {
-        // metadata.reviewed exists in rule::1.1 only.
-        let source = VALID_RULE.replace("rule::1.1", "rule::1.0").replace(
-            "  author: Someone\n",
-            "  author: Someone\n  reviewed: 2026-01-03\n",
-        );
-        let found = shape_findings(&source);
-        assert_eq!(found.len(), 1, "{found:?}");
-        let (path, message, range) = &found[0];
-        assert_eq!(path, "metadata.reviewed");
-        assert_eq!(
-            message,
-            "field 'metadata.reviewed' is not defined in rule::1.0"
-        );
-        // The real key on line 10, not the commented-out template key below it.
-        assert_eq!((range.start.line, range.start.character), (9, 2));
-        assert_eq!(
-            shape_findings(&source.replace("rule::1.0", "rule::1.1")),
-            vec![]
-        );
-        // An unknown root key, and one in a list item of a closed object.
-        let source = format!("{VALID_RULE}bogus: 1\n");
-        assert_eq!(shape_findings(&source)[0].0, "bogus");
-    }
-
-    fn every_finding(path: &str, source: &str) -> Vec<Diagnostic> {
-        analyze(AnalyzeInput {
-            path,
-            source,
-            workspace: &[],
-            elastic_tenants: &[],
-        })
-        .diagnostics
-    }
-
-    #[test]
     fn a_merge_key_fills_the_fields_it_merges() {
         // serde_yaml leaves `<<` unresolved: it read as an unknown key, and
         // the merged `status` as missing. opentide's loader resolves it.
@@ -2211,54 +1231,6 @@ configurations:
             "    <<: &base\n      status: DESIGN\n",
         );
         assert_eq!(shape_findings(&source), vec![]);
-    }
-
-    #[test]
-    fn a_bad_value_in_a_later_list_item_is_reported_on_that_item() {
-        let source = OBJECTIVE_SIGNALS;
-        let found: Vec<_> = every_finding("objects/objectives/o.yaml", source)
-            .into_iter()
-            .filter(|d| d.code == codes::VOCAB_UNKNOWN)
-            .collect();
-        assert_eq!(found.len(), 1, "{found:?}");
-        assert_eq!(found[0].message, "unknown severity value 'Bogus'");
-        // The second signal's `severity` (line 30), not the valid first one's (20).
-        assert_eq!(found[0].range.start.line, 29);
-        // Two bad items are two findings.
-        let both = source.replace("severity: Medium", "severity: Wrong");
-        let found = every_finding("objects/objectives/o.yaml", &both)
-            .into_iter()
-            .filter(|d| d.code == codes::VOCAB_UNKNOWN)
-            .count();
-        assert_eq!(found, 2);
-    }
-
-    #[test]
-    fn an_unknown_key_is_placed_whatever_its_spelling() {
-        // Non-ASCII, quoted: on the key itself.
-        for key in ["réf", "\"bogus\"", "'bogus'"] {
-            let source = format!("{VALID_RULE}{key}: 1\n");
-            let found = shape_findings(&source);
-            assert_eq!(found.len(), 1, "{key}: {found:?}");
-            assert_eq!(found[0].2.start.line, 19, "{key}");
-        }
-        // A flow mapping's key has no line of its own: its block's key.
-        let source = VALID_RULE.replace(
-            "  splunk:\n    status: DESIGN\n    query: index=main\n",
-            "  splunk: {status: DESIGN, query: index=main, bogus: 1}\n",
-        );
-        let found = shape_findings(&source);
-        assert_eq!(found.len(), 1, "{found:?}");
-        assert_eq!(found[0].0, "configurations.splunk.bogus");
-        assert_eq!(found[0].2.start.line, 16);
-    }
-
-    #[test]
-    fn a_key_that_is_not_a_string_is_not_a_field() {
-        let source = format!("{VALID_RULE}1: x\n");
-        let found = shape_findings(&source);
-        assert_eq!(found.len(), 1, "{found:?}");
-        assert_eq!(found[0].1, "field '1' is not defined in rule::1.1");
     }
 
     #[test]
@@ -2322,83 +1294,6 @@ objective:
 "#;
 
     #[test]
-    fn splunk_2x_spellings_are_unknown_keys() {
-        // opentide#745: `search` no longer fills `query` and flat `throttling`
-        // no longer moves into `trigger`; opentide validate refuses both.
-        let source = VALID_RULE.replace(
-            "    query: index=main\n",
-            "    search: index=main\n    throttling:\n      period: 1h\n",
-        );
-        let paths: Vec<String> = shape_findings(&source)
-            .into_iter()
-            .map(|(path, _, _)| path)
-            .collect();
-        for path in [
-            "configurations.splunk.search",
-            "configurations.splunk.throttling",
-            "configurations.splunk.query",
-        ] {
-            assert!(paths.iter().any(|p| p == path), "{path} in {paths:?}");
-        }
-        // Neither the query nor its legacy spelling: required.
-        let source = VALID_RULE.replace("    query: index=main\n", "");
-        assert_eq!(shape_findings(&source)[0].0, "configurations.splunk.query");
-    }
-
-    #[test]
-    fn a_field_only_the_templates_ask_for_is_a_warning() {
-        // opentide validate accepts a rule without configurations or response.
-        let source = VALID_RULE
-            .split("response:")
-            .next()
-            .expect("head")
-            .to_string();
-        assert_eq!(shape_findings(&source), vec![]);
-        let warnings: Vec<String> = analyze(AnalyzeInput {
-            path: "objects/rules/rule.yaml",
-            source: &source,
-            workspace: &[],
-            elastic_tenants: &[],
-        })
-        .diagnostics
-        .into_iter()
-        .filter(|d| d.code == codes::RECOMMENDED_FIELD_MISSING)
-        .map(|d| d.message)
-        .collect();
-        assert_eq!(
-            warnings,
-            vec![
-                "recommended field 'configurations' is missing",
-                "recommended field 'response' is missing"
-            ]
-        );
-    }
-
-    #[test]
-    fn every_enum_in_the_catalog_is_checked() {
-        let vocab = |source: &str| -> Vec<String> {
-            analyze(AnalyzeInput {
-                path: "objects/rules/rule.yaml",
-                source,
-                workspace: &[],
-                elastic_tenants: &[],
-            })
-            .diagnostics
-            .into_iter()
-            .filter(|d| d.code == codes::VOCAB_UNKNOWN)
-            .map(|d| d.field_path.unwrap_or_default().join("."))
-            .collect()
-        };
-        assert_eq!(vocab(VALID_RULE), Vec::<String>::new());
-        // response.alert_severity had no check of its own.
-        let source = VALID_RULE.replace("alert_severity: High", "alert_severity: Severe");
-        assert_eq!(vocab(&source), vec!["response.alert_severity"]);
-        // A field another check covers is reported once.
-        let source = VALID_RULE.replace("tlp: clear", "tlp: clearr");
-        assert_eq!(vocab(&source), vec!["metadata.tlp"]);
-    }
-
-    #[test]
     fn a_revision_the_catalog_does_not_know_reports_no_unknown_key() {
         let source = VALID_RULE.replace("rule::1.1", "rule::7.0").replace(
             "  author: Someone\n",
@@ -2409,43 +1304,6 @@ objective:
                 .iter()
                 .all(|(path, _, _)| path != "metadata.future_field")
         );
-    }
-
-    #[test]
-    fn retired_meta_is_an_unknown_key_not_a_deprecation() {
-        let src = r#"
-name: Legacy
-meta:
-  uuid: 11111111-1111-4111-8111-111111111111
-  schema: rule::1.0
-  version: 1
-  created: 2026-01-01
-  modified: 2026-01-02
-  tlp: clear
-"#;
-        let r = analyze(AnalyzeInput {
-            path: "objects/rules/legacy.yaml",
-            source: src,
-            workspace: &[],
-            elastic_tenants: &[],
-        });
-        // opentide#745 retired the `meta:` spelling: an unknown key, as opentide
-        // validate reports it, and `metadata` is required.
-        assert!(
-            !r.diagnostics
-                .iter()
-                .any(|d| d.code == codes::DEPRECATED_FIELD),
-            "{:?}",
-            r.diagnostics
-        );
-        let paths: Vec<Vec<String>> = r
-            .diagnostics
-            .iter()
-            .filter(|d| d.code == codes::SCHEMA_VALIDATION)
-            .filter_map(|d| d.field_path.clone())
-            .collect();
-        assert!(paths.contains(&vec!["meta".to_string()]), "{paths:?}");
-        assert!(paths.contains(&vec!["metadata".to_string()]), "{paths:?}");
     }
 
     #[test]
@@ -2484,154 +1342,6 @@ meta:
     }
 
     #[test]
-    fn workspace_deprecation_overlay_wins() {
-        let _overlay = OVERLAY_LOCK
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        install_deprecation_overlay(vec![FieldDeprecation {
-            schema: "rule".into(),
-            path: "legacy_note".into(),
-            message: "removed in 1.0".into(),
-        }]);
-        let src = "name: Rule\nlegacy_note: still here\nmetadata:\n  schema: rule::1.0\n";
-        let r = analyze(AnalyzeInput {
-            path: "objects/rules/overlay.yaml",
-            source: src,
-            workspace: &[],
-            elastic_tenants: &[],
-        });
-        install_deprecation_overlay(Vec::new());
-        assert!(
-            r.diagnostics.iter().any(|d| {
-                d.code == codes::DEPRECATED_FIELD && d.message.contains("removed in 1.0")
-            }),
-            "{:?}",
-            r.diagnostics
-        );
-    }
-
-    /// Bundled rows for `configurations.splunk.*` are dotted paths, not the
-    /// top-level `meta` key. A later `notable.security_domain` is the
-    /// replacement and must stay clean. Rule rows do not apply to threats.
-    #[test]
-    fn nested_splunk_deprecations_are_schema_scoped() {
-        let _overlay = OVERLAY_LOCK
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let src = r#"
-name: Nested Splunk
-metadata:
-  schema: rule::1.0
-configurations:
-  splunk:
-    advanced: {}
-    security_domain: Access
-    notable:
-      security_domain: Access
-"#;
-        // The bundled catalog has no deprecation since opentide#745; a
-        // workspace's own rows exercise the schema scoping.
-        install_deprecation_overlay(vec![
-            FieldDeprecation {
-                schema: "rule".into(),
-                path: "configurations.splunk.advanced".into(),
-                message: "Use nested Splunk action blocks".into(),
-            },
-            FieldDeprecation {
-                schema: "rule".into(),
-                path: "configurations.splunk.security_domain".into(),
-                message: "security_domain is now nested under the notable block".into(),
-            },
-        ]);
-        let warnings = deprecation_warnings(src);
-        assert_eq!(
-            warnings,
-            vec![
-                (
-                    vec![
-                        "configurations".to_string(),
-                        "splunk".to_string(),
-                        "advanced".to_string(),
-                    ],
-                    "Use nested Splunk action blocks".to_string(),
-                ),
-                (
-                    vec![
-                        "configurations".to_string(),
-                        "splunk".to_string(),
-                        "security_domain".to_string(),
-                    ],
-                    "security_domain is now nested under the notable block".to_string(),
-                ),
-            ]
-        );
-
-        let threat = r#"
-name: Not a rule
-metadata:
-  schema: threat::1.0
-configurations:
-  splunk:
-    advanced: {}
-    security_domain: Access
-"#;
-        let leaked = deprecation_warnings(threat);
-        install_deprecation_overlay(Vec::new());
-        assert!(
-            leaked.is_empty(),
-            "rule deprecations leaked onto a threat: {leaked:?}"
-        );
-    }
-
-    /// A workspace overlay adds rows, root and nested paths alike. (The bundled
-    /// catalog has none since opentide#745.)
-    #[test]
-    fn deprecation_overlay_reports_root_and_nested_paths() {
-        let _overlay = OVERLAY_LOCK
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        install_deprecation_overlay(vec![
-            FieldDeprecation {
-                schema: "rule".into(),
-                path: "legacy_note".into(),
-                message: "removed in 1.0".into(),
-            },
-            FieldDeprecation {
-                schema: "rule".into(),
-                path: "configurations.splunk.security_domain".into(),
-                message: "nested under notable".into(),
-            },
-        ]);
-        let src = r#"
-name: Rule
-legacy_note: still here
-metadata:
-  schema: rule::1.0
-configurations:
-  splunk:
-    security_domain: Access
-"#;
-        let warnings = deprecation_warnings(src);
-        install_deprecation_overlay(Vec::new());
-        let paths: Vec<&[String]> = warnings.iter().map(|(path, _)| path.as_slice()).collect();
-        assert!(
-            paths.contains(&["legacy_note".to_string()].as_slice()),
-            "{warnings:?}"
-        );
-        assert!(
-            paths.contains(
-                &[
-                    "configurations".to_string(),
-                    "splunk".to_string(),
-                    "security_domain".to_string(),
-                ]
-                .as_slice()
-            ),
-            "{warnings:?}"
-        );
-    }
-
-    #[test]
     fn parse_deprecation_overlay_accepts_alias_and_drops_empty() {
         let parsed = parse_deprecation_overlay(
             r#"{"fields":[
@@ -2648,71 +1358,6 @@ configurations:
         assert_eq!(parsed[1].path, "both");
         assert_eq!(parsed[1].message, "from message");
         assert!(parse_deprecation_overlay("{").is_err());
-    }
-
-    /// The deprecation overlay is process-wide: the tests that install one
-    /// take turns, or one would read another's rows.
-    static OVERLAY_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-    fn deprecation_warnings(source: &str) -> Vec<(Vec<String>, String)> {
-        analyze(AnalyzeInput {
-            path: "objects/rules/nested.yaml",
-            source,
-            workspace: &[],
-            elastic_tenants: &[],
-        })
-        .diagnostics
-        .into_iter()
-        .filter(|d| {
-            d.code == codes::DEPRECATED_FIELD && d.severity == opentide_core::Severity::Warning
-        })
-        .map(|d| {
-            let message = d
-                .message
-                .split_once(": ")
-                .map(|(_, rest)| rest.to_string())
-                .unwrap_or(d.message);
-            (d.field_path.unwrap_or_default(), message)
-        })
-        .collect()
-    }
-
-    #[test]
-    fn scalar_impact_is_schema_validation() {
-        let src = r#"
-name: Simulated Actor
-criticality: High
-metadata:
-  uuid: 00000000-0000-4000-8001-000000000001
-  schema: threat::1.0
-  version: 1
-  created: 2026-01-01
-  modified: 2026-01-02
-  tlp: clear
-threat:
-  severity: Substantial incident
-  impact: Data Breach
-  leverage:
-    - Information Gathering
-  viability: Likely
-"#;
-        let r = analyze(AnalyzeInput {
-            path: "objects/threats/t.yaml",
-            source: src,
-            workspace: &[],
-            elastic_tenants: &[],
-        });
-        let diag = r
-            .diagnostics
-            .iter()
-            .find(|d| d.message.contains("threat.impact"))
-            .expect("scalar impact diagnostic");
-        assert_eq!(diag.code, codes::SCHEMA_VALIDATION);
-        assert_eq!(
-            diag.field_path.as_deref(),
-            Some(["threat".to_string(), "impact".to_string()].as_slice())
-        );
-        assert_eq!(diag.suggestion.as_deref(), Some("- Data Breach"));
     }
 
     fn threat_src(threat_body: &str) -> String {
@@ -2740,66 +1385,6 @@ threat:
             workspace: &[],
             elastic_tenants: &[],
         })
-    }
-
-    #[test]
-    fn empty_impact_list_fails_min_items() {
-        let r = analyze_threat(
-            "  severity: Substantial incident\n  impact: []\n  leverage:\n    - Information Gathering\n  viability: Likely\n",
-        );
-        let diag = r
-            .diagnostics
-            .iter()
-            .find(|d| {
-                d.field_path.as_deref()
-                    == Some(["threat".to_string(), "impact".to_string()].as_slice())
-            })
-            .expect("empty impact");
-        assert_eq!(diag.code, codes::SCHEMA_VALIDATION);
-        assert!(
-            diag.message.contains("threat.impact") && diag.message.contains("at least 1"),
-            "{}",
-            diag.message
-        );
-    }
-
-    #[test]
-    fn unknown_leverage_item_is_vocab_unknown() {
-        let r = analyze_threat(
-            "  severity: Substantial incident\n  impact:\n    - Data Breach\n  leverage:\n    - Not A Real Leverage\n  viability: Likely\n",
-        );
-        let diag = r
-            .diagnostics
-            .iter()
-            .find(|d| {
-                d.code == codes::VOCAB_UNKNOWN
-                    && d.field_path.as_deref()
-                        == Some(["threat".to_string(), "leverage".to_string()].as_slice())
-            })
-            .expect("unknown leverage");
-        assert!(
-            diag.message.contains("Not A Real Leverage"),
-            "{}",
-            diag.message
-        );
-    }
-
-    #[test]
-    fn leverage_string_must_be_a_list() {
-        let r = analyze_threat(
-            "  severity: Substantial incident\n  impact:\n    - Data Breach\n  leverage: Information Gathering\n  viability: Likely\n",
-        );
-        let diag = r
-            .diagnostics
-            .iter()
-            .find(|d| {
-                d.field_path.as_deref()
-                    == Some(["threat".to_string(), "leverage".to_string()].as_slice())
-            })
-            .expect("scalar leverage");
-        assert_eq!(diag.code, codes::SCHEMA_VALIDATION);
-        assert!(diag.message.contains("YAML list"), "{}", diag.message);
-        assert_eq!(diag.suggestion.as_deref(), Some("- Information Gathering"));
     }
 
     #[test]
@@ -2879,34 +1464,6 @@ threat:
     }
 
     #[test]
-    fn unknown_tlp_is_vocab_unknown() {
-        let src = RULE.replace("tlp: clear", "tlp: purple");
-        let r = analyze(AnalyzeInput {
-            path: "objects/rules/sentinel-kql-rule.yaml",
-            source: &src,
-            workspace: &[],
-            elastic_tenants: &[],
-        });
-        assert!(
-            r.diagnostics.iter().any(|d| d.code == codes::VOCAB_UNKNOWN),
-            "{:?}",
-            r.diagnostics
-        );
-    }
-
-    #[test]
-    fn invalid_uuid_is_flagged() {
-        let src = RULE.replace("00000000-0000-4000-8003-000000000001", "not-a-uuid");
-        let r = analyze(AnalyzeInput {
-            path: "x.yaml",
-            source: &src,
-            workspace: &[],
-            elastic_tenants: &[],
-        });
-        assert!(r.diagnostics.iter().any(|d| d.code == codes::INVALID_UUID));
-    }
-
-    #[test]
     fn detection_model_absence_is_not_a_schema_error() {
         let src = RULE.replace(
             "detection_model: 00000000-0000-4000-8002-000000000001\n",
@@ -2922,21 +1479,6 @@ threat:
             !r.diagnostics.iter().any(|d| {
                 d.message.contains("detection_model") && d.code == codes::SCHEMA_VALIDATION
             }),
-            "{:?}",
-            r.diagnostics
-        );
-    }
-
-    #[test]
-    fn invalid_ref_detection_model() {
-        let r = analyze(AnalyzeInput {
-            path: "objects/rules/sentinel-kql-rule.yaml",
-            source: RULE,
-            workspace: &[],
-            elastic_tenants: &[],
-        });
-        assert!(
-            r.diagnostics.iter().any(|d| d.code == codes::INVALID_REF),
             "{:?}",
             r.diagnostics
         );
@@ -2986,219 +1528,6 @@ threat:
     }
 
     #[test]
-    fn detection_model_naming_nothing_is_invalid_with_no_unrelated_suggestion() {
-        let found = invalid_refs(
-            &rule_naming("5a1e4b8c-1d2f-4a3b-9c4d-0e1f2a3b4c5d"),
-            &signals_workspace(),
-        );
-        let [d] = found.as_slice() else {
-            panic!("{found:?}")
-        };
-        assert_eq!(
-            d.message,
-            "invalid_ref: detection_model 5a1e4b8c-1d2f-4a3b-9c4d-0e1f2a3b4c5d is not an indexed objective or signal"
-        );
-        assert_eq!(d.severity, opentide_core::Severity::Error);
-        // An objective about something else is not offered: applying it would
-        // re-parent the rule.
-        assert_eq!(d.suggestion, None);
-    }
-
-    #[test]
-    fn detection_model_one_typo_from_a_signal_suggests_it() {
-        let found = invalid_refs(
-            &rule_naming("00000000-0000-4000-8099-00000000002"),
-            &signals_workspace(),
-        );
-        let [d] = found.as_slice() else {
-            panic!("{found:?}")
-        };
-        assert_eq!(
-            d.suggestion.as_deref(),
-            Some("00000000-0000-4000-8099-000000000002")
-        );
-    }
-
-    /// The text a single-line range covers (ASCII fixtures: UTF-16 columns are bytes).
-    fn covered(source: &str, range: Range) -> &str {
-        assert_eq!(range.start.line, range.end.line, "{range:?}");
-        let line = source.lines().nth(range.start.line as usize).unwrap();
-        &line[range.start.character as usize..range.end.character as usize]
-    }
-
-    /// `source` with `range` replaced by `text`, as an editor applies a quick fix.
-    fn apply(source: &str, range: Range, text: &str) -> String {
-        let start = opentide_core::position_to_offset(source, range.start);
-        let end = opentide_core::position_to_offset(source, range.end);
-        format!("{}{text}{}", &source[..start], &source[end..])
-    }
-
-    #[test]
-    fn invalid_ref_underlines_the_uuid_and_its_fix_keeps_the_yaml_valid() {
-        // #215: the range is the value, so applying the suggestion replaces it.
-        let typo = "00000000-0000-4000-8099-00000000002";
-        let source = rule_naming(typo);
-        let found = invalid_refs(&source, &signals_workspace());
-        let [d] = found.as_slice() else {
-            panic!("{found:?}")
-        };
-        assert_eq!(covered(&source, d.range), typo);
-        let suggestion = d.suggestion.as_deref().expect("a near miss");
-        let fixed = apply(&source, d.range, suggestion);
-        let body: serde_yaml::Value = serde_yaml::from_str(&fixed).expect("valid YAML");
-        assert_eq!(body["detection_model"].as_str(), Some(suggestion));
-        assert!(invalid_refs(&fixed, &signals_workspace()).is_empty());
-    }
-
-    #[test]
-    fn an_aliased_detection_model_keeps_the_key_range() {
-        // The UUID is at the anchor, before the key: underlining it there
-        // would put the finding and its fix on another field.
-        let dangling = "00000000-0000-4000-8099-000000000099";
-        let source = RULE
-            .replace(
-                "description: |\n  test\n",
-                &format!("description: &dm {dangling}\n"),
-            )
-            .replace(
-                "detection_model: 00000000-0000-4000-8002-000000000001",
-                "detection_model: *dm",
-            );
-        assert!(source.contains("*dm") && source.contains("&dm"), "{source}");
-        let found = invalid_refs(&source, &signals_workspace());
-        let [d] = found.as_slice() else {
-            panic!("{found:?}")
-        };
-        assert_eq!(covered(&source, d.range), "detection_model");
-    }
-
-    #[test]
-    fn each_dangling_threat_underlines_its_own_uuid() {
-        let a = "00000000-0000-4000-8001-00000000000a";
-        let b = "00000000-0000-4000-8001-00000000000b";
-        let source = OBJECTIVE_SIGNALS.replace(
-            "  signals:\n",
-            &format!("  threats:\n    - {a}\n    - {b}\n  signals:\n"),
-        );
-        let found: Vec<_> = analyze(AnalyzeInput {
-            path: "objects/objectives/obj.yaml",
-            source: &source,
-            workspace: &[],
-            elastic_tenants: &[],
-        })
-        .diagnostics
-        .into_iter()
-        .filter(|d| d.code == codes::INVALID_REF)
-        .collect();
-        let texts: Vec<&str> = found.iter().map(|d| covered(&source, d.range)).collect();
-        assert_eq!(texts, [a, b]);
-    }
-
-    #[test]
-    fn filename_slug_underlines_the_name() {
-        let r = analyze(AnalyzeInput {
-            path: "objects/rules/not-the-slug.yaml",
-            source: RULE,
-            workspace: &[],
-            elastic_tenants: &[],
-        });
-        let d = r
-            .diagnostics
-            .iter()
-            .find(|d| d.code == codes::FILENAME_SLUG)
-            .expect("filename_slug");
-        assert_eq!(covered(RULE, d.range), "Sentinel KQL Rule");
-        assert_eq!(d.suggestion.as_deref(), Some("sentinel-kql-rule.yaml"));
-    }
-
-    /// The filename findings `diagnose_filename` gives for `RULE` at `path`
-    /// under `lint_toml`, as (code, suggestion).
-    fn filename_findings(path: &str, lint_toml: &str) -> Vec<(String, Option<String>)> {
-        let lint = parse_lint_settings(lint_toml).expect("lint.toml");
-        let object: TideObject = serde_yaml::from_str(RULE).expect("rule");
-        let mut found = Vec::new();
-        diagnose_filename(&lint, "rule", path, &object, RULE, &mut found);
-        found.into_iter().map(|d| (d.code, d.suggestion)).collect()
-    }
-
-    #[test]
-    fn object_file_stems_drop_the_debug_infix() {
-        assert_eq!(
-            object_file_stem("objects/rules/x.debug.yaml"),
-            Some(("x", ".debug.yaml"))
-        );
-        assert_eq!(
-            object_file_stem("/w/objects/rules/x.debug.yml"),
-            Some(("x", ".debug.yaml"))
-        );
-        assert_eq!(
-            object_file_stem("objects/rules/x.yaml"),
-            Some(("x", ".yaml"))
-        );
-        assert_eq!(
-            object_file_stem("c:/w/objects/rules/x.yml"),
-            Some(("x", ".yaml"))
-        );
-        assert_eq!(
-            object_file_stem("/w/objects/rules/[SEN] a: b.yaml"),
-            Some(("[SEN] a: b", ".yaml"))
-        );
-    }
-
-    #[test]
-    fn documents_that_are_not_files_have_no_stem() {
-        for path in [
-            "untitled:Untitled-1",
-            "opentide-object:00000000-0000-4000-8003-000000000001",
-            "vscode-vfs://github/org/repo/objects/rules/x.yaml",
-            "Untitled-1",
-            "x.yaml",
-            "",
-        ] {
-            assert_eq!(object_file_stem(path), None, "{path:?}");
-        }
-    }
-
-    #[test]
-    fn an_untitled_document_gets_no_filename_finding() {
-        let pattern = "[filenames]\npattern = '^[a-z-]+$'\n";
-        assert!(filename_findings("untitled:Untitled-1", pattern).is_empty());
-        assert!(filename_findings("untitled:Untitled-1", "").is_empty());
-        // The same text in a file is checked.
-        let found = filename_findings("objects/rules/Not The Slug.yaml", pattern);
-        let codes: Vec<&str> = found.iter().map(|(c, _)| c.as_str()).collect();
-        assert_eq!(codes, [codes::FILENAME_SLUG, codes::FILENAME_PATTERN]);
-    }
-
-    #[test]
-    fn a_debug_file_is_compared_without_its_infix() {
-        let pattern = "[filenames]\npattern = '^[a-z-]+$'\n";
-        assert!(
-            filename_findings("objects/rules/sentinel-kql-rule.debug.yaml", pattern).is_empty()
-        );
-        assert!(filename_findings("objects/rules/sentinel-kql-rule-2.debug.yml", "").is_empty());
-        assert_eq!(
-            filename_findings("objects/rules/not-the-slug.debug.yaml", ""),
-            [(
-                codes::FILENAME_SLUG.to_string(),
-                Some("sentinel-kql-rule.debug.yaml".to_string())
-            )]
-        );
-        let named = "[filenames]\nstyle = \"name\"\n";
-        assert!(filename_findings("objects/rules/Sentinel KQL Rule.debug.yaml", named).is_empty());
-    }
-
-    #[test]
-    fn signal_uuid_paths() {
-        assert!(is_signal_uuid_path("objective.signals.0.uuid"));
-        assert!(is_signal_uuid_path("objective.signals.12.uuid"));
-        assert!(!is_signal_uuid_path("objective.signals.0.parent"));
-        assert!(!is_signal_uuid_path("objective.signals..uuid"));
-        assert!(!is_signal_uuid_path("objective.threats.0"));
-        assert!(!is_signal_uuid_path("detection_model"));
-    }
-
-    #[test]
     fn injected_kql_tokens_land_on_yaml() {
         let r = analyze(AnalyzeInput {
             path: "objects/rules/sentinel-kql-rule.yaml",
@@ -3233,27 +1562,6 @@ threat:
             .filter(|t| t.capture == capture)
             .map(|t| &source[t.span.start..t.span.end])
             .collect()
-    }
-
-    #[test]
-    fn rule_severity_is_an_alert_severity() {
-        // opentide 0.18.0: a rule's `severity` takes alert_severity values
-        // (`High`), not the threat severity scale (`Substantial incident`).
-        let check = |severity: &str| {
-            let source = RULE.replace("\nseverity: High", &format!("\nseverity: {severity}"));
-            analyze(AnalyzeInput {
-                path: "objects/rules/sentinel-kql-rule.yaml",
-                source: &source,
-                workspace: &[],
-                elastic_tenants: &[],
-            })
-            .diagnostics
-            .into_iter()
-            .filter(|d| d.code == "vocab_unknown" && d.message.contains("severity"))
-            .count()
-        };
-        assert_eq!(check("High"), 0);
-        assert_eq!(check("Substantial incident"), 1);
     }
 
     #[test]
@@ -3389,51 +1697,6 @@ configurations:
     }
 
     #[test]
-    fn duplicate_id_across_workspace() {
-        let obj = IndexedObject::from_body(
-            "other.yaml",
-            "rule",
-            "00000000-0000-4000-8003-000000000001",
-            "Other",
-            serde_yaml::Value::Null,
-        );
-        let r = analyze(AnalyzeInput {
-            path: "objects/rules/sentinel-kql-rule.yaml",
-            source: RULE,
-            workspace: &[obj],
-            elastic_tenants: &[],
-        });
-        assert!(r.diagnostics.iter().any(|d| d.code == codes::DUPLICATE_ID));
-    }
-
-    #[test]
-    fn chaining_relation_unknown() {
-        let src = r#"
-name: Threat
-metadata:
-  uuid: 00000000-0000-4000-8001-000000000099
-  schema: threat::1.0
-threat:
-  chaining:
-    - relation: not-a-relation
-      vector: 00000000-0000-4000-8001-000000000001
-"#;
-        let r = analyze(AnalyzeInput {
-            path: "objects/threats/threat.yaml",
-            source: src,
-            workspace: &[],
-            elastic_tenants: &[],
-        });
-        assert!(
-            r.diagnostics
-                .iter()
-                .any(|d| d.code == codes::CHAINING_RELATION_UNKNOWN),
-            "{:?}",
-            r.diagnostics
-        );
-    }
-
-    #[test]
     fn crowdstrike_query_is_cql() {
         let rule = |query: &str| {
             format!(
@@ -3481,17 +1744,6 @@ threat:
             d.iter().any(|d| d.code == codes::CQL_CORRELATE_AGGREGATE),
             "{d:#?}"
         );
-    }
-
-    #[test]
-    fn filename_slug_warning() {
-        let r = analyze(AnalyzeInput {
-            path: "objects/rules/not-the-slug.yaml",
-            source: RULE,
-            workspace: &[],
-            elastic_tenants: &[],
-        });
-        assert!(r.diagnostics.iter().any(|d| d.code == codes::FILENAME_SLUG));
     }
 
     #[test]

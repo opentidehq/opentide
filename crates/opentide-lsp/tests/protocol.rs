@@ -99,11 +99,12 @@ fn capabilities_say_what_the_server_does_and_who_hosts_it() {
     assert!(kinds.contains(&json!("source.fixAll.opentide")), "{caps}");
     assert!(caps["documentLinkProvider"].is_object());
     assert!(caps["codeLensProvider"].is_object());
-    // #172: the binary alone has no host, checker or schemas.
+    // #172: the binary alone has no host or schemas; it checks configuration
+    // natively (UC-2.6).
     let opentide = &caps["experimental"]["opentide"];
     assert!(opentide["host"].is_null(), "{opentide}");
     assert_eq!(opentide["catalog"], "bundled");
-    assert_eq!(opentide["configurationChecks"], false);
+    assert_eq!(opentide["configurationChecks"], true);
     assert_eq!(opentide["configurationSchemas"], false);
     assert_eq!(opentide["engine"], init["serverInfo"]["version"]);
 
@@ -378,6 +379,75 @@ fn files_changed_on_disk_reach_the_open_documents() {
     }
 }
 
+fn loading(lsp: &mut Lsp) -> (u64, u64) {
+    let stats = lsp.request("opentide/__stats", Value::Null)["result"]["workspace"].clone();
+    (
+        stats["parses"].as_u64().unwrap(),
+        stats["configResolutions"].as_u64().unwrap(),
+    )
+}
+
+/// UC-2.6: the root's workspace is loaded once; an edit, a file a watcher
+/// reports and a configuration file reach it through its invalidation API,
+/// each re-reading only what it names, and the findings follow.
+#[test]
+fn edits_and_watched_files_invalidate_only_what_they_name() {
+    let scratch = workspace("invalidation", true);
+    let root = &scratch.0;
+    let rule_uri = file_uri(&root.join("objects/rules/rule-1.0.yaml"));
+    let (mut lsp, _) = start(json!({ "capabilities": watch(), "rootUri": file_uri(root) }));
+    let register = lsp.read();
+    lsp.write(&json!({ "jsonrpc": "2.0", "id": register["id"], "result": null }));
+    let rule = fixture(RULE);
+    let codes = codes_for(&mut lsp, &rule_uri, &rule);
+    assert!(!codes.contains(&"vocab_unknown".to_string()), "{codes:?}");
+    // The two object files, read once; the configuration resolved once.
+    assert_eq!(loading(&mut lsp), (2, 1));
+
+    // An edit re-reads that buffer alone, and validate reports on it.
+    let edited = rule.replacen("tlp: clear", "tlp: clearr", 1);
+    assert_ne!(edited, rule);
+    lsp.notify(
+        "textDocument/didChange",
+        json!({ "textDocument": { "uri": rule_uri, "version": 2 },
+                "contentChanges": [{ "text": edited }] }),
+    );
+    let diagnostics = published_for(&mut lsp, &rule_uri);
+    let tlp = diagnostics
+        .iter()
+        .find(|d| d["code"] == "vocab_unknown")
+        .unwrap_or_else(|| panic!("{diagnostics:#?}"));
+    assert_eq!(tlp["data"]["field_path"], json!(["metadata", "tlp"]));
+    assert_eq!(tlp["data"]["suggestion"], "clear", "{tlp}");
+    assert_eq!(loading(&mut lsp), (3, 1));
+
+    // The objective changes on disk: that file alone is read again.
+    let objective = root.join("objects/objectives/objective-1.0.yaml");
+    let text = std::fs::read_to_string(&objective).unwrap();
+    std::fs::write(&objective, format!("{text}\n")).unwrap();
+    lsp.notify(
+        "workspace/didChangeWatchedFiles",
+        json!({ "changes": [{ "uri": file_uri(&objective), "type": 2 }] }),
+    );
+    published_for(&mut lsp, &rule_uri);
+    assert_eq!(loading(&mut lsp), (4, 1));
+
+    // A configuration file: resolved again, no object re-read.
+    let platforms = root.join(".opentide/configurations/platforms");
+    std::fs::create_dir_all(&platforms).unwrap();
+    std::fs::write(
+        platforms.join("sentinel.toml"),
+        "[platform]\nenabled = true\n",
+    )
+    .unwrap();
+    lsp.notify(
+        "workspace/didChangeWatchedFiles",
+        json!({ "changes": [{ "uri": file_uri(&platforms.join("sentinel.toml")), "type": 1 }] }),
+    );
+    published_for(&mut lsp, &rule_uri);
+    assert_eq!(loading(&mut lsp), (4, 2));
+}
+
 /// P2.3: a code's documentation, a `Deprecated` tag and the other file of a
 /// `duplicate_id`, each for a client that reads it.
 #[test]
@@ -387,18 +457,10 @@ fn diagnostics_carry_what_the_client_reads() {
     // A second file with the rule's UUID.
     std::fs::write(root.join("objects/rules/copy.yaml"), fixture(RULE)).unwrap();
     let rule_uri = file_uri(&root.join("objects/rules/rule-1.0.yaml"));
-    let legacy =
-        "name: Legacy\nmeta:\n  uuid: 11111111-1111-4111-8111-111111111111\n  schema: rule::1.0\n";
-    // The bundled catalog has no deprecation since opentide#745: a workspace's
-    // own deprecations.json marks `meta`, so the tag is still exercised.
-    let catalogs = root.join(".opentide/lsp/catalogs/generated");
-    std::fs::create_dir_all(&catalogs).unwrap();
-    std::fs::write(
-        catalogs.join("deprecations.json"),
-        r#"{"fields":[{"schema":"rule","path":"meta","message":"Use metadata keyword instead"}]}"#,
-    )
-    .unwrap();
-    let legacy_uri = file_uri(&root.join("objects/rules/legacy.yaml"));
+    // `deprecated_field` is validate's, and no bundled field is deprecated
+    // (opentide#745): a deprecated KQL function exercises the tag.
+    let legacy = "SecurityEvent | summarize argmax(TimeGenerated, Account)\n";
+    let legacy_uri = file_uri(&root.join("queries/legacy.kql"));
     let rich = json!({ "textDocument": { "publishDiagnostics": {
         "codeDescriptionSupport": true,
         "tagSupport": { "valueSet": [1, 2] },
@@ -424,11 +486,11 @@ fn diagnostics_carry_what_the_client_reads() {
             .ends_with("objects/rules/copy.yaml"),
         "{duplicate}"
     );
-    open(&mut lsp, &legacy_uri, "opentide-yaml", legacy);
+    open(&mut lsp, &legacy_uri, "kql", legacy);
     let diagnostics = published_for(&mut lsp, &legacy_uri);
     let deprecated = diagnostics
         .iter()
-        .find(|d| d["code"] == "deprecated_field")
+        .find(|d| d["code"] == "kql_deprecated_function")
         .unwrap_or_else(|| panic!("{diagnostics:#?}"));
     assert_eq!(deprecated["tags"], json!([2]));
 
@@ -736,11 +798,30 @@ fn links_and_lenses_come_from_the_index() {
     assert_eq!(lens["command"]["arguments"][2][0]["uri"], rule_uri.as_str());
 }
 
-/// #219: a `filename_slug` rename is offered only where it can land: not
+/// lint's file-name finding as a client sends it back with a code action
+/// request: `filename_mismatch`, whose suggestion is the file name (KG-03;
+/// the server reports it once `lint::lint_file` is wired in, #905).
+fn file_name_finding(text: &str, suggestion: &str) -> Value {
+    let line = text.lines().position(|l| l.starts_with("name:")).unwrap();
+    let name = text.lines().nth(line).unwrap();
+    json!({
+        "range": {
+            "start": { "line": line, "character": 6 },
+            "end": { "line": line, "character": name.len() }
+        },
+        "severity": 2,
+        "code": "filename_mismatch",
+        "source": "opentide",
+        "message": "the file name is not the object's",
+        "data": { "field_path": ["name"], "suggestion": suggestion }
+    })
+}
+
+/// #219: a file-name rename is offered only where it can land: not
 /// for an unsaved `untitled:` buffer, which has no file to rename, and not
 /// onto a path another open document already has.
 #[test]
-fn filename_slug_renames_only_a_file_onto_a_free_name() {
+fn a_file_name_rename_lands_only_on_a_free_name() {
     let scratch = Scratch::new("filename-slug-no-rename");
     let path = scratch.0.join("objects/rules/not-the-slug.yaml");
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -754,13 +835,9 @@ fn filename_slug_renames_only_a_file_onto_a_free_name() {
     } } });
     let (mut lsp, _) = start(json!({ "capabilities": renaming, "rootUri": file_uri(&scratch.0) }));
     open(&mut lsp, &uri, "opentide-yaml", &text);
-    let diagnostics = published_for(&mut lsp, &uri);
-    let slug = diagnostics
-        .iter()
-        .find(|d| d["code"] == "filename_slug")
-        .unwrap_or_else(|| panic!("{diagnostics:#?}"))
-        .clone();
-    let suggestion = slug["data"]["suggestion"].as_str().unwrap().to_string();
+    published_for(&mut lsp, &uri);
+    let suggestion = "process-creation.yaml".to_string();
+    let slug = file_name_finding(&text, &suggestion);
     let actions = |lsp: &mut Lsp, uri: &str| {
         lsp.request(
             "textDocument/codeAction",
@@ -815,7 +892,7 @@ fn workspace_diagnostics_cover_closed_files() {
     assert_eq!(again["result"]["items"][0]["kind"], "unchanged", "{again}");
 }
 
-/// #215: `filename_slug`'s suggestion is a file name. A client that applies
+/// #215: a file-name finding's suggestion is a file name. A client that applies
 /// `RenameFile` gets an action that renames the file; no client gets an edit
 /// of the text, which is the object's name, and fixAll leaves it out.
 #[test]
@@ -823,7 +900,7 @@ fn workspace_diagnostics_cover_closed_files() {
     clippy::cast_possible_truncation,
     reason = "a range in a test document of a few lines"
 )]
-fn filename_slug_is_a_rename_never_a_text_edit() {
+fn a_file_name_finding_is_a_rename_never_a_text_edit() {
     let scratch = Scratch::new("filename-slug-rename");
     let path = scratch.0.join("objects/rules/not-the-slug.yaml");
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -839,14 +916,8 @@ fn filename_slug_is_a_rename_never_a_text_edit() {
         let (mut lsp, _) =
             start(json!({ "capabilities": capabilities, "rootUri": file_uri(&scratch.0) }));
         open(&mut lsp, &uri, "opentide-yaml", &text);
-        let diagnostics = published_for(&mut lsp, &uri);
-        let slug: Vec<&Value> = diagnostics
-            .iter()
-            .filter(|d| d["code"] == "filename_slug")
-            .collect();
-        let [slug] = slug.as_slice() else {
-            panic!("{diagnostics:#?}")
-        };
+        published_for(&mut lsp, &uri);
+        let slug = &file_name_finding(&text, "process-creation.yaml");
         // The range is the name the file should be named after.
         let line = text
             .lines()

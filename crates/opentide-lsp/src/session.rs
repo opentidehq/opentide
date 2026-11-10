@@ -2,12 +2,13 @@
 //! workspace roots and their files on disk, the client's capabilities, the
 //! analyses already run, and the messages waiting to be written.
 
+use crate::checks::{Buffers, RootChecks, Stub, configuration_issues, engine_diagnostic};
 use crate::server::{collect_objects, install_workspace_catalog_from, workspace_root};
 use crate::uri::uri_to_path;
 use lsp_server::{Message, Notification, ReqQueue, Response};
 use opentide_analysis::{
-    AnalyzeRequest, AnalyzeResponse, IndexedObject, LINT_CONFIGURATION, VISIBILITY_CONFIGURATION,
-    WorkspaceHost, analyze, install_lint, install_visibility, is_configuration_path,
+    AnalyzeRequest, AnalyzeResponse, IndexedObject, VISIBILITY_CONFIGURATION, WorkspaceHost,
+    analyze, install_visibility, is_configuration_path, place_configuration_issues,
 };
 use opentide_core::LanguageId;
 use std::cell::{Cell, RefCell};
@@ -82,8 +83,8 @@ pub(crate) struct Root {
         reason = "None: nothing installed yet; Some(None): no visibility.toml was found, which declares nothing; Some(Some(text)): the last text that parsed"
     )]
     good_visibility: RefCell<Option<Option<String>>>,
-    /// The last `lint.toml` text that parsed (#214), kept the same way.
-    good_lint: RefCell<Option<String>>,
+    /// The root's workspace, which `validate` checks (UC-2.6, #821).
+    pub(crate) checks: RefCell<RootChecks>,
 }
 
 impl Root {
@@ -96,7 +97,7 @@ impl Root {
             visibility: None,
             catalog: CatalogState::default(),
             good_visibility: RefCell::default(),
-            good_lint: RefCell::default(),
+            checks: RefCell::default(),
         }
     }
 
@@ -143,25 +144,23 @@ impl Root {
         }
         let changed = disk.refresh(&self.path);
         drop(disk);
-        if changed {
+        self.checks.borrow_mut().changed([PathBuf::from(path)]);
+        if !changed.is_empty() {
             self.drop_index();
         }
-        changed
+        !changed.is_empty()
     }
 
     /// Read one object file again (a watcher event, or the editor closed
     /// it), or forget it when it is gone.
     pub(crate) fn refresh_object(&self, path: &str) {
         self.disk.borrow_mut().refresh_path(path);
+        self.checks.borrow_mut().changed([PathBuf::from(path)]);
         self.drop_index();
     }
 
     fn visibility_path(&self) -> PathBuf {
         self.path.join(VISIBILITY_CONFIGURATION)
-    }
-
-    fn lint_path(&self) -> PathBuf {
-        self.path.join(LINT_CONFIGURATION)
     }
 }
 
@@ -270,13 +269,21 @@ struct DiskObjects {
 
 impl DiskObjects {
     /// Read every object file again; re-index only those whose text changed.
-    /// Whether anything changed.
-    fn refresh(&mut self, root: &Path) -> bool {
+    /// The files that changed, came or went (every file on the first read).
+    fn refresh(&mut self, root: &Path) -> Vec<PathBuf> {
         let found: BTreeMap<String, (String, String)> = collect_objects(root)
             .into_iter()
             .map(|(path, text)| (path_key(&path), (path, text)))
             .collect();
-        let mut changed = !self.loaded || found.len() != self.files.len();
+        let mut changed: Vec<PathBuf> = self
+            .files
+            .iter()
+            .filter(|(key, _)| !found.contains_key(*key))
+            .filter_map(|(_, (_, indexed))| indexed.as_ref().map(|o| PathBuf::from(&o.path)))
+            .collect();
+        if !self.loaded && found.is_empty() {
+            changed.push(root.join("objects"));
+        }
         self.loaded = true;
         self.files.retain(|path, _| found.contains_key(path));
         for (key, (path, text)) in found {
@@ -285,7 +292,7 @@ impl DiskObjects {
                 _ => {
                     let indexed = opentide_analysis::index_object(&path, &text);
                     self.files.insert(key, (text, indexed));
-                    changed = true;
+                    changed.push(PathBuf::from(path));
                 }
             }
         }
@@ -467,7 +474,30 @@ pub(crate) struct Session {
     catalog_sent: RefCell<CatalogSent>,
     /// What a host with no filesystem supplied on `initialize`.
     pub supplied: Supplied,
+    /// The workspaces of documents outside every root, by the folder that
+    /// holds their `objects/`.
+    loose_checks: RefCell<HashMap<PathBuf, RootChecks>>,
 }
+
+/// `path` as the workspace reads it: an absolute path as it is; anything
+/// else (an editor buffer's URI of another scheme, a path a browser host
+/// supplied relative to its workspace) under [`VIRTUAL_ROOT`], where no disk
+/// file is, so its folders and `objects/` are the buffers' alone.
+pub(crate) fn workspace_path(path: &str) -> PathBuf {
+    let native = Path::new(path);
+    if native.is_absolute() {
+        native.to_path_buf()
+    } else {
+        Path::new(VIRTUAL_ROOT).join(path.trim_start_matches(['/', '\\']))
+    }
+}
+
+/// Where [`workspace_path`] puts what is not an absolute path.
+#[cfg(windows)]
+pub(crate) const VIRTUAL_ROOT: &str = "C:\\opentide-virtual";
+/// Where [`workspace_path`] puts what is not an absolute path.
+#[cfg(not(windows))]
+pub(crate) const VIRTUAL_ROOT: &str = "/opentide-virtual";
 
 /// What a request sees of the workspace: the open documents, the object
 /// files of one root on disk, and their index.
@@ -600,9 +630,21 @@ impl Session {
             if r.checked.get() != self.batch.get() {
                 r.checked.set(self.batch.get());
                 let mut disk = r.disk.borrow_mut();
-                if (!disk.loaded || !self.caps.watch_files) && disk.refresh(&r.path) {
-                    r.drop_index();
-                    self.touch();
+                if !disk.loaded || !self.caps.watch_files {
+                    let first = !disk.loaded;
+                    let changed = disk.refresh(&r.path);
+                    if !self.caps.watch_files && !first {
+                        // Nothing reports what changed on disk: the object
+                        // files the walk found changed, and the
+                        // configuration, which is resolved again.
+                        let mut checks = r.checks.borrow_mut();
+                        checks.changed(changed.iter().cloned());
+                        checks.changed([r.path.join(".opentide").join("configurations")]);
+                    }
+                    if !changed.is_empty() {
+                        r.drop_index();
+                        self.touch();
+                    }
                 }
             }
         }
@@ -634,7 +676,6 @@ impl Session {
             self.log_warning(&err);
             self.warn_once(&err);
         }
-        self.activate_lint(r);
         let Some(r) = r else {
             if let Err(err) = install_visibility(self.supplied.visibility.as_deref()) {
                 self.log_warning(&format!("opentide-lsp: {err}; no datasets are declared"));
@@ -678,42 +719,6 @@ impl Session {
                     ));
                 }
                 let _ = install_visibility(kept.flatten().as_deref());
-            }
-        }
-    }
-
-    /// Install the root's `lint.toml` (#214): the editor's buffer, else the
-    /// file on disk, else the root's own among the supplied documents.
-    /// Without one, or outside every root, `opentide lint`'s defaults. Text
-    /// that does not parse keeps the last settings of that root that did.
-    fn activate_lint(&self, r: Option<&Root>) {
-        let Some(r) = r else {
-            let _ = install_lint(None);
-            return;
-        };
-        let path = r.lint_path();
-        let key = path_key(&path.display().to_string());
-        let text = self
-            .docs
-            .iter()
-            .find(|(uri, _)| path_key(&uri_to_path(uri)) == key)
-            .map(|(_, doc)| doc.text.clone())
-            .or_else(|| std::fs::read_to_string(&path).ok())
-            .or_else(|| {
-                self.supplied
-                    .files
-                    .get(&key)
-                    .map(|(_, text, _)| text.clone())
-            });
-        match install_lint(text.as_deref()) {
-            Ok(()) => {
-                *r.good_lint.borrow_mut() = text;
-            }
-            Err(err) => {
-                self.log_warning(&format!(
-                    "opentide-lsp: {err}; the last lint settings that parsed stay in use"
-                ));
-                let _ = install_lint(r.good_lint.borrow().as_deref());
             }
         }
     }
@@ -780,19 +785,206 @@ impl Session {
                 return Some(Arc::clone(response));
             }
         }
-        let response = Arc::new(analyze(
+        let mut response = analyze(
             &host,
             AnalyzeRequest {
                 uri: uri_to_path(uri),
                 language: doc.language,
                 text: doc.text.clone(),
             },
-        ));
+        );
+        match doc.language {
+            LanguageId::TideYaml => {
+                let found = self.object_findings(uri, doc);
+                response.diagnostics.splice(0..0, found);
+            }
+            LanguageId::Config => {
+                response.diagnostics = self.configuration_findings(uri, doc);
+            }
+            _ => {}
+        }
+        let response = Arc::new(response);
         self.analyses.set(self.analyses.get() + 1);
         self.cache
             .borrow_mut()
             .insert(uri.to_string(), (generation, Arc::clone(&response)));
         Some(response)
+    }
+
+    /// What `validate` reports on an open Tide document, placed in its text:
+    /// the root's workspace, with the open buffers (and what a host
+    /// supplied) in place of their files, checked for every open Tide
+    /// document of the root at once. A document outside every root, or
+    /// outside the root's object folders, has none (`validate` checks no such
+    /// file either).
+    fn object_findings(&self, uri: &str, doc: &Document) -> Vec<opentide_core::Diagnostic> {
+        let path = workspace_path(&uri_to_path(uri));
+        let files: Vec<PathBuf> = {
+            let mut files: Vec<PathBuf> = self
+                .docs
+                .iter()
+                .filter(|(_, d)| d.root == doc.root && d.language == LanguageId::TideYaml)
+                .map(|(u, _)| workspace_path(&uri_to_path(u)))
+                .collect();
+            files.sort();
+            files
+        };
+        let buffers = self.buffers(doc.root);
+        let generation = self.generation.get();
+        let run = |root: &Path, checks: &mut RootChecks| {
+            let found = checks.findings(root, buffers, files, generation);
+            (found, checks.resolve(&path), checks.failure.clone())
+        };
+        let (found, key, failure, root) = match doc.root.and_then(|i| self.roots.get(i)) {
+            Some(r) => {
+                let (found, key, failure) = run(&r.path, &mut r.checks.borrow_mut());
+                (found, key, failure, r.path.clone())
+            }
+            None => {
+                // A document outside every root is checked in the workspace
+                // its `objects/` folder names, as `validate` run there would.
+                let Some(root) = path
+                    .ancestors()
+                    .skip(1)
+                    .find(|a| a.file_name().is_some_and(|name| name == "objects"))
+                    .and_then(Path::parent)
+                    .map(Path::to_path_buf)
+                else {
+                    return Vec::new();
+                };
+                let mut loose = self.loose_checks.borrow_mut();
+                let (found, key, failure) = run(&root, loose.entry(root.clone()).or_default());
+                (found, key, failure, root)
+            }
+        };
+        if let Some(failure) = failure {
+            self.warn_once(&format!(
+                "{}: the configuration does not resolve, so objects are not checked: {failure}",
+                root.display()
+            ));
+            return Vec::new();
+        }
+        found
+            .get(&key)
+            .map(|findings| {
+                findings
+                    .iter()
+                    .map(|finding| engine_diagnostic(&doc.text, finding))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// What `validate` reports on a closed object file of `root`, placed in
+    /// `text` (a client that pulls the workspace's diagnostics).
+    pub(crate) fn closed_findings(
+        &self,
+        root: usize,
+        path: &str,
+        text: &str,
+    ) -> Vec<opentide_core::Diagnostic> {
+        let Some(r) = self.roots.get(root) else {
+            return Vec::new();
+        };
+        let buffers = self.buffers(Some(root));
+        let mut checks = r.checks.borrow_mut();
+        let found = checks.all_findings(&r.path, buffers, self.generation.get());
+        let key = checks.resolve(Path::new(path));
+        drop(checks);
+        found
+            .get(&key)
+            .map(|findings| {
+                findings
+                    .iter()
+                    .map(|finding| engine_diagnostic(text, finding))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// What the roots' workspaces read, parsed and resolved, summed.
+    pub(crate) fn workspace_stats(&self) -> opentide_workspace::Stats {
+        let mut sum = opentide_workspace::Stats::default();
+        for r in &self.roots {
+            if let Some(stats) = r.checks.borrow().stats() {
+                sum.file_reads += stats.file_reads;
+                sum.parses += stats.parses;
+                sum.config_resolutions += stats.config_resolutions;
+                sum.config_files_read += stats.config_files_read;
+            }
+        }
+        sum
+    }
+
+    /// The files the editor and the host hold for a root's workspace: the
+    /// open documents of the root, and every file a host with no filesystem
+    /// supplied.
+    fn buffers(&self, root: Option<usize>) -> Buffers {
+        let mut files: BTreeMap<PathBuf, String> = self
+            .supplied
+            .files
+            .values()
+            .filter(|(path, _, _)| !path.starts_with("opentide-object:"))
+            .map(|(path, text, _)| (workspace_path(path), text.clone()))
+            .collect();
+        for (uri, d) in &self.docs {
+            if d.root == root && matches!(d.language, LanguageId::TideYaml | LanguageId::Config) {
+                files.insert(workspace_path(&uri_to_path(uri)), d.text.clone());
+            }
+        }
+        // Objects the host knows by their metadata alone, unless a file
+        // holds them: the workspace reads each as a file of its family.
+        let mut stubs: Vec<Stub> = self
+            .host(root)
+            .indexed_objects()
+            .into_iter()
+            .flat_map(|index| index.iter().cloned().collect::<Vec<_>>())
+            .filter(|o| o.path.starts_with("opentide-object:"))
+            .map(|o| Stub {
+                family: o.object_type.clone(),
+                uuid: o.uuid.clone(),
+                schema: o.schema.clone(),
+                name: o.name.clone(),
+            })
+            .collect();
+        stubs.sort_by(|a, b| a.uuid.cmp(&b.uuid));
+        Buffers { files, stubs }
+    }
+
+    /// What opentide-schema's configuration checks report on an open
+    /// configuration buffer, placed on its keys.
+    fn configuration_findings(&self, uri: &str, doc: &Document) -> Vec<opentide_core::Diagnostic> {
+        let path = uri_to_path(uri);
+        let open: Vec<(String, String)> = self
+            .docs
+            .iter()
+            .filter(|(u, d)| u.as_str() != uri && d.language == LanguageId::Config)
+            .map(|(u, d)| (uri_to_path(u), d.text.clone()))
+            .collect();
+        let read = |file: &Path| -> Option<String> {
+            let key = path_key(&file.display().to_string());
+            std::fs::read(file)
+                .ok()
+                .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
+                .or_else(|| {
+                    self.supplied
+                        .files
+                        .get(&key)
+                        .map(|(_, text, _)| text.clone())
+                })
+                .map(|text| opentide_core::strip_bom(&text).to_string())
+        };
+        let is_dir = |dir: &Path| -> bool {
+            dir.is_dir() || {
+                let prefix = format!("{}/", path_key(&dir.display().to_string()));
+                self.supplied
+                    .files
+                    .keys()
+                    .any(|key| key.starts_with(&prefix))
+            }
+        };
+        let issues = configuration_issues(&path, &doc.text, &open, &read, &is_dir);
+        place_configuration_issues(&doc.text, issues)
     }
 
     /// The deepest root whose folder holds `path`, if one does: unlike
@@ -1271,13 +1463,6 @@ impl Session {
             typ: lsp_types::MessageType::WARNING,
             message: format!("opentide: {message}"),
         });
-    }
-
-    /// Whether `uri` is the `lint.toml` of a root.
-    pub(crate) fn is_lint(uri: &str) -> bool {
-        uri_to_path(uri)
-            .replace('\\', "/")
-            .ends_with(LINT_CONFIGURATION)
     }
 
     /// Whether `uri` is the `visibility.toml` of a root.

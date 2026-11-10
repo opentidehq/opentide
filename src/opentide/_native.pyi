@@ -1,6 +1,6 @@
 """Type stubs for the compiled module. Keep in step with ``src/lib.rs``."""
 
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from typing import Final, Literal, final
 
 Severity = Literal["error", "warning", "information", "hint"]
@@ -72,14 +72,7 @@ def install_catalog(
 def set_default_catalog(
     fields: str | None = None, deprecations: str | None = None, visibility: str | None = None
 ) -> None: ...
-def install_lint(text: str | None = None) -> None: ...
 def install_visibility(text: str | None = None) -> None: ...
-def set_configuration_checker(
-    checker: Callable[
-        [str, str, list[tuple[str, str]]], Sequence[tuple[str, Sequence[str], str, str]]
-    ]
-    | None = None,
-) -> None: ...
 def install_configuration_schemas(
     router: str | None = None, schemas: Sequence[tuple[str, str]] = ...
 ) -> None: ...

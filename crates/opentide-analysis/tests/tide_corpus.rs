@@ -1,14 +1,10 @@
-//! Conformance: tide_corpus objects produce `{code, field_path, severity}` diagnostics
-//! matching CLI issue shape. Pydantic object issues are a subset of the LSP.
-//! Engine may add extra query diagnostics inside `query: |`.
-//!
-//! The Pydantic side is this repository's `opentide` package (`src/opentide`), run by
-//! the interpreter of its environment (`uv sync --group dev` creates `.venv`), never
-//! an installed release. `OPENTIDE_PYTHON` names another interpreter, which must
-//! import `opentide` from `src/opentide` too.
+//! The tide_corpus objects as the engine reads them: indexed, their queries
+//! injected and checked in their languages. The object checks are
+//! `opentide-workspace`'s `validate` (UC-2.6, #821), compared with the
+//! oracle by `cargo xtask validate diff` and with the language server by
+//! `cargo xtask lsp parity`.
 
 #![expect(
-    clippy::expect_used,
     clippy::unwrap_used,
     reason = "test helpers outside #[test] functions: a panic fails the test"
 )]
@@ -16,7 +12,7 @@
 use opentide_analysis::{AnalyzeRequest, MemoryWorkspace, analyze, index_workspace};
 use opentide_core::LanguageId;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -192,181 +188,4 @@ fn library_rule_is_analyzable() {
             .map(|t| (t.capture.as_str(), text.get(t.span.start..t.span.end)))
             .collect::<Vec<_>>(),
     );
-}
-
-#[derive(serde::Deserialize)]
-struct PydanticIssue {
-    file: String,
-    code: String,
-    field_path: Vec<String>,
-    severity: String,
-}
-
-/// The interpreter of this checkout's Python environment, checked to import
-/// `opentide` from `src/opentide`.
-fn local_python() -> PathBuf {
-    let root = repo_root();
-    let python = std::env::var_os("OPENTIDE_PYTHON")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            let venv = std::env::var_os("UV_PROJECT_ENVIRONMENT")
-                .map_or_else(|| root.join(".venv"), |dir| root.join(dir));
-            if cfg!(windows) {
-                venv.join("Scripts").join("python.exe")
-            } else {
-                venv.join("bin").join("python")
-            }
-        });
-    assert!(
-        python.is_file(),
-        "no Python environment at {}: run `uv sync --group dev` in {} (or set OPENTIDE_PYTHON)",
-        python.display(),
-        root.display()
-    );
-    // `-X utf8`: the path is printed in UTF-8, not in the locale's encoding.
-    let output = std::process::Command::new(&python)
-        .args([
-            "-X",
-            "utf8",
-            "-c",
-            "import opentide, pathlib; print(pathlib.Path(opentide.__file__).resolve().parent)",
-        ])
-        .output()
-        .expect("python");
-    assert!(
-        output.status.success(),
-        "{} cannot import opentide: {}",
-        python.display(),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let package = String::from_utf8(output.stdout).expect("a UTF-8 path");
-    let package = Path::new(package.trim());
-    let local = root.join("src/opentide");
-    assert!(
-        same_directory(package, &local),
-        "{} imports opentide from {}, not this checkout",
-        python.display(),
-        package.display()
-    );
-    python
-}
-
-/// Whether two spellings name one directory. Each side is canonicalized: Python's
-/// `resolve()` and Rust's `canonicalize()` spell the same directory differently on
-/// Windows (`C:\...` and `\\?\C:\...`).
-fn same_directory(a: &Path, b: &Path) -> bool {
-    match (a.canonicalize(), b.canonicalize()) {
-        (Ok(a), Ok(b)) => a == b,
-        _ => false,
-    }
-}
-
-#[test]
-fn a_directory_is_the_same_however_it_is_spelled() {
-    let dir = std::env::temp_dir().join(format!("opentide-same-directory-{}", std::process::id()));
-    let real = dir.join("real");
-    fs::create_dir_all(real.join("sub")).unwrap();
-    // Another spelling of `real`, as Python on Windows prints one.
-    let other = real.join("sub").join("..");
-    assert_ne!(other, real.canonicalize().unwrap());
-    assert!(same_directory(&other, &real));
-    assert!(!same_directory(&real.join("sub"), &real));
-    assert!(!same_directory(&dir.join("missing"), &real));
-    fs::remove_dir_all(&dir).unwrap();
-}
-
-fn pydantic_issues(dir: &str) -> Vec<PydanticIssue> {
-    let root = repo_root();
-    let output = std::process::Command::new(local_python())
-        .arg(root.join("scripts/engine/pydantic_object_issues.py"))
-        .arg(root.join(dir))
-        .output()
-        .expect("python3");
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    serde_json::from_slice(&output.stdout).expect("pydantic json")
-}
-
-fn lsp_covers(dir: &str, issues: &[PydanticIssue]) {
-    let host = load_workspace(dir);
-    for issue in issues {
-        let (uri, text) = host
-            .files
-            .iter()
-            .find(|(path, _)| path.ends_with(&issue.file))
-            .cloned()
-            .unwrap_or_else(|| panic!("missing {}", issue.file));
-        let response = analyze(
-            &host,
-            AnalyzeRequest {
-                uri,
-                language: LanguageId::TideYaml,
-                text,
-            },
-        );
-        let covered = response.diagnostics.iter().any(|diag| {
-            diag.code == issue.code
-                && diag.severity.as_str() == issue.severity
-                && diag.field_path.as_deref() == Some(issue.field_path.as_slice())
-        });
-        assert!(
-            covered,
-            "LSP missing {} {:?} {} on {}; have {:?}",
-            issue.code,
-            issue.field_path,
-            issue.severity,
-            issue.file,
-            response
-                .diagnostics
-                .iter()
-                .map(|diag| (
-                    diag.code.as_str(),
-                    diag.field_path.clone(),
-                    diag.severity.as_str()
-                ))
-                .collect::<Vec<_>>()
-        );
-    }
-}
-
-#[test]
-fn pydantic_object_issues_are_subset_of_lsp() {
-    let corpus = pydantic_issues("crates/testdata/workspaces/tide_corpus");
-    lsp_covers("crates/testdata/workspaces/tide_corpus", &corpus);
-    let shaped = pydantic_issues("crates/testdata/conformance/pydantic");
-    assert!(
-        shaped
-            .iter()
-            .any(|issue| issue.code == "schema_validation"
-                && issue.field_path == ["threat", "impact"]),
-        "scalar impact fixture must be rejected by pydantic"
-    );
-    // opentide#745 retired `meta:` and the splunk::2.x `advanced` table: they are
-    // unknown keys, no longer deprecations, in Pydantic and in the catalog alike.
-    for path in [vec!["meta"], vec!["configurations", "splunk", "advanced"]] {
-        assert!(
-            shaped
-                .iter()
-                .any(|issue| issue.code == "schema_validation" && issue.field_path == path),
-            "legacy meta fixture: pydantic must reject {path:?} as an unknown key"
-        );
-    }
-    assert!(
-        !shaped.iter().any(|issue| issue.code == "deprecated_field"),
-        "a retired spelling is not a deprecation"
-    );
-    let claimed: Vec<_> = shaped
-        .into_iter()
-        .filter(|issue| {
-            issue.code == "schema_validation"
-                && (issue.field_path == ["threat", "impact"]
-                    || issue.field_path == ["meta"]
-                    || issue.field_path == ["metadata"]
-                    || issue.field_path == ["configurations", "splunk", "advanced"])
-        })
-        .collect();
-    lsp_covers("crates/testdata/conformance/pydantic", &claimed);
 }

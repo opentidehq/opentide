@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from opentide.analysis import check_configuration_buffer
 from opentide.validation.configuration import configuration_buffer_issues
 
 COMPLETE_BLOCK = """\
@@ -81,13 +80,3 @@ def test_a_file_without_a_model_gets_nothing(tmp_path: Path) -> None:
     configurations = _configurations(tmp_path)
     assert _codes(configurations / "resources.toml", "x = 1\n") == []
     assert _codes(configurations / "lint.toml", "x = 1\n") == []
-
-
-def test_the_engine_checker_returns_plain_records(tmp_path: Path) -> None:
-    deployment = _configurations(tmp_path) / "deployment.toml"
-    assert check_configuration_buffer(str(deployment), "[promotion]\nenabeld = true\n", []) == [
-        ("unknown_key", ["promotion", "enabeld"], "error", "unknown key")
-    ]
-    assert check_configuration_buffer(str(deployment), "x =\n", []) == [
-        ("config_parse", [], "error", "Not valid TOML: TOMLDecodeError.")
-    ]

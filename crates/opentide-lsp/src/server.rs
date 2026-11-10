@@ -201,11 +201,70 @@ pub fn host_info() -> Value {
         "host": host.map(|(name, version)| json!({ "name": name, "version": version })),
         "engine": crate::VERSION,
         "catalog": catalog,
-        "configurationChecks": opentide_analysis::has_configuration_checker(),
+        // Native since UC-2.6 (#821): opentide-schema's checks, in every host.
+        "configurationChecks": true,
         "configurationSchemas": opentide_analysis::has_configuration_schemas(),
         // The supplied workspace follows `opentide/didChangeWorkspace`.
         "workspaceUpdates": true,
     })
+}
+
+/// What `opentide validate --file` reports on `file` of the workspace at
+/// `root`, on disk, placed in `text` (the file's text, without a byte-order
+/// mark): the object checks the server reports for an open document. A
+/// configuration that does not resolve stops the checks: none.
+pub fn validate_file(root: &Path, file: &Path, text: &str) -> Vec<opentide_core::Diagnostic> {
+    let mut checks = crate::checks::RootChecks::default();
+    let file = std::path::absolute(file).unwrap_or_else(|_| file.to_path_buf());
+    let found = checks.findings(
+        root,
+        crate::checks::Buffers::default(),
+        vec![file.clone()],
+        0,
+    );
+    found
+        .get(&checks.resolve(&file))
+        .map(|findings| {
+            findings
+                .iter()
+                .map(|finding| crate::checks::engine_diagnostic(text, finding))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// What `opentide validate` reports on every object of the workspace at
+/// `root`, on disk, by file: for a host that checks many files of one
+/// workspace (the `opentide` package's `check_file`, `opentide tui`), one
+/// load and one run.
+pub struct ObjectFindings {
+    checks: crate::checks::RootChecks,
+    found: crate::checks::Findings,
+}
+
+impl ObjectFindings {
+    /// Load the workspace at `root` and validate it. A configuration that
+    /// does not resolve gives no finding (`validate` stops there).
+    pub fn validate(root: &Path) -> Self {
+        let mut checks = crate::checks::RootChecks::default();
+        let found = checks.all_findings(root, crate::checks::Buffers::default(), 0);
+        Self { checks, found }
+    }
+
+    /// The findings on `file`, placed in `text` (its text, without a
+    /// byte-order mark).
+    pub fn for_file(&self, file: &Path, text: &str) -> Vec<opentide_core::Diagnostic> {
+        let file = std::path::absolute(file).unwrap_or_else(|_| file.to_path_buf());
+        self.found
+            .get(&self.checks.resolve(&file))
+            .map(|findings| {
+                findings
+                    .iter()
+                    .map(|finding| crate::checks::engine_diagnostic(text, finding))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
 }
 
 // ---------------------------------------------------------------------------

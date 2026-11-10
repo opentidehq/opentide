@@ -63,12 +63,6 @@ def load_page(code: str) -> ExplainPage | None:
     return ExplainPage(code=code, summary=_summary(markdown), markdown=markdown)
 
 
-#: Engine codes that are about a Tide object, not a query, and where they show.
-_OBJECT_CODES = frozenset(
-    {"filename_slug", "filename_pattern", "missing_author", "missing_organisation"}
-)
-
-
 def engine_page(code: str) -> ExplainPage | None:
     """A page for an analysis-engine code, from the engine's sentence; ``None`` for another code."""
     from opentide.analysis import ELASTIC_ADVISORY_CODES, SYSDIG_ADVISORY_CODES, describe
@@ -121,9 +115,8 @@ def engine_page(code: str) -> ExplainPage | None:
             "`opentide lint --check queries` again."
         )
     else:
-        scope = "a Tide object" if code in _OBJECT_CODES else "an object file"
         where = (
-            f"Reported by the analysis engine for {scope}: an editor running "
+            "Reported by the analysis engine for an object file: an editor running "
             "`opentide lsp start` shows it. `opentide validate` and `opentide lint` are the "
             "authority for objects and name the same problem with their own code."
         )
