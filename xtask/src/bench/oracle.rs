@@ -150,8 +150,23 @@ pub fn ensure_oracle(root: &Path, dir: &Path) -> Result<(PathBuf, String)> {
 /// Builds opentide-workspace's `load` example (release): the Rust engine's
 /// `load` command.
 pub fn build_load(root: &Path) -> Result<PathBuf> {
+    build_example(root, "load")
+}
+
+/// Builds opentide-workspace's `validate` example (`--release`): the Rust
+/// engine's `validate_*` commands (UC-2.2, #817).
+///
+/// # Errors
+///
+/// The build fails, or names no executable.
+pub fn build_validate(root: &Path) -> Result<PathBuf> {
+    build_example(root, "validate")
+}
+
+/// Builds the opentide-workspace example `name` (`--release`); its path.
+fn build_example(root: &Path, name: &str) -> Result<PathBuf> {
     let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
-    eprintln!("bench: building opentide-workspace's load example (release)");
+    eprintln!("bench: building opentide-workspace's {name} example (release)");
     let output = Command::new(cargo)
         .current_dir(root)
         .args([
@@ -161,7 +176,7 @@ pub fn build_load(root: &Path) -> Result<PathBuf> {
             "--package",
             "opentide-workspace",
             "--example",
-            "load",
+            name,
             "--message-format=json-render-diagnostics",
         ])
         .stderr(std::process::Stdio::inherit())
@@ -169,16 +184,16 @@ pub fn build_load(root: &Path) -> Result<PathBuf> {
         .context("run cargo build")?;
     if !output.status.success() {
         bail!(
-            "cargo build -p opentide-workspace --example load failed ({})",
+            "cargo build -p opentide-workspace --example {name} failed ({})",
             output.status
         );
     }
     String::from_utf8_lossy(&output.stdout)
         .lines()
         .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
-        .filter(|m| m["reason"] == "compiler-artifact" && m["target"]["name"] == "load")
+        .filter(|m| m["reason"] == "compiler-artifact" && m["target"]["name"] == name)
         .find_map(|m| m["executable"].as_str().map(PathBuf::from))
-        .context("cargo built no load executable")
+        .with_context(|| format!("cargo built no {name} executable"))
 }
 
 /// Builds the language server from this workspace (release profile, the

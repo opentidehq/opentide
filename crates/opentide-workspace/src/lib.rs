@@ -15,11 +15,16 @@
 //! - [`Workspace`]: the whole, with [`Workspace::invalidate`] for the hosts
 //!   that keep it between runs; [`Registry`], the SDK's lifecycle.
 //!
+//! - [`validate`]: every check of `opentide validate`, reported as
+//!   [`Diagnostic`]s, the one finding type of the CLI, the SDK, MCP and the
+//!   language server (UC-2.2).
+//!
 //! Every read goes through a [`FileSystem`]: [`OsFs`] on disk,
 //! [`MemoryFs`] in memory. [`Stats`] counts the reads, parses and
 //! configuration resolutions.
 
 pub mod config;
+pub mod diagnostic;
 pub mod discover;
 mod export;
 pub mod fs;
@@ -27,9 +32,11 @@ pub mod index;
 pub mod load;
 pub mod registry;
 pub mod root;
+pub mod validate;
 mod workspace;
 
 pub use config::{ConfigError, Configuration};
+pub use diagnostic::{Diagnostic, Fix, Severity, TextEdit};
 pub use fs::{FileSystem, MemoryFs, OsFs};
 pub use index::{Index, Object};
 pub use registry::Registry;

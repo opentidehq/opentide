@@ -35,7 +35,7 @@ pub mod sharing;
 pub mod toml;
 pub mod types;
 
-use std::collections::BTreeMap;
+use indexmap::IndexMap;
 
 pub use opentide_core::Severity;
 use serde::Serialize;
@@ -92,8 +92,9 @@ pub struct Finding {
     pub message: String,
     /// The file, when the finding names one.
     pub file_path: Option<String>,
-    /// Extra facts (`file`, `value`, `integration`, `block`, `layer`, ...).
-    pub context: BTreeMap<String, serde_json::Value>,
+    /// Extra facts (`file`, `value`, `integration`, `block`, `layer`, ...),
+    /// in the order they were set: the order `validate --json` writes them.
+    pub context: IndexMap<String, serde_json::Value>,
 }
 
 impl Finding {
@@ -111,7 +112,7 @@ impl Finding {
             field_path,
             message: message.into(),
             file_path: file_path.map(str::to_owned),
-            context: BTreeMap::new(),
+            context: IndexMap::new(),
         }
     }
 

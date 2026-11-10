@@ -103,6 +103,17 @@ pub struct Duplicate {
     pub document: Arc<Document>,
 }
 
+/// An object file that parsed, with its family.
+#[derive(Debug, Clone)]
+pub struct Source {
+    /// The file.
+    pub path: PathBuf,
+    /// The family of the folder it is in.
+    pub family: String,
+    /// The document.
+    pub document: Arc<Document>,
+}
+
 /// A YAML file in a subfolder of an object folder (`nested_object_files`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Nested {
@@ -180,6 +191,9 @@ pub struct Reference {
 /// The index of a workspace.
 #[derive(Debug, Clone, Default)]
 pub struct Index {
+    /// Every object file that parsed, in discovery order, displaced
+    /// duplicates included: what the UUID scan of `validate` reads.
+    pub sources: Vec<Source>,
     /// The families of `[metaschemas]`, in order.
     pub families: Vec<String>,
     /// Objects by family, then by UUID, in the order the registry met them.
@@ -350,6 +364,11 @@ fn ingest(
     let Some(root) = document.root() else {
         return;
     };
+    index.sources.push(Source {
+        path: path.to_path_buf(),
+        family: family.to_owned(),
+        document: Arc::clone(document),
+    });
     let Some(id) = identifier(root) else {
         index.load_errors.push(LoadError {
             path: path.to_path_buf(),
