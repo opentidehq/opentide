@@ -18,7 +18,9 @@
 //! The skeleton (UC-1.1, #807) set the conventions, the context and the
 //! error type, with [`sample`] as their worked example. The Tide object
 //! models are in [`objects`] (UC-1.3, #809); the platform blocks and the
-//! configuration models follow (UC-1.4, UC-1.5). The crate is I/O-free and internal: the
+//! configuration models follow (UC-1.4, UC-1.5). The revision registry, the
+//! dispatch on `metadata.schema` and the forward migrations are [`revisions`]
+//! and [`migration`] (UC-1.7, #813). The crate is I/O-free and internal: the
 //! `opentide` facade (UC-5.1, #836) is the public API.
 
 // The derive's expansion names `::opentide_schema::…`, here as in every crate
@@ -29,10 +31,12 @@ pub mod configuration;
 pub mod error;
 pub mod from_node;
 pub mod keys;
+pub mod migration;
 pub mod node;
 pub mod objects;
 pub mod pins;
 mod revision;
+pub mod revisions;
 pub mod sample;
 pub mod vocab;
 

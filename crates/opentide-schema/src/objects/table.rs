@@ -1,8 +1,8 @@
 //! The object models against the oracle (UC-1.3, #809): every case of
 //! `tests/oracle/objects_cases.toml` and every object file of
 //! `tests/fixtures/tide_corpus` and of the VS Code fixture workspace, read by
-//! `node::load` and converted by `from_node` into the revision
-//! `metadata.schema` names. `tests/oracle/objects_table.json` is what the
+//! `node::load` and dispatched by the revision registry
+//! ([`crate::revisions::read`]) into the revision `metadata.schema` names. `tests/oracle/objects_table.json` is what the
 //! oracle reports (`objects_table.py`): each error's type, path, message,
 //! input, context, span and `yaml_line`, or the validated value.
 //!
@@ -21,20 +21,19 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::SchemaError;
-use crate::from_node;
 use crate::node::{self, Document};
-use crate::objects::{ObjectiveV1_0, RuleV1_0, RuleV1_1, ThreatVectorV1_0};
-use serde::Serialize;
+use crate::revisions::{self, Rejection};
 use serde_json::{Value as Json, json};
 
 const TABLE: &str = include_str!("../../tests/oracle/objects_table.json");
 
-/// The model `metadata.schema` selects for a family, or the loader's verdict.
+/// The registry's verdict (`revisions::read`): the model `metadata.schema`
+/// selects, or the loader's.
 fn convert(family: &str, document: &Document) -> Json {
-    fn value<T: Serialize>(result: Result<T, Vec<SchemaError>>) -> Json {
-        match result {
-            Ok(model) => {
-                let mut value = serde_json::to_value(&model).unwrap();
+    match revisions::read(document, family) {
+        Ok(read) => match read.result {
+            Ok(object) => {
+                let mut value = serde_json::to_value(&object).unwrap();
                 let map = value.as_object_mut().unwrap();
                 map.remove("file");
                 json!({ "value": value })
@@ -42,23 +41,10 @@ fn convert(family: &str, document: &Document) -> Json {
             Err(errors) => {
                 json!({ "errors": errors.iter().map(error_json).collect::<Vec<_>>() })
             }
-        }
-    }
-    let schema = document
-        .root()
-        .and_then(|root| root.get("metadata"))
-        .and_then(|metadata| metadata.get("schema"))
-        .and_then(|schema| schema.value.as_str().map(str::to_owned));
-    match (family, schema.as_deref()) {
-        ("rule", Some("rule::1.0")) => value(from_node::from_document::<RuleV1_0>(document)),
-        ("rule", Some("rule::1.1")) => value(from_node::from_document::<RuleV1_1>(document)),
-        ("threat", Some("threat::1.0")) => {
-            value(from_node::from_document::<ThreatVectorV1_0>(document))
-        }
-        ("objective", Some("objective::1.0")) => {
-            value(from_node::from_document::<ObjectiveV1_0>(document))
-        }
-        (_, other) => json!({ "loader": other }),
+        },
+        Err(Rejection::SchemaMissing) => json!({ "loader": "schema_missing" }),
+        Err(Rejection::MetadataNotAMapping(error)) => json!({ "errors": [error_json(&error)] }),
+        Err(rejection) => json!({ "loader": rejection.to_string() }),
     }
 }
 

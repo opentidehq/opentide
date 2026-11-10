@@ -2657,6 +2657,190 @@
    ]
   },
   {
+   "id": "revision-unknown-rule",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::7.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  future_field: 1\ndescription: d\nadded_in_7: true\n",
+   "loader": "unknown schema identifier: 'rule::7.0'"
+  },
+  {
+   "id": "revision-unknown-rule-reports-the-newest-revisions-errors",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.2\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: someday\n",
+   "loader": "unknown schema identifier: 'rule::1.2'"
+  },
+  {
+   "id": "revision-unknown-family-spelling",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: Rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n",
+   "loader": "unknown schema identifier: 'Rule::1.1'"
+  },
+  {
+   "id": "revision-unknown-objective",
+   "family": "objective",
+   "yaml": "name: Objective\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000003\n  schema: objective::2.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\nobjective:\n  priority: High\n",
+   "loader": "unknown schema identifier: 'objective::2.0'"
+  },
+  {
+   "id": "revision-unknown-threat",
+   "family": "threat",
+   "yaml": "name: Threat\ncriticality: High\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000002\n  schema: threat::1.5\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\nthreat:\n  description: d\n  severity: High\n  impact: [Data Breach]\n",
+   "loader": "unknown schema identifier: 'threat::1.5'"
+  },
+  {
+   "id": "revision-other-family",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: threat::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n",
+   "loader": "'threat::1.0' is not a rule schema identifier"
+  },
+  {
+   "id": "revision-visibility-is-another-family",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: visibility::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n",
+   "loader": "'visibility::1.0' is not a rule schema identifier"
+  },
+  {
+   "id": "revision-platform-identifier",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: platform::sentinel::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n",
+   "loader": "unknown schema identifier: 'platform::sentinel::1.0'"
+  },
+  {
+   "id": "revision-unknown-other-family",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: threat::9.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n",
+   "loader": "unknown schema identifier: 'threat::9.0'"
+  },
+  {
+   "id": "revision-not-an-identifier",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n",
+   "loader": "unknown schema identifier: 'rule'"
+  },
+  {
+   "id": "revision-bad-version",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.x\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n",
+   "loader": "unknown schema identifier: 'rule::1.x'"
+  },
+  {
+   "id": "revision-number",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: 1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n",
+   "loader": "unknown schema identifier: '1.1'"
+  },
+  {
+   "id": "revision-missing",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n",
+   "loader": "schema_missing"
+  },
+  {
+   "id": "revision-empty",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: ''\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n",
+   "loader": "schema_missing"
+  },
+  {
+   "id": "revision-null",
+   "family": "threat",
+   "yaml": "name: Threat\nmetadata:\n  schema:\n",
+   "loader": "schema_missing"
+  },
+  {
+   "id": "revision-no-metadata",
+   "family": "objective",
+   "yaml": "name: Objective\n",
+   "loader": "schema_missing"
+  },
+  {
+   "id": "revision-metadata-not-a-mapping",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata: rule::1.1\ndescription: d\n",
+   "errors": [
+    {
+     "type": "dict_type",
+     "field_path": [
+      "metadata"
+     ],
+     "msg": "Input should be a valid dictionary",
+     "input": "rule::1.1",
+     "ctx": {},
+     "span": [
+      2,
+      11,
+      20,
+      true
+     ],
+     "yaml_line": 1
+    }
+   ]
+  },
+  {
+   "id": "revision-metadata-list",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  - schema: rule::1.1\ndescription: d\n",
+   "errors": [
+    {
+     "type": "dict_type",
+     "field_path": [
+      "metadata"
+     ],
+     "msg": "Input should be a valid dictionary",
+     "input": null,
+     "ctx": {},
+     "span": [
+      2,
+      1,
+      9,
+      true
+     ],
+     "yaml_line": 2
+    }
+   ]
+  },
+  {
+   "id": "revision-schema-bool",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: true\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n",
+   "loader": "unknown schema identifier: 'True'"
+  },
+  {
+   "id": "revision-schema-list",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: [rule::1.1]\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n",
+   "loader": "unknown schema identifier: \"['rule::1.1']\""
+  },
+  {
+   "id": "revision-schema-map",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: {rule: 1.1}\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n",
+   "loader": "unknown schema identifier: \"{'rule': 1.1}\""
+  },
+  {
+   "id": "revision-schema-quote",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: \"rule's::1.1\"\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n",
+   "loader": "unknown schema identifier: \"rule's::1.1\""
+  },
+  {
+   "id": "revision-schema-float-zero",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: 0.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n",
+   "loader": "schema_missing"
+  },
+  {
+   "id": "revision-schema-negative-float-zero",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: -0.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n",
+   "loader": "schema_missing"
+  },
+  {
+   "id": "revision-metadata-float-zero",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata: 0.0\ndescription: d\n",
+   "loader": "schema_missing"
+  },
+  {
    "id": "platform-unknown-key",
    "family": "rule",
    "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sentinal: {status: STAGING}\n",

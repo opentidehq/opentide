@@ -13,11 +13,11 @@ use std::fmt;
 use crate::node::Span;
 
 /// The CLI's codes for schema errors. `schema_validation` is the engine's
-/// already ([`opentide_core::codes::SCHEMA_VALIDATION`]). The other four are
+/// already ([`opentide_core::codes::SCHEMA_VALIDATION`]). The others are
 /// created by the Python CLI; the language server only relays three of them
 /// from the host's configuration checker. `opentide_core::codes::ALL` lists
 /// the codes the engine itself emits, each with a description
-/// (`codes::describe`), so each of the four moves there with the Rust port
+/// (`codes::describe`), so each of the others moves there with the Rust port
 /// that emits it (UC-2.2, #817; UC-1.5, #811).
 pub mod codes {
     pub use opentide_core::codes::SCHEMA_VALIDATION;
@@ -29,6 +29,9 @@ pub mod codes {
     pub const MISSING_FIELD: &str = "missing_field";
     /// A configuration key the model does not declare (`validation/configuration.py`).
     pub const UNKNOWN_KEY: &str = "unknown_key";
+    /// An object with no `metadata.schema` (`loading/object_loader.py`
+    /// `SchemaMissingError.code`).
+    pub const SCHEMA_MISSING: &str = "schema_missing";
 }
 
 /// Where a model is read from. The same Pydantic error maps to a different
