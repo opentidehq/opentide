@@ -1,0 +1,30 @@
+name: Elastic Machine Learning
+
+metadata:
+  uuid: 00000000-0000-4000-8006-000000000006
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+  author: Detection Team
+  contributors:
+    - Analyst One
+    - Detection Team
+
+description: |
+  Elastic Machine Learning for the compile corpus.
+  Second line.
+
+response:
+  alert_severity: Critical
+
+configurations:
+  elastic:
+    status: STAGING
+    type: machine_learning
+    machine_learning:
+      job_id:
+        - rare-process
+        - rare-user
+      anomaly_threshold: 70

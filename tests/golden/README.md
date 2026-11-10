@@ -38,8 +38,13 @@ cargo xtask golden lock                         # rewrite oracle-requirements.tx
    the recordings outgrow their budget.
 7. **An approved difference is as narrow as the change**: an entry in `APPROVED_DIFFS.toml`
    (UC-0.7) names one command, a case glob and a target. A text rule is one whole line on each
-   side, approved where the oracle and candidate lines match it at the same line number; a JSON
-   rule is one value at one pointer.
+   side, approved where the oracle and candidate lines match it at the same line number; a lines
+   rule is a block of consecutive whole lines on each side, of any length, approved where the
+   candidate has its block at the place the oracle has its own (a row a port adds or drops),
+   each block quoted exactly and the entry naming its one case (no `*`): a block one character
+   off, or one the output extends by a line, is not approved, and the lines after an approved
+   block are compared at their new place; a
+   JSON rule is one value at one pointer.
 
 ## The oracle
 
@@ -141,6 +146,13 @@ Applied to stdout, stderr, file paths and file contents (UTF-8 only), in this or
 | `git <version>`, in cases with `normalise = ["host-git"]` (`doctor`) | `git <GIT_VERSION>` | `opentide doctor` prints the host's git; help text quotes a literal example, which stays |
 | `lsp-catalogs/<32 hex>` | `lsp-catalogs/<CATALOG-FINGERPRINT>` | the catalog cache is keyed by the installation's paths and file times |
 | UUIDs the fixture does not hold, in cases with `normalise = ["fresh-uuids"]` | `<UUID-1>`, `<UUID-2>`, … by first appearance | `new`, `setup` and `generate` mint them |
+
+When `golden check --engine compare` compares a run with its recording (not when a case is
+recorded), one more rule applies to each side:
+
+| Rule | Becomes | Why |
+|------|---------|-----|
+| opentide's own version, the exact string each side reports (the oracle's: `version` in `ORACLE`; the candidate's: what `.venv/bin/opentide --version` prints), as a whole token | `<OPENTIDE_VERSION>` | the oracle is a release and the candidate a build of this checkout; the installed version is not behaviour. Another package's version, a rule's `version`, a longer version containing it (`10.23.0`, `0.23.0.dev1`) and any other version-shaped text stay (`normalise::opentide_version`) |
 
 Known limits, each a one-in-a-million chance or a case no fixture has today: a timestamp whose
 microseconds are exactly 0 loses its fraction in Python's `isoformat()`, so it records shorter; two

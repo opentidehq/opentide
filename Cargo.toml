@@ -24,6 +24,7 @@ members = [
     "crates/opentide-schema",
     "crates/opentide-tide",
     "crates/opentide-workspace",
+    "crates/opentide-compile",
     "crates/opentide-analysis",
     "crates/opentide-lsp",
     "crates/opentide-wasm",
@@ -59,6 +60,8 @@ opentide-schema = { path = "crates/opentide-schema", version = "=0.12.0" }
 opentide-schema-derive = { path = "crates/opentide-schema-derive", version = "=0.12.0" }
 opentide-tide = { path = "crates/opentide-tide", version = "=0.12.0" }
 opentide-workspace = { path = "crates/opentide-workspace", version = "=0.12.0" }
+opentide-cli = { path = "crates/opentide-cli", version = "=0.12.0" }
+opentide-compile = { path = "crates/opentide-compile", version = "=0.12.0" }
 opentide-analysis = { path = "crates/opentide-analysis", version = "=0.12.0" }
 opentide-lsp = { path = "crates/opentide-lsp", version = "=0.12.0" }
 opentide-compare = { path = "crates/opentide-compare", version = "=0.12.0" }

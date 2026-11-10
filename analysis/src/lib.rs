@@ -217,6 +217,15 @@ fn analyze_query(
     }))
 }
 
+/// Runs the Rust command line with *argv* (without the program name) in this
+/// process, on its standard streams; the exit code. *version* is the
+/// package's, which `info` and `--version` print. The commands it has not
+/// ported refuse with `engine_not_ported`.
+#[pyfunction]
+fn cli_main(py: Python<'_>, argv: Vec<String>, version: String) -> i32 {
+    py.detach(|| opentide_cli::main(&argv, &version))
+}
+
 /// `(line, column, end_line, end_column, capture)`.
 type Token = (usize, usize, usize, usize, String);
 
@@ -653,10 +662,10 @@ mod _native {
     #[pymodule_export]
     use super::{
         Diagnostic, QueryReport, Workspace, analyze_query, bundled_catalog, catalog_is_workspace,
-        catalog_version, compare_runs, dataset_status, describe_code, highlight, install_catalog,
-        install_configuration_schemas, install_lint, install_visibility, language_for_path,
-        serve_stdio, set_configuration_checker, set_default_catalog, set_host_info,
-        use_host_catalogs,
+        catalog_version, cli_main, compare_runs, dataset_status, describe_code, highlight,
+        install_catalog, install_configuration_schemas, install_lint, install_visibility,
+        language_for_path, serve_stdio, set_configuration_checker, set_default_catalog,
+        set_host_info, use_host_catalogs,
     };
 
     #[pymodule_init]

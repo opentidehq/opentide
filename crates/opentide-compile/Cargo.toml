@@ -1,0 +1,54 @@
+[package]
+name = "opentide-compile"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+description = "opentide engine component: deploy compile and plan (request bodies per platform, status strategies, rule selection). Internal: depend on the opentide facade."
+readme = "../COMPONENT.md"
+# Not published while opentide-workspace, which it builds on, is not
+# (crates/opentide-schema/Cargo.toml says when that changes).
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+# "did you mean" for --strategy (strsim, clap's measure).
+opentide-core.workspace = true
+opentide-schema.workspace = true
+opentide-workspace.workspace = true
+# The git baseline (UC-3.1): gitoxide's crates read the repository without
+# the git program: the checkout's discovery, the reference store, the object
+# database, the tree diff (without its blob diff: filters, attributes), the
+# rev-spec parser and the merge base. The
+# crates, not the `gix` facade, whose object cache brings a second hashbrown
+# (clru), which deny.toml's multiple-versions ban refuses.
+gix-discover = "0.55"
+# The rev-spec parser's delegate reports failures as gix-error's Exn.
+gix-error = "0.3"
+gix-hash = { version = "0.26", features = ["sha1"] }
+gix-object = "0.64"
+gix-odb = "0.84"
+gix-ref = "0.67"
+gix-diff = { version = "0.67", default-features = false, features = ["sha1"] }
+gix-revwalk = "0.35"
+gix-revision = { version = "0.49", default-features = false, features = ["merge_base"] }
+# Paths without Windows' verbatim prefix (`\\?\`), which git, the oracle
+# and a user's own paths do not use: the messages name paths that way.
+dunce = "1"
+# Request bodies keep the order their keys are built in, as the oracle's dicts do.
+indexmap = { version = "2", features = ["serde"] }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+# The approved differences the oracle test honours (tests/golden/payloads/APPROVED.toml).
+toml.workspace = true
+proptest.workspace = true
+# Repositories the git baseline's tests build (the version xtask locks).
+tempfile = "3"

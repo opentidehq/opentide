@@ -1,0 +1,28 @@
+name: Elastic New Terms
+
+metadata:
+  uuid: 00000000-0000-4000-8006-000000000003
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+  author: Detection Team
+  contributors:
+    - Analyst One
+    - Detection Team
+
+description: |
+  Elastic New Terms for the compile corpus.
+  Second line.
+
+configurations:
+  elastic:
+    status: DISABLED
+    type: new_terms
+    query: host.name:*
+    new_terms:
+      fields:
+        - user.name
+      history_window_start: 7d
+    data_view_id: logs-view

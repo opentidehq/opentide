@@ -23,17 +23,23 @@
 //! [`MemoryFs`] in memory. [`Stats`] counts the reads, parses and
 //! configuration resolutions.
 
+pub mod catalogue;
 pub mod config;
+pub mod coverage;
 pub mod diagnostic;
 pub mod discover;
 mod export;
+pub mod fields;
 pub mod fix;
 pub mod fs;
 pub mod index;
+pub mod info;
 pub mod lint;
 pub mod load;
 pub mod registry;
+pub mod review;
 pub mod root;
+pub mod state;
 pub mod validate;
 pub mod watch;
 mod workspace;

@@ -8,8 +8,9 @@ references `validation/checks/cross_object.py` follows. It runs `validate` (UC-2
 `validation/`, `cli/services/validation.py`, `cli/ui/diagnostics.py`) and reports every finding
 as the one `Diagnostic` ([ADR 0010](../../docs/internal/adr/0010-one-diagnostic-model.md)). It
 runs `lint`, `validate --fix` (safe edits as text splices) and `--watch`'s pass selection (UC-2.3,
-#818: `cli/services/lint.py`, `cli/ui/fixes.py`, `cli/ui/watch.py`). The catalogue, the queries
-check and the language server come next (UC-2.4 to UC-2.6).
+#818: `cli/services/lint.py`, `cli/ui/fixes.py`, `cli/ui/watch.py`), and builds the catalogue,
+coverage, `info`'s data and `rules unreviewed` (UC-2.4, #819: `cli/services/catalog.py`,
+`info.py`, `rules.py`). The queries check and the language server come next (UC-2.5, UC-2.6).
 
 ## Place
 
@@ -30,6 +31,12 @@ source (`ci.yml` `engine-package`, `scripts/ci-local.sh`).
 | `src/index.rs` | `assemble`: the index from the scans and parses, in discovery order: objects, `file_paths`, duplicates, load errors (`yaml_parse`, `missing_uuid`), nested files, signals, references, chaining |
 | `src/workspace.rs` | `Workspace::open` (parallel read and parse with rayon), `Stats`, `invalidate` |
 | `src/registry.rs` | `Registry`: the SDK lifecycle (`initialise` once, `reload`, accessors, `lookup`) |
+| `src/fields.rs` | Reading fields by their model role (`core/object_fields.py`): role paths from `opentide_schema::objects::fields`; a scalar's text as YAML 1.2 writes it (`true`, `null`) |
+| `src/coverage.rs` | Own and inherited techniques of each rule, `info coverage`'s match (`core/technique_coverage.py`) |
+| `src/catalogue.rs` | `info catalog`'s document (UC-2.4): object rows, load-error rows read from the text, edges (`covers`, `implements`, `parent`, `chains`, `technique`, `logsource`), signals, the ATT&CK matrix, the summary |
+| `src/state.rs` | The deployment state shards, read only, for the catalogue's `deployment` |
+| `src/info.rs` | `info`: the platforms with their tenants (names of variables, never values), the vocabularies and their pins |
+| `src/review.rs` | `rules unreviewed`: the window, review instants (jiff), the RFC 0008 predicate |
 | `src/diagnostic.rs` | `Diagnostic`, `Severity`, `Fix`, `TextEdit`: the one finding type, serialised exactly as an issue of `validate --json` (keys in order); the frame's label and notes ride along unserialised |
 | `src/validate/mod.rs` | `validate` / `Workspace::validate`: the checks in the oracle's order, `--check`, `--queries`, `--strict`, the report (errors sorted as `sort_issues`), `checks` statuses, `summary`; `QueryCheck`, the host's query analysis (UC-2.5) |
 | `src/validate/scope.rs` | `--file`, `--uuid`, `--type` (`validation/scope.py`) |

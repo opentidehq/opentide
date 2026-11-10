@@ -31,8 +31,12 @@ indexmap = { version = "2", features = ["serde"] }
 # Each object file is read and parsed on its own thread.
 rayon.workspace = true
 serde_json.workspace = true
+# `rules unreviewed`: review instants and the window (the date library
+# opentide-schema checks `metadata.reviewed` with).
+jiff.workspace = true
 thiserror.workspace = true
-# Lint's placeholder markers and top-level keys; watch's UUID scan.
+# The catalogue's text fallbacks and `$VAR` references, as the oracle's
+# patterns; lint's placeholder markers and top-level keys; watch's UUID scan.
 regex.workspace = true
 # `validate --fix --dry-run`'s unified diff (the user's rule: a crate, never a
 # port of Python's difflib).

@@ -6,5 +6,5 @@ fn main() {
         .map(|arg| arg.to_string_lossy().into_owned())
         .collect();
     let version = option_env!("OPENTIDE_VERSION").unwrap_or(env!("CARGO_PKG_VERSION"));
-    std::process::exit(opentide_cli::main(&argv, version));
+    opentide_cli::exit(&argv, version);
 }
