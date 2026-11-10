@@ -220,6 +220,35 @@ impl Dispatcher<'_> {
         self
     }
 
+    /// [`Dispatcher::on`] for a handler that can refuse: its message goes
+    /// back as `RequestFailed`, for the client to show.
+    fn on_fallible<R: lsp_types::request::Request>(
+        mut self,
+        handler: impl FnOnce(&mut Session, R::Params) -> Result<R::Result, String>,
+    ) -> Self {
+        let Some(request) = self.request.take() else {
+            return self;
+        };
+        if request.method != R::METHOD {
+            self.request = Some(request);
+            return self;
+        }
+        self.response = Some(match serde_json::from_value::<R::Params>(request.params) {
+            Ok(params) => match handler(self.session, params) {
+                Ok(result) => Response::new_ok(request.id, result),
+                Err(message) => {
+                    Response::new_err(request.id, ErrorCode::RequestFailed as i32, message)
+                }
+            },
+            Err(err) => Response::new_err(
+                request.id,
+                ErrorCode::InvalidParams as i32,
+                format!("invalid params for {}: {err}", R::METHOD),
+            ),
+        });
+        self
+    }
+
     fn finish(self) -> Response {
         if let Some(response) = self.response {
             return response;
@@ -263,6 +292,9 @@ pub(crate) fn request(session: &mut Session, request: Request) -> Response {
         .on::<WorkspaceDiagnosticRequest>(handle_workspace_diagnostics)
         .on::<CodeActionRequest>(handle_code_action)
         .on::<FoldingRangeRequest>(handle_folding)
+        .on::<PrepareRenameRequest>(handle_prepare_rename)
+        .on_fallible::<Rename>(handle_rename)
+        .on::<Formatting>(handle_formatting)
         .on::<DocumentHighlightRequest>(handle_document_highlight)
         .on::<SelectionRangeRequest>(handle_selection_range)
         .on::<InlayHintRequest>(handle_inlay)
@@ -430,6 +462,13 @@ fn initialize(
         }),
         definition_provider: Some(lsp::OneOf::Left(true)),
         references_provider: Some(lsp::OneOf::Left(true)),
+        // YARA string identifiers (`$name`), in `.yar` files and Tide blocks.
+        rename_provider: Some(lsp::OneOf::Right(lsp::RenameOptions {
+            prepare_provider: Some(true),
+            work_done_progress_options: Default::default(),
+        })),
+        // `.yar` files, with yara-x-fmt.
+        document_formatting_provider: Some(lsp::OneOf::Left(true)),
         document_symbol_provider: Some(lsp::OneOf::Left(true)),
         workspace_symbol_provider: Some(lsp::OneOf::Left(true)),
         document_highlight_provider: Some(lsp::OneOf::Left(true)),
@@ -1292,11 +1331,29 @@ fn handle_definition(
 ) -> Option<lsp::GotoDefinitionResponse> {
     let position = &params.text_document_position_params;
     let doc = session.docs.get(position.text_document.uri.as_str())?;
-    let uuid = uuid_at(&doc.text, position.position)?;
+    let Some(uuid) = uuid_at(&doc.text, position.position) else {
+        // A YARA string or rule.
+        let at = offset(&doc.text, position.position);
+        let span = opentide_analysis::definition(doc.language, &doc.text, at)?;
+        return Some(lsp::GotoDefinitionResponse::Scalar(lsp::Location {
+            uri: position.text_document.uri.clone(),
+            range: span_range(&doc.text, span),
+        }));
+    };
     let host = session.host(doc.root);
     let workspace = workspace_index(&host);
     let object = opentide_tide::definition(&workspace, &uuid)?;
     object_location(&host, &object.path, &uuid).map(lsp::GotoDefinitionResponse::Scalar)
+}
+
+/// The spans of the YARA string or rule at a position, in the document.
+fn yara_references(
+    doc: &Document,
+    position: lsp::Position,
+    with_definition: bool,
+) -> Vec<ByteSpan> {
+    let at = offset(&doc.text, position);
+    opentide_analysis::references(doc.language, &doc.text, at, with_definition)
 }
 
 fn handle_references(
@@ -1306,7 +1363,16 @@ fn handle_references(
     let position = &params.text_document_position;
     let doc = session.docs.get(position.text_document.uri.as_str())?;
     let Some(uuid) = uuid_at(&doc.text, position.position) else {
-        return Some(Vec::new());
+        let uri = &position.text_document.uri;
+        return Some(
+            yara_references(doc, position.position, params.context.include_declaration)
+                .into_iter()
+                .map(|span| lsp::Location {
+                    uri: uri.clone(),
+                    range: span_range(&doc.text, span),
+                })
+                .collect(),
+        );
     };
     let host = session.host(doc.root);
     let workspace = workspace_index(&host);
@@ -1332,7 +1398,15 @@ fn handle_document_highlight(
     let position = &params.text_document_position_params;
     let doc = session.docs.get(position.text_document.uri.as_str())?;
     let Some(uuid) = uuid_at(&doc.text, position.position) else {
-        return Some(Vec::new());
+        return Some(
+            yara_references(doc, position.position, true)
+                .into_iter()
+                .map(|span| lsp::DocumentHighlight {
+                    range: span_range(&doc.text, span),
+                    kind: Some(lsp::DocumentHighlightKind::TEXT),
+                })
+                .collect(),
+        );
     };
     let lines = LineIndex::new(&doc.text);
     Some(
@@ -1956,11 +2030,90 @@ fn handle_semantic_tokens(
     }))
 }
 
+/// The name part of the YARA string identifier at a position (`a` of `#a`):
+/// only strings are renamed.
+fn handle_prepare_rename(
+    session: &mut Session,
+    params: lsp::TextDocumentPositionParams,
+) -> Option<lsp::PrepareRenameResponse> {
+    let doc = session.docs.get(params.text_document.uri.as_str())?;
+    let at = offset(&doc.text, params.position);
+    let definition = opentide_analysis::definition(doc.language, &doc.text, at)?;
+    if !doc.text[definition.start..].starts_with('$') {
+        return None;
+    }
+    let span = opentide_analysis::references(doc.language, &doc.text, at, true)
+        .into_iter()
+        .find(|s| at >= s.start && at <= s.end)?;
+    Some(lsp::PrepareRenameResponse::Range(span_range(
+        &doc.text,
+        ByteSpan::new(span.start + 1, span.end),
+    )))
+}
+
+fn handle_rename(
+    session: &mut Session,
+    params: lsp::RenameParams,
+) -> Result<Option<lsp::WorkspaceEdit>, String> {
+    let position = &params.text_document_position;
+    let Some(doc) = session.docs.get(position.text_document.uri.as_str()) else {
+        return Ok(None);
+    };
+    let at = offset(&doc.text, position.position);
+    let edits = opentide_analysis::rename(doc.language, &doc.text, at, &params.new_name)?;
+    let edits = edits
+        .into_iter()
+        .map(|(span, new_text)| lsp::TextEdit {
+            range: span_range(&doc.text, span),
+            new_text,
+        })
+        .collect();
+    Ok(Some(lsp::WorkspaceEdit {
+        changes: Some(HashMap::from([(position.text_document.uri.clone(), edits)])),
+        ..Default::default()
+    }))
+}
+
+/// A `.yar` file formatted with yara-x-fmt: one edit over the whole text,
+/// none when it is already formatted or does not parse.
+fn handle_formatting(
+    session: &mut Session,
+    params: lsp::DocumentFormattingParams,
+) -> Option<Vec<lsp::TextEdit>> {
+    let doc = session.docs.get(params.text_document.uri.as_str())?;
+    let formatted = opentide_analysis::format(doc.language, &doc.text)?;
+    if formatted == doc.text {
+        return Some(Vec::new());
+    }
+    Some(vec![lsp::TextEdit {
+        range: span_range(&doc.text, ByteSpan::new(0, doc.text.len())),
+        new_text: formatted,
+    }])
+}
+
 fn handle_folding(
     session: &mut Session,
     params: lsp::FoldingRangeParams,
 ) -> Option<Vec<lsp::FoldingRange>> {
     let doc = session.docs.get(params.text_document.uri.as_str())?;
+    if let Some(spans) = opentide_analysis::folding(doc.language, &doc.text) {
+        let lines = LineIndex::new(&doc.text);
+        return Some(
+            spans
+                .into_iter()
+                .map(|s| lsp::FoldingRange {
+                    start_line: lines.position(s.start).line,
+                    end_line: lines.position(s.end.saturating_sub(1)).line,
+                    kind: Some(if doc.text[s.start..].starts_with("/*") {
+                        lsp::FoldingRangeKind::Comment
+                    } else {
+                        lsp::FoldingRangeKind::Region
+                    }),
+                    ..Default::default()
+                })
+                .collect(),
+        );
+    }
     Some(
         folding_ranges(&doc.text)
             .into_iter()

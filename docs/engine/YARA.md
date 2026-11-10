@@ -87,6 +87,21 @@ The codes are constants in `opentide_core::codes`; `opentide explain <code>` pri
 
 The pinned opentide's catalogue does not have `yara.signature` or the Bitdefender block yet (opentide's HarfangLab `signature` branch and RFC 0016): until it does, the schema check may also report those keys.
 
+## Editor features
+
+In `.yar` files, and in `yara.signature` and HarfangLab's decomposed fragments inside Tide objects (`crates/opentide-yara/src/editor.rs`, mapped through the injection by `crates/opentide-analysis/src/yara.rs`):
+
+| Feature | What it does |
+|---------|--------------|
+| Hover | Module members (signature, type, documentation, which engine has it), modules, strings (`$a`, `#a`, `@a`, `!a` show the definition), rules, integer readers and built-in words |
+| Completion | Modules after `import "`, members after `pe.` (and after `pe.sections[0].`), the rule's strings after `$`, `#`, `@` or `!`, and keywords, readers, imported modules and earlier rules elsewhere |
+| Signature help | Each overload of a module function, and the integer readers |
+| Symbols | Rules and their strings |
+| Folding | Rules, sections, multi-line hex strings and comments |
+| Definition, references, highlights | Strings within their rule (a `$a*` set item that covers the string counts), rules across the signature |
+| Rename | String identifiers, keeping each sigil; refused for an invalid or taken name, or when a `$prefix*` set would stop matching. In a decomposed HarfangLab block it edits `strings` and `condition` together |
+| Formatting | `.yar` files, with `yara-x-fmt`'s defaults; a file that does not parse is left as it is |
+
 ## Modules
 
 `catalogs/yara/modules.toml` has every member of the 13 modules, generated from libyara 4.5.4's module declarations and YARA-X 1.23.0's module reflection (`skills/catalogs/SKILL.md`). Each row says which engine has it, so a member only one engine knows is reported as above. **libyara 4.5.4 ships no `lnk` module**, though yara-1.0 lists it among the 13: importing it is allowed as the spec says, and its members are checked against YARA-X's.
