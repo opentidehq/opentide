@@ -51,10 +51,17 @@ serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 tracing = "0.1"
+# `setup ci`'s pipelines are templates (UC-3.2c, #916); `[[ ]]` delimits a
+# value, since GitHub Actions spells its own expressions `${{ }}`.
+minijinja = { version = "2", default-features = false, features = ["builtins", "macros", "multi_template", "custom_syntax", "serde"] }
+# Shell words in the pipelines, quoted as the oracle's `shlex.quote` quotes them.
+shlex = "2.0"
+# `setup ci` reads each enabled platform's tenants for the variables its
+# live query check needs; the oracle test reads its approved differences
+# (tests/golden/payloads/APPROVED.toml) with it too.
+toml.workspace = true
 
 [dev-dependencies]
-# The approved differences the oracle test honours (tests/golden/payloads/APPROVED.toml).
-toml.workspace = true
 proptest.workspace = true
 # Repositories the git baseline's tests build (the version xtask locks).
 tempfile = "3"

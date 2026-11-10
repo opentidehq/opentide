@@ -12,6 +12,7 @@
 //! the caller.
 
 pub mod attack;
+pub mod ci;
 pub mod dry_run;
 pub mod duration;
 pub mod elastic;
