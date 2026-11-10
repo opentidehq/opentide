@@ -19,4 +19,5 @@ pub mod payloads;
 pub mod registry;
 pub mod schema;
 pub mod validate;
+pub mod verdict;
 pub mod vocab;
