@@ -133,6 +133,13 @@ def test_every_tide_model_has_a_rust_class_with_its_fields() -> None:
         ], name
         identifier = getattr(model, "__schema_identifier__", None)
         assert getattr(cls, "__schema_identifier__", None) == identifier, name
+        # A serialised name that is not the attribute's reads it (`.schema`),
+        # as a declared attribute, not through a catch-all `__getattr__`.
+        for attribute, serialised in cls.__tide_fields__:
+            if attribute != serialised:
+                descriptor = inspect.getattr_static(cls, serialised)
+                assert type(descriptor).__name__ == "getset_descriptor", (name, serialised)
+        assert "__getattr__" not in vars(cls), name
 
 
 @pytest.mark.parametrize("path", object_files(), ids=lambda path: path.relative_to(ROOT).as_posix())
@@ -161,25 +168,81 @@ def test_every_fixture_object_reads_as_the_pydantic_model_does(path: Path) -> No
 
 @pytest.mark.parametrize(("schema", "document"), oracle_cases())
 def test_every_oracle_case_reports_the_pydantic_errors(schema: str, document: Any) -> None:
+    expected_errors, actual_errors = both_errors(schema, document)
+    expected = [(item["type"], tuple(item["loc"]), item["msg"]) for item in expected_errors]
+    actual = [(item["type"], tuple(item["loc"]), item["msg"]) for item in actual_errors]
+    assert actual == expected
+    for rust, pydantic in zip(actual_errors, expected_errors, strict=True):
+        assert recorded_extras(rust) == expected_extras(rust, pydantic)
+
+
+def both_errors(schema: str, document: Any) -> tuple[list[Any], list[Any]]:
+    """Pydantic's ``errors()`` and the Rust class's, for *document*."""
     try:
         PYDANTIC[schema].model_validate(stringify_yaml_temporals(document))
-        expected: list[tuple[str, tuple[Any, ...], str]] = []
+        expected: list[Any] = []
     except PydanticValidationError as error:
-        expected = [(item["type"], tuple(item["loc"]), item["msg"]) for item in error.errors()]
+        expected = list(error.errors())
     try:
         RUST[schema].model_validate(document)
-        actual: list[tuple[str, tuple[Any, ...], str]] = []
+        actual: list[Any] = []
     except native.ValidationError as error:
-        actual = [(item["type"], tuple(item["loc"]), item["msg"]) for item in error.errors()]
-    assert actual == expected
+        actual = error.errors()  # ty: ignore[unresolved-attribute]  # set on each instance
+    return expected, actual
+
+
+def recorded_extras(rust: dict[str, Any]) -> dict[str, Any]:
+    return {key: rust[key] for key in ("input", "ctx") if key in rust}
+
+
+def expected_extras(rust: dict[str, Any], pydantic: dict[str, Any]) -> dict[str, Any]:
+    """What the Rust error holds of Pydantic's ``input`` and ``ctx``: the
+    input when it is a string, and every context value as ``str()`` gives it."""
+    extras: dict[str, Any] = {}
+    if isinstance(pydantic.get("input"), str):
+        extras["input"] = pydantic["input"]
+    if pydantic.get("ctx"):
+        extras["ctx"] = {key: str(value) for key, value in pydantic["ctx"].items()}
+    return extras
+
+
+def test_the_oracle_cases_compare_inputs_and_contexts() -> None:
+    """The comparison above is not vacuous: oracle cases record both."""
+    seen = {"input": 0, "ctx": 0}
+    for case in oracle_cases():
+        schema, document = case.values
+        _, actual_errors = both_errors(schema, document)
+        for rust in actual_errors:
+            for key in seen:
+                seen[key] += key in rust
+    assert seen["input"] >= 10 and seen["ctx"] >= 10, seen
 
 
 def test_the_generated_stub_declares_every_class() -> None:
     tree = ast.parse(STUB.read_text(encoding="utf-8"))
     declared = {node.name for node in tree.body if isinstance(node, ast.ClassDef)}
     assert declared == set(rust_classes())
+    # The stub is complete: no `__getattr__`, on the module or a class, that
+    # would type a misspelt attribute or a missing name as `Any`.
+    assert not [
+        node.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name == "__getattr__"
+    ]
     # ValidationError is a `create_exception!` type, which PyO3's introspection
-    # cannot describe: the stub says it is incomplete rather than leave it out.
-    functions = {node.name for node in tree.body if isinstance(node, ast.FunctionDef)}
-    assert "__getattr__" in functions
+    # cannot describe as a class: the module exports it as a value whose type
+    # the stub declares.
+    annotations = {
+        node.target.id: ast.unparse(node.annotation)
+        for node in tree.body
+        if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name)
+    }
+    assert annotations == {"ValidationError": "Final[type[ValueError]]"}
     assert issubclass(native.ValidationError, ValueError)
+    [dunder_all] = [
+        statement.value
+        for statement in tree.body
+        if isinstance(statement, ast.Assign)
+        and [ast.unparse(target) for target in statement.targets] == ["__all__"]
+    ]
+    assert set(ast.literal_eval(dunder_all)) == set(rust_classes()) | {"ValidationError"}

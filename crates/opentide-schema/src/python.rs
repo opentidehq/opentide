@@ -19,12 +19,12 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
-use pyo3::exceptions::{PyAttributeError, PyTypeError, PyValueError};
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::{PyBool, PyDict, PyFloat, PyInt, PyList, PyModule, PyString, PyTuple, PyType};
 use serde::Serialize;
 
-use crate::error::{PathSegment, SchemaError};
+use crate::error::{ErrorKind, PathSegment, SchemaError};
 use crate::from_node::{Context, FromNode, Model};
 use crate::node::{Entry, MAX_DEPTH, Mark, Node, Value};
 use crate::objects::any::Any;
@@ -104,16 +104,42 @@ fn raise(py: Python<'_>, title: &str, errors: &[SchemaError]) -> PyErr {
             "errors",
             functools.call_method1("partial", (deepcopy, &list))?,
         )?;
-        let count = errors.len();
         value.setattr(
             "error_count",
             functools.call_method1("partial", (py.import("builtins")?.getattr("len")?, &list))?,
         )?;
-        let _ = count;
         value.setattr("title", title)?;
         Ok(error)
     };
     build().unwrap_or_else(|error| error)
+}
+
+/// [`ValidationError`]'s class, as `opentide._native.models` exports it.
+///
+/// PyO3's introspection cannot describe a `create_exception!` type (and
+/// abi3 below Python 3.12 cannot subclass an exception with a `#[pyclass]`),
+/// so the module exports the class through this value, whose type hint
+/// (`type[ValueError]`) declares it in the generated stub: the stub stays
+/// complete, without a module `__getattr__` that would type every unknown
+/// name. `errors()`, `error_count()` and `title` are attributes of each
+/// instance (see [`raise`]).
+#[doc(hidden)]
+pub struct ValidationErrorClass;
+
+impl<'py> IntoPyObject<'py> for ValidationErrorClass {
+    type Target = PyType;
+    type Output = Bound<'py, PyType>;
+    type Error = std::convert::Infallible;
+
+    #[cfg(feature = "stubs")]
+    const OUTPUT_TYPE: pyo3::inspect::PyStaticExpr = pyo3::type_hint_subscript!(
+        pyo3::type_hint_identifier!("builtins", "type"),
+        pyo3::type_hint_identifier!("builtins", "ValueError")
+    );
+
+    fn into_pyobject(self, py: Python<'py>) -> Result<Self::Output, Self::Error> {
+        Ok(py.get_type::<ValidationError>())
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -200,43 +226,109 @@ fn at(value: Value) -> Arc<Node> {
     })
 }
 
-/// A Python value as a node: `None`, `bool`, `int` (64 bits), `float`,
-/// `str`, a sequence (`list`, `tuple`), a mapping (`dict`), or a model (its
-/// `model_dump(by_alias=True, exclude_none=True)`: a Pydantic model too).
-/// Anything else is a `TypeError`.
-fn py_to_node(value: &Bound<'_, PyAny>, depth: usize) -> PyResult<Arc<Node>> {
-    // The recursion keeps its frame small (the conversions of a leaf are
-    // functions of their own), so the deepest value it reads fits a thread's
-    // stack in a debug build too.
-    if depth > MAX_DEPTH {
-        return Err(too_deep());
-    }
-    if let Ok(dict) = value.cast::<PyDict>() {
-        let mut entries = Vec::with_capacity(dict.len());
-        for (key, item) in dict.iter() {
-            entries.push(Entry {
-                key: py_to_node(&key, depth + 1)?,
-                value: py_to_node(&item, depth + 1)?,
-            });
+/// Reads a Python value as a node tree, and records each value it cannot
+/// read as a [`SchemaError`] at its location: an `int` outside 64 bits, a
+/// `str` that is not UTF-8, a type a Tide document cannot hold, a value nested
+/// deeper than [`MAX_DEPTH`]. Such a value reads as `null`, so the conversion
+/// still reports every other error; [`validate`] then replaces what it says
+/// at that location with the recorded error. Pydantic raises its
+/// `ValidationError` for these values too, never an `OverflowError` or a
+/// `TypeError`.
+#[derive(Default)]
+struct Reader {
+    path: Vec<PathSegment>,
+    unreadable: Vec<SchemaError>,
+}
+
+impl Reader {
+    /// A Python value as a node: `None`, `bool`, `int` (64 bits), `float`,
+    /// `str`, a `date`, `datetime` or `time`, a sequence (`list`, `tuple`), a
+    /// mapping (`dict`), or a model (its `model_dump(by_alias=True,
+    /// exclude_none=True)`: a Pydantic model too).
+    fn read(&mut self, value: &Bound<'_, PyAny>, depth: usize) -> PyResult<Arc<Node>> {
+        // The recursion keeps its frame small (the conversions of a leaf are
+        // functions of their own), so the deepest value it reads fits a
+        // thread's stack in a debug build too.
+        if depth > MAX_DEPTH {
+            self.refuse(too_deep());
+            return Ok(at(Value::Null));
         }
-        return Ok(at(Value::Map(entries)));
-    }
-    if value.is_instance_of::<PyList>() || value.is_instance_of::<PyTuple>() {
-        let mut items = Vec::new();
-        for item in value.try_iter()? {
-            items.push(py_to_node(&item?, depth + 1)?);
+        if let Ok(dict) = value.cast::<PyDict>() {
+            let mut entries = Vec::with_capacity(dict.len());
+            for (key, item) in dict.iter() {
+                let refused = self.unreadable.len();
+                let key = self.read(&key, depth + 1)?;
+                let segment = PathSegment::Key(segment(&key));
+                // A key that cannot be read is refused where the conversion
+                // reports the entry it reads as `None`.
+                for error in &mut self.unreadable[refused..] {
+                    error.path.insert(self.path.len(), segment.clone());
+                }
+                self.path.push(segment);
+                let item = self.read(&item, depth + 1);
+                self.path.pop();
+                entries.push(Entry { key, value: item? });
+            }
+            return Ok(at(Value::Map(entries)));
         }
-        return Ok(at(Value::Seq(items)));
+        if value.is_instance_of::<PyList>() || value.is_instance_of::<PyTuple>() {
+            let mut items = Vec::new();
+            for (index, item) in value.try_iter()?.enumerate() {
+                self.path.push(PathSegment::Index(index));
+                let item = item.and_then(|item| self.read(&item, depth + 1));
+                self.path.pop();
+                items.push(item?);
+            }
+            return Ok(at(Value::Seq(items)));
+        }
+        match leaf(value)? {
+            Leaf::Value(value) => Ok(at(value)),
+            Leaf::Model(dumped) => self.read(&dumped, depth + 1),
+            Leaf::Unreadable(error) => {
+                self.refuse(error);
+                Ok(at(Value::Null))
+            }
+        }
     }
-    match leaf(value)? {
-        Leaf::Value(value) => Ok(at(value)),
-        Leaf::Model(dumped) => py_to_node(&dumped, depth + 1),
+
+    /// Records `error` at the current location.
+    fn refuse(&mut self, (kind, message): (ErrorKind, String)) {
+        self.unreadable
+            .push(SchemaError::new(kind, self.path.clone(), message));
+    }
+
+    /// The conversion's `errors` with the recorded ones: what the conversion
+    /// says at a location it read as `null` (which holds nothing, so nothing
+    /// under it has an error) gives way to the recorded error there.
+    fn merge(self, mut errors: Vec<SchemaError>) -> Vec<SchemaError> {
+        if self.unreadable.is_empty() {
+            return errors;
+        }
+        errors.retain(|error| {
+            !self
+                .unreadable
+                .iter()
+                .any(|refused| refused.path == error.path)
+        });
+        errors.extend(self.unreadable);
+        errors
     }
 }
 
+/// A mapping key as a location segment, as the conversion names it: a
+/// string key's text, else the value's text (`null` for `None`).
+fn segment(key: &Node) -> String {
+    key.value
+        .as_str()
+        .map_or_else(|| key.value.to_string(), str::to_owned)
+}
+
 #[inline(never)]
-fn too_deep() -> PyErr {
-    PyValueError::new_err(format!("the value nests deeper than {MAX_DEPTH} levels"))
+fn too_deep() -> (ErrorKind, String) {
+    (
+        ErrorKind::InvalidValue("recursion_loop"),
+        format!("Input should nest at most {MAX_DEPTH} levels deep"),
+    )
 }
 
 /// What a value that is not a collection reads as.
@@ -245,6 +337,8 @@ enum Leaf<'py> {
     Value(Value),
     /// A model's `model_dump(by_alias=True, exclude_none=True)`.
     Model(Bound<'py, PyAny>),
+    /// A value no Tide document holds: the error's kind and message.
+    Unreadable((ErrorKind, String)),
 }
 
 #[inline(never)]
@@ -256,14 +350,27 @@ fn leaf<'py>(value: &Bound<'py, PyAny>) -> PyResult<Leaf<'py>> {
         return Ok(Leaf::Value(Value::Bool(flag.is_true())));
     }
     if value.is_instance_of::<PyInt>() {
-        let integer: i64 = value.extract()?;
-        return Ok(Leaf::Value(Value::Int(integer)));
+        return Ok(match value.extract::<i64>() {
+            Ok(integer) => Leaf::Value(Value::Int(integer)),
+            Err(_) => Leaf::Unreadable((
+                ErrorKind::InvalidValue("int_parsing_size"),
+                "Input should be an integer from -2**63 to 2**63 - 1".to_owned(),
+            )),
+        });
     }
     if let Ok(float) = value.cast::<PyFloat>() {
         return Ok(Leaf::Value(Value::Float(float.value())));
     }
     if let Ok(text) = value.cast::<PyString>() {
-        return Ok(Leaf::Value(Value::Str(text.to_str()?.to_owned())));
+        return Ok(match text.to_str() {
+            Ok(text) => Leaf::Value(Value::Str(text.to_owned())),
+            // Pydantic's type and message for a `str` with lone surrogates.
+            Err(_) => Leaf::Unreadable((
+                ErrorKind::InvalidType("string_unicode"),
+                "Input should be a valid string, unable to parse raw data as a unicode string"
+                    .to_owned(),
+            )),
+        });
     }
     if let Some(text) = temporal(value)? {
         return Ok(Leaf::Value(Value::Str(text)));
@@ -278,9 +385,13 @@ fn leaf<'py>(value: &Bound<'py, PyAny>) -> PyResult<Leaf<'py>> {
             Some(&options),
         )?));
     }
-    Err(PyTypeError::new_err(format!(
-        "cannot read a value of type {} into a Tide model",
-        value.get_type().name()?
+    Ok(Leaf::Unreadable((
+        ErrorKind::InvalidType("is_instance_of"),
+        format!(
+            "Input should be None, a bool, int, float, str, date, time, list, tuple, dict or \
+             model, not {}",
+            value.get_type().name()?
+        ),
     )))
 }
 
@@ -434,10 +545,11 @@ where
     if let Ok(same) = value.cast::<T>() {
         return Ok(same.get().clone());
     }
-    let node = py_to_node(value, 0)?;
+    let mut reader = Reader::default();
+    let node = reader.read(value, 0)?;
     let mut cx = Context::new();
     let model = T::from_node(&node, &mut cx);
-    let errors = cx.into_errors();
+    let errors = reader.merge(cx.into_errors());
     match model {
         Some(model) if errors.is_empty() => Ok(model),
         _ => Err(raise(class.py(), T::CLASS, &errors)),
@@ -482,26 +594,44 @@ pub fn json_schema<T: schemars::JsonSchema>(py: Python<'_>) -> PyResult<Bound<'_
     Ok(json_to_py(py, schema.as_value())?.cast_into::<PyDict>()?)
 }
 
-/// A serialised name that is not the attribute's (`schema` for
-/// `schema_id`), read as that attribute.
+/// `model_dump`'s and `model_dump_json`'s `mode`: `"python"` or `"json"`.
+/// The two give the same values: every field already holds what JSON holds
+/// (`DetectionRule.file` is a `str`, a date the text the loader writes).
 #[doc(hidden)]
-pub fn alias<T: Model>(this: &Bound<'_, PyAny>, name: &str) -> PyResult<Py<PyAny>> {
-    match T::FIELDS
-        .iter()
-        .find(|(attribute, serialised)| *serialised == name && attribute != serialised)
-    {
-        Some((attribute, _)) => Ok(this.getattr(*attribute)?.unbind()),
-        None => Err(PyAttributeError::new_err(format!(
-            "'{}' object has no attribute '{name}'",
-            T::CLASS
+pub fn dump_mode(mode: &str) -> PyResult<()> {
+    match mode {
+        "python" | "json" => Ok(()),
+        other => Err(PyValueError::new_err(format!(
+            "mode must be 'python' or 'json', not {other:?}"
         ))),
     }
 }
 
-/// The methods of every model class. `Type = identifier` also gives the
-/// class `__schema_identifier__` and `schema_identifier()`.
+/// `model_json_schema`'s arguments: the schema names the fields by their
+/// serialised names (`by_alias=True`, Pydantic's default) and describes what
+/// validation reads and serialisation writes alike.
+#[doc(hidden)]
+pub fn json_schema_options(by_alias: bool, mode: &str) -> PyResult<()> {
+    if !by_alias {
+        return Err(PyValueError::new_err(
+            "model_json_schema names the fields by their serialised names only (by_alias=True)",
+        ));
+    }
+    match mode {
+        "validation" | "serialization" => Ok(()),
+        other => Err(PyValueError::new_err(format!(
+            "mode must be 'validation' or 'serialization', not {other:?}"
+        ))),
+    }
+}
+
+/// The methods of every model class. `Type [identifier]` also gives the
+/// class `__schema_identifier__` and `schema_identifier()`; `(schema =
+/// field: type)` gives it `schema`, the serialised name of `field`, as a
+/// read-only attribute (every class whose serialised and attribute names
+/// differ has one: `test_native_models.py` checks it).
 macro_rules! py_models {
-    ($($ty:ident $([$identifier:expr])? $(with $rule:ident)?),+ $(,)?) => {$(
+    ($($ty:ident $([$identifier:expr])? $((schema = $field:ident: $field_ty:ty))? $(with $rule:ident)?),+ $(,)?) => {$(
         #[::pyo3::pymethods]
         impl $ty {
             $(
@@ -532,9 +662,14 @@ macro_rules! py_models {
                 $crate::python::hash_of(self)
             }
 
-            fn __getattr__(slf: &::pyo3::Bound<'_, Self>, name: &str) -> ::pyo3::PyResult<::pyo3::Py<::pyo3::PyAny>> {
-                $crate::python::alias::<Self>(slf.as_any(), name)
-            }
+            $(
+                /// The serialised name of the schema identifier field,
+                /// read-only (`metadata.schema`, `block.schema`).
+                #[getter(schema)]
+                fn py_schema_alias(&self) -> $field_ty {
+                    self.$field.clone()
+                }
+            )?
 
             fn __reduce__<'py>(
                 slf: &::pyo3::Bound<'py, Self>,
@@ -545,17 +680,20 @@ macro_rules! py_models {
             }
 
             /// The fields as a dict: attribute names (`by_alias`: the
-            /// serialised ones), nested models as dicts.
-            #[pyo3(signature = (*, by_alias = false, exclude_none = false))]
+            /// serialised ones), nested models as dicts. `mode` is
+            /// `"python"` or `"json"`, which give the same values.
+            #[pyo3(signature = (*, mode = "python", by_alias = false, exclude_none = false))]
             fn model_dump<'py>(
                 slf: &::pyo3::Bound<'py, Self>,
+                mode: &str,
                 by_alias: bool,
                 exclude_none: bool,
             ) -> ::pyo3::PyResult<::pyo3::Bound<'py, ::pyo3::types::PyDict>> {
+                $crate::python::dump_mode(mode)?;
                 $crate::python::dump::<Self>(slf.as_any(), by_alias, exclude_none)
             }
 
-            /// `model_dump` as JSON text.
+            /// `model_dump` as JSON text, non-ASCII characters as they are.
             #[pyo3(signature = (*, by_alias = false, exclude_none = false, indent = None))]
             fn model_dump_json(
                 slf: &::pyo3::Bound<'_, Self>,
@@ -603,11 +741,17 @@ macro_rules! py_models {
                 $crate::python::copy::<Self>(slf, update)
             }
 
-            /// The model's JSON Schema.
+            /// The model's JSON Schema, the fields under their serialised
+            /// names (`by_alias=True` only); `mode` is `"validation"` or
+            /// `"serialization"`, which describe the same document.
             #[classmethod]
+            #[pyo3(signature = (by_alias = true, mode = "validation"))]
             fn model_json_schema<'py>(
                 class: &::pyo3::Bound<'py, ::pyo3::types::PyType>,
+                by_alias: bool,
+                mode: &str,
             ) -> ::pyo3::PyResult<::pyo3::Bound<'py, ::pyo3::types::PyDict>> {
+                $crate::python::json_schema_options(by_alias, mode)?;
                 $crate::python::json_schema::<Self>(class.py())
             }
 
@@ -772,8 +916,8 @@ py_union! {
 
 py_models! {
     Organisation,
-    ObjectMetadata,
-    RuleMetadata,
+    ObjectMetadata (schema = schema_id: String),
+    RuleMetadata (schema = schema_id: String),
     ObjectReferences,
     SignalData,
     ExternalDetector,
@@ -791,10 +935,10 @@ py_models! {
     ThreatActor,
     ThreatBody,
     ThreatVectorV1_0 [ThreatVectorV1_0::SCHEMA_IDENTIFIER],
-    CarbonBlackConfig [<CarbonBlackConfig as PlatformBlock>::SCHEMA_IDENTIFIER],
+    CarbonBlackConfig [<CarbonBlackConfig as PlatformBlock>::SCHEMA_IDENTIFIER] (schema = platform_schema: Option<String>),
     CrowdstrikeDetails,
     CrowdstrikeSchedule,
-    CrowdstrikeConfig [<CrowdstrikeConfig as PlatformBlock>::SCHEMA_IDENTIFIER],
+    CrowdstrikeConfig [<CrowdstrikeConfig as PlatformBlock>::SCHEMA_IDENTIFIER] (schema = platform_schema: Option<String>),
     DefenderAlert,
     DefenderImpactedEntities,
     DefenderGroupScoping,
@@ -805,8 +949,8 @@ py_models! {
     DefenderUserActions,
     DefenderResponseActions,
     DefenderExclusion,
-    DefenderConfig [<DefenderConfig as PlatformBlock>::SCHEMA_IDENTIFIER],
-    ElasticConfig [<ElasticConfig as PlatformBlock>::SCHEMA_IDENTIFIER],
+    DefenderConfig [<DefenderConfig as PlatformBlock>::SCHEMA_IDENTIFIER] (schema = platform_schema: Option<String>),
+    ElasticConfig [<ElasticConfig as PlatformBlock>::SCHEMA_IDENTIFIER] (schema = platform_schema: Option<String>),
     ElasticSuppression,
     ElasticCardinality,
     ElasticThreshold,
@@ -835,7 +979,7 @@ py_models! {
     HarfangLabSigma,
     HarfangLabYaraMeta,
     HarfangLabYara,
-    HarfangLabConfig [<HarfangLabConfig as PlatformBlock>::SCHEMA_IDENTIFIER],
+    HarfangLabConfig [<HarfangLabConfig as PlatformBlock>::SCHEMA_IDENTIFIER] (schema = platform_schema: Option<String>),
     SentinelTemplate,
     SentinelTrigger,
     SentinelScheduling,
@@ -847,17 +991,17 @@ py_models! {
     SentinelMappingEntry,
     SentinelEntityMapping,
     SentinelExclusion,
-    SentinelConfig [<SentinelConfig as PlatformBlock>::SCHEMA_IDENTIFIER],
+    SentinelConfig [<SentinelConfig as PlatformBlock>::SCHEMA_IDENTIFIER] (schema = platform_schema: Option<String>),
     SentinelOneDetails,
     SentinelOneSingleEvent,
     SentinelOneSubQuery,
     SentinelOneCorrelation,
     SentinelOneCondition,
     SentinelOneResponse,
-    SentinelOneConfig [<SentinelOneConfig as PlatformBlock>::SCHEMA_IDENTIFIER],
+    SentinelOneConfig [<SentinelOneConfig as PlatformBlock>::SCHEMA_IDENTIFIER] (schema = platform_schema: Option<String>),
     SplunkRiskObject,
     SplunkThreatObject,
-    SplunkConfig [<SplunkConfig as PlatformBlock>::SCHEMA_IDENTIFIER],
+    SplunkConfig [<SplunkConfig as PlatformBlock>::SCHEMA_IDENTIFIER] (schema = platform_schema: Option<String>),
     SplunkSchedule,
     SplunkTimerange,
     SplunkScheduling,
@@ -873,7 +1017,7 @@ py_models! {
     SysdigException,
     SysdigMacro,
     SysdigList,
-    SysdigConfig [<SysdigConfig as PlatformBlock>::SCHEMA_IDENTIFIER],
+    SysdigConfig [<SysdigConfig as PlatformBlock>::SCHEMA_IDENTIFIER] (schema = platform_schema: Option<String>),
 }
 
 /// Names the exported `models` submodule [`MODULE`] and puts it in
@@ -916,6 +1060,13 @@ pub mod models {
         SplunkNotable, SplunkNotableDrilldown, SplunkNotableEvent, SplunkRisk, SplunkRiskObject,
         SplunkSchedule, SplunkScheduling, SplunkThreatObject, SplunkThrottling, SplunkTimerange,
         SplunkTrigger, SysdigConfig, SysdigException, SysdigList, SysdigMacro, ThreatActor,
-        ThreatBody, ThreatVectorV1_0, ValidationError,
+        ThreatBody, ThreatVectorV1_0,
     };
+
+    /// The error `model_validate` raises: a `ValueError` whose instances
+    /// have `errors()` (each error's `type`, `loc`, `msg`, and `input` and
+    /// `ctx` when it records them), `error_count()` and `title`.
+    #[pymodule_export]
+    #[allow(non_upper_case_globals)]
+    const ValidationError: super::ValidationErrorClass = super::ValidationErrorClass;
 }
