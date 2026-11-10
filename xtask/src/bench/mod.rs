@@ -53,9 +53,9 @@ stdout (progress goes to stderr); --out writes it to FILE as well.
   --engine python   the oracle: opentide 0.23.0 from its PyPI wheel
                     (tests/bench/oracle-requirements.txt, hashes verified),
                     installed with uv under the target directory (default)
-  --engine rust     the Rust implementations: today only the language
-                    server (built --release); every other command reports
-                    \"no Rust yet\"
+  --engine rust     the Rust implementations: today the language server
+                    and `load` (opentide-workspace's load example), built
+                    --release; every other command reports \"no Rust yet\"
   --scale 1|10      the heavy workspace's size (default 1)
   --only ID,...     run only these commands (ids as in the report)
   --workspace DIR   benchmark this workspace instead of generating one
@@ -107,7 +107,21 @@ pub enum Kind {
     Cli,
     /// The language server, timed from spawn to the first diagnostics.
     Lsp,
+    /// Loading and indexing the workspace, as the SDK does: one process,
+    /// spawn to exit, printing what the index holds as JSON. The oracle runs
+    /// `Opentide.initialise()` ([`ORACLE_LOAD`]); the Rust engine
+    /// opentide-workspace's `load` example (UC-2.1, #816).
+    Load,
 }
+
+/// What the oracle runs for [`Kind::Load`]: the SDK's registry load
+/// (`Opentide.initialise()`), with the index's counts as JSON.
+pub const ORACLE_LOAD: &str = "import json\n\
+from opentide.core.registry import Opentide\n\
+Opentide.initialise()\n\
+index = Opentide.Index\n\
+objects = sum(len(v) for k, v in index['objects'].items() if k != 'signal')\n\
+print(json.dumps({'ok': True, 'objects': objects, 'load_errors': len(index['parse_errors'])}))\n";
 
 /// One benchmarked command.
 #[derive(Clone, Copy, Debug)]
@@ -171,6 +185,21 @@ fn explain(json: &Value, _: &workspace::Workspaces) -> Option<String> {
 
 fn lsp(_: &Value, _: &workspace::Workspaces) -> Option<String> {
     None
+}
+
+fn load(json: &Value, ws: &workspace::Workspaces) -> Option<String> {
+    if json["ok"] != Value::Bool(true) {
+        return Some(format!("ok is {}, not true", json["ok"]));
+    }
+    if json["load_errors"].as_u64() != Some(0) {
+        return Some(format!(
+            "{} load errors in the heavy workspace",
+            json["load_errors"]
+        ));
+    }
+    let objects = json["objects"].as_u64().unwrap_or(0);
+    let rules = u64::try_from(ws.rules).unwrap_or(u64::MAX);
+    (objects < rules).then(|| format!("{objects} objects indexed, fewer than the {rules} rules"))
 }
 
 /// The commands of issue #806, in the order they run.
@@ -270,6 +299,14 @@ pub const SCENARIOS: &[Scenario] = &[
         kind: Kind::Cli,
         exit_codes: &[0],
         expect: explain,
+    },
+    Scenario {
+        id: "load",
+        args: &[],
+        input: Input::Clean,
+        kind: Kind::Load,
+        exit_codes: &[0],
+        expect: load,
     },
     Scenario {
         id: "lsp_first_diagnostics",
@@ -585,6 +622,7 @@ fn program(
     engine: Engine,
     opentide: Option<&Path>,
     lsp: Option<&Path>,
+    load_bin: Option<&Path>,
     ws: Option<&workspace::Workspaces>,
 ) -> Program {
     let rule = ws.map(|ws| ws.rule.clone()).unwrap_or_default();
@@ -616,6 +654,17 @@ fn program(
         (Engine::Rust, Kind::Lsp) => match lsp {
             Some(lsp) => Program::Run(lsp.to_owned(), vec![OsString::from("--stdio")]),
             None => Program::Missing("no language server".into()),
+        },
+        (Engine::Python, Kind::Load) => match opentide {
+            Some(opentide) => Program::Run(
+                opentide.with_file_name("python"),
+                vec![OsString::from("-c"), OsString::from(ORACLE_LOAD)],
+            ),
+            None => Program::Missing("no opentide".into()),
+        },
+        (Engine::Rust, Kind::Load) => match load_bin {
+            Some(bin) => Program::Run(bin.to_owned(), Vec::new()),
+            None => Program::Missing("no load example".into()),
         },
         (Engine::Rust, Kind::Cli) => Program::Missing(
             "no Rust yet: the Rust CLI (opentide-cli) is UC-3; the command runs in Python".into(),
@@ -685,7 +734,7 @@ fn run_in(options: &Options, root: &Path, base: &Path, work: &Path) -> Result<()
                 .is_none_or(|only| only.iter().any(|id| id == s.id))
         })
         .collect();
-    let runnable = |s: &&&Scenario| options.engine == Engine::Python || s.kind == Kind::Lsp;
+    let runnable = |s: &&&Scenario| options.engine == Engine::Python || s.kind != Kind::Cli;
     let needs_workspace = selected
         .iter()
         .filter(runnable)
@@ -698,6 +747,12 @@ fn run_in(options: &Options, root: &Path, base: &Path, work: &Path) -> Result<()
             (Some(path), Some(version))
         }
         (Engine::Rust, _) => (None, None),
+    };
+    let load_bin = match options.engine {
+        Engine::Rust if selected.iter().any(|s| s.kind == Kind::Load) => {
+            Some(oracle::build_load(root)?)
+        }
+        _ => None,
     };
     let lsp = match (options.engine, &options.lsp) {
         (Engine::Rust, Some(path)) => Some(path.clone()),
@@ -753,6 +808,7 @@ fn run_in(options: &Options, root: &Path, base: &Path, work: &Path) -> Result<()
             options.engine,
             opentide.as_deref(),
             lsp.as_deref(),
+            load_bin.as_deref(),
             workspaces.as_ref(),
         ) {
             Program::Missing(why) => {
@@ -906,7 +962,7 @@ fn measure_scenario(
         let run_dir = measure::RunDir::prepare(&run_root, source)?;
         let sleep = if measured_run { inject } else { None };
         let sample = match scenario.kind {
-            Kind::Cli => {
+            Kind::Cli | Kind::Load => {
                 let mut command = measure::command(program, args, &run_dir)?;
                 let measured = measure::run(&mut command, sleep)?;
                 verify_cli(scenario, &run_dir, measured.exit_code, workspaces)?;
@@ -1154,9 +1210,20 @@ mod tests {
     #[test]
     fn rust_has_only_the_language_server_and_says_no_rust_yet_for_the_rest() {
         for scenario in SCENARIOS {
-            let program = program(scenario, Engine::Rust, None, Some(Path::new("lsp")), None);
+            let program = program(
+                scenario,
+                Engine::Rust,
+                None,
+                Some(Path::new("lsp")),
+                Some(Path::new("load")),
+                None,
+            );
             match (scenario.kind, program) {
                 (Kind::Lsp, Program::Run(_, args)) => assert_eq!(args, ["--stdio"]),
+                (Kind::Load, Program::Run(bin, args)) => {
+                    assert_eq!(bin, Path::new("load"));
+                    assert!(args.is_empty());
+                }
                 (Kind::Cli, Program::Missing(why)) => assert!(why.starts_with("no Rust yet")),
                 (kind, _) => panic!("{}: {kind:?}", scenario.id),
             }
@@ -1245,6 +1312,7 @@ mod tests {
             scenario,
             Engine::Python,
             Some(Path::new("opentide")),
+            None,
             None,
             Some(&ws),
         ) else {

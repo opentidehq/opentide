@@ -114,7 +114,7 @@ jobs:
           TAG: ${{ steps.tag.outputs.tag }}
         run: python3 scripts/engine/release.py check "${TAG}"
       - run: python3 scripts/engine/release.py vendor
-      - run: cargo package --locked --workspace --exclude opentide-native --exclude xtask --exclude opentide-compare --exclude opentide-schema --allow-dirty
+      - run: cargo package --locked --workspace --exclude opentide-native --exclude xtask --exclude opentide-compare --exclude opentide-schema --exclude opentide-workspace --allow-dirty
       - name: license scan (no oracle references)
         run: bash scripts/engine/license-scan.sh target/package/*.crate
 

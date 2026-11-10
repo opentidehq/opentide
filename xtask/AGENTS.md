@@ -12,6 +12,7 @@ xtask --`): the repository's Rust tooling, as a workspace member that is never p
 | `corpus generate\|faults\|clean\|codes\|coverage` | The corpora of UC-0.6 (#804): the seeded heavy workspace, the fault catalogue run against the oracle (and, `--engine rust --only objects`, against opentide-schema's object models), the code inventory and coverage report ([`tests/corpora/README.md`](../tests/corpora/README.md)) |
 | `corpus faults --check --engine rust --only objects\|structural\|configuration` | The fault kinds the Rust model covers today, against the oracle finding for finding: the object files' findings outside the platform blocks (UC-1.3; `structural` is UC-1.2's subset, `src/corpus/structural.rs`) and the configuration files' findings (UC-1.5, `src/corpus/configuration.rs`) |
 | `config diff --against python [--oracle BIN] [--corpus all\|fixtures\|generated]` | Every fixture and generated workspace's configuration resolved by `opentide-schema` and compared, as JSON, with the oracle's `resolve_configurations`, with its `validate --check configuration` findings (`src/config.rs`, `oracle/config_resolve.py`). UC-1.5 (#811) |
+| `registry diff --against python [--oracle BIN] [--corpus all\|fixtures\|generated\|faults] [--show-approved]` | Every corpus (the golden fixtures, an edge-case workspace, the heavy workspace and layouts, each fault kind alone) loaded by `opentide-workspace` and its index compared, as JSON, with the Python registry's (`src/registry.rs`, `oracle/registry_export.py`); differences only through the named rules of `APPROVED`, none stale. UC-2.1 (#816) |
 | `codegen` | Not implemented: UC-1.8 (#814) generates schemas, stubs, types and references with it |
 | `golden record [--check-determinism]`, `check`, `diff`, `lock`, `coverage` | Records what the frozen Python CLI (the oracle, `tests/golden/ORACLE`) does for every case of `tests/golden/cases.toml`, and checks an engine against the recordings: [`tests/golden/README.md`](../tests/golden/README.md) |
 | `golden check --engine compare [--report FILE]` | Runs every case whose command has a Rust implementation (`opentide.cli.engines.RUST_COMMANDS`) through this repository's CLI with `OPENTIDE_ENGINE=rust`, and compares it with the recording through `opentide-compare` and `tests/golden/APPROVED_DIFFS.toml`; a stale ledger entry fails it (UC-0.7, #805; CI job `Golden compare`) |
@@ -50,8 +51,10 @@ of it): a command that failed early would measure nothing, so the bench stops wi
 - `--engine python` runs the oracle, opentide 0.23.0 from its PyPI wheel, installed with uv into
   `<target>/xtask-bench/oracle` from [`tests/bench/oracle-requirements.txt`](../tests/bench/oracle-requirements.txt)
   (every file's SHA-256 pinned) on a uv-managed CPython (`ORACLE_PYTHON`), bytecode compiled at
-  install. `--engine rust` builds `opentide-lsp --release` for the language server and reports
-  "no Rust yet" for every command without a Rust implementation.
+  install. `--engine rust` builds `opentide-lsp --release` for the language server and
+  opentide-workspace's `load` example (`--release`) for `load`, and reports "no Rust yet" for every
+  other command. `load` is the SDK's load and index: the oracle runs `Opentide.initialise()`
+  with its interpreter (`ORACLE_LOAD`), the Rust engine the example, each timed spawn to exit.
 - The language server's number is spawn to the first `publishDiagnostics` for the opened rule
   (`src/bench/lsp.rs`), with the workspace as its root.
 - `--check` (`src/bench/check.rs`) fails a median or peak RSS more than `policy.regression` (10%)
@@ -149,5 +152,5 @@ cargo xtask check-layers
 ## Work items that change this crate
 
 UC-0.4 (#802) check-layers; UC-0.6 (#804) corpus; UC-1.8 (#814) codegen; UC-0.5 (#803) golden;
-UC-0.7 (#805) the comparator over `golden`; UC-X.2 (#844) coverage, mutants, parity; UC-0.8 (#806) bench; UC-1.6 (#812) `vocab`; UC-0.3 (#801) wired the checks into one
+UC-0.7 (#805) the comparator over `golden`; UC-2.1 (#816) `registry diff` and the `load` benchmark; UC-X.2 (#844) coverage, mutants, parity; UC-0.8 (#806) bench; UC-1.6 (#812) `vocab`; UC-0.3 (#801) wired the checks into one
 CI. Lints and tests: [`crates/AGENTS.md`](../crates/AGENTS.md).
