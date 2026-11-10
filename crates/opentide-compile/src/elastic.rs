@@ -406,8 +406,9 @@ pub fn compile(cx: &Context<'_>, rule: &Rule, setup: &Setup) -> Result<Json, Com
     let interval = text_of(&interval).map_err(failed)?;
     let lookback = text_of(&lookback).map_err(failed)?;
     let window = duration::elastic_format(
-        duration::elastic_seconds(interval, false).map_err(failed)?
-            + duration::elastic_seconds(lookback, true).map_err(failed)?,
+        duration::elastic_seconds(interval, false)
+            .map_err(failed)?
+            .saturating_add(duration::elastic_seconds(lookback, true).map_err(failed)?),
     );
     let name = get(block, "name")
         .filter(|name| name.truthy())

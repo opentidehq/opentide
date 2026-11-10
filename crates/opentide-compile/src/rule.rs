@@ -100,6 +100,21 @@ pub fn canonical_uuid(text: &str) -> String {
     )
 }
 
+/// The codes a compile failure carries, each with its `opentide explain` page
+/// (`src/opentide/data/diagnostics/compile_*.md`).
+pub mod codes {
+    /// A setting the platform needs is missing.
+    pub const COMPILE_MISSING_FIELD: &str = "compile_missing_field";
+    /// A setting has a value the platform cannot take.
+    pub const COMPILE_INVALID_VALUE: &str = "compile_invalid_value";
+    /// A block the rule needs is empty.
+    pub const COMPILE_EMPTY_BLOCK: &str = "compile_empty_block";
+    /// The rule's data does not hold together (a duration that cannot be read).
+    pub const COMPILE_INVALID_RULE: &str = "compile_invalid_rule";
+    /// Any other failure.
+    pub const COMPILE_FAILED: &str = "compile_failed";
+}
+
 /// A rule a platform cannot compile: a stable code, the reason alone, and
 /// what to do (`code`, `reason`, `hint`), with the field at fault.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -134,14 +149,14 @@ impl CompileError {
 
     /// A rule the data model refuses (`TideRuleDataModelErrors` without a code).
     pub fn invalid_rule(text: impl Into<String>) -> Self {
-        Self::new("compile_invalid_rule", text, None)
+        Self::new(codes::COMPILE_INVALID_RULE, text, None)
     }
 
     /// Any other failure, described for `platform` (its display name).
     pub fn failed(platform: &str, text: &str) -> Self {
         let text = text.trim();
         Self::new(
-            "compile_failed",
+            codes::COMPILE_FAILED,
             format!(
                 "{platform} cannot compile this rule: {}",
                 if text.is_empty() {

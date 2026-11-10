@@ -9,7 +9,7 @@ use crate::Context;
 use crate::duration;
 use crate::json::{Json, Object};
 use crate::kql;
-use crate::rule::{CompileError, Rule};
+use crate::rule::{CompileError, Rule, codes};
 use crate::strategy::{StatusStrategy, python_repr};
 
 /// The platform's display name, in messages.
@@ -89,7 +89,7 @@ fn missing(field: &str, requirement: &str) -> CompileError {
     let mut path = vec!["configurations", "sentinel"];
     path.extend(field.split('.'));
     CompileError::new(
-        "compile_missing_field",
+        codes::COMPILE_MISSING_FIELD,
         format!("configurations.sentinel.{field} is missing"),
         Some(requirement),
     )
@@ -195,7 +195,7 @@ pub fn compile(cx: &Context<'_>, rule: &Rule, tenant: &str) -> Result<Json, Comp
         }
         Some(_) => {
             return Err(CompileError::new(
-                "compile_invalid_value",
+                codes::COMPILE_INVALID_VALUE,
                 "configurations.sentinel.alert.suppression is true",
                 Some("set it to false or a duration such as PT1H"),
             )
@@ -405,7 +405,7 @@ pub fn compile(cx: &Context<'_>, rule: &Rule, tenant: &str) -> Result<Json, Comp
     let alert_severity = text(alert, "severity");
     if alert_severity.is_none() && rule.response().is_none() {
         return Err(CompileError::new(
-            "compile_empty_block",
+            codes::COMPILE_EMPTY_BLOCK,
             "`response` is empty, so Sentinel cannot read `alert_severity`",
             Some("set response.alert_severity, or configurations.sentinel.alert.severity"),
         )

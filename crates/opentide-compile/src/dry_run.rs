@@ -726,7 +726,7 @@ fn diagnostic(platform: &str, entry: &Json, root: &Path) -> Json {
             .get("code")
             .filter(|code| code.truthy())
             .cloned()
-            .unwrap_or_else(|| "compile_failed".into()),
+            .unwrap_or_else(|| crate::rule::codes::COMPILE_FAILED.into()),
     );
     out.insert("severity".into(), "error".into());
     out.insert(

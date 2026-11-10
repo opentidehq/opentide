@@ -541,9 +541,13 @@ pub fn state_id(
     let file = format!("{canonical}.json");
     // Another spelling of the same rule's shard makes the state unusable.
     let variants = names.iter().any(|name| {
-        name != &file
-            && name.to_lowercase().ends_with(".json")
-            && canonical_uuid(&name[..name.len() - 5]) == canonical
+        let stem = name
+            .len()
+            .checked_sub(5)
+            .filter(|at| name.is_char_boundary(*at))
+            .filter(|at| name[*at..].eq_ignore_ascii_case(".json"))
+            .map(|at| &name[..at]);
+        name != &file && stem.is_some_and(|stem| canonical_uuid(stem) == canonical)
     });
     if variants || !names.contains(&file) {
         return None;
@@ -824,6 +828,29 @@ mod tests {
             "a real deploy would need 4 variables that are unset: $A, $B, $C and 1 more; \
              opentide doctor lists them by tenant"
         );
+    }
+
+    #[test]
+    fn the_state_is_read_only_from_the_one_canonical_shard() {
+        let fs = opentide_workspace::MemoryFs::new();
+        let uuid = "0000000a-0000-4000-8000-00000000000b";
+        let shard = format!(
+            "{{\"schema\": \"deployment.state::1.0\", \"object_uuid\": \"{uuid}\", \
+             \"platforms\": {{\"crowdstrike\": {{\"t\": \"42\"}}}}}}"
+        );
+        let dir = "/ws/.opentide/states/deployment";
+        fs.write(format!("{dir}/{uuid}.json"), shard.clone());
+        fs.write(format!("{dir}/\u{212a}é.json"), "{}");
+        let root = Path::new("/ws");
+        assert_eq!(
+            state_id(&fs, root, uuid, "crowdstrike", "t").as_deref(),
+            Some("42")
+        );
+        assert_eq!(state_id(&fs, root, uuid, "crowdstrike", "other"), None);
+        assert_eq!(state_id(&fs, root, uuid, "sentinel_one", "t"), None);
+        // Another spelling of the same rule's shard makes the state unusable.
+        fs.write(format!("{dir}/{}.JSON", uuid.to_uppercase()), shard);
+        assert_eq!(state_id(&fs, root, uuid, "crowdstrike", "t"), None);
     }
 
     #[test]
