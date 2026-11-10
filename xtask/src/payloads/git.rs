@@ -109,20 +109,38 @@ fn candidate(repo: &Path) -> Value {
 /// Runs the scripted history. Whether every state agrees.
 pub fn run(python: &Path) -> Result<bool> {
     let (repo_root, _) = crate::vocab::diff::workspace()?;
-    let golden = repo_root.join("tests/golden");
-    let spec = crate::golden::case::Spec::parse(&fs::read_to_string(golden.join("cases.toml"))?)?;
     let scratch = tempfile::tempdir()?;
     let root = scratch.path().canonicalize()?;
     let home = root.join("home");
     fs::create_dir_all(&home)?;
     let probe = root.join("git_probe.py");
     fs::write(&probe, PROBE)?;
+    let states = history(&repo_root, &root, &home)?;
+    let mut passed = true;
+    for (name, dir) in &states {
+        let expected = oracle(python, &probe, dir, &home)?;
+        let got = candidate(dir);
+        if expected == got {
+            println!("{name}: agrees ({expected})");
+        } else {
+            passed = false;
+            println!("{name}: DIFFERS\n  oracle:    {expected}\n  candidate: {got}");
+        }
+    }
+    Ok(passed)
+}
+
+/// Builds the scripted history under `root` (git's `HOME` is `home`): each
+/// state, named, with the directory the baseline reads it in.
+pub fn history(repo_root: &Path, root: &Path, home: &Path) -> Result<Vec<(String, PathBuf)>> {
+    let golden = repo_root.join("tests/golden");
+    let spec = crate::golden::case::Spec::parse(&fs::read_to_string(golden.join("cases.toml"))?)?;
     let repo = root.join("repo");
     fs::create_dir_all(&repo)?;
     spec.fixtures
         .get("tide-corpus")
         .context("cases.toml has no fixture tide-corpus")?
-        .materialise(&repo_root, &repo)?;
+        .materialise(repo_root, &repo)?;
     // The fixture links objects/rules to its folder; git would track the link
     // alone, so the rules move into a real folder.
     let link = repo.join("objects/rules");
@@ -140,10 +158,10 @@ pub fn run(python: &Path) -> Result<bool> {
             states.push((name.to_owned(), copy));
         }
     };
-    git(&repo, &home, &["init", "-q", "-b", "main"])?;
+    git(&repo, home, &["init", "-q", "-b", "main"])?;
     check("no commit yet", &repo, &mut states);
-    git(&repo, &home, &["add", "-A", "--force"])?;
-    git(&repo, &home, &["commit", "-q", "-m", "first"])?;
+    git(&repo, home, &["add", "-A", "--force"])?;
+    git(&repo, home, &["commit", "-q", "-m", "first"])?;
     check("the first commit", &repo, &mut states);
     let files = rules(&repo)?;
     ensure!(files.len() >= 5, "tide-corpus has fewer than five rules");
@@ -151,10 +169,10 @@ pub fn run(python: &Path) -> Result<bool> {
     fs::copy(&files[1], repo.join("objects/rules/règle-détection-é.yaml"))?;
     fs::create_dir_all(repo.join("objects/rules/sub"))?;
     fs::copy(&files[2], repo.join("objects/rules/sub/nested-rule.yaml"))?;
-    git(&repo, &home, &["add", "-A", "--force"])?;
+    git(&repo, home, &["add", "-A", "--force"])?;
     git(
         &repo,
-        &home,
+        home,
         &["commit", "-q", "-m", "edit, non-ASCII, nested"],
     )?;
     check(
@@ -169,36 +187,36 @@ pub fn run(python: &Path) -> Result<bool> {
     };
     git(
         &repo,
-        &home,
+        home,
         &[
             "mv",
             &relative(&files[3])?,
             "objects/rules/renamed-rule.yaml",
         ],
     )?;
-    git(&repo, &home, &["rm", "-q", &relative(&files[4])?])?;
-    git(&repo, &home, &["commit", "-q", "-m", "rename and delete"])?;
+    git(&repo, home, &["rm", "-q", &relative(&files[4])?])?;
+    git(&repo, home, &["commit", "-q", "-m", "rename and delete"])?;
     check("a rename and a delete", &repo, &mut states);
-    git(&repo, &home, &["checkout", "-q", "--detach", "HEAD~1"])?;
+    git(&repo, home, &["checkout", "-q", "--detach", "HEAD~1"])?;
     check("a detached HEAD", &repo, &mut states);
-    git(&repo, &home, &["checkout", "-q", "main"])?;
-    git(&repo, &home, &["checkout", "-q", "-b", "feature"])?;
+    git(&repo, home, &["checkout", "-q", "main"])?;
+    git(&repo, home, &["checkout", "-q", "-b", "feature"])?;
     touch(&files[0])?;
-    git(&repo, &home, &["commit", "-q", "-am", "feature edit"])?;
-    git(&repo, &home, &["checkout", "-q", "main"])?;
+    git(&repo, home, &["commit", "-q", "-am", "feature edit"])?;
+    git(&repo, home, &["checkout", "-q", "main"])?;
     touch(&renamed)?;
-    git(&repo, &home, &["commit", "-q", "-am", "main edit"])?;
+    git(&repo, home, &["commit", "-q", "-am", "main edit"])?;
     git(
         &repo,
-        &home,
+        home,
         &["merge", "-q", "--no-ff", "-m", "merge feature", "feature"],
     )?;
     check("a merge commit", &repo, &mut states);
     let shallow = root.join("shallow");
     let url = format!("file://{}", repo.display());
     git(
-        &root,
-        &home,
+        root,
+        home,
         &[
             "clone",
             "-q",
@@ -220,13 +238,13 @@ pub fn run(python: &Path) -> Result<bool> {
         .status()?;
     ensure!(copied.success(), "copy the workspace into a subfolder");
     let _ = fs::remove_dir_all(inner.join(".git"));
-    git(&outer, &home, &["init", "-q", "-b", "main"])?;
-    git(&outer, &home, &["add", "-A", "--force"])?;
-    git(&outer, &home, &["commit", "-q", "-m", "first"])?;
+    git(&outer, home, &["init", "-q", "-b", "main"])?;
+    git(&outer, home, &["add", "-A", "--force"])?;
+    git(&outer, home, &["commit", "-q", "-m", "first"])?;
     touch(&rules(&inner)?[0])?;
     git(
         &outer,
-        &home,
+        home,
         &["commit", "-q", "-am", "edit below the top level"],
     )?;
     states.push(("a workspace below the git top level".to_owned(), inner));
@@ -235,20 +253,48 @@ pub fn run(python: &Path) -> Result<bool> {
     spec.fixtures
         .get("tide-corpus")
         .context("cases.toml has no fixture tide-corpus")?
-        .materialise(&repo_root, &bare)?;
+        .materialise(repo_root, &bare)?;
     let _ = fs::remove_dir_all(bare.join(".git"));
     check("no checkout", &bare, &mut states);
+    Ok(states)
+}
 
-    let mut passed = true;
-    for (name, dir) in &states {
-        let expected = oracle(python, &probe, dir, &home)?;
-        let got = candidate(dir);
-        if expected == got {
-            println!("{name}: agrees ({expected})");
-        } else {
-            passed = false;
-            println!("{name}: DIFFERS\n  oracle:    {expected}\n  candidate: {got}");
-        }
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_scripted_history_reads_each_state() {
+        let (repo_root, _) = crate::vocab::diff::workspace().unwrap();
+        let scratch = tempfile::tempdir().unwrap();
+        let root = scratch.path().canonicalize().unwrap();
+        let home = root.join("home");
+        fs::create_dir_all(&home).unwrap();
+        let states = history(&repo_root, &root, &home).unwrap();
+        let read = |name: &str| {
+            let (_, dir) = states.iter().find(|(known, _)| known == name).unwrap();
+            candidate(dir)
+        };
+        assert_eq!(states.len(), 9, "{states:?}");
+        assert_eq!(read("the first commit")["files"], json!([]));
+        let edited = read("an edit, a non-ASCII name and a nested rule");
+        assert!(
+            edited["files"]
+                .as_array()
+                .unwrap()
+                .contains(&json!("règle-détection-é.yaml")),
+            "{edited}"
+        );
+        assert_eq!(
+            edited["nested"],
+            json!(["objects/rules/sub/nested-rule.yaml"])
+        );
+        assert!(read("no checkout").get("error").is_some());
+        assert_eq!(
+            read("a workspace below the git top level")["files"]
+                .as_array()
+                .map(Vec::len),
+            Some(1)
+        );
     }
-    Ok(passed)
 }

@@ -295,3 +295,44 @@ pub fn run(filter: Option<&str>) -> Result<bool> {
     }
     Ok(passed)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_recorded_dry_run_plan_agrees() {
+        assert!(run(None).unwrap());
+        assert!(run(Some("deploy/json/vscode")).unwrap());
+    }
+
+    #[test]
+    fn a_request_reads_the_recorded_argv() {
+        let argv: Vec<String> = [
+            "--json",
+            "deploy",
+            "--dry-run",
+            "--strategy",
+            "PREVIEW",
+            "--all",
+            "--uuid",
+            "u",
+            "--file",
+            "f",
+            "--platform",
+            "sysdig",
+            "--wide",
+            "--drop-deprecated",
+        ]
+        .iter()
+        .map(|arg| (*arg).to_owned())
+        .collect();
+        let request = request(&argv, Path::new("/ws"));
+        assert!(request.all && request.wide);
+        assert_eq!(request.strategies, ["PREVIEW"]);
+        assert_eq!(request.uuids, ["u"]);
+        assert_eq!(request.files, ["f"]);
+        assert_eq!(request.platform.as_deref(), Some("sysdig"));
+        assert_eq!(request.keep_deprecated, Some(false));
+    }
+}
