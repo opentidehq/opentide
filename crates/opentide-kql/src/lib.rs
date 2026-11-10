@@ -534,10 +534,11 @@ impl Catalog {
             .get_or_init(Default::default)
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        if let Some((sources, names, catalog)) = cached.as_ref() {
-            if *sources == declared && *names == extra {
-                return CatalogRef::Declared(catalog.clone());
-            }
+        if let Some((sources, names, catalog)) = cached.as_ref()
+            && *sources == declared
+            && *names == extra
+        {
+            return CatalogRef::Declared(catalog.clone());
         }
         let mut catalog = (*workspace).clone();
         let targets = declared_targets(&patterns, extra.iter().map(String::as_str));
@@ -1067,10 +1068,10 @@ fn collect_operator_diagnostics(
 /// Names bound by `let` anywhere in the query: tables, scalars and functions the
 /// author declared, which the catalog cannot know.
 fn let_names(node: Node, source: &str, out: &mut BTreeSet<String>) {
-    if node.kind() == "let_statement" {
-        if let Some(name) = child_text(node, "name", source) {
-            out.insert(name);
-        }
+    if node.kind() == "let_statement"
+        && let Some(name) = child_text(node, "name", source)
+    {
+        out.insert(name);
     }
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
@@ -1098,72 +1099,72 @@ fn collect_function_diagnostics(
     lets: &BTreeSet<String>,
     out: &mut Vec<Diagnostic>,
 ) {
-    if node.kind() == "function_call" {
-        if let Some(name) = child_text(node, "name", source) {
-            let is_plugin = node.parent().map(|p| p.kind()) == Some("evaluate_operator");
-            let function = catalog.function(&name);
-            if lets.contains(&name) {
-                // A function the query declares with `let`.
-            } else if !is_plugin && TYPED_LITERAL_TYPES.contains(&name.as_str()) {
-                // The grammar lexes `datetime(...)` closed on its line as one
-                // literal token. A call shape here is a literal Kusto rejects: a
-                // space before `(`, or a value that runs onto the next line.
-                out.push(Diagnostic::error(
+    if node.kind() == "function_call"
+        && let Some(name) = child_text(node, "name", source)
+    {
+        let is_plugin = node.parent().map(|p| p.kind()) == Some("evaluate_operator");
+        let function = catalog.function(&name);
+        if lets.contains(&name) {
+            // A function the query declares with `let`.
+        } else if !is_plugin && TYPED_LITERAL_TYPES.contains(&name.as_str()) {
+            // The grammar lexes `datetime(...)` closed on its line as one
+            // literal token. A call shape here is a literal Kusto rejects: a
+            // space before `(`, or a value that runs onto the next line.
+            out.push(Diagnostic::error(
                     codes::KQL_PARSE_ERROR,
                     format!(
                         "'{name}(' starts a typed literal: write the value and ')' on the same line, directly after '{name}'"
                     ),
                     node_range(source, node),
                 ));
-            } else if is_plugin {
-                if catalog.plugin(&name).is_none() {
-                    let mut d = Diagnostic::error(
-                        codes::KQL_UNKNOWN_FUNCTION,
-                        format!("unknown evaluate plugin '{name}'"),
-                        call_name_range(source, node),
-                    );
-                    if let Some(s) = catalog
-                        .plugins
-                        .iter()
-                        .map(|p| (p.name.clone(), strsim_distance(&p.name, &name)))
-                        .filter(|(_, d)| *d <= 2)
-                        .min_by_key(|(_, d)| *d)
-                        .map(|(n, _)| n)
-                    {
-                        d = d.with_suggestion(s);
-                    }
-                    out.push(d);
-                }
-            } else if let Some(replacement) = function.and_then(|f| f.deprecated.as_ref()) {
-                out.push(
-                    Diagnostic::warning(
-                        codes::KQL_DEPRECATED_FUNCTION,
-                        format!("'{name}' is deprecated; use {replacement}()"),
-                        call_name_range(source, node),
-                    )
-                    .with_suggestion(replacement.clone()),
+        } else if is_plugin {
+            if catalog.plugin(&name).is_none() {
+                let mut d = Diagnostic::error(
+                    codes::KQL_UNKNOWN_FUNCTION,
+                    format!("unknown evaluate plugin '{name}'"),
+                    call_name_range(source, node),
                 );
-            } else if function.is_none() && catalog.operator(&name).is_none() {
-                // Operators used as functions are fine; unknown names get a diagnostic.
-                // Many scalar functions are not yet catalogued — only flag if it looks like a typo of a known one.
-                if let Some(suggestion) = catalog
-                    .functions
+                if let Some(s) = catalog
+                    .plugins
                     .iter()
-                    .filter(|f| f.deprecated.is_none())
-                    .map(|f| (f.name.clone(), strsim_distance(&f.name, &name)))
-                    .filter(|(_, d)| *d > 0 && *d <= 2)
+                    .map(|p| (p.name.clone(), strsim_distance(&p.name, &name)))
+                    .filter(|(_, d)| *d <= 2)
                     .min_by_key(|(_, d)| *d)
                     .map(|(n, _)| n)
                 {
-                    out.push(
-                        Diagnostic::error(
-                            codes::KQL_UNKNOWN_FUNCTION,
-                            format!("unknown function '{name}'"),
-                            call_name_range(source, node),
-                        )
-                        .with_suggestion(suggestion),
-                    );
+                    d = d.with_suggestion(s);
                 }
+                out.push(d);
+            }
+        } else if let Some(replacement) = function.and_then(|f| f.deprecated.as_ref()) {
+            out.push(
+                Diagnostic::warning(
+                    codes::KQL_DEPRECATED_FUNCTION,
+                    format!("'{name}' is deprecated; use {replacement}()"),
+                    call_name_range(source, node),
+                )
+                .with_suggestion(replacement.clone()),
+            );
+        } else if function.is_none() && catalog.operator(&name).is_none() {
+            // Operators used as functions are fine; unknown names get a diagnostic.
+            // Many scalar functions are not yet catalogued — only flag if it looks like a typo of a known one.
+            if let Some(suggestion) = catalog
+                .functions
+                .iter()
+                .filter(|f| f.deprecated.is_none())
+                .map(|f| (f.name.clone(), strsim_distance(&f.name, &name)))
+                .filter(|(_, d)| *d > 0 && *d <= 2)
+                .min_by_key(|(_, d)| *d)
+                .map(|(n, _)| n)
+            {
+                out.push(
+                    Diagnostic::error(
+                        codes::KQL_UNKNOWN_FUNCTION,
+                        format!("unknown function '{name}'"),
+                        call_name_range(source, node),
+                    )
+                    .with_suggestion(suggestion),
+                );
             }
         }
     }
@@ -1224,10 +1225,8 @@ fn tabular_parameters(definition: Node, source: &str) -> Vec<String> {
             .child_by_field_name("type")
             .and_then(|t| t.child(0))
             .is_some_and(|first| first.kind() == "(");
-        if tabular {
-            if let Some(name) = child_text(parameter, "name", source) {
-                names.push(name);
-            }
+        if tabular && let Some(name) = child_text(parameter, "name", source) {
+            names.push(name);
         }
     }
     names
@@ -1543,10 +1542,10 @@ fn collect_highlights(node: Node, _source: &str, out: &mut Vec<(ByteSpan, &'stat
         "," | ";" => Some("punctuation.delimiter"),
         _ => None,
     };
-    if let Some(capture) = capture {
-        if node.child_count() == 0 || matches!(kind, "string" | "comment" | "number" | "timespan") {
-            out.push((ByteSpan::new(node.start_byte(), node.end_byte()), capture));
-        }
+    if let Some(capture) = capture
+        && (node.child_count() == 0 || matches!(kind, "string" | "comment" | "number" | "timespan"))
+    {
+        out.push((ByteSpan::new(node.start_byte(), node.end_byte()), capture));
     }
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
@@ -1819,47 +1818,47 @@ pub fn completions(source: &str, offset: usize, profile: Profile) -> Vec<Complet
             .map(|o| complete_item(o.name.clone(), "operator", o.docs.clone(), o.docs.clone()))
             .collect();
     }
-    if let Some(op) = last_operator(before) {
-        if COLUMN_OPERATORS.iter().any(|n| *n == op) {
-            let mut seen = std::collections::BTreeSet::new();
-            let mut items = Vec::new();
-            let mentioned = catalog.mentioned_tables(source);
-            let rows: Vec<&ColumnRow> = if mentioned.is_empty() {
-                // No table named yet: the hand-written columns, not the whole
-                // reference.
-                catalog
-                    .columns
-                    .iter()
-                    .filter(|c| c.hand_written())
-                    .collect()
-            } else {
-                mentioned
-                    .iter()
-                    .flat_map(|t| catalog.columns_for_table(&t.name))
-                    .collect()
-            };
-            for col in rows {
-                if seen.insert(col.name.clone()) {
-                    let detail = format!(
-                        "{} ({})",
-                        col.table,
-                        col.type_name.as_deref().unwrap_or("column")
-                    );
-                    items.push(complete_item(
-                        col.name.clone(),
-                        "column",
-                        Some(detail),
-                        col.docs.clone(),
-                    ));
-                }
+    if let Some(op) = last_operator(before)
+        && COLUMN_OPERATORS.iter().any(|n| *n == op)
+    {
+        let mut seen = std::collections::BTreeSet::new();
+        let mut items = Vec::new();
+        let mentioned = catalog.mentioned_tables(source);
+        let rows: Vec<&ColumnRow> = if mentioned.is_empty() {
+            // No table named yet: the hand-written columns, not the whole
+            // reference.
+            catalog
+                .columns
+                .iter()
+                .filter(|c| c.hand_written())
+                .collect()
+        } else {
+            mentioned
+                .iter()
+                .flat_map(|t| catalog.columns_for_table(&t.name))
+                .collect()
+        };
+        for col in rows {
+            if seen.insert(col.name.clone()) {
+                let detail = format!(
+                    "{} ({})",
+                    col.table,
+                    col.type_name.as_deref().unwrap_or("column")
+                );
+                items.push(complete_item(
+                    col.name.clone(),
+                    "column",
+                    Some(detail),
+                    col.docs.clone(),
+                ));
             }
-            if !items.is_empty() {
-                let opts = catalog.options_for(&op);
-                if !opts.is_empty() && text_after_operator(before, &op).trim().is_empty() {
-                    items.extend(prefix_option_items(&op, &opts));
-                }
-                return items;
+        }
+        if !items.is_empty() {
+            let opts = catalog.options_for(&op);
+            if !opts.is_empty() && text_after_operator(before, &op).trim().is_empty() {
+                items.extend(prefix_option_items(&op, &opts));
             }
+            return items;
         }
     }
     let mut items: Vec<CompletionItem> = catalog
@@ -2109,43 +2108,42 @@ pub fn signature_help(source: &str, offset: usize, profile: Profile) -> Option<S
     let workspace = Catalog::for_workspace(profile, source);
     let catalog = &*workspace;
     let before = &source[..offset.min(source.len())];
-    if let Some((name, active)) = innermost_call(before) {
-        if let Some(mut help) = signature_for_name(catalog, &name, active) {
-            // `f(a=1, b=` is on parameter `b`, wherever it is in the list.
-            let current = before
-                .rsplit([',', '('])
-                .next()
-                .unwrap_or_default()
-                .trim_start();
-            if let Some((arg, _)) = current.split_once('=') {
-                let arg = arg.trim();
-                if let Some(index) = help.signatures.first().and_then(|s| {
-                    s.parameters
-                        .iter()
-                        .position(|p| p.label.split(':').next().map(str::trim) == Some(arg))
-                }) {
-                    help.active_parameter = index as u32;
-                }
+    if let Some((name, active)) = innermost_call(before)
+        && let Some(mut help) = signature_for_name(catalog, &name, active)
+    {
+        // `f(a=1, b=` is on parameter `b`, wherever it is in the list.
+        let current = before
+            .rsplit([',', '('])
+            .next()
+            .unwrap_or_default()
+            .trim_start();
+        if let Some((arg, _)) = current.split_once('=') {
+            let arg = arg.trim();
+            if let Some(index) = help.signatures.first().and_then(|s| {
+                s.parameters
+                    .iter()
+                    .position(|p| p.label.split(':').next().map(str::trim) == Some(arg))
+            }) {
+                help.active_parameter = index as u32;
             }
-            return Some(help);
         }
+        return Some(help);
     }
-    if let Some(op_name) = last_operator(before) {
-        if let Some(op) = catalog.operator(&op_name) {
-            if let Some(sig) = op.signature.clone() {
-                let params = parameter_list(&op.parameters, &sig);
-                let active = active_operator_parameter(before, &params);
-                return Some(SignatureHelp {
-                    signatures: vec![SignatureInformation {
-                        label: sig,
-                        documentation: op.docs.clone(),
-                        parameters: params,
-                    }],
-                    active_signature: 0,
-                    active_parameter: active,
-                });
-            }
-        }
+    if let Some(op_name) = last_operator(before)
+        && let Some(op) = catalog.operator(&op_name)
+        && let Some(sig) = op.signature.clone()
+    {
+        let params = parameter_list(&op.parameters, &sig);
+        let active = active_operator_parameter(before, &params);
+        return Some(SignatureHelp {
+            signatures: vec![SignatureInformation {
+                label: sig,
+                documentation: op.docs.clone(),
+                parameters: params,
+            }],
+            active_signature: 0,
+            active_parameter: active,
+        });
     }
     None
 }
@@ -2312,21 +2310,21 @@ fn parameter_list(params: &[ParamRow], signature: &str) -> Vec<ParameterInformat
 
 fn active_operator_parameter(before: &str, params: &[ParameterInformation]) -> u32 {
     let lower = before.to_ascii_lowercase();
-    if lower.contains(" on ") {
-        if let Some(index) = params.iter().position(|param| {
+    if lower.contains(" on ")
+        && let Some(index) = params.iter().position(|param| {
             let label = param.label.to_ascii_lowercase();
             label.contains("condition") || label.contains("attribute") || label == "on"
-        }) {
-            return index as u32;
-        }
+        })
+    {
+        return index as u32;
     }
-    if lower.contains("kind=") {
-        if let Some(index) = params.iter().position(|param| {
+    if lower.contains("kind=")
+        && let Some(index) = params.iter().position(|param| {
             let label = param.label.to_ascii_lowercase();
             label.contains("kind") || label.contains("flavor")
-        }) {
-            return index as u32;
-        }
+        })
+    {
+        return index as u32;
     }
     0
 }

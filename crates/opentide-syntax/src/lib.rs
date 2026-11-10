@@ -30,7 +30,9 @@ pub fn language(id: LanguageId) -> Option<Language> {
         LanguageId::Falco => Some(unsafe { from_raw(tree_sitter_opentide_falco()) }),
         LanguageId::Cql => Some(unsafe { from_raw(tree_sitter_opentide_cql()) }),
         // Tide YAML has its own parser; configuration TOML is the host's.
-        LanguageId::TideYaml | LanguageId::Config => None,
+        // YARA's verdict parser is yara-x-parser (opentide-yara); its
+        // tree-sitter grammar, for highlighting, is not vendored yet (#165).
+        LanguageId::TideYaml | LanguageId::Config | LanguageId::Yara => None,
     }
 }
 

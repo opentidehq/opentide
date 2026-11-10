@@ -211,15 +211,13 @@ pub(crate) fn names_tide_schema(text: &str) -> bool {
             in_metadata = line.trim_end() == "metadata:";
             continue;
         }
-        if in_metadata {
-            if let Some(value) = line.trim_start().strip_prefix("schema:") {
-                let value = value.trim().trim_matches(['"', '\'']);
-                if ["rule::", "threat::", "objective::"]
-                    .iter()
-                    .any(|family| value.starts_with(family))
-                {
-                    return true;
-                }
+        if in_metadata && let Some(value) = line.trim_start().strip_prefix("schema:") {
+            let value = value.trim().trim_matches(['"', '\'']);
+            if ["rule::", "threat::", "objective::"]
+                .iter()
+                .any(|family| value.starts_with(family))
+            {
+                return true;
             }
         }
     }
@@ -505,13 +503,12 @@ impl WorkspaceHost for SessionHost<'_> {
             .into_iter()
             .map(|uri| (uri_to_path(uri), session.docs[uri].text.clone()))
             .collect();
-        if let Some((path, text)) = session.elastic_configuration(self.root) {
-            if !files
+        if let Some((path, text)) = session.elastic_configuration(self.root)
+            && !files
                 .iter()
                 .any(|(open, _)| path_key(open) == path_key(&path))
-            {
-                files.push((path, text));
-            }
+        {
+            files.push((path, text));
         }
         files
     }
@@ -584,14 +581,14 @@ impl Session {
     /// disk are read again when no watcher reports changes, and its
     /// catalogs and declared datasets are installed in the engine.
     pub(crate) fn host(&self, root: Option<usize>) -> SessionHost<'_> {
-        if let Some(r) = root.and_then(|i| self.roots.get(i)) {
-            if r.checked.get() != self.batch.get() {
-                r.checked.set(self.batch.get());
-                let mut disk = r.disk.borrow_mut();
-                if (!disk.loaded || !self.caps.watch_files) && disk.refresh(&r.path) {
-                    r.drop_index();
-                    self.touch();
-                }
+        if let Some(r) = root.and_then(|i| self.roots.get(i))
+            && r.checked.get() != self.batch.get()
+        {
+            r.checked.set(self.batch.get());
+            let mut disk = r.disk.borrow_mut();
+            if (!disk.loaded || !self.caps.watch_files) && disk.refresh(&r.path) {
+                r.drop_index();
+                self.touch();
             }
         }
         self.activate(root);
@@ -763,10 +760,10 @@ impl Session {
         let doc = self.docs.get(uri)?;
         let host = self.host(doc.root);
         let generation = self.generation.get();
-        if let Some((at, response)) = self.cache.borrow().get(uri) {
-            if *at == generation {
-                return Some(Arc::clone(response));
-            }
+        if let Some((at, response)) = self.cache.borrow().get(uri)
+            && *at == generation
+        {
+            return Some(Arc::clone(response));
         }
         let response = Arc::new(analyze(
             &host,

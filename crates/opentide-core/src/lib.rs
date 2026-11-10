@@ -40,6 +40,10 @@ pub enum LanguageId {
     /// (`configurations.crowdstrike`). Not Cassandra's CQL.
     #[serde(rename = "cql", alias = "opentide-cql")]
     Cql,
+    /// YARA signatures as libyara 4.5 compiles them, with YARA-X 1.x as a
+    /// second opinion (yara-1.0; HarfangLab and Bitdefender `yara` blocks).
+    #[serde(rename = "yara", alias = "opentide-yara")]
+    Yara,
 }
 
 impl LanguageId {
@@ -55,6 +59,7 @@ impl LanguageId {
             Self::Config => "opentide-config",
             Self::Falco => "falco",
             Self::Cql => "cql",
+            Self::Yara => "yara",
         }
     }
 
@@ -70,6 +75,7 @@ impl LanguageId {
             "opentide-config" => Some(Self::Config),
             "falco" | "opentide-falco" | "Falco" => Some(Self::Falco),
             "cql" | "opentide-cql" | "CQL" | "logscale" | "crowdstrike" => Some(Self::Cql),
+            "yara" | "opentide-yara" | "YARA" => Some(Self::Yara),
             _ => None,
         }
     }
@@ -86,6 +92,7 @@ impl LanguageId {
             "lucene" => Some(Self::Lucene),
             "falco" => Some(Self::Falco),
             "cql" => Some(Self::Cql),
+            "yar" | "yara" => Some(Self::Yara),
             _ => None,
         }
     }
@@ -617,6 +624,43 @@ pub mod codes {
     pub const CQL_REGEX_GROUP_UNDER_OR: &str = "cql_regex_group_under_or";
     pub const CQL_CORRELATE_AGGREGATE: &str = "cql_correlate_aggregate";
 
+    // YARA (yara-1.0, #165). Errors are what libyara 4.5 refuses; the
+    // warnings are yara_x_incompatible through yara_meta_missing.
+    pub const YARA_PARSE_ERROR: &str = "yara_parse_error";
+    pub const YARA_INCLUDE: &str = "yara_include";
+    pub const YARA_SIGNATURE_ALIAS: &str = "yara_signature_alias";
+    pub const YARA_EMPTY_SIGNATURE: &str = "yara_empty_signature";
+    pub const YARA_DUPLICATE_RULE: &str = "yara_duplicate_rule";
+    pub const YARA_DUPLICATE_STRING: &str = "yara_duplicate_string";
+    pub const YARA_DUPLICATE_TAG: &str = "yara_duplicate_tag";
+    pub const YARA_UNDEFINED_STRING: &str = "yara_undefined_string";
+    pub const YARA_UNREFERENCED_STRING: &str = "yara_unreferenced_string";
+    pub const YARA_UNDEFINED_IDENTIFIER: &str = "yara_undefined_identifier";
+    pub const YARA_RULE_IDENTIFIER_CONFLICT: &str = "yara_rule_identifier_conflict";
+    pub const YARA_UNKNOWN_MODULE: &str = "yara_unknown_module";
+    pub const YARA_MODULE_NOT_IMPORTED: &str = "yara_module_not_imported";
+    pub const YARA_UNKNOWN_MODULE_MEMBER: &str = "yara_unknown_module_member";
+    pub const YARA_TYPE: &str = "yara_type";
+    pub const YARA_REGEXP: &str = "yara_regexp";
+    pub const YARA_HEX_STRING: &str = "yara_hex_string";
+    pub const YARA_STRING_MODIFIER: &str = "yara_string_modifier";
+    pub const YARA_NUMBER_OUT_OF_RANGE: &str = "yara_number_out_of_range";
+    pub const YARA_X_INCOMPATIBLE: &str = "yara_x_incompatible";
+    pub const YARA_SLOW_PATTERN: &str = "yara_slow_pattern";
+    pub const YARA_ENTRYPOINT_DEPRECATED: &str = "yara_entrypoint_deprecated";
+    pub const YARA_SUSPICIOUS_EXPRESSION: &str = "yara_suspicious_expression";
+    pub const YARA_MODULE_UNCONFIRMED: &str = "yara_module_unconfirmed";
+    pub const YARA_META_MISSING: &str = "yara_meta_missing";
+    // The YARA profiles of harfanglab-1.0 (1.2) and bitdefender-1.0.
+    pub const HARFANGLAB_RULE_KIND: &str = "harfanglab_rule_kind";
+    pub const HARFANGLAB_YARA_FORM: &str = "harfanglab_yara_form";
+    pub const HARFANGLAB_YARA_SECTION_HEADER: &str = "harfanglab_yara_section_header";
+    pub const HARFANGLAB_YARA_IMPORT: &str = "harfanglab_yara_import";
+    pub const HARFANGLAB_YARA_RULE_NAME: &str = "harfanglab_yara_rule_name";
+    pub const HARFANGLAB_YARA_CONTEXT: &str = "harfanglab_yara_context";
+    pub const BITDEFENDER_YARA_ASCII: &str = "bitdefender_yara_ascii";
+    pub const BITDEFENDER_YARA_SIZE: &str = "bitdefender_yara_size";
+
     /// Every code above, in declaration order.
     pub const ALL: &[&str] = &[
         SCHEMA_VALIDATION,
@@ -771,6 +815,39 @@ pub mod codes {
         CQL_MATCH_GUARD,
         CQL_REGEX_GROUP_UNDER_OR,
         CQL_CORRELATE_AGGREGATE,
+        YARA_PARSE_ERROR,
+        YARA_INCLUDE,
+        YARA_SIGNATURE_ALIAS,
+        YARA_EMPTY_SIGNATURE,
+        YARA_DUPLICATE_RULE,
+        YARA_DUPLICATE_STRING,
+        YARA_DUPLICATE_TAG,
+        YARA_UNDEFINED_STRING,
+        YARA_UNREFERENCED_STRING,
+        YARA_UNDEFINED_IDENTIFIER,
+        YARA_RULE_IDENTIFIER_CONFLICT,
+        YARA_UNKNOWN_MODULE,
+        YARA_MODULE_NOT_IMPORTED,
+        YARA_UNKNOWN_MODULE_MEMBER,
+        YARA_TYPE,
+        YARA_REGEXP,
+        YARA_HEX_STRING,
+        YARA_STRING_MODIFIER,
+        YARA_NUMBER_OUT_OF_RANGE,
+        YARA_X_INCOMPATIBLE,
+        YARA_SLOW_PATTERN,
+        YARA_ENTRYPOINT_DEPRECATED,
+        YARA_SUSPICIOUS_EXPRESSION,
+        YARA_MODULE_UNCONFIRMED,
+        YARA_META_MISSING,
+        HARFANGLAB_RULE_KIND,
+        HARFANGLAB_YARA_FORM,
+        HARFANGLAB_YARA_SECTION_HEADER,
+        HARFANGLAB_YARA_IMPORT,
+        HARFANGLAB_YARA_RULE_NAME,
+        HARFANGLAB_YARA_CONTEXT,
+        BITDEFENDER_YARA_ASCII,
+        BITDEFENDER_YARA_SIZE,
     ];
 
     /// One sentence on what a code means, for hosts that explain a diagnostic
@@ -1129,6 +1206,89 @@ pub mod codes {
             CQL_REGEX_GROUP_UNDER_OR => {
                 "A CQL regex with named groups is an operand of or, where LogScale extracts none of its fields."
             }
+            YARA_PARSE_ERROR => "The YARA signature does not parse as libyara 4.5 reads it.",
+            YARA_INCLUDE => {
+                "A YARA signature uses an include directive, which no platform resolves: each API takes one text with no file system behind it."
+            }
+            YARA_SIGNATURE_ALIAS => {
+                "A YARA signature is a YAML alias instead of text written out in its own block."
+            }
+            YARA_EMPTY_SIGNATURE => {
+                "The YARA signature has no rule, or only private or global rules."
+            }
+            YARA_DUPLICATE_RULE => "Two YARA rules in one signature have the same name.",
+            YARA_DUPLICATE_STRING => "Two strings of one YARA rule have the same identifier.",
+            YARA_DUPLICATE_TAG => "A YARA rule repeats a tag.",
+            YARA_UNDEFINED_STRING => {
+                "A YARA condition names a string ($id, #id, @id, !id or $prefix*) that the rule does not define."
+            }
+            YARA_UNREFERENCED_STRING => {
+                "A YARA string is never used in the condition, which libyara refuses unless the condition uses them."
+            }
+            YARA_UNDEFINED_IDENTIFIER => {
+                "A YARA identifier is neither a rule defined earlier in the signature nor an imported module."
+            }
+            YARA_RULE_IDENTIFIER_CONFLICT => {
+                "A YARA rule is named like an imported module or a keyword."
+            }
+            YARA_UNKNOWN_MODULE => "A YARA import names a module libyara does not ship.",
+            YARA_MODULE_NOT_IMPORTED => {
+                "A YARA module field or function is used without importing its module."
+            }
+            YARA_UNKNOWN_MODULE_MEMBER => {
+                "The YARA module has no such field or function, or the function takes other arguments."
+            }
+            YARA_TYPE => "A YARA operator or function is applied to a value of the wrong type.",
+            YARA_REGEXP => "A YARA regular expression is invalid.",
+            YARA_HEX_STRING => {
+                "A YARA hex string is invalid: an odd number of nibbles, a bad jump, or unbalanced alternatives."
+            }
+            YARA_STRING_MODIFIER => {
+                "libyara refuses this combination of YARA string modifiers, or an xor or base64 argument is out of range."
+            }
+            YARA_NUMBER_OUT_OF_RANGE => {
+                "A YARA integer, size suffix, jump bound or string index is outside the range libyara accepts."
+            }
+            YARA_X_INCOMPATIBLE => "libyara 4.5 compiles this YARA but YARA-X 1.x refuses it.",
+            YARA_SLOW_PATTERN => {
+                "libyara warns that this YARA string or loop may slow scanning down."
+            }
+            YARA_ENTRYPOINT_DEPRECATED => {
+                "entrypoint is deprecated in libyara and refused by YARA-X; use pe.entry_point or elf.entry_point."
+            }
+            YARA_SUSPICIOUS_EXPRESSION => {
+                "A YARA condition is invariant, unsatisfiable or not boolean, or compares an integer with a boolean."
+            }
+            YARA_MODULE_UNCONFIRMED => {
+                "The YARA module is known but not confirmed on the platform's agents."
+            }
+            YARA_META_MISSING => {
+                "A non-private YARA rule lacks a meta key the platform profile recommends."
+            }
+            HARFANGLAB_RULE_KIND => {
+                "A HarfangLab block sets both sigma and yara; a block is one kind."
+            }
+            HARFANGLAB_YARA_FORM => {
+                "A HarfangLab yara object sets signature together with decomposed keys (meta, strings, condition or imports)."
+            }
+            HARFANGLAB_YARA_SECTION_HEADER => {
+                "A decomposed HarfangLab YARA fragment contains a strings:, condition: or rule header, which deploy writes itself."
+            }
+            HARFANGLAB_YARA_IMPORT => {
+                "A decomposed HarfangLab YARA imports entry is not a module the YARA language knows."
+            }
+            HARFANGLAB_YARA_RULE_NAME => {
+                "The YARA rule name deploy derives from the rule name is a YARA keyword or keeps a character other than an ASCII letter, digit or underscore."
+            }
+            HARFANGLAB_YARA_CONTEXT => {
+                "A HarfangLab YARA rule's meta context is not file, memory, file,memory, file.pe, file.elf or file.macho."
+            }
+            BITDEFENDER_YARA_ASCII => {
+                "A Bitdefender YARA signature holds a character that is not ASCII."
+            }
+            BITDEFENDER_YARA_SIZE => {
+                "A Bitdefender YARA signature is longer than 30,000 characters."
+            }
             _ => return None,
         })
     }
@@ -1238,6 +1398,13 @@ mod tests {
         assert_eq!(LanguageId::from_extension("falco"), Some(LanguageId::Falco));
         assert_eq!(LanguageId::parse("falco"), Some(LanguageId::Falco));
         assert_eq!(LanguageId::parse("cql"), Some(LanguageId::Cql));
+        assert_eq!(LanguageId::parse("yara"), Some(LanguageId::Yara));
+        assert_eq!(
+            LanguageId::parse(LanguageId::Yara.as_str()),
+            Some(LanguageId::Yara)
+        );
+        assert_eq!(LanguageId::from_extension("yar"), Some(LanguageId::Yara));
+        assert_eq!(LanguageId::from_extension("yara"), Some(LanguageId::Yara));
         assert_eq!(LanguageId::parse("logscale"), Some(LanguageId::Cql));
         assert_eq!(LanguageId::from_extension("cql"), Some(LanguageId::Cql));
     }

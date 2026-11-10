@@ -525,10 +525,10 @@ impl<'a> Walker<'a> {
             out.push_str(description);
         }
         let mut values = self.values(node);
-        if values.is_empty() {
-            if let Some(items) = self.branches(node).into_iter().find_map(|b| b.get("items")) {
-                values = self.values(items);
-            }
+        if values.is_empty()
+            && let Some(items) = self.branches(node).into_iter().find_map(|b| b.get("items"))
+        {
+            values = self.values(items);
         }
         if !values.is_empty() {
             let listed: Vec<String> = values
@@ -748,12 +748,11 @@ fn present_keys(text: &str, body_start: usize) -> Vec<String> {
         if header(line).is_some() {
             break;
         }
-        if let Some(index) = equals(line) {
-            if let Some(first) = dotted(&line[..index]).into_iter().next() {
-                if !first.is_empty() {
-                    keys.push(first);
-                }
-            }
+        if let Some(index) = equals(line)
+            && let Some(first) = dotted(&line[..index]).into_iter().next()
+            && !first.is_empty()
+        {
+            keys.push(first);
         }
     }
     keys

@@ -88,17 +88,17 @@ fn collect(
     out: &mut Vec<(Vec<Step>, String)>,
 ) {
     match value {
-        serde_yaml::Value::String(text) => {
-            if text != own && !text.trim().is_empty() && is_reference(path) {
-                let steps = path
-                    .iter()
-                    .map(|step| match step {
-                        Step::Key(k) => Step::Key(k.clone()),
-                        Step::Index(i) => Step::Index(*i),
-                    })
-                    .collect();
-                out.push((steps, text.clone()));
-            }
+        serde_yaml::Value::String(text)
+            if text != own && !text.trim().is_empty() && is_reference(path) =>
+        {
+            let steps = path
+                .iter()
+                .map(|step| match step {
+                    Step::Key(k) => Step::Key(k.clone()),
+                    Step::Index(i) => Step::Index(*i),
+                })
+                .collect();
+            out.push((steps, text.clone()));
         }
         serde_yaml::Value::Sequence(items) => {
             for (i, item) in items.iter().enumerate() {

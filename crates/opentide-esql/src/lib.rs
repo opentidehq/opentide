@@ -115,8 +115,8 @@ pub fn analyze_for(source: &str, target: Option<StackTarget>) -> AnalyzeResult {
         if node.kind() == "unknown_command" {
             diagnostics.push(unknown_command(node, source, catalog));
         } else if let Some(name) = command_name(node, source) {
-            if let Some(row) = catalog.command(&name) {
-                if let Some(d) = availability(
+            if let Some(row) = catalog.command(&name)
+                && let Some(d) = availability(
                     target,
                     &display_name(&name),
                     "command",
@@ -125,9 +125,9 @@ pub fn analyze_for(source: &str, target: Option<StackTarget>) -> AnalyzeResult {
                     row.availability(),
                     keyword_span(node),
                     &to_range,
-                ) {
-                    diagnostics.push(d);
-                }
+                )
+            {
+                diagnostics.push(d);
             }
         } else if node.kind() == "function_call" {
             if let Some(d) = function_diagnostic(target, node, source, catalog) {
@@ -193,10 +193,10 @@ pub fn analyze_for(source: &str, target: Option<StackTarget>) -> AnalyzeResult {
     }
     // Kibana 9.4 and later add `METADATA _id` themselves (elastic-1.0
     // Advisories), so a declared 9.4+ or Serverless target skips the advisory.
-    if !target.is_some_and(|t| t.at_least(StackVersion::new(9, 4))) {
-        if let Some(d) = metadata_id_advisory(root, source) {
-            diagnostics.push(d);
-        }
+    if !target.is_some_and(|t| t.at_least(StackVersion::new(9, 4)))
+        && let Some(d) = metadata_id_advisory(root, source)
+    {
+        diagnostics.push(d);
     }
     // The indices `FROM` reads: undeclared ones, and ECS field checks when
     // every one holds ECS documents.
@@ -510,12 +510,12 @@ pub(crate) fn keyword_span(node: Node) -> ByteSpan {
             break;
         }
     }
-    if node.kind() == "join_command" {
-        if let Some(kind) = node.child_by_field_name("kind") {
-            end = end.max(kind.end_byte());
-            if let Some(join) = kind.next_sibling() {
-                end = end.max(join.end_byte());
-            }
+    if node.kind() == "join_command"
+        && let Some(kind) = node.child_by_field_name("kind")
+    {
+        end = end.max(kind.end_byte());
+        if let Some(join) = kind.next_sibling() {
+            end = end.max(join.end_byte());
         }
     }
     ByteSpan::new(start, end.max(start + 1))

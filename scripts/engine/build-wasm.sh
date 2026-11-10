@@ -59,7 +59,10 @@ for target in "${targets[@]}"; do
       AR_wasm32_wasip1="$WASI_SDK_PATH/bin/llvm-ar" \
       CFLAGS_wasm32_wasip1="--sysroot=$sysroot" \
         cargo build --release -p opentide-lsp --target wasm32-wasip1
-      node "$root/scripts/wasm-smoke.mjs" wasi "$root/target/wasm32-wasip1/release/opentide-lsp.wasm" ;;
+      # Node 22's fast WASI calls (fd_write, path_open) can start a garbage
+      # collection inside the call, which segfaults once the instance holds
+      # enough memory; the lsp-client wasi transport documents the same flag.
+      node --no-turbo-fast-api-calls "$root/scripts/wasm-smoke.mjs" wasi "$root/target/wasm32-wasip1/release/opentide-lsp.wasm" ;;
     *)
       echo "unknown target: $target (browser or wasi)"
       exit 2 ;;

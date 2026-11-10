@@ -269,11 +269,12 @@ fn is_singleton(a: &Automaton) -> bool {
     loop {
         visited[s] = true;
         if !a.accept[s] {
-            if let [(min, max, d)] = a.trans[s][..] {
-                if min == max && !visited[d] {
-                    s = d;
-                    continue;
-                }
+            if let [(min, max, d)] = a.trans[s][..]
+                && min == max
+                && !visited[d]
+            {
+                s = d;
+                continue;
             }
         } else if a.trans[s].is_empty() {
             return true;
@@ -413,19 +414,21 @@ fn make_concatenation(e1: Re, e2: Re) -> Re {
         s.extend(e2.string_parts());
         return Re::Str(s);
     }
-    if let Re::Concat(a, b) = &e1 {
-        if b.is_char_or_string() && e2.is_char_or_string() {
-            let mut s = b.string_parts();
-            s.extend(e2.string_parts());
-            return Re::Concat(a.clone(), Box::new(Re::Str(s)));
-        }
+    if let Re::Concat(a, b) = &e1
+        && b.is_char_or_string()
+        && e2.is_char_or_string()
+    {
+        let mut s = b.string_parts();
+        s.extend(e2.string_parts());
+        return Re::Concat(a.clone(), Box::new(Re::Str(s)));
     }
-    if let Re::Concat(a, b) = &e2 {
-        if e1.is_char_or_string() && a.is_char_or_string() {
-            let mut s = e1.string_parts();
-            s.extend(a.string_parts());
-            return Re::Concat(Box::new(Re::Str(s)), b.clone());
-        }
+    if let Re::Concat(a, b) = &e2
+        && e1.is_char_or_string()
+        && a.is_char_or_string()
+    {
+        let mut s = e1.string_parts();
+        s.extend(a.string_parts());
+        return Re::Concat(Box::new(Re::Str(s)), b.clone());
     }
     Re::Concat(Box::new(e1), Box::new(e2))
 }
@@ -623,7 +626,8 @@ impl<'a> Parser<'a> {
                     ranges.push((c, c));
                 }
             }
-            if !(self.more() && !self.peek("]")) {
+            // Lucene: `do { ... } while (more() && !peek("]"))`.
+            if !self.more() || self.peek("]") {
                 break;
             }
         }
@@ -856,11 +860,12 @@ impl Automaton {
             ts.sort_by_key(|&(min, max, d)| (d, min, max));
             let mut merged: Vec<(u32, u32, usize)> = Vec::with_capacity(ts.len());
             for &(min, max, d) in ts.iter() {
-                if let Some(last) = merged.last_mut() {
-                    if last.2 == d && min <= last.1.saturating_add(1) {
-                        last.1 = last.1.max(max);
-                        continue;
-                    }
+                if let Some(last) = merged.last_mut()
+                    && last.2 == d
+                    && min <= last.1.saturating_add(1)
+                {
+                    last.1 = last.1.max(max);
+                    continue;
                 }
                 merged.push((min, max, d));
             }

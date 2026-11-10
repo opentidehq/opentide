@@ -14,9 +14,9 @@
  *   analyze.
  * - `wasi` runs the `wasm32-wasip1` `opentide-lsp` CLI under `node:wasi`, one
  *   `analyze` or `highlight` per call. Under Node 22, run the process with
- *   `--no-turbo-fast-api-calls`: `node:wasi`'s fast `path_open` call can start
- *   a garbage collection inside the call, which segfaults the process once
- *   the WASI instances hold enough memory.
+ *   `--no-turbo-fast-api-calls`: `node:wasi`'s fast calls (`path_open`,
+ *   `fd_write`) can start a garbage collection inside the call, which
+ *   segfaults the process once the WASI instances hold enough memory.
  *
  * A transport that cannot answer rejects. It never returns an empty result in
  * place of one.

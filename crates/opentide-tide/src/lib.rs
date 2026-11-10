@@ -411,20 +411,21 @@ fn diagnose_filename(
             FilenameStyle::Name => lint::name_stem(name).map(|stem| (stem, "the name")),
             FilenameStyle::None => None,
         };
-        if let Some((expected, how)) = expected {
-            if stem != expected && !stem.starts_with(&format!("{expected}-")) {
-                push(
-                    Diagnostic::warning(
-                        codes::FILENAME_SLUG,
-                        format!("filename should be {expected}{suffix} ({how})"),
-                        // The name the file is named after (#215). The
-                        // suggestion is a file name: hosts offer it as a
-                        // rename, never as an edit of this text.
-                        name_range(source, name),
-                    )
-                    .with_suggestion(format!("{expected}{suffix}")),
-                );
-            }
+        if let Some((expected, how)) = expected
+            && stem != expected
+            && !stem.starts_with(&format!("{expected}-"))
+        {
+            push(
+                Diagnostic::warning(
+                    codes::FILENAME_SLUG,
+                    format!("filename should be {expected}{suffix} ({how})"),
+                    // The name the file is named after (#215). The
+                    // suggestion is a file name: hosts offer it as a
+                    // rename, never as an edit of this text.
+                    name_range(source, name),
+                )
+                .with_suggestion(format!("{expected}{suffix}")),
+            );
         }
     }
     if !rules.matches_pattern(stem) {
@@ -571,17 +572,17 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
                 .with_field_path(vec!["metadata".into(), "tlp".into()]),
             );
         }
-        if let Some(tlp) = &meta.tlp {
-            if let Some(message) = unknown_enum(&object_type, "metadata.tlp", tlp) {
-                diagnostics.push(
-                    Diagnostic::error(
-                        codes::VOCAB_UNKNOWN,
-                        message,
-                        key_range(input.source, "tlp"),
-                    )
-                    .with_field_path(vec!["metadata".into(), "tlp".into()]),
-                );
-            }
+        if let Some(tlp) = &meta.tlp
+            && let Some(message) = unknown_enum(&object_type, "metadata.tlp", tlp)
+        {
+            diagnostics.push(
+                Diagnostic::error(
+                    codes::VOCAB_UNKNOWN,
+                    message,
+                    key_range(input.source, "tlp"),
+                )
+                .with_field_path(vec!["metadata".into(), "tlp".into()]),
+            );
         }
         // `[metadata]` in lint.toml decides these, as it does `opentide lint`'s (#214).
         if lint.metadata_enabled {
@@ -609,17 +610,17 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
         }
     }
 
-    if let Some(sev) = &object.severity {
-        if let Some(message) = unknown_enum(&catalog_schema, "severity", sev) {
-            diagnostics.push(
-                Diagnostic::error(
-                    codes::VOCAB_UNKNOWN,
-                    message,
-                    key_range(input.source, "severity"),
-                )
-                .with_field_path(vec!["severity".into()]),
-            );
-        }
+    if let Some(sev) = &object.severity
+        && let Some(message) = unknown_enum(&catalog_schema, "severity", sev)
+    {
+        diagnostics.push(
+            Diagnostic::error(
+                codes::VOCAB_UNKNOWN,
+                message,
+                key_range(input.source, "severity"),
+            )
+            .with_field_path(vec!["severity".into()]),
+        );
     }
 
     diagnose_catalog_values(&catalog_schema, &object, input.source, &mut diagnostics);
@@ -672,95 +673,87 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
     };
 
     // invalid_ref
-    if object_type == "rule" {
-        if let Some(parent) = &object.detection_model {
-            if !detection_model_targets(input.workspace).any(|target| target == parent) {
-                let suggestion = closest_detection_model(input.workspace, parent);
-                let mut d = Diagnostic::error(
-                    codes::INVALID_REF,
-                    format!(
-                        "invalid_ref: detection_model {parent} is not an indexed objective or signal"
-                    ),
-                    ref_range("detection_model", "detection_model"),
-                )
-                .with_field_path(vec!["detection_model".into()]);
-                if let Some(s) = suggestion {
-                    d = d.with_suggestion(s);
-                }
-                diagnostics.push(d);
+    if object_type == "rule"
+        && let Some(parent) = &object.detection_model
+        && !detection_model_targets(input.workspace).any(|target| target == parent)
+    {
+        let suggestion = closest_detection_model(input.workspace, parent);
+        let mut d = Diagnostic::error(
+            codes::INVALID_REF,
+            format!("invalid_ref: detection_model {parent} is not an indexed objective or signal"),
+            ref_range("detection_model", "detection_model"),
+        )
+        .with_field_path(vec!["detection_model".into()]);
+        if let Some(s) = suggestion {
+            d = d.with_suggestion(s);
+        }
+        diagnostics.push(d);
+    }
+
+    if let Some(obj) = &object.objective
+        && let Some(threats) = obj.get("threats").and_then(|v| v.as_sequence())
+    {
+        for (i, t) in threats.iter().enumerate() {
+            if let Some(id) = t.as_str()
+                && !input
+                    .workspace
+                    .iter()
+                    .any(|o| o.object_type == "threat" && o.uuid == id)
+            {
+                diagnostics.push(
+                    Diagnostic::error(
+                        codes::INVALID_REF,
+                        format!("invalid_ref: threat {id} is not indexed"),
+                        ref_range(&format!("objective.threats.{i}"), "threats"),
+                    )
+                    .with_field_path(vec!["objective".into(), "threats".into()]),
+                );
             }
         }
     }
 
-    if let Some(obj) = &object.objective {
-        if let Some(threats) = obj.get("threats").and_then(|v| v.as_sequence()) {
-            for (i, t) in threats.iter().enumerate() {
-                if let Some(id) = t.as_str() {
-                    if !input
-                        .workspace
-                        .iter()
-                        .any(|o| o.object_type == "threat" && o.uuid == id)
-                    {
-                        diagnostics.push(
-                            Diagnostic::error(
-                                codes::INVALID_REF,
-                                format!("invalid_ref: threat {id} is not indexed"),
-                                ref_range(&format!("objective.threats.{i}"), "threats"),
-                            )
-                            .with_field_path(vec!["objective".into(), "threats".into()]),
-                        );
-                    }
-                }
+    if let Some(threat) = &object.threat
+        && let Some(chaining) = threat.get("chaining").and_then(|v| v.as_sequence())
+    {
+        let vocab = vocabs.get("chaining_relations");
+        for (idx, link) in chaining.iter().enumerate() {
+            if let Some(rel) = link.get("relation").and_then(|v| v.as_str())
+                && let Some(vocab) = vocab
+                && !vocab.contains(rel)
+            {
+                diagnostics.push(
+                    Diagnostic::error(
+                        codes::CHAINING_RELATION_UNKNOWN,
+                        format!("Unknown chaining relation '{rel}'"),
+                        key_range(input.source, "relation"),
+                    )
+                    .with_field_path(vec![
+                        "threat".into(),
+                        "chaining".into(),
+                        idx.to_string(),
+                        "relation".into(),
+                    ]),
+                );
             }
-        }
-    }
-
-    if let Some(threat) = &object.threat {
-        if let Some(chaining) = threat.get("chaining").and_then(|v| v.as_sequence()) {
-            let vocab = vocabs.get("chaining_relations");
-            for (idx, link) in chaining.iter().enumerate() {
-                if let Some(rel) = link.get("relation").and_then(|v| v.as_str()) {
-                    if let Some(vocab) = vocab {
-                        if !vocab.contains(rel) {
-                            diagnostics.push(
-                                Diagnostic::error(
-                                    codes::CHAINING_RELATION_UNKNOWN,
-                                    format!("Unknown chaining relation '{rel}'"),
-                                    key_range(input.source, "relation"),
-                                )
-                                .with_field_path(vec![
-                                    "threat".into(),
-                                    "chaining".into(),
-                                    idx.to_string(),
-                                    "relation".into(),
-                                ]),
-                            );
-                        }
-                    }
-                }
-                if let Some(vector) = link.get("vector").and_then(|v| v.as_str()) {
-                    if !input
-                        .workspace
-                        .iter()
-                        .any(|o| o.object_type == "threat" && o.uuid == vector)
-                    {
-                        diagnostics.push(
-                            Diagnostic::error(
-                                codes::INVALID_REF,
-                                format!(
-                                    "invalid_ref: chaining vector {vector} is not an indexed threat"
-                                ),
-                                ref_range(&format!("threat.chaining.{idx}.vector"), "vector"),
-                            )
-                            .with_field_path(vec![
-                                "threat".into(),
-                                "chaining".into(),
-                                idx.to_string(),
-                                "vector".into(),
-                            ]),
-                        );
-                    }
-                }
+            if let Some(vector) = link.get("vector").and_then(|v| v.as_str())
+                && !input
+                    .workspace
+                    .iter()
+                    .any(|o| o.object_type == "threat" && o.uuid == vector)
+            {
+                diagnostics.push(
+                    Diagnostic::error(
+                        codes::INVALID_REF,
+                        format!("invalid_ref: chaining vector {vector} is not an indexed threat"),
+                        ref_range(&format!("threat.chaining.{idx}.vector"), "vector"),
+                    )
+                    .with_field_path(vec![
+                        "threat".into(),
+                        "chaining".into(),
+                        idx.to_string(),
+                        "vector".into(),
+                    ]),
+                );
             }
         }
     }
@@ -782,14 +775,13 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
             .configurations
             .as_ref()
             .is_some_and(|c| c.get("elastic").is_some())
+        && let Ok(rule) = serde_yaml::from_str::<serde_yaml::Value>(input.source)
     {
-        if let Ok(rule) = serde_yaml::from_str::<serde_yaml::Value>(input.source) {
-            diagnostics.extend(elastic::block_advisories(
-                input.source,
-                &rule,
-                input.workspace,
-            ));
-        }
+        diagnostics.extend(elastic::block_advisories(
+            input.source,
+            &rule,
+            input.workspace,
+        ));
     }
 
     if let Some(block) = object.configurations.as_ref().and_then(|c| c.get("sysdig")) {
@@ -852,26 +844,26 @@ pub fn analyze_queries(source: &str, elastic_tenants: &[ElasticTenant]) -> Vec<Q
     // `data_view_id`) are its query's, so `opentide validate` reports them as
     // the editor does, except on a placeholder query, which validate skips
     // (the editor still reports them on the block).
-    if let Some(block) = configurations.as_ref().and_then(|c| c.get("elastic")) {
-        if let Some(query) = out.iter_mut().find(|q| {
+    if let Some(block) = configurations.as_ref().and_then(|c| c.get("elastic"))
+        && let Some(query) = out.iter_mut().find(|q| {
             q.query.field_path == ["configurations", "elastic", "query"]
                 && !placeholder::is_placeholder_query(source, &q.query)
-        }) {
-            query
-                .diagnostics
-                .extend(elastic::dataset_declarations(source, block));
-        }
+        })
+    {
+        query
+            .diagnostics
+            .extend(elastic::dataset_declarations(source, block));
     }
     // An unknown event source is the condition's: its fields go unchecked.
-    if let Some(block) = configurations.as_ref().and_then(|c| c.get("sysdig")) {
-        if let Some(query) = out.iter_mut().find(|q| {
+    if let Some(block) = configurations.as_ref().and_then(|c| c.get("sysdig"))
+        && let Some(query) = out.iter_mut().find(|q| {
             q.query.field_path == ["configurations", "sysdig", "condition"]
                 && !placeholder::is_placeholder_query(source, &q.query)
-        }) {
-            query
-                .diagnostics
-                .extend(falco::source_diagnostics(source, block));
-        }
+        })
+    {
+        query
+            .diagnostics
+            .extend(falco::source_diagnostics(source, block));
     }
     out
 }
@@ -977,7 +969,11 @@ fn analyze_injections(
                 let r = opentide_cql::analyze_with(&inj.inner, &ctx);
                 (r.diagnostics, r.tokens)
             }
-            LanguageId::TideYaml | LanguageId::Config => (Vec::new(), Vec::new()),
+            // No field path injects YARA yet: `yara.signature` and the
+            // decomposed HarfangLab fragments come with their profiles (#165).
+            LanguageId::TideYaml | LanguageId::Config | LanguageId::Yara => {
+                (Vec::new(), Vec::new())
+            }
         };
         // The stand-in `opentide new` wrote is lint's `placeholders` finding,
         // not a query to check: `opentide validate` skips it too.
@@ -1768,30 +1764,30 @@ fn diagnose_field_value(
     if field.array {
         match value {
             serde_yaml::Value::Sequence(items) => {
-                if let Some(min) = field.min_items {
-                    if (items.len() as u32) < min {
+                if let Some(min) = field.min_items
+                    && (items.len() as u32) < min
+                {
+                    diagnostics.push(
+                        Diagnostic::error(
+                            codes::SCHEMA_VALIDATION,
+                            format!("{path} must contain at least {min} item"),
+                            key_range(source, path.rsplit('.').next().unwrap_or(path)),
+                        )
+                        .with_field_path(field_path.clone()),
+                    );
+                }
+                for item in items {
+                    if let Some(text) = item.as_str()
+                        && let Some(message) = unknown_enum(schema, path, text)
+                    {
                         diagnostics.push(
                             Diagnostic::error(
-                                codes::SCHEMA_VALIDATION,
-                                format!("{path} must contain at least {min} item"),
+                                codes::VOCAB_UNKNOWN,
+                                message,
                                 key_range(source, path.rsplit('.').next().unwrap_or(path)),
                             )
                             .with_field_path(field_path.clone()),
                         );
-                    }
-                }
-                for item in items {
-                    if let Some(text) = item.as_str() {
-                        if let Some(message) = unknown_enum(schema, path, text) {
-                            diagnostics.push(
-                                Diagnostic::error(
-                                    codes::VOCAB_UNKNOWN,
-                                    message,
-                                    key_range(source, path.rsplit('.').next().unwrap_or(path)),
-                                )
-                                .with_field_path(field_path.clone()),
-                            );
-                        }
                     }
                 }
             }

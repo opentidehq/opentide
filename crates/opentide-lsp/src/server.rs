@@ -296,11 +296,10 @@ pub fn yaml_files(dir: &Path) -> Vec<(String, String)> {
                     path.extension().and_then(|s| s.to_str()),
                     Some("yaml" | "yml")
                 )
+                && let Ok(text) = std::fs::read_to_string(&path)
             {
-                if let Ok(text) = std::fs::read_to_string(&path) {
-                    let text = opentide_core::strip_bom(&text).to_string();
-                    out.push((path.display().to_string(), text));
-                }
+                let text = opentide_core::strip_bom(&text).to_string();
+                out.push((path.display().to_string(), text));
             }
         }
     }
@@ -329,6 +328,11 @@ mod tests {
         assert_eq!(lang("file:///q.yaml", Some("kusto")), Some(LanguageId::Kql));
         assert_eq!(lang("file:///q.spl", Some("SPL")), Some(LanguageId::Spl));
         assert_eq!(lang("file:///q.txt", None), Some(LanguageId::TideYaml));
+        assert_eq!(lang("file:///q.yar", None), Some(LanguageId::Yara));
+        assert_eq!(
+            lang("file:///q.yara", Some("plaintext")),
+            Some(LanguageId::Yara)
+        );
     }
 
     #[test]

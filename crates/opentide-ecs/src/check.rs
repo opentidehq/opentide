@@ -184,14 +184,13 @@ pub fn field_type(name: &str) -> Option<(ValueType, &'static str)> {
         let type_name = declared?;
         return ValueType::of(type_name).map(|t| (t, type_name));
     }
-    if let Some((parent, suffix)) = name.rsplit_once('.') {
-        if MULTI_FIELDS.contains(&suffix) {
-            if let Some(declared) = declared_type(parent) {
-                return declared
-                    .filter(|t| ValueType::of(t) == Some(ValueType::String))
-                    .map(|t| (ValueType::String, t));
-            }
-        }
+    if let Some((parent, suffix)) = name.rsplit_once('.')
+        && MULTI_FIELDS.contains(&suffix)
+        && let Some(declared) = declared_type(parent)
+    {
+        return declared
+            .filter(|t| ValueType::of(t) == Some(ValueType::String))
+            .map(|t| (ValueType::String, t));
     }
     if let Some(f) = field(name) {
         return ValueType::of(&f.type_name).map(|t| (t, f.type_name.as_str()));
@@ -245,10 +244,12 @@ pub fn unknown_field(name: &str) -> Option<String> {
         return None;
     }
     // `process.nmae.caseless`: the near miss is in the parent.
-    if let Some((parent, suffix)) = name.rsplit_once('.') {
-        if MULTI_FIELDS.contains(&suffix) && field(name).is_none() && field(parent).is_none() {
-            return near_miss(parent).map(|p| format!("{p}.{suffix}"));
-        }
+    if let Some((parent, suffix)) = name.rsplit_once('.')
+        && MULTI_FIELDS.contains(&suffix)
+        && field(name).is_none()
+        && field(parent).is_none()
+    {
+        return near_miss(parent).map(|p| format!("{p}.{suffix}"));
     }
     near_miss(name).map(str::to_string)
 }

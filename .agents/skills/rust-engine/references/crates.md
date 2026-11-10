@@ -27,7 +27,7 @@ Shared package metadata (`version`, `edition`, `rust-version`, `license`, `repos
 3. Use the crate from the member that needs it, not from every crate.
 4. Run the compile you need, then `git checkout -- Cargo.lock` if the only lock diff is a prune of unrelated packages. If you added a real crate, keep the new `[[package]]` blocks and the root package's `dependencies` update, and restore any deleted packages that were not yours.
 
-`cc` is a build-dependency of `opentide-syntax` only. `wasm-bindgen` and `js-sys` are dependencies of `opentide-wasm` only. `clap` and `anyhow` are dependencies of `opentide-lsp` only.
+`cc` is a build-dependency of `opentide-syntax` only. `yara-x-parser` and `yara-x-fmt` are dependencies of `opentide-yara` only. `wasm-bindgen` and `js-sys` are dependencies of `opentide-wasm` only. `clap` and `anyhow` are dependencies of `opentide-lsp` only.
 
 ## serde
 

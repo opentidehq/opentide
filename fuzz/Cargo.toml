@@ -81,6 +81,13 @@ doc = false
 bench = false
 
 [[bin]]
+name = "yara"
+path = "fuzz_targets/yara.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "tide"
 path = "fuzz_targets/tide.rs"
 test = false

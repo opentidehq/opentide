@@ -17,13 +17,13 @@ Before editing, read the one skill that matches the change. Skills follow the [A
 
 ## Product
 
-Native language server for **KQL**, **SPL**, **Tide YAML**, the Elastic Security languages **ES|QL**, **EQL**, **Kibana KQL** (`kuery`, never confused with Microsoft KQL), and **Lucene**, **Falco** rule conditions (Sysdig Secure, `configurations.sysdig`), and the **CrowdStrike Query Language** (CQL: Falcon LogScale and Next-Gen SIEM, `configurations.crowdstrike`). SQL is out of scope. Names use `opentide`, never `otide`. The client factory is `createOpentideClient`.
+Native language server for **KQL**, **SPL**, **Tide YAML**, the Elastic Security languages **ES|QL**, **EQL**, **Kibana KQL** (`kuery`, never confused with Microsoft KQL), and **Lucene**, **Falco** rule conditions (Sysdig Secure, `configurations.sysdig`), the **CrowdStrike Query Language** (CQL: Falcon LogScale and Next-Gen SIEM, `configurations.crowdstrike`), and **YARA** (libyara 4.5, with YARA-X 1.x as warnings: HarfangLab and Bitdefender `yara` blocks and `.yar` files, `docs/YARA.md`). SQL is out of scope. Names use `opentide`, never `otide`. The client factory is `createOpentideClient`.
 
 Engines are I/O-free. Hosts (`opentide-lsp`, the WASM crate, the TypeScript packages) own the filesystem and the editor protocol. The CLI (`analyze`, `highlight`, `generate-highlights`) prints plain JSON. Only `--stdio` and `--listen` speak JSON-RPC.
 
 ## Hard rules
 
-- No `std::fs` in `crates/opentide-{core,highlight,syntax,kql,spl,esql,eql,kuery,lucene,falco,cql,ecs,tide,analysis}/src`. Tests may read the repo.
+- No `std::fs` in `crates/opentide-{core,highlight,syntax,kql,spl,esql,eql,kuery,lucene,falco,cql,yara,ecs,tide,analysis}/src`. Tests may read the repo.
 - Do not rename a HighlightSpec capture. Adding one is a minor (`highlights/spec.toml` `[meta].version`).
 - CrowdStrike is CQL, checked against CrowdStrike's published grammar and function reference (`docs/CQL.md`). Never report an unknown field, saved search, lookup file or repository as a finding: they live in the tenant.
 - Control commands (`.show`, `.create`) parse so the engine can emit `kql_control_command_unsupported`. They are not valid detections.
@@ -33,6 +33,7 @@ Engines are I/O-free. Hosts (`opentide-lsp`, the WASM crate, the TypeScript pack
 - Do not hand-edit `grammars/**/src/parser.c`, `grammar.json`, or `node-types.json`. Regenerate with `tree-sitter-cli` **0.25.10**.
 - Do not commit a rewritten `Cargo.lock`. Resolution prunes entries the lock keeps on purpose. Restore the committed lock if Cargo rewrites it.
 - Configuration TOML (`opentide-config`, #158) is checked by the host, never by Rust. The engine places the host checker's `{code, field_path, severity}` findings and reads the host's schemas for hover and completion. No configuration check logic in Rust, no vendored or hand-written configuration schema, no TOML grammar, no HighlightSpec captures. Without a host checker there are no configuration diagnostics.
+- YARA's verdict parser is `yara-x-parser`, never the `yara-x` compiler crate (wasmtime, breaks WASI). `yara-x` and `yara-python` are oracles only: not in `Cargo.lock`, never shipped.
 - Pydantic in the pinned `opentide` package remains CLI authority for Tide objects. The LSP matches `{code, field_path, severity}` and adds ranges.
 
 ## Verify
