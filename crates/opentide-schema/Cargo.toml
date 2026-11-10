@@ -29,6 +29,11 @@ python = ["dep:pyo3"]
 # the TypeScript types arrive with UC-5.3 (#838). CI builds the crate for
 # wasm32 with it so that no dependency of the model stops compiling there.
 wasm = []
+# Reading a rule whose platform blocks are not checked yet: the blocks are
+# UC-1.4's (#810), and until they arrive `RuleV1_0`, `RuleV1_1` and
+# `RuleConfigurations` read only with this feature. Tests and xtask's oracle
+# comparisons turn it on; nothing that ships may (UC-1.4 removes it).
+unchecked-platform-blocks = []
 
 [dependencies]
 opentide-core.workspace = true
@@ -48,8 +53,14 @@ saphyr-parser.workspace = true
 serde-saphyr.workspace = true
 opentide-schema-derive.workspace = true
 pyo3 = { workspace = true, features = ["abi3-py310"], optional = true }
+# `metadata.reviewed` (UC-1.3): the shape, then whether the date, the time and
+# the offset exist (jiff's civil types; no time zone database).
+regex.workspace = true
+jiff = { workspace = true }
 
 [dev-dependencies]
+# The crate's own tests read rules: the feature on, for tests only.
+opentide-schema = { path = ".", features = ["unchecked-platform-blocks"] }
 insta.workspace = true
 strsim.workspace = true
 serde_yaml.workspace = true

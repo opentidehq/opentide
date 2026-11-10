@@ -1,0 +1,1539 @@
+# The object models against the oracle (UC-1.3, #809): each case is a Tide
+# object file and its family, read by the oracle's validate path
+# (`parse_yaml`, then `load_object_for_validation`) and by opentide-schema's
+# (`node::load`, then `from_node` into the revision `metadata.schema` names).
+# `objects_table.py` runs every case, and every object file of
+# tests/fixtures/tide_corpus and of the VS Code fixture workspace, through the
+# oracle and writes `objects_table.json`:
+#
+#   <oracle python> crates/opentide-schema/tests/oracle/objects_table.py
+#
+# `tests/objects_table.rs` compares them case by case: each error's type,
+# field path, message, input, context, span and `yaml_line`, or the value. A
+# case that differs names the `[[difference]]` that explains it (its reason
+# and the bold lead of its CHANGELOG.md entry); the platform blocks under
+# `configurations` are UC-1.4's (#810) and are not compared. The intended
+# differences are listed in tests/golden/APPROVED_DIFFS.toml too.
+
+[[difference]]
+id = "yaml-1-2-dates"
+reason = "YAML 1.2 has no timestamp type (crates/opentide-schema/YAML.md, `timestamps`): `2026-01-01 10:00:00` stays as written where the oracle rewrote it `2026-01-01T10:00:00`, and `2026-02-30` reaches the field's check, which refuses it as a date that does not exist (`value_error` on `metadata.reviewed`), where the oracle refused the file (`yaml_parse`)."
+changelog = "**Tide objects are read as YAML 1.2**"
+
+[[difference]]
+id = "date-fields-are-strings"
+reason = "`metadata.created` and `metadata.modified` take a string, as the editor schema (`type: string`, `format: date`) says. The oracle turned any value into text first (`_coerce_dates`: `20260101` became `'20260101'`, `true` `'True'`, `null` `'None'`); a number, a boolean or null is now `string_type`. A date written `2026-01-01` is a string in YAML 1.2 and reads as before."
+changelog = "**`created` and `modified` are text**"
+
+[[difference]]
+id = "reviewed-validity-message"
+reason = "A `metadata.reviewed` of the right shape whose date, time or offset cannot exist is refused as before (`value_error`), with jiff's explanation (`metadata.reviewed is not a valid date or time: parameter 'day' with value 30 is not in the required range of 1..=28`) instead of Python's `datetime` message (`day 30 must be in range 1..28 for month 2 in year 2026`)."
+changelog = "**An impossible `reviewed` date is explained by the date library**"
+
+[[difference]]
+id = "public-reference-keys"
+reason = "A key of `references.public` is a reference number: an integer, or a string that is one (`\"2\"`). The oracle ran Python's `int()` on every key before validating and crashed on a word (`ValueError`, no finding); the Rust model reports `int_parsing` at the key (`references.public.abc.[key]`), as Pydantic reports a dictionary key."
+changelog = "**A word as a public reference number is reported**"
+
+[[difference]]
+id = "strict-types"
+reason = "As crates/opentide-schema/tests/oracle/from_node_cases.toml `strict-types`: a field takes its declared type. `version: 1.5` was Pydantic's `int_from_float` in the `int` member; it is `int_type`."
+changelog = "**Field types are checked as declared**"
+
+[[case]]
+id = "rule-1-1-minimal"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+'''
+
+[[case]]
+id = "rule-1-0-minimal"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+'''
+
+[[case]]
+id = "rule-1-1-everything"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+  author: A
+  contributors: [B, C]
+  organisation:
+    uuid: 00000000-0000-4000-8000-0000000000aa
+    name: Org
+  reviewed: 2026-09-01
+description: d
+status: STAGING
+severity: High
+techniques: [T1059, T1003.001]
+platforms:
+  legacy: {key: value, n: 1}
+references:
+  public:
+    1: https://example.org/a
+    "2": https://example.org/b
+  internal: {wiki: https://wiki.example.org}
+  reports: [https://example.org/report]
+detection_model: 00000000-0000-4000-8000-000000000099
+response:
+  alert_severity: High
+  playbook: https://example.org/playbook
+  responders: soc
+  procedure:
+    analysis: |
+      Look.
+    searches:
+      - purpose: p
+        system: sentinel
+        query: |
+          SecurityEvent
+    containment: isolate
+configurations: {}
+'''
+
+[[case]]
+id = "rule-response-default-severity"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+response:
+  playbook: p
+'''
+
+[[case]]
+id = "rule-reviewed-datetime-z"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+  reviewed: 2026-09-01T15:04:05Z
+description: d
+'''
+
+[[case]]
+id = "rule-reviewed-offset"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+  reviewed: 2026-09-01T15:04:05+02:00
+description: d
+'''
+
+[[case]]
+id = "rule-reviewed-quoted-space"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+  reviewed: '2026-09-01 15:04:05Z'
+description: d
+'''
+
+[[case]]
+id = "rule-reviewed-fraction"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+  reviewed: '2026-09-01T15:04:05.25-05:30'
+description: d
+'''
+
+[[case]]
+id = "rule-reviewed-word"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+  reviewed: yesterday
+description: d
+'''
+
+[[case]]
+id = "rule-reviewed-empty"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+  reviewed: ''
+description: d
+'''
+
+[[case]]
+id = "rule-reviewed-padded"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+  reviewed: '  2026-09-01  '
+description: d
+'''
+
+[[case]]
+id = "rule-reviewed-null"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+  reviewed: null
+description: d
+'''
+
+[[case]]
+id = "rule-reviewed-number"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+  reviewed: 20260101
+description: d
+'''
+
+[[case]]
+id = "rule-reviewed-boolean"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+  reviewed: true
+description: d
+'''
+
+[[case]]
+id = "rule-reviewed-list"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+  reviewed: [2026-09-01]
+description: d
+'''
+
+[[case]]
+id = "rule-reviewed-no-offset"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+  reviewed: '2026-09-01T15:04:05'
+description: d
+'''
+
+[[case]]
+id = "rule-reviewed-impossible-quoted"
+family = "rule"
+difference = ["reviewed-validity-message"]
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+  reviewed: '2026-02-30'
+description: d
+'''
+
+[[case]]
+id = "rule-reviewed-impossible-hour"
+family = "rule"
+difference = ["reviewed-validity-message"]
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+  reviewed: '2026-01-01T25:00:00Z'
+description: d
+'''
+
+[[case]]
+id = "rule-reviewed-impossible-plain"
+family = "rule"
+difference = ["yaml-1-2-dates"]
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+  reviewed: 2026-02-30
+description: d
+'''
+
+[[case]]
+id = "rule-reviewed-spaced-timestamp"
+family = "rule"
+difference = ["yaml-1-2-dates"]
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+  reviewed: 2026-09-01 15:04:05Z
+description: d
+'''
+
+[[case]]
+id = "rule-1-0-reviewed"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+  reviewed: 2026-03-01
+description: d
+'''
+
+[[case]]
+id = "rule-created-number"
+family = "rule"
+difference = ["date-fields-are-strings"]
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 20260101
+  modified: 2026-01-02
+  tlp: clear
+description: d
+'''
+
+[[case]]
+id = "rule-created-boolean"
+family = "rule"
+difference = ["date-fields-are-strings"]
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: true
+  modified: 2026-01-02
+  tlp: clear
+description: d
+'''
+
+[[case]]
+id = "rule-created-null"
+family = "rule"
+difference = ["date-fields-are-strings"]
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: null
+  modified: 2026-01-02
+  tlp: clear
+description: d
+'''
+
+[[case]]
+id = "rule-created-spaced-timestamp"
+family = "rule"
+difference = ["yaml-1-2-dates"]
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01 10:00:00
+  modified: 2026-01-02
+  tlp: clear
+description: d
+'''
+
+[[case]]
+id = "rule-created-quoted"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: '1 January 2026'
+  modified: 2026-01-02
+  tlp: clear
+description: d
+'''
+
+[[case]]
+id = "rule-missing-description-and-name"
+family = "rule"
+yaml = '''
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+'''
+
+[[case]]
+id = "rule-metadata-missing-fields"
+family = "rule"
+yaml = '''
+name: n
+metadata:
+  schema: rule::1.1
+description: d
+'''
+
+[[case]]
+id = "rule-unknown-keys"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+  colour: blue
+description: d
+extra: 1
+configurations:
+  unknown_platform: {}
+'''
+
+[[case]]
+id = "rule-version-forms"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: '1.2'
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+'''
+
+[[case]]
+id = "rule-version-float"
+family = "rule"
+difference = ["strict-types"]
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1.5
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+'''
+
+[[case]]
+id = "rule-version-list"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: [1]
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+'''
+
+[[case]]
+id = "rule-techniques-not-a-list"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+techniques: T1059
+'''
+
+[[case]]
+id = "rule-techniques-item-number"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+techniques: [T1059, 1059]
+'''
+
+[[case]]
+id = "rule-contributors-string"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+  contributors: B
+description: d
+'''
+
+[[case]]
+id = "rule-organisation-missing-name"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+  organisation: {uuid: u}
+description: d
+'''
+
+[[case]]
+id = "rule-platforms-wrong-shape"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+platforms:
+  sentinel: x
+  splunk: [1]
+'''
+
+[[case]]
+id = "rule-configurations-not-a-mapping"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+configurations: sentinel
+'''
+
+[[case]]
+id = "rule-configurations-null"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+configurations: null
+response: null
+references: null
+'''
+
+[[case]]
+id = "rule-response-errors"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+response:
+  alert_severity: [High]
+  colour: red
+  procedure:
+    searches:
+      - purpose: p
+        system: s
+      - x
+'''
+
+[[case]]
+id = "rule-references-errors"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+references:
+  public: [a]
+  internal: {a: 1}
+  reports: a
+'''
+
+[[case]]
+id = "rule-references-public-value"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+references:
+  public:
+    1: [a]
+'''
+
+[[case]]
+id = "rule-references-public-word-key"
+family = "rule"
+difference = ["public-reference-keys"]
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+references:
+  public:
+    abc: https://example.org
+'''
+
+[[case]]
+id = "rule-references-public-null"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+references:
+  public: null
+'''
+
+[[case]]
+id = "rule-file-is-loader-only"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+file: rules/x.yaml
+'''
+
+[[case]]
+id = "rule-detection-model-number"
+family = "rule"
+yaml = '''
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: d
+detection_model: 12
+'''
+
+[[case]]
+id = "threat-minimal"
+family = "threat"
+yaml = '''
+name: Threat
+criticality: High
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000002
+  schema: threat::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+threat:
+  description: d
+  severity: High
+  impact: [Data Breach]
+  leverage: [High]
+  viability: High
+  terrain: Endpoints.
+  surface: [OS::Windows::Desktop]
+  mitre_attack: [T1059]
+'''
+
+[[case]]
+id = "threat-everything"
+family = "threat"
+yaml = '''
+name: Threat
+criticality: High
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000002
+  schema: threat::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+threat:
+  description: d
+  severity: High
+  impact: [Data Breach]
+  leverage: [High]
+  viability: High
+  terrain: Endpoints.
+  surface: [OS::Windows::Desktop]
+  mitre_attack: [T1059]
+  actors:
+    - name: att&ck::G0006
+      sighting: Simulated credential access.
+      references: [https://attack.mitre.org/groups/G0006]
+  killchain: Exploitation
+  chaining:
+    - relation: preceded_by
+      vector: 00000000-0000-4000-8000-000000000004
+  cve: [CVE-2024-3094, GHSA-rxwq-x6h5-x525]
+references:
+  public:
+    1: https://example.org
+'''
+
+[[case]]
+id = "threat-impact-string"
+family = "threat"
+yaml = '''
+name: Threat
+criticality: High
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000002
+  schema: threat::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+threat:
+  description: d
+  severity: High
+  impact: Data Breach
+  leverage: [High]
+  viability: High
+  terrain: Endpoints.
+  surface: [OS::Windows::Desktop]
+  mitre_attack: [T1059]
+'''
+
+[[case]]
+id = "threat-leverage-packed-string"
+family = "threat"
+yaml = '''
+name: Threat
+criticality: High
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000002
+  schema: threat::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+threat:
+  description: d
+  severity: High
+  impact: [Data Breach]
+  leverage: 'High; Low'
+  viability: High
+  terrain: Endpoints.
+  surface: [OS::Windows::Desktop]
+  mitre_attack: [T1059]
+'''
+
+[[case]]
+id = "threat-impact-packed-item"
+family = "threat"
+yaml = '''
+name: Threat
+criticality: High
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000002
+  schema: threat::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+threat:
+  description: d
+  severity: High
+  impact: [Data Breach, 'Identity Theft; Fraud']
+  leverage: [High]
+  viability: High
+  terrain: Endpoints.
+  surface: [OS::Windows::Desktop]
+  mitre_attack: [T1059]
+'''
+
+[[case]]
+id = "threat-impact-empty"
+family = "threat"
+yaml = '''
+name: Threat
+criticality: High
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000002
+  schema: threat::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+threat:
+  description: d
+  severity: High
+  impact: []
+  leverage: []
+  viability: High
+  terrain: Endpoints.
+  surface: [OS::Windows::Desktop]
+  mitre_attack: [T1059]
+'''
+
+[[case]]
+id = "threat-impact-number-item"
+family = "threat"
+yaml = '''
+name: Threat
+criticality: High
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000002
+  schema: threat::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+threat:
+  description: d
+  severity: High
+  impact: [1, 'a;b']
+  leverage: [High]
+  viability: High
+  terrain: Endpoints.
+  surface: [OS::Windows::Desktop]
+  mitre_attack: [T1059]
+'''
+
+[[case]]
+id = "threat-impact-null"
+family = "threat"
+yaml = '''
+name: Threat
+criticality: High
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000002
+  schema: threat::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+threat:
+  description: d
+  severity: High
+  impact: null
+  leverage: [High]
+  viability: High
+  terrain: Endpoints.
+  surface: [OS::Windows::Desktop]
+  mitre_attack: [T1059]
+'''
+
+[[case]]
+id = "threat-impact-mapping"
+family = "threat"
+yaml = '''
+name: Threat
+criticality: High
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000002
+  schema: threat::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+threat:
+  description: d
+  severity: High
+  impact: {a: b}
+  leverage: [High]
+  viability: High
+  terrain: Endpoints.
+  surface: [OS::Windows::Desktop]
+  mitre_attack: [T1059]
+'''
+
+[[case]]
+id = "threat-actors-strings"
+family = "threat"
+yaml = '''
+name: Threat
+criticality: High
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000002
+  schema: threat::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+threat:
+  description: d
+  severity: High
+  impact: [Data Breach]
+  leverage: [High]
+  viability: High
+  terrain: Endpoints.
+  surface: [OS::Windows::Desktop]
+  mitre_attack: [T1059]
+  actors: [G0006, G0007]
+'''
+
+[[case]]
+id = "threat-actor-unknown-key"
+family = "threat"
+yaml = '''
+name: Threat
+criticality: High
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000002
+  schema: threat::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+threat:
+  description: d
+  severity: High
+  impact: [Data Breach]
+  leverage: [High]
+  viability: High
+  terrain: Endpoints.
+  surface: [OS::Windows::Desktop]
+  mitre_attack: [T1059]
+  actors:
+    - name: att&ck::G0006
+      alias: x
+'''
+
+[[case]]
+id = "threat-killchain-list"
+family = "threat"
+yaml = '''
+name: Threat
+criticality: High
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000002
+  schema: threat::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+threat:
+  description: d
+  severity: High
+  impact: [Data Breach]
+  leverage: [High]
+  viability: High
+  terrain: Endpoints.
+  surface: [OS::Windows::Desktop]
+  mitre_attack: [T1059]
+  killchain: [Delivery, Exploitation]
+'''
+
+[[case]]
+id = "threat-killchain-number"
+family = "threat"
+yaml = '''
+name: Threat
+criticality: High
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000002
+  schema: threat::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+threat:
+  description: d
+  severity: High
+  impact: [Data Breach]
+  leverage: [High]
+  viability: High
+  terrain: Endpoints.
+  surface: [OS::Windows::Desktop]
+  mitre_attack: [T1059]
+  killchain: 3
+'''
+
+[[case]]
+id = "threat-killchain-mixed-list"
+family = "threat"
+yaml = '''
+name: Threat
+criticality: High
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000002
+  schema: threat::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+threat:
+  description: d
+  severity: High
+  impact: [Data Breach]
+  leverage: [High]
+  viability: High
+  terrain: Endpoints.
+  surface: [OS::Windows::Desktop]
+  mitre_attack: [T1059]
+  killchain: [Delivery, 3]
+'''
+
+[[case]]
+id = "threat-chaining-errors"
+family = "threat"
+yaml = '''
+name: Threat
+criticality: High
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000002
+  schema: threat::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+threat:
+  description: d
+  severity: High
+  impact: [Data Breach]
+  leverage: [High]
+  viability: High
+  terrain: Endpoints.
+  surface: [OS::Windows::Desktop]
+  mitre_attack: [T1059]
+  chaining:
+    - relation: 1
+    - x
+'''
+
+[[case]]
+id = "threat-missing-body-fields"
+family = "threat"
+yaml = '''
+name: Threat
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000002
+  schema: threat::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+threat:
+  description: d
+  impact: [Data Breach]
+  leverage: [High]
+  viability: High
+  surface: [OS::Windows::Desktop]
+  mitre_attack: [T1059]
+'''
+
+[[case]]
+id = "threat-body-not-a-mapping"
+family = "threat"
+yaml = '''
+name: Threat
+criticality: High
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000002
+  schema: threat::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+threat: text
+'''
+
+[[case]]
+id = "objective-minimal"
+family = "objective"
+yaml = '''
+name: Objective
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000003
+  schema: objective::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+objective:
+  priority: High
+  type: Threat
+  description: obj
+  composition:
+    strategy: synergetic
+    description: compose
+  signals:
+    - name: Signal
+      uuid: 00000000-0000-4000-8000-000000000099
+      description: sig
+      severity: Medium
+      methodology: analytics
+      entities: [Host::Process]
+      data:
+        availability: Complete
+        requirements: logs
+'''
+
+[[case]]
+id = "objective-everything"
+family = "objective"
+yaml = '''
+name: Objective
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000003
+  schema: objective::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+objective:
+  priority: High
+  type: Threat
+  description: obj
+  composition:
+    strategy: synergetic
+    description: compose
+  signals:
+    - name: Signal
+      uuid: 00000000-0000-4000-8000-000000000099
+      description: sig
+      severity: Medium
+      methodology: analytics
+      entities: [Host::Process]
+      data:
+        availability: Complete
+        requirements: logs
+        logsources: [Windows Security]
+      effort: 3
+      detectors:
+        - name: EDR
+          technology: edr
+          description: d
+          link: https://example.org
+      examples:
+        - description: e
+          link: https://example.org
+          language: kql
+          query: SecurityEvent
+      parent: 00000000-0000-4000-8000-000000000098
+  investment: Medium
+  threats: [00000000-0000-4000-8000-000000000002]
+  mitre_attack: [T1059]
+references:
+  reports: [https://example.org]
+'''
+
+[[case]]
+id = "objective-effort-quoted"
+family = "objective"
+yaml = '''
+name: Objective
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000003
+  schema: objective::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+objective:
+  priority: High
+  type: Threat
+  description: obj
+  composition:
+    strategy: synergetic
+    description: compose
+  signals:
+    - name: Signal
+      uuid: 00000000-0000-4000-8000-000000000099
+      description: sig
+      severity: Medium
+      methodology: analytics
+      entities: [Host::Process]
+      data:
+        availability: Complete
+        requirements: logs
+      effort: '3'
+'''
+
+[[case]]
+id = "objective-effort-boolean"
+family = "objective"
+yaml = '''
+name: Objective
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000003
+  schema: objective::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+objective:
+  priority: High
+  type: Threat
+  description: obj
+  composition:
+    strategy: synergetic
+    description: compose
+  signals:
+    - name: Signal
+      uuid: 00000000-0000-4000-8000-000000000099
+      description: sig
+      severity: Medium
+      methodology: analytics
+      entities: [Host::Process]
+      data:
+        availability: Complete
+        requirements: logs
+      effort: true
+'''
+
+[[case]]
+id = "objective-effort-float"
+family = "objective"
+yaml = '''
+name: Objective
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000003
+  schema: objective::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+objective:
+  priority: High
+  type: Threat
+  description: obj
+  composition:
+    strategy: synergetic
+    description: compose
+  signals:
+    - name: Signal
+      uuid: 00000000-0000-4000-8000-000000000099
+      description: sig
+      severity: Medium
+      methodology: analytics
+      entities: [Host::Process]
+      data:
+        availability: Complete
+        requirements: logs
+      effort: 3.0
+'''
+
+[[case]]
+id = "objective-root-composition"
+family = "objective"
+yaml = '''
+name: Objective
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000003
+  schema: objective::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+objective:
+  priority: High
+  type: Threat
+  description: obj
+  composition:
+    strategy: synergetic
+    description: compose
+  signals:
+    - name: Signal
+      uuid: 00000000-0000-4000-8000-000000000099
+      description: sig
+      severity: Medium
+      methodology: analytics
+      entities: [Host::Process]
+      data:
+        availability: Complete
+        requirements: logs
+composition:
+  strategy: synergetic
+  description: compose
+'''
+
+[[case]]
+id = "objective-signal-errors"
+family = "objective"
+yaml = '''
+name: Objective
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000003
+  schema: objective::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+objective:
+  priority: High
+  type: Threat
+  description: obj
+  composition:
+    strategy: synergetic
+    description: compose
+  signals:
+    - name: Signal
+      uuid: 00000000-0000-4000-8000-000000000099
+      description: sig
+      severity: Medium
+      methodology: analytics
+      data:
+        availability: Complete
+        requirements: logs
+      detectors:
+        - name: EDR
+      examples:
+        - description: e
+      entities: Host::Process
+'''
+
+[[case]]
+id = "objective-signals-missing"
+family = "objective"
+yaml = '''
+name: Objective
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000003
+  schema: objective::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+objective:
+  priority: High
+  type: Threat
+  description: obj
+  composition:
+    strategy: synergetic
+    description: compose
+'''
+
+[[case]]
+id = "objective-mitre-attack-string"
+family = "objective"
+yaml = '''
+name: Objective
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000003
+  schema: objective::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+objective:
+  priority: High
+  type: Threat
+  description: obj
+  composition:
+    strategy: synergetic
+    description: compose
+  signals:
+    - name: Signal
+      uuid: 00000000-0000-4000-8000-000000000099
+      description: sig
+      severity: Medium
+      methodology: analytics
+      entities: [Host::Process]
+      data:
+        availability: Complete
+        requirements: logs
+  mitre_attack: T1059
+'''

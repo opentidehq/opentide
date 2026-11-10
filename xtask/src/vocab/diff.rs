@@ -500,7 +500,7 @@ fn approves_help(
 }
 
 /// The repository root and the target directory, from `cargo metadata`.
-fn workspace() -> Result<(PathBuf, PathBuf)> {
+pub fn workspace() -> Result<(PathBuf, PathBuf)> {
     let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
     let mut command = Command::new(cargo);
     command.args(["metadata", "--format-version", "1", "--no-deps"]);

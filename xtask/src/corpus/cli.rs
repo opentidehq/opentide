@@ -28,12 +28,13 @@ commands:
                  apply each fault kind of tests/corpora/faults.toml to its own
                  copy of the clean workspace, run the oracle, and check it
                  reports exactly the expected codes and severities
-  faults --check --engine rust [--oracle BIN] [--only structural|ID,...]
+  faults --check --engine rust [--oracle BIN] [--only objects|structural|ID,...]
          [--keep DIR] [--catalogue FILE]
-                 the structural fault kinds (UC-1.2): each object file read and
-                 converted by opentide-schema, every schema_validation finding
-                 compared with the oracle's field for field (code, field path,
-                 message, line, columns, yaml_line), and yaml_parse by code
+                 the object fault kinds (UC-1.3; structural: UC-1.2's subset):
+                 each object file read and converted by opentide-schema's object
+                 models, every schema_validation finding outside the platform
+                 blocks compared with the oracle's field for field (code, field
+                 path, message, line, columns, yaml_line), and yaml_parse by code
   faults --out DIR [--catalogue FILE]
                  write one workspace ([combined] counts) with every fault
                  kind not marked isolated applied once (twice if cross-file)
@@ -52,8 +53,8 @@ commands:
                  --dir reads faults.toml, codes.toml and COVERAGE.md from DIR
 
 The oracle is BIN, else $OPENTIDE_ORACLE, else `opentide` on PATH; it must
-print the version faults.toml names. `--engine rust` covers the structural
-kinds today (opentide-schema, UC-1.2); every kind comes with the Rust
+print the version faults.toml names. `--engine rust` covers the object
+kinds today (opentide-schema, UC-1.3); every kind comes with the Rust
 engine's validate (UC-2.x).
 ";
 
@@ -640,26 +641,26 @@ fn run_kind(
     Ok((faults::judge(kind, &target_paths, &found), target_paths))
 }
 
-/// `faults --check --engine rust`: the structural kinds, the Rust conversion
+/// `faults --check --engine rust`: the object kinds, the Rust object models
 /// against the oracle, finding for finding ([`structural`]).
 fn structural_check(parsed: &FaultArgs, catalogue: &Catalogue) -> Result<u8> {
-    let structural: BTreeSet<&str> = structural::STRUCTURAL.iter().map(|(id, _)| *id).collect();
+    let objects: BTreeSet<&str> = structural::kinds().into_iter().collect();
     let mut ids: BTreeSet<String> = BTreeSet::new();
     match &parsed.only {
-        None => ids.extend(structural.iter().map(|id| (*id).to_string())),
+        None => ids.extend(objects.iter().map(|id| (*id).to_string())),
         Some(only) => {
             for id in only {
-                if id == structural::GROUP {
-                    ids.extend(structural.iter().map(|id| (*id).to_string()));
-                } else if structural.contains(id.as_str()) {
+                if let Some(group) = structural::group(id) {
+                    ids.extend(group.into_iter().map(str::to_owned));
+                } else if objects.contains(id.as_str()) {
                     ids.insert(id.clone());
                 } else if catalogue.kind(id).is_none() {
                     bail!("--only: no fault kind `{id}`");
                 } else {
                     bail!(
-                        "--engine rust checks the structural kinds only (UC-1.2; --only \
-                         structural lists them): `{id}` comes with the Rust engine's validate \
-                         (UC-2.x)"
+                        "--engine rust checks the object kinds only (UC-1.3; --only objects \
+                         lists them): `{id}` comes with the platform blocks (UC-1.4), the \
+                         configuration models (UC-1.5) or the Rust engine's validate (UC-2.x)"
                     );
                 }
             }
@@ -690,7 +691,7 @@ fn structural_check(parsed: &FaultArgs, catalogue: &Catalogue) -> Result<u8> {
         .context("reading CHANGELOG.md for the approved differences")?;
     let started = Instant::now();
     let mut failed = 0usize;
-    // The clean base: the stand-in models report nothing on any object.
+    // The clean base: the object models report nothing on any object.
     let mut checked = 0usize;
     for file in &base.files {
         if let Some(found) = structural::check_object(&file.path, file.render().as_bytes()) {
@@ -706,7 +707,7 @@ fn structural_check(parsed: &FaultArgs, catalogue: &Catalogue) -> Result<u8> {
         }
     }
     println!(
-        "ok   {:<48} {checked} rules and threats, no finding",
+        "ok   {:<48} {checked} rules, threats and objectives, no finding",
         "(clean base)"
     );
     for id in &ids {

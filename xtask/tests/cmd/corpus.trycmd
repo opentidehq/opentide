@@ -27,13 +27,13 @@ xtask corpus: --engine python is required (the oracle the expectations name)
 
 ```
 
-The Rust engine checks the structural kinds (UC-1.2) against the oracle; any
-other kind is a usage error until the Rust engine's validate (UC-2.x):
+The Rust engine checks the object kinds (UC-1.3) against the oracle; any
+other kind is a usage error until its item ports it:
 
 ```
 $ xtask corpus faults --check --engine rust --only sysdig-constraint-priority
 ? 2
-xtask corpus: --engine rust checks the structural kinds only (UC-1.2; --only structural lists them): `sysdig-constraint-priority` comes with the Rust engine's validate (UC-2.x)
+xtask corpus: --engine rust checks the object kinds only (UC-1.3; --only objects lists them): `sysdig-constraint-priority` comes with the platform blocks (UC-1.4), the configuration models (UC-1.5) or the Rust engine's validate (UC-2.x)
 
 $ xtask corpus faults --check --engine rust --only no-such-kind
 ? 2
