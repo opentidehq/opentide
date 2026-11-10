@@ -551,6 +551,71 @@ mod lint {
     }
 
     #[test]
+    fn one_file_gets_the_editors_file_name_and_metadata_findings() {
+        use opentide_workspace::lint::lint_file;
+        let fs = workspace();
+        fs.write("/ws/objects/rules/a.yaml", rule(U1, "A"));
+        // Shares A's name: expected with its UUID's prefix; no organisation.
+        fs.write(
+            "/ws/objects/rules/a-v2.yaml",
+            format!("name: A\nmetadata:\n  uuid: {U2}\n  author: me\n"),
+        );
+        fs.write("/ws/objects/rules/team/n.yaml", rule(U2, "N"));
+        let found = lint_file(
+            &fs,
+            Path::new(ROOT),
+            &LintConfig::default(),
+            Path::new("/ws/objects/rules/a-v2.yaml"),
+        );
+        assert_eq!(
+            found
+                .iter()
+                .map(|f| (
+                    f.code(),
+                    f.json
+                        .get("expected")
+                        .and_then(|e| e.as_str())
+                        .unwrap_or("")
+                ))
+                .collect::<Vec<_>>(),
+            [
+                ("metadata_recommended", ""),
+                ("filename_mismatch", "objects/rules/a-22222222.yaml"),
+            ]
+        );
+        assert_eq!(found[0].diagnostic.severity, Severity::Info);
+        assert!(
+            lint_file(
+                &fs,
+                Path::new(ROOT),
+                &LintConfig::default(),
+                Path::new("/ws/objects/rules/a.yaml")
+            )
+            .is_empty()
+        );
+        // Not an object file: nothing; the checks lint.toml disables: nothing.
+        assert!(
+            lint_file(
+                &fs,
+                Path::new(ROOT),
+                &LintConfig::default(),
+                Path::new("/ws/objects/rules/team/n.yaml")
+            )
+            .is_empty()
+        );
+        let off = config("[filenames]\nenabled = false\n[metadata]\nenabled = false\n");
+        assert!(
+            lint_file(
+                &fs,
+                Path::new(ROOT),
+                &off,
+                Path::new("/ws/objects/rules/a-v2.yaml")
+            )
+            .is_empty()
+        );
+    }
+
+    #[test]
     fn no_workspace_points_at_setup() {
         let fs = MemoryFs::new();
         fs.create_dir("/ws");

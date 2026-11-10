@@ -500,6 +500,42 @@ pub fn lint(
     report(fs, &target, selected, all, scope, shown.len(), options)
 }
 
+/// Lint's file name and metadata findings on one object file: what the
+/// language server reports for an open file (KG-03 and KG-05, approved on
+/// #893; UC-2.6 wires it), `filename_mismatch` and `metadata_recommended` in
+/// place of the editor's `filename_slug`, `missing_author`,
+/// `missing_organisation` and `recommended_field_missing`. The checks are
+/// the ones `lint.toml` enables, at its severities; the other files of the
+/// folder are read for the stems they hold, so a name another object has is
+/// expected with its UUID's prefix, as `lint` expects it. A file that is not
+/// directly in an object folder has none.
+pub fn lint_file(
+    fs: &dyn FileSystem,
+    root: &Path,
+    config: &LintConfig,
+    file: &Path,
+) -> Vec<LintFinding> {
+    let checks: Vec<LintCheck> = enabled_checks(config)
+        .into_iter()
+        .filter(|check| matches!(check, LintCheck::Filenames | LintCheck::Metadata))
+        .collect();
+    if checks.is_empty() {
+        return Vec::new();
+    }
+    let options = LintOptions {
+        checks,
+        files: vec![file.to_string_lossy().into_owned()],
+        cwd: root.to_path_buf(),
+        ..LintOptions::default()
+    };
+    let report = lint(fs, None, root, config, &options);
+    report
+        .findings
+        .into_iter()
+        .filter(|finding| matches!(finding.code(), codes::FILENAME | codes::METADATA))
+        .collect()
+}
+
 fn check_severity(config: &LintConfig, check: LintCheck) -> Option<&str> {
     config
         .checks
