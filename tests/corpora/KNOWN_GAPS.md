@@ -85,8 +85,9 @@ object whose name another object of its family shares. The CLI's rule is the str
 `name-v2.yaml` is a file name a reader cannot tell from a copy. `lint` keeps it (UC-2.3, #818
 ports it); the language server reports the same finding from the same function when it moves onto
 `opentide-workspace` (UC-2.6, #821), and stops reporting `filename_slug`. Retiring the engine's
-code is a plan §3 invariant 3 change, so it waits for a maintainer (the UC-2.2 pull request's
-"Needs a maintainer"). CHANGELOG: "**One rule names object files, in the editor and in CI**".
+code is a plan §3 invariant 3 change: the maintainer approved it on #893. Lint's side is UC-2.3's
+(#818): `opentide_workspace::lint::lint_file`, the findings `lint --file` reports for one file.
+CHANGELOG: "**One rule names object files, in the editor and in CI**".
 
 ## KG-04: Invalid and duplicate UUIDs
 
@@ -130,7 +131,8 @@ server reports it from the same function when it moves onto `opentide-workspace`
 stops reporting `missing_author`, `missing_organisation` and `recommended_field_missing`, whose
 2,200 warnings on a clean workspace `validate` never showed. `validate` stays silent: a
 recommendation is not a validation error. `organisation: ACME` stays a `schema_validation` of
-`validate`. Retiring the engine's three codes waits for a maintainer (plan §3 invariant 3).
+`validate`. Retiring the engine's three codes (plan §3 invariant 3) was approved on #893;
+`lint_file` (UC-2.3, #818) gives the editor lint's finding, and UC-2.6 retires the codes.
 CHANGELOG: "**Metadata recommendations have one code, in the editor and in CI**".
 
 ## KG-06: Configuration files that stop the run, or vanish without a finding

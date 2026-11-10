@@ -362,8 +362,15 @@ pub fn placeholder(text: &str, ws: &Path) -> String {
 }
 
 /// [`placeholder`] for a workspace spelled `ws`, with Windows' separator
-/// when `windows`.
-fn placeholder_for(text: &str, ws: &str, windows: bool) -> String {
+/// when `windows`. On Windows the workspace may also be spelled with the
+/// verbatim prefix `\\?\` (what `std::fs::canonicalize` returns), with or
+/// without it in `ws`: both spellings read `<WS>`.
+pub(crate) fn placeholder_for(text: &str, ws: &str, windows: bool) -> String {
+    let ws = if windows {
+        ws.strip_prefix(r"\\?\").unwrap_or(ws)
+    } else {
+        ws
+    };
     let quoted = serde_json::to_string(ws).unwrap_or_default();
     let escaped = quoted
         .strip_prefix('"')
@@ -375,8 +382,10 @@ fn placeholder_for(text: &str, ws: &str, windows: bool) -> String {
     if !windows {
         return text.replace(escaped, "<WS>");
     }
+    // The verbatim spelling, JSON-escaped, reads as the plain one.
+    let text = text.replace(&format!(r"\\\\?\\{escaped}"), escaped);
     let mut out = String::with_capacity(text.len());
-    let mut rest = text;
+    let mut rest = text.as_str();
     while let Some(at) = rest.find(escaped) {
         out.push_str(&rest[..at]);
         out.push_str("<WS>");
@@ -786,6 +795,15 @@ mod tests {
             r#""from <WS>. Run inside it.""#
         );
         assert_eq!(placeholder_for("{}", "", true), "{}");
+        // The verbatim spelling of a Windows path, in the text or in `ws`.
+        assert_eq!(
+            placeholder_for(r#""\\\\?\\C:\\ws\\a.yaml""#, r"C:\ws", true),
+            r#""<WS>/a.yaml""#
+        );
+        assert_eq!(
+            placeholder_for(r#""C:\\ws\\a.yaml""#, r"\\?\C:\ws", true),
+            r#""<WS>/a.yaml""#
+        );
         let here = std::env::current_dir().unwrap();
         let text = serde_json::to_string(&here.join("objects").join("a.yaml")).unwrap();
         assert_eq!(placeholder(&text, &here), "\"<WS>/objects/a.yaml\"");

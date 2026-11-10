@@ -6,10 +6,11 @@ oracle's `core/root.py`, `registry/discovery.py`, `registry/paths.py`, `registry
 `registry/builder.py` (object loading), `registry/signals.py`, `core/chaining.py` and the
 references `validation/checks/cross_object.py` follows. It runs `validate` (UC-2.2, #817:
 `validation/`, `cli/services/validation.py`, `cli/ui/diagnostics.py`) and reports every finding
-as the one `Diagnostic` ([ADR 0010](../../docs/internal/adr/0010-one-diagnostic-model.md)), and
-builds the catalogue, coverage, `info`'s data and `rules unreviewed` (UC-2.4, #819:
-`cli/services/catalog.py`, `info.py`, `rules.py`). Lint, the queries check and the language
-server come next (UC-2.3, UC-2.5, UC-2.6).
+as the one `Diagnostic` ([ADR 0010](../../docs/internal/adr/0010-one-diagnostic-model.md)). It
+runs `lint`, `validate --fix` (safe edits as text splices) and `--watch`'s pass selection (UC-2.3,
+#818: `cli/services/lint.py`, `cli/ui/fixes.py`, `cli/ui/watch.py`), and builds the catalogue,
+coverage, `info`'s data and `rules unreviewed` (UC-2.4, #819: `cli/services/catalog.py`,
+`info.py`, `rules.py`). The queries check and the language server come next (UC-2.5, UC-2.6).
 
 ## Place
 
@@ -22,7 +23,7 @@ source (`ci.yml` `engine-package`, `scripts/ci-local.sh`).
 
 | Path | What |
 | --- | --- |
-| `src/fs.rs` | `FileSystem` (every read goes through it), `OsFs` (the disk), `MemoryFs` (tests, editor buffers; counts reads by path) |
+| `src/fs.rs` | `FileSystem` (every read goes through it), `OsFs` (the disk), `MemoryFs` (tests, editor buffers; counts reads by path); `WriteFs` (what `--fix` writes: `replace` only while the file holds what was read, through a temporary file renamed into place; `rename_file`), `Stamp` (`--watch`'s snapshot) |
 | `src/root.rs` | `RootOptions` (`--repo`, `OPENTIDE_REPO_ROOT`, `OPENTIDE_TIDE_WORKSPACE`, the working directory: the host passes them, `from_env` reads the process's), `resolve` |
 | `src/config.rs` | The configuration folders read through the `FileSystem` and resolved once (`opentide_schema::configuration::resolve`), `paths.toml` checked, the object folders |
 | `src/discover.rs` | Object files: direct children of a family folder, `.yaml`/`.yml` case-sensitively, `.debug.*` left out; deeper files are nested; linked folders are not entered |
@@ -42,12 +43,19 @@ source (`ci.yml` `engine-package`, `scripts/ci-local.sh`).
 | `src/validate/objects.rs` | One object's checks: UUID format, schema (`revisions::dispatch`), the vocabulary walk over the revision's JSON Schema with its pins, configured values, deprecated fields, `platform_not_enabled`, vendor ids, references, chaining, `merge_reference_findings` |
 | `src/validate/states.rs` | `.opentide/states/deployment/` shards (`states/deployment.py`) |
 | `src/validate/annotate.rs` | `path`, `line`, `column`, `end_*`, `help`, `fix`, label and notes of each finding (`diagnostic_from_issue`) |
+| `src/fix.rs` | `validate --fix`: `plan` (safe edits re-checked at their span, the file still parsing and differing in that one value), `FixPlan::write`, `FixPlan::diff` (the `similar` crate's unified diff, never a port of difflib), `Workspace::validate_fix` |
+| `src/lint/` | `lint` / `Workspace::lint`: every `LINT_CODES` rule, `lint.toml`, `--check`, `--file`, `--changed` (the host's diff), `--strict`, `--fix` renames; `LintFinding` (the JSON entry, keys in the oracle's order, and its `Diagnostic`; `info` is `Severity::Info`, framed `note`); `lint_file` (the editor's file name and metadata findings, KG-03/KG-05); `stems.rs` (`slugify`, `expected_stem`, `.debug` suffixes) |
+| `src/watch/` | `--watch`: `Watcher` (snapshot, references, findings by file), `select_pass` and `scoped_pass_holds` (the full-versus-scoped rules of `docs/internal/cli-experience.md`), `WorkspaceValidate`; `events.rs`, `notify`'s events that wake the loop (not on WebAssembly). Drawing a pass is UC-3.5's |
 | `src/export.rs` | `Index::to_json`: what `cargo xtask registry diff` compares |
 | `examples/load.rs` | `cargo xtask bench`'s `load` command for the Rust engine |
 | `examples/validate.rs` | `cargo xtask bench`'s `validate_*` commands for the Rust engine |
 | `tests/loading.rs` | Discovery, counts (one read and one parse per file, one resolution), load errors, duplicates, signals, references, the registry lifecycle, invalidation, the disk |
 | `tests/validate.rs` | Each check's findings, places and steps, the scope, the verdict and counts; every recorded `validate --json` finding round-trips through `Diagnostic` byte for byte |
 | `tests/index.rs` | Property test: after any edits, creations, deletions, renames and `paths.toml` changes, the incremental index equals a full rebuild |
+| `tests/lint.rs` | Each lint rule's JSON entry and frame, `lint.toml`, the scope options, `--fix` renames, `lint_file` |
+| `tests/fix.rs` | Property test: any set of fixes changes no byte outside its spans and the result parses; a file changed after it was read is not written |
+| `tests/watch.rs` | The watch pass rules case by case, the watcher end to end, `notify` on disk |
+| `tests/external_difflib.rs` | The dry run's diff against CPython's `difflib` (needs a Python: `OPENTIDE_PYTHON` or `.venv`; left out of the fast profile): both patch the file to the same result |
 
 ## Invariants
 
@@ -70,14 +78,23 @@ source (`ci.yml` `engine-package`, `scripts/ci-local.sh`).
 - A `Diagnostic`'s JSON keys and their order are the CLI contract (plan §3): never add, drop or
   move one; what only a frame shows goes in `label` and `notes`.
 - YAML is opentide-schema's (YAML 1.2, saphyr); never re-implement a YAML 1.1 rule for parity.
-- No panics on what a file holds. `std::fs` only in `fs.rs` (`OsFs`); the rest reads through the
-  `FileSystem`. No environment read but `RootOptions::from_env`.
+- No panics on what a file holds. `std::fs` only in `fs.rs` (`OsFs`); the rest reads and writes
+  through the `FileSystem` and `WriteFs`, and `watch/events.rs` holds the one other OS handle,
+  `notify`'s watcher. No environment read but `RootOptions::from_env`.
+- `lint` reports what the oracle's `lint --json` reports, key for key: `cargo xtask lint diff`
+  runs every recorded case (`--fix` on a fresh copy, its renames compared); `validate diff` runs
+  the `--fix` and `--fix --dry-run` cases with their diff and files. A difference is a bug unless a
+  rule of `xtask/src/lint.rs` or `xtask/src/validate.rs` `APPROVED` explains it.
+- A fix is a text splice: every byte outside its span is kept (`tests/fix.rs`), and a file is
+  written only while it holds the text the plan read. Never write YAML back from a parsed tree.
 
 ## Test
 
 ```bash
-cargo nextest run -p opentide-workspace loading index validate
+cargo nextest run -p opentide-workspace loading index validate lint fix watch
 cargo xtask validate diff                                 # the recordings; no oracle needed
+cargo xtask lint diff                                     # the recordings; no oracle needed
+OPENTIDE_PYTHON=python3 cargo test -p opentide-workspace --test external_difflib
 cargo xtask bench --engine rust --only validate_clean,validate_warnings,validate_file
 cargo xtask registry diff --against python --corpus all   # needs the oracle (OPENTIDE_ORACLE)
 cargo xtask bench --engine rust --only load
