@@ -21,6 +21,23 @@ use crate::pins::Pins;
 #[garde(allow_unvalidated)]
 #[schemars(rename = "SentinelOneDetails", description = "")]
 #[from_node(model = "SentinelOneDetails")]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(
+        frozen,
+        get_all,
+        eq,
+        name = "SentinelOneDetails",
+        module = "opentide._native.models"
+    )
+)]
+#[cfg_attr(
+    feature = "python",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+    )
+)]
 pub struct SentinelOneDetails {
     /// STAR rule name. Deploy uses the Tide rule `name` when omitted.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -45,6 +62,23 @@ pub struct SentinelOneDetails {
 #[garde(allow_unvalidated)]
 #[schemars(rename = "SentinelOneSingleEvent", description = "")]
 #[from_node(model = "SentinelOneSingleEvent")]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(
+        frozen,
+        get_all,
+        eq,
+        name = "SentinelOneSingleEvent",
+        module = "opentide._native.models"
+    )
+)]
+#[cfg_attr(
+    feature = "python",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+    )
+)]
 pub struct SentinelOneSingleEvent {
     /// S1QL. Multiline. Sent as `queryType: events`.
     #[schemars(extend("tide.template.multiline" = true))]
@@ -58,6 +92,23 @@ pub struct SentinelOneSingleEvent {
 #[garde(allow_unvalidated)]
 #[schemars(rename = "SentinelOneSubQuery", description = "")]
 #[from_node(model = "SentinelOneSubQuery")]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(
+        frozen,
+        get_all,
+        eq,
+        name = "SentinelOneSubQuery",
+        module = "opentide._native.models"
+    )
+)]
+#[cfg_attr(
+    feature = "python",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+    )
+)]
 pub struct SentinelOneSubQuery {
     /// S1QL sub-query. Multiline.
     #[schemars(extend("tide.template.multiline" = true))]
@@ -73,6 +124,23 @@ pub struct SentinelOneSubQuery {
 #[garde(allow_unvalidated)]
 #[schemars(rename = "SentinelOneCorrelation", description = "")]
 #[from_node(model = "SentinelOneCorrelation")]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(
+        frozen,
+        get_all,
+        eq,
+        name = "SentinelOneCorrelation",
+        module = "opentide._native.models"
+    )
+)]
+#[cfg_attr(
+    feature = "python",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+    )
+)]
 pub struct SentinelOneCorrelation {
     /// Entity the sub-queries correlate on (`host`, `user`, …).
     pub entity: String,
@@ -96,6 +164,23 @@ literal_enum! {
 #[garde(allow_unvalidated)]
 #[schemars(rename = "SentinelOneCondition", description = "")]
 #[from_node(model = "SentinelOneCondition")]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(
+        frozen,
+        get_all,
+        eq,
+        name = "SentinelOneCondition",
+        module = "opentide._native.models"
+    )
+)]
+#[cfg_attr(
+    feature = "python",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+    )
+)]
 pub struct SentinelOneCondition {
     /// `Single Event` or `Correlation`.
     pub r#type: ConditionType,
@@ -193,6 +278,23 @@ impl JsonSchema for TreatAsThreat {
 #[garde(allow_unvalidated)]
 #[schemars(rename = "SentinelOneResponse", description = "")]
 #[from_node(model = "SentinelOneResponse")]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(
+        frozen,
+        get_all,
+        eq,
+        name = "SentinelOneResponse",
+        module = "opentide._native.models"
+    )
+)]
+#[cfg_attr(
+    feature = "python",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+    )
+)]
 pub struct SentinelOneResponse {
     /// `false` is sent as `UNDEFINED`.
     pub treat_as_threat: TreatAsThreat,
@@ -208,6 +310,8 @@ platform_block! {
     #[garde(allow_unvalidated)]
     #[schemars(rename = "SentinelOneConfig", description = "")]
     #[from_node(model = "SentinelOneConfig")]
+    #[cfg_attr(feature = "python", pyo3::pyclass(frozen, get_all, eq, name = "SentinelOneConfig", module = "opentide._native.models"))]
+    #[cfg_attr(feature = "python", expect(clippy::unsafe_derive_deserialize, reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"))]
     pub struct SentinelOneConfig ["platform::sentinel_one::1.0"] {
         /// Single-event or correlation query.
         pub condition: SentinelOneCondition,

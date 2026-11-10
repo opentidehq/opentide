@@ -9,6 +9,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from opentide._models.metadata import ObjectMetadata, ObjectReferences
+from opentide._models.rule import DetectionRule
+from opentide._models.threat import ThreatVector
 from opentide.documentation.catalog import DocumentationCatalog
 from opentide.documentation.format.factory import formatter_for
 from opentide.documentation.parts.sections import (
@@ -37,9 +40,6 @@ from opentide.documentation.vocabulary import EnrichedEntry
 from opentide.documentation.vocabulary import enrich as enrich_vocab
 from opentide.generation import framework as fw
 from opentide.loading.objective_loader import load_objective_from_dict
-from opentide.models.metadata import ObjectMetadata, ObjectReferences
-from opentide.models.rule import DetectionRule
-from opentide.models.threat import ThreatVector
 from opentide.vulnerability_lookup import CveSettings, VulnerabilityLookupError, VulnerabilityRecord
 
 

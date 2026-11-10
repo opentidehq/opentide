@@ -161,8 +161,8 @@ def workspace_artifacts(workspace: Path, family: str) -> WorkspaceArtifacts:
     ``rules unreviewed`` reports by its schema alone), so a new object starts
     on the latest revision instead.
     """
+    from opentide._models.schema_registry import latest_identifier
     from opentide.core.files import resolve_configurations
-    from opentide.models.schema_registry import latest_identifier
     from opentide.registry.artifacts import schema_artifact_name, template_artifact_name
     from opentide.registry.paths import resolve_workspace_paths
 
@@ -801,7 +801,7 @@ def template_schema_id(template: str, family: str) -> str:
     match = re.search(r"^\s+schema:\s*([\w:.]+)\s*$", template, re.MULTILINE)
     if match:
         return match.group(1)
-    from opentide.models.schema_registry import latest_identifier
+    from opentide._models.schema_registry import latest_identifier
 
     return latest_identifier(family)
 
@@ -862,8 +862,8 @@ def scaffold_object(
     The template and schema must exist: :func:`missing_artifacts` names what
     to generate first.
     """
-    from opentide.models.platform_schema import platform_model_for_key
-    from opentide.models.schema_registry import resolve_model
+    from opentide._models.platform_schema import platform_model_for_key
+    from opentide._models.schema_registry import resolve_model
 
     family = options.family
     _check_references(options, workspace)

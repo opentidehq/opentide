@@ -4,6 +4,10 @@ from __future__ import annotations
 
 import pytest
 
+from opentide._models import vocab_pins
+from opentide._models.schema_registry import register_model, unregister_model
+from opentide._models.threat import ThreatVector
+from opentide._models.vocab_pins import get_pins
 from opentide.generation.pydantic_metaschema import (
     apply_vocab_pins,
     build_schema_source_for_identifier,
@@ -16,10 +20,6 @@ from opentide.generation.vocabulary import (
     VocabularyMetadata,
     VocabularyRevisionResolver,
 )
-from opentide.models import vocab_pins
-from opentide.models.schema_registry import register_model, unregister_model
-from opentide.models.threat import ThreatVector
-from opentide.models.vocab_pins import get_pins
 
 
 class ThreatVector_v2_1(ThreatVector):

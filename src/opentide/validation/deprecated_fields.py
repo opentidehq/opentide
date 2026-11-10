@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from opentide.models.version import SchemaVersion
+from opentide._models.version import SchemaVersion
 from opentide.validation.issues import ValidationIssue
 
 

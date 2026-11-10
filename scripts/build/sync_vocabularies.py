@@ -88,7 +88,7 @@ def list_pin_files(directory: Path) -> dict[str, Path]:
 
 
 def load_pin_tables(path: Path) -> PinTables:
-    """Return the pin tables of one file the way ``opentide.models.vocab_pins`` reads them."""
+    """Return the pin tables of one file the way ``opentide._models.vocab_pins`` reads them."""
     return {
         str(section): {str(key): str(value) for key, value in pins.items()}
         for section, pins in load_toml(path).items()

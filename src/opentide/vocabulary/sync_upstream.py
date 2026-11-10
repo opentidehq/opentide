@@ -14,7 +14,7 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from opentide.models.vocab_pins import pin_data_dir
+from opentide._models.vocab_pins import pin_data_dir
 from opentide.vocabulary.generate_actors import generate_actors_vocabs
 from opentide.vocabulary.generate_attack import GenerateReport, generate_attack_vocabs
 from opentide.vocabulary.pins import vocab_fields_in_pin_directories

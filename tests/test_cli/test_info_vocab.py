@@ -51,7 +51,7 @@ def test_detail_reports_pins_from_the_pin_manifests() -> None:
         "threat::1.0": {"threat.surface": "demo::1.0", "threat.severity": "severity::1.0"},
         "threat::9.9": {"threat.surface": "demo::1.5"},
     }
-    with patch("opentide.models.vocab_pins.all_pins", return_value=pins):
+    with patch("opentide._models.vocab_pins.all_pins", return_value=pins):
         detail = info_service._vocab_detail("demo", _definition())
 
     assert detail["entries"] == 4
@@ -151,7 +151,7 @@ def _render(monkeypatch: pytest.MonkeyPatch, payload: dict[str, Any]) -> str:
 
 def test_render_vocab_detail(monkeypatch: pytest.MonkeyPatch) -> None:
     pins = {"threat::1.0": {"threat.surface": "demo::1.5"}}
-    with patch("opentide.models.vocab_pins.all_pins", return_value=pins):
+    with patch("opentide._models.vocab_pins.all_pins", return_value=pins):
         detail = info_service._vocab_detail("demo", _definition())
     output = _render(monkeypatch, {"vocabulary": detail})
     assert "Vocabulary demo" in output
@@ -162,7 +162,7 @@ def test_render_vocab_detail(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_render_vocab_detail_without_pins_says_so(monkeypatch: pytest.MonkeyPatch) -> None:
-    with patch("opentide.models.vocab_pins.all_pins", return_value={}):
+    with patch("opentide._models.vocab_pins.all_pins", return_value={}):
         detail = info_service._vocab_detail("demo", _definition())
     assert "No object schema pins this vocabulary" in _render(monkeypatch, {"vocabulary": detail})
 

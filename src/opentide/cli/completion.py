@@ -63,8 +63,8 @@ PLATFORMS = (
 )
 
 #: ``--strategy`` values and what each deploys, as
-#: ``opentide.models.deployment_enums.DEPLOYABLE_STRATEGIES`` holds them. A
-#: copy: importing ``opentide.models`` loads pydantic and every model.
+#: ``opentide._models.deployment_enums.DEPLOYABLE_STRATEGIES`` holds them. A
+#: copy: importing ``opentide._models`` loads pydantic and every model.
 STRATEGIES: tuple[tuple[str, str], ...] = (
     ("PREVIEW", "Deployment from Pull/Merge Requests"),
     ("RELEASE", "Deployment from the default branch (also called trunk, or main branch)"),

@@ -366,7 +366,7 @@ def test_validate_query_platform_skips_when_no_rules(monkeypatch) -> None:
 
 
 def test_validate_query_platform_reads_every_rule_for_both_strategies_by_default() -> None:
-    from opentide.models.deployment_enums import DEPLOYABLE_STRATEGIES
+    from opentide._models.deployment_enums import DEPLOYABLE_STRATEGIES
 
     ctx = CliContext(json_output=True)
     with patch("opentide.deployment.make_deploy_plan", return_value={}) as plan:
@@ -380,7 +380,7 @@ def test_validate_query_platform_reads_every_rule_for_both_strategies_by_default
 
 
 def test_validate_query_platform_narrows_to_an_explicit_strategy() -> None:
-    from opentide.models.deployment_enums import StatusStrategy
+    from opentide._models.deployment_enums import StatusStrategy
 
     ctx = CliContext(json_output=True)
     with patch("opentide.deployment.make_deploy_plan", return_value={}) as plan:
@@ -418,7 +418,7 @@ def test_validate_query_platform_refuses_a_strategy_that_is_not_deployable(
 def test_validate_query_platform_refuses_an_inherited_deployment_plan(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from opentide.models.deployment_enums import removed_plan_message
+    from opentide._models.deployment_enums import removed_plan_message
 
     monkeypatch.setenv("DEPLOYMENT_PLAN", "STAGING")
     ctx = CliContext(json_output=True)
@@ -452,7 +452,7 @@ def test_validate_query_platform_runs_validator(monkeypatch) -> None:
         }
         result = validation_service.validate_query_platform(ctx, "sentinel", live=True)
     validator.validate.assert_called_once()
-    from opentide.models.deployment_enums import DEPLOYABLE_STRATEGIES
+    from opentide._models.deployment_enums import DEPLOYABLE_STRATEGIES
 
     assert validator.validate.call_args.kwargs["strategies"] == DEPLOYABLE_STRATEGIES
     assert result["status"] == "passed"

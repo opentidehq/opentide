@@ -8,12 +8,12 @@ from typing import Any, ClassVar
 
 import pytest
 
+from opentide._models.rule import DetectionRule
+from opentide._models.system_config import ConfigurationModels as C
+from opentide._models.system_config import SystemConfig
 from opentide.core.errors import Errors
 from opentide.core.io import load_yaml
 from opentide.loading.rule_loader import load_rule_from_dict
-from opentide.models.rule import DetectionRule
-from opentide.models.system_config import ConfigurationModels as C
-from opentide.models.system_config import SystemConfig
 from opentide.query.models import (
     QueryColumn,
     QueryRefused,

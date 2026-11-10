@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from opentide.models.rule import DetectionRule
+from opentide._models.rule import DetectionRule
 
 
 class RuleQueryError(ValueError):

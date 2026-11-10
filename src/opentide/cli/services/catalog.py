@@ -22,11 +22,11 @@ from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
+from opentide._models.base import FieldRole
 from opentide.core.logging import get_logger
 from opentide.core.object_fields import object_role_values
 from opentide.core.technique_coverage import as_list as _as_list
 from opentide.core.technique_coverage import inherited_techniques as _inherited_techniques
-from opentide.models.base import FieldRole
 
 logger = get_logger(__name__)
 
@@ -480,7 +480,7 @@ def _platform_blocks(
 
 def _status_strategies(deployment: Mapping[str, Any]) -> dict[str, str]:
     """Status name to strategy name, from ``deployment.toml`` as written."""
-    from opentide.models.deployment_enums import StatusStrategy
+    from opentide._models.deployment_enums import StatusStrategy
 
     result: dict[str, str] = {}
     for entry in deployment.get("statuses") or ():
@@ -533,9 +533,9 @@ def _deployment_bindings(workspace: Path) -> dict[str, list[dict[str, Any]]]:
 
 def _attack_definition() -> tuple[Any, str | None]:
     """The ``att&ck`` vocabulary and the newest revision an object schema pins it to."""
+    from opentide._models.vocab_pins import all_pins
     from opentide.core.registry import Opentide
     from opentide.generation.vocabulary import parse_semver, parse_vocab_contract
-    from opentide.models.vocab_pins import all_pins
 
     definition = Opentide.Vocabularies.Index.get("att&ck")
     revisions: list[str] = []

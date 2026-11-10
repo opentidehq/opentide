@@ -55,14 +55,14 @@ def test_tool_deploy_rule_dry_run_keeps_dry_run_action(tide_corpus_repo: Path) -
 
 
 def test_tool_deploy_rule_without_tenants_names_the_failure(tide_corpus_repo: Path) -> None:
-    from opentide.models.rule import DetectionRule
+    from opentide._models.rule import DetectionRule
 
     def fail_deploy(self: DetectionRule, platform: str, dry_run: bool = False) -> None:
         raise AssertionError(f"deploy engine called for {platform} dry_run={dry_run}")
 
     # The corpus Sentinel rule has a configuration block and no tenants.
     # A real deploy must stop with the CLI sentence and must not call the engine.
-    import opentide.models.rule as rule_module
+    import opentide._models.rule as rule_module
 
     original = rule_module.DetectionRule.deploy
     rule_module.DetectionRule.deploy = fail_deploy  # type: ignore[method-assign]
@@ -116,7 +116,7 @@ def test_tool_deploy_rule_reports_a_refused_rule_as_failed(
 def test_tool_deploy_rule_does_not_inherit_a_previous_failure(
     tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from opentide.models.rule import DeploymentResult, DetectionRule
+    from opentide._models.rule import DeploymentResult, DetectionRule
 
     def deployed(self: DetectionRule, platform: str, dry_run: bool = False) -> DeploymentResult:
         return DeploymentResult(platform=platform, uuids=[self.metadata.uuid], dry_run=dry_run)

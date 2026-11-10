@@ -27,9 +27,17 @@ opentide-analysis.workspace = true
 opentide-lsp.workspace = true
 # The differential comparator, for OPENTIDE_ENGINE=compare (UC-0.7, #805).
 opentide-compare.workspace = true
+# The Tide models as Python classes, opentide._native.models (UC-1.9, #815).
+opentide-schema = { workspace = true, features = ["python"] }
 # The Rust command line, for the commands ported to it (`cli_main`, run by
 # `python -m opentide.cli.rust`).
 opentide-cli.workspace = true
+
+[features]
+# PyO3's introspection data, from which `cargo xtask stubs` writes the
+# generated stubs (src/opentide/_native/models.pyi). Only that build turns it
+# on: the wheel carries no introspection data.
+stubs = ["opentide-schema/stubs", "pyo3/experimental-inspect"]
 
 [build-dependencies]
 pyo3-build-config = "0.30.1"

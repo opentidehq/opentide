@@ -9,10 +9,10 @@ from functools import partial
 from importlib.metadata import EntryPoint, entry_points
 from typing import Any, Generic, Protocol, TypeVar, cast
 
+from opentide._models.deployment_enums import RunStrategies
+from opentide._models.rule import DetectionRule
 from opentide.core.logging import get_logger
 from opentide.core.root import get_repo_root
-from opentide.models.deployment_enums import RunStrategies
-from opentide.models.rule import DetectionRule
 from opentide.platforms.config import build_system_config
 from opentide.platforms.enabled import enabled_systems
 

@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+from opentide._models.platform import SentinelConfig
 from opentide.generation.schema import TideSchemaGenerator, model_json_schema
 from opentide.generation.schema_utils import strip_framework_keywords
-from opentide.models.platform import SentinelConfig
 
 
 def test_strip_framework_keywords_removes_tide_keys() -> None:

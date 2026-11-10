@@ -18,9 +18,9 @@ from unittest.mock import MagicMock
 import pytest
 from tests.corpus_support import CORPUS_RULE_UUIDS, clear_runtime_caches
 
+from opentide._models.deployment_enums import RunStrategies, StatusStrategy
+from opentide._models.system_config import ConfigurationModels
 from opentide.deployment.external_ids import plan_external_id, record_created
-from opentide.models.deployment_enums import RunStrategies, StatusStrategy
-from opentide.models.system_config import ConfigurationModels
 from opentide.states.deployment import DeploymentStateError, record_external_id, shard_path
 
 PREVIEW = (StatusStrategy.PREVIEW,)

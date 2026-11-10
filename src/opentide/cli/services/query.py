@@ -20,7 +20,7 @@ from opentide.cli.ui.contract import (
 from opentide.query.models import DEFAULT_LIMIT, DEFAULT_TIMEOUT
 
 if TYPE_CHECKING:
-    from opentide.models.rule import DetectionRule
+    from opentide._models.rule import DetectionRule
     from opentide.query.runner import QueryRunner
     from opentide.query.service import QueryRun
 

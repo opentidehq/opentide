@@ -15,6 +15,23 @@ use crate::pins::Pins;
 #[garde(context(Pins))]
 #[schemars(rename = "SignalData", description = "")]
 #[from_node(model = "SignalData")]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(
+        frozen,
+        get_all,
+        eq,
+        name = "SignalData",
+        module = "opentide._native.models"
+    )
+)]
+#[cfg_attr(
+    feature = "python",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+    )
+)]
 pub struct SignalData {
     /// Data availability level.
     #[garde(skip)]
@@ -35,6 +52,23 @@ pub struct SignalData {
 #[garde(context(Pins))]
 #[schemars(rename = "ExternalDetector", description = "")]
 #[from_node(model = "ExternalDetector")]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(
+        frozen,
+        get_all,
+        eq,
+        name = "ExternalDetector",
+        module = "opentide._native.models"
+    )
+)]
+#[cfg_attr(
+    feature = "python",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+    )
+)]
 pub struct ExternalDetector {
     /// Detector name.
     #[garde(skip)]
@@ -59,6 +93,23 @@ pub struct ExternalDetector {
 #[garde(context(Pins))]
 #[schemars(rename = "DetectionExample", description = "")]
 #[from_node(model = "DetectionExample")]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(
+        frozen,
+        get_all,
+        eq,
+        name = "DetectionExample",
+        module = "opentide._native.models"
+    )
+)]
+#[cfg_attr(
+    feature = "python",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+    )
+)]
 pub struct DetectionExample {
     /// Example description.
     #[schemars(extend("tide.template.multiline" = true))]
@@ -85,6 +136,23 @@ pub struct DetectionExample {
 #[garde(context(Pins))]
 #[schemars(rename = "DetectionSignal")]
 #[from_node(model = "DetectionSignal")]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(
+        frozen,
+        get_all,
+        eq,
+        name = "DetectionSignal",
+        module = "opentide._native.models"
+    )
+)]
+#[cfg_attr(
+    feature = "python",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+    )
+)]
 pub struct DetectionSignal {
     /// Signal name.
     #[garde(skip)]
@@ -142,6 +210,23 @@ pub struct DetectionSignal {
 #[garde(context(Pins))]
 #[schemars(rename = "ObjectiveComposition", description = "")]
 #[from_node(model = "ObjectiveComposition")]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(
+        frozen,
+        get_all,
+        eq,
+        name = "ObjectiveComposition",
+        module = "opentide._native.models"
+    )
+)]
+#[cfg_attr(
+    feature = "python",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+    )
+)]
 pub struct ObjectiveComposition {
     /// Detection composition strategy vocabulary.
     #[garde(skip)]
@@ -158,14 +243,30 @@ pub struct ObjectiveComposition {
 #[garde(context(Pins))]
 #[schemars(rename = "ObjectiveBody", description = "")]
 #[from_node(model = "ObjectiveBody")]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(
+        frozen,
+        get_all,
+        eq,
+        name = "ObjectiveBody",
+        module = "opentide._native.models"
+    )
+)]
+#[cfg_attr(
+    feature = "python",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+    )
+)]
 pub struct ObjectiveBody {
     /// Priority level.
     #[garde(skip)]
     pub priority: String,
     /// Detection type vocabulary.
-    #[serde(rename = "type")]
     #[garde(skip)]
-    pub kind: String,
+    pub r#type: String,
     /// Objective narrative.
     #[schemars(extend("tide.template.multiline" = true))]
     #[garde(skip)]
@@ -197,6 +298,23 @@ pub struct ObjectiveBody {
 #[garde(context(Pins))]
 #[schemars(rename = "DetectionObjective")]
 #[from_node(model = "DetectionObjective")]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(
+        frozen,
+        get_all,
+        eq,
+        name = "DetectionObjective",
+        module = "opentide._native.models"
+    )
+)]
+#[cfg_attr(
+    feature = "python",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+    )
+)]
 pub struct ObjectiveV1_0 {
     /// Objective display name.
     #[garde(skip)]

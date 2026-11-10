@@ -25,6 +25,10 @@
 //! | unit enum | `literal` | the error type `literal_error` rather than `enum` |
 //! | enum | `union` | a union of its one-field variants, each with `tag = "str"` |
 //!
+//! A struct also gets `opentide_schema::from_node::Model`: its class name and
+//! each field's attribute and serialised names, in order, which the Python
+//! classes read (UC-1.9, #815).
+//!
 //! serde attributes that change what is read and that the conversion does not
 //! reproduce (`flatten`, `skip`, `deserialize_with`, `with`, `untagged` on a
 //! non-union, a container `default`, `from`, `try_from`, `transparent`, a
@@ -246,6 +250,7 @@ fn expand_struct(
     }
     let mut bindings = Vec::new();
     let mut lets = Vec::new();
+    let mut described = Vec::new();
     for (index, field) in declared.named.iter().enumerate() {
         let Some(ident) = &field.ident else {
             return Err(syn::Error::new(field.span(), "a named field"));
@@ -283,6 +288,9 @@ fn expand_struct(
                 "an Option field needs #[serde(default)]: serde reads a missing one as None",
             ));
         }
+        let attribute = ident.to_string().trim_start_matches("r#").to_owned();
+        let serialised = &names[0];
+        described.push(quote!((#attribute, #serialised)));
         names.extend(aliases);
         let mut field_before = quote!(::core::option::Option::None);
         let mut convert =
@@ -339,6 +347,12 @@ fn expand_struct(
                 __fields.finish(__cx, #closed, #tolerate);
                 ::core::option::Option::Some(Self { #(#bindings),* })
             }
+        }
+
+        #[automatically_derived]
+        impl ::opentide_schema::from_node::Model for #name {
+            const CLASS: &'static str = #class_name;
+            const FIELDS: &'static [(&'static str, &'static str)] = &[#(#described),*];
         }
     })
 }
@@ -566,6 +580,17 @@ mod tests {
         assert!(code.contains("if ! check (__node , __cx)"), "{code}");
         assert!(code.contains("finish (__cx , true , LEGACY)"), "{code}");
         assert!(code.contains("& [\"type\"]"), "{code}");
+        // The fields as Python reads them: the attribute, then the key.
+        assert!(
+            code.contains("impl :: opentide_schema :: from_node :: Model for Body"),
+            "{code}"
+        );
+        assert!(
+            code.contains(
+                "& [(\"schema_id\" , \"schema\") , (\"tags\" , \"tags\") , (\"flag\" , \"flag\") , (\"impact\" , \"impact\") , (\"type\" , \"type\")]"
+            ),
+            "{code}"
+        );
     }
 
     #[test]

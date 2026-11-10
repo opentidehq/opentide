@@ -7,9 +7,9 @@ from typing import Any
 
 import pytest
 
+from opentide._models.system_config import ConfigurationModels, DeploymentBatch, batch_tenant
 from opentide.deployment.external_ids import ExternalIdAction
 from opentide.loading.rule_loader import load_rule_from_dict
-from opentide.models.system_config import ConfigurationModels, DeploymentBatch, batch_tenant
 
 
 def _rule(metadata: dict[str, Any], **body: Any) -> Any:

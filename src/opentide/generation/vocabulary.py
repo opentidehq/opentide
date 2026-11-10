@@ -8,8 +8,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from opentide._models.version import SchemaVersion
 from opentide.core.logging import get_logger
-from opentide.models.version import SchemaVersion
 
 logger = get_logger(__name__)
 

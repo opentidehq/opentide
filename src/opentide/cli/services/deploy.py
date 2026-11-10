@@ -24,10 +24,10 @@ from opentide.core.index_manager import IndexManager
 
 logger = structlog.get_logger("opentide.cli.services.deploy")
 if TYPE_CHECKING:
+    from opentide._models.deployment_enums import RunStrategies
     from opentide.cli.context import CliContext
     from opentide.cli.ui.progress import Checklist
     from opentide.deployment.git_repo import RuleScope
-    from opentide.models.deployment_enums import RunStrategies
 
 
 _NO_RULES_MATCHED = "No rule this run read has a status that maps to its strategies"
@@ -37,8 +37,8 @@ def _tenant_targets(
     system: str, uuids: list[str], run: RunStrategies, wide: bool
 ) -> dict[str, list[str]]:
     """Which tenants a deploy would reach on *system*, and with which rules."""
+    from opentide._models.deployment_enums import DetectionPlatforms
     from opentide.deployment.planning import TideDeployment, wide_scope
-    from opentide.models.deployment_enums import DetectionPlatforms
 
     platform = DetectionPlatforms[system.upper()]
     if wide:
@@ -161,8 +161,8 @@ def resolve_run_strategies(values: Iterable[str]) -> RunStrategies:
 
     Raises ``ValueError`` with the message the CLI prints.
     """
+    from opentide._models.deployment_enums import parse_strategies
     from opentide.core.registry import Opentide
-    from opentide.models.deployment_enums import parse_strategies
 
     statuses: dict[str, Any] = {}
     try:
@@ -175,7 +175,7 @@ def resolve_run_strategies(values: Iterable[str]) -> RunStrategies:
 
 def strategy_suggestion(values: Any) -> str | None:
     """The deployable strategy closest to the first ``--strategy`` value that is not one."""
-    from opentide.models.deployment_enums import DEPLOYABLE_STRATEGIES
+    from opentide._models.deployment_enums import DEPLOYABLE_STRATEGIES
 
     names = [strategy.name for strategy in DEPLOYABLE_STRATEGIES]
     for raw in values:
@@ -188,7 +188,7 @@ def strategy_suggestion(values: Any) -> str | None:
 
 def removed_plan_error() -> str | None:
     """The refusal for a run that still sets ``DEPLOYMENT_PLAN``, or ``None``."""
-    from opentide.models.deployment_enums import REMOVED_PLAN_ENV, removed_plan_message
+    from opentide._models.deployment_enums import REMOVED_PLAN_ENV, removed_plan_message
 
     value = os.environ.get(REMOVED_PLAN_ENV)
     if value is None or not value.strip():
@@ -299,10 +299,10 @@ def _report_skipped(result: dict[str, object], skipped: list[dict[str, str]]) ->
     """
     from collections import Counter
 
+    from opentide._models.deployment_enums import StatusStrategy
     from opentide.cli.ui.glyphs import glyph
     from opentide.cli.ui.progress import plural
     from opentide.deployment.utils import statuses_deployed_by
-    from opentide.models.deployment_enums import StatusStrategy
 
     rules = len({entry["uuid"] for entry in skipped})
     statuses = Counter(entry["status"] for entry in skipped)
@@ -441,6 +441,7 @@ def _deploy(
             "_failure_code": USAGE_MISSING_OPTION,
             "_failure_argument": "--strategy",
         }
+    from opentide._models.deployment_enums import StatusStrategy
     from opentide.core.registry import Opentide
     from opentide.deployment import CIEnvironment, make_deploy_plan, modified_mdr_files
     from opentide.deployment.ci import is_change_request
@@ -449,7 +450,6 @@ def _deploy(
         diff_error_message,
         missing_checkout_message,
     )
-    from opentide.models.deployment_enums import StatusStrategy
     from opentide.mutation.promotion import PromoteMDR
     from opentide.platforms.plugins import EnabledPlatforms
 

@@ -22,10 +22,10 @@ from unittest.mock import MagicMock
 import pytest
 import yaml
 
+from opentide._models.deployment_enums import DetectionPlatforms
+from opentide._models.system_config import SystemConfig
 from opentide.deployment.planning import TideDeployment, flatten_mapping
 from opentide.loading.rule_loader import load_rule_from_dict
-from opentide.models.deployment_enums import DetectionPlatforms
-from opentide.models.system_config import SystemConfig
 
 ROOT = Path(__file__).resolve().parents[2]
 EXPECTED = json.loads(
@@ -135,8 +135,8 @@ import yaml
 
 from opentide.deployment.planning import TideDeployment
 from opentide.loading.rule_loader import load_rule_from_dict
-from opentide.models.deployment_enums import DetectionPlatforms
-from opentide.models.system_config import SystemConfig
+from opentide._models.deployment_enums import DetectionPlatforms
+from opentide._models.system_config import SystemConfig
 
 rule = load_rule_from_dict(yaml.safe_load(open({rule_file!r}, encoding="utf-8")))
 tide = TideDeployment.__new__(TideDeployment)

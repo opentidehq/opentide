@@ -5,9 +5,9 @@ from __future__ import annotations
 from collections.abc import Collection
 from typing import TYPE_CHECKING
 
-from opentide.models.base import TideModel
-from opentide.models.object_types import CORE_OBJECT_TYPES
-from opentide.models.version import MigrationFn, SchemaVersion, SchemaVersionChain
+from opentide._models.base import TideModel
+from opentide._models.object_types import CORE_OBJECT_TYPES
+from opentide._models.version import MigrationFn, SchemaVersion, SchemaVersionChain
 
 if TYPE_CHECKING:
     pass
@@ -124,10 +124,10 @@ def _bootstrap() -> None:
     global _BOOTSTRAPPED
     if _BOOTSTRAPPED:
         return
-    from opentide.models.objective import DetectionObjective
-    from opentide.models.rule import DetectionRule, DetectionRule_v1_1
-    from opentide.models.threat import ThreatVector
-    from opentide.models.visibility import VisibilityConfig
+    from opentide._models.objective import DetectionObjective
+    from opentide._models.rule import DetectionRule, DetectionRule_v1_1
+    from opentide._models.threat import ThreatVector
+    from opentide._models.visibility import VisibilityConfig
 
     for model_cls in (
         DetectionRule,

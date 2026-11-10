@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from opentide.models.base import TideModel
-from opentide.models.platform import (
+from opentide._models.base import TideModel
+from opentide._models.platform import (
     PLATFORM_CONFIG_MODELS,
     CarbonBlackConfig,
     CrowdstrikeConfig,

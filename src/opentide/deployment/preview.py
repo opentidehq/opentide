@@ -7,7 +7,7 @@ from typing import Any, cast
 
 import structlog
 
-from opentide.models.rule import DetectionRule
+from opentide._models.rule import DetectionRule
 
 logger = structlog.get_logger(__name__)
 

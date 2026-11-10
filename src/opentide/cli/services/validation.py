@@ -41,9 +41,9 @@ from opentide.validation.session import run_validation
 
 logger = structlog.get_logger("opentide.cli.services.validation")
 if TYPE_CHECKING:
+    from opentide._models.deployment_enums import RunStrategies
     from opentide.cli.context import CliContext
     from opentide.deployment.git_repo import RuleScope
-    from opentide.models.deployment_enums import RunStrategies
     from opentide.platforms.transport import TenantUnreachableError
     from opentide.query.check import LiveCheckReport
 
@@ -907,9 +907,9 @@ def _validate_query_platform(
             "_failure_code": USAGE_MISSING_OPTION,
             "_failure_argument": "--platform",
         }
+    from opentide._models.deployment_enums import DEPLOYABLE_STRATEGIES
     from opentide.cli.services.deploy import removed_plan_error, resolve_run_strategies
     from opentide.deployment import make_deploy_plan
-    from opentide.models.deployment_enums import DEPLOYABLE_STRATEGIES
 
     failed = {"platform": platform, "mode": "live", "status": "failed", "supported": True}
     removed = removed_plan_error()
@@ -1237,8 +1237,8 @@ def queries_per_tenant(
     The same resolution the platform validator runs, so a tenant listed here
     is one the validator connects to. Tenants that receive no rule are absent.
     """
+    from opentide._models.deployment_enums import DetectionPlatforms
     from opentide.deployment import TideDeployment
-    from opentide.models.deployment_enums import DetectionPlatforms
 
     deployment = TideDeployment(
         deployment=list(rules), system=DetectionPlatforms[platform.upper()], strategies=strategies

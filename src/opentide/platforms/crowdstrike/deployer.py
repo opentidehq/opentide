@@ -2,6 +2,9 @@ from collections.abc import Sequence
 
 import structlog
 
+from opentide._models.deployment_enums import RunStrategies, StatusStrategy
+from opentide._models.rule import DetectionRule
+from opentide._models.system_config import ConfigurationModels, batch_tenant
 from opentide.core import deploy_events
 from opentide.core.debug import DebugEnvironment
 from opentide.core.errors import Errors
@@ -15,9 +18,6 @@ from opentide.deployment.external_ids import (
     report_failure,
     screen_tenant,
 )
-from opentide.models.deployment_enums import RunStrategies, StatusStrategy
-from opentide.models.rule import DetectionRule
-from opentide.models.system_config import ConfigurationModels, batch_tenant
 from opentide.platforms.crowdstrike.client import CrowdstrikeService
 from opentide.platforms.crowdstrike.client import DetectionRule as CrowdstrikeRule
 from opentide.platforms.plugins import RuleDeployer

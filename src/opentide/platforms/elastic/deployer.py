@@ -10,17 +10,17 @@ from typing import Any
 import requests
 import structlog
 
-from opentide.core import deploy_events
-from opentide.core.registry import Opentide
-from opentide.deployment import TideDeployment, check_status
-from opentide.deployment.external_ids import without_legacy_external_ids
-from opentide.models.deployment_enums import (
+from opentide._models.deployment_enums import (
     DetectionPlatforms,
     RunStrategies,
     StatusStrategy,
 )
-from opentide.models.rule import DetectionRule
-from opentide.models.system_config import ConfigurationModels, batch_tenant
+from opentide._models.rule import DetectionRule
+from opentide._models.system_config import ConfigurationModels, batch_tenant
+from opentide.core import deploy_events
+from opentide.core.registry import Opentide
+from opentide.deployment import TideDeployment, check_status
+from opentide.deployment.external_ids import without_legacy_external_ids
 from opentide.platforms.elastic.attack import find_non_enterprise_techniques
 from opentide.platforms.elastic.client import ElasticClient
 from opentide.platforms.elastic.compile import compile_rule

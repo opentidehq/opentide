@@ -27,8 +27,8 @@ from tests.splunk_support import (
     serve_splunk,
 )
 
+from opentide._models.system_config import ConfigurationModels
 from opentide.loading.rule_loader import load_rule_from_dict
-from opentide.models.system_config import ConfigurationModels
 from opentide.platforms.splunk.client import (
     HTTP_ERROR_STATUS,
     SplunkAnsweredHtmlError,
@@ -572,7 +572,7 @@ def test_delete_reaches_splunk_as_a_delete(splunk: SplunkStandIn) -> None:
 @pytest.fixture
 def retiring(monkeypatch: pytest.MonkeyPatch) -> None:
     """Every rule status carries the DELETION strategy."""
-    from opentide.models.deployment_enums import StatusStrategy
+    from opentide._models.deployment_enums import StatusStrategy
 
     monkeypatch.setattr(
         "opentide.platforms.splunk.deployer.check_status", lambda _status: StatusStrategy.DELETION

@@ -482,8 +482,8 @@ def test_index_lists_every_option_a_loaded_command_completes() -> None:
 
 
 def test_platform_and_strategy_copies_match_the_engine() -> None:
+    from opentide._models.deployment_enums import DEPLOYABLE_STRATEGIES
     from opentide.cli.enums import DetectionPlatform
-    from opentide.models.deployment_enums import DEPLOYABLE_STRATEGIES
 
     assert tuple(platform.value for platform in DetectionPlatform) == completion.PLATFORMS
     assert (

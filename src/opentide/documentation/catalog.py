@@ -5,12 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal
 
+from opentide._models.objective import DetectionObjective
+from opentide._models.threat import ThreatVector
 from opentide.core.registry import Opentide
 from opentide.documentation.markdown.links import unique_slugs
 from opentide.documentation.types import DocumentRecord, DocumentScope
 from opentide.generation import framework as fw
-from opentide.models.objective import DetectionObjective
-from opentide.models.threat import ThreatVector
 
 RelationDirection = Literal["upstream", "downstream"]
 ChainingArrow = Literal["forward", "bidirectional"]

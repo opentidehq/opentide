@@ -381,7 +381,7 @@ def test_bundled_entries_are_not_duplicated_when_upstream_lists_them(
 )
 def test_bundled_skills_name_the_latest_schema(family: str, slug: str) -> None:
     """``discover`` and the installed SKILL.md teach the schema ``opentide new`` writes."""
-    from opentide.models.object_types import latest_identifier
+    from opentide._models.object_types import latest_identifier
 
     latest = latest_identifier(family)
     entry = next(e for e in registry.BUNDLED_AUTHORING_ENTRIES if e.slug == slug)

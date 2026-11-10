@@ -12,7 +12,7 @@ from typing import Annotated, Any
 
 from pydantic import ConfigDict, Field
 
-from opentide.models.configuration.base import (
+from opentide._models.configuration.base import (
     ConfigurationModel,
     EnvPlaceholder,
     RunStrategyName,
