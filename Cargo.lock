@@ -612,6 +612,8 @@ checksum = "cc4e190f5d26ca7051642629da2c52fc03bde85a03197c99408dcd291734c855"
 dependencies = [
  "equivalent",
  "hashbrown",
+ "serde",
+ "serde_core",
 ]
 
 [[package]]
@@ -830,6 +832,7 @@ name = "opentide-core"
 version = "0.12.0"
 dependencies = [
  "serde",
+ "strsim",
  "thiserror",
  "toml 0.8.23",
 ]
@@ -986,6 +989,7 @@ name = "opentide-schema"
 version = "0.12.0"
 dependencies = [
  "garde",
+ "indexmap",
  "insta",
  "opentide-core",
  "opentide-schema-derive",
@@ -1000,10 +1004,12 @@ dependencies = [
  "serde-saphyr",
  "serde_json",
  "serde_yaml",
+ "strsim",
  "thiserror",
  "toml 0.8.23",
  "toml_edit 0.22.27",
  "trybuild",
+ "unicode-properties",
 ]
 
 [[package]]
@@ -1933,6 +1939,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e6e4313cd5fcd3dad5cafa179702e2b244f760991f45397d14d4ebf38247da75"
 
 [[package]]
+name = "unicode-properties"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "993ad287eb20e8ba755312801cfe1413e0f25d604075863acaddca10b04c1833"
+
+[[package]]
 name = "unicode-width"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2115,6 +2127,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "glob",
+ "indexmap",
  "opentide-compare",
  "opentide-schema",
  "regex",
@@ -2122,6 +2135,7 @@ dependencies = [
  "serde",
  "serde_json",
  "similar 2.7.0",
+ "strsim",
  "tempfile",
  "toml 0.8.23",
  "trycmd",

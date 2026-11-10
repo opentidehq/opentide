@@ -6,7 +6,7 @@
   "ics"
  ],
  "source": "https://raw.githubusercontent.com/mitre-attack/attack-stix-data/master/{domain}-attack/{domain}-attack-18.1.json",
- "generator": "scripts/build/sync_sentinel_attack.py",
+ "generator": "cargo xtask vocab sentinel-attack",
  "techniques": {
   "T0800": "Activate Firmware Update Mode",
   "T0801": "Monitor Process State",

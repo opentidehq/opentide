@@ -286,20 +286,28 @@ def test_ci_runs_the_rust_gates(job: str, command: str) -> None:
 
 
 def test_every_cargo_job_denies_warnings() -> None:
-    """A compiler warning fails every ci.yml job that builds with cargo, as in
-    language-server's CI (engine-ci.yml set it workflow-wide). The nightly fuzz
-    build is left out: its lints are a nightly's, not the pinned release's."""
+    """A compiler warning fails every ci.yml step that builds with cargo, as in
+    language-server's CI (engine-ci.yml set it workflow-wide): the workflow's,
+    job's or step's environment sets ``RUSTFLAGS=-Dwarnings``. A step may set it
+    alone where the job's environment is a Rust cache's key (``lint`` reads the
+    binding's cache, built without it). The nightly fuzz build is left out: its
+    lints are a nightly's, not the pinned release's."""
     workflow = _load(CI)
     checked = []
     for job_id, job in workflow["jobs"].items():
         if "uses" in job or job_id == "fuzz-smoke":
             continue
-        if not re.search(r"\bcargo (?!\+)", _step_runs(job)):
-            continue
-        env = {**(workflow.get("env") or {}), **(job.get("env") or {})}
-        assert env.get("RUSTFLAGS") == "-Dwarnings", job_id
-        checked.append(job_id)
-    assert {"engine", "engine-test", "engine-package", "bench", "clients"} <= set(checked)
+        for step in job.get("steps") or []:
+            if not re.search(r"\bcargo (?!\+)", str(step.get("run", ""))):
+                continue
+            env = {
+                **(workflow.get("env") or {}),
+                **(job.get("env") or {}),
+                **(step.get("env") or {}),
+            }
+            assert env.get("RUSTFLAGS") == "-Dwarnings", (job_id, step.get("name"))
+            checked.append(job_id)
+    assert {"engine", "engine-test", "engine-package", "bench", "clients", "lint"} <= set(checked)
 
 
 def test_the_oracles_are_required() -> None:

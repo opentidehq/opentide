@@ -76,6 +76,11 @@ regex = "1"
 # The parsed pattern (HIR) of a `regex` pattern, to anchor it whatever its
 # flags (opentide-schema `lint`): the version `regex` itself locks.
 regex-syntax = "0.8"
+# "did you mean" suggestions (opentide-core `suggest`): edit distances. Also clap's.
+strsim = "0.11"
+# Unicode general categories (opentide-schema `vocab::quote`: which characters a
+# message escapes). unicode-rs, as unicode-normalization and unicode-width.
+unicode-properties = { version = "0.1", default-features = false, features = ["general-category"] }
 serde_yaml = "0.9"
 clap = { version = "4", features = ["derive"] }
 tree-sitter = "0.25"
