@@ -1,0 +1,3248 @@
+{
+ "oracle": "0.23.0",
+ "cases": [
+  {
+   "id": "rule-1-1-minimal",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {}
+   }
+  },
+  {
+   "id": "rule-1-0-minimal",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.0",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {}
+   }
+  },
+  {
+   "id": "rule-1-1-everything",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  author: A\n  contributors: [B, C]\n  organisation:\n    uuid: 00000000-0000-4000-8000-0000000000aa\n    name: Org\n  reviewed: 2026-09-01\ndescription: d\nstatus: STAGING\nseverity: High\ntechniques: [T1059, T1003.001]\nplatforms:\n  legacy: {key: value, n: 1}\nreferences:\n  public:\n    1: https://example.org/a\n    \"2\": https://example.org/b\n  internal: {wiki: https://wiki.example.org}\n  reports: [https://example.org/report]\ndetection_model: 00000000-0000-4000-8000-000000000099\nresponse:\n  alert_severity: High\n  playbook: https://example.org/playbook\n  responders: soc\n  procedure:\n    analysis: |\n      Look.\n    searches:\n      - purpose: p\n        system: sentinel\n        query: |\n          SecurityEvent\n    containment: isolate\nconfigurations: {}\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear",
+     "author": "A",
+     "contributors": [
+      "B",
+      "C"
+     ],
+     "organisation": {
+      "uuid": "00000000-0000-4000-8000-0000000000aa",
+      "name": "Org"
+     },
+     "reviewed": "2026-09-01"
+    },
+    "description": "d",
+    "status": "STAGING",
+    "severity": "High",
+    "techniques": [
+     "T1059",
+     "T1003.001"
+    ],
+    "platforms": {
+     "legacy": {
+      "key": "value",
+      "n": 1
+     }
+    },
+    "references": {
+     "public": {
+      "1": "https://example.org/a",
+      "2": "https://example.org/b"
+     },
+     "internal": {
+      "wiki": "https://wiki.example.org"
+     },
+     "reports": [
+      "https://example.org/report"
+     ]
+    },
+    "detection_model": "00000000-0000-4000-8000-000000000099",
+    "response": {
+     "alert_severity": "High",
+     "playbook": "https://example.org/playbook",
+     "responders": "soc",
+     "procedure": {
+      "analysis": "Look.\n",
+      "searches": [
+       {
+        "purpose": "p",
+        "system": "sentinel",
+        "query": "SecurityEvent\n"
+       }
+      ],
+      "containment": "isolate"
+     }
+    },
+    "configurations": {}
+   }
+  },
+  {
+   "id": "rule-response-default-severity",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nresponse:\n  playbook: p\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "response": {
+     "alert_severity": "Informational",
+     "playbook": "p"
+    }
+   }
+  },
+  {
+   "id": "rule-reviewed-datetime-z",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: 2026-09-01T15:04:05Z\ndescription: d\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear",
+     "reviewed": "2026-09-01T15:04:05Z"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {}
+   }
+  },
+  {
+   "id": "rule-reviewed-offset",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: 2026-09-01T15:04:05+02:00\ndescription: d\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear",
+     "reviewed": "2026-09-01T15:04:05+02:00"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {}
+   }
+  },
+  {
+   "id": "rule-reviewed-quoted-space",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: '2026-09-01 15:04:05Z'\ndescription: d\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear",
+     "reviewed": "2026-09-01 15:04:05Z"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {}
+   }
+  },
+  {
+   "id": "rule-reviewed-fraction",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: '2026-09-01T15:04:05.25-05:30'\ndescription: d\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear",
+     "reviewed": "2026-09-01T15:04:05.25-05:30"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {}
+   }
+  },
+  {
+   "id": "rule-reviewed-word",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: yesterday\ndescription: d\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "metadata",
+      "reviewed"
+     ],
+     "msg": "Value error, metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime",
+     "input": "yesterday",
+     "ctx": {
+      "error": "metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime"
+     },
+     "span": [
+      9,
+      13,
+      22,
+      true
+     ],
+     "yaml_line": 8
+    }
+   ]
+  },
+  {
+   "id": "rule-reviewed-empty",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: ''\ndescription: d\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {}
+   }
+  },
+  {
+   "id": "rule-reviewed-padded",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: '  2026-09-01  '\ndescription: d\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear",
+     "reviewed": "2026-09-01"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {}
+   }
+  },
+  {
+   "id": "rule-reviewed-null",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: null\ndescription: d\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {}
+   }
+  },
+  {
+   "id": "rule-reviewed-number",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: 20260101\ndescription: d\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "metadata",
+      "reviewed"
+     ],
+     "msg": "Value error, metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime",
+     "input": null,
+     "ctx": {
+      "error": "metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime"
+     },
+     "span": [
+      9,
+      13,
+      21,
+      true
+     ],
+     "yaml_line": 8
+    }
+   ]
+  },
+  {
+   "id": "rule-reviewed-boolean",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: true\ndescription: d\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "metadata",
+      "reviewed"
+     ],
+     "msg": "Value error, metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime",
+     "input": null,
+     "ctx": {
+      "error": "metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime"
+     },
+     "span": [
+      9,
+      13,
+      17,
+      true
+     ],
+     "yaml_line": 8
+    }
+   ]
+  },
+  {
+   "id": "rule-reviewed-list",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: [2026-09-01]\ndescription: d\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "metadata",
+      "reviewed"
+     ],
+     "msg": "Value error, metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime",
+     "input": null,
+     "ctx": {
+      "error": "metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime"
+     },
+     "span": [
+      9,
+      3,
+      11,
+      true
+     ],
+     "yaml_line": 8
+    }
+   ]
+  },
+  {
+   "id": "rule-reviewed-no-offset",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: '2026-09-01T15:04:05'\ndescription: d\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "metadata",
+      "reviewed"
+     ],
+     "msg": "Value error, metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime",
+     "input": "2026-09-01T15:04:05",
+     "ctx": {
+      "error": "metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime"
+     },
+     "span": [
+      9,
+      14,
+      33,
+      true
+     ],
+     "yaml_line": 8
+    }
+   ]
+  },
+  {
+   "id": "rule-reviewed-impossible-quoted",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: '2026-02-30'\ndescription: d\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "metadata",
+      "reviewed"
+     ],
+     "msg": "Value error, day 30 must be in range 1..28 for month 2 in year 2026",
+     "input": "2026-02-30",
+     "ctx": {
+      "error": "day 30 must be in range 1..28 for month 2 in year 2026"
+     },
+     "span": [
+      9,
+      14,
+      24,
+      true
+     ],
+     "yaml_line": 8
+    }
+   ]
+  },
+  {
+   "id": "rule-reviewed-impossible-hour",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: '2026-01-01T25:00:00Z'\ndescription: d\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "metadata",
+      "reviewed"
+     ],
+     "msg": "Value error, hour must be in 0..23, not 25",
+     "input": "2026-01-01T25:00:00Z",
+     "ctx": {
+      "error": "hour must be in 0..23, not 25"
+     },
+     "span": [
+      9,
+      14,
+      34,
+      true
+     ],
+     "yaml_line": 8
+    }
+   ]
+  },
+  {
+   "id": "rule-reviewed-impossible-plain",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: 2026-02-30\ndescription: d\n",
+   "yaml_error": true
+  },
+  {
+   "id": "rule-reviewed-spaced-timestamp",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: 2026-09-01 15:04:05Z\ndescription: d\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear",
+     "reviewed": "2026-09-01T15:04:05Z"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {}
+   }
+  },
+  {
+   "id": "rule-1-0-reviewed",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: 2026-03-01\ndescription: d\n",
+   "errors": [
+    {
+     "type": "extra_forbidden",
+     "field_path": [
+      "metadata",
+      "reviewed"
+     ],
+     "msg": "Extra inputs are not permitted",
+     "input": "2026-03-01",
+     "ctx": {},
+     "span": [
+      9,
+      3,
+      11,
+      true
+     ],
+     "yaml_line": 8
+    }
+   ]
+  },
+  {
+   "id": "rule-created-number",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 20260101\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "20260101",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {}
+   }
+  },
+  {
+   "id": "rule-created-boolean",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: true\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "True",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {}
+   }
+  },
+  {
+   "id": "rule-created-null",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: null\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "None",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {}
+   }
+  },
+  {
+   "id": "rule-created-spaced-timestamp",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01 10:00:00\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01T10:00:00",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {}
+   }
+  },
+  {
+   "id": "rule-created-quoted",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: '1 January 2026'\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "1 January 2026",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {}
+   }
+  },
+  {
+   "id": "rule-missing-description-and-name",
+   "family": "rule",
+   "yaml": "metadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n",
+   "errors": [
+    {
+     "type": "missing",
+     "field_path": [
+      "name"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      1,
+      1,
+      9,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "missing",
+     "field_path": [
+      "description"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      1,
+      1,
+      9,
+      false
+     ],
+     "yaml_line": null
+    }
+   ]
+  },
+  {
+   "id": "rule-metadata-missing-fields",
+   "family": "rule",
+   "yaml": "name: n\nmetadata:\n  schema: rule::1.1\ndescription: d\n",
+   "errors": [
+    {
+     "type": "missing",
+     "field_path": [
+      "metadata",
+      "uuid"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      2,
+      1,
+      9,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "missing",
+     "field_path": [
+      "metadata",
+      "version"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      2,
+      1,
+      9,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "missing",
+     "field_path": [
+      "metadata",
+      "created"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      2,
+      1,
+      9,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "missing",
+     "field_path": [
+      "metadata",
+      "modified"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      2,
+      1,
+      9,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "missing",
+     "field_path": [
+      "metadata",
+      "tlp"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      2,
+      1,
+      9,
+      false
+     ],
+     "yaml_line": null
+    }
+   ]
+  },
+  {
+   "id": "rule-unknown-keys",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  colour: blue\ndescription: d\nextra: 1\nconfigurations:\n  unknown_platform: {}\n",
+   "errors": [
+    {
+     "type": "extra_forbidden",
+     "field_path": [
+      "metadata",
+      "colour"
+     ],
+     "msg": "Extra inputs are not permitted",
+     "input": "blue",
+     "ctx": {},
+     "span": [
+      9,
+      3,
+      9,
+      true
+     ],
+     "yaml_line": 8
+    },
+    {
+     "type": "extra_forbidden",
+     "field_path": [
+      "configurations",
+      "unknown_platform"
+     ],
+     "msg": "Extra inputs are not permitted",
+     "input": null,
+     "ctx": {},
+     "span": [
+      13,
+      3,
+      19,
+      true
+     ],
+     "yaml_line": 12
+    },
+    {
+     "type": "extra_forbidden",
+     "field_path": [
+      "extra"
+     ],
+     "msg": "Extra inputs are not permitted",
+     "input": null,
+     "ctx": {},
+     "span": [
+      11,
+      1,
+      6,
+      true
+     ],
+     "yaml_line": 10
+    }
+   ]
+  },
+  {
+   "id": "rule-version-forms",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: '1.2'\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": "1.2",
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {}
+   }
+  },
+  {
+   "id": "rule-version-float",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1.5\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n",
+   "errors": [
+    {
+     "type": "string_type",
+     "field_path": [
+      "metadata",
+      "version",
+      "str"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      5,
+      3,
+      10,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "int_from_float",
+     "field_path": [
+      "metadata",
+      "version",
+      "int"
+     ],
+     "msg": "Input should be a valid integer, got a number with a fractional part",
+     "input": null,
+     "ctx": {},
+     "span": [
+      5,
+      3,
+      10,
+      false
+     ],
+     "yaml_line": null
+    }
+   ]
+  },
+  {
+   "id": "rule-version-list",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: [1]\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n",
+   "errors": [
+    {
+     "type": "string_type",
+     "field_path": [
+      "metadata",
+      "version",
+      "str"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      5,
+      3,
+      10,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "int_type",
+     "field_path": [
+      "metadata",
+      "version",
+      "int"
+     ],
+     "msg": "Input should be a valid integer",
+     "input": null,
+     "ctx": {},
+     "span": [
+      5,
+      3,
+      10,
+      false
+     ],
+     "yaml_line": null
+    }
+   ]
+  },
+  {
+   "id": "rule-techniques-not-a-list",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\ntechniques: T1059\n",
+   "errors": [
+    {
+     "type": "list_type",
+     "field_path": [
+      "techniques"
+     ],
+     "msg": "Input should be a valid list",
+     "input": "T1059",
+     "ctx": {},
+     "span": [
+      10,
+      13,
+      18,
+      true
+     ],
+     "yaml_line": 9
+    }
+   ]
+  },
+  {
+   "id": "rule-techniques-item-number",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\ntechniques: [T1059, 1059]\n",
+   "errors": [
+    {
+     "type": "string_type",
+     "field_path": [
+      "techniques",
+      "1"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      10,
+      21,
+      25,
+      true
+     ],
+     "yaml_line": 9
+    }
+   ]
+  },
+  {
+   "id": "rule-contributors-string",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  contributors: B\ndescription: d\n",
+   "errors": [
+    {
+     "type": "list_type",
+     "field_path": [
+      "metadata",
+      "contributors"
+     ],
+     "msg": "Input should be a valid list",
+     "input": "B",
+     "ctx": {},
+     "span": [
+      9,
+      17,
+      18,
+      true
+     ],
+     "yaml_line": 8
+    }
+   ]
+  },
+  {
+   "id": "rule-organisation-missing-name",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  organisation: {uuid: u}\ndescription: d\n",
+   "errors": [
+    {
+     "type": "missing",
+     "field_path": [
+      "metadata",
+      "organisation",
+      "name"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      9,
+      3,
+      15,
+      false
+     ],
+     "yaml_line": null
+    }
+   ]
+  },
+  {
+   "id": "rule-platforms-wrong-shape",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nplatforms:\n  sentinel: x\n  splunk: [1]\n",
+   "errors": [
+    {
+     "type": "dict_type",
+     "field_path": [
+      "platforms",
+      "sentinel"
+     ],
+     "msg": "Input should be a valid dictionary",
+     "input": "x",
+     "ctx": {},
+     "span": [
+      11,
+      13,
+      14,
+      true
+     ],
+     "yaml_line": 10
+    },
+    {
+     "type": "dict_type",
+     "field_path": [
+      "platforms",
+      "splunk"
+     ],
+     "msg": "Input should be a valid dictionary",
+     "input": null,
+     "ctx": {},
+     "span": [
+      12,
+      3,
+      9,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "rule-configurations-not-a-mapping",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations: sentinel\n",
+   "errors": [
+    {
+     "type": "model_type",
+     "field_path": [
+      "configurations"
+     ],
+     "msg": "Input should be a valid dictionary or instance of RuleConfigurations",
+     "input": "sentinel",
+     "ctx": {
+      "class_name": "RuleConfigurations"
+     },
+     "span": [
+      10,
+      17,
+      25,
+      true
+     ],
+     "yaml_line": 9
+    }
+   ]
+  },
+  {
+   "id": "rule-configurations-null",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations: null\nresponse: null\nreferences: null\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {}
+   }
+  },
+  {
+   "id": "rule-response-errors",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nresponse:\n  alert_severity: [High]\n  colour: red\n  procedure:\n    searches:\n      - purpose: p\n        system: s\n      - x\n",
+   "errors": [
+    {
+     "type": "string_type",
+     "field_path": [
+      "response",
+      "alert_severity"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      11,
+      3,
+      17,
+      true
+     ],
+     "yaml_line": 10
+    },
+    {
+     "type": "missing",
+     "field_path": [
+      "response",
+      "procedure",
+      "analysis"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      13,
+      3,
+      12,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "missing",
+     "field_path": [
+      "response",
+      "procedure",
+      "searches",
+      "0",
+      "query"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      15,
+      9,
+      10,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "model_type",
+     "field_path": [
+      "response",
+      "procedure",
+      "searches",
+      "1"
+     ],
+     "msg": "Input should be a valid dictionary or instance of ResponseSearch",
+     "input": "x",
+     "ctx": {
+      "class_name": "ResponseSearch"
+     },
+     "span": [
+      17,
+      9,
+      10,
+      true
+     ],
+     "yaml_line": 16
+    },
+    {
+     "type": "extra_forbidden",
+     "field_path": [
+      "response",
+      "colour"
+     ],
+     "msg": "Extra inputs are not permitted",
+     "input": "red",
+     "ctx": {},
+     "span": [
+      12,
+      3,
+      9,
+      true
+     ],
+     "yaml_line": 11
+    }
+   ]
+  },
+  {
+   "id": "rule-references-errors",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nreferences:\n  public: [a]\n  internal: {a: 1}\n  reports: a\n",
+   "errors": [
+    {
+     "type": "dict_type",
+     "field_path": [
+      "references",
+      "public"
+     ],
+     "msg": "Input should be a valid dictionary",
+     "input": null,
+     "ctx": {},
+     "span": [
+      11,
+      3,
+      9,
+      true
+     ],
+     "yaml_line": 10
+    },
+    {
+     "type": "string_type",
+     "field_path": [
+      "references",
+      "internal",
+      "a"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      12,
+      17,
+      18,
+      true
+     ],
+     "yaml_line": 11
+    },
+    {
+     "type": "list_type",
+     "field_path": [
+      "references",
+      "reports"
+     ],
+     "msg": "Input should be a valid list",
+     "input": "a",
+     "ctx": {},
+     "span": [
+      13,
+      12,
+      13,
+      true
+     ],
+     "yaml_line": 12
+    }
+   ]
+  },
+  {
+   "id": "rule-references-public-value",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nreferences:\n  public:\n    1: [a]\n",
+   "errors": [
+    {
+     "type": "string_type",
+     "field_path": [
+      "references",
+      "public",
+      "1"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      11,
+      3,
+      9,
+      false
+     ],
+     "yaml_line": null
+    }
+   ]
+  },
+  {
+   "id": "rule-references-public-word-key",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nreferences:\n  public:\n    abc: https://example.org\n",
+   "crash": "ValueError"
+  },
+  {
+   "id": "rule-reviewed-year-zero",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: '0000-01-01'\ndescription: d\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "metadata",
+      "reviewed"
+     ],
+     "msg": "Value error, year must be in 1..9999, not 0",
+     "input": "0000-01-01",
+     "ctx": {
+      "error": "year must be in 1..9999, not 0"
+     },
+     "span": [
+      9,
+      14,
+      24,
+      true
+     ],
+     "yaml_line": 8
+    }
+   ]
+  },
+  {
+   "id": "rule-reviewed-year-zero-datetime",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: '0000-01-01T00:00:00Z'\ndescription: d\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "metadata",
+      "reviewed"
+     ],
+     "msg": "Value error, year must be in 1..9999, not 0",
+     "input": "0000-01-01T00:00:00Z",
+     "ctx": {
+      "error": "year must be in 1..9999, not 0"
+     },
+     "span": [
+      9,
+      14,
+      34,
+      true
+     ],
+     "yaml_line": 8
+    }
+   ]
+  },
+  {
+   "id": "rule-reviewed-offset-before-year-one",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: '0001-01-01T00:00:00+23:59'\ndescription: d\n",
+   "crash": "OverflowError"
+  },
+  {
+   "id": "rule-reviewed-offset-after-year-9999",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: '9999-12-31T23:59:59-23:59'\ndescription: d\n",
+   "crash": "OverflowError"
+  },
+  {
+   "id": "rule-reviewed-first-instant",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: '0001-01-01T00:00:00Z'\ndescription: d\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear",
+     "reviewed": "0001-01-01T00:00:00Z"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {}
+   }
+  },
+  {
+   "id": "rule-reviewed-last-instant-with-offset",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: '9999-12-31T23:59:59+00:00'\ndescription: d\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear",
+     "reviewed": "9999-12-31T23:59:59+00:00"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {}
+   }
+  },
+  {
+   "id": "rule-reviewed-arabic-indic-digits",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: '٢٠٢٦-٠٩-٠١'\ndescription: d\n",
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "metadata",
+      "reviewed"
+     ],
+     "msg": "Value error, Invalid isoformat string: '٢٠٢٦-٠٩-٠١'",
+     "input": "٢٠٢٦-٠٩-٠١",
+     "ctx": {
+      "error": "Invalid isoformat string: '٢٠٢٦-٠٩-٠١'"
+     },
+     "span": [
+      9,
+      14,
+      24,
+      true
+     ],
+     "yaml_line": 8
+    }
+   ]
+  },
+  {
+   "id": "rule-reviewed-control-padding",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: \"\\x1c2026-09-01\"\ndescription: d\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear",
+     "reviewed": "2026-09-01"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {}
+   }
+  },
+  {
+   "id": "rule-reviewed-control-padding-after",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: \"2026-09-01\\x1f\"\ndescription: d\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear",
+     "reviewed": "2026-09-01"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {}
+   }
+  },
+  {
+   "id": "rule-references-public-padded-key",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nreferences:\n  public:\n    ' 12 ': https://example.org\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "references": {
+     "public": {
+      "12": "https://example.org"
+     }
+    }
+   }
+  },
+  {
+   "id": "rule-references-public-underscore-key",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nreferences:\n  public:\n    '1_000': https://example.org\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "references": {
+     "public": {
+      "1000": "https://example.org"
+     }
+    }
+   }
+  },
+  {
+   "id": "rule-references-public-arabic-indic-key",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nreferences:\n  public:\n    '١٢': https://example.org\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "references": {
+     "public": {
+      "12": "https://example.org"
+     }
+    }
+   }
+  },
+  {
+   "id": "rule-references-public-float-key",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nreferences:\n  public:\n    1.5: https://example.org\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "references": {
+     "public": {
+      "1": "https://example.org"
+     }
+    }
+   }
+  },
+  {
+   "id": "rule-references-public-bool-key",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nreferences:\n  public:\n    true: https://example.org\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "references": {
+     "public": {
+      "1": "https://example.org"
+     }
+    }
+   }
+  },
+  {
+   "id": "rule-references-public-wide-integer-key",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nreferences:\n  public:\n    9223372036854775808: https://example.org\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "references": {
+     "public": {
+      "9223372036854775808": "https://example.org"
+     }
+    }
+   }
+  },
+  {
+   "id": "rule-references-public-wide-string-key",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nreferences:\n  public:\n    '9223372036854775808': https://example.org\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "references": {
+     "public": {
+      "9223372036854775808": "https://example.org"
+     }
+    }
+   }
+  },
+  {
+   "id": "rule-references-public-null",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nreferences:\n  public: null\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {},
+    "references": {}
+   }
+  },
+  {
+   "id": "rule-file-is-loader-only",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nfile: rules/x.yaml\n",
+   "value": {
+    "name": "Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000001",
+     "schema": "rule::1.1",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "d",
+    "techniques": [],
+    "platforms": {}
+   }
+  },
+  {
+   "id": "rule-detection-model-number",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\ndetection_model: 12\n",
+   "errors": [
+    {
+     "type": "string_type",
+     "field_path": [
+      "detection_model"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      10,
+      18,
+      20,
+      true
+     ],
+     "yaml_line": 9
+    }
+   ]
+  },
+  {
+   "id": "threat-minimal",
+   "family": "threat",
+   "yaml": "name: Threat\ncriticality: High\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000002\n  schema: threat::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\nthreat:\n  description: d\n  severity: High\n  impact: [Data Breach]\n  leverage: [High]\n  viability: High\n  terrain: Endpoints.\n  surface: [OS::Windows::Desktop]\n  mitre_attack: [T1059]\n",
+   "value": {
+    "name": "Threat",
+    "criticality": "High",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000002",
+     "schema": "threat::1.0",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "threat": {
+     "description": "d",
+     "severity": "High",
+     "impact": [
+      "Data Breach"
+     ],
+     "leverage": [
+      "High"
+     ],
+     "viability": "High",
+     "terrain": "Endpoints.",
+     "surface": [
+      "OS::Windows::Desktop"
+     ],
+     "mitre_attack": [
+      "T1059"
+     ]
+    }
+   }
+  },
+  {
+   "id": "threat-everything",
+   "family": "threat",
+   "yaml": "name: Threat\ncriticality: High\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000002\n  schema: threat::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\nthreat:\n  description: d\n  severity: High\n  impact: [Data Breach]\n  leverage: [High]\n  viability: High\n  terrain: Endpoints.\n  surface: [OS::Windows::Desktop]\n  mitre_attack: [T1059]\n  actors:\n    - name: att&ck::G0006\n      sighting: Simulated credential access.\n      references: [https://attack.mitre.org/groups/G0006]\n  killchain: Exploitation\n  chaining:\n    - relation: preceded_by\n      vector: 00000000-0000-4000-8000-000000000004\n  cve: [CVE-2024-3094, GHSA-rxwq-x6h5-x525]\nreferences:\n  public:\n    1: https://example.org\n",
+   "value": {
+    "name": "Threat",
+    "criticality": "High",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000002",
+     "schema": "threat::1.0",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "threat": {
+     "description": "d",
+     "severity": "High",
+     "impact": [
+      "Data Breach"
+     ],
+     "leverage": [
+      "High"
+     ],
+     "viability": "High",
+     "terrain": "Endpoints.",
+     "surface": [
+      "OS::Windows::Desktop"
+     ],
+     "mitre_attack": [
+      "T1059"
+     ],
+     "actors": [
+      {
+       "name": "att&ck::G0006",
+       "sighting": "Simulated credential access.",
+       "references": [
+        "https://attack.mitre.org/groups/G0006"
+       ]
+      }
+     ],
+     "killchain": "Exploitation",
+     "chaining": [
+      {
+       "relation": "preceded_by",
+       "vector": "00000000-0000-4000-8000-000000000004"
+      }
+     ],
+     "cve": [
+      "CVE-2024-3094",
+      "GHSA-rxwq-x6h5-x525"
+     ]
+    },
+    "references": {
+     "public": {
+      "1": "https://example.org"
+     }
+    }
+   }
+  },
+  {
+   "id": "threat-impact-string",
+   "family": "threat",
+   "yaml": "name: Threat\ncriticality: High\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000002\n  schema: threat::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\nthreat:\n  description: d\n  severity: High\n  impact: Data Breach\n  leverage: [High]\n  viability: High\n  terrain: Endpoints.\n  surface: [OS::Windows::Desktop]\n  mitre_attack: [T1059]\n",
+   "errors": [
+    {
+     "type": "vocab_list_type",
+     "field_path": [
+      "threat",
+      "impact"
+     ],
+     "msg": "must be a YAML list of impact vocabulary names, not a single string",
+     "input": "Data Breach",
+     "ctx": {
+      "field": "impact",
+      "value": "Data Breach"
+     },
+     "span": [
+      13,
+      11,
+      22,
+      true
+     ],
+     "yaml_line": 12
+    }
+   ]
+  },
+  {
+   "id": "threat-leverage-packed-string",
+   "family": "threat",
+   "yaml": "name: Threat\ncriticality: High\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000002\n  schema: threat::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\nthreat:\n  description: d\n  severity: High\n  impact: [Data Breach]\n  leverage: 'High; Low'\n  viability: High\n  terrain: Endpoints.\n  surface: [OS::Windows::Desktop]\n  mitre_attack: [T1059]\n",
+   "errors": [
+    {
+     "type": "vocab_list_type",
+     "field_path": [
+      "threat",
+      "leverage"
+     ],
+     "msg": "must be a YAML list of leverage vocabulary names, not a single string; list each name in 'High; Low' as its own item",
+     "input": "High; Low",
+     "ctx": {
+      "field": "leverage",
+      "value": "High; Low"
+     },
+     "span": [
+      14,
+      14,
+      23,
+      true
+     ],
+     "yaml_line": 13
+    }
+   ]
+  },
+  {
+   "id": "threat-impact-packed-item",
+   "family": "threat",
+   "yaml": "name: Threat\ncriticality: High\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000002\n  schema: threat::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\nthreat:\n  description: d\n  severity: High\n  impact: [Data Breach, 'Identity Theft; Fraud']\n  leverage: [High]\n  viability: High\n  terrain: Endpoints.\n  surface: [OS::Windows::Desktop]\n  mitre_attack: [T1059]\n",
+   "errors": [
+    {
+     "type": "vocab_packed_names",
+     "field_path": [
+      "threat",
+      "impact",
+      "1"
+     ],
+     "msg": "'Identity Theft; Fraud' packs several vocabulary names into one string; list each name as its own item",
+     "input": "Identity Theft; Fraud",
+     "ctx": {
+      "value": "Identity Theft; Fraud"
+     },
+     "span": [
+      13,
+      26,
+      47,
+      true
+     ],
+     "yaml_line": 12
+    }
+   ]
+  },
+  {
+   "id": "threat-impact-empty",
+   "family": "threat",
+   "yaml": "name: Threat\ncriticality: High\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000002\n  schema: threat::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\nthreat:\n  description: d\n  severity: High\n  impact: []\n  leverage: []\n  viability: High\n  terrain: Endpoints.\n  surface: [OS::Windows::Desktop]\n  mitre_attack: [T1059]\n",
+   "errors": [
+    {
+     "type": "too_short",
+     "field_path": [
+      "threat",
+      "impact"
+     ],
+     "msg": "List should have at least 1 item after validation, not 0",
+     "input": null,
+     "ctx": {
+      "field_type": "List",
+      "min_length": "1",
+      "actual_length": "0"
+     },
+     "span": [
+      13,
+      3,
+      9,
+      true
+     ],
+     "yaml_line": 12
+    },
+    {
+     "type": "too_short",
+     "field_path": [
+      "threat",
+      "leverage"
+     ],
+     "msg": "List should have at least 1 item after validation, not 0",
+     "input": null,
+     "ctx": {
+      "field_type": "List",
+      "min_length": "1",
+      "actual_length": "0"
+     },
+     "span": [
+      14,
+      3,
+      11,
+      true
+     ],
+     "yaml_line": 13
+    }
+   ]
+  },
+  {
+   "id": "threat-impact-number-item",
+   "family": "threat",
+   "yaml": "name: Threat\ncriticality: High\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000002\n  schema: threat::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\nthreat:\n  description: d\n  severity: High\n  impact: [1, 'a;b']\n  leverage: [High]\n  viability: High\n  terrain: Endpoints.\n  surface: [OS::Windows::Desktop]\n  mitre_attack: [T1059]\n",
+   "errors": [
+    {
+     "type": "string_type",
+     "field_path": [
+      "threat",
+      "impact",
+      "0"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      13,
+      12,
+      13,
+      true
+     ],
+     "yaml_line": 12
+    },
+    {
+     "type": "vocab_packed_names",
+     "field_path": [
+      "threat",
+      "impact",
+      "1"
+     ],
+     "msg": "'a;b' packs several vocabulary names into one string; list each name as its own item",
+     "input": "a;b",
+     "ctx": {
+      "value": "a;b"
+     },
+     "span": [
+      13,
+      16,
+      19,
+      true
+     ],
+     "yaml_line": 12
+    }
+   ]
+  },
+  {
+   "id": "threat-impact-null",
+   "family": "threat",
+   "yaml": "name: Threat\ncriticality: High\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000002\n  schema: threat::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\nthreat:\n  description: d\n  severity: High\n  impact: null\n  leverage: [High]\n  viability: High\n  terrain: Endpoints.\n  surface: [OS::Windows::Desktop]\n  mitre_attack: [T1059]\n",
+   "errors": [
+    {
+     "type": "list_type",
+     "field_path": [
+      "threat",
+      "impact"
+     ],
+     "msg": "Input should be a valid list",
+     "input": null,
+     "ctx": {},
+     "span": [
+      13,
+      11,
+      15,
+      true
+     ],
+     "yaml_line": null
+    }
+   ]
+  },
+  {
+   "id": "threat-impact-mapping",
+   "family": "threat",
+   "yaml": "name: Threat\ncriticality: High\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000002\n  schema: threat::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\nthreat:\n  description: d\n  severity: High\n  impact: {a: b}\n  leverage: [High]\n  viability: High\n  terrain: Endpoints.\n  surface: [OS::Windows::Desktop]\n  mitre_attack: [T1059]\n",
+   "errors": [
+    {
+     "type": "list_type",
+     "field_path": [
+      "threat",
+      "impact"
+     ],
+     "msg": "Input should be a valid list",
+     "input": null,
+     "ctx": {},
+     "span": [
+      13,
+      3,
+      9,
+      true
+     ],
+     "yaml_line": 12
+    }
+   ]
+  },
+  {
+   "id": "threat-actors-strings",
+   "family": "threat",
+   "yaml": "name: Threat\ncriticality: High\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000002\n  schema: threat::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\nthreat:\n  description: d\n  severity: High\n  impact: [Data Breach]\n  leverage: [High]\n  viability: High\n  terrain: Endpoints.\n  surface: [OS::Windows::Desktop]\n  mitre_attack: [T1059]\n  actors: [G0006, G0007]\n",
+   "errors": [
+    {
+     "type": "model_type",
+     "field_path": [
+      "threat",
+      "actors",
+      "0"
+     ],
+     "msg": "Input should be a valid dictionary or instance of ThreatActor",
+     "input": "G0006",
+     "ctx": {
+      "class_name": "ThreatActor"
+     },
+     "span": [
+      19,
+      12,
+      17,
+      true
+     ],
+     "yaml_line": 18
+    },
+    {
+     "type": "model_type",
+     "field_path": [
+      "threat",
+      "actors",
+      "1"
+     ],
+     "msg": "Input should be a valid dictionary or instance of ThreatActor",
+     "input": "G0007",
+     "ctx": {
+      "class_name": "ThreatActor"
+     },
+     "span": [
+      19,
+      19,
+      24,
+      true
+     ],
+     "yaml_line": 18
+    }
+   ]
+  },
+  {
+   "id": "threat-actor-unknown-key",
+   "family": "threat",
+   "yaml": "name: Threat\ncriticality: High\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000002\n  schema: threat::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\nthreat:\n  description: d\n  severity: High\n  impact: [Data Breach]\n  leverage: [High]\n  viability: High\n  terrain: Endpoints.\n  surface: [OS::Windows::Desktop]\n  mitre_attack: [T1059]\n  actors:\n    - name: att&ck::G0006\n      alias: x\n",
+   "errors": [
+    {
+     "type": "extra_forbidden",
+     "field_path": [
+      "threat",
+      "actors",
+      "0",
+      "alias"
+     ],
+     "msg": "Extra inputs are not permitted",
+     "input": "x",
+     "ctx": {},
+     "span": [
+      21,
+      7,
+      12,
+      true
+     ],
+     "yaml_line": 20
+    }
+   ]
+  },
+  {
+   "id": "threat-killchain-list",
+   "family": "threat",
+   "yaml": "name: Threat\ncriticality: High\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000002\n  schema: threat::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\nthreat:\n  description: d\n  severity: High\n  impact: [Data Breach]\n  leverage: [High]\n  viability: High\n  terrain: Endpoints.\n  surface: [OS::Windows::Desktop]\n  mitre_attack: [T1059]\n  killchain: [Delivery, Exploitation]\n",
+   "value": {
+    "name": "Threat",
+    "criticality": "High",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000002",
+     "schema": "threat::1.0",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "threat": {
+     "description": "d",
+     "severity": "High",
+     "impact": [
+      "Data Breach"
+     ],
+     "leverage": [
+      "High"
+     ],
+     "viability": "High",
+     "terrain": "Endpoints.",
+     "surface": [
+      "OS::Windows::Desktop"
+     ],
+     "mitre_attack": [
+      "T1059"
+     ],
+     "killchain": [
+      "Delivery",
+      "Exploitation"
+     ]
+    }
+   }
+  },
+  {
+   "id": "threat-killchain-number",
+   "family": "threat",
+   "yaml": "name: Threat\ncriticality: High\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000002\n  schema: threat::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\nthreat:\n  description: d\n  severity: High\n  impact: [Data Breach]\n  leverage: [High]\n  viability: High\n  terrain: Endpoints.\n  surface: [OS::Windows::Desktop]\n  mitre_attack: [T1059]\n  killchain: 3\n",
+   "errors": [
+    {
+     "type": "string_type",
+     "field_path": [
+      "threat",
+      "killchain",
+      "str"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      19,
+      3,
+      12,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "list_type",
+     "field_path": [
+      "threat",
+      "killchain",
+      "list[str]"
+     ],
+     "msg": "Input should be a valid list",
+     "input": null,
+     "ctx": {},
+     "span": [
+      19,
+      3,
+      12,
+      false
+     ],
+     "yaml_line": null
+    }
+   ]
+  },
+  {
+   "id": "threat-killchain-mixed-list",
+   "family": "threat",
+   "yaml": "name: Threat\ncriticality: High\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000002\n  schema: threat::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\nthreat:\n  description: d\n  severity: High\n  impact: [Data Breach]\n  leverage: [High]\n  viability: High\n  terrain: Endpoints.\n  surface: [OS::Windows::Desktop]\n  mitre_attack: [T1059]\n  killchain: [Delivery, 3]\n",
+   "errors": [
+    {
+     "type": "string_type",
+     "field_path": [
+      "threat",
+      "killchain",
+      "str"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      19,
+      3,
+      12,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "string_type",
+     "field_path": [
+      "threat",
+      "killchain",
+      "list[str]",
+      "1"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      19,
+      3,
+      12,
+      false
+     ],
+     "yaml_line": null
+    }
+   ]
+  },
+  {
+   "id": "threat-chaining-errors",
+   "family": "threat",
+   "yaml": "name: Threat\ncriticality: High\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000002\n  schema: threat::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\nthreat:\n  description: d\n  severity: High\n  impact: [Data Breach]\n  leverage: [High]\n  viability: High\n  terrain: Endpoints.\n  surface: [OS::Windows::Desktop]\n  mitre_attack: [T1059]\n  chaining:\n    - relation: 1\n    - x\n",
+   "errors": [
+    {
+     "type": "string_type",
+     "field_path": [
+      "threat",
+      "chaining",
+      "0",
+      "relation"
+     ],
+     "msg": "Input should be a valid string",
+     "input": null,
+     "ctx": {},
+     "span": [
+      20,
+      17,
+      18,
+      true
+     ],
+     "yaml_line": 19
+    },
+    {
+     "type": "dict_type",
+     "field_path": [
+      "threat",
+      "chaining",
+      "1"
+     ],
+     "msg": "Input should be a valid dictionary",
+     "input": "x",
+     "ctx": {},
+     "span": [
+      21,
+      7,
+      8,
+      true
+     ],
+     "yaml_line": 20
+    }
+   ]
+  },
+  {
+   "id": "threat-missing-body-fields",
+   "family": "threat",
+   "yaml": "name: Threat\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000002\n  schema: threat::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\nthreat:\n  description: d\n  impact: [Data Breach]\n  leverage: [High]\n  viability: High\n  surface: [OS::Windows::Desktop]\n  mitre_attack: [T1059]\n",
+   "errors": [
+    {
+     "type": "missing",
+     "field_path": [
+      "criticality"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      1,
+      1,
+      5,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "missing",
+     "field_path": [
+      "threat",
+      "severity"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      9,
+      1,
+      7,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "missing",
+     "field_path": [
+      "threat",
+      "terrain"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      9,
+      1,
+      7,
+      false
+     ],
+     "yaml_line": null
+    }
+   ]
+  },
+  {
+   "id": "threat-body-not-a-mapping",
+   "family": "threat",
+   "yaml": "name: Threat\ncriticality: High\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000002\n  schema: threat::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\nthreat: text\n",
+   "errors": [
+    {
+     "type": "model_type",
+     "field_path": [
+      "threat"
+     ],
+     "msg": "Input should be a valid dictionary or instance of ThreatBody",
+     "input": "text",
+     "ctx": {
+      "class_name": "ThreatBody"
+     },
+     "span": [
+      10,
+      9,
+      13,
+      true
+     ],
+     "yaml_line": 9
+    }
+   ]
+  },
+  {
+   "id": "objective-minimal",
+   "family": "objective",
+   "yaml": "name: Objective\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000003\n  schema: objective::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\nobjective:\n  priority: High\n  type: Threat\n  description: obj\n  composition:\n    strategy: synergetic\n    description: compose\n  signals:\n    - name: Signal\n      uuid: 00000000-0000-4000-8000-000000000099\n      description: sig\n      severity: Medium\n      methodology: analytics\n      entities: [Host::Process]\n      data:\n        availability: Complete\n        requirements: logs\n",
+   "value": {
+    "name": "Objective",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000003",
+     "schema": "objective::1.0",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "objective": {
+     "priority": "High",
+     "type": "Threat",
+     "description": "obj",
+     "signals": [
+      {
+       "name": "Signal",
+       "uuid": "00000000-0000-4000-8000-000000000099",
+       "description": "sig",
+       "severity": "Medium",
+       "data": {
+        "availability": "Complete",
+        "requirements": "logs"
+       },
+       "methodology": "analytics",
+       "entities": [
+        "Host::Process"
+       ]
+      }
+     ],
+     "composition": {
+      "strategy": "synergetic",
+      "description": "compose"
+     }
+    }
+   }
+  },
+  {
+   "id": "objective-everything",
+   "family": "objective",
+   "yaml": "name: Objective\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000003\n  schema: objective::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\nobjective:\n  priority: High\n  type: Threat\n  description: obj\n  composition:\n    strategy: synergetic\n    description: compose\n  signals:\n    - name: Signal\n      uuid: 00000000-0000-4000-8000-000000000099\n      description: sig\n      severity: Medium\n      methodology: analytics\n      entities: [Host::Process]\n      data:\n        availability: Complete\n        requirements: logs\n        logsources: [Windows Security]\n      effort: 3\n      detectors:\n        - name: EDR\n          technology: edr\n          description: d\n          link: https://example.org\n      examples:\n        - description: e\n          link: https://example.org\n          language: kql\n          query: SecurityEvent\n      parent: 00000000-0000-4000-8000-000000000098\n  investment: Medium\n  threats: [00000000-0000-4000-8000-000000000002]\n  mitre_attack: [T1059]\nreferences:\n  reports: [https://example.org]\n",
+   "value": {
+    "name": "Objective",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8000-000000000003",
+     "schema": "objective::1.0",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "objective": {
+     "priority": "High",
+     "type": "Threat",
+     "description": "obj",
+     "signals": [
+      {
+       "name": "Signal",
+       "uuid": "00000000-0000-4000-8000-000000000099",
+       "description": "sig",
+       "severity": "Medium",
+       "data": {
+        "availability": "Complete",
+        "requirements": "logs",
+        "logsources": [
+         "Windows Security"
+        ]
+       },
+       "methodology": "analytics",
+       "entities": [
+        "Host::Process"
+       ],
+       "effort": 3,
+       "detectors": [
+        {
+         "name": "EDR",
+         "technology": "edr",
+         "description": "d",
+         "link": "https://example.org"
+        }
+       ],
+       "examples": [
+        {
+         "description": "e",
+         "link": "https://example.org",
+         "language": "kql",
+         "query": "SecurityEvent"
+        }
+       ],
+       "parent": "00000000-0000-4000-8000-000000000098"
+      }
+     ],
+     "composition": {
+      "strategy": "synergetic",
+      "description": "compose"
+     },
+     "investment": "Medium",
+     "threats": [
+      "00000000-0000-4000-8000-000000000002"
+     ],
+     "mitre_attack": [
+      "T1059"
+     ]
+    },
+    "references": {
+     "reports": [
+      "https://example.org"
+     ]
+    }
+   }
+  },
+  {
+   "id": "objective-effort-quoted",
+   "family": "objective",
+   "yaml": "name: Objective\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000003\n  schema: objective::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\nobjective:\n  priority: High\n  type: Threat\n  description: obj\n  composition:\n    strategy: synergetic\n    description: compose\n  signals:\n    - name: Signal\n      uuid: 00000000-0000-4000-8000-000000000099\n      description: sig\n      severity: Medium\n      methodology: analytics\n      entities: [Host::Process]\n      data:\n        availability: Complete\n        requirements: logs\n      effort: '3'\n",
+   "errors": [
+    {
+     "type": "int_type",
+     "field_path": [
+      "objective",
+      "signals",
+      "0",
+      "effort"
+     ],
+     "msg": "Input should be a valid integer",
+     "input": "3",
+     "ctx": {},
+     "span": [
+      26,
+      16,
+      17,
+      true
+     ],
+     "yaml_line": 25
+    }
+   ]
+  },
+  {
+   "id": "objective-effort-boolean",
+   "family": "objective",
+   "yaml": "name: Objective\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000003\n  schema: objective::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\nobjective:\n  priority: High\n  type: Threat\n  description: obj\n  composition:\n    strategy: synergetic\n    description: compose\n  signals:\n    - name: Signal\n      uuid: 00000000-0000-4000-8000-000000000099\n      description: sig\n      severity: Medium\n      methodology: analytics\n      entities: [Host::Process]\n      data:\n        availability: Complete\n        requirements: logs\n      effort: true\n",
+   "errors": [
+    {
+     "type": "int_type",
+     "field_path": [
+      "objective",
+      "signals",
+      "0",
+      "effort"
+     ],
+     "msg": "Input should be a valid integer",
+     "input": null,
+     "ctx": {},
+     "span": [
+      26,
+      15,
+      19,
+      true
+     ],
+     "yaml_line": 25
+    }
+   ]
+  },
+  {
+   "id": "objective-effort-float",
+   "family": "objective",
+   "yaml": "name: Objective\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000003\n  schema: objective::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\nobjective:\n  priority: High\n  type: Threat\n  description: obj\n  composition:\n    strategy: synergetic\n    description: compose\n  signals:\n    - name: Signal\n      uuid: 00000000-0000-4000-8000-000000000099\n      description: sig\n      severity: Medium\n      methodology: analytics\n      entities: [Host::Process]\n      data:\n        availability: Complete\n        requirements: logs\n      effort: 3.0\n",
+   "errors": [
+    {
+     "type": "int_type",
+     "field_path": [
+      "objective",
+      "signals",
+      "0",
+      "effort"
+     ],
+     "msg": "Input should be a valid integer",
+     "input": null,
+     "ctx": {},
+     "span": [
+      26,
+      15,
+      18,
+      true
+     ],
+     "yaml_line": 25
+    }
+   ]
+  },
+  {
+   "id": "objective-root-composition",
+   "family": "objective",
+   "yaml": "name: Objective\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000003\n  schema: objective::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\nobjective:\n  priority: High\n  type: Threat\n  description: obj\n  composition:\n    strategy: synergetic\n    description: compose\n  signals:\n    - name: Signal\n      uuid: 00000000-0000-4000-8000-000000000099\n      description: sig\n      severity: Medium\n      methodology: analytics\n      entities: [Host::Process]\n      data:\n        availability: Complete\n        requirements: logs\ncomposition:\n  strategy: synergetic\n  description: compose\n",
+   "errors": [
+    {
+     "type": "extra_forbidden",
+     "field_path": [
+      "composition"
+     ],
+     "msg": "Extra inputs are not permitted",
+     "input": null,
+     "ctx": {},
+     "span": [
+      26,
+      1,
+      12,
+      true
+     ],
+     "yaml_line": 26
+    }
+   ]
+  },
+  {
+   "id": "objective-signal-errors",
+   "family": "objective",
+   "yaml": "name: Objective\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000003\n  schema: objective::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\nobjective:\n  priority: High\n  type: Threat\n  description: obj\n  composition:\n    strategy: synergetic\n    description: compose\n  signals:\n    - name: Signal\n      uuid: 00000000-0000-4000-8000-000000000099\n      description: sig\n      severity: Medium\n      methodology: analytics\n      data:\n        availability: Complete\n        requirements: logs\n      detectors:\n        - name: EDR\n      examples:\n        - description: e\n      entities: Host::Process\n",
+   "errors": [
+    {
+     "type": "list_type",
+     "field_path": [
+      "objective",
+      "signals",
+      "0",
+      "entities"
+     ],
+     "msg": "Input should be a valid list",
+     "input": "Host::Process",
+     "ctx": {},
+     "span": [
+      29,
+      17,
+      30,
+      true
+     ],
+     "yaml_line": 28
+    },
+    {
+     "type": "missing",
+     "field_path": [
+      "objective",
+      "signals",
+      "0",
+      "detectors",
+      "0",
+      "technology"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      26,
+      11,
+      12,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "missing",
+     "field_path": [
+      "objective",
+      "signals",
+      "0",
+      "detectors",
+      "0",
+      "description"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      26,
+      11,
+      12,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "missing",
+     "field_path": [
+      "objective",
+      "signals",
+      "0",
+      "examples",
+      "0",
+      "link"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      28,
+      11,
+      12,
+      false
+     ],
+     "yaml_line": null
+    }
+   ]
+  },
+  {
+   "id": "objective-signals-missing",
+   "family": "objective",
+   "yaml": "name: Objective\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000003\n  schema: objective::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\nobjective:\n  priority: High\n  type: Threat\n  description: obj\n  composition:\n    strategy: synergetic\n    description: compose\n",
+   "errors": [
+    {
+     "type": "missing",
+     "field_path": [
+      "objective",
+      "signals"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      9,
+      1,
+      10,
+      false
+     ],
+     "yaml_line": null
+    }
+   ]
+  },
+  {
+   "id": "objective-mitre-attack-string",
+   "family": "objective",
+   "yaml": "name: Objective\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000003\n  schema: objective::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\nobjective:\n  priority: High\n  type: Threat\n  description: obj\n  composition:\n    strategy: synergetic\n    description: compose\n  signals:\n    - name: Signal\n      uuid: 00000000-0000-4000-8000-000000000099\n      description: sig\n      severity: Medium\n      methodology: analytics\n      entities: [Host::Process]\n      data:\n        availability: Complete\n        requirements: logs\n  mitre_attack: T1059\n",
+   "errors": [
+    {
+     "type": "list_type",
+     "field_path": [
+      "objective",
+      "mitre_attack"
+     ],
+     "msg": "Input should be a valid list",
+     "input": "T1059",
+     "ctx": {},
+     "span": [
+      26,
+      17,
+      22,
+      true
+     ],
+     "yaml_line": 25
+    }
+   ]
+  },
+  {
+   "id": "file:tests/fixtures/tide_corpus/current/Objects/Detection Objectives/objective-0001-credential-access.yaml",
+   "family": "objective",
+   "yaml": "name: Credential Access Objective\n\nmetadata:\n  uuid: 00000000-0000-4000-8002-000000000001\n  schema: objective::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n\nobjective:\n  priority: High\n  type: Threat\n  description: Detect credential access techniques\n  composition:\n    strategy: Combined\n    description: Compose signals for credential access detection\n  threats:\n    - 00000000-0000-4000-8001-000000000001\n  signals:\n    - name: Suspicious logon signal\n      uuid: 00000000-0000-4000-8099-000000000001\n      description: Suspicious authentication activity\n      severity: Medium\n      methodology: Statistical\n      entities:\n        - Host::Hostname\n      data:\n        availability: Complete\n        requirements: Security event logs\n",
+   "value": {
+    "name": "Credential Access Objective",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8002-000000000001",
+     "schema": "objective::1.0",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "objective": {
+     "priority": "High",
+     "type": "Threat",
+     "description": "Detect credential access techniques",
+     "signals": [
+      {
+       "name": "Suspicious logon signal",
+       "uuid": "00000000-0000-4000-8099-000000000001",
+       "description": "Suspicious authentication activity",
+       "severity": "Medium",
+       "data": {
+        "availability": "Complete",
+        "requirements": "Security event logs"
+       },
+       "methodology": "Statistical",
+       "entities": [
+        "Host::Hostname"
+       ]
+      }
+     ],
+     "composition": {
+      "strategy": "Combined",
+      "description": "Compose signals for credential access detection"
+     },
+     "threats": [
+      "00000000-0000-4000-8001-000000000001"
+     ]
+    }
+   }
+  },
+  {
+   "id": "file:tests/fixtures/tide_corpus/current/Objects/Detection Rules/rule-0001-sentinel-kql.yaml",
+   "family": "rule",
+   "yaml": "name: Sentinel KQL Rule\n\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000001\n  schema: rule::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n\ndescription: |\n  Simulated Sentinel rule for CLI E2E corpus.\nstatus: STAGING\nseverity: High\ntechniques:\n  - T1059\ndetection_model: 00000000-0000-4000-8002-000000000001\n\nresponse:\n  alert_severity: High\n\nconfigurations:\n  sentinel:\n    enabled: true\n    name: Sentinel KQL Rule\n    status: STAGING\n    query: |\n      SecurityEvent\n      | where EventID == 4688\n      | take 1\n    scheduling:\n      frequency: PT1H\n      lookback: PT2H\n    alert:\n      title: Sentinel KQL Rule\n      suppression: false\n    grouping:\n      event: SingleAlert\n      alert:\n        enabled: false\n",
+   "value": {
+    "name": "Sentinel KQL Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8003-000000000001",
+     "schema": "rule::1.0",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "Simulated Sentinel rule for CLI E2E corpus.\n",
+    "status": "STAGING",
+    "severity": "High",
+    "techniques": [
+     "T1059"
+    ],
+    "platforms": {},
+    "detection_model": "00000000-0000-4000-8002-000000000001",
+    "response": {
+     "alert_severity": "High"
+    },
+    "configurations": {
+     "sentinel": {}
+    }
+   }
+  },
+  {
+   "id": "file:tests/fixtures/tide_corpus/current/Objects/Detection Rules/rule-0002-defender-kql.yaml",
+   "family": "rule",
+   "yaml": "name: Defender KQL Rule\n\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000002\n  schema: rule::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n\ndescription: |\n  Simulated Defender rule for CLI E2E corpus.\nstatus: STAGING\nseverity: High\ntechniques:\n  - T1059\ndetection_model: 00000000-0000-4000-8002-000000000001\n\nresponse:\n  alert_severity: High\n\nconfigurations:\n  defender_for_endpoint:\n    enabled: true\n    name: Defender KQL Rule\n    status: STAGING\n    query: |\n      DeviceProcessEvents\n      | take 1\n    scheduling: 1H\n    alert:\n      category: Execution\n    impacted_entities:\n      device: device_id\n    scope:\n      selection: All\n",
+   "value": {
+    "name": "Defender KQL Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8003-000000000002",
+     "schema": "rule::1.0",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "Simulated Defender rule for CLI E2E corpus.\n",
+    "status": "STAGING",
+    "severity": "High",
+    "techniques": [
+     "T1059"
+    ],
+    "platforms": {},
+    "detection_model": "00000000-0000-4000-8002-000000000001",
+    "response": {
+     "alert_severity": "High"
+    },
+    "configurations": {
+     "defender_for_endpoint": {}
+    }
+   }
+  },
+  {
+   "id": "file:tests/fixtures/tide_corpus/current/Objects/Detection Rules/rule-0003-splunk-spl.yaml",
+   "family": "rule",
+   "yaml": "name: Splunk SPL Rule\n\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000003\n  schema: rule::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n\ndescription: |\n  Simulated Splunk rule for CLI E2E corpus.\nstatus: STAGING\nseverity: High\ntechniques:\n  - T1059\ndetection_model: 00000000-0000-4000-8002-000000000001\n\nresponse:\n  alert_severity: High\n\nconfigurations:\n  splunk:\n    enabled: true\n    name: Splunk SPL Rule\n    status: STAGING\n    query: index=main | head 1\n    scheduling:\n      schedule:\n        cron: \"0 * * * *\"\n",
+   "value": {
+    "name": "Splunk SPL Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8003-000000000003",
+     "schema": "rule::1.0",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "Simulated Splunk rule for CLI E2E corpus.\n",
+    "status": "STAGING",
+    "severity": "High",
+    "techniques": [
+     "T1059"
+    ],
+    "platforms": {},
+    "detection_model": "00000000-0000-4000-8002-000000000001",
+    "response": {
+     "alert_severity": "High"
+    },
+    "configurations": {
+     "splunk": {}
+    }
+   }
+  },
+  {
+   "id": "file:tests/fixtures/tide_corpus/current/Objects/Detection Rules/rule-0004-sentinel-one-s1ql.yaml",
+   "family": "rule",
+   "yaml": "name: SentinelOne S1QL Rule\n\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000004\n  schema: rule::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n\ndescription: |\n  Simulated SentinelOne rule for CLI E2E corpus.\nstatus: STAGING\nseverity: High\ntechniques:\n  - T1059\ndetection_model: 00000000-0000-4000-8002-000000000001\n\nresponse:\n  alert_severity: High\n\nconfigurations:\n  sentinel_one:\n    enabled: true\n    name: SentinelOne S1QL Rule\n    status: STAGING\n    condition:\n      type: Correlation\n      correlation:\n        entity: host\n        match_in_order: true\n        time_window: 1h\n        sub_queries:\n          - query: EventType = \"Process Create\"\n            matches_required: 1\n    response:\n      treat_as_threat: Malicious\n      network_quarantine: false\n",
+   "value": {
+    "name": "SentinelOne S1QL Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8003-000000000004",
+     "schema": "rule::1.0",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "Simulated SentinelOne rule for CLI E2E corpus.\n",
+    "status": "STAGING",
+    "severity": "High",
+    "techniques": [
+     "T1059"
+    ],
+    "platforms": {},
+    "detection_model": "00000000-0000-4000-8002-000000000001",
+    "response": {
+     "alert_severity": "High"
+    },
+    "configurations": {
+     "sentinel_one": {}
+    }
+   }
+  },
+  {
+   "id": "file:tests/fixtures/tide_corpus/current/Objects/Detection Rules/rule-0005-carbon-black-lucene.yaml",
+   "family": "rule",
+   "yaml": "name: Carbon Black Lucene Rule\n\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000005\n  schema: rule::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n\ndescription: |\n  Simulated Carbon Black rule for CLI E2E corpus.\nstatus: STAGING\nseverity: High\ntechniques:\n  - T1059\ndetection_model: 00000000-0000-4000-8002-000000000001\n\nresponse:\n  alert_severity: High\n\nconfigurations:\n  carbon_black_cloud:\n    enabled: true\n    name: Carbon Black Lucene Rule\n    status: STAGING\n    query: process_name:cmd.exe\n",
+   "value": {
+    "name": "Carbon Black Lucene Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8003-000000000005",
+     "schema": "rule::1.0",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "Simulated Carbon Black rule for CLI E2E corpus.\n",
+    "status": "STAGING",
+    "severity": "High",
+    "techniques": [
+     "T1059"
+    ],
+    "platforms": {},
+    "detection_model": "00000000-0000-4000-8002-000000000001",
+    "response": {
+     "alert_severity": "High"
+    },
+    "configurations": {
+     "carbon_black_cloud": {}
+    }
+   }
+  },
+  {
+   "id": "file:tests/fixtures/tide_corpus/current/Objects/Detection Rules/rule-0006-crowdstrike-deploy-only.yaml",
+   "family": "rule",
+   "yaml": "name: CrowdStrike Deploy Rule\n\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000006\n  schema: rule::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n\ndescription: |\n  Simulated CrowdStrike rule for CLI E2E corpus (deploy-only).\nstatus: STAGING\nseverity: High\ntechniques:\n  - T1059\ndetection_model: 00000000-0000-4000-8002-000000000001\n\nresponse:\n  alert_severity: High\n\nconfigurations:\n  crowdstrike:\n    enabled: true\n    name: CrowdStrike Deploy Rule\n    status: STAGING\n    query: index=main\n    details:\n      trigger: event\n      outcome: detection\n    schedule:\n      frequency: 1h\n      lookback: 2h\n",
+   "value": {
+    "name": "CrowdStrike Deploy Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8003-000000000006",
+     "schema": "rule::1.0",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "Simulated CrowdStrike rule for CLI E2E corpus (deploy-only).\n",
+    "status": "STAGING",
+    "severity": "High",
+    "techniques": [
+     "T1059"
+    ],
+    "platforms": {},
+    "detection_model": "00000000-0000-4000-8002-000000000001",
+    "response": {
+     "alert_severity": "High"
+    },
+    "configurations": {
+     "crowdstrike": {}
+    }
+   }
+  },
+  {
+   "id": "file:tests/fixtures/tide_corpus/current/Objects/Detection Rules/rule-0007-harfanglab-deploy-only.yaml",
+   "family": "rule",
+   "yaml": "name: HarfangLab Deploy Rule\n\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000007\n  schema: rule::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n\ndescription: |\n  Simulated HarfangLab rule for CLI E2E corpus (deploy-only).\nstatus: STAGING\nseverity: High\ntechniques:\n  - T1059\ndetection_model: 00000000-0000-4000-8002-000000000001\n\nresponse:\n  alert_severity: High\n\nconfigurations:\n  harfanglab:\n    enabled: true\n    name: HarfangLab Deploy Rule\n    status: STAGING\n    action: Alert\n    sigma:\n      logsource:\n        category: process_creation\n        product: windows\n      selections:\n        - name: selection\n          field: Image\n          value: cmd.exe\n      condition: selection\n",
+   "value": {
+    "name": "HarfangLab Deploy Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8003-000000000007",
+     "schema": "rule::1.0",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "Simulated HarfangLab rule for CLI E2E corpus (deploy-only).\n",
+    "status": "STAGING",
+    "severity": "High",
+    "techniques": [
+     "T1059"
+    ],
+    "platforms": {},
+    "detection_model": "00000000-0000-4000-8002-000000000001",
+    "response": {
+     "alert_severity": "High"
+    },
+    "configurations": {
+     "harfanglab": {}
+    }
+   }
+  },
+  {
+   "id": "file:tests/fixtures/tide_corpus/current/Objects/Detection Rules/rule-0008-staging-promote.yaml",
+   "family": "rule",
+   "yaml": "name: Staging Promote Rule\n\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000008\n  schema: rule::1.0\n  version: 2\n  created: 2026-01-01\n  modified: 2026-01-03\n  tlp: clear\n\ndescription: |\n  Rule with higher metadata.version for mutate/promote E2E tests.\nstatus: STAGING\nseverity: High\ntechniques:\n  - T1059\ndetection_model: 00000000-0000-4000-8002-000000000001\n\nresponse:\n  alert_severity: Medium\n\nconfigurations:\n  sentinel:\n    enabled: true\n    name: Staging Promote Rule\n    status: STAGING\n    query: |\n      SecurityEvent | take 1\n    scheduling:\n      frequency: PT1H\n      lookback: PT2H\n    alert:\n      title: Staging Promote Rule\n      suppression: false\n    grouping:\n      event: SingleAlert\n      alert:\n        enabled: false\n",
+   "value": {
+    "name": "Staging Promote Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8003-000000000008",
+     "schema": "rule::1.0",
+     "version": 2,
+     "created": "2026-01-01",
+     "modified": "2026-01-03",
+     "tlp": "clear"
+    },
+    "description": "Rule with higher metadata.version for mutate/promote E2E tests.\n",
+    "status": "STAGING",
+    "severity": "High",
+    "techniques": [
+     "T1059"
+    ],
+    "platforms": {},
+    "detection_model": "00000000-0000-4000-8002-000000000001",
+    "response": {
+     "alert_severity": "Medium"
+    },
+    "configurations": {
+     "sentinel": {}
+    }
+   }
+  },
+  {
+   "id": "file:tests/fixtures/tide_corpus/current/Objects/Detection Rules/rule-0009-elastic-kql.yaml",
+   "family": "rule",
+   "yaml": "name: Elastic KQL Rule\n\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000009\n  schema: rule::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n\ndescription: |\n  Simulated Elastic rule for CLI E2E corpus.\nstatus: STAGING\nseverity: High\ntechniques:\n  - T1059\ndetection_model: 00000000-0000-4000-8002-000000000001\n\nresponse:\n  alert_severity: High\n\nconfigurations:\n  elastic:\n    enabled: true\n    schema: platform::elastic::1.0\n    status: STAGING\n    type: query\n    language: kuery\n    query: |\n      process.name: \"powershell.exe\"\n    index:\n      - logs-*\n    scheduling:\n      interval: 5m\n      lookback: 1m\n",
+   "value": {
+    "name": "Elastic KQL Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8003-000000000009",
+     "schema": "rule::1.0",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "Simulated Elastic rule for CLI E2E corpus.\n",
+    "status": "STAGING",
+    "severity": "High",
+    "techniques": [
+     "T1059"
+    ],
+    "platforms": {},
+    "detection_model": "00000000-0000-4000-8002-000000000001",
+    "response": {
+     "alert_severity": "High"
+    },
+    "configurations": {
+     "elastic": {}
+    }
+   }
+  },
+  {
+   "id": "file:tests/fixtures/tide_corpus/current/Objects/Detection Rules/rule-0013-sysdig-falco.yaml",
+   "family": "rule",
+   "yaml": "name: Sysdig Falco Rule\n\nmetadata:\n  uuid: 00000000-0000-4000-8003-0000005d1a90\n  schema: rule::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n\ndescription: |\n  Simulated Sysdig Secure Falco rule for CLI E2E corpus: a shell spawned in\n  a container.\nstatus: STAGING\nseverity: Medium\ntechniques:\n  - T1059.004\ndetection_model: 00000000-0000-4000-8002-000000000001\n\nresponse:\n  alert_severity: Medium\n\nconfigurations:\n  sysdig:\n    enabled: true\n    schema: platform::sysdig::1.0\n    status: STAGING\n    condition: >\n      spawned_process and container\n      and proc.name in (corpus_shells)\n    lists:\n      - name: corpus_shells\n        items: [bash, sh, zsh]\n    tags: [container, shell]\n",
+   "value": {
+    "name": "Sysdig Falco Rule",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8003-0000005d1a90",
+     "schema": "rule::1.0",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "description": "Simulated Sysdig Secure Falco rule for CLI E2E corpus: a shell spawned in\na container.\n",
+    "status": "STAGING",
+    "severity": "Medium",
+    "techniques": [
+     "T1059.004"
+    ],
+    "platforms": {},
+    "detection_model": "00000000-0000-4000-8002-000000000001",
+    "response": {
+     "alert_severity": "Medium"
+    },
+    "configurations": {
+     "sysdig": {}
+    }
+   }
+  },
+  {
+   "id": "file:tests/fixtures/tide_corpus/current/Objects/Threat Vectors/threat-0001-simulated-actor.yaml",
+   "family": "threat",
+   "yaml": "name: Simulated Actor\ncriticality: High\n\nmetadata:\n  uuid: 00000000-0000-4000-8001-000000000001\n  schema: threat::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n\nthreat:\n  description: Simulated threat actor for CLI E2E corpus\n  severity: Substantial incident\n  impact:\n    - Data Breach\n    - Identity Theft\n  leverage:\n    - Information Gathering\n    - Elevation of privilege\n  viability: Likely\n  terrain: Endpoint workstations and user devices.\n  surface:\n    - OS::Windows::Desktop\n  mitre_attack:\n    - T1059\n  actors:\n    - name: att&ck::G0006\n",
+   "value": {
+    "name": "Simulated Actor",
+    "criticality": "High",
+    "metadata": {
+     "uuid": "00000000-0000-4000-8001-000000000001",
+     "schema": "threat::1.0",
+     "version": 1,
+     "created": "2026-01-01",
+     "modified": "2026-01-02",
+     "tlp": "clear"
+    },
+    "threat": {
+     "description": "Simulated threat actor for CLI E2E corpus",
+     "severity": "Substantial incident",
+     "impact": [
+      "Data Breach",
+      "Identity Theft"
+     ],
+     "leverage": [
+      "Information Gathering",
+      "Elevation of privilege"
+     ],
+     "viability": "Likely",
+     "terrain": "Endpoint workstations and user devices.",
+     "surface": [
+      "OS::Windows::Desktop"
+     ],
+     "mitre_attack": [
+      "T1059"
+     ],
+     "actors": [
+      {
+       "name": "att&ck::G0006"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "file:tests/golden/fixtures/vscode-workspace/objects/objectives/detect-lsass-access.yaml",
+   "family": "objective",
+   "yaml": "name: Detect LSASS access\nmetadata:\n  uuid: 04149254-2a5b-4c1e-9f0e-3c1d2b5a6e7f\n  schema: objective::1.0\n  tlp: amber\n",
+   "errors": [
+    {
+     "type": "missing",
+     "field_path": [
+      "metadata",
+      "version"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      2,
+      1,
+      9,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "missing",
+     "field_path": [
+      "metadata",
+      "created"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      2,
+      1,
+      9,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "missing",
+     "field_path": [
+      "metadata",
+      "modified"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      2,
+      1,
+      9,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "missing",
+     "field_path": [
+      "objective"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      1,
+      1,
+      5,
+      false
+     ],
+     "yaml_line": null
+    }
+   ]
+  },
+  {
+   "id": "file:tests/golden/fixtures/vscode-workspace/objects/rules/suspicious-lsass-access.yaml",
+   "family": "rule",
+   "yaml": "name: Suspicious LSASS Access\nmetadata:\n  uuid: ff8bf67e-64dc-460d-b5df-48db643f3560\n  schema: rule::1.1\n  tlp: amber\ndetection_model: 04149254-2a5b-4c1e-9f0e-3c1d2b5a6e7f\nconfigurations:\n  sentinel:\n    query: |\n      DeviceProcessEvents\n      | where FileName =~ \"procdump.exe\"\n",
+   "errors": [
+    {
+     "type": "missing",
+     "field_path": [
+      "metadata",
+      "version"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      2,
+      1,
+      9,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "missing",
+     "field_path": [
+      "metadata",
+      "created"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      2,
+      1,
+      9,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "missing",
+     "field_path": [
+      "metadata",
+      "modified"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      2,
+      1,
+      9,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "missing",
+     "field_path": [
+      "description"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      1,
+      1,
+      5,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "missing",
+     "field_path": [
+      "configurations",
+      "sentinel",
+      "status"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      8,
+      3,
+      11,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "missing",
+     "field_path": [
+      "configurations",
+      "sentinel",
+      "scheduling"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      8,
+      3,
+      11,
+      false
+     ],
+     "yaml_line": null
+    },
+    {
+     "type": "missing",
+     "field_path": [
+      "configurations",
+      "sentinel",
+      "alert"
+     ],
+     "msg": "Field required",
+     "input": null,
+     "ctx": {},
+     "span": [
+      8,
+      3,
+      11,
+      false
+     ],
+     "yaml_line": null
+    }
+   ]
+  }
+ ]
+}

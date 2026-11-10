@@ -27,7 +27,7 @@ merge first; CodeQL and the oracles run there too). Jobs run in parallel; a new 
 | `test` | The Python matrix, **3.10–3.14**, coverage gate on 3.14 |
 | `cli-e2e`, `cli-windows-smoke`, `gitlab-ci-lint` | The sharded E2E suite, a Windows smoke run, the generated GitLab pipelines; none waits for `test` |
 | `golden-compare` | `cargo xtask golden check --engine compare` (UC-0.7): every golden case whose command has a Rust implementation, through this repository's CLI with `OPENTIDE_ENGINE=rust`, against the oracle's recording and `tests/golden/APPROVED_DIFFS.toml`; the `golden-compare` artifact holds the report |
-| `corpus` | The corpora of UC-0.6 against opentide 0.23.0 from PyPI, hash-pinned in its own venv: the heavy workspace has no finding, `cargo xtask corpus faults --check` (every fault kind reports exactly its codes), the code inventory and `COVERAGE.md` are current ([`tests/corpora/README.md`](../tests/corpora/README.md)) |
+| `corpus` | The corpora of UC-0.6 against opentide 0.23.0 from PyPI, hash-pinned in its own venv: the heavy workspace has no finding, `cargo xtask corpus faults --check` (every fault kind reports exactly its codes), the code inventory and `COVERAGE.md` are current ([`tests/corpora/README.md`](../tests/corpora/README.md)); opentide-schema's object models against the oracle (UC-1.3): `corpus faults --check --engine rust --only objects` and `cargo xtask schema diff --against python` (JSON Schemas, findings on every corpus) |
 | `clients`, `bench` | Informational (`continue-on-error`): real LSP clients (pytest-lsp, Neovim) and `cargo bench`; never required |
 
 Every Rust job installs the release `rust-toolchain.toml` pins (`rustup toolchain install` with no

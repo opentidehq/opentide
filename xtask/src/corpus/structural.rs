@@ -1,37 +1,34 @@
-//! `corpus faults --check --engine rust --only structural` (UC-1.2, #808): the
-//! fault kinds whose findings are the object model's structural errors,
-//! checked against the oracle finding for finding: code, field path, message,
-//! line, columns and `yaml_line`, byte for byte.
+//! `corpus faults --check --engine rust --only objects` (UC-1.3, #809; the
+//! `structural` subset, UC-1.2, #808): the fault kinds whose findings are the
+//! object models', checked against the oracle finding for finding: code,
+//! field path, message, line, columns and `yaml_line`, byte for byte.
 //!
 //! The Rust engine's `validate` comes with UC-2.x. Until then this is the
-//! narrowest runner the item's verification needs: each object file is read
+//! narrowest runner the items' verification needs: each object file is read
 //! with `opentide_schema::node` and converted with
-//! `opentide_schema::from_node`, into the stand-in models below. They are the
-//! oracle's `rule::1.0`, `rule::1.1` and `threat::1.0` field for field (names,
-//! aliases, defaults, closure, the `mode="before"` validators that shape the
-//! value), down to the blocks other items port: the platform blocks
-//! (`configurations`, UC-1.4), `response` and `references.public` are taken
-//! unchecked. UC-1.3 (#809) replaces them with the real models in
-//! `opentide-schema`.
+//! `opentide_schema::from_node` into the object model its `metadata.schema`
+//! names (`opentide_schema::objects`: `rule::1.0`, `rule::1.1`,
+//! `threat::1.0`, `objective::1.0`). The platform blocks under
+//! `configurations` are UC-1.4's (#810): they are read unchecked, and the
+//! oracle's findings inside one are left out ([`in_platform_block`]).
 //!
 //! This module computes; [`super::cli`] writes the workspaces and runs the
 //! oracle.
 
-use std::collections::BTreeMap;
-use std::sync::Arc;
-
-use opentide_schema::FromNode;
 use opentide_schema::Surface;
-use opentide_schema::from_node::{self, Context};
-use opentide_schema::node::{self, Node, Value};
+use opentide_schema::from_node;
+use opentide_schema::node;
+use opentide_schema::objects::{
+    ObjectiveV1_0, RuleConfigurations, RuleV1_0, RuleV1_1, ThreatVectorV1_0,
+};
 use serde_json::{Value as Json, json};
 
-/// The fault kinds of `tests/corpora/faults.toml` this runner checks, each
-/// with what makes it structural. The other `schema_validation` kinds are
-/// constraints and validators (`sysdig-constraint-*`: UC-1.4;
-/// `schema-validation-reviewed-word`: UC-1.3) or configuration files
-/// (`config-*`: UC-1.5); `yaml-parse-empty` is the loader's decision about an
-/// empty document (UC-2.x).
+/// The structural fault kinds of `tests/corpora/faults.toml` (UC-1.2), each
+/// with what makes it structural; [`OBJECTS`] adds the object models'
+/// validators. The other `schema_validation` kinds are platform blocks
+/// (`sysdig-constraint-*`: UC-1.4) or configuration files (`config-*`:
+/// UC-1.5); `yaml-parse-empty` is the loader's decision about an empty
+/// document (UC-2.x).
 pub const STRUCTURAL: &[(&str, &str)] = &[
     (
         "schema-validation-description",
@@ -61,10 +58,43 @@ pub const STRUCTURAL: &[(&str, &str)] = &[
     ("lint-yaml-parse", "the YAML does not parse, under lint"),
 ];
 
+/// The object fault kinds (UC-1.3): [`STRUCTURAL`], and the kinds the object
+/// models' validators decide.
+pub const OBJECTS: &[(&str, &str)] = &[
+    (
+        "schema-validation-reviewed-word",
+        "`metadata.reviewed` is not a date (its validator)",
+    ),
+    (
+        "gap-reviewed-in-future",
+        "a review dated in the future: nothing to report",
+    ),
+];
+
+/// The kinds `--only <group>` names: `structural` ([`STRUCTURAL`]) or
+/// `objects` ([`STRUCTURAL`] and [`OBJECTS`]).
+pub fn group(name: &str) -> Option<Vec<&'static str>> {
+    let structural = STRUCTURAL.iter().map(|(id, _)| *id);
+    match name {
+        GROUP => Some(structural.collect()),
+        OBJECTS_GROUP => Some(
+            structural
+                .chain(OBJECTS.iter().map(|(id, _)| *id))
+                .collect(),
+        ),
+        _ => None,
+    }
+}
+
+/// Every kind this runner checks.
+pub fn kinds() -> Vec<&'static str> {
+    group(OBJECTS_GROUP).unwrap_or_default()
+}
+
 /// An intended difference between the oracle and the Rust conversion on one
 /// fault kind: on each target file the oracle's findings are `oracle` and the
 /// Rust conversion's are `rust` (JSON, as [`oracle_findings`] and
-/// [`comparable`] give them). The runner fails when an entry no longer
+/// [`comparable`] give them, without their positions: [`Approved::applies`]). The runner fails when an entry no longer
 /// applies, and when `changelog` is not in CHANGELOG.md.
 #[derive(Debug, Clone, Copy)]
 pub struct Approved {
@@ -85,224 +115,64 @@ pub struct Approved {
 pub const APPROVED: &[Approved] = &[Approved {
     kind: "reviewed-impossible-date",
     oracle: r#"[{"code":"yaml_parse"}]"#,
-    rust: "[]",
+    rust: REVIEWED_IMPOSSIBLE_DATE,
     reason: "YAML 1.2 has no timestamp type: `reviewed: 2026-02-30` is a string, not a \
-             YAML error. Checking that the date exists is the `reviewed` field's own \
-             validator, which arrives with the real models (UC-1.3, #809); this runner's \
-             stand-in model has none",
+             YAML error, and the `reviewed` field's validator refuses it as a date that \
+             does not exist (crates/opentide-schema/tests/oracle/objects_cases.toml, \
+             `yaml-1-2-dates`)",
     changelog: "**Tide objects are read as YAML 1.2**",
 }];
+
+/// What the Rust model reports for `reviewed: 2026-02-30`, positions aside.
+const REVIEWED_IMPOSSIBLE_DATE: &str = r#"[{"code":"schema_validation","field_path":["metadata","reviewed"],"message":"Value error, metadata.reviewed is not a valid date or time: parameter 'day' for `2026-02` is invalid, must be in range `1..=28`"}]"#;
+
+/// A finding without its position (`line`, `column`, `end_line`,
+/// `end_column`, `yaml_line`): an approved difference names what is found,
+/// not where, which depends on the file it is applied to.
+pub fn without_position(findings: &[Json]) -> Json {
+    Json::Array(
+        findings
+            .iter()
+            .map(|finding| {
+                let mut finding = finding.clone();
+                if let Some(map) = finding.as_object_mut() {
+                    for key in ["line", "column", "end_line", "end_column", "yaml_line"] {
+                        map.remove(key);
+                    }
+                }
+                finding
+            })
+            .collect(),
+    )
+}
+
+impl Approved {
+    /// Whether it approves these findings on one file: the oracle's are
+    /// `oracle` and the Rust model's `rust`, positions aside.
+    pub fn applies(&self, oracle: &[Json], rust: &[Json]) -> bool {
+        serde_json::from_str::<Json>(self.oracle).ok().as_ref() == Some(&without_position(oracle))
+            && serde_json::from_str::<Json>(self.rust).ok().as_ref()
+                == Some(&without_position(rust))
+    }
+}
 
 /// The approved difference for `kind`, if any.
 pub fn approved(kind: &str) -> Option<&'static Approved> {
     APPROVED.iter().find(|approved| approved.kind == kind)
 }
 
-/// Whether `--only` names the structural group.
+/// The group `--only structural` names.
 pub const GROUP: &str = "structural";
 
-/// `metadata.reviewed` (`_coerce_reviewed`, a model validator UC-1.3 brings
-/// over): `null` stays `None`, a string is trimmed and an empty one is `None`.
-#[expect(
-    clippy::option_option,
-    reason = "the conversion's Option (it converted) around the field's Option (`None` or a text)"
-)]
-fn reviewed(node: &Node, cx: &mut Context) -> Option<Option<String>> {
-    match &node.value {
-        Value::Null => Some(None),
-        Value::Str(text) => {
-            let text = text.trim();
-            Some((!text.is_empty()).then(|| text.to_owned()))
-        }
-        _ => String::from_node(node, cx).map(Some),
-    }
-}
+/// The group `--only objects` names.
+pub const OBJECTS_GROUP: &str = "objects";
 
-#[derive(Debug, FromNode)]
-#[serde(deny_unknown_fields)]
-#[expect(dead_code, reason = "a stand-in model: only its conversion is used")]
-struct Organisation {
-    uuid: String,
-    name: String,
-}
-
-#[derive(Debug, FromNode)]
-#[from_node(union)]
-#[expect(dead_code, reason = "a stand-in model: only its conversion is used")]
-enum StrOrInt {
-    #[from_node(tag = "str")]
-    Str(String),
-    #[from_node(tag = "int")]
-    Int(i64),
-}
-
-#[derive(Debug, FromNode)]
-#[from_node(union)]
-#[expect(dead_code, reason = "a stand-in model: only its conversion is used")]
-enum StrOrList {
-    #[from_node(tag = "str")]
-    Str(String),
-    #[from_node(tag = "list[str]")]
-    List(Vec<String>),
-}
-
-#[derive(Debug, FromNode)]
-#[serde(deny_unknown_fields)]
-#[expect(dead_code, reason = "a stand-in model: only its conversion is used")]
-struct ObjectMetadata {
-    uuid: String,
-    #[serde(rename = "schema", alias = "schema_id")]
-    schema_id: String,
-    version: StrOrInt,
-    created: String,
-    modified: String,
-    tlp: String,
-    #[serde(default)]
-    author: Option<String>,
-    #[serde(default)]
-    contributors: Option<Vec<String>>,
-    #[serde(default)]
-    organisation: Option<Organisation>,
-}
-
-#[derive(Debug, FromNode)]
-#[serde(deny_unknown_fields)]
-#[expect(dead_code, reason = "a stand-in model: only its conversion is used")]
-struct RuleMetadata {
-    uuid: String,
-    #[serde(rename = "schema", alias = "schema_id")]
-    schema_id: String,
-    version: StrOrInt,
-    created: String,
-    modified: String,
-    tlp: String,
-    #[serde(default)]
-    author: Option<String>,
-    #[serde(default)]
-    contributors: Option<Vec<String>>,
-    #[serde(default)]
-    organisation: Option<Organisation>,
-    #[serde(default)]
-    #[from_node(with = "reviewed")]
-    reviewed: Option<String>,
-}
-
-#[derive(Debug, FromNode)]
-#[serde(deny_unknown_fields)]
-#[expect(dead_code, reason = "a stand-in model: only its conversion is used")]
-struct ObjectReferences {
-    /// `coerce_public_keys` turns the keys into integers first: UC-1.3.
-    #[serde(default)]
-    public: Option<Arc<Node>>,
-    #[serde(default)]
-    internal: Option<BTreeMap<String, String>>,
-    #[serde(default)]
-    reports: Option<Vec<String>>,
-}
-
-#[derive(Debug, FromNode)]
-#[serde(deny_unknown_fields)]
-#[expect(dead_code, reason = "a stand-in model: only its conversion is used")]
-struct ThreatActor {
-    name: String,
-    #[serde(default)]
-    sighting: Option<String>,
-    #[serde(default)]
-    references: Option<Vec<String>>,
-}
-
-#[derive(Debug, FromNode)]
-#[serde(deny_unknown_fields)]
-#[expect(dead_code, reason = "a stand-in model: only its conversion is used")]
-struct ThreatBody {
-    description: String,
-    severity: String,
-    #[from_node(before = "from_node::require_vocab_list")]
-    impact: Vec<String>,
-    #[from_node(before = "from_node::require_vocab_list")]
-    leverage: Vec<String>,
-    viability: String,
-    terrain: String,
-    surface: Vec<String>,
-    mitre_attack: Vec<String>,
-    #[serde(default)]
-    actors: Option<Vec<ThreatActor>>,
-    #[serde(default)]
-    killchain: Option<StrOrList>,
-    #[serde(default)]
-    chaining: Option<Vec<BTreeMap<String, String>>>,
-    #[serde(default)]
-    cve: Option<Vec<String>>,
-}
-
-#[derive(Debug, FromNode)]
-#[serde(deny_unknown_fields)]
-#[expect(dead_code, reason = "a stand-in model: only its conversion is used")]
-struct ThreatVector {
-    name: String,
-    criticality: String,
-    metadata: ObjectMetadata,
-    threat: ThreatBody,
-    #[serde(default)]
-    references: Option<ObjectReferences>,
-}
-
-#[derive(Debug, FromNode)]
-#[serde(deny_unknown_fields)]
-#[from_node(model = "DetectionRule")]
-#[expect(dead_code, reason = "a stand-in model: only its conversion is used")]
-struct RuleV1_0 {
-    name: String,
-    metadata: ObjectMetadata,
-    description: String,
-    #[serde(default)]
-    status: Option<String>,
-    #[serde(default)]
-    severity: Option<String>,
-    #[serde(default)]
-    techniques: Vec<String>,
-    #[serde(default)]
-    platforms: BTreeMap<String, BTreeMap<String, Arc<Node>>>,
-    #[serde(default)]
-    references: Option<ObjectReferences>,
-    #[serde(default)]
-    detection_model: Option<String>,
-    /// `RuleResponse`: UC-1.3.
-    #[serde(default)]
-    response: Option<Arc<Node>>,
-    /// The platform blocks: UC-1.4.
-    #[serde(default)]
-    configurations: Option<Arc<Node>>,
-    #[serde(default)]
-    file: Option<String>,
-}
-
-#[derive(Debug, FromNode)]
-#[serde(deny_unknown_fields)]
-#[from_node(model = "DetectionRule_v1_1")]
-#[expect(dead_code, reason = "a stand-in model: only its conversion is used")]
-struct RuleV1_1 {
-    name: String,
-    metadata: RuleMetadata,
-    description: String,
-    #[serde(default)]
-    status: Option<String>,
-    #[serde(default)]
-    severity: Option<String>,
-    #[serde(default)]
-    techniques: Vec<String>,
-    #[serde(default)]
-    platforms: BTreeMap<String, BTreeMap<String, Arc<Node>>>,
-    #[serde(default)]
-    references: Option<ObjectReferences>,
-    #[serde(default)]
-    detection_model: Option<String>,
-    #[serde(default)]
-    response: Option<Arc<Node>>,
-    #[serde(default)]
-    configurations: Option<Arc<Node>>,
-    #[serde(default)]
-    file: Option<String>,
+/// Whether a finding's field path is inside a platform block
+/// (`configurations.<platform>…`): UC-1.4's (#810), not compared yet.
+pub fn in_platform_block(field_path: &[String]) -> bool {
+    field_path.len() >= 2
+        && field_path[0] == "configurations"
+        && RuleConfigurations::PLATFORMS.contains(&field_path[1].as_str())
 }
 
 /// The findings the Rust conversion gives one object file, as the CLI's JSON
@@ -315,11 +185,19 @@ pub fn check_object(path: &str, bytes: &[u8]) -> Option<Vec<Json>> {
         "rule"
     } else if path.starts_with("objects/threats/") {
         "threat"
+    } else if path.starts_with("objects/objectives/") {
+        "objective"
     } else {
         return None;
     };
+    Some(check_object_as(family, bytes))
+}
+
+/// [`check_object`] for a file of `family` (`rule`, `threat`, `objective`),
+/// wherever it is.
+pub fn check_object_as(family: &str, bytes: &[u8]) -> Vec<Json> {
     let Ok(document) = node::load_bytes(bytes) else {
-        return Some(vec![json!({ "code": "yaml_parse" })]);
+        return vec![json!({ "code": "yaml_parse" })];
     };
     let schema = document
         .root()
@@ -330,39 +208,40 @@ pub fn check_object(path: &str, bytes: &[u8]) -> Option<Vec<Json>> {
         ("rule", Some("rule::1.0")) => from_node::from_document::<RuleV1_0>(&document).err(),
         ("rule", Some("rule::1.1")) => from_node::from_document::<RuleV1_1>(&document).err(),
         ("threat", Some("threat::1.0")) => {
-            from_node::from_document::<ThreatVector>(&document).err()
+            from_node::from_document::<ThreatVectorV1_0>(&document).err()
+        }
+        ("objective", Some("objective::1.0")) => {
+            from_node::from_document::<ObjectiveV1_0>(&document).err()
         }
         // A missing or unknown identifier is the workspace's finding.
-        _ => return Some(Vec::new()),
+        _ => return Vec::new(),
     };
-    Some(
-        errors
-            .unwrap_or_default()
-            .iter()
-            .map(|error| {
-                let span = error.span.as_ref();
-                let line = span
-                    .map(|span| span.line)
-                    .or(error.yaml_line.map(|line| line + 1));
-                json!({
-                    "code": error.code(Surface::Object),
-                    "field_path": error.field_path(),
-                    "message": error.message,
-                    "line": line,
-                    "column": span.map(|span| span.column),
-                    "end_line": span.map(|span| span.end_line),
-                    "end_column": span.map(|span| span.end_column),
-                    "yaml_line": error.yaml_line,
-                    "kind": format!("{:?}", error.kind),
-                })
+    errors
+        .unwrap_or_default()
+        .iter()
+        .map(|error| {
+            let span = error.span.as_ref();
+            let line = span
+                .map(|span| span.line)
+                .or(error.yaml_line.map(|line| line + 1));
+            json!({
+                "code": error.code(Surface::Object),
+                "field_path": error.field_path(),
+                "message": error.message,
+                "line": line,
+                "column": span.map(|span| span.column),
+                "end_line": span.map(|span| span.end_line),
+                "end_column": span.map(|span| span.end_column),
+                "yaml_line": error.yaml_line,
+                "kind": format!("{:?}", error.kind),
             })
-            .collect(),
-    )
+        })
+        .collect()
 }
 
 /// The oracle's findings for `path` that the Rust conversion owns
-/// (`schema_validation` and `yaml_parse`), in the fields [`check_object`]
-/// gives (a `yaml_parse` by its code alone: its message is the loader's,
+/// (`schema_validation` and `yaml_parse`, outside the platform blocks), in
+/// the fields [`check_object`] gives (a `yaml_parse` by its code alone: its message is the loader's,
 /// UC-2.x).
 pub fn oracle_findings(document: &Json, path: &str) -> Vec<Json> {
     let mut out = Vec::new();
@@ -389,7 +268,17 @@ pub fn oracle_findings(document: &Json, path: &str) -> Vec<Json> {
         }
         match item.get("code").and_then(Json::as_str) {
             Some("yaml_parse") => out.push(json!({ "code": "yaml_parse" })),
-            Some("schema_validation") => out.push(json!({
+            Some("schema_validation")
+                if !in_platform_block(
+                    &item["field_path"]
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                        .filter_map(|part| part.as_str().map(str::to_owned))
+                        .collect::<Vec<_>>(),
+                ) =>
+            {
+                out.push(json!({
                 "code": "schema_validation",
                 "field_path": item["field_path"],
                 "message": item["message"],
@@ -398,7 +287,8 @@ pub fn oracle_findings(document: &Json, path: &str) -> Vec<Json> {
                 "end_line": item["end_line"],
                 "end_column": item["end_column"],
                 "yaml_line": item.get("yaml_line").cloned().unwrap_or(Json::Null),
-            })),
+                }));
+            }
             _ => {}
         }
     }
@@ -470,8 +360,48 @@ mod tests {
             "../../../tests/corpora/faults.toml"
         ))
         .unwrap();
-        for (id, _) in STRUCTURAL {
+        for (id, _) in STRUCTURAL.iter().chain(OBJECTS) {
             assert!(catalogue.kind(id).is_some(), "{id}");
         }
+    }
+
+    #[test]
+    fn groups_name_their_kinds() {
+        assert_eq!(group(GROUP).unwrap().len(), STRUCTURAL.len());
+        assert_eq!(
+            group(OBJECTS_GROUP).unwrap().len(),
+            STRUCTURAL.len() + OBJECTS.len()
+        );
+        assert_eq!(group("platforms"), None);
+    }
+
+    #[test]
+    fn an_objective_is_checked_and_a_platform_block_is_not_compared() {
+        let text = "name: n\nmetadata:\n  uuid: u\n  schema: objective::1.0\n  version: 1\n  \
+                    created: '2026-01-01'\n  modified: '2026-01-01'\n  tlp: clear\n";
+        let findings = check_object("objects/objectives/o.yaml", text.as_bytes()).unwrap();
+        assert_eq!(findings.len(), 1, "{findings:?}");
+        assert_eq!(findings[0]["field_path"], json!(["objective"]));
+        assert!(in_platform_block(&[
+            "configurations".into(),
+            "sysdig".into()
+        ]));
+        assert!(in_platform_block(&[
+            "configurations".into(),
+            "sentinel".into(),
+            "query".into()
+        ]));
+        assert!(!in_platform_block(&["configurations".into()]));
+        assert!(!in_platform_block(&[
+            "configurations".into(),
+            "unknown".into()
+        ]));
+        let report = json!({"report": {"issues": [
+            {"path": "objects/rules/r.yaml", "code": "schema_validation", "field_path": ["configurations", "sysdig"], "message": "m"},
+            {"path": "objects/rules/r.yaml", "code": "schema_validation", "field_path": ["description"], "message": "Field required"},
+        ]}});
+        let found = oracle_findings(&report, "objects/rules/r.yaml");
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0]["field_path"], json!(["description"]));
     }
 }

@@ -74,6 +74,10 @@ commands:
                  the vocabularies: sync and check them against specifications,
                  generate Sentinel's ATT&CK list, compare with the oracle
                  (UC-1.6, #812); `cargo xtask vocab help` lists the options
+  schema diff --against python [options]
+                 the object models against the oracle: their JSON Schemas,
+                 and their verdict on every object file of every corpus
+                 (UC-1.3, #809); `cargo xtask schema help` lists the options
   help           print this message
 
 exit status: 0 passed, 1 check failed or not implemented yet,
@@ -144,6 +148,7 @@ fn main() -> ExitCode {
         "golden" => xtask::golden::main(rest),
         "bench" => xtask::bench::main(rest),
         "vocab" => xtask::vocab::main(rest),
+        "schema" => xtask::schema::main(rest),
         "help" | "--help" | "-h" => {
             print!("{USAGE}");
             ExitCode::SUCCESS

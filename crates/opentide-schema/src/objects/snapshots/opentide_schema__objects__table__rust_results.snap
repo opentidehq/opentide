@@ -1,0 +1,2990 @@
+---
+source: crates/opentide-schema/src/objects/table.rs
+expression: "serde_json::to_string_pretty(&results).unwrap()"
+---
+{
+  "file:tests/fixtures/tide_corpus/current/Objects/Detection Objectives/objective-0001-credential-access.yaml": {
+    "value": {
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "objective::1.0",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8002-000000000001",
+        "version": 1
+      },
+      "name": "Credential Access Objective",
+      "objective": {
+        "composition": {
+          "description": "Compose signals for credential access detection",
+          "strategy": "Combined"
+        },
+        "description": "Detect credential access techniques",
+        "priority": "High",
+        "signals": [
+          {
+            "data": {
+              "availability": "Complete",
+              "requirements": "Security event logs"
+            },
+            "description": "Suspicious authentication activity",
+            "entities": [
+              "Host::Hostname"
+            ],
+            "methodology": "Statistical",
+            "name": "Suspicious logon signal",
+            "severity": "Medium",
+            "uuid": "00000000-0000-4000-8099-000000000001"
+          }
+        ],
+        "threats": [
+          "00000000-0000-4000-8001-000000000001"
+        ],
+        "type": "Threat"
+      }
+    }
+  },
+  "file:tests/fixtures/tide_corpus/current/Objects/Detection Rules/rule-0001-sentinel-kql.yaml": {
+    "value": {
+      "configurations": {
+        "sentinel": {}
+      },
+      "description": "Simulated Sentinel rule for CLI E2E corpus.\n",
+      "detection_model": "00000000-0000-4000-8002-000000000001",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.0",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8003-000000000001",
+        "version": 1
+      },
+      "name": "Sentinel KQL Rule",
+      "platforms": {},
+      "response": {
+        "alert_severity": "High"
+      },
+      "severity": "High",
+      "status": "STAGING",
+      "techniques": [
+        "T1059"
+      ]
+    }
+  },
+  "file:tests/fixtures/tide_corpus/current/Objects/Detection Rules/rule-0002-defender-kql.yaml": {
+    "value": {
+      "configurations": {
+        "defender_for_endpoint": {}
+      },
+      "description": "Simulated Defender rule for CLI E2E corpus.\n",
+      "detection_model": "00000000-0000-4000-8002-000000000001",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.0",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8003-000000000002",
+        "version": 1
+      },
+      "name": "Defender KQL Rule",
+      "platforms": {},
+      "response": {
+        "alert_severity": "High"
+      },
+      "severity": "High",
+      "status": "STAGING",
+      "techniques": [
+        "T1059"
+      ]
+    }
+  },
+  "file:tests/fixtures/tide_corpus/current/Objects/Detection Rules/rule-0003-splunk-spl.yaml": {
+    "value": {
+      "configurations": {
+        "splunk": {}
+      },
+      "description": "Simulated Splunk rule for CLI E2E corpus.\n",
+      "detection_model": "00000000-0000-4000-8002-000000000001",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.0",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8003-000000000003",
+        "version": 1
+      },
+      "name": "Splunk SPL Rule",
+      "platforms": {},
+      "response": {
+        "alert_severity": "High"
+      },
+      "severity": "High",
+      "status": "STAGING",
+      "techniques": [
+        "T1059"
+      ]
+    }
+  },
+  "file:tests/fixtures/tide_corpus/current/Objects/Detection Rules/rule-0004-sentinel-one-s1ql.yaml": {
+    "value": {
+      "configurations": {
+        "sentinel_one": {}
+      },
+      "description": "Simulated SentinelOne rule for CLI E2E corpus.\n",
+      "detection_model": "00000000-0000-4000-8002-000000000001",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.0",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8003-000000000004",
+        "version": 1
+      },
+      "name": "SentinelOne S1QL Rule",
+      "platforms": {},
+      "response": {
+        "alert_severity": "High"
+      },
+      "severity": "High",
+      "status": "STAGING",
+      "techniques": [
+        "T1059"
+      ]
+    }
+  },
+  "file:tests/fixtures/tide_corpus/current/Objects/Detection Rules/rule-0005-carbon-black-lucene.yaml": {
+    "value": {
+      "configurations": {
+        "carbon_black_cloud": {}
+      },
+      "description": "Simulated Carbon Black rule for CLI E2E corpus.\n",
+      "detection_model": "00000000-0000-4000-8002-000000000001",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.0",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8003-000000000005",
+        "version": 1
+      },
+      "name": "Carbon Black Lucene Rule",
+      "platforms": {},
+      "response": {
+        "alert_severity": "High"
+      },
+      "severity": "High",
+      "status": "STAGING",
+      "techniques": [
+        "T1059"
+      ]
+    }
+  },
+  "file:tests/fixtures/tide_corpus/current/Objects/Detection Rules/rule-0006-crowdstrike-deploy-only.yaml": {
+    "value": {
+      "configurations": {
+        "crowdstrike": {}
+      },
+      "description": "Simulated CrowdStrike rule for CLI E2E corpus (deploy-only).\n",
+      "detection_model": "00000000-0000-4000-8002-000000000001",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.0",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8003-000000000006",
+        "version": 1
+      },
+      "name": "CrowdStrike Deploy Rule",
+      "platforms": {},
+      "response": {
+        "alert_severity": "High"
+      },
+      "severity": "High",
+      "status": "STAGING",
+      "techniques": [
+        "T1059"
+      ]
+    }
+  },
+  "file:tests/fixtures/tide_corpus/current/Objects/Detection Rules/rule-0007-harfanglab-deploy-only.yaml": {
+    "value": {
+      "configurations": {
+        "harfanglab": {}
+      },
+      "description": "Simulated HarfangLab rule for CLI E2E corpus (deploy-only).\n",
+      "detection_model": "00000000-0000-4000-8002-000000000001",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.0",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8003-000000000007",
+        "version": 1
+      },
+      "name": "HarfangLab Deploy Rule",
+      "platforms": {},
+      "response": {
+        "alert_severity": "High"
+      },
+      "severity": "High",
+      "status": "STAGING",
+      "techniques": [
+        "T1059"
+      ]
+    }
+  },
+  "file:tests/fixtures/tide_corpus/current/Objects/Detection Rules/rule-0008-staging-promote.yaml": {
+    "value": {
+      "configurations": {
+        "sentinel": {}
+      },
+      "description": "Rule with higher metadata.version for mutate/promote E2E tests.\n",
+      "detection_model": "00000000-0000-4000-8002-000000000001",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-03",
+        "schema": "rule::1.0",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8003-000000000008",
+        "version": 2
+      },
+      "name": "Staging Promote Rule",
+      "platforms": {},
+      "response": {
+        "alert_severity": "Medium"
+      },
+      "severity": "High",
+      "status": "STAGING",
+      "techniques": [
+        "T1059"
+      ]
+    }
+  },
+  "file:tests/fixtures/tide_corpus/current/Objects/Detection Rules/rule-0009-elastic-kql.yaml": {
+    "value": {
+      "configurations": {
+        "elastic": {}
+      },
+      "description": "Simulated Elastic rule for CLI E2E corpus.\n",
+      "detection_model": "00000000-0000-4000-8002-000000000001",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.0",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8003-000000000009",
+        "version": 1
+      },
+      "name": "Elastic KQL Rule",
+      "platforms": {},
+      "response": {
+        "alert_severity": "High"
+      },
+      "severity": "High",
+      "status": "STAGING",
+      "techniques": [
+        "T1059"
+      ]
+    }
+  },
+  "file:tests/fixtures/tide_corpus/current/Objects/Detection Rules/rule-0013-sysdig-falco.yaml": {
+    "value": {
+      "configurations": {
+        "sysdig": {}
+      },
+      "description": "Simulated Sysdig Secure Falco rule for CLI E2E corpus: a shell spawned in\na container.\n",
+      "detection_model": "00000000-0000-4000-8002-000000000001",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.0",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8003-0000005d1a90",
+        "version": 1
+      },
+      "name": "Sysdig Falco Rule",
+      "platforms": {},
+      "response": {
+        "alert_severity": "Medium"
+      },
+      "severity": "Medium",
+      "status": "STAGING",
+      "techniques": [
+        "T1059.004"
+      ]
+    }
+  },
+  "file:tests/fixtures/tide_corpus/current/Objects/Threat Vectors/threat-0001-simulated-actor.yaml": {
+    "value": {
+      "criticality": "High",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "threat::1.0",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8001-000000000001",
+        "version": 1
+      },
+      "name": "Simulated Actor",
+      "threat": {
+        "actors": [
+          {
+            "name": "att&ck::G0006"
+          }
+        ],
+        "description": "Simulated threat actor for CLI E2E corpus",
+        "impact": [
+          "Data Breach",
+          "Identity Theft"
+        ],
+        "leverage": [
+          "Information Gathering",
+          "Elevation of privilege"
+        ],
+        "mitre_attack": [
+          "T1059"
+        ],
+        "severity": "Substantial incident",
+        "surface": [
+          "OS::Windows::Desktop"
+        ],
+        "terrain": "Endpoint workstations and user devices.",
+        "viability": "Likely"
+      }
+    }
+  },
+  "file:tests/golden/fixtures/vscode-workspace/objects/objectives/detect-lsass-access.yaml": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "metadata",
+          "version"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          2,
+          1,
+          9,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "metadata",
+          "created"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          2,
+          1,
+          9,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "metadata",
+          "modified"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          2,
+          1,
+          9,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "objective"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          1,
+          1,
+          5,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      }
+    ]
+  },
+  "file:tests/golden/fixtures/vscode-workspace/objects/rules/suspicious-lsass-access.yaml": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "metadata",
+          "version"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          2,
+          1,
+          9,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "metadata",
+          "created"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          2,
+          1,
+          9,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "metadata",
+          "modified"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          2,
+          1,
+          9,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "description"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          1,
+          1,
+          5,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      }
+    ]
+  },
+  "objective-effort-boolean": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "objective",
+          "signals",
+          "0",
+          "effort"
+        ],
+        "input": null,
+        "msg": "Input should be a valid integer",
+        "span": [
+          26,
+          15,
+          19,
+          true
+        ],
+        "type": "int_type",
+        "yaml_line": 25
+      }
+    ]
+  },
+  "objective-effort-float": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "objective",
+          "signals",
+          "0",
+          "effort"
+        ],
+        "input": null,
+        "msg": "Input should be a valid integer",
+        "span": [
+          26,
+          15,
+          18,
+          true
+        ],
+        "type": "int_type",
+        "yaml_line": 25
+      }
+    ]
+  },
+  "objective-effort-quoted": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "objective",
+          "signals",
+          "0",
+          "effort"
+        ],
+        "input": "3",
+        "msg": "Input should be a valid integer",
+        "span": [
+          26,
+          16,
+          17,
+          true
+        ],
+        "type": "int_type",
+        "yaml_line": 25
+      }
+    ]
+  },
+  "objective-everything": {
+    "value": {
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "objective::1.0",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000003",
+        "version": 1
+      },
+      "name": "Objective",
+      "objective": {
+        "composition": {
+          "description": "compose",
+          "strategy": "synergetic"
+        },
+        "description": "obj",
+        "investment": "Medium",
+        "mitre_attack": [
+          "T1059"
+        ],
+        "priority": "High",
+        "signals": [
+          {
+            "data": {
+              "availability": "Complete",
+              "logsources": [
+                "Windows Security"
+              ],
+              "requirements": "logs"
+            },
+            "description": "sig",
+            "detectors": [
+              {
+                "description": "d",
+                "link": "https://example.org",
+                "name": "EDR",
+                "technology": "edr"
+              }
+            ],
+            "effort": 3,
+            "entities": [
+              "Host::Process"
+            ],
+            "examples": [
+              {
+                "description": "e",
+                "language": "kql",
+                "link": "https://example.org",
+                "query": "SecurityEvent"
+              }
+            ],
+            "methodology": "analytics",
+            "name": "Signal",
+            "parent": "00000000-0000-4000-8000-000000000098",
+            "severity": "Medium",
+            "uuid": "00000000-0000-4000-8000-000000000099"
+          }
+        ],
+        "threats": [
+          "00000000-0000-4000-8000-000000000002"
+        ],
+        "type": "Threat"
+      },
+      "references": {
+        "reports": [
+          "https://example.org"
+        ]
+      }
+    }
+  },
+  "objective-minimal": {
+    "value": {
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "objective::1.0",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000003",
+        "version": 1
+      },
+      "name": "Objective",
+      "objective": {
+        "composition": {
+          "description": "compose",
+          "strategy": "synergetic"
+        },
+        "description": "obj",
+        "priority": "High",
+        "signals": [
+          {
+            "data": {
+              "availability": "Complete",
+              "requirements": "logs"
+            },
+            "description": "sig",
+            "entities": [
+              "Host::Process"
+            ],
+            "methodology": "analytics",
+            "name": "Signal",
+            "severity": "Medium",
+            "uuid": "00000000-0000-4000-8000-000000000099"
+          }
+        ],
+        "type": "Threat"
+      }
+    }
+  },
+  "objective-mitre-attack-string": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "objective",
+          "mitre_attack"
+        ],
+        "input": "T1059",
+        "msg": "Input should be a valid list",
+        "span": [
+          26,
+          17,
+          22,
+          true
+        ],
+        "type": "list_type",
+        "yaml_line": 25
+      }
+    ]
+  },
+  "objective-root-composition": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "composition"
+        ],
+        "input": null,
+        "msg": "Extra inputs are not permitted",
+        "span": [
+          26,
+          1,
+          12,
+          true
+        ],
+        "type": "extra_forbidden",
+        "yaml_line": 26
+      }
+    ]
+  },
+  "objective-signal-errors": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "objective",
+          "signals",
+          "0",
+          "entities"
+        ],
+        "input": "Host::Process",
+        "msg": "Input should be a valid list",
+        "span": [
+          29,
+          17,
+          30,
+          true
+        ],
+        "type": "list_type",
+        "yaml_line": 28
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "objective",
+          "signals",
+          "0",
+          "detectors",
+          "0",
+          "technology"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          26,
+          11,
+          12,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "objective",
+          "signals",
+          "0",
+          "detectors",
+          "0",
+          "description"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          26,
+          11,
+          12,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "objective",
+          "signals",
+          "0",
+          "examples",
+          "0",
+          "link"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          28,
+          11,
+          12,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      }
+    ]
+  },
+  "objective-signals-missing": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "objective",
+          "signals"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          9,
+          1,
+          10,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      }
+    ]
+  },
+  "rule-1-0-minimal": {
+    "value": {
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.0",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
+  },
+  "rule-1-0-reviewed": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "metadata",
+          "reviewed"
+        ],
+        "input": "2026-03-01",
+        "msg": "Extra inputs are not permitted",
+        "span": [
+          9,
+          3,
+          11,
+          true
+        ],
+        "type": "extra_forbidden",
+        "yaml_line": 8
+      }
+    ]
+  },
+  "rule-1-1-everything": {
+    "value": {
+      "configurations": {},
+      "description": "d",
+      "detection_model": "00000000-0000-4000-8000-000000000099",
+      "metadata": {
+        "author": "A",
+        "contributors": [
+          "B",
+          "C"
+        ],
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "organisation": {
+          "name": "Org",
+          "uuid": "00000000-0000-4000-8000-0000000000aa"
+        },
+        "reviewed": "2026-09-01",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {
+        "legacy": {
+          "key": "value",
+          "n": 1
+        }
+      },
+      "references": {
+        "internal": {
+          "wiki": "https://wiki.example.org"
+        },
+        "public": {
+          "1": "https://example.org/a",
+          "2": "https://example.org/b"
+        },
+        "reports": [
+          "https://example.org/report"
+        ]
+      },
+      "response": {
+        "alert_severity": "High",
+        "playbook": "https://example.org/playbook",
+        "procedure": {
+          "analysis": "Look.\n",
+          "containment": "isolate",
+          "searches": [
+            {
+              "purpose": "p",
+              "query": "SecurityEvent\n",
+              "system": "sentinel"
+            }
+          ]
+        },
+        "responders": "soc"
+      },
+      "severity": "High",
+      "status": "STAGING",
+      "techniques": [
+        "T1059",
+        "T1003.001"
+      ]
+    }
+  },
+  "rule-1-1-minimal": {
+    "value": {
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
+  },
+  "rule-configurations-not-a-mapping": {
+    "errors": [
+      {
+        "ctx": {
+          "class_name": "RuleConfigurations"
+        },
+        "field_path": [
+          "configurations"
+        ],
+        "input": "sentinel",
+        "msg": "Input should be a valid dictionary or instance of RuleConfigurations",
+        "span": [
+          10,
+          17,
+          25,
+          true
+        ],
+        "type": "model_type",
+        "yaml_line": 9
+      }
+    ]
+  },
+  "rule-configurations-null": {
+    "value": {
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
+  },
+  "rule-contributors-string": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "metadata",
+          "contributors"
+        ],
+        "input": "B",
+        "msg": "Input should be a valid list",
+        "span": [
+          9,
+          17,
+          18,
+          true
+        ],
+        "type": "list_type",
+        "yaml_line": 8
+      }
+    ]
+  },
+  "rule-created-boolean": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "metadata",
+          "created"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          6,
+          12,
+          16,
+          true
+        ],
+        "type": "string_type",
+        "yaml_line": 5
+      }
+    ]
+  },
+  "rule-created-null": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "metadata",
+          "created"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          6,
+          12,
+          16,
+          true
+        ],
+        "type": "string_type",
+        "yaml_line": 5
+      }
+    ]
+  },
+  "rule-created-number": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "metadata",
+          "created"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          6,
+          12,
+          20,
+          true
+        ],
+        "type": "string_type",
+        "yaml_line": 5
+      }
+    ]
+  },
+  "rule-created-quoted": {
+    "value": {
+      "description": "d",
+      "metadata": {
+        "created": "1 January 2026",
+        "modified": "2026-01-02",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
+  },
+  "rule-created-spaced-timestamp": {
+    "value": {
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01 10:00:00",
+        "modified": "2026-01-02",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
+  },
+  "rule-detection-model-number": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "detection_model"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          10,
+          18,
+          20,
+          true
+        ],
+        "type": "string_type",
+        "yaml_line": 9
+      }
+    ]
+  },
+  "rule-file-is-loader-only": {
+    "value": {
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
+  },
+  "rule-metadata-missing-fields": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "metadata",
+          "uuid"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          2,
+          1,
+          9,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "metadata",
+          "version"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          2,
+          1,
+          9,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "metadata",
+          "created"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          2,
+          1,
+          9,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "metadata",
+          "modified"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          2,
+          1,
+          9,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "metadata",
+          "tlp"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          2,
+          1,
+          9,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      }
+    ]
+  },
+  "rule-missing-description-and-name": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "name"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          1,
+          1,
+          9,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "description"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          1,
+          1,
+          9,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      }
+    ]
+  },
+  "rule-organisation-missing-name": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "metadata",
+          "organisation",
+          "name"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          9,
+          3,
+          15,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      }
+    ]
+  },
+  "rule-platforms-wrong-shape": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "platforms",
+          "sentinel"
+        ],
+        "input": "x",
+        "msg": "Input should be a valid dictionary",
+        "span": [
+          11,
+          13,
+          14,
+          true
+        ],
+        "type": "dict_type",
+        "yaml_line": 10
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "platforms",
+          "splunk"
+        ],
+        "input": null,
+        "msg": "Input should be a valid dictionary",
+        "span": [
+          12,
+          3,
+          9,
+          true
+        ],
+        "type": "dict_type",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "rule-references-errors": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "references",
+          "public"
+        ],
+        "input": null,
+        "msg": "Input should be a valid dictionary",
+        "span": [
+          11,
+          3,
+          9,
+          true
+        ],
+        "type": "dict_type",
+        "yaml_line": 10
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "references",
+          "internal",
+          "a"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          12,
+          17,
+          18,
+          true
+        ],
+        "type": "string_type",
+        "yaml_line": 11
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "references",
+          "reports"
+        ],
+        "input": "a",
+        "msg": "Input should be a valid list",
+        "span": [
+          13,
+          12,
+          13,
+          true
+        ],
+        "type": "list_type",
+        "yaml_line": 12
+      }
+    ]
+  },
+  "rule-references-public-arabic-indic-key": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "references",
+          "public",
+          "١٢",
+          "[key]"
+        ],
+        "input": "١٢",
+        "msg": "Input should be a valid integer, unable to parse string as an integer",
+        "span": [
+          12,
+          6,
+          8,
+          false
+        ],
+        "type": "int_parsing",
+        "yaml_line": null
+      }
+    ]
+  },
+  "rule-references-public-bool-key": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "references",
+          "public",
+          "true",
+          "[key]"
+        ],
+        "input": null,
+        "msg": "Input should be a valid integer",
+        "span": [
+          12,
+          5,
+          9,
+          false
+        ],
+        "type": "int_type",
+        "yaml_line": null
+      }
+    ]
+  },
+  "rule-references-public-float-key": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "references",
+          "public",
+          "1.5",
+          "[key]"
+        ],
+        "input": null,
+        "msg": "Input should be a valid integer",
+        "span": [
+          12,
+          5,
+          8,
+          false
+        ],
+        "type": "int_type",
+        "yaml_line": null
+      }
+    ]
+  },
+  "rule-references-public-null": {
+    "value": {
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "references": {},
+      "techniques": []
+    }
+  },
+  "rule-references-public-padded-key": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "references",
+          "public",
+          " 12 ",
+          "[key]"
+        ],
+        "input": " 12 ",
+        "msg": "Input should be a valid integer, unable to parse string as an integer",
+        "span": [
+          12,
+          6,
+          10,
+          false
+        ],
+        "type": "int_parsing",
+        "yaml_line": null
+      }
+    ]
+  },
+  "rule-references-public-underscore-key": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "references",
+          "public",
+          "1_000",
+          "[key]"
+        ],
+        "input": "1_000",
+        "msg": "Input should be a valid integer, unable to parse string as an integer",
+        "span": [
+          12,
+          6,
+          11,
+          false
+        ],
+        "type": "int_parsing",
+        "yaml_line": null
+      }
+    ]
+  },
+  "rule-references-public-value": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "references",
+          "public",
+          "1"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          12,
+          5,
+          6,
+          true
+        ],
+        "type": "string_type",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "rule-references-public-wide-integer-key": {
+    "yaml_error": true
+  },
+  "rule-references-public-wide-string-key": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "references",
+          "public",
+          "9223372036854775808",
+          "[key]"
+        ],
+        "input": "9223372036854775808",
+        "msg": "Input should be a valid integer, unable to parse string as an integer",
+        "span": [
+          12,
+          6,
+          25,
+          false
+        ],
+        "type": "int_parsing",
+        "yaml_line": null
+      }
+    ]
+  },
+  "rule-references-public-word-key": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "references",
+          "public",
+          "abc",
+          "[key]"
+        ],
+        "input": "abc",
+        "msg": "Input should be a valid integer, unable to parse string as an integer",
+        "span": [
+          12,
+          5,
+          8,
+          false
+        ],
+        "type": "int_parsing",
+        "yaml_line": null
+      }
+    ]
+  },
+  "rule-response-default-severity": {
+    "value": {
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "response": {
+        "alert_severity": "Informational",
+        "playbook": "p"
+      },
+      "techniques": []
+    }
+  },
+  "rule-response-errors": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "response",
+          "alert_severity"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          11,
+          3,
+          17,
+          true
+        ],
+        "type": "string_type",
+        "yaml_line": 10
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "response",
+          "procedure",
+          "analysis"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          13,
+          3,
+          12,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "response",
+          "procedure",
+          "searches",
+          "0",
+          "query"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          15,
+          9,
+          10,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      },
+      {
+        "ctx": {
+          "class_name": "ResponseSearch"
+        },
+        "field_path": [
+          "response",
+          "procedure",
+          "searches",
+          "1"
+        ],
+        "input": "x",
+        "msg": "Input should be a valid dictionary or instance of ResponseSearch",
+        "span": [
+          17,
+          9,
+          10,
+          true
+        ],
+        "type": "model_type",
+        "yaml_line": 16
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "response",
+          "colour"
+        ],
+        "input": "red",
+        "msg": "Extra inputs are not permitted",
+        "span": [
+          12,
+          3,
+          9,
+          true
+        ],
+        "type": "extra_forbidden",
+        "yaml_line": 11
+      }
+    ]
+  },
+  "rule-reviewed-arabic-indic-digits": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime"
+        },
+        "field_path": [
+          "metadata",
+          "reviewed"
+        ],
+        "input": "٢٠٢٦-٠٩-٠١",
+        "msg": "Value error, metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime",
+        "span": [
+          9,
+          14,
+          24,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 8
+      }
+    ]
+  },
+  "rule-reviewed-boolean": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime"
+        },
+        "field_path": [
+          "metadata",
+          "reviewed"
+        ],
+        "input": null,
+        "msg": "Value error, metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime",
+        "span": [
+          9,
+          13,
+          17,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 8
+      }
+    ]
+  },
+  "rule-reviewed-control-padding": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime"
+        },
+        "field_path": [
+          "metadata",
+          "reviewed"
+        ],
+        "input": "\u001c2026-09-01",
+        "msg": "Value error, metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime",
+        "span": [
+          9,
+          14,
+          28,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 8
+      }
+    ]
+  },
+  "rule-reviewed-control-padding-after": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime"
+        },
+        "field_path": [
+          "metadata",
+          "reviewed"
+        ],
+        "input": "2026-09-01\u001f",
+        "msg": "Value error, metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime",
+        "span": [
+          9,
+          14,
+          28,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 8
+      }
+    ]
+  },
+  "rule-reviewed-datetime-z": {
+    "value": {
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "reviewed": "2026-09-01T15:04:05Z",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
+  },
+  "rule-reviewed-empty": {
+    "value": {
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
+  },
+  "rule-reviewed-first-instant": {
+    "value": {
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "reviewed": "0001-01-01T00:00:00Z",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
+  },
+  "rule-reviewed-fraction": {
+    "value": {
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "reviewed": "2026-09-01T15:04:05.25-05:30",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
+  },
+  "rule-reviewed-impossible-hour": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "metadata.reviewed is not a valid date or time: parameter 'hour' is not in the required range of 0..=23"
+        },
+        "field_path": [
+          "metadata",
+          "reviewed"
+        ],
+        "input": "2026-01-01T25:00:00Z",
+        "msg": "Value error, metadata.reviewed is not a valid date or time: parameter 'hour' is not in the required range of 0..=23",
+        "span": [
+          9,
+          14,
+          34,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 8
+      }
+    ]
+  },
+  "rule-reviewed-impossible-plain": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "metadata.reviewed is not a valid date or time: parameter 'day' for `2026-02` is invalid, must be in range `1..=28`"
+        },
+        "field_path": [
+          "metadata",
+          "reviewed"
+        ],
+        "input": "2026-02-30",
+        "msg": "Value error, metadata.reviewed is not a valid date or time: parameter 'day' for `2026-02` is invalid, must be in range `1..=28`",
+        "span": [
+          9,
+          13,
+          23,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 8
+      }
+    ]
+  },
+  "rule-reviewed-impossible-quoted": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "metadata.reviewed is not a valid date or time: parameter 'day' for `2026-02` is invalid, must be in range `1..=28`"
+        },
+        "field_path": [
+          "metadata",
+          "reviewed"
+        ],
+        "input": "2026-02-30",
+        "msg": "Value error, metadata.reviewed is not a valid date or time: parameter 'day' for `2026-02` is invalid, must be in range `1..=28`",
+        "span": [
+          9,
+          14,
+          24,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 8
+      }
+    ]
+  },
+  "rule-reviewed-last-instant-with-offset": {
+    "value": {
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "reviewed": "9999-12-31T23:59:59+00:00",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
+  },
+  "rule-reviewed-list": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime"
+        },
+        "field_path": [
+          "metadata",
+          "reviewed"
+        ],
+        "input": null,
+        "msg": "Value error, metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime",
+        "span": [
+          9,
+          3,
+          11,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 8
+      }
+    ]
+  },
+  "rule-reviewed-no-offset": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime"
+        },
+        "field_path": [
+          "metadata",
+          "reviewed"
+        ],
+        "input": "2026-09-01T15:04:05",
+        "msg": "Value error, metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime",
+        "span": [
+          9,
+          14,
+          33,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 8
+      }
+    ]
+  },
+  "rule-reviewed-null": {
+    "value": {
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
+  },
+  "rule-reviewed-number": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime"
+        },
+        "field_path": [
+          "metadata",
+          "reviewed"
+        ],
+        "input": null,
+        "msg": "Value error, metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime",
+        "span": [
+          9,
+          13,
+          21,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 8
+      }
+    ]
+  },
+  "rule-reviewed-offset": {
+    "value": {
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "reviewed": "2026-09-01T15:04:05+02:00",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
+  },
+  "rule-reviewed-offset-after-year-9999": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "metadata.reviewed is not a valid date or time: the time in UTC is not between the years 0001 and 9999"
+        },
+        "field_path": [
+          "metadata",
+          "reviewed"
+        ],
+        "input": "9999-12-31T23:59:59-23:59",
+        "msg": "Value error, metadata.reviewed is not a valid date or time: the time in UTC is not between the years 0001 and 9999",
+        "span": [
+          9,
+          14,
+          39,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 8
+      }
+    ]
+  },
+  "rule-reviewed-offset-before-year-one": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "metadata.reviewed is not a valid date or time: the time in UTC is not between the years 0001 and 9999"
+        },
+        "field_path": [
+          "metadata",
+          "reviewed"
+        ],
+        "input": "0001-01-01T00:00:00+23:59",
+        "msg": "Value error, metadata.reviewed is not a valid date or time: the time in UTC is not between the years 0001 and 9999",
+        "span": [
+          9,
+          14,
+          39,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 8
+      }
+    ]
+  },
+  "rule-reviewed-padded": {
+    "value": {
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "reviewed": "2026-09-01",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
+  },
+  "rule-reviewed-quoted-space": {
+    "value": {
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "reviewed": "2026-09-01 15:04:05Z",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
+  },
+  "rule-reviewed-spaced-timestamp": {
+    "value": {
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "reviewed": "2026-09-01 15:04:05Z",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
+  },
+  "rule-reviewed-word": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime"
+        },
+        "field_path": [
+          "metadata",
+          "reviewed"
+        ],
+        "input": "yesterday",
+        "msg": "Value error, metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime",
+        "span": [
+          9,
+          13,
+          22,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 8
+      }
+    ]
+  },
+  "rule-reviewed-year-zero": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "metadata.reviewed is not a valid date or time: the year 0000 is not between 0001 and 9999"
+        },
+        "field_path": [
+          "metadata",
+          "reviewed"
+        ],
+        "input": "0000-01-01",
+        "msg": "Value error, metadata.reviewed is not a valid date or time: the year 0000 is not between 0001 and 9999",
+        "span": [
+          9,
+          14,
+          24,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 8
+      }
+    ]
+  },
+  "rule-reviewed-year-zero-datetime": {
+    "errors": [
+      {
+        "ctx": {
+          "error": "metadata.reviewed is not a valid date or time: the year 0000 is not between 0001 and 9999"
+        },
+        "field_path": [
+          "metadata",
+          "reviewed"
+        ],
+        "input": "0000-01-01T00:00:00Z",
+        "msg": "Value error, metadata.reviewed is not a valid date or time: the year 0000 is not between 0001 and 9999",
+        "span": [
+          9,
+          14,
+          34,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 8
+      }
+    ]
+  },
+  "rule-techniques-item-number": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "techniques",
+          "1"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          10,
+          21,
+          25,
+          true
+        ],
+        "type": "string_type",
+        "yaml_line": 9
+      }
+    ]
+  },
+  "rule-techniques-not-a-list": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "techniques"
+        ],
+        "input": "T1059",
+        "msg": "Input should be a valid list",
+        "span": [
+          10,
+          13,
+          18,
+          true
+        ],
+        "type": "list_type",
+        "yaml_line": 9
+      }
+    ]
+  },
+  "rule-unknown-keys": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "metadata",
+          "colour"
+        ],
+        "input": "blue",
+        "msg": "Extra inputs are not permitted",
+        "span": [
+          9,
+          3,
+          9,
+          true
+        ],
+        "type": "extra_forbidden",
+        "yaml_line": 8
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "unknown_platform"
+        ],
+        "input": null,
+        "msg": "Extra inputs are not permitted",
+        "span": [
+          13,
+          3,
+          19,
+          true
+        ],
+        "type": "extra_forbidden",
+        "yaml_line": 12
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "extra"
+        ],
+        "input": null,
+        "msg": "Extra inputs are not permitted",
+        "span": [
+          11,
+          1,
+          6,
+          true
+        ],
+        "type": "extra_forbidden",
+        "yaml_line": 10
+      }
+    ]
+  },
+  "rule-version-float": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "metadata",
+          "version",
+          "str"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          5,
+          3,
+          10,
+          false
+        ],
+        "type": "string_type",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "metadata",
+          "version",
+          "int"
+        ],
+        "input": null,
+        "msg": "Input should be a valid integer",
+        "span": [
+          5,
+          3,
+          10,
+          false
+        ],
+        "type": "int_type",
+        "yaml_line": null
+      }
+    ]
+  },
+  "rule-version-forms": {
+    "value": {
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": "1.2"
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
+  },
+  "rule-version-list": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "metadata",
+          "version",
+          "str"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          5,
+          3,
+          10,
+          false
+        ],
+        "type": "string_type",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "metadata",
+          "version",
+          "int"
+        ],
+        "input": null,
+        "msg": "Input should be a valid integer",
+        "span": [
+          5,
+          3,
+          10,
+          false
+        ],
+        "type": "int_type",
+        "yaml_line": null
+      }
+    ]
+  },
+  "threat-actor-unknown-key": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "threat",
+          "actors",
+          "0",
+          "alias"
+        ],
+        "input": "x",
+        "msg": "Extra inputs are not permitted",
+        "span": [
+          21,
+          7,
+          12,
+          true
+        ],
+        "type": "extra_forbidden",
+        "yaml_line": 20
+      }
+    ]
+  },
+  "threat-actors-strings": {
+    "errors": [
+      {
+        "ctx": {
+          "class_name": "ThreatActor"
+        },
+        "field_path": [
+          "threat",
+          "actors",
+          "0"
+        ],
+        "input": "G0006",
+        "msg": "Input should be a valid dictionary or instance of ThreatActor",
+        "span": [
+          19,
+          12,
+          17,
+          true
+        ],
+        "type": "model_type",
+        "yaml_line": 18
+      },
+      {
+        "ctx": {
+          "class_name": "ThreatActor"
+        },
+        "field_path": [
+          "threat",
+          "actors",
+          "1"
+        ],
+        "input": "G0007",
+        "msg": "Input should be a valid dictionary or instance of ThreatActor",
+        "span": [
+          19,
+          19,
+          24,
+          true
+        ],
+        "type": "model_type",
+        "yaml_line": 18
+      }
+    ]
+  },
+  "threat-body-not-a-mapping": {
+    "errors": [
+      {
+        "ctx": {
+          "class_name": "ThreatBody"
+        },
+        "field_path": [
+          "threat"
+        ],
+        "input": "text",
+        "msg": "Input should be a valid dictionary or instance of ThreatBody",
+        "span": [
+          10,
+          9,
+          13,
+          true
+        ],
+        "type": "model_type",
+        "yaml_line": 9
+      }
+    ]
+  },
+  "threat-chaining-errors": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "threat",
+          "chaining",
+          "0",
+          "relation"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          20,
+          17,
+          18,
+          true
+        ],
+        "type": "string_type",
+        "yaml_line": 19
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "threat",
+          "chaining",
+          "1"
+        ],
+        "input": "x",
+        "msg": "Input should be a valid dictionary",
+        "span": [
+          21,
+          7,
+          8,
+          true
+        ],
+        "type": "dict_type",
+        "yaml_line": 20
+      }
+    ]
+  },
+  "threat-everything": {
+    "value": {
+      "criticality": "High",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "threat::1.0",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000002",
+        "version": 1
+      },
+      "name": "Threat",
+      "references": {
+        "public": {
+          "1": "https://example.org"
+        }
+      },
+      "threat": {
+        "actors": [
+          {
+            "name": "att&ck::G0006",
+            "references": [
+              "https://attack.mitre.org/groups/G0006"
+            ],
+            "sighting": "Simulated credential access."
+          }
+        ],
+        "chaining": [
+          {
+            "relation": "preceded_by",
+            "vector": "00000000-0000-4000-8000-000000000004"
+          }
+        ],
+        "cve": [
+          "CVE-2024-3094",
+          "GHSA-rxwq-x6h5-x525"
+        ],
+        "description": "d",
+        "impact": [
+          "Data Breach"
+        ],
+        "killchain": "Exploitation",
+        "leverage": [
+          "High"
+        ],
+        "mitre_attack": [
+          "T1059"
+        ],
+        "severity": "High",
+        "surface": [
+          "OS::Windows::Desktop"
+        ],
+        "terrain": "Endpoints.",
+        "viability": "High"
+      }
+    }
+  },
+  "threat-impact-empty": {
+    "errors": [
+      {
+        "ctx": {
+          "actual_length": "0",
+          "field_type": "List",
+          "min_length": "1"
+        },
+        "field_path": [
+          "threat",
+          "impact"
+        ],
+        "input": null,
+        "msg": "List should have at least 1 item after validation, not 0",
+        "span": [
+          13,
+          3,
+          9,
+          true
+        ],
+        "type": "too_short",
+        "yaml_line": 12
+      },
+      {
+        "ctx": {
+          "actual_length": "0",
+          "field_type": "List",
+          "min_length": "1"
+        },
+        "field_path": [
+          "threat",
+          "leverage"
+        ],
+        "input": null,
+        "msg": "List should have at least 1 item after validation, not 0",
+        "span": [
+          14,
+          3,
+          11,
+          true
+        ],
+        "type": "too_short",
+        "yaml_line": 13
+      }
+    ]
+  },
+  "threat-impact-mapping": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "threat",
+          "impact"
+        ],
+        "input": null,
+        "msg": "Input should be a valid list",
+        "span": [
+          13,
+          3,
+          9,
+          true
+        ],
+        "type": "list_type",
+        "yaml_line": 12
+      }
+    ]
+  },
+  "threat-impact-null": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "threat",
+          "impact"
+        ],
+        "input": null,
+        "msg": "Input should be a valid list",
+        "span": [
+          13,
+          11,
+          15,
+          true
+        ],
+        "type": "list_type",
+        "yaml_line": 12
+      }
+    ]
+  },
+  "threat-impact-number-item": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "threat",
+          "impact",
+          "0"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          13,
+          12,
+          13,
+          true
+        ],
+        "type": "string_type",
+        "yaml_line": 12
+      },
+      {
+        "ctx": {
+          "value": "a;b"
+        },
+        "field_path": [
+          "threat",
+          "impact",
+          "1"
+        ],
+        "input": "a;b",
+        "msg": "'a;b' packs several vocabulary names into one string; list each name as its own item",
+        "span": [
+          13,
+          16,
+          19,
+          true
+        ],
+        "type": "vocab_packed_names",
+        "yaml_line": 12
+      }
+    ]
+  },
+  "threat-impact-packed-item": {
+    "errors": [
+      {
+        "ctx": {
+          "value": "Identity Theft; Fraud"
+        },
+        "field_path": [
+          "threat",
+          "impact",
+          "1"
+        ],
+        "input": "Identity Theft; Fraud",
+        "msg": "'Identity Theft; Fraud' packs several vocabulary names into one string; list each name as its own item",
+        "span": [
+          13,
+          26,
+          47,
+          true
+        ],
+        "type": "vocab_packed_names",
+        "yaml_line": 12
+      }
+    ]
+  },
+  "threat-impact-string": {
+    "errors": [
+      {
+        "ctx": {
+          "field": "impact",
+          "value": "Data Breach"
+        },
+        "field_path": [
+          "threat",
+          "impact"
+        ],
+        "input": "Data Breach",
+        "msg": "must be a YAML list of impact vocabulary names, not a single string",
+        "span": [
+          13,
+          11,
+          22,
+          true
+        ],
+        "type": "vocab_list_type",
+        "yaml_line": 12
+      }
+    ]
+  },
+  "threat-killchain-list": {
+    "value": {
+      "criticality": "High",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "threat::1.0",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000002",
+        "version": 1
+      },
+      "name": "Threat",
+      "threat": {
+        "description": "d",
+        "impact": [
+          "Data Breach"
+        ],
+        "killchain": [
+          "Delivery",
+          "Exploitation"
+        ],
+        "leverage": [
+          "High"
+        ],
+        "mitre_attack": [
+          "T1059"
+        ],
+        "severity": "High",
+        "surface": [
+          "OS::Windows::Desktop"
+        ],
+        "terrain": "Endpoints.",
+        "viability": "High"
+      }
+    }
+  },
+  "threat-killchain-mixed-list": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "threat",
+          "killchain",
+          "str"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          19,
+          3,
+          12,
+          false
+        ],
+        "type": "string_type",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "threat",
+          "killchain",
+          "list[str]",
+          "1"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          19,
+          3,
+          12,
+          false
+        ],
+        "type": "string_type",
+        "yaml_line": null
+      }
+    ]
+  },
+  "threat-killchain-number": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "threat",
+          "killchain",
+          "str"
+        ],
+        "input": null,
+        "msg": "Input should be a valid string",
+        "span": [
+          19,
+          3,
+          12,
+          false
+        ],
+        "type": "string_type",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "threat",
+          "killchain",
+          "list[str]"
+        ],
+        "input": null,
+        "msg": "Input should be a valid list",
+        "span": [
+          19,
+          3,
+          12,
+          false
+        ],
+        "type": "list_type",
+        "yaml_line": null
+      }
+    ]
+  },
+  "threat-leverage-packed-string": {
+    "errors": [
+      {
+        "ctx": {
+          "field": "leverage",
+          "value": "High; Low"
+        },
+        "field_path": [
+          "threat",
+          "leverage"
+        ],
+        "input": "High; Low",
+        "msg": "must be a YAML list of leverage vocabulary names, not a single string; list each name in 'High; Low' as its own item",
+        "span": [
+          14,
+          14,
+          23,
+          true
+        ],
+        "type": "vocab_list_type",
+        "yaml_line": 13
+      }
+    ]
+  },
+  "threat-minimal": {
+    "value": {
+      "criticality": "High",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "threat::1.0",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000002",
+        "version": 1
+      },
+      "name": "Threat",
+      "threat": {
+        "description": "d",
+        "impact": [
+          "Data Breach"
+        ],
+        "leverage": [
+          "High"
+        ],
+        "mitre_attack": [
+          "T1059"
+        ],
+        "severity": "High",
+        "surface": [
+          "OS::Windows::Desktop"
+        ],
+        "terrain": "Endpoints.",
+        "viability": "High"
+      }
+    }
+  },
+  "threat-missing-body-fields": {
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "criticality"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          1,
+          1,
+          5,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "threat",
+          "severity"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          9,
+          1,
+          7,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "threat",
+          "terrain"
+        ],
+        "input": null,
+        "msg": "Field required",
+        "span": [
+          9,
+          1,
+          7,
+          false
+        ],
+        "type": "missing",
+        "yaml_line": null
+      }
+    ]
+  }
+}

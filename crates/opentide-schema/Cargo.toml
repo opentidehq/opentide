@@ -29,6 +29,12 @@ python = ["dep:pyo3"]
 # the TypeScript types arrive with UC-5.3 (#838). CI builds the crate for
 # wasm32 with it so that no dependency of the model stops compiling there.
 wasm = []
+# Reading a rule whose platform blocks are not checked yet: the blocks are
+# UC-1.4's (#810), and until they arrive `RuleV1_0`, `RuleV1_1` and
+# `RuleConfigurations` read only with this feature, or in the crate's unit
+# tests (`cfg(test)`). xtask's oracle comparisons turn it on; nothing that
+# ships may (UC-1.4 removes it).
+unchecked-platform-blocks = []
 
 [dependencies]
 opentide-core.workspace = true
@@ -50,11 +56,15 @@ opentide-schema-derive.workspace = true
 # Configuration TOML with every item's span (UC-1.5): the version the
 # workspace already locks for opentide-analysis.
 toml_edit.workspace = true
-# Pattern constraints and the lint `pattern`, as pydantic-core does.
+# Pattern constraints and the lint `pattern`, as pydantic-core does; the
+# shape of `metadata.reviewed` (UC-1.3).
 regex.workspace = true
 # The lint `pattern` anchored on its parsed form, verbose comments and all.
 regex-syntax.workspace = true
 pyo3 = { workspace = true, features = ["abi3-py310"], optional = true }
+# `metadata.reviewed` (UC-1.3): whether the date, the time and the offset
+# exist (jiff's civil types; no time zone database).
+jiff = { workspace = true }
 
 [dev-dependencies]
 insta.workspace = true
