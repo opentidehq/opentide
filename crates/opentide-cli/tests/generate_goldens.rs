@@ -30,6 +30,8 @@ const COMMANDS: &[&str] = &[
     "generate.exports.objects",
     "generate.exports.revisions",
     "generate.explorer",
+    "generate.inflight",
+    "generate.inflight.prune",
 ];
 
 fn repo() -> PathBuf {
@@ -470,4 +472,80 @@ fn the_explorer_publishes_only_what_this_run_chose() {
         bundle["stagingIndex"]["productionObjects"],
         serde_json::json!(["00000000-0000-4000-8003-000000000001"])
     );
+}
+
+/// Runs git in `dir`, without the host's configuration.
+fn git(dir: &Path, args: &[&str]) {
+    let status = std::process::Command::new("git")
+        .args(["-c", "user.name=t", "-c", "user.email=t@example.com"])
+        .args(args)
+        .current_dir(dir)
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .status()
+        .unwrap();
+    assert!(status.success(), "git {args:?}");
+}
+
+/// A rule changed on a feature branch gets a shard naming its file, and the
+/// shard is pruned once the default branch holds that version.
+#[test]
+fn inflight_shards_follow_the_branch() {
+    if std::process::Command::new("git")
+        .arg("--version")
+        .output()
+        .is_err()
+    {
+        return;
+    }
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
+    fixture("vscode", &ws);
+    git(&ws, &["init", "-q", "-b", "main"]);
+    git(&ws, &["add", "-A"]);
+    git(&ws, &["commit", "-q", "-m", "catalogue"]);
+    git(&ws, &["checkout", "-q", "-b", "feature"]);
+    let rules = ws.join("objects/rules");
+    let rule = std::fs::read_dir(&rules)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .filter(|path| path.extension().is_some_and(|ext| ext == "yaml"))
+        .min()
+        .unwrap();
+    let text = std::fs::read_to_string(&rule).unwrap();
+    let document = opentide_schema::node::load(&text).unwrap();
+    let root = document.root().unwrap();
+    let uuid = root
+        .get("metadata")
+        .and_then(|metadata| metadata.get("uuid"))
+        .and_then(|uuid| uuid.value.as_str())
+        .unwrap()
+        .to_owned();
+    std::fs::write(&rule, format!("{text}\n# changed\n")).unwrap();
+    let (code, stdout) = run_json(&ws, &["generate", "inflight"]);
+    assert_eq!(code, 0, "{stdout}");
+    assert!(
+        stdout.contains("\"message\":\"Generated 1 file in "),
+        "{stdout}"
+    );
+    let shard_path = ws.join(".opentide/inflight").join(format!("{uuid}.json"));
+    let shard: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&shard_path).unwrap()).unwrap();
+    assert_eq!(shard["schema"], "inflight.shard::1.0");
+    assert_eq!(shard["object"]["metadata"]["uuid"], uuid.as_str());
+    assert_eq!(shard["change"]["platform"], "local");
+    let relative = rule
+        .strip_prefix(&ws)
+        .unwrap()
+        .to_string_lossy()
+        .into_owned();
+    assert_eq!(shard["change"]["source_path"], relative.as_str());
+    // The default branch holds the shard's version: pruned.
+    let (code, stdout) = run_json(&ws, &["generate", "inflight", "prune"]);
+    assert_eq!(code, 0, "{stdout}");
+    assert!(
+        stdout.contains("\"message\":\"Removed 1 file in "),
+        "{stdout}"
+    );
+    assert!(!shard_path.exists());
 }

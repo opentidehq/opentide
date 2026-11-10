@@ -217,6 +217,215 @@ pub fn overlay(index: &Index, shards: &IndexMap<String, Shard>) -> Index {
     overlaid
 }
 
+/// Whether `path`, relative to the workspace with `/`, is an object file
+/// the shards preview: `objects/<threats|objectives|rules>/<name>.yaml` (or
+/// `.yml`).
+pub fn is_object_yaml(path: &str) -> bool {
+    let path = path.replace('\\', "/");
+    let parts: Vec<&str> = path.split('/').collect();
+    let [first, family, file] = parts.as_slice() else {
+        return false;
+    };
+    *first == "objects"
+        && ["threats", "objectives", "rules"].contains(family)
+        && [".yaml", ".yml"].iter().any(|extension| {
+            file.strip_suffix(extension)
+                .is_some_and(|stem| !stem.is_empty())
+        })
+}
+
+/// The environment, as the change metadata reads it.
+pub type Env<'a> = &'a dyn Fn(&str) -> Option<String>;
+
+/// A variable's value, `None` when unset.
+fn var(env: Env<'_>, name: &str) -> Json {
+    env(name).map_or(Json::Null, Json::Str)
+}
+
+/// `os.getenv(name) or fallback`: an empty value falls through.
+fn var_or(env: Env<'_>, name: &str, fallback: Option<&Json>) -> Json {
+    match env(name).filter(|value| !value.is_empty()) {
+        Some(value) => Json::Str(value),
+        None => fallback.cloned().unwrap_or(Json::Null),
+    }
+}
+
+/// A number when the value is all digits, else the value (`int(x) if
+/// x.isdigit() else x`).
+fn number(value: Option<String>) -> Json {
+    match value {
+        Some(text) if !text.is_empty() && text.chars().all(|c| c.is_ascii_digit()) => {
+            text.parse().map_or(Json::Str(text), Json::Int)
+        }
+        Some(text) => Json::Str(text),
+        None => Json::Null,
+    }
+}
+
+/// The pull or merge request a shard comes from, as the CI platform
+/// describes it (`collect_change_metadata`): `INFLIGHT_CHANGE_JSON` when it
+/// holds a JSON object, else the platform's variables (GitHub's event file
+/// for the number, link and title). `source_path` is the object file from the
+/// workspace; `event` the GitHub event file's text, when there is one.
+pub fn change(
+    env: Env<'_>,
+    ci: crate::git::Ci,
+    source_path: &str,
+    event: Option<&str>,
+    recorded_at: &str,
+) -> Json {
+    if let Some(text) = env("INFLIGHT_CHANGE_JSON").filter(|text| !text.trim().is_empty())
+        && let Some(document) = parse(text.trim())
+        && let Some(root) = document.root()
+        && let Json::Object(mut data) = Json::from_node(root)
+    {
+        data.entry("source_path".into())
+            .or_insert_with(|| Json::from(source_path));
+        data.entry("recorded_at".into())
+            .or_insert_with(|| Json::from(recorded_at));
+        return Json::Object(data);
+    }
+    let mut meta = crate::json::Object::new();
+    let mut put = |key: &str, value: Json| {
+        meta.insert(key.to_owned(), value);
+    };
+    match ci {
+        crate::git::Ci::GitHub => {
+            let payload = event
+                .and_then(parse)
+                .and_then(|document| document.root().map(|root| Json::from_node(root)))
+                .unwrap_or(Json::Null);
+            let pull = payload
+                .get("pull_request")
+                .filter(|pull| pull.as_object().is_some());
+            let field = |key: &str| {
+                pull.and_then(|pull| pull.get(key))
+                    .cloned()
+                    .unwrap_or(Json::Null)
+            };
+            let side = |name: &str, key: &str| {
+                pull.and_then(|pull| pull.get(name))
+                    .filter(|side| side.as_object().is_some())
+                    .and_then(|side| side.get(key))
+                    .cloned()
+            };
+            put("platform", Json::from("github"));
+            put("number", field("number"));
+            put("url", field("html_url"));
+            put("title", field("title"));
+            put(
+                "head_ref",
+                var_or(env, "GITHUB_HEAD_REF", side("head", "ref").as_ref()),
+            );
+            put(
+                "base_ref",
+                var_or(env, "GITHUB_BASE_REF", side("base", "ref").as_ref()),
+            );
+            put(
+                "head_sha",
+                var_or(env, "GITHUB_SHA", side("head", "sha").as_ref()),
+            );
+        }
+        crate::git::Ci::GitLab => {
+            let iid = env("CI_MERGE_REQUEST_IID");
+            let project = env("CI_PROJECT_URL").unwrap_or_default();
+            let url = match &iid {
+                Some(iid) if !iid.is_empty() && !project.is_empty() => {
+                    Json::Str(format!("{project}/-/merge_requests/{iid}"))
+                }
+                _ => Json::Null,
+            };
+            put("platform", Json::from("gitlab"));
+            put("number", number(iid));
+            put("url", url);
+            put("title", var(env, "CI_MERGE_REQUEST_TITLE"));
+            put("head_ref", var(env, "CI_MERGE_REQUEST_SOURCE_BRANCH_NAME"));
+            put("base_ref", var(env, "CI_MERGE_REQUEST_TARGET_BRANCH_NAME"));
+            put("head_sha", var(env, "CI_COMMIT_SHA"));
+        }
+        crate::git::Ci::Azure => {
+            let number_text = env("SYSTEM_PULLREQUEST_PULLREQUESTNUMBER")
+                .filter(|value| !value.is_empty())
+                .or_else(|| env("SYSTEM_PULLREQUEST_PULLREQUESTID"));
+            let branch =
+                |name: &str| Json::Str(env(name).unwrap_or_default().replace("refs/heads/", ""));
+            put("platform", Json::from("azure"));
+            put("number", number(number_text));
+            put("url", var(env, "SYSTEM_PULLREQUEST_PULLREQUESTURI"));
+            put("title", var(env, "SYSTEM_PULLREQUEST_PULLREQUESTTITLE"));
+            put("head_ref", branch("SYSTEM_PULLREQUEST_SOURCEBRANCH"));
+            put("base_ref", branch("SYSTEM_PULLREQUEST_TARGETBRANCH"));
+            put("head_sha", var(env, "BUILD_SOURCEVERSION"));
+        }
+        crate::git::Ci::Local => {
+            put("platform", Json::from("local"));
+            for key in ["number", "url", "title", "head_ref", "base_ref", "head_sha"] {
+                put(key, Json::Null);
+            }
+        }
+    }
+    put("source_path", Json::from(source_path));
+    put("recorded_at", Json::from(recorded_at));
+    Json::Object(meta)
+}
+
+/// The shard of `object` (`build_shard_payload`).
+pub fn shard(object: &Node, written_at: &str, change: Json) -> Json {
+    let mut shard = crate::json::Object::new();
+    shard.insert("schema".into(), Json::from(SHARD_SCHEMA));
+    shard.insert("written_at".into(), Json::from(written_at));
+    shard.insert("object".into(), Json::from_node(object));
+    shard.insert("change".into(), change);
+    Json::Object(shard)
+}
+
+/// The shard files of `dir` the default branch has caught up with
+/// (`prune_inflight_shards`): its object's committed version (in `index`)
+/// is at least the shard's. In file name order.
+pub fn superseded(dir: &Path, index: &Index) -> Vec<(String, PathBuf)> {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return Vec::new();
+    };
+    let mut paths: Vec<PathBuf> = entries
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| path.extension().is_some_and(|ext| ext == "json") && path.is_file())
+        .collect();
+    paths.sort();
+    let mut pruned = Vec::new();
+    for path in paths {
+        let Some(document) = std::fs::read_to_string(&path)
+            .ok()
+            .and_then(|text| parse(&text))
+        else {
+            continue;
+        };
+        let shard = Shard {
+            path: path.clone(),
+            document: Arc::new(document),
+        };
+        let Some(object) = shard.object() else {
+            continue;
+        };
+        let Some(uuid) = object_uuid(object) else {
+            continue;
+        };
+        let committed = ["threat", "objective", "rule"].iter().find_map(|family| {
+            index
+                .objects
+                .get(*family)
+                .and_then(|objects| objects.get(&uuid))
+                .and_then(opentide_workspace::Object::root)
+        });
+        if let Some(committed) = committed
+            && object_version(committed) >= object_version(object)
+        {
+            pruned.push((uuid, path));
+        }
+    }
+    pruned
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -249,6 +458,112 @@ mod tests {
 
     fn write(dir: &Path, name: &str, text: &str) {
         std::fs::write(dir.join(name), text).unwrap();
+    }
+
+    #[test]
+    fn object_files_are_found_by_their_place() {
+        assert!(is_object_yaml("objects/rules/a.yaml"));
+        assert!(is_object_yaml("objects\\threats\\a.yml"));
+        assert!(!is_object_yaml("objects/rules/.yaml"));
+        assert!(!is_object_yaml("objects/rules/sub/a.yaml"));
+        assert!(!is_object_yaml("objects/signals/a.yaml"));
+        assert!(!is_object_yaml("x/objects/rules/a.yaml"));
+        assert!(!is_object_yaml("objects/rules/a.json"));
+    }
+
+    #[test]
+    fn a_change_is_described_by_its_ci_platform() {
+        use crate::git::Ci;
+        let vars = |pairs: &'static [(&'static str, &'static str)]| {
+            move |name: &str| {
+                pairs
+                    .iter()
+                    .find(|(key, _)| *key == name)
+                    .map(|(_, value)| (*value).to_owned())
+            }
+        };
+        let line = |json: &Json| super::line(json);
+        let local = vars(&[]);
+        assert_eq!(
+            line(&change(
+                &local,
+                Ci::Local,
+                "objects/rules/a.yaml",
+                None,
+                "t"
+            )),
+            "{\"platform\": \"local\", \"number\": null, \"url\": null, \"title\": null, \"head_ref\": null, \"base_ref\": null, \"head_sha\": null, \"source_path\": \"objects/rules/a.yaml\", \"recorded_at\": \"t\"}"
+        );
+        let github = vars(&[("GITHUB_HEAD_REF", ""), ("GITHUB_SHA", "abc")]);
+        let event = r#"{"pull_request": {"number": 7, "html_url": "u", "title": "T", "head": {"ref": "feat", "sha": "def"}, "base": {"ref": "main"}}}"#;
+        assert_eq!(
+            line(&change(&github, Ci::GitHub, "p", Some(event), "t")),
+            "{\"platform\": \"github\", \"number\": 7, \"url\": \"u\", \"title\": \"T\", \"head_ref\": \"feat\", \"base_ref\": \"main\", \"head_sha\": \"abc\", \"source_path\": \"p\", \"recorded_at\": \"t\"}"
+        );
+        let gitlab = vars(&[
+            ("CI_MERGE_REQUEST_IID", "12"),
+            ("CI_PROJECT_URL", "https://g/p"),
+        ]);
+        let described = change(&gitlab, Ci::GitLab, "p", None, "t");
+        assert_eq!(described.get("number"), Some(&Json::Int(12)));
+        assert_eq!(
+            described.get("url"),
+            Some(&Json::from("https://g/p/-/merge_requests/12"))
+        );
+        let azure = vars(&[
+            ("SYSTEM_PULLREQUEST_PULLREQUESTNUMBER", ""),
+            ("SYSTEM_PULLREQUEST_PULLREQUESTID", "x9"),
+            ("SYSTEM_PULLREQUEST_SOURCEBRANCH", "refs/heads/feat"),
+        ]);
+        let described = change(&azure, Ci::Azure, "p", None, "t");
+        assert_eq!(described.get("number"), Some(&Json::from("x9")));
+        assert_eq!(described.get("head_ref"), Some(&Json::from("feat")));
+        assert_eq!(described.get("base_ref"), Some(&Json::from("")));
+        let given = vars(&[(
+            "INFLIGHT_CHANGE_JSON",
+            r#"{"platform": "manual", "recorded_at": "then"}"#,
+        )]);
+        assert_eq!(
+            line(&change(&given, Ci::GitHub, "p", None, "now")),
+            "{\"platform\": \"manual\", \"recorded_at\": \"then\", \"source_path\": \"p\"}"
+        );
+    }
+
+    #[test]
+    fn shards_the_default_branch_caught_up_with_are_superseded() {
+        let dir = tempfile::tempdir().unwrap();
+        let index = index_of(&[
+            (
+                "rule",
+                "r1",
+                "metadata: {uuid: r1, version: 2}\nconfigurations: {a: {}}\n",
+            ),
+            (
+                "rule",
+                "r2",
+                "metadata: {uuid: r2, version: 1}\nconfigurations: {a: {}}\n",
+            ),
+        ]);
+        write(
+            dir.path(),
+            "r1.json",
+            r#"{"schema": "inflight.shard::1.0", "object": {"metadata": {"uuid": "r1", "version": 2}}}"#,
+        );
+        write(
+            dir.path(),
+            "r2.json",
+            r#"{"metadata": {"uuid": "r2", "version": 2}}"#,
+        );
+        write(
+            dir.path(),
+            "r3.json",
+            r#"{"metadata": {"uuid": "r3", "version": 1}}"#,
+        );
+        let pruned: Vec<String> = superseded(dir.path(), &index)
+            .into_iter()
+            .map(|(uuid, _)| uuid)
+            .collect();
+        assert_eq!(pruned, ["r1"]);
     }
 
     #[test]

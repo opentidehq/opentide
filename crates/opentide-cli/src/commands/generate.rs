@@ -14,6 +14,7 @@ use opentide_compile::generate::exports::{Settings, Target, export};
 use opentide_compile::generate::files::{Snapshot, common_dir, write_all};
 use opentide_compile::generate::visibility::{self, DatasetRead, Inputs};
 use opentide_compile::generate::{Output, PhaseError, explorer, inflight};
+use opentide_compile::git;
 use opentide_schema::vocab::Vocabularies;
 use opentide_workspace::Workspace;
 
@@ -446,6 +447,201 @@ pub fn explorer(options: &ExplorerOptions, cx: &Context<'_>) -> Report {
         None => generated(
             COMMAND,
             vec![("phase".to_owned(), Json::str("explorer"))],
+            vec![phase.step],
+        ),
+    }
+}
+
+/// The object files the change set touches (`changed_object_yaml_paths`):
+/// `INFLIGHT_PATHS` when set, else, outside CI, the work tree against the
+/// default branch, and in CI the pull or merge request's diff (the work tree
+/// again when that cannot be read).
+fn changed_object_files(root: &Path, cx: &Context<'_>) -> Vec<PathBuf> {
+    if let Some(raw) = cx
+        .env
+        .get("INFLIGHT_PATHS")
+        .filter(|raw| !raw.trim().is_empty())
+    {
+        return raw
+            .trim()
+            .split(',')
+            .filter(|path| !path.trim().is_empty())
+            .map(|path| cx.cwd.join(path))
+            .collect();
+    }
+    let env = |name: &str| cx.env.get(name).map(str::to_owned);
+    if git::ci(&env) == git::Ci::Local {
+        let local = work_tree_changes(root);
+        if local.is_empty() {
+            tracing::warn!("inflight_no_local_git_diff_found");
+        }
+        return local;
+    }
+    match git::changed_paths(root, cx.cwd, &env, git::DiffSource::ChangeRequest) {
+        Ok(scope) => scope
+            .iter()
+            .filter(|path| inflight::is_object_yaml(path))
+            .map(|path| root.join(path))
+            .collect(),
+        Err(error) => {
+            tracing::warn!(detail = error.message().as_str(), "inflight_ci_diff_failed");
+            work_tree_changes(root)
+        }
+    }
+}
+
+/// The object files changed in the work tree against the default branch,
+/// untracked ones included (`_local_git_changed_paths`).
+fn work_tree_changes(root: &Path) -> Vec<PathBuf> {
+    let baseline = match crate::git_baseline::resolve(root) {
+        Ok(baseline) => baseline,
+        Err(detail) => {
+            tracing::warn!(detail = detail.as_str(), "inflight_no_git_baseline");
+            return Vec::new();
+        }
+    };
+    let top = crate::git_baseline::toplevel(root);
+    let canonical =
+        |path: &Path| std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    let prefix = canonical(root)
+        .strip_prefix(canonical(&top))
+        .map(Path::to_path_buf)
+        .unwrap_or_default();
+    let prefix_text = prefix.to_string_lossy().replace('\\', "/");
+    let pathspec = if prefix_text.is_empty() {
+        "objects/".to_owned()
+    } else {
+        format!("{prefix_text}/objects/")
+    };
+    crate::git_baseline::changed(root, &baseline, &pathspec)
+        .into_iter()
+        .filter_map(|relative| {
+            let within = Path::new(&relative).strip_prefix(&prefix).ok()?;
+            let absolute = top.join(&relative);
+            (inflight::is_object_yaml(&within.to_string_lossy()) && absolute.is_file())
+                .then_some(absolute)
+        })
+        .collect()
+}
+
+/// `path` from the workspace with `/`, or as given when it is outside it
+/// (`_normalise_source_path`).
+fn source_path(root: &Path, path: &Path) -> String {
+    let canonical =
+        |path: &Path| std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    let shown = canonical(path)
+        .strip_prefix(canonical(root))
+        .map_or_else(|_| path.to_path_buf(), Path::to_path_buf);
+    shown.to_string_lossy().replace('\\', "/")
+}
+
+/// `opentide generate inflight`: a preview shard for each object file the
+/// change set touches, under `.opentide/inflight/`.
+pub fn inflight_shards(cx: &Context<'_>) -> Report {
+    const COMMAND: &str = "generate inflight";
+    let workspace = match workspace(COMMAND, cx) {
+        Ok(workspace) => workspace,
+        Err(report) => return *report,
+    };
+    let root = workspace.root().to_path_buf();
+    let dir = root.join(".opentide").join("inflight");
+    let phase = run_phase(
+        "inflight",
+        std::slice::from_ref(&root),
+        cx.cwd,
+        &root,
+        || {
+            std::fs::create_dir_all(&dir).map_err(|error| format!("{}: {error}", dir.display()))?;
+            let env = |name: &str| cx.env.get(name).map(str::to_owned);
+            let ci = git::ci(&env);
+            let event = cx
+                .env
+                .get("GITHUB_EVENT_PATH")
+                .filter(|path| !path.is_empty())
+                .and_then(|path| std::fs::read_to_string(path).ok());
+            let mut shards: indexmap::IndexMap<PathBuf, Output> = indexmap::IndexMap::new();
+            for path in changed_object_files(&root, cx) {
+                let text = std::fs::read(&path)
+                    .map_err(|error| format!("{}: {error}", path.display()))
+                    .and_then(|bytes| crate::queries::decode(&bytes))?;
+                let document = opentide_schema::node::load(&text)
+                    .map_err(|error| format!("{}: {error}", path.display()))?;
+                let Some(body) = document
+                    .root()
+                    .filter(|root| matches!(root.value, opentide_schema::node::Value::Map(_)))
+                else {
+                    tracing::warn!(path = %path.display(), "inflight_skip_non_mapping");
+                    continue;
+                };
+                let Some(uuid) = inflight::object_uuid(body) else {
+                    tracing::warn!(path = %path.display(), "inflight_skip_missing_uuid");
+                    continue;
+                };
+                let now = now_iso();
+                let change =
+                    inflight::change(&env, ci, &source_path(&root, &path), event.as_deref(), &now);
+                let shard = inflight::shard(body, &now, change);
+                let target = dir.join(format!("{uuid}.json"));
+                tracing::info!(uuid = uuid.as_str(), path = %target.display(), "inflight_shard_written");
+                shards.insert(
+                    target.clone(),
+                    Output::text(
+                        target,
+                        opentide_compile::generate::json_text::pretty(&shard, 2),
+                    ),
+                );
+            }
+            write(&shards.into_values().collect::<Vec<_>>())
+        },
+    );
+    match phase.error {
+        Some(detail) => phase_failed(COMMAND, "inflight", &detail, Vec::new(), vec![phase.step]),
+        None => generated(
+            COMMAND,
+            vec![("phase".to_owned(), Json::str("inflight"))],
+            vec![phase.step],
+        ),
+    }
+}
+
+/// `opentide generate inflight prune`: removes the shards the default
+/// branch has caught up with.
+pub fn inflight_prune(cx: &Context<'_>) -> Report {
+    const COMMAND: &str = "generate inflight prune";
+    let workspace = match workspace(COMMAND, cx) {
+        Ok(workspace) => workspace,
+        Err(report) => return *report,
+    };
+    let root = workspace.root().to_path_buf();
+    let dir = root.join(".opentide").join("inflight");
+    let phase = run_phase(
+        "inflight prune",
+        std::slice::from_ref(&root),
+        cx.cwd,
+        &root,
+        || {
+            for (uuid, path) in inflight::superseded(&dir, workspace.index()) {
+                match std::fs::remove_file(&path) {
+                    Ok(()) => {}
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                    Err(error) => return Err(format!("{}: {error}", path.display())),
+                }
+                tracing::info!(uuid = uuid.as_str(), path = %path.display(), "inflight_shard_pruned");
+            }
+            Ok(())
+        },
+    );
+    match phase.error {
+        Some(detail) => phase_failed(
+            COMMAND,
+            "inflight-prune",
+            &detail,
+            Vec::new(),
+            vec![phase.step],
+        ),
+        None => generated(
+            COMMAND,
+            vec![("phase".to_owned(), Json::str("inflight-prune"))],
             vec![phase.step],
         ),
     }

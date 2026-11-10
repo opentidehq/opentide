@@ -388,6 +388,20 @@ impl Run<'_> {
                 );
                 self.emit_report(&report, out, err)
             }
+            "generate inflight" | "generate inflight prune" => {
+                let cwd = self.host.cwd.clone().unwrap_or_default();
+                let cx = crate::commands::generate::Context {
+                    repo: self.globals.repo.as_deref(),
+                    env: self.env,
+                    cwd: &cwd,
+                };
+                let report = if path == "generate inflight" {
+                    crate::commands::generate::inflight_shards(&cx)
+                } else {
+                    crate::commands::generate::inflight_prune(&cx)
+                };
+                self.emit_report(&report, out, err)
+            }
             "rules unreviewed" => {
                 let older_than = leaf(&matches)
                     .get_one::<String>("older_than")

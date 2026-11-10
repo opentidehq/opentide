@@ -810,3 +810,78 @@ candidate = "  \u001b[1;31m\u2717\u001b[0m  \u001b[1mexplorer\u001b[0m \u001b[2m
 reason = "the explorer files are written in milliseconds: the checklist row is printed when they are done, without the spinner Python drew while they ran"
 issue = "https://github.com/opentidehq/opentide/issues/916"
 changelog = "**`generate explorer`, `generate inflight` and `setup ci` run on the Rust engine**"
+
+
+# UC-3.2c (#916): `generate inflight` outside a git repository logs that it
+# found no baseline. The Rust command line writes a log line as text in every
+# mode (`OPENTIDE_LOG_JSON=1` writes JSON lines), unwrapped and uncoloured, as
+# it is written: the oracle wrote structlog's JSON (with its Python logger's
+# module name) under `--json`, and at a terminal wrapped and coloured lines
+# inside its spinner's live region. `generate inflight prune` prints its
+# checklist row without the spinner, as `generate exports` does.
+
+[[diff]]
+command = "generate inflight"
+case = "generate.inflight/json/tide-corpus/default"
+target = "stderr"
+rule = "lines"
+oracle = "{\"detail\":\"changed-object discovery requires a git repository with at least one commit\",\"event\":\"inflight_no_git_baseline\",\"logger\":\"opentide.indexing.inflight\",\"level\":\"warning\",\"timestamp\":\"0000-00-00 00:00:00\"}\n{\"event\":\"inflight_no_local_git_diff_found\",\"logger\":\"opentide.indexing.inflight\",\"level\":\"warning\",\"timestamp\":\"0000-00-00 00:00:00\"}"
+candidate = "warning: Inflight no git baseline · detail: changed-object discovery requires a git repository with at least one commit\nwarning: Inflight no local git diff found"
+reason = "the Rust command line logs a warning as one text line in every mode (OPENTIDE_LOG_JSON=1 for JSON lines), as it is written, before the checklist row; the oracle wrote structlog JSON under --json, and at a terminal wrapped, coloured lines inside its spinner"
+issue = "https://github.com/opentidehq/opentide/issues/916"
+changelog = "**`generate explorer`, `generate inflight` and `setup ci` run on the Rust engine**"
+
+[[diff]]
+command = "generate inflight"
+case = "generate.inflight/human/tide-corpus/default"
+target = "stderr"
+rule = "lines"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36minflight\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[1;33mwarning: \u001b[0mInflight no git baseline · detail: changed-object discovery requires a git repository with \nat least one commit\n\u001b[1;33mwarning: \u001b[0mInflight no local git diff found\n\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;32m✓\u001b[0m  \u001b[1minflight\u001b[0m  \u001b[2m0 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+candidate = "warning: Inflight no git baseline · detail: changed-object discovery requires a git repository with at least one commit\nwarning: Inflight no local git diff found\n  \u001b[1;32m✓\u001b[0m  \u001b[1minflight\u001b[0m  \u001b[2m0 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+reason = "the Rust command line logs a warning as one text line in every mode (OPENTIDE_LOG_JSON=1 for JSON lines), as it is written, before the checklist row; the oracle wrote structlog JSON under --json, and at a terminal wrapped, coloured lines inside its spinner"
+issue = "https://github.com/opentidehq/opentide/issues/916"
+changelog = "**`generate explorer`, `generate inflight` and `setup ci` run on the Rust engine**"
+
+[[diff]]
+command = "generate inflight prune"
+case = "generate.inflight.prune/human/tide-corpus/default"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36minflight prune\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;32m✓\u001b[0m  \u001b[1minflight prune\u001b[0m  \u001b[2m0 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+candidate = "  \u001b[1;32m✓\u001b[0m  \u001b[1minflight prune\u001b[0m  \u001b[2m0 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+reason = "the shards are pruned in milliseconds: the checklist row is printed when they are done, without the spinner Python drew while they ran"
+issue = "https://github.com/opentidehq/opentide/issues/916"
+changelog = "**`generate explorer`, `generate inflight` and `setup ci` run on the Rust engine**"
+
+[[diff]]
+command = "generate inflight"
+case = "generate.inflight/json/vscode/default"
+target = "stderr"
+rule = "lines"
+oracle = "{\"detail\":\"changed-object discovery requires a git repository with at least one commit\",\"event\":\"inflight_no_git_baseline\",\"logger\":\"opentide.indexing.inflight\",\"level\":\"warning\",\"timestamp\":\"0000-00-00 00:00:00\"}\n{\"event\":\"inflight_no_local_git_diff_found\",\"logger\":\"opentide.indexing.inflight\",\"level\":\"warning\",\"timestamp\":\"0000-00-00 00:00:00\"}"
+candidate = "warning: Inflight no git baseline · detail: changed-object discovery requires a git repository with at least one commit\nwarning: Inflight no local git diff found"
+reason = "the Rust command line logs a warning as one text line in every mode (OPENTIDE_LOG_JSON=1 for JSON lines), as it is written, before the checklist row; the oracle wrote structlog JSON under --json, and at a terminal wrapped, coloured lines inside its spinner"
+issue = "https://github.com/opentidehq/opentide/issues/916"
+changelog = "**`generate explorer`, `generate inflight` and `setup ci` run on the Rust engine**"
+
+[[diff]]
+command = "generate inflight"
+case = "generate.inflight/human/vscode/default"
+target = "stderr"
+rule = "lines"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36minflight\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[1;33mwarning: \u001b[0mInflight no git baseline · detail: changed-object discovery requires a git repository with \nat least one commit\n\u001b[1;33mwarning: \u001b[0mInflight no local git diff found\n\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;32m✓\u001b[0m  \u001b[1minflight\u001b[0m  \u001b[2m0 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+candidate = "warning: Inflight no git baseline · detail: changed-object discovery requires a git repository with at least one commit\nwarning: Inflight no local git diff found\n  \u001b[1;32m✓\u001b[0m  \u001b[1minflight\u001b[0m  \u001b[2m0 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+reason = "the Rust command line logs a warning as one text line in every mode (OPENTIDE_LOG_JSON=1 for JSON lines), as it is written, before the checklist row; the oracle wrote structlog JSON under --json, and at a terminal wrapped, coloured lines inside its spinner"
+issue = "https://github.com/opentidehq/opentide/issues/916"
+changelog = "**`generate explorer`, `generate inflight` and `setup ci` run on the Rust engine**"
+
+[[diff]]
+command = "generate inflight prune"
+case = "generate.inflight.prune/human/vscode/default"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36minflight prune\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;32m✓\u001b[0m  \u001b[1minflight prune\u001b[0m  \u001b[2m0 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+candidate = "  \u001b[1;32m✓\u001b[0m  \u001b[1minflight prune\u001b[0m  \u001b[2m0 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+reason = "the shards are pruned in milliseconds: the checklist row is printed when they are done, without the spinner Python drew while they ran"
+issue = "https://github.com/opentidehq/opentide/issues/916"
+changelog = "**`generate explorer`, `generate inflight` and `setup ci` run on the Rust engine**"
