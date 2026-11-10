@@ -469,6 +469,16 @@ fn code_actions_follow_the_context() {
     let found = actions(&mut lsp, json!({ "diagnostics": [diagnostics[0]] }));
     assert_eq!(found.len(), 1, "{found:#?}");
     assert_eq!(found[0]["title"], "Apply suggestion: where");
+    let edit = &found[0]["edit"]["changes"][uri][0];
+    assert_eq!(edit["range"]["start"]["character"], 16, "{edit}");
+    assert_eq!(edit["range"]["end"]["character"], 20, "{edit}");
+    // The diagnostic itself still covers the stage (plan §3 invariant 3).
+    assert!(
+        diagnostics[0]["range"]["end"]["character"]
+            .as_u64()
+            .unwrap()
+            > 20
+    );
     assert_eq!(found[0]["isPreferred"], true);
     assert_eq!(found[0]["diagnostics"][0], diagnostics[0]);
 
@@ -490,6 +500,17 @@ fn code_actions_follow_the_context() {
         .map(|e| e["newText"].as_str().unwrap())
         .collect();
     assert_eq!(texts, ["where", "project"]);
+    // Each replaces the operator's word, not its stage: the arguments stay (#887).
+    let ranges: Vec<(u64, u64)> = edits
+        .iter()
+        .map(|e| {
+            (
+                e["range"]["start"]["character"].as_u64().unwrap(),
+                e["range"]["end"]["character"].as_u64().unwrap(),
+            )
+        })
+        .collect();
+    assert_eq!(ranges, [(16, 20), (39, 45)], "{edits:#?}");
 
     let found = actions(&mut lsp, json!({ "diagnostics": [], "only": ["quickfix"] }));
     assert!(found.iter().all(|a| a["kind"] == "quickfix"), "{found:#?}");
