@@ -19,6 +19,7 @@ pub mod commands;
 pub mod crash;
 pub mod env;
 pub mod envelope;
+pub mod explain;
 pub mod hoist;
 pub mod json;
 pub mod logging;

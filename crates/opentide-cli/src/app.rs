@@ -28,7 +28,16 @@ use std::time::{Duration, Instant, SystemTime};
 
 /// Command paths with a Rust implementation; every other one is refused with
 /// `engine_not_ported`, as `OPENTIDE_ENGINE=rust` refuses it.
-pub const PORTED: &[&str] = &["commands", "info", "rules unreviewed"];
+pub const PORTED: &[&str] = &[
+    "commands",
+    "explain",
+    "info",
+    "rules unreviewed",
+    "generate exports",
+    "generate exports navigator",
+    "generate exports objects",
+    "generate exports revisions",
+];
 
 /// What the embedding process tells the run about itself.
 pub struct Host {
@@ -71,6 +80,12 @@ impl Interrupt {
     /// Whether Ctrl-C was pressed: long jobs poll this and stop.
     pub fn requested(&self) -> bool {
         self.requested.load(Ordering::SeqCst)
+    }
+
+    /// Takes back a Ctrl-C a command handled as its way to stop
+    /// (`validate --watch` exits 0): the run then reports no interruption.
+    pub fn consume(&self) {
+        self.requested.store(false, Ordering::SeqCst);
     }
 
     /// Prints `error: interrupted` once, whoever reports it first; 130.
@@ -368,6 +383,36 @@ impl Run<'_> {
                 );
                 self.emit_report(&report, out, err)
             }
+            "validate" => {
+                let (args, report) = self.validate(&matches);
+                if let Some(report) = report {
+                    return self.emit_report(&report, out, err);
+                }
+                let cwd = self.host.cwd.clone().unwrap_or_default();
+                let terminal = self.terminal();
+                let interrupt = self.host.interrupt.clone();
+                let code = crate::commands::watch::run(
+                    &args,
+                    &crate::commands::validate::Context {
+                        repo: self.globals.repo.as_deref(),
+                        env: self.env,
+                        cwd: &cwd,
+                        version: &self.host.version,
+                        terminal: &terminal,
+                    },
+                    out,
+                    err,
+                    &|| interrupt.requested(),
+                )?;
+                // Ctrl-C is how a watch stops.
+                self.host.interrupt.consume();
+                Ok(code)
+            }
+            "explain" => {
+                let code = leaf(&matches).get_one::<String>("code").cloned();
+                let report = crate::commands::explain::run(code.as_deref(), &self.terminal());
+                self.emit_report(&report, out, err)
+            }
             "rules unreviewed" => {
                 let older_than = leaf(&matches)
                     .get_one::<String>("older_than")
@@ -423,6 +468,85 @@ impl Run<'_> {
         )
     }
 
+    /// `opentide validate`, from its parsed arguments: its report, or `None`
+    /// for a `--watch` the options allow, which runs until Ctrl-C.
+    fn validate(
+        &self,
+        matches: &clap::ArgMatches,
+    ) -> (
+        crate::commands::validate::Args,
+        Option<crate::commands::Report>,
+    ) {
+        use crate::commands::validate::{Args, Context, run};
+        use clap::ValueEnum;
+        let args = leaf(matches);
+        let strings = |id: &str| -> Vec<String> {
+            args.get_many::<String>(id)
+                .map(|values| values.cloned().collect())
+                .unwrap_or_default()
+        };
+        let parsed = Args {
+            check: args
+                .get_one::<crate::tree::Check>("check")
+                .and_then(|check| check.to_possible_value())
+                .and_then(|value| opentide_workspace::validate::Check::parse(value.get_name())),
+            selection: opentide_workspace::validate::Selection {
+                files: strings("file"),
+                uuids: strings("uuid"),
+                types: strings("object_type"),
+            },
+            strict: args.get_flag("strict"),
+            queries: args
+                .get_one::<crate::tree::Queries>("queries")
+                .map(|queries| match queries {
+                    crate::tree::Queries::Error => opentide_workspace::validate::QueriesMode::Error,
+                    crate::tree::Queries::Warn => opentide_workspace::validate::QueriesMode::Warn,
+                    crate::tree::Queries::Off => opentide_workspace::validate::QueriesMode::Off,
+                }),
+            fix: args.get_flag("fix"),
+            dry_run: args.get_flag("dry_run"),
+            watch: args.get_flag("watch"),
+            format: args
+                .get_one::<crate::tree::ReportFormat>("report_format")
+                .map(|format| match format {
+                    crate::tree::ReportFormat::Text => crate::render::report::ReportFormat::Text,
+                    crate::tree::ReportFormat::Sarif => crate::render::report::ReportFormat::Sarif,
+                    crate::tree::ReportFormat::Codequality => {
+                        crate::render::report::ReportFormat::Codequality
+                    }
+                }),
+            output: args.get_one::<PathBuf>("output").cloned(),
+        };
+        if parsed.watch && crate::commands::validate::refuse(&parsed, self.mode).is_none() {
+            return (parsed, None);
+        }
+        let cwd = self.host.cwd.clone().unwrap_or_default();
+        let terminal = self.terminal();
+        let report = run(
+            &parsed,
+            &Context {
+                repo: self.globals.repo.as_deref(),
+                env: self.env,
+                cwd: &cwd,
+                version: &self.host.version,
+                terminal: &terminal,
+            },
+        );
+        (parsed, Some(report))
+    }
+
+    /// The streams, as a command lays its text out for them.
+    fn terminal(&self) -> crate::commands::Terminal {
+        crate::commands::Terminal {
+            mode: self.mode,
+            stdout: self.console(self.host.stdout_tty),
+            stderr: self.console(self.host.stderr_tty),
+            quiet: self.globals.quiet,
+            stdout_tty: self.host.stdout_tty,
+            width: self.host.width,
+        }
+    }
+
     /// The width a table or a long line is laid out at on stdout: `COLUMNS`,
     /// else the terminal's, else 80.
     fn stdout_width(&self) -> usize {
@@ -454,6 +578,10 @@ impl Run<'_> {
             return Ok(INTERRUPTED_EXIT_CODE);
         }
         let outcome = &report.outcome;
+        if !report.stderr_first.is_empty() {
+            err.write_all(report.stderr_first.as_bytes())?;
+            err.flush()?;
+        }
         if self.mode == Mode::Json {
             let mut document = outcome.document(self.duration_ms());
             if !report.warnings.is_empty()
@@ -500,6 +628,13 @@ impl Run<'_> {
         }
         let stdout = self.console(self.host.stdout_tty);
         let width = self.stdout_width();
+        if let Some(whole) = &report.whole_stdout {
+            if self.mode != Mode::Mcp {
+                out.write_all(whole.as_bytes())?;
+            }
+            out.flush()?;
+            return Ok(outcome.exit_code);
+        }
         if self.mode != Mode::Mcp {
             for block in &report.body {
                 match block {
@@ -515,8 +650,19 @@ impl Run<'_> {
                             out.write_all(stdout.line(&line).as_bytes())?;
                         }
                     }
+                    Block::Raw(text) => out.write_all(text.as_bytes())?,
+                    Block::Stderr(text) => {
+                        out.flush()?;
+                        err.write_all(text.as_bytes())?;
+                        err.flush()?;
+                    }
                 }
             }
+        }
+        if report.body_only && outcome.exit_code == 0 {
+            out.flush()?;
+            err.flush()?;
+            return Ok(outcome.exit_code);
         }
         let view = ResultView {
             message: outcome.message.clone(),
@@ -1367,14 +1513,14 @@ mod tests {
             "{}",
             help.stdout
         );
-        let refused = dispatched("--json validate", &[], false);
+        let refused = dispatched("--json deploy", &[], false);
         assert_eq!(refused.code, 2);
         assert!(refused.stdout.contains("\"code\":\"engine_not_ported\""));
         assert!(refused.stdout.contains("\"argument\":\"OPENTIDE_ENGINE\""));
-        let plain = dispatched("validate", &[], false);
+        let plain = dispatched("deploy", &[], false);
         assert_eq!(
             plain.stderr,
-            "error: opentide validate has no Rust implementation yet: unset OPENTIDE_ENGINE, or set it to python or compare.\n"
+            "error: opentide deploy has no Rust implementation yet: unset OPENTIDE_ENGINE, or set it to python or compare.\n"
         );
         let file =
             std::env::temp_dir().join(format!("opentide-cli-not-a-dir-{}", std::process::id()));
@@ -1530,7 +1676,7 @@ mod tests {
         assert_eq!(plain.code, 0);
         assert!(plain.stdout.contains("commands"), "{}", plain.stdout);
         // Parsed, then refused as not ported: no usage error.
-        let strict = dispatched("--json validate --strict --strict", &[], false);
+        let strict = dispatched("--json deploy --dry-run --dry-run", &[], false);
         assert!(
             strict.stdout.contains("\"code\":\"engine_not_ported\""),
             "{}",
@@ -1755,7 +1901,7 @@ mod tests {
             Ok(run.emit(&outcome, &[], &["a line".into()], out, err)?)
         });
         assert_eq!((success.code, success.stdout.as_str()), (0, ""));
-        let failed = dispatched("--json validate", &[], false);
+        let failed = dispatched("--json deploy", &[], false);
         assert!(
             failed.stdout.starts_with("{\"error\":"),
             "{}",
@@ -1767,13 +1913,13 @@ mod tests {
     fn framework_small_behaviours() {
         // TERM=DUMB in any case: no SGR, even in human mode on a terminal.
         let dumb = dispatched(
-            "validate",
+            "deploy",
             &[("OPENTIDE_OUTPUT", "human"), ("TERM", "DUMB")],
             true,
         );
         assert!(!dumb.stderr.contains('\u{1b}'), "{}", dumb.stderr);
         let coloured = dispatched(
-            "validate",
+            "deploy",
             &[("OPENTIDE_OUTPUT", "human"), ("TERM", "xterm")],
             true,
         );

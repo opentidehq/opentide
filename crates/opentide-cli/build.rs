@@ -1,0 +1,44 @@
+//! Compiles in the `opentide explain` pages: one `include_str!` per Markdown
+//! file of `src/opentide/data/diagnostics/`, written to
+//! `$OUT_DIR/explain_pages.rs` as `PAGES: &[(&str, &str)]` (code, Markdown),
+//! sorted by code. The pages are the package's data; the Python CLI reads
+//! the same files.
+
+use std::fmt::Write as _;
+use std::path::PathBuf;
+
+#[expect(
+    clippy::unwrap_used,
+    reason = "a build script: cargo sets its variables, and a page that cannot be listed fails the build"
+)]
+fn main() {
+    let manifest = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
+    let pages = manifest.join("../../src/opentide/data/diagnostics");
+    let mut found: Vec<(String, PathBuf)> = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(&pages) {
+        for entry in entries {
+            let path = entry.unwrap().path();
+            if path.extension().and_then(|ext| ext.to_str()) == Some("md")
+                && let Some(stem) = path.file_stem().and_then(|stem| stem.to_str())
+            {
+                found.push((stem.to_owned(), path.canonicalize().unwrap()));
+            }
+        }
+    }
+    found.sort();
+    let mut out = String::from("/// The explain pages: (code, Markdown), sorted by code.\n");
+    out.push_str("pub const PAGES: &[(&str, &str)] = &[\n");
+    for (code, path) in &found {
+        writeln!(
+            out,
+            "    ({code:?}, include_str!({:?})),",
+            path.display().to_string()
+        )
+        .unwrap();
+    }
+    out.push_str("];\n");
+    let target = PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("explain_pages.rs");
+    std::fs::write(target, out).unwrap();
+    println!("cargo:rerun-if-changed={}", pages.display());
+    println!("cargo:rerun-if-changed=build.rs");
+}

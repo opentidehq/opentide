@@ -25,6 +25,35 @@
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
+/// A string option whose choices the catalogue lists but the command checks
+/// itself, with its own message (`validate --type`: "Unknown object
+/// type(s): …"): clap accepts any value and still knows the choices.
+#[derive(Clone, Debug)]
+pub struct CommandChecked(pub &'static [&'static str]);
+
+impl clap::builder::TypedValueParser for CommandChecked {
+    type Value = String;
+
+    fn parse_ref(
+        &self,
+        cmd: &clap::Command,
+        arg: Option<&clap::Arg>,
+        value: &std::ffi::OsStr,
+    ) -> Result<String, clap::Error> {
+        clap::builder::StringValueParser::new().parse_ref(cmd, arg, value)
+    }
+
+    fn possible_values(
+        &self,
+    ) -> Option<Box<dyn Iterator<Item = clap::builder::PossibleValue> + '_>> {
+        Some(Box::new(
+            self.0
+                .iter()
+                .map(|name| clap::builder::PossibleValue::new(*name)),
+        ))
+    }
+}
+
 /// The values of `Check`, as the command line spells them.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
 pub enum Check {
@@ -1621,7 +1650,7 @@ pub struct ValidateArgs {
     pub file: Vec<String>,
     #[arg(long = "uuid", help = "Validate only the object with this UUID (repeatable)", action = clap::ArgAction::Append)]
     pub uuid: Vec<String>,
-    #[arg(long = "type", help = "Validate only this type: rule, threat or objective (repeatable)", value_parser = clap::builder::PossibleValuesParser::new(["rule", "threat", "objective"]), action = clap::ArgAction::Append)]
+    #[arg(long = "type", help = "Validate only this type: rule, threat or objective (repeatable)", value_parser = CommandChecked(&["rule", "threat", "objective"]), action = clap::ArgAction::Append)]
     pub object_type: Vec<String>,
     #[arg(long = "strict", help = "Fail on warnings too")]
     pub strict: bool,
