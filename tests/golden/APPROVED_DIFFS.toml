@@ -252,9 +252,12 @@
 #   left there is neither a duplicate nor a parse error (no recording holds
 #   one; "**Every file with an invalid UUID is reported**").
 #
-# Decided by UC-2.2 for the language server (UC-2.6, #821), once a
-# maintainer approves retiring the engine's codes (plan §3 invariant 3); no
-# golden case records the editor:
+# Decided by UC-2.2 for the language server (UC-2.6, #821), and approved by
+# the maintainer on #893 (plan §3 invariant 3). UC-2.3 (#818) gives lint's
+# side, `opentide_workspace::lint::lint_file`: the filenames and metadata
+# findings of one file, the ones `lint --file` reports; UC-2.6 reports them
+# in the editor and retires the four codes. No golden case records the
+# editor, so no entry can apply to a case:
 #
 # - KG-03: `filename_slug` gives way to lint's `filename_mismatch` ("**One
 #   rule names object files, in the editor and in CI**").
@@ -263,3 +266,47 @@
 #   ("**Metadata recommendations have one code, in the editor and in CI**").
 # - KG-02: the editor checks `metadata.reviewed` through the Rust model
 #   ("**The editor checks `metadata.reviewed` as `validate` does**").
+#
+# Lint, `validate --fix` and `--watch` (UC-2.3, #818), decided and checked
+# case by case by `cargo xtask lint diff` (xtask/src/lint.rs `APPROVED`) and
+# `cargo xtask validate diff`'s --fix cases; entered here, each with its
+# rule, when `lint` and `validate` route their cases to Rust (UC-2.7,
+# UC-3.5). Every recorded `lint --json` finding, `validate --fix` diff and
+# file written matches, but for:
+#
+# - `yaml-error-text` in `lint` `*/fault/*` (3 findings): a `yaml_parse`
+#   finding's message is saphyr's, at the line and column the oracle names
+#   (one column later where saphyr names a tab) ("**Tide objects are read
+#   as YAML 1.2**").
+# - `yaml-1-2-dates` in `lint` `*/fault/*`: `reviewed: 2026-02-30`
+#   unquoted no longer makes the file a `yaml_parse` error; lint reads the
+#   file like any other (one error fewer, `count` and `summary` follow)
+#   ("**Tide objects are read as YAML 1.2**").
+#
+# Decided by UC-2.3 and reached by no recording (announced under
+# "**`lint`, `validate --fix` and `--watch` run in the Rust engine**"):
+#
+# - `fix-diff-alignment`: `--fix --dry-run`'s diff is the `similar` crate's
+#   (Myers) unified diff, not a port of difflib. Where a changed line sits
+#   next to an identical line, the hunk may show the change against the
+#   other copy (or start a line earlier); both diffs patch the file to the
+#   same result (crates/opentide-workspace/tests/external_difflib.rs: 2777
+#   of 3000 generated files byte for byte, every other one equivalent). The
+#   recorded dry runs are byte for byte the oracle's.
+# - `lint-yaml-lines`: lint counts lines where YAML breaks them (`\r\n`,
+#   `\r`, `\n`), as `validate` does, where the oracle's `str.splitlines`
+#   also broke at `\v`, `\f`, `\x1c`-`\x1e`, `\x85`, U+2028 and U+2029: a
+#   key or placeholder after such a character is reported on its YAML line.
+# - `write-error-text`: a fix that cannot be written names the reason in
+#   the operating system's words as Rust reports them (`Permission denied
+#   (os error 13)`), where the oracle wrote `Permission denied`.
+# - `fix-after-bom`: a fix on the first line of a file that starts with a
+#   byte order mark is applied (positions count from after the mark, as the
+#   parser counts them); the oracle counted the mark as a column, so the
+#   text at the span was not the value and the fix was left out.
+# - `lint-stem-case`: two stems that differ only in case are compared in
+#   lower case (Unicode lowercase), where the oracle used `casefold`: `ß` and
+#   `ss` are two names.
+# - `watch-events`: `--watch` wakes on the file system's events (`notify`)
+#   and still looks every 0.5 s; a scoped pass reloads only the changed
+#   files. The pass rules (full or scoped) are the oracle's.
