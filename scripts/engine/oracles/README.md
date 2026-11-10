@@ -13,10 +13,11 @@ CI-only checks that compare the opentide engine with the parser each query langu
 | Lucene, Carbon Black Cloud | A Carbon Black Cloud tenant's `processes/search_validation` (`valid`, `invalid_message`, `error_offset`), as cbc_sdk's `validate_process_query` calls it | `oracle.py carbon_black`, with `OPENTIDE_CBC_URL`, `OPENTIDE_CBC_ORG_KEY` and `OPENTIDE_CBC_TOKEN` (`<api secret>/<api id>`, `org.search.events` READ) | `oracle.yml` → Carbon Black Cloud, weekly and on demand; it skips without the secrets and never runs on a pull request |
 | Falco | `falco --validate`: Falco 0.45.2 (libs 0.26.1), `falcosecurity/falco:0.45.2`, with the three default rules files of `falcosecurity/rules@e7b066bf` loaded | `falco/oracle.py`, one Falco process per case in one container | `oracle.yml` → Falco 0.45.2; see [Falco](#falco) |
 | CQL (CrowdStrike) | None in CI. CQL is closed source: there is no parser to port, LogScale self-hosted needs a licence key and Kafka, and Community Edition sign-up closed in 2024. A tenant is the only reference: LogScale's GraphQL `validateQuery` (diagnostics without positions), or a Next-Gen SIEM query job that fails with HTTP 400 | — | the engine follows CrowdStrike's published grammar and function reference, measured on 2,846 public queries; see [docs/CQL.md](../../docs/CQL.md) |
+| YARA | libyara 4.5.4 (`yara-python` 4.5.4: `yara.compile`, warnings by `error_on_warning`) and YARA-X 1.23.0 (the `yara-x` wheel: `Compiler.add_source`, `build`) | `yara/oracle.py`, each verdict in a child process with 2 GB and 20 s | `oracle.yml` → libyara and YARA-X; see [YARA](#yara) |
 | Tide YAML | Pydantic models in the pinned `opentide` package | `scripts/pydantic_object_issues.py` | `ci.yml` (`cargo test`, `tide_corpus.rs`) |
 | EQL, ES\|QL, Lucene | A live Elasticsearch (8.19 and 9.x release images) | `elasticsearch/`, a throwaway container | `oracle.yml` (8.19.23 and 9.5.5), and locally for the other lines; see [Live Elasticsearch](#live-elasticsearch) |
 
-Tide YAML already has its oracle: `tide_corpus.rs` runs the opentide CLI's Pydantic models and requires the LSP to report every issue they find. Configuration TOML gets the same treatment in `#68`. The Elastic references are fetched at CI time: the npm packages from `elastic/package-lock.json` (`npm ci --ignore-scripts`), and `EqlBase.g4`, `grammar.peggy`, and the Lucene jars by URL with a pinned SHA-256 (`FETCH` in `oracle.py`), cached in `elastic/.cache/`. None of them is committed. CQL has none (its row above says why). Later languages (S1QL, Sigma, YARA) get an oracle when they get an engine; see `skills/add-language/SKILL.md`.
+Tide YAML already has its oracle: `tide_corpus.rs` runs the opentide CLI's Pydantic models and requires the LSP to report every issue they find. Configuration TOML gets the same treatment in `#68`. The Elastic references are fetched at CI time: the npm packages from `elastic/package-lock.json` (`npm ci --ignore-scripts`), and `EqlBase.g4`, `grammar.peggy`, and the Lucene jars by URL with a pinned SHA-256 (`FETCH` in `oracle.py`), cached in `elastic/.cache/`. None of them is committed. CQL has none (its row above says why). Later languages (S1QL, Sigma) get an oracle when they get an engine; see `skills/add-language/SKILL.md`.
 
 ## What is compared
 
@@ -91,7 +92,7 @@ Nothing from this reference is shipped or vendored; the image is pulled at run t
 
 ## Not shipped
 
-Kusto.Language, Splunk, Splunk SDKs, and the Elastic and Lucene references never enter a release artifact. `ci-oracle.sh` fails if a shipped manifest depends on one, and `release.yml` runs `scripts/license-scan.sh` over every artifact (unpacking zips and `.crate` files) before it attaches or publishes them.
+Kusto.Language, Splunk, Splunk SDKs, the Elastic and Lucene references, the `yara-x` compiler crate and `yara-python` never enter a release artifact. `ci-oracle.sh` fails if a shipped manifest depends on one, and `release.yml` runs `scripts/license-scan.sh` over every artifact (unpacking zips and `.crate` files) before it attaches or publishes them.
 
 ## Falco
 
@@ -105,4 +106,21 @@ Pins: Falco `0.45.2` (the `falcosecurity/falco` image), rules `falcosecurity/rul
 
 ```bash
 python scripts/oracles/falco/oracle.py --rules ../falcosecurity-rules --docker falcosecurity/falco:0.45.2 --report report.json
+```
+
+## YARA
+
+`yara/oracle.py` makes two checks, with the pins `yara-python==4.5.4` and `yara-x==1.23.0` (it refuses other versions):
+
+1. Every verdict recorded in `testdata/conformance/yara/cases.json` (1,762 cases from YARA-X's `lib/src/tests/mod.rs` and compiler `errors`/`warnings` suites, and libyara's `tests/test-rules.c`, written by `scripts/sync_yara_conformance.py`) is what the live engines say. `crates/opentide-yara/tests/conformance.rs` holds the engine to those verdicts in every `cargo test`, so the oracle only keeps them honest.
+2. Every YARA file of the repository (`testdata/corpus/yara`, `testdata/conformance/external/yara` with its `.broken.` twins, YARA-X's parser suite in `testdata/conformance/yara-x/parser`) goes through `opentide-lsp analyze --language yara` and both references.
+
+A file agrees when the engine reports an error exactly when libyara refuses it (`yara_empty_signature` aside: libyara compiles a file of private rules), and reports `yara_x_incompatible` (or `yara_entrypoint_deprecated`) exactly when libyara compiles it and YARA-X refuses it. A disagreement fails unless a `[[yara]]` entry of `testdata/oracles/exceptions.toml` lists it, with `check` naming the verdict that differs (`libyara`, `yara_x` or `both`); `conformance.rs` reads the entries whose paths are `cases.json#<origin>`. A listed path that agrees fails too. The four entries are an unterminated `/*` (libyara drops the rest of the text silently), a case libyara runs out of memory on, YARA-X's regexp size limit, and libyara's test-only `tests` module.
+
+Neither package ships: `scripts/ci-oracle.sh` refuses the `yara-x` compiler crate (and its `wasmtime`) or `yara-python` in a shipped manifest, and `scripts/license-scan.sh` in a release artifact. The engine parses with `yara-x-parser`, which is not the compiler.
+
+```bash
+pip install yara-python==4.5.4 yara-x==1.23.0
+cargo build -p opentide-lsp
+python3 scripts/oracles/yara/oracle.py --report report.json
 ```

@@ -774,6 +774,7 @@ dependencies = [
  "opentide-highlight",
  "opentide-syntax",
  "serde",
+ "serde_json",
  "toml",
  "tree-sitter",
  "yara-x-fmt",

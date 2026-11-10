@@ -108,10 +108,41 @@ In `.yar` files, and in `yara.signature` and HarfangLab's decomposed fragments i
 
 ## Verified against the engines
 
-Local runs, against `yara-python` 4.5.4 (libyara) and the `yara-x` 1.23.0 wheel. The CI oracle job comes with the conformance work.
+The references are `yara-python` 4.5.4 (libyara) and the `yara-x` 1.23.0 wheel. Neither ships (`scripts/oracles/README.md`).
+
+### In every `cargo test`
+
+- **Conformance cases**: `testdata/conformance/yara/cases.json` holds 1,762 cases with both engines' recorded verdicts. They come from YARA-X's `lib/src/tests/mod.rs` and its compiler `errors`/`warnings` suites, and from libyara's `tests/test-rules.c`, extracted by `scripts/sync_yara_conformance.py`. Verdict pairs (libyara, YARA-X):
+
+  | Pair | Cases |
+  |------|-------|
+  | ok, ok | 828 |
+  | error, error | 506 |
+  | error, ok | 222 |
+  | warning, ok | 171 |
+  | ok, error | 27 |
+  | warning, error | 8 |
+
+  `crates/opentide-yara/tests/conformance.rs` checks three things:
+  - under the libyara dialect, an error exactly where libyara refuses, and a warning where libyara warns;
+  - `yara_x_incompatible` on every case libyara compiles and YARA-X refuses;
+  - no `yara_x_incompatible` on a case both compile.
+
+  The differences are the `[[yara]]` entries of `testdata/oracles/exceptions.toml`. There are four:
+  - an unterminated `/*`: libyara silently drops the rest of the text, and the engine reports it as YARA-X does;
+  - sixteen nested repetitions that libyara runs out of memory on;
+  - YARA-X's regexp size limit, which is not modelled;
+  - libyara's test-only `tests` module.
+- **External corpus**: 50 public files with their `.broken.` twins, under `testdata/conformance/external/yara`. 25 come from ReversingLabs (MIT) and 25 from signature-base (DRL 1.1). `crates/opentide-yara/tests/external_corpus.rs` requires no finding on each file under both dialects, and an error on each twin.
+
+### In CI
+
+`oracle.yml` → libyara and YARA-X (`scripts/oracles/yara/oracle.py`) re-checks every recorded verdict against the live engines. It also runs every YARA file of the repository (269: the production corpus, the external corpus, YARA-X's parser suite) through the engine and both references.
+
+### Local sweeps
 
 | Set | Result |
 |-----|--------|
-| Neo23x0/signature-base (`de3c725`, 754 files) and ReversingLabs/reversinglabs-yara-rules (`e0a0be5`, 309 files) | 1,059 / 1,063 files agree with libyara on error or not, no file libyara refuses is missed; the other 4 have every rule commented out, which yara-1.0 reports as `yara_empty_signature` |
+| Neo23x0/signature-base (`de3c725`, 754 files) and ReversingLabs/reversinglabs-yara-rules (`e0a0be5`, 309 files) | 1,059 / 1,063 files agree with libyara on error or not, no file libyara refuses is missed; the other 4 have every rule commented out, which yara-1.0 reports as `yara_empty_signature`. YARA-X compiles every file libyara compiles, and the engine warns `yara_x_incompatible` on none |
 | 467 one-fault mutations of those rules (a renamed string reference, a dropped import, a duplicated string, a broken hex byte or regexp, an unclosed parenthesis, a bad rule name, `nocase xor`, a 20-digit integer, a repeated tag) | 467 / 467 agree with libyara |
 | 400 random short strings, hex strings and regexps | 400 / 400 agree with libyara on "may slow down scanning" |
