@@ -23,6 +23,7 @@ members = [
     "crates/opentide-schema-derive",
     "crates/opentide-schema",
     "crates/opentide-tide",
+    "crates/opentide-workspace",
     "crates/opentide-analysis",
     "crates/opentide-lsp",
     "crates/opentide-wasm",
@@ -57,6 +58,7 @@ opentide-ecs = { path = "crates/opentide-ecs", version = "=0.12.0" }
 opentide-schema = { path = "crates/opentide-schema", version = "=0.12.0" }
 opentide-schema-derive = { path = "crates/opentide-schema-derive", version = "=0.12.0" }
 opentide-tide = { path = "crates/opentide-tide", version = "=0.12.0" }
+opentide-workspace = { path = "crates/opentide-workspace", version = "=0.12.0" }
 opentide-analysis = { path = "crates/opentide-analysis", version = "=0.12.0" }
 opentide-lsp = { path = "crates/opentide-lsp", version = "=0.12.0" }
 opentide-compare = { path = "crates/opentide-compare", version = "=0.12.0" }
@@ -121,6 +123,9 @@ trycmd = "1.2"
 trybuild = "1.0"
 # Property tests (opentide-schema: every valid object round-trips).
 proptest = { version = "1", default-features = false, features = ["std"] }
+# Data parallelism (opentide-workspace: each object file read and parsed on
+# its own thread). The version trycmd already locks.
+rayon = "1.12"
 # xtask only: `cargo xtask bench` reads each benchmarked process's peak RSS
 # from wait4(2), whose safe wrapper this is (the workspace forbids `unsafe`).
 wait4 = "0.2"

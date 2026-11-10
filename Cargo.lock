@@ -1176,6 +1176,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "opentide-workspace"
+version = "0.12.0"
+dependencies = [
+ "indexmap",
+ "opentide-schema",
+ "proptest",
+ "rayon",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "ordered-float"
 version = "5.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2257,6 +2269,7 @@ dependencies = [
  "opentide-compare",
  "opentide-schema",
  "opentide-tide",
+ "opentide-workspace",
  "regex",
  "rustix",
  "schemars",

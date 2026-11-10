@@ -41,6 +41,11 @@
 #   `#[derive(FromNode)]` proc-macro opentide-schema uses depends on no
 #   workspace crate (syn, quote), and its expansion names opentide-schema's
 #   paths, which only opentide-schema and the crates above it use.
+# - opentide-workspace (UC-2.1, #816) is domain tier 0, beside opentide-tide:
+#   the plan's domain crate that loads a workspace builds on opentide-schema
+#   (the node tree, the configuration) and on no other domain crate. The
+#   language server (UC-2.6, #821) and the command line come to it from above;
+#   opentide-analysis and opentide-tide fold into it later (plan §4).
 
 [[layer]]
 name = "foundation"
@@ -55,7 +60,7 @@ tiers = [
 [[layer]]
 name = "domain"
 tiers = [
-    ["opentide-tide"],
+    ["opentide-tide", "opentide-workspace"],
     ["opentide-analysis"],
 ]
 
