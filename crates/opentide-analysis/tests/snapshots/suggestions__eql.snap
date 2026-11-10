@@ -1,0 +1,13 @@
+---
+source: crates/opentide-analysis/tests/suggestions.rs
+expression: "queries(LanguageId::Eql, None, &[\"eql_unknown_function\"],\n&[\"process where startswith~(process.name, \\\"cmd\\\")\",\n\"process where startwith(process.name, \\\"cmd\\\")\",\n\"process where lenght(process.name) > 1\",\n\"process where str(process.pid) == \\\"1\\\"\",\n\"process where stringContains(process.name, \\\"cmd\\\")\",\n\"process where cidrmatch(source.ip, \\\"10.0.0.0/8\\\")\",],)"
+---
+process where startswith~(process.name, "cmd")
+process where startwith(process.name, "cmd")
+  error eql_unknown_function `startwith` => startsWith
+process where lenght(process.name) > 1
+  error eql_unknown_function `lenght` => length
+process where str(process.pid) == "1"
+  error eql_unknown_function `str` => (none)
+process where stringContains(process.name, "cmd")
+process where cidrmatch(source.ip, "10.0.0.0/8")
