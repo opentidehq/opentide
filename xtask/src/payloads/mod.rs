@@ -2,13 +2,14 @@
 //! oracle (UC-3.1, #823).
 //!
 //! `diff --against python` materialises each corpus (the fixtures of
-//! `tests/golden/cases.toml`), has the oracle compile every rule's Sentinel,
-//! Elastic and Sysdig block (`probe.py`: the dry run's body, each configured
-//! tenant's, and the dry run's payload entry), compiles the same with
-//! `opentide-compile`, and compares them byte for byte. A difference fails,
-//! unless `tests/golden/payloads/APPROVED.toml` approves it. The blocks of
-//! every other platform, which opentide-compile does not compile yet, are
-//! listed as not compared.
+//! `tests/golden/cases.toml`), has the oracle compile every platform block of
+//! every rule (`probe.py`: the dry run's body of Sentinel, Elastic and
+//! Sysdig, each configured tenant's body, or for the other six platforms the
+//! writes their deployer sends to it, and the dry run's payload entry),
+//! compiles the same with `opentide-compile`, and compares them byte for
+//! byte. A difference fails, unless `tests/golden/payloads/APPROVED.toml`
+//! approves it: one difference (`[[diff]]`), or a class of differences of
+//! the model-dump previews (`[[dump]]`, [`dump_approval`]).
 
 pub mod git;
 pub mod plan;
@@ -21,10 +22,10 @@ use std::sync::Arc;
 
 use anyhow::{Context as _, Result, bail, ensure};
 use opentide_compile::json::Json;
-use opentide_compile::preview::{self, Preview};
-use opentide_compile::{CompileError, Owned, Rule, elastic, sentinel, sysdig};
+use opentide_compile::preview::{self, Inputs, PROBE_CLOCK, PROBE_TIMESTAMP};
+use opentide_compile::{CompileError, Owned, Rule};
 use opentide_schema::vocab::Vocabularies;
-use opentide_workspace::{Options, OsFs, RootOptions, Workspace};
+use opentide_workspace::{FileSystem, Options, OsFs, RootOptions, Workspace};
 use serde::Deserialize;
 
 /// The probe the oracle runs.
@@ -56,11 +57,13 @@ usage: cargo xtask payloads <command> [options]
 
 commands:
   diff --against python [--corpus NAME|all ...] [--python PATH] [--record]
-                 compile every Sentinel, Elastic and Sysdig block of every rule of each
-                 corpus (the fixtures of tests/golden/cases.toml) with the oracle
-                 and with opentide-compile: the dry run's body, each configured
-                 tenant's body, and the dry run's payload entry; any difference
-                 not in tests/golden/payloads/APPROVED.toml fails. The corpus
+                 compile every platform block of every rule of each corpus (the
+                 fixtures of tests/golden/cases.toml) with the oracle and with
+                 opentide-compile: the dry run's body, each configured tenant's
+                 body (the writes the deployer sends, for Defender, Splunk,
+                 SentinelOne, CrowdStrike, HarfangLab and Carbon Black), and the
+                 dry run's payload entry; any difference not in
+                 tests/golden/payloads/APPROVED.toml fails. The corpus
                  `payloads` is tests/golden/payloads/corpus; the oracle's result on it
                  must equal tests/golden/payloads/oracle.json (--record writes it)
   git --against python [--python PATH]
@@ -185,13 +188,107 @@ pub struct Approved {
     pub changelog: String,
 }
 
+/// A class of differences approved in the model-dump previews (`[[dump]]`):
+/// the dry run shows a block it builds no body for as the block's model,
+/// which opentide-compile serialises with serde from opentide-schema's
+/// models, not with Pydantic's `model_dump`.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DumpApproval {
+    /// `nulls`: the oracle writes an unset optional field `null`, serde
+    /// leaves it out. `order`: as `nulls`, and a mapping's keys are in the
+    /// model's order (a `BTreeMap`'s), not the file's.
+    pub rule: String,
+    /// The platforms it applies to.
+    pub platforms: Vec<String>,
+    /// Why the candidate's is right.
+    pub reason: String,
+    /// The issue that decided it.
+    pub issue: String,
+    /// The bold lead of the CHANGELOG.md entry that announces it.
+    pub changelog: String,
+}
+
 #[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct ApprovedFile {
     #[serde(default)]
     diff: Vec<Approved>,
+    #[serde(default)]
+    dump: Vec<DumpApproval>,
     #[serde(default, rename = "plan")]
     _plan: Vec<toml::Value>,
+}
+
+/// Reads the approved model-dump classes, checking each is complete and
+/// announced.
+pub fn read_dump_approvals(text: &str, changelog: &str) -> Result<Vec<DumpApproval>> {
+    let file: ApprovedFile = toml::from_str(text).context("parse the approved differences")?;
+    for entry in &file.dump {
+        ensure!(
+            matches!(entry.rule.as_str(), "nulls" | "order"),
+            "{APPROVED}: a [[dump]] rule is `nulls` or `order`, not `{}`",
+            entry.rule
+        );
+        ensure!(
+            !entry.reason.is_empty() && entry.issue.starts_with("https://github.com/opentidehq/"),
+            "{APPROVED}: the [[dump]] {} needs a reason and an opentidehq issue",
+            entry.rule
+        );
+        ensure!(
+            changelog.contains(&entry.changelog),
+            "{APPROVED}: CHANGELOG.md has no entry `{}`",
+            entry.changelog
+        );
+    }
+    Ok(file.dump)
+}
+
+/// `value` without its `null` members, at every depth, keys in order.
+fn without_null_members(value: Json) -> Json {
+    match value {
+        Json::Object(object) => Json::Object(
+            object
+                .into_iter()
+                .filter(|(_, value)| !value.is_null())
+                .map(|(key, value)| (key, without_null_members(value)))
+                .collect(),
+        ),
+        Json::Array(items) => Json::Array(items.into_iter().map(without_null_members).collect()),
+        other => other,
+    }
+}
+
+/// The `[[dump]]` approval that accounts for a preview entry of `platform`
+/// that differs: the oracle's entry is a model dump (an `api_request` and no
+/// `status`), and with its `null` members left out it equals the
+/// candidate's text (`nulls`), or the candidate's value with the keys of
+/// some object in another order (`order`). Every value is compared; only
+/// what serde does not write, and for `order` the order of keys, is
+/// approved.
+pub fn dump_approval(
+    approvals: &[DumpApproval],
+    platform: &str,
+    oracle: &str,
+    candidate: &str,
+) -> Option<usize> {
+    let oracle_json: Json = serde_json::from_str(oracle).ok()?;
+    if oracle_json.get("status").is_some() || oracle_json.get("api_request").is_none() {
+        return None;
+    }
+    let trimmed = without_null_members(oracle_json).to_compact();
+    let rule = if trimmed == candidate {
+        "nulls"
+    } else {
+        let unordered = |text: &str| serde_json::from_str::<serde_json::Value>(text).ok();
+        if unordered(&trimmed)? != unordered(candidate)? {
+            return None;
+        }
+        "order"
+    };
+    approvals.iter().position(|approval| {
+        approval.rule == rule && approval.platforms.iter().any(|known| known == platform)
+    })
 }
 
 /// Reads the approved differences, checking each is complete and announced.
@@ -399,19 +496,6 @@ pub fn compare(corpus: &str, workspace: &Workspace, text: &str) -> Result<Tally>
     );
     let index = workspace.index().clone();
     let cx = owned.context(&index);
-    let tenants = |platform: &str| -> Vec<Json> {
-        let tree = Json::from_node(&workspace.configuration().resolved.tree);
-        match tree
-            .get("platforms")
-            .and_then(|platforms| platforms.get(platform))
-            .and_then(|platform| platform.get("tenants"))
-        {
-            Some(Json::Array(items)) => items.clone(),
-            _ => Vec::new(),
-        }
-    };
-    let elastic_tenants = tenants("elastic");
-    let sysdig_tenants = tenants("sysdig");
     let mut tally = Tally::default();
     for refused in &result.unloadable {
         tally.skipped.push((
@@ -450,98 +534,53 @@ pub fn compare(corpus: &str, workspace: &Workspace, text: &str) -> Result<Tally>
                 });
             }
         };
-        let Some(compiled) = preview::compile_offline(&cx, &probe.platform, &rule) else {
-            continue;
-        };
-        check(
-            "compile".to_owned(),
-            describe(&probe.compile),
-            describe(&candidate(compiled)),
-        );
+        // The dry run's body, for a platform that builds it from the rule.
+        if let Some(compiled) = preview::compile_offline(&cx, &probe.platform, &rule) {
+            check(
+                "compile".to_owned(),
+                describe(&probe.compile),
+                describe(&candidate(compiled)),
+            );
+        }
         for tenant in &probe.tenants {
-            let candidate_outcome = match probe.platform.as_str() {
-                "sentinel" => candidate(sentinel::compile(&cx, &rule, &tenant.tenant)),
-                "sysdig" => {
-                    let known = sysdig_tenants.iter().find(|known| {
-                        known.get("name").and_then(Json::as_str) == Some(&tenant.tenant)
-                    });
-                    candidate(sysdig::compile_body(&cx, &rule, known))
-                }
-                _ => {
-                    let setup = elastic_tenants
-                        .iter()
-                        .find(|known| {
-                            known.get("name").and_then(Json::as_str) == Some(&tenant.tenant)
-                        })
-                        .map(elastic::Setup::from_tenant)
-                        .unwrap_or_else(elastic::Setup::none);
-                    candidate(elastic::compile(&cx, &rule, &setup))
-                }
+            let inputs = Inputs {
+                known: opentide_compile::plan::state_id(
+                    &OsFs as &dyn FileSystem,
+                    root,
+                    &probe.uuid,
+                    &probe.platform,
+                    &tenant.tenant,
+                ),
+                clock: PROBE_CLOCK,
+                timestamp: PROBE_TIMESTAMP,
+            };
+            let Some(compiled) =
+                preview::compile_tenant(&cx, &probe.platform, &rule, &tenant.tenant, &inputs)
+            else {
+                tally.skipped.push((
+                    probe.uuid.clone(),
+                    format!(
+                        "{} is not a platform opentide-compile knows",
+                        probe.platform
+                    ),
+                ));
+                continue;
             };
             check(
                 format!("tenant:{}", tenant.tenant),
                 describe(&tenant.outcome),
-                describe(&candidate_outcome),
+                describe(&candidate(compiled)),
             );
         }
-        match preview::preview(&cx, &probe.platform, &rule) {
-            Preview::Entry(entry) => {
-                // The oracle's entry names the file it read; the Rust side
-                // reads the same file from the same materialised corpus.
-                check(
-                    "preview".to_owned(),
-                    probe.preview.clone(),
-                    entry.to_compact(),
-                );
-            }
-            Preview::ConfigDump => tally.skipped.push((
-                probe.uuid.clone(),
-                format!(
-                    "{} preview is the block's model dump, which needs the platform models \
-                     (UC-1.4, #810)",
-                    probe.platform
-                ),
-            )),
-        }
-    }
-    // The blocks of the platforms opentide-compile does not compile yet: the
-    // probe has no body for them, so the report lists each one as not
-    // compared, rather than leave the gap out of the tally.
-    for object in index.rules() {
-        if result
-            .unloadable
-            .iter()
-            .any(|refused| refused.uuid == object.uuid)
-        {
-            continue;
-        }
-        let Some(root) = object.root() else {
-            continue;
-        };
-        let rule = Rule::new(root, None);
-        for platform in unported(&rule) {
-            tally.skipped.push((
-                object.uuid.clone(),
-                format!("{platform} body (UC-3.1b, #895)"),
-            ));
-        }
+        // The oracle's entry names the file it read; the Rust side reads the
+        // same file from the same materialised corpus.
+        check(
+            "preview".to_owned(),
+            probe.preview.clone(),
+            preview::preview(&cx, &probe.platform, &rule).to_compact(),
+        );
     }
     Ok(tally)
-}
-
-/// The platforms of `rule`'s set blocks whose body opentide-compile does not
-/// build ([`preview::OFFLINE`] lists those it does), in the rule's order.
-fn unported(rule: &Rule) -> Vec<String> {
-    let Some(Json::Object(configurations)) = rule.data.get("configurations") else {
-        return Vec::new();
-    };
-    configurations
-        .keys()
-        .filter(|platform| {
-            !preview::OFFLINE.contains(&platform.as_str()) && rule.block(platform).is_some()
-        })
-        .cloned()
-        .collect()
 }
 
 /// Lays out `corpus` in `ws`: the compile corpus, or a fixture of `cases.toml`.
@@ -586,11 +625,15 @@ pub fn run(options: &DiffOptions) -> Result<bool> {
     let python = oracle_python(options.python.as_deref())?;
     let spec = crate::golden::case::Spec::parse(&fs::read_to_string(golden.join("cases.toml"))?)?;
     let changelog = fs::read_to_string(repo.join("CHANGELOG.md"))?;
-    let approved = match fs::read_to_string(repo.join(APPROVED)) {
-        Ok(text) => read_approved(&text, &changelog)?,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+    let (approved, dumps) = match fs::read_to_string(repo.join(APPROVED)) {
+        Ok(text) => (
+            read_approved(&text, &changelog)?,
+            read_dump_approvals(&text, &changelog)?,
+        ),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => (Vec::new(), Vec::new()),
         Err(error) => return Err(error).context(APPROVED),
     };
+    let mut dumps_used = vec![false; dumps.len()];
     let corpora: Vec<String> = if options.corpora.is_empty() {
         CORPORA.iter().map(|c| (*c).to_owned()).collect()
     } else {
@@ -680,6 +723,22 @@ pub fn run(options: &DiffOptions) -> Result<bool> {
                 );
                 continue;
             }
+            if difference.what == "preview"
+                && let Some(position) = dump_approval(
+                    &dumps,
+                    &difference.platform,
+                    &difference.oracle,
+                    &difference.candidate,
+                )
+            {
+                dumps_used[position] = true;
+                let _ = writeln!(
+                    report,
+                    "  approved ({} of the model dump): {} {} preview",
+                    dumps[position].rule, difference.uuid, difference.platform
+                );
+                continue;
+            }
             passed = false;
             let _ = writeln!(
                 report,
@@ -692,6 +751,19 @@ pub fn run(options: &DiffOptions) -> Result<bool> {
             );
         }
         print!("{report}");
+    }
+    let every_corpus = CORPORA
+        .iter()
+        .all(|corpus| corpora.iter().any(|run| run == corpus));
+    for (entry, used) in dumps.iter().zip(&dumps_used) {
+        if !used && every_corpus {
+            passed = false;
+            eprintln!(
+                "error: {APPROVED}: the [[dump]] {} of {} matches nothing (stale)",
+                entry.rule,
+                entry.platforms.join(", ")
+            );
+        }
     }
     for (entry, used) in approved.iter().zip(&used) {
         if !used && corpora.contains(&entry.corpus) {
@@ -805,15 +877,48 @@ mod tests {
         // put back into it, so the record reads the same on every host.
         let recorded = fs::read_to_string(repo.join(ORACLE_RECORD)).unwrap();
         let tally = compare("payloads", &workspace, &recorded).unwrap();
-        assert!(tally.compared >= 80, "{}", tally.compared);
+        assert!(tally.compared >= 150, "{}", tally.compared);
         assert!(tally.skipped.is_empty(), "{:?}", tally.skipped);
-        // The one approved difference: the oracle names Sentinel in a Sysdig failure.
-        let differing: Vec<(&str, &str)> = tally
-            .differences
-            .iter()
-            .map(|difference| (difference.platform.as_str(), difference.what.as_str()))
-            .collect();
-        assert_eq!(differing, [("sysdig", "preview")]);
+        // Every difference is approved: one by one (the oracle names
+        // Sentinel in a Sysdig failure, Splunk's risk JSON, HarfangLab's
+        // Sigma quotes), or as a class of the model-dump previews.
+        let changelog = fs::read_to_string(repo.join("CHANGELOG.md")).unwrap();
+        let text = fs::read_to_string(repo.join(APPROVED)).unwrap();
+        let approved = read_approved(&text, &changelog).unwrap();
+        let dumps = read_dump_approvals(&text, &changelog).unwrap();
+        let mut one_by_one: Vec<(&str, &str)> = Vec::new();
+        for difference in &tally.differences {
+            if approved.iter().any(|entry| {
+                entry.corpus == "payloads"
+                    && entry.uuid == difference.uuid
+                    && entry.what == difference.what
+                    && entry.oracle == difference.oracle
+                    && entry.candidate == difference.candidate
+            }) {
+                one_by_one.push((difference.platform.as_str(), difference.what.as_str()));
+                continue;
+            }
+            assert!(
+                difference.what == "preview"
+                    && dump_approval(
+                        &dumps,
+                        &difference.platform,
+                        &difference.oracle,
+                        &difference.candidate
+                    )
+                    .is_some(),
+                "{difference:?}"
+            );
+        }
+        one_by_one.sort_unstable();
+        assert_eq!(
+            one_by_one,
+            [
+                ("harfanglab", "tenant:sigma"),
+                ("splunk", "tenant:es"),
+                ("sysdig", "preview")
+            ]
+        );
         // A rule the oracle refused, and one the index does not hold.
         let refused = r#"{"rules":[{"uuid":"00000000-0000-4000-8005-ffffffffffff","file":"",
             "platform":"sysdig","compile":{"body":"{}"},"preview":"{}","tenants":[]}],
@@ -830,7 +935,35 @@ mod tests {
     }
 
     #[test]
-    fn blocks_of_platforms_not_compiled_are_listed_as_not_compared() {
+    fn model_dump_classes_approve_only_nulls_and_key_order() {
+        let changelog = "**Lead**";
+        let text = "[[dump]]\nrule = \"nulls\"\nplatforms = [\"splunk\"]\nreason = \"r\"\nissue = \
+                    \"https://github.com/opentidehq/opentide/issues/895\"\nchangelog = \"**Lead**\"\n";
+        let dumps = read_dump_approvals(text, changelog).unwrap();
+        assert!(read_dump_approvals(&text.replace("nulls", "loose"), changelog).is_err());
+        assert!(read_dump_approvals(text, "nothing").is_err());
+        let oracle =
+            r#"{"uuid":"u","name":"n","api_request":{"a":1,"b":null,"c":{"d":null,"e":[1]}}}"#;
+        let candidate = r#"{"uuid":"u","name":"n","api_request":{"a":1,"c":{"e":[1]}}}"#;
+        assert_eq!(dump_approval(&dumps, "splunk", oracle, candidate), Some(0));
+        // Another platform, another value, another order, a failure entry.
+        assert_eq!(
+            dump_approval(&dumps, "crowdstrike", oracle, candidate),
+            None
+        );
+        let other = r#"{"uuid":"u","name":"n","api_request":{"a":2,"c":{"e":[1]}}}"#;
+        assert_eq!(dump_approval(&dumps, "splunk", oracle, other), None);
+        let reordered = r#"{"uuid":"u","name":"n","api_request":{"c":{"e":[1]},"a":1}}"#;
+        assert_eq!(dump_approval(&dumps, "splunk", oracle, reordered), None);
+        let order = read_dump_approvals(&text.replace("nulls", "order"), changelog).unwrap();
+        assert_eq!(dump_approval(&order, "splunk", oracle, reordered), Some(0));
+        assert_eq!(dump_approval(&order, "splunk", oracle, candidate), None);
+        let failed = r#"{"uuid":"u","status":"failed","api_request":null}"#;
+        assert_eq!(dump_approval(&dumps, "splunk", failed, failed), None);
+    }
+
+    #[test]
+    fn every_platforms_blocks_are_compared() {
         let scratch = tempfile::tempdir().unwrap();
         let ws = scratch.path().join("ws");
         fs::create_dir_all(ws.join(".opentide/configurations/platforms")).unwrap();
@@ -838,31 +971,27 @@ mod tests {
         fs::write(
             ws.join("objects/rules/r.yaml"),
             "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8005-000000000902\n  \
-             schema: rule::1.0\ndescription: d\nconfigurations:\n  defender:\n    \
-             status: STAGING\n  sentinel:\n    status: STAGING\n  splunk:\n    \
-             status: STAGING\n  crowdstrike: null\n",
+             schema: rule::1.0\ndescription: d\nconfigurations:\n  splunk:\n    \
+             status: STAGING\n    query: index=main\n",
         )
         .unwrap();
         let ws = dunce::canonicalize(&ws).unwrap();
         let workspace = open(&ws).unwrap();
-        let tally = compare("c", &workspace, r#"{"rules":[],"unloadable":[]}"#).unwrap();
-        let skipped: Vec<&str> = tally.skipped.iter().map(|(_, why)| why.as_str()).collect();
-        assert_eq!(
-            skipped,
-            [
-                "defender body (UC-3.1b, #895)",
-                "splunk body (UC-3.1b, #895)",
-            ]
-        );
+        let probe = r#"{"rules":[{"uuid":"00000000-0000-4000-8005-000000000902","platform":"splunk",
+            "compile":{},"preview":"{\"uuid\":\"00000000-0000-4000-8005-000000000902\",\"name\":\"Rule\",\"api_request\":{}}",
+            "tenants":[]}],"unloadable":[]}"#;
+        let tally = compare("c", &workspace, probe).unwrap();
+        // The preview alone: no compile for a deployer's platform, no tenant.
+        assert_eq!(tally.compared, 1);
+        assert!(tally.skipped.is_empty(), "{:?}", tally.skipped);
+        assert_eq!(tally.differences.len(), 1);
         assert!(
-            tally
-                .skipped
-                .iter()
-                .all(|(uuid, _)| uuid == "00000000-0000-4000-8005-000000000902")
+            tally.differences[0]
+                .candidate
+                .contains(r#""query":"index=main""#),
+            "{:?}",
+            tally.differences
         );
-        // A rule the oracle refused is listed once, for that.
-        let refused = r#"{"rules":[],"unloadable":[{"uuid":"00000000-0000-4000-8005-000000000902","error":"no"}]}"#;
-        assert_eq!(compare("c", &workspace, refused).unwrap().skipped.len(), 1);
     }
 
     #[test]

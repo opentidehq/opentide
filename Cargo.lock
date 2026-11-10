@@ -1423,6 +1423,7 @@ name = "opentide-compile"
 version = "0.12.0"
 dependencies = [
  "dunce",
+ "form_urlencoded",
  "gix-diff",
  "gix-discover",
  "gix-error",
@@ -1438,6 +1439,7 @@ dependencies = [
  "opentide-workspace",
  "proptest",
  "serde",
+ "serde-saphyr",
  "serde_json",
  "tempfile",
  "thiserror",
