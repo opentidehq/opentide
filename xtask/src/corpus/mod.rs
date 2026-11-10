@@ -13,6 +13,7 @@ pub mod configuration;
 pub mod coverage;
 pub mod faults;
 pub mod generate;
+pub mod queries;
 pub mod rng;
 pub mod structural;
 pub mod vocab;

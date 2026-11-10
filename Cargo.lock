@@ -3232,6 +3232,7 @@ dependencies = [
  "glob",
  "indexmap",
  "jsonschema",
+ "opentide-cli",
  "opentide-compare",
  "opentide-compile",
  "opentide-schema",
