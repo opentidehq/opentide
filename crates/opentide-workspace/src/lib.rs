@@ -41,6 +41,7 @@ pub mod review;
 pub mod root;
 pub mod state;
 pub mod validate;
+pub mod vocabularies;
 pub mod watch;
 mod workspace;
 

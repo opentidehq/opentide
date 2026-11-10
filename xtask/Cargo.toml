@@ -42,6 +42,7 @@ similar = "2.7"
 tempfile = "3"
 # xtask vocab (src/vocab/) also reads opentide-schema's vocabularies.
 indexmap = { version = "2", features = ["serde"] }
+jsonschema = { version = "0.61.1", default-features = false }
 
 [target.'cfg(unix)'.dependencies]
 # The pseudo-terminals of human mode and killing a case's process group.
