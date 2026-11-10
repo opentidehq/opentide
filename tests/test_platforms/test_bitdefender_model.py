@@ -592,3 +592,19 @@ def test_the_alert_field_as_a_criterion_is_an_error_on_every_target(target: str)
         ("detection", "criteria", "0"),
     )
     assert "alert" in error["msg"]
+
+
+@pytest.mark.parametrize(
+    "targets",
+    [
+        {"endpoint_tags": [" "]},
+        {"endpoint_tags": ["a", ""]},
+        {"companies": [" "]},
+        {"companies": ["acme", ""]},
+    ],
+)
+def test_a_blank_target_alias_is_a_shape_error(targets: dict[str, Any]) -> None:
+    """bitdefender-1.0 (1.4): no blank alias in a block's targets."""
+    assert _errors(_block(detection=PROCESS, targets=targets)) == [
+        ("bitdefender_targets_shape", ("targets",))
+    ]
