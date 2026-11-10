@@ -12,6 +12,7 @@ unsafe extern "C" {
     fn tree_sitter_opentide_lucene() -> *const ();
     fn tree_sitter_opentide_falco() -> *const ();
     fn tree_sitter_opentide_cql() -> *const ();
+    fn tree_sitter_opentide_yara() -> *const ();
 }
 
 fn from_raw(ptr: *const ()) -> Language {
@@ -29,10 +30,11 @@ pub fn language(id: LanguageId) -> Option<Language> {
         LanguageId::Lucene => Some(unsafe { from_raw(tree_sitter_opentide_lucene()) }),
         LanguageId::Falco => Some(unsafe { from_raw(tree_sitter_opentide_falco()) }),
         LanguageId::Cql => Some(unsafe { from_raw(tree_sitter_opentide_cql()) }),
+        // Highlighting and structure only: YARA's verdict parser is
+        // yara-x-parser (opentide-yara).
+        LanguageId::Yara => Some(unsafe { from_raw(tree_sitter_opentide_yara()) }),
         // Tide YAML has its own parser; configuration TOML is the host's.
-        // YARA's verdict parser is yara-x-parser (opentide-yara); its
-        // tree-sitter grammar, for highlighting, is not vendored yet (#165).
-        LanguageId::TideYaml | LanguageId::Config | LanguageId::Yara => None,
+        LanguageId::TideYaml | LanguageId::Config => None,
     }
 }
 

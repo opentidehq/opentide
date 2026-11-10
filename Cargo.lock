@@ -771,6 +771,8 @@ version = "0.12.1"
 dependencies = [
  "opentide-core",
  "opentide-highlight",
+ "opentide-syntax",
+ "tree-sitter",
  "yara-x-fmt",
  "yara-x-parser",
 ]

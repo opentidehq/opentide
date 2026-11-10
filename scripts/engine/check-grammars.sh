@@ -17,7 +17,7 @@ fi
 tmp="$(mktemp -d)"
 cleanup() { rm -rf "$tmp"; }
 trap cleanup EXIT
-for lang in kql spl esql eql kuery lucene falco cql; do
+for lang in kql spl esql eql kuery lucene falco cql yara; do
   src="$root/grammars/tree-sitter-opentide-$lang"
   cp -a "$src" "$tmp/$lang"
   (cd "$tmp/$lang" && "$TS" generate)

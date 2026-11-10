@@ -56,6 +56,7 @@ export const LANGUAGES: readonly OpentideLanguage[] = [
   { id: "lucene", name: "Lucene", patterns: ["**/*.lucene"] },
   { id: "falco", name: "Falco", patterns: ["**/*.falco"] },
   { id: "cql", name: "CrowdStrike Query Language", patterns: ["**/*.cql"] },
+  { id: "yara", name: "YARA", patterns: ["**/*.yar", "**/*.yara"] },
   { id: "opentide-config", name: "opentide configuration", patterns: ["**/.opentide/configurations/**/*.toml"] },
 ];
 
