@@ -336,12 +336,16 @@ impl DiskObjects {
         changed
     }
 
-    /// Index the files not indexed yet, in parallel: on the first request
-    /// that reads the editor's index, every object file of the root.
-    fn index_all(&self) -> &BTreeMap<String, DiskFile> {
-        self.files.par_iter().for_each(|(_, file)| {
-            file.indexed();
-        });
+    /// Index the files `keep` accepts that are not indexed yet, in
+    /// parallel: on the first request that reads the editor's index, every
+    /// object file of the root.
+    fn index_matching(&self, keep: &(dyn Fn(&str) -> bool + Sync)) -> &BTreeMap<String, DiskFile> {
+        self.files
+            .par_iter()
+            .filter(|(_, file)| keep(&file.text))
+            .for_each(|(_, file)| {
+                file.indexed();
+            });
         &self.files
     }
 
@@ -605,14 +609,31 @@ impl WorkspaceHost for SessionHost<'_> {
     }
 
     fn indexed_objects(&self) -> Option<Arc<[IndexedObject]>> {
-        let session = self.session;
-        let slot = match self.root {
-            Some(i) => &session.roots[i].index,
-            None => &session.loose_index,
-        };
+        let slot = self.slot();
         if let Some(index) = slot.borrow().as_ref() {
             return Some(Arc::clone(index));
         }
+        let index: Arc<[IndexedObject]> = self.collect_index(&|_| true).into();
+        *slot.borrow_mut() = Some(Arc::clone(&index));
+        Some(index)
+    }
+}
+
+impl SessionHost<'_> {
+    /// Where the root's index is kept.
+    fn slot(&self) -> &RefCell<Option<Arc<[IndexedObject]>>> {
+        match self.root {
+            Some(i) => &self.session.roots[i].index,
+            None => &self.session.loose_index,
+        }
+    }
+
+    /// The index entries of the root's objects whose text `keep` accepts, in
+    /// the order of the full index: the files on disk (but the open ones),
+    /// the open documents, then what the host supplied that no file holds.
+    /// A file on disk is indexed once, whichever call indexes it first.
+    fn collect_index(&self, keep: &(dyn Fn(&str) -> bool + Sync)) -> Vec<IndexedObject> {
+        let session = self.session;
         let open: BTreeMap<String, (String, &String)> = session
             .docs
             .iter()
@@ -626,15 +647,17 @@ impl WorkspaceHost for SessionHost<'_> {
             Some(i) => session.roots[i]
                 .disk
                 .borrow()
-                .index_all()
+                .index_matching(keep)
                 .iter()
                 .filter(|(path, _)| !open.contains_key(*path))
+                .filter(|(_, file)| keep(&file.text))
                 .filter_map(|(_, file)| file.indexed().cloned())
                 .collect(),
             None => Vec::new(),
         };
         index.extend(
             open.values()
+                .filter(|(_, text)| keep(text))
                 .filter_map(|(path, text)| opentide_analysis::index_object(path, text)),
         );
         // What the host supplied stands in for objects the session has no
@@ -654,16 +677,56 @@ impl WorkspaceHost for SessionHost<'_> {
                 .files
                 .iter()
                 .filter(|(key, _)| !open.contains_key(*key) && !on_disk(key))
-                .filter(|(_, (path, _, _))| {
+                .filter(|(_, (path, text, _))| {
                     let owner = session.owning_root(path);
-                    owner.is_none() || owner == self.root
+                    (owner.is_none() || owner == self.root) && keep(text)
                 })
                 .filter_map(|(_, (_, _, indexed))| indexed.clone())
                 .filter(|o| !known.contains(&o.uuid)),
         );
-        let index: Arc<[IndexedObject]> = index.into();
-        *slot.borrow_mut() = Some(Arc::clone(&index));
-        Some(index)
+        index
+    }
+
+    /// The part of the editor's index the analysis of the Tide document
+    /// `text` reads: the objects an Elastic block's advisories look up (the
+    /// objective its `detection_model` names, and that objective's threats),
+    /// with every object that might be one of them, in the full index's
+    /// order. The full index once some request built it; until then only
+    /// the files that name one of those UUIDs, or could spell one with an
+    /// escape, are indexed, so the first diagnostics do not wait for every
+    /// object of the workspace to be parsed (#821).
+    pub(crate) fn analysis_index(&self, text: &str) -> Arc<[IndexedObject]> {
+        if let Some(index) = self.slot().borrow().as_ref() {
+            return Arc::clone(index);
+        }
+        let Ok(rule) = serde_yaml::from_str::<serde_yaml::Value>(text) else {
+            return Arc::default();
+        };
+        let Some(model) = rule.get("detection_model").and_then(|m| m.as_str()) else {
+            return Arc::default();
+        };
+        let names = |text: &str, uuids: &[&str]| {
+            text.contains('\\') || uuids.iter().any(|uuid| text.contains(uuid))
+        };
+        let objectives = self.collect_index(&|text| names(text, &[model]));
+        let threats: Vec<String> = objectives
+            .iter()
+            .find(|o| o.object_type == "objective" && o.uuid == model)
+            .and_then(|o| o.body.get("objective"))
+            .and_then(|b| b.get("threats"))
+            .and_then(|t| t.as_sequence())
+            .map(|s| {
+                s.iter()
+                    .filter_map(|t| t.as_str().map(str::to_owned))
+                    .collect()
+            })
+            .unwrap_or_default();
+        if threats.is_empty() {
+            return objectives.into();
+        }
+        let mut uuids: Vec<&str> = threats.iter().map(String::as_str).collect();
+        uuids.push(model);
+        self.collect_index(&|text| names(text, &uuids)).into()
     }
 }
 
@@ -839,10 +902,15 @@ impl Session {
         // A Tide object that cannot read the other objects is analysed
         // without the editor's index, which is then built on the first
         // request that reads it, not before the first diagnostics.
-        let mut response = if doc.language == LanguageId::TideYaml && !may_read_index(&doc.text) {
-            analyze_with_index(&host, &[], request)
-        } else {
-            analyze(&host, request)
+        let mut response = match doc.language {
+            LanguageId::TideYaml if !may_read_index(&doc.text) => {
+                analyze_with_index(&host, &[], request)
+            }
+            LanguageId::TideYaml => {
+                let index = host.analysis_index(&doc.text);
+                analyze_with_index(&host, &index, request)
+            }
+            _ => analyze(&host, request),
         };
         match doc.language {
             LanguageId::TideYaml => {
@@ -1189,7 +1257,7 @@ impl Session {
         };
         r.disk
             .borrow()
-            .index_all()
+            .index_matching(&|_| true)
             .values()
             .filter_map(|file| Some((file.indexed()?.path.clone(), file.text.clone())))
             .collect()
@@ -1598,7 +1666,7 @@ mod tests {
         assert_eq!(changed.len(), 2, "{changed:?}");
         assert!(disk.files.values().all(|file| file.indexed.get().is_none()));
         let indexed: Vec<_> = disk
-            .index_all()
+            .index_matching(&|_| true)
             .values()
             .map(|file| file.indexed().cloned())
             .collect();

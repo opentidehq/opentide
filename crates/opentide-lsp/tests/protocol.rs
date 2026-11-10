@@ -16,6 +16,7 @@ use serde_json::{Value, json};
 
 const RULE: &str = "crates/testdata/objects/rules/rule-1.0.yaml";
 const OBJECTIVE: &str = "crates/testdata/objects/objective-1.0.yaml";
+const THREAT: &str = "crates/testdata/objects/threat-1.0.yaml";
 
 fn fixture(path: &str) -> String {
     std::fs::read_to_string(repo_root().join(path)).unwrap()
@@ -519,6 +520,59 @@ fn an_elastic_rule_reads_the_techniques_it_inherits() {
         inherited["message"].as_str().unwrap().contains("T1626"),
         "{inherited}"
     );
+}
+
+/// #821: the first diagnostics of an Elastic rule index the objects its
+/// advisories look up (the objective `detection_model` names and that
+/// objective's threats), not every object of the root: a technique it
+/// inherits through the objective's threat is still reported, and objects
+/// that name neither are left for the first request that reads the whole
+/// index.
+#[test]
+fn an_elastic_rule_indexes_only_the_objects_it_inherits_from() {
+    let scratch = workspace("scoped-index-elastic", true);
+    let root = &scratch.0;
+    let threats = root.join("objects/threats");
+    std::fs::create_dir_all(&threats).unwrap();
+    let threat = fixture(THREAT).replacen("    - T1059\n", "    - T1626\n", 1);
+    assert_ne!(threat, fixture(THREAT));
+    std::fs::write(threats.join("threat-1.0.yaml"), threat).unwrap();
+    // Objects that name neither the objective nor its threat.
+    for i in 0..4 {
+        let other = fixture(THREAT)
+            .replacen(
+                "00000000-0000-4000-8001-000000000001",
+                &format!("00000000-0000-4000-8001-00000000010{i}"),
+                1,
+            )
+            .replacen("Simulated Actor", &format!("Other Actor {i}"), 1);
+        std::fs::write(threats.join(format!("other-{i}.yaml")), other).unwrap();
+    }
+    let rule_uri = file_uri(&root.join("objects/rules/rule-1.0.yaml"));
+    let (mut lsp, _) = start(json!({ "capabilities": watch(), "rootUri": file_uri(root) }));
+    let register = lsp.read();
+    lsp.write(&json!({ "jsonrpc": "2.0", "id": register["id"], "result": null }));
+    let rule = format!(
+        "{}  elastic:\n    type: query\n    query: x\n",
+        fixture(RULE)
+    );
+    open(&mut lsp, &rule_uri, "opentide-yaml", &rule);
+    let diagnostics = published_for(&mut lsp, &rule_uri);
+    let inherited = diagnostics
+        .iter()
+        .find(|d| d["code"] == "technique_not_enterprise")
+        .unwrap_or_else(|| panic!("{diagnostics:#?}"));
+    assert!(
+        inherited["message"].as_str().unwrap().contains("T1626"),
+        "{inherited}"
+    );
+    // The rule's file, the objective and its threat; not the 4 others.
+    assert_eq!(editor_indexed(&mut lsp), 3);
+
+    // A request that reads the whole index indexes the rest.
+    let symbols = lsp.request("workspace/symbol", json!({ "query": "Other Actor" }));
+    assert_eq!(symbols["result"].as_array().unwrap().len(), 4, "{symbols}");
+    assert_eq!(editor_indexed(&mut lsp), 7);
 }
 
 /// #914: the root's workspace starts loading when the folder is known,

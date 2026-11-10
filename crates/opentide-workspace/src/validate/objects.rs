@@ -196,6 +196,57 @@ fn object_vocabulary(index: &Index, family: &str) -> Option<Vocabulary> {
     Vocabulary::from_table(table, family).ok()
 }
 
+/// Parses, ahead of the first check of an object of revision `identifier`,
+/// what that check reads once per process and keeps: the revision's schema
+/// and every bundled vocabulary its fields name. A long-running host (the
+/// language server) calls it on a thread of its own while it loads the
+/// workspace, so the first check does not parse them.
+pub fn warm_up(identifier: &str) {
+    let Some(schema) = revision_schema(identifier) else {
+        return;
+    };
+    let vocabularies = Vocabularies::bundled();
+    for field in vocabulary_fields(schema) {
+        let _ = vocabularies.get(&field);
+    }
+}
+
+/// The vocabulary fields the `tide.vocab` keys of `schema` name, at any
+/// depth: the one a key names, or for `true`, the property's own name.
+fn vocabulary_fields(schema: &Json) -> BTreeSet<String> {
+    fn walk(schema: &Json, property: Option<&str>, out: &mut BTreeSet<String>) {
+        match schema {
+            Json::Object(map) => {
+                let vocab = match map.get("tide.vocab") {
+                    Some(Json::Bool(true)) => property,
+                    Some(Json::String(vocab)) => Some(vocab.as_str()),
+                    Some(Json::Array(list)) => list.first().and_then(Json::as_str),
+                    _ => None,
+                };
+                if let Some(reference) = vocab.and_then(|v| v.parse::<VocabRef>().ok()) {
+                    out.insert(reference.field);
+                }
+                for (key, value) in map {
+                    match (key.as_str(), value) {
+                        ("properties", Json::Object(properties)) => {
+                            for (name, value) in properties {
+                                walk(value, Some(name), out);
+                            }
+                        }
+                        ("$defs" | "definitions", _) => walk(value, None, out),
+                        _ => walk(value, property, out),
+                    }
+                }
+            }
+            Json::Array(list) => list.iter().for_each(|value| walk(value, property, out)),
+            _ => {}
+        }
+    }
+    let mut out = BTreeSet::new();
+    walk(schema, None, &mut out);
+    out
+}
+
 /// The JSON Schema of an object revision, with its `tide.*` keys and its
 /// vocabulary pins applied: what the vocabulary walk reads
 /// (`index["metaschemas"]`, `build_schema_source_for_identifier`).
@@ -1137,6 +1188,7 @@ pub fn merge_reference_findings(issues: Vec<Diagnostic>) -> Vec<Diagnostic> {
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
     use crate::diagnostic::Severity;
 
@@ -1171,6 +1223,37 @@ mod tests {
         assert_eq!(
             warning.context.get("deprecation").and_then(|v| v.as_str()),
             Some("use `new`")
+        );
+    }
+
+    /// The warm-up parses the vocabularies a rule's check reads: the ones
+    /// its fields name, each a bundled vocabulary.
+    #[test]
+    fn a_rule_s_vocabularies_are_the_ones_its_fields_name() {
+        let schema = revision_schema("rule::1.1").unwrap();
+        let fields = vocabulary_fields(schema);
+        for field in ["tlp", "att&ck"] {
+            assert!(fields.contains(field), "{field} not in {fields:?}");
+        }
+        let bundled: BTreeSet<&str> = opentide_schema::vocab::bundled::fields().collect();
+        let unknown: Vec<&String> = fields
+            .iter()
+            .filter(|field| !bundled.contains(field.as_str()))
+            .collect();
+        assert!(unknown.is_empty(), "not bundled: {unknown:?}");
+        assert!(vocabulary_fields(&serde_json::json!({ "a": [1] })).is_empty());
+        // `true` names the property's own vocabulary, at any depth.
+        let named = vocabulary_fields(&serde_json::json!({
+            "properties": {
+                "tlp": { "tide.vocab": true },
+                "list": { "items": { "tide.vocab": ["stakeholders::1.0"] } },
+                "nested": { "properties": { "sectors": { "tide.vocab": true } } },
+            },
+            "$defs": { "Loose": { "tide.vocab": true } },
+        }));
+        assert_eq!(
+            named.into_iter().collect::<Vec<_>>(),
+            ["sectors", "stakeholders", "tlp"]
         );
     }
 }
