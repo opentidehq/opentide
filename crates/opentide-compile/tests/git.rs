@@ -656,3 +656,244 @@ fn docs_on_a_pushed_feature_branch_compare_with_the_default_branch() {
     assert_eq!(changed.len(), 1, "{changed:?}");
     assert_eq!(changed[0].baseline.as_deref(), Some(b"a: 1\n".as_slice()));
 }
+
+fn yaml(name: &str) -> bool {
+    Path::new(name).extension().is_some_and(|ext| ext == "yaml")
+}
+
+fn changed_names(root: &Path, folder: &str) -> Vec<String> {
+    git::changed_in_folders(root, &[root.join(folder)], &yaml)
+        .unwrap()
+        .into_iter()
+        .map(|file| file.relative)
+        .collect()
+}
+
+/// What git itself reports for `folder` against `base`: `git diff
+/// --name-only` and `git ls-files --others --exclude-standard`, the oracle's
+/// two commands.
+fn git_reports(root: &Path, base: &str, folder: &str) -> Vec<String> {
+    let mut names: Vec<String> = git_cmd(
+        root,
+        &[
+            "diff",
+            "--name-only",
+            "--diff-filter=ACMRD",
+            base,
+            "--",
+            folder,
+        ],
+    )
+    .lines()
+    .chain(
+        git_cmd(
+            root,
+            &[
+                "ls-files",
+                "--others",
+                "--exclude-standard",
+                "--full-name",
+                "--",
+                folder,
+            ],
+        )
+        .lines(),
+    )
+    .filter(|line| yaml(line) && !line[folder.len() + 1..].contains('/'))
+    .map(str::to_owned)
+    .collect();
+    names.sort();
+    names.dedup();
+    names
+}
+
+/// An untracked file an exclude file ignores (`.gitignore`, a nested one,
+/// `.git/info/exclude`) is no change, as `git ls-files --exclude-standard`
+/// skips it; a tracked file stays read even when a pattern matches it.
+#[test]
+fn docs_changes_skip_ignored_untracked_files() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dunce::canonicalize(dir.path()).unwrap();
+    git_cmd(&root, &["init", "-q", "-b", "main"]);
+    write(&root, "objects/rules/tracked.yaml", "name: tracked\n");
+    commit(&root, "tracked");
+    write(&root, ".gitignore", "*.local.yaml\ntracked.yaml\n");
+    write(&root, "objects/rules/.gitignore", "scratch-*.yaml\n");
+    commit(&root, "base");
+    write(&root, "objects/rules/draft.local.yaml", "name: draft\n");
+    write(&root, "objects/rules/scratch-1.yaml", "name: scratch\n");
+    write(&root, "objects/rules/excluded.yaml", "name: excluded\n");
+    write(&root, ".git/info/exclude", "excluded.yaml\n");
+    write(&root, "objects/rules/new.yaml", "name: new\n");
+    write(
+        &root,
+        "objects/rules/tracked.yaml",
+        "name: tracked, edited\n",
+    );
+    let expected = ["objects/rules/new.yaml", "objects/rules/tracked.yaml"];
+    assert_eq!(git_reports(&root, "HEAD", "objects/rules"), expected);
+    assert_eq!(changed_names(&root, "objects/rules"), expected);
+}
+
+/// A checkout with `core.autocrlf` (or a `text eol=crlf` attribute) has
+/// CRLF files whose stored content is the baseline's: they are not changed,
+/// as `git diff` compares a file through its clean filter.
+#[test]
+fn docs_changes_compare_files_through_the_clean_filters() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dunce::canonicalize(dir.path()).unwrap();
+    git_cmd(&root, &["init", "-q", "-b", "main"]);
+    git_cmd(&root, &["config", "core.autocrlf", "false"]);
+    write(&root, "rules/a.yaml", "name: a\nlevel: 1\n");
+    write(&root, "rules/b.yaml", "name: b\n");
+    write(&root, "attributed/c.yaml", "name: c\n");
+    write(&root, "attributed/.gitattributes", "*.yaml text eol=crlf\n");
+    commit(&root, "base");
+    // What a Windows checkout with autocrlf writes.
+    git_cmd(&root, &["config", "core.autocrlf", "true"]);
+    write(&root, "rules/a.yaml", "name: a\r\nlevel: 1\r\n");
+    write(&root, "rules/b.yaml", "name: b, edited\r\n");
+    write(&root, "attributed/c.yaml", "name: c\r\n");
+    assert_eq!(git_reports(&root, "HEAD", "rules"), ["rules/b.yaml"]);
+    assert_eq!(changed_names(&root, "rules"), ["rules/b.yaml"]);
+    assert!(git_reports(&root, "HEAD", "attributed").is_empty());
+    assert!(changed_names(&root, "attributed").is_empty());
+    // Without the conversion, the CRLF bytes are a change.
+    git_cmd(&root, &["config", "core.autocrlf", "false"]);
+    assert_eq!(
+        changed_names(&root, "rules"),
+        ["rules/a.yaml", "rules/b.yaml"]
+    );
+}
+
+/// A file removed from the index but left on disk reads as changed (`git
+/// diff` reports the baseline's as deleted), even when it is ignored.
+#[test]
+fn docs_changes_report_a_file_no_longer_tracked() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dunce::canonicalize(dir.path()).unwrap();
+    git_cmd(&root, &["init", "-q", "-b", "main"]);
+    write(&root, "rules/a.yaml", "name: a\n");
+    write(&root, "rules/b.yaml", "name: b\n");
+    commit(&root, "base");
+    git_cmd(&root, &["rm", "-q", "--cached", "rules/a.yaml"]);
+    write(&root, ".gitignore", "a.yaml\n");
+    assert_eq!(git_reports(&root, "HEAD", "rules"), ["rules/a.yaml"]);
+    assert_eq!(changed_names(&root, "rules"), ["rules/a.yaml"]);
+}
+
+/// The baseline is the merge base with the default branch, not its tip: a
+/// commit the default branch gained after the work branched off is no
+/// change of the work.
+#[test]
+fn docs_compare_with_the_merge_base_of_an_advanced_default_branch() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dunce::canonicalize(dir.path()).unwrap();
+    git_cmd(&root, &["init", "-q", "-b", "main"]);
+    write(&root, "rules/a.yaml", "a: 1\n");
+    write(&root, "rules/b.yaml", "b: 1\n");
+    let fork = commit(&root, "base");
+    git_cmd(&root, &["checkout", "-q", "-b", "feature"]);
+    write(&root, "rules/a.yaml", "a: 2\n");
+    commit(&root, "on the branch");
+    git_cmd(&root, &["checkout", "-q", "main"]);
+    write(&root, "rules/b.yaml", "b: 2\n");
+    write(&root, "rules/c.yaml", "c: 1\n");
+    commit(&root, "on main");
+    git_cmd(&root, &["checkout", "-q", "feature"]);
+    let changed = git::changed_in_folders(&root, &[root.join("rules")], &yaml).unwrap();
+    let found: Vec<(&str, Option<&[u8]>)> = changed
+        .iter()
+        .map(|file| (file.relative.as_str(), file.baseline.as_deref()))
+        .collect();
+    assert_eq!(found, [("rules/a.yaml", Some(b"a: 1\n".as_slice()))]);
+    assert_eq!(git_reports(&root, &fork, "rules"), ["rules/a.yaml"]);
+}
+
+/// main: base; `release` from base: r (edits a); `feature` from release: f
+/// (edits b).
+fn release_history() -> (tempfile::TempDir, PathBuf) {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dunce::canonicalize(dir.path()).unwrap();
+    git_cmd(&root, &["init", "-q", "-b", "main"]);
+    write(&root, "rules/a.yaml", "a: 1\n");
+    write(&root, "rules/b.yaml", "b: 1\n");
+    commit(&root, "base");
+    git_cmd(&root, &["checkout", "-q", "-b", "release"]);
+    write(&root, "rules/a.yaml", "a: 2\n");
+    commit(&root, "r");
+    git_cmd(&root, &["checkout", "-q", "-b", "feature"]);
+    write(&root, "rules/b.yaml", "b: 2\n");
+    commit(&root, "f");
+    (dir, root)
+}
+
+/// A branch tracking another remote branch than its own copy compares with
+/// that upstream, ahead of the default branch.
+#[test]
+fn docs_compare_with_a_tracked_upstream_that_is_not_the_branch_itself() {
+    let (_dir, root) = release_history();
+    assert_eq!(
+        changed_names(&root, "rules"),
+        ["rules/a.yaml", "rules/b.yaml"]
+    );
+    let release = git_cmd(&root, &["rev-parse", "release"]);
+    git_cmd(
+        &root,
+        &[
+            "update-ref",
+            "refs/remotes/origin/release",
+            release.as_str(),
+        ],
+    );
+    git_cmd(&root, &["config", "branch.feature.remote", "origin"]);
+    git_cmd(
+        &root,
+        &["config", "branch.feature.merge", "refs/heads/release"],
+    );
+    assert_eq!(changed_names(&root, "rules"), ["rules/b.yaml"]);
+}
+
+/// A branch tracking a local branch (`remote = .`) compares with that
+/// branch.
+#[test]
+fn docs_compare_with_a_tracked_local_branch() {
+    let (_dir, root) = release_history();
+    git_cmd(&root, &["config", "branch.feature.remote", "."]);
+    git_cmd(
+        &root,
+        &["config", "branch.feature.merge", "refs/heads/release"],
+    );
+    assert_eq!(changed_names(&root, "rules"), ["rules/b.yaml"]);
+}
+
+/// `origin/HEAD` names the default branch when it has none of the usual
+/// names.
+#[test]
+fn docs_compare_with_the_default_branch_origin_head_names() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dunce::canonicalize(dir.path()).unwrap();
+    git_cmd(&root, &["init", "-q", "-b", "trunk"]);
+    write(&root, "rules/a.yaml", "a: 1\n");
+    let base = commit(&root, "base");
+    git_cmd(&root, &["checkout", "-q", "-b", "feature"]);
+    write(&root, "rules/a.yaml", "a: 2\n");
+    commit(&root, "on the branch");
+    git_cmd(&root, &["branch", "-q", "-D", "trunk"]);
+    git_cmd(
+        &root,
+        &["update-ref", "refs/remotes/origin/trunk", base.as_str()],
+    );
+    // Without origin/HEAD nothing names the default branch: the baseline is
+    // HEAD, and the committed edit is no change.
+    assert!(changed_names(&root, "rules").is_empty());
+    git_cmd(
+        &root,
+        &[
+            "symbolic-ref",
+            "refs/remotes/origin/HEAD",
+            "refs/remotes/origin/trunk",
+        ],
+    );
+    assert_eq!(changed_names(&root, "rules"), ["rules/a.yaml"]);
+}

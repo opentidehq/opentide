@@ -893,10 +893,227 @@ fn tree_entries(repo: &Repo, id: ObjectId, path: &str) -> Vec<(String, ObjectId,
         .collect()
 }
 
+/// The repository's configuration as git reads it for the work tree: the
+/// installation's, system, global and local files, then the environment's
+/// overrides.
+fn full_config(git_dir: &Path) -> Option<gix_config::File> {
+    let common =
+        match gix_discover::path::from_plain_file_relative_to_file(&git_dir.join("commondir")) {
+            Some(Ok(common)) => common,
+            _ => git_dir.to_path_buf(),
+        };
+    gix_config::File::from_git_dir(common).ok()
+}
+
+/// A path setting (`core.excludesFile`), `~` expanded; else the XDG default
+/// (`$XDG_CONFIG_HOME/git/<default>`), as git falls back to it.
+fn config_path(config: Option<&gix_config::File>, key: &str, default: &str) -> Option<PathBuf> {
+    let configured = config.and_then(|config| config.path(key)).and_then(|path| {
+        let home = gix_path::env::home_dir();
+        path.interpolate(gix_config::path::interpolate::Context {
+            home_dir: home.as_deref(),
+            ..Default::default()
+        })
+        .ok()
+    });
+    configured.or_else(|| gix_path::env::xdg_config(default, &mut |name| std::env::var_os(name)))
+}
+
+/// The work tree as `git diff <baseline>` and `git ls-files --others
+/// --exclude-standard` read it: the index says which files are tracked; an
+/// untracked file counts unless an exclude file ignores it; a file's content
+/// is what git would store for it, through the clean filters its attributes
+/// and the configuration choose (`core.autocrlf`, `core.eol`, `text`, `eol`,
+/// `ident`, `working-tree-encoding`, `filter.<driver>.clean`).
+struct WorkTree {
+    index: gix_index::File,
+    stack: gix_worktree::Stack,
+    pipeline: gix_filter::Pipeline,
+}
+
+impl WorkTree {
+    fn open(top: &Path, git_dir: &Path) -> Self {
+        let common = match gix_discover::path::from_plain_file_relative_to_file(
+            &git_dir.join("commondir"),
+        ) {
+            Some(Ok(common)) => common,
+            _ => git_dir.to_path_buf(),
+        };
+        let kind = gix_hash::Kind::Sha1;
+        // No index (nothing staged yet) reads as an empty one, as git reads it.
+        let index = gix_index::File::at(
+            git_dir.join("index"),
+            kind,
+            false,
+            gix_index::decode::Options::default(),
+        )
+        .unwrap_or_else(|_| {
+            gix_index::File::from_state(gix_index::State::new(kind), git_dir.join("index"))
+        });
+        let config = full_config(git_dir);
+        let config = config.as_ref();
+        let flag = |key: &str| {
+            config
+                .and_then(|config| config.boolean(key).ok().flatten())
+                .unwrap_or(false)
+        };
+        let setting = |key: &str| {
+            config
+                .and_then(|config| config.string(key))
+                .map(|value| value.to_str_lossy().to_lowercase())
+        };
+        let mut buf = Vec::new();
+        let ignore_globals = gix_ignore::Search::from_git_dir(
+            &common,
+            config_path(config, "core.excludesFile", "ignore"),
+            &mut buf,
+            gix_ignore::search::Ignore::default(),
+        )
+        .unwrap_or_default();
+        let ignore = gix_worktree::stack::state::Ignore::new(
+            gix_ignore::Search::default(),
+            ignore_globals,
+            None,
+            gix_worktree::stack::state::ignore::Source::WorktreeThenIdMappingIfNotSkipped,
+            gix_ignore::search::Ignore::default(),
+        );
+        let mut collection = gix_attributes::search::MetadataCollection::default();
+        let attribute_globals = gix_attributes::Search::new_globals(
+            config_path(config, "core.attributesFile", "attributes"),
+            &mut buf,
+            &mut collection,
+        )
+        .unwrap_or_default();
+        let attributes = gix_worktree::stack::state::Attributes::new(
+            attribute_globals,
+            Some(common.join("info").join("attributes")),
+            gix_worktree::stack::state::attributes::Source::WorktreeThenIdMapping,
+            collection,
+        );
+        let stack = gix_worktree::Stack::from_state_and_ignore_case(
+            top,
+            flag("core.ignoreCase"),
+            gix_worktree::stack::State::for_add(attributes, ignore),
+            &index,
+            index.path_backing(),
+        );
+        let auto_crlf = match setting("core.autocrlf").as_deref() {
+            Some("input") => gix_filter::eol::AutoCrlf::Input,
+            _ if flag("core.autocrlf") => gix_filter::eol::AutoCrlf::Enabled,
+            _ => gix_filter::eol::AutoCrlf::Disabled,
+        };
+        let eol = match setting("core.eol").as_deref() {
+            Some("lf") => Some(gix_filter::eol::Mode::Lf),
+            Some("crlf") => Some(gix_filter::eol::Mode::CrLf),
+            _ => None,
+        };
+        let drivers = config
+            .and_then(|config| config.sections_by_name("filter"))
+            .into_iter()
+            .flatten()
+            .filter_map(|section| {
+                let name = section.header().subsection_name()?.to_owned();
+                let body = section.body();
+                Some(gix_filter::Driver {
+                    name,
+                    clean: body.value("clean"),
+                    smudge: body.value("smudge"),
+                    process: body.value("process"),
+                    required: body.value("required").is_some_and(|value| {
+                        gix_config::Boolean::try_from(value.as_bstr()).is_ok_and(|b| b.0)
+                    }),
+                })
+            })
+            .collect();
+        let pipeline = gix_filter::Pipeline::new(
+            gix_command::Context {
+                git_dir: Some(git_dir.to_path_buf()),
+                worktree_dir: Some(top.to_path_buf()),
+                ..Default::default()
+            },
+            gix_filter::pipeline::Options {
+                drivers,
+                eol_config: gix_filter::eol::Configuration { auto_crlf, eol },
+                crlf_roundtrip_check: gix_filter::pipeline::CrlfRoundTripCheck::Skip,
+                object_hash: kind,
+                ..Default::default()
+            },
+        );
+        Self {
+            index,
+            stack,
+            pipeline,
+        }
+    }
+
+    /// The object the index holds for `relative`, at stage 0 or "ours".
+    fn tracked(&self, relative: &str) -> Option<ObjectId> {
+        self.index
+            .entry_by_path(relative.as_bytes().as_bstr())
+            .map(|entry| entry.id)
+    }
+
+    /// Whether an exclude file ignores the untracked file `relative`.
+    fn ignored(&mut self, relative: &str, odb: &gix_odb::Handle) -> bool {
+        self.stack
+            .at_entry(
+                relative.as_bytes().as_bstr(),
+                Some(gix_index::entry::Mode::FILE),
+                odb,
+            )
+            .is_ok_and(|platform| platform.is_excluded())
+    }
+
+    /// The object id git would store for `bytes` at `relative`, through the
+    /// clean filters; `None` when a filter fails.
+    fn stored_id(
+        &mut self,
+        relative: &str,
+        bytes: &[u8],
+        odb: &gix_odb::Handle,
+    ) -> Option<ObjectId> {
+        let in_index = self.tracked(relative);
+        let stack = &mut self.stack;
+        let mut attributes = |path: &BStr, out: &mut gix_attributes::search::Outcome| {
+            if let Ok(platform) = stack.at_entry(path, Some(gix_index::entry::Mode::FILE), odb) {
+                platform.matching_attributes(out);
+            }
+        };
+        let mut index_object = |buf: &mut Vec<u8>| match in_index {
+            Some(id) => odb.try_find(&id, buf).map(|found| found.map(|_| ())),
+            None => Ok(None),
+        };
+        let outcome = self
+            .pipeline
+            .convert_to_git(
+                bytes,
+                Path::new(relative),
+                &mut attributes,
+                &mut index_object,
+            )
+            .ok()?;
+        let hash = |data: &[u8]| {
+            gix_object::compute_hash(gix_hash::Kind::Sha1, gix_object::Kind::Blob, data).ok()
+        };
+        match outcome {
+            gix_filter::pipeline::convert::ToGitOutcome::Unchanged(_) => hash(bytes),
+            gix_filter::pipeline::convert::ToGitOutcome::Buffer(data) => hash(data),
+            gix_filter::pipeline::convert::ToGitOutcome::Process(mut read) => {
+                let mut data = Vec::new();
+                std::io::Read::read_to_end(&mut read, &mut data).ok()?;
+                hash(&data)
+            }
+        }
+    }
+}
+
 /// The files directly in each of `folders` that differ from the default
-/// branch's baseline: changed, added (untracked included) or deleted
-/// (`changed_paths` read for the object folders only). `keep` picks the file
-/// names that count. Sorted by path.
+/// branch's baseline, as `git diff <baseline>` and `git ls-files --others
+/// --exclude-standard` report them (`changed_paths` read for the object
+/// folders only): a tracked file whose content, through the clean filters,
+/// is not the baseline's; one deleted or no longer in the index; an
+/// untracked file no exclude file ignores. `keep` picks the file names that
+/// count. Sorted by path.
 ///
 /// # Errors
 ///
@@ -911,6 +1128,7 @@ pub fn changed_in_folders(
     let repo = open(workspace).map_err(|_| failed(NO_GIT_MESSAGE))?;
     let base = baseline(&repo, &git_dir)?;
     let top = dunce::canonicalize(&top).unwrap_or(top);
+    let mut work = WorkTree::open(&top, &git_dir);
     let mut changed = Vec::new();
     for folder in folders {
         let Ok(real) = dunce::canonicalize(folder) else {
@@ -924,6 +1142,13 @@ pub fn changed_in_folders(
             .map(|part| part.as_os_str().to_string_lossy().into_owned())
             .collect::<Vec<_>>()
             .join("/");
+        let path_of = |name: &str| {
+            if prefix.is_empty() {
+                name.to_owned()
+            } else {
+                format!("{prefix}/{name}")
+            }
+        };
         let committed: std::collections::BTreeMap<String, ObjectId> =
             tree_entries(&repo, base, &prefix)
                 .into_iter()
@@ -947,16 +1172,27 @@ pub fn changed_in_folders(
         names.sort();
         names.dedup();
         for name in names {
+            let relative = path_of(name);
             let before = committed.get(name);
-            let now = on_disk.get(name);
-            let same = match (before, now) {
-                (Some(id), Some(bytes)) => {
-                    gix_object::compute_hash(gix_hash::Kind::Sha1, gix_object::Kind::Blob, bytes)
-                        .is_ok_and(|hash| hash == *id)
+            let tracked = work.tracked(&relative).is_some();
+            let differs = match on_disk.get(name) {
+                // Deleted from the work tree: a change only if the baseline had it.
+                None => before.is_some(),
+                Some(_) if !tracked && work.ignored(&relative, &repo.odb) => {
+                    // Ignored and untracked: `git ls-files --exclude-standard`
+                    // skips it; `git diff` still reports a baseline file the
+                    // index no longer holds.
+                    before.is_some()
                 }
-                _ => false,
+                // Untracked, or no longer in the index: the baseline's file
+                // reads as deleted, and the one on disk as new.
+                Some(_) if !tracked => true,
+                Some(bytes) => before.is_none_or(|id| {
+                    work.stored_id(&relative, bytes, &repo.odb)
+                        .is_none_or(|stored| stored != *id)
+                }),
             };
-            if same {
+            if !differs {
                 continue;
             }
             let baseline = before.and_then(|id| {
@@ -966,11 +1202,6 @@ pub fn changed_in_folders(
                     .ok()
                     .map(|blob| blob.data.to_vec())
             });
-            let relative = if prefix.is_empty() {
-                name.clone()
-            } else {
-                format!("{prefix}/{name}")
-            };
             changed.push(ChangedFile {
                 absolute: top.join(&relative),
                 relative,

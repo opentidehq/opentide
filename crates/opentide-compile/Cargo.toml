@@ -20,6 +20,8 @@ workspace = true
 # "did you mean" for --strategy (strsim, clap's measure).
 opentide-core.workspace = true
 opentide-schema.workspace = true
+# generate docs: the catalogue checks each object against its model's constraints.
+garde.workspace = true
 opentide-workspace.workspace = true
 # The git baseline (UC-3.1): gitoxide's crates read the repository without
 # the git program: the checkout's discovery, the reference store, the object
@@ -40,6 +42,20 @@ gix-ref = "0.67"
 gix-diff = { version = "0.67", default-features = false, features = ["sha1"] }
 gix-revwalk = "0.35"
 gix-revision = { version = "0.49", default-features = false, features = ["merge_base"] }
+# generate docs --changed reads the work tree as `git diff` and `git ls-files
+# --others --exclude-standard` do: the index's entries and their stat data
+# (gix-index), the exclude files and `.gitattributes` (gix-worktree's stack,
+# gix-ignore, gix-attributes) and the clean filters a file goes through before
+# it is compared (gix-filter: autocrlf, eol, ident, working-tree-encoding and
+# configured filter drivers).
+gix-index = "0.55"
+gix-worktree = { version = "0.56", default-features = false, features = ["attributes"] }
+gix-ignore = "0.22"
+gix-attributes = "0.35"
+gix-filter = "0.34"
+gix-fs = "0.22"
+gix-path = "0.12"
+gix-command = "0.10"
 # Paths without Windows' verbatim prefix (`\\?\`), which git, the oracle
 # and a user's own paths do not use: the messages name paths that way.
 dunce = "1"
