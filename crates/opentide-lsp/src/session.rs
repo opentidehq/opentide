@@ -2,7 +2,9 @@
 //! workspace roots and their files on disk, the client's capabilities, the
 //! analyses already run, and the messages waiting to be written.
 
-use crate::checks::{Buffers, RootChecks, Stub, configuration_issues, engine_diagnostic};
+use crate::checks::{
+    Buffers, Findings, RootChecks, Stub, configuration_issues, engine_diagnostic, validate_files,
+};
 use crate::server::{collect_objects, install_workspace_catalog_from, workspace_root};
 use crate::uri::uri_to_path;
 use lsp_server::{Message, Notification, ReqQueue, Response};
@@ -542,6 +544,16 @@ pub(crate) fn workspace_path(path: &str) -> PathBuf {
     }
 }
 
+/// The workspace an object file outside every root belongs to: the folder
+/// that holds the nearest `objects/` above it.
+fn objects_root(path: &Path) -> Option<PathBuf> {
+    path.ancestors()
+        .skip(1)
+        .find(|a| a.file_name().is_some_and(|name| name == "objects"))
+        .and_then(Path::parent)
+        .map(Path::to_path_buf)
+}
+
 /// Where [`workspace_path`] puts what is not an absolute path.
 #[cfg(windows)]
 pub(crate) const VIRTUAL_ROOT: &str = "C:\\opentide-virtual";
@@ -962,18 +974,18 @@ impl Session {
             None => {
                 // A document outside every root is checked in the workspace
                 // its `objects/` folder names, as `validate` run there would.
-                let Some(root) = path
-                    .ancestors()
-                    .skip(1)
-                    .find(|a| a.file_name().is_some_and(|name| name == "objects"))
-                    .and_then(Path::parent)
-                    .map(Path::to_path_buf)
-                else {
-                    return Vec::new();
-                };
-                let mut loose = self.loose_checks.borrow_mut();
-                let (found, key, failure) = run(&root, loose.entry(root.clone()).or_default());
-                (found, key, failure, root)
+                // One with no `objects/` around it is checked in a workspace
+                // of its own ([`Self::standalone_findings`]).
+                if let Some(root) = objects_root(&path) {
+                    let mut loose = self.loose_checks.borrow_mut();
+                    let (found, key, failure) = run(&root, loose.entry(root.clone()).or_default());
+                    (found, key, failure, root)
+                } else {
+                    let Some((found, key, failure)) = self.standalone_findings(uri, None) else {
+                        return Vec::new();
+                    };
+                    (found, key, failure, PathBuf::from(VIRTUAL_ROOT))
+                }
             }
         };
         if let Some(failure) = failure {
@@ -989,6 +1001,95 @@ impl Session {
                 findings
                     .iter()
                     .map(|finding| engine_diagnostic(&doc.text, finding))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// `validate`'s findings for the Tide documents outside every root that
+    /// no `objects/` folder holds (an unsaved buffer, a file opened on its
+    /// own), and the key of `uri`'s among them. Each is checked as a file of
+    /// its family's folder in the virtual root, with what the host supplied
+    /// ([`RootChecks::standalone_path`]), so a reference to an object
+    /// neither holds is `invalid_ref`, as in any workspace. `text`, when
+    /// given, is `uri`'s text (an `opentide/analyze` request's), in place of
+    /// an open document's. `None` when `uri` names no family.
+    fn standalone_findings(
+        &self,
+        uri: &str,
+        text: Option<&str>,
+    ) -> Option<(Findings, PathBuf, Option<String>)> {
+        let root = PathBuf::from(VIRTUAL_ROOT);
+        let mut buffers = self.buffers(None);
+        let mut standalone: BTreeMap<&str, &str> = self
+            .docs
+            .iter()
+            .filter(|(u, d)| {
+                d.root.is_none()
+                    && d.language == LanguageId::TideYaml
+                    && objects_root(&workspace_path(&uri_to_path(u))).is_none()
+            })
+            .map(|(u, d)| (u.as_str(), d.text.as_str()))
+            .collect();
+        if let Some(text) = text {
+            standalone.insert(uri, text);
+        }
+        for u in standalone.keys() {
+            buffers.files.remove(&workspace_path(&uri_to_path(u)));
+        }
+        let mut loose = self.loose_checks.borrow_mut();
+        let checks = loose.entry(root.clone()).or_default();
+        let placed: Vec<(&str, PathBuf, &str)> = standalone
+            .into_iter()
+            .filter_map(|(u, text)| {
+                let path = checks.standalone_path(&root, &buffers, u, text)?;
+                Some((u, path, text))
+            })
+            .collect();
+        let this = placed.iter().find(|(u, _, _)| *u == uri)?.1.clone();
+        let mut files: Vec<PathBuf> = Vec::new();
+        for (_, path, text) in placed {
+            files.push(checks.resolve(&path));
+            buffers.files.insert(path, text.to_string());
+        }
+        // Not cached by generation: an `opentide/analyze` text changes
+        // without one. These documents are few, and their workspace small.
+        let found = match checks.workspace(&root, buffers) {
+            Some(workspace) => Arc::new(validate_files(workspace, &files)),
+            None => Findings::default(),
+        };
+        Some((found, checks.resolve(&this), checks.failure.clone()))
+    }
+
+    /// `validate`'s findings on the Tide text of an `opentide/analyze`
+    /// request for `uri`, placed in `text`: an open document's, when the
+    /// text is the document's; a text outside every root and `objects/`
+    /// folder, checked on its own ([`Self::standalone_findings`]); none for
+    /// another text of a workspace.
+    pub(crate) fn analyze_findings(&self, uri: &str, text: &str) -> Vec<opentide_core::Diagnostic> {
+        if let Some(doc) = self.docs.get(uri) {
+            return if doc.language == LanguageId::TideYaml && doc.text == text {
+                self.object_findings(uri, doc)
+            } else {
+                Vec::new()
+            };
+        }
+        let path = workspace_path(&uri_to_path(uri));
+        if self.root_for(&path.display().to_string()).is_some() || objects_root(&path).is_some() {
+            return Vec::new();
+        }
+        let Some((found, key, failure)) = self.standalone_findings(uri, Some(text)) else {
+            return Vec::new();
+        };
+        if failure.is_some() {
+            return Vec::new();
+        }
+        found
+            .get(&key)
+            .map(|findings| {
+                findings
+                    .iter()
+                    .map(|finding| engine_diagnostic(text, finding))
                     .collect()
             })
             .unwrap_or_default()
@@ -1656,7 +1757,9 @@ mod tests {
     #[test]
     fn object_files_are_indexed_when_the_index_is_read() {
         let root = std::env::temp_dir().join(format!("opentide-lsp-disk-{}", std::process::id()));
-        let rules = root.join("objects/rules");
+        // Joined one name at a time: the walk spells the path with the
+        // platform's separator.
+        let rules = root.join("objects").join("rules");
         std::fs::create_dir_all(&rules).unwrap();
         let rule = "name: R\nmetadata:\n  uuid: u-1\n  schema: rule::1.0\n";
         std::fs::write(rules.join("r.yaml"), rule).unwrap();

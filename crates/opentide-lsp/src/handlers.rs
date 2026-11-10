@@ -2213,6 +2213,12 @@ fn handle_custom_analyze(session: &mut Session, params: custom::TextParams) -> V
         .and_then(LanguageId::parse)
         .unwrap_or(LanguageId::TideYaml);
     let uri = params.uri.unwrap_or_else(|| "memory".to_string());
+    // The object checks are validate's, as for an open document.
+    let mut diagnostics = if language == LanguageId::TideYaml {
+        session.analyze_findings(&uri, opentide_core::strip_bom(&params.text))
+    } else {
+        Vec::new()
+    };
     let host = session.host_for(&uri);
     let response = opentide_analysis::analyze(
         &host,
@@ -2222,7 +2228,8 @@ fn handle_custom_analyze(session: &mut Session, params: custom::TextParams) -> V
             text: params.text,
         },
     );
-    json!({ "diagnostics": response.diagnostics })
+    diagnostics.extend(response.diagnostics);
+    json!({ "diagnostics": diagnostics })
 }
 
 /// `opentide/catalog` (#198): each root's indexed objects, with their

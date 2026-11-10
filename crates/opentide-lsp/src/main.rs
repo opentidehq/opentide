@@ -161,6 +161,11 @@ fn cmd_analyze(file: &Path, language: Option<&str>, platform: Option<&str>) -> R
     }
     // The object checks are validate's, as the server reports them.
     let mut diagnostics = match (language, root.as_deref().and_then(Path::parent)) {
+        // A file no workspace holds is checked on its own, as the server
+        // checks a document outside every root.
+        (LanguageId::TideYaml, _) if server::workspace_root(file).is_none() => {
+            server::validate_standalone(file, &text)
+        }
         (LanguageId::TideYaml, Some(workspace)) => server::validate_file(workspace, file, &text),
         _ => Vec::new(),
     };

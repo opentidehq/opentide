@@ -255,6 +255,32 @@ pub fn validate_file(root: &Path, file: &Path, text: &str) -> Vec<opentide_core:
         .unwrap_or_default()
 }
 
+/// What `validate` reports on the Tide object `text` of `file`, a file no
+/// workspace holds (no `objects/` or `.opentide/` above it), placed in
+/// `text`: the object checked in a workspace of its own, as the server
+/// checks a document outside every root, so a reference to an object it
+/// does not hold is `invalid_ref`.
+pub fn validate_standalone(file: &Path, text: &str) -> Vec<opentide_core::Diagnostic> {
+    let mut checks = crate::checks::RootChecks::default();
+    let root = PathBuf::from(crate::session::VIRTUAL_ROOT);
+    let mut buffers = crate::checks::Buffers::default();
+    let Some(placed) = checks.standalone_path(&root, &buffers, &file.display().to_string(), text)
+    else {
+        return Vec::new();
+    };
+    buffers.files.insert(placed.clone(), text.to_string());
+    let found = checks.findings(&root, buffers, vec![placed.clone()], 0);
+    found
+        .get(&checks.resolve(&placed))
+        .map(|findings| {
+            findings
+                .iter()
+                .map(|finding| crate::checks::engine_diagnostic(text, finding))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 /// What `opentide validate` reports on every object of the workspace at
 /// `root`, on disk, by file: for a host that checks many files of one
 /// workspace (the `opentide` package's `check_file`, `opentide tui`), one

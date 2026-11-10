@@ -1173,6 +1173,38 @@ fn cli_codes(file: &std::path::Path) -> Vec<String> {
     codes
 }
 
+/// #914: a Tide file no workspace holds is checked on its own: `analyze`
+/// reports a reference to an object it does not hold as `invalid_ref`, as
+/// the server does for an unsaved buffer (`opentide/analyze`), and both
+/// report the same codes (the lsp-client package holds every transport to
+/// the CLI's).
+#[test]
+fn a_file_outside_every_workspace_reports_what_the_server_does() {
+    let root = std::env::temp_dir().join(format!("opentide-standalone-{}", std::process::id()));
+    std::fs::create_dir_all(root.join("q")).unwrap();
+    let file = root.join("q/query.yaml");
+    let rule = "name: Two platforms\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000099\n  schema: rule::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: Sentinel in a rule.\nstatus: STAGING\ndetection_model: 00000000-0000-4000-8002-000000000001\nconfigurations:\n  sentinel:\n    query: |\n      SecurityEvent\n      | where EventID == 4688\n";
+    std::fs::write(&file, rule).unwrap();
+    let cli = cli_codes(&file);
+    std::fs::remove_dir_all(&root).ok();
+    assert!(cli.contains(&"invalid_ref".to_string()), "{cli:?}");
+
+    let mut lsp = Lsp::spawn();
+    lsp.request("initialize", json!({ "capabilities": {} }));
+    let reply = lsp.request(
+        "opentide/analyze",
+        json!({ "language": "opentide-yaml", "text": rule, "uri": "untitled:query.yaml" }),
+    );
+    let mut server: Vec<String> = reply["result"]["diagnostics"]
+        .as_array()
+        .unwrap_or_else(|| panic!("{reply}"))
+        .iter()
+        .map(|d| d["code"].as_str().unwrap().to_string())
+        .collect();
+    server.sort();
+    assert_eq!(server, cli);
+}
+
 /// One workspace file that is not UTF-8 is left out of the index. It used to
 /// fail `analyze` outright, and leave the stdio server with no index at all,
 /// so every reference to another object was reported as unresolved.

@@ -137,7 +137,7 @@ Requests beyond LSP, for clients that know them (`crates/opentide-lsp/src/handle
 
 | Method | Params | Result |
 | --- | --- | --- |
-| `opentide/analyze` | `{ text, language?, uri? }` | `{ diagnostics }`, in the engine's own shape: `{ code, message, severity, range, suggestion? }`, `severity` a word (`error`, `warning`, `information`, `hint`). The text need not be open. Without `language` it is Tide YAML. `uri` picks the root whose workspace (`visibility.toml`, the index) the analysis reads; without it the text is analysed as `memory`, outside every root |
+| `opentide/analyze` | `{ text, language?, uri? }` | `{ diagnostics }`, in the engine's own shape: `{ code, message, severity, range, suggestion? }`, `severity` a word (`error`, `warning`, `information`, `hint`). The text need not be open. Without `language` it is Tide YAML. `uri` picks the root whose workspace (`visibility.toml`, the index) the analysis reads; without it the text is analysed as `memory`, outside every root. A Tide text outside every root and `objects/` folder gets `validate`'s findings too, checked on its own with what the host supplied; an open document's text gets its published ones |
 | `opentide/highlight` | `{ text, language? }` | `{ language_id, legend, tokens }`: each token's `capture` (a HighlightSpec capture), `range`, `span` (bytes) and `token_type` (an index into `legend`). Without `language` it is KQL |
 | `opentide/compiledKql` | `{ query, tenant? }` | `{ compiled }`: the KQL Sentinel runs for the query on `tenant` (`opentide_kql::compile_kql_query`, with no exclusions) |
 | `opentide/compiledSpl` | `{ query }` | `{ compiled }`: the search Splunk runs, the authored text (an implicit leading `\| search` is not a rewrite) |

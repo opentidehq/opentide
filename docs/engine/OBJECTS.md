@@ -28,9 +28,12 @@ Every code, its meaning and its place are `validate`'s
 `invalid_uuid`, `missing_uuid`, `yaml_parse`, `duplicate_id`, `invalid_ref`,
 `chaining_relation_unknown`, `deprecated_field`, `platform_not_enabled`,
 `nested_object_file` and the others. A document outside every workspace
-folder is checked in the workspace its `objects/` folder belongs to; one in
-no `objects/` folder gets no object finding, as `validate` checks no such
-file. While the configuration does not resolve, objects are not checked and
+folder is checked in the workspace its `objects/` folder belongs to. One in
+no `objects/` folder and outside every root (an unsaved buffer, a text sent
+with `opentide/analyze`, a file `opentide-lsp analyze` finds no workspace
+around) is checked as a file of its family's folder in a workspace of its
+own, with the objects a browser host supplied: a reference to an object
+neither holds is `invalid_ref`. While the configuration does not resolve, objects are not checked and
 the editor says why once.
 
 `filename_slug`, `missing_author`, `missing_organisation` and

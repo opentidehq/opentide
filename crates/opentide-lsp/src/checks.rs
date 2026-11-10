@@ -17,6 +17,8 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use crate::session::workspace_path;
+
 /// The disk, with the editor's buffers (and what a host with no filesystem
 /// supplied) in place of their files: a buffer is read for its path, and its
 /// folders exist, whatever the disk holds.
@@ -158,19 +160,33 @@ impl RootChecks {
         self.workspace.as_ref().map(Workspace::stats)
     }
 
-    /// `path` as the workspace names its files.
+    /// `path` as the workspace names its files: a path that is not
+    /// absolute on this platform (a browser host's, or `/a` on Windows)
+    /// under the virtual root ([`workspace_path`]), then resolved as the
+    /// workspace resolves what it reads (symbolic links, macOS's `/var` for
+    /// `/private/var`, Windows' long form of a short name such as
+    /// `RUNNER~1`). A buffer, a change, a root and a finding then name one
+    /// file whatever spelling the editor used for it.
     pub(crate) fn resolve(&self, path: &Path) -> PathBuf {
-        self.fs.resolve(path)
+        self.fs.resolve(&workspace_path(&path.to_string_lossy()))
     }
 
     /// `paths` changed on disk (a watcher's events).
     pub(crate) fn changed(&mut self, paths: impl IntoIterator<Item = PathBuf>) {
-        self.pending.extend(paths.into_iter().map(Change::changed));
+        let changes: Vec<Change> = paths
+            .into_iter()
+            .map(|path| Change::changed(self.resolve(&path)))
+            .collect();
+        self.pending.extend(changes);
     }
 
     /// Put `buffers` in place of their files: the ones that changed, came or
     /// went since the last call are changes for the workspace.
     fn set_buffers(&mut self, buffers: BTreeMap<PathBuf, String>) {
+        let buffers: BTreeMap<PathBuf, String> = buffers
+            .into_iter()
+            .map(|(path, text)| (self.resolve(&path), text))
+            .collect();
         if buffers == self.buffers {
             return;
         }
@@ -197,6 +213,7 @@ impl RootChecks {
     /// brought up to date. `None` while its configuration does not resolve
     /// ([`failure`](Self::failure) says why).
     pub(crate) fn workspace(&mut self, root: &Path, buffers: Buffers) -> Option<&Workspace> {
+        let root = &self.resolve(root);
         let mut files = buffers.files.clone();
         self.set_buffers(buffers.files);
         self.update(root);
@@ -237,13 +254,14 @@ impl RootChecks {
         if self.workspace.is_some() || self.opening.is_some() {
             return;
         }
+        let root = self.resolve(root);
         let fs: Arc<dyn FileSystem> = Arc::clone(&self.fs) as Arc<dyn FileSystem>;
-        let options = open_options(root);
+        let options = open_options(&root);
         self.opening = std::thread::Builder::new()
             .name("opentide-lsp-load".to_owned())
             .spawn(move || Workspace::open(fs, options))
             .ok()
-            .map(|handle| (root.to_path_buf(), handle));
+            .map(|handle| (root, handle));
     }
 
     /// The workspace [`prefetch`](Self::prefetch) loaded for `root`, if it
@@ -320,6 +338,7 @@ impl RootChecks {
         files: Vec<PathBuf>,
         generation: u64,
     ) -> Findings {
+        let files: Vec<PathBuf> = files.iter().map(|file| self.resolve(file)).collect();
         let cached = self.findings.as_ref().filter(|(at, wanted, _)| {
             *at == generation && files.iter().all(|file| wanted.contains(file))
         });
@@ -334,6 +353,51 @@ impl RootChecks {
         let found = Arc::new(validate_files(workspace, &files));
         self.findings = Some((generation, files, Arc::clone(&found)));
         found
+    }
+}
+
+/// The family a Tide object names (`rule` of `metadata.schema:
+/// rule::1.0`), if it names one.
+fn family_of(text: &str) -> Option<String> {
+    let value: serde_yaml::Value = serde_yaml::from_str(opentide_core::strip_bom(text)).ok()?;
+    let schema = value.get("metadata")?.get("schema")?.as_str()?;
+    let family = schema.split("::").next()?.trim();
+    (!family.is_empty()).then(|| family.to_string())
+}
+
+impl RootChecks {
+    /// Where a Tide object outside every workspace (an unsaved buffer, a
+    /// file with no `objects/` or `.opentide/` around it) is checked: as a
+    /// file of its family's folder in the workspace at `root` (the virtual
+    /// root, which holds what a host supplied), named after `id` (its URI),
+    /// so `validate` reports on it what it would on that object in a
+    /// workspace of its own, a reference to an object it does not hold
+    /// included. `None` for a text that names no family, or a family the
+    /// configuration gives no folder.
+    pub(crate) fn standalone_path(
+        &mut self,
+        root: &Path,
+        buffers: &Buffers,
+        id: &str,
+        text: &str,
+    ) -> Option<PathBuf> {
+        use std::hash::{Hash, Hasher};
+        let family = family_of(text)?;
+        if self.workspace.is_none() {
+            self.workspace(root, buffers.clone());
+        }
+        let folder = self
+            .workspace
+            .as_ref()?
+            .configuration()
+            .object_folders
+            .iter()
+            .find(|folder| folder.family == family)?
+            .path
+            .clone()?;
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        id.hash(&mut hasher);
+        Some(folder.join(format!("opentide-standalone-{:016x}.yaml", hasher.finish())))
     }
 }
 

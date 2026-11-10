@@ -1257,6 +1257,46 @@ fn an_unsaved_configuration_buffer_changes_the_objects_findings() {
     assert!(!codes.contains(&unknown), "{codes:?}");
 }
 
+/// #914: a folder the editor names by another spelling than the one the
+/// workspace resolves it to (a symbolic link here; macOS's `/var` for
+/// `/private/var`, Windows' `RUNNER~1` for the long name) still has its
+/// unsaved buffers and its edits checked: the server names each file as
+/// the workspace does.
+#[cfg(unix)]
+#[test]
+fn a_folder_opened_through_a_link_has_its_buffers_checked() {
+    let scratch = workspace("linked-root", true);
+    let link = scratch.0.with_file_name(format!(
+        "{}-link",
+        scratch.0.file_name().unwrap().to_string_lossy()
+    ));
+    let _ = std::fs::remove_file(&link);
+    std::os::unix::fs::symlink(&scratch.0, &link).unwrap();
+    let rule_uri = file_uri(&link.join("objects/rules/rule-1.0.yaml"));
+    let deployment_uri = file_uri(&link.join(".opentide/configurations/deployment.toml"));
+    let (mut lsp, _) =
+        start(json!({ "capabilities": pulling(json!({})), "rootUri": file_uri(&link) }));
+    let rule = fixture(RULE);
+    open(&mut lsp, &rule_uri, "opentide-yaml", &rule);
+    let unknown = "config_enum_unknown".to_string();
+    assert!(!pulled(&mut lsp, &rule_uri).contains(&unknown));
+
+    // An unsaved configuration buffer is the configuration.
+    open(&mut lsp, &deployment_uri, "toml", DESIGN_ONLY);
+    let codes = pulled(&mut lsp, &rule_uri);
+    assert!(codes.contains(&unknown), "{codes:?}");
+
+    // An edit of the rule is what is checked.
+    lsp.notify(
+        "textDocument/didChange",
+        json!({ "textDocument": { "uri": rule_uri, "version": 2 },
+                "contentChanges": [{ "text": rule.replacen("tlp: clear", "tlp: clearr", 1) }] }),
+    );
+    let codes = pulled(&mut lsp, &rule_uri);
+    assert!(codes.contains(&"vocab_unknown".to_string()), "{codes:?}");
+    std::fs::remove_file(&link).unwrap();
+}
+
 /// UC-2.6: a client with no file watcher has the disk read again on each
 /// request, and the configuration resolved again with it.
 #[test]
