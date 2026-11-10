@@ -1364,12 +1364,13 @@ fn handle_references(
     let doc = session.docs.get(position.text_document.uri.as_str())?;
     let Some(uuid) = uuid_at(&doc.text, position.position) else {
         let uri = &position.text_document.uri;
+        let lines = LineIndex::new(&doc.text);
         return Some(
             yara_references(doc, position.position, params.context.include_declaration)
                 .into_iter()
                 .map(|span| lsp::Location {
                     uri: uri.clone(),
-                    range: span_range(&doc.text, span),
+                    range: lsp_range(lines.range(span)),
                 })
                 .collect(),
         );
@@ -1398,11 +1399,12 @@ fn handle_document_highlight(
     let position = &params.text_document_position_params;
     let doc = session.docs.get(position.text_document.uri.as_str())?;
     let Some(uuid) = uuid_at(&doc.text, position.position) else {
+        let lines = LineIndex::new(&doc.text);
         return Some(
             yara_references(doc, position.position, true)
                 .into_iter()
                 .map(|span| lsp::DocumentHighlight {
-                    range: span_range(&doc.text, span),
+                    range: lsp_range(lines.range(span)),
                     kind: Some(lsp::DocumentHighlightKind::TEXT),
                 })
                 .collect(),
@@ -1533,6 +1535,7 @@ fn handle_document_link(
     }
     let host = session.host(doc.root);
     let workspace = workspace_index(&host);
+    let lines = LineIndex::new(&doc.text);
     Some(
         opentide_tide::document_links(&doc.text, &workspace)
             .into_iter()
@@ -1542,7 +1545,7 @@ fn handle_document_link(
                     opentide_tide::LinkTarget::Object { path } => file_uri(&path)?,
                 };
                 Some(lsp::DocumentLink {
-                    range: span_range(&doc.text, link.span),
+                    range: lsp_range(lines.range(link.span)),
                     target: Some(target),
                     tooltip: Some(link.tooltip),
                     data: None,
@@ -2061,10 +2064,11 @@ fn handle_rename(
     };
     let at = offset(&doc.text, position.position);
     let edits = opentide_analysis::rename(doc.language, &doc.text, at, &params.new_name)?;
+    let lines = LineIndex::new(&doc.text);
     let edits = edits
         .into_iter()
         .map(|(span, new_text)| lsp::TextEdit {
-            range: span_range(&doc.text, span),
+            range: lsp_range(lines.range(span)),
             new_text,
         })
         .collect();

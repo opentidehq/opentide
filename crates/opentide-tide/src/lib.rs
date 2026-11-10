@@ -17,7 +17,7 @@ mod yaml_path;
 mod yaml_scalar;
 mod yara;
 
-use opentide_core::{ByteSpan, Diagnostic, LanguageId, Range, codes, span_to_range};
+use opentide_core::{ByteSpan, Diagnostic, LanguageId, LineIndex, Range, codes, span_to_range};
 use opentide_highlight::{
     HighlightSpec, HighlightToken, TideField, highlight_markdown_line, tide_field_at,
     tide_schema_root, tokens_from_spans,
@@ -950,7 +950,12 @@ fn analyze_injections(
     injections: Vec<InjectedQuery>,
 ) -> Vec<QueryAnalysis> {
     let mut out = Vec::with_capacity(injections.len());
+    // One index per text: a token or finding converts in O(log n), not by
+    // scanning the object from its start (a large YARA signature has
+    // hundreds of thousands of tokens).
+    let host = LineIndex::new(source);
     for inj in injections {
+        let inner_lines = LineIndex::new(&inj.inner);
         let mut extra = Vec::new();
         let (found, query_tokens) = match inj.language {
             LanguageId::Kql => {
@@ -1052,7 +1057,7 @@ fn analyze_injections(
                 r.diagnostics = r
                     .diagnostics
                     .into_iter()
-                    .filter_map(|d| yara::on_assembled(&inj, d))
+                    .filter_map(|d| yara::on_assembled(&inj, &inner_lines, d))
                     .collect();
                 (r.diagnostics, r.tokens)
             }
@@ -1062,12 +1067,16 @@ fn analyze_injections(
         // not a query to check: `opentide validate` skips it too.
         let mut diagnostics: Vec<Diagnostic> = Vec::new();
         if !placeholder::is_placeholder_query(source, &inj) {
-            diagnostics.extend(found.into_iter().map(|d| remap_diagnostic(source, &inj, d)));
+            diagnostics.extend(
+                found
+                    .into_iter()
+                    .map(|d| remap_diagnostic(&host, &inner_lines, &inj, d)),
+            );
             diagnostics.extend(extra);
         }
         let tokens = query_tokens
             .iter()
-            .filter_map(|t| remap_token(source, &inj, t))
+            .filter_map(|t| remap_token(&host, &inj, t))
             .collect();
         out.push(QueryAnalysis {
             query: inj,
@@ -1078,9 +1087,14 @@ fn analyze_injections(
     out
 }
 
-fn remap_diagnostic(source: &str, inj: &InjectedQuery, mut d: Diagnostic) -> Diagnostic {
-    let start = inner_offset(&inj.inner, d.range.start);
-    let mut end = inner_offset(&inj.inner, d.range.end).max(start + 1);
+fn remap_diagnostic(
+    host: &LineIndex,
+    inner: &LineIndex,
+    inj: &InjectedQuery,
+    mut d: Diagnostic,
+) -> Diagnostic {
+    let start = inner.offset(d.range.start);
+    let mut end = inner.offset(d.range.end).max(start + 1);
     // A finding stays inside the part it starts in.
     if let Some(part) = inj.part_at(start) {
         end = end.min(part.end).max(start + 1);
@@ -1089,36 +1103,15 @@ fn remap_diagnostic(source: &str, inj: &InjectedQuery, mut d: Diagnostic) -> Dia
         }
     }
     let span = remap_span(inj, ByteSpan::new(start, end));
-    d.range = span_to_range(source, span);
+    d.range = host.range(span);
     if d.field_path.is_none() {
         d.field_path = Some(inj.field_path.clone());
     }
     d
 }
 
-/// Byte offset of an LSP position (UTF-16 columns) inside an injected query.
-fn inner_offset(inner: &str, position: opentide_core::Position) -> usize {
-    let mut line = 0u32;
-    let mut col = 0u32;
-    for (idx, ch) in inner.char_indices() {
-        if line == position.line && col >= position.character {
-            return idx;
-        }
-        if ch == '\n' {
-            if line == position.line {
-                return idx;
-            }
-            line += 1;
-            col = 0;
-        } else {
-            col += ch.len_utf16() as u32;
-        }
-    }
-    inner.len()
-}
-
 fn remap_token(
-    source: &str,
+    host: &LineIndex,
     inj: &InjectedQuery,
     token: &HighlightToken,
 ) -> Option<HighlightToken> {
@@ -1128,7 +1121,7 @@ fn remap_token(
     let mapped = remap_span(inj, token.span);
     Some(HighlightToken {
         span: mapped,
-        range: span_to_range(source, mapped),
+        range: host.range(mapped),
         capture: token.capture.clone(),
         token_type: token.token_type,
     })

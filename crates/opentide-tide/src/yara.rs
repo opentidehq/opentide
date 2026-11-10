@@ -886,7 +886,11 @@ pub(crate) fn decomposed_injection(source: &str, keys: &[YamlKey]) -> Option<Inj
 /// unclosed condition found at the closing brace) moves to the nearest byte
 /// of the field it belongs to, or, when that field has none, onto its key.
 /// No error is lost.
-pub(crate) fn on_assembled(inj: &InjectedQuery, mut d: Diagnostic) -> Option<Diagnostic> {
+pub(crate) fn on_assembled(
+    inj: &InjectedQuery,
+    inner: &opentide_core::LineIndex,
+    mut d: Diagnostic,
+) -> Option<Diagnostic> {
     if inj.parts.is_empty() {
         return Some(d);
     }
@@ -901,10 +905,8 @@ pub(crate) fn on_assembled(inj: &InjectedQuery, mut d: Diagnostic) -> Option<Dia
     if len == 0 {
         return Some(d);
     }
-    let start = opentide_core::position_to_offset(&inj.inner, d.range.start).min(len - 1);
-    let end = opentide_core::position_to_offset(&inj.inner, d.range.end)
-        .max(start + 1)
-        .min(len);
+    let start = inner.offset(d.range.start).min(len - 1);
+    let end = inner.offset(d.range.end).max(start + 1).min(len);
     let (first, last) = match (start..end).find(|&i| !inj.is_synthetic(i)) {
         Some(first) => {
             let last = (first..end)
@@ -931,10 +933,7 @@ pub(crate) fn on_assembled(inj: &InjectedQuery, mut d: Diagnostic) -> Option<Dia
             (at, at)
         }
     };
-    d.range = opentide_core::Range::new(
-        opentide_core::offset_to_position(&inj.inner, first),
-        opentide_core::offset_to_position(&inj.inner, last + 1),
-    );
+    d.range = opentide_core::Range::new(inner.position(first), inner.position(last + 1));
     Some(d)
 }
 
