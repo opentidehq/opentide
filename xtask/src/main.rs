@@ -69,6 +69,10 @@ commands:
                  load every corpus with opentide-workspace and compare its
                  index (objects, UUIDs, types, paths, load errors, references,
                  signals), as JSON, with the Python registry's (UC-2.1, #816)
+  lsp parity --corpus faults [--only ID,...] [--keep DIR]
+                 for each fault kind `opentide validate` reports, the
+                 language server's published diagnostics against validate's
+                 findings: codes, severities, ranges in UTF-16 (UC-2.6, #821)
   validate diff [--filter GLOB] [--keep DIR] [--show-approved]
                  run opentide-workspace's validate on every recorded
                  `validate --json` case that only checks, and compare its
@@ -165,6 +169,13 @@ fn main() -> ExitCode {
             Ok(code) => ExitCode::from(code),
             Err(error) => {
                 eprintln!("xtask registry: {error:#}");
+                ExitCode::from(2)
+            }
+        },
+        "lsp" => match xtask::lsp::run(rest) {
+            Ok(code) => ExitCode::from(code),
+            Err(error) => {
+                eprintln!("xtask lsp: {error:#}");
                 ExitCode::from(2)
             }
         },

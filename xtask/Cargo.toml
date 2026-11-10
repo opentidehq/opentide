@@ -26,6 +26,11 @@ opentide-schema = { workspace = true }
 opentide-workspace.workspace = true
 # xtask payloads (src/payloads/): the deploy compile against the oracle.
 opentide-compile.workspace = true
+# `lsp parity` (UC-2.6): the language server in this process, and the
+# engine's own analysis it adds to validate's findings.
+opentide-lsp.workspace = true
+opentide-analysis.workspace = true
+opentide-core.workspace = true
 schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
