@@ -480,9 +480,10 @@ impl<'a> Checker<'a> {
                     other => (other.to_string(), span(&meta.identifier.span())),
                 };
                 // A comma-joined list of known contexts (`file.pe,memory`).
+                // A comma-joined list without blanks (harfanglab-1.0 1.3).
                 if let Some(bad) = value
                     .split(',')
-                    .find(|part| !data.context_values.iter().any(|v| v == part.trim()))
+                    .find(|part| !data.context_values.iter().any(|v| v == part))
                 {
                     // On the unknown part of the list, when it is there as written.
                     let written = self.text(at);
@@ -494,9 +495,8 @@ impl<'a> Checker<'a> {
                     self.warn(
                         codes::HARFANGLAB_YARA_CONTEXT,
                         format!(
-                            "HarfangLab's YARA rules use contexts from {}, joined with commas; `{}` is none of them",
+                            "HarfangLab's YARA rules use contexts from {}, joined with commas and no blanks; `{bad}` is none of them",
                             data.context_values.join(", "),
-                            bad.trim()
                         ),
                         at,
                     );
@@ -742,7 +742,25 @@ impl<'a> Checker<'a> {
                     if text.contains("0x") || text.contains("0o") {
                         self.yara_x_only("A hex or octal jump bound", at);
                     }
+                    // libyara reads a jump bound into a 32-bit signed int:
+                    // 2^31 and above wrap negative, which it refuses.
+                    let negative = [jump.start, jump.end]
+                        .iter()
+                        .flatten()
+                        .any(|&b| b > i32::MAX as u32);
+                    if negative {
+                        self.error(
+                            codes::YARA_HEX_STRING,
+                            if text.contains('-') {
+                                format!("invalid negative jump length: libyara reads a bound above {} as negative", i32::MAX)
+                            } else {
+                                format!("invalid jump length: libyara reads a length above {} as negative", i32::MAX)
+                            },
+                            at,
+                        );
+                    }
                     match (jump.start, jump.end) {
+                        _ if negative => {}
                         (Some(0), Some(0)) => self.error(
                             codes::YARA_HEX_STRING,
                             "invalid jump length: [0]".to_string(),

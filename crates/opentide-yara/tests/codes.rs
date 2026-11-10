@@ -372,6 +372,19 @@ const RAW: &[(&str, &[(&str, Severity)])] = &[
         "rule a { strings: $a = \"abcd\" xor(1-2) condition: $a and -99999999999999999999 }",
         &[("yara_number_out_of_range", E)],
     ),
+    // libyara reads a jump bound as a 32-bit signed int: 2^31 is negative.
+    (
+        "rule a { strings: $h = { 4D 5A 90 00 [0-2147483647] 50 45 00 00 } condition: $h }",
+        &[],
+    ),
+    (
+        "rule a { strings: $h = { 4D 5A 90 00 [0-2147483648] 50 45 00 00 } condition: $h }",
+        &[("yara_hex_string", E)],
+    ),
+    (
+        "rule a { strings: $h = { 4D 5A 90 00 [3000000000] 50 45 00 00 } condition: $h }",
+        &[("yara_hex_string", E)],
+    ),
     // A rule named like an imported module: libyara accepts it, YARA-X does not.
     (
         "import \"pe\"\nrule pe { condition: true }",
@@ -441,6 +454,14 @@ fn profiles() {
     assert_eq!(
         codes(
             "rule a { meta: context = \"file.pe,disk\" condition: true }",
+            &hl
+        ),
+        [("harfanglab_yara_context".to_string(), W)]
+    );
+    // No blanks in the list.
+    assert_eq!(
+        codes(
+            "rule a { meta: context = \"file.pe, memory\" condition: true }",
             &hl
         ),
         [("harfanglab_yara_context".to_string(), W)]

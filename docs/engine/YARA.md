@@ -1,8 +1,8 @@
 # YARA
 
-The YARA engine (`crates/opentide-yara`) checks YARA signatures as [yara-1.0](https://github.com/opentidehq/specifications/blob/main/specs/languages/yara-1.0.md) defines them: the language libyara 4.5 compiles, with YARA-X 1.x as a second opinion whose refusals are warnings. Design and work packages: [RFC 0015 §6](https://github.com/opentidehq/specifications/blob/main/rfcs/0015-yara-language.md#6-analysis-engine-language-server). Tracking: [#165](https://github.com/opentidehq/language-server/issues/165).
+The YARA engine (`crates/opentide-yara`) checks YARA signatures as [yara-1.0](https://github.com/opentidehq/specifications/blob/main/specs/languages/yara-1.0.md) 1.1 defines them: the language libyara 4.5 compiles, with YARA-X 1.x as a second opinion whose refusals are warnings. Design and work packages: [RFC 0015 §6](https://github.com/opentidehq/specifications/blob/main/rfcs/0015-yara-language.md#6-analysis-engine-language-server). Tracking: [#165](https://github.com/opentidehq/language-server/issues/165).
 
-Language id `yara` (`.yar`, `.yara`). Platforms: HarfangLab (`configurations.harfanglab.yara`, harfanglab-1.0 1.2) and Bitdefender GravityZone (`configurations.bitdefender.yara`, bitdefender-1.0).
+Language id `yara` (`.yar`, `.yara`). Platforms: HarfangLab (`configurations.harfanglab.yara`, harfanglab-1.0 1.3) and Bitdefender GravityZone (`configurations.bitdefender.yara`, bitdefender-1.0).
 
 ## Parsers
 
@@ -47,7 +47,7 @@ Errors are what libyara 4.5 refuses to compile. **Source** is the libyara 4.5.4 
 | `yara_unknown_module_member` | A member the module lacks (or only YARA-X has), or arguments no overload takes | `modules/*/*.c` `begin_declarations`; `parser.c` `yr_parser_check_types` | `RAW`: `pe.nonexistent`, `pe.exports(1, 2)`, `math.entropy("a", "b")` |
 | `yara_type` | An operator or function on the wrong type; a boolean where libyara wants a `primary_expression` | `grammar.y` `check_type` | `RAW`: `filesize contains "a"`, `"a" + 1`, `filesize matches "x"` |
 | `yara_regexp` | An invalid regular expression | `re_lexer.l`, `re_grammar.y` | `RAW`: `/a(b/`, `/[z-a]bc/`, `/a{3,1}/`; `regexp.rs` `libyara_errors` |
-| `yara_hex_string` | Odd nibbles, `[0]`, `[a-b]` with a > b, an unbounded or over-200 jump in an alternative, unbalanced alternatives | `hex_grammar.y` | `RAW`: `[4-2]`, `( 03 \| [-] 04 )`, `[1-300]` in an alternative, `{ 01 0 }` |
+| `yara_hex_string` | Odd nibbles, `[0]`, `[a-b]` with a > b, a jump bound from 2^31 to 2^32 − 1 (libyara reads it as a negative 32-bit int), an unbounded or over-200 jump in an alternative, unbalanced alternatives | `hex_grammar.y` | `RAW`: `[4-2]`, `[0-2147483648]`, `( 03 \| [-] 04 )`, `[1-300]` in an alternative, `{ 01 0 }` |
 | `yara_string_modifier` | A modifier repeated, on the wrong kind of string, or combined as libyara refuses (`xor nocase`, `base64` with `nocase`, `fullword` or `xor`); an `xor` range or `base64` alphabet libyara refuses; two different alphabets | `grammar.y` `string_modifiers`; `parser.c` `_yr_parser_check_string_modifiers` | `RAW`: `base64 nocase`, `xor nocase`, `wide wide`, hex `xor`, `xor(3-1)`, `xor(300)`, `base64("abc")` |
 | `yara_number_out_of_range` | An integer literal over 64 bits; a percentage outside 1-100 | `lexer.l`; `grammar.y` `ERROR_INVALID_PERCENTAGE` | `RAW`: `99999999999999999999`, `150% of them` |
 
@@ -71,7 +71,7 @@ Errors are what libyara 4.5 refuses to compile. **Source** is the libyara 4.5.4 
 | `harfanglab_yara_section_header` | error | HarfangLab | A `strings:`, `condition:`, `meta:` or `rule` header in a fragment | `tests/yara.rs` `decomposed_imports_and_headers_and_rule_names` |
 | `harfanglab_yara_import` | error | HarfangLab | An `imports` entry that is not a known module | same |
 | `harfanglab_yara_rule_name` | error | HarfangLab | The derived rule name is a keyword or keeps a character other than an ASCII letter, digit or `_` | same (`Condition`, `Détection`) |
-| `harfanglab_yara_context` | warning | HarfangLab | Meta `context` that is not a comma-joined list of `file`, `memory`, `file.pe`, `file.elf`, `file.macho`, on the unknown value | `profiles`; `tests/yara.rs` `decomposed_unescaped_meta_is_checked_where_it_is_written` |
+| `harfanglab_yara_context` | warning | HarfangLab | Meta `context` that is not a comma-joined list, without blanks, of `file`, `memory`, `file.pe`, `file.elf`, `file.macho`, on the unknown value; the decomposed form's `context` too | `profiles`; `tests/yara.rs` `decomposed_unescaped_meta_is_checked_where_it_is_written` |
 | `bitdefender_yara_ascii` | error | Bitdefender | A character that is not ASCII | `profiles` |
 | `bitdefender_yara_size` | error | Bitdefender | More than 30,000 characters | `profiles` |
 
