@@ -3,8 +3,9 @@
 //!
 //! Offline: a page lists each identifier as a link to its record page. The
 //! oracle also fetched each record's details over HTTP when `[cve]
-//! retrieve_details` is on (its default); the engine reaches no network while
-//! rendering, so the details table is not written (`APPROVED_DIFFS.toml`).
+//! retrieve_details` is on (its default); the engine has no HTTP client until
+//! the connectors bring one (UC-4.1), so the details table is not written
+//! (`CHANGELOG.md`, the "**`generate docs` runs on the Rust engine**" entry).
 
 use std::sync::LazyLock;
 

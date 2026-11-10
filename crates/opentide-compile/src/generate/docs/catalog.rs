@@ -7,11 +7,12 @@ use std::collections::{HashMap, HashSet};
 
 use indexmap::IndexMap;
 use opentide_schema::error::{ErrorKind, PathSegment, SchemaError};
-use opentide_schema::from_node::from_document;
+use opentide_schema::from_node::{Invalid, validate};
 use opentide_schema::node::{Node, Value};
 use opentide_schema::objects::{
     ObjectiveV1_0, RuleV1_0, RuleV1_1, ThreatVector, threat::Killchain,
 };
+use opentide_schema::{PinTable, Pins};
 use opentide_workspace::Index;
 
 use super::flavor::slugify;
@@ -920,13 +921,64 @@ fn rule_model(document: &opentide_schema::node::Document) -> Result<RuleModel, P
     }
 }
 
-fn typed<T: opentide_schema::FromNode>(
-    document: &opentide_schema::node::Document,
-) -> Result<T, PhaseError> {
-    from_document::<T>(document).map_err(|errors| {
-        let root = document.root().map(AsRef::as_ref);
-        PhaseError::new(describe(&errors, root))
+/// The document's model, read and then checked against the model's
+/// constraints (garde, with the pins of the revision `metadata.schema`
+/// names), as the oracle's pydantic model validates both.
+fn typed<T>(document: &opentide_schema::node::Document) -> Result<T, PhaseError>
+where
+    T: opentide_schema::FromNode + garde::Validate<Context = Pins>,
+{
+    let root = document.root().map(AsRef::as_ref);
+    let revision = root
+        .and_then(|root| root.get("metadata"))
+        .and_then(|metadata| metadata.get("schema"))
+        .and_then(|schema| schema.value.as_str())
+        .unwrap_or_default();
+    let pins = PinTable::bundled()
+        .get(revision)
+        .cloned()
+        .unwrap_or_default();
+    validate::<T>(document, &pins).map_err(|invalid| {
+        PhaseError::new(match invalid {
+            Invalid::Structure(errors) => describe(&errors, root),
+            Invalid::Constraints(report) => describe_constraints(&report, root),
+        })
     })
+}
+
+/// One line for a model's failed constraints, worded as [`describe`] words
+/// a structure error: the first, where and what, and how many more.
+fn describe_constraints(report: &garde::Report, root: Option<&Node>) -> String {
+    let errors: Vec<_> = report.iter().collect();
+    let Some((path, error)) = errors.first() else {
+        return "an object does not validate; opentide validate shows each finding".to_owned();
+    };
+    let location = path.to_string();
+    let location = if location.is_empty() {
+        "the object".to_owned()
+    } else {
+        location
+    };
+    let mut message = error.message().to_owned();
+    if let Some(head) = message.chars().next() {
+        message = head.to_lowercase().collect::<String>() + &message[head.len_utf8()..];
+    }
+    let subject = root
+        .and_then(|root| root.get("name"))
+        .and_then(|name| name.value.as_str())
+        .filter(|name| !name.is_empty())
+        .map_or_else(
+            || "an object".to_owned(),
+            opentide_schema::configuration::repr::quote,
+        );
+    let more = if errors.len() > 1 {
+        format!(" (and {} more)", errors.len() - 1)
+    } else {
+        String::new()
+    };
+    format!(
+        "{subject} does not validate: {location}: {message}{more}; opentide validate shows each finding"
+    )
 }
 
 /// One line for a model's errors, as the oracle words a `ValidationError`
@@ -1030,7 +1082,7 @@ mod tests {
     use super::*;
 
     fn record(uuid: &str, name: &str) -> (String, String, Model) {
-        let threat: ThreatVector = from_document(
+        let threat: ThreatVector = opentide_schema::from_node::from_document(
             &opentide_schema::node::load(&format!(
                 "name: {name}\ncriticality: High\nmetadata:\n  uuid: {uuid}\n  schema: threat::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-01\n  tlp: clear\nthreat:\n  description: d\n  severity: s\n  impact: [i]\n  leverage: [l]\n  viability: v\n  terrain: t\n  surface: [s]\n  mitre_attack: [T1059]\n"
             ))
@@ -1088,6 +1140,50 @@ mod tests {
         assert_eq!(
             error,
             "'R' does not validate: description: field required; opentide validate shows each finding"
+        );
+    }
+
+    /// A document that reads into its model but breaks one of the model's
+    /// constraints fails the catalogue, as the oracle's pydantic model does.
+    #[test]
+    fn a_failed_constraint_fails_the_catalogue() {
+        let rule = |version: &str| {
+            opentide_schema::node::load(&format!(
+                "name: Sysdig rule\nmetadata:\n  uuid: u\n  schema: rule::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nstatus: STAGING\nseverity: Medium\ntechniques: [T1059.004]\ndetection_model: m\nresponse:\n  alert_severity: Medium\nconfigurations:\n  sysdig:\n    enabled: true\n    schema: platform::sysdig::1.0\n    status: STAGING\n    condition: spawned_process\n    minimum_engine_version: {version}\n"
+            ))
+            .unwrap()
+        };
+        assert!(typed::<RuleV1_0>(&rule("1")).is_ok());
+        // The conversion places the constraint in the block.
+        let error = typed::<RuleV1_0>(&rule("-1")).unwrap_err().detail;
+        assert_eq!(
+            error,
+            "an object does not validate: minimum_engine_version: input should be greater than \
+             or equal to 0; opentide validate shows each finding"
+        );
+    }
+
+    /// garde's report of a model is worded as a structure error is: the
+    /// first failed constraint, where, and how many more.
+    #[test]
+    fn a_constraint_report_names_the_first_failure() {
+        use garde::Validate as _;
+        let (_, _, model) = record("u-1", "Threat");
+        let Model::Threat(mut threat) = model else {
+            unreachable!("a threat record");
+        };
+        threat.threat.impact = vec!["a; b".to_owned()];
+        threat.threat.leverage = Vec::new();
+        let report = threat.validate_with(&Pins::default()).unwrap_err();
+        let root = opentide_schema::node::load("name: Threat\n").unwrap();
+        let line = describe_constraints(&report, root.root().map(AsRef::as_ref));
+        assert!(
+            line.starts_with("'Threat' does not validate: threat.impact[0]: 'a; b' packs several"),
+            "{line}"
+        );
+        assert!(
+            line.ends_with(" (and 1 more); opentide validate shows each finding"),
+            "{line}"
         );
     }
 }
