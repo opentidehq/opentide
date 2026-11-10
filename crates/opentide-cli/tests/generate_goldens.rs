@@ -799,3 +799,81 @@ fn docs_preview_shards_refresh_signals_and_references() {
         "{threat}"
     );
 }
+
+/// A threat that lists CVEs, with `[cve] retrieve_details` on (the default):
+/// its page needs each record's details, which only the Python engine
+/// fetches, so every run that writes it is refused with `engine_not_ported`
+/// before any page is written (`OPENTIDE_ENGINE=compare` then runs Python
+/// alone); a run that does not write it, and every run with the setting off,
+/// writes as before, the CVEs as links.
+#[test]
+fn docs_with_cve_details_are_left_to_python() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
+    fixture("tide-corpus", &ws);
+    let threat = ws.join("Objects/Threat Vectors/threat-0001-simulated-actor.yaml");
+    let mut text = std::fs::read_to_string(&threat).unwrap();
+    text.push_str("  cve:\n    - CVE-2024-3094\n");
+    std::fs::write(&threat, text).unwrap();
+    for words in [
+        &["--json", "generate", "docs"][..],
+        &["--json", "generate", "docs", "--threats"],
+        &["--json", "generate", "docs", "--rules", "--threats"],
+        &["--json", "generate", "docs", "threats"],
+    ] {
+        let (code, stdout) = run_at(&ws, words);
+        assert_eq!(code, 2, "{words:?}: {stdout}");
+        let document: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+        assert_eq!(
+            document["failure"]["code"], "engine_not_ported",
+            "{words:?}: {stdout}"
+        );
+        assert_eq!(document["failure"]["argument"], "OPENTIDE_ENGINE");
+        let message = document["failure"]["message"].as_str().unwrap();
+        assert!(
+            message.starts_with("The CVE details of Simulated Actor ([cve] retrieve_details)"),
+            "{message}"
+        );
+        assert!(!ws.join("docs").exists(), "{words:?} wrote pages");
+    }
+    // Rules and the index carry no CVE section.
+    for words in [
+        &["--json", "generate", "docs", "rules"][..],
+        &["--json", "generate", "docs", "index"],
+    ] {
+        let (code, stdout) = run_at(&ws, words);
+        assert_eq!(code, 0, "{words:?}: {stdout}");
+    }
+    assert!(!ws.join("docs/threats/simulated-actor.md").exists());
+    // --changed: refused when a changed object's pages include the threat's.
+    git(&ws, &["init", "-q", "-b", "main"]);
+    git(&ws, &["add", "-A"]);
+    git(&ws, &["commit", "-q", "-m", "base"]);
+    let rule = ws.join("Objects/Detection Rules/rule-0001-sentinel-kql.yaml");
+    let text = std::fs::read_to_string(&rule).unwrap();
+    std::fs::write(
+        &rule,
+        text.replacen("name: Sentinel KQL Rule", "name: Renamed Sentinel Rule", 1),
+    )
+    .unwrap();
+    let (code, stdout) = run_at(&ws, &["--json", "generate", "docs", "--changed"]);
+    assert_eq!(code, 2, "{stdout}");
+    assert!(
+        stdout.contains("\"code\":\"engine_not_ported\""),
+        "{stdout}"
+    );
+    assert!(!ws.join("docs/rules/renamed-sentinel-rule.md").exists());
+    // With the setting off, the page lists the CVE as a link.
+    std::fs::write(
+        ws.join(".opentide/configurations/documentation.toml"),
+        "[cve]\nretrieve_details = false\n",
+    )
+    .unwrap();
+    let (code, stdout) = run_at(&ws, &["--json", "generate", "docs"]);
+    assert_eq!(code, 0, "{stdout}");
+    let page = std::fs::read_to_string(ws.join("docs/threats/simulated-actor.md")).unwrap();
+    assert!(
+        page.contains("- [CVE-2024-3094](https://vulnerability.circl.lu/vuln/CVE-2024-3094)\n"),
+        "{page}"
+    );
+}

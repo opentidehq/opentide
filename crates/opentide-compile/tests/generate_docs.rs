@@ -21,7 +21,9 @@ use opentide_compile::generate::Output;
 use opentide_compile::generate::docs::catalog::{Catalog, Scope};
 use opentide_compile::generate::docs::render::{Pages, Templates};
 use opentide_compile::generate::docs::vocab::Vocab;
-use opentide_compile::generate::docs::{FlavorHints, Settings, index_pages, pages};
+use opentide_compile::generate::docs::{
+    FlavorHints, Settings, cve_details_needed, index_pages, pages,
+};
 use opentide_compile::strategy::Statuses;
 use opentide_schema::vocab::Vocabularies;
 use opentide_workspace::{OsFs, RootOptions, Workspace};
@@ -456,4 +458,73 @@ fn a_threats_cves_link_to_their_records() {
     assert!(
         !render(&workspace, None).unwrap()["docs/threats/simulated-actor.md"].contains("## CVE")
     );
+}
+
+/// With `[cve] retrieve_details` on (the default), the threats whose pages
+/// list CVEs need their details, which only the Python engine fetches: by
+/// the scopes and targets a run writes. With it off, none do.
+#[test]
+fn cve_details_are_needed_with_retrieve_details_on() {
+    let with_cves = |toml: &'static str| {
+        move |ws: &Path| {
+            append(
+                ws,
+                "Objects/Threat Vectors/threat-0001-simulated-actor.yaml",
+                "  cve:\n    - cve-2024-3094\n",
+            );
+            if !toml.is_empty() {
+                documentation(ws, toml);
+            }
+        }
+    };
+    let needed = |workspace: &Workspace,
+                  scopes: &[Scope],
+                  targets: Option<&std::collections::BTreeSet<String>>| {
+        let resolved = &workspace.configuration().resolved;
+        let settings = Settings::resolve(
+            resolved,
+            workspace.root(),
+            None,
+            None,
+            &FlavorHints::default(),
+        )
+        .unwrap();
+        let catalog = Catalog::build(workspace.index(), Statuses::from_resolved(resolved)).unwrap();
+        let vocabularies = Vocabularies::bundled();
+        let templates = Templates::new();
+        let pages_of = Pages {
+            catalog: &catalog,
+            settings: &settings,
+            vocab: Vocab::new(&vocabularies),
+            templates: &templates,
+        };
+        cve_details_needed(&pages_of, scopes, targets)
+    };
+    let (_dir, workspace) = open_edited("tide-corpus", with_cves(""));
+    assert_eq!(needed(&workspace, &Scope::ALL, None), ["Simulated Actor"]);
+    assert_eq!(
+        needed(&workspace, &[Scope::Threats], None),
+        ["Simulated Actor"]
+    );
+    assert!(needed(&workspace, &[Scope::Rules, Scope::Objectives], None).is_empty());
+    let threat: std::collections::BTreeSet<String> =
+        ["00000000-0000-4000-8001-000000000001".to_owned()].into();
+    let rule: std::collections::BTreeSet<String> =
+        ["00000000-0000-4000-8003-000000000001".to_owned()].into();
+    assert_eq!(
+        needed(&workspace, &Scope::ALL, Some(&threat)),
+        ["Simulated Actor"]
+    );
+    assert!(needed(&workspace, &Scope::ALL, Some(&rule)).is_empty());
+    let (_dir, workspace) =
+        open_edited("tide-corpus", with_cves("[cve]\nretrieve_details = true\n"));
+    assert_eq!(needed(&workspace, &Scope::ALL, None), ["Simulated Actor"]);
+    let (_dir, workspace) = open_edited(
+        "tide-corpus",
+        with_cves("[cve]\nretrieve_details = false\n"),
+    );
+    assert!(needed(&workspace, &Scope::ALL, None).is_empty());
+    // Without CVEs, nothing is needed.
+    let (_dir, workspace) = open("tide-corpus");
+    assert!(needed(&workspace, &Scope::ALL, None).is_empty());
 }

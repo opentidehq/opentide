@@ -39,7 +39,7 @@ use opentide_schema::configuration::resolve::Resolved;
 use opentide_schema::from_node::Context;
 use rayon::prelude::*;
 
-use self::catalog::{Direction, Scope};
+use self::catalog::{Direction, Model, Record, Scope};
 use self::cve::CveLinks;
 use self::flavor::Flavor;
 use self::render::{Pages, SECTIONS};
@@ -69,6 +69,9 @@ pub struct Settings {
     pub icons: bool,
     /// Where CVE links point.
     pub cve: CveLinks,
+    /// `[cve] retrieve_details`: a CVE section is a table of each record's
+    /// details, which this engine cannot fetch ([`cve_details_needed`]).
+    pub cve_details: bool,
 }
 
 /// Where the flavour comes from when `--flavor` does not say.
@@ -227,6 +230,7 @@ impl Settings {
             cve: docs.as_ref().map_or_else(CveLinks::default, |docs| {
                 CveLinks::new(Some(&docs.cve.base_url), Some(&docs.cve.default_db_link))
             }),
+            cve_details: docs.as_ref().is_none_or(|docs| docs.cve.retrieve_details),
         })
     }
 
@@ -277,18 +281,7 @@ pub fn pages(
     scopes: &[Scope],
     targets: Option<&std::collections::BTreeSet<String>>,
 ) -> Result<(Vec<Output>, Counts), PhaseError> {
-    let mut jobs = Vec::new();
-    for scope in [Scope::Threats, Scope::Objectives, Scope::Rules] {
-        if !scopes.contains(&scope) {
-            continue;
-        }
-        for record in pages.catalog.records(scope) {
-            if targets.is_some_and(|targets| !targets.contains(&record.uuid)) {
-                continue;
-            }
-            jobs.push(record);
-        }
-    }
+    let jobs = page_records(pages, scopes, targets);
     let rendered: Vec<Result<Output, PhaseError>> = jobs
         .par_iter()
         .map(|record| {
@@ -312,6 +305,56 @@ pub fn pages(
         counts.add(record.scope);
     }
     Ok((outputs, counts))
+}
+
+/// The objects whose pages a run of `scopes` writes (only those of `targets`
+/// when given): threats, objectives, then rules, each by name.
+fn page_records<'c>(
+    pages: &Pages<'c, '_>,
+    scopes: &[Scope],
+    targets: Option<&std::collections::BTreeSet<String>>,
+) -> Vec<&'c Record> {
+    let mut records = Vec::new();
+    for scope in [Scope::Threats, Scope::Objectives, Scope::Rules] {
+        if !scopes.contains(&scope) {
+            continue;
+        }
+        for record in pages.catalog.records(scope) {
+            if targets.is_some_and(|targets| !targets.contains(&record.uuid)) {
+                continue;
+            }
+            records.push(record);
+        }
+    }
+    records
+}
+
+/// The names of the threats whose pages, in a run of `scopes` (only the
+/// objects of `targets` when given), need the details of their CVEs: with
+/// `[cve] retrieve_details` on, the oracle fetched each identifier's record
+/// over HTTP and wrote a table of them. This engine has no HTTP client until
+/// the connectors bring one (UC-4.1), so the command line refuses such a run
+/// and the Python engine writes it (`CHANGELOG.md`, the "**`generate docs`
+/// runs on the Rust engine**" entry). Empty when the setting is off: the
+/// pages then list each identifier as a link, as the oracle does.
+pub fn cve_details_needed(
+    pages: &Pages<'_, '_>,
+    scopes: &[Scope],
+    targets: Option<&std::collections::BTreeSet<String>>,
+) -> Vec<String> {
+    if !pages.settings.cve_details {
+        return Vec::new();
+    }
+    page_records(pages, scopes, targets)
+        .into_iter()
+        .filter(|record| match &record.model {
+            Model::Threat(threat) => {
+                !cve::identifiers(threat.threat.cve.as_deref().unwrap_or_default()).is_empty()
+            }
+            _ => false,
+        })
+        .map(|record| record.name.clone())
+        .collect()
 }
 
 /// The folders' index pages, GitLab's `.order` files and the root README,

@@ -18,6 +18,9 @@ arguments, then changes the result as its first argument says:
 - ``recent``: a date-time of yesterday, at a new second each run.
 - ``mutate``: deletes ``delete-me.txt`` and makes ``chmod-me.txt`` 0600.
 - ``sigterm``: the process ends on SIGTERM, without output.
+- ``refuse``: refuses the run as the Rust CLI refuses an input it does not
+  cover: its message in the file ``OPENTIDE_ENGINE_REFUSAL`` names, when it
+  names one, other output and exit 2.
 
 Usage: ``python fake_rust_engine.py <mode> <opentide arguments>``.
 """
@@ -40,6 +43,13 @@ def main() -> int:
     mode, args = sys.argv[1], sys.argv[2:]
     if mode == "sigterm":
         os.kill(os.getpid(), signal.SIGTERM)
+    if mode == "refuse":
+        refusal = os.environ.get("OPENTIDE_ENGINE_REFUSAL")
+        if refusal:
+            Path(refusal).write_text("not for this input", encoding="utf-8")
+        Path("fake-rust.txt").write_text("written by the fake\n", encoding="utf-8")
+        sys.stdout.write("refused by the fake\n")
+        return 2
     env = {**os.environ, "OPENTIDE_ENGINE": "python"}
     child = subprocess.run(
         [sys.executable, "-m", "opentide", *args], env=env, capture_output=True, check=False

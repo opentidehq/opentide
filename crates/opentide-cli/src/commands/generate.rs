@@ -13,8 +13,8 @@ use opentide_compile::generate::docs::catalog::{Catalog, Scope};
 use opentide_compile::generate::docs::render::{Pages, Templates};
 use opentide_compile::generate::docs::vocab::Vocab;
 use opentide_compile::generate::docs::{
-    Counts, FlavorHints, Settings as DocsSettings, changed, index_pages, inflight, pages,
-    stale_pages,
+    Counts, FlavorHints, Settings as DocsSettings, changed, cve_details_needed, index_pages,
+    inflight, pages, stale_pages,
 };
 use opentide_compile::generate::exports::{Settings, Target, export};
 use opentide_compile::generate::files::{Snapshot, common_dir, remove_all, write_all};
@@ -296,6 +296,36 @@ struct DocsRun {
     message: Option<String>,
     /// `--changed` outside a checkout: the run's own failure.
     failure: Option<String>,
+    /// Why this engine does not write this run ([`needs_python`]): it is
+    /// refused with `engine_not_ported`, before any page is written.
+    not_ported: Option<String>,
+}
+
+/// Whether the pages of `scopes` (of `targets` when given) need what only
+/// the Python engine does: the details of a threat's CVEs, with `[cve]
+/// retrieve_details` on ([`cve_details_needed`]). If so, `run` gets the
+/// refusal; `OPENTIDE_ENGINE=compare` then runs Python alone.
+fn needs_python(
+    pages_of: &Pages<'_, '_>,
+    scopes: &[Scope],
+    targets: Option<&std::collections::BTreeSet<String>>,
+    run: &mut DocsRun,
+) -> bool {
+    let threats = cve_details_needed(pages_of, scopes, targets);
+    let Some(first) = threats.first() else {
+        return false;
+    };
+    let others = match threats.len() - 1 {
+        0 => String::new(),
+        1 => " and 1 other threat".to_owned(),
+        more => format!(" and {more} other threats"),
+    };
+    run.not_ported = Some(format!(
+        "The CVE details of {first}{others} ([cve] retrieve_details) are fetched by the Python \
+         engine only: unset OPENTIDE_ENGINE, or set it to python or compare, or turn \
+         retrieve_details off in documentation.toml for a list of links."
+    ));
+    true
 }
 
 fn counts_json(counts: Counts) -> Json {
@@ -379,6 +409,13 @@ pub fn docs(args: &DocsArgs, cx: &Context<'_>) -> Report {
         report.warnings = warnings;
         return report;
     }
+    if let Some(message) = run.not_ported {
+        let mut failure = Failure::new(crate::envelope::code::ENGINE_NOT_PORTED, message);
+        failure.argument = Some("OPENTIDE_ENGINE".into());
+        let mut report = Report::failed(&command, crate::envelope::USAGE_EXIT_CODE, failure);
+        report.warnings = warnings;
+        return report;
+    }
     if let Some(message) = run.failure {
         let mut step = phase.step;
         step.status = StepStatus::Failed;
@@ -455,6 +492,9 @@ fn docs_phase(
             run.message = Some("Index pages written".into());
         }
         Some(DocsScope::Objects(_)) if args.scope.is_none() && flagged.len() > 1 => {
+            if needs_python(&pages_of, &flagged, None, run) {
+                return Ok(());
+            }
             let mut counts = Counts::default();
             for scope in &flagged {
                 let (outputs, scoped) =
@@ -478,6 +518,9 @@ fn docs_phase(
             ];
         }
         Some(DocsScope::Objects(scope)) => {
+            if needs_python(&pages_of, &[scope], None, run) {
+                return Ok(());
+            }
             let (outputs, counts) =
                 pages(&pages_of, &[scope], None).map_err(|error| error.detail)?;
             let stale = stale_pages(&pages_of, &[scope]);
@@ -489,6 +532,9 @@ fn docs_phase(
             ];
         }
         None => {
+            if needs_python(&pages_of, &Scope::ALL, None, run) {
+                return Ok(());
+            }
             let (outputs, counts) =
                 pages(&pages_of, &Scope::ALL, None).map_err(|error| error.detail)?;
             let stale = stale_pages(&pages_of, &Scope::ALL);
@@ -534,6 +580,9 @@ fn changed_phase(
         }
     };
     let changes = changed::changes(pages_of.catalog, &files);
+    if needs_python(pages_of, &Scope::ALL, Some(&changes.targets), run) {
+        return Ok(());
+    }
     if changes.paths.is_empty() {
         run.message = Some("No changed object documentation detected".into());
         run.data = vec![

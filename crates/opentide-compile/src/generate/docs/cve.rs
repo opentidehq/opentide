@@ -1,11 +1,13 @@
 //! CVE references as links to a Vulnerability-Lookup instance
 //! (`vulnerability_lookup.py`: identifiers, `page_url_for`, `[cve]`).
 //!
-//! Offline: a page lists each identifier as a link to its record page. The
-//! oracle also fetched each record's details over HTTP when `[cve]
-//! retrieve_details` is on (its default); the engine has no HTTP client until
-//! the connectors bring one (UC-4.1), so the details table is not written
-//! (`CHANGELOG.md`, the "**`generate docs` runs on the Rust engine**" entry).
+//! Offline: a page lists each identifier as a link to its record page, as the
+//! oracle does with `[cve] retrieve_details` off. With it on (its default) the
+//! oracle fetched each record's details over HTTP and wrote a table of them;
+//! the engine has no HTTP client until the connectors bring one (UC-4.1), so
+//! a run whose threat pages list CVEs with the setting on is refused and the
+//! Python engine writes it ([`super::cve_details_needed`]; `CHANGELOG.md`, the
+//! "**`generate docs` runs on the Rust engine**" entry).
 
 use std::sync::LazyLock;
 
