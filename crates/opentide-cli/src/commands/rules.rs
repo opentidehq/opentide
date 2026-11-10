@@ -14,7 +14,8 @@ use crate::render::text::Text;
 
 const COMMAND: &str = "rules unreviewed";
 
-/// `evaluated_at`: UTC, microseconds when there are any, `Z`.
+/// `evaluated_at`, a machine-read value of the JSON document whose format
+/// is its contract: RFC 3339 in UTC (`Z`), with microseconds when there are any.
 fn evaluated_at(now: Timestamp) -> String {
     let utc = now.to_zoned(jiff::tz::TimeZone::UTC);
     let micros = utc.subsec_nanosecond() / 1000;
@@ -130,7 +131,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn instants_print_as_python_isoformat_does() {
+    fn evaluated_at_is_rfc3339_utc_to_the_microsecond() {
         let at: Timestamp = "2026-01-02T03:04:05Z".parse().unwrap();
         assert_eq!(evaluated_at(at), "2026-01-02T03:04:05Z");
         let at: Timestamp = "2026-01-02T03:04:05.000120500Z".parse().unwrap();

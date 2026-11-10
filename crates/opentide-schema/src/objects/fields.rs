@@ -58,7 +58,7 @@ pub fn newest_model_schema(family: &str) -> Option<&'static Value> {
 }
 
 /// The paths of the fields that play `role` in the revision `identifier`,
-/// sorted as Python sorts tuples. A revision without a model (or `None`)
+/// in lexicographic order. A revision without a model (or `None`)
 /// takes the union of every model's paths, as the oracle does for a body
 /// whose `metadata.schema` it cannot resolve. Computed once, on first use.
 pub fn role_paths(identifier: Option<&str>, role: FieldRole) -> &'static [Vec<String>] {
