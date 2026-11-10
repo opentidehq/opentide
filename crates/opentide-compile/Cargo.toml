@@ -41,3 +41,5 @@ thiserror.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true
+# Repositories the git baseline's tests build (the version xtask locks).
+tempfile = "3"

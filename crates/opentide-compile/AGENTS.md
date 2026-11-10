@@ -35,7 +35,8 @@ domain, tier 1 (`xtask/layers.toml`), beside `opentide-analysis`: it reads the i
   never a panic.
 - `cargo xtask payloads diff --against python --corpus all` compares every body of every rule of
   every corpus with the oracle's; a difference is a bug or an entry of
-  `tests/golden/APPROVED_DIFFS.toml`.
+  `tests/golden/payloads/APPROVED.toml` (moved to `tests/golden/APPROVED_DIFFS.toml` when deploy
+  runs on the Rust command line).
 
 ## Test
 

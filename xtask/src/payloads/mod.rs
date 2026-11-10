@@ -31,8 +31,16 @@ const PROBE: &str = include_str!("probe.py");
 /// The approved differences, relative to the repository.
 pub const APPROVED: &str = "tests/golden/payloads/APPROVED.toml";
 
-/// Every corpus of `cases.toml` with rules in it.
-pub const CORPORA: [&str; 5] = [
+/// The compile corpus: rules for every branch of the compilers.
+pub const COMPILE_CORPUS: &str = "tests/golden/payloads/corpus";
+
+/// What the oracle compiles from the compile corpus, paths written `<WS>`.
+pub const ORACLE_RECORD: &str = "tests/golden/payloads/oracle.json";
+
+/// Every corpus with rules in it: the compile corpus, then the fixtures of
+/// `cases.toml`.
+pub const CORPORA: [&str; 6] = [
+    "payloads",
     "tide-corpus",
     "vscode",
     "tide-corpus-typo",
@@ -45,12 +53,14 @@ pub const USAGE: &str = "\
 usage: cargo xtask payloads <command> [options]
 
 commands:
-  diff --against python [--corpus NAME|all ...] [--python PATH]
+  diff --against python [--corpus NAME|all ...] [--python PATH] [--record]
                  compile every Sentinel and Elastic block of every rule of each
                  corpus (the fixtures of tests/golden/cases.toml) with the oracle
                  and with opentide-compile: the dry run's body, each configured
                  tenant's body, and the dry run's payload entry; any difference
-                 not in tests/golden/payloads/APPROVED.toml fails
+                 not in tests/golden/payloads/APPROVED.toml fails. The corpus
+                 `payloads` is tests/golden/payloads/corpus; the oracle's result on it
+                 must equal tests/golden/payloads/oracle.json (--record writes it)
   git --against python [--python PATH]
                  the changed rule files of a scripted git history (first commit,
                  edits, a non-ASCII name, a nested rule, a rename, a delete, a
@@ -109,6 +119,8 @@ pub struct DiffOptions {
     pub python: Option<PathBuf>,
     /// The corpora; [`CORPORA`] when empty.
     pub corpora: Vec<String>,
+    /// Write [`ORACLE_RECORD`] instead of checking it.
+    pub record: bool,
 }
 
 /// Reads the options.
@@ -135,6 +147,7 @@ pub fn parse(args: &[String]) -> Result<DiffOptions> {
                 }
             }
             "--python" => options.python = Some(PathBuf::from(value("--python")?)),
+            "--record" => options.record = true,
             other => bail!("unknown option `{other}`"),
         }
     }
@@ -444,6 +457,23 @@ pub fn compare(corpus: &str, workspace: &Workspace, text: &str) -> Result<Tally>
     Ok(tally)
 }
 
+/// Lays out `corpus` in `ws`: the compile corpus, or a fixture of `cases.toml`.
+fn materialise(
+    spec: &crate::golden::case::Spec,
+    repo: &Path,
+    corpus: &str,
+    ws: &Path,
+) -> Result<()> {
+    if corpus == "payloads" {
+        return crate::golden::fixture::copy_tree(&repo.join(COMPILE_CORPUS), ws);
+    }
+    spec.fixtures
+        .get(corpus)
+        .with_context(|| format!("cases.toml has no fixture `{corpus}`"))?
+        .materialise(repo, ws)
+        .with_context(|| format!("materialise {corpus}"))
+}
+
 /// The first line of a message.
 fn first_line(text: &str) -> &str {
     text.lines().next().unwrap_or_default()
@@ -484,16 +514,10 @@ pub fn run(options: &DiffOptions) -> Result<bool> {
     let mut passed = true;
     let mut used = vec![false; approved.len()];
     for corpus in &corpora {
-        let fixture = spec
-            .fixtures
-            .get(corpus)
-            .with_context(|| format!("cases.toml has no fixture `{corpus}`"))?;
         let root = scratch.path().join(corpus);
         let ws = root.join("ws");
         fs::create_dir_all(&ws)?;
-        fixture
-            .materialise(&repo, &ws)
-            .with_context(|| format!("materialise {corpus}"))?;
+        materialise(&spec, &repo, corpus, &ws)?;
         let ws = ws.canonicalize()?;
         let workspace = open(&ws)?;
         let request = root.join("request.json");
@@ -525,6 +549,20 @@ pub fn run(options: &DiffOptions) -> Result<bool> {
         );
         let text = fs::read_to_string(&response)
             .with_context(|| format!("the probe wrote no result for {corpus}"))?;
+        if corpus == "payloads" {
+            let recorded = text.replace(&ws.to_string_lossy().into_owned(), "<WS>");
+            let path = repo.join(ORACLE_RECORD);
+            if options.record {
+                fs::write(&path, &recorded)?;
+                println!("wrote {ORACLE_RECORD}");
+            } else if fs::read_to_string(&path).ok().as_deref() != Some(recorded.as_str()) {
+                passed = false;
+                eprintln!(
+                    "error: {ORACLE_RECORD} is not what the oracle compiles from {COMPILE_CORPUS}: \
+                     run cargo xtask payloads diff --against python --corpus payloads --record"
+                );
+            }
+        }
         let tally = compare(corpus, &workspace, &text)?;
         let mut report = format!(
             "{corpus}: {} bodies compared, {} differ, {} not compared\n",
