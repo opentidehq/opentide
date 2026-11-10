@@ -57,7 +57,7 @@ stdout (progress goes to stderr); --out writes it to FILE as well.
                     and `validate_*` (opentide-workspace's load and validate
                     examples; validate without the queries check, UC-2.5)
                     and the commands the Rust CLI runs (info, info catalog,
-                    rules unreviewed), built --release; every other command
+                    rules unreviewed, deploy --dry-run), built --release; every other command
                     reports \"no Rust yet\"
   --scale 1|10      the heavy workspace's size (default 1)
   --only ID,...     run only these commands (ids as in the report)
@@ -627,8 +627,9 @@ enum Program {
 }
 
 /// The commands the Rust CLI (opentide-cli) runs, by scenario id: `--engine
-/// rust` measures its `opentide` binary on them (UC-2.4, #819).
-const RUST_CLI: &[&str] = &["info", "info_catalog", "rules_unreviewed"];
+/// rust` measures its `opentide` binary on them (UC-2.4, #819; `deploy
+/// --dry-run`, UC-3.1c, #896).
+const RUST_CLI: &[&str] = &["info", "info_catalog", "rules_unreviewed", "deploy_dry_run"];
 
 /// The program a scenario runs. For `--engine rust`, `opentide` is the Rust
 /// CLI's binary.

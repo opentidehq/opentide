@@ -182,15 +182,18 @@ fn package_uuids(repo: &Path) -> Result<std::collections::BTreeSet<String>> {
 }
 
 /// The command paths with a Rust implementation: the CLI's dispatch table,
-/// `opentide.cli.engines.RUST_COMMANDS`, read through this repository's `.venv`.
-pub fn rust_commands(repo: &Path) -> Result<std::collections::BTreeSet<String>> {
+/// `opentide.cli.engines.RUST_COMMANDS`, read through this repository's
+/// `.venv`, each with the flags of which a run must carry one for the Rust
+/// implementation to cover it (`RustCommand.requires`; none: every run).
+pub fn rust_commands(repo: &Path) -> Result<BTreeMap<String, Vec<String>>> {
     let python = repo.join(".venv").join("bin").join("python");
     let output = std::process::Command::new(&python)
         .args([
             "-I",
             "-c",
             "import json; from opentide.cli.engines import RUST_COMMANDS; \
-             print(json.dumps([' '.join(path) for path in RUST_COMMANDS]))",
+             print(json.dumps({' '.join(path): list(command.requires) \
+             for path, command in RUST_COMMANDS.items()}))",
         ])
         .output()
         .with_context(|| format!("run {} (uv sync --group dev)", python.display()))?;
@@ -200,9 +203,21 @@ pub fn rust_commands(repo: &Path) -> Result<std::collections::BTreeSet<String>> 
             String::from_utf8_lossy(&output.stderr).trim()
         );
     }
-    let paths: Vec<String> =
-        serde_json::from_slice(&output.stdout).context("parse the dispatch table")?;
-    Ok(paths.into_iter().collect())
+    serde_json::from_slice(&output.stdout).context("parse the dispatch table")
+}
+
+/// Whether the Rust implementation covers a case of `command` run with
+/// `argv`: its command is in `table`, and the arguments before `--` carry
+/// one of the flags it requires, if it requires any.
+pub fn covers(table: &BTreeMap<String, Vec<String>>, command: &str, argv: &[String]) -> bool {
+    let Some(requires) = table.get(command) else {
+        return false;
+    };
+    let options = argv
+        .iter()
+        .position(|arg| arg == "--")
+        .map_or(argv, |end| &argv[..end]);
+    requires.is_empty() || requires.iter().any(|flag| options.contains(flag))
 }
 
 /// What the CLI prints when `OPENTIDE_ENGINE=rust` names a command with no
@@ -386,6 +401,34 @@ pub fn golden(
 #[cfg(test)]
 mod tests {
     use super::version_of;
+
+    #[test]
+    fn a_command_that_requires_a_flag_covers_only_runs_with_it() {
+        use std::collections::BTreeMap;
+        let argv =
+            |args: &[&str]| -> Vec<String> { args.iter().map(|arg| (*arg).to_owned()).collect() };
+        let table = BTreeMap::from([
+            ("info".to_owned(), Vec::new()),
+            ("deploy".to_owned(), vec!["--dry-run".to_owned()]),
+        ]);
+        assert!(super::covers(&table, "info", &argv(&["opentide", "info"])));
+        assert!(super::covers(
+            &table,
+            "deploy",
+            &argv(&["opentide", "deploy", "--dry-run", "--all"])
+        ));
+        assert!(!super::covers(
+            &table,
+            "deploy",
+            &argv(&["opentide", "deploy", "--all"])
+        ));
+        assert!(!super::covers(
+            &table,
+            "deploy",
+            &argv(&["opentide", "deploy", "--", "--dry-run"])
+        ));
+        assert!(!super::covers(&table, "lint", &argv(&["opentide", "lint"])));
+    }
 
     #[test]
     fn reads_the_version_opentide_prints() {

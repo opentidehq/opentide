@@ -64,11 +64,25 @@ class RustCommand:
     the goldens do. *side_effects* marks a command that reaches outside the
     workspace (a tenant, MISP): ``compare`` refuses it, since both runs would
     reach it and nothing would compare what they did there.
+
+    *requires* names flags of which a run must carry one for the Rust
+    implementation to cover it (``deploy`` runs in Rust with ``--dry-run``
+    only); a run without any is a command with no Rust implementation:
+    ``rust`` refuses it with ``engine_not_ported`` and ``compare`` runs
+    Python alone.
     """
 
     launch: tuple[str, ...]
     rules: tuple[str, ...] = ()
     side_effects: bool = False
+    requires: tuple[str, ...] = ()
+
+    def covers(self, args: Sequence[str]) -> bool:
+        """Whether the Rust implementation runs the command with *args*."""
+        if not self.requires:
+            return True
+        options = args[: args.index("--")] if "--" in args else args
+        return any(flag in options for flag in self.requires)
 
 
 #: The Rust command line compiled into ``opentide._native`` (:mod:`opentide.cli.rust`).
@@ -77,10 +91,12 @@ RUST_CLI: tuple[str, ...] = (sys.executable, "-m", "opentide.cli.rust")
 #: Command paths (``("validate",)``, ``("generate", "docs")``) that have a Rust
 #: implementation. Every command has its Python one; a path is added here in
 #: the change that ports it. ``info`` (every section) and ``rules unreviewed``
-#: came with UC-2.4 (#819).
+#: came with UC-2.4 (#819), ``deploy --dry-run`` with UC-3.1c (#896): a
+#: deploy that sends stays Python's.
 RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
     ("info",): RustCommand(launch=RUST_CLI),
     ("rules", "unreviewed"): RustCommand(launch=RUST_CLI),
+    ("deploy",): RustCommand(launch=RUST_CLI, requires=("--dry-run",)),
 }
 
 
@@ -129,11 +145,14 @@ def dispatch(cli_ctx: CliContext, click_ctx: _click.Context) -> None:
             suggestion=did_you_mean(engine, ENGINES),
         )
     rust = RUST_COMMANDS.get(words)
+    if rust is not None and not rust.covers(args):
+        path = f"{path} without {' or '.join(rust.requires)}"
+        rust = None
     if rust is None:
         if engine == RUST:
             _fail(
                 cli_ctx,
-                path,
+                " ".join(words) or "(no command)",
                 f"opentide {path} has no Rust implementation yet: "
                 f"unset {ENGINE_ENV}, or set it to {PYTHON} or {COMPARE}.",
                 code=ENGINE_NOT_PORTED,
