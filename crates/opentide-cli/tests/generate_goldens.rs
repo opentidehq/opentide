@@ -593,3 +593,209 @@ fn docs_preview_the_inflight_shards() {
         serde_json::json!({"rules": 11, "objectives": 1, "threats": 1})
     );
 }
+
+/// `generate docs --changed` after an objective is renamed: its page moves,
+/// the threat above it is rewritten (a parent shows its children), and so is
+/// every rule below it (their pages link to the objective by its name).
+#[test]
+fn changed_docs_rewrite_the_pages_below_a_renamed_objective() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
+    fixture("tide-corpus", &ws);
+    let (code, stdout) = run_at(&ws, &["--json", "generate", "docs"]);
+    assert_eq!(code, 0, "{stdout}");
+    git(&ws, &["init", "-q", "-b", "main"]);
+    git(&ws, &["add", "-A"]);
+    git(&ws, &["commit", "-q", "-m", "base"]);
+    let objective = ws.join("Objects/Detection Objectives/objective-0001-credential-access.yaml");
+    let text = std::fs::read_to_string(&objective).unwrap();
+    std::fs::write(
+        &objective,
+        text.replacen(
+            "name: Credential Access Objective",
+            "name: Renamed Objective",
+            1,
+        ),
+    )
+    .unwrap();
+    let (code, stdout) = run_at(&ws, &["--json", "generate", "docs", "--changed"]);
+    assert_eq!(code, 0, "{stdout}");
+    let document: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(
+        document["changed_uuids"],
+        serde_json::json!(["00000000-0000-4000-8002-000000000001"])
+    );
+    // The upstream walk alone reaches the threat; the rules come from the
+    // rename's downstream walk.
+    assert_eq!(
+        document["targets"],
+        serde_json::json!([
+            "00000000-0000-4000-8001-000000000001",
+            "00000000-0000-4000-8002-000000000001",
+            "00000000-0000-4000-8003-000000000001",
+            "00000000-0000-4000-8003-000000000002",
+            "00000000-0000-4000-8003-000000000003",
+            "00000000-0000-4000-8003-000000000004",
+            "00000000-0000-4000-8003-000000000005",
+            "00000000-0000-4000-8003-000000000006",
+            "00000000-0000-4000-8003-000000000007",
+            "00000000-0000-4000-8003-000000000008",
+            "00000000-0000-4000-8003-000000000009",
+            "00000000-0000-4000-8003-0000005d1a90"
+        ])
+    );
+    assert_eq!(
+        document["counts"],
+        serde_json::json!({"rules": 10, "objectives": 1, "threats": 1})
+    );
+    assert_eq!(document["removed"], 1);
+    let docs = ws.join("docs");
+    assert!(docs.join("objectives/renamed-objective.md").is_file());
+    assert!(
+        !docs
+            .join("objectives/credential-access-objective.md")
+            .exists()
+    );
+    for rule in ["sentinel-kql-rule.md", "sysdig-falco-rule.md"] {
+        let page = std::fs::read_to_string(docs.join("rules").join(rule)).unwrap();
+        assert!(
+            page.contains("[Renamed Objective](../objectives/renamed-objective.md)"),
+            "{rule}: {page}"
+        );
+        assert!(
+            !page.contains("credential-access-objective"),
+            "{rule}: {page}"
+        );
+    }
+    let threat = std::fs::read_to_string(docs.join("threats/simulated-actor.md")).unwrap();
+    assert!(
+        threat.contains("[Renamed Objective](../objectives/renamed-objective.md)"),
+        "{threat}"
+    );
+}
+
+/// A run removes the generated pages no object writes any more, and leaves
+/// the files it did not write: hand-written notes (even one with a Metadata
+/// heading), README.md, and pages in subfolders.
+#[test]
+fn docs_remove_stale_pages_and_keep_hand_written_files() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
+    fixture("tide-corpus", &ws);
+    let (code, stdout) = run_at(&ws, &["--json", "generate", "docs"]);
+    assert_eq!(code, 0, "{stdout}");
+    let rules = ws.join("docs/rules");
+    let generated = std::fs::read_to_string(rules.join("sentinel-kql-rule.md")).unwrap();
+    std::fs::write(rules.join("old-rule.md"), &generated).unwrap();
+    let notes = "# Notes\n\nHand-written.\n";
+    let metadata_notes = "# Review\n\n## Metadata\n\n| UUID | to be assigned |\n";
+    std::fs::write(rules.join("notes.md"), notes).unwrap();
+    std::fs::write(rules.join("review.md"), metadata_notes).unwrap();
+    std::fs::create_dir_all(rules.join("archive")).unwrap();
+    std::fs::write(rules.join("archive/older-rule.md"), &generated).unwrap();
+    std::fs::write(ws.join("docs/objectives/notes.md"), notes).unwrap();
+    let (code, stdout) = run_at(&ws, &["--json", "generate", "docs"]);
+    assert_eq!(code, 0, "{stdout}");
+    let document: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(document["removed"], 1, "{stdout}");
+    assert!(!rules.join("old-rule.md").exists());
+    assert_eq!(
+        std::fs::read_to_string(rules.join("notes.md")).unwrap(),
+        notes
+    );
+    assert_eq!(
+        std::fs::read_to_string(rules.join("review.md")).unwrap(),
+        metadata_notes
+    );
+    assert!(rules.join("archive/older-rule.md").is_file());
+    assert_eq!(
+        std::fs::read_to_string(ws.join("docs/objectives/notes.md")).unwrap(),
+        notes
+    );
+    assert!(rules.join("sentinel-kql-rule.md").is_file());
+}
+
+/// The inflight preview re-reads what the shards change: an objective's
+/// shard renames a signal and adds one, a new rule's shard names the new
+/// signal as its detection model, and another's names the objective; the
+/// objective's page shows both rules and the signals as the shard has them.
+/// A new threat's shard chains to the committed threat, whose page draws
+/// the chain.
+#[test]
+fn docs_preview_shards_refresh_signals_and_references() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
+    fixture("tide-corpus", &ws);
+    let yaml = |path: &Path| -> serde_json::Value {
+        let text = std::fs::read_to_string(path).unwrap();
+        let document = opentide_schema::node::load(&text).unwrap();
+        let json = opentide_compile::json::Json::from_node(document.root().unwrap());
+        serde_json::from_str(&json.to_compact()).unwrap()
+    };
+    let mut objective =
+        yaml(&ws.join("Objects/Detection Objectives/objective-0001-credential-access.yaml"));
+    objective["metadata"]["version"] = 2.into();
+    objective["objective"]["signals"][0]["name"] = "Renamed logon signal".into();
+    let mut signal = objective["objective"]["signals"][0].clone();
+    signal["name"] = "Pull request signal".into();
+    signal["uuid"] = "00000000-0000-4000-8099-000000000002".into();
+    objective["objective"]["signals"]
+        .as_array_mut()
+        .unwrap()
+        .push(signal);
+    let rule = yaml(&ws.join("Objects/Detection Rules/rule-0002-defender-kql.yaml"));
+    let mut on_signal = rule.clone();
+    on_signal["name"] = "Signal Rule".into();
+    on_signal["metadata"]["uuid"] = "00000000-0000-4000-8003-00000000aaaa".into();
+    on_signal["detection_model"] = "00000000-0000-4000-8099-000000000002".into();
+    let mut on_objective = rule;
+    on_objective["name"] = "Objective Rule".into();
+    on_objective["metadata"]["uuid"] = "00000000-0000-4000-8003-00000000bbbb".into();
+    let mut chained = yaml(&ws.join("Objects/Threat Vectors/threat-0001-simulated-actor.yaml"));
+    chained["name"] = "Chained Actor".into();
+    chained["metadata"]["uuid"] = "00000000-0000-4000-8001-00000000cccc".into();
+    chained["threat"]["chaining"] = serde_json::json!([{
+        "relation": "preceeds",
+        "vector": "00000000-0000-4000-8001-000000000001",
+        "description": "Then the actor"
+    }]);
+    let inflight = ws.join(".opentide/inflight");
+    std::fs::create_dir_all(&inflight).unwrap();
+    for (name, object) in [
+        ("a", objective),
+        ("b", on_signal),
+        ("c", on_objective),
+        ("d", chained),
+    ] {
+        let shard = serde_json::json!({"schema": "inflight.shard::1.0", "object": object});
+        std::fs::write(inflight.join(format!("{name}.json")), shard.to_string()).unwrap();
+    }
+    let (code, stdout) = run_at(&ws, &["--json", "generate", "docs"]);
+    assert_eq!(code, 0, "{stdout}");
+    let page =
+        std::fs::read_to_string(ws.join("docs/objectives/credential-access-objective.md")).unwrap();
+    for line in [
+        "### Renamed logon signal\n",
+        "### Pull request signal\n",
+        "| Renamed logon signal | _None_ |\n",
+        "| Pull request signal | [Signal Rule](../rules/signal-rule.md) \
+         (`00000000-0000-4000-8003-00000000aaaa`) |\n",
+        "| Signal | [Pull request signal](credential-access-objective.md#pull-request-signal) \
+         (`00000000-0000-4000-8099-000000000002`) | Downstream | signal |\n",
+        "| Rule | [Signal Rule](../rules/signal-rule.md) \
+         (`00000000-0000-4000-8003-00000000aaaa`) | Downstream | rule |\n",
+        "| Rule | [Objective Rule](../rules/objective-rule.md) \
+         (`00000000-0000-4000-8003-00000000bbbb`) | Downstream | rule |\n",
+    ] {
+        assert!(page.contains(line), "{line}: {page}");
+    }
+    assert!(!page.contains("Suspicious logon signal"), "{page}");
+    let threat = std::fs::read_to_string(ws.join("docs/threats/simulated-actor.md")).unwrap();
+    assert!(
+        threat.contains(
+            "00000000_0000_4000_8001_00000000cccc -->|preceeds| \
+             00000000_0000_4000_8001_000000000001\n"
+        ),
+        "{threat}"
+    );
+}
