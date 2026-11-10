@@ -6,6 +6,14 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ## [Unreleased]
 
+### Added
+
+- **Bitdefender GravityZone rules (`configurations.bitdefender`) are checked as bitdefender-1.0 says.** The block's constraint codes and advisories are reported on their fields, so the editor and `opentide validate` agree; `bitdefender_name_duplicate` stays a workspace check in opentide ([#226](https://github.com/opentidehq/language-server/issues/226)).
+  - Errors: `bitdefender_rule_kind`, `bitdefender_target`, `bitdefender_criterion_shape`, `bitdefender_criterion_relation`, `bitdefender_criterion_value`, `bitdefender_criteria_combination`, `bitdefender_action_scope`, `bitdefender_targets_shape`, `bitdefender_severity`, `bitdefender_yara_ascii`, `bitdefender_yara_size`
+  - `bitdefender_criterion_field`: an error on `process`, `file`, `connection` and `registry`, a warning on the XDR targets
+  - Warnings: `bitdefender_registry_full_hive`, `bitdefender_contains_no_wildcard`, `bitdefender_severity_collapsed`
+  - Completion and hover for `detection.target`, each target's criteria fields, the relations `is`, `contains` and `any`, enumerated values, and `actions`, from GravityZone's criteria catalogue (`catalogs/bitdefender/criteria.toml`, `scripts/sync_bitdefender_criteria.py`)
+
 ## [0.12.1] - 2026-11-09
 
 A Splunk block's `advanced` table is no longer reported as an unknown key, as opentide accepts it again.

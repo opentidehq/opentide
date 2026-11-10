@@ -594,6 +594,23 @@ pub mod codes {
     pub const SYSDIG_DEFINITION_ORDER: &str = "sysdig_definition_order";
     pub const SYSDIG_LIST_IN_VALUE: &str = "sysdig_list_in_value";
     pub const SYSDIG_LIST_SELF_REFERENCE: &str = "sysdig_list_self_reference";
+    // Bitdefender GravityZone block codes (bitdefender-1.0, Constraints and
+    // Advisories), as opentide names them.
+    pub const BITDEFENDER_RULE_KIND: &str = "bitdefender_rule_kind";
+    pub const BITDEFENDER_TARGET: &str = "bitdefender_target";
+    pub const BITDEFENDER_CRITERION_SHAPE: &str = "bitdefender_criterion_shape";
+    pub const BITDEFENDER_CRITERION_FIELD: &str = "bitdefender_criterion_field";
+    pub const BITDEFENDER_CRITERION_RELATION: &str = "bitdefender_criterion_relation";
+    pub const BITDEFENDER_CRITERION_VALUE: &str = "bitdefender_criterion_value";
+    pub const BITDEFENDER_CRITERIA_COMBINATION: &str = "bitdefender_criteria_combination";
+    pub const BITDEFENDER_ACTION_SCOPE: &str = "bitdefender_action_scope";
+    pub const BITDEFENDER_TARGETS_SHAPE: &str = "bitdefender_targets_shape";
+    pub const BITDEFENDER_SEVERITY: &str = "bitdefender_severity";
+    pub const BITDEFENDER_YARA_ASCII: &str = "bitdefender_yara_ascii";
+    pub const BITDEFENDER_YARA_SIZE: &str = "bitdefender_yara_size";
+    pub const BITDEFENDER_REGISTRY_FULL_HIVE: &str = "bitdefender_registry_full_hive";
+    pub const BITDEFENDER_CONTAINS_NO_WILDCARD: &str = "bitdefender_contains_no_wildcard";
+    pub const BITDEFENDER_SEVERITY_COLLAPSED: &str = "bitdefender_severity_collapsed";
 
     // CrowdStrike Query Language (Falcon LogScale, Next-Gen SIEM).
     pub const CQL_PARSE_ERROR: &str = "cql_parse_error";
@@ -751,6 +768,21 @@ pub mod codes {
         SYSDIG_DEFINITION_ORDER,
         SYSDIG_LIST_IN_VALUE,
         SYSDIG_LIST_SELF_REFERENCE,
+        BITDEFENDER_RULE_KIND,
+        BITDEFENDER_TARGET,
+        BITDEFENDER_CRITERION_SHAPE,
+        BITDEFENDER_CRITERION_FIELD,
+        BITDEFENDER_CRITERION_RELATION,
+        BITDEFENDER_CRITERION_VALUE,
+        BITDEFENDER_CRITERIA_COMBINATION,
+        BITDEFENDER_ACTION_SCOPE,
+        BITDEFENDER_TARGETS_SHAPE,
+        BITDEFENDER_SEVERITY,
+        BITDEFENDER_YARA_ASCII,
+        BITDEFENDER_YARA_SIZE,
+        BITDEFENDER_REGISTRY_FULL_HIVE,
+        BITDEFENDER_CONTAINS_NO_WILDCARD,
+        BITDEFENDER_SEVERITY_COLLAPSED,
         CQL_PARSE_ERROR,
         CQL_UNKNOWN_FUNCTION,
         CQL_REMOVED_FUNCTION,
@@ -1071,6 +1103,49 @@ pub mod codes {
             }
             SYSDIG_LIST_SELF_REFERENCE => {
                 "A block list names itself: Falco keeps the name as a literal item, which on Sysdig resolves against a tenant list of that name, not this one."
+            }
+            BITDEFENDER_RULE_KIND => {
+                "A Bitdefender block sets exactly one of `detection` (a Basic rule) and `yara` (a YARA rule)."
+            }
+            BITDEFENDER_TARGET => {
+                "`detection.target` is not a GravityZone detection target; the exclusion-only targets `flow` and `bitbucket repository` are refused."
+            }
+            BITDEFENDER_CRITERION_SHAPE => {
+                "A criterion has a `field` and exactly one of `is`, `contains`, and `any`; `any` is a non-empty list, `is` and `contains` one value."
+            }
+            BITDEFENDER_CRITERION_FIELD => {
+                "The criterion's field is not a field of the rule's target in the GravityZone criteria catalogue (a warning for a target bitdefender-1.0 does not list)."
+            }
+            BITDEFENDER_CRITERION_RELATION => {
+                "The field does not take this relation: enumerated fields take `is` or `any` (some only `is`), and hashes take no `contains`."
+            }
+            BITDEFENDER_CRITERION_VALUE => {
+                "The value is not one of the field's enumerated values, or a port is not an integer from 0 to 65535."
+            }
+            BITDEFENDER_CRITERIA_COMBINATION => {
+                "The criteria break a GravityZone pairing rule: EDR-only and XDR-only criteria mixed, a field without the field it needs, two incompatible fields, or `alert` beside an operation criterion."
+            }
+            BITDEFENDER_ACTION_SCOPE => {
+                "An automatic action is unknown, has a value it does not take, or is not allowed for the rule's kind or target."
+            }
+            BITDEFENDER_TARGETS_SHAPE => {
+                "`targets` sets one of `endpoint_tags` and `companies`, as a non-empty list."
+            }
+            BITDEFENDER_SEVERITY => "`severity` is not `Low`, `Medium`, or `High`.",
+            BITDEFENDER_YARA_ASCII => {
+                "The YARA signature holds a character outside ASCII, which GravityZone refuses."
+            }
+            BITDEFENDER_YARA_SIZE => {
+                "The YARA signature is longer than GravityZone's 30,000 characters."
+            }
+            BITDEFENDER_REGISTRY_FULL_HIVE => {
+                "A `Registry.Key` value starts with a full hive name: GravityZone accepts it, and the rule never triggers. Write `HKLM`, `HKCU`, `HKU`, `HKCR`, `HKCC`, or `HKLU`."
+            }
+            BITDEFENDER_CONTAINS_NO_WILDCARD => {
+                "A `contains` value has neither `*` nor `?`, so GravityZone matches it as written; the author most likely meant `*value*`."
+            }
+            BITDEFENDER_SEVERITY_COLLAPSED => {
+                "`response.alert_severity` is `Critical` or `Informational` and the block sets no `severity`: GravityZone has three levels, so it is sent as `High` or `Low`."
             }
             SYSDIG_LIST_IN_VALUE => {
                 "A block list name appears in an exception value where Falco's expansion would not produce a value list."
