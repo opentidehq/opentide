@@ -70,7 +70,12 @@
 # compare` as stale. They are entered, with these rules, in the change that
 # routes `validate` and `validate query` to Rust; the CHANGELOG already
 # announces them under "**The query engines suggest by the same rule**".
-# Codes, severities and ranges do not change. The one recorded difference:
+# Codes, severities and ranges do not change. The rule bounds the edits by a
+# third of the words that hold the part that differs, so two edits side by
+# side or two characters cut from a long name (`SecurityEve`, a
+# `detection_model` UUID) are found as before, and callers with a stated
+# bound (`detection_model` two edits, CQL events one) keep it; no recording
+# reaches those. The one recorded difference:
 # `process.pid::foo` (objects/rules/encoded-downgrade-rule-0170.yaml:53:56,
 # `esql_unknown_type`) is three edits from `bool`, more than a third of its
 # length, so the shared rule suggests nothing and the help falls back to the
