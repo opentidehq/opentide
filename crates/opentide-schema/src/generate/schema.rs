@@ -17,9 +17,12 @@
 //!    choices (`recomposition_handler`, `platform_root_extras`);
 //! 4. [`ResolveValues`]: every `tide.vocab` becomes an `enum` with its
 //!    Markdown dropdowns, plain descriptions and search hints, and every
-//!    `tide.config.*` key the configured values (statuses, tenants,
-//!    responders, log sources, detectors, enabled platforms, parameter
-//!    lists);
+//!    `tide.config.*` key a model carries the configured values (statuses,
+//!    tenants, responders, log sources). The keywords no model carries
+//!    (`tide.config.visibility.detectors`, `tide.config.parameter-list`,
+//!    `tide.config.systems::enabled`, `tide.meta.deprecation`, a field's
+//!    `tide.vocab.stages`) are not resolved, and a test keeps them out of
+//!    the models;
 //! 5. [`CloseObjects`]: an object property that does not say otherwise
 //!    takes no unknown keys;
 //! 6. [`PinIdentifier`]: `metadata.schema` is the revision's identifier;
@@ -572,14 +575,6 @@ fn truthy(value: Option<&Value>) -> bool {
 }
 
 fn resolve_field(map: &mut Map<String, Value>, key: Option<&str>, sources: &Sources) {
-    if let Some(message) = map.get(keys::META_DEPRECATION).and_then(Value::as_str) {
-        let message = message.to_owned();
-        map.insert("title".to_owned(), " DEPRECATION WARNING".into());
-        map.insert(
-            "description".to_owned(),
-            format!(" DEPRECATED : {message}").into(),
-        );
-    }
     let config = &sources.config;
     if truthy(map.get(keys::CONFIG_VISIBILITY_LOGSOURCE_NAMES))
         && let Some(offer) = logsources(config)
@@ -587,26 +582,6 @@ fn resolve_field(map: &mut Map<String, Value>, key: Option<&str>, sources: &Sour
         let mut items = offer.keywords(false);
         items.insert("uniqueItems".to_owned(), true.into());
         map.insert("items".to_owned(), Value::Object(items));
-    }
-    if truthy(map.get(keys::CONFIG_VISIBILITY_DETECTORS))
-        && let Some(offer) = detectors(config)
-    {
-        set_typed(map, &offer.keywords(false));
-    }
-    if let Some(path) = map.get(keys::CONFIG_PARAMETER_LIST).and_then(Value::as_str) {
-        let values = parameter_list(config, path);
-        let mut keywords = Map::new();
-        keywords.insert("enum".to_owned(), Value::Array(values));
-        set_typed(map, &keywords);
-    }
-    if truthy(map.get(keys::CONFIG_SYSTEMS_ENABLED)) {
-        let values: Vec<Value> = enabled_platforms(config)
-            .into_iter()
-            .map(|(identifier, _)| Value::from(identifier))
-            .collect();
-        let mut keywords = Map::new();
-        keywords.insert("enum".to_owned(), Value::Array(values));
-        set_typed(map, &keywords);
     }
     if let Some(platform) = map.get(keys::CONFIG_SYSTEM_TENANTS).and_then(Value::as_str) {
         let offer = tenants(config, platform);
@@ -642,25 +617,12 @@ fn resolve_field(map: &mut Map<String, Value>, key: Option<&str>, sources: &Sour
     }
     let scoped = truthy(map.get(keys::VOCAB_SCOPED));
     let no_wrap = truthy(map.get(keys::VOCAB_HINTS_NO_WRAP));
-    let stages: Vec<String> = match map.get(keys::VOCAB_STAGES) {
-        Some(Value::String(stage)) => vec![stage.clone()],
-        Some(Value::Array(stages)) => stages
-            .iter()
-            .filter_map(Value::as_str)
-            .map(str::to_owned)
-            .collect(),
-        _ => Vec::new(),
-    };
     let mut offer = Offer::default();
     for reference in &references {
         let one = vocabulary_offer(
             &sources.vocabularies,
             reference,
-            &VocabOptions {
-                scoped,
-                no_wrap,
-                stages: &stages,
-            },
+            &VocabOptions { scoped, no_wrap },
         );
         offer.values.extend(one.values);
         offer.markdown.extend(one.markdown);
@@ -674,13 +636,7 @@ fn resolve_field(map: &mut Map<String, Value>, key: Option<&str>, sources: &Sour
 fn set_typed(map: &mut Map<String, Value>, keywords: &Map<String, Value>) {
     let kind = map.get("type").cloned().unwrap_or(Value::Null);
     if has_type(&kind, "string") {
-        let mut keywords = keywords.clone();
-        if has_type(&kind, "null")
-            && let Some(Value::Array(values)) = keywords.get_mut("enum")
-        {
-            values.push(Value::Null);
-        }
-        map.extend(keywords);
+        map.extend(keywords.clone());
     } else if has_type(&kind, "array") {
         let mut items = keywords.clone();
         items.insert("uniqueItems".to_owned(), true.into());
@@ -754,10 +710,9 @@ fn apply_enum(field: &mut Map<String, Value>, keywords: &Map<String, Value>) {
 // --- vocabularies -------------------------------------------------------------------------
 
 /// How a field asks for a vocabulary.
-struct VocabOptions<'a> {
+struct VocabOptions {
     scoped: bool,
     no_wrap: bool,
-    stages: &'a [String],
 }
 
 /// The longest stage description a dropdown quotes, in characters.
@@ -834,20 +789,15 @@ fn vocabulary_offer(vocabularies: &Vocabularies, reference: &str, options: &Voca
             }
             continue;
         }
-        let matching: Vec<&String> = entry
-            .stages
-            .iter()
-            .filter(|stage| options.stages.is_empty() || options.stages.contains(stage))
-            .collect();
         if options.scoped {
-            for stage in matching {
+            for stage in &entry.stages {
                 emit(
                     &mut offer,
                     format!("{stage}::{}", entry.key),
                     std::slice::from_ref(stage),
                 );
             }
-        } else if options.stages.is_empty() || !matching.is_empty() {
+        } else {
             emit(&mut offer, entry.key.clone(), &entry.stages);
         }
     }
@@ -917,26 +867,6 @@ fn plain(value: &str, entry: &Entry) -> String {
     }
 }
 
-/// Capitalises the first letter of each word of a lower-case name.
-fn title_case(text: &str) -> String {
-    let mut out = String::with_capacity(text.len());
-    let mut start = true;
-    for c in text.chars() {
-        if c.is_alphabetic() {
-            if start {
-                out.extend(c.to_uppercase());
-            } else {
-                out.push(c);
-            }
-            start = false;
-        } else {
-            out.push(c);
-            start = true;
-        }
-    }
-    out
-}
-
 /// The Markdown an editor shows for an entry in a dropdown: its name, its
 /// identifier and vocabulary, its level and TLP (an object), its stages, its
 /// link and its description; empty parts are left out.
@@ -947,8 +877,10 @@ fn dropdown(vocabulary: &Vocabulary, entry: &Entry, stages: &[String]) -> String
     } else {
         entry.name.clone()
     };
+    // An all-lower-case name is title-cased by English rules (the
+    // `titlecase` crate: `command and control` is `Command and Control`).
     if display.chars().any(char::is_alphabetic) && !display.chars().any(char::is_uppercase) {
-        display = title_case(&display);
+        display = titlecase::titlecase(&display);
     }
     let mut parts = vec![
         format!("### {display}"),
@@ -1194,79 +1126,6 @@ fn logsources(config: &Node) -> Option<Offer> {
         }
     }
     Some(offer)
-}
-
-/// The external detectors `visibility.toml` declares; `None` when it
-/// declares none.
-fn detectors(config: &Node) -> Option<Offer> {
-    let visibility = config.get("visibility");
-    let detectors = sequence(visibility.and_then(|visibility| visibility.get("detectors")));
-    if detectors.is_empty() {
-        return None;
-    }
-    let assets = visibility_assets(visibility);
-    let mut offer = Offer::default();
-    for detector in detectors {
-        let name = display(detector.get("name"));
-        let mut description = format!(
-            "### {name}\n**Description**: {}\n\n",
-            display(detector.get("description"))
-        );
-        let references = strings(detector.get("references"));
-        if !references.is_empty() {
-            description.push_str("### References:\n");
-            for reference in references {
-                description.push_str(&format!("- {reference}\n"));
-            }
-            description.push('\n');
-        }
-        let asset_names = strings(detector.get("assets"));
-        if !asset_names.is_empty() {
-            description.push_str("### Monitored Assets:\n");
-            for asset in &asset_names {
-                description.push_str(&format_asset(asset, &assets));
-                description.push('\n');
-            }
-        }
-        offer.values.push(name.into());
-        offer.markdown.push(description);
-    }
-    Some(offer)
-}
-
-/// A configuration list by dot path; under `tenants`, every tenant's
-/// values of the next key, each as `<tenant>::<value>`. A path that names
-/// no list gives none.
-fn parameter_list(config: &Node, path: &str) -> Vec<Value> {
-    let parts: Vec<&str> = path.split('.').collect();
-    let mut node = config;
-    for (index, part) in parts.iter().enumerate() {
-        if *part == "tenants" {
-            let Some(key) = parts.get(index + 1) else {
-                return Vec::new();
-            };
-            let mut values = Vec::new();
-            for tenant in sequence(node.get("tenants")) {
-                let name = display(tenant.get("name"));
-                let parameters = tenant.get("parameters");
-                for value in strings(parameters.and_then(|parameters| parameters.get(key))) {
-                    values.push(format!("{}::{}", name.trim(), value.trim()).into());
-                }
-            }
-            return values;
-        }
-        let Some(next) = node.get(part) else {
-            return Vec::new();
-        };
-        node = next;
-    }
-    match &node.value {
-        NodeValue::Seq(items) => items
-            .iter()
-            .map(|item| Value::from(item.value.to_string()))
-            .collect(),
-        _ => Vec::new(),
-    }
 }
 
 /// An object property that does not allow other keys takes none: every

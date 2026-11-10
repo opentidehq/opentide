@@ -400,3 +400,61 @@ fn the_editor_text_is_annotated() {
     );
     assert!(text.is_ascii());
 }
+
+#[test]
+fn an_all_lower_case_name_is_title_cased_by_english_rules() {
+    let vocabulary = objectives(&[
+        ("o1", "command and control over it's own channel"),
+        ("o2", "already Cased name"),
+        ("o3", "o3"),
+    ]);
+    let heading = |key: &str| -> String {
+        let entry = &vocabulary.entries[key];
+        dropdown(&vocabulary, entry, &[])
+            .lines()
+            .next()
+            .unwrap()
+            .to_owned()
+    };
+    // Small words stay lower case and an apostrophe starts no word.
+    assert_eq!(
+        heading("o1"),
+        "### Command and Control Over It's Own Channel"
+    );
+    // A name that has a capital is written as it is.
+    assert_eq!(heading("o2"), "### already Cased name");
+    assert_eq!(heading("o3"), "### O3");
+}
+
+/// The `tide.*` keywords [`ResolveValues`] does not resolve: no object model
+/// may carry one, or its schema would silently leave out what the keyword
+/// asks for (a model that needs one adds its branch, with a test).
+#[test]
+fn no_model_carries_a_keyword_the_generator_does_not_resolve() {
+    let unresolved = [
+        keys::META_DEPRECATION,
+        keys::CONFIG_VISIBILITY_DETECTORS,
+        keys::CONFIG_PARAMETER_LIST,
+        keys::CONFIG_SYSTEMS_ENABLED,
+        keys::VOCAB_STAGES,
+    ];
+    let texts: Vec<(String, String)> = ["rule::1.0", "rule::1.1", "threat::1.0", "objective::1.0"]
+        .into_iter()
+        .map(|identifier| {
+            (
+                identifier.to_owned(),
+                serde_json::to_string(&revision_model_schema(identifier).unwrap()).unwrap(),
+            )
+        })
+        .collect();
+    for (name, text) in &texts {
+        // The derived schemas do carry the keywords that are resolved.
+        assert!(text.contains("\"tide."), "{name}: no tide keyword at all");
+        for keyword in unresolved {
+            assert!(
+                !text.contains(&format!("\"{keyword}\"")),
+                "{name} carries {keyword}, which the generator does not resolve"
+            );
+        }
+    }
+}

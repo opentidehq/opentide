@@ -86,7 +86,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
   - keys are in alphabetical order, and a property has no generated `title` (`Detection Model`), where Pydantic wrote both;
   - an optional field is `"type": ["string", "null"]` rather than `anyOf` with a `null` branch, and its `enum` lists `null`;
   - `metadata` and `references` refer to their definition (`$ref`) instead of repeating it, and `references: null` is accepted, as the model accepts it; each document declares `$schema` (draft 2020-12);
-  - descriptions are the Rust models' doc comments, and a dropdown leaves out its empty lines and icon placeholders.
+  - descriptions are the Rust models' doc comments, and a dropdown leaves out its empty lines and icon placeholders and title-cases an all-lower-case name by English rules (`Command and Control`, `It's`, where Python wrote `Command And Control`, `It'S`).
 
 ### Fixed
 
