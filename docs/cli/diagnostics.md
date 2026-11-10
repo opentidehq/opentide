@@ -905,33 +905,51 @@ Check the tenant `url` (it ends in `/api`), the network path to it, and the tena
 
 A Bitdefender YARA signature holds a character that is not ASCII.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` on a `bitdefender` block's `yara.signature` (bitdefender-1.0): GravityZone takes ASCII only. The analysis engine checks the signature under its Bitdefender profile and places the finding on the character; without the engine, `opentide validate` still reports it on `yara.signature`. `opentide validate query --platform bitdefender` reports it in a `.yar` file. Deploy refuses the rule.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  bitdefender:
+    yara:
+      signature: |
+        rule Loader {
+          meta:
+            description = "Stage-1 loader — config blob"
+          condition:
+            true
+        }
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Replace the character with ASCII (`-` for `—`), or match it as a hex string (`{ E2 80 94 }`), then run `opentide validate` again.
 
 ## bitdefender_yara_size
 
 A Bitdefender YARA signature is longer than 30,000 characters.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` on a `bitdefender` block's `yara.signature` (bitdefender-1.0): GravityZone takes at most 30,000 characters. The analysis engine checks the signature under its Bitdefender profile; without the engine, `opentide validate` still reports it on `yara.signature`. `opentide validate query --platform bitdefender` reports it in a `.yar` file. Deploy refuses the rule.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  bitdefender:
+    yara:
+      signature: |
+        rule Loader {
+          strings:
+            $a01 = "..."   # thousands of strings, 30,001 characters in all
+          condition:
+            any of them
+        }
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Shorten the signature: drop comments and unused strings, or split its rules across several Tide rules, then run `opentide validate` again.
 
 ## cbc_unknown_field
 

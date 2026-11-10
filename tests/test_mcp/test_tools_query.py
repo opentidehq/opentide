@@ -131,12 +131,29 @@ def test_validate_query_sysdig_live_is_unsupported() -> None:
     assert result["valid"] is None
 
 
-@pytest.mark.parametrize("live", [False, True])
-def test_validate_query_bitdefender_is_unsupported(live: bool) -> None:
+def test_validate_query_bitdefender_live_is_unsupported() -> None:
     """GravityZone has no dry run, and opentide never fakes one (bitdefender-1.0)."""
-    result = tools.tool_validate_query("rule A { condition: true }", "bitdefender", live=live)
+    result = tools.tool_validate_query("rule A { condition: true }", "bitdefender", live=True)
     assert result["supported"] is False
     assert result["valid"] is None
+
+
+def test_validate_query_checks_a_bitdefender_yara_rule_offline() -> None:
+    """The engine checks YARA under its Bitdefender profile (bitdefender-1.0, yara-1.0)."""
+    good = tools.tool_validate_query("rule a {\n  condition:\n    true\n}\n", "bitdefender")
+    assert good["mode"] == "offline"
+    assert good["valid"] is True
+    assert not good.get("warnings")  # no meta needed: HarfangLab's profile is not applied
+    bad = tools.tool_validate_query(
+        'include "a.yar"\nrule a {\n  condition:\n    true // \N{EM DASH}\n}\n', "bitdefender"
+    )
+    assert bad["valid"] is False
+    codes = [e["code"] for e in bad["errors"]]
+    assert sorted(codes) == ["bitdefender_yara_ascii", "yara_include"]
+    big = tools.tool_validate_query(
+        "rule a {\n  condition:\n    true\n}\n" + "// " + "x" * 30_000 + "\n", "bitdefender"
+    )
+    assert [e["code"] for e in big["errors"]] == ["bitdefender_yara_size"]
 
 
 def test_validate_query_truncates_the_preview() -> None:

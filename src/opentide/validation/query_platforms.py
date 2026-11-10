@@ -21,6 +21,9 @@ QUERY_VALIDATION_PLATFORMS: frozenset[str] = frozenset(
 #: Sysdig's Falco condition is checked offline only: Sysdig has no rule preview.
 #: HarfangLab's YARA (``yara.signature`` and the rule the decomposed form assembles) is
 #: checked offline only: HarfangLab has no YARA dry run (harfanglab-1.0, yara-1.0).
+#: Bitdefender's ``yara.signature`` is checked offline only, under the engine's
+#: bitdefender profile (ASCII, 30,000 characters; bitdefender-1.0): GravityZone has
+#: no dry run.
 #: SentinelOne (S1QL) is checked on the tenant only (``validate query --live``).
 #: CrowdStrike is never checked: no fake validation.
 OFFLINE_QUERY_LANGUAGES: dict[str, tuple[str, ...]] = {
@@ -31,5 +34,6 @@ OFFLINE_QUERY_LANGUAGES: dict[str, tuple[str, ...]] = {
     "carbon_black_cloud": ("lucene",),
     "sysdig": ("falco",),
     "harfanglab": ("yara",),
+    "bitdefender": ("yara",),
 }
 OFFLINE_QUERY_PLATFORMS = frozenset(OFFLINE_QUERY_LANGUAGES)

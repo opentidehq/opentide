@@ -20,7 +20,7 @@ opentide integrates with **ten detection platforms** through built-in adapters r
 | CrowdStrike Falcon | `crowdstrike` | yes | no | no | yes | correlation filter (CQL) |
 | HarfangLab | `harfanglab` | yes | no | YARA | telemetry filters | Sigma or YARA |
 | Sysdig Secure (Falco) | `sysdig` | yes | no | yes | no | Falco condition |
-| Bitdefender GravityZone | `bitdefender` | yes | no | no | no | GravityZone criteria or YARA |
+| Bitdefender GravityZone | `bitdefender` | yes | no | YARA | no | GravityZone criteria or YARA |
 
 The offline check is the analysis engine that ships with `pip install opentide` (`opentide validate`, `opentide validate query`, `opentide lint`, [`opentide lsp`](../../cli/lsp.md)): it parses each query in its language, with the platform's tables or dialect, and needs no tenant.
 
@@ -57,7 +57,7 @@ Every platform but Sysdig and Bitdefender answers [`opentide query`](../../cli/q
 
 Sysdig Secure runs Falco. A `sysdig` block is a Falco rule (a condition, its exceptions, and the macros and lists only that rule uses), which deploy creates through the Sysdig Secure runtime API and adds to the runtime policies the tenant or block names, keeping Sysdig's rule id in [deployment state](deployment-state.md). Deploy expands the block's own macros and lists into the condition and derives the Falco `desc`, `priority`, MITRE tags and a default `output` from the rule. The analysis engine checks the Falco condition offline; Sysdig has no rule preview, so `validate query --platform sysdig --live` reports `supported: false`. `deploy --dry-run` shows the API body.
 
-Bitdefender GravityZone takes custom detection rules. A `bitdefender` block is one rule of one kind: `detection`, a list of criteria on a process, file, connection, registry or XDR event, or `yara`, a YARA signature written out in the block. Deploy calls the Incidents API (JSON-RPC `createCustomRule`, `updateCustomRule`, `deleteCustomRule`), sends the whole payload on every update, and keeps GravityZone's 24-hex rule id in [deployment state](deployment-state.md); it never lists rules, and never creates, updates or deletes an exclusion rule. It derives the GravityZone name, description, severity and tags from the rule, and resolves `targets` aliases with the tenant's `endpoint_tags` and `companies` tables. `opentide validate` checks the criteria catalogue, the actions each kind allows, and the YARA signature, and warns (as does `opentide lint`) on a full registry hive name, a `contains` value without a wildcard, and a `Critical` or `Informational` severity GravityZone collapses; GravityZone has no dry run, so `validate query --platform bitdefender` reports `supported: false`. `deploy --dry-run` shows the `createCustomRule` request.
+Bitdefender GravityZone takes custom detection rules. A `bitdefender` block is one rule of one kind: `detection`, a list of criteria on a process, file, connection, registry or XDR event, or `yara`, a YARA signature written out in the block. Deploy calls the Incidents API (JSON-RPC `createCustomRule`, `updateCustomRule`, `deleteCustomRule`), sends the whole payload on every update, and keeps GravityZone's 24-hex rule id in [deployment state](deployment-state.md); it never lists rules, and never creates, updates or deletes an exclusion rule. It derives the GravityZone name, description, severity and tags from the rule, and resolves `targets` aliases with the tenant's `endpoint_tags` and `companies` tables. `opentide validate` checks the criteria catalogue, the actions each kind allows, and the YARA signature, and warns (as does `opentide lint`) on a full registry hive name, a `contains` value without a wildcard, and a `Critical` or `Informational` severity GravityZone collapses; The analysis engine checks `yara.signature` offline under its Bitdefender profile, as `opentide validate` (its `queries` check), `opentide validate query --platform bitdefender` and the editor do: a YARA error, a character that is not ASCII (`bitdefender_yara_ascii`) or a signature over 30,000 characters (`bitdefender_yara_size`) fails the rule, each reported once, at its place in the signature, and `opentide lint` warns on a module GravityZone has not confirmed (`yara_module_unconfirmed`). GravityZone has no dry run, so `validate query --platform bitdefender --live` reports `supported: false`. `deploy --dry-run` shows the `createCustomRule` request.
 
 Normative capability flags and the shared block: [Platforms spec](/docs/specifications/specs/platforms/).
 
@@ -96,7 +96,7 @@ for name, plat in Opentide.Platforms.items():
 
 ## Query validation policy
 
-Only platforms with `can_validate=True` run live validation. For CrowdStrike, HarfangLab, Sysdig and Bitdefender, CLI and MCP return `supported: false` for `--live` — **never fake validation**. HarfangLab's YARA and Sysdig's Falco are checked offline; Bitdefender blocks are checked by `opentide validate`.
+Only platforms with `can_validate=True` run live validation. For CrowdStrike, HarfangLab, Sysdig and Bitdefender, CLI and MCP return `supported: false` for `--live` — **never fake validation**. HarfangLab's and Bitdefender's YARA and Sysdig's Falco are checked offline; Bitdefender's criteria are checked by `opentide validate`.
 
 ```bash
 opentide validate query --platform crowdstrike   # reports unsupported

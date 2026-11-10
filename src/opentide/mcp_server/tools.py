@@ -281,6 +281,7 @@ _DEFAULT_QUERY_LANGUAGE = {
     "elastic": "kuery",
     "sysdig": "falco",
     "harfanglab": "yara",
+    "bitdefender": "yara",
 }
 
 
@@ -293,7 +294,8 @@ def tool_validate_query(
     """
     from opentide.validation.query_platforms import OFFLINE_QUERY_PLATFORMS
 
-    # Sysdig (Falco) and HarfangLab (YARA) are checked offline but have no tenant check.
+    # Sysdig (Falco), HarfangLab and Bitdefender (YARA) are checked offline but have no
+    # tenant check.
     if platform not in QUERY_VALIDATION_PLATFORMS and (
         live or platform not in OFFLINE_QUERY_PLATFORMS
     ):
