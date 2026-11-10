@@ -61,7 +61,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     println!(
         "open and index {:.3}s, plan and compile {:.3}s, total {:.3}s; exit {}; {summary}",
         opened.as_secs_f64(),
-        (total - opened).as_secs_f64(),
+        total.saturating_sub(opened).as_secs_f64(),
         total.as_secs_f64(),
         outcome.exit_code
     );
