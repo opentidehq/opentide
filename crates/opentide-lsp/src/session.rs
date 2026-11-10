@@ -537,10 +537,22 @@ pub(crate) struct Session {
 /// file is, so its folders and `objects/` are the buffers' alone.
 pub(crate) fn workspace_path(path: &str) -> PathBuf {
     let native = Path::new(path);
-    if native.is_absolute() {
+    if is_absolute(native) {
         native.to_path_buf()
     } else {
         Path::new(VIRTUAL_ROOT).join(path.trim_start_matches(['/', '\\']))
+    }
+}
+
+/// Whether `path` is absolute here. The browser build (wasm32-unknown-unknown)
+/// is neither Unix nor Windows, and std calls no path absolute there, not
+/// even [`VIRTUAL_ROOT`]'s: a rooted path is, as on Unix, or every call
+/// would put the path under the virtual root once more.
+fn is_absolute(path: &Path) -> bool {
+    if cfg!(all(target_family = "wasm", target_os = "unknown")) {
+        path.has_root()
+    } else {
+        path.is_absolute()
     }
 }
 

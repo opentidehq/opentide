@@ -537,13 +537,30 @@ fn nested_message(path: &str, folder: &str) -> String {
     )
 }
 
+/// When the run started, where the target has a clock.
+///
+/// The browser build (wasm32-unknown-unknown, which the language server's
+/// `opentide/analyze` reaches through [`validate`]) has none: std's
+/// `Instant::now` panics there ("time not implemented"), which traps the
+/// whole WebAssembly worker. Its runs report a `wall_ms` of 0.
+#[cfg(not(all(target_family = "wasm", target_os = "unknown")))]
+fn clock_start() -> Option<Instant> {
+    Some(Instant::now())
+}
+
+/// The browser build has no clock: see the native [`clock_start`].
+#[cfg(all(target_family = "wasm", target_os = "unknown"))]
+fn clock_start() -> Option<Instant> {
+    None
+}
+
 /// Runs `validate` over `ws`.
 #[expect(
     clippy::too_many_lines,
     reason = "the run's phases in the oracle's order (session.py run_validation), read top to bottom"
 )]
 pub fn validate(ws: &Workspace, options: &Options<'_>) -> Validation {
-    let started = Instant::now();
+    let started = clock_start();
     let fs = ws.fs().as_ref();
     let index = ws.index();
     let root = ws.root().to_path_buf();
@@ -818,7 +835,9 @@ pub fn validate(ws: &Workspace, options: &Options<'_>) -> Validation {
     let mut sources = annotate::Sources::new(fs, index);
     annotate::annotate(&mut issues, &mut sources, &root);
     annotate::annotate(&mut warnings, &mut sources, &root);
-    stats.wall_ms = (started.elapsed().as_secs_f64() * 100_000.0).round() / 100.0;
+    stats.wall_ms = started.map_or(0.0, |started| {
+        (started.elapsed().as_secs_f64() * 100_000.0).round() / 100.0
+    });
 
     let report = Report {
         ok: issues.is_empty(),
