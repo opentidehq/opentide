@@ -232,6 +232,8 @@ class CrowdstrikeConfig(PlatformConfigBase):
 
 class HarfangLabConfig(PlatformConfigBase):
     __schema_identifier__: ClassVar[str] = "platform::harfanglab::1.0"
+    # Its before-validator reports the constraint codes; it accepts no extra key.
+    __legacy_keys__: ClassVar[Mapping[str, str | None]] = {}
     maturity: str = "Experimental"
     """Rule maturity. Mapped to HarfangLab `hl_status`."""
     confidence: str = "Moderate"
