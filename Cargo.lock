@@ -1312,6 +1312,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "memo-map"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5449c8c750f1a07ea702bbd212bd999fceece9b3d1508b17023b3e174583124b"
+
+[[package]]
+name = "minijinja"
+version = "2.24.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "86886cf6dbf4e614b19c9a1eec9775f021869d7eadde0fc73921a81b90c9b4c9"
+dependencies = [
+ "memo-map",
+ "serde",
+]
+
+[[package]]
 name = "nix"
 version = "0.31.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1462,16 +1478,21 @@ dependencies = [
  "gix-revision",
  "gix-revwalk",
  "indexmap",
+ "minijinja",
  "opentide-core",
  "opentide-schema",
  "opentide-workspace",
+ "percent-encoding",
  "proptest",
  "rayon",
+ "regex",
  "serde",
  "serde_json",
  "tempfile",
+ "textwrap",
  "thiserror",
  "toml 0.8.23",
+ "unicode-properties",
 ]
 
 [[package]]

@@ -47,6 +47,15 @@ rayon.workspace = true
 # generate exports: the Navigator layer lists objects by name under full
 # Unicode case folding, as the oracle's `str.casefold()` sorts them.
 caseless = "0.2"
+# generate docs (UC-3.2b): the pages are minijinja templates
+# (`src/generate/docs/templates/`), Mermaid labels wrapped by textwrap, CVE
+# identifiers read with regex and quoted into links with percent-encoding,
+# heading anchors by Unicode general category.
+minijinja = { version = "2.24", default-features = false, features = ["builtins", "macros", "multi_template", "serde", "std_collections"] }
+textwrap = { version = "0.16", default-features = false }
+regex.workspace = true
+percent-encoding = "2"
+unicode-properties.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
