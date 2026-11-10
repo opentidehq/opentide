@@ -3,6 +3,7 @@
 //! Pydantic remains CLI authority. The LSP emits the same `{code, field_path, severity}`
 //! with real source ranges. opentide LSP owns Tide diagnostics — disable yamlls on `objects/**`.
 
+pub mod bitdefender;
 mod elastic;
 mod falco;
 mod injection;
@@ -856,6 +857,20 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
         diagnostics.extend(yara::constraint_diagnostics(
             input.source,
             &yaml_scalar::mapping_keys(input.source),
+        ));
+    }
+
+    if let Some(block) = object
+        .configurations
+        .as_ref()
+        .and_then(|c| c.get("bitdefender"))
+        .filter(|b| b.is_mapping())
+        && let Ok(rule) = serde_yaml::from_str::<serde_yaml::Value>(input.source)
+    {
+        diagnostics.extend(bitdefender::constraint_diagnostics(
+            input.source,
+            &rule,
+            block,
         ));
     }
 

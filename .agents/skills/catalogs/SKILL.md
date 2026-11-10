@@ -110,6 +110,14 @@ YARA conformance data is generated too, never hand-edited:
 
 A difference from either engine is a `[[yara]]` entry of `testdata/oracles/exceptions.toml` (`check = "libyara" | "yara_x" | "both"`). `conformance.rs` and `scripts/oracles/yara/oracle.py` both read it.
 
+## Bitdefender catalogue
+
+| Path | Contents |
+| --- | --- |
+| `catalogs/bitdefender/criteria.toml` | every GravityZone Basic rule target (detection, exclusion, `closed`), every criterion field with its Control Center label, sensors (`edr`, `xdr`, `both`), relations, kind (`string`, `hash`, `ip`, `email`, `port`, `enum` with per-value sensors), pairing data (`requires_any`, `detection_requires_any`, `incompatible`, value `incompatible`, `resource`), the rules over a whole list (`no_sensor_mix`, `one_resource`, `alert_or_operation`) and the registry hive abbreviations |
+
+`scripts/sync_bitdefender_criteria.py --cache <dir>` regenerates it from Bitdefender's "Detection and exclusion criteria for Basic rules" page (`--offline` reads only the cached page; `--check` compares and makes no request); never hand-edit. The page is all rights reserved: facts only, no sentence copied (`catalogs/bitdefender/NOTICE`). Every note in the page's table must match a pattern in the script or be listed in `IGNORED_NOTES` with its reason, so a page change fails the run until someone reads it. `closed` marks the four targets whose field list bitdefender-1.0 states (process, file, connection, registry): an unknown field there is `bitdefender_criterion_field` as an error, on another target a warning. `crates/opentide-tide/tests/bitdefender_spec.rs` holds the catalogue to the spec's EDR and enum tables (`testdata/conformance/bitdefender/spec-tables.md`, pasted verbatim) and the spec's fixtures; when the spec changes, paste its new sections there. The checks themselves are `crates/opentide-tide/src/bitdefender.rs`.
+
 ## Tide objects
 
 `scripts/sync_opentide_schemas.py` runs opentide's own generator (`python -m opentide.generation.lsp_catalog`) and writes `catalogs/tide/generated/`, the reference schemas and the highlights key list; it needs an opentide that ships the generator (`uv run --project ../opentide python scripts/sync_opentide_schemas.py` from a checkout). Rows are keyed by schema id; lookups resolve an object's `metadata.schema`, a bare family or unknown revision taking the newest, and a family-keyed catalog (an older workspace one) applying to every revision. Required fields, closed objects and legacy keys come from the catalog: never hard-code a revision check in Rust. `scripts/requirements-opentide.txt` pins the opentide release `pydantic_object_issues.py` uses as its oracle. Pydantic is the CLI authority. The LSP emits the same `{code, field_path, severity}` with ranges. `scripts/pydantic_object_issues.py` is the comparison source. Do not re-encode the object schema as hand-written Rust structs when the generated field catalog already has the answer.
