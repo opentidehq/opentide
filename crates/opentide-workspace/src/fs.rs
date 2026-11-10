@@ -4,6 +4,10 @@
 //! so the language server can serve its open buffers, a test can build a
 //! workspace in memory ([`MemoryFs`]), and every read is counted in one
 //! place. [`OsFs`] is the disk.
+//!
+//! The commands that change files (`validate --fix`, `lint --fix`) write
+//! through [`WriteFs`]: a file is replaced only while it still holds what was
+//! read, through a temporary file renamed over it.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::ffi::OsString;
@@ -67,6 +71,17 @@ pub trait FileSystem: Send + Sync {
     /// exist (yet) still resolves, lexically past its last existing parent.
     fn resolve(&self, path: &Path) -> PathBuf;
 
+    /// What `path` holds now, as cheaply as the filesystem can tell: two
+    /// equal stamps mean the file did not change (`--watch`'s snapshot).
+    ///
+    /// # Errors
+    ///
+    /// The file cannot be examined.
+    fn stamp(&self, path: &Path) -> io::Result<Stamp> {
+        let bytes = self.read(path)?;
+        Ok(Stamp::of_bytes(&bytes))
+    }
+
     /// Whether `path` is a directory.
     fn is_dir(&self, path: &Path) -> bool {
         matches!(self.kind(path), Ok(EntryKind::Dir))
@@ -78,6 +93,88 @@ pub trait FileSystem: Send + Sync {
     }
 }
 
+/// What a file held when it was looked at: on disk its modification time
+/// and size, in memory a digest of its bytes and their length.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Stamp {
+    /// Nanoseconds since the epoch (disk) or a digest of the bytes (memory).
+    pub version: u128,
+    /// The size in bytes.
+    pub len: u64,
+}
+
+impl Stamp {
+    /// The stamp of `bytes`, by content.
+    pub fn of_bytes(bytes: &[u8]) -> Self {
+        use std::hash::{Hash, Hasher};
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        bytes.hash(&mut hasher);
+        Self {
+            version: u128::from(hasher.finish()),
+            len: bytes.len() as u64,
+        }
+    }
+}
+
+/// Why a file was not written.
+#[derive(Debug, thiserror::Error)]
+pub enum WriteError {
+    /// It no longer holds the text the change was made from.
+    #[error("it changed since it was read; run opentide validate --fix again")]
+    Changed,
+    /// The filesystem refused (a folder that cannot be written, a full disk).
+    #[error("{0}")]
+    Io(#[from] io::Error),
+}
+
+/// The write side of a filesystem: what `validate --fix` and `lint --fix`
+/// change.
+pub trait WriteFs: FileSystem {
+    /// Replaces the bytes of the file `path` names (its symbolic links
+    /// followed, so a link keeps pointing at the file it names) with `after`,
+    /// only while it still holds `before`. The new bytes go to a temporary
+    /// file in the same folder, given the original's permissions, which is
+    /// then renamed over it: a write that fails partway leaves the original
+    /// whole.
+    ///
+    /// # Errors
+    ///
+    /// [`WriteError::Changed`] when the file no longer holds `before`;
+    /// [`WriteError::Io`] when it cannot be read or written.
+    fn replace(&self, path: &Path, before: &[u8], after: &[u8]) -> Result<(), WriteError>;
+
+    /// Renames the file `from` to `to`. A rename that only changes the case
+    /// of the name goes through a temporary name, which a case-insensitive
+    /// filesystem needs.
+    ///
+    /// # Errors
+    ///
+    /// The rename failed.
+    fn rename_file(&self, from: &Path, to: &Path) -> io::Result<()>;
+
+    /// Whether `a` and `b` name the same file (on a case-insensitive
+    /// filesystem, `Rule.yaml` and `rule.yaml` do).
+    fn same_file(&self, a: &Path, b: &Path) -> bool;
+}
+
+/// The suffix of the temporary name a case-only rename passes through.
+pub const CASE_RENAME_SUFFIX: &str = ".opentide-case-rename";
+
+/// Whether `dest` exists only because it is `src` under another case
+/// (`_case_only_rename`): on macOS and Windows `Phishing.yaml` and
+/// `phishing.yaml` are one file.
+pub fn case_only_rename(fs: &dyn WriteFs, src: &Path, dest: &Path) -> bool {
+    let (Some(from), Some(to)) = (src.file_name(), dest.file_name()) else {
+        return false;
+    };
+    let (from, to) = (from.to_string_lossy(), to.to_string_lossy());
+    if from == to || from.to_lowercase() != to.to_lowercase() {
+        return false;
+    }
+    let staged = src.with_file_name(format!("{from}{CASE_RENAME_SUFFIX}"));
+    fs.kind(dest).is_ok() && fs.same_file(src, dest) && fs.kind(&staged).is_err()
+}
+
 /// The disk.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct OsFs;
@@ -85,6 +182,19 @@ pub struct OsFs;
 impl FileSystem for OsFs {
     fn read(&self, path: &Path) -> io::Result<Vec<u8>> {
         std::fs::read(path)
+    }
+
+    fn stamp(&self, path: &Path) -> io::Result<Stamp> {
+        let metadata = std::fs::metadata(path)?;
+        let version = metadata
+            .modified()
+            .ok()
+            .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+            .map_or(0, |since| since.as_nanos());
+        Ok(Stamp {
+            version,
+            len: metadata.len(),
+        })
     }
 
     fn kind(&self, path: &Path) -> io::Result<EntryKind> {
@@ -135,6 +245,66 @@ impl FileSystem for OsFs {
             }
         }
         resolved
+    }
+}
+
+impl WriteFs for OsFs {
+    fn replace(&self, path: &Path, before: &[u8], after: &[u8]) -> Result<(), WriteError> {
+        use std::io::Write as _;
+        let target = std::fs::canonicalize(path).map(strip_verbatim)?;
+        if std::fs::read(&target)? != before {
+            return Err(WriteError::Changed);
+        }
+        let folder = target.parent().unwrap_or_else(|| Path::new("."));
+        let name = target
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        // A folder the user cannot write refuses the temporary file itself.
+        let mut temporary = tempfile::Builder::new()
+            .prefix(&format!(".{name}."))
+            .suffix(".tmp")
+            .tempfile_in(folder)?;
+        temporary.write_all(after)?;
+        temporary.as_file().sync_all()?;
+        let permissions = std::fs::metadata(&target)?.permissions();
+        std::fs::set_permissions(temporary.path(), permissions)?;
+        // Dropped on an error, the temporary file is deleted.
+        temporary
+            .persist(&target)
+            .map_err(|error| WriteError::Io(error.error))?;
+        Ok(())
+    }
+
+    fn rename_file(&self, from: &Path, to: &Path) -> io::Result<()> {
+        if !case_only_rename(self, from, to) {
+            return std::fs::rename(from, to);
+        }
+        let name = from
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let staged = from.with_file_name(format!("{name}{CASE_RENAME_SUFFIX}"));
+        std::fs::rename(from, &staged)?;
+        std::fs::rename(&staged, to)
+    }
+
+    fn same_file(&self, a: &Path, b: &Path) -> bool {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt as _;
+            match (std::fs::metadata(a), std::fs::metadata(b)) {
+                (Ok(a), Ok(b)) => a.dev() == b.dev() && a.ino() == b.ino(),
+                _ => false,
+            }
+        }
+        #[cfg(not(unix))]
+        {
+            match (std::fs::canonicalize(a), std::fs::canonicalize(b)) {
+                (Ok(a), Ok(b)) => a == b,
+                _ => false,
+            }
+        }
     }
 }
 
@@ -307,7 +477,43 @@ fn not_found(path: &Path) -> io::Error {
     )
 }
 
+impl WriteFs for MemoryFs {
+    fn replace(&self, path: &Path, before: &[u8], after: &[u8]) -> Result<(), WriteError> {
+        let path = normalise(path);
+        let mut tree = self.tree_mut();
+        match tree.files.get_mut(&path) {
+            Some(bytes) if bytes.as_slice() == before => {
+                *bytes = after.to_vec();
+                Ok(())
+            }
+            Some(_) => Err(WriteError::Changed),
+            None => Err(WriteError::Io(not_found(&path))),
+        }
+    }
+
+    fn rename_file(&self, from: &Path, to: &Path) -> io::Result<()> {
+        if self.is_file(from) && self.rename(from, to) {
+            Ok(())
+        } else {
+            Err(not_found(from))
+        }
+    }
+
+    fn same_file(&self, a: &Path, b: &Path) -> bool {
+        normalise(a) == normalise(b) && self.kind(a).is_ok()
+    }
+}
+
 impl FileSystem for MemoryFs {
+    fn stamp(&self, path: &Path) -> io::Result<Stamp> {
+        let path = normalise(path);
+        let tree = self.tree();
+        tree.files
+            .get(&path)
+            .map(|bytes| Stamp::of_bytes(bytes))
+            .ok_or_else(|| not_found(&path))
+    }
+
     fn read(&self, path: &Path) -> io::Result<Vec<u8>> {
         let path = normalise(path);
         *self
@@ -426,6 +632,92 @@ mod tests {
             fs.resolve(Path::new("/ws/a/../b/./c")),
             PathBuf::from("/ws/b/c")
         );
+    }
+
+    #[test]
+    fn memory_fs_replaces_only_what_it_still_holds() {
+        let fs = MemoryFs::new();
+        fs.write("/w/a.yaml", "a: 1\n");
+        let stamp = fs.stamp(Path::new("/w/a.yaml")).unwrap();
+        assert!(matches!(
+            fs.replace(Path::new("/w/a.yaml"), b"a: 2\n", b"a: 3\n"),
+            Err(WriteError::Changed)
+        ));
+        fs.replace(Path::new("/w/a.yaml"), b"a: 1\n", b"a: 3\n")
+            .unwrap();
+        assert_eq!(fs.read(Path::new("/w/a.yaml")).unwrap(), b"a: 3\n");
+        assert_ne!(fs.stamp(Path::new("/w/a.yaml")).unwrap(), stamp);
+        assert!(matches!(
+            fs.replace(Path::new("/w/none.yaml"), b"", b""),
+            Err(WriteError::Io(_))
+        ));
+        fs.rename_file(Path::new("/w/a.yaml"), Path::new("/w/b.yaml"))
+            .unwrap();
+        assert!(fs.is_file(Path::new("/w/b.yaml")));
+        assert!(
+            fs.rename_file(Path::new("/w/a.yaml"), Path::new("/w/c.yaml"))
+                .is_err()
+        );
+        assert!(fs.same_file(Path::new("/w/b.yaml"), Path::new("/w/./b.yaml")));
+        assert!(!fs.same_file(Path::new("/w/b.yaml"), Path::new("/w/B.yaml")));
+        assert!(!case_only_rename(
+            &fs,
+            Path::new("/w/b.yaml"),
+            Path::new("/w/B.yaml")
+        ));
+    }
+
+    #[test]
+    fn os_fs_replaces_through_a_temporary_file_keeping_the_mode_and_links() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("rule.yaml");
+        std::fs::write(&file, "severity: high\n").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt as _;
+            std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o640)).unwrap();
+        }
+        #[cfg(unix)]
+        let link = {
+            let link = dir.path().join("link.yaml");
+            std::os::unix::fs::symlink(&file, &link).unwrap();
+            link
+        };
+        #[cfg(not(unix))]
+        let link = file.clone();
+        let fs = OsFs;
+        let stamp = fs.stamp(&file).unwrap();
+        assert_eq!(stamp.len, 15);
+        // Saved since it was read: left alone.
+        assert!(matches!(
+            fs.replace(&link, b"severity: low\n", b"severity: High\n"),
+            Err(WriteError::Changed)
+        ));
+        fs.replace(&link, b"severity: high\n", b"severity: High\n")
+            .unwrap();
+        assert_eq!(std::fs::read(&file).unwrap(), b"severity: High\n");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt as _;
+            assert!(std::fs::symlink_metadata(&link).unwrap().is_symlink());
+            let mode = std::fs::metadata(&file).unwrap().permissions().mode();
+            assert_eq!(mode & 0o777, 0o640);
+        }
+        let names: Vec<String> = std::fs::read_dir(dir.path())
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .filter(|name| name.starts_with(".rule.yaml."))
+            .collect();
+        assert!(names.is_empty(), "{names:?}");
+        let moved = dir.path().join("moved.yaml");
+        fs.rename_file(&file, &moved).unwrap();
+        assert!(moved.is_file() && !file.exists());
+        assert!(fs.same_file(&moved, &moved));
+        assert!(!fs.same_file(&moved, &dir.path().join("none.yaml")));
+        assert!(matches!(
+            fs.replace(&dir.path().join("none.yaml"), b"", b""),
+            Err(WriteError::Io(_))
+        ));
     }
 
     #[test]

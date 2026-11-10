@@ -133,7 +133,7 @@ def _tenants(configured: Any) -> list[dict[str, Any]]:
     """
     import os
 
-    from opentide.models.deployment_enums import DEPLOYABLE_STRATEGIES, parse_strategies
+    from opentide._models.deployment_enums import DEPLOYABLE_STRATEGIES, parse_strategies
     from opentide.platforms.config import setup_variables
 
     tenants: list[dict[str, Any]] = []
@@ -437,7 +437,7 @@ def _vocab_overview(name: str, definition: VocabularyDefinition) -> dict[str, An
 
 def _vocab_detail(name: str, definition: VocabularyDefinition) -> dict[str, Any]:
     """Everything ``info vocab <name>`` reports about one vocabulary."""
-    from opentide.models.vocab_pins import all_pins
+    from opentide._models.vocab_pins import all_pins
 
     revisions = _vocab_revisions(definition)
     defined = {item["revision"] for item in revisions}
@@ -476,9 +476,9 @@ def _field_is_scoped(schema_id: str, path: str) -> bool | None:
     (``objective::1.1``); the family's latest registered model stands in.
     ``None`` when no model declares the path.
     """
-    from opentide.models.base import field_json_schema_extra
-    from opentide.models.schema_registry import latest_model_for_family, resolve_model
-    from opentide.models.version import SchemaVersion
+    from opentide._models.base import field_json_schema_extra
+    from opentide._models.schema_registry import latest_model_for_family, resolve_model
+    from opentide._models.version import SchemaVersion
 
     try:
         model: type[Any] | None = resolve_model(schema_id)
@@ -508,7 +508,7 @@ def _model_field(model: type[Any], name: str) -> Any:
 
 def _nested_model(annotation: Any) -> type[Any] | None:
     """The Tide model a field holds, looking through ``list[...]`` and ``... | None``."""
-    from opentide.models.base import TideModel
+    from opentide._models.base import TideModel
 
     if isinstance(annotation, type) and issubclass(annotation, TideModel):
         return annotation

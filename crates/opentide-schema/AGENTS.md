@@ -29,7 +29,7 @@ depends on opentide-core (`codes`, `suggest`). Not published yet (`publish = fal
 | `src/migration.rs` | Forward one-step `From` impls (`From<RuleV1_0> for RuleV1_1`), `TideObject::step`, `migrate_to`, `into_newest`, `path` (`SchemaVersionChain`), `stamp_schema_identifier`; `migration/tests.rs`: the migration properties |
 | `src/revision.rs` | `revisions!`: one struct per revision, shared fields written once, in groups `@0,` … `@3,` around overridden fields |
 | `src/sample.rs` | Every derive and field convention on a two-revision family; not part of the model |
-| `src/generate/` | The generated artifacts (UC-1.8, #814): `json` (keys in insertion order, written as Python's `json.dumps(indent=4)`), `annotate` (`schema_annotations.py`, its patterns on `fancy-regex`), `router` (`opentide.schema.json`), `models` (each model's field order, from its derived `Deserialize`: the schemas schemars writes keep their keys sorted), `template` (`pydantic_skeleton.py`, walking the schemars schema), `snippets` (`vscode_snippets.py`), `workspace` (the `templates` and `snippets` phases and the router from a resolved configuration), `tests.rs` (the committed platform templates and the tide-corpus golden templates) |
+| `src/generate/` | The generated artifacts (UC-1.8, #814): `json` (keys in insertion order, written as Python's `json.dumps(indent=4)`), `annotate` (`schema_annotations.py`, its patterns on `fancy-regex`), `router` (`opentide.schema.json`), `models` (each model's field order, from its derived `Deserialize`: the schemas schemars writes keep their keys sorted), `template` (`pydantic_skeleton.py`, walking the schemars schema), `snippets` (`vscode_snippets.py`), `schema` (UC-1.8b, #900: each revision's editor schema and `visibility.toml`'s, schemars' schema with opentide's `Transform`s: root extras, pins, platform recomposition, vocabulary and configured enums with their dropdowns and search hints, closure, the pinned identifier, `tide.*` stripped), `configuration` (each configuration file's schema from the configuration models' derived `JsonSchema`, and the router), `workspace` (the `schemas`, `templates` and `snippets` phases from a resolved configuration), `tests.rs` (the committed platform templates and the tide-corpus golden templates) |
 | `src/objects/` | The object models (UC-1.3, #809): `metadata` (`ObjectMetadata`, `RuleMetadata`, `ObjectReferences`, `Organisation`), `response`, `threat` (`ThreatVectorV1_0`), `objective` (`ObjectiveV1_0`), `rule` (`RuleV1_0`, `RuleV1_1`, `RuleConfigurations`), `role` (`FieldRole`), `any` (an unchecked value), `checks` (the validators, run by the conversion and by garde), `tests.rs` (the ported `tests/test_models/` tests) |
 | `src/objects/platform/` | The platform blocks (UC-1.4, #810): one module per platform with its nested models (`platform_block!` puts `PlatformConfigBase`'s fields first), `PLATFORM_CONFIG_MODELS` (closed), `LEGACY_KEYS` (the oracle declares none to tolerate), the named checks `elastic_rule_shape` and `sysdig_rule_shape` (`NAMED_CHECKS`, each block's before-validator: codes judged on the raw block, one `value_error` naming them), `QueryText`, the Sentinel ATT&CK v18 and duration checks, `durations` (Elastic; `opentide_core::duration` re-exported), `falco_text` (the oracle's `resolve_list` and macro scan; Falco's terms are `opentide_core::falco`'s), `schema` (`platform_schema.py`), `deprecation` (`deprecated_field`), `table.rs` (`tests/oracle/platform_cases.toml` against the oracle) and `tests.rs` (the ported Python tests) |
 | `tests/platform.rs` | Every block of `tests/fixtures/sysdig` and `tests/fixtures/elastic` |
@@ -46,7 +46,9 @@ depends on opentide-core (`codes`, `suggest`). Not published yet (`publish = fal
 | `tests/roundtrip.rs` | YAML → struct → YAML byte for byte; optional, defaulted, alias, closure, pins |
 | `tests/json_schema.rs` | The derived schema (insta snapshot) and its `tide.*` keys |
 | `tests/adr.rs` | ADR 0001's key table matches `keys::ALL` |
+| `src/python.rs` | Feature `python` (UC-1.9, #815, [ADR 0011](../../docs/internal/adr/0011-python-models.md)): the Pydantic methods of every class (`py_models!`: `model_validate`, `model_dump`, `model_copy`, `model_json_schema`, `__hash__`, `__repr__`, pickling, the serialised names as aliases), the field types that are not classes (`py_value!`, `py_union!`), `ValidationError`, and the `models` module the binding exports as `opentide._native.models`. Feature `stubs`: the type hints of PyO3's introspection, for `cargo xtask stubs` |
 | `tests/python.rs` | Feature `python`: the class from Python, frozen, attribute access |
+| `tests/python_models.rs` | Feature `python`: the models module in an embedded CPython: names, identifiers, validation and its errors, dumps, aliases, frozen, equality, hashing, pickling, copies |
 | `tests/ui.rs`, `tests/ui/` | Feature `python`: compile-fail cases (trybuild), e.g. no generic `#[pyclass]` |
 
 ## Invariants
@@ -56,6 +58,12 @@ depends on opentide-core (`codes`, `suggest`). Not published yet (`publish = fal
   constraints, metadata keys. A difference is an approved diff (`tests/golden/APPROVED_DIFFS.toml`)
   or a bug.
 - One concrete struct per revision; no generic model (`#[pyclass]` cannot take one).
+- Every model is a `#[pyclass(frozen, get_all, eq, name = "<Pydantic name>", module =
+  "opentide._native.models")]` behind `python`, listed in `python.rs` (`py_models!` and the
+  `models` module); a field's Rust name is the Pydantic attribute (`r#type`, not `kind`), and a
+  free-form mapping is an `IndexMap`, in the document's order as a Python `dict` is.
+  `tests/test_models/test_native_models.py` compares each class with its Pydantic class, and
+  `cargo xtask stubs` regenerates the stub after a change (ADR 0011).
 - A `tide.*` key keeps its name and value: `#[schemars(extend("tide.…" = …))]`, and the key is in
   `keys::ALL`. A new key is a new row in the ADR's table and in `keys.rs` (`tests/adr.rs` checks).
 - Identifiers stay `String`, checked where the oracle checks them (`invalid_uuid` is a workspace
@@ -92,9 +100,14 @@ depends on opentide-core (`codes`, `suggest`). Not published yet (`publish = fal
   oracle), and `xtask/tests/sysdig_engines.rs` runs both on `tests/oracle/platform_cases.toml`'s
   Sysdig cases and compares the codes, a difference by design listed there with its reason. The
   language server's walk goes when it reads this model (UC-2.6, #821).
-- A generated artifact is byte for byte what the oracle writes: `cargo xtask codegen --check`
-  compares the templates, snippets and router schema with every golden recording of `opentide
-  generate`. A model a template or schema reaches is listed in `generate::models` (its field
+- A generated template, snippet file or router schema is byte for byte what the oracle writes:
+  `cargo xtask codegen --check` compares them with every golden recording of `opentide
+  generate`. A generated JSON Schema (each revision's, `visibility.toml`'s, the configuration
+  schemas) is compared by verdict instead (UC-1.8b, #900): it must accept and refuse every corpus
+  object, configuration file and fault as the oracle's does; its text (titles, descriptions, key
+  order, `type` arrays for Pydantic's `anyOf` with `null`, the dropdown Markdown) is schemars' and
+  is listed in `tests/golden/APPROVED_DIFFS.toml`. Never port Pydantic's schema pipeline to close
+  a text difference; adapt schemars' output with a `Transform`. A model a template or schema reaches is listed in `generate::models` (its field
   order); `generate::tests` fails on one it does not list. A Pydantic `Literal` is written in place
   (`literal_enum!`'s `inline_schema`), as Pydantic writes it: the template offers its first value.
 - `metadata.schema` is read through `revisions` (`select`, `read`), never matched by hand; a new

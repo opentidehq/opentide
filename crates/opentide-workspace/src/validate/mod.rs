@@ -165,6 +165,8 @@ pub struct QueryObject<'a> {
     pub uuid: &'a str,
     /// Its family.
     pub family: &'a str,
+    /// Its text, as the index read it (after a byte-order mark).
+    pub source: &'a str,
 }
 
 /// What the queries check found.
@@ -179,11 +181,19 @@ pub struct QueryFindings {
     pub queries: usize,
 }
 
-/// The offline query analysis, which the host supplies (`opentide-analysis`
-/// sits above this crate; UC-2.5, #820, wires it here).
+/// The offline query analysis, which the host supplies: the query engines
+/// sit above this crate (`opentide-cli`'s `queries::EngineQueries`, UC-2.5,
+/// #820).
 pub trait QueryCheck: Sync {
-    /// The findings of every query `objects` carry.
-    fn check(&self, objects: &[QueryObject<'_>], as_warnings: bool) -> QueryFindings;
+    /// The findings of every query `objects` carry, in `ws` (its root, its
+    /// configuration files): errors placed by the engine (`line` set), as
+    /// warnings when `as_warnings`.
+    fn check(
+        &self,
+        ws: &Workspace,
+        objects: &[QueryObject<'_>],
+        as_warnings: bool,
+    ) -> QueryFindings;
 }
 
 /// What a `validate` run does.
@@ -750,10 +760,11 @@ pub fn validate(ws: &Workspace, options: &Options<'_>) -> Validation {
                 path: subject.path,
                 uuid: subject.uuid,
                 family: subject.family,
+                source: subject.document.source(),
             })
             .collect();
         if let Some(query_check) = options.query_check {
-            let found = query_check.check(&objects, options.queries == QueriesMode::Warn);
+            let found = query_check.check(ws, &objects, options.queries == QueriesMode::Warn);
             // A query the schema check rejects (an empty one) is its finding, once.
             let rejected: BTreeSet<(Option<PathBuf>, Vec<String>)> = issues
                 .iter()
@@ -833,12 +844,11 @@ pub fn validate(ws: &Workspace, options: &Options<'_>) -> Validation {
         files: files_with(Severity::Error),
         warning_files: files_with(Severity::Warning),
         queries: report.stats.queries_checked,
-        fixable: report
-            .issues
-            .iter()
-            .chain(&report.warnings)
-            .filter(|item| item.fix.as_ref().is_some_and(|fix| fix.safe))
-            .count(),
+        // What `--fix` would apply: the safe fixes that still fit their file
+        // (`plan_fixes`), not every finding that offers one.
+        fixable: crate::fix::plan(fs, report.issues.iter().chain(&report.warnings))
+            .changes
+            .len(),
     };
     Validation {
         checks: check_list,

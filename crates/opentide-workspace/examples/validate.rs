@@ -5,8 +5,8 @@
 //!
 //! Options: `--check NAME`, `--type FAMILY`, `--uuid UUID`, `--file PATH`
 //! (each repeatable but `--check`), `--strict`, `--queries error|warn|off`.
-//! The queries check needs the query engines (UC-2.5, #820): it reports
-//! nothing here.
+//! The queries check needs the query engines, which sit above this crate
+//! (`opentide_cli::queries`, UC-2.5, #820): it reports nothing here.
 
 use std::path::PathBuf;
 use std::process::ExitCode;

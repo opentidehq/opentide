@@ -38,6 +38,7 @@ def _plain(text: str) -> str:
 _ENGINE_PREFIXES = (
     "opentide.registry",
     "opentide.core.registry",
+    "opentide._models",
     "opentide.models",
     "opentide.platforms",
     "opentide.cli.services",
@@ -271,6 +272,7 @@ _ENGINE = (
     "opentide.registry",
     "opentide.core.registry",
     "opentide.core.index_manager",
+    "opentide._models",
     "opentide.models",
     "opentide.platforms",
     "opentide.deployment",

@@ -19,7 +19,7 @@ if sys.version_info >= (3, 11):
 else:
     import tomli as tomllib
 
-from opentide.models.visibility import (
+from opentide._models.visibility import (
     COLUMN_TYPES,
     LEGACY_DATASET_KEYS,
     VisibilityConfig,

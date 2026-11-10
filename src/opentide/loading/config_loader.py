@@ -1,6 +1,6 @@
 """Configuration loaders for deployment and visibility settings.
 
-Thin adapters over `opentide.models.configuration`: each validates with the
+Thin adapters over `opentide._models.configuration`: each validates with the
 file's Pydantic model, then hands callers the dataclasses they already use.
 """
 
@@ -11,19 +11,19 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from opentide.core.logging import get_logger
-from opentide.models.configuration.deployment import (
+from opentide._models.configuration.deployment import (
     DeploymentConfiguration,
     DeploymentResponder,
     DeploymentStatusEntry,
 )
-from opentide.models.configuration.loading import (
+from opentide._models.configuration.loading import (
     ConfigurationError,
     error_locations,
     validate_configuration,
 )
-from opentide.models.system_config import ConfigurationModels
-from opentide.models.visibility import VisibilityConfig
+from opentide._models.system_config import ConfigurationModels
+from opentide._models.visibility import VisibilityConfig
+from opentide.core.logging import get_logger
 
 logger = get_logger(__name__)
 

@@ -16,7 +16,7 @@ from typing import Any
 
 import pytest
 
-from opentide.models.system_config import ConfigurationModels as C
+from opentide._models.system_config import ConfigurationModels as C
 from opentide.query.models import QueryRefused, QueryRequest, QueryTimedOut, TimeWindow
 
 WINDOW = TimeWindow(

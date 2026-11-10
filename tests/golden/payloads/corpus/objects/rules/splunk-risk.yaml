@@ -1,0 +1,32 @@
+name: Splunk Risk
+
+metadata:
+  uuid: 00000000-0000-4000-8005-000000000306
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+
+description: Splunk Risk for the compile corpus.
+
+response:
+  alert_severity: Medium
+
+configurations:
+  splunk:
+    status: PRODUCTION
+    query: index=main risk
+    scheduling:
+      schedule:
+        frequency: 1d
+        custom_time: 06h30
+      timerange:
+        earliest: -2d@d
+    actions:
+      risk:
+        message: Risk on $host$
+        risk_objects:
+          - field: host
+            type: system
+            score: 20

@@ -267,8 +267,8 @@ class RegistryBuilder:
         return json_index
 
     def _load_metaschemas(self, metaschemas: dict[str, str]) -> dict[str, Any]:
+        from opentide._models.schema_registry import models_for_family
         from opentide.generation.pydantic_metaschema import build_schema_source_for_identifier
-        from opentide.models.schema_registry import models_for_family
 
         result: dict[str, Any] = {}
         for family in metaschemas:
@@ -302,9 +302,9 @@ class RegistryBuilder:
         Both are filed under ``"systems"``, the key the platform block
         resolvers read.
         """
+        from opentide._models.platform import PLATFORM_CONFIG_MODELS
+        from opentide._models.platform_schema import platform_model_for_key
         from opentide.generation.pydantic_metaschema import build_platform_schema_source
-        from opentide.models.platform import PLATFORM_CONFIG_MODELS
-        from opentide.models.platform_schema import platform_model_for_key
         from opentide.package.paths import platform_template_name
 
         schemas: dict[str, Any] = {}

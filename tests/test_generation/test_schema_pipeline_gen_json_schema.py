@@ -231,7 +231,7 @@ def test_recomposition_overlay_describes_only_enabled_platforms() -> None:
     with (
         patch.object(sp, "_runtime_ready", True),
         patch.object(sp, "CONFIG_INDEX", config),
-        patch("opentide.models.platform_schema.platform_model_for_key") as mock_model,
+        patch("opentide._models.platform_schema.platform_model_for_key") as mock_model,
         patch(
             "opentide.generation.pydantic_metaschema.build_platform_schema_source",
             return_value={"properties": {}},

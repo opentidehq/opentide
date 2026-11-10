@@ -7,11 +7,11 @@ from typing import Literal, NoReturn
 import requests
 import structlog
 
+from opentide._models.system_config import ConfigurationModels
 from opentide.core.debug import DebugEnvironment
 from opentide.core.errors import Errors
 from opentide.core.registry import Opentide
 from opentide.core.time import format_utc_z, utc_now
-from opentide.models.system_config import ConfigurationModels
 from opentide.platforms.transport import TenantSession, tenant_tls_verify
 
 logger = structlog.get_logger("opentide.platforms.sentinel_one.client")

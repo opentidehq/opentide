@@ -6,7 +6,7 @@ from typing import Any, cast
 
 from pydantic.json_schema import CoreSchema, GenerateJsonSchema
 
-from opentide.models.base import TideModel
+from opentide._models.base import TideModel
 
 
 class TideSchemaGenerator(GenerateJsonSchema):

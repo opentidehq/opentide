@@ -1,0 +1,22 @@
+[platform]
+enabled = true
+
+[[tenants]]
+name = "eu"
+description = "EU-1 cloud"
+[tenants.setup]
+ssl = true
+api = "EU-1"
+customer_id = "ABCDEF0123-45"
+client_id = "$CS_CLIENT_ID"
+client_secret = "$CS_CLIENT_SECRET"
+
+[[tenants]]
+name = "us"
+description = "US-1 cloud"
+[tenants.setup]
+ssl = true
+api = "US-1"
+customer_id = "fedcba9876"
+client_id = "$CS_CLIENT_ID"
+client_secret = "$CS_CLIENT_SECRET"

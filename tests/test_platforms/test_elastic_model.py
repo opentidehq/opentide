@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 import yaml
 
-from opentide.models.platform import ElasticConfig
+from opentide._models.platform import ElasticConfig
 
 
 def test_elastic_config_omitted_status_is_rejected() -> None:

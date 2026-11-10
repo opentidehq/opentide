@@ -192,17 +192,17 @@ fn execute(case: &Case, ctx: &RunContext, root: &Path) -> Result<(Vec<u8>, Vec<u
         .envs(&env)
         .current_dir(root.join("ws").join(&case.cwd));
 
-    let mut readers: Vec<JoinHandle<Vec<u8>>> = Vec::new();
+    let mut streams: Vec<Stream> = Vec::new();
     let mut keep_open: Vec<fs::File> = Vec::new();
     let mut child = if case.mode == Mode::Human {
         spawn_on_terminals(
             &mut command,
             &case.stdin.input,
-            &mut readers,
+            &mut streams,
             &mut keep_open,
         )?
     } else {
-        spawn_on_pipes(&mut command, case, &mut readers)?
+        spawn_on_pipes(&mut command, case, &mut streams)?
     };
     let status = wait(&mut child, Duration::from_secs(case.timeout_secs));
     // Whatever the program left running in its session goes with it, so the
@@ -210,11 +210,8 @@ fn execute(case: &Case, ctx: &RunContext, root: &Path) -> Result<(Vec<u8>, Vec<u
     kill_session(&child);
     let status = status?;
     let mut outputs = Vec::new();
-    for reader in readers {
-        match reader.join() {
-            Ok(bytes) => outputs.push(bytes),
-            Err(_) => bail!("a stream reader panicked"),
-        }
+    for stream in streams {
+        outputs.push(stream.finish()?);
     }
     let mut outputs = outputs.into_iter();
     let stdout = outputs.next().unwrap_or_default();
@@ -226,11 +223,29 @@ fn execute(case: &Case, ctx: &RunContext, root: &Path) -> Result<(Vec<u8>, Vec<u
     Ok((stdout, stderr, code))
 }
 
-fn spawn_on_pipes(
-    command: &mut Command,
-    case: &Case,
-    readers: &mut Vec<JoinHandle<Vec<u8>>>,
-) -> Result<Child> {
+/// A stream of the program's output being read.
+enum Stream {
+    /// A pipe, read to its end.
+    Pipe(JoinHandle<Vec<u8>>),
+    /// A pseudo-terminal (human mode).
+    #[cfg(unix)]
+    Terminal(crate::golden::pty::Capture),
+}
+
+impl Stream {
+    /// Everything the program wrote; call it once the program is over.
+    fn finish(self) -> Result<Vec<u8>> {
+        match self {
+            Self::Pipe(reader) => reader
+                .join()
+                .map_err(|_| anyhow::anyhow!("a stream reader panicked")),
+            #[cfg(unix)]
+            Self::Terminal(capture) => capture.finish(),
+        }
+    }
+}
+
+fn spawn_on_pipes(command: &mut Command, case: &Case, streams: &mut Vec<Stream>) -> Result<Child> {
     let stdin = match case.stdin.kind {
         StdinKind::Pipe => Stdio::piped(),
         StdinKind::Null | StdinKind::Tty => Stdio::null(),
@@ -249,8 +264,8 @@ fn spawn_on_pipes(
     }
     let stdout = child.stdout.take().context("no stdout pipe")?;
     let stderr = child.stderr.take().context("no stderr pipe")?;
-    readers.push(spawn_reader(stdout));
-    readers.push(spawn_reader(stderr));
+    streams.push(Stream::Pipe(spawn_reader(stdout)));
+    streams.push(Stream::Pipe(spawn_reader(stderr)));
     Ok(child)
 }
 
@@ -266,25 +281,24 @@ fn spawn_reader<R: Read + Send + 'static>(mut stream: R) -> JoinHandle<Vec<u8>> 
 fn spawn_on_terminals(
     command: &mut Command,
     input: &str,
-    readers: &mut Vec<JoinHandle<Vec<u8>>>,
+    streams: &mut Vec<Stream>,
     keep_open: &mut Vec<fs::File>,
 ) -> Result<Child> {
-    use crate::golden::pty::{self, Role};
+    use crate::golden::pty::{self, Capture, Role};
     let stdin = pty::open(Role::Input)?;
-    let stdout = pty::open(Role::Output)?;
-    let stderr = pty::open(Role::Output)?;
+    let (stdout, stdout_slave) = Capture::start(pty::open(Role::Output)?)?;
+    let (stderr, stderr_slave) = Capture::start(pty::open(Role::Output)?)?;
     let child = command
         .stdin(Stdio::from(stdin.slave))
-        .stdout(Stdio::from(stdout.slave))
-        .stderr(Stdio::from(stderr.slave))
+        .stdout(Stdio::from(stdout_slave))
+        .stderr(Stdio::from(stderr_slave))
         .spawn()
         .context("start the engine")?;
-    // The command holds the slaves until it is dropped; a reader only sees the
-    // end of its terminal once no process holds the slave.
+    // The command holds the slaves until it is dropped: only the program and
+    // the captures may hold them while it runs.
     *command = Command::new("true");
-    for master in [stdout.master, stderr.master] {
-        readers.push(std::thread::spawn(move || read_terminal(master)));
-    }
+    streams.push(Stream::Terminal(stdout));
+    streams.push(Stream::Terminal(stderr));
     // The input, then the end-of-file character. The input master stays open
     // until the case is over: closing it hangs the terminal up.
     // Written on a thread of its own: a program that never reads would block
@@ -305,13 +319,14 @@ fn spawn_on_terminals(
 fn spawn_on_terminals(
     _command: &mut Command,
     _input: &str,
-    _readers: &mut Vec<JoinHandle<Vec<u8>>>,
+    _streams: &mut Vec<Stream>,
     _keep_open: &mut Vec<fs::File>,
 ) -> Result<Child> {
     bail!("human mode needs a pseudo-terminal: record the goldens on Linux")
 }
 
-/// Reads a terminal's master until the last slave closes (`EIO` on Linux).
+/// Reads a terminal's master until the last slave closes (`EIO` on Linux);
+/// the input terminal's echo-free drain.
 #[cfg(unix)]
 fn read_terminal(mut master: fs::File) -> Vec<u8> {
     let mut out = Vec::new();

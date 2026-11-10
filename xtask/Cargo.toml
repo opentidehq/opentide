@@ -24,6 +24,9 @@ opentide-compare.workspace = true
 opentide-schema = { workspace = true }
 # `registry diff` (UC-2.1, #816) and the `load` benchmark.
 opentide-workspace.workspace = true
+# `validate diff` and `corpus faults --only queries` (UC-2.5): the queries
+# check on the query engines, `opentide_cli::queries`.
+opentide-cli.workspace = true
 # xtask payloads (src/payloads/): the deploy compile against the oracle.
 opentide-compile.workspace = true
 schemars.workspace = true
@@ -38,7 +41,12 @@ glob = "0.3"
 similar = "2.7"
 tempfile = "3"
 # xtask vocab (src/vocab/) also reads opentide-schema's vocabularies.
-indexmap = "2"
+indexmap = { version = "2", features = ["serde"] }
+# xtask stubs (UC-1.9, #815): the stubs of opentide._native.models, read from
+# the introspection data PyO3 compiles into the extension (`maturin
+# generate-stubs` uses the same crate). Its version is PyO3's.
+pyo3-introspection = "0.30.1"
+jsonschema = { version = "0.61.1", default-features = false }
 
 [target.'cfg(unix)'.dependencies]
 # The pseudo-terminals of human mode and killing a case's process group.

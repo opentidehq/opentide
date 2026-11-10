@@ -10,8 +10,8 @@ import re
 from collections.abc import Sequence
 from typing import ClassVar
 
+from opentide._models.rule import DetectionRule
 from opentide.core.logging import get_logger
-from opentide.models.rule import DetectionRule
 from opentide.platforms.live_validation import LiveQueryValidator
 from opentide.query.models import LiveCheck, QueryRequest
 

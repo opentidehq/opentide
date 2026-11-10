@@ -35,14 +35,38 @@ pub enum Severity {
     Error,
     /// Fails it under `--strict`, unless its code is exempt.
     Warning,
+    /// A note: `lint`'s `info` (`metadata_recommended`, the queries check's
+    /// advice), which fails no run. Its JSON says `info`; its frame says
+    /// `note` ([`Severity::frame_label`]).
+    Info,
 }
 
 impl Severity {
-    /// `error` or `warning`.
+    /// `error`, `warning` or `info`: the JSON value.
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Error => "error",
             Self::Warning => "warning",
+            Self::Info => "info",
+        }
+    }
+
+    /// The word a code frame starts with: `error`, `warning`, or `note` for
+    /// [`Severity::Info`] (`error[code]:`, `note[code]:`).
+    pub const fn frame_label(self) -> &'static str {
+        match self {
+            Self::Info => "note",
+            other => other.as_str(),
+        }
+    }
+
+    /// A lint severity as `lint.toml` and lint's JSON write it.
+    pub fn parse(text: &str) -> Option<Self> {
+        match text {
+            "error" => Some(Self::Error),
+            "warning" => Some(Self::Warning),
+            "info" => Some(Self::Info),
+            _ => None,
         }
     }
 }
@@ -130,7 +154,7 @@ impl From<serde_json::Value> for ContextValue {
 pub type Context = IndexMap<String, ContextValue>;
 
 /// Replace the text from (`line`, `column`) up to (`end_line`, `end_column`).
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct TextEdit {
     /// 1-based.
     pub line: usize,
@@ -387,5 +411,21 @@ mod tests {
             serde_json::json!({"safe": true, "edits": [{"line": 3, "column": 6, "end_line": 3, "end_column": 11, "replacement": "amber"}]})
         );
         assert_eq!(value["severity"], "warning");
+    }
+
+    #[test]
+    fn info_is_written_info_and_framed_as_a_note() {
+        let note = Diagnostic::new("metadata_recommended", Severity::Info, "m");
+        let value: serde_json::Value = serde_json::to_value(&note).unwrap();
+        assert_eq!(value["severity"], "info");
+        assert_eq!(Severity::Info.frame_label(), "note");
+        assert_eq!(Severity::Error.frame_label(), "error");
+        assert_eq!(Severity::Warning.frame_label(), "warning");
+        for word in ["error", "warning", "info"] {
+            assert_eq!(Severity::parse(word).unwrap().as_str(), word);
+        }
+        assert_eq!(Severity::parse("note"), None);
+        let back: Severity = serde_json::from_str("\"info\"").unwrap();
+        assert_eq!(back, Severity::Info);
     }
 }

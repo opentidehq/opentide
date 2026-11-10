@@ -16,7 +16,7 @@ from urllib.parse import quote
 
 import requests
 
-from opentide.models.system_config import ConfigurationModels, SystemConfig
+from opentide._models.system_config import ConfigurationModels, SystemConfig
 from opentide.platforms.transport import TenantSession, not_json_detail
 from opentide.query.models import (
     QueryRefused,

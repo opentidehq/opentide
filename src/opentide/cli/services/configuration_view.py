@@ -763,10 +763,10 @@ def _findings(configs: Mapping[str, Any]) -> dict[str, list[ConfigFinding]]:
 def _platform_cards(
     configs: Mapping[str, Any], rules: Mapping[str, Any], environ: Mapping[str, str]
 ) -> list[PlatformCard]:
+    from opentide._models.deployment_enums import StatusStrategy, deployed_by
     from opentide.cli.services.catalog import _status_strategies
     from opentide.core.environment import env_reference
     from opentide.core.object_fields import as_body
-    from opentide.models.deployment_enums import StatusStrategy, deployed_by
 
     strategies = _status_strategies(configs.get("deployment") or {})
     platforms = configs.get("platforms") or {}

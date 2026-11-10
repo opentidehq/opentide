@@ -8,6 +8,7 @@ use std::fmt::Write as _;
 use indexmap::IndexMap;
 use opentide_schema::configuration::repr::float_text;
 use opentide_schema::node::{Node, Value};
+use serde::de::{Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 use serde::ser::{Serialize, SerializeMap, SerializeSeq, Serializer};
 
 /// An object: keys in insertion order.
@@ -158,6 +159,88 @@ impl Serialize for Json {
     }
 }
 
+/// Reads any serde value, keys in the order they come: a model serialised
+/// with `serde_json` reads back with its fields in declaration order.
+impl<'de> Deserialize<'de> for Json {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        deserializer.deserialize_any(JsonVisitor)
+    }
+}
+
+struct JsonVisitor;
+
+impl<'de> Visitor<'de> for JsonVisitor {
+    type Value = Json;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("a JSON value")
+    }
+
+    fn visit_unit<E>(self) -> Result<Json, E> {
+        Ok(Json::Null)
+    }
+
+    fn visit_none<E>(self) -> Result<Json, E> {
+        Ok(Json::Null)
+    }
+
+    fn visit_some<D: Deserializer<'de>>(self, deserializer: D) -> Result<Json, D::Error> {
+        Json::deserialize(deserializer)
+    }
+
+    fn visit_bool<E>(self, value: bool) -> Result<Json, E> {
+        Ok(Json::Bool(value))
+    }
+
+    fn visit_i64<E>(self, value: i64) -> Result<Json, E> {
+        Ok(Json::Int(value))
+    }
+
+    fn visit_u64<E>(self, value: u64) -> Result<Json, E> {
+        // An integer beyond i64 is a float, as JSON carries it.
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "only an integer beyond i64, which no model holds, is approximated"
+        )]
+        Ok(i64::try_from(value).map_or(Json::Float(value as f64), Json::Int))
+    }
+
+    fn visit_f64<E>(self, value: f64) -> Result<Json, E> {
+        Ok(Json::Float(value))
+    }
+
+    fn visit_str<E>(self, value: &str) -> Result<Json, E> {
+        Ok(Json::Str(value.to_owned()))
+    }
+
+    fn visit_string<E>(self, value: String) -> Result<Json, E> {
+        Ok(Json::Str(value))
+    }
+
+    fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Json, A::Error> {
+        let mut items = Vec::new();
+        while let Some(item) = seq.next_element()? {
+            items.push(item);
+        }
+        Ok(Json::Array(items))
+    }
+
+    fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Json, A::Error> {
+        let mut object = Object::new();
+        while let Some((key, value)) = map.next_entry::<String, Json>()? {
+            object.insert(key, value);
+        }
+        Ok(Json::Object(object))
+    }
+}
+
+impl Json {
+    /// `value` serialised with serde, fields in declaration order.
+    pub fn from_serialize<T: Serialize>(value: &T) -> Result<Self, serde_json::Error> {
+        serde_json::from_str(&serde_json::to_string(value)?)
+    }
+}
+
 impl From<&str> for Json {
     fn from(text: &str) -> Self {
         Self::Str(text.to_owned())
@@ -220,6 +303,30 @@ mod tests {
             json.to_compact(),
             r#"{"b":1,"a":["x",2.5,true,null],"1":"k"}"#
         );
+    }
+
+    #[test]
+    fn a_serialised_value_keeps_its_field_order() {
+        #[derive(serde::Serialize)]
+        struct Model {
+            zeta: u8,
+            alpha: Option<&'static str>,
+            nested: Vec<f64>,
+            big: u64,
+        }
+        let json = Json::from_serialize(&Model {
+            zeta: 1,
+            alpha: None,
+            nested: vec![0.5],
+            big: u64::MAX,
+        })
+        .unwrap();
+        assert_eq!(
+            json.to_compact(),
+            r#"{"zeta":1,"alpha":null,"nested":[0.5],"big":1.8446744073709552e+19}"#
+        );
+        let back: Json = serde_json::from_str(r#"{"b":[true,"x"],"a":{}}"#).unwrap();
+        assert_eq!(back.to_compact(), r#"{"b":[true,"x"],"a":{}}"#);
     }
 
     #[test]

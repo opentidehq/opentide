@@ -6,16 +6,16 @@ import json
 from pathlib import Path
 from typing import Any
 
+from opentide._models.base import TideModel
+from opentide._models.object_types import CORE_OBJECT_TYPES
+from opentide._models.schema_registry import identifiers_for_families, resolve_model
+from opentide._models.version import SchemaVersion
 from opentide.generation.model_json_schema import model_json_schema
 from opentide.generation.pydantic_metaschema import (
     build_model_schema_source,
 )
 from opentide.generation.schema_annotations import annotate_editor_schema
 from opentide.generation.schema_utils import strip_framework_keywords
-from opentide.models.base import TideModel
-from opentide.models.object_types import CORE_OBJECT_TYPES
-from opentide.models.schema_registry import identifiers_for_families, resolve_model
-from opentide.models.version import SchemaVersion
 from opentide.registry.artifacts import schema_artifact_name
 
 
@@ -99,14 +99,14 @@ def export_all_registered_schemas(
 # Back-compat names used by older callers.
 def generate_core_model_schema(model_key: str, *, enrich: bool = True) -> dict[str, Any]:
     """Generate JSON Schema for the latest model of a core object family."""
-    from opentide.models.schema_registry import latest_identifier
+    from opentide._models.schema_registry import latest_identifier
 
     return generate_schema_for_identifier(latest_identifier(model_key), enrich=enrich)
 
 
 def export_core_model_schema(model_key: str, output_path: Path) -> None:
     """Write JSON Schema for the latest core family model to disk."""
-    from opentide.models.schema_registry import latest_identifier
+    from opentide._models.schema_registry import latest_identifier
 
     export_schema_for_identifier(latest_identifier(model_key), output_path)
 

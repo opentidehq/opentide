@@ -19,8 +19,8 @@ def workspace_config(configs: dict[str, Any]) -> dict[str, Any]:
 
 def validate_paths_configuration(configs: dict[str, Any]) -> None:
     """Validate merged ``paths.toml`` against `PathsConfiguration`."""
-    from opentide.models.configuration.loading import validate_configuration
-    from opentide.models.configuration.paths import PathsConfiguration
+    from opentide._models.configuration.loading import validate_configuration
+    from opentide._models.configuration.paths import PathsConfiguration
 
     document = configs.get("paths")
     if isinstance(document, dict):

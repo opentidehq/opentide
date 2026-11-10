@@ -97,4 +97,4 @@ A `[[responders]]` entry that does not match its model is a warning: the loader 
 
 ## Source
 
-`src/opentide/models/configuration/`, `src/opentide/generation/configuration_schemas.py`, `src/opentide/validation/configuration.py`
+`src/opentide/_models/configuration/`, `src/opentide/generation/configuration_schemas.py`, `src/opentide/validation/configuration.py`

@@ -71,8 +71,14 @@ commands:
                  signals), as JSON, with the Python registry's (UC-2.1, #816)
   validate diff [--filter GLOB] [--keep DIR] [--show-approved]
                  run opentide-workspace's validate on every recorded
-                 `validate --json` case that only checks, and compare its
+                 `validate --json` case that checks or fixes, and compare its
                  report, checks and summary with the recording (UC-2.2, #817)
+                 and, for --fix and --fix --dry-run, what it fixed, the diff
+                 and the files written (UC-2.3, #818)
+  lint diff [--filter GLOB] [--keep DIR] [--show-approved]
+                 run opentide-workspace's lint on every recorded `lint --json`
+                 case and compare its findings, verdict, next steps and the
+                 files --fix renamed with the recording (UC-2.3, #818)
   codegen [--check]
                  write the artifacts generated from the Rust model (the
                  platform templates); --check compares them, and what
@@ -95,6 +101,10 @@ commands:
                  the object models against the oracle: their JSON Schemas,
                  and their verdict on every object file of every corpus
                  (UC-1.3, #809); `cargo xtask schema help` lists the options
+  stubs [--check] [--library FILE]
+                 generate src/opentide/_native/models.pyi, the stubs of the
+                 Tide models' Python classes, from the extension's
+                 introspection data (UC-1.9, #815); --check fails on drift
   help           print this message
 
 exit status: 0 passed, 1 check failed or not implemented yet,
@@ -175,6 +185,13 @@ fn main() -> ExitCode {
                 ExitCode::from(2)
             }
         },
+        "lint" => match xtask::lint::run(rest) {
+            Ok(code) => ExitCode::from(code),
+            Err(error) => {
+                eprintln!("xtask lint: {error:#}");
+                ExitCode::from(2)
+            }
+        },
         "codegen" => match xtask::codegen::run(rest) {
             Ok(code) => ExitCode::from(code),
             Err(error) => {
@@ -187,6 +204,7 @@ fn main() -> ExitCode {
         "payloads" => xtask::payloads::main(rest),
         "vocab" => xtask::vocab::main(rest),
         "schema" => xtask::schema::main(rest),
+        "stubs" => xtask::stubs::main(rest),
         "help" | "--help" | "-h" => {
             print!("{USAGE}");
             ExitCode::SUCCESS

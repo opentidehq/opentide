@@ -2,11 +2,11 @@ import os
 from enum import Enum, auto
 from typing import Any
 
-from opentide.core.logging import get_logger
-from opentide.core.registry import DebugHelpers
-from opentide.models.deployment_enums import (
+from opentide._models.deployment_enums import (
     StatusStrategy,
 )
+from opentide.core.logging import get_logger
+from opentide.core.registry import DebugHelpers
 
 logger = get_logger(__name__)
 

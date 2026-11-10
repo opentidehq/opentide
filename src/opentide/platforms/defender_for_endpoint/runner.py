@@ -5,8 +5,8 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import Any, ClassVar
 
+from opentide._models.system_config import ConfigurationModels, SystemConfig
 from opentide.core.time import format_utc_z, utc_now
-from opentide.models.system_config import ConfigurationModels, SystemConfig
 from opentide.platforms.transport import not_json_detail
 from opentide.query.models import QueryColumn, QueryRefused, QueryRequest, QueryResult
 from opentide.query.runner import QueryRunner, kql_with_limit

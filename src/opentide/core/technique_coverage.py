@@ -8,7 +8,7 @@ covers. ``opentide info catalog``, ``opentide info coverage``, the MCP
 they cannot disagree about what a rule covers.
 
 *Own* techniques are the ones the rule's model tags with
-:attr:`~opentide.models.base.FieldRole.TECHNIQUES` (``techniques``); *inherited*
+:attr:`~opentide._models.base.FieldRole.TECHNIQUES` (``techniques``); *inherited*
 ones come from its objective (through a signal's owner) or that objective's
 threats, minus the rule's own. "This rule lists the technique" is the stronger
 claim, so the two stay apart wherever coverage is reported.
@@ -20,8 +20,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from opentide._models.base import FieldRole
 from opentide.core.object_fields import as_body, object_role_values, technique_covers
-from opentide.models.base import FieldRole
 
 __all__ = [
     "RuleTechniques",

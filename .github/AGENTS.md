@@ -27,7 +27,7 @@ merge first; CodeQL and the oracles run there too). Jobs run in parallel; a new 
 | `test` | The Python matrix, **3.10–3.14**, coverage gate on 3.14 |
 | `cli-e2e`, `cli-windows-smoke`, `gitlab-ci-lint` | The sharded E2E suite, a Windows smoke run, the generated GitLab pipelines; none waits for `test` |
 | `golden-compare` | `cargo xtask golden check --engine compare` (UC-0.7): every golden case whose command has a Rust implementation, through this repository's CLI with `OPENTIDE_ENGINE=rust`, against the oracle's recording and `tests/golden/APPROVED_DIFFS.toml`; the `golden-compare` artifact holds the report |
-| `corpus` | The corpora of UC-0.6 against opentide 0.23.0 from PyPI, hash-pinned in its own venv: the heavy workspace has no finding, `cargo xtask corpus faults --check` (every fault kind reports exactly its codes), the code inventory and `COVERAGE.md` are current ([`tests/corpora/README.md`](../tests/corpora/README.md)); opentide-schema's object models against the oracle (UC-1.3): `corpus faults --check --engine rust --only objects` and `cargo xtask schema diff --against python` (JSON Schemas, findings on every corpus); `cargo xtask validate diff` (UC-2.2: opentide-workspace's validate against the recordings of `validate --json`, every difference approved, none stale) |
+| `corpus` | The corpora of UC-0.6 against opentide 0.23.0 from PyPI, hash-pinned in its own venv: the heavy workspace has no finding, `cargo xtask corpus faults --check` (every fault kind reports exactly its codes), the code inventory and `COVERAGE.md` are current ([`tests/corpora/README.md`](../tests/corpora/README.md)); opentide-schema's object models against the oracle (UC-1.3): `corpus faults --check --engine rust --only objects` and `cargo xtask schema diff --against python` (JSON Schemas, findings on every corpus); `cargo xtask validate diff` (UC-2.2: opentide-workspace's validate against the recordings of `validate --json`, every difference approved, none stale; UC-2.3: its `--fix` and `--fix --dry-run` cases too) and `cargo xtask lint diff` (UC-2.3: its lint against the recordings of `lint --json`) |
 | `clients`, `bench` | Informational (`continue-on-error`): real LSP clients (pytest-lsp, Neovim) and `cargo bench`; never required |
 
 Every Rust job installs the release `rust-toolchain.toml` pins (`rustup toolchain install` with no
@@ -175,8 +175,10 @@ together.
 - [`schema.yml`](workflows/schema.yml), on every pull request and push: `opentide-schema` (UC-1.1)
   built for the native target, abi3-py310 (feature `python`) and `wasm32-unknown-unknown`
   (feature `wasm`), clippy on the last two (ci.yml's engine jobs build no features), and its tests
-  with the Python class on CPython 3.10, the abi3 floor. Written before ci.yml became one
-  workflow; not a required check.
+  with the Python class on CPython 3.10, the abi3 floor; clippy with feature `stubs`, and
+  `cargo xtask stubs --check`, which fails when the generated `src/opentide/_native/models.pyi`
+  differs from the extension (UC-1.9). Written before ci.yml became one workflow; not a required
+  check.
 - [`oracle.yml`](workflows/oracle.yml) checks the query parsers against Kusto.Language, Splunk,
   Elasticsearch, Lucene, Kibana and Falco (`OPENTIDE_ORACLE_REQUIRED`) on every push to
   `development`, on an `engine-v*` tag, on a pull request that changes `crates/`, `grammars/`,

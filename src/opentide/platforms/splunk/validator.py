@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import ClassVar
 
-from opentide.models.system_config import ConfigurationModels, SystemConfig
+from opentide._models.system_config import ConfigurationModels, SystemConfig
 from opentide.platforms.live_validation import LiveQueryValidator
 
 

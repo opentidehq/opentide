@@ -7,11 +7,11 @@ from collections.abc import Mapping
 from types import SimpleNamespace
 from typing import Any
 
+from opentide._models.configuration.base import SSL_FALSE_WORDS, SSL_TRUE_WORDS
+from opentide._models.configuration.platforms import PlatformConfigurationBase
+from opentide._models.system_config import ConfigurationModels, SystemConfig
 from opentide.core.environment import ENV_REFERENCE, env_reference
 from opentide.core.index_manager import IndexManager
-from opentide.models.configuration.base import SSL_FALSE_WORDS, SSL_TRUE_WORDS
-from opentide.models.configuration.platforms import PlatformConfigurationBase
-from opentide.models.system_config import ConfigurationModels, SystemConfig
 
 
 def systems_raw_index() -> dict[str, dict[str, Any]]:
@@ -52,7 +52,7 @@ _DEPLOYMENT_KEY_REPLACEMENT = {
 
 def _tenant_targeting(data: dict[str, Any], *, where: str) -> dict[str, Any]:
     """Read a tenant's ``strategies`` and ``manual``; refuse the removed ``deployment`` key."""
-    from opentide.models.deployment_enums import parse_strategies
+    from opentide._models.deployment_enums import parse_strategies
 
     if "deployment" in data:
         value = str(data["deployment"]).strip().upper()
@@ -390,8 +390,8 @@ def validate_platform_config(system: str, raw: dict[str, Any]) -> PlatformConfig
     (an `opentide.platforms` entry point) owns its file, so only the built-in
     platforms are validated; the call returns `None` for any other.
     """
-    from opentide.models.configuration.loading import validate_configuration
-    from opentide.models.configuration.platforms import PLATFORM_CONFIGURATION_MODELS
+    from opentide._models.configuration.loading import validate_configuration
+    from opentide._models.configuration.platforms import PLATFORM_CONFIGURATION_MODELS
 
     model = PLATFORM_CONFIGURATION_MODELS.get(system)
     if model is None:

@@ -12,7 +12,17 @@ accepted = [
   "Unicode-DFS-2016",
   "Zlib",
   "EUPL-1.2",
+  # A public-domain dedication: notify, which --watch uses, is CC0-1.0 in every
+  # release. Approved for any crate by the maintainer (UC-2.3, #818).
+  "CC0-1.0",
 ]
 targets = ["x86_64-unknown-linux-gnu", "aarch64-apple-darwin", "x86_64-pc-windows-msvc"]
 ignore-build-dependencies = true
 ignore-dev-dependencies = true
+
+# One crate under a licence outside the list, never shipped: borrow-or-share
+# (MIT-0, MIT without the attribution clause) reaches only xtask, through the
+# jsonschema crate `cargo xtask codegen --check` validates the corpora with
+# (UC-1.8b, #900). deny.toml carries the same single-crate exception.
+[borrow-or-share]
+accepted = ["MIT-0"]

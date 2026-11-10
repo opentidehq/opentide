@@ -11,7 +11,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Set
 from typing import Any
 
-from opentide.models.platform import PLATFORM_CONFIG_MODELS
+from opentide._models.platform import PLATFORM_CONFIG_MODELS
 from opentide.platforms.enabled import (
     enable_platform_command,
     misspelled_enabled_key,

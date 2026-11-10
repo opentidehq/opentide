@@ -20,8 +20,8 @@ Each gate below runs in CI; the required ones are in `.github/AGENTS.md` ("Requi
 ## deny.toml
 
 **Licences.** The allow-list is `about.toml`'s, which cargo-about uses to render
-`THIRD-PARTY-LICENSES.html` for each release: permissive licences and EUPL-1.2 itself, every one
-compatible with distributing the engine under EUPL-1.2. `tests/test_ci/test_supply_chain.py` keeps
+`THIRD-PARTY-LICENSES.html` for each release: permissive licences, CC0-1.0 (a public-domain dedication; notify uses it) and EUPL-1.2 itself,
+every one compatible with distributing the engine under EUPL-1.2. `tests/test_ci/test_supply_chain.py` keeps
 the two lists equal. Only what ships is checked: dev-dependencies (test tools) never leave a
 checkout, and build dependencies (`cc`) run at build time and link nothing in, as `about.toml`'s
 `ignore-build-dependencies` says.
@@ -38,8 +38,10 @@ list (`scripts/engine/audit.py ignores`). Today there is one:
 left out, as cargo-deny leaves them out by default. These test tools duplicate a shipped crate,
 reviewed and harmless because none of them ships: `trycmd`'s `toml_edit` 0.25 (with `winnow` 1,
 `toml_datetime` 1 and `serde_spanned` 1) beside the engine's `toml` 0.8 and `toml_edit` 0.22;
-`trycmd`'s `shlex` 1 beside `cc`'s `shlex` 2; `insta`'s `similar` 2 beside `snapbox`'s `similar` 3;
-`tempfile`'s `bitflags` 2 beside `lsp-types`'s `bitflags` 1. `trybuild`'s `toml` 1 (with its `toml_*` crates) beside the engine's `toml` 0.8, for `opentide-schema`'s compile-fail tests. xtask, which is tooling and never ships, uses `rustix` (the golden runner's pseudo-terminals) and `tempfile` at run time, so `bitflags` 2 is in the checked graph through it alone: `skip` names `bitflags@2.13.2` with that reason. `openssl-sys`, `openssl` and
+`trycmd`'s `shlex` 1 beside `cc`'s `shlex` 2; `insta`'s `similar` 2 beside `snapbox`'s `similar` 3
+(the shipped `opentide-workspace`, for `validate --fix --dry-run`'s diff, and xtask use `similar` 2,
+so the shipped graph holds one `similar`);
+`tempfile`'s `bitflags` 2 beside `lsp-types`'s `bitflags` 1. `trybuild`'s `toml` 1 (with its `toml_*` crates) beside the engine's `toml` 0.8, for `opentide-schema`'s compile-fail tests. xtask (tooling, never shipped) uses `rustix` (the golden runner's pseudo-terminals) and `tempfile` at run time, and `opentide-workspace` uses `tempfile` (`validate --fix`'s writes) and `notify` (`--watch`), whose `inotify` brings `bitflags` 2 while `kqueue-sys` (BSD, macOS) keeps `bitflags` 1: `skip` names `bitflags@2.13.2` with that reason. xtask's schema comparison (`cargo xtask codegen --check`, UC-1.8b) validates with the `jsonschema` crate, which brings `fancy-regex` 0.20, `fluent-uri` 0.4, `getrandom` 0.3 and `r-efi` 5 beside the shipped crates' versions: `skip` names each, with that reason; and `borrow-or-share` under MIT-0, which `[licenses] exceptions` allows for that crate alone. `openssl-sys`, `openssl` and
 `native-tls` are banned: TLS is rustls (plan D-8; per-tenant TLS settings are a §3 invariant), with
 no system library to link on every wheel target. Wildcard version requirements fail.
 

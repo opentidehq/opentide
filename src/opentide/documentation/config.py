@@ -6,11 +6,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
+from opentide._models.configuration.documentation import DocumentationConfiguration
+from opentide._models.configuration.loading import validate_configuration
 from opentide.core.registry import Opentide
 from opentide.documentation.context import resolve_flavor
 from opentide.documentation.types import DocumentFlavor
-from opentide.models.configuration.documentation import DocumentationConfiguration
-from opentide.models.configuration.loading import validate_configuration
 
 
 @dataclass(frozen=True)
