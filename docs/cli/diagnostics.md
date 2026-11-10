@@ -273,7 +273,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`yara_entrypoint_deprecated`](#yara_entrypoint_deprecated) | entrypoint is deprecated in libyara and refused by YARA-X; use pe.entry_point or elf.entry_point. |
 | [`yara_hex_string`](#yara_hex_string) | A YARA hex string is invalid: an odd number of nibbles, a bad jump, or unbalanced alternatives. |
 | [`yara_include`](#yara_include) | A YARA signature uses an include directive, which no platform resolves: each API takes one text with no file system behind it. |
-| [`yara_meta_missing`](#yara_meta_missing) | A YARA rule in a HarfangLab `yara.signature` has no meta `context`, which the HarfangLab profile recommends on every rule that is not private. |
+| [`yara_meta_missing`](#yara_meta_missing) | A HarfangLab YARA rule has no meta `context`, which the HarfangLab profile recommends on every rule that is not private. |
 | [`yara_module_not_imported`](#yara_module_not_imported) | A YARA module field or function is used without importing its module. |
 | [`yara_module_unconfirmed`](#yara_module_unconfirmed) | The YARA module is known but not confirmed on the platform's agents. |
 | [`yara_number_out_of_range`](#yara_number_out_of_range) | A YARA integer, size suffix, jump bound or string index is outside the range libyara accepts. |
@@ -4666,9 +4666,9 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 ## yara_meta_missing
 
-A YARA rule in a HarfangLab `yara.signature` has no meta `context`, which the HarfangLab profile recommends on every rule that is not private.
+A HarfangLab YARA rule has no meta `context`, which the HarfangLab profile recommends on every rule that is not private.
 
-Severity: warning. Reported by `opentide lint` (its `queries` check) on a HarfangLab rule (`harfanglab`) written in the signature form: a rule that is not `private` has no `meta:` section, or one without `context`. `opentide validate` does not fail on it. Deploy sends the signature verbatim and adds no meta, so the agent receives the rule without saying where to scan.
+Severity: warning. Reported by `opentide lint` (its `queries` check) on a HarfangLab rule (`harfanglab`). In the signature form, a rule that is not `private` has no `meta:` section, or one without `context`. `opentide validate` does not fail on it. Deploy sends the signature verbatim and adds no meta, so the agent receives the rule without saying where to scan. In the decomposed form, an empty `meta.context: []` is the same finding: deploy then writes the rule with no `context` line.
 
 ### Example
 

@@ -497,3 +497,112 @@ def test_the_decomposed_context_is_found_with_its_line() -> None:
     assert "context:" in text.splitlines()[line]
     signature = (FIXTURES / "harfanglab-yara-signature.yaml").read_text(encoding="utf-8")
     assert yara.decomposed_context_in(signature) is None
+
+
+# --- re-review regressions (R1–R4) ---------------------------------------------------
+
+_REGEXP_RULE = (
+    'rule {name} {{\n  meta:\n    context = "file"\n  strings:\n'
+    "    $r = /firewall add rule name=/\n  condition:\n    $r\n}}\n"
+)
+
+
+def test_a_rule_header_inside_a_regexp_is_not_a_rule() -> None:
+    """R1: `rule name=` in a regexp was read as a rule named `name`."""
+    signature = _REGEXP_RULE.format(name="a") + _REGEXP_RULE.format(name="b")
+    assert yara.signature_codes(signature) == set()
+    assert list(yara.advisories(signature)) == []
+    one = (
+        'rule a {\n  meta:\n    context = "file"\n  strings:\n'
+        "    $r = /advfirewall firewall add rule name=/ nocase\n  condition:\n    $r\n}\n"
+    )
+    assert list(yara.advisories(one)) == []
+
+
+def test_an_include_inside_a_regexp_is_not_an_include() -> None:
+    signature = (
+        'rule a {\n  meta:\n    context = "file"\n  strings:\n'
+        '    $r = /include "stdio.h"/\n  condition:\n    $r\n}\n'
+    )
+    assert yara.signature_codes(signature) == set()
+
+
+def test_a_regexp_after_matches_is_blanked_and_division_is_not_a_regexp() -> None:
+    signature = (
+        'rule a {\n  meta:\n    context = "file"\n  condition:\n'
+        "    pe.sections[0].name matches /rule b \\/x/ and filesize / 2 > 1\n}\n"
+        'rule c {\n  meta:\n    context = "file"\n  condition:\n    filesize / 4 > 2\n}\n'
+    )
+    assert [header.name for header in yara.rule_headers(signature)] == ["a", "c"]
+    assert yara.signature_codes(signature) == set()
+
+
+def test_an_include_after_a_regexp_is_still_found() -> None:
+    signature = (
+        'include "x.yar"\nrule a {\n  meta:\n    context = "file"\n  strings:\n'
+        "    $r = /a\\/b/\n  condition:\n    $r\n}\n"
+    )
+    assert yara.signature_codes(signature) == {"yara_include"}
+
+
+def test_the_alias_check_ignores_unrelated_deep_aliases() -> None:
+    """R2: a file of nested aliases elsewhere made the walk exponential (52 s, then OOM)."""
+    import time
+
+    lines = ["x-l0: &l0 [" + ", ".join(["x"] * 10) + "]"]
+    for level in range(1, 8):
+        lines.append(f"x-l{level}: &l{level} [" + ", ".join([f"*l{level - 1}"] * 10) + "]")
+    rule = (FIXTURES / "harfanglab-yara-signature.yaml").read_text(encoding="utf-8")
+    text = "\n".join(lines) + "\n" + rule
+    started = time.perf_counter()
+    assert not yara.signature_is_aliased(text)
+    assert time.perf_counter() - started < 2
+    aliased = text + "other: &sig 'rule x { condition: true }'\n"
+    assert not yara.signature_is_aliased(aliased)
+
+
+def test_a_double_quoted_signature_points_at_its_written_line() -> None:
+    """R3: an escaped double-quoted signature reported the advisory on its first line."""
+    text = (
+        "configurations:\n  harfanglab:\n    yara:\n"
+        '      signature: "rule a {\\n  meta:\\n\n'
+        "        \n"
+        '        \\    context=\\"disk\\"\\n\n'
+        '        condition: true }"\n'
+    )
+    site = yara.signature_in(text)
+    assert site is not None
+    [advisory] = list(yara.advisories(site.value))
+    assert advisory.code == "harfanglab_yara_context"
+    assert 'context=\\"disk' in text.splitlines()[site.line_of(advisory.offset)]
+
+
+@pytest.mark.parametrize(
+    "written",
+    [
+        '"a \\x41\\u0042\\U00000043 b"',
+        "'it''s a\n\n  b'",
+        "plain words\n  folded  here",
+        '"tab\\tand \\\\ slash \\/"',
+    ],
+)
+def test_flow_positions_cover_each_decoded_character(written: str) -> None:
+    text = "k: " + written + "\n"
+    node = yaml.compose(text).value[0][1]
+    positions = yara._flow_positions(
+        text, node.start_mark.index, node.end_mark.index, node.style or ""
+    )
+    assert len(positions) == len(node.value)
+
+
+def test_a_long_rule_name_names_the_rule_and_the_limit() -> None:
+    """R4: the 128-character case read like a keyword or character problem."""
+    name = "a" * 140
+    with pytest.raises(ValidationError) as caught:
+        DetectionRule.model_validate(_rule(name=name))
+    message = str(caught.value)
+    assert "harfanglab_yara_rule_name" in message
+    assert "140 characters long" in message and "at most 128" in message
+    assert f"rule {name!r}" in message
+    assert "keyword" in yara.rule_name_problem("Condition")
+    assert "'é'" in yara.rule_name_problem("Détection")

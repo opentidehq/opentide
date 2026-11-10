@@ -88,14 +88,13 @@ class DetectionRule(TideModel):
         block = self.configurations.harfanglab if self.configurations else None
         if block is None or block.yara is None or block.yara.signature is not None:
             return self
-        from opentide.platforms.harfanglab.yara import derived_rule_name, rule_name_refused
+        from opentide.platforms.harfanglab.yara import rule_name_problem
 
-        if rule_name_refused(self.name):
+        problem = rule_name_problem(self.name)
+        if problem is not None:
             raise ValueError(
                 "DetectionRule validation failed with code(s): harfanglab_yara_rule_name "
-                f"(the YARA rule name {derived_rule_name(self.name)!r} derived from the rule "
-                "name is a YARA keyword or keeps a character other than ASCII letters, "
-                "digits and _)"
+                f"(rule {self.name!r}: {problem})"
             )
         return self
 

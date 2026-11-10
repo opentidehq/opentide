@@ -126,18 +126,40 @@ _CONTEXT = re.compile(r"(?<![\w$#@!])context\s*=\s*")
 _ASCII_NAME = re.compile(r"[A-Za-z0-9_]+")
 
 
+_MATCHES = re.compile(r"(?<![\w$#@!])matches\s*$")
+
+
+def _regexp_starts(out: list[str], index: int) -> bool:
+    """Whether a ``/`` at *index* opens a regular expression rather than dividing.
+
+    A regexp is an operand: a string's value (``$r = /.../``) or the right of
+    ``matches``. *out* is the text scanned so far, comments and strings blanked.
+    """
+    before = "".join(out[max(0, index - 64) : index]).rstrip()
+    if before.endswith("=") and not before.endswith(("==", "!=", "<=", ">=")):
+        return True
+    return bool(_MATCHES.search(before))
+
+
 def _blank(text: str) -> str:
-    """*text* with comments and the insides of string literals turned into spaces.
+    """*text* with comments and the insides of string and regexp literals turned into spaces.
 
     Offsets and line breaks are kept, so a position in the result is the same
-    position in *text*. The quotes of a string stay, so ``include "x"`` still
-    reads as an include.
+    position in *text*. The quotes of a string and the slashes of a regexp
+    stay, so ``include "x"`` still reads as an include.
     """
     out = list(text)
     index, size = 0, len(text)
     while index < size:
         char = text[index]
-        if char == "/" and text.startswith("//", index):
+        if char == "/" and not text.startswith(("//", "/*"), index) and _regexp_starts(out, index):
+            end = index + 1
+            while end < size and text[end] not in "/\n":
+                end += 2 if text[end] == "\\" else 1
+            end = min(end, size)
+            out[index + 1 : end] = " " * (end - index - 1)
+            index = end + 1
+        elif char == "/" and text.startswith("//", index):
             end = text.find("\n", index)
             end = size if end < 0 else end
             out[index:end] = " " * (end - index)
@@ -215,17 +237,33 @@ def derived_rule_name(name: str) -> str:
     return derived
 
 
-def rule_name_refused(name: str) -> bool:
-    """Whether libyara refuses the rule name deploy derives (``harfanglab_yara_rule_name``).
+def rule_name_problem(name: str) -> str | None:
+    """Why libyara refuses the rule name deploy derives from *name*, or ``None``.
 
-    A keyword, a letter other than ASCII, or more than 128 characters (harfanglab-1.0 1.3).
+    A keyword, a character other than ASCII letters, digits and ``_``, or more
+    than 128 characters (``harfanglab_yara_rule_name``, harfanglab-1.0 1.3).
     """
     derived = derived_rule_name(name)
-    return (
-        derived in YARA_KEYWORDS
-        or not _ASCII_NAME.fullmatch(derived)
-        or len(derived) > MAX_IDENTIFIER
-    )
+    if derived in YARA_KEYWORDS:
+        return f"the YARA rule name {derived!r} derived from it is a YARA keyword"
+    if not _ASCII_NAME.fullmatch(derived):
+        others = sorted({c for c in derived if not _ASCII_NAME.fullmatch(c)})
+        shown = ", ".join(repr(c) for c in others) or "none"
+        return (
+            f"the YARA rule name {derived!r} derived from it keeps {shown}; libyara takes only "
+            "ASCII letters, digits and _"
+        )
+    if len(derived) > MAX_IDENTIFIER:
+        return (
+            f"the YARA rule name derived from it is {len(derived)} characters long; libyara "
+            f"takes at most {MAX_IDENTIFIER}"
+        )
+    return None
+
+
+def rule_name_refused(name: str) -> bool:
+    """Whether libyara refuses the rule name deploy derives (``harfanglab_yara_rule_name``)."""
+    return rule_name_problem(name) is not None
 
 
 def context_accepted(value: str) -> bool:
@@ -395,61 +433,62 @@ def _compose(text: str) -> Any:
 _MERGE_TAG = "tag:yaml.org,2002:merge"
 
 
-def aliased_paths(text: str) -> list[tuple[str, ...]]:
-    """The key paths whose scalar value comes from a YAML alias in *text*.
+def _aliased(value: Any, key: Any) -> bool:
+    """Whether *value*, written after *key*, is an alias: its node starts where its anchor is.
 
-    ``yaml.safe_load`` gives an alias the same value as its anchor, so whether
-    ``signature`` was written in place is only seen in the node graph: an alias
-    is the anchored node object itself, met a second time. A scalar under an
-    aliased mapping or sequence is aliased too (``yara: *shared``), and so is
-    one a merge key brings in (``<<: *shared``), at the path it takes in the
-    mapping it is merged into, unless that mapping writes the key itself.
+    YAML defines an anchor before any alias of it, so an alias's node starts
+    before the key it is the value of; a value written in place starts after.
+    """
+    return value.start_mark.index < key.end_mark.index
+
+
+def _lookup(node: Any, key: str, stack: frozenset[int]) -> tuple[Any, bool] | None:
+    """``(value, aliased)`` of *key* in mapping *node*, through merge keys as PyYAML merges.
+
+    A key the mapping writes wins over a merged one; among ``<<`` sources the
+    first that has the key wins. *aliased* is whether reaching the value went
+    through an alias. Only this one key is looked up, so unrelated aliases are
+    never expanded.
     """
     import yaml
 
-    root = _compose(text)
-    seen: set[int] = set()
-    found: list[tuple[str, ...]] = []
-
-    def walk(node: Any, path: tuple[str, ...], aliased: bool, stack: frozenset[int]) -> None:
-        if id(node) in stack:  # a recursive alias: nothing new below it
-            return
-        aliased = aliased or id(node) in seen
-        seen.add(id(node))
-        stack = stack | {id(node)}
-        if isinstance(node, yaml.ScalarNode):
-            if aliased:
-                found.append(path)
-        elif isinstance(node, yaml.MappingNode):
-            walk_mapping(node, path, aliased, stack, frozenset())
-        elif isinstance(node, yaml.SequenceNode):
-            for index, value in enumerate(node.value):
-                walk(value, (*path, str(index)), aliased, stack)
-
-    def walk_mapping(
-        node: Any, path: tuple[str, ...], aliased: bool, stack: frozenset[int], written: frozenset
-    ) -> None:
-        own = frozenset(str(key.value) for key, _ in node.value if key.tag != _MERGE_TAG) | written
-        for key, value in node.value:
-            if key.tag == _MERGE_TAG:
-                merged = value.value if isinstance(value, yaml.SequenceNode) else [value]
-                for source in merged:
-                    if not isinstance(source, yaml.MappingNode) or id(source) in stack:
-                        continue
-                    from_alias = aliased or id(source) in seen
-                    seen.add(id(source))
-                    walk_mapping(source, path, from_alias, stack | {id(source)}, own)
-            elif str(key.value) not in written:
-                walk(value, (*path, str(key.value)), aliased, stack)
-
-    if root is not None:
-        walk(root, (), False, frozenset())
-    return found
+    if not isinstance(node, yaml.MappingNode) or id(node) in stack:
+        return None
+    stack = stack | {id(node)}
+    for k, value in node.value:
+        if k.tag != _MERGE_TAG and str(k.value) == key:
+            return value, _aliased(value, k)
+    for k, value in node.value:
+        if k.tag != _MERGE_TAG:
+            continue
+        sources = value.value if isinstance(value, yaml.SequenceNode) else [value]
+        for source in sources:
+            found = _lookup(source, key, stack)
+            if found is not None:
+                via = _aliased(source, k) if source is value else _aliased(source, value)
+                return found[0], found[1] or via
+    return None
 
 
 def signature_is_aliased(text: str) -> bool:
-    """Whether the HarfangLab ``signature`` in *text* is a YAML alias (``yara_signature_alias``)."""
-    return SIGNATURE_PATH in aliased_paths(text)
+    """Whether the HarfangLab ``signature`` in *text* is a YAML alias (``yara_signature_alias``).
+
+    ``yaml.safe_load`` gives an alias the same value as its anchor, so whether
+    ``signature`` was written in place is only seen in the node graph. The
+    signature is aliased when its node, or any mapping on its path
+    (``configurations``, ``harfanglab``, ``yara``), or a merge source (``<<:``)
+    on that path, is an alias. Only that path is followed, so a file's other
+    aliases cost nothing, however deep they nest.
+    """
+    node = _compose(text)
+    aliased = False
+    for key in SIGNATURE_PATH:
+        found = _lookup(node, key, frozenset())
+        if found is None:
+            return False
+        node, step = found
+        aliased = aliased or step
+    return aliased
 
 
 @dataclass(frozen=True)
@@ -477,6 +516,10 @@ class SignatureSite:
         """
         if self.style == "|":
             return self.text.count("\n", 0, self.start) + 1 + self.value.count("\n", 0, offset)
+        if self.style in ("", "'", '"'):
+            positions = _flow_positions(self.text, self.start, self.end, self.style)
+            if len(positions) == len(self.value) and 0 <= offset < len(positions):
+                return self.text.count("\n", 0, positions[offset])
         words = re.findall(r"\S+", self.value[offset:])[:2]
         if words:
             pattern = re.compile(r"\s+".join(re.escape(word) for word in words))
@@ -485,6 +528,63 @@ class SignatureSite:
             if before < len(written):
                 return self.text.count("\n", 0, written[before].start())
         return self.text.count("\n", 0, self.start)
+
+
+#: How many source characters after ``\\x``, ``\\u`` and ``\\U`` a double-quoted escape reads.
+_ESCAPE_DIGITS = {"x": 2, "u": 4, "U": 8}
+
+
+def _flow_positions(text: str, start: int, end: int, style: str) -> list[int]:
+    """For each character of a flow scalar's value, where it is written in *text*.
+
+    *start* and *end* are the scalar's marks; *style* is ``""`` (plain), ``'``
+    or ``"``. It follows YAML's flow folding (a line break between words is a
+    space, each empty line a ``\\n``, whitespace around a break dropped), a
+    double-quoted escape (``\\"``, ``\\n``, ``\\x41``, an escaped line break)
+    and a single-quoted ``''``. A list whose length differs from the value's
+    means the scalar holds what this does not decode.
+    """
+    quoted = style in ("'", '"')
+    index, stop = start + quoted, end - quoted
+    positions: list[int] = []
+    pending: list[int] = []  # blanks that a line break after them drops
+    while index < stop:
+        char = text[index]
+        if char in " \t":
+            pending.append(index)
+            index += 1
+            continue
+        if char in "\r\n":
+            pending = []
+            breaks: list[int] = []
+            while index < stop and text[index] in "\r\n":
+                breaks.append(index)
+                index += 2 if text.startswith("\r\n", index) else 1
+                while index < stop and text[index] in " \t":
+                    index += 1
+            # One break folds to a space; each further (empty) line is a \n.
+            positions.extend(breaks[:1] if len(breaks) == 1 else breaks[1:])
+            continue
+        positions.extend(pending)
+        pending = []
+        following = text[index + 1] if index + 1 < stop else ""
+        if style == '"' and char == "\\":
+            if following in "\r\n" and following:
+                index += 3 if text.startswith("\r\n", index + 1) else 2
+                while index < stop and text[index] in " \t":
+                    index += 1
+                continue
+            positions.append(index)
+            index += 2 + _ESCAPE_DIGITS.get(following, 0)
+            continue
+        if style == "'" and char == "'" and following == "'":
+            positions.append(index)
+            index += 2
+            continue
+        positions.append(index)
+        index += 1
+    positions.extend(pending)
+    return positions
 
 
 def _node_at(text: str, path: tuple[str, ...]) -> Any:

@@ -272,3 +272,21 @@ def test_queries_warn_keeps_the_models_include_error(invoke_cli, tide_corpus_rep
     assert model["code"] == "schema_validation"
     assert "yara_include" in model["message"]
     assert not [item for item in report["warnings"] if item["code"] == "yara_include"]
+
+
+def test_a_rule_header_inside_a_regexp_passes_validate_and_lint(
+    invoke_cli, tide_corpus_repo: Path
+) -> None:
+    """R1: two rules matching `rule name=` in a regexp were yara_duplicate_rule, plus advisories."""
+    rule = (
+        '        rule {name} {{\n          meta:\n            context = "file"\n'
+        "          strings:\n            $r = /firewall add rule name=/\n"
+        "          condition:\n            $r\n        }}\n"
+    )
+    text = (FIXTURES / SIGNATURE_RULE).read_text(encoding="utf-8")
+    head = text[: text.index("      signature: |\n") + len("      signature: |\n")]
+    text = head + rule.format(name="a") + "\n" + rule.format(name="b")
+    name = _add(tide_corpus_repo, SIGNATURE_RULE, text=text)
+    assert_json_ok(invoke_cli("validate", "--file", name))
+    payload = parse_cli_json(invoke_cli("lint", "--check", "queries", "--file", name))
+    assert not [item for item in payload["findings"] if item["code"] in ADVISORIES]
