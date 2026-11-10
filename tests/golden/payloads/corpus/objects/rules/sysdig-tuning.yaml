@@ -1,0 +1,33 @@
+name: Sysdig Tuning
+
+metadata:
+  uuid: 00000000-0000-4000-8005-000000000102
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+  author: Detection Team
+
+description: |
+  Sysdig Tuning for the compile corpus.
+    Indented second line.
+response:
+  alert_severity: Low
+
+configurations:
+  sysdig:
+    enabled: true
+    schema: platform::sysdig::1.0
+    status: PRODUCTION
+    append_to_rule: Terminal shell in container
+    condition: and not proc.pname in (ci_runners)
+    minimum_engine_version: 30
+    exceptions:
+    - name: build_namespaces
+      fields: k8s.ns.name
+      comps: in
+      values: [ci, builds]
+    lists:
+    - name: ci_runners
+      items: [gitlab-runner, buildkite-agent]

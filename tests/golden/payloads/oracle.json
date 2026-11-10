@@ -356,6 +356,132 @@
      }
     }
    ]
+  },
+  {
+   "uuid": "00000000-0000-4000-8005-000000000104",
+   "file": "<WS>/objects/rules/sysdig-cloudtrail.yaml",
+   "platform": "sysdig",
+   "compile": {
+    "body": "{\"name\":\"Sysdig Cloudtrail\",\"description\":\"Sysdig Cloudtrail for the compile corpus. Indented second line.\",\"tags\":[\"maturity_sandbox\"],\"details\":{\"ruleType\":\"FALCO\",\"append\":false,\"source\":\"aws_cloudtrail\",\"condition\":{\"condition\":\"ct.name = ConsoleLogin and ct.error exists\",\"components\":[]},\"output\":\"Sysdig Cloudtrail | user=%ct.user region=%ct.region event=%ct.name source_ip=%ct.srcip account=%ct.user.accountid\",\"priority\":\"critical\"}}"
+   },
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000104\",\"name\":\"Sysdig Cloudtrail\",\"api_request\":{\"name\":\"Sysdig Cloudtrail\",\"description\":\"Sysdig Cloudtrail for the compile corpus. Indented second line.\",\"tags\":[\"maturity_sandbox\"],\"details\":{\"ruleType\":\"FALCO\",\"append\":false,\"source\":\"aws_cloudtrail\",\"condition\":{\"condition\":\"ct.name = ConsoleLogin and ct.error exists\",\"components\":[]},\"output\":\"Sysdig Cloudtrail | user=%ct.user region=%ct.region event=%ct.name source_ip=%ct.srcip account=%ct.user.accountid\",\"priority\":\"critical\"}}}",
+   "tenants": [
+    {
+     "tenant": "tagged",
+     "body": "{\"name\":\"Sysdig Cloudtrail\",\"description\":\"Sysdig Cloudtrail for the compile corpus. Indented second line.\",\"tags\":[\"maturity_sandbox\",\"tenant_tag\",\"container\"],\"details\":{\"ruleType\":\"FALCO\",\"append\":false,\"source\":\"aws_cloudtrail\",\"condition\":{\"condition\":\"ct.name = ConsoleLogin and ct.error exists\",\"components\":[]},\"output\":\"Sysdig Cloudtrail | user=%ct.user region=%ct.region event=%ct.name source_ip=%ct.srcip account=%ct.user.accountid\",\"priority\":\"critical\"}}"
+    },
+    {
+     "tenant": "plain",
+     "body": "{\"name\":\"Sysdig Cloudtrail\",\"description\":\"Sysdig Cloudtrail for the compile corpus. Indented second line.\",\"tags\":[\"maturity_sandbox\"],\"details\":{\"ruleType\":\"FALCO\",\"append\":false,\"source\":\"aws_cloudtrail\",\"condition\":{\"condition\":\"ct.name = ConsoleLogin and ct.error exists\",\"components\":[]},\"output\":\"Sysdig Cloudtrail | user=%ct.user region=%ct.region event=%ct.name source_ip=%ct.srcip account=%ct.user.accountid\",\"priority\":\"critical\"}}"
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-0000-4000-8005-000000000101",
+   "file": "<WS>/objects/rules/sysdig-full.yaml",
+   "platform": "sysdig",
+   "compile": {
+    "body": "{\"name\":\"Sysdig Full\",\"description\":\"Sysdig Full for the compile corpus. Indented second line.\",\"tags\":[\"container\",\"shell\",\"T1059.004\",\"T1059\",\"mitre_execution\",\"maturity_incubating\"],\"details\":{\"ruleType\":\"FALCO\",\"append\":false,\"source\":\"syscall\",\"condition\":{\"condition\":\"(evt.type in (execve, execveat) and evt.dir=<) and container and proc.name in ( sh, bash, zsh, \\\"fish shell\\\", ksh ) and not (proc.pname in ( gitlab-runner, buildkite-agent ) or (evt.type in (execve, execveat) and evt.dir=<) and proc.pname = make) and not proc.pname in ( gitlab-runner, buildkite-agent   ) and fd.name = sh, bash, zsh, \\\"fish shell\\\", ksh \",\"components\":[]},\"output\":\"Shell spawned in a container | user=%user.name command=%proc.cmdline\",\"priority\":\"error\",\"exceptions\":[{\"name\":\"single_field\",\"fields\":\"proc.name\",\"comps\":\"in\",\"values\":[\"gitlab-runner\",\"buildkite-agent\",\"bash\",5]},{\"name\":\"tuple_form\",\"fields\":[\"proc.name\",\"proc.pname\"],\"comps\":[\"=\",\"in\"],\"values\":[[\"zsh\",[\"gitlab-runner\",\"buildkite-agent\"]],[\"fish\",[\"gitlab-runner\",\"buildkite-agent\",\"make\"]],[\"ksh\",\"sudo\"]]},{\"name\":\"default_comps\",\"fields\":[\"container.image.repository\"],\"values\":[[\"registry.example.org/build\"]]}],\"minimumEngineVersion\":26}}"
+   },
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000101\",\"name\":\"Sysdig Full\",\"api_request\":{\"name\":\"Sysdig Full\",\"description\":\"Sysdig Full for the compile corpus. Indented second line.\",\"tags\":[\"container\",\"shell\",\"T1059.004\",\"T1059\",\"mitre_execution\",\"maturity_incubating\"],\"details\":{\"ruleType\":\"FALCO\",\"append\":false,\"source\":\"syscall\",\"condition\":{\"condition\":\"(evt.type in (execve, execveat) and evt.dir=<) and container and proc.name in ( sh, bash, zsh, \\\"fish shell\\\", ksh ) and not (proc.pname in ( gitlab-runner, buildkite-agent ) or (evt.type in (execve, execveat) and evt.dir=<) and proc.pname = make) and not proc.pname in ( gitlab-runner, buildkite-agent   ) and fd.name = sh, bash, zsh, \\\"fish shell\\\", ksh \",\"components\":[]},\"output\":\"Shell spawned in a container | user=%user.name command=%proc.cmdline\",\"priority\":\"error\",\"exceptions\":[{\"name\":\"single_field\",\"fields\":\"proc.name\",\"comps\":\"in\",\"values\":[\"gitlab-runner\",\"buildkite-agent\",\"bash\",5]},{\"name\":\"tuple_form\",\"fields\":[\"proc.name\",\"proc.pname\"],\"comps\":[\"=\",\"in\"],\"values\":[[\"zsh\",[\"gitlab-runner\",\"buildkite-agent\"]],[\"fish\",[\"gitlab-runner\",\"buildkite-agent\",\"make\"]],[\"ksh\",\"sudo\"]]},{\"name\":\"default_comps\",\"fields\":[\"container.image.repository\"],\"values\":[[\"registry.example.org/build\"]]}],\"minimumEngineVersion\":26}}}",
+   "tenants": [
+    {
+     "tenant": "tagged",
+     "body": "{\"name\":\"Sysdig Full\",\"description\":\"Sysdig Full for the compile corpus. Indented second line.\",\"tags\":[\"container\",\"shell\",\"T1059.004\",\"T1059\",\"mitre_execution\",\"maturity_incubating\",\"tenant_tag\"],\"details\":{\"ruleType\":\"FALCO\",\"append\":false,\"source\":\"syscall\",\"condition\":{\"condition\":\"(evt.type in (execve, execveat) and evt.dir=<) and container and proc.name in ( sh, bash, zsh, \\\"fish shell\\\", ksh ) and not (proc.pname in ( gitlab-runner, buildkite-agent ) or (evt.type in (execve, execveat) and evt.dir=<) and proc.pname = make) and not proc.pname in ( gitlab-runner, buildkite-agent   ) and fd.name = sh, bash, zsh, \\\"fish shell\\\", ksh \",\"components\":[]},\"output\":\"Shell spawned in a container | user=%user.name command=%proc.cmdline\",\"priority\":\"error\",\"exceptions\":[{\"name\":\"single_field\",\"fields\":\"proc.name\",\"comps\":\"in\",\"values\":[\"gitlab-runner\",\"buildkite-agent\",\"bash\",5]},{\"name\":\"tuple_form\",\"fields\":[\"proc.name\",\"proc.pname\"],\"comps\":[\"=\",\"in\"],\"values\":[[\"zsh\",[\"gitlab-runner\",\"buildkite-agent\"]],[\"fish\",[\"gitlab-runner\",\"buildkite-agent\",\"make\"]],[\"ksh\",\"sudo\"]]},{\"name\":\"default_comps\",\"fields\":[\"container.image.repository\"],\"values\":[[\"registry.example.org/build\"]]}],\"minimumEngineVersion\":26}}"
+    },
+    {
+     "tenant": "plain",
+     "body": "{\"name\":\"Sysdig Full\",\"description\":\"Sysdig Full for the compile corpus. Indented second line.\",\"tags\":[\"container\",\"shell\",\"T1059.004\",\"T1059\",\"mitre_execution\",\"maturity_incubating\"],\"details\":{\"ruleType\":\"FALCO\",\"append\":false,\"source\":\"syscall\",\"condition\":{\"condition\":\"(evt.type in (execve, execveat) and evt.dir=<) and container and proc.name in ( sh, bash, zsh, \\\"fish shell\\\", ksh ) and not (proc.pname in ( gitlab-runner, buildkite-agent ) or (evt.type in (execve, execveat) and evt.dir=<) and proc.pname = make) and not proc.pname in ( gitlab-runner, buildkite-agent   ) and fd.name = sh, bash, zsh, \\\"fish shell\\\", ksh \",\"components\":[]},\"output\":\"Shell spawned in a container | user=%user.name command=%proc.cmdline\",\"priority\":\"error\",\"exceptions\":[{\"name\":\"single_field\",\"fields\":\"proc.name\",\"comps\":\"in\",\"values\":[\"gitlab-runner\",\"buildkite-agent\",\"bash\",5]},{\"name\":\"tuple_form\",\"fields\":[\"proc.name\",\"proc.pname\"],\"comps\":[\"=\",\"in\"],\"values\":[[\"zsh\",[\"gitlab-runner\",\"buildkite-agent\"]],[\"fish\",[\"gitlab-runner\",\"buildkite-agent\",\"make\"]],[\"ksh\",\"sudo\"]]},{\"name\":\"default_comps\",\"fields\":[\"container.image.repository\"],\"values\":[[\"registry.example.org/build\"]]}],\"minimumEngineVersion\":26}}"
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-0000-4000-8005-000000000103",
+   "file": "<WS>/objects/rules/sysdig-k8s.yaml",
+   "platform": "sysdig",
+   "compile": {
+    "body": "{\"name\":\"K8s exec into pod\",\"description\":\"Sysdig K8s Defaults for the compile corpus. Indented second line.\",\"tags\":[\"T1609\",\"T1078.004\",\"mitre_initial_access\",\"mitre_execution\",\"mitre_persistence\",\"mitre_privilege_escalation\",\"mitre_stealth\",\"maturity_stable\"],\"details\":{\"ruleType\":\"FALCO\",\"append\":false,\"source\":\"k8s_audit\",\"condition\":{\"condition\":\"ka.verb = create and ka.target.subresource in (exec, attach)\",\"components\":[]},\"output\":\"K8s exec into pod | user=%ka.user.name verb=%ka.verb uri=%ka.uri resource=%ka.target.resource namespace=%ka.target.namespace name=%ka.target.name response=%ka.response.code\",\"priority\":\"info\"}}"
+   },
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000103\",\"name\":\"Sysdig K8s Defaults\",\"api_request\":{\"name\":\"K8s exec into pod\",\"description\":\"Sysdig K8s Defaults for the compile corpus. Indented second line.\",\"tags\":[\"T1609\",\"T1078.004\",\"mitre_initial_access\",\"mitre_execution\",\"mitre_persistence\",\"mitre_privilege_escalation\",\"mitre_stealth\",\"maturity_stable\"],\"details\":{\"ruleType\":\"FALCO\",\"append\":false,\"source\":\"k8s_audit\",\"condition\":{\"condition\":\"ka.verb = create and ka.target.subresource in (exec, attach)\",\"components\":[]},\"output\":\"K8s exec into pod | user=%ka.user.name verb=%ka.verb uri=%ka.uri resource=%ka.target.resource namespace=%ka.target.namespace name=%ka.target.name response=%ka.response.code\",\"priority\":\"info\"}}}",
+   "tenants": [
+    {
+     "tenant": "tagged",
+     "body": "{\"name\":\"K8s exec into pod\",\"description\":\"Sysdig K8s Defaults for the compile corpus. Indented second line.\",\"tags\":[\"T1609\",\"T1078.004\",\"mitre_initial_access\",\"mitre_execution\",\"mitre_persistence\",\"mitre_privilege_escalation\",\"mitre_stealth\",\"maturity_stable\",\"tenant_tag\",\"container\"],\"details\":{\"ruleType\":\"FALCO\",\"append\":false,\"source\":\"k8s_audit\",\"condition\":{\"condition\":\"ka.verb = create and ka.target.subresource in (exec, attach)\",\"components\":[]},\"output\":\"K8s exec into pod | user=%ka.user.name verb=%ka.verb uri=%ka.uri resource=%ka.target.resource namespace=%ka.target.namespace name=%ka.target.name response=%ka.response.code\",\"priority\":\"info\"}}"
+    },
+    {
+     "tenant": "plain",
+     "body": "{\"name\":\"K8s exec into pod\",\"description\":\"Sysdig K8s Defaults for the compile corpus. Indented second line.\",\"tags\":[\"T1609\",\"T1078.004\",\"mitre_initial_access\",\"mitre_execution\",\"mitre_persistence\",\"mitre_privilege_escalation\",\"mitre_stealth\",\"maturity_stable\"],\"details\":{\"ruleType\":\"FALCO\",\"append\":false,\"source\":\"k8s_audit\",\"condition\":{\"condition\":\"ka.verb = create and ka.target.subresource in (exec, attach)\",\"components\":[]},\"output\":\"K8s exec into pod | user=%ka.user.name verb=%ka.verb uri=%ka.uri resource=%ka.target.resource namespace=%ka.target.namespace name=%ka.target.name response=%ka.response.code\",\"priority\":\"info\"}}"
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-0000-4000-8005-000000000105",
+   "file": "<WS>/objects/rules/sysdig-okta.yaml",
+   "platform": "sysdig",
+   "compile": {
+    "body": "{\"name\":\"Sysdig Plugin Source\",\"description\":\"Sysdig Plugin Source for the compile corpus. Indented second line.\",\"tags\":[\"maturity_incubating\"],\"details\":{\"ruleType\":\"FALCO\",\"append\":false,\"source\":\"okta\",\"condition\":{\"condition\":\"okta.evt.type = user.session.start\",\"components\":[]},\"output\":\"Sysdig Plugin Source\",\"priority\":\"emergency\"}}"
+   },
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000105\",\"name\":\"Sysdig Plugin Source\",\"api_request\":{\"name\":\"Sysdig Plugin Source\",\"description\":\"Sysdig Plugin Source for the compile corpus. Indented second line.\",\"tags\":[\"maturity_incubating\"],\"details\":{\"ruleType\":\"FALCO\",\"append\":false,\"source\":\"okta\",\"condition\":{\"condition\":\"okta.evt.type = user.session.start\",\"components\":[]},\"output\":\"Sysdig Plugin Source\",\"priority\":\"emergency\"}}}",
+   "tenants": [
+    {
+     "tenant": "tagged",
+     "body": "{\"name\":\"Sysdig Plugin Source\",\"description\":\"Sysdig Plugin Source for the compile corpus. Indented second line.\",\"tags\":[\"maturity_incubating\",\"tenant_tag\",\"container\"],\"details\":{\"ruleType\":\"FALCO\",\"append\":false,\"source\":\"okta\",\"condition\":{\"condition\":\"okta.evt.type = user.session.start\",\"components\":[]},\"output\":\"Sysdig Plugin Source\",\"priority\":\"emergency\"}}"
+    },
+    {
+     "tenant": "plain",
+     "body": "{\"name\":\"Sysdig Plugin Source\",\"description\":\"Sysdig Plugin Source for the compile corpus. Indented second line.\",\"tags\":[\"maturity_incubating\"],\"details\":{\"ruleType\":\"FALCO\",\"append\":false,\"source\":\"okta\",\"condition\":{\"condition\":\"okta.evt.type = user.session.start\",\"components\":[]},\"output\":\"Sysdig Plugin Source\",\"priority\":\"emergency\"}}"
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-0000-4000-8005-000000000102",
+   "file": "<WS>/objects/rules/sysdig-tuning.yaml",
+   "platform": "sysdig",
+   "compile": {
+    "body": "{\"name\":\"Terminal shell in container\",\"description\":\"\",\"tags\":[],\"details\":{\"ruleType\":\"FALCO\",\"append\":true,\"condition\":{\"condition\":\"and not proc.pname in ( gitlab-runner, buildkite-agent )\",\"components\":[]},\"exceptions\":[{\"name\":\"build_namespaces\",\"fields\":\"k8s.ns.name\",\"comps\":\"in\",\"values\":[\"ci\",\"builds\"]}],\"minimumEngineVersion\":30}}"
+   },
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000102\",\"name\":\"Sysdig Tuning\",\"api_request\":{\"name\":\"Terminal shell in container\",\"description\":\"\",\"tags\":[],\"details\":{\"ruleType\":\"FALCO\",\"append\":true,\"condition\":{\"condition\":\"and not proc.pname in ( gitlab-runner, buildkite-agent )\",\"components\":[]},\"exceptions\":[{\"name\":\"build_namespaces\",\"fields\":\"k8s.ns.name\",\"comps\":\"in\",\"values\":[\"ci\",\"builds\"]}],\"minimumEngineVersion\":30}}}",
+   "tenants": [
+    {
+     "tenant": "tagged",
+     "body": "{\"name\":\"Terminal shell in container\",\"description\":\"\",\"tags\":[],\"details\":{\"ruleType\":\"FALCO\",\"append\":true,\"condition\":{\"condition\":\"and not proc.pname in ( gitlab-runner, buildkite-agent )\",\"components\":[]},\"exceptions\":[{\"name\":\"build_namespaces\",\"fields\":\"k8s.ns.name\",\"comps\":\"in\",\"values\":[\"ci\",\"builds\"]}],\"minimumEngineVersion\":30}}"
+    },
+    {
+     "tenant": "plain",
+     "body": "{\"name\":\"Terminal shell in container\",\"description\":\"\",\"tags\":[],\"details\":{\"ruleType\":\"FALCO\",\"append\":true,\"condition\":{\"condition\":\"and not proc.pname in ( gitlab-runner, buildkite-agent )\",\"components\":[]},\"exceptions\":[{\"name\":\"build_namespaces\",\"fields\":\"k8s.ns.name\",\"comps\":\"in\",\"values\":[\"ci\",\"builds\"]}],\"minimumEngineVersion\":30}}"
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-0000-4000-8005-000000000106",
+   "file": "<WS>/objects/rules/sysdig-unknown-status.yaml",
+   "platform": "sysdig",
+   "compile": {
+    "error": {
+     "code": "compile_failed",
+     "message": "Sysdig cannot compile this rule: \"Status 'NOT_A_STATUS' is not defined in deployment configuration. Available statuses: DESIGN, DEVELOPMENT, IMPROVING, STAGING, ACCEPTANCE, PRODUCTION, DISABLED, REMOVED.\"",
+     "help": null
+    }
+   },
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000106\",\"name\":\"Sysdig Unknown Status\",\"status\":\"failed\",\"code\":\"compile_failed\",\"error\":\"Sentinel cannot compile this rule: \\\"Status 'NOT_A_STATUS' is not defined in deployment configuration. Available statuses: DESIGN, DEVELOPMENT, IMPROVING, STAGING, ACCEPTANCE, PRODUCTION, DISABLED, REMOVED.\\\"\",\"help\":null,\"file\":\"<WS>/objects/rules/sysdig-unknown-status.yaml\",\"api_request\":null}",
+   "tenants": [
+    {
+     "tenant": "tagged",
+     "error": {
+      "code": "compile_failed",
+      "message": "Sysdig cannot compile this rule: \"Status 'NOT_A_STATUS' is not defined in deployment configuration. Available statuses: DESIGN, DEVELOPMENT, IMPROVING, STAGING, ACCEPTANCE, PRODUCTION, DISABLED, REMOVED.\"",
+      "help": null
+     }
+    },
+    {
+     "tenant": "plain",
+     "error": {
+      "code": "compile_failed",
+      "message": "Sysdig cannot compile this rule: \"Status 'NOT_A_STATUS' is not defined in deployment configuration. Available statuses: DESIGN, DEVELOPMENT, IMPROVING, STAGING, ACCEPTANCE, PRODUCTION, DISABLED, REMOVED.\"",
+      "help": null
+     }
+    }
+   ]
   }
  ],
  "unloadable": []

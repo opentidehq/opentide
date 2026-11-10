@@ -1,4 +1,4 @@
-//! Every Sentinel and Elastic body of the compile corpus
+//! Every Sentinel, Elastic and Sysdig body of the compile corpus
 //! (`tests/golden/payloads/corpus`) against what the oracle compiled from it
 //! (`tests/golden/payloads/oracle.json`, written by `cargo xtask payloads diff
 //! --against python --corpus payloads --record`): the dry run's body, each
@@ -13,7 +13,7 @@ use std::sync::Arc;
 
 use opentide_compile::json::Json;
 use opentide_compile::preview::{self, Preview};
-use opentide_compile::{CompileError, Owned, Rule, elastic, sentinel};
+use opentide_compile::{CompileError, Owned, Rule, elastic, sentinel, sysdig};
 use opentide_schema::vocab::Vocabularies;
 use opentide_workspace::{FileSystem, Options, OsFs, RootOptions, Workspace};
 use serde_json::Value;
@@ -85,6 +85,31 @@ fn a_windows_path_reads_as_the_record_writes_it() {
     );
 }
 
+/// The approved differences of the compile corpus (`[[diff]]` entries of
+/// `tests/golden/payloads/APPROVED.toml` for the corpus `payloads`): uuid,
+/// platform, what, oracle and candidate.
+fn approved() -> Vec<[String; 5]> {
+    let text = std::fs::read_to_string(repo().join("tests/golden/payloads/APPROVED.toml")).unwrap();
+    let file: toml::Table = toml::from_str(&text).unwrap();
+    let field = |entry: &toml::Value, key: &str| entry[key].as_str().unwrap().to_owned();
+    file.get("diff")
+        .and_then(toml::Value::as_array)
+        .map(Vec::as_slice)
+        .unwrap_or_default()
+        .iter()
+        .filter(|entry| entry["corpus"].as_str() == Some("payloads"))
+        .map(|entry| {
+            [
+                field(entry, "uuid"),
+                field(entry, "platform"),
+                field(entry, "what"),
+                field(entry, "oracle"),
+                field(entry, "candidate"),
+            ]
+        })
+        .collect()
+}
+
 #[test]
 fn the_compile_corpus_compiles_as_the_oracle_compiles_it() {
     let corpus = dunce::canonicalize(repo().join("tests/golden/payloads/corpus")).unwrap();
@@ -111,7 +136,10 @@ fn the_compile_corpus_compiles_as_the_oracle_compiles_it() {
     let cx = owned.context(&index);
     let config = Json::from_node(&workspace.configuration().resolved.tree);
     let elastic_tenants = opentide_compile::plan::tenants(&config, "elastic");
+    let sysdig_tenants = opentide_compile::plan::tenants(&config, "sysdig");
     let ws = corpus.to_string_lossy().into_owned();
+    let approved = approved();
+    let mut used = vec![false; approved.len()];
     let mut compared = 0;
     let mut differences = Vec::new();
     let rules = record["rules"].as_array().unwrap();
@@ -130,7 +158,12 @@ fn the_compile_corpus_compiles_as_the_oracle_compiles_it() {
         );
         let mut check = |what: String, oracle: String, mine: String| {
             compared += 1;
-            if oracle != in_workspace(&mine, &ws) {
+            let mine = in_workspace(&mine, &ws);
+            if let Some(at) = approved.iter().position(|[u, p, w, o, c]| {
+                u == uuid && p == platform && *w == what && *o == oracle && *c == mine
+            }) {
+                used[at] = true;
+            } else if oracle != mine {
                 differences.push(format!(
                     "{uuid} {platform} {what}\n  oracle:    {oracle}\n  candidate: {mine}"
                 ));
@@ -144,8 +177,13 @@ fn the_compile_corpus_compiles_as_the_oracle_compiles_it() {
         );
         for tenant in entry["tenants"].as_array().unwrap() {
             let name = tenant["tenant"].as_str().unwrap();
+            let named = |known: &&Json| known.get("name").and_then(Json::as_str) == Some(name);
             let mine = if platform == "sentinel" {
                 candidate(sentinel::compile(&cx, &rule, name))
+            } else if platform == "sysdig" {
+                let tenant = sysdig_tenants.iter().copied().find(named);
+                assert!(tenant.is_some(), "{name} is a configured Sysdig tenant");
+                candidate(sysdig::compile_body(&cx, &rule, tenant))
             } else {
                 let setup = elastic_tenants
                     .iter()
@@ -166,5 +204,9 @@ fn the_compile_corpus_compiles_as_the_oracle_compiles_it() {
         }
     }
     assert!(differences.is_empty(), "{}", differences.join("\n"));
+    assert!(
+        used.iter().all(|used| *used),
+        "an approval of the compile corpus matches nothing (stale)"
+    );
     assert!(compared >= 60, "{compared} comparisons");
 }

@@ -2,7 +2,7 @@
 //! `opentide deploy` would send, computed locally.
 //!
 //! - [`strategy`]: status strategies, `--strategy`, the configured statuses.
-//! - [`sentinel`], [`elastic`]: the request bodies of the platforms whose body
+//! - [`sentinel`], [`elastic`], [`sysdig`]: the request bodies of the platforms whose body
 //!   is built from the rule alone (`compile_offline`), byte for byte the
 //!   oracle's ([`json::Json`] keeps the order keys are built in).
 //! - [`preview`]: a dry run's payload entries.
@@ -23,6 +23,7 @@ pub mod preview;
 pub mod rule;
 pub mod sentinel;
 pub mod strategy;
+pub mod sysdig;
 
 pub use json::Json;
 pub use rule::{CompileError, Rule};

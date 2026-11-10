@@ -43,6 +43,8 @@ thiserror.workspace = true
 # Paths without Windows' verbatim prefix (`\\?\`), which git and the oracle's
 # paths do not use.
 dunce = "1"
+# The approved differences the oracle test honours (tests/golden/payloads/APPROVED.toml).
+toml.workspace = true
 proptest.workspace = true
 # Repositories the git baseline's tests build (the version xtask locks).
 tempfile = "3"

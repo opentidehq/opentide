@@ -3,7 +3,7 @@
 
 use crate::json::{Json, Object};
 use crate::rule::{CompileError, Rule};
-use crate::{Context, elastic, sentinel};
+use crate::{Context, elastic, sentinel, sysdig};
 
 /// The tenant a preview compiles for: exclusions scoped to a tenant name are
 /// left out, so the payload is the one any tenant without a tenant-specific
@@ -12,7 +12,7 @@ pub const PREVIEW_TENANT: &str = "corpus-tenant";
 
 /// The platforms whose request body opentide builds from the rule alone,
 /// with no tenant (`OFFLINE_COMPILERS`), that this crate compiles.
-pub const OFFLINE: [&str; 2] = ["sentinel", "elastic"];
+pub const OFFLINE: [&str; 3] = ["sentinel", "elastic", "sysdig"];
 
 /// The request body a deploy would send for `rule` on `platform` with no
 /// tenant (`compile_offline`). `None` for a platform this crate does not
@@ -25,6 +25,7 @@ pub fn compile_offline(
     match platform {
         "sentinel" => Some(sentinel::compile(cx, rule, PREVIEW_TENANT)),
         "elastic" => Some(elastic::compile(cx, rule, &elastic::Setup::none())),
+        "sysdig" => Some(sysdig::compile_body(cx, rule, None)),
         _ => None,
     }
 }
@@ -69,8 +70,8 @@ pub fn failure(rule: &Rule, error: &CompileError) -> Json {
 }
 
 /// The preview of `rule` on `platform` (`preview_rule_deployment`). Sentinel
-/// reports a rule it cannot compile as a failure; Elastic falls back to the
-/// block's dump, as every other platform does.
+/// and Sysdig report a rule they cannot compile as a failure; Elastic falls
+/// back to the block's dump, as every other platform does.
 pub fn preview(cx: &Context<'_>, platform: &str, rule: &Rule) -> Preview {
     match platform {
         "sentinel" => match sentinel::compile(cx, rule, PREVIEW_TENANT) {
@@ -80,6 +81,13 @@ pub fn preview(cx: &Context<'_>, platform: &str, rule: &Rule) -> Preview {
                 // display name: compile_diagnostic(exc) names Sentinel.
                 Preview::Entry(failure(rule, &error))
             }
+        },
+        // The oracle names Sentinel in a Sysdig failure (`_compile_failure`
+        // calls `compile_diagnostic(exc)` without the platform); this names
+        // Sysdig (tests/golden/payloads/APPROVED.toml).
+        "sysdig" => match sysdig::compile_body(cx, rule, None) {
+            Ok(body) => Preview::Entry(compiled(rule, body)),
+            Err(error) => Preview::Entry(failure(rule, &error)),
         },
         "elastic" => match elastic::compile(cx, rule, &elastic::Setup::none()) {
             Ok(body) => Preview::Entry(compiled(rule, body)),

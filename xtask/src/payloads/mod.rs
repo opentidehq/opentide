@@ -2,8 +2,8 @@
 //! oracle (UC-3.1, #823).
 //!
 //! `diff --against python` materialises each corpus (the fixtures of
-//! `tests/golden/cases.toml`), has the oracle compile every rule's Sentinel
-//! and Elastic block (`probe.py`: the dry run's body, each configured
+//! `tests/golden/cases.toml`), has the oracle compile every rule's Sentinel,
+//! Elastic and Sysdig block (`probe.py`: the dry run's body, each configured
 //! tenant's, and the dry run's payload entry), compiles the same with
 //! `opentide-compile`, and compares them byte for byte. A difference fails,
 //! unless `tests/golden/payloads/APPROVED.toml` approves it.
@@ -20,7 +20,7 @@ use std::sync::Arc;
 use anyhow::{Context as _, Result, bail, ensure};
 use opentide_compile::json::Json;
 use opentide_compile::preview::{self, Preview};
-use opentide_compile::{CompileError, Owned, Rule, elastic, sentinel};
+use opentide_compile::{CompileError, Owned, Rule, elastic, sentinel, sysdig};
 use opentide_schema::vocab::Vocabularies;
 use opentide_workspace::{Options, OsFs, RootOptions, Workspace};
 use serde::Deserialize;
@@ -54,7 +54,7 @@ usage: cargo xtask payloads <command> [options]
 
 commands:
   diff --against python [--corpus NAME|all ...] [--python PATH] [--record]
-                 compile every Sentinel and Elastic block of every rule of each
+                 compile every Sentinel, Elastic and Sysdig block of every rule of each
                  corpus (the fixtures of tests/golden/cases.toml) with the oracle
                  and with opentide-compile: the dry run's body, each configured
                  tenant's body, and the dry run's payload entry; any difference
@@ -371,6 +371,7 @@ pub fn compare(corpus: &str, workspace: &Workspace, text: &str) -> Result<Tally>
         }
     };
     let elastic_tenants = tenants("elastic");
+    let sysdig_tenants = tenants("sysdig");
     let mut tally = Tally::default();
     for refused in &result.unloadable {
         tally.skipped.push((
@@ -417,6 +418,12 @@ pub fn compare(corpus: &str, workspace: &Workspace, text: &str) -> Result<Tally>
         for tenant in &probe.tenants {
             let candidate_outcome = match probe.platform.as_str() {
                 "sentinel" => candidate(sentinel::compile(&cx, &rule, &tenant.tenant)),
+                "sysdig" => {
+                    let known = sysdig_tenants.iter().find(|known| {
+                        known.get("name").and_then(Json::as_str) == Some(&tenant.tenant)
+                    });
+                    candidate(sysdig::compile_body(&cx, &rule, known))
+                }
                 _ => {
                     let setup = elastic_tenants
                         .iter()
@@ -563,7 +570,14 @@ pub fn run(options: &DiffOptions) -> Result<bool> {
                 );
             }
         }
-        let tally = compare(corpus, &workspace, &text)?;
+        let mut tally = compare(corpus, &workspace, &text)?;
+        // An approval names the workspace `<WS>`: the corpus is laid out in
+        // a new directory on every run.
+        let here = ws.to_string_lossy().into_owned();
+        for difference in &mut tally.differences {
+            difference.oracle = difference.oracle.replace(&here, "<WS>");
+            difference.candidate = difference.candidate.replace(&here, "<WS>");
+        }
         let mut report = format!(
             "{corpus}: {} bodies compared, {} differ, {} not compared\n",
             tally.compared,
@@ -673,5 +687,52 @@ mod tests {
             )))),
             describe(&outcome)
         );
+    }
+
+    #[test]
+    fn the_recorded_oracle_agrees_with_the_compile_corpus() {
+        let (repo, _) = crate::vocab::diff::workspace().unwrap();
+        let scratch = tempfile::tempdir().unwrap();
+        let ws = scratch.path().join("ws");
+        crate::golden::fixture::copy_tree(&repo.join(COMPILE_CORPUS), &ws).unwrap();
+        let ws = ws.canonicalize().unwrap();
+        let workspace = open(&ws).unwrap();
+        let request = request(&ws, &workspace);
+        assert!(request["rules"].as_array().unwrap().len() >= 20);
+        let recorded = fs::read_to_string(repo.join(ORACLE_RECORD))
+            .unwrap()
+            .replace("<WS>", &ws.to_string_lossy());
+        let tally = compare("payloads", &workspace, &recorded).unwrap();
+        assert!(tally.compared >= 80, "{}", tally.compared);
+        assert!(tally.skipped.is_empty(), "{:?}", tally.skipped);
+        // The one approved difference: the oracle names Sentinel in a Sysdig failure.
+        let differing: Vec<(&str, &str)> = tally
+            .differences
+            .iter()
+            .map(|difference| (difference.platform.as_str(), difference.what.as_str()))
+            .collect();
+        assert_eq!(differing, [("sysdig", "preview")]);
+        // A rule the oracle refused, and one the index does not hold.
+        let refused = r#"{"rules":[{"uuid":"00000000-0000-4000-8005-ffffffffffff","file":"",
+            "platform":"sysdig","compile":{"body":"{}"},"preview":"{}","tenants":[]}],
+            "unloadable":[{"uuid":"u","error":"ValidationError: no\nmore"}]}"#;
+        let tally = compare("payloads", &workspace, refused).unwrap();
+        assert_eq!(tally.compared, 0);
+        assert_eq!(tally.skipped.len(), 2, "{:?}", tally.skipped);
+        assert!(
+            tally.skipped[0]
+                .1
+                .ends_with("refuses the rule: ValidationError: no")
+        );
+        assert!(compare("payloads", &workspace, "not json").is_err());
+    }
+
+    #[test]
+    fn the_command_line_answers_usage_and_unknown_commands() {
+        assert_eq!(main(&[]), ExitCode::from(2));
+        assert_eq!(main(&args("help")), ExitCode::SUCCESS);
+        assert_eq!(main(&args("nope")), ExitCode::from(2));
+        assert_eq!(main(&args("plan --filter")), ExitCode::from(2));
+        assert_eq!(main(&args("diff --against rust")), ExitCode::from(2));
     }
 }

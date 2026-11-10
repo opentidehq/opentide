@@ -6,7 +6,7 @@ workspace. REQUEST is JSON: {"repo": DIR, "rules": [{"uuid", "path"}]}, the
 rules the Rust index holds. Each is read as the registry reads it
 (`load_rule_from_dict`); a rule the data model refuses is reported as
 `unloadable`, with why. For every other rule, and every platform block it has
-whose body opentide compiles from the rule alone (Sentinel, Elastic), the
+whose body opentide compiles from the rule alone (Sentinel, Elastic, Sysdig), the
 probe writes:
 
 - `compile`: the body `compile_offline` gives (the dry run's tenant), as
@@ -14,7 +14,7 @@ probe writes:
   (`compile_diagnostic`: code, message, help);
 - `tenants`: the same for each configured tenant of the platform (Sentinel's
   tenant name selects exclusions; Elastic's `setup` adds index, tags and
-  suppression);
+  suppression; Sysdig's adds tags);
 - `preview`: the dry run's payload entry (`preview_rule_deployment`).
 
 Standard library and the oracle only; no output on stdout is relied on.
@@ -29,8 +29,9 @@ import os
 import sys
 from typing import Any
 
-PLATFORMS = ("sentinel", "elastic")
-DISPLAY = {"sentinel": "Sentinel", "elastic": "Elastic"}
+PLATFORMS = ("sentinel", "elastic", "sysdig")
+DISPLAY = {"sentinel": "Sentinel", "elastic": "Elastic", "sysdig": "Sysdig"}
+ATTRIBUTES = {"sentinel": "Sentinel", "elastic": "Elastic", "sysdig": "Sysdig"}
 
 
 def compact(value: object) -> str:
@@ -47,6 +48,11 @@ def body_for(platform: str, rule: Any, tenant: Any) -> object:
         from opentide.platforms.sentinel.deployer import SentinelDeploy
 
         return SentinelDeploy().compile_deployment(service=None, data=rule, tenant=tenant.name)
+    if platform == "sysdig":
+        from opentide.platforms.sysdig.compile import api_body
+        from opentide.platforms.sysdig.deployer import SysdigDeploy
+
+        return api_body(SysdigDeploy().compile_deployment(rule, tenant))
     from opentide.platforms.elastic.compile import compile_rule
 
     return compile_rule(rule, tenant)
@@ -89,7 +95,7 @@ def main() -> int:
         Opentide.initialise()
         systems = Opentide.Configurations.Systems
         tenants: dict[str, list[Any]] = {}
-        for platform, attribute in (("sentinel", "Sentinel"), ("elastic", "Elastic")):
+        for platform, attribute in ATTRIBUTES.items():
             try:
                 tenants[platform] = list(
                     getattr(getattr(systems, attribute), "tenants", None) or []
