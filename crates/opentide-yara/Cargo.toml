@@ -15,5 +15,7 @@ opentide-core.workspace = true
 opentide-highlight.workspace = true
 opentide-syntax.workspace = true
 tree-sitter.workspace = true
+serde.workspace = true
+toml.workspace = true
 yara-x-parser.workspace = true
 yara-x-fmt.workspace = true

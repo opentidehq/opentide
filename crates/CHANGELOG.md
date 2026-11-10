@@ -12,7 +12,8 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ### Added
 
-- **`.yar` and `.yara` files are YARA, language id `yara`.** The server reports what libyara 4.5 cannot parse as `yara_parse_error`, an integer literal out of range as `yara_number_out_of_range`, and a bad regexp modifier as `yara_regexp`. `opentide explain` knows every code of the YARA language spec and its HarfangLab and Bitdefender profiles, listed in `docs/YARA.md` ([#165](https://github.com/opentidehq/language-server/issues/165)).
+- **`.yar` and `.yara` files are YARA, language id `yara`.** `opentide explain` knows every code of the YARA language spec and its HarfangLab and Bitdefender profiles, listed in `docs/YARA.md` ([#165](https://github.com/opentidehq/language-server/issues/165)).
+- **YARA signatures are checked as libyara 4.5 compiles them.** Every error and warning of the YARA language spec is reported: undefined and unreferenced strings, unknown and unimported modules, module members and function arguments against a catalogue of the 13 modules, types, regular expressions, hex strings, string modifiers and numeric limits, and libyara's own warnings (slow strings, `entrypoint`, suspicious expressions). What only YARA-X refuses is the warning `yara_x_incompatible`, and YARA-X-only syntax is an error that names the feature. `docs/YARA.md` maps each code to its libyara source ([#165](https://github.com/opentidehq/language-server/issues/165)).
 - **YARA is highlighted.** Semantic tokens colour rules, tags, meta keys, strings and their counts and offsets, modules and their functions; `highlights/generated/yara.tmLanguage.json` (`source.opentide.yara`) is the TextMate grammar, and the Neovim, Helix, Zed and `@opentide/lsp-client` samples map `.yar` and `.yara` to `yara` ([#165](https://github.com/opentidehq/language-server/issues/165)).
 
 ## [0.12.1] - 2026-11-09
