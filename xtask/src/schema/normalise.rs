@@ -107,13 +107,20 @@ fn inline(schema: &Value, defs: &Map<String, Value>, depth: usize) -> Value {
             }
             Value::Object(out)
         }
-        Value::Array(items) => Value::Array(items.iter().map(|item| inline(item, defs, depth + 1)).collect()),
+        Value::Array(items) => Value::Array(
+            items
+                .iter()
+                .map(|item| inline(item, defs, depth + 1))
+                .collect(),
+        ),
         other => other.clone(),
     }
 }
 
 fn is_null_schema(value: &Value) -> bool {
-    value.as_object().is_some_and(|map| map.len() == 1 && map.get("type") == Some(&Value::from("null")))
+    value
+        .as_object()
+        .is_some_and(|map| map.len() == 1 && map.get("type") == Some(&Value::from("null")))
 }
 
 /// One schema object in the normal form; `field` is the property name it is
@@ -126,7 +133,10 @@ fn tidy(schema: Value, side: Side, field: Option<&str>) -> Value {
     if let Some(Value::Array(branches)) = map.get("anyOf").cloned()
         && branches.iter().any(is_null_schema)
     {
-        let rest: Vec<Value> = branches.into_iter().filter(|b| !is_null_schema(b)).collect();
+        let rest: Vec<Value> = branches
+            .into_iter()
+            .filter(|b| !is_null_schema(b))
+            .collect();
         map.remove("anyOf");
         map.insert("nullable".into(), Value::Bool(true));
         if rest.len() == 1 {
@@ -154,17 +164,26 @@ fn tidy(schema: Value, side: Side, field: Option<&str>) -> Value {
     if map.get("default") == Some(&Value::Null) {
         map.remove("default");
     }
-    if side == Side::Schemars
-        && matches!(map.get("default"), Some(Value::Array(items)) if items.is_empty())
-        || side == Side::Schemars
-            && matches!(map.get("default"), Some(Value::Object(fields)) if fields.is_empty())
-    {
+    let empty_default = match map.get("default") {
+        Some(Value::Array(items)) => items.is_empty(),
+        Some(Value::Object(fields)) => fields.is_empty(),
+        _ => false,
+    };
+    if side == Side::Schemars && empty_default {
         map.remove("default");
     }
     if let Some(format) = map.get("format").and_then(Value::as_str)
         && matches!(
             format,
-            "int8" | "int16" | "int32" | "int64" | "uint" | "uint8" | "uint16" | "uint32" | "uint64"
+            "int8"
+                | "int16"
+                | "int32"
+                | "int64"
+                | "uint"
+                | "uint8"
+                | "uint16"
+                | "uint32"
+                | "uint64"
         )
     {
         map.remove("format");
@@ -211,7 +230,8 @@ fn exclude(schema: &mut Value, path: &[&str]) {
     let Some((first, rest)) = path.split_first() else {
         if let Value::Object(map) = schema {
             map.retain(|key, _| {
-                matches!(key.as_str(), "description" | "nullable" | "default") || key.starts_with("tide.")
+                matches!(key.as_str(), "description" | "nullable" | "default")
+                    || key.starts_with("tide.")
             });
             map.insert("x-not-compared".into(), Value::from("UC-1.4"));
         }

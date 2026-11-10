@@ -1060,7 +1060,6 @@ dependencies = [
  "insta",
  "jiff",
  "opentide-core",
- "opentide-schema",
  "opentide-schema-derive",
  "proptest",
  "pyo3",

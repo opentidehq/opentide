@@ -34,4 +34,6 @@ pub use rule::{Rule, RuleConfigurations, RuleV1_0, RuleV1_1, UncheckedBlock};
 pub use threat::{Killchain, ThreatActor, ThreatBody, ThreatVector, ThreatVectorV1_0};
 
 #[cfg(test)]
+mod table;
+#[cfg(test)]
 mod tests;

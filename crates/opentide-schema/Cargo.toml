@@ -31,8 +31,9 @@ python = ["dep:pyo3"]
 wasm = []
 # Reading a rule whose platform blocks are not checked yet: the blocks are
 # UC-1.4's (#810), and until they arrive `RuleV1_0`, `RuleV1_1` and
-# `RuleConfigurations` read only with this feature. Tests and xtask's oracle
-# comparisons turn it on; nothing that ships may (UC-1.4 removes it).
+# `RuleConfigurations` read only with this feature, or in the crate's unit
+# tests (`cfg(test)`). xtask's oracle comparisons turn it on; nothing that
+# ships may (UC-1.4 removes it).
 unchecked-platform-blocks = []
 
 [dependencies]
@@ -59,8 +60,6 @@ regex.workspace = true
 jiff = { workspace = true }
 
 [dev-dependencies]
-# The crate's own tests read rules: the feature on, for tests only.
-opentide-schema = { path = ".", features = ["unchecked-platform-blocks"] }
 insta.workspace = true
 strsim.workspace = true
 serde_yaml.workspace = true

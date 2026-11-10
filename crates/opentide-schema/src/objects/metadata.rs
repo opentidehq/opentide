@@ -32,9 +32,11 @@ pub struct Organisation {
 pub enum Version {
     /// A text version (`"1.2"`).
     #[from_node(tag = "str")]
+    #[schemars(description = "")]
     Str(String),
     /// A number (`3`).
     #[from_node(tag = "int")]
+    #[schemars(description = "")]
     Int(i64),
 }
 

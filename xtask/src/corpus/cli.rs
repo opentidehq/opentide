@@ -736,10 +736,7 @@ fn structural_check(parsed: &FaultArgs, catalogue: &Catalogue) -> Result<u8> {
             compared += rust.len();
             if rust != oracle
                 && let Some(approved) = approved
-                && serde_json::from_str::<serde_json::Value>(approved.oracle)?
-                    == serde_json::Value::from(oracle.clone())
-                && serde_json::from_str::<serde_json::Value>(approved.rust)?
-                    == serde_json::Value::from(rust.clone())
+                && approved.applies(&oracle, &rust)
             {
                 applied += 1;
                 continue;
@@ -765,16 +762,19 @@ fn structural_check(parsed: &FaultArgs, catalogue: &Catalogue) -> Result<u8> {
             }
         }
         // Not vacuous: each target carries a finding the two agree on, or the
-        // approved difference.
+        // approved difference; a kind the oracle reports nothing for
+        // (`codes = []`) is checked on targets the model read.
         for path in target_paths.iter().filter(|_| approved.is_none()) {
             let file = workspace
                 .files
                 .iter()
                 .find(|file| &file.path == path)
                 .with_context(|| format!("{id}: no target {path}"))?;
-            let rust =
-                structural::check_object(&file.path, file.render().as_bytes()).unwrap_or_default();
-            if rust.is_empty() {
+            let Some(rust) = structural::check_object(&file.path, file.render().as_bytes()) else {
+                problems.push(format!("{path}: a target no object model reads"));
+                continue;
+            };
+            if rust.is_empty() && !kind.codes.is_empty() {
                 problems.push(format!("{path}: no finding on a target"));
             }
         }
@@ -797,7 +797,7 @@ fn structural_check(parsed: &FaultArgs, catalogue: &Catalogue) -> Result<u8> {
     }
     drop(guard);
     println!(
-        "corpus faults --engine rust: {} structural kinds, {} passed, {failed} failed, in {:.1} s \
+        "corpus faults --engine rust: {} object kinds, {} passed, {failed} failed, in {:.1} s \
          against {}",
         ids.len(),
         ids.len() - failed,

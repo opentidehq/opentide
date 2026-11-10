@@ -158,7 +158,10 @@ pub fn rust_schemas() -> Vec<(&'static str, Value)> {
         ("ExternalDetector", of::<objects::ExternalDetector>()),
         ("DetectionExample", of::<objects::DetectionExample>()),
         ("DetectionSignal", of::<objects::DetectionSignal>()),
-        ("ObjectiveComposition", of::<objects::ObjectiveComposition>()),
+        (
+            "ObjectiveComposition",
+            of::<objects::ObjectiveComposition>(),
+        ),
         ("ObjectiveBody", of::<objects::ObjectiveBody>()),
         ("DetectionObjective", of::<objects::ObjectiveV1_0>()),
         ("RuleConfigurations", of::<objects::RuleConfigurations>()),
@@ -268,8 +271,26 @@ pub struct Corpus {
     pub findings: usize,
     /// Files whose findings differ by an approved difference.
     pub approved: usize,
+    /// Files the oracle's loader or workspace refused before any model ran.
+    pub loader: usize,
     /// Files whose findings differ otherwise: path, oracle, Rust.
     pub mismatches: Vec<(String, Value, Value)>,
+}
+
+/// Whether the oracle refused `path` before validating it: `missing_uuid`
+/// or `schema_missing`.
+fn loader_refused(report: &Value, path: &str) -> bool {
+    report["report"]["issues"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .any(|item| {
+            item["path"].as_str() == Some(path)
+                && matches!(
+                    item["code"].as_str(),
+                    Some("missing_uuid" | "schema_missing")
+                )
+        })
 }
 
 /// Compares the findings on one workspace (`probe.py objects`'s result).
@@ -284,24 +305,39 @@ pub fn compare_objects(name: &str, ws: &Path, result: &Value) -> Result<Corpus> 
         .context("the probe listed no object files")?;
     for file in files {
         let path = file["path"].as_str().context("an object without a path")?;
-        let family = file["family"].as_str().context("an object without a family")?;
+        let family = file["family"]
+            .as_str()
+            .context("an object without a family")?;
         let bytes = fs::read(ws.join(path)).with_context(|| format!("read {path}"))?;
-        let rust = structural::comparable(&structural::check_object_as(family, &bytes));
-        let oracle = structural::oracle_findings(report, path);
         corpus.files += 1;
+        // The loader's and the workspace's decisions, before any model runs
+        // (UC-2.x): a file without metadata.uuid or metadata.schema, and an
+        // empty document.
+        let empty = opentide_schema::node::load_bytes(&bytes)
+            .is_ok_and(|document| document.root().is_none());
+        if empty || loader_refused(report, path) {
+            corpus.loader += 1;
+            continue;
+        }
+        // The CLI sorts a report's findings; the model's own order is
+        // compared with Pydantic's by opentide-schema's `objects::table` test.
+        let mut rust = structural::comparable(&structural::check_object_as(family, &bytes));
+        let mut oracle = structural::oracle_findings(report, path);
+        rust.sort_by_key(ToString::to_string);
+        oracle.sort_by_key(ToString::to_string);
         corpus.findings += oracle.len();
         if rust == oracle {
             continue;
         }
-        let (oracle, rust) = (Value::from(oracle), Value::from(rust));
-        let approved = structural::APPROVED.iter().any(|entry| {
-            serde_json::from_str::<Value>(entry.oracle).ok().as_ref() == Some(&oracle)
-                && serde_json::from_str::<Value>(entry.rust).ok().as_ref() == Some(&rust)
-        });
-        if approved {
+        if structural::APPROVED
+            .iter()
+            .any(|entry| entry.applies(&oracle, &rust))
+        {
             corpus.approved += 1;
         } else {
-            corpus.mismatches.push((path.to_owned(), oracle, rust));
+            corpus
+                .mismatches
+                .push((path.to_owned(), Value::from(oracle), Value::from(rust)));
         }
     }
     ensure!(corpus.files > 0, "{name}: the probe found no object file");
@@ -361,8 +397,9 @@ pub fn run(options: &Options) -> Result<bool> {
             let corpus = compare_objects(name, &ws, &result)?;
             if corpus.mismatches.is_empty() {
                 println!(
-                    "ok   objects {name}: {} files, {} findings, {} approved difference(s)",
-                    corpus.files, corpus.findings, corpus.approved
+                    "ok   objects {name}: {} files, {} findings the same, {} approved \
+                     difference(s), {} refused by the loader",
+                    corpus.files, corpus.findings, corpus.approved, corpus.loader
                 );
             } else {
                 passed = false;
@@ -384,7 +421,11 @@ pub fn run(options: &Options) -> Result<bool> {
     }
     println!(
         "schema diff: {}",
-        if passed { "the same, but for the approved differences" } else { "FAILED" }
+        if passed {
+            "the same, but for the approved differences"
+        } else {
+            "FAILED"
+        }
     );
     Ok(passed)
 }

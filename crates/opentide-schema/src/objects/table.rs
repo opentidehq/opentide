@@ -11,25 +11,21 @@
 //! names a difference and does not differ fails, as does an entry no case
 //! uses. Errors inside a platform block (`configurations.<platform>…`) are
 //! UC-1.4's (#810) and are left out on both sides. Every Rust result is the
-//! reviewed snapshot `tests/snapshots/objects_table__rust_results.snap`.
-
-#![expect(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    reason = "helpers of the tests: a fixture that does not parse fails them"
-)]
+//! reviewed snapshot in `src/objects/snapshots/`. A unit test, not an
+//! integration test: reading a rule needs `cfg(test)` or the
+//! `unchecked-platform-blocks` feature until UC-1.4.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use opentide_schema::SchemaError;
-use opentide_schema::from_node;
-use opentide_schema::node::{self, Document};
-use opentide_schema::objects::{ObjectiveV1_0, RuleConfigurations, RuleV1_0, RuleV1_1, ThreatVectorV1_0};
+use crate::SchemaError;
+use crate::from_node;
+use crate::node::{self, Document};
+use crate::objects::{ObjectiveV1_0, RuleConfigurations, RuleV1_0, RuleV1_1, ThreatVectorV1_0};
 use serde::Serialize;
 use serde_json::{Value as Json, json};
 
-const TABLE: &str = include_str!("oracle/objects_table.json");
+const TABLE: &str = include_str!("../../tests/oracle/objects_table.json");
 
 /// The model `metadata.schema` selects for a family, or the loader's verdict.
 fn convert(family: &str, document: &Document) -> Json {
@@ -115,7 +111,8 @@ fn repo() -> &'static Path {
 fn every_case_is_compared_with_the_oracle_and_every_difference_is_explained() {
     let table: Json = serde_json::from_str(TABLE).unwrap();
     assert_eq!(table["oracle"], "0.23.0");
-    let notes: Cases = toml::from_str(include_str!("oracle/objects_cases.toml")).unwrap();
+    let notes: Cases =
+        toml::from_str(include_str!("../../tests/oracle/objects_cases.toml")).unwrap();
     let differences: BTreeMap<&str, &Difference> = notes
         .difference
         .iter()
@@ -216,7 +213,12 @@ fn every_object_file_of_the_corpora_is_in_the_table() {
         .as_array()
         .unwrap()
         .iter()
-        .filter_map(|case| case["id"].as_str()?.strip_prefix("file:").map(str::to_owned))
+        .filter_map(|case| {
+            case["id"]
+                .as_str()?
+                .strip_prefix("file:")
+                .map(str::to_owned)
+        })
         .collect();
     let mut found = BTreeSet::new();
     for source in [

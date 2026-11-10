@@ -59,11 +59,7 @@ impl FromStr for FieldRole {
 
 /// The role a field's schema declares (`field_role`), if any.
 pub fn field_role(field_schema: &Value) -> Option<FieldRole> {
-    field_schema
-        .get(keys::FIELD_ROLE)?
-        .as_str()?
-        .parse()
-        .ok()
+    field_schema.get(keys::FIELD_ROLE)?.as_str()?.parse().ok()
 }
 
 /// Every field of a model's schema (`schemars::schema_for!(T)`) that

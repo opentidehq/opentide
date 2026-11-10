@@ -1,7 +1,7 @@
 //! The object models' unit tests, ported from `tests/test_models/`
 //! (`test_base.py`, `test_metadata.py`, `test_threat.py`,
 //! `test_objective.py`, `test_rule_reviewed.py`); the oracle comparison of
-//! every case is `tests/objects_table.rs`.
+//! every case is `table.rs`.
 
 use garde::Validate;
 use serde_json::{Value, json};
@@ -20,13 +20,22 @@ fn read<T: crate::FromNode>(text: &str) -> Result<T, Vec<crate::SchemaError>> {
 }
 
 fn with_reviewed(value: &str) -> String {
-    RULE.replace("  tlp: clear\n", &format!("  tlp: clear\n  reviewed: {value}\n"))
+    RULE.replace(
+        "  tlp: clear\n",
+        &format!("  tlp: clear\n  reviewed: {value}\n"),
+    )
 }
 
 fn messages(errors: &[crate::SchemaError]) -> Vec<(String, Option<&'static str>, String)> {
     errors
         .iter()
-        .map(|e| (e.field_path().join("."), e.kind.pydantic_type(), e.message.clone()))
+        .map(|e| {
+            (
+                e.field_path().join("."),
+                e.kind.pydantic_type(),
+                e.message.clone(),
+            )
+        })
         .collect()
 }
 
@@ -101,12 +110,12 @@ fn public_reference_keys_are_numbers() {
         messages(&errors),
         [
             (
-                " 4.[key]".to_owned(),
+                "public. 4.[key]".to_owned(),
                 Some("int_parsing"),
                 "Input should be a valid integer, unable to parse string as an integer".to_owned()
             ),
             (
-                "1.5.[key]".to_owned(),
+                "public.1.5.[key]".to_owned(),
                 Some("int_type"),
                 "Input should be a valid integer".to_owned()
             ),
@@ -190,7 +199,10 @@ fn threat_with(field: &str, value: &str) -> String {
 fn threat_vector_reads() {
     let threat: ThreatVector = read(THREAT).unwrap();
     assert_eq!(threat.threat.mitre_attack, ["T1059"]);
-    assert_eq!(threat.metadata.schema_id, ThreatVectorV1_0::SCHEMA_IDENTIFIER);
+    assert_eq!(
+        threat.metadata.schema_id,
+        ThreatVectorV1_0::SCHEMA_IDENTIFIER
+    );
 }
 
 #[test]
@@ -203,7 +215,10 @@ fn threat_actors_are_objects() {
     let threat: ThreatVector = read(&text).unwrap();
     let actor = &threat.threat.actors.unwrap()[0];
     assert_eq!(actor.name, "att&ck::G0006");
-    assert_eq!(actor.sighting.as_deref(), Some("Simulated credential access."));
+    assert_eq!(
+        actor.sighting.as_deref(),
+        Some("Simulated credential access.")
+    );
     assert_eq!(
         actor.references.as_deref(),
         Some(&["https://attack.mitre.org/groups/G0006".to_owned()][..])
@@ -227,7 +242,10 @@ fn threat_cve_round_trips() {
 #[test]
 fn impact_and_leverage_keep_every_name() {
     let text = threat_with("impact", "[Data Breach, Identity Theft]");
-    let text = text.replace("leverage: [High]", "leverage: [Elevation of privilege, Repudiation]");
+    let text = text.replace(
+        "leverage: [High]",
+        "leverage: [Elevation of privilege, Repudiation]",
+    );
     let threat: ThreatVector = read(&text).unwrap();
     assert_eq!(threat.threat.impact, ["Data Breach", "Identity Theft"]);
     assert_eq!(
@@ -373,8 +391,8 @@ fn rule_1_1_rejects_a_bad_review_date() {
         [(
             "metadata.reviewed".to_owned(),
             Some("value_error"),
-            "Value error, metadata.reviewed is not a valid date or time: parameter 'day' with \
-             value 30 is not in the required range of 1..=28"
+            "Value error, metadata.reviewed is not a valid date or time: parameter 'day' for \
+             `2026-02` is invalid, must be in range `1..=28`"
                 .to_owned()
         )]
     );
@@ -415,7 +433,10 @@ fn garde_runs_the_same_validators() {
     bad.metadata.reviewed = Some("2026-02-30".to_owned());
     bad.metadata.schema_id = "rule::9.9".to_owned();
     let report = bad.validate_with(&pins).unwrap_err().to_string();
-    assert!(report.contains("unknown schema identifier: 'rule::9.9'"), "{report}");
+    assert!(
+        report.contains("unknown schema identifier: 'rule::9.9'"),
+        "{report}"
+    );
     assert!(report.contains("not a valid date or time"), "{report}");
     let mut untrimmed = rule;
     untrimmed.metadata.reviewed = Some(" 2026-09-01".to_owned());
@@ -426,7 +447,10 @@ fn garde_runs_the_same_validators() {
     threat.threat.impact = vec!["a; b".to_owned()];
     threat.threat.leverage = Vec::new();
     let report = threat.validate_with(&pins).unwrap_err().to_string();
-    assert!(report.contains("packs several vocabulary names"), "{report}");
+    assert!(
+        report.contains("packs several vocabulary names"),
+        "{report}"
+    );
     assert!(report.contains("threat.leverage"), "{report}");
 }
 
@@ -453,21 +477,20 @@ fn the_severity_a_page_shows() {
     let rule: RuleV1_1 =
         read(&format!("{RULE}severity: High\nresponse:\n  playbook: p\n")).unwrap();
     assert_eq!(rule.displayed_severity(), Some("Informational"));
-    let rule: RuleV1_1 =
-        read(&format!("{RULE}response:\n  alert_severity: Critical\n")).unwrap();
+    let rule: RuleV1_1 = read(&format!("{RULE}response:\n  alert_severity: Critical\n")).unwrap();
     assert_eq!(rule.alert_severity(), "Critical");
 }
 
 #[test]
 fn configurations_hold_each_block_in_order() {
-    let text = format!(
-        "{RULE}configurations:\n  sysdig: {{condition: x}}\n  sentinel: {{query: q}}\n"
-    );
+    let text =
+        format!("{RULE}configurations:\n  sysdig: {{condition: x}}\n  sentinel: {{query: q}}\n");
     let rule: RuleV1_1 = read(&text).unwrap();
     let configurations = rule.configurations.unwrap();
     let platforms: Vec<&str> = configurations.blocks().iter().map(|(p, _)| *p).collect();
     assert_eq!(platforms, ["sentinel", "sysdig"]);
-    let errors = read::<RuleV1_1>(&format!("{RULE}configurations:\n  sentinal: {{}}\n")).unwrap_err();
+    let errors =
+        read::<RuleV1_1>(&format!("{RULE}configurations:\n  sentinal: {{}}\n")).unwrap_err();
     assert_eq!(errors[0].field_path(), ["configurations", "sentinal"]);
 }
 

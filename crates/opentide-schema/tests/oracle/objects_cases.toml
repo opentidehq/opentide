@@ -8,7 +8,7 @@
 #
 #   <oracle python> crates/opentide-schema/tests/oracle/objects_table.py
 #
-# `tests/objects_table.rs` compares them case by case: each error's type,
+# `src/objects/table.rs` compares them case by case: each error's type,
 # field path, message, input, context, span and `yaml_line`, or the value. A
 # case that differs names the `[[difference]]` that explains it (its reason
 # and the bold lead of its CHANGELOG.md entry); the platform blocks under
@@ -27,13 +27,18 @@ changelog = "**`created` and `modified` are text**"
 
 [[difference]]
 id = "reviewed-validity-message"
-reason = "A `metadata.reviewed` of the right shape whose date, time or offset cannot exist is refused as before (`value_error`), with jiff's explanation (`metadata.reviewed is not a valid date or time: parameter 'day' with value 30 is not in the required range of 1..=28`) instead of Python's `datetime` message (`day 30 must be in range 1..28 for month 2 in year 2026`)."
+reason = "A `metadata.reviewed` of the right shape whose date, time or offset cannot exist is refused as before (`value_error`), with jiff's explanation (`metadata.reviewed is not a valid date or time: parameter 'day' for `2026-02` is invalid, must be in range `1..=28``) instead of Python's `datetime` message (`day 30 must be in range 1..28 for month 2 in year 2026`)."
 changelog = "**An impossible `reviewed` date is explained by the date library**"
 
 [[difference]]
 id = "public-reference-keys"
 reason = "A key of `references.public` is a reference number: an integer, or a string that is one (`\"2\"`). The oracle ran Python's `int()` on every key before validating and crashed on a word (`ValueError`, no finding); the Rust model reports `int_parsing` at the key (`references.public.abc.[key]`), as Pydantic reports a dictionary key."
 changelog = "**A word as a public reference number is reported**"
+
+[[difference]]
+id = "positions"
+reason = "As crates/opentide-schema/tests/oracle/from_node_cases.toml `positions`: positions come from the parser's node marks. A value written `null` has a `yaml_line` (the oracle gave none), and an error under an integer key (`references.public.1`) is found at that key, where the oracle could not find the key and pointed at its parent."
+changelog = "**Findings point at the key or value they are about**"
 
 [[difference]]
 id = "strict-types"
@@ -738,6 +743,7 @@ references:
 [[case]]
 id = "rule-references-public-value"
 family = "rule"
+difference = ["positions"]
 yaml = '''
 name: Rule
 metadata:
@@ -1004,6 +1010,7 @@ threat:
 [[case]]
 id = "threat-impact-null"
 family = "threat"
+difference = ["positions"]
 yaml = '''
 name: Threat
 criticality: High

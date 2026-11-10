@@ -18,7 +18,9 @@
 use opentide_schema::Surface;
 use opentide_schema::from_node;
 use opentide_schema::node;
-use opentide_schema::objects::{ObjectiveV1_0, RuleConfigurations, RuleV1_0, RuleV1_1, ThreatVectorV1_0};
+use opentide_schema::objects::{
+    ObjectiveV1_0, RuleConfigurations, RuleV1_0, RuleV1_1, ThreatVectorV1_0,
+};
 use serde_json::{Value as Json, json};
 
 /// The structural fault kinds of `tests/corpora/faults.toml` (UC-1.2), each
@@ -75,7 +77,11 @@ pub fn group(name: &str) -> Option<Vec<&'static str>> {
     let structural = STRUCTURAL.iter().map(|(id, _)| *id);
     match name {
         GROUP => Some(structural.collect()),
-        OBJECTS_GROUP => Some(structural.chain(OBJECTS.iter().map(|(id, _)| *id)).collect()),
+        OBJECTS_GROUP => Some(
+            structural
+                .chain(OBJECTS.iter().map(|(id, _)| *id))
+                .collect(),
+        ),
         _ => None,
     }
 }
@@ -88,7 +94,7 @@ pub fn kinds() -> Vec<&'static str> {
 /// An intended difference between the oracle and the Rust conversion on one
 /// fault kind: on each target file the oracle's findings are `oracle` and the
 /// Rust conversion's are `rust` (JSON, as [`oracle_findings`] and
-/// [`comparable`] give them). The runner fails when an entry no longer
+/// [`comparable`] give them, without their positions: [`Approved::applies`]). The runner fails when an entry no longer
 /// applies, and when `changelog` is not in CHANGELOG.md.
 #[derive(Debug, Clone, Copy)]
 pub struct Approved {
@@ -117,9 +123,38 @@ pub const APPROVED: &[Approved] = &[Approved {
     changelog: "**Tide objects are read as YAML 1.2**",
 }];
 
-/// What the Rust model reports for `reviewed: 2026-02-30` (the fault kind
-/// sets it on the line after `tlp`).
-const REVIEWED_IMPOSSIBLE_DATE: &str = r#"[{"code":"schema_validation","column":13,"end_column":23,"end_line":10,"field_path":["metadata","reviewed"],"line":10,"message":"Value error, metadata.reviewed is not a valid date or time: parameter 'day' with value 30 is not in the required range of 1..=28","yaml_line":9}]"#;
+/// What the Rust model reports for `reviewed: 2026-02-30`, positions aside.
+const REVIEWED_IMPOSSIBLE_DATE: &str = r#"[{"code":"schema_validation","field_path":["metadata","reviewed"],"message":"Value error, metadata.reviewed is not a valid date or time: parameter 'day' for `2026-02` is invalid, must be in range `1..=28`"}]"#;
+
+/// A finding without its position (`line`, `column`, `end_line`,
+/// `end_column`, `yaml_line`): an approved difference names what is found,
+/// not where, which depends on the file it is applied to.
+pub fn without_position(findings: &[Json]) -> Json {
+    Json::Array(
+        findings
+            .iter()
+            .map(|finding| {
+                let mut finding = finding.clone();
+                if let Some(map) = finding.as_object_mut() {
+                    for key in ["line", "column", "end_line", "end_column", "yaml_line"] {
+                        map.remove(key);
+                    }
+                }
+                finding
+            })
+            .collect(),
+    )
+}
+
+impl Approved {
+    /// Whether it approves these findings on one file: the oracle's are
+    /// `oracle` and the Rust model's `rust`, positions aside.
+    pub fn applies(&self, oracle: &[Json], rust: &[Json]) -> bool {
+        serde_json::from_str::<Json>(self.oracle).ok().as_ref() == Some(&without_position(oracle))
+            && serde_json::from_str::<Json>(self.rust).ok().as_ref()
+                == Some(&without_position(rust))
+    }
+}
 
 /// The approved difference for `kind`, if any.
 pub fn approved(kind: &str) -> Option<&'static Approved> {
@@ -182,26 +217,26 @@ pub fn check_object_as(family: &str, bytes: &[u8]) -> Vec<Json> {
         _ => return Vec::new(),
     };
     errors
-            .unwrap_or_default()
-            .iter()
-            .map(|error| {
-                let span = error.span.as_ref();
-                let line = span
-                    .map(|span| span.line)
-                    .or(error.yaml_line.map(|line| line + 1));
-                json!({
-                    "code": error.code(Surface::Object),
-                    "field_path": error.field_path(),
-                    "message": error.message,
-                    "line": line,
-                    "column": span.map(|span| span.column),
-                    "end_line": span.map(|span| span.end_line),
-                    "end_column": span.map(|span| span.end_column),
-                    "yaml_line": error.yaml_line,
-                    "kind": format!("{:?}", error.kind),
-                })
+        .unwrap_or_default()
+        .iter()
+        .map(|error| {
+            let span = error.span.as_ref();
+            let line = span
+                .map(|span| span.line)
+                .or(error.yaml_line.map(|line| line + 1));
+            json!({
+                "code": error.code(Surface::Object),
+                "field_path": error.field_path(),
+                "message": error.message,
+                "line": line,
+                "column": span.map(|span| span.column),
+                "end_line": span.map(|span| span.end_line),
+                "end_column": span.map(|span| span.end_column),
+                "yaml_line": error.yaml_line,
+                "kind": format!("{:?}", error.kind),
             })
-            .collect()
+        })
+        .collect()
 }
 
 /// The oracle's findings for `path` that the Rust conversion owns
@@ -347,7 +382,10 @@ mod tests {
         let findings = check_object("objects/objectives/o.yaml", text.as_bytes()).unwrap();
         assert_eq!(findings.len(), 1, "{findings:?}");
         assert_eq!(findings[0]["field_path"], json!(["objective"]));
-        assert!(in_platform_block(&["configurations".into(), "sysdig".into()]));
+        assert!(in_platform_block(&[
+            "configurations".into(),
+            "sysdig".into()
+        ]));
         assert!(in_platform_block(&[
             "configurations".into(),
             "sentinel".into(),

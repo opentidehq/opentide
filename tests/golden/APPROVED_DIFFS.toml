@@ -63,7 +63,7 @@
 #
 # The object models (UC-1.3, #809), decided and checked case by case in
 # crates/opentide-schema/tests/oracle/objects_cases.toml (`[[difference]]`,
-# run by tests/objects_table.rs) and on the fault catalogue
+# run by crates/opentide-schema/src/objects/table.rs) and on the fault catalogue
 # (xtask/src/corpus/structural.rs `APPROVED`); entered here when `validate`
 # routes to Rust (UC-2.x):
 #
@@ -78,5 +78,8 @@
 # - `public-reference-keys`: a word as a `references.public` key is
 #   `int_parsing` at the key, where the oracle crashed ("**A word as a public
 #   reference number is reported**").
+# - `positions`: a `null` value has a `yaml_line`; an error under an integer
+#   key is placed at that key ("**Findings point at the key or value they are
+#   about**").
 # - `strict-types`: `version: 1.5` is `int_type`, not `int_from_float`
 #   ("**Field types are checked as declared**").

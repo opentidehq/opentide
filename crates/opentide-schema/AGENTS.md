@@ -31,7 +31,7 @@ depends on opentide-core (`codes`, `suggest`). Not published yet (`publish = fal
 | `YAML.md` | Generated: every YAML case read by the oracle (PyYAML, YAML 1.1) and by `node` (YAML 1.2), with each difference and its reason |
 | `tests/yaml_table.rs` | `tests/oracle/yaml_cases.toml` against the oracle (`yaml_table.json`, from `yaml_table.py`); writes `YAML.md` |
 | `tests/from_node_table.rs` | `tests/oracle/from_node_cases.toml` against the oracle (`from_node_table.json`, from `from_node_table.py`); the Rust results are the insta snapshot |
-| `tests/objects_table.rs` | `tests/oracle/objects_cases.toml` and every object file of `tests/fixtures/tide_corpus` and the VS Code fixture against the oracle (`objects_table.json`, from `objects_table.py`); the Rust results are the insta snapshot |
+| `src/objects/table.rs` (a unit test: rules read under `cfg(test)`) | `tests/oracle/objects_cases.toml` and every object file of `tests/fixtures/tide_corpus` and the VS Code fixture against the oracle (`objects_table.json`, from `objects_table.py`); the Rust results are the insta snapshot |
 | `tests/round_trip_property.rs`, `tests/from_node_api.rs`, `tests/fuzz_regressions.rs` | proptest round trip, the API, and the `from_node` fuzz target's seeds and saved crashes |
 | `tests/roundtrip.rs` | YAML → struct → YAML byte for byte; optional, defaulted, alias, closure, pins |
 | `tests/json_schema.rs` | The derived schema (insta snapshot) and its `tide.*` keys |
@@ -66,8 +66,8 @@ depends on opentide-core (`codes`, `suggest`). Not published yet (`publish = fal
   conversion (`#[from_node(with = ...)]`, so its error sits among the others in Pydantic's order)
   and garde (`#[garde(custom(...))]`).
 - The platform blocks are UC-1.4's: until then a block is an `UncheckedBlock`, and the rule models
-  read only with the `unchecked-platform-blocks` feature, which the crate's own tests (a
-  dev-dependency on itself) and xtask turn on. Nothing that ships may.
+  read only with the `unchecked-platform-blocks` feature, which xtask turns on, or in the crate's
+  unit tests (`cfg(test)`); its integration tests cannot read a rule. Nothing that ships may.
 
 ## Test
 
@@ -77,7 +77,7 @@ cargo nextest run -p opentide-schema --features python     # + the Python class 
 cargo build -p opentide-schema --target wasm32-unknown-unknown --features wasm
 cargo nextest run -p opentide-schema vocab                 # the vocabularies, 13k misspellings
 cargo xtask vocab diff --against python                    # against the oracle, every corpus
-cargo nextest run -p opentide-schema --test objects_table  # the object models against the oracle's table
+cargo nextest run -p opentide-schema objects::table        # the object models against the oracle's table
 cargo xtask schema diff --against python                   # JSON Schemas and every corpus, live
 cargo xtask corpus faults --check --engine rust --only objects
 ```

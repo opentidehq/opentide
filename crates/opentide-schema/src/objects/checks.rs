@@ -158,15 +158,23 @@ pub fn check_reviewed(text: &str) -> Result<(), Violation> {
         ))
     };
     if let Some(parts) = date.captures(text) {
-        return civil_date(number(parts.get(1)), number(parts.get(2)), number(parts.get(3)))
-            .map(drop)
-            .map_err(|error| invalid(&error));
+        return civil_date(
+            number(parts.get(1)),
+            number(parts.get(2)),
+            number(parts.get(3)),
+        )
+        .map(drop)
+        .map_err(|error| invalid(&error));
     }
     let Some(parts) = datetime.captures(text) else {
         return Err(Violation::value_error(REVIEWED_SHAPE));
     };
-    let day = civil_date(number(parts.get(1)), number(parts.get(2)), number(parts.get(3)))
-        .map_err(|error| invalid(&error))?;
+    let day = civil_date(
+        number(parts.get(1)),
+        number(parts.get(2)),
+        number(parts.get(3)),
+    )
+    .map_err(|error| invalid(&error))?;
     let fraction = parts.get(7).map_or(0, |digits| {
         // Nanoseconds: the first nine digits, the rest dropped.
         let mut nanos: String = digits.as_str().chars().take(9).collect();
@@ -240,10 +248,6 @@ pub fn schema_identifier(node: &Node, cx: &mut Context) -> Option<String> {
 /// one is `None`; what is left must be a date or a datetime. Any other value
 /// is the oracle's `value_error` (it turns the value into text, which never
 /// has either form).
-#[expect(
-    clippy::option_option,
-    reason = "the conversion's Option (it converted) around the field's Option"
-)]
 pub fn reviewed(node: &Node, cx: &mut Context) -> Option<Option<String>> {
     let text = match &node.value {
         Value::Null => return Some(None),
@@ -315,10 +319,6 @@ pub fn vocab_names(node: &Node, cx: &mut Context) -> Option<Vec<String>> {
 /// (`coerce_public_keys`); here a key is an integer, or a string that is one
 /// (`"12"`, `"-1"`, `"+3"`). Any other key is `int_parsing` (a string) or
 /// `int_type`, at the key's `[key]`, as Pydantic reports a dictionary key.
-#[expect(
-    clippy::option_option,
-    reason = "the conversion's Option (it converted) around the field's Option"
-)]
 pub fn public_references(node: &Node, cx: &mut Context) -> Option<Option<BTreeMap<i64, String>>> {
     let entries = match &node.value {
         Value::Null => return Some(None),
@@ -381,10 +381,6 @@ pub fn garde_schema_identifier(value: &str, _pins: &Pins) -> garde::Result {
 }
 
 /// garde: [`check_reviewed`] on a present, trimmed, non-empty value.
-#[expect(
-    clippy::ref_option,
-    reason = "garde's custom rule receives the field by reference"
-)]
 pub fn garde_reviewed(value: &Option<String>, _pins: &Pins) -> garde::Result {
     match value {
         None => Ok(()),

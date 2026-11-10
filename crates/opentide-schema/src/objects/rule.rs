@@ -4,10 +4,11 @@
 //!
 //! The platform blocks are UC-1.4's (#810). Until they arrive each block is an
 //! [`UncheckedBlock`]: the node the file holds, unchecked. Reading one is
-//! behind the `unchecked-platform-blocks` feature, which only tests and the
-//! oracle comparisons (xtask) turn on, so nothing ships that accepts a rule
-//! with unchecked blocks: without it, the rule models and the container
-//! serialise and give their schema, and do not read.
+//! behind the `unchecked-platform-blocks` feature, which only the oracle
+//! comparisons (xtask) turn on, and the crate's own unit tests (`cfg(test)`),
+//! so nothing ships that accepts a rule with unchecked blocks: without it,
+//! the rule models and the container serialise and give their schema, and do
+//! not read.
 
 use std::collections::BTreeMap;
 
@@ -15,10 +16,10 @@ use garde::Validate;
 use schemars::{JsonSchema, Schema, SchemaGenerator, json_schema};
 use serde::Serialize;
 
-#[cfg(feature = "unchecked-platform-blocks")]
+#[cfg(any(test, feature = "unchecked-platform-blocks"))]
 use serde::Deserialize;
 
-#[cfg(feature = "unchecked-platform-blocks")]
+#[cfg(any(test, feature = "unchecked-platform-blocks"))]
 use crate::FromNode;
 use crate::objects::any::Any;
 use crate::objects::metadata::{ObjectMetadata, ObjectReferences, RuleMetadata};
@@ -28,16 +29,13 @@ use crate::revision::revisions;
 
 /// A platform block, unchecked until its model arrives (UC-1.4, #810).
 #[derive(Debug, Clone, PartialEq, Serialize)]
-#[cfg_attr(feature = "unchecked-platform-blocks", derive(Deserialize))]
+#[cfg_attr(any(test, feature = "unchecked-platform-blocks"), derive(Deserialize))]
 #[serde(transparent)]
 pub struct UncheckedBlock(pub Any);
 
-#[cfg(feature = "unchecked-platform-blocks")]
+#[cfg(any(test, feature = "unchecked-platform-blocks"))]
 impl FromNode for UncheckedBlock {
-    fn from_node(
-        node: &crate::node::Node,
-        cx: &mut crate::from_node::Context,
-    ) -> Option<Self> {
+    fn from_node(node: &crate::node::Node, cx: &mut crate::from_node::Context) -> Option<Self> {
         Any::from_node(node, cx).map(Self)
     }
 }
@@ -59,7 +57,7 @@ impl JsonSchema for UncheckedBlock {
 /// Dynamically composed rule platform configurations.
 #[derive(Debug, Clone, PartialEq, Serialize, JsonSchema, Validate)]
 #[cfg_attr(
-    feature = "unchecked-platform-blocks",
+    any(test, feature = "unchecked-platform-blocks"),
     derive(Deserialize, FromNode),
     from_node(model = "RuleConfigurations")
 )]
@@ -209,7 +207,7 @@ revisions! {
     /// Code-first detection rule with registry-backed delegation helpers.
     #[derive(Debug, Clone, PartialEq, Serialize, JsonSchema, Validate)]
     #[cfg_attr(
-        feature = "unchecked-platform-blocks",
+        any(test, feature = "unchecked-platform-blocks"),
         derive(Deserialize, FromNode),
         from_node(model = "DetectionRule")
     )]
@@ -228,7 +226,7 @@ revisions! {
     /// Detection rule schema ``rule::1.1`` with optional ``metadata.reviewed``.
     #[derive(Debug, Clone, PartialEq, Serialize, JsonSchema, Validate)]
     #[cfg_attr(
-        feature = "unchecked-platform-blocks",
+        any(test, feature = "unchecked-platform-blocks"),
         derive(Deserialize, FromNode),
         from_node(model = "DetectionRule_v1_1")
     )]
