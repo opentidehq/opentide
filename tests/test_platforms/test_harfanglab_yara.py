@@ -739,3 +739,76 @@ def test_lint_reads_a_merged_signature_as_deploy_does() -> None:
     [advisory] = list(yara.advisories(site.value))
     assert advisory.code == "harfanglab_yara_context"
     assert "disk" in text.splitlines()[site.line_of(advisory.offset)]
+
+
+_DECOMPOSED_HEAD = (
+    "configurations:\n  harfanglab:\n    yara:\n"
+    '      strings: |\n        $a = "x"\n      condition: |\n        $a\n'
+)
+
+
+@pytest.mark.parametrize(
+    ("meta", "placed"),
+    [
+        # context merged into meta (R2e): the merged key, written in the block.
+        ("      meta:\n        <<: {context: []}\n        os: Windows\n", "<<: {context: []}"),
+        # meta itself merged from an anchor: the block's own meta key.
+        ("      meta:\n        <<: *m\n", "meta:"),
+    ],
+    ids=["context-merged", "meta-merged"],
+)
+def test_a_merged_decomposed_context_is_read_as_loaded(meta: str, placed: str) -> None:
+    anchor = "x-m: &m {context: [], os: Windows}\n"
+    text = anchor + _DECOMPOSED_HEAD + meta
+    loaded = yaml.safe_load(text)["configurations"]["harfanglab"]["yara"]["meta"]
+    assert loaded["context"] == []
+    found = yara.decomposed_context_in(text)
+    assert found is not None
+    contexts, os, at = found
+    assert (contexts, os) == ([], "Windows")
+    assert yara.decomposed_advisory(contexts, os)[0] == "yara_meta_missing"
+    assert text.splitlines()[at].strip() == placed
+
+
+@pytest.mark.parametrize(
+    "yara_block",
+    [
+        "      <<: [{x: &m {signature: 'rule r { condition: true }'}}, *m]\n",
+        "      <<:\n        - x: &m\n            signature: 'rule r { condition: true }'\n"
+        "        - *m\n",
+    ],
+    ids=["flow", "block"],
+)
+def test_an_alias_to_an_anchor_in_an_earlier_merge_item_is_an_alias(yara_block: str) -> None:
+    """R2f: the item was compared with the sequence start, and the anchor is inside it."""
+    text = "configurations:\n  harfanglab:\n    yara:\n" + yara_block
+    assert yaml.safe_load(text)["configurations"]["harfanglab"]["yara"]["signature"]
+    assert yara.signature_is_aliased(text)
+
+
+def test_a_duplicate_signature_key_is_the_last_as_loaded() -> None:
+    text = (
+        "configurations:\n  harfanglab:\n    yara:\n"
+        "      signature: 'rule a { condition: true }'\n"
+        "      signature: 'rule b { meta: context = \"disk\" condition: true }'\n"
+    )
+    site = yara.signature_in(text)
+    assert site is not None and site.style == "'"
+    [advisory] = list(yara.advisories(site.value))
+    assert site.line_of(advisory.offset) == 4
+
+
+def test_an_unplaced_signature_falls_back_to_its_key_line(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Nit: a value no written scalar holds pointed at file line 1."""
+    text = (
+        "name: x\nconfigurations:\n  harfanglab:\n    yara:\n"
+        "      signature: 'rule a { condition: true }'\n"
+    )
+    loaded = 'rule a { meta: context = "disk" condition: true }'
+    monkeypatch.setattr(yara, "_loaded_at", lambda text, path: loaded)
+    site = yara.signature_in(text)
+    assert site is not None and site.style == "?"
+    [advisory] = list(yara.advisories(site.value))
+    assert site.line_of(advisory.offset) == 4

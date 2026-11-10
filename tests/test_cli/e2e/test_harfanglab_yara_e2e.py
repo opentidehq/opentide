@@ -358,3 +358,15 @@ def test_lint_warns_on_a_merged_signature(invoke_cli, tide_corpus_repo: Path) ->
     assert [item["code"] for item in payload["findings"] if item["code"] in ADVISORIES] == [
         "harfanglab_yara_context"
     ]
+
+
+def test_lint_reads_a_merged_decomposed_context(invoke_cli, tide_corpus_repo: Path) -> None:
+    """R2e: `meta: {<<: {context: []}}` validates, deploys no context, and lint says so."""
+    text = (FIXTURES / "harfanglab-yara.yaml").read_text(encoding="utf-8")
+    text = text.replace("        context:\n          - file\n", "        <<: {context: []}\n")
+    name = _add(tide_corpus_repo, "harfanglab-yara.yaml", text=text)
+    assert_json_ok(invoke_cli("validate", "--file", name))
+    payload = parse_cli_json(invoke_cli("lint", "--check", "queries", "--file", name))
+    found = [item for item in payload["findings"] if item["code"] in ADVISORIES]
+    assert [item["code"] for item in found] == ["yara_meta_missing"]
+    assert text.splitlines()[found[0]["yaml_line"]].strip() == "<<: {context: []}"

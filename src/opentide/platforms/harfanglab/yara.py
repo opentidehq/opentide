@@ -433,11 +433,14 @@ def _aliased(value: Any, key: Any) -> bool:
     return value.start_mark.index < key.end_mark.index
 
 
-def _own(node: Any, key: str) -> tuple[Any, bool] | None:
-    """``(value, aliased)`` of *key* where mapping *node* writes it itself, else ``None``."""
-    for k, value in node.value:
+def _own(node: Any, key: str) -> tuple[Any, Any, bool] | None:
+    """``(key node, value, aliased)`` where mapping *node* writes *key* itself, else ``None``.
+
+    A key written twice is the last one, as PyYAML loads it.
+    """
+    for k, value in reversed(node.value):
         if k.tag != _MERGE_TAG and str(k.value) == key:
-            return value, _aliased(value, k)
+            return k, value, _aliased(value, k)
     return None
 
 
@@ -456,17 +459,21 @@ def _merge_sources(node: Any) -> list[tuple[Any, bool]]:
             continue
         if isinstance(value, yaml.SequenceNode):
             sequence_aliased = _aliased(value, k)
-            sources.extend(
-                (item, sequence_aliased or item.start_mark.index < value.start_mark.index)
-                for item in value.value
-            )
+            # An item written in place starts after everything written before it in
+            # the sequence; an alias starts at its anchor, which is earlier: before
+            # the sequence, or inside an earlier item.
+            boundary = value.start_mark.index
+            for item in value.value:
+                sources.append((item, sequence_aliased or item.start_mark.index < boundary))
+                boundary = max(boundary, item.end_mark.index)
         else:
             sources.append((value, _aliased(value, k)))
     return sources
 
 
-def _lookup(node: Any, key: str) -> tuple[Any, bool] | None:
-    """``(value, aliased)`` of *key* in mapping *node*, through merge keys as PyYAML merges.
+def _lookup(node: Any, key: str) -> tuple[Any, Any, bool] | None:
+    """``(key node, value, aliased)`` of *key* in mapping *node*, through merge keys as PyYAML
+    merges them.
 
     A key the mapping writes wins over a merged one; among ``<<`` sources the
     first that has the key wins, depth first. *aliased* is whether reaching the
@@ -496,7 +503,7 @@ def _lookup(node: Any, key: str) -> tuple[Any, bool] | None:
         reached = aliased or via
         own = _own(source, key)
         if own is not None:
-            return own[0], reached or own[1]
+            return own[0], own[1], reached or own[2]
         stack.append((iter(_merge_sources(source)), reached))
     return None
 
@@ -517,7 +524,7 @@ def signature_is_aliased(text: str) -> bool:
         found = _lookup(node, key)
         if found is None:
             return False
-        node, step = found
+        _, node, step = found
         aliased = aliased or step
     return aliased
 
@@ -619,15 +626,22 @@ def _flow_positions(text: str, start: int, end: int, style: str) -> list[int]:
     return positions
 
 
-def _node_at(text: str, path: tuple[str, ...]) -> Any:
-    """The node at *path* in *text*, through merge keys as the loaded data has it."""
-    node = _compose(text)
-    for key in path:
-        found = _lookup(node, key)
+def _entry_at(text: str, path: tuple[str, ...]) -> tuple[Any, Any] | None:
+    """``(key node, value node)`` at *path* in *text*, through merge keys as loaded."""
+    node: Any = _compose(text)
+    key: Any = None
+    for part in path:
+        found = _lookup(node, part)
         if found is None:
             return None
-        node = found[0]
-    return node
+        key, node, _ = found
+    return key, node
+
+
+def _node_at(text: str, path: tuple[str, ...]) -> Any:
+    """The node at *path* in *text*, through merge keys as the loaded data has it."""
+    entry = _entry_at(text, path)
+    return entry[1] if entry else None
 
 
 def _loaded_at(text: str, path: tuple[str, ...]) -> Any:
@@ -655,24 +669,33 @@ def decomposed_context_in(text: str) -> tuple[Any, Any, int] | None:
 
     ``None`` when the file has no ``meta.context`` or its block has a ``signature``.
     """
-    import yaml
+    yara = _loaded_at(text, SIGNATURE_PATH[:-1])
+    if not isinstance(yara, dict) or "signature" in yara:
+        return None
+    meta = yara.get("meta")
+    if not isinstance(meta, dict) or "context" not in meta:
+        return None
+    # The values are the loaded data's, after merges; the key only places them.
+    return meta.get("context"), meta.get("os"), _placed_line(text, CONTEXT_PATH)
 
-    if _node_at(text, SIGNATURE_PATH) is not None:
-        return None
-    meta = _node_at(text, CONTEXT_PATH[:-1])
-    if not isinstance(meta, yaml.MappingNode):
-        return None
-    key, node = next(((k, v) for k, v in meta.value if k.value == CONTEXT_PATH[-1]), (None, None))
-    if key is None:
-        return None
-    loader = yaml.SafeLoader("")
-    os_node = _node_at(text, OS_PATH)
-    try:
-        contexts = loader.construct_object(node, deep=True)
-        os = loader.construct_object(os_node, deep=True) if os_node is not None else None
-    except yaml.YAMLError:
-        return None
-    return contexts, os, key.start_mark.line
+
+def _placed_line(text: str, path: tuple[str, ...]) -> int:
+    """The 0-based line of the deepest key of *path* written in place in *text*.
+
+    Past an alias the keys are the anchor's, elsewhere in the file, so the last
+    key reached without one places the finding; 0 when *text* writes none.
+    """
+    node: Any = _compose(text)
+    line = 0
+    for part in path:
+        found = _lookup(node, part)
+        if found is None:
+            break
+        key, node, aliased = found
+        if aliased:
+            break
+        line = key.start_mark.line
+    return line
 
 
 def signature_in(text: str) -> SignatureSite | None:
@@ -687,13 +710,27 @@ def signature_in(text: str) -> SignatureSite | None:
     value = _loaded_at(text, SIGNATURE_PATH)
     if not isinstance(value, str):
         return None
-    node = _node_at(text, SIGNATURE_PATH)
-    if not isinstance(node, yaml.ScalarNode):
-        return SignatureSite(value=value, text=text, start=0, end=0, style="?")
+    entry = _entry_at(text, SIGNATURE_PATH)
+    node = entry[1] if entry else None
+    if not isinstance(node, yaml.ScalarNode) or node.value != value:
+        # No written scalar holds it: the signature key, else the yara block, stands for it.
+        if entry is not None:
+            where = entry[0].start_mark.index
+        else:
+            where = _line_start(text, _placed_line(text, SIGNATURE_PATH))
+        return SignatureSite(value=value, text=text, start=where, end=where, style="?")
     return SignatureSite(
         value=value,
         text=text,
         start=node.start_mark.index,
         end=node.end_mark.index,
-        style=(node.style or "") if node.value == value else "?",
+        style=node.style or "",
     )
+
+
+def _line_start(text: str, line: int) -> int:
+    """The offset of the 0-based *line* in *text*."""
+    offset = 0
+    for _ in range(line):
+        offset = text.index("\n", offset) + 1
+    return offset
