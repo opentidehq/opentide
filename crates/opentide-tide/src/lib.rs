@@ -2035,6 +2035,39 @@ mod tests {
         assert_eq!(closest("  "), None);
     }
 
+    /// #213's bound is two edits, wherever they are: side by side, cut or
+    /// added at one place, or apart; three edits apart find nothing.
+    #[test]
+    fn closest_detection_model_takes_two_edits_anywhere() {
+        let objective = |uuid: &str| IndexedObject {
+            path: format!("objects/objectives/{uuid}.yaml"),
+            object_type: "objective".into(),
+            uuid: uuid.into(),
+            name: uuid.into(),
+            body: serde_yaml::Value::Null,
+            schema: "objective::1.0".into(),
+            name_range: Range::point(0, 0),
+            refs: Vec::new(),
+        };
+        let a = "6f1c2a3b-0000-4000-8000-000000000001";
+        let workspace = [objective(a)];
+        let closest = |v: &str| closest_detection_model(&workspace, v);
+        for typo in [
+            // Two characters changed side by side.
+            "6f1c2a3b-0000-4000-8000-0000000000ab",
+            // Two characters dropped at one place.
+            "6f1c2a3b-0000-4000-8000-0000000001",
+            // Two characters appended.
+            "6f1c2a3b-0000-4000-8000-00000000000100",
+            // Two characters changed apart.
+            "7f1c2a3b-0000-4000-8000-000000000002",
+        ] {
+            assert_eq!(closest(typo).as_deref(), Some(a), "{typo}");
+        }
+        // Three characters changed apart: more than #213's two edits.
+        assert_eq!(closest("7f1c2a3b-0000-5000-8000-000000000002"), None);
+    }
+
     #[test]
     fn vocabularies_suggest_by_the_shared_rule() {
         let tlp = vocab_for_field("tlp").expect("the tlp vocabulary");

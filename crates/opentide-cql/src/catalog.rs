@@ -351,6 +351,10 @@ mod tests {
         assert_eq!(c.suggest_event("processrollup2"), Some("ProcessRollup2"));
         assert_eq!(c.suggest_event("ProcessRollup3"), Some("ProcessRollup2"));
         assert_eq!(c.suggest_event("XzFileWritten"), None);
+        // Two edits apart in a long name: within a third of its length, but
+        // not within the one edit event names allow.
+        assert_eq!(c.suggest_event("PrucessRollup3"), None);
+        assert_eq!(c.suggest_event("ProcessRollup2x"), Some("ProcessRollup2"));
         assert_eq!(c.suggest_function("selct"), Some("select"));
         let group_by = c.function("groupBy").expect("groupBy");
         assert_eq!(c.suggest_parameter(group_by, "functin"), Some("function"));
