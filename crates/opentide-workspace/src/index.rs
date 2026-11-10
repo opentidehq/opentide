@@ -568,6 +568,30 @@ fn references(index: &mut Index) {
 }
 
 impl Index {
+    /// Indexes the signals of `objectives` again from their documents, after
+    /// their documents were replaced (`drop_objective_signals`, then
+    /// `index_objective_signals` for each, in order): a signal one of them
+    /// no longer defines leaves the index, and one moved between two of them
+    /// lands on the objective that defines it now, whichever was replaced
+    /// first.
+    pub fn reindex_signals(&mut self, objectives: &[String]) {
+        self.signals
+            .retain(|_, signal| !objectives.contains(&signal.owner));
+        for uuid in objectives {
+            let Some(document) = self
+                .objects
+                .get("objective")
+                .and_then(|objects| objects.get(uuid))
+                .map(|object| Arc::clone(&object.document))
+            else {
+                continue;
+            };
+            if let Some(root) = document.root() {
+                index_signals(self, uuid, root);
+            }
+        }
+    }
+
     /// The objects of `family`.
     pub fn family(&self, family: &str) -> impl Iterator<Item = &Object> {
         self.objects

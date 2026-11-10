@@ -368,6 +368,26 @@ impl Run<'_> {
                 );
                 self.emit_report(&report, out, err)
             }
+            "generate explorer" => {
+                let parsed = leaf(&matches);
+                let options = crate::commands::generate::ExplorerOptions {
+                    include_visibility: parsed.get_flag("include_visibility"),
+                    visibility_tlp: (parsed.value_source("visibility_tlp")
+                        == Some(ValueSource::CommandLine))
+                    .then(|| parsed.get_one::<String>("visibility_tlp").cloned())
+                    .flatten(),
+                };
+                let cwd = self.host.cwd.clone().unwrap_or_default();
+                let report = crate::commands::generate::explorer(
+                    &options,
+                    &crate::commands::generate::Context {
+                        repo: self.globals.repo.as_deref(),
+                        env: self.env,
+                        cwd: &cwd,
+                    },
+                );
+                self.emit_report(&report, out, err)
+            }
             "rules unreviewed" => {
                 let older_than = leaf(&matches)
                     .get_one::<String>("older_than")

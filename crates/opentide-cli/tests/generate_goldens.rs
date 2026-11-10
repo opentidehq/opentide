@@ -29,6 +29,7 @@ const COMMANDS: &[&str] = &[
     "generate.exports.navigator",
     "generate.exports.objects",
     "generate.exports.revisions",
+    "generate.explorer",
 ];
 
 fn repo() -> PathBuf {
@@ -401,4 +402,72 @@ fn exports_before_a_failure_are_written() {
     assert!(exports.join("attack-navigator.json").is_file());
     assert!(!exports.join("objects.export.json").exists());
     assert!(!exports.join("revisions.export.json").exists());
+}
+
+/// Runs `args` in `ws` in json mode; the exit code and stdout.
+fn run_json(ws: &Path, words: &[&str]) -> (i32, String) {
+    let sink: Sink = Arc::new(Mutex::new(Buffer::default()));
+    let host = Host {
+        version: "0.23.0".into(),
+        stdout_tty: false,
+        stderr_tty: false,
+        log_sink: sink,
+        cwd: Some(ws.to_path_buf()),
+        width: None,
+        interrupt: opentide_cli::app::Interrupt::default(),
+    };
+    let argv: Vec<String> = std::iter::once("--json")
+        .chain(words.iter().copied())
+        .map(str::to_owned)
+        .collect();
+    let home = ws.with_file_name("home");
+    std::fs::create_dir_all(&home).unwrap();
+    let env = Env::from_pairs([("HOME".to_owned(), home.display().to_string())]);
+    let (mut out, mut err) = (Vec::new(), Buffer::default());
+    let exit_code = run(&argv, &env, &host, &mut out, &mut err);
+    (exit_code, String::from_utf8(out).unwrap())
+}
+
+/// The visibility export is written only when asked for, and a run without
+/// it removes the one an earlier run wrote; an inflight shard of an open pull
+/// request is previewed in the bundle, a newer version replacing the
+/// committed object.
+#[test]
+fn the_explorer_publishes_only_what_this_run_chose() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
+    fixture("tide-corpus", &ws);
+    let exports = ws.join(".opentide/exports");
+    let visibility = exports.join("explorer.visibility.json");
+    let (code, stdout) = run_json(
+        &ws,
+        &[
+            "generate",
+            "explorer",
+            "--include-visibility",
+            "--visibility-tlp",
+            "GREEN ",
+        ],
+    );
+    assert_eq!(code, 0, "{stdout}");
+    let written: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&visibility).unwrap()).unwrap();
+    assert_eq!(written["tlp"], "green");
+    std::fs::write(
+        ws.join(".opentide/inflight/00000000-0000-4000-8003-000000000001.json"),
+        r#"{"schema": "inflight.shard::1.0", "object": {"name": "Previewed", "metadata": {"uuid": "00000000-0000-4000-8003-000000000001", "schema": "rule::1.0", "version": 2}, "configurations": {"splunk": {"status": "PRODUCTION"}}}}"#,
+    )
+    .unwrap();
+    let (code, stdout) = run_json(&ws, &["generate", "explorer"]);
+    assert_eq!(code, 0, "{stdout}");
+    assert!(!visibility.exists());
+    let bundle: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(exports.join("explorer.bundle.json")).unwrap())
+            .unwrap();
+    let rule = &bundle["models"]["rule"]["00000000-0000-4000-8003-000000000001"];
+    assert_eq!(rule["name"], "Previewed");
+    assert_eq!(
+        bundle["stagingIndex"]["productionObjects"],
+        serde_json::json!(["00000000-0000-4000-8003-000000000001"])
+    );
 }

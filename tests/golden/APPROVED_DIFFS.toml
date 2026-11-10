@@ -773,3 +773,40 @@ candidate = "  \u001b[1;32m✓\u001b[0m  \u001b[1mexports revisions\u001b[0m  \u
 reason = "the exports are written in milliseconds: the checklist row is printed when they are done, without the spinner Python drew while they ran"
 issue = "https://github.com/opentidehq/opentide/issues/824"
 changelog = "**`generate exports` runs on the Rust engine**"
+
+# UC-3.2c (#916): `generate explorer` on a terminal prints its checklist row
+# once the explorer files are written, without the spinner the oracle drew
+# while it ran (as `generate exports`, above).
+
+[[diff]]
+command = "generate explorer"
+case = "generate.explorer/human/tide-corpus/default"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mexplorer\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;32m\u2713\u001b[0m  \u001b[1mexplorer\u001b[0m  \u001b[2m2 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2m.opentide/exports/\u001b[0m"
+candidate = "  \u001b[1;32m\u2713\u001b[0m  \u001b[1mexplorer\u001b[0m  \u001b[2m2 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2m.opentide/exports/\u001b[0m"
+reason = "the explorer files are written in milliseconds: the checklist row is printed when they are done, without the spinner Python drew while they ran"
+issue = "https://github.com/opentidehq/opentide/issues/916"
+changelog = "**`generate explorer`, `generate inflight` and `setup ci` run on the Rust engine**"
+
+[[diff]]
+command = "generate explorer"
+case = "generate.explorer/human/tide-corpus/visibility"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mexplorer\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;32m\u2713\u001b[0m  \u001b[1mexplorer\u001b[0m  \u001b[2m3 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2m.opentide/exports/\u001b[0m"
+candidate = "  \u001b[1;32m\u2713\u001b[0m  \u001b[1mexplorer\u001b[0m  \u001b[2m3 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2m.opentide/exports/\u001b[0m"
+reason = "the explorer files are written in milliseconds: the checklist row is printed when they are done, without the spinner Python drew while they ran"
+issue = "https://github.com/opentidehq/opentide/issues/916"
+changelog = "**`generate explorer`, `generate inflight` and `setup ci` run on the Rust engine**"
+
+[[diff]]
+command = "generate explorer"
+case = "generate.explorer/human/vscode/default"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mexplorer\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;31m\u2717\u001b[0m  \u001b[1mexplorer\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+candidate = "  \u001b[1;31m\u2717\u001b[0m  \u001b[1mexplorer\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+reason = "the explorer files are written in milliseconds: the checklist row is printed when they are done, without the spinner Python drew while they ran"
+issue = "https://github.com/opentidehq/opentide/issues/916"
+changelog = "**`generate explorer`, `generate inflight` and `setup ci` run on the Rust engine**"

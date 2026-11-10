@@ -1,17 +1,19 @@
-//! `opentide generate exports [navigator|objects|revisions]`
-//! (`cli/commands/generate.py`, `cli/services/export.py`,
+//! `opentide generate exports [navigator|objects|revisions]` and `generate
+//! explorer` (`cli/commands/generate.py`, `cli/services/export.py`,
 //! `cli/services/generation.py`) on `opentide-compile`'s `generate` module.
 //!
 //! A phase runs as a checklist step that counts the files it wrote, compared
 //! by modification time and size before and after ([`Snapshot`]); the result
 //! is `Generated 3 files in 0.1s · exports`, with the steps behind it.
 
+use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use opentide_compile::generate::exports::{Settings, Target, export};
 use opentide_compile::generate::files::{Snapshot, common_dir, write_all};
-use opentide_compile::generate::{Output, PhaseError};
+use opentide_compile::generate::visibility::{self, DatasetRead, Inputs};
+use opentide_compile::generate::{Output, PhaseError, explorer, inflight};
 use opentide_schema::vocab::Vocabularies;
 use opentide_workspace::Workspace;
 
@@ -239,6 +241,216 @@ pub fn exports(target: Option<Target>, cx: &Context<'_>) -> Report {
     }
 }
 
+/// `generate explorer`'s options.
+#[derive(Debug, Clone, Default)]
+pub struct ExplorerOptions {
+    /// `--include-visibility`.
+    pub include_visibility: bool,
+    /// `--visibility-tlp`, as typed; `None` when not given.
+    pub visibility_tlp: Option<String>,
+}
+
+/// The visibility probe: one placeholder log source per system whose names
+/// declare datasets, so the engines name every dataset a query reads
+/// (`dataset_reads`).
+const PROBE: &str = "__opentide_visibility_probe__";
+/// The systems whose log source names declare datasets to the query checks.
+const DATASET_SYSTEMS: [&str; 4] = ["sentinel", "defender_for_endpoint", "splunk", "elastic"];
+/// A table outside the engine's catalog: a read only when its message names
+/// `visibility.toml`, as the language server's quick fix takes it.
+const UNKNOWN_TABLE_CODE: &str = "kql_unknown_table";
+
+/// The datasets each rule's queries read, as the query engines read them
+/// (`dataset_reads`): each rule file is analysed with a visibility that
+/// declares only the probe for every system, so the engines report every
+/// dataset a query reads as undeclared, and the name is the quoted one in the
+/// finding. The workspace's own declarations are installed again after.
+fn dataset_reads(
+    index: &opentide_workspace::Index,
+    files: &opentide_workspace::Index,
+    root: &Path,
+) -> Vec<DatasetRead> {
+    let _engine = crate::queries::ENGINE
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let mut probe = String::new();
+    for system in DATASET_SYSTEMS {
+        let _ = write!(
+            probe,
+            "[[logsources]]\nname = \"{PROBE}\"\ndescription = \"probe\"\nsystem = \"{system}\"\n\n"
+        );
+    }
+    let _ = opentide_analysis::install_visibility(Some(&probe));
+    let host = opentide_analysis::MemoryWorkspace { files: Vec::new() };
+    let quoted = regex::Regex::new(r"'([^']+)'|`([^`]+)`").ok();
+    let mut reads: Vec<DatasetRead> = Vec::new();
+    for rule in index.family("rule") {
+        let Some(path) = files.file_paths.get(&rule.uuid) else {
+            continue;
+        };
+        let Some(text) = std::fs::read(path)
+            .ok()
+            .and_then(|bytes| crate::queries::decode(&bytes).ok())
+        else {
+            continue;
+        };
+        for report in opentide_analysis::analyze_queries(&host, &text) {
+            let path = &report.field_path;
+            let system = match path.as_slice() {
+                [first, second, ..] if first == "configurations" => second.clone(),
+                _ => String::new(),
+            };
+            for finding in &report.diagnostics {
+                let is_read = crate::queries::DECLARED_DATASET_CODES
+                    .contains(&finding.code.as_str())
+                    || (finding.code == UNKNOWN_TABLE_CODE
+                        && finding.message.contains("visibility.toml"));
+                if !is_read {
+                    continue;
+                }
+                let name = quoted
+                    .as_ref()
+                    .and_then(|quoted| quoted.captures(&finding.message))
+                    .and_then(|found| found.get(1).or_else(|| found.get(2)))
+                    .map(|found| found.as_str().to_owned())
+                    .unwrap_or_default();
+                if name.is_empty() || name == PROBE {
+                    continue;
+                }
+                let read = DatasetRead {
+                    rule: rule.uuid.clone(),
+                    system: system.clone(),
+                    name,
+                    field_path: path.join("."),
+                };
+                if !reads.contains(&read) {
+                    reads.push(read);
+                }
+            }
+        }
+    }
+    let own = std::fs::read(root.join(crate::queries::VISIBILITY_CONFIGURATION))
+        .ok()
+        .and_then(|bytes| crate::queries::decode(&bytes).ok());
+    if opentide_analysis::install_visibility(own.as_deref()).is_err() {
+        let _ = opentide_analysis::install_visibility(None);
+    }
+    reads
+}
+
+/// The visibility report of the (overlaid) `index` (`load_visibility`):
+/// the declared log sources, read through their model, and the datasets the
+/// rules' files read.
+fn visibility_report(
+    workspace: &Workspace,
+    index: &opentide_workspace::Index,
+    root: &Path,
+) -> opentide_compile::json::Json {
+    let present = root
+        .join(crate::queries::VISIBILITY_CONFIGURATION)
+        .is_file();
+    let mut inputs = Inputs::default();
+    if present {
+        match workspace
+            .configuration()
+            .resolved
+            .get("visibility")
+            .map(visibility::declared)
+        {
+            Some(Ok(declared)) => inputs.declared = Some(declared),
+            Some(Err(problem)) => inputs.problem = Some(problem),
+            None => inputs.declared = Some(Vec::new()),
+        }
+    }
+    inputs.reads = dataset_reads(index, workspace.index(), root);
+    visibility::report(index, &inputs)
+}
+
+/// The UTC time now as Python's `isoformat()` writes an aware datetime.
+fn now_iso() -> String {
+    jiff::Timestamp::now()
+        .to_zoned(jiff::tz::TimeZone::UTC)
+        .strftime("%Y-%m-%dT%H:%M:%S%.6f+00:00")
+        .to_string()
+}
+
+/// `opentide generate explorer`.
+pub fn explorer(options: &ExplorerOptions, cx: &Context<'_>) -> Report {
+    const COMMAND: &str = "generate explorer";
+    let tlp = match &options.visibility_tlp {
+        Some(given) if !options.include_visibility => {
+            let _ = given;
+            let mut failure = Failure::new(
+                super::USAGE_MISSING_OPTION,
+                "--visibility-tlp needs --include-visibility: it labels explorer.visibility.json, which only --include-visibility writes.",
+            );
+            failure.argument = Some("--visibility-tlp".into());
+            return Report::failed(COMMAND, crate::envelope::USAGE_EXIT_CODE, failure);
+        }
+        Some(given) => given.trim().to_lowercase(),
+        None => explorer::DEFAULT_TLP.to_owned(),
+    };
+    if !explorer::TLP_CHOICES.contains(&tlp.as_str()) {
+        let given = options.visibility_tlp.clone().unwrap_or_default();
+        return Report::usage(
+            COMMAND,
+            format!(
+                "Unknown TLP {}. Pass one of: {}.",
+                opentide_schema::configuration::repr::quote(&given),
+                explorer::TLP_CHOICES.join(", ")
+            ),
+            super::USAGE_INVALID_CHOICE,
+            "--visibility-tlp",
+            Some(&given),
+            &explorer::TLP_CHOICES,
+        );
+    }
+    let workspace = match workspace(COMMAND, cx) {
+        Ok(workspace) => workspace,
+        Err(report) => return *report,
+    };
+    let root = workspace.root().to_path_buf();
+    let dir = Settings::new(workspace.configuration(), &root).dir;
+    let phase = run_phase(
+        "explorer",
+        std::slice::from_ref(&root),
+        cx.cwd,
+        &root,
+        || {
+            std::fs::create_dir_all(&dir).map_err(|error| format!("{}: {error}", dir.display()))?;
+            // Open pull requests' objects, previewed (`inflight_preview`).
+            let shards = inflight::load(&root.join(".opentide").join("inflight"));
+            let index = inflight::overlay(workspace.index(), &shards);
+            let generated_at = now_iso();
+            let outputs = explorer::outputs(&index, &dir, &generated_at)
+                .map_err(|PhaseError { detail }| detail)?;
+            write(&outputs)?;
+            let visibility_path = dir.join(explorer::VISIBILITY);
+            if options.include_visibility {
+                let report = visibility_report(&workspace, &index, &root);
+                let document = explorer::visibility(report, &generated_at, &tlp);
+                write(&[Output::text(
+                    visibility_path,
+                    opentide_compile::generate::json_text::line(&document),
+                )])?;
+            } else if visibility_path.is_file() {
+                // Opt-in per run: an inventory an earlier run wrote is not published again.
+                std::fs::remove_file(&visibility_path)
+                    .map_err(|error| format!("{}: {error}", visibility_path.display()))?;
+            }
+            Ok(())
+        },
+    );
+    match phase.error {
+        Some(detail) => phase_failed(COMMAND, "explorer", &detail, Vec::new(), vec![phase.step]),
+        None => generated(
+            COMMAND,
+            vec![("phase".to_owned(), Json::str("explorer"))],
+            vec![phase.step],
+        ),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -299,6 +511,43 @@ mod tests {
         });
         assert_eq!(phase.step.count, Some(1));
         assert_eq!(phase.step.unit, "file");
+    }
+
+    #[test]
+    fn the_explorer_refuses_a_marking_it_cannot_use() {
+        let env = Env::from_pairs(std::iter::empty::<(String, String)>());
+        let cwd = std::env::temp_dir();
+        let cx = Context {
+            repo: None,
+            env: &env,
+            cwd: &cwd,
+        };
+        let alone = explorer(
+            &ExplorerOptions {
+                include_visibility: false,
+                visibility_tlp: Some("red".into()),
+            },
+            &cx,
+        );
+        assert_eq!(alone.outcome.exit_code, 2);
+        let failure = alone.outcome.failure.unwrap();
+        assert_eq!(failure.code, "usage_missing_option");
+        assert_eq!(failure.argument.as_deref(), Some("--visibility-tlp"));
+        let unknown = explorer(
+            &ExplorerOptions {
+                include_visibility: true,
+                visibility_tlp: Some("redd".into()),
+            },
+            &cx,
+        );
+        assert_eq!(unknown.outcome.exit_code, 2);
+        assert_eq!(
+            unknown.outcome.message,
+            "Unknown TLP 'redd'. Pass one of: clear, green, amber, amber+strict, red."
+        );
+        let failure = unknown.outcome.failure.unwrap();
+        assert_eq!(failure.code, "usage_invalid_choice");
+        assert_eq!(failure.suggestion.as_deref(), Some("red"));
     }
 
     #[test]
