@@ -14,15 +14,15 @@ The Python CLI at the frozen tag is the oracle ([plan §5](https://github.com/op
 | | |
 |---|---:|
 | Commands | 59 |
-| Commands with a Rust implementation | 10 |
+| Commands with a Rust implementation | 15 |
 | Commands flipped to Rust | 0 |
 | Recordings (command × corpus × mode) | 629 |
-| … no Rust yet | 481 (76.4%) |
+| … no Rust yet | 421 (66.9%) |
 | … compare passing | 0 (0.0%) |
 | … compare failing | 0 (0.0%) |
-| … compare not run | 148 (23.5%) |
+| … compare not run | 208 (33.0%) |
 | … flipped | 0 (0.0%) |
-| Approved diffs (`tests/golden/APPROVED_DIFFS.toml`) | 274 |
+| Approved diffs (`tests/golden/APPROVED_DIFFS.toml`) | 287 |
 | Diagnostic codes with a fault kind | 163 of 175 (93.1%) |
 | … with no fault kind, evidence recorded | 12 |
 | … with neither (missing) | 0 |
@@ -92,43 +92,53 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide generate docs`
 
+5 approved diff(s).
+
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
-| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| vscode | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| none | compare not run | compare not run | compare not run | compare not run |
+| tide-corpus | compare not run | compare not run | compare not run | compare not run |
+| vscode | compare not run | compare not run | compare not run | compare not run |
 
 ### `opentide generate docs index`
 
+2 approved diff(s).
+
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
-| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| vscode | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| none | compare not run | compare not run | compare not run | compare not run |
+| tide-corpus | compare not run | compare not run | compare not run | compare not run |
+| vscode | compare not run | compare not run | compare not run | compare not run |
 
 ### `opentide generate docs objectives`
 
+2 approved diff(s).
+
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
-| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| vscode | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| none | compare not run | compare not run | compare not run | compare not run |
+| tide-corpus | compare not run | compare not run | compare not run | compare not run |
+| vscode | compare not run | compare not run | compare not run | compare not run |
 
 ### `opentide generate docs rules`
 
+2 approved diff(s).
+
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
-| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| vscode | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| none | compare not run | compare not run | compare not run | compare not run |
+| tide-corpus | compare not run | compare not run | compare not run | compare not run |
+| vscode | compare not run | compare not run | compare not run | compare not run |
 
 ### `opentide generate docs threats`
 
+2 approved diff(s).
+
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
-| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| vscode | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| none | compare not run | compare not run | compare not run | compare not run |
+| tide-corpus | compare not run | compare not run | compare not run | compare not run |
+| vscode | compare not run | compare not run | compare not run | compare not run |
 
 ### `opentide generate explorer`
 

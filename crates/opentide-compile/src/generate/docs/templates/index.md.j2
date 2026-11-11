@@ -1,0 +1,12 @@
+{#- An index page (documentation/publish/index.py): a folder's objects, or the
+    root's folders. With `table_only`, the Markdown table alone. -#}
+{% import "macros.md.j2" as md %}
+{% if table_only %}
+{{ md.table(table_only.headers, table_only.rows) -}}
+{% else %}
+# {{ title }}
+{% if toc %}
+{{ toc }}
+{% endif %}
+{{ table -}}
+{% endif %}

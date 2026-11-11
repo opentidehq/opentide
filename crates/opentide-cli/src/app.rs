@@ -37,7 +37,19 @@ pub const PORTED: &[&str] = &[
     "generate exports navigator",
     "generate exports objects",
     "generate exports revisions",
+    "generate docs",
+    "generate docs rules",
+    "generate docs objectives",
+    "generate docs threats",
+    "generate docs index",
 ];
+
+/// The file in which a run refused with `engine_not_ported` records its
+/// message, when the variable names one. `OPENTIDE_ENGINE=compare`
+/// (`src/opentide/cli/engines.py`) sets it for the Rust side: a command this
+/// engine runs for some inputs only (`generate docs` without CVE details)
+/// refuses the others, and the Python side's run is then the result.
+pub const REFUSAL_ENV: &str = "OPENTIDE_ENGINE_REFUSAL";
 
 /// What the embedding process tells the run about itself.
 pub struct Host {
@@ -203,6 +215,7 @@ impl Run<'_> {
         if self.interrupted() {
             return Ok(INTERRUPTED_EXIT_CODE);
         }
+        self.record_refusal(outcome)?;
         match self.mode {
             Mode::Json => {
                 let text = document_text(&outcome.document(self.duration_ms()), self.indent);
@@ -237,6 +250,22 @@ impl Run<'_> {
         out.flush()?;
         err.flush()?;
         Ok(outcome.exit_code)
+    }
+
+    /// Writes an `engine_not_ported` refusal's message to the file
+    /// [`REFUSAL_ENV`] names, if it names one.
+    fn record_refusal(&self, outcome: &Outcome) -> std::io::Result<()> {
+        let Some(failure) = outcome
+            .failure
+            .as_ref()
+            .filter(|failure| failure.code == code::ENGINE_NOT_PORTED)
+        else {
+            return Ok(());
+        };
+        match self.env.get(REFUSAL_ENV).filter(|path| !path.is_empty()) {
+            Some(path) => std::fs::write(path, failure.message.as_bytes()),
+            None => Ok(()),
+        }
     }
 
     /// The stream the lines go to: colour in `human` mode, bold and dim only
@@ -449,6 +478,47 @@ impl Run<'_> {
                 let report = crate::commands::explain::run(code.as_deref(), &self.terminal());
                 self.emit_report(&report, out, err)
             }
+            "generate docs"
+            | "generate docs rules"
+            | "generate docs objectives"
+            | "generate docs threats"
+            | "generate docs index" => {
+                use crate::commands::generate::{DocsArgs, DocsScope};
+                use opentide_compile::generate::docs::catalog::Scope;
+                let docs = leaf(&matches);
+                let flag = |name: &str| {
+                    docs.try_get_one::<bool>(name)
+                        .ok()
+                        .flatten()
+                        .copied()
+                        .unwrap_or(false)
+                };
+                let parsed = DocsArgs {
+                    scope: match words.get(2).map(String::as_str) {
+                        Some("rules") => Some(DocsScope::Objects(Scope::Rules)),
+                        Some("objectives") => Some(DocsScope::Objects(Scope::Objectives)),
+                        Some("threats") => Some(DocsScope::Objects(Scope::Threats)),
+                        Some("index") => Some(DocsScope::Index),
+                        _ => None,
+                    },
+                    output: docs.get_one::<String>("output").cloned(),
+                    flavor: docs.get_one::<String>("flavor").cloned(),
+                    rules: flag("rules"),
+                    threats: flag("threats"),
+                    objectives: flag("objectives"),
+                    changed: flag("changed"),
+                };
+                let cwd = self.host.cwd.clone().unwrap_or_default();
+                let report = crate::commands::generate::docs(
+                    &parsed,
+                    &crate::commands::generate::Context {
+                        repo: self.globals.repo.as_deref(),
+                        env: self.env,
+                        cwd: &cwd,
+                    },
+                );
+                self.emit_report(&report, out, err)
+            }
             "rules unreviewed" => {
                 let older_than = leaf(&matches)
                     .get_one::<String>("older_than")
@@ -652,6 +722,7 @@ impl Run<'_> {
             return Ok(INTERRUPTED_EXIT_CODE);
         }
         let outcome = &report.outcome;
+        self.record_refusal(outcome)?;
         if !report.stderr_first.is_empty() {
             err.write_all(report.stderr_first.as_bytes())?;
             err.flush()?;
@@ -1573,6 +1644,31 @@ mod tests {
         // The reader went away: exit 1, quietly.
         let (code, stderr) = into_failing("--json commands", std::io::ErrorKind::BrokenPipe);
         assert_eq!((code, stderr.as_str()), (1, ""));
+    }
+
+    /// A refusal is recorded in the file `OPENTIDE_ENGINE_REFUSAL` names, in
+    /// every mode, for `compare` to run Python alone; nothing else is.
+    #[test]
+    fn a_refusal_is_recorded_where_the_dispatcher_asks() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("refusal");
+        let path = file.to_string_lossy().into_owned();
+        for line in ["--json doctor", "doctor"] {
+            let refused = dispatched(line, &[(REFUSAL_ENV, &path)], false);
+            assert_eq!(refused.code, 2, "{line}");
+            let recorded = std::fs::read_to_string(&file).unwrap();
+            assert!(
+                recorded.starts_with("opentide doctor has no Rust implementation yet"),
+                "{line}: {recorded}"
+            );
+            std::fs::remove_file(&file).unwrap();
+        }
+        let ran = dispatched("--json commands", &[(REFUSAL_ENV, &path)], false);
+        assert_eq!(ran.code, 0);
+        assert!(!file.exists());
+        // Without the variable, nothing is written.
+        assert_eq!(dispatched("doctor", &[], false).code, 2);
+        assert!(!file.exists());
     }
 
     #[test]

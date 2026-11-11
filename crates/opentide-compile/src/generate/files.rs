@@ -46,6 +46,18 @@ pub fn write_all(outputs: &[Output]) -> Result<(), (PathBuf, io::Error)> {
     })
 }
 
+/// Removes `paths` (`generate docs`: pages no object writes any more).
+///
+/// # Errors
+///
+/// The first file that could not be removed, with its path.
+pub fn remove_all(paths: &[PathBuf]) -> Result<(), (PathBuf, io::Error)> {
+    for path in paths {
+        std::fs::remove_file(path).map_err(|error| (path.clone(), error))?;
+    }
+    Ok(())
+}
+
 /// `outputs` without those a later output of the same path replaces, in order.
 fn last_per_path(outputs: &[Output]) -> Vec<&Output> {
     let mut last: std::collections::HashMap<&Path, usize> = std::collections::HashMap::new();
