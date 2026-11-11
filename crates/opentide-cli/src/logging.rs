@@ -336,6 +336,8 @@ mod tests {
             tracing::warn!(
                 objects = 12,
                 negative = -4,
+                files = 7_usize,
+                big = u64::MAX,
                 ratio = 0.5,
                 whole = 2.0,
                 changed = true,
@@ -347,12 +349,12 @@ mod tests {
         };
         assert_eq!(
             capture(config(false, false, true), emit),
-            "{\"objects\":12,\"negative\":-4,\"ratio\":0.5,\"whole\":2.0,\"changed\":true,\"dry_run\":false,\"name\":\"x\",\"path\":\"\\\"a/b\\\"\",\"event\":\"indexed\",\"level\":\"warning\",\"timestamp\":\"12:00:00\"}\n"
+            "{\"objects\":12,\"negative\":-4,\"files\":7,\"big\":18446744073709551615,\"ratio\":0.5,\"whole\":2.0,\"changed\":true,\"dry_run\":false,\"name\":\"x\",\"path\":\"\\\"a/b\\\"\",\"event\":\"indexed\",\"level\":\"warning\",\"timestamp\":\"12:00:00\"}\n"
         );
         // A text line is as it was.
         assert_eq!(
             capture(config(false, false, false), emit),
-            "warning: Indexed · objects: 12 · negative: -4 · ratio: 0.5 · whole: 2.0 · changed: true · dry_run: false · name: x · path: \"a/b\"\n"
+            "warning: Indexed · objects: 12 · negative: -4 · files: 7 · big: 18446744073709551615 · ratio: 0.5 · whole: 2.0 · changed: true · dry_run: false · name: x · path: \"a/b\"\n"
         );
     }
 
