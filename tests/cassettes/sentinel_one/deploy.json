@@ -1,0 +1,260 @@
+{
+  "format": 1,
+  "scenario": "sentinel_one/deploy",
+  "recorded_from": [
+    "{python}",
+    "tests/cassettes/sentinel_one/client.py",
+    "deploy"
+  ],
+  "digest": "sha256:4c39ff10079185a17dc4a5d38c3e08d8159f73c7e88ec7cfb7d4908676b04b03",
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://s1.invalid/web/api/v2.1/cloud-detection/rules",
+        "headers": [
+          [
+            "authorization",
+            "REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"data\": {\"expirationMode\": \"Permanent\", \"name\": \"SentinelOne rule 41 \\u2014 \\u00dcn\\u00efcode\", \"description\": \"Rule 41 of the SentinelOne connector's cassettes.\", \"queryType\": \"correlation\", \"severity\": \"High\", \"status\": \"Active\", \"networkQuarantine\": false, \"treatAsThreat\": \"Malicious\", \"queryLang\": \"2.0\", \"coolOffSetting\": {\"renotifyMinutes\": 30}, \"correlationParams\": {\"entity\": \"host\", \"matchInOrder\": true, \"subQueries\": [{\"matchesRequired\": 1, \"subQuery\": \"EventType = \\\"Process Create\\\"\"}, {\"matchesRequired\": 2, \"subQuery\": \"src.process.name = 'cmd.exe'\"}], \"timeWindow\": {\"windowMinutes\": 60}}}, \"filter\": {\"siteIds\": [\"77\"]}}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "s1-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"data\": {\"id\": \"1900000000000000001\", \"expirationMode\": \"Permanent\", \"name\": \"SentinelOne rule 41 \\u2014 \\u00dcn\\u00efcode\", \"description\": \"Rule 41 of the SentinelOne connector's cassettes.\", \"queryType\": \"correlation\", \"severity\": \"High\", \"status\": \"Active\", \"networkQuarantine\": false, \"treatAsThreat\": \"Malicious\", \"queryLang\": \"2.0\", \"coolOffSetting\": {\"renotifyMinutes\": 30}, \"correlationParams\": {\"entity\": \"host\", \"matchInOrder\": true, \"subQueries\": [{\"matchesRequired\": 1, \"subQuery\": \"EventType = \\\"Process Create\\\"\"}, {\"matchesRequired\": 2, \"subQuery\": \"src.process.name = 'cmd.exe'\"}], \"timeWindow\": {\"windowMinutes\": 60}}}}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://s1.invalid/web/api/v2.1/cloud-detection/rules",
+        "headers": [
+          [
+            "authorization",
+            "REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"data\": {\"expirationMode\": \"Permanent\", \"name\": \"SentinelOne rule 42 \\u2014 \\u00dcn\\u00efcode\", \"description\": \"Rule 42 of the SentinelOne connector's cassettes.\", \"queryType\": \"events\", \"severity\": \"High\", \"status\": \"Active\", \"networkQuarantine\": true, \"treatAsThreat\": \"UNDEFINED\", \"queryLang\": \"2.0\", \"s1ql\": \"src.process.name = 'cmd.exe'\"}, \"filter\": {\"siteIds\": [\"77\"]}}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "s1-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"data\": {\"id\": \"1900000000000000002\", \"expirationMode\": \"Permanent\", \"name\": \"SentinelOne rule 42 \\u2014 \\u00dcn\\u00efcode\", \"description\": \"Rule 42 of the SentinelOne connector's cassettes.\", \"queryType\": \"events\", \"severity\": \"High\", \"status\": \"Active\", \"networkQuarantine\": true, \"treatAsThreat\": \"UNDEFINED\", \"queryLang\": \"2.0\", \"s1ql\": \"src.process.name = 'cmd.exe'\"}}"
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://s1.invalid/web/api/v2.1/cloud-detection/rules/1900000000000000001",
+        "headers": [
+          [
+            "authorization",
+            "REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"data\": {\"expirationMode\": \"Permanent\", \"name\": \"SentinelOne rule 41 \\u2014 \\u00dcn\\u00efcode\", \"description\": \"Rule 41 of the SentinelOne connector's cassettes.\", \"queryType\": \"correlation\", \"severity\": \"High\", \"status\": \"Active\", \"networkQuarantine\": false, \"treatAsThreat\": \"Malicious\", \"queryLang\": \"2.0\", \"coolOffSetting\": {\"renotifyMinutes\": 30}, \"correlationParams\": {\"entity\": \"host\", \"matchInOrder\": true, \"subQueries\": [{\"matchesRequired\": 1, \"subQuery\": \"EventType = \\\"Process Create\\\"\"}, {\"matchesRequired\": 2, \"subQuery\": \"src.process.name = 'cmd.exe'\"}], \"timeWindow\": {\"windowMinutes\": 60}}}, \"filter\": {\"siteIds\": [\"77\"]}}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "s1-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"data\": {\"id\": \"1900000000000000001\", \"expirationMode\": \"Permanent\", \"name\": \"SentinelOne rule 41 \\u2014 \\u00dcn\\u00efcode\", \"description\": \"Rule 41 of the SentinelOne connector's cassettes.\", \"queryType\": \"correlation\", \"severity\": \"High\", \"status\": \"Active\", \"networkQuarantine\": false, \"treatAsThreat\": \"Malicious\", \"queryLang\": \"2.0\", \"coolOffSetting\": {\"renotifyMinutes\": 30}, \"correlationParams\": {\"entity\": \"host\", \"matchInOrder\": true, \"subQueries\": [{\"matchesRequired\": 1, \"subQuery\": \"EventType = \\\"Process Create\\\"\"}, {\"matchesRequired\": 2, \"subQuery\": \"src.process.name = 'cmd.exe'\"}], \"timeWindow\": {\"windowMinutes\": 60}}}}"
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://s1.invalid/web/api/v2.1/cloud-detection/rules/999",
+        "headers": [
+          [
+            "authorization",
+            "REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"data\": {\"expirationMode\": \"Permanent\", \"name\": \"SentinelOne rule 41 \\u2014 \\u00dcn\\u00efcode\", \"description\": \"Rule 41 of the SentinelOne connector's cassettes.\", \"queryType\": \"correlation\", \"severity\": \"High\", \"status\": \"Active\", \"networkQuarantine\": false, \"treatAsThreat\": \"Malicious\", \"queryLang\": \"2.0\", \"coolOffSetting\": {\"renotifyMinutes\": 30}, \"correlationParams\": {\"entity\": \"host\", \"matchInOrder\": true, \"subQueries\": [{\"matchesRequired\": 1, \"subQuery\": \"EventType = \\\"Process Create\\\"\"}, {\"matchesRequired\": 2, \"subQuery\": \"src.process.name = 'cmd.exe'\"}], \"timeWindow\": {\"windowMinutes\": 60}}}, \"filter\": {\"siteIds\": [\"77\"]}}"
+      },
+      "response": {
+        "status": 404,
+        "headers": [
+          [
+            "server",
+            "s1-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"errors\": [{\"code\": 4040010, \"title\": \"Not Found\", \"detail\": \"Rule 999 not found\"}]}"
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://s1.invalid/web/api/v2.1/cloud-detection/rules",
+        "headers": [
+          [
+            "authorization",
+            "REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"filter\": {\"ids\": [1900000000000000001]}}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "s1-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"data\": {\"affected\": 1}}"
+      }
+    },
+    {
+      "request": {
+        "method": "DELETE",
+        "url": "https://s1.invalid/web/api/v2.1/cloud-detection/rules",
+        "headers": [
+          [
+            "authorization",
+            "REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"filter\": {\"ids\": [1900000000000000001]}}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "s1-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"data\": {\"affected\": 1}}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://s1.invalid/web/api/v2.1/dv/events/pq",
+        "headers": [
+          [
+            "authorization",
+            "REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\n    \"accountIds\": \"4242\",\n    \"site_id\": \"77\",\n    \"query\": \"EventType = \\\"Process Create\\\"\",\n    \"toDate\": \"2026-10-27T08:00:00.000Z\",\n    \"fromDate\": \"2026-10-27T07:59:00.000Z\"\n}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "s1-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"data\": {\"queryId\": \"pq-1\", \"status\": \"FINISHED\", \"progress\": 100, \"columns\": [{\"name\": \"src.process.name\", \"type\": \"string\"}, {\"name\": \"endpoint.name\"}], \"data\": [[\"cmd.exe\", \"ws-1\"], [\"powershell.exe\", \"ws-2\"]], \"recommendations\": [\"Add a filter on event.type to speed up the query\"]}}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://s1.invalid/web/api/v2.1/dv/events/pq",
+        "headers": [
+          [
+            "authorization",
+            "REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\n    \"accountIds\": \"4242\",\n    \"site_id\": \"77\",\n    \"query\": \"EventType = | syntax\",\n    \"toDate\": \"2026-10-27T08:00:00.000Z\",\n    \"fromDate\": \"2026-10-27T07:59:00.000Z\"\n}"
+      },
+      "response": {
+        "status": 400,
+        "headers": [
+          [
+            "server",
+            "s1-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"errors\": [{\"code\": 4000010, \"title\": \"Validation Error\", \"detail\": \"Syntax error at 3\"}]}"
+      }
+    }
+  ]
+}

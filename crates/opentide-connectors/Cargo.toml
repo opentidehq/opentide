@@ -17,6 +17,14 @@ workspace = true
 [dependencies]
 # `$NAME` and `${NAME}` placeholders: the one parser the workspace's `info` uses.
 opentide-workspace.workspace = true
+# The platforms (UC-4.2): request bodies and rows keep their key order
+# (`opentide_compile::json::Json`); Elastic's durations; the advisory codes;
+# Python's float `repr` in messages.
+opentide-compile.workspace = true
+opentide-core.workspace = true
+opentide-schema.workspace = true
+jiff.workspace = true
+regex.workspace = true
 reqwest.workspace = true
 rustls.workspace = true
 rustls-native-certs.workspace = true

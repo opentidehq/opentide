@@ -17,6 +17,8 @@
 pub mod body;
 pub mod connector;
 pub mod credentials;
+pub mod defender;
+pub mod elastic;
 pub mod env;
 pub mod error;
 pub mod http;
@@ -24,6 +26,8 @@ pub mod progress;
 pub mod proxy;
 pub mod retry;
 pub mod runtime;
+pub mod search;
+pub mod sentinel_one;
 pub mod tenant;
 pub mod tls;
 

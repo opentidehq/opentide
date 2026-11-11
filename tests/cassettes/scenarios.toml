@@ -28,3 +28,90 @@ name = "skills/manifest"
 description = "The opentidehq/skills catalogue (manifest.json on main), as `setup skills discover` fetches it; every skills golden case replays it."
 client = ["{oracle}/opentide", "--json", "setup", "skills", "discover"]
 cwd = "tmp"
+
+# ---- UC-4.2b (#832): Defender for Endpoint, Elastic, SentinelOne ----
+# Each platform's stand-in tenant (tenant.py) answers as the Python suite's mocks
+# do; client.py drives the oracle's own client, runner, deployer or validator
+# through the scenario. `client.py fixture <path>` writes the inputs the Rust
+# tests give the connector (crates/opentide-connectors/tests/fixtures/).
+
+[[scenario]]
+name = "defender/deploy"
+description = "Defender for Endpoint: sign in, create a rule (refused, then created with the safer configuration), update it, update an id Graph does not know (404), delete it."
+client = ["{python}", "tests/cassettes/defender/client.py", "deploy"]
+tenant = ["{python}", "tests/cassettes/defender/tenant.py"]
+routes = ["login.microsoftonline.com", "graph.microsoft.com"]
+secrets = ["DEFENDER_CLIENT_SECRET"]
+cwd = "repo"
+
+[[scenario]]
+name = "defender/query"
+description = "Defender for Endpoint: opentide query's hunting queries over a fixed window: rows past the limit, a syntax error, a missing permission, a gateway's page."
+client = ["{python}", "tests/cassettes/defender/client.py", "query"]
+tenant = ["{python}", "tests/cassettes/defender/tenant.py"]
+routes = ["login.microsoftonline.com", "graph.microsoft.com"]
+secrets = ["DEFENDER_CLIENT_SECRET"]
+cwd = "repo"
+
+[[scenario]]
+name = "defender/validate"
+description = "Defender for Endpoint: validate query --live's one-row checks, a query with a custom detection's columns and one without."
+client = ["{python}", "tests/cassettes/defender/client.py", "validate"]
+tenant = ["{python}", "tests/cassettes/defender/tenant.py"]
+routes = ["login.microsoftonline.com", "graph.microsoft.com"]
+secrets = ["DEFENDER_CLIENT_SECRET"]
+cwd = "repo"
+
+[[scenario]]
+name = "elastic/deploy"
+description = "Elastic: one batch: create, update with preserved fields, type change, prebuilt refused, delete of a missing rule, disable, ES|QL pre-flight, threshold field checks, a missing data view, a 401 ending the batch."
+client = ["{python}", "tests/cassettes/elastic/client.py", "deploy"]
+tenant = ["{python}", "tests/cassettes/elastic/tenant.py"]
+routes = ["kibana.elastic.invalid", "es.elastic.invalid"]
+secrets = ["ELASTIC_API_KEY"]
+cwd = "repo"
+
+[[scenario]]
+name = "elastic/query"
+description = "Elastic: opentide query in ES|QL, Lucene, EQL and KQL (rule preview, the one write), on the tenant's index, a data view and --index; refusals and a gateway's page."
+client = ["{python}", "tests/cassettes/elastic/client.py", "query"]
+tenant = ["{python}", "tests/cassettes/elastic/tenant.py"]
+routes = ["kibana.elastic.invalid", "es.elastic.invalid"]
+secrets = ["ELASTIC_API_KEY"]
+cwd = "repo"
+
+[[scenario]]
+name = "elastic/validate"
+description = "Elastic: validate query --live's checks of each rule: Elasticsearch checks and a rule preview ending at a fixed time."
+client = ["{python}", "tests/cassettes/elastic/client.py", "validate"]
+tenant = ["{python}", "tests/cassettes/elastic/tenant.py"]
+routes = ["kibana.elastic.invalid", "es.elastic.invalid"]
+secrets = ["ELASTIC_API_KEY"]
+cwd = "repo"
+
+[[scenario]]
+name = "sentinel_one/deploy"
+description = "SentinelOne: create two STAR rules, update one, update an unknown id (404), disable and delete it, then validate_query twice."
+client = ["{python}", "tests/cassettes/sentinel_one/client.py", "deploy"]
+tenant = ["{python}", "tests/cassettes/sentinel_one/tenant.py"]
+routes = ["s1.invalid"]
+secrets = ["S1_API_TOKEN"]
+cwd = "repo"
+
+[[scenario]]
+name = "sentinel_one/query"
+description = "SentinelOne: opentide query's PowerQueries: polled until finished, finished at once, refused, failed."
+client = ["{python}", "tests/cassettes/sentinel_one/client.py", "query"]
+tenant = ["{python}", "tests/cassettes/sentinel_one/tenant.py"]
+routes = ["s1.invalid"]
+secrets = ["S1_API_TOKEN"]
+cwd = "repo"
+
+[[scenario]]
+name = "sentinel_one/validate"
+description = "SentinelOne: validate query --live's one-row checks of a rule's queries."
+client = ["{python}", "tests/cassettes/sentinel_one/client.py", "validate"]
+tenant = ["{python}", "tests/cassettes/sentinel_one/tenant.py"]
+routes = ["s1.invalid"]
+secrets = ["S1_API_TOKEN"]
+cwd = "repo"

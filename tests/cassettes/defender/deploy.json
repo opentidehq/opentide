@@ -1,0 +1,186 @@
+{
+  "format": 1,
+  "scenario": "defender/deploy",
+  "recorded_from": [
+    "{python}",
+    "tests/cassettes/defender/client.py",
+    "deploy"
+  ],
+  "digest": "sha256:70ff10cb42d05408ec468406736a205e35b65a9965798ba3342f66e8a9e0eb84",
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://login.microsoftonline.com/contoso-tenant-id/oauth2/v2.0/token",
+        "headers": [
+          [
+            "content-type",
+            "application/x-www-form-urlencoded"
+          ]
+        ],
+        "body": "client_id=opentide-app-id&client_secret=REDACTED&grant_type=client_credentials&scope=https%3A%2F%2Fgraph.microsoft.com%2F.default"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "defender-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"token_type\": \"REDACTED\", \"expires_in\": 3599, \"ext_expires_in\": 3599, \"access_token\": \"REDACTED\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://graph.microsoft.com/beta/security/rules/detectionRules",
+        "headers": [
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"displayName\": \"Encoded PowerShell \\u2014 \\u00dcn\\u00efcode\", \"queryCondition\": {\"queryText\": \"DeviceProcessEvents\\n| where ProcessCommandLine has \\\"-enc\\\"\"}, \"schedule\": {\"period\": \"1H\"}, \"detectionAction\": {\"alertTemplate\": {\"title\": \"Encoded PowerShell\", \"description\": \"A process ran PowerShell with an encoded command.\", \"severity\": \"high\", \"category\": \"Execution\", \"mitreTechniques\": [], \"impactedAssets\": [{\"@odata.type\": \"#microsoft.graph.security.impactedUserAsset\", \"identifier\": \"accountUpn\"}, {\"@odata.type\": \"#microsoft.graph.security.impactedDeviceAsset\", \"identifier\": \"deviceName\"}], \"recommendedActions\": null}, \"responseActions\": [{\"@odata.type\": \"#microsoft.graph.security.isolateDeviceResponseAction\", \"identifier\": \"deviceId\", \"isolationType\": \"full\"}, {\"@odata.type\": \"#microsoft.graph.security.disableUserResponseAction\", \"identifier\": \"accountSid\"}], \"organizationalScope\": null}, \"isEnabled\": true}"
+      },
+      "response": {
+        "status": 400,
+        "headers": [
+          [
+            "server",
+            "defender-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"error\": {\"code\": \"REDACTED\", \"message\": \"accountUpn is not a column of the query\"}}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://graph.microsoft.com/beta/security/rules/detectionRules",
+        "headers": [
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"displayName\": \"Encoded PowerShell \\u2014 \\u00dcn\\u00efcode\", \"queryCondition\": {\"queryText\": \"DeviceProcessEvents\\n| where ProcessCommandLine has \\\"-enc\\\"\"}, \"schedule\": {\"period\": \"1H\"}, \"detectionAction\": {\"alertTemplate\": {\"title\": \"Encoded PowerShell\", \"description\": \"A process ran PowerShell with an encoded command.\", \"severity\": \"high\", \"category\": \"Execution\", \"mitreTechniques\": [], \"impactedAssets\": [{\"@odata.type\": \"#microsoft.graph.security.impactedDeviceAsset\", \"identifier\": \"deviceId\"}], \"recommendedActions\": null}, \"responseActions\": [{\"@odata.type\": \"#microsoft.graph.security.isolateDeviceResponseAction\", \"identifier\": \"deviceId\", \"isolationType\": \"full\"}], \"organizationalScope\": null}, \"isEnabled\": true}"
+      },
+      "response": {
+        "status": 201,
+        "headers": [
+          [
+            "server",
+            "defender-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"id\": \"42\", \"displayName\": \"Encoded PowerShell \\u2014 \\u00dcn\\u00efcode\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "PATCH",
+        "url": "https://graph.microsoft.com/beta/security/rules/detectionRules/42",
+        "headers": [
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"displayName\": \"Encoded PowerShell \\u2014 \\u00dcn\\u00efcode\", \"queryCondition\": {\"queryText\": \"DeviceProcessEvents\\n| where ProcessCommandLine has \\\"-enc\\\"\"}, \"schedule\": {\"period\": \"1H\"}, \"detectionAction\": {\"alertTemplate\": {\"title\": \"Encoded PowerShell\", \"description\": \"A process ran PowerShell with an encoded command.\", \"severity\": \"high\", \"category\": \"Execution\", \"mitreTechniques\": [], \"impactedAssets\": [{\"@odata.type\": \"#microsoft.graph.security.impactedUserAsset\", \"identifier\": \"accountUpn\"}, {\"@odata.type\": \"#microsoft.graph.security.impactedDeviceAsset\", \"identifier\": \"deviceName\"}], \"recommendedActions\": null}, \"responseActions\": [{\"@odata.type\": \"#microsoft.graph.security.isolateDeviceResponseAction\", \"identifier\": \"deviceId\", \"isolationType\": \"full\"}, {\"@odata.type\": \"#microsoft.graph.security.disableUserResponseAction\", \"identifier\": \"accountSid\"}], \"organizationalScope\": null}, \"isEnabled\": true}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "defender-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"id\": \"42\", \"displayName\": \"Encoded PowerShell \\u2014 \\u00dcn\\u00efcode\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "PATCH",
+        "url": "https://graph.microsoft.com/beta/security/rules/detectionRules/99",
+        "headers": [
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"displayName\": \"Encoded PowerShell \\u2014 \\u00dcn\\u00efcode\", \"queryCondition\": {\"queryText\": \"DeviceProcessEvents\\n| where ProcessCommandLine has \\\"-enc\\\"\"}, \"schedule\": {\"period\": \"1H\"}, \"detectionAction\": {\"alertTemplate\": {\"title\": \"Encoded PowerShell\", \"description\": \"A process ran PowerShell with an encoded command.\", \"severity\": \"high\", \"category\": \"Execution\", \"mitreTechniques\": [], \"impactedAssets\": [{\"@odata.type\": \"#microsoft.graph.security.impactedUserAsset\", \"identifier\": \"accountUpn\"}, {\"@odata.type\": \"#microsoft.graph.security.impactedDeviceAsset\", \"identifier\": \"deviceName\"}], \"recommendedActions\": null}, \"responseActions\": [{\"@odata.type\": \"#microsoft.graph.security.isolateDeviceResponseAction\", \"identifier\": \"deviceId\", \"isolationType\": \"full\"}, {\"@odata.type\": \"#microsoft.graph.security.disableUserResponseAction\", \"identifier\": \"accountSid\"}], \"organizationalScope\": null}, \"isEnabled\": true}"
+      },
+      "response": {
+        "status": 404,
+        "headers": [
+          [
+            "server",
+            "defender-tenant"
+          ]
+        ],
+        "body": ""
+      }
+    },
+    {
+      "request": {
+        "method": "DELETE",
+        "url": "https://graph.microsoft.com/beta/security/rules/detectionRules/42",
+        "headers": [
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 204,
+        "headers": [
+          [
+            "server",
+            "defender-tenant"
+          ]
+        ],
+        "body": ""
+      }
+    }
+  ]
+}

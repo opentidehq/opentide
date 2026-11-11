@@ -18,6 +18,8 @@ adds the Python plugin hook to its registry.
 | `runtime.rs` | `block_on` (a runtime per call, for the synchronous CLI), `fan_out` over tenants (bounded, ordered, cancellable), `cancel_when` (Ctrl-C) | the query and deploy loops |
 | `progress.rs` | `tenant` progress events (`OPENTIDE_PROGRESS=json`) | `core/progress_events.py` `tenant` |
 | `body.rs` | `python_json`: a body as `json.dumps` writes it (`, ` and `: `, ASCII escapes), through a serde_json formatter | `requests`' `json=` |
+| `search.rs` | What the query runners share: `SearchRequest`, `SearchResult`, `SearchError` (refused, timed out, tenant), `TimeWindow`, `kql_with_limit`, `flatten`, `describe_answer`, `quote`/`urlencode` as `urllib` writes them | `query/models.py`, `query/runner.py`, `transport.describe_answer` |
+| `defender.rs`, `elastic.rs`, `sentinel_one.rs` | The platforms of UC-4.2b (#832): client, deploy calls, live check and query runner of each, request for request; Elastic's Elasticsearch checks, rule preview, query text and advisories | `platforms/<platform>/` |
 
 ## Place
 
@@ -49,3 +51,8 @@ proxy, `no_proxy`, `--proxy`, timeouts and retries with tenants of different set
 run; credentials; redaction; fan-out, cancellation, progress; bodies) and `tests/harness.rs` (the
 sample connector against `tests/cassettes/mock-platform/deploy.json`; one byte off fails; no
 credential in any cassette).
+
+`cargo nextest run -p opentide-connectors defender elastic sentinel_one`: each platform against its
+cassettes (`tests/cassettes/<platform>/<scenario>.json`, recorded from the oracle against the stand-in tenant
+`tenant.py` beside them), the inputs the Python client was given in `tests/fixtures/<platform>.json` (written by
+`client.py fixture`); one byte off fails.

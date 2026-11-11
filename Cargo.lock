@@ -2666,8 +2666,13 @@ name = "opentide-connectors"
 version = "0.12.0"
 dependencies = [
  "backon",
+ "jiff",
  "opentide-cassette",
+ "opentide-compile",
+ "opentide-core",
+ "opentide-schema",
  "opentide-workspace",
+ "regex",
  "reqwest",
  "rustls",
  "rustls-native-certs",
