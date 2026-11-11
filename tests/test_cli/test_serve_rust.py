@@ -314,8 +314,9 @@ def test_help_and_unported_commands_go_through_python(
     help_text = rust_client.run("info", "--help")
     assert help_text["exit_code"] == 0
     assert "Usage" in help_text["document"]["text"]
-    # validate has a Rust implementation (UC-3.5); new threat has none.
-    refused = rust_client.run("new", "threat")
+    # validate has a Rust implementation (UC-3.5); a bare generate (the full
+    # pipeline) has none: only generate with its phases named runs on Rust.
+    refused = rust_client.run("generate")
     assert refused["exit_code"] == 2
     assert refused["document"]["failure"]["code"] == "engine_not_ported"
     assert rust_runs == []

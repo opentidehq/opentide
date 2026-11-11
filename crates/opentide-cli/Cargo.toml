@@ -67,6 +67,8 @@ textwrap = { version = "0.16", default-features = false, features = ["unicode-wi
 toml.workspace = true
 tracing = "0.1"
 unicode-width = "0.2"
+# `new`'s fresh object identifiers.
+uuid = { workspace = true, features = ["v4"] }
 # `doctor` (UC-3.5c): whether git and an MCP server's command are on PATH.
 which = "7"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["registry", "std"] }

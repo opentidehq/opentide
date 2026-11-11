@@ -76,9 +76,10 @@ class RustCommand:
     workspace (a tenant, MISP): ``compare`` refuses it, since both runs would
     reach it and nothing would compare what they did there.
 
-    *requires* names flags of which a run must carry one for the Rust
-    implementation to cover it (``deploy`` runs in Rust with ``--dry-run``
-    only); a run without any is a command with no Rust implementation:
+    *requires* names flags (or words: ``generate``'s phases) of which a run
+    must carry one for the Rust implementation to cover it (``deploy`` runs in
+    Rust with ``--dry-run`` only); a run without any is a command with no
+    Rust implementation:
     ``rust`` refuses it with ``engine_not_ported`` and ``compare`` runs
     Python alone. *refuses* names flags a run must carry none of: ``validate
     query --live`` checks the queries on the tenants, which stays Python's
@@ -132,10 +133,13 @@ RUST_CLI: tuple[str, ...] = (sys.executable, "-m", "opentide.cli.rust")
 #: doctor that reaches PyPI and the proxy stays Python's; ``mcp start`` with UC-3.7
 #: (#829): the Rust server, which hands the tools and resources it has no
 #: implementation of to the Python server's handlers in its own process
-#: (``opentide.mcp_server.bridge``); ``serve`` with UC-3.8 (#830): the Rust host,
-#: which runs each command with a Rust implementation itself and hands every
-#: other run to this package's runner in its own process
-#: (``opentide.cli.services.serve_bridge``).
+#: (``opentide.mcp_server.bridge``).
+#: ``new threat|objective|rule`` and ``generate`` with phases named
+#: (``generate schemas templates``) with UC-3.5d (#933): its *requires* are
+#: the phase words, so a bare ``generate`` (the full pipeline) stays Python's.
+#: ``serve`` with UC-3.8 (#830): the Rust host, which runs each command with a
+#: Rust implementation itself and hands every other run to this package's
+#: runner in its own process (``opentide.cli.services.serve_bridge``).
 RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
     ("commands",): RustCommand(launch=RUST_CLI),
     ("explain",): RustCommand(launch=RUST_CLI),
@@ -161,6 +165,12 @@ RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
     ("generate", "inflight", "prune"): RustCommand(launch=RUST_CLI),
     ("setup", "ci"): RustCommand(launch=RUST_CLI),
     ("mcp", "start"): RustCommand(launch=RUST_CLI),
+    ("generate",): RustCommand(
+        launch=RUST_CLI, requires=("schemas", "templates", "vocabs", "snippets")
+    ),
+    ("new", "threat"): RustCommand(launch=RUST_CLI, rules=("fresh-uuids",)),
+    ("new", "objective"): RustCommand(launch=RUST_CLI, rules=("fresh-uuids",)),
+    ("new", "rule"): RustCommand(launch=RUST_CLI, rules=("fresh-uuids",)),
     ("serve",): RustCommand(launch=RUST_CLI),
 }
 

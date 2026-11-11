@@ -19,4 +19,6 @@ workspace = true
 regex.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+# The digests of `sha256` ledger rules (RustCrypto).
+sha2 = "0.11"
 toml.workspace = true

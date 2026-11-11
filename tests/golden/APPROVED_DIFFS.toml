@@ -15,7 +15,10 @@
 #   rule       json:<JSON pointer> (the value there in the target's JSON
 #              document; "json:" alone is the whole document),
 #              json-extend:<JSON pointer> (elements the candidate adds to the
-#              oracle's array there), text, or
+#              oracle's array there), text, sha256 (a whole file: the
+#              SHA-256 digests of each side's normalised bytes, for a file
+#              another check compares, such as an editor schema by verdict),
+#              or
 #              lines (consecutive whole lines, separated by \n: where the
 #              oracle has the `oracle` lines and the candidate, at the same
 #              place, the `candidate` lines, so a row inserted or removed is
@@ -188,9 +191,12 @@
 # --check` validates every object and configuration file of the fixtures,
 # every fault of tests/corpora/faults.toml, the configuration table's texts
 # and the bundled configuration files against both with the `jsonschema`
-# crate, and fails on any verdict that differs. Entered here, one rule per
-# kind, when `generate schemas` routes to Rust (UC-3.x), for `generate` on
-# `file:.opentide/schemas/*.schema.json`; the CHANGELOG announces them under
+# crate, and fails on any verdict that differs. No rule of text or JSON
+# reaches these documents' differences one by one (thousands of values), so
+# each recorded schema file `generate schemas` and `new` write is approved
+# whole by a `sha256` entry pinning both files (UC-3.5d, #933, at the end of
+# this file), which `cargo xtask codegen --check` judges by verdict; the
+# kinds of difference are these, and the CHANGELOG announces them under
 # "**The editor schemas are generated from the Rust models**":
 #
 # - `schema-key-order`: keys in serde_json's (alphabetical) order, where
@@ -8992,6 +8998,660 @@ candidate = "\u001b[1;31merror:\u001b[0m Invalid value for 'ci_platform': 'githb
 reason = "the Rust command line words a value outside an argument's choices as it words every other one (the value, then the choices) and suggests the closest, as for --check and --platform; the oracle's 0.23.0 setup ci had a sentence of its own and no suggestion"
 issue = "https://github.com/opentidehq/opentide/issues/916"
 changelog = "**`generate explorer`, `generate inflight` and `setup ci` run on the Rust engine**"
+
+# UC-3.5d (#933): `new threat|objective|rule` and `generate <phase>` on the Rust CLI.
+# The editor schemas `generate schemas` writes (and `new` writes first where a
+# workspace has none) are compared by verdict, not text (UC-1.8b above): each
+# is approved whole by a `sha256` entry that pins the oracle's file and the
+# candidate's, which `cargo xtask codegen --check` judges by verdict.
+
+[[diff]]
+command = "new objective"
+case = "new.objective/human/tide-corpus/example"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mtemplates\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K\u001b[1A\u001b[2K  \u001b[1;32m✓\u001b[0m  \u001b[1mtemplates\u001b[0m  \u001b[2m13 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2m.opentide/templates/\u001b[0m"
+candidate = "  \u001b[1;32m✓\u001b[0m  \u001b[1mtemplates\u001b[0m  \u001b[2m13 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2m.opentide/templates/\u001b[0m"
+reason = "the templates and schemas are written in milliseconds: the checklist rows are printed when they are done, without the spinner Python drew while they ran"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+[[diff]]
+command = "new objective"
+case = "new.objective/human/tide-corpus/unknown-threat"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mtemplates\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K\u001b[1A\u001b[2K  \u001b[1;32m✓\u001b[0m  \u001b[1mtemplates\u001b[0m  \u001b[2m13 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2m.opentide/templates/\u001b[0m"
+candidate = "  \u001b[1;32m✓\u001b[0m  \u001b[1mtemplates\u001b[0m  \u001b[2m13 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2m.opentide/templates/\u001b[0m"
+reason = "the templates and schemas are written in milliseconds: the checklist rows are printed when they are done, without the spinner Python drew while they ran"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+[[diff]]
+command = "new rule"
+case = "new.rule/human/tide-corpus/example"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mtemplates\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K\u001b[1A\u001b[2K  \u001b[1;32m✓\u001b[0m  \u001b[1mtemplates\u001b[0m  \u001b[2m13 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2m.opentide/templates/\u001b[0m"
+candidate = "  \u001b[1;32m✓\u001b[0m  \u001b[1mtemplates\u001b[0m  \u001b[2m13 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2m.opentide/templates/\u001b[0m"
+reason = "the templates and schemas are written in milliseconds: the checklist rows are printed when they are done, without the spinner Python drew while they ran"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+[[diff]]
+command = "new rule"
+case = "new.rule/human/vscode/example"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mtemplates\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K\u001b[1A\u001b[2K  \u001b[1;32m✓\u001b[0m  \u001b[1mtemplates\u001b[0m  \u001b[2m4 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2m.opentide/templates/\u001b[0m"
+candidate = "  \u001b[1;32m✓\u001b[0m  \u001b[1mtemplates\u001b[0m  \u001b[2m4 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2m.opentide/templates/\u001b[0m"
+reason = "the templates and schemas are written in milliseconds: the checklist rows are printed when they are done, without the spinner Python drew while they ran"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+[[diff]]
+command = "new threat"
+case = "new.threat/human/empty/example"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mtemplates\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K\u001b[1A\u001b[2K  \u001b[1;32m✓\u001b[0m  \u001b[1mtemplates\u001b[0m  \u001b[2m4 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2m.opentide/templates/\u001b[0m"
+candidate = "  \u001b[1;32m✓\u001b[0m  \u001b[1mtemplates\u001b[0m  \u001b[2m4 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2m.opentide/templates/\u001b[0m"
+reason = "the templates and schemas are written in milliseconds: the checklist rows are printed when they are done, without the spinner Python drew while they ran"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+[[diff]]
+command = "new threat"
+case = "new.threat/human/heavy-small/example"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mtemplates\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K\u001b[1A\u001b[2K  \u001b[1;32m✓\u001b[0m  \u001b[1mtemplates\u001b[0m  \u001b[2m13 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2m.opentide/templates/\u001b[0m"
+candidate = "  \u001b[1;32m✓\u001b[0m  \u001b[1mtemplates\u001b[0m  \u001b[2m13 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2m.opentide/templates/\u001b[0m"
+reason = "the templates and schemas are written in milliseconds: the checklist rows are printed when they are done, without the spinner Python drew while they ran"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+[[diff]]
+command = "new threat"
+case = "new.threat/human/tide-corpus/example"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mtemplates\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K\u001b[1A\u001b[2K  \u001b[1;32m✓\u001b[0m  \u001b[1mtemplates\u001b[0m  \u001b[2m13 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2m.opentide/templates/\u001b[0m"
+candidate = "  \u001b[1;32m✓\u001b[0m  \u001b[1mtemplates\u001b[0m  \u001b[2m13 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2m.opentide/templates/\u001b[0m"
+reason = "the templates and schemas are written in milliseconds: the checklist rows are printed when they are done, without the spinner Python drew while they ran"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+[[diff]]
+command = "new threat"
+case = "new.threat/human/tide-corpus/path"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mtemplates\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K\u001b[1A\u001b[2K  \u001b[1;32m✓\u001b[0m  \u001b[1mtemplates\u001b[0m  \u001b[2m13 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2m.opentide/templates/\u001b[0m"
+candidate = "  \u001b[1;32m✓\u001b[0m  \u001b[1mtemplates\u001b[0m  \u001b[2m13 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2m.opentide/templates/\u001b[0m"
+reason = "the templates and schemas are written in milliseconds: the checklist rows are printed when they are done, without the spinner Python drew while they ran"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+[[diff]]
+command = "new threat"
+case = "new.threat/human/vscode/example"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mtemplates\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K\u001b[1A\u001b[2K  \u001b[1;32m✓\u001b[0m  \u001b[1mtemplates\u001b[0m  \u001b[2m4 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2m.opentide/templates/\u001b[0m"
+candidate = "  \u001b[1;32m✓\u001b[0m  \u001b[1mtemplates\u001b[0m  \u001b[2m4 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2m.opentide/templates/\u001b[0m"
+reason = "the templates and schemas are written in milliseconds: the checklist rows are printed when they are done, without the spinner Python drew while they ran"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+[[diff]]
+command = "new objective"
+case = "new.objective/*/tide-corpus/*"
+target = "file:ws/.opentide/schemas/objective.1.0.schema.json"
+rule = "sha256"
+oracle = "cdc8edb0c91393081b74541c2c35b2d39269643a980f0dc8157629a2e197cb57"
+candidate = "4be421bd113319ade77d89fa723b74159216cd3c6433e6c5c89cbd3d2c67e92c"
+reason = "the JSON Schema is generated from the Rust models with schemars (UC-1.8b, #900): its text differs as the schema-* kinds above say, and it accepts and refuses every corpus object, configuration file and fault as the oracle's does (cargo xtask codegen --check judges this recording's schemas by verdict); the digests pin both files"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+[[diff]]
+command = "new objective"
+case = "new.objective/*/tide-corpus/*"
+target = "file:ws/.opentide/schemas/rule.1.0.schema.json"
+rule = "sha256"
+oracle = "47656628ff5a61697d2d1bb3a1b25228383151f971abeb85fbc133f3368304f9"
+candidate = "e4c38e8380b41b436a31f029303437b9f4fa36538032c0ea3ad7bc939c93baf9"
+reason = "the JSON Schema is generated from the Rust models with schemars (UC-1.8b, #900): its text differs as the schema-* kinds above say, and it accepts and refuses every corpus object, configuration file and fault as the oracle's does (cargo xtask codegen --check judges this recording's schemas by verdict); the digests pin both files"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+[[diff]]
+command = "new objective"
+case = "new.objective/*/tide-corpus/*"
+target = "file:ws/.opentide/schemas/rule.1.1.schema.json"
+rule = "sha256"
+oracle = "ec700e2282c16754e56a603d660c9327624df84e6beb63621500366fef6f9e39"
+candidate = "8748cef7edae586ec6bbb1a3f5c4da4a6e8ae67bebdfeb724b20bffde2efec85"
+reason = "the JSON Schema is generated from the Rust models with schemars (UC-1.8b, #900): its text differs as the schema-* kinds above say, and it accepts and refuses every corpus object, configuration file and fault as the oracle's does (cargo xtask codegen --check judges this recording's schemas by verdict); the digests pin both files"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+[[diff]]
+command = "new objective"
+case = "new.objective/*/tide-corpus/*"
+target = "file:ws/.opentide/schemas/threat.1.0.schema.json"
+rule = "sha256"
+oracle = "493e6868ec1d8ea492acbc21ad9676819ec21c6852bf1df6fc11a3256bda653c"
+candidate = "7c17a0a7beb05f642c6f608f595130754c1405013ab5f0d7423108cdb8586fd5"
+reason = "the JSON Schema is generated from the Rust models with schemars (UC-1.8b, #900): its text differs as the schema-* kinds above say, and it accepts and refuses every corpus object, configuration file and fault as the oracle's does (cargo xtask codegen --check judges this recording's schemas by verdict); the digests pin both files"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+[[diff]]
+command = "new objective"
+case = "new.objective/*/tide-corpus/*"
+target = "file:ws/.opentide/schemas/visibility.1.0.schema.json"
+rule = "sha256"
+oracle = "2650d85bfa10fadb1f95ce1404496186f23e2ced87c77b92bed6c2fc022e7e19"
+candidate = "76c75e5ad9323637bca452de1357f73f5f2e4e02a0ccd9433575bb5658adae3b"
+reason = "the JSON Schema is generated from the Rust models with schemars (UC-1.8b, #900): its text differs as the schema-* kinds above say, and it accepts and refuses every corpus object, configuration file and fault as the oracle's does (cargo xtask codegen --check judges this recording's schemas by verdict); the digests pin both files"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+[[diff]]
+command = "new rule"
+case = "new.rule/*/tide-corpus/*"
+target = "file:ws/.opentide/schemas/objective.1.0.schema.json"
+rule = "sha256"
+oracle = "cdc8edb0c91393081b74541c2c35b2d39269643a980f0dc8157629a2e197cb57"
+candidate = "4be421bd113319ade77d89fa723b74159216cd3c6433e6c5c89cbd3d2c67e92c"
+reason = "the JSON Schema is generated from the Rust models with schemars (UC-1.8b, #900): its text differs as the schema-* kinds above say, and it accepts and refuses every corpus object, configuration file and fault as the oracle's does (cargo xtask codegen --check judges this recording's schemas by verdict); the digests pin both files"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+[[diff]]
+command = "new rule"
+case = "new.rule/*/tide-corpus/*"
+target = "file:ws/.opentide/schemas/rule.1.0.schema.json"
+rule = "sha256"
+oracle = "47656628ff5a61697d2d1bb3a1b25228383151f971abeb85fbc133f3368304f9"
+candidate = "e4c38e8380b41b436a31f029303437b9f4fa36538032c0ea3ad7bc939c93baf9"
+reason = "the JSON Schema is generated from the Rust models with schemars (UC-1.8b, #900): its text differs as the schema-* kinds above say, and it accepts and refuses every corpus object, configuration file and fault as the oracle's does (cargo xtask codegen --check judges this recording's schemas by verdict); the digests pin both files"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+[[diff]]
+command = "new rule"
+case = "new.rule/*/tide-corpus/*"
+target = "file:ws/.opentide/schemas/rule.1.1.schema.json"
+rule = "sha256"
+oracle = "ec700e2282c16754e56a603d660c9327624df84e6beb63621500366fef6f9e39"
+candidate = "8748cef7edae586ec6bbb1a3f5c4da4a6e8ae67bebdfeb724b20bffde2efec85"
+reason = "the JSON Schema is generated from the Rust models with schemars (UC-1.8b, #900): its text differs as the schema-* kinds above say, and it accepts and refuses every corpus object, configuration file and fault as the oracle's does (cargo xtask codegen --check judges this recording's schemas by verdict); the digests pin both files"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+[[diff]]
+command = "new rule"
+case = "new.rule/*/tide-corpus/*"
+target = "file:ws/.opentide/schemas/threat.1.0.schema.json"
+rule = "sha256"
+oracle = "493e6868ec1d8ea492acbc21ad9676819ec21c6852bf1df6fc11a3256bda653c"
+candidate = "7c17a0a7beb05f642c6f608f595130754c1405013ab5f0d7423108cdb8586fd5"
+reason = "the JSON Schema is generated from the Rust models with schemars (UC-1.8b, #900): its text differs as the schema-* kinds above say, and it accepts and refuses every corpus object, configuration file and fault as the oracle's does (cargo xtask codegen --check judges this recording's schemas by verdict); the digests pin both files"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+[[diff]]
+command = "new rule"
+case = "new.rule/*/tide-corpus/*"
+target = "file:ws/.opentide/schemas/visibility.1.0.schema.json"
+rule = "sha256"
+oracle = "2650d85bfa10fadb1f95ce1404496186f23e2ced87c77b92bed6c2fc022e7e19"
+candidate = "76c75e5ad9323637bca452de1357f73f5f2e4e02a0ccd9433575bb5658adae3b"
+reason = "the JSON Schema is generated from the Rust models with schemars (UC-1.8b, #900): its text differs as the schema-* kinds above say, and it accepts and refuses every corpus object, configuration file and fault as the oracle's does (cargo xtask codegen --check judges this recording's schemas by verdict); the digests pin both files"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+[[diff]]
+command = "new rule"
+case = "new.rule/*/vscode/example"
+target = "file:ws/.opentide/schemas/objective.1.0.schema.json"
+rule = "sha256"
+oracle = "cdc8edb0c91393081b74541c2c35b2d39269643a980f0dc8157629a2e197cb57"
+candidate = "4be421bd113319ade77d89fa723b74159216cd3c6433e6c5c89cbd3d2c67e92c"
+reason = "the JSON Schema is generated from the Rust models with schemars (UC-1.8b, #900): its text differs as the schema-* kinds above say, and it accepts and refuses every corpus object, configuration file and fault as the oracle's does (cargo xtask codegen --check judges this recording's schemas by verdict); the digests pin both files"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+[[diff]]
+command = "new rule"
+case = "new.rule/*/vscode/example"
+target = "file:ws/.opentide/schemas/rule.1.0.schema.json"
+rule = "sha256"
+oracle = "3e64fab183eefbce7f320b20a29655e538e3ad6828b4ea5d62b0355c42bd5561"
+candidate = "b279c683a3af65b8646c98f75662c06a40f9105c234e5169312ca5e6768ca3a6"
+reason = "the JSON Schema is generated from the Rust models with schemars (UC-1.8b, #900): its text differs as the schema-* kinds above say, and it accepts and refuses every corpus object, configuration file and fault as the oracle's does (cargo xtask codegen --check judges this recording's schemas by verdict); the digests pin both files"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+[[diff]]
+command = "new rule"
+case = "new.rule/*/vscode/example"
+target = "file:ws/.opentide/schemas/rule.1.1.schema.json"
+rule = "sha256"
+oracle = "50766051aaa2cdb9bfda2c35b9b0e613645988d9c5a0c62e7c78e5274601dc4b"
+candidate = "6f39d17d815b3ded897c0d388b12b3f5d36fa4e7943afaab5a62969029a22562"
+reason = "the JSON Schema is generated from the Rust models with schemars (UC-1.8b, #900): its text differs as the schema-* kinds above say, and it accepts and refuses every corpus object, configuration file and fault as the oracle's does (cargo xtask codegen --check judges this recording's schemas by verdict); the digests pin both files"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+[[diff]]
+command = "new rule"
+case = "new.rule/*/vscode/example"
+target = "file:ws/.opentide/schemas/threat.1.0.schema.json"
+rule = "sha256"
+oracle = "493e6868ec1d8ea492acbc21ad9676819ec21c6852bf1df6fc11a3256bda653c"
+candidate = "7c17a0a7beb05f642c6f608f595130754c1405013ab5f0d7423108cdb8586fd5"
+reason = "the JSON Schema is generated from the Rust models with schemars (UC-1.8b, #900): its text differs as the schema-* kinds above say, and it accepts and refuses every corpus object, configuration file and fault as the oracle's does (cargo xtask codegen --check judges this recording's schemas by verdict); the digests pin both files"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+[[diff]]
+command = "new rule"
+case = "new.rule/*/vscode/example"
+target = "file:ws/.opentide/schemas/visibility.1.0.schema.json"
+rule = "sha256"
+oracle = "2650d85bfa10fadb1f95ce1404496186f23e2ced87c77b92bed6c2fc022e7e19"
+candidate = "76c75e5ad9323637bca452de1357f73f5f2e4e02a0ccd9433575bb5658adae3b"
+reason = "the JSON Schema is generated from the Rust models with schemars (UC-1.8b, #900): its text differs as the schema-* kinds above say, and it accepts and refuses every corpus object, configuration file and fault as the oracle's does (cargo xtask codegen --check judges this recording's schemas by verdict); the digests pin both files"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+[[diff]]
+command = "new threat"
+case = "new.threat/*/empty/example"
+target = "file:ws/.opentide/schemas/objective.1.0.schema.json"
+rule = "sha256"
+oracle = "cdc8edb0c91393081b74541c2c35b2d39269643a980f0dc8157629a2e197cb57"
+candidate = "4be421bd113319ade77d89fa723b74159216cd3c6433e6c5c89cbd3d2c67e92c"
+reason = "the JSON Schema is generated from the Rust models with schemars (UC-1.8b, #900): its text differs as the schema-* kinds above say, and it accepts and refuses every corpus object, configuration file and fault as the oracle's does (cargo xtask codegen --check judges this recording's schemas by verdict); the digests pin both files"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+[[diff]]
+command = "new threat"
+case = "new.threat/*/empty/example"
+target = "file:ws/.opentide/schemas/rule.1.0.schema.json"
+rule = "sha256"
+oracle = "e574f63ef320901e52a1edf820e66e90aabded0966e631f290aec9395e30a837"
+candidate = "91964c70b890761dd6ab1318c357afa919e8d8bfef883dc686cf647353a0c59e"
+reason = "the JSON Schema is generated from the Rust models with schemars (UC-1.8b, #900): its text differs as the schema-* kinds above say, and it accepts and refuses every corpus object, configuration file and fault as the oracle's does (cargo xtask codegen --check judges this recording's schemas by verdict); the digests pin both files"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+[[diff]]
+command = "new threat"
+case = "new.threat/*/empty/example"
+target = "file:ws/.opentide/schemas/rule.1.1.schema.json"
+rule = "sha256"
+oracle = "d2343c251aaada7aaa710ebbd1e4b1e05918438371503c9924d7bb6ee19ad97e"
+candidate = "08d78cca67c7ae9170ffdd587eb145a4a5ae1164bd55c2f685022e65b44175f6"
+reason = "the JSON Schema is generated from the Rust models with schemars (UC-1.8b, #900): its text differs as the schema-* kinds above say, and it accepts and refuses every corpus object, configuration file and fault as the oracle's does (cargo xtask codegen --check judges this recording's schemas by verdict); the digests pin both files"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+[[diff]]
+command = "new threat"
+case = "new.threat/*/empty/example"
+target = "file:ws/.opentide/schemas/threat.1.0.schema.json"
+rule = "sha256"
+oracle = "493e6868ec1d8ea492acbc21ad9676819ec21c6852bf1df6fc11a3256bda653c"
+candidate = "7c17a0a7beb05f642c6f608f595130754c1405013ab5f0d7423108cdb8586fd5"
+reason = "the JSON Schema is generated from the Rust models with schemars (UC-1.8b, #900): its text differs as the schema-* kinds above say, and it accepts and refuses every corpus object, configuration file and fault as the oracle's does (cargo xtask codegen --check judges this recording's schemas by verdict); the digests pin both files"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+[[diff]]
+command = "new threat"
+case = "new.threat/*/empty/example"
+target = "file:ws/.opentide/schemas/visibility.1.0.schema.json"
+rule = "sha256"
+oracle = "2650d85bfa10fadb1f95ce1404496186f23e2ced87c77b92bed6c2fc022e7e19"
+candidate = "76c75e5ad9323637bca452de1357f73f5f2e4e02a0ccd9433575bb5658adae3b"
+reason = "the JSON Schema is generated from the Rust models with schemars (UC-1.8b, #900): its text differs as the schema-* kinds above say, and it accepts and refuses every corpus object, configuration file and fault as the oracle's does (cargo xtask codegen --check judges this recording's schemas by verdict); the digests pin both files"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+[[diff]]
+command = "new threat"
+case = "new.threat/*/heavy-small/example"
+target = "file:ws/.opentide/schemas/objective.1.0.schema.json"
+rule = "sha256"
+oracle = "c9f4ab28ca83e9ed6998279e589fefda0efd98da393dd35e05528a35a0eb2dc8"
+candidate = "e7472a7dcde2bd5a222261cf37a002c5aea38fbff10573928aaa37e67216e932"
+reason = "the JSON Schema is generated from the Rust models with schemars (UC-1.8b, #900): its text differs as the schema-* kinds above say, and it accepts and refuses every corpus object, configuration file and fault as the oracle's does (cargo xtask codegen --check judges this recording's schemas by verdict); the digests pin both files"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+[[diff]]
+command = "new threat"
+case = "new.threat/*/heavy-small/example"
+target = "file:ws/.opentide/schemas/rule.1.0.schema.json"
+rule = "sha256"
+oracle = "97bbfa205a36004fd87284aa73e104b0a41d39d39fe804443b2a5090ad4aea59"
+candidate = "2215381c872dd31bf05013b06c97ab023f8a9bb1a2423a091b8727edf63ca6a0"
+reason = "the JSON Schema is generated from the Rust models with schemars (UC-1.8b, #900): its text differs as the schema-* kinds above say, and it accepts and refuses every corpus object, configuration file and fault as the oracle's does (cargo xtask codegen --check judges this recording's schemas by verdict); the digests pin both files"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+[[diff]]
+command = "new threat"
+case = "new.threat/*/heavy-small/example"
+target = "file:ws/.opentide/schemas/rule.1.1.schema.json"
+rule = "sha256"
+oracle = "15d2d6288cf937f5b69520d0f501bf4caaa9284856b0a8981cf4dcb4698e5bf2"
+candidate = "c437bd33c12472313290fbf20bc72ed5ff58372f89e00c718aaa99f54d141abd"
+reason = "the JSON Schema is generated from the Rust models with schemars (UC-1.8b, #900): its text differs as the schema-* kinds above say, and it accepts and refuses every corpus object, configuration file and fault as the oracle's does (cargo xtask codegen --check judges this recording's schemas by verdict); the digests pin both files"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+[[diff]]
+command = "new threat"
+case = "new.threat/*/heavy-small/example"
+target = "file:ws/.opentide/schemas/threat.1.0.schema.json"
+rule = "sha256"
+oracle = "493e6868ec1d8ea492acbc21ad9676819ec21c6852bf1df6fc11a3256bda653c"
+candidate = "7c17a0a7beb05f642c6f608f595130754c1405013ab5f0d7423108cdb8586fd5"
+reason = "the JSON Schema is generated from the Rust models with schemars (UC-1.8b, #900): its text differs as the schema-* kinds above say, and it accepts and refuses every corpus object, configuration file and fault as the oracle's does (cargo xtask codegen --check judges this recording's schemas by verdict); the digests pin both files"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+[[diff]]
+command = "new threat"
+case = "new.threat/*/heavy-small/example"
+target = "file:ws/.opentide/schemas/visibility.1.0.schema.json"
+rule = "sha256"
+oracle = "2650d85bfa10fadb1f95ce1404496186f23e2ced87c77b92bed6c2fc022e7e19"
+candidate = "76c75e5ad9323637bca452de1357f73f5f2e4e02a0ccd9433575bb5658adae3b"
+reason = "the JSON Schema is generated from the Rust models with schemars (UC-1.8b, #900): its text differs as the schema-* kinds above say, and it accepts and refuses every corpus object, configuration file and fault as the oracle's does (cargo xtask codegen --check judges this recording's schemas by verdict); the digests pin both files"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+[[diff]]
+command = "new threat"
+case = "new.threat/*/tide-corpus/*"
+target = "file:ws/.opentide/schemas/objective.1.0.schema.json"
+rule = "sha256"
+oracle = "cdc8edb0c91393081b74541c2c35b2d39269643a980f0dc8157629a2e197cb57"
+candidate = "4be421bd113319ade77d89fa723b74159216cd3c6433e6c5c89cbd3d2c67e92c"
+reason = "the JSON Schema is generated from the Rust models with schemars (UC-1.8b, #900): its text differs as the schema-* kinds above say, and it accepts and refuses every corpus object, configuration file and fault as the oracle's does (cargo xtask codegen --check judges this recording's schemas by verdict); the digests pin both files"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+[[diff]]
+command = "new threat"
+case = "new.threat/*/tide-corpus/*"
+target = "file:ws/.opentide/schemas/rule.1.0.schema.json"
+rule = "sha256"
+oracle = "47656628ff5a61697d2d1bb3a1b25228383151f971abeb85fbc133f3368304f9"
+candidate = "e4c38e8380b41b436a31f029303437b9f4fa36538032c0ea3ad7bc939c93baf9"
+reason = "the JSON Schema is generated from the Rust models with schemars (UC-1.8b, #900): its text differs as the schema-* kinds above say, and it accepts and refuses every corpus object, configuration file and fault as the oracle's does (cargo xtask codegen --check judges this recording's schemas by verdict); the digests pin both files"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+[[diff]]
+command = "new threat"
+case = "new.threat/*/tide-corpus/*"
+target = "file:ws/.opentide/schemas/rule.1.1.schema.json"
+rule = "sha256"
+oracle = "ec700e2282c16754e56a603d660c9327624df84e6beb63621500366fef6f9e39"
+candidate = "8748cef7edae586ec6bbb1a3f5c4da4a6e8ae67bebdfeb724b20bffde2efec85"
+reason = "the JSON Schema is generated from the Rust models with schemars (UC-1.8b, #900): its text differs as the schema-* kinds above say, and it accepts and refuses every corpus object, configuration file and fault as the oracle's does (cargo xtask codegen --check judges this recording's schemas by verdict); the digests pin both files"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+[[diff]]
+command = "new threat"
+case = "new.threat/*/tide-corpus/*"
+target = "file:ws/.opentide/schemas/threat.1.0.schema.json"
+rule = "sha256"
+oracle = "493e6868ec1d8ea492acbc21ad9676819ec21c6852bf1df6fc11a3256bda653c"
+candidate = "7c17a0a7beb05f642c6f608f595130754c1405013ab5f0d7423108cdb8586fd5"
+reason = "the JSON Schema is generated from the Rust models with schemars (UC-1.8b, #900): its text differs as the schema-* kinds above say, and it accepts and refuses every corpus object, configuration file and fault as the oracle's does (cargo xtask codegen --check judges this recording's schemas by verdict); the digests pin both files"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+[[diff]]
+command = "new threat"
+case = "new.threat/*/tide-corpus/*"
+target = "file:ws/.opentide/schemas/visibility.1.0.schema.json"
+rule = "sha256"
+oracle = "2650d85bfa10fadb1f95ce1404496186f23e2ced87c77b92bed6c2fc022e7e19"
+candidate = "76c75e5ad9323637bca452de1357f73f5f2e4e02a0ccd9433575bb5658adae3b"
+reason = "the JSON Schema is generated from the Rust models with schemars (UC-1.8b, #900): its text differs as the schema-* kinds above say, and it accepts and refuses every corpus object, configuration file and fault as the oracle's does (cargo xtask codegen --check judges this recording's schemas by verdict); the digests pin both files"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+[[diff]]
+command = "new threat"
+case = "new.threat/*/vscode/example"
+target = "file:ws/.opentide/schemas/objective.1.0.schema.json"
+rule = "sha256"
+oracle = "cdc8edb0c91393081b74541c2c35b2d39269643a980f0dc8157629a2e197cb57"
+candidate = "4be421bd113319ade77d89fa723b74159216cd3c6433e6c5c89cbd3d2c67e92c"
+reason = "the JSON Schema is generated from the Rust models with schemars (UC-1.8b, #900): its text differs as the schema-* kinds above say, and it accepts and refuses every corpus object, configuration file and fault as the oracle's does (cargo xtask codegen --check judges this recording's schemas by verdict); the digests pin both files"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+[[diff]]
+command = "new threat"
+case = "new.threat/*/vscode/example"
+target = "file:ws/.opentide/schemas/rule.1.0.schema.json"
+rule = "sha256"
+oracle = "3e64fab183eefbce7f320b20a29655e538e3ad6828b4ea5d62b0355c42bd5561"
+candidate = "b279c683a3af65b8646c98f75662c06a40f9105c234e5169312ca5e6768ca3a6"
+reason = "the JSON Schema is generated from the Rust models with schemars (UC-1.8b, #900): its text differs as the schema-* kinds above say, and it accepts and refuses every corpus object, configuration file and fault as the oracle's does (cargo xtask codegen --check judges this recording's schemas by verdict); the digests pin both files"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+[[diff]]
+command = "new threat"
+case = "new.threat/*/vscode/example"
+target = "file:ws/.opentide/schemas/rule.1.1.schema.json"
+rule = "sha256"
+oracle = "50766051aaa2cdb9bfda2c35b9b0e613645988d9c5a0c62e7c78e5274601dc4b"
+candidate = "6f39d17d815b3ded897c0d388b12b3f5d36fa4e7943afaab5a62969029a22562"
+reason = "the JSON Schema is generated from the Rust models with schemars (UC-1.8b, #900): its text differs as the schema-* kinds above say, and it accepts and refuses every corpus object, configuration file and fault as the oracle's does (cargo xtask codegen --check judges this recording's schemas by verdict); the digests pin both files"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+[[diff]]
+command = "new threat"
+case = "new.threat/*/vscode/example"
+target = "file:ws/.opentide/schemas/threat.1.0.schema.json"
+rule = "sha256"
+oracle = "493e6868ec1d8ea492acbc21ad9676819ec21c6852bf1df6fc11a3256bda653c"
+candidate = "7c17a0a7beb05f642c6f608f595130754c1405013ab5f0d7423108cdb8586fd5"
+reason = "the JSON Schema is generated from the Rust models with schemars (UC-1.8b, #900): its text differs as the schema-* kinds above say, and it accepts and refuses every corpus object, configuration file and fault as the oracle's does (cargo xtask codegen --check judges this recording's schemas by verdict); the digests pin both files"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+[[diff]]
+command = "new threat"
+case = "new.threat/*/vscode/example"
+target = "file:ws/.opentide/schemas/visibility.1.0.schema.json"
+rule = "sha256"
+oracle = "2650d85bfa10fadb1f95ce1404496186f23e2ced87c77b92bed6c2fc022e7e19"
+candidate = "76c75e5ad9323637bca452de1357f73f5f2e4e02a0ccd9433575bb5658adae3b"
+reason = "the JSON Schema is generated from the Rust models with schemars (UC-1.8b, #900): its text differs as the schema-* kinds above say, and it accepts and refuses every corpus object, configuration file and fault as the oracle's does (cargo xtask codegen --check judges this recording's schemas by verdict); the digests pin both files"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+[[diff]]
+command = "new threat"
+case = "new.threat/*/heavy-small/example"
+target = "file:ws/.opentide/lsp/catalogs/generated/fields.json"
+rule = "json:/fields/24/enum"
+oracle = "[]"
+candidate = "[\"SecurityEvent\",\"SigninLogs\",\"DeviceProcessEvents\",\"DeviceNetworkEvents\",\"WinEventLog:Security\",\"logs-endpoint.events.*\",\"sentinel::SecurityEvent\",\"sentinel::SigninLogs\",\"sentinel::DeviceProcessEvents\",\"defender_for_endpoint::DeviceProcessEvents\",\"defender_for_endpoint::DeviceNetworkEvents\",\"splunk::WinEventLog:Security\",\"elastic::logs-endpoint.events.*\"]"
+reason = "objective.signals.data.logsources offers the log sources the workspace's visibility.toml declares, as its JSON Schema does: the oracle's catalog generator looked for them on the field's array branch only, where Pydantic's schema does not put them, and left the row without an enum"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+[[diff]]
+command = "new threat"
+case = "new.threat/*/heavy-small/example"
+target = "file:ws/.opentide/lsp/catalogs/generated/fields.json"
+rule = "json:/fields/24/enum_docs"
+oracle = "[]"
+candidate = "[\"### SecurityEvent **System**: sentinel **Description**: Windows security events in the Sentinel workspace ### Associated Assets: - **Domain workstations** - _C…\",\"### SigninLogs **System**: sentinel **Description**: Entra ID sign-ins\",\"### DeviceProcessEvents **System**: defender_for_endpoint **Description**: Defender process events in advanced hunting\",\"### DeviceNetworkEvents **System**: defender_for_endpoint **Description**: Defender network events in advanced hunting\",\"### WinEventLog:Security **System**: splunk **Description**: Windows security log\",\"### logs-endpoint.events.* **System**: elastic **Description**: Endpoint telemetry\",\"### SecurityEvent **System**: sentinel **Description**: Windows security events in the Sentinel workspace ### Associated Assets: - **Domain workstations** - _C…\",\"### SigninLogs **System**: sentinel **Description**: Entra ID sign-ins\",\"### DeviceProcessEvents **System**: sentinel **Description**: Defender process events in the Sentinel workspace\",\"### DeviceProcessEvents **System**: defender_for_endpoint **Description**: Defender process events in advanced hunting\",\"### DeviceNetworkEvents **System**: defender_for_endpoint **Description**: Defender network events in advanced hunting\",\"### WinEventLog:Security **System**: splunk **Description**: Windows security log\",\"### logs-endpoint.events.* **System**: elastic **Description**: Endpoint telemetry\"]"
+reason = "objective.signals.data.logsources offers the log sources the workspace's visibility.toml declares, as its JSON Schema does: the oracle's catalog generator looked for them on the field's array branch only, where Pydantic's schema does not put them, and left the row without an enum"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+[[diff]]
+command = "generate"
+case = "generate/human/tide-corpus/schemas"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mschemas\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;32m✓\u001b[0m  \u001b[1mschemas\u001b[0m  \u001b[2m8 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2m.opentide/\u001b[0m"
+candidate = "  \u001b[1;32m✓\u001b[0m  \u001b[1mschemas\u001b[0m  \u001b[2m8 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2m.opentide/\u001b[0m"
+reason = "the templates and schemas are written in milliseconds: the checklist rows are printed when they are done, without the spinner Python drew while they ran"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+[[diff]]
+command = "generate"
+case = "generate/human/tide-corpus/schemas-templates-vocabs-snippets"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mschemas\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K\u001b[1A\u001b[2K\u001b[1A\u001b[2K\u001b[1A\u001b[2K  \u001b[1;32m✓\u001b[0m  \u001b[1mschemas\u001b[0m       \u001b[2m 8 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2m.opentide/\u001b[0m"
+candidate = "  \u001b[1;32m✓\u001b[0m  \u001b[1mschemas\u001b[0m       \u001b[2m 8 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2m.opentide/\u001b[0m"
+reason = "the templates and schemas are written in milliseconds: the checklist rows are printed when they are done, without the spinner Python drew while they ran"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+[[diff]]
+command = "generate"
+case = "generate/human/vscode/schemas-templates-vocabs-snippets"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mschemas\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K\u001b[1A\u001b[2K\u001b[1A\u001b[2K\u001b[1A\u001b[2K  \u001b[1;32m✓\u001b[0m  \u001b[1mschemas\u001b[0m       \u001b[2m8 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2m.opentide/\u001b[0m"
+candidate = "  \u001b[1;32m✓\u001b[0m  \u001b[1mschemas\u001b[0m       \u001b[2m8 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2m.opentide/\u001b[0m"
+reason = "the templates and schemas are written in milliseconds: the checklist rows are printed when they are done, without the spinner Python drew while they ran"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+[[diff]]
+command = "generate"
+case = "generate/*/tide-corpus/*"
+target = "file:ws/.opentide/schemas/objective.1.0.schema.json"
+rule = "sha256"
+oracle = "cdc8edb0c91393081b74541c2c35b2d39269643a980f0dc8157629a2e197cb57"
+candidate = "4be421bd113319ade77d89fa723b74159216cd3c6433e6c5c89cbd3d2c67e92c"
+reason = "the JSON Schema is generated from the Rust models with schemars (UC-1.8b, #900): its text differs as the schema-* kinds above say, and it accepts and refuses every corpus object, configuration file and fault as the oracle's does (cargo xtask codegen --check judges this recording's schemas by verdict); the digests pin both files"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+[[diff]]
+command = "generate"
+case = "generate/*/tide-corpus/*"
+target = "file:ws/.opentide/schemas/rule.1.0.schema.json"
+rule = "sha256"
+oracle = "47656628ff5a61697d2d1bb3a1b25228383151f971abeb85fbc133f3368304f9"
+candidate = "e4c38e8380b41b436a31f029303437b9f4fa36538032c0ea3ad7bc939c93baf9"
+reason = "the JSON Schema is generated from the Rust models with schemars (UC-1.8b, #900): its text differs as the schema-* kinds above say, and it accepts and refuses every corpus object, configuration file and fault as the oracle's does (cargo xtask codegen --check judges this recording's schemas by verdict); the digests pin both files"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+[[diff]]
+command = "generate"
+case = "generate/*/tide-corpus/*"
+target = "file:ws/.opentide/schemas/rule.1.1.schema.json"
+rule = "sha256"
+oracle = "ec700e2282c16754e56a603d660c9327624df84e6beb63621500366fef6f9e39"
+candidate = "8748cef7edae586ec6bbb1a3f5c4da4a6e8ae67bebdfeb724b20bffde2efec85"
+reason = "the JSON Schema is generated from the Rust models with schemars (UC-1.8b, #900): its text differs as the schema-* kinds above say, and it accepts and refuses every corpus object, configuration file and fault as the oracle's does (cargo xtask codegen --check judges this recording's schemas by verdict); the digests pin both files"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+[[diff]]
+command = "generate"
+case = "generate/*/tide-corpus/*"
+target = "file:ws/.opentide/schemas/threat.1.0.schema.json"
+rule = "sha256"
+oracle = "493e6868ec1d8ea492acbc21ad9676819ec21c6852bf1df6fc11a3256bda653c"
+candidate = "7c17a0a7beb05f642c6f608f595130754c1405013ab5f0d7423108cdb8586fd5"
+reason = "the JSON Schema is generated from the Rust models with schemars (UC-1.8b, #900): its text differs as the schema-* kinds above say, and it accepts and refuses every corpus object, configuration file and fault as the oracle's does (cargo xtask codegen --check judges this recording's schemas by verdict); the digests pin both files"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+[[diff]]
+command = "generate"
+case = "generate/*/tide-corpus/*"
+target = "file:ws/.opentide/schemas/visibility.1.0.schema.json"
+rule = "sha256"
+oracle = "2650d85bfa10fadb1f95ce1404496186f23e2ced87c77b92bed6c2fc022e7e19"
+candidate = "76c75e5ad9323637bca452de1357f73f5f2e4e02a0ccd9433575bb5658adae3b"
+reason = "the JSON Schema is generated from the Rust models with schemars (UC-1.8b, #900): its text differs as the schema-* kinds above say, and it accepts and refuses every corpus object, configuration file and fault as the oracle's does (cargo xtask codegen --check judges this recording's schemas by verdict); the digests pin both files"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+[[diff]]
+command = "generate"
+case = "generate/*/vscode/schemas-templates-vocabs-snippets"
+target = "file:ws/.opentide/schemas/objective.1.0.schema.json"
+rule = "sha256"
+oracle = "cdc8edb0c91393081b74541c2c35b2d39269643a980f0dc8157629a2e197cb57"
+candidate = "4be421bd113319ade77d89fa723b74159216cd3c6433e6c5c89cbd3d2c67e92c"
+reason = "the JSON Schema is generated from the Rust models with schemars (UC-1.8b, #900): its text differs as the schema-* kinds above say, and it accepts and refuses every corpus object, configuration file and fault as the oracle's does (cargo xtask codegen --check judges this recording's schemas by verdict); the digests pin both files"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+[[diff]]
+command = "generate"
+case = "generate/*/vscode/schemas-templates-vocabs-snippets"
+target = "file:ws/.opentide/schemas/rule.1.0.schema.json"
+rule = "sha256"
+oracle = "3e64fab183eefbce7f320b20a29655e538e3ad6828b4ea5d62b0355c42bd5561"
+candidate = "b279c683a3af65b8646c98f75662c06a40f9105c234e5169312ca5e6768ca3a6"
+reason = "the JSON Schema is generated from the Rust models with schemars (UC-1.8b, #900): its text differs as the schema-* kinds above say, and it accepts and refuses every corpus object, configuration file and fault as the oracle's does (cargo xtask codegen --check judges this recording's schemas by verdict); the digests pin both files"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+[[diff]]
+command = "generate"
+case = "generate/*/vscode/schemas-templates-vocabs-snippets"
+target = "file:ws/.opentide/schemas/rule.1.1.schema.json"
+rule = "sha256"
+oracle = "50766051aaa2cdb9bfda2c35b9b0e613645988d9c5a0c62e7c78e5274601dc4b"
+candidate = "6f39d17d815b3ded897c0d388b12b3f5d36fa4e7943afaab5a62969029a22562"
+reason = "the JSON Schema is generated from the Rust models with schemars (UC-1.8b, #900): its text differs as the schema-* kinds above say, and it accepts and refuses every corpus object, configuration file and fault as the oracle's does (cargo xtask codegen --check judges this recording's schemas by verdict); the digests pin both files"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+[[diff]]
+command = "generate"
+case = "generate/*/vscode/schemas-templates-vocabs-snippets"
+target = "file:ws/.opentide/schemas/threat.1.0.schema.json"
+rule = "sha256"
+oracle = "493e6868ec1d8ea492acbc21ad9676819ec21c6852bf1df6fc11a3256bda653c"
+candidate = "7c17a0a7beb05f642c6f608f595130754c1405013ab5f0d7423108cdb8586fd5"
+reason = "the JSON Schema is generated from the Rust models with schemars (UC-1.8b, #900): its text differs as the schema-* kinds above say, and it accepts and refuses every corpus object, configuration file and fault as the oracle's does (cargo xtask codegen --check judges this recording's schemas by verdict); the digests pin both files"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+[[diff]]
+command = "generate"
+case = "generate/*/vscode/schemas-templates-vocabs-snippets"
+target = "file:ws/.opentide/schemas/visibility.1.0.schema.json"
+rule = "sha256"
+oracle = "2650d85bfa10fadb1f95ce1404496186f23e2ced87c77b92bed6c2fc022e7e19"
+candidate = "76c75e5ad9323637bca452de1357f73f5f2e4e02a0ccd9433575bb5658adae3b"
+reason = "the JSON Schema is generated from the Rust models with schemars (UC-1.8b, #900): its text differs as the schema-* kinds above say, and it accepts and refuses every corpus object, configuration file and fault as the oracle's does (cargo xtask codegen --check judges this recording's schemas by verdict); the digests pin both files"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
 
 # UC-3.7 (#829): the Rust MCP server's own refusal of an argument of the
 # wrong type, where MCPServer quotes Pydantic's validation error.

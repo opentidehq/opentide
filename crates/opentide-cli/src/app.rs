@@ -348,7 +348,50 @@ impl Run<'_> {
                 return self.emit(&outcome, &problem.notes, &[], out, err);
             }
         };
-        let words = command_path(&matches);
+        let mut words = command_path(&matches);
+        // `generate schemas templates`: the words after `generate` that are
+        // no subcommand of it are its phases.
+        let mut generate_phases = Vec::new();
+        if words.first().map(String::as_str) == Some("generate")
+            && let Some(("generate", group)) = matches.subcommand()
+            && let Some((first, external)) = group.subcommand()
+            && self
+                .root
+                .find_subcommand("generate")
+                .is_some_and(|generate| generate.find_subcommand(first).is_none())
+        {
+            generate_phases.push(first.to_owned());
+            if let Ok(Some(rest)) = external.try_get_many::<String>("") {
+                generate_phases.extend(rest.cloned());
+            } else if let Ok(Some(rest)) = external.try_get_many::<std::ffi::OsString>("") {
+                generate_phases.extend(rest.map(|word| word.to_string_lossy().into_owned()));
+            }
+            words.truncate(1);
+            // The phases end at the first word that starts with `-`
+            // (`GeneratePhaseGroup`): what follows is `generate`'s own
+            // options, parsed as such, so `generate schemas --bogus` is an
+            // unknown option and `generate schemas --help` the group's help.
+            if let Some(end) = generate_phases
+                .iter()
+                .position(|word| word.starts_with('-'))
+            {
+                let options = generate_phases.split_off(end);
+                let start = hoist::root_options_end(&self.root, &self.args);
+                let mut reparsed = self.args[..=start].to_vec();
+                reparsed.extend(options);
+                let argv =
+                    std::iter::once(catalog::PROGRAM.to_owned()).chain(reparsed.iter().cloned());
+                if let Err(error) = self.root.clone().try_get_matches_from(argv) {
+                    if error.kind() == clap::error::ErrorKind::DisplayHelp {
+                        return self.help(&words, 0, out);
+                    }
+                    let problem = usage::describe(&self.root, &reparsed, &error);
+                    let outcome =
+                        Outcome::failed(&problem.command, USAGE_EXIT_CODE, problem.failure);
+                    return self.emit(&outcome, &problem.notes, &[], out, err);
+                }
+            }
+        }
         if matches.value_source("repo") == Some(ValueSource::CommandLine)
             && let Some(repo) = &self.globals.repo
             && words.first().map(String::as_str) != Some("setup")
@@ -418,6 +461,23 @@ impl Run<'_> {
                         cwd: &cwd,
                     },
                 );
+                self.emit_report(&report, out, err)
+            }
+            "generate" => {
+                let cwd = self.host.cwd.clone().unwrap_or_default();
+                let report = crate::commands::generate::phases(
+                    &generate_phases,
+                    &crate::commands::generate::Context {
+                        repo: self.globals.repo.as_deref(),
+                        env: self.env,
+                        cwd: &cwd,
+                    },
+                    &self.host.version,
+                );
+                self.emit_report(&report, out, err)
+            }
+            "new threat" | "new objective" | "new rule" => {
+                let report = self.new_object(&matches, &words[1]);
                 self.emit_report(&report, out, err)
             }
             "generate explorer" => {
@@ -667,6 +727,52 @@ impl Run<'_> {
                 self.emit(&outcome, &[], &[], out, err)
             }
         }
+    }
+
+    /// `opentide new <family>`, from its parsed arguments.
+    fn new_object(&self, matches: &clap::ArgMatches, family: &str) -> crate::commands::Report {
+        use crate::commands::new::{Context, NewArgs, run, stdin_is_terminal};
+        let args = leaf(matches);
+        let text = |id: &str| args.try_get_one::<String>(id).ok().flatten().cloned();
+        let many = |id: &str| -> Vec<String> {
+            args.try_get_many::<String>(id)
+                .ok()
+                .flatten()
+                .map(|values| values.cloned().collect())
+                .unwrap_or_default()
+        };
+        let platforms: Vec<String> = args
+            .try_get_many::<crate::tree::Platform>("platform")
+            .ok()
+            .flatten()
+            .map(|values| {
+                values
+                    .filter_map(|platform| {
+                        clap::ValueEnum::to_possible_value(platform)
+                            .map(|value| value.get_name().to_owned())
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        let parsed = NewArgs {
+            family: family.to_owned(),
+            name: text("name"),
+            path: text("path"),
+            platforms,
+            objective: text("objective"),
+            threats: many("threat"),
+        };
+        let cwd = self.host.cwd.clone().unwrap_or_default();
+        run(
+            &parsed,
+            &Context {
+                repo: self.globals.repo.as_deref(),
+                env: self.env,
+                cwd: &cwd,
+                version: &self.host.version,
+                can_prompt: self.mode == Mode::Human && stdin_is_terminal(),
+            },
+        )
     }
 
     /// `opentide setup ci`, from its parsed arguments and the `setup`
@@ -1298,8 +1404,10 @@ impl Run<'_> {
                 .failure
                 .as_ref()
                 .map(|failure| (failure.code.clone(), failure.suggestion.clone())),
-            detail: None,
-            advice: None,
+            // A result's `detail` is a `note:` and its `advice` a `help:`
+            // under the outcome (`REMEDIATION_FIELDS`).
+            detail: data_text(&outcome.data, "detail"),
+            advice: data_text(&outcome.data, "advice"),
             warnings: report.warnings.clone(),
             next_actions: outcome.next_actions.clone(),
         };
@@ -1361,6 +1469,16 @@ fn leaf(matches: &clap::ArgMatches) -> &clap::ArgMatches {
 }
 
 /// The subcommand path `matches` ran.
+/// The string a result holds at `key`, if any.
+fn data_text(data: &[(String, crate::json::Json)], key: &str) -> Option<String> {
+    data.iter()
+        .find(|(name, _)| name == key)
+        .and_then(|(_, value)| match value {
+            crate::json::Json::Str(text) => Some(text.clone()),
+            _ => None,
+        })
+}
+
 fn command_path(matches: &clap::ArgMatches) -> Vec<String> {
     let mut words = Vec::new();
     let mut current = matches;
@@ -2637,5 +2755,56 @@ mod tests {
     fn globals_of(root: &clap::Command, text: &str, env: &Env) -> Globals {
         let args: Vec<String> = text.split_whitespace().map(str::to_owned).collect();
         globals(root, &args, env)
+    }
+
+    /// `generate <phase>...`: the words after `generate` that are no
+    /// subcommand are its phases. An unknown phase is a usage error; the full
+    /// pipeline is refused for the Python engine; the subcommands still run
+    /// as subcommands.
+    #[test]
+    fn generate_takes_its_phases_as_words() {
+        let unknown = dispatched("--json generate schemas explrer", &[], false);
+        assert_eq!(unknown.code, 2, "{}", unknown.stdout);
+        assert!(
+            unknown.stdout.contains(
+                "Unknown generation phase explrer. Pass one or more of: schemas, snippets, templates, vocabs."
+            ),
+            "{}",
+            unknown.stdout
+        );
+        assert!(unknown.stdout.contains("\"code\":\"usage_invalid_choice\""));
+        assert!(unknown.stdout.contains("\"argument\":\"phase\""));
+        let refused = dispatched("--json generate", &[], false);
+        assert_eq!(refused.code, 2);
+        assert!(refused.stdout.contains("\"code\":\"engine_not_ported\""));
+        // The phases end at the first `-` word: what follows is
+        // `generate`'s own options (`GeneratePhaseGroup`).
+        for (argv, option) in [
+            ("--json generate schemas --bogus", "--bogus"),
+            ("--json generate schemas templates --repo .", "--repo"),
+        ] {
+            let flag = dispatched(argv, &[], false);
+            assert_eq!(flag.code, 2, "{}", flag.stdout);
+            assert!(
+                flag.stdout.contains("\"code\":\"usage_unknown_option\""),
+                "{}",
+                flag.stdout
+            );
+            assert!(flag.stdout.contains(option), "{}", flag.stdout);
+            assert!(!flag.stdout.contains("generation phase"), "{}", flag.stdout);
+        }
+        let help = dispatched("generate schemas --help", &[], false);
+        assert_eq!(help.code, 0, "{}", help.stdout);
+        assert!(
+            help.stdout.contains("Usage: opentide generate"),
+            "{}",
+            help.stdout
+        );
+        let subcommand = dispatched("--json generate inflight prune --bogus", &[], false);
+        assert!(
+            subcommand.stdout.contains("usage_unknown_option"),
+            "{}",
+            subcommand.stdout
+        );
     }
 }
