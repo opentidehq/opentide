@@ -127,6 +127,8 @@ class StdioClient:
         lines: list[str] = []
         while (line := self._lines.get(timeout=READ_TIMEOUT)) is not None:
             lines.append(line)
+        # Everything the server wrote to stderr is read too.
+        self._errors.join(timeout=READ_TIMEOUT)
         return lines
 
     def handshake(self) -> dict[str, Any]:

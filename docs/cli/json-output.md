@@ -165,7 +165,7 @@ A command's default moves to Rust one at a time, in three releases ([#822](https
 2. After a release with no difference, the default changes to Rust, with a changelog entry. `OPENTIDE_ENGINE=python` still runs Python for that release: the escape hatch if your workspace finds what the corpora did not.
 3. The release after, the Python implementation goes.
 
-No command's default has changed yet. `opentide serve` and `opentide mcp start` run under any engine: the engine applies to the commands `serve` runs and to the MCP validation tools (`validate_rule`, `validation_report`), not to the servers themselves ([opentide serve](./serve.md#the-rust-engine), [MCP tools](../mcp/tools.md#choosing-the-implementation)). The SDK's `run_validation` follows `OPENTIDE_ENGINE` the same way ([Validation](../sdk/validation.md#choosing-the-implementation)).
+No command's default has changed yet. `opentide serve` and `opentide mcp start` run under any engine: the engine applies to the commands `serve` runs and to the MCP validation tools (`validate_rule`, `validation_report`); `rust` also serves `mcp start` from the Rust server, and `compare` keeps the Python one ([opentide serve](./serve.md#the-rust-engine), [MCP tools](../mcp/tools.md#choosing-the-implementation)). The SDK's `run_validation` follows `OPENTIDE_ENGINE` the same way ([Validation](../sdk/validation.md#choosing-the-implementation)).
 
 ```bash
 OPENTIDE_ENGINE=compare opentide --json validate
