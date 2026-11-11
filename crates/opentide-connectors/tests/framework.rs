@@ -803,6 +803,79 @@ fn framework_retry_per_tenant() {
 }
 
 #[test]
+fn framework_a_read_timeout_is_retried_only_for_a_retried_method() {
+    // urllib3 retries a read timeout only for the methods in its list: the
+    // server may have acted on a POST it never answered in time, and sending
+    // it again could deploy a rule twice. A GET is sent again.
+    let (_runtime, server) = wiremock();
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(
+        Mock::given(path("/slow"))
+            .respond_with(ResponseTemplate::new(200).set_delay(Duration::from_millis(700)))
+            .mount(&server),
+    );
+    let settings = HttpSettings {
+        timeout: Duration::from_millis(200),
+        retry: RetryPolicy::urllib3(2, 0.01, &[503], &["GET"]),
+        ..HttpSettings::default()
+    };
+    let env = Environment::default();
+    let client = HttpClient::new(&label("deploy"), &settings, &env, None).unwrap();
+    let url = format!("{}/slow", server.uri());
+    let send = |verb: reqwest::Method| {
+        block_on(async {
+            let request = client.request(verb, &url).build().unwrap();
+            client
+                .send(request, &CancellationToken::new())
+                .await
+                .map(|answer| answer.status().as_u16())
+        })
+        .unwrap()
+    };
+    let received = |verb: &str| {
+        rt.block_on(server.received_requests())
+            .unwrap()
+            .iter()
+            .filter(|request| request.method.as_str() == verb)
+            .count()
+    };
+    let post = send(reqwest::Method::POST);
+    assert!(
+        matches!(post, Err(ConnectorError::Timeout { .. })),
+        "{post:?}"
+    );
+    assert_eq!(
+        received("POST"),
+        1,
+        "a POST that timed out is not sent again"
+    );
+    let get = send(reqwest::Method::GET);
+    assert!(
+        matches!(get, Err(ConnectorError::Timeout { .. })),
+        "{get:?}"
+    );
+    assert_eq!(received("GET"), 1 + 2, "a GET that timed out is retried");
+}
+
+#[test]
+fn framework_upper_case_no_proxy_alone_is_read() {
+    // NO_PROXY with no lower-case spelling set is the list, as Python's
+    // getproxies_environment reads it.
+    let env = Environment::from_pairs([
+        ("HTTPS_PROXY", "http://upper-https:1"),
+        ("NO_PROXY", "internal.example,127.0.0.1"),
+    ]);
+    assert_eq!(
+        ProxySettings::from_env(&env, None),
+        ProxySettings {
+            https: Some("http://upper-https:1".into()),
+            http: None,
+            no_proxy: Some("internal.example,127.0.0.1".into()),
+        }
+    );
+}
+
+#[test]
 fn framework_credentials_placeholders_and_errors() {
     let env = Environment::from_pairs([
         ("MOCK_TOKEN", "s3cr3t-value"),
