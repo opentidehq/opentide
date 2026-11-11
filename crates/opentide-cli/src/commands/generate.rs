@@ -21,7 +21,7 @@ use opentide_compile::generate::files::{Snapshot, common_dir, remove_all, write_
 use opentide_compile::generate::{Output, PhaseError};
 use opentide_compile::strategy::Statuses;
 use opentide_schema::vocab::Vocabularies;
-use opentide_workspace::Workspace;
+use opentide_workspace::{FileSystem, OsFs, Workspace};
 
 use super::{Report, open, placement};
 use crate::env::Env;
@@ -390,13 +390,14 @@ pub fn docs(args: &DocsArgs, cx: &Context<'_>) -> Report {
         Err(report) => return *report,
     };
     let root = workspace.root().to_path_buf();
-    let mut roots = vec![root.clone()];
+    let base = output_base(&workspace);
+    let mut roots = vec![root.clone(), base.clone()];
     if let Some(output) = args.output.as_deref().filter(|output| !output.is_empty()) {
         let path = PathBuf::from(output);
         roots.push(if path.is_absolute() {
             path
         } else {
-            root.join(path)
+            base.join(path)
         });
     }
     let mut run = DocsRun::default();
@@ -434,6 +435,14 @@ pub fn docs(args: &DocsArgs, cx: &Context<'_>) -> Report {
     report
 }
 
+/// The folder a relative docs output is under: the repository root, as the
+/// oracle's `load_settings` joins it onto `get_repo_root()`, not the Tide
+/// workspace, which `OPENTIDE_TIDE_WORKSPACE` can place elsewhere (#931).
+/// Resolved as the workspace is, so the two compare when they are one folder.
+fn output_base(workspace: &Workspace) -> PathBuf {
+    OsFs.resolve(&workspace.roots().repo)
+}
+
 /// The work of the docs phase: the pages, the stale pages removed, the
 /// index; `run` gets the result's keys.
 fn docs_phase(
@@ -448,7 +457,7 @@ fn docs_phase(
     let hints = FlavorHints::new(&env, opentide_compile::git::origin_url(root));
     let settings = DocsSettings::resolve(
         resolved,
-        root,
+        &output_base(workspace),
         args.output.as_deref(),
         args.flavor.as_deref(),
         &hints,
@@ -701,5 +710,50 @@ mod tests {
         );
         assert_eq!(report.outcome.data[0].0, "phase");
         assert_eq!(report.outcome.data[1].0, "target");
+    }
+
+    /// A relative docs output is under the repository root, as the oracle's
+    /// `get_repo_root() / output`, not under the Tide workspace that
+    /// `OPENTIDE_TIDE_WORKSPACE` places elsewhere (#931).
+    #[test]
+    fn docs_output_is_under_the_repository_root_not_the_tide_workspace() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = OsFs.resolve(dir.path());
+        let tide = repo.join("detections");
+        std::fs::create_dir_all(tide.join("objects")).unwrap();
+        let env = Env::from_pairs([("OPENTIDE_TIDE_WORKSPACE", tide.to_string_lossy())]);
+        let cx = Context {
+            repo: None,
+            env: &env,
+            cwd: &repo,
+        };
+        let report = docs(&DocsArgs::default(), &cx);
+        assert_eq!(report.outcome.exit_code, 0, "{:?}", report.outcome.message);
+        assert!(repo.join("docs/README.md").is_file());
+        assert!(!tide.join("docs").exists());
+        // The step counts the pages it wrote there.
+        let written = walk(&repo.join("docs"));
+        assert!(written > 1);
+        assert_eq!(report.steps[0].count, Some(written));
+        let output = DocsArgs {
+            output: Some("site".into()),
+            ..DocsArgs::default()
+        };
+        let report = docs(&output, &cx);
+        assert_eq!(report.outcome.exit_code, 0, "{:?}", report.outcome.message);
+        assert!(repo.join("site/README.md").is_file());
+        assert!(!tide.join("site").exists());
+        assert_eq!(report.steps[0].count, Some(walk(&repo.join("site"))));
+    }
+
+    /// The files under `dir`, at any depth.
+    fn walk(dir: &Path) -> usize {
+        std::fs::read_dir(dir)
+            .unwrap()
+            .map(|entry| {
+                let path = entry.unwrap().path();
+                if path.is_dir() { walk(&path) } else { 1 }
+            })
+            .sum()
     }
 }

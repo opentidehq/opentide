@@ -133,8 +133,9 @@ pub fn flavor_for_url(url: &str) -> Option<Flavor> {
 }
 
 impl Settings {
-    /// The settings of the workspace at `root`: `--output` and `--flavor`
-    /// first, then `documentation.toml`.
+    /// The settings from `--output` and `--flavor` first, then
+    /// `documentation.toml`; a relative output folder is under `root`, the
+    /// repository root (`get_repo_root()`).
     ///
     /// # Errors
     ///
