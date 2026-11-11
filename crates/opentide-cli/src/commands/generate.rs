@@ -718,7 +718,8 @@ mod tests {
     #[test]
     fn docs_output_is_under_the_repository_root_not_the_tide_workspace() {
         let dir = tempfile::tempdir().unwrap();
-        let repo = OsFs.resolve(dir.path());
+        let outside = OsFs.resolve(dir.path());
+        let repo = outside.join("repo");
         let tide = repo.join("detections");
         std::fs::create_dir_all(tide.join("objects")).unwrap();
         let env = Env::from_pairs([("OPENTIDE_TIDE_WORKSPACE", tide.to_string_lossy())]);
@@ -744,6 +745,30 @@ mod tests {
         assert!(repo.join("site/README.md").is_file());
         assert!(!tide.join("site").exists());
         assert_eq!(report.steps[0].count, Some(walk(&repo.join("site"))));
+        // A relative output that leaves both roots is still resolved against
+        // the repository root, and the step counts the pages written there.
+        let sibling = DocsArgs {
+            output: Some("../site".into()),
+            ..DocsArgs::default()
+        };
+        let report = docs(&sibling, &cx);
+        assert_eq!(report.outcome.exit_code, 0, "{:?}", report.outcome.message);
+        assert!(outside.join("site/README.md").is_file());
+        let written = walk(&outside.join("site"));
+        assert!(written > 1);
+        assert_eq!(report.steps[0].count, Some(written));
+        // An absolute output is used as given.
+        let absolute = outside.join("abs");
+        let args = DocsArgs {
+            output: Some(absolute.to_string_lossy().into_owned()),
+            ..DocsArgs::default()
+        };
+        let report = docs(&args, &cx);
+        assert_eq!(report.outcome.exit_code, 0, "{:?}", report.outcome.message);
+        assert!(absolute.join("README.md").is_file());
+        let written = walk(&absolute);
+        assert!(written > 1);
+        assert_eq!(report.steps[0].count, Some(written));
     }
 
     /// The files under `dir`, at any depth.

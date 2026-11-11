@@ -244,6 +244,11 @@ def test_the_integration_branch_gets_ci_after_each_merge(name: str) -> None:
     assert {"development", "integration/unified-core"} <= set(branches), name
 
 
+# The engine-test job notes the checkout before the tests and after them (#931).
+TREE_BEFORE = 'git status --porcelain --untracked-files=all > "$RUNNER_TEMP/tree-before"'
+TREE_AFTER = 'git status --porcelain --untracked-files=all > "$RUNNER_TEMP/tree-after"'
+
+
 @pytest.mark.parametrize(
     ("job", "command"),
     [
@@ -254,7 +259,8 @@ def test_the_integration_branch_gets_ci_after_each_merge(name: str) -> None:
         ("engine-test", "cargo nextest run --workspace --locked --profile ci"),
         ("engine-test", "cargo test --workspace --locked --doc"),
         # The tests leave the checkout as they found it (#931).
-        ("engine-test", 'git status --porcelain --untracked-files=all > "$RUNNER_TEMP/tree-after"'),
+        ("engine-test", TREE_BEFORE),
+        ("engine-test", TREE_AFTER),
         ("engine-wasm", "bash scripts/engine/build-wasm.sh"),
         ("engine-wasm", "node scripts/engine/check-npm-packs.mjs"),
         ("engine-package", "bash scripts/engine/license-scan.sh target/package/*.crate"),
@@ -285,6 +291,26 @@ def test_ci_runs_the_rust_gates(job: str, command: str) -> None:
     assert step.get("if") == allowed.get((job, command)), (job, command, step.get("if"))
     run = str(step["run"])
     assert not re.search(r"\|\|\s*(?:true|:)\b", run), (job, command)
+
+
+def test_ci_fails_when_the_rust_tests_leave_a_file_in_the_checkout() -> None:
+    """The checkout is noted before the tests and compared after them; a
+    difference fails the job (#931)."""
+    steps = [str(step.get("run", "")) for step in _ci_jobs()["engine-test"].get("steps") or []]
+
+    def index(command: str) -> int:
+        found = [i for i, run in enumerate(steps) if command in run.splitlines()]
+        assert len(found) == 1, command
+        return found[0]
+
+    before = index(TREE_BEFORE)
+    nextest = index("cargo nextest run --workspace --locked --profile ci")
+    doctests = index("cargo test --workspace --locked --doc")
+    guard = index(TREE_AFTER)
+    assert before < nextest < doctests < guard
+    lines = [line.strip() for line in steps[guard].splitlines()]
+    assert 'if ! diff -u "$RUNNER_TEMP/tree-before" "$RUNNER_TEMP/tree-after"; then' in lines
+    assert "exit 1" in lines
 
 
 def test_every_cargo_job_denies_warnings() -> None:
