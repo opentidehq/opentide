@@ -18,6 +18,13 @@ fn git_cmd(dir: &Path, args: &[&str]) -> String {
         .args(args)
         .current_dir(dir)
         .env("GIT_CONFIG_NOSYSTEM", "1")
+        // No automatic maintenance or gc: either works in `.git` in the
+        // background after a commit, while the test reads the repository (#934).
+        .env("GIT_CONFIG_COUNT", "2")
+        .env("GIT_CONFIG_KEY_0", "maintenance.auto")
+        .env("GIT_CONFIG_VALUE_0", "false")
+        .env("GIT_CONFIG_KEY_1", "gc.auto")
+        .env("GIT_CONFIG_VALUE_1", "0")
         .env("HOME", dir)
         .env("GIT_AUTHOR_NAME", "t")
         .env("GIT_AUTHOR_EMAIL", "t@example.invalid")
