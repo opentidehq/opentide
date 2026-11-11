@@ -13,7 +13,10 @@ one. ``OPENTIDE_ENGINE`` chooses, read once per process by the root callback:
   agree, the Python run's output and exit code are the result; if not, exit 70,
   ``failure.code`` ``engine_mismatch``, and a diff report in the state
   directory whose path the message names. A command without a Rust
-  implementation runs Python alone.
+  implementation runs Python alone, and so does a run its Rust implementation
+  refuses with ``engine_not_ported`` (:data:`REFUSAL_ENV`): one it covers for
+  some inputs only, such as ``generate docs`` on threats whose CVE details
+  only Python fetches.
 
 :data:`RUST_COMMANDS` is the dispatch table: the work items that port a
 command add it there.
@@ -47,6 +50,13 @@ COMPARE = "compare"
 #: The values ``OPENTIDE_ENGINE`` accepts.
 ENGINES = (PYTHON, RUST, COMPARE)
 
+#: The variable naming the file in which the Rust side of ``compare`` records
+#: an ``engine_not_ported`` refusal (``REFUSAL_ENV`` in
+#: ``crates/opentide-cli/src/app.rs``): the Rust implementation does not cover
+#: this run's input, and the Python run is the result, as for a command with
+#: no Rust implementation.
+REFUSAL_ENV = "OPENTIDE_ENGINE_REFUSAL"
+
 #: What the workspace copy's path reads as in both runs before they are compared.
 WORKSPACE_PLACEHOLDER = "<WS>"
 
@@ -78,7 +88,7 @@ RUST_CLI: tuple[str, ...] = (sys.executable, "-m", "opentide.cli.rust")
 #: implementation. Every command has its Python one; a path is added here in
 #: the change that ports it. ``info`` (every section) and ``rules unreviewed``
 #: came with UC-2.4 (#819); ``generate exports`` and its three exports with
-#: UC-3.2 (#824).
+#: UC-3.2 (#824); ``generate docs`` and its four scopes with UC-3.2b (#915).
 RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
     ("info",): RustCommand(launch=RUST_CLI),
     ("rules", "unreviewed"): RustCommand(launch=RUST_CLI),
@@ -86,6 +96,11 @@ RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
     ("generate", "exports", "navigator"): RustCommand(launch=RUST_CLI),
     ("generate", "exports", "objects"): RustCommand(launch=RUST_CLI),
     ("generate", "exports", "revisions"): RustCommand(launch=RUST_CLI),
+    ("generate", "docs"): RustCommand(launch=RUST_CLI),
+    ("generate", "docs", "rules"): RustCommand(launch=RUST_CLI),
+    ("generate", "docs", "objectives"): RustCommand(launch=RUST_CLI),
+    ("generate", "docs", "threats"): RustCommand(launch=RUST_CLI),
+    ("generate", "docs", "index"): RustCommand(launch=RUST_CLI),
 }
 
 
@@ -386,13 +401,22 @@ class _Side:
 
 
 def _run_side(
-    engine: str, launch: Sequence[str], args: Sequence[str], workspace: Path, scratch: Path
+    engine: str,
+    launch: Sequence[str],
+    args: Sequence[str],
+    workspace: Path,
+    scratch: Path,
+    extra_env: Mapping[str, str] | None = None,
 ) -> _Side:
-    """Run one implementation on its own copy of *workspace*; what it did, for the comparator."""
+    """Run one implementation on its own copy of *workspace*; what it did, for the comparator.
+
+    *extra_env* is added to its environment as is (no path in it is mapped).
+    """
     from opentide.cli.ui.mode import OUTPUT_ENV_VALUES, get_mode, json_indent
 
     copy = _copy_workspace(workspace, scratch / engine / workspace.name)
     env = {name: copy.map_path(value) for name, value in _environment(engine).items()}
+    env.update(extra_env or {})
     # Both runs print as this one would: the mode and the JSON layout it
     # resolved, although their stdout is a pipe.
     mode = get_mode().value
@@ -496,9 +520,17 @@ def _compare(cli_ctx: CliContext, path: str, args: Sequence[str], rust: RustComm
             argument=ENGINE_ENV,
         )
     with tempfile.TemporaryDirectory(prefix="opentide-compare-") as scratch:
+        refusal = Path(scratch) / "rust-refusal"
         try:
             oracle = _run_side(PYTHON, python_launch(), args, workspace, Path(scratch))
-            candidate = _run_side(RUST, rust.launch, args, workspace, Path(scratch))
+            candidate = _run_side(
+                RUST,
+                rust.launch,
+                args,
+                workspace,
+                Path(scratch),
+                extra_env={REFUSAL_ENV: str(refusal)},
+            )
         except (OSError, shutil.Error) as exc:
             _fail(
                 cli_ctx,
@@ -507,6 +539,17 @@ def _compare(cli_ctx: CliContext, path: str, args: Sequence[str], rust: RustComm
                 code=COMMAND_FAILED,
                 exit_code=1,
             )
+        if refusal.exists():
+            # The Rust implementation does not cover this input: nothing to
+            # compare with, so the Python run is the result.
+            from opentide.core.logging import get_logger
+
+            get_logger(__name__).debug(
+                "engine_compare_python_only",
+                command=path,
+                reason=refusal.read_text(encoding="utf-8", errors="replace"),
+            )
+            _adopt(cli_ctx, path, oracle, workspace, agreed=False)
         try:
             report: dict[str, Any] = json.loads(
                 compare_runs(
@@ -523,21 +566,7 @@ def _compare(cli_ctx: CliContext, path: str, args: Sequence[str], rust: RustComm
         except UnicodeError as exc:
             _fail(cli_ctx, path, f"{ENGINE_ENV}={COMPARE}: {exc}", code=COMMAND_FAILED, exit_code=1)
         if report.get("equal"):
-            back = _back_to(oracle.copy, workspace)
-            try:
-                _apply(oracle.run[3], workspace, back)
-            except OSError as exc:
-                _fail(
-                    cli_ctx,
-                    path,
-                    f"{ENGINE_ENV}={COMPARE}: both agreed, but the workspace could not "
-                    f"take the changes: {exc}",
-                    code=COMMAND_FAILED,
-                    exit_code=1,
-                )
-            _replay(back(oracle.run[1]), back(oracle.run[2]))
-            code = oracle.run[0]
-            raise SystemExit(128 - code if code < 0 else code)
+            _adopt(cli_ctx, path, oracle, workspace, agreed=True)
     written = _write_report(cli_ctx, path, args, report)
     count = len(report.get("differences", [])) + int(report.get("omitted", 0))
     message = (
@@ -545,6 +574,32 @@ def _compare(cli_ctx: CliContext, path: str, args: Sequence[str], rust: RustComm
         f"({count} difference{'' if count == 1 else 's'}); the report is {written}"
     )
     _fail(cli_ctx, path, message, code=ENGINE_MISMATCH, exit_code=ENGINE_MISMATCH_EXIT_CODE)
+
+
+def _adopt(
+    cli_ctx: CliContext, path: str, oracle: _Side, workspace: Path, *, agreed: bool
+) -> NoReturn:
+    """Make the Python run the result: its changes made in *workspace*, its output, its exit.
+
+    *agreed*: both implementations ran and agreed, rather than Python alone.
+    """
+    from opentide.cli.ui.contract import COMMAND_FAILED
+
+    back = _back_to(oracle.copy, workspace)
+    try:
+        _apply(oracle.run[3], workspace, back)
+    except OSError as exc:
+        _fail(
+            cli_ctx,
+            path,
+            f"{ENGINE_ENV}={COMPARE}: {'both agreed, but ' if agreed else ''}the workspace "
+            f"could not take the changes: {exc}",
+            code=COMMAND_FAILED,
+            exit_code=1,
+        )
+    _replay(back(oracle.run[1]), back(oracle.run[2]))
+    code = oracle.run[0]
+    raise SystemExit(128 - code if code < 0 else code)
 
 
 def _known_texts(workspace: Path) -> list[str]:
