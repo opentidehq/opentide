@@ -206,3 +206,20 @@ fn a_scoped_run_that_matches_nothing_is_not_an_empty_workspace() {
         "opentide --json setup"
     );
 }
+
+/// `setup` and its file-writing subcommands (UC-3.6, #828): plan mode and
+/// non-interactive runs with the files written, and the wizard's refusals.
+#[test]
+fn setup_cases_are_the_oracles() {
+    check(
+        &[
+            "setup",
+            "setup.env",
+            "setup.hooks",
+            "setup.mcp",
+            "setup.platforms",
+            "setup.repo",
+        ],
+        40,
+    );
+}

@@ -203,7 +203,7 @@ pub fn recorded_files(dir: &Path, outcome: &toml::Table) -> BTreeMap<String, Fil
                     Some(blob) => {
                         std::fs::read(repo().join("tests/golden/blobs").join(blob)).unwrap()
                     }
-                    None => std::fs::read(dir.join("files").join(path)).unwrap(),
+                    None => std::fs::read(dir.join("files").join(escape(path))).unwrap(),
                 },
             },
             other => panic!("{path}: a recorded {other:?} this test does not read"),
@@ -211,6 +211,22 @@ pub fn recorded_files(dir: &Path, outcome: &toml::Table) -> BTreeMap<String, Fil
         out.insert(path.to_owned(), state);
     }
     out
+}
+
+/// A recorded file's path under `files/`, as `cargo xtask golden record`
+/// escapes it (`xtask/src/golden/recording.rs` `escape`): a component that
+/// starts with `.git` or `~` gets a `~` before it. The other escapes (`%XX`,
+/// Windows' reserved names) name no file the replayed commands write.
+fn escape(path: &str) -> PathBuf {
+    path.split('/')
+        .map(|part| {
+            if part.starts_with(".git") || part.starts_with('~') {
+                format!("~{part}")
+            } else {
+                part.to_owned()
+            }
+        })
+        .collect()
 }
 
 /// The ledger, as `cargo xtask golden check` reads it.

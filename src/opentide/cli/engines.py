@@ -126,7 +126,10 @@ RUST_CLI: tuple[str, ...] = (sys.executable, "-m", "opentide.cli.rust")
 #: sends stays Python's; ``commands``, ``explain``, ``lint`` and ``validate`` with
 #: UC-3.5 (#827); offline ``validate query`` with UC-3.5b (#927): ``--live`` stays
 #: Python's; ``migrate vocab-scope`` and ``doctor --offline`` with UC-3.5c (#928): a
-#: doctor that reaches PyPI and the proxy stays Python's.
+#: doctor that reaches PyPI and the proxy stays Python's; ``setup`` (scripted
+#: runs and ``--plan``) and its ``env``, ``hooks``, ``mcp``, ``platforms`` and
+#: ``repo`` with UC-3.6 (#828): the wizard at a terminal, ``--vscode-setup``,
+#: ``--skills`` and ``--plugin`` stay Python's.
 RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
     ("commands",): RustCommand(launch=RUST_CLI),
     ("explain",): RustCommand(launch=RUST_CLI),
@@ -151,6 +154,14 @@ RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
     ("generate", "inflight"): RustCommand(launch=RUST_CLI),
     ("generate", "inflight", "prune"): RustCommand(launch=RUST_CLI),
     ("setup", "ci"): RustCommand(launch=RUST_CLI),
+    ("setup",): RustCommand(
+        launch=RUST_CLI, refuses=("--vscode-setup", "--skills", "--plugin")
+    ),
+    ("setup", "env"): RustCommand(launch=RUST_CLI),
+    ("setup", "hooks"): RustCommand(launch=RUST_CLI),
+    ("setup", "mcp"): RustCommand(launch=RUST_CLI),
+    ("setup", "platforms"): RustCommand(launch=RUST_CLI),
+    ("setup", "repo"): RustCommand(launch=RUST_CLI),
 }
 
 

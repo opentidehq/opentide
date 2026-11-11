@@ -62,6 +62,9 @@ pub struct Report {
     /// Written on stderr first, in every mode (`OPENTIDE_PROGRESS=json`'s
     /// events).
     pub stderr_first: String,
+    /// The next steps as a numbered list under a `Next steps` header, for a
+    /// sequence the reader follows step by step (`setup`).
+    pub numbered_next: bool,
 }
 
 /// One part of a body.
@@ -156,6 +159,7 @@ impl Report {
             whole_stdout: None,
             body_only: false,
             stderr_first: String::new(),
+            numbered_next: false,
         }
     }
 
@@ -171,6 +175,7 @@ impl Report {
             whole_stdout: None,
             body_only: false,
             stderr_first: String::new(),
+            numbered_next: false,
         }
     }
 
