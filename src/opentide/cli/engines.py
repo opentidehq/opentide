@@ -154,9 +154,7 @@ RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
     ("generate", "inflight"): RustCommand(launch=RUST_CLI),
     ("generate", "inflight", "prune"): RustCommand(launch=RUST_CLI),
     ("setup", "ci"): RustCommand(launch=RUST_CLI),
-    ("setup",): RustCommand(
-        launch=RUST_CLI, refuses=("--vscode-setup", "--skills", "--plugin")
-    ),
+    ("setup",): RustCommand(launch=RUST_CLI, refuses=("--vscode-setup", "--skills", "--plugin")),
     ("setup", "env"): RustCommand(launch=RUST_CLI),
     ("setup", "hooks"): RustCommand(launch=RUST_CLI),
     ("setup", "mcp"): RustCommand(launch=RUST_CLI),
