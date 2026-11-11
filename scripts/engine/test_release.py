@@ -237,6 +237,16 @@ class ReleaseWorkflowTest(unittest.TestCase):
             # Every job states its permissions, so none inherits a token.
             self.assertIn("permissions:", jobs[job], job)
 
+    def test_native_adds_its_target_to_the_pinned_toolchain(self) -> None:
+        # rust-toolchain.toml pins the compiler, so a target installed for
+        # another toolchain (dtolnay's `targets:` on stable) is not the one
+        # cargo builds with: the cross builds failed with "can't find crate
+        # for `std`" (v0.13.0). The target is added with rustup in the checkout.
+        native = workflow_jobs()["native"]
+        self.assertIn("rustup target add ${{ matrix.target }}", native)
+        self.assertNotRegex(native, r"targets:\s*\$\{\{ matrix\.target \}\}")
+        self.assertLess(native.index("actions/checkout"), native.index("rustup target add"))
+
     def test_the_attest_job_builds_and_runs_nothing(self) -> None:
         attest = workflow_jobs()["attest"]
         self.assertNotIn("run:", attest)

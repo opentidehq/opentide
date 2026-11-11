@@ -106,8 +106,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
+      # rust-toolchain.toml pins the compiler cargo uses here (1.95.0), so the
+      # cross target goes on that toolchain, not on stable: rustup run in the
+      # checkout installs the pinned toolchain and adds the target to it.
+      - name: target for the pinned toolchain
+        shell: bash
+        run: rustup target add ${{ matrix.target }}
       - name: musl linker
         if: contains(matrix.target, 'musl')
         run: sudo apt-get update && sudo apt-get install -y musl-tools
