@@ -85,6 +85,10 @@ tokio = { version = "1.48", default-features = false, features = ["rt", "io-std"
 # frame reaches stdout (`dup2`, safely).
 rustix = { version = "1.1", default-features = false, features = ["std", "stdio"] }
 
+[target.'cfg(unix)'.dev-dependencies]
+# `tests/tui_terminal.rs`: the pseudo-terminals `tui` runs in at a terminal.
+rustix = { version = "1.1", default-features = false, features = ["std", "fs", "pty", "termios"] }
+
 [dev-dependencies]
 # The goldens' normalisation, for the generate cases (tests/generate_goldens.rs).
 opentide-compare.workspace = true

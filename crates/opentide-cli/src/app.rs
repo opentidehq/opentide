@@ -26,6 +26,14 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant, SystemTime};
 
+/// The string the command's keys hold under `key`, if any.
+fn outcome_text(outcome: &Outcome, key: &str) -> Option<String> {
+    outcome.data.iter().find_map(|(name, value)| match value {
+        crate::json::Json::Str(text) if name == key => Some(text.clone()),
+        _ => None,
+    })
+}
+
 /// Command paths with a Rust implementation; every other one is refused with
 /// `engine_not_ported`, as `OPENTIDE_ENGINE=rust` refuses it.
 /// `deploy` runs here with `--dry-run` only (UC-3.1c); a deploy that sends is
@@ -609,6 +617,26 @@ impl Run<'_> {
                     debug: self.globals.debug || self.env.debug_requested(),
                 };
                 crate::mcp::serve(&launch, &self.host.version)
+            }
+            "tui" => {
+                use std::io::IsTerminal as _;
+                let place = crate::commands::tui::Place {
+                    mode: self.mode,
+                    interactive: std::io::stdin().is_terminal() && self.host.stdout_tty,
+                    no_color: self.globals.no_color,
+                    env: self.env,
+                };
+                if let Some(report) = crate::commands::tui::gate(&place) {
+                    return self.emit_report(&report, out, err);
+                }
+                // A person at a terminal: the UI, which runs on Python.
+                let message = "opentide tui's terminal UI has no Rust implementation yet: \
+                     unset OPENTIDE_ENGINE, or set it to python or compare."
+                    .to_owned();
+                let mut failure = Failure::new(code::ENGINE_NOT_PORTED, message);
+                failure.argument = Some("OPENTIDE_ENGINE".into());
+                let outcome = Outcome::failed(&path, USAGE_EXIT_CODE, failure);
+                self.emit(&outcome, &[], &[], out, err)
             }
             "lsp start" => {
                 // stdout is the protocol's: nothing is emitted around the server.
@@ -1288,8 +1316,10 @@ impl Run<'_> {
                 .failure
                 .as_ref()
                 .map(|failure| (failure.code.clone(), failure.suggestion.clone())),
-            detail: None,
-            advice: None,
+            // What to do about the result (`REMEDIATION_FIELDS`): a `note:`
+            // and a `help:` line in the text modes.
+            detail: outcome_text(outcome, "detail"),
+            advice: outcome_text(outcome, "advice"),
             warnings: report.warnings.clone(),
             next_actions: outcome.next_actions.clone(),
         };
@@ -1644,6 +1674,20 @@ pub fn main(argv: &[String], version: &str) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn a_reports_detail_and_advice_are_its_note_and_help() {
+        let mut outcome = Outcome::failed("tui", 2, Failure::new("x", "m"));
+        assert_eq!(outcome_text(&outcome, "advice"), None);
+        outcome
+            .data
+            .push(("advice".into(), crate::json::Json::str("do this")));
+        outcome
+            .data
+            .push(("detail".into(), crate::json::Json::Int(1)));
+        assert_eq!(outcome_text(&outcome, "advice").as_deref(), Some("do this"));
+        // Only a string is a line to print.
+        assert_eq!(outcome_text(&outcome, "detail"), None);
+    }
 
     /// Counts its drops, to tell a freed value from a leaked one.
     struct Counted(std::rc::Rc<std::cell::Cell<u32>>);
