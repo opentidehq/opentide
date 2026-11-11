@@ -200,3 +200,31 @@ fn replay_serves_in_order_checks_bytes_and_repeats_whole_passes() {
         "request 2: GET https://t.invalid/rules/r-1 was recorded and never sent"
     );
 }
+
+#[test]
+fn a_name_ending_in_key_is_a_secret_and_one_merely_ending_in_key_is_not() {
+    use opentide_cassette::redact::is_secret_name;
+    // In no SECRET_WORDS entry: only the `_key` / `-key` suffix makes them secret.
+    for name in ["client_key", "ACCESS_KEY", "x-tenant-key", "Key"] {
+        assert!(is_secret_name(name), "{name}");
+    }
+    for name in ["monkey", "keyboard", "key_id", "hotkeys"] {
+        assert!(!is_secret_name(name), "{name}");
+    }
+    let redaction = Redaction::default();
+    let url = redaction.url("https://tenant.invalid/api?client_key=abc123&monkey=banana");
+    assert_eq!(
+        url,
+        "https://tenant.invalid/api?client_key=REDACTED&monkey=banana"
+    );
+}
+
+#[test]
+fn known_secrets_of_three_characters_or_more_are_redacted() {
+    // Short values (a tenant's three-letter PIN): redacted wherever they
+    // appear. Two characters would redact half of every recording, so they
+    // are not.
+    let redaction = Redaction::new(["abc".to_owned(), "xy".to_owned(), String::new()]);
+    assert_eq!(redaction.text("abc xy abcd"), "REDACTED xy REDACTEDd");
+    assert_eq!(redaction.text("ab"), "ab");
+}
