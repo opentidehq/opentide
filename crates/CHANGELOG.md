@@ -6,6 +6,10 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-11-11
+
+YARA is a language: `.yar` files and the YARA in HarfangLab and Bitdefender rules are checked as libyara 4.5 compiles them, with YARA-X differences flagged, and Bitdefender GravityZone rules are checked against GravityZone's criteria.
+
 ### Upgrade
 
 - If you build the engine crates or `opentide-lsp` from source, use Rust 1.95 or later: `rust-version` is 1.95, which the YARA parser crates need ([#165](https://github.com/opentidehq/language-server/issues/165)).
@@ -24,6 +28,14 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
   - `bitdefender_criterion_field`: an error on `process`, `file`, `connection` and `registry`, a warning on the XDR targets
   - Warnings: `bitdefender_registry_full_hive`, `bitdefender_contains_no_wildcard`, `bitdefender_severity_collapsed`
   - Completion and hover for `detection.target`, each target's criteria fields, the relations `is`, `contains` and `any`, enumerated values, and `actions`, from GravityZone's criteria catalogue (`catalogs/bitdefender/criteria.toml`, `scripts/sync_bitdefender_criteria.py`)
+
+### Changed
+
+- **The bundled Tide catalog knows `configurations.harfanglab.yara.signature` and the `configurations.bitdefender` block.** It is regenerated from opentide's models, so `opentide-lsp` run on its own and `opentide validate` agree on HarfangLab and Bitdefender blocks, and the Tide TextMate grammar highlights their keys ([#236](https://github.com/opentidehq/language-server/pull/236), [#239](https://github.com/opentidehq/language-server/pull/239)).
+
+### Fixed
+
+- **A large injected query no longer takes time in the square of its size.** Every semantic token and finding of a query in a Tide object, and every symbol of a `.yar` file, was positioned by scanning the text from its start: a rule with a 1 MB YARA signature took about 280 s to analyse and now takes about 1 s, with the same output. KQL, SPL, Falco and every other injected language share the path ([#238](https://github.com/opentidehq/language-server/pull/238)).
 
 ## [0.12.1] - 2026-11-09
 
@@ -682,6 +694,7 @@ The first working server serves KQL, SPL and Tide YAML over stdio and WASM, with
 - **A frozen HighlightSpec with generated editor maps.** Semantic tokens use the standard LSP legend.
 - **Stdio and WASM hosts, with Zed, Helix and Neovim samples.**
 
+[0.13.0]: https://github.com/opentidehq/language-server/compare/v0.12.1...v0.13.0
 [0.12.1]: https://github.com/opentidehq/language-server/compare/v0.12.0...v0.12.1
 [0.12.0]: https://github.com/opentidehq/language-server/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/opentidehq/language-server/compare/v0.10.0...v0.11.0
