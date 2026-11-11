@@ -85,6 +85,9 @@ of it): a command that failed early would measure nothing, so the bench stops wi
   pass for the command's now and then (more often under load and coverage instrumentation).
   What xtask touches after the exec (the language server's reader thread and messages) is not
   in the child's floor, so the read does not wait for the reap.
+- The `memory_*` tests of `measure` and `lsp` measure this process's own mark, which the other
+  tests of a plain `cargo test` (threads of one process) move: each runs itself again in a child
+  process of the test binary, alone (`bench::measured_alone`), under `cargo test` and nextest alike.
 - `XTASK_BENCH_INJECT_SLEEP_MS` is test-only: a sleep inside every measured run's timed window.
   `tests/bench.rs` proves that it makes the check fail.
 - CI: [`bench.yml`](../.github/workflows/bench.yml). Re-record the baseline only from a CI run on

@@ -1195,6 +1195,49 @@ fn git_sha(root: &Path) -> Option<String> {
         .then(|| String::from_utf8_lossy(&output.stdout).trim().to_owned())
 }
 
+/// Runs a memory test in a test process of its own, the one way its
+/// measurement holds: VmHWM, its reset (`clear_refs`) and the floor a child
+/// inherits are the whole process's, so another test allocating or resetting
+/// at the same time (plain `cargo test` runs a binary's tests as threads of
+/// one process) moves the floor it measures.
+///
+/// Called first by the test named `test` (`module` is its `module_path!()`):
+/// `true` means this process is the test's own and it runs its body; `false`
+/// means the test ran, and passed, in a child process of this test binary
+/// (`--exact`, one thread), and the caller returns.
+#[cfg(all(test, target_os = "linux"))]
+#[expect(
+    clippy::expect_used,
+    reason = "a test helper: a test that cannot run its child fails"
+)]
+pub(crate) fn measured_alone(module: &str, test: &str) -> bool {
+    const ALONE: &str = "XTASK_BENCH_MEMORY_TEST_ALONE";
+    let path = format!(
+        "{}::{test}",
+        module.split_once("::").map_or(module, |(_, rest)| rest)
+    );
+    if std::env::var_os(ALONE).is_some_and(|alone| alone == path.as_str()) {
+        return true;
+    }
+    let exe = std::env::current_exe().expect("the test binary's path");
+    let output = std::process::Command::new(exe)
+        .args([path.as_str(), "--exact", "--test-threads=1"])
+        .env(ALONE, &path)
+        .output()
+        .expect("run the memory test in a process of its own");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success(),
+        "{path}, alone in its process:\n{stdout}\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        stdout.contains("1 passed"),
+        "{path} did not run alone in its process:\n{stdout}"
+    );
+    false
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
