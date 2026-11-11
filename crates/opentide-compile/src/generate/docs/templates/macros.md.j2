@@ -1,0 +1,84 @@
+{#- Markdown building blocks the pages share (documentation/format/protocol.py,
+    parts/sections.py). Every macro ends its output with a newline. -#}
+{% macro table(headers, rows) %}
+| {{ headers|map("cell")|join(" | ") }} |
+| {% for header in headers %}---{% if not loop.last %} | {% endif %}{% endfor %} |
+{% for row in rows %}
+| {{ row|map("cell")|join(" | ") }} |
+{% endfor %}
+{% endmacro %}
+
+{% macro fold(flavor, summary, body) %}
+<details><summary>{{ summary }}</summary>
+
+{% if flavor == "azure_devops" %}
+
+{% endif %}
+{{ body }}
+
+</details>
+{% endmacro %}
+
+{% macro title(title) %}
+{% if title.frontmatter %}
+---
+title: {{ title.text }}
+---
+{% else %}
+# {{ title.text }}
+{% endif %}
+{% endmacro %}
+
+{% macro metadata(rows) %}
+## Metadata
+{{ table(["Field", "Value"], rows) }}
+{%- endmacro %}
+
+{% macro references(refs) %}
+{% if refs %}
+## References
+{% if refs.public %}
+### Public
+{% for item in refs.public %}
+- **{{ item[0] }}**: {{ item[1] }}
+{% endfor %}
+{% endif %}
+{% if refs.internal %}
+### Internal
+{% for item in refs.internal %}
+- **{{ item[0] }}**: {{ item[1] }}
+{% endfor %}
+{% endif %}
+{% if refs.reports %}
+### Reports
+{% for item in refs.reports %}
+- {{ item }}
+{% endfor %}
+{% endif %}
+{% endif %}
+{% endmacro %}
+
+{% macro description(text) %}
+## Description
+{{ text|trim }}
+{% endmacro %}
+
+{% macro techniques(rows) %}
+{% if rows %}
+## ATT&CK Techniques
+{{ table(["Technique", "Name", "Description"], rows) }}
+{% endif %}
+{% endmacro %}
+
+{% macro coverage(block) %}
+{% if block %}
+{% if block.heading %}
+## {{ block.heading }}
+{% endif %}
+{{ block.diagram }}
+{%- if block.related %}
+## Related objects
+{{ table(["Type", "Name", "Direction", "Relation"], block.related) }}
+{%- endif %}
+{% endif %}
+{% endmacro %}

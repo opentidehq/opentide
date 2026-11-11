@@ -57,9 +57,9 @@ stdout (progress goes to stderr); --out writes it to FILE as well.
                     and `validate_*` (opentide-workspace's load and validate
                     examples; validate without the queries check, UC-2.5)
                     and the commands the Rust CLI runs (info, info catalog,
-                    rules unreviewed, generate exports navigator, deploy
-                    --dry-run), built --release; every other command
-                    reports \"no Rust yet\"
+                    rules unreviewed, generate exports navigator, generate
+                    docs, deploy --dry-run), built --release; every other
+                    command reports \"no Rust yet\"
   --scale 1|10      the heavy workspace's size (default 1)
   --only ID,...     run only these commands (ids as in the report)
   --workspace DIR   benchmark this workspace instead of generating one
@@ -635,6 +635,7 @@ const RUST_CLI: &[&str] = &[
     "info_catalog",
     "rules_unreviewed",
     "generate_exports_navigator",
+    "generate_docs",
     "deploy_dry_run",
 ];
 

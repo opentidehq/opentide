@@ -568,6 +568,62 @@ fn references(index: &mut Index) {
 }
 
 impl Index {
+    /// Puts `document`, read from `path`, in `family` as the object `uuid`,
+    /// replacing the one indexed there (the inflight preview's overlay,
+    /// `apply_inflight_overlay`). `false`, changing nothing, when the index
+    /// has no such family. An objective's signals are re-indexed with
+    /// [`Self::reindex_signals`] once every object is in place, and the
+    /// references and chains with [`Self::refresh_references`].
+    pub fn overlay(
+        &mut self,
+        family: &str,
+        uuid: &str,
+        path: PathBuf,
+        document: Arc<Document>,
+    ) -> bool {
+        let Some(bucket) = self.objects.get_mut(family) else {
+            return false;
+        };
+        bucket.insert(
+            uuid.to_owned(),
+            Object {
+                uuid: uuid.to_owned(),
+                family: family.to_owned(),
+                path: path.clone(),
+                document,
+            },
+        );
+        self.file_paths.insert(uuid.to_owned(), path);
+        true
+    }
+
+    /// Indexes again the signals of `objectives`: the ones they no longer
+    /// define leave the index, and each one's signals are indexed from its
+    /// body (`drop_objective_signals`, `index_objective_signals`).
+    pub fn reindex_signals(&mut self, objectives: &[String]) {
+        self.signals
+            .retain(|_, signal| !objectives.contains(&signal.owner));
+        for uuid in objectives {
+            let Some(document) = self
+                .objects
+                .get("objective")
+                .and_then(|bucket| bucket.get(uuid))
+                .map(|object| Arc::clone(&object.document))
+            else {
+                continue;
+            };
+            if let Some(root) = document.root() {
+                index_signals(self, uuid, root);
+            }
+        }
+    }
+
+    /// Reads the references and the threats' chains again, after
+    /// [`Self::overlay`].
+    pub fn refresh_references(&mut self) {
+        references(self);
+    }
+
     /// The objects of `family`.
     pub fn family(&self, family: &str) -> impl Iterator<Item = &Object> {
         self.objects

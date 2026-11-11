@@ -1,0 +1,78 @@
+{#- A detection objective's page (documentation/objects/objective.py). -#}
+{% import "macros.md.j2" as md %}
+{% macro section_objective_meta() %}
+## Objective metadata
+
+- **Priority**: {{ priority }}
+- **Type**: {{ objective_type }}
+{% if investment %}
+- **Investment**: {{ investment }}
+{% endif %}
+- **Composition**: {{ composition }}
+- **Composition rationale**: {{ rationale }}
+{% endmacro %}
+{% macro section_signal_block(s) %}
+### {{ s.name }}
+{{ s.description|trim }}
+
+- **Severity**: {{ s.severity }}
+- **Methodology**: {{ s.methodology }}
+{% if s.effort is not none %}
+- **Effort**: {{ s.effort }}
+{% endif %}
+#### Data
+
+- **Availability**: {{ s.availability }}
+- **Requirements**: {{ s.requirements }}
+{% if s.logsources %}
+- **Log sources**: {{ s.logsources|join(", ") }}
+{% endif %}
+- **Entities**: {{ s.entities|join(", ") }}
+{% if s.detectors %}
+#### Detectors
+
+{% for d in s.detectors %}
+- **{{ d.name }}** ({{ d.technology }}): {{ d.description }}{% if d.link %} ([Reference]({{ d.link }})){% endif %}
+
+{% endfor %}
+{% endif %}
+{% if s.examples %}
+#### Examples
+
+{% for e in s.examples %}
+{{ loop.index }}. {{ e.description }}
+   - **Link**: [{{ e.link }}]({{ e.link }})
+{% if e.query %}
+```{{ e.language }}
+{{ e.query }}
+```
+
+
+{% endif %}
+{% endfor %}
+{% endif %}
+{% endmacro %}
+{% macro section_signals_section(list) %}
+{% if list %}
+## Signals
+{% for s in list %}
+{{ section_signal_block(s) }}
+{%- endfor %}
+{% endif %}
+{% endmacro %}
+{% macro section_signal_coverage(rows) %}
+{% if rows %}
+## Signal rule coverage
+{{ md.table(["Signal", "Downstream rules"], rows) }}
+{% endif %}
+{% endmacro %}
+{{ [
+    md.title(title),
+    md.metadata(metadata),
+    md.references(references),
+    md.description(description),
+    section_objective_meta(),
+    section_signals_section(signals),
+    section_signal_coverage(signal_coverage),
+    md.coverage(coverage),
+]|join_blocks }}
