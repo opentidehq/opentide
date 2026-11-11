@@ -1,11 +1,11 @@
 ---
 title: Platforms
-description: Ten deployment platforms, six query validators (five offline), eight query runners, and where each platform block schema is specified.
+description: Eleven deployment platforms, seven query validators (six offline), nine query runners, and where each platform block schema is specified.
 ---
 
 # Platforms
 
-opentide integrates with **ten detection platforms** through built-in adapters registered at import time (`opentide.platforms` entry points). All ship in the base PyPI package.
+opentide integrates with **eleven detection platforms** through built-in adapters registered at import time (`opentide.platforms` entry points). All ship in the base PyPI package.
 
 ## Capability matrix
 
@@ -21,6 +21,7 @@ opentide integrates with **ten detection platforms** through built-in adapters r
 | HarfangLab | `harfanglab` | yes | no | YARA | telemetry filters | Sigma or YARA |
 | Sysdig Secure (Falco) | `sysdig` | yes | no | yes | no | Falco condition |
 | Bitdefender GravityZone | `bitdefender` | yes | no | YARA | no | GravityZone criteria or YARA |
+| Graylog | `graylog` | yes | yes | yes | yes | Graylog search syntax (Lucene) |
 
 The offline check is the analysis engine that ships with `pip install opentide` (`opentide validate`, `opentide validate query`, `opentide lint`, [`opentide lsp`](../../cli/lsp.md)): it parses each query in its language, with the platform's tables or dialect, and needs no tenant.
 
@@ -59,6 +60,8 @@ Sysdig Secure runs Falco. A `sysdig` block is a Falco rule (a condition, its exc
 
 Bitdefender GravityZone takes custom detection rules. A `bitdefender` block is one rule of one kind: `detection`, a list of criteria on a process, file, connection, registry or XDR event, or `yara`, a YARA signature written out in the block. Deploy calls the Incidents API (JSON-RPC `createCustomRule`, `updateCustomRule`, `deleteCustomRule`), sends the whole payload on every update, and keeps GravityZone's 24-hex rule id in [deployment state](deployment-state.md); it never lists rules, and never creates, updates or deletes an exclusion rule. It derives the GravityZone name, description, severity and tags from the rule, and resolves `targets` aliases with the tenant's `endpoint_tags` and `companies` tables. `opentide validate` checks the criteria catalogue, the actions each kind allows, and the YARA signature, and warns (as does `opentide lint`) on a full registry hive name, a `contains` value without a wildcard, and a `Critical` or `Informational` severity GravityZone collapses; The analysis engine checks `yara.signature` offline under its Bitdefender profile, as `opentide validate` (its `queries` check), `opentide validate query --platform bitdefender` and the editor do: a YARA error, a character that is not ASCII (`bitdefender_yara_ascii`) or a signature over 30,000 characters (`bitdefender_yara_size`) fails the rule, each reported once, at its place in the signature, and `opentide lint` warns on a module GravityZone has not confirmed (`yara_module_unconfirmed`). GravityZone has no dry run, so `validate query --platform bitdefender --live` reports `supported: false`. `deploy --dry-run` shows the `createCustomRule` request.
 
+Graylog takes event definitions of the Filter & Aggregation type, on Graylog 6.3, 7.0, 7.1 and 7.2, Open included. A `graylog` block is one definition: a query in Graylog's search syntax, and optionally an `aggregation` (group-by fields and a condition such as `count() >= 3 OR card(parent_image_lc) >= 2`), streams and notifications named by aliases from the tenant's tables, a schedule, event fields, a summary and remediation steps. Deploy reads the server version (`GET /api/system`) once per tenant and builds every request for it, checks the query with `POST /api/search/validate` before every save (a query Graylog reports as `ERROR` is never saved), and keeps Graylog's 24-hex event definition id in [deployment state](deployment-state.md); it never lists definitions. It derives the title, description, priority, tags and ATT&CK ids from the rule: `tags` and `tactics_techniques` on 7.2 and later, a description line and an `attack_techniques` event field before. `opentide validate` checks the block's constraints and warns on a filter whose window overlaps its interval, a definition with no stream, and two rules with one title. Offline, the analysis engine checks the query as Lucene in its Graylog dialect; `validate query --platform graylog --live` asks each tenant's `/api/search/validate`, and `opentide query --platform graylog` searches messages read-only. Graylog keyword fields are case-sensitive: the [spec](/docs/specifications/specs/platforms/graylog-1.0/) documents the lower-cased-copy pipeline pattern for case-insensitive rules.
+
 Normative capability flags and the shared block: [Platforms spec](/docs/specifications/specs/platforms/).
 
 ## Platform block schemas
@@ -76,6 +79,7 @@ Every key on `configurations.<platform>`, required and optional, is specified un
   <Card title="HarfangLab" href="/docs/specifications/specs/platforms/harfanglab-1.0/" description="Sigma or YARA, never both. YARA as a whole signature or decomposed, checked offline." />
   <Card title="Sysdig Secure" href="/docs/specifications/specs/platforms/sysdig-1.0/" description="Custom Falco rule through the Sysdig Secure API. Block macros and lists are expanded at deploy." />
   <Card title="Bitdefender GravityZone" href="/docs/specifications/specs/platforms/bitdefender-1.0/" description="Custom detection rule: Basic criteria or a YARA signature, through the Incidents API." />
+  <Card title="Graylog" href="/docs/specifications/specs/platforms/graylog-1.0/" description="Event definition (Filter & Aggregation) on Graylog 6.3 to 7.2, each request built for the server's version." />
 </Cards>
 
 ## Inspecting capabilities at runtime
@@ -102,7 +106,7 @@ Only platforms with `can_validate=True` run live validation. For CrowdStrike, Ha
 opentide validate query --platform crowdstrike   # reports unsupported
 ```
 
-For the six that can, `opentide validate query` checks each query offline with
+For the seven that can, `opentide validate query` checks each query offline with
 the analysis engine (every platform but SentinelOne, whose S1QL it does not
 parse), and `--live` submits the catalogue queries to the tenants, which
 requires credentials; every vendor SDK ships with `pip install opentide`. A

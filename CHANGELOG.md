@@ -6,6 +6,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Added
+
+- **Graylog event definitions deploy from opentide.** A `configurations.graylog` block (`platform::graylog::1.0`) is one Filter & Aggregation event definition: a query in Graylog's search syntax, and optionally an aggregation condition (`count() >= 3 OR card(parent_image_lc) >= 2`), streams and notifications by tenant alias, a schedule, event fields, a summary and remediation. Deploy reads the server version once per tenant and builds every request for Graylog 6.3, 7.0, 7.1 or 7.2, checks the query with `/api/search/validate` before every save, and keeps the 24-hex definition id in `.opentide/states/deployment/`. Enable it with `opentide setup platforms --graylog`. See [Platforms](docs/usage/concepts/platforms.md).
+- **`validate` checks Graylog blocks.** It reports every `graylog_*` constraint code of the spec (the query, list fields, the schedule and its Quartz cron, the event limit, the aggregation condition grammar, event fields and key, priority, group-by field names), each at the `field_path` the spec fixes, and warns, as `lint` does, on a filter whose window overlaps its interval (`graylog_overlapping_window`), a definition with no stream (`graylog_all_streams`) and two rules with one title (`graylog_title_duplicate`).
+- **`validate query --platform graylog --live` and `opentide query --platform graylog`.** The live check asks each tenant's `POST /api/search/validate` with the block's streams and window: `ERROR` explanations fail the rule, warnings carry Graylog's line and column. `opentide query` searches messages read-only with `POST /api/search/messages`; `--index` names Graylog stream aliases. Offline, the block's query and `.lucene` files under `--platform graylog` are checked as Lucene.
+
+### Fixed
+
+- **`validate` no longer crashes on a legacy external-id key with a text value.** A `rule_id::<tenant>` key whose id is a string (a CrowdStrike, Bitdefender or Graylog id) stopped the run with `invalid literal for int() with base 10: '<tenant>'`; it is `external_id_in_rule`, as a numeric id was.
+
 ## [0.25.0] — 2026-11-11
 
 Bitdefender GravityZone rules deploy from a `configurations.bitdefender` block, as a custom detection rule or a YARA rule. HarfangLab rules take a whole YARA signature, and `validate`, `lint`, the editor and `opentide tui` check YARA as libyara 4.5 compiles it.
