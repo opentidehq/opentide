@@ -23,15 +23,17 @@ from pathlib import Path
 from typing import Any
 
 from opentide.cli.engine_defaults import PYTHON, RUST, selected
+from opentide.cli.ui.contract import ENGINE_MISMATCH, USAGE_INVALID_CHOICE
 from opentide.validation.issues import ValidationIssue, ValidationReport
 
+# ENGINE_MISMATCH and USAGE_INVALID_CHOICE are the CLI contract's failure codes,
+# not validation findings: a comparison that found a difference, an engine
+# that does not exist.
 COMPARE = "compare"
 #: The engines the SDK and MCP accept.
 ENGINES = (PYTHON, RUST, COMPARE)
 #: The command whose result these surfaces return.
 VALIDATE = ("validate",)
-#: ``failure.code`` of a comparison that found a difference, as the CLI's.
-ENGINE_MISMATCH = "engine_mismatch"
 
 #: Report statistics that differ between any two runs, or between the
 #: implementations by design (threads): never compared.
@@ -39,9 +41,12 @@ _UNCOMPARED_STATS = frozenset({"wall_ms", "parallel", "workers", "object_workers
 
 
 class EngineSelectionError(ValueError):
-    """``OPENTIDE_ENGINE`` names no engine."""
+    """``OPENTIDE_ENGINE`` names no engine: the CLI's usage error."""
 
-    code = "usage_invalid_choice"
+    @property
+    def code(self) -> str:
+        """``failure.code``, as the CLI's for the same value: a failure, never a finding."""
+        return USAGE_INVALID_CHOICE
 
 
 class RustValidationError(RuntimeError):
