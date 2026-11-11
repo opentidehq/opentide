@@ -25,3 +25,7 @@ src/opentide/schemas/data/platform_templates/*.template.yaml -text
 # (crates/opentide-lsp/tests/protocol.rs): the bytes as committed, LF, on a
 # Windows checkout too.
 crates/testdata/objects/** -text
+# The explain pages, compiled into the Rust CLI (crates/opentide-cli/build.rs's
+# include_str!) and read by the Python CLI: the bytes as committed, LF, on a
+# Windows checkout too.
+src/opentide/data/diagnostics/*.md -text

@@ -153,12 +153,7 @@ pub fn page(code: &str) -> Option<Page> {
         return None;
     }
     if let Some((code, markdown)) = pages::PAGES.iter().find(|(name, _)| *name == code) {
-        return Some(Page {
-            code: (*code).to_owned(),
-            summary: summary_of(markdown),
-            markdown: (*markdown).to_owned(),
-            retired: false,
-        });
+        return Some(file_page(code, markdown));
     }
     engine_page(&code).or_else(|| {
         RETIRED
@@ -166,6 +161,19 @@ pub fn page(code: &str) -> Option<Page> {
             .find(|retired| retired.code == code)
             .map(retired_page)
     })
+}
+
+/// A page from a file of `src/opentide/data/diagnostics/`, its line endings
+/// made LF: a checkout that converted the file to CRLF (Windows) builds a
+/// binary whose summary and Markdown are the same as an LF checkout's.
+fn file_page(code: &str, markdown: &str) -> Page {
+    let markdown = markdown.replace("\r\n", "\n");
+    Page {
+        code: code.to_owned(),
+        summary: summary_of(&markdown),
+        markdown,
+        retired: false,
+    }
 }
 
 /// Every page, in code order.
@@ -316,6 +324,27 @@ mod tests {
         );
         assert!(page.markdown.starts_with("# vocab_unknown\n"));
         assert!(!page.retired);
+    }
+
+    #[test]
+    fn a_crlf_page_is_the_lf_page() {
+        let (code, markdown) = pages::PAGES
+            .iter()
+            .find(|(name, _)| *name == "vocab_unknown")
+            .unwrap();
+        let lf = file_page(code, &markdown.replace("\r\n", "\n"));
+        let crlf = file_page(code, &lf.markdown.replace('\n', "\r\n"));
+        assert_eq!(crlf, lf);
+        assert_eq!(
+            crlf.summary,
+            "A value is not in the vocabulary its field uses."
+        );
+        assert!(!crlf.markdown.contains('\r'));
+        let terminal = crate::commands::Terminal::plain(crate::mode::Mode::Human);
+        assert_eq!(
+            crate::commands::explain::render_markdown(&crlf.markdown, &terminal),
+            crate::commands::explain::render_markdown(&lf.markdown, &terminal)
+        );
     }
 
     #[test]
