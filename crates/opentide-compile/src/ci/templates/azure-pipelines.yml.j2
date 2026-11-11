@@ -1,0 +1,131 @@
+{#- Azure Pipelines: `azure-pipelines.yml` (`ci/azure.py`). -#}
+{% import "scripts.sh.j2" as sh %}
+{% macro script(commands) -%}
+- script: |
+    set -e
+    [[ commands | join("\n") | indent(4) ]]
+{%- endmacro %}
+{% macro steps(commands, persist=false, full_history=false) -%}
+{% if persist or full_history %}
+- checkout: self
+{% if persist %}
+  persistCredentials: true
+{% endif %}
+{% if full_history %}
+  fetchDepth: 0
+{% endif %}
+{% endif %}
+- task: UsePythonVersion@0
+  inputs:
+    versionSpec: '[[ python ]]'
+- script: [[ pip ]]
+  displayName: Install opentide
+[[ script(commands) ]]
+{%- endmacro %}
+{% macro job(id, name, body, condition=none) -%}
+- job: [[ id ]]
+  displayName: [[ name ]]
+{% if condition %}
+  condition: [[ condition ]]
+{% endif %}
+  steps:
+    [[ body | trim | indent(4) ]]
+{%- endmacro %}
+{% set identity = ['git config user.email "azure-pipelines@opentide.local"', 'git config user.name "azure-pipelines"'] %}
+{% set push = "git push origin HEAD:" ~ branch %}
+{% set fetch = "git fetch origin " ~ branch %}
+{% set validate %}
+[[ steps(["mkdir -p opentide-reports"] + validate_sarif, full_history=lint_changed) ]]
+- task: PublishBuildArtifacts@1
+  displayName: Publish opentide reports
+  condition: succeededOrFailed()
+  inputs:
+    PathtoPublish: $(Build.SourcesDirectory)/opentide-reports
+    ArtifactName: CodeAnalysisLogs
+{% endset %}
+{% set production %}
+[[ steps([skip_guard] + identity + [sh.overlay(fetch), dry_run, 'echo "##vso[task.setvariable variable=OPENTIDE_DEPLOY_STARTED]true"', deploy], persist=true, full_history=true) ]]
+[[ script(identity + [sh.writeback(rules, push, fetch, 'git push origin "$state_commit:refs/opentide/deployment-state/$state_commit"')]) ]]
+  displayName: Commit deployment write-backs
+  condition: and(always(), eq(variables['OPENTIDE_DEPLOY_STARTED'], 'true'))
+{% endset %}
+{% set document %}
+[[ steps(docs) ]]
+{% if docs %}
+- task: PublishBuildArtifacts@1
+  displayName: Publish documentation
+  inputs:
+    PathtoPublish: [[ docs_publish_path ]]
+    ArtifactName: opentide-docs
+{% endif %}
+{% endset %}
+[[ header ]]trigger:
+  branches:
+    include:
+      - '*'
+
+# Azure Repos Git ignores pr:. Add a build validation policy on the
+# default branch so pull requests set Build.Reason to PullRequest.
+# Staging deploy stays gated on that reason. Hosted Azure Pipelines
+# (GitHub or Bitbucket) honor pr: as written.
+pr:
+  branches:
+    include:
+      - [[ branch ]]
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  OPENTIDE_REPO_ROOT: $(Build.SourcesDirectory)
+  [[ version_entry ]]
+
+# Azure cannot serialise a job from YAML alone. Add an Exclusive lock
+# check to a resource the Deploy stage uses (for example an environment
+# or the agent pool); this line then queues runs in order instead of
+# cancelling all but the latest.
+lockBehavior: sequential
+
+stages:
+  - stage: Validate
+    displayName: Validate
+    jobs:
+      [[ job("validate", "Validate objects", validate) | indent(6) ]]
+{% for query in queries %}
+      [[ job("validate_query_" ~ query.id, "Validate query (" ~ query.platform ~ ")", steps([skip_guard] + restore + [query.command], persist=true, full_history=true)) | indent(6) ]]
+{% endfor %}
+
+  - stage: Generate
+    displayName: Generate
+    dependsOn: Validate
+    jobs:
+      [[ job("generate", "Generate framework artifacts", steps(["opentide generate"])) | indent(6) ]]
+
+  - stage: Deploy
+    displayName: Deploy
+    dependsOn: Generate
+    jobs:
+{% if staging %}
+      [[ job("deploy_staging", "Deploy Staging", steps([skip_guard] + restore + staging_commands, persist=true, full_history=true), premerge) | indent(6) ]]
+{% endif %}
+{% if inflight %}
+      [[ job("inflight_shards", "Inflight preview shards", steps([fetch, sh.default_branch_shards("origin/" ~ branch), 'export OPENTIDE_REPO_ROOT="$BUILD_SOURCESDIRECTORY"', "opentide generate inflight"] + identity + [sh.publish_shards(push, fetch)], persist=true, full_history=true), premerge) | indent(6) ]]
+      [[ job("inflight_prune", "Prune inflight preview shards", steps(['export OPENTIDE_REPO_ROOT="$BUILD_SOURCESDIRECTORY"', "opentide generate inflight prune"] + identity + [sh.commit_and_push("ci: prune inflight preview shards [skip ci]", "No inflight prune changes", push, fetch)], persist=true, full_history=true), on_default_branch) | indent(6) ]]
+{% endif %}
+      [[ job("deploy_production", "Deploy Production", production, on_default_branch) | indent(6) ]]
+
+{% if sharing %}
+  - stage: Share
+    displayName: Share
+    dependsOn: [Generate, Deploy]
+    condition: and(not(canceled()), eq(dependencies.Generate.result, 'Succeeded'), eq(variables['Build.SourceBranch'], 'refs/heads/[[ branch ]]'), ne(variables['Build.Reason'], 'PullRequest'))
+    jobs:
+      [[ job("share", "Share changed objects", steps([skip_guard, "git fetch origin " ~ quoted_branch, "git checkout -q FETCH_HEAD", "opentide share push --changed"], persist=true, full_history=true)) | indent(6) ]]
+
+{% endif %}
+  - stage: Document
+    displayName: Document
+    dependsOn: Generate
+    condition: [[ on_default_branch ]]
+    jobs:
+      [[ job("document", "Generate documentation", document) | indent(6) ]]

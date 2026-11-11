@@ -1,5 +1,5 @@
-//! `generate` against the oracle's recordings (UC-3.2, #824): every recorded
-//! case of the ported generate commands, run in-process through
+//! `generate` and `setup ci` against the oracle's recordings (UC-3.2, #824;
+//! UC-3.2c, #916): every recorded case of the ported commands, run in-process through
 //! [`opentide_cli::run`] on a fresh copy of its fixture, with the goldens'
 //! normalisation (`opentide-compare`), compared with the recording by the
 //! goldens' comparator (`opentide_compare::compare`, as `cargo xtask golden
@@ -12,7 +12,7 @@
     reason = "a test helper: a broken recording is a failure"
 )]
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use opentide_cli::env::Env;
@@ -34,6 +34,10 @@ const COMMANDS: &[&str] = &[
     "generate.docs.objectives",
     "generate.docs.threats",
     "generate.docs.index",
+    "generate.explorer",
+    "generate.inflight",
+    "generate.inflight.prune",
+    "setup.ci",
 ];
 
 #[test]
@@ -86,6 +90,548 @@ fn exports_before_a_failure_are_written() {
     assert!(!exports.join("revisions.export.json").exists());
 }
 
+/// Runs `args` in `ws` in json mode; the exit code and stdout.
+fn run_json(ws: &Path, words: &[&str]) -> (i32, String) {
+    run_json_with(ws, words, &[])
+}
+
+/// [`run_json`] with `extra` added to the environment.
+fn run_json_with(ws: &Path, words: &[&str], extra: &[(&str, &str)]) -> (i32, String) {
+    let sink: Sink = Arc::new(Mutex::new(Buffer::default()));
+    let host = Host {
+        version: "0.23.0".into(),
+        stdout_tty: false,
+        stderr_tty: false,
+        log_sink: sink,
+        cwd: Some(ws.to_path_buf()),
+        width: None,
+        interrupt: opentide_cli::app::Interrupt::default(),
+    };
+    let argv: Vec<String> = std::iter::once("--json")
+        .chain(words.iter().copied())
+        .map(str::to_owned)
+        .collect();
+    let home = ws.with_file_name("home");
+    std::fs::create_dir_all(&home).unwrap();
+    let env = Env::from_pairs(
+        [
+            ("HOME".to_owned(), home.display().to_string()),
+            ("PATH".to_owned(), std::env::var("PATH").unwrap_or_default()),
+            ("GIT_CONFIG_NOSYSTEM".to_owned(), "1".to_owned()),
+            ("GIT_CONFIG_GLOBAL".to_owned(), "/dev/null".to_owned()),
+        ]
+        .into_iter()
+        .chain(
+            extra
+                .iter()
+                .map(|(key, value)| ((*key).to_owned(), (*value).to_owned())),
+        ),
+    );
+    let (mut out, mut err) = (Vec::new(), Buffer::default());
+    let exit_code = run(&argv, &env, &host, &mut out, &mut err);
+    (exit_code, String::from_utf8(out).unwrap())
+}
+
+/// The visibility export is written only when asked for, and a run without
+/// it removes the one an earlier run wrote; an inflight shard of an open pull
+/// request is previewed in the bundle, a newer version replacing the
+/// committed object.
+#[test]
+fn the_explorer_publishes_only_what_this_run_chose() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
+    fixture("tide-corpus", &ws);
+    let exports = ws.join(".opentide/exports");
+    let visibility = exports.join("explorer.visibility.json");
+    let (code, stdout) = run_json(
+        &ws,
+        &[
+            "generate",
+            "explorer",
+            "--include-visibility",
+            "--visibility-tlp",
+            "GREEN ",
+        ],
+    );
+    assert_eq!(code, 0, "{stdout}");
+    let written: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&visibility).unwrap()).unwrap();
+    assert_eq!(written["tlp"], "green");
+    std::fs::write(
+        ws.join(".opentide/inflight/00000000-0000-4000-8003-000000000001.json"),
+        r#"{"schema": "inflight.shard::1.0", "object": {"name": "Previewed", "metadata": {"uuid": "00000000-0000-4000-8003-000000000001", "schema": "rule::1.0", "version": 2}, "configurations": {"splunk": {"status": "PRODUCTION"}}}}"#,
+    )
+    .unwrap();
+    let (code, stdout) = run_json(&ws, &["generate", "explorer"]);
+    assert_eq!(code, 0, "{stdout}");
+    assert!(!visibility.exists());
+    let bundle: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(exports.join("explorer.bundle.json")).unwrap())
+            .unwrap();
+    let rule = &bundle["models"]["rule"]["00000000-0000-4000-8003-000000000001"];
+    assert_eq!(rule["name"], "Previewed");
+    assert_eq!(
+        bundle["stagingIndex"]["productionObjects"],
+        serde_json::json!(["00000000-0000-4000-8003-000000000001"])
+    );
+}
+
+/// Runs git in `dir`, without the host's configuration.
+fn git(dir: &Path, args: &[&str]) {
+    let status = std::process::Command::new("git")
+        .args(["-c", "user.name=t", "-c", "user.email=t@example.com"])
+        .args(args)
+        .current_dir(dir)
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .status()
+        .unwrap();
+    assert!(status.success(), "git {args:?}");
+}
+
+/// A rule changed on a feature branch gets a shard naming its file, and the
+/// shard is pruned once the default branch holds that version.
+#[test]
+fn inflight_shards_follow_the_branch() {
+    if std::process::Command::new("git")
+        .arg("--version")
+        .output()
+        .is_err()
+    {
+        return;
+    }
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
+    fixture("vscode", &ws);
+    git(&ws, &["init", "-q", "-b", "main"]);
+    git(&ws, &["add", "-A"]);
+    git(&ws, &["commit", "-q", "-m", "catalogue"]);
+    git(&ws, &["checkout", "-q", "-b", "feature"]);
+    let rules = ws.join("objects/rules");
+    let rule = std::fs::read_dir(&rules)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .filter(|path| path.extension().is_some_and(|ext| ext == "yaml"))
+        .min()
+        .unwrap();
+    let text = std::fs::read_to_string(&rule).unwrap();
+    let document = opentide_schema::node::load(&text).unwrap();
+    let root = document.root().unwrap();
+    let uuid = root
+        .get("metadata")
+        .and_then(|metadata| metadata.get("uuid"))
+        .and_then(|uuid| uuid.value.as_str())
+        .unwrap()
+        .to_owned();
+    std::fs::write(&rule, format!("{text}\n# changed\n")).unwrap();
+    let (code, stdout) = run_json(&ws, &["generate", "inflight"]);
+    assert_eq!(code, 0, "{stdout}");
+    assert!(
+        stdout.contains("\"message\":\"Generated 1 file in "),
+        "{stdout}"
+    );
+    let shard_path = ws.join(".opentide/inflight").join(format!("{uuid}.json"));
+    let shard: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&shard_path).unwrap()).unwrap();
+    assert_eq!(shard["schema"], "inflight.shard::1.0");
+    assert_eq!(shard["object"]["metadata"]["uuid"], uuid.as_str());
+    assert_eq!(shard["change"]["platform"], "local");
+    let relative = rule
+        .strip_prefix(&ws)
+        .unwrap()
+        .to_string_lossy()
+        .into_owned();
+    assert_eq!(shard["change"]["source_path"], relative.as_str());
+    // The default branch holds the shard's version: pruned.
+    let (code, stdout) = run_json(&ws, &["generate", "inflight", "prune"]);
+    assert_eq!(code, 0, "{stdout}");
+    assert!(
+        stdout.contains("\"message\":\"Removed 1 file in "),
+        "{stdout}"
+    );
+    assert!(!shard_path.exists());
+}
+
+/// `setup ci` refuses what it cannot do before it writes anything, and
+/// writes the `[promotion]` override a flag asks for beside the pipeline.
+#[test]
+fn setup_ci_refuses_then_writes() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
+    fixture("tide-corpus", &ws);
+    let failure = |stdout: &str| -> serde_json::Value {
+        serde_json::from_str::<serde_json::Value>(stdout).unwrap()["failure"].clone()
+    };
+    let (code, stdout) = run_json(&ws, &["setup", "ci", "azure"]);
+    assert_eq!(code, 2, "{stdout}");
+    assert_eq!(failure(&stdout)["code"], "usage_needs_input");
+    assert_eq!(
+        failure(&stdout)["message"],
+        "--json cannot prompt for confirmation. Add --yes to write to '.'."
+    );
+    let (code, stdout) = run_json(
+        &ws,
+        &["setup", "ci", "github", "--default-branch", "a b", "--yes"],
+    );
+    assert_eq!(code, 2, "{stdout}");
+    assert_eq!(failure(&stdout)["argument"], "--default-branch");
+    assert_eq!(
+        failure(&stdout)["message"],
+        "Invalid value for '--default-branch': 'a b' cannot be written into a pipeline; use letters, digits, '.', '_', '/' and '-'"
+    );
+    let (code, stdout) = run_json(&ws, &["setup", "--name", "x", "ci", "github", "--yes"]);
+    assert_eq!(code, 2, "{stdout}");
+    assert_eq!(
+        failure(&stdout)["message"],
+        "Invalid value: --name configures `opentide setup` itself and would be ignored by `opentide setup ci`."
+    );
+    let (code, stdout) = run_json(
+        &ws,
+        &[
+            "setup",
+            "ci",
+            "github",
+            "--yes",
+            "--promotion-target",
+            "NOPE",
+        ],
+    );
+    assert_eq!(code, 2, "{stdout}");
+    assert!(
+        failure(&stdout)["message"]
+            .as_str()
+            .unwrap()
+            .starts_with("Invalid value for '--promotion-target': 'NOPE' is not a status in this repository's deployment.toml; use one of: DESIGN, "),
+        "{stdout}"
+    );
+    assert!(!ws.join(".github").exists());
+    let (code, stdout) = run_json(
+        &ws,
+        &[
+            "setup",
+            "--yes",
+            "ci",
+            "gitlab",
+            "--no-promotion",
+            "--default-branch",
+            "main",
+        ],
+    );
+    assert_eq!(code, 0, "{stdout}");
+    let document: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(
+        document["files"],
+        serde_json::json!([".gitlab-ci.yml", ".opentide/configurations/deployment.toml"])
+    );
+    assert_eq!(document["message"], "Wrote 2 files");
+    assert_eq!(
+        document["warnings"],
+        serde_json::json!([
+            "GitLab pipelines publish to $CI_DEFAULT_BRANCH; --default-branch is ignored."
+        ])
+    );
+    assert_eq!(
+        std::fs::read_to_string(ws.join(".opentide/configurations/deployment.toml")).unwrap(),
+        "[promotion]\nenabled = false\n"
+    );
+    // Planned again, the pipeline is a change and the override already holds.
+    let (code, stdout) = run_json(&ws, &["setup", "ci", "gitlab", "--plan", "--no-promotion"]);
+    assert_eq!(code, 0, "{stdout}");
+    let plan: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(
+        plan["steps"][0]["files"],
+        serde_json::json!([{"path": ".gitlab-ci.yml", "action": "merge"}])
+    );
+    assert_eq!(
+        plan["message"],
+        "Plan: 1 file to write (0 new, 1 changed) · nothing written"
+    );
+}
+
+/// The parsed document of a run's stdout.
+fn document(stdout: &str) -> serde_json::Value {
+    serde_json::from_str(stdout).unwrap()
+}
+
+/// `--include-visibility` reads the workspace's `visibility.toml`: a declared
+/// source lists the rules that read it and leaves `undeclared`; a custom
+/// table, which the KQL engine reports as unknown, is a read too; and a file
+/// its model refuses is the report's `problem`.
+#[test]
+fn the_explorer_reports_declared_visibility() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
+    fixture("tide-corpus", &ws);
+    let rule = ws.join("Objects/Detection Rules/rule-0001-sentinel-kql.yaml");
+    let text = std::fs::read_to_string(&rule).unwrap();
+    assert!(text.contains("      SecurityEvent\n"));
+    std::fs::write(
+        &rule,
+        text.replace("      SecurityEvent\n", "      MyCustom_CL\n"),
+    )
+    .unwrap();
+    let configuration = ws.join(".opentide/configurations/visibility.toml");
+    std::fs::write(
+        &configuration,
+        "[[logsources]]\nname = \"SecurityEvent\"\nsystem = \"sentinel\"\ndescription = \"Windows security events\"\n\n[logsources.columns.EventID]\ntype = \"int\"\n",
+    )
+    .unwrap();
+    let visibility = ws.join(".opentide/exports/explorer.visibility.json");
+    let (code, stdout) = run_json(&ws, &["generate", "explorer", "--include-visibility"]);
+    assert_eq!(code, 0, "{stdout}");
+    let report: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&visibility).unwrap()).unwrap();
+    assert_eq!(report["present"], true);
+    assert_eq!(report["problem"], serde_json::Value::Null);
+    let rows = report["logsources"].as_array().unwrap();
+    assert_eq!(rows.len(), 1, "{report}");
+    assert_eq!(rows[0]["name"], "SecurityEvent");
+    assert_eq!(
+        rows[0]["read_by"],
+        serde_json::json!(["00000000-0000-4000-8003-000000000008"])
+    );
+    assert_eq!(
+        rows[0]["columns"],
+        serde_json::json!([{"name": "EventID", "type": "int", "description": ""}])
+    );
+    assert_eq!(
+        report["systems"],
+        serde_json::json!({"sentinel": {"logsources": 1, "with_columns": 1, "used": 1}})
+    );
+    let reads = report["reads"].as_array().unwrap();
+    assert!(
+        reads.contains(&serde_json::json!({
+            "rule": "00000000-0000-4000-8003-000000000001",
+            "system": "sentinel",
+            "name": "MyCustom_CL",
+            "field_path": "configurations.sentinel.query",
+        })),
+        "{report}"
+    );
+    let undeclared = report["undeclared"].as_array().unwrap();
+    assert!(
+        undeclared
+            .iter()
+            .all(|entry| entry["name"] != "SecurityEvent"),
+        "{report}"
+    );
+    assert!(
+        undeclared.contains(&serde_json::json!({
+            "system": "sentinel",
+            "name": "MyCustom_CL",
+            "rules": ["00000000-0000-4000-8003-000000000001"],
+            "system_declares": true,
+        })),
+        "{report}"
+    );
+    // A source without its `system` is refused by the model.
+    std::fs::write(
+        &configuration,
+        "[[logsources]]\nname = \"SecurityEvent\"\ndescription = \"d\"\n",
+    )
+    .unwrap();
+    let (code, stdout) = run_json(&ws, &["generate", "explorer", "--include-visibility"]);
+    assert_eq!(code, 0, "{stdout}");
+    let report: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&visibility).unwrap()).unwrap();
+    // As the oracle's report: nothing could be read, so nothing is present.
+    assert_eq!(report["present"], false);
+    assert_eq!(report["logsources"], serde_json::json!([]));
+    let problem = report["problem"].as_str().unwrap();
+    assert!(
+        problem.starts_with("visibility.toml could not be read: ") && problem.contains("system"),
+        "{problem}"
+    );
+}
+
+/// `INFLIGHT_PATHS` names the change set outside git.
+#[test]
+fn inflight_paths_name_the_change_set() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
+    fixture("tide-corpus", &ws);
+    let (code, stdout) = run_json_with(
+        &ws,
+        &["generate", "inflight"],
+        &[(
+            "INFLIGHT_PATHS",
+            " objects/rules/rule-0003-splunk-spl.yaml, ",
+        )],
+    );
+    assert_eq!(code, 0, "{stdout}");
+    let shards: Vec<String> = std::fs::read_dir(ws.join(".opentide/inflight"))
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(shards, ["00000000-0000-4000-8003-000000000003.json"]);
+}
+
+fn has_git() -> bool {
+    std::process::Command::new("git")
+        .arg("--version")
+        .output()
+        .is_ok()
+}
+
+/// The vscode fixture committed on `main`, checked out on `feature`; its
+/// rule files, sorted.
+fn feature_branch(ws: &Path) -> Vec<PathBuf> {
+    fixture("vscode", ws);
+    git(ws, &["init", "-q", "-b", "main"]);
+    git(ws, &["add", "-A"]);
+    git(ws, &["commit", "-q", "-m", "catalogue"]);
+    git(ws, &["checkout", "-q", "-b", "feature"]);
+    let mut rules: Vec<PathBuf> = std::fs::read_dir(ws.join("objects/rules"))
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .filter(|path| path.extension().is_some_and(|ext| ext == "yaml"))
+        .collect();
+    rules.sort();
+    rules
+}
+
+/// A deleted object file has nothing to preview: only the changed one gets
+/// a shard, locally and when a CI run's diff cannot be read (the work tree
+/// again).
+#[test]
+fn inflight_skips_deleted_object_files() {
+    if !has_git() {
+        return;
+    }
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
+    let rules = feature_branch(&ws);
+    std::fs::remove_file(ws.join("objects/objectives/detect-lsass-access.yaml")).unwrap();
+    let text = std::fs::read_to_string(&rules[0]).unwrap();
+    std::fs::write(&rules[0], format!("{text}\n# changed\n")).unwrap();
+    let inflight = ws.join(".opentide/inflight");
+    let count = || std::fs::read_dir(&inflight).unwrap().count();
+    let (code, stdout) = run_json(&ws, &["generate", "inflight"]);
+    assert_eq!(code, 0, "{stdout}");
+    assert!(
+        stdout.contains("\"message\":\"Generated 1 file in "),
+        "{stdout}"
+    );
+    assert_eq!(count(), 1);
+    std::fs::remove_dir_all(&inflight).unwrap();
+    // A GitHub run without the pull request's refs falls back to the work tree.
+    let (code, stdout) = run_json_with(
+        &ws,
+        &["generate", "inflight"],
+        &[("GITHUB_ACTIONS", "true")],
+    );
+    assert_eq!(code, 0, "{stdout}");
+    assert_eq!(count(), 1);
+    let shard: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(
+            std::fs::read_dir(&inflight)
+                .unwrap()
+                .next()
+                .unwrap()
+                .unwrap()
+                .path(),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(shard["change"]["platform"], "github");
+}
+
+/// GitHub and Azure pipelines deploy from `origin/HEAD`'s branch; without
+/// it, from the checked-out branch, with a warning when others exist.
+#[test]
+fn setup_ci_detects_the_default_branch() {
+    if !has_git() {
+        return;
+    }
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
+    fixture("tide-corpus", &ws);
+    git(&ws, &["init", "-q", "-b", "trunk"]);
+    git(&ws, &["add", "-A"]);
+    git(&ws, &["commit", "-q", "-m", "catalogue"]);
+    git(&ws, &["update-ref", "refs/remotes/origin/trunk", "HEAD"]);
+    git(
+        &ws,
+        &[
+            "symbolic-ref",
+            "refs/remotes/origin/HEAD",
+            "refs/remotes/origin/trunk",
+        ],
+    );
+    git(&ws, &["checkout", "-q", "-b", "feature"]);
+    let (code, stdout) = run_json(&ws, &["setup", "ci", "github", "--yes"]);
+    assert_eq!(code, 0, "{stdout}");
+    let written = document(&stdout);
+    assert_eq!(written["default_branch"], "trunk");
+    assert!(written.get("warnings").is_none(), "{stdout}");
+    let (code, stdout) = run_json(&ws, &["setup", "ci", "azure", "--yes"]);
+    assert_eq!(code, 0, "{stdout}");
+    assert_eq!(document(&stdout)["default_branch"], "trunk");
+    git(
+        &ws,
+        &["symbolic-ref", "--delete", "refs/remotes/origin/HEAD"],
+    );
+    let (code, stdout) = run_json(&ws, &["setup", "ci", "github", "--yes"]);
+    assert_eq!(code, 0, "{stdout}");
+    let written = document(&stdout);
+    assert_eq!(written["default_branch"], "feature");
+    assert_eq!(
+        written["warnings"],
+        serde_json::json!([
+            "origin/HEAD is not set, so the pipeline targets the checked-out branch 'feature'. Re-run with --default-branch <branch> if another branch deploys."
+        ])
+    );
+}
+
+/// Only the platforms whose file enables them get validate query jobs; and
+/// two different repository paths are refused before anything is written.
+#[test]
+fn setup_ci_reads_enabled_platforms_and_one_path() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
+    fixture("tide-corpus", &ws);
+    std::fs::create_dir_all(ws.join("other")).unwrap();
+    let (code, stdout) = run_json(
+        &ws,
+        &[
+            "setup", "--path", ".", "ci", "github", "--path", "other", "--yes",
+        ],
+    );
+    assert_eq!(code, 2, "{stdout}");
+    let refused = document(&stdout);
+    assert_eq!(refused["failure"]["code"], "usage_invalid_value");
+    assert_eq!(
+        refused["failure"]["message"],
+        "Invalid value: Pass the repository path once: . and other name different targets."
+    );
+    assert!(!ws.join(".github").exists());
+    assert!(!ws.join("other/.github").exists());
+    let splunk = ws.join(".opentide/configurations/platforms/splunk.toml");
+    let text = std::fs::read_to_string(&splunk).unwrap();
+    assert!(text.starts_with("[platform]\nenabled = true\n"));
+    std::fs::write(
+        &splunk,
+        text.replacen("enabled = true", "enabled = false", 1),
+    )
+    .unwrap();
+    let (code, stdout) = run_json(
+        &ws,
+        &["setup", "ci", "github", "--default-branch", "main", "--yes"],
+    );
+    assert_eq!(code, 0, "{stdout}");
+    let platforms = document(&stdout)["platforms"].clone();
+    let platforms: Vec<&str> = platforms
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|name| name.as_str().unwrap())
+        .collect();
+    assert!(!platforms.contains(&"splunk"), "{platforms:?}");
+    assert!(platforms.contains(&"sentinel"), "{platforms:?}");
+    assert_eq!(platforms.len(), 8, "{platforms:?}");
+}
+
 /// Runs the CLI in-process at `ws`; the exit code and stdout.
 fn run_at(ws: &Path, words: &[&str]) -> (i32, String) {
     let sink: Sink = Arc::new(Mutex::new(Buffer::default()));
@@ -107,7 +653,8 @@ fn run_at(ws: &Path, words: &[&str]) -> (i32, String) {
     (exit_code, String::from_utf8(out).unwrap())
 }
 
-fn git(ws: &Path, args: &[&str]) {
+/// Runs git in `ws`, with no system configuration and `ws` as its home.
+fn git_at(ws: &Path, args: &[&str]) {
     let status = std::process::Command::new("git")
         .args(args)
         .current_dir(ws)
@@ -139,9 +686,9 @@ fn changed_docs_rewrite_a_renamed_rule_and_its_parents() {
     fixture("tide-corpus", &ws);
     let (code, stdout) = run_at(&ws, &["--json", "generate", "docs"]);
     assert_eq!(code, 0, "{stdout}");
-    git(&ws, &["init", "-q", "-b", "main"]);
-    git(&ws, &["add", "-A"]);
-    git(&ws, &["commit", "-q", "-m", "base"]);
+    git_at(&ws, &["init", "-q", "-b", "main"]);
+    git_at(&ws, &["add", "-A"]);
+    git_at(&ws, &["commit", "-q", "-m", "base"]);
     let rule = ws.join("Objects/Detection Rules/rule-0001-sentinel-kql.yaml");
     let text = std::fs::read_to_string(&rule).unwrap();
     std::fs::write(
@@ -196,8 +743,8 @@ fn changed_docs_rewrite_a_renamed_rule_and_its_parents() {
         "an unrelated page was rewritten"
     );
     // Nothing changed against HEAD once it is committed: nothing is written.
-    git(&ws, &["add", "-A"]);
-    git(&ws, &["commit", "-q", "-m", "renamed"]);
+    git_at(&ws, &["add", "-A"]);
+    git_at(&ws, &["commit", "-q", "-m", "renamed"]);
     let (code, stdout) = run_at(&ws, &["--json", "generate", "docs", "--changed"]);
     assert_eq!(code, 0, "{stdout}");
     let document: serde_json::Value = serde_json::from_str(&stdout).unwrap();
@@ -289,9 +836,9 @@ fn changed_docs_rewrite_the_pages_below_a_renamed_objective() {
     fixture("tide-corpus", &ws);
     let (code, stdout) = run_at(&ws, &["--json", "generate", "docs"]);
     assert_eq!(code, 0, "{stdout}");
-    git(&ws, &["init", "-q", "-b", "main"]);
-    git(&ws, &["add", "-A"]);
-    git(&ws, &["commit", "-q", "-m", "base"]);
+    git_at(&ws, &["init", "-q", "-b", "main"]);
+    git_at(&ws, &["add", "-A"]);
+    git_at(&ws, &["commit", "-q", "-m", "base"]);
     let objective = ws.join("Objects/Detection Objectives/objective-0001-credential-access.yaml");
     let text = std::fs::read_to_string(&objective).unwrap();
     std::fs::write(
@@ -531,9 +1078,9 @@ fn docs_with_cve_details_are_left_to_python() {
     }
     assert!(!ws.join("docs/threats/simulated-actor.md").exists());
     // --changed: refused when a changed object's pages include the threat's.
-    git(&ws, &["init", "-q", "-b", "main"]);
-    git(&ws, &["add", "-A"]);
-    git(&ws, &["commit", "-q", "-m", "base"]);
+    git_at(&ws, &["init", "-q", "-b", "main"]);
+    git_at(&ws, &["add", "-A"]);
+    git_at(&ws, &["commit", "-q", "-m", "base"]);
     let rule = ws.join("Objects/Detection Rules/rule-0001-sentinel-kql.yaml");
     let text = std::fs::read_to_string(&rule).unwrap();
     std::fs::write(
