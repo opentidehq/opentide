@@ -9,6 +9,11 @@ tests/golden/fixtures/** -text
 # the harnesses lay them out and compare the bytes `--fix` writes with the
 # recordings, so a Windows checkout must hold the recorded (LF) bytes too.
 tests/fixtures/tide_corpus/** -text
+# The minijinja templates compiled in with include_str! (setup ci's pipelines,
+# generate docs' pages) and setup ci's oracle pipelines: files a user commits,
+# compared byte for byte, so a Windows checkout holds the LF bytes too.
+crates/opentide-compile/src/**/templates/*.j2 -text
+crates/opentide-compile/tests/ci/** -text
 # The renderers' oracle files (crates/opentide-cli/AGENTS.md): compared byte for byte too.
 crates/opentide-cli/tests/render/** -text linguist-generated
 
@@ -25,3 +30,7 @@ src/opentide/schemas/data/platform_templates/*.template.yaml -text
 # (crates/opentide-lsp/tests/protocol.rs): the bytes as committed, LF, on a
 # Windows checkout too.
 crates/testdata/objects/** -text
+# The explain pages, compiled into the Rust CLI (crates/opentide-cli/build.rs's
+# include_str!) and read by the Python CLI: the bytes as committed, LF, on a
+# Windows checkout too.
+src/opentide/data/diagnostics/*.md -text

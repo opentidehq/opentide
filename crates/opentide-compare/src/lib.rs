@@ -311,13 +311,38 @@ impl Comparison<'_> {
         candidate_doc: Json,
     ) {
         let original = candidate_doc.clone();
-        let mut patched = candidate_doc;
         let mut applied = Vec::new();
         let entries: Vec<(usize, Rule)> = self
             .ledger
             .entries_for(self.case.command, self.case.id, target)
             .map(|(index, entry)| (index, entry.rule.clone()))
             .collect();
+        // First the arrays the candidate extends: each named element set
+        // aside, so the rest lines up with the oracle's array, and `json:`
+        // entries address it by the oracle's indices. An outer array first,
+        // so that an array inside one of its elements is found by the
+        // oracle's index too.
+        let mut aligned = candidate_doc;
+        let mut extends: Vec<Extend<'_>> = entries
+            .iter()
+            .filter_map(|(index, rule)| match rule {
+                Rule::JsonExtend {
+                    pointer,
+                    oracle_len,
+                    added,
+                } => Some((*index, pointer.as_slice(), *oracle_len, added.as_slice())),
+                _ => None,
+            })
+            .collect();
+        extends.sort_by_key(|(index, pointer, ..)| (pointer.len(), *index));
+        for (index, pointer, oracle_len, added) in extends {
+            if let Some(rest) = set_aside(oracle_doc, &aligned, pointer, oracle_len, added)
+                && aligned.set(pointer, Some(Json::Array(rest)), None)
+            {
+                applied.push(index);
+            }
+        }
+        let mut patched = aligned.clone();
         for (index, rule) in entries {
             let Rule::Json {
                 pointer,
@@ -328,7 +353,7 @@ impl Comparison<'_> {
                 continue;
             };
             let found_oracle = oracle_doc.get(&pointer);
-            let found_candidate = original.get(&pointer);
+            let found_candidate = aligned.get(&pointer);
             if found_oracle != expected_oracle.as_ref()
                 || found_candidate != expected_candidate.as_ref()
             {
@@ -525,6 +550,45 @@ impl Comparison<'_> {
         }
     }
 }
+
+/// The candidate's array at `pointer` without the `added` elements, where a
+/// `json-extend:` entry applies: the oracle's array there has `oracle_len`
+/// elements, and the candidate's has each added element, exactly, at its
+/// index, and `oracle_len` others. `None` where it does not apply.
+fn set_aside(
+    oracle: &Json,
+    candidate: &Json,
+    pointer: &[String],
+    oracle_len: usize,
+    added: &[(usize, Json)],
+) -> Option<Vec<Json>> {
+    let (Some(Json::Array(oracle)), Some(Json::Array(candidate))) =
+        (oracle.get(pointer), candidate.get(pointer))
+    else {
+        return None;
+    };
+    if oracle.len() != oracle_len || candidate.len() != oracle_len + added.len() {
+        return None;
+    }
+    let mut named = added.iter().peekable();
+    let mut rest = Vec::with_capacity(oracle_len);
+    for (at, item) in candidate.iter().enumerate() {
+        match named.peek() {
+            Some((index, value)) if *index == at => {
+                if item != value {
+                    return None;
+                }
+                named.next();
+            }
+            _ => rest.push(item.clone()),
+        }
+    }
+    named.peek().is_none().then_some(rest)
+}
+
+/// A `json-extend:` entry: its index, pointer, the oracle array's length
+/// and the added elements by candidate index.
+type Extend<'a> = (usize, &'a [String], usize, &'a [(usize, Json)]);
 
 /// A `lines` entry: its index, the oracle's lines and the candidate's.
 type LineBlock = (usize, Vec<Vec<u8>>, Vec<Vec<u8>>);
@@ -783,6 +847,281 @@ changelog = "**x**"
         let report = compare(case, &oracle, &other, &ledger, &mut usage);
         assert!(!report.equal);
         assert_eq!(report.differences[0].at.as_deref(), Some("line 2, byte 14"));
+    }
+
+    /// A `lines` entry with an `(absent)` candidate approves the oracle's
+    /// block where the candidate writes nothing in its place, even a stream
+    /// the candidate leaves empty; a block one character off, or a line the
+    /// candidate still writes, is reported.
+    #[test]
+    fn a_lines_entry_approves_a_dropped_block() {
+        let ledger = Ledger::parse(
+            r#"
+[[diff]]
+command = "validate"
+case = "json/fault/default"
+target = "stderr"
+rule = "lines"
+oracle = "warn: a\nwarn: b"
+candidate = "(absent)"
+reason = "no such step"
+issue = "https://github.com/opentidehq/opentide/issues/827"
+changelog = "**x**"
+"#,
+        )
+        .unwrap();
+        let case = Case {
+            command: "validate",
+            id: "json/fault/default",
+        };
+        let oracle = Run {
+            stderr: b"warn: a\nwarn: b\n".to_vec(),
+            ..Run::default()
+        };
+        let mut usage = Usage::default();
+        let report = compare(case, &oracle, &Run::default(), &ledger, &mut usage);
+        assert!(report.equal, "{report:?}");
+        assert!(usage.is_used(0));
+
+        let kept = Run {
+            stderr: b"warn: z\n".to_vec(),
+            ..Run::default()
+        };
+        let report = compare(case, &oracle, &kept, &ledger, &mut Usage::default());
+        assert!(
+            !report.equal,
+            "a line the candidate writes is still compared"
+        );
+
+        let other = Run {
+            stderr: b"warn: a\nwarn: c\n".to_vec(),
+            ..Run::default()
+        };
+        let mut usage = Usage::default();
+        let report = compare(case, &other, &Run::default(), &ledger, &mut usage);
+        assert!(!report.equal, "a block one character off is not approved");
+        assert!(!usage.is_used(0));
+
+        let middle = Run {
+            stderr: b"x\nwarn: a\nwarn: b\ny\n".to_vec(),
+            ..Run::default()
+        };
+        let candidate = Run {
+            stderr: b"x\ny\n".to_vec(),
+            ..Run::default()
+        };
+        let report = compare(case, &middle, &candidate, &ledger, &mut Usage::default());
+        assert!(report.equal, "{report:?}");
+    }
+
+    /// The ledger entry of the `json-extend:` tests: the oracle's catalogue
+    /// has two rules, the candidate adds `c` at index 1 and `d` at index 3.
+    const EXTEND: &str = r#"
+[[diff]]
+command = "lint"
+case = "json/*"
+target = "stdout"
+rule = "json-extend:/rules"
+oracle = "2"
+candidate = '{"1": {"id": "c", "level": "error"}, "3": {"id": "d"}}'
+reason = "codes added since the oracle"
+issue = "https://github.com/opentidehq/opentide/issues/827"
+changelog = "**x**"
+"#;
+
+    /// A document with `rules`, in the CLI's compact layout.
+    fn extend_run(rules: &str) -> Run {
+        let text = format!("{{\"rules\": {rules}, \"n\": 1}}");
+        Run {
+            stdout: json::write(
+                &json::parse_str(&text).unwrap(),
+                json::Layout::Compact,
+                true,
+            ),
+            ..Run::default()
+        }
+    }
+
+    fn extend_compare(candidate: &str) -> (CaseReport, Usage) {
+        let ledger = Ledger::parse(EXTEND).unwrap();
+        let oracle = extend_run(r#"[{"id": "a"}, {"id": "b"}]"#);
+        let mut usage = Usage::default();
+        let case = Case {
+            command: "lint",
+            id: "json/ws/default",
+        };
+        let report = compare(case, &oracle, &extend_run(candidate), &ledger, &mut usage);
+        (report, usage)
+    }
+
+    /// A `json-extend:` entry approves the elements it names, at their
+    /// indices, where the oracle's elements stay as they were and in order.
+    #[test]
+    fn a_json_extend_entry_approves_the_named_elements() {
+        let (report, usage) = extend_compare(
+            r#"[{"id": "a"}, {"id": "c", "level": "error"}, {"id": "b"}, {"id": "d"}]"#,
+        );
+        assert!(report.equal, "{report:?}");
+        assert!(usage.is_used(0));
+    }
+
+    /// Each way a candidate's array can be more than the oracle's plus the
+    /// named elements is still a difference: no looser than quoting the
+    /// candidate's whole array.
+    #[test]
+    fn a_json_extend_entry_approves_nothing_else() {
+        for (mutant, candidate) in [
+            (
+                "an oracle element changed",
+                r#"[{"id": "a"}, {"id": "c", "level": "error"}, {"id": "B"}, {"id": "d"}]"#,
+            ),
+            (
+                "the oracle's elements reordered",
+                r#"[{"id": "b"}, {"id": "c", "level": "error"}, {"id": "a"}, {"id": "d"}]"#,
+            ),
+            (
+                "an element the entry does not name",
+                r#"[{"id": "a"}, {"id": "c", "level": "error"}, {"id": "b"}, {"id": "d"}, {"id": "e"}]"#,
+            ),
+            (
+                "an oracle element dropped",
+                r#"[{"id": "c", "level": "error"}, {"id": "b"}, {"id": "d"}]"#,
+            ),
+            (
+                "a named element changed",
+                r#"[{"id": "a"}, {"id": "c", "level": "note"}, {"id": "b"}, {"id": "d"}]"#,
+            ),
+            (
+                "a named element moved",
+                r#"[{"id": "c", "level": "error"}, {"id": "a"}, {"id": "b"}, {"id": "d"}]"#,
+            ),
+            (
+                "a named element missing",
+                r#"[{"id": "a"}, {"id": "c", "level": "error"}, {"id": "b"}]"#,
+            ),
+            (
+                "a named element with its keys in another order",
+                r#"[{"id": "a"}, {"level": "error", "id": "c"}, {"id": "b"}, {"id": "d"}]"#,
+            ),
+        ] {
+            let (report, _) = extend_compare(candidate);
+            assert!(!report.equal, "{mutant}: approved");
+        }
+    }
+
+    /// A `json:` entry under an extended array addresses it with the added
+    /// elements set aside: the oracle's indices.
+    #[test]
+    fn a_json_entry_under_an_extended_array_uses_the_oracle_indices() {
+        let ledger = Ledger::parse(&format!(
+            "{EXTEND}{}",
+            r#"
+[[diff]]
+command = "lint"
+case = "json/*"
+target = "stdout"
+rule = "json:/rules/1/id"
+oracle = '"b"'
+candidate = '"B"'
+reason = "renamed"
+issue = "https://github.com/opentidehq/opentide/issues/827"
+changelog = "**x**"
+"#
+        ))
+        .unwrap();
+        let oracle = extend_run(r#"[{"id": "a"}, {"id": "b"}]"#);
+        let candidate =
+            extend_run(r#"[{"id": "a"}, {"id": "c", "level": "error"}, {"id": "B"}, {"id": "d"}]"#);
+        let case = Case {
+            command: "lint",
+            id: "json/ws/default",
+        };
+        let mut usage = Usage::default();
+        let report = compare(case, &oracle, &candidate, &ledger, &mut usage);
+        assert!(report.equal, "{report:?}");
+        assert!(usage.is_used(0) && usage.is_used(1));
+    }
+
+    /// An array extended inside an element of an extended array is found
+    /// by the oracle's index of that element, whatever order the ledger
+    /// lists the two entries in.
+    #[test]
+    fn a_nested_json_extend_entry_uses_the_oracle_index() {
+        let inner = EXTEND
+            .replace("json-extend:/rules", "json-extend:/rules/1/tags")
+            .replace("oracle = \"2\"", "oracle = \"1\"")
+            .replace(
+                r#"candidate = '{"1": {"id": "c", "level": "error"}, "3": {"id": "d"}}'"#,
+                r#"candidate = '{"1": "new"}'"#,
+            );
+        let oracle = extend_run(r#"[{"id": "a"}, {"id": "b", "tags": ["old"]}]"#);
+        let candidate = extend_run(
+            r#"[{"id": "a"}, {"id": "c", "level": "error"}, {"id": "b", "tags": ["old", "new"]}, {"id": "d"}]"#,
+        );
+        let case = Case {
+            command: "lint",
+            id: "json/ws/default",
+        };
+        for text in [format!("{inner}{EXTEND}"), format!("{EXTEND}{inner}")] {
+            let ledger = Ledger::parse(&text).unwrap();
+            let mut usage = Usage::default();
+            let report = compare(case, &oracle, &candidate, &ledger, &mut usage);
+            assert!(report.equal, "{report:?}");
+            assert!(usage.is_used(0) && usage.is_used(1));
+        }
+    }
+
+    /// Two `lines` entries of one case and target approve two blocks, each
+    /// where its own oracle lines are; a block neither names is reported.
+    #[test]
+    fn two_lines_entries_approve_two_blocks_of_one_case() {
+        let entry = |oracle: &str, candidate: &str| {
+            format!(
+                r#"
+[[diff]]
+command = "validate"
+case = "human/fault/default"
+target = "stdout"
+rule = "lines"
+oracle = "{oracle}"
+candidate = "{candidate}"
+reason = "r"
+issue = "https://github.com/opentidehq/opentide/issues/827"
+changelog = "**x**"
+"#
+            )
+        };
+        let ledger = Ledger::parse(&format!(
+            "{}{}",
+            entry("a\\nhelp: x", "a"),
+            entry("q: 1", "q: 2")
+        ))
+        .unwrap();
+        let case = Case {
+            command: "validate",
+            id: "human/fault/default",
+        };
+        let oracle = Run {
+            stdout: b"a\nhelp: x\nkeep\nq: 1\nend\n".to_vec(),
+            ..Run::default()
+        };
+        let candidate = Run {
+            stdout: b"a\nkeep\nq: 2\nend\n".to_vec(),
+            ..Run::default()
+        };
+        let mut usage = Usage::default();
+        let report = compare(case, &oracle, &candidate, &ledger, &mut usage);
+        assert!(report.equal, "{report:?}");
+        assert!(usage.is_used(0) && usage.is_used(1));
+        let other = Run {
+            stdout: b"a\nkeep\nq: 2\nEND\n".to_vec(),
+            ..Run::default()
+        };
+        let report = compare(case, &oracle, &other, &ledger, &mut Usage::default());
+        assert!(
+            !report.equal,
+            "a line neither entry names is still compared"
+        );
     }
 
     #[test]

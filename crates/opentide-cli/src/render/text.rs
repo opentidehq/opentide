@@ -100,7 +100,7 @@ impl Style {
     }
 
     /// `self`, then `other` on top: attributes add up, `other`'s colour and link win.
-    fn combine(&self, other: &Style) -> Style {
+    pub fn combine(&self, other: &Style) -> Style {
         Style {
             bold: self.bold || other.bold,
             dim: self.dim || other.dim,

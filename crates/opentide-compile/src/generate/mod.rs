@@ -5,19 +5,28 @@
 //!   `parents`, `childs`, `get_type`).
 //! - [`exports`]: the ATT&CK Navigator layer, the objects table and the
 //!   revisions snapshot (`export/`).
+//! - [`explorer`]: the explorer site's bundle and search index
+//!   (`export/explorer_export.py`), and [`visibility`], the telemetry report
+//!   `--include-visibility` adds (`cli/services/visibility.py`).
+//! - [`inflight`]: the inflight preview shards and their overlay
+//!   (`indexing/inflight.py`).
 //! - [`json_text`]: JSON written as `json.dumps(..., indent=n)` lays it out
 //!   (serde_json's pretty printer, non-ASCII escaped).
 //! - [`files`]: writing [`Output`]s in parallel (rayon), and [`files::Snapshot`],
 //!   the files a phase wrote found by modification time and size.
 //!
 //! Rendering is pure: a phase returns its [`Output`]s or a [`PhaseError`];
-//! only [`files`] touches the disk.
+//! only [`files`] touches the disk, and [`inflight`], which reads the shards
+//! it lays over the index and the object files it compares them with.
 
 pub mod docs;
+pub mod explorer;
 pub mod exports;
 pub mod files;
+pub mod inflight;
 pub mod json_text;
 pub mod relations;
+pub mod visibility;
 
 use std::path::PathBuf;
 
