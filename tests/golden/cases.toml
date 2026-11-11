@@ -37,6 +37,12 @@ source = "tests/golden/fixtures/vscode-workspace"
 about = "vscode with a signal entity defined under several stages (`Account`), which `migrate vocab-scope` leaves for a person (exit 2), beside one it rewrites (`Process`)"
 edits = [{ path = "objects/objectives/detect-lsass-access.yaml", find = "\n  tlp: amber\n", replace = "\n  tlp: amber\nobjective:\n  signals:\n    - name: LSASS handle\n      entities:\n        - Account\n        - Process\n" }]
 
+[fixtures.vscode-docs-folder]
+kind = "copy"
+source = "tests/golden/fixtures/vscode-workspace"
+about = "vscode with the legacy `[paths.core]` `docs_folder` set and no documentation.toml `output`, which both engines refuse in the `generate docs` docs step (#936)"
+edits = [{ path = ".opentide/configurations/paths.toml", find = "[paths.objects]\n", replace = "[paths.core]\ndocs_folder = \"site\"\n\n[paths.objects]\n" }]
+
 [fixtures.vscode]
 kind = "copy"
 source = "tests/golden/fixtures/vscode-workspace"
@@ -1607,6 +1613,14 @@ command = "generate docs"
 variant = "output"
 args = ["generate", "docs", "--output", "docs"]
 fixtures = ["tide-corpus"]
+
+# Legacy [paths.core] docs_folder with no documentation.toml output: both
+# engines refuse the configuration in the docs step (exit 1, no pages, #936).
+[[case]]
+command = "generate docs"
+variant = "docs-folder"
+args = ["generate", "docs"]
+fixtures = ["vscode-docs-folder"]
 
 [[case]]
 command = "info"

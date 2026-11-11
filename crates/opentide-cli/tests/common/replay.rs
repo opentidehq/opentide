@@ -61,6 +61,7 @@ pub const FIXTURES: &[&str] = &[
     "tide-corpus-typo",
     "vscode",
     "setup-merge",
+    "vscode-docs-folder",
 ];
 
 pub fn repo() -> PathBuf {
@@ -133,6 +134,20 @@ pub fn fixture(name: &str, ws: &Path) {
         }
         "vscode" => copy_tree(&repo().join("tests/golden/fixtures/vscode-workspace"), ws),
         "setup-merge" => copy_tree(&repo().join("tests/golden/fixtures/setup-merge"), ws),
+        "vscode-docs-folder" => {
+            fixture("vscode", ws);
+            let path = ws.join(".opentide/configurations/paths.toml");
+            let text = std::fs::read_to_string(&path).unwrap();
+            assert_eq!(text.matches("[paths.objects]\n").count(), 1);
+            std::fs::write(
+                &path,
+                text.replace(
+                    "[paths.objects]\n",
+                    "[paths.core]\ndocs_folder = \"site\"\n\n[paths.objects]\n",
+                ),
+            )
+            .unwrap();
+        }
         other => panic!("{other}: a fixture this test does not lay out"),
     }
 }

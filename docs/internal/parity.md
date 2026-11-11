@@ -16,13 +16,13 @@ The Python CLI at the frozen tag is the oracle ([plan §5](https://github.com/op
 | Commands | 59 |
 | Commands with a Rust implementation | 30 |
 | Commands flipped to Rust | 0 |
-| Recordings (command × corpus × mode) | 645 |
-| … no Rust yet | 245 (37.9%) |
+| Recordings (command × corpus × mode) | 649 |
+| … no Rust yet | 245 (37.7%) |
 | … compare passing | 0 (0.0%) |
 | … compare failing | 0 (0.0%) |
-| … compare not run | 400 (62.0%) |
+| … compare not run | 404 (62.2%) |
 | … flipped | 0 (0.0%) |
-| Approved diffs (`tests/golden/APPROVED_DIFFS.toml`) | 767 |
+| Approved diffs (`tests/golden/APPROVED_DIFFS.toml`) | 773 |
 | Diagnostic codes with a fault kind | 163 of 175 (93.1%) |
 | … with no fault kind, evidence recorded | 12 |
 | … with neither (missing) | 0 |
@@ -96,13 +96,14 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide generate docs`
 
-5 approved diff(s).
+11 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
 | none | compare not run | compare not run | compare not run | compare not run |
 | tide-corpus | compare not run | compare not run | compare not run | compare not run |
 | vscode | compare not run | compare not run | compare not run | compare not run |
+| vscode-docs-folder | compare not run | compare not run | compare not run | compare not run |
 
 ### `opentide generate docs index`
 
