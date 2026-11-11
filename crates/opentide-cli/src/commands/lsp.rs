@@ -111,7 +111,8 @@ mod tests {
             assert_eq!(info["host"]["name"], "opentide");
             assert_eq!(info["host"]["version"], "9.9.9");
             assert_eq!(info["configurationSchemas"], true);
-            assert_eq!(info["catalog"], "host");
+            // The server builds its own catalogs (#926); the host keeps none.
+            assert_eq!(info["catalog"], "models");
             Ok(true)
         });
         assert_eq!(code, 0);
