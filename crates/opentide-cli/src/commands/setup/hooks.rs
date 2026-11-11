@@ -146,34 +146,10 @@ struct GitLayout {
     hooks_shared: bool,
 }
 
-/// `path` normalised: `.` and `..` folded, links of its existing part resolved.
+/// `path` as `Path.resolve()` gives it: links of its existing part
+/// resolved, `.` and `..` folded, the rest kept.
 fn normalised(path: &Path) -> PathBuf {
-    let mut out = PathBuf::new();
-    for part in path.components() {
-        match part {
-            std::path::Component::ParentDir => {
-                out.pop();
-            }
-            std::path::Component::CurDir => {}
-            other => out.push(other.as_os_str()),
-        }
-    }
-    let mut existing = out.clone();
-    let mut rest = Vec::new();
-    while !existing.exists() {
-        let Some(name) = existing.file_name() else {
-            break;
-        };
-        rest.push(name.to_owned());
-        if !existing.pop() {
-            break;
-        }
-    }
-    let mut resolved = std::fs::canonicalize(&existing).unwrap_or(existing);
-    for name in rest.into_iter().rev() {
-        resolved.push(name);
-    }
-    resolved
+    soft_canonicalize::soft_canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
 }
 
 /// Asks Git where the repository around `target` is (`_git_layout`).
@@ -217,33 +193,9 @@ fn git_layout(env: &Env, target: &Path) -> Option<GitLayout> {
     })
 }
 
-/// `dest` relative to `target`, through `..` when it is outside it.
+/// `dest` relative to `target`, both resolved first.
 fn shown_relative(dest: &Path, target: &Path) -> String {
-    let dest = normalised(dest);
-    let target = normalised(target);
-    let common = dest
-        .components()
-        .zip(target.components())
-        .take_while(|(a, b)| a == b)
-        .count();
-    if common == 0 {
-        return dest.to_string_lossy().replace('\\', "/");
-    }
-    let mut parts: Vec<String> = target
-        .components()
-        .skip(common)
-        .map(|_| "..".to_owned())
-        .collect();
-    parts.extend(
-        dest.components()
-            .skip(common)
-            .map(|part| part.as_os_str().to_string_lossy().into_owned()),
-    );
-    if parts.is_empty() {
-        ".".to_owned()
-    } else {
-        parts.join("/")
-    }
+    super::shown_relative(&normalised(dest), &normalised(target))
 }
 
 /// The workspace an opentide `entry` pins: `""` for the Git root, `None`
@@ -866,5 +818,144 @@ mod tests {
         stage.commit().unwrap();
         let again = hooks(&mut Stage::new(), &env, &dir.path().join("ws"), true).unwrap();
         assert!(again.strings("files").is_empty());
+    }
+
+    /// A Git repository at `root`, and the environment git runs with there.
+    fn git_repository(root: &Path) -> Env {
+        let env = Env::from_pairs([
+            ("PATH".to_owned(), std::env::var("PATH").unwrap_or_default()),
+            ("HOME".to_owned(), root.display().to_string()),
+            ("GIT_CONFIG_NOSYSTEM".to_owned(), "1".to_owned()),
+            (
+                "GIT_CEILING_DIRECTORIES".to_owned(),
+                root.parent().unwrap().display().to_string(),
+            ),
+        ]);
+        let status = std::process::Command::new("git")
+            .args(["init", "-q"])
+            .current_dir(root)
+            .env_clear()
+            .envs(env.iter())
+            .status()
+            .unwrap();
+        assert!(status.success());
+        env
+    }
+
+    #[cfg(unix)]
+    fn mode(path: &Path) -> u32 {
+        use std::os::unix::fs::PermissionsExt as _;
+        std::fs::metadata(path).unwrap().permissions().mode()
+    }
+
+    #[cfg(unix)]
+    fn not_executable(path: &Path, content: &str) {
+        use std::os::unix::fs::PermissionsExt as _;
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, content).unwrap();
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o644)).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn hooks_with_the_right_content_but_no_execute_bit_are_repaired() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("repo");
+        std::fs::create_dir_all(&root).unwrap();
+        let env = git_repository(&root);
+        let root = soft_canonicalize::soft_canonicalize(&root).unwrap();
+        let script = pre_commit_script(&[String::new()]);
+        not_executable(&root.join(VERSIONED_HOOK_PATH), &script);
+        not_executable(&root.join(".git/hooks/pre-commit"), &script);
+        let mut stage = Stage::new();
+        let result = hooks(&mut stage, &env, &root, true).unwrap();
+        assert_eq!(
+            result.strings("files"),
+            [
+                ".pre-commit-config.yaml",
+                VERSIONED_HOOK_PATH,
+                ".git/hooks/pre-commit"
+            ]
+        );
+        assert_eq!(result.get("installed"), Some(&Json::Bool(true)));
+        stage.commit().unwrap();
+        for hook in [VERSIONED_HOOK_PATH, ".git/hooks/pre-commit"] {
+            let path = root.join(hook);
+            assert_eq!(mode(&path) & 0o111, 0o111, "{hook}");
+            assert_eq!(std::fs::read_to_string(&path).unwrap(), script);
+        }
+        // Repaired, a second run leaves both alone.
+        let again = hooks(&mut Stage::new(), &env, &root, true).unwrap();
+        assert!(
+            again.strings("files").is_empty(),
+            "{:?}",
+            again.strings("files")
+        );
+        assert_eq!(again.get("installed"), Some(&Json::Bool(false)));
+    }
+
+    #[test]
+    fn an_entry_pinned_to_another_live_workspace_is_kept_with_a_warning() {
+        let dir = tempfile::tempdir().unwrap();
+        let top = dir.path();
+        std::fs::create_dir_all(top.join("other/.opentide")).unwrap();
+        let text = format!(
+            "repos:\n  - repo: local\n    hooks:\n      - id: opentide-validate\n        entry: {}\n",
+            yaml_value(&hook_entry("other"))
+        );
+        let (refreshed, kept) = refresh_hook_entry(&text, "", Some(top));
+        assert_eq!(refreshed, None);
+        assert_eq!(kept, ["other"]);
+        // Through the step: the file is left alone and the warning says why.
+        std::fs::write(top.join(PRE_COMMIT_CONFIG_PATH), &text).unwrap();
+        let mut stage = Stage::new();
+        let mut warnings = Vec::new();
+        let changed = ensure_pre_commit_config(&mut stage, top, &mut warnings, "").unwrap();
+        assert!(!changed);
+        assert_eq!(
+            warnings,
+            [format!(
+                ".pre-commit-config.yaml runs {HOOK_ID} for other; left unchanged, so pre-commit does not validate the repository root."
+            )]
+        );
+        // A workspace that is gone is no reason to keep its pin.
+        std::fs::remove_dir_all(top.join("other")).unwrap();
+        let (refreshed, kept) = refresh_hook_entry(&text, "", Some(top));
+        assert!(kept.is_empty());
+        assert!(
+            refreshed
+                .unwrap()
+                .contains(&format!("entry: {}\n", yaml_value(&hook_entry("")))),
+        );
+    }
+
+    #[test]
+    fn a_listed_workspace_without_opentide_is_pruned_from_the_git_hook() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("repo");
+        std::fs::create_dir_all(root.join("kept/.opentide")).unwrap();
+        std::fs::create_dir_all(root.join("gone")).unwrap();
+        let env = git_repository(&root);
+        let root = soft_canonicalize::soft_canonicalize(&root).unwrap();
+        let hook = root.join(".git/hooks/pre-commit");
+        std::fs::write(
+            &hook,
+            pre_commit_script(&[String::new(), "gone".into(), "kept".into()]),
+        )
+        .unwrap();
+        let mut stage = Stage::new();
+        let result = hooks(&mut stage, &env, &root, true).unwrap();
+        assert_eq!(
+            result.strings("warnings"),
+            [".git/hooks/pre-commit no longer validates gone: it has no .opentide/ directory."]
+        );
+        assert!(
+            result
+                .strings("files")
+                .contains(&".git/hooks/pre-commit".to_owned())
+        );
+        let written = String::from_utf8(stage.read(&hook).unwrap().unwrap()).unwrap();
+        assert_eq!(hook_workspaces(&written), ["", "kept"]);
+        assert!(stage.is_executable(&hook));
     }
 }

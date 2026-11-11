@@ -8907,3 +8907,47 @@ candidate = "\u001b[1;31merror:\u001b[0m Invalid value for 'ci_platform': 'githb
 reason = "the Rust command line words a value outside an argument's choices as it words every other one (the value, then the choices) and suggests the closest, as for --check and --platform; the oracle's 0.23.0 setup ci had a sentence of its own and no suggestion"
 issue = "https://github.com/opentidehq/opentide/issues/916"
 changelog = "**`generate explorer`, `generate inflight` and `setup ci` run on the Rust engine**"
+
+[[diff]]
+command = "setup mcp"
+case = "setup.mcp/human/setup-merge/merge"
+target = "file:ws/.vscode/mcp.json"
+rule = "lines"
+oracle = "{\n  \"servers\": {\n    \"other\": {\n      \"command\": \"other-server\",\n      \"args\": []\n    },\n    \"opentide\": {\n      \"command\": \"opentide\",\n      \"args\": [\n        \"mcp\",\n        \"start\"\n      ],\n      \"env\": {\n        \"OPENTIDE_REPO_ROOT\": \"${workspaceFolder}\"\n      }\n    }\n  }\n}"
+candidate = "\ufeff{\n  // The team's MCP servers.\n  \"servers\": {\n    /* keep */ \"other\": {\"command\": \"other-server\", \"args\": []},\n    \"opentide\": {\n      \"command\": \"opentide\",\n      \"args\": [\"mcp\", \"start\"],\n      \"env\": {\n        \"OPENTIDE_REPO_ROOT\": \"${workspaceFolder}\",\n      },\n    },\n  },\n}"
+reason = "setup mcp merges opentide's server into an existing configuration in place with a JSONC-preserving editor (jsonc-parser's CST): the byte-order mark, comments, layout and trailing commas stay, and the new member follows the file's own style (here its trailing commas); the oracle (0.23.0) parsed the file, dropped its comments, BOM and trailing commas and rewrote it as indented JSON. A user's committed file keeps every byte outside the merged member (#743)"
+issue = "https://github.com/opentidehq/opentide/issues/828"
+changelog = "**`setup`, `setup env`, `setup hooks`, `setup mcp`, `setup platforms` and `setup repo` run on the Rust engine**"
+
+[[diff]]
+command = "setup mcp"
+case = "setup.mcp/plain/setup-merge/merge"
+target = "file:ws/.vscode/mcp.json"
+rule = "lines"
+oracle = "{\n  \"servers\": {\n    \"other\": {\n      \"command\": \"other-server\",\n      \"args\": []\n    },\n    \"opentide\": {\n      \"command\": \"opentide\",\n      \"args\": [\n        \"mcp\",\n        \"start\"\n      ],\n      \"env\": {\n        \"OPENTIDE_REPO_ROOT\": \"${workspaceFolder}\"\n      }\n    }\n  }\n}"
+candidate = "\ufeff{\n  // The team's MCP servers.\n  \"servers\": {\n    /* keep */ \"other\": {\"command\": \"other-server\", \"args\": []},\n    \"opentide\": {\n      \"command\": \"opentide\",\n      \"args\": [\"mcp\", \"start\"],\n      \"env\": {\n        \"OPENTIDE_REPO_ROOT\": \"${workspaceFolder}\",\n      },\n    },\n  },\n}"
+reason = "setup mcp merges opentide's server into an existing configuration in place with a JSONC-preserving editor (jsonc-parser's CST): the byte-order mark, comments, layout and trailing commas stay, and the new member follows the file's own style (here its trailing commas); the oracle (0.23.0) parsed the file, dropped its comments, BOM and trailing commas and rewrote it as indented JSON. A user's committed file keeps every byte outside the merged member (#743)"
+issue = "https://github.com/opentidehq/opentide/issues/828"
+changelog = "**`setup`, `setup env`, `setup hooks`, `setup mcp`, `setup platforms` and `setup repo` run on the Rust engine**"
+
+[[diff]]
+command = "setup mcp"
+case = "setup.mcp/json/setup-merge/merge"
+target = "file:ws/.vscode/mcp.json"
+rule = "lines"
+oracle = "{\n  \"servers\": {\n    \"other\": {\n      \"command\": \"other-server\",\n      \"args\": []\n    },\n    \"opentide\": {\n      \"command\": \"opentide\",\n      \"args\": [\n        \"mcp\",\n        \"start\"\n      ],\n      \"env\": {\n        \"OPENTIDE_REPO_ROOT\": \"${workspaceFolder}\"\n      }\n    }\n  }\n}"
+candidate = "\ufeff{\n  // The team's MCP servers.\n  \"servers\": {\n    /* keep */ \"other\": {\"command\": \"other-server\", \"args\": []},\n    \"opentide\": {\n      \"command\": \"opentide\",\n      \"args\": [\"mcp\", \"start\"],\n      \"env\": {\n        \"OPENTIDE_REPO_ROOT\": \"${workspaceFolder}\",\n      },\n    },\n  },\n}"
+reason = "setup mcp merges opentide's server into an existing configuration in place with a JSONC-preserving editor (jsonc-parser's CST): the byte-order mark, comments, layout and trailing commas stay, and the new member follows the file's own style (here its trailing commas); the oracle (0.23.0) parsed the file, dropped its comments, BOM and trailing commas and rewrote it as indented JSON. A user's committed file keeps every byte outside the merged member (#743)"
+issue = "https://github.com/opentidehq/opentide/issues/828"
+changelog = "**`setup`, `setup env`, `setup hooks`, `setup mcp`, `setup platforms` and `setup repo` run on the Rust engine**"
+
+[[diff]]
+command = "setup mcp"
+case = "setup.mcp/agent/setup-merge/merge"
+target = "file:ws/.vscode/mcp.json"
+rule = "lines"
+oracle = "{\n  \"servers\": {\n    \"other\": {\n      \"command\": \"other-server\",\n      \"args\": []\n    },\n    \"opentide\": {\n      \"command\": \"opentide\",\n      \"args\": [\n        \"mcp\",\n        \"start\"\n      ],\n      \"env\": {\n        \"OPENTIDE_REPO_ROOT\": \"${workspaceFolder}\"\n      }\n    }\n  }\n}"
+candidate = "\ufeff{\n  // The team's MCP servers.\n  \"servers\": {\n    /* keep */ \"other\": {\"command\": \"other-server\", \"args\": []},\n    \"opentide\": {\n      \"command\": \"opentide\",\n      \"args\": [\"mcp\", \"start\"],\n      \"env\": {\n        \"OPENTIDE_REPO_ROOT\": \"${workspaceFolder}\",\n      },\n    },\n  },\n}"
+reason = "setup mcp merges opentide's server into an existing configuration in place with a JSONC-preserving editor (jsonc-parser's CST): the byte-order mark, comments, layout and trailing commas stay, and the new member follows the file's own style (here its trailing commas); the oracle (0.23.0) parsed the file, dropped its comments, BOM and trailing commas and rewrote it as indented JSON. A user's committed file keeps every byte outside the merged member (#743)"
+issue = "https://github.com/opentidehq/opentide/issues/828"
+changelog = "**`setup`, `setup env`, `setup hooks`, `setup mcp`, `setup platforms` and `setup repo` run on the Rust engine**"

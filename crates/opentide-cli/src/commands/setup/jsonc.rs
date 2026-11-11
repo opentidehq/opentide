@@ -90,7 +90,7 @@ fn root_object(root: &CstRootNode) -> Result<CstObject, MergeError> {
 }
 
 /// `text` with `template`'s members merged in, one level deep: a member
-/// the file lacks is added; an object member gains (or replaces) each of
+/// the file lacks, or has as `null`, is added; an object member gains (or replaces) each of
 /// the template's entries, the file's others kept; a scalar the file
 /// already has stays the file's. Everything else in `text` is kept byte
 /// for byte.
@@ -115,6 +115,15 @@ pub fn merge(text: &str, template: &Json) -> Result<String, MergeError> {
             object.append(key, input(value));
             continue;
         };
+        // `null` is no value: the template's takes its place, as for a
+        // member the file lacks.
+        if current
+            .value()
+            .is_some_and(|value| value.as_null_keyword().is_some())
+        {
+            current.set_value(input(value));
+            continue;
+        }
         let Json::Object(entries) = value else {
             continue;
         };
@@ -175,9 +184,12 @@ mod tests {
         let after = merge(before, &template()).unwrap();
         let inserted = only_inserted(before, &after);
         assert!(inserted.contains("\"opentide\""), "{inserted:?}");
+        // Every line the merge wrote ends as the file's lines do.
         assert!(
-            !inserted.contains('\n') || inserted.contains("\r\n"),
-            "{inserted:?}"
+            after
+                .match_indices('\n')
+                .all(|(at, _)| at > 0 && after.as_bytes()[at - 1] == b'\r'),
+            "a bare LF in {after:?}"
         );
         assert!(after.starts_with('\u{feff}'));
         let value = parse(&after).unwrap();
@@ -210,6 +222,22 @@ mod tests {
         let before = "{\"$schema\": \"mine\", \"mcpServers\": {}}";
         let after = merge(before, &template).unwrap();
         assert_eq!(after, before);
+    }
+
+    #[test]
+    fn a_null_member_is_replaced_by_the_templates() {
+        let before = "{\n  // ours\n  \"servers\": null,\n  \"$schema\": null\n}\n";
+        let template =
+            Json::parse(r#"{"servers": {"opentide": {"command": "opentide"}}, "$schema": "s"}"#)
+                .unwrap();
+        let after = merge(before, &template).unwrap();
+        assert!(
+            after.starts_with("{\n  // ours\n  \"servers\": "),
+            "{after}"
+        );
+        let value = parse(&after).unwrap();
+        assert_eq!(value["servers"]["opentide"]["command"], "opentide");
+        assert_eq!(value["$schema"], "s");
     }
 
     #[test]

@@ -87,7 +87,12 @@ impl Step {
             Step::Hooks { install } => super::hooks::hooks(stage, cx.env, root, *install),
             Step::Platforms(platforms) => files::platforms(stage, root, platforms),
             Step::Repo(options) => files::repo(stage, root, options),
-            Step::Mcp(hosts) => Ok(files::mcp(stage, root, hosts)),
+            Step::Mcp(hosts) => Ok(files::mcp(
+                stage,
+                root,
+                hosts,
+                files::McpServer::from_env(cx.env).as_ref(),
+            )),
         }
     }
 }
@@ -312,41 +317,18 @@ pub struct Planned {
     warnings: Vec<String>,
 }
 
-/// `path` relative to `base`, through `..` when outside it.
-fn relative_shown(path: &Path, base: &Path) -> String {
-    let common = path
-        .components()
-        .zip(base.components())
-        .take_while(|(a, b)| a == b)
-        .count();
-    if common == 0 {
-        return path.to_string_lossy().replace('\\', "/");
-    }
-    let mut parts: Vec<String> = base
-        .components()
-        .skip(common)
-        .map(|_| "..".to_owned())
-        .collect();
-    parts.extend(
-        path.components()
-            .skip(common)
-            .map(|part| part.as_os_str().to_string_lossy().into_owned()),
-    );
-    parts.join("/")
-}
-
 /// What the step that just ran wrote, and the files it reported left alone.
 fn planned(stage: &mut Stage, root: &Path, name: &str, result: &StepResult) -> Planned {
     let mut changes = stage.step();
     changes.sort_by_key(|change| change.path.to_string_lossy().into_owned());
     let mut files: Vec<(String, &'static str)> = changes
         .into_iter()
-        .map(|change| (relative_shown(&change.path, root), change.action))
+        .map(|change| (super::shown_relative(&change.path, root), change.action))
         .collect();
     for skipped in result.strings("skipped") {
         let path = Path::new(&skipped);
         let shown = if path.is_absolute() {
-            relative_shown(path, root)
+            super::shown_relative(path, root)
         } else {
             skipped.replace('\\', "/")
         };
@@ -943,7 +925,7 @@ fn run_steps(
             let mut written = Vec::new();
             if let Some(content) = override_.content {
                 recorder.stage.write(&override_.path, content);
-                written.push(relative_shown(&override_.path, &root));
+                written.push(super::shown_relative(&override_.path, &root));
             }
             recorder
                 .record(
@@ -984,7 +966,12 @@ fn run_steps(
         recorder.record("hooks", result).map_err(failed)?;
     }
     if !args.mcp.is_empty() {
-        let result = files::mcp(&mut recorder.stage, &root, &args.mcp);
+        let result = files::mcp(
+            &mut recorder.stage,
+            &root,
+            &args.mcp,
+            files::McpServer::from_env(cx.env).as_ref(),
+        );
         recorder.record("mcp", result).map_err(failed)?;
     }
     Ok(())
@@ -1073,10 +1060,20 @@ mod tests {
     #[test]
     fn a_path_outside_the_target_is_shown_through_dot_dot() {
         assert_eq!(
-            relative_shown(Path::new("/r/.git/hooks/pre-commit"), Path::new("/r/a/b")),
+            super::super::shown_relative(
+                Path::new("/r/.git/hooks/pre-commit"),
+                Path::new("/r/a/b")
+            ),
             "../../.git/hooks/pre-commit"
         );
-        assert_eq!(relative_shown(Path::new("/r/a/x"), Path::new("/r/a")), "x");
+        assert_eq!(
+            super::super::shown_relative(Path::new("/r/a/x"), Path::new("/r/a")),
+            "x"
+        );
+        assert_eq!(
+            super::super::shown_relative(Path::new("/r/a"), Path::new("/r/a")),
+            "."
+        );
     }
 
     #[test]

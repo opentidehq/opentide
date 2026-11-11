@@ -53,6 +53,11 @@ kind = "generated"
 argv = ["cargo", "xtask", "corpus", "faults", "--out", "{out}"]
 about = "UC-0.6's fault workspace: seed 1, 120 threats, 60 objectives, 600 rules, every fault kind not marked isolated applied; generated at record and check time, never committed. Its outputs are recorded as they are, not asserted against the fault manifest"
 
+[fixtures.setup-merge]
+kind = "copy"
+source = "tests/golden/fixtures/setup-merge"
+about = "a workspace whose files `setup` merges into: a .vscode/mcp.json with a byte-order mark, comments and a trailing comma, and a sentinel.toml with `enabled = false`"
+
 [fixtures.empty]
 kind = "skeleton"
 dirs = [".opentide"]
@@ -1339,6 +1344,20 @@ command = "setup mcp"
 variant = "cursor-vscode"
 args = ["setup", "mcp", "--cursor", "--vscode", "--yes"]
 fixtures = ["tide-corpus"]
+
+# An existing configuration with a byte-order mark and comments, merged into (#743).
+[[case]]
+command = "setup mcp"
+variant = "merge"
+args = ["setup", "mcp", "--vscode", "--yes"]
+fixtures = ["setup-merge"]
+
+# An existing platform file, enabled in place.
+[[case]]
+command = "setup platforms"
+variant = "merge"
+args = ["setup", "platforms", "--sentinel", "--yes"]
+fixtures = ["setup-merge"]
 
 [[case]]
 command = "setup vscode"

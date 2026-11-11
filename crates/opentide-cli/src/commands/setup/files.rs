@@ -595,8 +595,41 @@ pub fn mcp_config_warning(relative: &str, problem: &str) -> String {
     format!("{relative} {problem}; left unchanged. Add the opentide server to it by hand.")
 }
 
-/// `setup mcp`: each host's configuration.
-pub fn mcp(stage: &mut Stage, target: &Path, hosts: &[String]) -> StepResult {
+/// The variable the Python launcher (`opentide.cli.rust`) sets for a
+/// `setup` run: whether `opentide mcp start`, which every configuration
+/// launches, can start in its environment, as a JSON object
+/// `{"missing": [imports it cannot satisfy], "hint": "how to repair it"}`.
+/// The server is still Python's, so only that environment can say.
+pub const MCP_SERVER_ENV: &str = "OPENTIDE_MCP_SERVER";
+
+/// Why `opentide mcp start` cannot start here, as [`MCP_SERVER_ENV`] says.
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Deserialize)]
+pub struct McpServer {
+    /// The imports the server needs that the environment cannot satisfy.
+    #[serde(default)]
+    pub missing: Vec<String>,
+    /// The command that repairs the environment.
+    #[serde(default)]
+    pub hint: String,
+}
+
+impl McpServer {
+    /// What the launcher reported; `None` when no launcher said (the server
+    /// is then taken to start, as when it is this program's).
+    pub fn from_env(env: &crate::env::Env) -> Option<McpServer> {
+        env.get(MCP_SERVER_ENV)
+            .and_then(|text| serde_json::from_str(text).ok())
+    }
+}
+
+/// `setup mcp`: each host's configuration; `server` is what the launcher
+/// reported about `opentide mcp start` ([`McpServer::from_env`]).
+pub fn mcp(
+    stage: &mut Stage,
+    target: &Path,
+    hosts: &[String],
+    server: Option<&McpServer>,
+) -> StepResult {
     let (mut written, mut skipped, mut warnings) = (Vec::new(), Vec::new(), Vec::new());
     for host in hosts {
         match write_mcp_config(stage, target, host) {
@@ -629,8 +662,19 @@ pub fn mcp(stage: &mut Stage, target: &Path, hosts: &[String]) -> StepResult {
             Json::str("Copy opentide.mcp.json into your editor MCP settings or run opentide setup mcp with a specific host flag."),
         );
     }
-    // Every configuration runs `opentide mcp start`, which this program serves.
-    result.set("mcp_available", Json::Bool(true));
+    // Every configuration runs `opentide mcp start`. Say so now rather than
+    // leaving the user to debug a server their editor silently fails to start.
+    match server.filter(|server| !server.missing.is_empty()) {
+        Some(server) => {
+            result.set("mcp_available", Json::Bool(false));
+            warnings.push(format!(
+                "These configs launch opentide mcp start, which cannot import {} in this environment. Repair it with: {}",
+                server.missing.join(", "),
+                server.hint
+            ));
+        }
+        None => result.set("mcp_available", Json::Bool(true)),
+    }
     if !warnings.is_empty() {
         result.set("warnings", strings(&warnings));
     }
@@ -744,7 +788,7 @@ mod tests {
         let before = "{\r\n  // ours\r\n  \"servers\": {\"x\": {}}\r\n}\r\n";
         std::fs::write(root.join(".vscode/mcp.json"), before).unwrap();
         let mut stage = Stage::new();
-        let result = mcp(&mut stage, root, &["vscode".into()]);
+        let result = mcp(&mut stage, root, &["vscode".into()], None);
         assert_eq!(result.strings("files"), [".vscode/mcp.json"]);
         let after = String::from_utf8(stage.read(&root.join(".vscode/mcp.json")).unwrap().unwrap())
             .unwrap();
@@ -753,13 +797,95 @@ mod tests {
         std::fs::write(root.join(".cursor.json"), "").unwrap();
         std::fs::create_dir_all(root.join(".cursor")).unwrap();
         std::fs::write(root.join(".cursor/mcp.json"), "[]").unwrap();
-        let refused = mcp(&mut Stage::new(), root, &["cursor".into()]);
+        let refused = mcp(&mut Stage::new(), root, &["cursor".into()], None);
         assert_eq!(refused.strings("skipped"), [".cursor/mcp.json"]);
         assert_eq!(
             refused.strings("warnings"),
             [
                 ".cursor/mcp.json is not a JSON object; left unchanged. Add the opentide server to it by hand."
             ]
+        );
+    }
+
+    #[test]
+    fn an_env_example_without_a_final_newline_gets_one_before_the_root() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        std::fs::write(root.join(".env.example"), "A=1").unwrap();
+        let mut stage = Stage::new();
+        let result = env(&mut stage, root).unwrap();
+        assert_eq!(result.strings("files"), [".env.example", ".gitignore"]);
+        assert_eq!(
+            stage.read(&root.join(".env.example")).unwrap().unwrap(),
+            b"A=1\nOPENTIDE_REPO_ROOT=.\n"
+        );
+        // A file that ends its last line is not given a blank one.
+        std::fs::write(root.join(".env.example"), "A=1\n").unwrap();
+        let mut stage = Stage::new();
+        env(&mut stage, root).unwrap();
+        assert_eq!(
+            stage.read(&root.join(".env.example")).unwrap().unwrap(),
+            b"A=1\nOPENTIDE_REPO_ROOT=.\n"
+        );
+        // One that names the root already is left alone.
+        let mut stage = Stage::new();
+        std::fs::write(root.join(".env.example"), "OPENTIDE_REPO_ROOT=x").unwrap();
+        let kept = env(&mut stage, root).unwrap();
+        assert_eq!(kept.strings("skipped")[0], ".env.example");
+        assert_eq!(
+            kept.text("message"),
+            Some("Environment example already present")
+        );
+    }
+
+    #[test]
+    fn only_the_vscode_host_reports_the_extension_server() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        std::fs::create_dir_all(root.join(".vscode")).unwrap();
+        std::fs::write(
+            root.join(".vscode/extensions.json"),
+            r#"{"recommendations": ["opentidehq.opentide"]}"#,
+        )
+        .unwrap();
+        let cursor = mcp(&mut Stage::new(), root, &["cursor".into()], None);
+        assert_eq!(cursor.get("extension_mcp"), None);
+        assert_eq!(cursor.get("detail"), None);
+        let vscode = mcp(&mut Stage::new(), root, &["vscode".into()], None);
+        assert_eq!(vscode.get("extension_mcp"), Some(&Json::Bool(true)));
+        assert_eq!(vscode.text("detail"), Some(EXTENSION_MCP_NOTE));
+    }
+
+    #[test]
+    fn a_server_that_cannot_start_is_reported_unavailable_with_its_repair() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let broken = McpServer {
+            missing: vec!["mcp.server.mcpserver".into()],
+            hint: "pip install 'mcp>=2.3,<3'".into(),
+        };
+        let result = mcp(&mut Stage::new(), root, &["cursor".into()], Some(&broken));
+        assert_eq!(result.get("mcp_available"), Some(&Json::Bool(false)));
+        assert_eq!(
+            result.strings("warnings"),
+            [
+                "These configs launch opentide mcp start, which cannot import mcp.server.mcpserver in this environment. Repair it with: pip install 'mcp>=2.3,<3'"
+            ]
+        );
+        let fine = McpServer::default();
+        for server in [Some(&fine), None] {
+            let result = mcp(&mut Stage::new(), root, &["cursor".into()], server);
+            assert_eq!(result.get("mcp_available"), Some(&Json::Bool(true)));
+            assert_eq!(result.get("warnings"), None);
+        }
+        let env = crate::env::Env::from_pairs([(
+            MCP_SERVER_ENV,
+            r#"{"missing": ["mcp.server.mcpserver"], "hint": "pip install 'mcp>=2.3,<3'"}"#,
+        )]);
+        assert_eq!(McpServer::from_env(&env), Some(broken));
+        assert_eq!(
+            McpServer::from_env(&crate::env::Env::from_pairs::<&str, &str>([])),
+            None
         );
     }
 }

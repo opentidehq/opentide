@@ -54,7 +54,14 @@ pub fn case_root() -> tempfile::TempDir {
 }
 
 /// The fixtures this module lays out.
-pub const FIXTURES: &[&str] = &["none", "empty", "tide-corpus", "tide-corpus-typo", "vscode"];
+pub const FIXTURES: &[&str] = &[
+    "none",
+    "empty",
+    "tide-corpus",
+    "tide-corpus-typo",
+    "vscode",
+    "setup-merge",
+];
 
 pub fn repo() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -125,6 +132,7 @@ pub fn fixture(name: &str, ws: &Path) {
             }
         }
         "vscode" => copy_tree(&repo().join("tests/golden/fixtures/vscode-workspace"), ws),
+        "setup-merge" => copy_tree(&repo().join("tests/golden/fixtures/setup-merge"), ws),
         other => panic!("{other}: a fixture this test does not lay out"),
     }
 }

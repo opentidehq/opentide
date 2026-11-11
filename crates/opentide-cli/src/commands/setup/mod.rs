@@ -33,6 +33,16 @@ use crate::render::text::{Style, Text};
 
 const COMMAND: &str = "setup ci";
 
+/// `path` relative to `base` (`os.path.relpath`), through `..` when it is
+/// outside it, with `/` between parts; `.` for `base` itself.
+pub(crate) fn shown_relative(path: &Path, base: &Path) -> String {
+    match pathdiff::diff_paths(path, base) {
+        Some(relative) if relative.as_os_str().is_empty() => ".".to_owned(),
+        Some(relative) => relative.to_string_lossy().replace('\\', "/"),
+        None => path.to_string_lossy().replace('\\', "/"),
+    }
+}
+
 /// `failure.code` of a prompt nobody can answer.
 pub const USAGE_NEEDS_INPUT: &str = "usage_needs_input";
 

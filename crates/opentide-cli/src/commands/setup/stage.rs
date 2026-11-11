@@ -355,4 +355,26 @@ mod tests {
         stage.commit().unwrap();
         assert!(executable_on_disk(&path));
     }
+
+    #[cfg(unix)]
+    #[test]
+    fn rewriting_an_executable_file_keeps_it_executable() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let dir = tempfile::tempdir().unwrap();
+        let (tool, plain) = (dir.path().join("tool"), dir.path().join("plain"));
+        for (path, mode) in [(&tool, 0o755), (&plain, 0o644)] {
+            std::fs::write(path, "old\n").unwrap();
+            std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode)).unwrap();
+        }
+        let mut stage = Stage::new();
+        stage.write(&tool, "new\n");
+        stage.write(&plain, "new\n");
+        assert!(stage.is_executable(&tool));
+        assert!(!stage.is_executable(&plain));
+        stage.commit().unwrap();
+        let mode = |path: &Path| std::fs::metadata(path).unwrap().permissions().mode();
+        assert_eq!(mode(&tool) & 0o111, 0o111);
+        assert_eq!(mode(&plain) & 0o111, 0);
+        assert_eq!(std::fs::read_to_string(&tool).unwrap(), "new\n");
+    }
 }
