@@ -7,6 +7,44 @@ description: Public package versions of opentide on PyPI.
 
 Every version of the [`opentide`](https://pypi.org/project/opentide/) package, newest first. Each opens with what it does for you, then the steps to take after upgrading, then what changed, under the same headings every time: Breaking, Added, Changed, Deprecated, Removed, Fixed and Security. Pin a version in CI. [`CHANGELOG.md`](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md) records every change in full; GitHub Releases are tagged `v*` and publish to PyPI.
 
+## 0.25.0 — 11 November 2026
+
+Bitdefender GravityZone is a tenth deploy platform, for custom detection and YARA rules. HarfangLab rules take a whole YARA signature, and `validate`, `lint`, the editor and `opentide tui` check YARA as libyara 4.5 compiles it.
+
+**Install**
+
+```bash
+pip install opentide==0.25.0
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
+**Upgrade**
+
+1. If a HarfangLab block sets both `sigma` and `yara`, split it into two rules, one per kind, then run `opentide validate`.
+
+**Breaking**
+
+- **A HarfangLab block is a Sigma rule or a YARA rule, not both.** Such a block deployed only its `sigma`; `validate` now fails it with `harfanglab_rule_kind`. The decomposed YARA form also fails what libyara refused at deploy: a section header in `strings` or `condition`, an unknown module in `imports`, a rule `name` whose derived YARA name libyara refuses.
+
+**Added**
+
+- **Bitdefender GravityZone is a tenth deploy platform.** A `configurations.bitdefender` block is a GravityZone custom detection rule, Basic criteria or a YARA signature. `validate` checks it against GravityZone's criteria catalogue; deploy creates, updates, disables and deletes it. Enable it with `opentide setup platforms --bitdefender`. See [Platforms](concepts/platforms.md).
+- **HarfangLab YARA as a whole signature: `yara.signature`.** Write imports and one or more YARA rules; deploy sends the text verbatim.
+- **`validate`, `lint`, the editor and `opentide tui` check YARA** as libyara 4.5 compiles it, with a warning where YARA-X differs. `validate query` checks HarfangLab and Bitdefender YARA offline, `.yar` files included.
+
+**Changed**
+
+- **The engine is [language-server 0.13.0](https://github.com/opentidehq/language-server/releases/tag/v0.13.0).** It adds the YARA language and the Bitdefender checks; a large YARA signature no longer slows `validate` down. Building from source needs Rust 1.95 or later.
+
+See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md#0250--2026-11-11) for every change.
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/0.25.0/)
+- [GitHub Release](https://github.com/opentidehq/opentide/releases/tag/v0.25.0)
+- [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md)
+
 ## 0.24.1 — 10 November 2026
 
 `pip install opentide` works again: Typer 0.29.0 crashed every opentide on start, and opentide now requires a Typer it runs on. The diagnostic codes reference publishes on opentide.org again.
