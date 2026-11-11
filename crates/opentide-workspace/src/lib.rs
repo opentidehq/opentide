@@ -23,6 +23,9 @@
 //! Every read goes through a [`FileSystem`]: [`OsFs`] on disk,
 //! [`MemoryFs`] in memory. [`Stats`] counts the reads, parses and
 //! configuration resolutions.
+//!
+//! Internal to opentide, with no stability promise: depend on the
+//! [`opentide`](https://docs.rs/opentide) crate, its Rust SDK, instead.
 
 pub mod catalogue;
 pub mod config;

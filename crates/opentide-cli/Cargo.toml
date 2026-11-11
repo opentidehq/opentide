@@ -25,6 +25,9 @@ path = "src/lib.rs"
 [[bin]]
 name = "opentide"
 path = "src/main.rs"
+# Not documented: its page would take the path of the opentide facade's
+# library (target/doc/opentide, cargo#6313), whose docs are the binary's too.
+doc = false
 
 [dependencies]
 clap = { workspace = true, features = ["env", "string"] }

@@ -1,0 +1,115 @@
+[package]
+name = "opentide"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+description = "The opentide Rust SDK: open a Tide workspace, validate and lint it, read its catalogue and coverage, plan a deploy, run the command line. The only opentide crate with a stability promise."
+readme = "README.md"
+documentation = "https://docs.rs/opentide"
+keywords = ["opentide", "detection-as-code", "security", "sigma", "siem"]
+categories = ["development-tools", "command-line-utilities"]
+# Not published while the engine crates it wraps (opentide-schema,
+# opentide-workspace, opentide-compile, opentide-cli) are not
+# (crates/opentide-schema/Cargo.toml says when that changes). Until then
+# publishing/placeholders/crates/opentide holds the name on crates.io, and
+# `cargo package` leaves this crate out (ci.yml, engine-release.yml,
+# scripts/ci-local.sh), which scan its source instead.
+publish = false
+
+[lints]
+workspace = true
+
+[package.metadata.docs.rs]
+# Every feature's API on docs.rs (UC-5.1, #836).
+all-features = true
+
+[lib]
+name = "opentide"
+path = "src/lib.rs"
+
+# The command line, as the opentide-cli crate's own binary and the PyPI and
+# npm launchers run it: one `main(argv)` (ADR 0003). Only with `cli`: the
+# library alone carries no binary.
+[[bin]]
+name = "opentide"
+path = "src/bin/opentide.rs"
+required-features = ["cli"]
+# The library's documentation is the crate's; the binary has none of its own.
+doc = false
+
+# The three examples of the Rust page in docs/sdk. Each is also compiled into
+# tests/examples.rs, which runs it on a workspace, so CI runs them with the
+# tests (`cargo nextest run --workspace`).
+[[example]]
+name = "validate"
+required-features = ["workspace"]
+
+[[example]]
+name = "catalog"
+required-features = ["workspace"]
+
+[[example]]
+name = "deploy_plan"
+required-features = ["compile"]
+
+[[test]]
+name = "examples"
+required-features = ["compile"]
+
+[[test]]
+name = "api"
+required-features = ["compile"]
+
+# The binary and `cli::run_json`: CI's `facade` job runs them with every
+# feature (`cargo nextest run -p opentide --all-features`).
+[[test]]
+name = "cli"
+required-features = ["cli"]
+
+[[test]]
+name = "lsp"
+required-features = ["lsp"]
+
+[features]
+default = ["schema", "workspace", "compile"]
+# The Tide models: threat vectors, detection objectives, detection rules, each
+# revision, the schema identifiers (`opentide::models`).
+schema = ["dep:opentide-schema"]
+# Opening a workspace, validate, lint, info, the catalogue and coverage.
+workspace = ["schema", "dep:opentide-workspace"]
+# The deploy plan: what `opentide deploy --dry-run` would send.
+compile = ["workspace", "dep:opentide-compile"]
+# The offline query engines (KQL, SPL, ES|QL, EQL, Kibana KQL, Lucene, Falco,
+# CQL) behind validate's and lint's queries checks. Without them a queries
+# check reports `engine_unavailable`, never a skipped check. They come from the
+# command line's crate until they move to the domain layer (plan §4), so this
+# feature builds opentide-cli.
+queries = ["workspace", "dep:opentide-cli"]
+# The command line: `opentide::cli::main(argv)`, `opentide::cli::run_json`,
+# and the `opentide` binary (`cargo install opentide --features cli`).
+cli = ["compile", "queries"]
+# The language server (`opentide::lsp`): stdio, or one message at a time.
+lsp = ["workspace", "dep:opentide-lsp"]
+
+[dependencies]
+opentide-schema = { workspace = true, optional = true }
+opentide-workspace = { workspace = true, optional = true }
+opentide-compile = { workspace = true, optional = true }
+opentide-cli = { workspace = true, optional = true }
+opentide-lsp = { workspace = true, optional = true }
+# The documents the facade hands back as JSON: the deploy plan's payload,
+# `cli::run_json`'s envelope.
+serde_json.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+# The tests lay a workspace out under a temporary folder, never in the checkout.
+tempfile = "3"
+# The goldens' comparator and ledger: the binary's `--json commands` against
+# the PyPI CLI's recording (tests/cli.rs).
+opentide-compare.workspace = true

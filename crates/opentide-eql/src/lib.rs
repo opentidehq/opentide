@@ -8,6 +8,9 @@
 //! `semantics` adds the Verifier's literal type checks and the planner's
 //! field-versus-field rule; `lexical` follows the lexer where the grammar
 //! cannot (nested block comments, the expression-depth pre-scan).
+//!
+//! Internal to opentide, with no stability promise: depend on the
+//! [`opentide`](https://docs.rs/opentide) crate, its Rust SDK, instead.
 
 #![expect(
     missing_docs,

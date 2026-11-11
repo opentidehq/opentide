@@ -22,6 +22,9 @@
 //! dispatch on `metadata.schema` and the forward migrations are [`revisions`]
 //! and [`migration`] (UC-1.7, #813). The crate is I/O-free and internal: the
 //! `opentide` facade (UC-5.1, #836) is the public API.
+//!
+//! Internal to opentide, with no stability promise: depend on the
+//! [`opentide`](https://docs.rs/opentide) crate, its Rust SDK, instead.
 
 // The derive's expansion names `::opentide_schema::…`, here as in every crate
 // that uses it.

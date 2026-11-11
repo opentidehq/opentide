@@ -1,4 +1,7 @@
 //! I/O-free SPL engine. Catalogs compiled in; unknown commands are never silently eaten.
+//!
+//! Internal to opentide, with no stability promise: depend on the
+//! [`opentide`](https://docs.rs/opentide) crate, its Rust SDK, instead.
 
 #![expect(
     missing_docs,

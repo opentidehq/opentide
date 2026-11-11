@@ -8,8 +8,9 @@ name: CI
 #   required checks, and their jobs carry no `if`.
 # - The full set adds the rest: Python 3.11-3.13, the engine release dry run,
 #   WebAssembly, crate packaging, grammars, the Elastic sweep, fuzz smoke, the
-#   Windows CLI smoke, LSP clients and benchmarks. It runs nightly, on every
-#   push to development and integration/unified-core, on Run workflow, and on
+#   Windows CLI smoke, the facade crate's every feature and semver checks, LSP
+#   clients and benchmarks. It runs nightly, on every push to development and
+#   integration/unified-core, on Run workflow, and on
 #   a pull request that carries the `full-ci` label (read at each push: add
 #   the label, then push, or Run workflow on the branch). Each of these jobs
 #   has an `if` on that condition; the release dry run (and crate packaging)
@@ -404,6 +405,63 @@ jobs:
           path: target/nextest/ci/junit.xml
           retention-days: 14
 
+  # The opentide facade crate (UC-5.1, #836) with every feature: its tests and
+  # doctests (the `opentide` binary's `--json commands` against the PyPI CLI's
+  # recording, `cli::run_json`, the language server), its docs as docs.rs
+  # builds them, and its API against the branch it merges into
+  # (cargo-semver-checks). engine-test runs its default features on every
+  # pull request; this job builds opentide-cli and opentide-lsp a second time
+  # with the facade's features, so it is in the full set.
+  facade:
+    name: Facade crate (every feature, docs, semver checks)
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      RUSTFLAGS: "-Dwarnings"
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The merge commit and its first parent (a pull request's base
+          # branch, or the branch before a push): the semver baseline.
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Set up Rust
+        run: rustup toolchain install --profile minimal --no-self-update
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: engine-facade
+
+      - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
+        with:
+          tool: cargo-semver-checks@0.51.0
+
+      - name: Tests and doctests, every feature
+        run: cargo test -p opentide --all-features --locked
+
+      # docs.rs builds every feature (`[package.metadata.docs.rs]`).
+      - name: rustdoc, every feature
+        env:
+          RUSTDOCFLAGS: "-D warnings"
+        run: cargo doc -p opentide --all-features --no-deps --locked
+
+      # Against the first parent until the crate is on crates.io; then the
+      # last published version is the baseline (docs/sdk/rust.md, Stability).
+      # A commit that adds the crate has no baseline to compare with.
+      - name: API against the base (cargo semver-checks)
+        run: |
+          baseline="$(git rev-parse HEAD^1)"
+          if git cat-file -e "${baseline}:crates/opentide/Cargo.toml" 2>/dev/null; then
+            cargo semver-checks -p opentide --all-features --baseline-rev "${baseline}"
+          else
+            echo "::notice::crates/opentide is new in this change: no baseline API to check against"
+          fi
+
   # scripts/engine/build-wasm.sh builds both WebAssembly artifacts with the
   # wasi-sdk it pins and smoke-tests them; the npm packages build and pack only
   # what they publish; the TypeScript client runs against the native, worker
@@ -521,11 +579,12 @@ jobs:
       # opentide-lsp and opentide-wasm (publish = false) take their checks
       # from opentide-workspace and opentide-schema (UC-2.6, ADR 0010's
       # addendum): left out of the package step too, their sources scanned.
-      - run: cargo package --locked --workspace --exclude opentide-native --exclude xtask --exclude opentide-compare --exclude opentide-schema --exclude opentide-workspace --exclude opentide-compile --exclude opentide-cli --exclude opentide-lsp --exclude opentide-wasm --allow-dirty
+      # So is the opentide facade (UC-5.1), which wraps all of them.
+      - run: cargo package --locked --workspace --exclude opentide-native --exclude xtask --exclude opentide-compare --exclude opentide-schema --exclude opentide-workspace --exclude opentide-compile --exclude opentide-cli --exclude opentide-lsp --exclude opentide-wasm --exclude opentide --allow-dirty
       - name: license scan (no oracle references)
         run: |
           bash scripts/engine/license-scan.sh target/package/*.crate
-          bash scripts/engine/license-scan.sh crates/opentide-schema crates/opentide-schema-derive crates/opentide-compare crates/opentide-workspace crates/opentide-compile crates/opentide-lsp crates/opentide-wasm
+          bash scripts/engine/license-scan.sh crates/opentide-schema crates/opentide-schema-derive crates/opentide-compare crates/opentide-workspace crates/opentide-compile crates/opentide-lsp crates/opentide-wasm crates/opentide
           cargo package --list --locked --allow-dirty -p opentide-cli | (cd crates/opentide-cli && while IFS= read -r f; do if [ -f "$f" ]; then printf '%s\0' "$f"; fi; done | xargs -0 bash ../../scripts/engine/license-scan.sh)
 
   # The supply-chain gate (#843, deny.toml): licences of what we ship,

@@ -7,7 +7,7 @@ opentide documentation lives in this directory and is published on **[opentide.o
 | Usage | `usage/` | Human operators — setup, workflows, concepts |
 | CLI | `cli/` | Command-line reference |
 | MCP | `mcp/` | Agent and editor integrations |
-| SDK | `sdk/` | Python API consumers |
+| SDK | `sdk/` | Python and Rust API consumers |
 
 Internal maintainer docs (test plan, publishing) live in `internal/` and are excluded from the public site tree.
 
@@ -62,7 +62,7 @@ Update docs in the **same PR** when you change:
 |-----------|--------------|
 | CLI commands / flags | `docs/cli/` |
 | MCP tools / resources | `docs/mcp/` |
-| Public Python API | `docs/sdk/` |
+| Public Python API, the `opentide` crate's API | `docs/sdk/` |
 | Setup / onboarding flows | `docs/usage/` |
 | Platform capabilities | `docs/usage/concepts/platforms.md` |
 

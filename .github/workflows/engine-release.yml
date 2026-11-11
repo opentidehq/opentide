@@ -116,12 +116,13 @@ jobs:
       - run: python3 scripts/engine/release.py vendor
       # opentide-lsp and opentide-wasm are not published while the crates
       # their checks come from are not (UC-2.6): their binaries and the
-      # WebAssembly build still ship as release assets.
-      - run: cargo package --locked --workspace --exclude opentide-native --exclude xtask --exclude opentide-compare --exclude opentide-schema --exclude opentide-workspace --exclude opentide-compile --exclude opentide-lsp --exclude opentide-wasm --allow-dirty
+      # WebAssembly build still ship as release assets. Nor is the opentide
+      # facade (UC-5.1), which wraps them.
+      - run: cargo package --locked --workspace --exclude opentide-native --exclude xtask --exclude opentide-compare --exclude opentide-schema --exclude opentide-workspace --exclude opentide-compile --exclude opentide-lsp --exclude opentide-wasm --exclude opentide --allow-dirty
       - name: license scan (no oracle references)
         run: |
           bash scripts/engine/license-scan.sh target/package/*.crate
-          bash scripts/engine/license-scan.sh crates/opentide-lsp crates/opentide-wasm
+          bash scripts/engine/license-scan.sh crates/opentide-lsp crates/opentide-wasm crates/opentide
 
   # Every asset, the licences and SHA256SUMS, as the artifact `release-assets`.
   # No OIDC token there: crates.io and npm trust this workflow as a whole, so a

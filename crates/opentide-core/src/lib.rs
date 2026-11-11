@@ -1,6 +1,9 @@
 //! Shared I/O-free types for the opentide language server.
 //!
 //! Names use `opentide`, never `otide`.
+//!
+//! Internal to opentide, with no stability promise: depend on the
+//! [`opentide`](https://docs.rs/opentide) crate, its Rust SDK, instead.
 
 #![expect(
     missing_docs,

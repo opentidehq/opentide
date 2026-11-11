@@ -2,6 +2,9 @@
 //!
 //! Pydantic remains CLI authority. The LSP emits the same `{code, field_path, severity}`
 //! with real source ranges. opentide LSP owns Tide diagnostics — disable yamlls on `objects/**`.
+//!
+//! Internal to opentide, with no stability promise: depend on the
+//! [`opentide`](https://docs.rs/opentide) crate, its Rust SDK, instead.
 
 #![expect(
     missing_docs,

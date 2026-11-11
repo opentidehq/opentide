@@ -1,7 +1,7 @@
 {
   "root": true,
   "title": "SDK",
-  "description": "Python package API for embedding opentide",
+  "description": "Python and Rust APIs for embedding opentide",
   "icon": "Code",
   "pages": [
     "index",
@@ -13,6 +13,8 @@
     "---Models---",
     "models",
     "platforms",
-    "configuration"
+    "configuration",
+    "---Rust---",
+    "rust"
   ]
 }

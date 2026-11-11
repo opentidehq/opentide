@@ -30,6 +30,7 @@ members = [
     "crates/opentide-wasm",
     "crates/opentide-compare",
     "crates/opentide-cli",
+    "crates/opentide",
     "analysis",
     "xtask",
 ]

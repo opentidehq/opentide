@@ -6,6 +6,9 @@
 //! behaviours sit below the grammar and are checked here: an unquoted literal
 //! ends at an unescaped `not` followed by whitespace, and Lucene operators
 //! (`[a TO b]`, `_exists_`, `~`, `^`, `/re/`) are searched as literal text.
+//!
+//! Internal to opentide, with no stability promise: depend on the
+//! [`opentide`](https://docs.rs/opentide) crate, its Rust SDK, instead.
 
 use opentide_core::{
     ByteSpan, CompletionItem, Diagnostic, LanguageId, Range, Severity, codes, span_to_range,
