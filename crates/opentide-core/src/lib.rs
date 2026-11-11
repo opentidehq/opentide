@@ -559,6 +559,7 @@ pub mod codes {
     pub const GRAYLOG_REGEX_UNSUPPORTED: &str = "graylog_regex_unsupported";
     pub const GRAYLOG_REGEX_OPERATOR: &str = "graylog_regex_operator";
     pub const GRAYLOG_REGEX_QUOTE: &str = "graylog_regex_quote";
+    pub const GRAYLOG_OPEN_RANGE: &str = "graylog_open_range";
     pub const GRAYLOG_DOUBLE_BACKSLASH: &str = "graylog_double_backslash";
     pub const GRAYLOG_ANALYZED_FIELD: &str = "graylog_analyzed_field";
     pub const KUERY_QUESTION_MARK: &str = "kuery_question_mark";
@@ -795,6 +796,7 @@ pub mod codes {
         GRAYLOG_REGEX_UNSUPPORTED,
         GRAYLOG_REGEX_OPERATOR,
         GRAYLOG_REGEX_QUOTE,
+        GRAYLOG_OPEN_RANGE,
         GRAYLOG_DOUBLE_BACKSLASH,
         GRAYLOG_ANALYZED_FIELD,
         KUERY_QUESTION_MARK,
@@ -1088,6 +1090,9 @@ pub mod codes {
             }
             GRAYLOG_REGEX_QUOTE => {
                 "A Graylog regex holds an unescaped `\"`, which Lucene reads as a quoted literal, not the character: escape it as `\\\"`."
+            }
+            GRAYLOG_OPEN_RANGE => {
+                "A Graylog range has `*` as a bound (`[1 TO *]`, `{* TO 5}`). Graylog's query validator refuses it, so deploy cannot save the definition: write `field:>=1` or `field:<5`."
             }
             GRAYLOG_DOUBLE_BACKSLASH => {
                 "A Graylog query holds four backslashes in a row: `\\\\` is already one literal backslash, so `\\\\\\\\` matches two."

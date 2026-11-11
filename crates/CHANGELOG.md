@@ -8,8 +8,8 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ### Added
 
-- **Graylog queries are checked in a Graylog dialect of Lucene.** `configurations.graylog.query`, hunts with `system: graylog` and `opentide-lsp analyze --platform graylog` get Elastic's Lucene checks without the ECS and Kibana KQL advice, plus graylog-1.0's six codes. Hover and completion offer Graylog's message fields and `_exists_` (`docs/LANGUAGE.md`).
-  - Errors: `graylog_leading_wildcard` (opentide drops it for a tenant that allows leading wildcards), `graylog_regex_unsupported`
+- **Graylog queries are checked in a Graylog dialect of Lucene.** `configurations.graylog.query`, hunts with `system: graylog` and `opentide-lsp analyze --platform graylog` get Elastic's Lucene checks without the ECS and Kibana KQL advice, plus graylog-1.1's seven codes. Hover and completion offer Graylog's message fields and `_exists_` (`docs/LANGUAGE.md`).
+  - Errors: `graylog_leading_wildcard` (opentide drops it for a tenant that allows leading wildcards), `graylog_regex_unsupported`, `graylog_open_range` (a `*` range bound, which Graylog's validator refuses)
   - Warnings: `graylog_regex_operator`, `graylog_regex_quote`, `graylog_double_backslash`, `graylog_analyzed_field`
 - **Graylog blocks (`configurations.graylog`) are checked as graylog-1.0 says.** The block's constraint codes and `graylog_overlapping_window` (warning) are reported on their fields, so the editor and `opentide validate` agree; `aggregation.condition` gets completion and hover for Graylog's 12 aggregation functions. `graylog_all_streams` and `graylog_title_duplicate` stay opentide's.
   - Errors: `graylog_query_blank`, `graylog_list_shape`, `graylog_schedule` (a Quartz cron as Graylog reads it, an IANA `timezone`), `graylog_event_limit`, `graylog_aggregation`, `graylog_event_field`, `graylog_event_key`, `graylog_priority`, `graylog_field_name`

@@ -36,18 +36,11 @@ const SILENT: &[(&str, &str)] = &[
 /// Where the engine and Graylog's validator disagree, with the reason. A
 /// listed probe the engine now agrees with fails, so the list stays exact.
 const EXCEPTIONS: &[(&str, &str)] = &[
-    // Graylog's validator fails on an open range bound (a null term in its
-    // TermRangeQuery handling); OpenSearch runs it. (It also refuses `*:*`,
-    // "Unrecognized query type MatchAllDocsQuery", which the engine reports
-    // as a leading wildcard.)
-    ("range_open_upper.lucene", VALIDATOR),
-    ("range_open_lower.lucene", VALIDATOR),
     // The validator parses with Lucene, which ignores a fuzziness it cannot
     // read; OpenSearch's `query_string` rejects it at search time.
     ("fuzzy_word.lucene", SEARCH_TIME),
 ];
 
-const VALIDATOR: &str = "Graylog's validator refuses a query OpenSearch runs";
 const SEARCH_TIME: &str = "OpenSearch refuses it when the search runs";
 
 /// The finding each dialect probe must get.
@@ -78,6 +71,11 @@ const CODES: &[(&str, &str)] = &[
     ("regex_ampersand.lucene", codes::GRAYLOG_REGEX_OPERATOR),
     ("regex_greater_than.lucene", codes::GRAYLOG_REGEX_OPERATOR),
     ("regex_quoted_literal.lucene", codes::GRAYLOG_REGEX_QUOTE),
+    // Graylog's validator fails on an open bound (a null term in its
+    // TermRangeQuery handling) though OpenSearch runs it. It also refuses
+    // `*:*`, which the engine reports as a leading wildcard.
+    ("range_open_upper.lucene", codes::GRAYLOG_OPEN_RANGE),
+    ("range_open_lower.lucene", codes::GRAYLOG_OPEN_RANGE),
     ("four_backslashes.lucene", codes::GRAYLOG_DOUBLE_BACKSLASH),
     ("analyzed_regex.lucene", codes::GRAYLOG_ANALYZED_FIELD),
     ("analyzed_wildcard.lucene", codes::GRAYLOG_ANALYZED_FIELD),

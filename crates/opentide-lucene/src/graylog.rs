@@ -108,6 +108,55 @@ pub(crate) fn leading_wildcard(node: Node, source: &str, out: &mut Vec<Diagnosti
     ));
 }
 
+/// `graylog_open_range` on each `*` bound of a `range_query`: Graylog's
+/// validator refuses it, so deploy cannot save the definition.
+pub(crate) fn open_range(node: Node, source: &str, out: &mut Vec<Diagnostic>) {
+    let field = node
+        .parent()
+        .filter(|p| p.kind() == "field_query")
+        .and_then(|p| p.child_by_field_name("field"))
+        .map_or("field", |f| text(f, source));
+    let token = |name: &str| node.child_by_field_name(name).map(|n| text(n, source));
+    let (Some(lower), Some(upper)) = (
+        node.child_by_field_name("lower"),
+        node.child_by_field_name("upper"),
+    ) else {
+        return;
+    };
+    let advice = match (text(lower, source), text(upper, source)) {
+        ("*", "*") => format!("to match any value, write `_exists_:{field}`"),
+        ("*", value) => {
+            let op = if token("close") == Some("]") {
+                "<="
+            } else {
+                "<"
+            };
+            format!("write `{field}:{op}{value}`")
+        }
+        (value, "*") => {
+            let op = if token("open") == Some("[") {
+                ">="
+            } else {
+                ">"
+            };
+            format!("write `{field}:{op}{value}`")
+        }
+        _ => return,
+    };
+    for star in [lower, upper]
+        .into_iter()
+        .filter(|b| text(*b, source) == "*")
+    {
+        out.push(Diagnostic::error(
+            codes::GRAYLOG_OPEN_RANGE,
+            format!(
+                "Graylog's query validator refuses `*` as a range bound, so deploy cannot save the definition; {advice}"
+            ),
+            range(source, star.start_byte(), star.end_byte()),
+        ));
+    }
+}
+
 /// A wildcard term as the Lucene regex that matches the same values.
 fn regex_for(word: &str) -> String {
     let mut out = String::new();
@@ -465,6 +514,37 @@ mod tests {
         assert_eq!(at("\"a~b\""), Vec::<usize>::new());
         // Byte offsets past multibyte text.
         assert_eq!(at("é~"), [2]);
+    }
+
+    #[test]
+    fn open_range_bounds_are_refused_with_a_rewrite() {
+        let found = |q: &str| {
+            crate::analyze_dialect(q, crate::Dialect::Graylog)
+                .diagnostics
+                .into_iter()
+                .filter(|d| d.code == codes::GRAYLOG_OPEN_RANGE)
+                .map(|d| (d.message, d.range))
+                .collect::<Vec<_>>()
+        };
+        let upper = found("bytes:[1 TO *]");
+        assert_eq!(upper.len(), 1);
+        assert!(upper[0].0.ends_with("write `bytes:>=1`"), "{upper:?}");
+        assert_eq!(
+            (upper[0].1.start.character, upper[0].1.end.character),
+            (12, 13)
+        );
+        let lower = found("bytes:{* TO 5}");
+        assert!(lower[0].0.ends_with("write `bytes:<5`"), "{lower:?}");
+        let both = found("é:[* TO *]");
+        assert_eq!(both.len(), 2);
+        assert!(both[0].0.ends_with("write `_exists_:é`"), "{both:?}");
+        assert!(found("bytes:[1 TO 5]").is_empty());
+        assert!(
+            crate::analyze_dialect("bytes:[1 TO *]", crate::Dialect::Elastic)
+                .diagnostics
+                .iter()
+                .all(|d| d.code != codes::GRAYLOG_OPEN_RANGE)
+        );
     }
 
     #[test]

@@ -117,6 +117,7 @@ pub fn analyze_dialect(source: &str, dialect: Dialect) -> AnalyzeResult {
         "range_query" => {
             range_whitespace(node, text, &mut diagnostics);
             if graylog {
+                graylog::open_range(node, text, &mut diagnostics);
                 graylog::analyzed_field(node, ancestors, text, &mut diagnostics);
             }
         }
