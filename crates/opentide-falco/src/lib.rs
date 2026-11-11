@@ -18,6 +18,9 @@
 //!
 //! What depends on the agent (fields and macros the catalogue does not know)
 //! is a warning; what Falco refuses to load is an error. See `docs/engine/FALCO.md`.
+//!
+//! Internal to opentide, with no stability promise: depend on the
+//! [`opentide`](https://docs.rs/opentide) crate, its Rust SDK, instead.
 
 #![expect(
     missing_docs,

@@ -8,6 +8,9 @@
 //! backslash at a time, and a tab or newline inside a range glues tokens.
 //! `/regexp/` bodies are Lucene's own regular-expression grammar
 //! ([`regexp`]). Those are the checks this engine adds after the grammar.
+//!
+//! Internal to opentide, with no stability promise: depend on the
+//! [`opentide`](https://docs.rs/opentide) crate, its Rust SDK, instead.
 
 #![expect(
     missing_docs,

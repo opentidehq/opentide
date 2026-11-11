@@ -1,9 +1,12 @@
 //! I/O-free analysis orchestrator. Filesystem lives behind [`WorkspaceHost`].
 //!
-//! The engine's public entry point: the language server, the browser build, and
+//! The engine's entry point inside opentide: the language server, the browser build, and
 //! bindings such as the `opentide` Python package depend on this crate alone. The
 //! types its functions take and return are re-exported here, so a host never needs
 //! the per-language crates behind it.
+//!
+//! Internal to opentide, with no stability promise: depend on the
+//! [`opentide`](https://docs.rs/opentide) crate, its Rust SDK, instead.
 
 #![expect(
     missing_docs,

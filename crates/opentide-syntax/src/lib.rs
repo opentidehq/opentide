@@ -5,6 +5,9 @@
 //! site says why it is sound (`// SAFETY:`), and `docs/internal/unsafe.md`
 //! lists them. It is one of the two crates allowed `unsafe` (the root
 //! Cargo.toml, `[workspace.lints]`).
+//!
+//! Internal to opentide, with no stability promise: depend on the
+//! [`opentide`](https://docs.rs/opentide) crate, its Rust SDK, instead.
 
 use opentide_core::{ByteSpan, LanguageId};
 use tree_sitter::{Language, Node, Parser, Query, QueryCursor, StreamingIterator, Tree};

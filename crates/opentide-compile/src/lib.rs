@@ -16,6 +16,9 @@
 //!
 //! The crate does no I/O: the workspace (`opentide-workspace`) is loaded by
 //! the caller.
+//!
+//! Internal to opentide, with no stability promise: depend on the
+//! [`opentide`](https://docs.rs/opentide) crate, its Rust SDK, instead.
 
 pub mod attack;
 pub mod carbon_black;

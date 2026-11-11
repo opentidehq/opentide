@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import fnmatch
 import importlib.util
 import re
 import subprocess
@@ -213,3 +214,91 @@ def test_only_the_engine_release_publishes_the_engine() -> None:
     release = (ROOT / ".github" / "workflows" / "engine-release.yml").read_text(encoding="utf-8")
     assert re.search(r"release\.py publish|npm publish", release)
     assert '  push:\n    tags:\n      - "engine-v*"\n  workflow_dispatch:' in release
+
+
+# Cargo's explicit target tables, with the folder and file name a target takes
+# when its table gives no `path`.
+_TARGET_TABLES = {
+    "bin": ("src/bin", "main.rs"),
+    "test": ("tests", "main.rs"),
+    "example": ("examples", "main.rs"),
+    "bench": ("benches", "main.rs"),
+}
+
+
+def _sdist_excludes() -> list[str]:
+    pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    return list(pyproject["tool"]["hatch"]["build"]["targets"]["sdist"]["exclude"])
+
+
+def _excluded(relative: str, patterns: list[str]) -> bool:
+    """Whether hatchling leaves *relative* (a `/`-separated path from the root)
+    out of the sdist: an anchored pattern names a path or a folder above it,
+    each `*` standing for one path segment."""
+    parts = relative.split("/")
+    for pattern in patterns:
+        wanted = pattern.strip("/").split("/")
+        if len(wanted) <= len(parts) and all(
+            fnmatch.fnmatchcase(part, glob)
+            for part, glob in zip(parts[: len(wanted)], wanted, strict=True)
+        ):
+            return True
+    return False
+
+
+def _declared_target_files(member: str, manifest: dict[str, object]) -> list[str]:
+    """The source files *member*'s manifest names in its explicit `[lib]`,
+    `[[bin]]`, `[[test]]`, `[[example]]` and `[[bench]]` tables: cargo reads
+    them whenever it parses the manifest."""
+    files: list[str] = []
+    lib = manifest.get("lib")
+    if isinstance(lib, dict):
+        files.append(f"{member}/{lib.get('path', 'src/lib.rs')}")
+    for table, (folder, main) in _TARGET_TABLES.items():
+        for target in manifest.get(table, []) or []:
+            assert isinstance(target, dict), (member, table, target)
+            if "path" in target:
+                files.append(f"{member}/{target['path']}")
+                continue
+            name = target["name"]
+            single = f"{member}/{folder}/{name}.rs"
+            files.append(
+                single if (ROOT / single).is_file() else f"{member}/{folder}/{name}/{main}"
+            )
+    return files
+
+
+def test_the_sdist_ships_every_target_a_workspace_manifest_names() -> None:
+    """A `[[test]]` table naming a file under `crates/*/tests`, which the sdist
+    leaves out, stopped every build from the sdist: cargo would not parse the
+    manifest (#963). Cargo discovers a crate's tests by itself; a table may name
+    only a file the sdist ships."""
+    root = tomllib.loads((ROOT / "Cargo.toml").read_text(encoding="utf-8"))
+    patterns = _sdist_excludes()
+    problems: list[str] = []
+    for member in root["workspace"]["members"]:
+        manifest = tomllib.loads((ROOT / member / "Cargo.toml").read_text(encoding="utf-8"))
+        for relative in _declared_target_files(member, manifest):
+            if not (ROOT / relative).is_file():
+                problems.append(f"{member}/Cargo.toml names {relative}, which does not exist")
+            elif _excluded(relative, patterns):
+                problems.append(f"{member}/Cargo.toml names {relative}, which the sdist leaves out")
+    assert problems == []
+
+
+def test_the_target_check_sees_a_test_table_the_sdist_leaves_out() -> None:
+    patterns = _sdist_excludes()
+    manifest: dict[str, object] = {
+        "test": [{"name": "api"}, {"name": "absent"}],
+        "bench": [{"name": "x", "path": "b.rs"}],
+    }
+    files = _declared_target_files("crates/opentide", manifest)
+    assert files == [
+        "crates/opentide/tests/api.rs",
+        "crates/opentide/tests/absent/main.rs",
+        "crates/opentide/b.rs",
+    ]
+    assert _excluded("crates/opentide/tests/api.rs", patterns)
+    assert _excluded("crates/opentide/tests/api/main.rs", patterns)
+    assert not _excluded("crates/opentide/examples/validate.rs", patterns)
+    assert not _excluded("crates/opentide/src/lib.rs", patterns)

@@ -86,10 +86,14 @@ tiers = [
     ["opentide-cli"],
 ]
 
-# The `opentide` facade crate: UC-5.1 (#836) places it here.
+# The `opentide` facade crate (UC-5.1, #836): the public Rust API over the
+# applications and the domain (ADR 0005). Its features reach opentide-cli
+# (`queries`, `cli`) and opentide-lsp (`lsp`), so it sits above both.
 [[layer]]
 name = "facade"
-tiers = []
+tiers = [
+    ["opentide"],
+]
 
 [[layer]]
 name = "bindings"

@@ -7,7 +7,7 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 authors.workspace = true
-description = "opentide engine component: Tree-sitter language bindings for opentide KQL, SPL, ES|QL, EQL, kuery, Lucene, Falco, and CQL. Depend on opentide-analysis."
+description = "opentide engine component: Tree-sitter language bindings for opentide KQL, SPL, ES|QL, EQL, kuery, Lucene, Falco, and CQL. Internal: depend on the opentide crate."
 readme = "../COMPONENT.md"
 build = "build.rs"
 

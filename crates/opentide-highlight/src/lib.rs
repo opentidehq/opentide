@@ -2,6 +2,9 @@
 //!
 //! Capture rename in `highlights/spec.toml` is a **major** (breaking) change.
 //! Adding captures is a minor.
+//!
+//! Internal to opentide, with no stability promise: depend on the
+//! [`opentide`](https://docs.rs/opentide) crate, its Rust SDK, instead.
 
 #![expect(
     missing_docs,

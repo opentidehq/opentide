@@ -2509,6 +2509,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7e036b411754132fd6b74e94b74e9a13c5cf606fa93d1885c35860d3060820b1"
 
 [[package]]
+name = "opentide"
+version = "0.12.0"
+dependencies = [
+ "opentide-cli",
+ "opentide-compare",
+ "opentide-compile",
+ "opentide-lsp",
+ "opentide-schema",
+ "opentide-workspace",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
 name = "opentide-analysis"
 version = "0.12.0"
 dependencies = [
