@@ -210,7 +210,7 @@ impl Json {
 }
 
 /// An array index token: decimal, without a leading zero (RFC 6901).
-fn array_index(token: &str) -> Option<usize> {
+pub fn array_index(token: &str) -> Option<usize> {
     if token.is_empty()
         || (token.len() > 1 && token.starts_with('0'))
         || !token.bytes().all(|byte| byte.is_ascii_digit())

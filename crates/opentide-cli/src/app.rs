@@ -30,7 +30,22 @@ use std::time::{Duration, Instant, SystemTime};
 /// `engine_not_ported`, as `OPENTIDE_ENGINE=rust` refuses it.
 /// `deploy` runs here with `--dry-run` only (UC-3.1c); a deploy that sends is
 /// refused as unported.
-pub const PORTED: &[&str] = &["commands", "info", "rules unreviewed", "deploy"];
+pub const PORTED: &[&str] = &[
+    "commands",
+    "explain",
+    "info",
+    "rules unreviewed",
+    "generate exports",
+    "generate exports navigator",
+    "generate exports objects",
+    "generate exports revisions",
+    "generate docs",
+    "generate docs rules",
+    "generate docs objectives",
+    "generate docs threats",
+    "generate docs index",
+    "deploy",
+];
 
 /// The file in which a run refused with `engine_not_ported` records its
 /// message, when the variable names one. `OPENTIDE_ENGINE=compare`
@@ -80,6 +95,12 @@ impl Interrupt {
     /// Whether Ctrl-C was pressed: long jobs poll this and stop.
     pub fn requested(&self) -> bool {
         self.requested.load(Ordering::SeqCst)
+    }
+
+    /// Takes back a Ctrl-C a command handled as its way to stop
+    /// (`validate --watch` exits 0): the run then reports no interruption.
+    pub fn consume(&self) {
+        self.requested.store(false, Ordering::SeqCst);
     }
 
     /// Prints `error: interrupted` once, whoever reports it first; 130.
@@ -414,6 +435,72 @@ impl Run<'_> {
                 );
                 self.emit_report(&report, out, err)
             }
+            "validate" => {
+                // A person at a terminal sees what runs until the result
+                // replaces it.
+                let status = self.mode == Mode::Human
+                    && self.host.stderr_tty
+                    && !self.globals.quiet
+                    && self.console(true).colour != Colour::None;
+                // Log lines follow under `--debug`: the line stays above them.
+                let logging = self.globals.debug || self.env.debug_requested();
+                // A report on stdout is whole: no status line then either.
+                let status = status
+                    && !leaf(&matches).get_flag("watch")
+                    && leaf(&matches)
+                        .get_one::<crate::tree::ReportFormat>("report_format")
+                        .is_none_or(|format| *format == crate::tree::ReportFormat::Text);
+                if status {
+                    let mut line = Text::styled("⠋", &Style::new("bold cyan"));
+                    line.push_str(" Validating objects");
+                    err.write_all(b"\x1b[?25l")?;
+                    err.write_all(line.render(Colour::Full, false).as_bytes())?;
+                    if logging {
+                        err.write_all(b"\n")?;
+                    }
+                    err.flush()?;
+                }
+                let (parsed, report) = self.validate(&matches);
+                if status {
+                    err.write_all(if logging {
+                        b"\x1b[?25h".as_slice()
+                    } else {
+                        b"\r\x1b[2K\x1b[?25h".as_slice()
+                    })?;
+                    err.flush()?;
+                }
+                if let Some(report) = report {
+                    return self.emit_report(&report, out, err);
+                }
+                let cwd = self.host.cwd.clone().unwrap_or_default();
+                let terminal = self.terminal();
+                let interrupt = self.host.interrupt.clone();
+                let code = crate::commands::watch::run(
+                    &parsed,
+                    &crate::commands::validate::Context {
+                        repo: self.globals.repo.as_deref(),
+                        env: self.env,
+                        cwd: &cwd,
+                        version: &self.host.version,
+                        terminal: &terminal,
+                    },
+                    out,
+                    err,
+                    &|| interrupt.requested(),
+                )?;
+                // Ctrl-C is how a watch stops.
+                self.host.interrupt.consume();
+                Ok(code)
+            }
+            "lint" => {
+                let report = self.lint(&matches);
+                self.emit_report(&report, out, err)
+            }
+            "explain" => {
+                let code = leaf(&matches).get_one::<String>("code").cloned();
+                let report = crate::commands::explain::run(code.as_deref(), &self.terminal());
+                self.emit_report(&report, out, err)
+            }
             "generate docs"
             | "generate docs rules"
             | "generate docs objectives"
@@ -634,6 +721,123 @@ impl Run<'_> {
         )
     }
 
+    /// `opentide validate`, from its parsed arguments: its report, or `None`
+    /// for a `--watch` the options allow, which runs until Ctrl-C.
+    fn validate(
+        &self,
+        matches: &clap::ArgMatches,
+    ) -> (
+        crate::commands::validate::Args,
+        Option<crate::commands::Report>,
+    ) {
+        use crate::commands::validate::{Args, Context, run};
+        use clap::ValueEnum;
+        let args = leaf(matches);
+        let strings = |id: &str| -> Vec<String> {
+            args.get_many::<String>(id)
+                .map(|values| values.cloned().collect())
+                .unwrap_or_default()
+        };
+        let parsed = Args {
+            check: args
+                .get_one::<crate::tree::Check>("check")
+                .and_then(|check| check.to_possible_value())
+                .and_then(|value| opentide_workspace::validate::Check::parse(value.get_name())),
+            selection: opentide_workspace::validate::Selection {
+                files: strings("file"),
+                uuids: strings("uuid"),
+                types: strings("object_type"),
+            },
+            strict: args.get_flag("strict"),
+            queries: args
+                .get_one::<crate::tree::Queries>("queries")
+                .map(|queries| match queries {
+                    crate::tree::Queries::Error => opentide_workspace::validate::QueriesMode::Error,
+                    crate::tree::Queries::Warn => opentide_workspace::validate::QueriesMode::Warn,
+                    crate::tree::Queries::Off => opentide_workspace::validate::QueriesMode::Off,
+                }),
+            fix: args.get_flag("fix"),
+            dry_run: args.get_flag("dry_run"),
+            watch: args.get_flag("watch"),
+            format: args
+                .get_one::<crate::tree::ReportFormat>("report_format")
+                .map(|format| match format {
+                    crate::tree::ReportFormat::Text => crate::render::report::ReportFormat::Text,
+                    crate::tree::ReportFormat::Sarif => crate::render::report::ReportFormat::Sarif,
+                    crate::tree::ReportFormat::Codequality => {
+                        crate::render::report::ReportFormat::Codequality
+                    }
+                }),
+            output: args.get_one::<PathBuf>("output").cloned(),
+        };
+        if parsed.watch && crate::commands::validate::refuse(&parsed, self.mode).is_none() {
+            return (parsed, None);
+        }
+        let cwd = self.host.cwd.clone().unwrap_or_default();
+        let terminal = self.terminal();
+        let report = run(
+            &parsed,
+            &Context {
+                repo: self.globals.repo.as_deref(),
+                env: self.env,
+                cwd: &cwd,
+                version: &self.host.version,
+                terminal: &terminal,
+            },
+        );
+        (parsed, Some(report))
+    }
+
+    /// `opentide lint`, from its parsed arguments.
+    fn lint(&self, matches: &clap::ArgMatches) -> crate::commands::Report {
+        use clap::ValueEnum;
+        let args = leaf(matches);
+        let parsed = crate::commands::lint::Args {
+            fix: args.get_flag("fix"),
+            strict: args.get_flag("strict"),
+            checks: args
+                .get_many::<crate::tree::Check2>("check")
+                .into_iter()
+                .flatten()
+                .filter_map(|check| check.to_possible_value())
+                .filter_map(|value| opentide_workspace::lint::LintCheck::parse(value.get_name()))
+                .collect(),
+            changed: args.get_flag("changed"),
+            files: args
+                .get_many::<String>("file")
+                .map(|values| values.cloned().collect())
+                .unwrap_or_default(),
+            format: args
+                .get_one::<crate::tree::ReportFormat>("report_format")
+                .map(|format| report_format(*format)),
+            output: args.get_one::<PathBuf>("output").cloned(),
+        };
+        let cwd = self.host.cwd.clone().unwrap_or_default();
+        let terminal = self.terminal();
+        crate::commands::lint::run(
+            &parsed,
+            &crate::commands::lint::Context {
+                repo: self.globals.repo.as_deref(),
+                env: self.env,
+                cwd: &cwd,
+                version: &self.host.version,
+                terminal: &terminal,
+            },
+        )
+    }
+
+    /// The streams, as a command lays its text out for them.
+    fn terminal(&self) -> crate::commands::Terminal {
+        crate::commands::Terminal {
+            mode: self.mode,
+            stdout: self.console(self.host.stdout_tty),
+            stderr: self.console(self.host.stderr_tty),
+            quiet: self.globals.quiet,
+            stdout_tty: self.host.stdout_tty,
+            width: self.host.width,
+        }
+    }
+
     /// `opentide deploy --dry-run`, from its parsed arguments.
     fn deploy(&self, matches: &clap::ArgMatches) -> crate::commands::deploy::DryRun {
         use clap::ValueEnum;
@@ -807,6 +1011,10 @@ impl Run<'_> {
         }
         let outcome = &report.outcome;
         self.record_refusal(outcome)?;
+        if !report.stderr_first.is_empty() {
+            err.write_all(report.stderr_first.as_bytes())?;
+            err.flush()?;
+        }
         if self.mode == Mode::Json {
             let mut document = outcome.document(self.duration_ms());
             if !report.warnings.is_empty()
@@ -853,6 +1061,13 @@ impl Run<'_> {
         }
         let stdout = self.console(self.host.stdout_tty);
         let width = self.stdout_width();
+        if let Some(whole) = &report.whole_stdout {
+            if self.mode != Mode::Mcp {
+                out.write_all(whole.as_bytes())?;
+            }
+            out.flush()?;
+            return Ok(outcome.exit_code);
+        }
         if self.mode != Mode::Mcp {
             for block in &report.body {
                 match block {
@@ -868,8 +1083,19 @@ impl Run<'_> {
                             out.write_all(stdout.line(&line).as_bytes())?;
                         }
                     }
+                    Block::Raw(text) => out.write_all(text.as_bytes())?,
+                    Block::Stderr(text) => {
+                        out.flush()?;
+                        err.write_all(text.as_bytes())?;
+                        err.flush()?;
+                    }
                 }
             }
+        }
+        if report.body_only && outcome.exit_code == 0 {
+            out.flush()?;
+            err.flush()?;
+            return Ok(outcome.exit_code);
         }
         let view = ResultView {
             message: outcome.message.clone(),
@@ -922,6 +1148,15 @@ impl Run<'_> {
         }
         out.extend(self.host.cwd.clone());
         out
+    }
+}
+
+/// `--format`'s value as the renderers name it.
+fn report_format(format: crate::tree::ReportFormat) -> crate::render::report::ReportFormat {
+    match format {
+        crate::tree::ReportFormat::Text => crate::render::report::ReportFormat::Text,
+        crate::tree::ReportFormat::Sarif => crate::render::report::ReportFormat::Sarif,
+        crate::tree::ReportFormat::Codequality => crate::render::report::ReportFormat::Codequality,
     }
 }
 
@@ -1718,12 +1953,12 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let file = dir.path().join("refusal");
         let path = file.to_string_lossy().into_owned();
-        for line in ["--json validate", "validate"] {
+        for line in ["--json doctor", "doctor"] {
             let refused = dispatched(line, &[(REFUSAL_ENV, &path)], false);
             assert_eq!(refused.code, 2, "{line}");
             let recorded = std::fs::read_to_string(&file).unwrap();
             assert!(
-                recorded.starts_with("opentide validate has no Rust implementation yet"),
+                recorded.starts_with("opentide doctor has no Rust implementation yet"),
                 "{line}: {recorded}"
             );
             std::fs::remove_file(&file).unwrap();
@@ -1732,7 +1967,7 @@ mod tests {
         assert_eq!(ran.code, 0);
         assert!(!file.exists());
         // Without the variable, nothing is written.
-        assert_eq!(dispatched("validate", &[], false).code, 2);
+        assert_eq!(dispatched("doctor", &[], false).code, 2);
         assert!(!file.exists());
     }
 
@@ -1757,14 +1992,14 @@ mod tests {
             "{}",
             help.stdout
         );
-        let refused = dispatched("--json validate", &[], false);
+        let refused = dispatched("--json share push", &[], false);
         assert_eq!(refused.code, 2);
         assert!(refused.stdout.contains("\"code\":\"engine_not_ported\""));
         assert!(refused.stdout.contains("\"argument\":\"OPENTIDE_ENGINE\""));
-        let plain = dispatched("validate", &[], false);
+        let plain = dispatched("share push", &[], false);
         assert_eq!(
             plain.stderr,
-            "error: opentide validate has no Rust implementation yet: unset OPENTIDE_ENGINE, or set it to python or compare.\n"
+            "error: opentide share push has no Rust implementation yet: unset OPENTIDE_ENGINE, or set it to python or compare.\n"
         );
         let file =
             std::env::temp_dir().join(format!("opentide-cli-not-a-dir-{}", std::process::id()));
@@ -1920,7 +2155,7 @@ mod tests {
         assert_eq!(plain.code, 0);
         assert!(plain.stdout.contains("commands"), "{}", plain.stdout);
         // Parsed, then refused as not ported: no usage error.
-        let strict = dispatched("--json validate --strict --strict", &[], false);
+        let strict = dispatched("--json share push --dry-run --dry-run", &[], false);
         assert!(
             strict.stdout.contains("\"code\":\"engine_not_ported\""),
             "{}",
@@ -2145,7 +2380,7 @@ mod tests {
             Ok(run.emit(&outcome, &[], &["a line".into()], out, err)?)
         });
         assert_eq!((success.code, success.stdout.as_str()), (0, ""));
-        let failed = dispatched("--json validate", &[], false);
+        let failed = dispatched("--json deploy", &[], false);
         assert!(
             failed.stdout.starts_with("{\"error\":"),
             "{}",
@@ -2157,13 +2392,13 @@ mod tests {
     fn framework_small_behaviours() {
         // TERM=DUMB in any case: no SGR, even in human mode on a terminal.
         let dumb = dispatched(
-            "validate",
+            "deploy",
             &[("OPENTIDE_OUTPUT", "human"), ("TERM", "DUMB")],
             true,
         );
         assert!(!dumb.stderr.contains('\u{1b}'), "{}", dumb.stderr);
         let coloured = dispatched(
-            "validate",
+            "deploy",
             &[("OPENTIDE_OUTPUT", "human"), ("TERM", "xterm")],
             true,
         );

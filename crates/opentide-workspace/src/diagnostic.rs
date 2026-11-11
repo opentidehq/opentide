@@ -237,6 +237,11 @@ pub struct Diagnostic {
     /// in the JSON.
     #[serde(skip)]
     pub notes: Vec<(String, String)>,
+    /// The sentence a person reads in the frame's header, when it is not
+    /// [`Self::message`] (`missing required field 'x'`, `'clearr' is not a
+    /// TLP value`); not in the JSON, which keeps the engine's message.
+    #[serde(skip)]
+    pub headline: Option<String>,
 }
 
 impl Diagnostic {
@@ -262,7 +267,13 @@ impl Diagnostic {
             fix: None,
             label: None,
             notes: Vec::new(),
+            headline: None,
         }
+    }
+
+    /// The frame's header sentence: [`Self::headline`], else the message.
+    pub fn frame_message(&self) -> &str {
+        self.headline.as_deref().unwrap_or(&self.message)
     }
 
     /// An error.

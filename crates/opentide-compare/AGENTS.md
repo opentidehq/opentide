@@ -32,6 +32,16 @@ goes when compare mode does (UC-6.2, #841).
 - A text rule is one whole line on each side, approved where the oracle and candidate lines match
   it at the same line number (without the line ending, which is still compared). Part of a line
   approves nothing.
+- A json-extend rule names the elements a candidate adds to the oracle's array at its pointer,
+  by their indices in the candidate's array, and the oracle array's length. They are set aside
+  (outer arrays first) and what is left is compared with the oracle's array as any value is: an
+  oracle element changed, dropped or moved, or an added element it does not name, is still a
+  difference. JSON rules address an extended array by the oracle's indices.
+- A lines rule is a block of whole lines on each side, naming its one case; a case may have
+  several, one per block, each placed by its oracle side (the same block twice is a duplicate).
+  Its candidate may be
+  `(absent)`: the oracle's block is dropped and the candidate writes no line in its place. Its
+  oracle side is always quoted.
 - A ledger entry that applies to no case in a complete run is stale, and the run fails
   (`RunReport::new`). A single CLI run (`compare_normalised`) does not check staleness.
 - Every ledger field is required; the schema is in the comment at the top of

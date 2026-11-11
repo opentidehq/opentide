@@ -9,7 +9,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use opentide_cli::queries::{EngineQueries, Profiles, REPORTED_AS_WARNING_NOTE};
+use opentide_cli::queries::{EngineLintQueries, EngineQueries, Profiles, REPORTED_AS_WARNING_NOTE};
 use opentide_workspace::validate::{Check, Options, QueriesMode, QueryCheck, QueryObject};
 use opentide_workspace::{Diagnostic, FileSystem, MemoryFs, RootOptions, Severity, Workspace};
 use serde_json::{Value, json};
@@ -369,4 +369,198 @@ fn validate_runs_the_engines_and_drops_what_the_schema_check_rejects() {
     assert_eq!(checked.len(), 1);
     assert!(checked[0].is_rule_query());
     assert_eq!(checked[0].errors(), 1);
+}
+
+/// What lint's queries check finds in `text`, as a rule file of a
+/// workspace: (code, severity, line) per finding.
+fn lint_check(text: &str) -> Vec<(String, String, usize)> {
+    use opentide_workspace::lint::LintQueryCheck;
+    let _engine = opentide_cli::queries::ENGINE.lock().unwrap();
+    let fs = MemoryFs::new();
+    fs.create_dir("/ws/.opentide/configurations");
+    let check = EngineLintQueries::install(&fs, std::path::Path::new("/ws"));
+    check
+        .check(
+            std::path::Path::new(FILE),
+            "objects/rules/a.yaml",
+            Some(UUID),
+            text,
+        )
+        .unwrap()
+        .into_iter()
+        .map(|finding| {
+            assert_eq!(finding.json["check"], "queries");
+            assert_eq!(finding.json["uuid"], UUID);
+            (
+                finding.diagnostic.code.clone(),
+                finding.diagnostic.severity.as_str().to_owned(),
+                finding.diagnostic.line.unwrap(),
+            )
+        })
+        .collect()
+}
+
+const ELASTIC_KUERY: &str = "  elastic:\n    type: query\n    language: kuery\n";
+
+#[test]
+fn lint_reports_query_warnings_and_advisories_but_not_engine_errors() {
+    let text = rule(&format!(
+        "  sentinel:\n    query: |\n      search \"error\"\n  defender_for_endpoint:\n    \
+         query: |\n      DeviceProcessEvents\n      | where (\n{ELASTIC_KUERY}    query: \
+         'process.name: \"a\"'\n    scheduling:\n      interval: 5m\n      lookback: 0m\n"
+    ));
+    let found = lint_check(&text);
+    // The unscoped search is a warning on the Sentinel query's line.
+    assert!(
+        found.contains(&("kql_unscoped_search".into(), "warning".into(), 8)),
+        "{found:#?}"
+    );
+    // Elastic's block advisory is lint's.
+    assert!(
+        found
+            .iter()
+            .any(|(code, severity, line)| code == "lookback_zero"
+                && severity == "warning"
+                && *line == 19),
+        "{found:#?}"
+    );
+    // The query the engine rejects (`kql_parse_error` on line 12) is
+    // validate's, and the object's other findings (schema, metadata) are not
+    // the queries check's.
+    assert_eq!(found.len(), 2, "{found:#?}");
+}
+
+#[test]
+fn lint_leaves_a_placeholder_query_to_the_placeholders_check() {
+    // `...` is a free-text Kuery query: a note where it is not a placeholder.
+    let written = rule(&format!("{ELASTIC_KUERY}    query: ...\n"));
+    assert_eq!(
+        lint_check(&written),
+        [("kuery_free_text".to_owned(), "info".to_owned(), 9)]
+    );
+    // The marker on the key's own line, or on the line above the stand-in.
+    let inline = rule(&format!(
+        "{ELASTIC_KUERY}    query: ...  # opentide:placeholder\n"
+    ));
+    assert_eq!(lint_check(&inline), []);
+    let next_line = rule(&format!(
+        "{ELASTIC_KUERY}    query: |  # opentide:placeholder\n      ...\n"
+    ));
+    assert_eq!(lint_check(&next_line), []);
+    // A marker without its stand-in leaves the query checked.
+    let replaced = rule(&format!(
+        "{ELASTIC_KUERY}    query: |  # opentide:placeholder\n      process.name: \"a\" or ...\n"
+    ));
+    assert!(
+        lint_check(&replaced)
+            .iter()
+            .any(|(code, _, _)| code == "kuery_free_text"),
+        "{:#?}",
+        lint_check(&replaced)
+    );
+}
+
+#[test]
+fn is_stand_in_reads_the_value_without_its_marker() {
+    assert!(opentide_cli::queries::is_stand_in(
+        "...  # opentide:placeholder"
+    ));
+    assert!(opentide_cli::queries::is_stand_in("  ...  "));
+    assert!(!opentide_cli::queries::is_stand_in(
+        "a ...  # opentide:placeholder"
+    ));
+    assert!(!opentide_cli::queries::is_stand_in(""));
+}
+
+#[test]
+fn lint_reports_every_elastic_block_advisory() {
+    let codes = |text: &str| -> Vec<String> {
+        lint_check(text)
+            .into_iter()
+            .map(|(code, _, _)| code)
+            .collect()
+    };
+    let query = "    query: 'process.name: \"a\"'\n";
+    let long = rule(&format!(
+        "{ELASTIC_KUERY}{query}    scheduling:\n      interval: 5m\n      lookback: 2h\n"
+    ));
+    assert_eq!(codes(&long), ["lookback_long"]);
+    let threshold = rule(&format!(
+        "  elastic:\n    type: threshold\n    language: kuery\n{query}    threshold:\n      \
+         field:\n        - host.name\n      value: 4\n    scheduling:\n      interval: 5m\n      \
+         lookback: 10m\n"
+    ));
+    assert_eq!(codes(&threshold), ["threshold_lookback"]);
+    let risk = format!(
+        "name: A\nmetadata:\n  uuid: {UUID}\n  schema: rule::1.1\nresponse:\n  \
+         alert_severity: High\nconfigurations:\n{ELASTIC_KUERY}{query}    risk: 90\n"
+    );
+    assert_eq!(codes(&risk), ["risk_band"]);
+    let mobile = format!(
+        "name: A\nmetadata:\n  uuid: {UUID}\n  schema: rule::1.1\ntechniques:\n  - T1626\n\
+         configurations:\n{ELASTIC_KUERY}{query}"
+    );
+    assert_eq!(codes(&mobile), ["technique_not_enterprise"]);
+}
+
+/// `opentide --json lint` with `words` after it, in-process, in a workspace
+/// on disk holding `text` as its one rule: the JSON document.
+fn lint_run(text: &str, words: &[&str]) -> Value {
+    use std::sync::Mutex;
+    #[derive(Clone, Default)]
+    struct Sink(Arc<Mutex<Vec<u8>>>);
+    impl std::io::Write for Sink {
+        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+            self.0.lock().unwrap().extend_from_slice(bytes);
+            Ok(bytes.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
+    std::fs::create_dir_all(ws.join(".opentide/configurations")).unwrap();
+    std::fs::create_dir_all(ws.join("objects/rules")).unwrap();
+    std::fs::write(ws.join("objects/rules/a.yaml"), text).unwrap();
+    let home = scratch.path().join("home");
+    std::fs::create_dir_all(&home).unwrap();
+    let host = opentide_cli::Host {
+        version: "0.23.0".into(),
+        stdout_tty: false,
+        stderr_tty: false,
+        log_sink: Arc::new(Mutex::new(Sink::default())),
+        cwd: Some(ws),
+        width: None,
+        interrupt: opentide_cli::app::Interrupt::default(),
+    };
+    let argv: Vec<String> = ["--json", "lint"]
+        .iter()
+        .chain(words)
+        .map(|word| (*word).to_owned())
+        .collect();
+    let env = opentide_cli::env::Env::from_pairs([("HOME".to_owned(), home.display().to_string())]);
+    let (mut out, mut err) = (Vec::new(), Sink::default());
+    opentide_cli::run(&argv, &env, &host, &mut out, &mut err);
+    serde_json::from_slice(&out).unwrap()
+}
+
+#[test]
+fn a_default_lint_run_includes_the_queries_check() {
+    let text = rule("  sentinel:\n    query: |\n      search \"error\"\n");
+    let queries = |document: &Value| -> Vec<String> {
+        document["findings"]
+            .as_array()
+            .unwrap_or_else(|| panic!("{document}"))
+            .iter()
+            .filter(|finding| finding["check"] == "queries")
+            .map(|finding| finding["code"].as_str().unwrap().to_owned())
+            .collect()
+    };
+    let default = lint_run(&text, &[]);
+    assert_eq!(queries(&default), ["kql_unscoped_search"], "{default}");
+    let only = lint_run(&text, &["--check", "queries"]);
+    assert_eq!(queries(&only), ["kql_unscoped_search"], "{only}");
+    let other = lint_run(&text, &["--check", "metadata"]);
+    assert_eq!(queries(&other), Vec::<String>::new(), "{other}");
 }
