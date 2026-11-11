@@ -22,7 +22,7 @@ The Python CLI at the frozen tag is the oracle ([plan §5](https://github.com/op
 | … compare failing | 0 (0.0%) |
 | … compare not run | 208 (33.0%) |
 | … flipped | 0 (0.0%) |
-| Approved diffs (`tests/golden/APPROVED_DIFFS.toml`) | 293 |
+| Approved diffs (`tests/golden/APPROVED_DIFFS.toml`) | 613 |
 | Diagnostic codes with a fault kind | 163 of 175 (93.1%) |
 | … with no fault kind, evidence recorded | 12 |
 | … with neither (missing) | 0 |
@@ -76,7 +76,7 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide explain`
 
-7 approved diff(s).
+18 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
@@ -246,7 +246,7 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide lint`
 
-53 approved diff(s).
+133 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
@@ -494,7 +494,7 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide validate`
 
-175 approved diff(s).
+404 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
