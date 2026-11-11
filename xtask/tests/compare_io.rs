@@ -213,13 +213,17 @@ fn the_dispatch_table_is_read_from_the_repository_cli() {
 
     write(
         &python,
-        "#!/bin/sh\necho '[\"validate\", \"info rules\"]'\n",
+        "#!/bin/sh\necho '{\"validate\": [], \"info rules\": [], \"deploy\": [\"--dry-run\"]}'\n",
     );
     std::fs::set_permissions(&python, std::fs::Permissions::from_mode(0o755)).unwrap();
     let paths = xtask::compare::rust_commands(dir.path()).unwrap();
     assert_eq!(
         paths.into_iter().collect::<Vec<_>>(),
-        ["info rules", "validate"]
+        [
+            ("deploy".to_owned(), vec!["--dry-run".to_owned()]),
+            ("info rules".to_owned(), Vec::new()),
+            ("validate".to_owned(), Vec::new()),
+        ]
     );
 
     write(&python, "#!/bin/sh\necho broken >&2\nexit 1\n");

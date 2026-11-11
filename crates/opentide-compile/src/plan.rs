@@ -317,6 +317,20 @@ pub fn select(
                         other => other.to_compact(),
                     })
                     .ok_or_else(|| {
+                        // The oracle's `get_platform_status` logs it, then raises.
+                        let detail = format!(
+                            "Rule {} ({uuid}) has no 'status' in its {platform} configuration \
+                             block. Add a status, e.g. 'status: STAGING', then re-run 'opentide \
+                             validate'.",
+                            crate::strategy::python_repr(&name)
+                        );
+                        tracing::error!(
+                            detail = detail.as_str(),
+                            system = platform.as_str(),
+                            rule = name.as_str(),
+                            uuid = uuid.as_str(),
+                            "platform_status_missing"
+                        );
                         PlanError::Failed(crate::strategy::python_repr(&format!(
                             "{} ({uuid}): configurations.{platform}.status is required for \
                              deployment",

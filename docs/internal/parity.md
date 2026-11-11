@@ -22,7 +22,7 @@ The Python CLI at the frozen tag is the oracle ([plan §5](https://github.com/op
 | … compare failing | 0 (0.0%) |
 | … compare not run | 164 (26.0%) |
 | … flipped | 0 (0.0%) |
-| Approved diffs (`tests/golden/APPROVED_DIFFS.toml`) | 63 |
+| Approved diffs (`tests/golden/APPROVED_DIFFS.toml`) | 121 |
 | Diagnostic codes with a fault kind | 163 of 175 (93.1%) |
 | … with no fault kind, evidence recorded | 12 |
 | … with neither (missing) | 0 |
@@ -46,12 +46,14 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide deploy`
 
+67 approved diff(s).
+
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
-| fault | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| vscode | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| fault | compare not run | compare not run | compare not run | compare not run |
+| none | compare not run | compare not run | compare not run | compare not run |
+| tide-corpus | compare not run | compare not run | compare not run | compare not run |
+| vscode | compare not run | compare not run | compare not run | compare not run |
 
 ### `opentide deploy migrate-state`
 
@@ -283,14 +285,12 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide migrate vocab-scope`
 
-9 approved diff(s).
-
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
-| fault | compare not run | compare not run | compare not run | compare not run |
-| none | compare not run | compare not run | compare not run | compare not run |
-| tide-corpus | compare not run | compare not run | compare not run | compare not run |
-| vscode | compare not run | compare not run | compare not run | compare not run |
+| fault | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| vscode | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
 
 ### `opentide new`
 
