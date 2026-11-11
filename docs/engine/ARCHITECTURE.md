@@ -69,22 +69,20 @@ queries). A key with no field row is `property`. LSP semantic tokens map
 
 **Elastic stack version.** ES|QL availability is checked against the lowest `setup.version` declared across a rule block's target tenants in `.opentide/configurations/platforms/elastic.toml` (the block's `tenants`, or every tenant). A target without a version, or no configuration, means the 8.19 floor (specifications#59). A declared 9.4+ or Serverless target also drops `esql_metadata_id`, because Kibana adds `METADATA _id` itself there.
 
-Pydantic remains CLI authority. The LSP emits the same `{code, field_path, severity}` with real ranges. The engine may add **extra** query diagnostics inside `query: |`.
+The object checks are `opentide-workspace`'s `validate`: the language server loads each root with `Workspace::open` over the disk and the editor's buffers, keeps it current with `Workspace::invalidate` (an edit, a watched file, `opentide/didChangeWorkspace`), and publishes `validate`'s findings with their ranges in UTF-16 (UC-2.6, #821; [OBJECTS.md](OBJECTS.md)). The engine adds its query and platform-block diagnostics inside `query: |`.
 
 ## Configuration TOML
 
-`.opentide/configurations/**/*.toml` is `opentide-config` (#158). opentide decides what is wrong with these files. The engine only says where:
+`.opentide/configurations/**/*.toml` is `opentide-config` (#158). opentide's models decide what is wrong with these files. The engine only says where:
 
-- **The host checks.** A host installs a checker with `opentide_analysis::set_configuration_checker`. `opentide lsp start` installs opentide's `configuration_text_issues`, the check `opentide validate` runs. It merges the buffer onto the bundled file and the parent instance, checks the models, and runs the checks a schema cannot state (`rule_status_unknown`, `promotion_target_unknown`, `asset_unknown`, `identifier_mismatch`, the `sharing-config` codes). The engine calls the checker with the buffer's path, its text and the other open configuration buffers (`ConfigRequest`). It gets back `{code, field_path, severity, message}` (`ConfigIssue`).
+- **The server checks, natively.** `opentide-lsp` checks each buffer with `opentide_schema::configuration::checks::buffer_issues` (UC-2.6, #821), the port of `configuration_buffer_issues` that `opentide validate`'s configuration check shares: the buffer merged onto the bundled file and the parent instance's file of the same name, the models, and the checks a schema cannot state (`rule_status_unknown`, `promotion_target_unknown`, `asset_unknown`, `identifier_mismatch`, the `sharing-config` codes); for `sharing.toml`, the statuses of an open `deployment.toml` buffer, else the file. Every host has them, the bare binary and WebAssembly included; the `set_configuration_checker` callback is gone. The findings are `{code, field_path, severity, message}` (`ConfigIssue`).
 - **The engine places.** `toml_edit` spans turn each `field_path` into a range:
   - a path that exists: its last key, or an array-of-tables entry's `[[header]]`;
   - a path that exists only in part (a missing key): the deepest key or header that exists, and the message names the path (`misp[1].url: Field required`);
   - an empty path, or one held by another layer: the first line;
   - `config_parse`: where `toml_edit` stops parsing.
-
-  A checker that fails gives one `config_check_failed` warning.
 - **The host's schemas** (`install_configuration_schemas`: the router and one JSON Schema per file, as opentide's `generate_configuration_schemas()` returns them) give hover and completion. Hover shows title, type, description, allowed values and default, never the buffer's value. Completion offers the keys a table may still take, table names in a header, and allowed values after `=`. A walker reads the schema (`$ref`, `anyOf`, `items`, `additionalProperties`); it does not validate.
-- **Without a host**, as in `opentide-lsp` on its own or WASM, there is no checker and no schema. A configuration file then gets no diagnostics, no hover and no completion. The engine never guesses what opentide would say.
+- **Without a host's schemas**, as in `opentide-lsp` on its own or WASM, a configuration file gets its diagnostics but no hover and no completion: the configuration models do not derive their JSON Schemas yet (UC-1.8), so `install_configuration_schemas` stays until they do.
 - **No highlighting.** The editor's TOML grammar stays: no semantic tokens for `opentide-config`, no HighlightSpec captures, no TOML grammar here.
 
 ## Hosts

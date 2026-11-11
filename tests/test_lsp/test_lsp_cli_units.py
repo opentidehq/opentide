@@ -147,10 +147,10 @@ def _finding(code: str, message: str, suggestion: str | None = None) -> Finding:
             "the SPL reference: https://docs.splunk.com/Documentation/Splunk/latest/SearchReference",
         ),
         (
-            "missing_author",
-            "metadata.author is missing",
+            "risk_band",
+            "the risk score is outside the band of the severity",
             None,
-            "opentide explain missing_author describes it",
+            "opentide explain risk_band describes it",
         ),
         # Declared in visibility.toml or not: the page says how, not the KQL reference.
         (

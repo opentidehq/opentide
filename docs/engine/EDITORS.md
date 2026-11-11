@@ -7,6 +7,10 @@ description: "How an editor hosts the opentide language server: language ids, th
 
 The opentide LSP owns Tide diagnostics. Disable yamlls / Red Hat YAML on `objects/**`.
 
+### Tide diagnostics
+
+An object's diagnostics are `opentide validate`'s findings on it (the queries check is the engine's own analysis of the same text): the same codes and severities, placed from the finding's 1-based line and code-point columns (end column exclusive) to LSP's 0-based lines and UTF-16 columns. A finding without a line is at the start of the file; one with a column and no end column, on its own line, is a point at that column; one with no column covers its line (to its end line's end when it names one). `cargo xtask lsp parity --corpus faults` (CI's corpus job) compares the two on every fault kind `validate` reports.
+
 Languages: `opentide-yaml`, `kql`, `spl`, `esql`, `eql`, `kuery` (Kibana KQL), `lucene`, `falco`, `cql` (CrowdStrike Query Language) and `opentide-config`. There is no `sql`.
 
 Semantic tokens come from the server. TextMate grammars must be **copied from the language-server highlight zip**, never hand-authored.
@@ -17,7 +21,7 @@ The Tide grammar (`tide.tmLanguage.json`, `source.opentide-yaml`) marks the quer
 
 `.opentide/configurations/**/*.toml` is `opentide-config`, whatever language id the editor sends. Any other `.toml` (`Cargo.toml`, `pyproject.toml`) is not read.
 
-- **opentide checks it.** The findings are opentide's own (`configuration_text_issues`, the check `opentide validate` runs), placed on the keys they name. Only `opentide lsp start` has them. `opentide-lsp` on its own has no checker, so it reports nothing for these files and never guesses. Hover and completion come from the schemas `opentide lsp start` hands the server, so they need it too. See [ARCHITECTURE.md](ARCHITECTURE.md#configuration-toml).
+- **opentide checks it.** The findings are the configuration checks `opentide validate` runs (`opentide-schema`'s), placed on the keys they name. `opentide-lsp` runs them itself, on its own, in the WASI build and in the browser too (UC-2.6). Hover and completion come from the schemas `opentide lsp start` hands the server, so they need it. See [ARCHITECTURE.md](ARCHITECTURE.md#configuration-toml).
 - **The editor's TOML grammar highlights it.** The server sends no semantic tokens for `opentide-config`, and there is no opentide TOML grammar.
 - **Keep generic TOML language servers off `.opentide/configurations/**`** (taplo, Even Better TOML, tombi), so a file is not reported twice. Give the glob its own language (`opentide-config`), as the samples do.
 - Editing one configuration file re-checks the others that are open: a status added to `deployment.toml` is one `sharing.toml` may name. `visibility.toml` still declares datasets live, and is checked like the other files.
@@ -116,9 +120,8 @@ Suggestions the KQL, SPL and Tide engines attach. Every one is chosen by the rul
 | `spl_search_operator` | the operator | `=`, `!=`, `>=` or `<=` ([spl/search-syntax.md](spl/search-syntax.md)) |
 | `spl_command_without_pipe` | the command word | `\| {command}` |
 | `spl_unknown_datamodel`, `spl_unknown_datamodel_field` | the data model reference | the corrected name ([spl/cim-fields.md](spl/cim-fields.md)) |
-| `invalid_ref` on `detection_model` | the UUID value | the objective or signal UUID within two edits of the value, wherever they are (side by side, cut, added or apart), by the shared rule (ignoring case); none when nothing is that close, so an unrelated objective is never offered |
-| `schema_validation` (string where a list is required) | the field key | `- {text}` |
-| `filename_slug` | the `name` value | `{stem}.yaml` (`{stem}.debug.yaml` for a debug file), the stem `[filenames] style` derives from the name (`slug` or `name`, [OBJECTS.md](OBJECTS.md)), a file name: the quick fix renames the file (`RenameFile`, for a client with `workspaceEdit.documentChanges` and `resourceOperations: ["rename"]`) beside it, only for a `file:` document and when no other file, open document or supplied document has that name (the same file under another case is renamed), and is never a text edit nor part of `source.fixAll.opentide` |
+| A `validate` finding whose fix is one edit (`vocab_unknown`, `invalid_ref`, the other value typos) | the value | the replacement `validate --fix` would write ([OBJECTS.md](OBJECTS.md)) |
+| `filename_mismatch` (lint's, once the editor reports it, #905) | the `name` value | a file name: the quick fix renames the file (`RenameFile`, for a client with `workspaceEdit.documentChanges` and `resourceOperations: ["rename"]`) beside it, only for a `file:` document and when no other file, open document or supplied document has that name (the same file under another case is renamed), and is never a text edit nor part of `source.fixAll.opentide` |
 
 A reference finding (`invalid_ref` on `detection_model`, on each
 `objective.threats` entry and on a `threat.chaining` `vector`) is on the UUID
@@ -134,7 +137,7 @@ Requests beyond LSP, for clients that know them (`crates/opentide-lsp/src/handle
 
 | Method | Params | Result |
 | --- | --- | --- |
-| `opentide/analyze` | `{ text, language?, uri? }` | `{ diagnostics }`, in the engine's own shape: `{ code, message, severity, range, suggestion? }`, `severity` a word (`error`, `warning`, `information`, `hint`). The text need not be open. Without `language` it is Tide YAML. `uri` picks the root whose workspace (`visibility.toml`, the index) the analysis reads; without it the text is analysed as `memory`, outside every root |
+| `opentide/analyze` | `{ text, language?, uri? }` | `{ diagnostics }`, in the engine's own shape: `{ code, message, severity, range, suggestion? }`, `severity` a word (`error`, `warning`, `information`, `hint`). The text need not be open. Without `language` it is Tide YAML. `uri` picks the root whose workspace (`visibility.toml`, the index) the analysis reads; without it the text is analysed as `memory`, outside every root. A Tide text outside every root and `objects/` folder gets `validate`'s findings too, checked on its own with what the host supplied; an open document's text gets its published ones |
 | `opentide/highlight` | `{ text, language? }` | `{ language_id, legend, tokens }`: each token's `capture` (a HighlightSpec capture), `range`, `span` (bytes) and `token_type` (an index into `legend`). Without `language` it is KQL |
 | `opentide/compiledKql` | `{ query, tenant? }` | `{ compiled }`: the KQL Sentinel runs for the query on `tenant` (`opentide_kql::compile_kql_query`, with no exclusions) |
 | `opentide/compiledSpl` | `{ query }` | `{ compiled }`: the search Splunk runs, the authored text (an implicit leading `\| search` is not a rewrite) |
@@ -216,7 +219,7 @@ const client = createOpentideClient({ transport: "worker", worker });
 const { diagnostics } = await client.analyze("kql", "SecurityEvent | take 1");
 ```
 
-The browser has no filesystem to index, so pass the workspace on `initialize`: `workspace: { objects: [{ uuid, schema, name }], documents: [{ uri, text }], visibility }` (`initializationOptions.workspace` for any other client). Without it, a rule's `detection_model` is an `invalid_ref`. A document the client opens is that object, not a second one with its UUID, and a root's own files win over what is supplied. A supplied document under a workspace folder belongs to that folder's root alone, as a file on disk would, so a reference from one folder to another's object is an `invalid_ref`, as the CLI reports it; an object supplied with no `uri`, or one outside every folder, is every root's. A root's `.opentide/configurations/visibility.toml` among the documents declares that root's datasets; `visibility` declares them for a root that has none. A root's `.opentide/configurations/lint.toml` among the documents sets its filename and metadata checks ([OBJECTS.md](OBJECTS.md#linttoml)). When those files change, send `opentide/didChangeWorkspace` with what changed ([Custom RPCs](#custom-rpcs)), `client.updateWorkspace(change)` with `createOpentideClient`: the server has no file watcher to read, since it has no files.
+The browser has no filesystem to index, so pass the workspace on `initialize`: `workspace: { objects: [{ uuid, schema, name }], documents: [{ uri, text }], visibility }` (`initializationOptions.workspace` for any other client). Without it, a rule's `detection_model` is an `invalid_ref`. A document the client opens is that object, not a second one with its UUID, and a root's own files win over what is supplied. A supplied document under a workspace folder belongs to that folder's root alone, as a file on disk would, so a reference from one folder to another's object is an `invalid_ref`, as the CLI reports it; an object supplied with no `uri`, or one outside every folder, is every root's. A root's `.opentide/configurations/visibility.toml` among the documents declares that root's datasets; `visibility` declares them for a root that has none. The documents are the files `validate` reads in the browser: a root's objects and its `.opentide/configurations/*.toml`, which the server checks natively too; an object known by its metadata alone stands in as a file of its family's folder. When those files change, send `opentide/didChangeWorkspace` with what changed ([Custom RPCs](#custom-rpcs)), `client.updateWorkspace(change)` with `createOpentideClient`: the server has no file watcher to read, since it has no files.
 
 To highlight in the same thread instead, load the module with `loadHighlightModule` and hand it over as `module`:
 

@@ -156,17 +156,17 @@ pub fn install_schemas() {
 }
 
 /// Configuration TOML as the engine sees it in an editor
-/// (`opentide_analysis::config`): the host's checker reports findings by
+/// (`opentide_analysis::config`): the host's checks report findings by
 /// `field_path`, and the engine places each in the buffer; hover and
 /// completion walk the host's schemas.
 ///
 /// The input is `<file byte><text>\0<field path>\0<field path>…`: the first
 /// byte picks the file from [`CONFIGURATION_FILES`], the text is the buffer,
-/// and each field path (`.`-separated, list items by index) is a finding the
-/// checker returns, with a severity from its length. A path `!` makes the
-/// checker fail instead, as a host's can.
+/// and each field path (`.`-separated, list items by index) is a finding to
+/// place, with a severity from its length. A path `!` is skipped (it made a
+/// host's checker fail, before the checks were native).
 pub fn configuration(data: &[u8]) {
-    use opentide_analysis::{ConfigIssue, ConfigRequest, Severity};
+    use opentide_analysis::{ConfigIssue, Severity};
 
     let Some((&pick, rest)) = data.split_first() else {
         return;
@@ -176,13 +176,13 @@ pub fn configuration(data: &[u8]) {
         return;
     };
     let mut issues = Vec::new();
-    let mut fail = false;
     for part in parts {
         let Ok(path) = std::str::from_utf8(part) else {
             continue;
         };
+        // `!` made a host's checker fail; the checks are native now and
+        // cannot (UC-2.6): the saved inputs that hold it place nothing for it.
         if path == "!" {
-            fail = true;
             continue;
         }
         let severity = match path.len() % 4 {
@@ -203,37 +203,11 @@ pub fn configuration(data: &[u8]) {
         });
     }
     install_schemas();
-    opentide_analysis::set_configuration_checker(Some(Box::new(
-        move |_: &ConfigRequest<'_>| {
-            if fail {
-                Err("the host's checker failed".to_string())
-            } else {
-                Ok(issues.clone())
-            }
-        },
-    )));
-
     let file = CONFIGURATION_FILES[usize::from(pick) % CONFIGURATION_FILES.len()];
     let path = format!("/w/{}{file}", opentide_analysis::CONFIGURATIONS_DIRECTORY);
-    // Another open configuration buffer: the engine hands the checker every
-    // open one.
-    let other = format!("/w/{}deployment.toml", opentide_analysis::CONFIGURATIONS_DIRECTORY);
-    let host = MemoryWorkspace {
-        files: vec![
-            (path.clone(), text.to_string()),
-            (other, "[deployment]\n".to_string()),
-        ],
-    };
-    let response = opentide_analysis::analyze(
-        &host,
-        AnalyzeRequest {
-            uri: path.clone(),
-            language: LanguageId::Config,
-            text: text.to_string(),
-        },
-    );
+    let diagnostics = opentide_analysis::place_configuration_issues(text, issues);
     let lines = text.split('\n').count() as u32;
-    for d in &response.diagnostics {
+    for d in &diagnostics {
         assert!(d.range.start.line < lines.max(1), "{d:?}");
         assert!(d.range.end.line < lines.max(1), "{d:?}");
         assert!(

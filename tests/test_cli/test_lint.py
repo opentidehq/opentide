@@ -713,7 +713,17 @@ def test_lint_reports_the_engines_dataset_and_ecs_warnings(
     rule = _write_object(tmp_path, "rules", "simulated-rule.yaml", _THREAT)
     codes = ("elastic_dataset_not_declared", "ecs_unknown_field", "not_a_query_code")
 
-    def check_file(space: object, path: Path, text: str, *, language: str | None = None) -> list:
+    asked: list[bool] = []
+
+    def check_file(
+        space: object,
+        path: Path,
+        text: str,
+        *,
+        language: str | None = None,
+        objects: bool = True,
+    ) -> list:
+        asked.append(objects)
         return [Finding(code, "warning", code, 2, 1, 2, 5) for code in codes]
 
     monkeypatch.setattr(analysis, "check_file", check_file)
@@ -721,6 +731,9 @@ def test_lint_reports_the_engines_dataset_and_ecs_warnings(
     found = [(item.get("code"), item["path"]) for item in result["findings"]]
     relative = rule.relative_to(tmp_path).as_posix()
     assert found == [(code, relative) for code in codes[:2]]
+    # The queries check asks for the engine's query checks alone: validate's
+    # object findings, a whole-workspace validate run, would be dropped.
+    assert asked == [False]
 
 
 def _lint_names(

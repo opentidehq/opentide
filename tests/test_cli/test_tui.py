@@ -569,9 +569,9 @@ def test_at_100_columns_names_end_in_an_ellipsis_and_nothing_scrolls_sideways(
 ) -> None:
     rule = tutorial_repo / RULE_FILE
     rule.write_text(
-        rule.read_text(encoding="utf-8").replace(
-            "name: Sentinel KQL Rule", f"name: {LONG_RULE}", 1
-        ),
+        rule.read_text(encoding="utf-8")
+        .replace("name: Sentinel KQL Rule", f"name: {LONG_RULE}", 1)
+        .replace("tlp: clear\n", "tlp: clearr\n"),
         encoding="utf-8",
     )
 
@@ -584,9 +584,9 @@ def test_at_100_columns_names_end_in_an_ellipsis_and_nothing_scrolls_sideways(
         # The counts stay whole; the name gives way.
         assert threat.endswith("  1 objective · 1 rule"), threat
         assert objective.endswith("…  1 rule"), objective
-        # The language server's warning (the name no longer matches the file
-        # name) stays whole too.
-        assert leaf.endswith("…  ! 1") and " …" not in leaf, leaf
+        # The language server's finding (validate's `vocab_unknown` on the
+        # TLP) stays whole too.
+        assert leaf.endswith("…  ✗ 1") and " …" not in leaf, leaf
         assert LONG_RULE not in leaf
         assert tree.virtual_size.width <= width
         assert not tree.show_horizontal_scrollbar
@@ -947,22 +947,6 @@ def test_the_language_server_reports_each_object_at_load(tutorial_repo: Path) ->
     # A rule's `severity: High` is an alert_severity: the engine's bundled
     # catalog no longer checks it against the threat severity scale.
     assert report.for_path(catalogue.entries[THREAT].path) == ()
-
-
-def test_the_language_server_follows_the_workspace_lint_toml(tutorial_repo: Path) -> None:
-    """``[filenames]`` decides the engine's file name warning, as it does ``opentide lint``'s."""
-    renamed = tutorial_repo / "objects/rules/Not A Slug.yaml"
-    (tutorial_repo / RULE_FILE).rename(renamed)
-
-    def codes() -> list[str]:
-        catalogue = load_catalogue(CliContext(repo=tutorial_repo))
-        return [f.code for f in catalogue.language_server.for_path(renamed)]
-
-    assert "filename_slug" in codes()
-    lint = tutorial_repo / ".opentide/configurations/lint.toml"
-    lint.parent.mkdir(parents=True, exist_ok=True)
-    lint.write_text("[filenames]\nenabled = false\n", encoding="utf-8")
-    assert "filename_slug" not in codes()
 
 
 def test_without_the_engine_nothing_is_checked_and_the_ui_says_so(

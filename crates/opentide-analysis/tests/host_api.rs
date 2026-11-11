@@ -203,10 +203,6 @@ fn analysis_with_a_prebuilt_index_matches_analyze() {
     };
     let indexed = codes(analyze_with_index(&host, &index, request.clone()).diagnostics);
     assert_eq!(indexed, codes(analyze(&host, request).diagnostics));
-    assert!(
-        indexed.contains(&codes::INVALID_REF.to_string()),
-        "{indexed:?}"
-    );
 }
 
 #[test]

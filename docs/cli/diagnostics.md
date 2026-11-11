@@ -123,7 +123,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`falco_value_type`](#falco_value_type) | The value cannot be parsed as the field's type (a number, `true` or `false`, an IP address or network, a hex string for `bcontains`); Falco refuses to load the rule. |
 | [`filename_mismatch`](#filename_mismatch) | An object file's name is not the stem `lint.toml` `[filenames].style` (or its kind's `[filenames.<kind>].style`) asks for: `slugify(name)` by default. |
 | [`filename_pattern`](#filename_pattern) | An object file's name does not match the regular expression `lint.toml` sets for it. |
-| [`filename_slug`](#filename_slug) | The file name is not the one lint.toml's [filenames] style derives from the object's name. |
+| [`filename_slug`](#filename_slug) | Retired in opentide 0.24.0; `opentide lint` reports a file name that is not the object's as `filename_mismatch`. |
 | [`git`](#git) | git is on `PATH`. |
 | [`git_repository`](#git_repository) | The workspace is in a git repository, and its default branch (`origin/HEAD`). |
 | [`internal`](#internal) | opentide stopped on an exception it did not handle: a bug in opentide, not in your input. |
@@ -175,9 +175,9 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`max_tlp_unknown`](#max_tlp_unknown) | A `sharing.toml` block's `max_tlp` is not a TLP value. |
 | [`mcp_config`](#mcp_config) | An MCP configuration from `opentide setup mcp` runs `opentide mcp start`. |
 | [`metadata_recommended`](#metadata_recommended) | An object has no `metadata.author` or `metadata.organisation`. |
-| [`missing_author`](#missing_author) | The recommended metadata.author field is missing. |
+| [`missing_author`](#missing_author) | Retired in opentide 0.24.0; `opentide lint` reports a missing recommended metadata field as `metadata_recommended`. |
 | [`missing_field`](#missing_field) | A configuration file is missing a required key, once it is merged with the bundled file and the parent instance. |
-| [`missing_organisation`](#missing_organisation) | The recommended metadata.organisation field is missing. |
+| [`missing_organisation`](#missing_organisation) | Retired in opentide 0.24.0; `opentide lint` reports a missing recommended metadata field as `metadata_recommended`. |
 | [`missing_uuid`](#missing_uuid) | An object file has no UUID, so it cannot be indexed. |
 | [`name_invalid`](#name_invalid) | A `sharing.toml` block name is not 1-64 lowercase letters, digits, `-` or `_`. |
 | [`name_missing`](#name_missing) | An object has no `name`, so lint cannot derive its file name. |
@@ -202,7 +202,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`proxy`](#proxy) | The proxy in `--proxy`, `OPENTIDE_PROXY` or `HTTPS_PROXY` accepts a connection. |
 | [`python_version`](#python_version) | The Python interpreter running opentide. |
 | [`query_check_timeout`](#query_check_timeout) | `validate query --live` failed because a tenant did not answer a query's check within the check timeout. |
-| [`recommended_field_missing`](#recommended_field_missing) | A field the templates ask for is missing; opentide validate accepts the object without it. |
+| [`recommended_field_missing`](#recommended_field_missing) | Retired in opentide 0.24.0; `opentide lint` reports a missing recommended metadata field as `metadata_recommended`. |
 | [`reference_not_found`](#reference_not_found) | `--objective` or `--threat` names a UUID that no object in the catalogue carries. |
 | [`retired_configuration_file`](#retired_configuration_file) | A file or folder under `.opentide/configurations/` that opentide does not read. |
 | [`retract_unconfirmed`](#retract_unconfirmed) | `share retract` would delete a remote event, and was not confirmed. |
@@ -2110,19 +2110,21 @@ The pattern is matched against the whole file name without its extension (`re.fu
 
 ## filename_slug
 
-The file name is not the one lint.toml's [filenames] style derives from the object's name.
+Retired in opentide 0.24.0; `opentide lint` reports a file name that is not the object's as `filename_mismatch`.
 
-Reported by the analysis engine for a Tide object: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: warning, while it was reported. The file name was not the one `lint.toml`'s `[filenames]` style derives from the object's name.
+
+Until opentide 0.24.0, the language server reported it as a warning on an object's `name`, with a looser rule than `opentide lint` (any stem that started with the slug passed). The editor now reports what `opentide validate` reports, and `opentide lint` keeps the one file-name rule, `filename_mismatch` (KG-03).
 
 ### Example
 
 ```text
-opentide validate
+opentide lint --check filenames
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Nothing to fix: no command reports this code any more. A suppression list or SARIF baseline that names it can drop it.
 
 ## git
 
@@ -2967,19 +2969,21 @@ Add the missing keys under `metadata`. They are recommended, not required: lint 
 
 ## missing_author
 
-The recommended metadata.author field is missing.
+Retired in opentide 0.24.0; `opentide lint` reports a missing recommended metadata field as `metadata_recommended`.
 
-Reported by the analysis engine for a Tide object: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: warning, while it was reported. The recommended `metadata.author` field was missing.
+
+Until opentide 0.24.0, the language server reported it as a warning on every object without an author, where `opentide validate` reported nothing and `opentide lint` reported `metadata_recommended` (KG-05).
 
 ### Example
 
 ```text
-opentide validate
+opentide lint --check metadata
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Nothing to fix: no command reports this code any more. A suppression list or SARIF baseline that names it can drop it.
 
 ## missing_field
 
@@ -3001,19 +3005,21 @@ Add the key the message names. `context.file` names the file and `field_path` th
 
 ## missing_organisation
 
-The recommended metadata.organisation field is missing.
+Retired in opentide 0.24.0; `opentide lint` reports a missing recommended metadata field as `metadata_recommended`.
 
-Reported by the analysis engine for a Tide object: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: warning, while it was reported. The recommended `metadata.organisation` field was missing.
+
+Until opentide 0.24.0, the language server reported it as a warning on every object without an organisation, where `opentide validate` reported nothing and `opentide lint` reported `metadata_recommended` (KG-05).
 
 ### Example
 
 ```text
-opentide validate
+opentide lint --check metadata
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Nothing to fix: no command reports this code any more. A suppression list or SARIF baseline that names it can drop it.
 
 ## missing_uuid
 
@@ -3426,19 +3432,21 @@ Raise the timeout with `--check-timeout SECONDS` or `OPENTIDE_QUERY_CHECK_TIMEOU
 
 ## recommended_field_missing
 
-A field the templates ask for is missing; opentide validate accepts the object without it.
+Retired in opentide 0.24.0; `opentide lint` reports a missing recommended metadata field as `metadata_recommended`.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: warning, while it was reported. A field the templates ask for was missing; `opentide validate` accepted the object without it.
+
+Until opentide 0.24.0, the language server reported it as a warning. The editor now reports what `opentide validate` reports, and recommendations are `opentide lint`'s `metadata_recommended` (KG-05).
 
 ### Example
 
 ```text
-opentide validate
+opentide lint --check metadata
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Nothing to fix: no command reports this code any more. A suppression list or SARIF baseline that names it can drop it.
 
 ## reference_not_found
 
