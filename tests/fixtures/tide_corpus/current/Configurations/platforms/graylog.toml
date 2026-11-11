@@ -1,0 +1,17 @@
+[platform]
+enabled = true
+name = "Graylog"
+
+[[tenants]]
+name = "staging"
+strategies = ["PREVIEW"]
+[tenants.setup]
+ssl = true
+url = "https://graylog.example"
+token = "$GRAYLOG_TOKEN"
+streams = ["sysmon"]
+tags = ["managed-by-opentide"]
+[tenants.setup.stream_ids]
+sysmon = "65f0c0ffee0123456789abcd"
+[tenants.setup.notification_ids]
+soc-slack = "65f0c0ffee0123456789abcf"

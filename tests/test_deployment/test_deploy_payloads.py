@@ -48,6 +48,7 @@ def tide_corpus_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
         ("rule-0006-crowdstrike-deploy-only.yaml", "crowdstrike"),
         ("rule-0007-harfanglab-deploy-only.yaml", "harfanglab"),
         ("rule-0009-elastic-kql.yaml", "elastic"),
+        ("rule-0015-graylog-event-definition.yaml", "graylog"),
     ],
 )
 def test_preview_payload_shape(

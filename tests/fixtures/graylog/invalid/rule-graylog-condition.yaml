@@ -1,0 +1,23 @@
+# A condition with a lower-case operator and an unknown function. Expected constraint code: graylog_aggregation.
+name: Graylog invalid block (rule-graylog-condition.yaml)
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000063
+  schema: rule::1.0
+  version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
+  tlp: clear
+  author: Detection Engineering
+description: |
+  Invalid Graylog block fixture.
+response:
+  alert_severity: Medium
+configurations:
+  graylog:
+    enabled: true
+    schema: platform::graylog::1.0
+    status: STAGING
+    query: 'EventID:1'
+    aggregation:
+      group_by: source
+      condition: count() >= 3 or total(bytes) > 10
