@@ -92,6 +92,36 @@ pub enum ConnectorError {
         /// The panic's message, when it has one.
         message: String,
     },
+    /// The tenant answered and refused: a query it cannot run, a rule it
+    /// will not take, a credential it does not accept (Python's
+    /// `QueryRefused` and the deployers' `DetectionRule*Failed`). The
+    /// message names the tenant; *detail* is the tenant's own words.
+    #[error("{message}")]
+    Refused {
+        /// The platform's identifier.
+        platform: String,
+        /// The tenant's name.
+        tenant: String,
+        /// What was refused.
+        message: String,
+        /// The tenant's reason, when it gave one.
+        detail: Option<String>,
+    },
+    /// An asynchronous search outlived its timeout and was stopped
+    /// (Python's `QueryTimedOut`).
+    #[error("{message}")]
+    QueryTimedOut {
+        /// The platform's identifier.
+        platform: String,
+        /// The tenant's name.
+        tenant: String,
+        /// What timed out.
+        message: String,
+        /// What to do about it.
+        detail: Option<String>,
+        /// The timeout.
+        timeout: std::time::Duration,
+    },
     /// The run was cancelled (Ctrl-C, `$/cancelRequest`).
     #[error("interrupted")]
     Cancelled,
