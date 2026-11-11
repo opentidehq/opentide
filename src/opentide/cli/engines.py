@@ -113,7 +113,8 @@ RUST_CLI: tuple[str, ...] = (sys.executable, "-m", "opentide.cli.rust")
 #: ``generate explorer``, ``generate inflight`` and its ``prune``, and ``setup ci``
 #: with UC-3.2c (#916); ``deploy --dry-run`` with UC-3.1c (#896): a deploy that
 #: sends stays Python's; ``commands``, ``explain``, ``lint`` and ``validate`` with
-#: UC-3.5 (#827).
+#: UC-3.5 (#827); ``migrate vocab-scope`` and ``doctor --offline`` with UC-3.5c
+#: (#928): a doctor that reaches PyPI and the proxy stays Python's.
 RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
     ("commands",): RustCommand(launch=RUST_CLI),
     ("explain",): RustCommand(launch=RUST_CLI),
@@ -122,6 +123,8 @@ RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
     ("validate",): RustCommand(launch=RUST_CLI),
     ("rules", "unreviewed"): RustCommand(launch=RUST_CLI),
     ("deploy",): RustCommand(launch=RUST_CLI, requires=("--dry-run",)),
+    ("doctor",): RustCommand(launch=RUST_CLI, rules=("host-git",), requires=("--offline",)),
+    ("migrate", "vocab-scope"): RustCommand(launch=RUST_CLI),
     ("generate", "exports"): RustCommand(launch=RUST_CLI),
     ("generate", "exports", "navigator"): RustCommand(launch=RUST_CLI),
     ("generate", "exports", "objects"): RustCommand(launch=RUST_CLI),
@@ -163,16 +166,25 @@ def selected(words: Sequence[str], env: Mapping[str, str] | None = None) -> str:
     return engine if engine == PYTHON or tuple(words) in RUST_COMMANDS else PYTHON
 
 
-def rust_command(words: Sequence[str], env: Mapping[str, str] | None = None) -> RustCommand | None:
+def rust_command(
+    words: Sequence[str],
+    env: Mapping[str, str] | None = None,
+    args: Sequence[str] | None = None,
+) -> RustCommand | None:
     """The Rust implementation that runs *words* now, or ``None`` when Python does (or must refuse).
 
     For hosts that run commands in their own process (``serve``): ``rust``
-    selected and a Rust implementation to run. ``compare``, an unknown engine
-    and ``rust`` for a command without one go through :func:`dispatch`.
+    selected and a Rust implementation that covers *args*, the run's command
+    line (:meth:`RustCommand.covers`). ``compare``, an unknown engine and
+    ``rust`` for a command, or a run of it, without one go through
+    :func:`dispatch`, which refuses as at a terminal.
     """
     if selected(words, env) != RUST:
         return None
-    return RUST_COMMANDS.get(tuple(words))
+    rust = RUST_COMMANDS.get(tuple(words))
+    if rust is None or (args is not None and not rust.covers(args)):
+        return None
+    return rust
 
 
 def dispatch(cli_ctx: CliContext, click_ctx: _click.Context) -> None:
