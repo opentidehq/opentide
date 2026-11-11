@@ -678,6 +678,14 @@ impl Run<'_> {
                 let report = self.setup_skills_catalogue(&matches, &path);
                 self.emit_report(&report, out, err)
             }
+            "setup env" | "setup hooks" | "setup platforms" | "setup repo" | "setup mcp" => {
+                let report = self.setup_step(&matches);
+                self.emit_report(&report, out, err)
+            }
+            "setup" => {
+                let report = self.setup_group(&matches);
+                self.emit_report(&report, out, err)
+            }
             "rules unreviewed" => {
                 let older_than = leaf(&matches)
                     .get_one::<String>("older_than")
@@ -788,38 +796,7 @@ impl Run<'_> {
                     crate::tree::CiPlatform::Azure => opentide_compile::ci::Provider::Azure,
                 },
             );
-        // The group's own options, which `setup ci` would ignore, named as
-        // the group's help names them (`--staging/--no-staging`).
-        let setup = self.root.find_subcommand("setup");
-        let mut group_only: Vec<String> = Vec::new();
-        for arg in setup.into_iter().flat_map(clap::Command::get_arguments) {
-            let id = arg.get_id().as_str();
-            if matches!(id, "path" | "yes" | "plan") || !given(group, id) {
-                continue;
-            }
-            let long = |arg: &clap::Arg| arg.get_long().map(|long| format!("--{long}"));
-            let partner = setup
-                .into_iter()
-                .flat_map(clap::Command::get_arguments)
-                .find(|other| {
-                    other.get_id() != arg.get_id()
-                        && (other.get_id().as_str() == format!("no_{id}")
-                            || id == format!("no_{}", other.get_id().as_str())
-                            || (id, other.get_id().as_str()) == ("lint_all", "lint_changed")
-                            || (id, other.get_id().as_str()) == ("lint_changed", "lint_all"))
-                });
-            let name = match (long(arg), partner.and_then(long)) {
-                (Some(own), Some(other)) if id.starts_with("no_") || id == "lint_all" => {
-                    format!("{other}/{own}")
-                }
-                (Some(own), Some(other)) => format!("{own}/{other}"),
-                (Some(own), None) => own,
-                _ => id.to_owned(),
-            };
-            if !group_only.contains(&name) {
-                group_only.push(name);
-            }
-        }
+        let group_only = self.setup_group_only(group);
         let parsed = CiArgs {
             provider,
             path: given(args, "path").then(|| text("path")).flatten(),
@@ -854,8 +831,236 @@ impl Run<'_> {
                 cwd: &cwd,
                 mode: self.mode,
                 version: &self.host.version,
+                quiet: self.globals.quiet,
             },
         )
+    }
+
+    /// The `setup` group's own options given on the command line before a
+    /// subcommand, which it would ignore, named as the group's help names
+    /// them (`--staging/--no-staging`).
+    fn setup_group_only(&self, group: &clap::ArgMatches) -> Vec<String> {
+        let given = |matches: &clap::ArgMatches, id: &str| {
+            matches.value_source(id) == Some(ValueSource::CommandLine)
+        };
+        let setup = self.root.find_subcommand("setup");
+        let mut group_only: Vec<String> = Vec::new();
+        for arg in setup.into_iter().flat_map(clap::Command::get_arguments) {
+            let id = arg.get_id().as_str();
+            if matches!(id, "path" | "yes" | "plan") || !given(group, id) {
+                continue;
+            }
+            let long = |arg: &clap::Arg| arg.get_long().map(|long| format!("--{long}"));
+            let partner = setup
+                .into_iter()
+                .flat_map(clap::Command::get_arguments)
+                .find(|other| {
+                    other.get_id() != arg.get_id()
+                        && (other.get_id().as_str() == format!("no_{id}")
+                            || id == format!("no_{}", other.get_id().as_str())
+                            || (id, other.get_id().as_str()) == ("lint_all", "lint_changed")
+                            || (id, other.get_id().as_str()) == ("lint_changed", "lint_all"))
+                });
+            let name = match (long(arg), partner.and_then(long)) {
+                (Some(own), Some(other)) if id.starts_with("no_") || id == "lint_all" => {
+                    format!("{other}/{own}")
+                }
+                (Some(own), Some(other)) => format!("{own}/{other}"),
+                (Some(own), None) => own,
+                _ => id.to_owned(),
+            };
+            if !group_only.contains(&name) {
+                group_only.push(name);
+            }
+        }
+        group_only
+    }
+
+    /// The setup commands' context.
+    fn setup_context<'a>(
+        &'a self,
+        cwd: &'a std::path::Path,
+    ) -> crate::commands::setup::Context<'a> {
+        crate::commands::setup::Context {
+            repo: self.globals.repo.as_deref(),
+            env: self.env,
+            cwd,
+            mode: self.mode,
+            version: &self.host.version,
+            quiet: self.globals.quiet,
+        }
+    }
+
+    /// `opentide setup env|hooks|platforms|repo|mcp`.
+    fn setup_step(&self, matches: &clap::ArgMatches) -> crate::commands::Report {
+        use crate::commands::setup::files::RepoOptions;
+        use crate::commands::setup::run::{Paths, Step, subcommand};
+        use clap::ValueEnum;
+        let Some((_, group)) = matches.subcommand() else {
+            return crate::commands::Report::error("setup", "no setup command");
+        };
+        let Some((name, args)) = group.subcommand() else {
+            return crate::commands::Report::error("setup", "no setup command");
+        };
+        let given = |matches: &clap::ArgMatches, id: &str| {
+            matches.value_source(id) == Some(ValueSource::CommandLine)
+        };
+        let text = |id: &str| args.get_one::<String>(id).cloned();
+        let flag_given = given(args, "path_flag");
+        let positional_given = given(args, "path");
+        let paths = Paths {
+            own: if flag_given {
+                text("path_flag")
+            } else if positional_given {
+                text("path")
+            } else {
+                None
+            },
+            group: given(group, "path")
+                .then(|| group.get_one::<String>("path").cloned())
+                .flatten(),
+            both: flag_given && positional_given,
+            group_only: self.setup_group_only(group),
+        };
+        let flag = |id: &str| {
+            args.try_get_one::<bool>(id)
+                .ok()
+                .flatten()
+                .copied()
+                .unwrap_or(false)
+        };
+        let step = match name {
+            "env" => Step::Env,
+            "hooks" => Step::Hooks {
+                install: !flag("no_install"),
+            },
+            "platforms" => Step::Platforms(
+                [
+                    ("sentinel", "sentinel"),
+                    ("splunk", "splunk"),
+                    ("crowdstrike", "crowdstrike"),
+                    ("defender_for_endpoint", "defender_for_endpoint"),
+                    ("sentinel_one", "sentinel_one"),
+                    ("carbon_black_cloud", "carbon_black_cloud"),
+                    ("harfanglab", "harfanglab"),
+                    ("elastic", "elastic"),
+                    ("sysdig", "sysdig"),
+                ]
+                .into_iter()
+                .filter(|(id, _)| flag(id))
+                .map(|(_, value)| value.to_owned())
+                .collect(),
+            ),
+            "repo" => Step::Repo(RepoOptions {
+                name: text("name"),
+                org: text("org"),
+                description: text("description"),
+                platforms: args
+                    .get_many::<crate::tree::Platform>("platform")
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|platform| platform.to_possible_value())
+                    .map(|value| value.get_name().to_owned())
+                    .collect(),
+            }),
+            _ => Step::Mcp(
+                [
+                    ("vscode", "vscode"),
+                    ("cursor", "cursor"),
+                    ("claude_code", "claude-code"),
+                    ("generic", "generic"),
+                ]
+                .into_iter()
+                .filter(|(id, _)| flag(id))
+                .map(|(_, value)| value.to_owned())
+                .collect(),
+            ),
+        };
+        let cwd = self.host.cwd.clone().unwrap_or_default();
+        subcommand(
+            &step,
+            &paths,
+            flag("yes") || group.get_flag("yes"),
+            flag("plan") || group.get_flag("plan"),
+            &self.setup_context(&cwd),
+        )
+    }
+
+    /// `opentide setup` without a subcommand.
+    fn setup_group(&self, matches: &clap::ArgMatches) -> crate::commands::Report {
+        use crate::commands::setup::files::RepoOptions;
+        use crate::commands::setup::run::{GroupArgs, group};
+        use clap::ValueEnum;
+        let args = leaf(matches);
+        let flag = |id: &str| args.get_flag(id);
+        let text = |id: &str| args.get_one::<String>(id).cloned();
+        let names = |values: Vec<Option<clap::builder::PossibleValue>>| -> Vec<String> {
+            let mut out: Vec<String> = Vec::new();
+            for value in values.into_iter().flatten() {
+                let name = value.get_name().to_owned();
+                if !out.contains(&name) {
+                    out.push(name);
+                }
+            }
+            out
+        };
+        let parsed = GroupArgs {
+            path: text("path").unwrap_or_else(|| ".".to_owned()),
+            repo: RepoOptions {
+                name: text("name"),
+                org: text("org"),
+                description: text("description"),
+                platforms: args
+                    .get_many::<crate::tree::Platform>("platform")
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|platform| platform.to_possible_value())
+                    .map(|value| value.get_name().to_owned())
+                    .collect(),
+            },
+            ci: args
+                .get_one::<crate::tree::Ci>("ci")
+                .and_then(|ci| ci.to_possible_value())
+                .map(|value| value.get_name().to_owned()),
+            pipeline: None,
+            staging: !flag("no_staging"),
+            inflight: !flag("no_inflight"),
+            sharing: flag("sharing"),
+            lint_changed: flag("lint_changed"),
+            explorer_pages: flag("explorer_pages"),
+            promotion: if flag("promotion") {
+                Some(true)
+            } else if flag("no_promotion") {
+                Some(false)
+            } else {
+                None
+            },
+            promotion_target: text("promotion_target"),
+            python_version: text("python_version").unwrap_or_else(|| "3.12".to_owned()),
+            default_branch: text("default_branch"),
+            vscode_setup: flag("vscode_setup"),
+            mcp: names(
+                args.get_many::<crate::tree::Mcp>("mcp")
+                    .into_iter()
+                    .flatten()
+                    .map(ValueEnum::to_possible_value)
+                    .collect(),
+            ),
+            skills: names(
+                args.get_many::<crate::tree::Skills>("skills")
+                    .into_iter()
+                    .flatten()
+                    .map(ValueEnum::to_possible_value)
+                    .collect(),
+            ),
+            plugin: flag("plugin"),
+            hooks: flag("hooks"),
+            env: flag("env"),
+            plan: flag("plan"),
+            yes: flag("yes"),
+        };
+        let cwd = self.host.cwd.clone().unwrap_or_default();
+        group(&parsed, &self.setup_context(&cwd))
     }
 
     /// `opentide info`, from its parsed arguments.
@@ -1245,6 +1450,7 @@ impl Run<'_> {
             advice: run.advice(),
             warnings: run.warnings.clone(),
             next_actions: outcome.next_actions.clone(),
+            numbered_next: false,
         };
         let (result_out, result_err) =
             render_result(&view, stdout, stderr, self.mode, self.globals.quiet);
@@ -1400,6 +1606,7 @@ impl Run<'_> {
             advice: data_text(&outcome.data, "advice"),
             warnings: report.warnings.clone(),
             next_actions: outcome.next_actions.clone(),
+            numbered_next: report.numbered_next,
         };
         let (text_out, text_err) = render_result(
             &view,

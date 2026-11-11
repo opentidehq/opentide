@@ -9904,6 +9904,50 @@ reason = "the JSON Schema is generated from the Rust models with schemars (UC-1.
 issue = "https://github.com/opentidehq/opentide/issues/933"
 changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
 
+[[diff]]
+command = "setup mcp"
+case = "setup.mcp/human/setup-merge/merge"
+target = "file:ws/.vscode/mcp.json"
+rule = "lines"
+oracle = "{\n  \"servers\": {\n    \"other\": {\n      \"command\": \"other-server\",\n      \"args\": []\n    },\n    \"opentide\": {\n      \"command\": \"opentide\",\n      \"args\": [\n        \"mcp\",\n        \"start\"\n      ],\n      \"env\": {\n        \"OPENTIDE_REPO_ROOT\": \"${workspaceFolder}\"\n      }\n    }\n  }\n}"
+candidate = "\ufeff{\n  // The team's MCP servers.\n  \"servers\": {\n    /* keep */ \"other\": {\"command\": \"other-server\", \"args\": []},\n    \"opentide\": {\n      \"command\": \"opentide\",\n      \"args\": [\"mcp\", \"start\"],\n      \"env\": {\n        \"OPENTIDE_REPO_ROOT\": \"${workspaceFolder}\",\n      },\n    },\n  },\n}"
+reason = "setup mcp merges opentide's server into an existing configuration in place with a JSONC-preserving editor (jsonc-parser's CST): the byte-order mark, comments, layout and trailing commas stay, and the new member follows the file's own style (here its trailing commas); the oracle (0.23.0) parsed the file, dropped its comments, BOM and trailing commas and rewrote it as indented JSON. A user's committed file keeps every byte outside the merged member (#743)"
+issue = "https://github.com/opentidehq/opentide/issues/828"
+changelog = "**`setup`, `setup env`, `setup hooks`, `setup mcp`, `setup platforms` and `setup repo` run on the Rust engine**"
+
+[[diff]]
+command = "setup mcp"
+case = "setup.mcp/plain/setup-merge/merge"
+target = "file:ws/.vscode/mcp.json"
+rule = "lines"
+oracle = "{\n  \"servers\": {\n    \"other\": {\n      \"command\": \"other-server\",\n      \"args\": []\n    },\n    \"opentide\": {\n      \"command\": \"opentide\",\n      \"args\": [\n        \"mcp\",\n        \"start\"\n      ],\n      \"env\": {\n        \"OPENTIDE_REPO_ROOT\": \"${workspaceFolder}\"\n      }\n    }\n  }\n}"
+candidate = "\ufeff{\n  // The team's MCP servers.\n  \"servers\": {\n    /* keep */ \"other\": {\"command\": \"other-server\", \"args\": []},\n    \"opentide\": {\n      \"command\": \"opentide\",\n      \"args\": [\"mcp\", \"start\"],\n      \"env\": {\n        \"OPENTIDE_REPO_ROOT\": \"${workspaceFolder}\",\n      },\n    },\n  },\n}"
+reason = "setup mcp merges opentide's server into an existing configuration in place with a JSONC-preserving editor (jsonc-parser's CST): the byte-order mark, comments, layout and trailing commas stay, and the new member follows the file's own style (here its trailing commas); the oracle (0.23.0) parsed the file, dropped its comments, BOM and trailing commas and rewrote it as indented JSON. A user's committed file keeps every byte outside the merged member (#743)"
+issue = "https://github.com/opentidehq/opentide/issues/828"
+changelog = "**`setup`, `setup env`, `setup hooks`, `setup mcp`, `setup platforms` and `setup repo` run on the Rust engine**"
+
+[[diff]]
+command = "setup mcp"
+case = "setup.mcp/json/setup-merge/merge"
+target = "file:ws/.vscode/mcp.json"
+rule = "lines"
+oracle = "{\n  \"servers\": {\n    \"other\": {\n      \"command\": \"other-server\",\n      \"args\": []\n    },\n    \"opentide\": {\n      \"command\": \"opentide\",\n      \"args\": [\n        \"mcp\",\n        \"start\"\n      ],\n      \"env\": {\n        \"OPENTIDE_REPO_ROOT\": \"${workspaceFolder}\"\n      }\n    }\n  }\n}"
+candidate = "\ufeff{\n  // The team's MCP servers.\n  \"servers\": {\n    /* keep */ \"other\": {\"command\": \"other-server\", \"args\": []},\n    \"opentide\": {\n      \"command\": \"opentide\",\n      \"args\": [\"mcp\", \"start\"],\n      \"env\": {\n        \"OPENTIDE_REPO_ROOT\": \"${workspaceFolder}\",\n      },\n    },\n  },\n}"
+reason = "setup mcp merges opentide's server into an existing configuration in place with a JSONC-preserving editor (jsonc-parser's CST): the byte-order mark, comments, layout and trailing commas stay, and the new member follows the file's own style (here its trailing commas); the oracle (0.23.0) parsed the file, dropped its comments, BOM and trailing commas and rewrote it as indented JSON. A user's committed file keeps every byte outside the merged member (#743)"
+issue = "https://github.com/opentidehq/opentide/issues/828"
+changelog = "**`setup`, `setup env`, `setup hooks`, `setup mcp`, `setup platforms` and `setup repo` run on the Rust engine**"
+
+[[diff]]
+command = "setup mcp"
+case = "setup.mcp/agent/setup-merge/merge"
+target = "file:ws/.vscode/mcp.json"
+rule = "lines"
+oracle = "{\n  \"servers\": {\n    \"other\": {\n      \"command\": \"other-server\",\n      \"args\": []\n    },\n    \"opentide\": {\n      \"command\": \"opentide\",\n      \"args\": [\n        \"mcp\",\n        \"start\"\n      ],\n      \"env\": {\n        \"OPENTIDE_REPO_ROOT\": \"${workspaceFolder}\"\n      }\n    }\n  }\n}"
+candidate = "\ufeff{\n  // The team's MCP servers.\n  \"servers\": {\n    /* keep */ \"other\": {\"command\": \"other-server\", \"args\": []},\n    \"opentide\": {\n      \"command\": \"opentide\",\n      \"args\": [\"mcp\", \"start\"],\n      \"env\": {\n        \"OPENTIDE_REPO_ROOT\": \"${workspaceFolder}\",\n      },\n    },\n  },\n}"
+reason = "setup mcp merges opentide's server into an existing configuration in place with a JSONC-preserving editor (jsonc-parser's CST): the byte-order mark, comments, layout and trailing commas stay, and the new member follows the file's own style (here its trailing commas); the oracle (0.23.0) parsed the file, dropped its comments, BOM and trailing commas and rewrote it as indented JSON. A user's committed file keeps every byte outside the merged member (#743)"
+issue = "https://github.com/opentidehq/opentide/issues/828"
+changelog = "**`setup`, `setup env`, `setup hooks`, `setup mcp`, `setup platforms` and `setup repo` run on the Rust engine**"
+
 # UC-3.7 (#829): the Rust MCP server's own refusal of an argument of the
 # wrong type, where MCPServer quotes Pydantic's validation error.
 [[diff]]

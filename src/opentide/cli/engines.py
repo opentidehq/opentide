@@ -135,7 +135,9 @@ RUST_CLI: tuple[str, ...] = (sys.executable, "-m", "opentide.cli.rust")
 #: implementation of to the Python server's handlers in its own process
 #: (``opentide.mcp_server.bridge``); ``setup skills discover`` and ``setup skills
 #: show`` with UC-4.1 (#831): the opentidehq/skills catalogue through the connectors'
-#: HTTP client.
+#: HTTP client; ``setup`` (scripted runs and ``--plan``) and its ``env``, ``hooks``,
+#: ``mcp``, ``platforms`` and ``repo`` with UC-3.6 (#828): the wizard at a terminal,
+#: ``--vscode-setup``, ``--skills`` and ``--plugin`` stay Python's.
 #: ``new threat|objective|rule`` and ``generate`` with phases named
 #: (``generate schemas templates``) with UC-3.5d (#933): its *requires* are
 #: the phase words, so a bare ``generate`` (the full pipeline) stays Python's.
@@ -165,6 +167,12 @@ RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
     ("setup", "ci"): RustCommand(launch=RUST_CLI),
     ("setup", "skills", "discover"): RustCommand(launch=RUST_CLI),
     ("setup", "skills", "show"): RustCommand(launch=RUST_CLI),
+    ("setup",): RustCommand(launch=RUST_CLI, refuses=("--vscode-setup", "--skills", "--plugin")),
+    ("setup", "env"): RustCommand(launch=RUST_CLI),
+    ("setup", "hooks"): RustCommand(launch=RUST_CLI),
+    ("setup", "mcp"): RustCommand(launch=RUST_CLI),
+    ("setup", "platforms"): RustCommand(launch=RUST_CLI),
+    ("setup", "repo"): RustCommand(launch=RUST_CLI),
     ("mcp", "start"): RustCommand(launch=RUST_CLI),
     ("generate",): RustCommand(
         launch=RUST_CLI, requires=("schemas", "templates", "vocabs", "snippets")

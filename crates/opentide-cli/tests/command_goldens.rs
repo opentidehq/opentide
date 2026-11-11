@@ -367,3 +367,20 @@ fn generate_phase_cases_are_the_oracles() {
         assert!(refused >= 8, "only {refused} refused");
     }
 }
+
+/// `setup` and its file-writing subcommands (UC-3.6, #828): plan mode and
+/// non-interactive runs with the files written, and the wizard's refusals.
+#[test]
+fn setup_cases_are_the_oracles() {
+    check(
+        &[
+            "setup",
+            "setup.env",
+            "setup.hooks",
+            "setup.mcp",
+            "setup.platforms",
+            "setup.repo",
+        ],
+        40,
+    );
+}
