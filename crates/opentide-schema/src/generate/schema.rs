@@ -36,7 +36,8 @@
 //! descriptions, key order, `type` arrays where Pydantic writes `anyOf` with
 //! `null`) are recorded in `tests/golden/APPROVED_DIFFS.toml`.
 
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex, OnceLock};
 
 use schemars::generate::SchemaSettings;
 use schemars::transform::Transform;
@@ -925,7 +926,7 @@ fn plain(value: &str, entry: &Entry) -> String {
     } else {
         entry.name.trim()
     };
-    let description = first_sentence(&plain_text(&entry.description, true));
+    let description = summary(&entry.description);
     if !display.is_empty() && !value.ends_with(display) {
         if description.is_empty() {
             display.to_owned()
@@ -935,6 +936,46 @@ fn plain(value: &str, entry: &Entry) -> String {
     } else {
         description
     }
+}
+
+/// The first sentence of `description` as plain text, worked out once per
+/// distinct description. One `generate schemas` offers a vocabulary in many
+/// fields of every schema and in the field catalog, and the Markdown
+/// clean-up of its descriptions was most of the phase's time (each
+/// `opentide new` that generates the schemas first paid it again per
+/// field). Keyed by the text itself, so an edited description is a miss,
+/// never a stale answer.
+fn summary(description: &str) -> String {
+    static CACHE: OnceLock<Mutex<HashMap<String, String>>> = OnceLock::new();
+    summary_in(
+        CACHE.get_or_init(Mutex::default),
+        SUMMARY_LIMIT,
+        description,
+    )
+}
+
+/// How many descriptions [`summary`] keeps before it starts over: more
+/// than every bundled vocabulary holds, so a long-running process (the
+/// language server) that sees many workspaces stays bounded.
+const SUMMARY_LIMIT: usize = 1 << 16;
+
+/// [`summary`] with its cache and bound given.
+fn summary_in(cache: &Mutex<HashMap<String, String>>, limit: usize, description: &str) -> String {
+    if let Some(found) = cache
+        .lock()
+        .ok()
+        .and_then(|cache| cache.get(description).cloned())
+    {
+        return found;
+    }
+    let computed = first_sentence(&plain_text(description, true));
+    if let Ok(mut cache) = cache.lock() {
+        if cache.len() >= limit {
+            cache.clear();
+        }
+        cache.insert(description.to_owned(), computed.clone());
+    }
+    computed
 }
 
 /// The Markdown an editor shows for an entry in a dropdown: its name, its

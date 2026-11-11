@@ -208,10 +208,21 @@ fn a_scoped_run_that_matches_nothing_is_not_an_empty_workspace() {
 }
 
 /// `new threat|objective|rule` (UC-3.5d, #933): the object written, the
-/// templates and schemas generated first, the failures.
+/// templates and schemas generated first, the failures. One test per family,
+/// so nextest runs them side by side: each case generates the schemas.
 #[test]
-fn new_cases_are_the_oracles() {
-    check(&["new.threat", "new.objective", "new.rule"], 40);
+fn new_threat_cases_are_the_oracles() {
+    check(&["new.threat"], 23);
+}
+
+#[test]
+fn new_objective_cases_are_the_oracles() {
+    check(&["new.objective"], 8);
+}
+
+#[test]
+fn new_rule_cases_are_the_oracles() {
+    check(&["new.rule"], 11);
 }
 
 /// `new rule --objective` takes the UUID of an existing objective in any
