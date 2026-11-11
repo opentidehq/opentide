@@ -365,15 +365,34 @@ fn annotate_one(
             }
         ));
     }
+    if diagnostic.code == "schema_validation"
+        && let Some((missing, parents)) = diagnostic.field_path.split_last()
+    {
+        if message == "Field required" {
+            let place = if parents.is_empty() {
+                String::new()
+            } else {
+                format!(" in {}", parents.join("."))
+            };
+            message = format!("missing required field {}{place}", quote(missing));
+        } else {
+            message = format!("{}: {message}", diagnostic.field_path.join("."));
+        }
+    } else if let Some(value) = &value
+        && let Some(own) = value_message(diagnostic, value)
+    {
+        message = own;
+    }
     if let Some(place) = &span {
         line = Some(place.line);
     }
     let mut help = diagnostic.suggestion.clone();
     if diagnostic.code == "platform_not_enabled"
         && help.is_none()
-        && let Some((_, step)) = message.rsplit_once("; ")
+        && let Some((sentence, step)) = message.clone().rsplit_once("; ")
     {
         help = Some(step.to_owned());
+        sentence.clone_into(&mut message);
     }
     let mut fix = None;
     if VALUE_SUGGESTION_CODES.contains(&diagnostic.code.as_str())
@@ -423,10 +442,13 @@ fn annotate_one(
     } else if help.is_none() {
         help = default_help(&diagnostic.code).map(str::to_owned);
     }
-    if diagnostic.code == "duplicate_id"
-        && let Some(also) = duplicate_also(diagnostic, value.as_deref(), sources, workspace)
-    {
-        notes.push(("also".to_owned(), also));
+    if diagnostic.code == "duplicate_id" {
+        if let Some(own) = duplicate_message(diagnostic, value.as_deref()) {
+            message = own;
+        }
+        if let Some(also) = duplicate_also(diagnostic, value.as_deref(), sources, workspace) {
+            notes.push(("also".to_owned(), also));
+        }
     }
     if diagnostic.code == "config_enum_unknown"
         && let Some(ContextValue::List(allowed)) = diagnostic.context.get("allowed")
@@ -450,6 +472,52 @@ fn annotate_one(
     diagnostic.fix = fix;
     diagnostic.label = label;
     diagnostic.notes = notes;
+    diagnostic.headline = (message != diagnostic.message).then_some(message);
+}
+
+/// `'clearr' is not a TLP value`, `'x' is not a configured status`: the
+/// sentence a person reads for a finding about one value.
+fn value_message(diagnostic: &Diagnostic, value: &str) -> Option<String> {
+    let context = |key: &str| diagnostic.context.get(key).and_then(ContextValue::as_str);
+    match diagnostic.code.as_str() {
+        "vocab_unknown" => {
+            let vocab = context("vocab")?;
+            let name = vocab.split("::").next().unwrap_or(vocab);
+            let noun = if ["tlp", "pap", "rsit"].contains(&name) {
+                name.to_uppercase()
+            } else {
+                name.split(['.', '_'])
+                    .filter(|part| !part.is_empty())
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            };
+            Some(format!("{} is not a {noun} value", quote(value)))
+        }
+        "config_enum_unknown" => {
+            let setting = context("setting")?;
+            let noun = match setting {
+                "statuses" => "status",
+                "responders" => "responder",
+                other => other,
+            };
+            Some(format!("{} is not a configured {noun}", quote(value)))
+        }
+        _ => None,
+    }
+}
+
+/// `UUID … is also used by 'Name'` (or `another object`).
+fn duplicate_message(diagnostic: &Diagnostic, value: Option<&str>) -> Option<String> {
+    let ContextValue::Map(original) = diagnostic.context.get("original")? else {
+        return None;
+    };
+    let value = value?;
+    let other = original
+        .get("name")
+        .and_then(ContextValue::as_str)
+        .filter(|name| !name.is_empty())
+        .map_or_else(|| "another object".to_owned(), quote);
+    Some(format!("UUID {value} is also used by {other}"))
 }
 
 fn label(diagnostic: &Diagnostic) -> Option<String> {
@@ -507,6 +575,101 @@ mod tests {
         assert!(!is_safe_replacement("vocab_unknown", "ambr", "amber"));
         assert!(!is_safe_replacement("vocab_unknown", "t1059", "T1059"));
         assert!(!is_safe_replacement("vocab_unknown", "amber", "amber"));
+    }
+
+    fn vocab(vocab: &str) -> Diagnostic {
+        Diagnostic::error("vocab_unknown", "x").with("vocab", vocab)
+    }
+
+    #[test]
+    fn a_value_headline_names_the_vocabulary_as_a_person_reads_it() {
+        // The acronyms are upper-case, every other name is words.
+        for (name, noun) in [("tlp", "TLP"), ("pap", "PAP"), ("rsit", "RSIT")] {
+            assert_eq!(
+                value_message(&vocab(&format!("{name}::1.0")), "x").as_deref(),
+                Some(format!("'x' is not a {noun} value").as_str())
+            );
+        }
+        assert_eq!(
+            value_message(&vocab("signal.entities::1.0"), "Host::Gizmo").as_deref(),
+            Some("'Host::Gizmo' is not a signal entities value")
+        );
+        assert_eq!(
+            value_message(&vocab("alert_severity"), "high").as_deref(),
+            Some("'high' is not a alert severity value")
+        );
+        assert_eq!(
+            value_message(&Diagnostic::error("vocab_unknown", "x"), "v"),
+            None
+        );
+        let setting =
+            |name: &str| Diagnostic::error("config_enum_unknown", "x").with("setting", name);
+        assert_eq!(
+            value_message(&setting("statuses"), "LIVE").as_deref(),
+            Some("'LIVE' is not a configured status")
+        );
+        assert_eq!(
+            value_message(&setting("responders"), "soc").as_deref(),
+            Some("'soc' is not a configured responder")
+        );
+        assert_eq!(
+            value_message(&setting("tiers"), "t9").as_deref(),
+            Some("'t9' is not a configured tiers")
+        );
+        assert_eq!(
+            value_message(&Diagnostic::error("invalid_ref", "x"), "v"),
+            None
+        );
+    }
+
+    #[test]
+    fn a_duplicate_names_the_other_object_or_says_another() {
+        let duplicate = |original: serde_json::Value| {
+            Diagnostic::error("duplicate_id", "x").with("original", original)
+        };
+        let uuid = "00000000-0000-4000-8003-000000000001";
+        assert_eq!(
+            duplicate_message(&duplicate(serde_json::json!({"name": "First"})), Some(uuid))
+                .as_deref(),
+            Some(format!("UUID {uuid} is also used by 'First'").as_str())
+        );
+        for original in [serde_json::json!({"name": ""}), serde_json::json!({})] {
+            assert_eq!(
+                duplicate_message(&duplicate(original), Some(uuid)).as_deref(),
+                Some(format!("UUID {uuid} is also used by another object").as_str())
+            );
+        }
+        // Without the value or the original, the engine's sentence stays.
+        assert_eq!(
+            duplicate_message(&duplicate(serde_json::json!({"name": "First"})), None),
+            None
+        );
+        assert_eq!(
+            duplicate_message(&Diagnostic::error("duplicate_id", "x"), Some(uuid)),
+            None
+        );
+    }
+
+    #[test]
+    fn labels_say_where_a_value_is_missing_from() {
+        assert_eq!(
+            label(&vocab("tlp::1.0")).as_deref(),
+            Some("not in tlp::1.0")
+        );
+        assert_eq!(
+            label(&Diagnostic::error("invalid_ref", "x")).as_deref(),
+            Some("no object has this id")
+        );
+        assert_eq!(
+            label(&Diagnostic::error("config_enum_unknown", "x").with("setting", "statuses"))
+                .as_deref(),
+            Some("not in [[statuses]]")
+        );
+        assert_eq!(
+            label(&Diagnostic::error("chaining_relation_unknown", "x")).as_deref(),
+            Some("not a chaining relation")
+        );
+        assert_eq!(label(&Diagnostic::error("yaml_parse", "x")), None);
     }
 
     #[test]

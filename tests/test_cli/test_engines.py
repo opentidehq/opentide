@@ -19,7 +19,7 @@ from typing import Any
 import pytest
 from typer.testing import CliRunner
 
-from opentide.cli import app, engines
+from opentide.cli import app, engine_defaults, engines
 from opentide.cli.engines import RustCommand
 
 FAKE = Path(__file__).with_name("fake_rust_engine.py")
@@ -40,6 +40,10 @@ def state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setenv("XDG_STATE_HOME", str(home))
     monkeypatch.setattr(sys, "platform", "linux")
     return home / "opentide" / "compare"
+
+
+#: A command line with no Rust implementation: ``setup`` (UC-3.6).
+UNPORTED = ("setup", "--plan", "--platform", "sentinel")
 
 
 def fake(mode: str) -> RustCommand:
@@ -66,21 +70,21 @@ def test_the_engine_is_python_unless_set() -> None:
 
 def test_the_engine_is_read_per_process(workspace: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Read when the command runs, not when opentide is imported."""
-    args = ["--json", "--repo", str(workspace), "validate"]
+    args = ["--json", "--repo", str(workspace), *UNPORTED]
     assert invoke(args, "rust")[0] == 2
     monkeypatch.delenv("OPENTIDE_ENGINE", raising=False)
     assert invoke(args, None)[0] != 2
 
 
 def test_rust_on_a_command_without_rust_is_engine_not_ported(workspace: Path) -> None:
-    code, stdout, _ = invoke(["--json", "--repo", str(workspace), "validate"], "rust")
+    code, stdout, _ = invoke(["--json", "--repo", str(workspace), *UNPORTED], "rust")
     assert code == 2
     doc = document(stdout)
     assert doc["exit_code"] == 2
-    assert doc["command"] == "validate"
+    assert doc["command"] == "setup"
     assert doc["failure"]["code"] == "engine_not_ported"
     assert doc["failure"]["argument"] == "OPENTIDE_ENGINE"
-    assert "opentide validate has no Rust implementation yet" in doc["failure"]["message"]
+    assert "opentide setup has no Rust implementation yet" in doc["failure"]["message"]
     assert stdout.endswith("}\n") and stdout.count("\n") == 1
 
 
@@ -93,10 +97,10 @@ def test_rust_on_a_subcommand_names_its_path(workspace: Path) -> None:
 
 
 def test_rust_without_json_is_one_error_line(workspace: Path) -> None:
-    code, stdout, stderr = invoke(["--no-color", "--repo", str(workspace), "validate"], "rust")
+    code, stdout, stderr = invoke(["--no-color", "--repo", str(workspace), *UNPORTED], "rust")
     assert code == 2
     assert stdout == ""
-    assert "error: opentide validate has no Rust implementation yet" in stderr
+    assert "error: opentide setup has no Rust implementation yet" in stderr
 
 
 def test_an_unknown_engine_is_a_usage_error_with_a_suggestion(workspace: Path) -> None:
@@ -111,7 +115,7 @@ def test_an_unknown_engine_is_a_usage_error_with_a_suggestion(workspace: Path) -
 @pytest.mark.parametrize("engine", [None, "", "python", "compare"])
 def test_python_runs_where_rust_does_not_exist(workspace: Path, engine: str | None) -> None:
     """``compare`` on a command with no Rust implementation runs Python alone."""
-    code, stdout, _ = invoke(["--json", "--repo", str(workspace), "explain", "internal"], engine)
+    code, stdout, _ = invoke(["--json", "--repo", str(workspace), *UNPORTED], engine)
     assert code == 0
     doc = document(stdout)
     assert doc["ok"] is True
@@ -615,3 +619,111 @@ def test_an_agreed_signal_exit_is_128_plus_n(
     monkeypatch.setitem(engines.RUST_COMMANDS, ("explain",), fake("sigterm"))
     code, _, _ = invoke(["--no-color", "--repo", str(workspace), "explain", "internal"], "compare")
     assert code == 143
+
+
+# --- per-command defaults and the escape hatch (plan §7, #822) -------------------------
+
+
+def test_every_default_is_python_or_a_ported_rust_command() -> None:
+    """A command flips to rust only once it has a Rust implementation to run."""
+    for path, engine in engine_defaults.DEFAULT_ENGINES.items():
+        assert engine in (engines.PYTHON, engines.RUST), path
+        if engine == engines.RUST:
+            assert path in engines.RUST_COMMANDS, path
+
+
+def test_the_variable_wins_over_the_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setitem(engines.RUST_COMMANDS, ("explain",), fake("same"))
+    monkeypatch.setitem(engine_defaults.DEFAULT_ENGINES, ("explain",), "rust")
+    assert engines.selected(("explain",), {}) == "rust"
+    assert engines.selected(("explain",), {"OPENTIDE_ENGINE": " "}) == "rust"
+    assert engines.selected(("explain",), {"OPENTIDE_ENGINE": "python"}) == "python"
+    assert engines.selected(("explain",), {"OPENTIDE_ENGINE": "compare"}) == "compare"
+    assert engines.selected(("validate",), {}) == "python"
+    assert engines.rust_command(("explain",), {}) is engines.RUST_COMMANDS[("explain",)]
+    assert engines.rust_command(("explain",), {"OPENTIDE_ENGINE": "python"}) is None
+    assert engines.rust_command(("explain",), {"OPENTIDE_ENGINE": "compare"}) is None
+
+
+def test_a_rust_default_without_a_rust_implementation_runs_python(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # explain has a Rust implementation (UC-3.5): take it away for this test.
+    monkeypatch.delitem(engines.RUST_COMMANDS, ("explain",))
+    monkeypatch.setitem(engine_defaults.DEFAULT_ENGINES, ("explain",), "rust")
+    monkeypatch.delenv("OPENTIDE_ENGINE", raising=False)
+    assert engines.selected(("explain",), {}) == "python"
+    code, stdout, _ = invoke(["--json", "--repo", str(workspace), "explain", "internal"], None)
+    assert code == 0
+    assert document(stdout)["failure"] is None
+
+
+def test_the_root_reads_a_default_only_for_the_commands_it_names() -> None:
+    defaults = engine_defaults.DEFAULT_ENGINES
+    assert not engine_defaults.any_default(("explain", "internal"))
+    defaults[("generate", "exports")] = "rust"
+    try:
+        assert engine_defaults.any_default(("generate", "exports", "objects"))
+        assert not engine_defaults.any_default(("generate",))
+        defaults[("generate", "exports")] = "python"
+        assert not engine_defaults.any_default(("generate", "exports"))
+    finally:
+        del defaults[("generate", "exports")]
+
+
+@pytest.mark.parametrize(
+    ("engine", "delta"),
+    [(None, 1), ("", 1), ("rust", 1), ("python", 0)],
+)
+def test_a_flipped_default_runs_rust_and_python_is_the_escape_hatch(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch, engine: str | None, delta: int
+) -> None:
+    """Both settings of the switch: the default (rust once flipped) and ``python``."""
+    args = ["--json", "--repo", str(workspace), "explain", "internal"]
+    python = invoke(args, "python")[0]
+    monkeypatch.setitem(engines.RUST_COMMANDS, ("explain",), fake("exit"))
+    monkeypatch.setitem(engine_defaults.DEFAULT_ENGINES, ("explain",), "rust")
+    monkeypatch.delenv("OPENTIDE_ENGINE", raising=False)
+    # The fake's exit code is one more than Python's: it tells who ran.
+    assert invoke(args, engine)[0] == python + delta
+
+
+def test_compare_still_compares_a_flipped_command(
+    workspace: Path, state: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(workspace)
+    monkeypatch.setitem(engines.RUST_COMMANDS, ("explain",), fake("exit"))
+    monkeypatch.setitem(engine_defaults.DEFAULT_ENGINES, ("explain",), "rust")
+    code, stdout, _ = invoke(["--json", "--repo", str(workspace), "explain", "internal"], "compare")
+    assert code == 70
+    assert document(stdout)["failure"]["code"] == "engine_mismatch"
+
+
+def test_compare_running_python_alone_keeps_the_library_on_python(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``validate`` has no Rust CLI yet: under compare its run_validation is Python's, once."""
+    from opentide.validation import engine as validation_engine
+
+    def refuse(*_: Any, **__: Any) -> Any:
+        raise AssertionError("the SDK's Rust validate ran inside a Python-only command")
+
+    monkeypatch.setattr(validation_engine, "run_rust", refuse)
+    monkeypatch.chdir(workspace)
+    args = ["--json", "--repo", str(workspace), "validate"]
+    expected = document(invoke(args, "python")[1])
+    code, stdout, _ = invoke(args, "compare")
+    doc = document(stdout)
+    assert code == expected["exit_code"]
+    assert doc["failure"] == expected["failure"]
+    assert doc["report"]["issues"] == expected["report"]["issues"]
+
+
+def test_hosts_run_under_any_engine_but_not_a_bad_one(workspace: Path) -> None:
+    """``serve`` and ``mcp start`` apply the engine to what they run, not to themselves."""
+    assert ("serve",) in engines.ENGINE_HOSTS
+    assert ("mcp", "start") in engines.ENGINE_HOSTS
+    # serve's stdout is the protocol's: the refusal is a line on stderr.
+    code, stdout, stderr = invoke(["--json", "--repo", str(workspace), "serve"], "Rust")
+    assert (code, stdout) == (2, "")
+    assert "OPENTIDE_ENGINE=Rust is not an engine" in stderr

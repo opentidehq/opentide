@@ -100,7 +100,77 @@ def run_validation(
 
     *queries_as_warnings* reports the queries check's errors as warnings
     (``validate --queries warn``): the run passes unless strict.
+
+    The engine ``OPENTIDE_ENGINE`` selects for ``validate`` runs it
+    (:mod:`opentide.validation.engine`, #822): Python by default; ``rust``
+    validates on the Rust workspace and returns its report as this model;
+    ``compare`` runs both and returns Python's, logging any difference
+    (``engine_mismatch``) with a diff report: shadow mode, where a Rust run
+    that fails is a difference too, never the call's failure. A run no
+    ``validate`` command line can make (a given *index*, a set of checks
+    that is neither the defaults nor one check) runs Python.
     """
+    from opentide.validation import engine as engines
+
+    selected = engines.validation_engine()
+    request = None if index is not None else _rust_request(scope, checks, queries_as_warnings)
+    if selected == engines.PYTHON or request is None:
+        return _run_python(
+            scope, checks, index=index, workers=workers, queries_as_warnings=queries_as_warnings
+        )
+    if selected == engines.RUST:
+        return engines.report_from(engines.run_rust(request)["report"])
+    python = _run_python(
+        scope, checks, index=index, workers=workers, queries_as_warnings=queries_as_warnings
+    )
+    return engines.shadowed(
+        python,
+        lambda: engines.run_rust(request),
+        surface="run_validation",
+        workspace=engines.current_workspace(),
+    )
+
+
+def _rust_request(
+    scope: ValidationScope | None,
+    checks: frozenset[ValidateCheck] | None,
+    queries_as_warnings: bool,
+) -> Any:
+    """The Rust run that does what *scope* and *checks* ask, or ``None`` when none does."""
+    from opentide.validation.engine import RustRequest, default_checks_request
+
+    chosen = default_checks_request(
+        None if checks is None else sorted(check.value for check in checks),
+        sorted(check.value for check in DEFAULT_CHECKS),
+        queries_as_warnings=queries_as_warnings,
+    )
+    if chosen is None:
+        return None
+    check, queries = chosen
+    scope = scope or ValidationScope.full()
+    if scope.mode == "full":
+        return RustRequest(check=check, queries=queries)
+    files = tuple(target for target, _, _ in scope.file_targets)
+    given = {target.strip() for target in files}
+    uuids = tuple(sorted(target for target in scope.targets if target not in given))
+    return RustRequest(
+        check=check,
+        queries=queries,
+        files=files,
+        uuids=uuids,
+        types=tuple(sorted(scope.object_types)),
+    )
+
+
+def _run_python(
+    scope: ValidationScope | None = None,
+    checks: frozenset[ValidateCheck] | None = None,
+    *,
+    index: Mapping[str, Any] | None = None,
+    workers: int | None = None,
+    queries_as_warnings: bool = False,
+) -> ValidationReport:
+    """:func:`run_validation` on the Python implementation."""
     started = time.perf_counter()
     scope = scope or ValidationScope.full()
     checks = checks or DEFAULT_CHECKS

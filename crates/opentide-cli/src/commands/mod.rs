@@ -1,4 +1,6 @@
-//! The commands that run on this crate (UC-2.4: `info`, `rules unreviewed`).
+//! The commands that run on this crate (UC-2.4: `info`, `rules unreviewed`;
+//! UC-3.2: `generate exports`; UC-3.5: `validate`, `validate query`, `lint`,
+//! `explain`; UC-3.1c: `deploy --dry-run`).
 //!
 //! A command reads its arguments and the workspace and returns a
 //! [`Report`]: the JSON envelope's parts, and what the text modes print
@@ -6,9 +8,14 @@
 //! mode.
 
 pub mod deploy;
+pub mod explain;
+pub mod findings;
 pub mod generate;
 pub mod info;
+pub mod lint;
 pub mod rules;
+pub mod validate;
+pub mod watch;
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -41,6 +48,15 @@ pub struct Report {
     pub body: Vec<Block>,
     /// The checklist's steps, printed on stderr before anything else.
     pub steps: Vec<crate::render::progress::Step>,
+    /// The whole of stdout in the text modes, instead of the body and the
+    /// outcome (a `--format` report printed without `--output`).
+    pub whole_stdout: Option<String>,
+    /// No outcome line in the text modes: the body is the output
+    /// (`explain <code>`).
+    pub body_only: bool,
+    /// Written on stderr first, in every mode (`OPENTIDE_PROGRESS=json`'s
+    /// events).
+    pub stderr_first: String,
 }
 
 /// One part of a body.
@@ -50,6 +66,64 @@ pub enum Block {
     Lines(Vec<Text>),
     /// A table, laid out at the stream's width.
     Table(crate::render::table::Table),
+    /// Text for stdout, already laid out for the stream.
+    Raw(String),
+    /// Text for stderr, already laid out for the stream, in its place
+    /// among the body's parts.
+    Stderr(String),
+}
+
+/// The streams a command lays its text out for.
+#[derive(Clone, Debug)]
+pub struct Terminal {
+    /// The run's output mode.
+    pub mode: crate::mode::Mode,
+    /// stdout's styles and width.
+    pub stdout: crate::render::outcome::Console,
+    /// stderr's styles and width.
+    pub stderr: crate::render::outcome::Console,
+    /// `--quiet`.
+    pub quiet: bool,
+    /// Whether stdout is a terminal.
+    pub stdout_tty: bool,
+    /// The terminal's width, when there is one.
+    pub width: Option<usize>,
+}
+
+impl Terminal {
+    /// A terminal for tests and machine modes: no styles, no width.
+    pub fn plain(mode: crate::mode::Mode) -> Terminal {
+        let console = crate::render::outcome::Console {
+            colour: crate::render::text::Colour::None,
+            width: None,
+        };
+        Terminal {
+            mode,
+            stdout: console,
+            stderr: console,
+            quiet: false,
+            stdout_tty: false,
+            width: None,
+        }
+    }
+
+    /// Whether the run prints text (not `json`).
+    pub fn text(&self) -> bool {
+        self.mode != crate::mode::Mode::Json
+    }
+
+    /// How code frames are drawn on stdout.
+    pub fn frames(&self, cwd: &Path, env: &Env) -> crate::render::codeframe::Frames {
+        let human = self.mode == crate::mode::Mode::Human;
+        crate::render::codeframe::Frames {
+            colour: self.stdout.colour,
+            links: human && self.stdout_tty,
+            columns: self.stdout.width,
+            highlight: human && self.stdout.colour == crate::render::text::Colour::Full,
+            cwd: cwd.to_path_buf(),
+            env: env.clone(),
+        }
+    }
 }
 
 impl Report {
@@ -71,6 +145,9 @@ impl Report {
             outcome_kind: None,
             body: Vec::new(),
             steps: Vec::new(),
+            whole_stdout: None,
+            body_only: false,
+            stderr_first: String::new(),
         }
     }
 
@@ -83,6 +160,9 @@ impl Report {
             outcome_kind: None,
             body: Vec::new(),
             steps: Vec::new(),
+            whole_stdout: None,
+            body_only: false,
+            stderr_first: String::new(),
         }
     }
 
