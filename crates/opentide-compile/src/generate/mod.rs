@@ -13,6 +13,7 @@
 //! Rendering is pure: a phase returns its [`Output`]s or a [`PhaseError`];
 //! only [`files`] touches the disk.
 
+pub mod docs;
 pub mod exports;
 pub mod files;
 pub mod json_text;
