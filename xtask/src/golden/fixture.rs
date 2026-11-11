@@ -11,7 +11,8 @@
 //! - `generated`: a generator command writes the workspace (`argv`, where
 //!   `{out}` is the directory to fill). UC-0.6's corpus generator plugs in here:
 //!   the workspace is generated at record and check time from a seed, never
-//!   committed.
+//!   committed. A `cargo xtask corpus ...` generator runs in-process, in this
+//!   program, rather than as a spawned cargo (#948).
 
 use anyhow::{Context, Result, bail, ensure};
 use serde::Deserialize;
@@ -33,7 +34,8 @@ pub struct FixtureSpec {
     #[serde(default)]
     pub dirs: Vec<String>,
     /// The generator's argv (`generated`); `{out}` is the workspace directory,
-    /// and it runs in the repository root.
+    /// and it runs in the repository root (`cargo xtask corpus ...` runs
+    /// in-process).
     #[serde(default)]
     pub argv: Vec<String>,
     /// Values a case's arguments use as `{name}`.
@@ -134,6 +136,21 @@ impl FixtureSpec {
             .iter()
             .map(|arg| arg.replace("{out}", out))
             .collect();
+        if let Some(args) = this_xtask(&command, repo) {
+            // The generator is this program's own `corpus` command: run it
+            // here. A spawned `cargo xtask` builds xtask alone, with other
+            // features than a workspace test build, so under `cargo nextest
+            // run --workspace` it recompiled much of the workspace and held
+            // three corpus tests for minutes (#948).
+            let code = crate::corpus::cli::run(args)
+                .with_context(|| format!("the fixture generator `{}`", command.join(" ")))?;
+            ensure!(
+                code == 0,
+                "the fixture generator `{}` failed (exit status {code})",
+                command.join(" ")
+            );
+            return Ok(());
+        }
         let Some((program, args)) = command.split_first() else {
             bail!("a generated fixture needs `argv`");
         };
@@ -151,6 +168,26 @@ impl FixtureSpec {
         );
         Ok(())
     }
+}
+
+/// The `corpus` arguments of a generator `argv` that is `cargo xtask corpus
+/// ...` run in this repository (`repo` is the workspace this xtask belongs
+/// to), which [`FixtureSpec::materialise`] runs in-process; `None` for any
+/// other command, which it spawns. The corpus command reads its inputs from
+/// the repository root, never the working directory, so where it runs
+/// changes nothing.
+fn this_xtask<'a>(argv: &'a [String], repo: &Path) -> Option<&'a [String]> {
+    let [cargo, xtask, corpus, rest @ ..] = argv else {
+        return None;
+    };
+    if (cargo.as_str(), xtask.as_str(), corpus.as_str()) != ("cargo", "xtask", "corpus") {
+        return None;
+    }
+    let same = |a: &Path, b: &Path| match (dunce::canonicalize(a), dunce::canonicalize(b)) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => false,
+    };
+    same(repo, &crate::corpus::cli::repo_root()).then_some(rest)
 }
 
 /// Sets every directory to `0755` and every regular file to `0644`, or
@@ -281,6 +318,104 @@ fn migrate_tide_corpus_layout(dest: &Path) -> Result<()> {
 #[cfg(test)]
 mod portable_tests {
     use super::*;
+
+    fn strings(words: &[&str]) -> Vec<String> {
+        words.iter().map(|word| (*word).to_owned()).collect()
+    }
+
+    /// Only `cargo xtask corpus ...` in this repository runs in-process.
+    #[test]
+    fn only_this_repositorys_corpus_command_runs_in_process() {
+        let repo = crate::corpus::cli::repo_root();
+        let argv = strings(&["cargo", "xtask", "corpus", "faults", "--out", "/w"]);
+        assert_eq!(
+            this_xtask(&argv, &repo),
+            Some(&strings(&["faults", "--out", "/w"])[..])
+        );
+        let elsewhere = tempfile::tempdir().unwrap();
+        assert_eq!(this_xtask(&argv, elsewhere.path()), None);
+        assert_eq!(this_xtask(&argv, &repo.join("no-such-dir")), None);
+        for other in [
+            &["cargo", "xtask", "golden", "record"][..],
+            &["cargo", "run", "corpus", "generate"],
+            &["cargo2", "xtask", "corpus", "generate"],
+            &["cargo", "xtask"],
+            &["sh", "-c", "true"],
+            &[],
+        ] {
+            assert_eq!(this_xtask(&strings(other), &repo), None, "{other:?}");
+        }
+    }
+
+    fn files_of(root: &Path) -> BTreeMap<String, Vec<u8>> {
+        let mut files = BTreeMap::new();
+        let mut stack = vec![root.to_path_buf()];
+        while let Some(dir) = stack.pop() {
+            for entry in fs::read_dir(&dir).unwrap() {
+                let path = entry.unwrap().path();
+                if path.is_dir() {
+                    stack.push(path);
+                } else {
+                    let name = path.strip_prefix(root).unwrap().to_string_lossy();
+                    files.insert(name.replace('\\', "/"), fs::read(&path).unwrap());
+                }
+            }
+        }
+        files
+    }
+
+    /// The generated fixture run in-process writes what the corpus
+    /// generator writes, file for file, without spawning cargo (#948).
+    #[test]
+    fn a_generated_fixture_of_this_xtask_is_the_generators_workspace() {
+        let repo = crate::corpus::cli::repo_root();
+        let size = [
+            "--seed",
+            "3",
+            "--threats",
+            "2",
+            "--objectives",
+            "2",
+            "--rules",
+            "3",
+        ];
+        let fixture = FixtureSpec {
+            kind: FixtureKind::Generated,
+            source: None,
+            dirs: Vec::new(),
+            argv: strings(&["cargo", "xtask", "corpus", "generate"])
+                .into_iter()
+                .chain(strings(&size))
+                .chain(strings(&["--out", "{out}"]))
+                .collect(),
+            vars: BTreeMap::new(),
+            about: String::new(),
+            edits: Vec::new(),
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let ws = dir.path().join("ws");
+        fs::create_dir_all(&ws).unwrap();
+        fixture.materialise(&repo, &ws).unwrap();
+        let direct = dir.path().join("direct");
+        let args: Vec<String> = strings(&["generate"])
+            .into_iter()
+            .chain(strings(&size))
+            .chain(["--out".to_owned(), direct.to_string_lossy().into_owned()])
+            .collect();
+        assert_eq!(crate::corpus::cli::run(&args).unwrap(), 0);
+        fix_modes(&direct).unwrap();
+        let written = files_of(&ws);
+        assert!(written.len() > 5, "{:?}", written.keys());
+        assert_eq!(written, files_of(&direct));
+
+        let refused = FixtureSpec {
+            argv: strings(&["cargo", "xtask", "corpus", "generate", "--nope", "{out}"]),
+            ..fixture
+        };
+        let ws = dir.path().join("refused");
+        fs::create_dir_all(&ws).unwrap();
+        assert!(refused.materialise(&repo, &ws).is_err());
+    }
 
     /// Every fixture copied from the repository is checked out with the
     /// bytes it was recorded from: no end-of-line conversion (a Windows
