@@ -9942,3 +9942,105 @@ candidate = '"Error executing tool validation_report: command_failed: <WS>/.open
 reason = "a workspace whose configuration does not parse is refused the same way (isError, one text block naming the tool), and the Rust refusal says why: validate's failure code and the file and error, where the Python tool's exception carries no message"
 issue = "https://github.com/opentidehq/opentide/issues/829"
 changelog = "**`OPENTIDE_ENGINE=rust opentide mcp start` serves MCP from Rust**"
+
+# `setup skills discover` and `setup skills show` on the Rust command line
+# (UC-4.1, #831): the catalogue through the connectors' HTTP client.
+
+[[diff]]
+command = "setup skills discover"
+case = "setup.skills.discover/json/*/example"
+target = "stderr"
+rule = "json:/logger"
+oracle = "\"opentide.cli.services.setup.skills_registry\""
+candidate = "(absent)"
+reason = "A JSON log line of the Rust CLI's logging layer (UC-3.3) has no `logger` key: the Python module that logged it does not exist on the Rust side. The event, its fields and level are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/831"
+changelog = "**`setup skills discover` and `setup skills show` run on the Rust command line**"
+
+[[diff]]
+command = "setup skills show"
+case = "setup.skills.show/json/tide-corpus/*"
+target = "stderr"
+rule = "json:/logger"
+oracle = "\"opentide.cli.services.setup.skills_registry\""
+candidate = "(absent)"
+reason = "A JSON log line of the Rust CLI's logging layer (UC-3.3) has no `logger` key: the Python module that logged it does not exist on the Rust side. The event, its fields and level are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/831"
+changelog = "**`setup skills discover` and `setup skills show` run on the Rust command line**"
+
+[[diff]]
+command = "setup skills discover"
+case = "setup.skills.discover/human/none/example"
+target = "stderr"
+rule = "lines"
+oracle = "\u001b[1;31merror: \u001b[0mSkills manifest remote unavailable · source: opentidehq/skills · ref: main"
+candidate = "error: Skills manifest remote unavailable · source: opentidehq/skills · ref: main"
+reason = "A log line is written by the Rust CLI's logging layer (UC-3.3), as one unstyled line: Rich coloured its label. The event, its fields and their order are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/831"
+changelog = "**`setup skills discover` and `setup skills show` run on the Rust command line**"
+
+[[diff]]
+command = "setup skills discover"
+case = "setup.skills.discover/human/tide-corpus/example"
+target = "stderr"
+rule = "lines"
+oracle = "\u001b[1;31merror: \u001b[0mSkills manifest remote unavailable · source: opentidehq/skills · ref: main"
+candidate = "error: Skills manifest remote unavailable · source: opentidehq/skills · ref: main"
+reason = "A log line is written by the Rust CLI's logging layer (UC-3.3), as one unstyled line: Rich coloured its label. The event, its fields and their order are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/831"
+changelog = "**`setup skills discover` and `setup skills show` run on the Rust command line**"
+
+[[diff]]
+command = "setup skills show"
+case = "setup.skills.show/human/tide-corpus/example"
+target = "stderr"
+rule = "lines"
+oracle = "\u001b[1;31merror: \u001b[0mSkills manifest remote unavailable · source: opentidehq/skills · ref: main"
+candidate = "error: Skills manifest remote unavailable · source: opentidehq/skills · ref: main"
+reason = "A log line is written by the Rust CLI's logging layer (UC-3.3), as one unstyled line: Rich coloured its label. The event, its fields and their order are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/831"
+changelog = "**`setup skills discover` and `setup skills show` run on the Rust command line**"
+
+[[diff]]
+command = "setup skills show"
+case = "setup.skills.show/human/tide-corpus/unknown"
+target = "stderr"
+rule = "lines"
+oracle = "\u001b[1;31merror: \u001b[0mSkills manifest remote unavailable · source: opentidehq/skills · ref: main"
+candidate = "error: Skills manifest remote unavailable · source: opentidehq/skills · ref: main"
+reason = "A log line is written by the Rust CLI's logging layer (UC-3.3), as one unstyled line: Rich coloured its label. The event, its fields and their order are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/831"
+changelog = "**`setup skills discover` and `setup skills show` run on the Rust command line**"
+
+[[diff]]
+command = "setup skills show"
+case = "setup.skills.show/human/none/catalogue-remote"
+target = "stdout"
+rule = "lines"
+oracle = "MITRE ATT&CK mapping discipline and technique reference for opentide threats, objectives and \ndetection rules — technique vs sub-technique selection, tactic assignment, multi-technique chaining,\nversion pinning, revocation handling, coverage gap analysis, platform matrix awareness, and a \nlocally searchable technique index. Use when populating threat.att&ck fields in threats, mapping \nobjective signals to techniques, tagging detection rules, assessing detection coverage against the \nATT&CK matrix, or looking up technique IDs and descriptions."
+candidate = "MITRE ATT&CK mapping discipline and technique reference for opentide threats, objectives and\ndetection rules — technique vs sub-technique selection, tactic assignment, multi-technique chaining,\nversion pinning, revocation handling, coverage gap analysis, platform matrix awareness, and a\nlocally searchable technique index. Use when populating threat.att&ck fields in threats, mapping\nobjective signals to techniques, tagging detection rules, assessing detection coverage against the\nATT&CK matrix, or looking up technique IDs and descriptions."
+reason = "The description is wrapped at the stream's width at the same words; Rich left the space it broke at on the end of each row, the Rust renderer does not."
+issue = "https://github.com/opentidehq/opentide/issues/831"
+changelog = "**`setup skills discover` and `setup skills show` run on the Rust command line**"
+
+[[diff]]
+command = "setup skills show"
+case = "setup.skills.show/plain/none/catalogue-remote"
+target = "stdout"
+rule = "lines"
+oracle = "MITRE ATT&CK mapping discipline and technique reference for opentide threats, \nobjectives and detection rules — technique vs sub-technique selection, tactic \nassignment, multi-technique chaining, version pinning, revocation handling, \ncoverage gap analysis, platform matrix awareness, and a locally searchable \ntechnique index. Use when populating threat.att&ck fields in threats, mapping \nobjective signals to techniques, tagging detection rules, assessing detection \ncoverage against the ATT&CK matrix, or looking up technique IDs and \ndescriptions."
+candidate = "MITRE ATT&CK mapping discipline and technique reference for opentide threats,\nobjectives and detection rules — technique vs sub-technique selection, tactic\nassignment, multi-technique chaining, version pinning, revocation handling,\ncoverage gap analysis, platform matrix awareness, and a locally searchable\ntechnique index. Use when populating threat.att&ck fields in threats, mapping\nobjective signals to techniques, tagging detection rules, assessing detection\ncoverage against the ATT&CK matrix, or looking up technique IDs and\ndescriptions."
+reason = "The description is wrapped at the stream's width at the same words; Rich left the space it broke at on the end of each row, the Rust renderer does not."
+issue = "https://github.com/opentidehq/opentide/issues/831"
+changelog = "**`setup skills discover` and `setup skills show` run on the Rust command line**"
+
+[[diff]]
+command = "setup skills show"
+case = "setup.skills.show/agent/none/catalogue-remote"
+target = "stdout"
+rule = "lines"
+oracle = "MITRE ATT&CK mapping discipline and technique reference for opentide threats, \nobjectives and detection rules — technique vs sub-technique selection, tactic \nassignment, multi-technique chaining, version pinning, revocation handling, \ncoverage gap analysis, platform matrix awareness, and a locally searchable \ntechnique index. Use when populating threat.att&ck fields in threats, mapping \nobjective signals to techniques, tagging detection rules, assessing detection \ncoverage against the ATT&CK matrix, or looking up technique IDs and \ndescriptions."
+candidate = "MITRE ATT&CK mapping discipline and technique reference for opentide threats,\nobjectives and detection rules — technique vs sub-technique selection, tactic\nassignment, multi-technique chaining, version pinning, revocation handling,\ncoverage gap analysis, platform matrix awareness, and a locally searchable\ntechnique index. Use when populating threat.att&ck fields in threats, mapping\nobjective signals to techniques, tagging detection rules, assessing detection\ncoverage against the ATT&CK matrix, or looking up technique IDs and\ndescriptions."
+reason = "The description is wrapped at the stream's width at the same words; Rich left the space it broke at on the end of each row, the Rust renderer does not."
+issue = "https://github.com/opentidehq/opentide/issues/831"
+changelog = "**`setup skills discover` and `setup skills show` run on the Rust command line**"

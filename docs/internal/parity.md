@@ -14,15 +14,15 @@ The Python CLI at the frozen tag is the oracle ([plan §5](https://github.com/op
 | | |
 |---|---:|
 | Commands | 59 |
-| Commands with a Rust implementation | 24 |
+| Commands with a Rust implementation | 26 |
 | Commands flipped to Rust | 0 |
-| Recordings (command × corpus × mode) | 661 |
-| … no Rust yet | 301 (45.5%) |
+| Recordings (command × corpus × mode) | 641 |
+| … no Rust yet | 285 (44.4%) |
 | … compare passing | 0 (0.0%) |
 | … compare failing | 0 (0.0%) |
-| … compare not run | 360 (54.4%) |
+| … compare not run | 356 (55.5%) |
 | … flipped | 0 (0.0%) |
-| Approved diffs (`tests/golden/APPROVED_DIFFS.toml`) | 793 |
+| Approved diffs (`tests/golden/APPROVED_DIFFS.toml`) | 778 |
 | Diagnostic codes with a fault kind | 163 of 175 (93.1%) |
 | … with no fault kind, evidence recorded | 12 |
 | … with neither (missing) | 0 |
@@ -147,25 +147,23 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide generate explorer`
 
-9 approved diff(s).
+3 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
 | none | compare not run | compare not run | compare not run | compare not run |
 | tide-corpus | compare not run | compare not run | compare not run | compare not run |
 | vscode | compare not run | compare not run | compare not run | compare not run |
-| vscode-docs-folder | compare not run | compare not run | compare not run | compare not run |
 
 ### `opentide generate exports`
 
-8 approved diff(s).
+2 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
 | none | compare not run | compare not run | compare not run | compare not run |
 | tide-corpus | compare not run | compare not run | compare not run | compare not run |
 | vscode | compare not run | compare not run | compare not run | compare not run |
-| vscode-docs-folder | compare not run | compare not run | compare not run | compare not run |
 
 ### `opentide generate exports navigator`
 
@@ -226,25 +224,23 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide generate inflight`
 
-10 approved diff(s).
+4 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
 | none | compare not run | compare not run | compare not run | compare not run |
 | tide-corpus | compare not run | compare not run | compare not run | compare not run |
 | vscode | compare not run | compare not run | compare not run | compare not run |
-| vscode-docs-folder | compare not run | compare not run | compare not run | compare not run |
 
 ### `opentide generate inflight prune`
 
-8 approved diff(s).
+2 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
 | none | compare not run | compare not run | compare not run | compare not run |
 | tide-corpus | compare not run | compare not run | compare not run | compare not run |
 | vscode | compare not run | compare not run | compare not run | compare not run |
-| vscode-docs-folder | compare not run | compare not run | compare not run | compare not run |
 
 ### `opentide info`
 
@@ -396,7 +392,6 @@ No compare results were given: every command with a Rust implementation that is 
 |--------|------|------|------|------|
 | none | compare not run | compare not run | compare not run | compare not run |
 | tide-corpus | compare not run | compare not run | compare not run | compare not run |
-| vscode-docs-folder | compare not run | compare not run | compare not run | compare not run |
 
 ### `opentide setup env`
 
@@ -444,17 +439,21 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide setup skills discover`
 
+3 approved diff(s).
+
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
-| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| none | compare not run | compare not run | compare not run | compare not run |
+| tide-corpus | compare not run | compare not run | compare not run | compare not run |
 
 ### `opentide setup skills show`
 
+6 approved diff(s).
+
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
-| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| none | compare not run | compare not run | compare not run | compare not run |
+| tide-corpus | compare not run | compare not run | compare not run | compare not run |
 
 ### `opentide setup vscode`
 

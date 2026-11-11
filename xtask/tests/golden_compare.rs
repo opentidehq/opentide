@@ -37,6 +37,7 @@ fn recording(stdout: &str) -> Recording {
             },
             timeout_secs: 60,
             normalise: Vec::new(),
+            cassette: None,
         },
         stdout: stdout.as_bytes().to_vec(),
         stderr: Vec::new(),

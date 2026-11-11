@@ -42,6 +42,14 @@ fn a_case_root_is_as_long_as_the_golden_checks() {
     assert_eq!(root.path().parent().unwrap(), std::path::Path::new("/tmp"));
 }
 
+/// `setup skills discover` and `setup skills show` (UC-4.1, #831): the
+/// network refused, and the catalogue served from its cassette
+/// (`tests/cassettes/skills/manifest.json`), the requests checked against it.
+#[test]
+fn skills_catalogue_cases_are_the_oracles() {
+    check(&["setup.skills.discover", "setup.skills.show"], 20);
+}
+
 #[test]
 fn explain_cases_are_the_oracles() {
     check(&["explain"], 12);

@@ -390,6 +390,28 @@ pub fn replay(id: &str, dir: &Path, ledger: &Ledger, usage: &mut Usage) -> Vec<S
     // Python then runs alone, and there is nothing to compare.
     let refusal_dir = tempfile::tempdir().unwrap();
     let refusal = refusal_dir.path().join("refusal");
+    // A cassette case (UC-4.1): the network is the replaying proxy, its CA
+    // where the case's CA bundle variables point.
+    let proxy = case
+        .get("cassette")
+        .and_then(|name| name.as_str())
+        .map(|name| {
+            let text = std::fs::read_to_string(repo().join(format!("tests/cassettes/{name}.json")))
+                .unwrap();
+            let proxy = opentide_cassette::Proxy::start(
+                opentide_cassette::Mode::Replay {
+                    cassette: opentide_cassette::Cassette::parse(&text).unwrap(),
+                },
+                opentide_cassette::Redaction::default(),
+            )
+            .unwrap();
+            std::fs::write(tmp.join("cassette-ca.pem"), proxy.ca_pem()).unwrap();
+            proxy
+        });
+    let proxy_url = proxy.as_ref().map_or_else(
+        || "http://127.0.0.1:9".to_owned(),
+        opentide_cassette::Proxy::url,
+    );
     let env = Env::from_pairs(
         case["env"]
             .as_table()
@@ -399,6 +421,7 @@ pub fn replay(id: &str, dir: &Path, ledger: &Ledger, usage: &mut Usage) -> Vec<S
                 let value = value
                     .as_str()
                     .unwrap()
+                    .replace("<CASSETTE_PROXY>", &proxy_url)
                     .replace("<HOME>", &home.display().to_string())
                     .replace("<TMP>", &tmp.display().to_string())
                     .replace("<WS>", &ws.display().to_string());
@@ -488,6 +511,11 @@ pub fn replay(id: &str, dir: &Path, ledger: &Ledger, usage: &mut Usage) -> Vec<S
     let stdout = normaliser.text(&String::from_utf8(out).unwrap());
     let stderr = normaliser.text(&String::from_utf8(stderr.0.lock().unwrap().clone()).unwrap());
     let mut problems = Vec::new();
+    if let Some(proxy) = &proxy {
+        for mismatch in proxy.verify() {
+            problems.push(format!("{id}: not the cassette's requests: {mismatch}"));
+        }
+    }
     // `generate` prints its checklist once the work is done: no live display.
     if mode == "human" && id.starts_with("generate") && stderr.contains("\x1b[?25l") {
         problems.push(format!(
