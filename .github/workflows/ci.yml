@@ -1146,6 +1146,17 @@ jobs:
       - name: Compare every ported command with the recordings
         run: cargo xtask golden check --engine compare --report golden-compare.json
 
+      # The MCP server (UC-3.7, #829): the recorded sessions of the Python
+      # server replayed against it and against the Rust server, and the MCP
+      # suite, its stdio end-to-end tests included, against the Rust server.
+      - name: Replay the recorded MCP sessions against both servers
+        run: cargo xtask mcp replay --engine compare tests/golden/mcp/*.jsonl
+
+      - name: Run the MCP tests against the Rust server
+        env:
+          OPENTIDE_ENGINE: rust
+        run: uv run --no-sync pytest tests/test_mcp -q --no-cov -n auto
+
       - name: Upload the report
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

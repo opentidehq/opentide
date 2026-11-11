@@ -61,7 +61,13 @@ def _cli(repo: Path, query: str) -> dict:
     path = repo / "query.kql"
     path.write_text(f"{query}\n", encoding="utf-8")
     argv = ["--json", "--repo", str(repo), "validate", "query"]
-    result = runner.invoke(app, [*argv, "--platform", PLATFORM, "--file", str(path)])
+    # `validate query` has no Rust implementation: the CLI is the oracle on
+    # Python, whatever OPENTIDE_ENGINE the tool runs on.
+    result = runner.invoke(
+        app,
+        [*argv, "--platform", PLATFORM, "--file", str(path)],
+        env={"OPENTIDE_ENGINE": "python"},
+    )
     assert result.exit_code in (0, 1), result.output
     return json.loads(result.stdout)
 
