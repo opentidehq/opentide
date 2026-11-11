@@ -105,13 +105,13 @@
           ]
         },
         {
-          "begin": "^(\\s+)(carbon_black_cloud)\\s*:\\s*(?:#.*)?$",
+          "begin": "^(\\s+)(carbon_black_cloud|graylog)\\s*:\\s*(?:#.*)?$",
           "beginCaptures": {
             "2": {
               "name": "variable.other.property.tide"
             }
           },
-          "comment": "configurations.{carbon_black_cloud}: lucene queries (#171)",
+          "comment": "configurations.{carbon_black_cloud,graylog}: lucene queries (#171)",
           "end": "^(?!\\1\\s+\\S|\\s*$)",
           "patterns": [
             {

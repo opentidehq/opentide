@@ -293,9 +293,9 @@ pub fn analyze_queries(host: &dyn WorkspaceHost, text: &str) -> Vec<QueryReport>
 pub struct QueryRequest {
     pub language: LanguageId,
     /// The detection platform the query is for, as a `configurations` key
-    /// (`defender_for_endpoint` picks the Defender KQL schema and
-    /// `carbon_black_cloud` the Carbon Black Lucene dialect). `None` for the
-    /// language's default.
+    /// (`defender_for_endpoint` picks the Defender KQL schema,
+    /// `carbon_black_cloud` the Carbon Black Lucene dialect, and `graylog`
+    /// the Graylog one). `None` for the language's default.
     pub platform: Option<String>,
     /// Elastic stack the query must run on (`"9.5"`, `"serverless"`), for
     /// ES|QL. `None`, or a value that does not parse, checks every supported
@@ -317,11 +317,7 @@ pub fn analyze_query(request: &QueryRequest) -> Vec<Diagnostic> {
                 .diagnostics
         }
         LanguageId::Lucene => {
-            let dialect = if platform == "carbon_black_cloud" {
-                opentide_lucene::Dialect::CarbonBlack
-            } else {
-                opentide_lucene::Dialect::Elastic
-            };
+            let dialect = opentide_lucene::Dialect::for_platform(platform);
             opentide_lucene::analyze_dialect(&request.text, dialect).diagnostics
         }
         // `platform: harfanglab` or `bitdefender`: the platform's YARA profile.
@@ -580,9 +576,14 @@ fn query_hover(language: LanguageId, text: &str, offset: usize, platform: &str) 
         LanguageId::Kuery => {
             opentide_kuery::hover(text, offset).or_else(|| ecs::hover(text, offset))
         }
-        // Carbon Black has its own fields: no ECS (#162).
-        LanguageId::Lucene if platform == "carbon_black_cloud" => {
-            opentide_lucene::hover_dialect(text, offset, opentide_lucene::Dialect::CarbonBlack)
+        // Carbon Black has its own fields (#162), and Graylog its message
+        // fields: no ECS.
+        LanguageId::Lucene if matches!(platform, "carbon_black_cloud" | "graylog") => {
+            opentide_lucene::hover_dialect(
+                text,
+                offset,
+                opentide_lucene::Dialect::for_platform(platform),
+            )
         }
         LanguageId::Lucene => {
             opentide_lucene::hover(text, offset).or_else(|| ecs::hover(text, offset))
@@ -644,11 +645,11 @@ fn query_completions(
     match language {
         LanguageId::Kql => opentide_kql::completions(text, offset, kql_profile(platform)),
         LanguageId::Spl => opentide_spl::completions(text, offset),
-        LanguageId::Lucene if platform == "carbon_black_cloud" => {
+        LanguageId::Lucene if matches!(platform, "carbon_black_cloud" | "graylog") => {
             opentide_lucene::completions_dialect(
                 text,
                 offset,
-                opentide_lucene::Dialect::CarbonBlack,
+                opentide_lucene::Dialect::for_platform(platform),
             )
         }
         LanguageId::Esql | LanguageId::Eql | LanguageId::Kuery | LanguageId::Lucene => {
