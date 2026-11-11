@@ -292,12 +292,27 @@ jobs:
       - name: Install dependencies
         run: uv sync --group dev
 
+      # A test writes under a temporary folder, never in the checkout (#931):
+      # the tree's state before the tests is compared with it after them.
+      - name: Note the checkout's state
+        shell: bash
+        run: git status --porcelain --untracked-files=all > "$RUNNER_TEMP/tree-before"
+
       - name: cargo nextest (profile ci)
         run: cargo nextest run --workspace --locked --profile ci
 
       - name: doctests
         if: runner.os == 'Linux'
         run: cargo test --workspace --locked --doc
+
+      - name: The tests left the checkout as they found it
+        shell: bash
+        run: |
+          git status --porcelain --untracked-files=all > "$RUNNER_TEMP/tree-after"
+          if ! diff -u "$RUNNER_TEMP/tree-before" "$RUNNER_TEMP/tree-after"; then
+            echo "::error::A test wrote into the checkout (lines starting with +): write under a temporary folder (tempfile::tempdir) instead."
+            exit 1
+          fi
 
       - name: Upload the JUnit report
         if: failure()
