@@ -85,6 +85,9 @@ of it): a command that failed early would measure nothing, so the bench stops wi
   pass for the command's now and then (more often under load and coverage instrumentation).
   What xtask touches after the exec (the language server's reader thread and messages) is not
   in the child's floor, so the read does not wait for the reap.
+- The `memory_*` tests of `measure` and `lsp` measure this process's own mark, which the other
+  tests of a plain `cargo test` (threads of one process) move: each runs itself again in a child
+  process of the test binary, alone (`bench::measured_alone`), under `cargo test` and nextest alike.
 - `XTASK_BENCH_INJECT_SLEEP_MS` is test-only: a sleep inside every measured run's timed window.
   `tests/bench.rs` proves that it makes the check fail.
 - CI: [`bench.yml`](../.github/workflows/bench.yml). Re-record the baseline only from a CI run on
@@ -121,6 +124,10 @@ cargo nextest run --profile fast -p xtask
 cargo xtask check-layers
 ```
 
+- Every git repository a test or `payloads git` builds runs git with automatic maintenance and gc
+  off (`GIT_CONFIG_COUNT`: `maintenance.auto=false`, `gc.auto=0`; `payloads::git::QUIET_GIT`):
+  either works under `.git` in the background after a commit, and a copy of `.git` made meanwhile
+  failed (#934). A state's copy leaves git's `*.lock` files out and fails loudly otherwise.
 - `src/layers.rs` unit tests: synthetic tables and metadata, including a deliberate upward
   dependency on the repository's own table, which must fail.
 - `tests/cli.rs`: the binary through trycmd (`tests/cmd/*.trycmd`, fixtures in
