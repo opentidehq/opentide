@@ -187,6 +187,12 @@ pub(crate) fn phase_failed(
     report
 }
 
+/// The workspace a generate command reads, or the report of why it cannot.
+fn workspace(command: &str, cx: &Context<'_>) -> Result<Workspace, Box<Report>> {
+    let (_, options) = placement(cx.repo, cx.env, cx.cwd);
+    open(options).map_err(|message| Box::new(Report::error(command, message)))
+}
+
 /// The workspace a generate command reads, opened as the first work of its
 /// step `step`: the oracle reads the configuration inside the phase, so a
 /// configuration that does not resolve (a paths.toml its model refuses,
