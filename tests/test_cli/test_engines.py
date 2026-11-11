@@ -648,6 +648,8 @@ def test_the_variable_wins_over_the_default(monkeypatch: pytest.MonkeyPatch) -> 
 def test_a_rust_default_without_a_rust_implementation_runs_python(
     workspace: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # explain has a Rust implementation (UC-3.5): take it away for this test.
+    monkeypatch.delitem(engines.RUST_COMMANDS, ("explain",))
     monkeypatch.setitem(engine_defaults.DEFAULT_ENGINES, ("explain",), "rust")
     monkeypatch.delenv("OPENTIDE_ENGINE", raising=False)
     assert engines.selected(("explain",), {}) == "python"
