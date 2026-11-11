@@ -5,26 +5,34 @@
 #
 # A workflow of its own, not a job of ci.yml: an instrumented build of the whole
 # workspace takes a target directory of its own (target/llvm-cov-target) and a
-# cache of its own, and ci.yml is being restructured by UC-0.3 (#801). The
-# check to require is `Rust coverage gates` (a maintainer sets required checks).
+# cache of its own, and ci.yml is being restructured by UC-0.3 (#801).
+#
+# In the full set (ci.yml's header): nightly, every push to development and
+# integration/unified-core, Run workflow, and a pull request with the
+# `full-ci` label. Not a required check: it does not run on every pull request.
 name: Coverage
 
 on:
   pull_request:
   push:
     branches: [development, integration/unified-core]
+  schedule:
+    - cron: "41 1 * * *"
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: coverage-${{ github.ref }}
+  # The event in the group, so that the nightly run and a push to development
+  # do not cancel each other.
+  group: coverage-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   rust:
     name: Rust coverage gates
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')
     runs-on: ubuntu-latest
     timeout-minutes: 90
     permissions:
