@@ -49,6 +49,19 @@ The `cve` check looks up `threat.cve` identifiers on [CIRCL Vulnerability-Lookup
 
 Default pipeline checks: id uniqueness, UUID format, schema, configuration. CVE lookup is opt-in via `ValidateCheck.cve`, and the `sharing.toml` check via `ValidateCheck.sharing_config`. The configuration check is workspace-wide, so a narrowed scope skips it unless it is the only check requested; see [Configuration models](./configuration.md).
 
+## Choosing the implementation
+
+`run_validation` runs on the implementation `OPENTIDE_ENGINE` selects for `validate` ([Choosing the implementation](../cli/json-output.md#choosing-the-implementation)), read at each call:
+
+| Value | Runs |
+|-------|------|
+| empty or unset | `validate`'s default: Python today |
+| `python` | The Python implementation |
+| `rust` | The Rust workspace (`opentide._native`); its report comes back as the same `ValidationReport` |
+| `compare` | Both; returns the Python report, and logs a warning (`engine_mismatch`) with a diff report in `$XDG_STATE_HOME/opentide/compare/` when they differ, or when the Rust run fails (no engine, a configuration it does not resolve) |
+
+Any other value raises `opentide.validation.engine.EngineSelectionError`. A call no `validate` command line can make runs Python whatever the variable says: one with `index=`, or with a set of `checks` that is neither the defaults, the defaults without `queries`, nor one check. `workers=` is a Python setting: the Rust workspace picks its own threads. Under `rust`, a workspace whose configuration does not resolve raises `opentide.validation.engine.RustValidationError` (its `code` is `command_failed`).
+
 ## ValidationReport
 
 Structured report with:
