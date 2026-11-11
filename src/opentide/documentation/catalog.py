@@ -374,7 +374,7 @@ class DocumentationCatalog:
             add_edge(objective_uuid, rule_uuid, "implements")
 
     def rules_for_signal(self, signal_uuid: str) -> list[str]:
-        """Return MDR UUIDs that implement a detection signal."""
+        """Return the UUIDs of the rules that implement a detection signal."""
         downstream: set[str] = set()
         try:
             if fw.get_type(signal_uuid, mute=True) != "signal":
