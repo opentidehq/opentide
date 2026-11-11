@@ -1108,8 +1108,15 @@ mod tests {
             unreadable_rule(Err("gone".into())),
             Some(("gone".into(), None, None))
         );
-        let error = std::io::Error::from_raw_os_error(2);
-        assert_eq!(os_problem(&error), "No such file or directory");
+        // The OS's own words, which differ by platform: only the
+        // `(os error N)` suffix Rust appends is dropped.
+        let dir = tempfile::tempdir().unwrap();
+        let error = std::fs::read(dir.path().join("missing.yaml")).unwrap_err();
+        let code = error.raw_os_error().unwrap();
+        let problem = os_problem(&error);
+        assert!(!problem.is_empty());
+        assert_eq!(format!("{problem} (os error {code})"), error.to_string());
+        assert_eq!(os_problem(&std::io::Error::other("gone")), "gone");
     }
 
     #[test]
