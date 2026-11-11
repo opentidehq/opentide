@@ -80,7 +80,18 @@ impl FixtureSpec {
     /// Writes the workspace into `dest`, which exists and is empty. Its
     /// permissions are then set the same on every host (see [`fix_modes`]).
     pub fn materialise(&self, repo: &Path, dest: &Path) -> Result<()> {
-        self.lay_out(repo, dest)?;
+        self.materialise_with(repo, dest, spawn)
+    }
+
+    /// [`Self::materialise`], with `spawn` running a generator command that
+    /// does not run in-process (a seam for the tests).
+    fn materialise_with(
+        &self,
+        repo: &Path,
+        dest: &Path,
+        spawn: impl FnOnce(&[String], &Path) -> Result<()>,
+    ) -> Result<()> {
+        self.lay_out(repo, dest, spawn)?;
         for edit in &self.edits {
             let path = dest.join(&edit.path);
             let text =
@@ -97,7 +108,12 @@ impl FixtureSpec {
         fix_modes(dest)
     }
 
-    fn lay_out(&self, repo: &Path, dest: &Path) -> Result<()> {
+    fn lay_out(
+        &self,
+        repo: &Path,
+        dest: &Path,
+        spawn: impl FnOnce(&[String], &Path) -> Result<()>,
+    ) -> Result<()> {
         match self.kind {
             FixtureKind::Copy => copy_tree(&self.source_dir(repo)?, dest),
             FixtureKind::TideCorpus => {
@@ -111,7 +127,7 @@ impl FixtureSpec {
                 }
                 Ok(())
             }
-            FixtureKind::Generated => self.generate(repo, dest),
+            FixtureKind::Generated => self.generate(repo, dest, spawn),
         }
     }
 
@@ -129,7 +145,12 @@ impl FixtureSpec {
         Ok(dir)
     }
 
-    fn generate(&self, repo: &Path, dest: &Path) -> Result<()> {
+    fn generate(
+        &self,
+        repo: &Path,
+        dest: &Path,
+        spawn: impl FnOnce(&[String], &Path) -> Result<()>,
+    ) -> Result<()> {
         let out = dest.to_str().context("the workspace path is not UTF-8")?;
         let command: Vec<String> = self
             .argv
@@ -151,23 +172,29 @@ impl FixtureSpec {
             );
             return Ok(());
         }
-        let Some((program, args)) = command.split_first() else {
-            bail!("a generated fixture needs `argv`");
-        };
-        let output = Command::new(program)
-            .args(args)
-            .current_dir(repo)
-            .output()
-            .with_context(|| format!("run the fixture generator {program}"))?;
-        ensure!(
-            output.status.success(),
-            "the fixture generator `{}` failed ({}): {}",
-            command.join(" "),
-            output.status,
-            String::from_utf8_lossy(&output.stderr).trim()
-        );
-        Ok(())
+        ensure!(!command.is_empty(), "a generated fixture needs `argv`");
+        spawn(&command, repo)
     }
+}
+
+/// Runs a generator command in `repo` and fails unless it succeeds.
+fn spawn(command: &[String], repo: &Path) -> Result<()> {
+    let Some((program, args)) = command.split_first() else {
+        bail!("a generated fixture needs `argv`");
+    };
+    let output = Command::new(program)
+        .args(args)
+        .current_dir(repo)
+        .output()
+        .with_context(|| format!("run the fixture generator {program}"))?;
+    ensure!(
+        output.status.success(),
+        "the fixture generator `{}` failed ({}): {}",
+        command.join(" "),
+        output.status,
+        String::from_utf8_lossy(&output.stderr).trim()
+    );
+    Ok(())
 }
 
 /// The `corpus` arguments of a generator `argv` that is `cargo xtask corpus
@@ -332,6 +359,13 @@ mod portable_tests {
             this_xtask(&argv, &repo),
             Some(&strings(&["faults", "--out", "/w"])[..])
         );
+        // The caller passes cargo metadata's workspace root, which may be
+        // spelled differently from this program's: the same directory by
+        // another path still runs in-process.
+        assert_eq!(
+            this_xtask(&argv, &repo.join("xtask").join("..")),
+            Some(&strings(&["faults", "--out", "/w"])[..])
+        );
         let elsewhere = tempfile::tempdir().unwrap();
         assert_eq!(this_xtask(&argv, elsewhere.path()), None);
         assert_eq!(this_xtask(&argv, &repo.join("no-such-dir")), None);
@@ -362,6 +396,11 @@ mod portable_tests {
             }
         }
         files
+    }
+
+    /// A spawner that fails the test: the command must have run in-process.
+    fn no_spawn(command: &[String], _repo: &Path) -> Result<()> {
+        panic!("spawned `{}`", command.join(" "))
     }
 
     /// The generated fixture run in-process writes what the corpus
@@ -395,7 +434,7 @@ mod portable_tests {
         let dir = tempfile::tempdir().unwrap();
         let ws = dir.path().join("ws");
         fs::create_dir_all(&ws).unwrap();
-        fixture.materialise(&repo, &ws).unwrap();
+        fixture.materialise_with(&repo, &ws, no_spawn).unwrap();
         let direct = dir.path().join("direct");
         let args: Vec<String> = strings(&["generate"])
             .into_iter()
@@ -414,7 +453,62 @@ mod portable_tests {
         };
         let ws = dir.path().join("refused");
         fs::create_dir_all(&ws).unwrap();
-        assert!(refused.materialise(&repo, &ws).is_err());
+        assert!(refused.materialise_with(&repo, &ws, no_spawn).is_err());
+
+        // Any other generator is spawned, in the repository root.
+        let other = FixtureSpec {
+            argv: strings(&["gen", "--into", "{out}"]),
+            ..refused
+        };
+        let ws = dir.path().join("other");
+        fs::create_dir_all(&ws).unwrap();
+        let mut spawned = None;
+        other
+            .materialise_with(&repo, &ws, |command, at| {
+                spawned = Some((command.to_vec(), at.to_path_buf()));
+                Ok(())
+            })
+            .unwrap();
+        let out = ws.to_str().unwrap().to_owned();
+        assert_eq!(
+            spawned,
+            Some((strings(&["gen", "--into", &out]), repo.clone()))
+        );
+    }
+
+    /// A corpus command run in-process that returns a non-zero exit status
+    /// fails the fixture, as a spawned one would.
+    #[test]
+    fn a_failing_in_process_generator_fails_the_fixture() {
+        let corpora = crate::corpus::cli::corpora_dir();
+        let dir = tempfile::tempdir().unwrap();
+        let stale = dir.path().join("corpora");
+        fs::create_dir_all(&stale).unwrap();
+        for name in ["faults.toml", "codes.toml"] {
+            fs::copy(corpora.join(name), stale.join(name)).unwrap();
+        }
+        // `coverage --check` against a stale report exits 1 (`Ok(1)`).
+        fs::write(stale.join("COVERAGE.md"), "stale\n").unwrap();
+        let fixture = FixtureSpec {
+            kind: FixtureKind::Generated,
+            source: None,
+            dirs: Vec::new(),
+            argv: strings(&["cargo", "xtask", "corpus", "coverage", "--check", "--dir"])
+                .into_iter()
+                .chain([stale.to_string_lossy().into_owned()])
+                .collect(),
+            vars: BTreeMap::new(),
+            about: String::new(),
+            edits: Vec::new(),
+        };
+        let ws = dir.path().join("ws");
+        fs::create_dir_all(&ws).unwrap();
+        let repo = crate::corpus::cli::repo_root();
+        let error = fixture
+            .materialise_with(&repo, &ws, no_spawn)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("exit status 1"), "{error}");
     }
 
     /// Every fixture copied from the repository is checked out with the
