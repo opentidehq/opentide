@@ -855,6 +855,22 @@ changelog = "**`info` draws its tables with comfy-table**"
 # - On Rust the MCP tools and `run_validation` show `validate`'s own announced
 #   differences (`unknown-revision`, `yaml-1-2-dates`, `yaml-error-text`).
 
+# UC-3.8 (#830): `opentide serve` under `OPENTIDE_ENGINE=rust` is the Rust
+# host (`crates/opentide-cli/src/serve`). The golden cases run `serve` under
+# `python` and `compare`, both the Python host (an engine host runs Python's
+# under `compare`), so no entry can apply to a case; the recorded sessions
+# replay against the Rust host in `crates/opentide-cli/tests/serve.rs`.
+# Announced under "**`OPENTIDE_ENGINE=rust opentide serve` is the Rust
+# host**":
+#
+# - `serve-json-strict`: a line Python's `json` reads but JSON does not allow
+#   (`NaN`, `Infinity`, a lone surrogate, nesting past 128) answers `-32700`
+#   with serde_json's message.
+# - `serve-ids-as-written`: request ids are compared by their JSON text.
+# - `serve-ignored-signals`: SIGTERM and SIGHUP stop the server even when it was started
+#   ignoring it (no safe way to read a disposition without `unsafe`).
+# - `serve-duration`: `duration_ms` is 0 in the documents the host builds.
+
 # UC-3.2 (#824): `generate exports` on a terminal in `human` mode prints its
 # checklist row once the exports are written. The Rust engine writes them in
 # milliseconds and draws no spinner while they run; the oracle's first line

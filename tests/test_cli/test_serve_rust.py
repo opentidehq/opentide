@@ -1,4 +1,4 @@
-"""``opentide serve`` on the Rust engine (#822): the same answers, from a warm Rust workspace.
+"""``opentide serve``'s Python host on the Rust engine (#822): the same answers, warm.
 
 A run whose command the engine selection gives to Rust runs in this process
 through ``opentide._native.run_cli``; the Python CLI, run fresh, is the
@@ -77,7 +77,9 @@ def _client(tmp_path: Path) -> Client:
     env = {**os.environ, "XDG_STATE_HOME": str(tmp_path / "state")}
     elsewhere = tmp_path / "server-cwd"
     elsewhere.mkdir(exist_ok=True)
-    return Client(CommandRunner(base_env=env, cwd=elsewhere))
+    # The Python host, whose Rust runs go through ``run_cli``: the Rust host
+    # (UC-3.8) is test_serve.py's under ``rust``, and crates/opentide-cli's.
+    return Client(CommandRunner(base_env=env, cwd=elsewhere), python_host=True)
 
 
 @pytest.fixture

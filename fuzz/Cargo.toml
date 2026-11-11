@@ -126,3 +126,10 @@ path = "fuzz_targets/from_node.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "serve"
+path = "fuzz_targets/serve.rs"
+test = false
+doc = false
+bench = false

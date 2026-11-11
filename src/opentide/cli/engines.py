@@ -132,7 +132,10 @@ RUST_CLI: tuple[str, ...] = (sys.executable, "-m", "opentide.cli.rust")
 #: doctor that reaches PyPI and the proxy stays Python's; ``mcp start`` with UC-3.7
 #: (#829): the Rust server, which hands the tools and resources it has no
 #: implementation of to the Python server's handlers in its own process
-#: (``opentide.mcp_server.bridge``).
+#: (``opentide.mcp_server.bridge``); ``serve`` with UC-3.8 (#830): the Rust host,
+#: which runs each command with a Rust implementation itself and hands every
+#: other run to this package's runner in its own process
+#: (``opentide.cli.services.serve_bridge``).
 RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
     ("commands",): RustCommand(launch=RUST_CLI),
     ("explain",): RustCommand(launch=RUST_CLI),
@@ -158,6 +161,7 @@ RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
     ("generate", "inflight", "prune"): RustCommand(launch=RUST_CLI),
     ("setup", "ci"): RustCommand(launch=RUST_CLI),
     ("mcp", "start"): RustCommand(launch=RUST_CLI),
+    ("serve",): RustCommand(launch=RUST_CLI),
 }
 
 

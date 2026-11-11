@@ -7,7 +7,10 @@ last ones spawn the console script and speak the protocol over its stdio.
 Every test runs on both engines (#927): ``OPENTIDE_ENGINE`` unset runs each
 command's Python implementation, ``rust`` the Rust one where the command has
 it (``validate``, ``info``, ``lint``, ``explain``, ...), in the server and in
-the fresh run it is compared with.
+the fresh run it is compared with. Under ``rust`` the server is the Rust host
+(UC-3.8, #830; ``opentide._native.ServeHost`` in this process, the
+``opentide serve`` child over stdio), which hands the runs the engine
+selection gives to Python to :mod:`opentide.cli.services.serve_bridge`.
 """
 
 from __future__ import annotations
@@ -32,6 +35,7 @@ from typer.testing import CliRunner
 from opentide import __version__
 from opentide.cli import app
 from opentide.cli.services import serve as serve_mod
+from opentide.cli.services import serve_bridge
 from opentide.cli.services.serve import CommandRunner, Server, commands_digest
 
 RULE_FILE = "Objects/Detection Rules/rule-0001-sentinel-kql.yaml"
@@ -77,12 +81,20 @@ def spawned_document(argv: list[str], *, env: dict[str, str] | None = None) -> t
 
 
 class Client:
-    """A client of an in-process :class:`Server`, with its loop on a thread."""
+    """A client of an in-process server, with its loop on a thread.
 
-    def __init__(self, runner: CommandRunner) -> None:
+    The server is the host ``opentide serve`` runs under the engine selection
+    (the Rust host under ``rust``), or the Python host when *python_host*.
+    """
+
+    def __init__(self, runner: CommandRunner, *, python_host: bool = False) -> None:
         self.messages: queue.Queue[dict[str, Any]] = queue.Queue()
         self.notifications: list[dict[str, Any]] = []
-        self.server = Server(self._received, runner=runner)
+        self.server: Server | serve_bridge.RustServer = (
+            Server(self._received, runner=runner)
+            if python_host
+            else serve_bridge.server_for(self._received, runner=runner)
+        )
         self.code: int | None = None
         self._next = 0
         self._loop = threading.Thread(target=self._serve, daemon=True)
@@ -270,6 +282,7 @@ def test_each_run_resolves_its_own_workspace(
     working directory in this process (``tests/conftest.py``).
     """
     other = materialise_corpus(tmp_path / "other")
+    started_in = Path.cwd()
     first = client.run("info")["document"]
     by_repo = client.run("--repo", str(other), "info")["document"]
     by_env = client.run("info", env={"OPENTIDE_REPO_ROOT": str(other)})["document"]
@@ -281,7 +294,10 @@ def test_each_run_resolves_its_own_workspace(
     # The server's own state is put back after every run.
     assert os.environ.get("OPENTIDE_REPO_ROOT") == str(tide_corpus_repo)
     assert client.run("info")["document"]["repo"] == str(tide_corpus_repo)
-    assert Path.cwd() == client.server.runner.cwd
+    # The Python host runs in the server's directory; the Rust host's runs
+    # never change the process's.
+    python_host = isinstance(client.server, Server)
+    assert Path.cwd() == (client.server.runner.cwd if python_host else started_in)
 
 
 def test_progress_events_arrive_as_notifications(client: Client) -> None:
@@ -448,6 +464,9 @@ def validate_runs(
             return
         from opentide.analysis import engine as native_engine
 
+        # The Rust host hands the run to this process's runner, whose Rust
+        # run is the fake below.
+        monkeypatch.setattr(serve_bridge.Bridge, "rust_run", lambda *_: None)
         native = native_engine()
         real = native.run_cli
 
@@ -463,6 +482,17 @@ def validate_runs(
         monkeypatch.setattr(native, "run_cli", run_cli)
 
     return install
+
+
+@pytest.fixture
+def through_python(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Every run goes through this process's :class:`CommandRunner`, on either host.
+
+    The Rust host runs a ported command itself; these tests reach into the
+    Python runner (or replace it), so the Rust host hands it every run, as
+    it does a command with no Rust implementation.
+    """
+    monkeypatch.setattr(serve_bridge.Bridge, "rust_run", lambda *_: None)
 
 
 def test_cancel_stops_the_run_with_130_and_cleanup_runs(
@@ -517,7 +547,7 @@ def test_cancelling_a_queued_run_answers_130_without_running_it(
 
 
 def test_a_cancel_after_the_command_returned_keeps_its_answer(
-    client: Client, monkeypatch: pytest.MonkeyPatch
+    client: Client, monkeypatch: pytest.MonkeyPatch, through_python: None
 ) -> None:
     # The cancel lands while the run parses what the command printed: the
     # command has finished, so its own document and exit code come back.
@@ -542,9 +572,18 @@ def test_a_cancel_after_the_command_returned_keeps_its_answer(
     assert "failure" not in result["document"] or not result["document"]["failure"]
 
 
-def test_a_cancelled_run_names_its_command(client: Client, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_cancelled_run_names_its_command(
+    client: Client, monkeypatch: pytest.MonkeyPatch, engine: str
+) -> None:
     # Cancelled before the run thread started: the fallback document still
     # carries the command.
+    if engine == "rust":
+        pytest.skip(
+            "the Python host's run thread; the Rust host's queued and unstarted runs are "
+            "crates/opentide-cli/tests/serve.rs's cancelling_a_queued_run_* and "
+            "a_rust_run_cancelled_before_it_started_*"
+        )
+
     def cancelled_work(self: Server, work: Any, *, job: Any = None, argv: Any = ()) -> Any:
         assert job is not None
         job.cancelled = True
@@ -570,10 +609,12 @@ class RecordingRunner(CommandRunner):
 
 
 @pytest.mark.parametrize("ending", ["close_input", "exit"])
-def test_queued_runs_do_not_run_after_exit_or_the_end_of_input(ending: str) -> None:
+def test_queued_runs_do_not_run_after_exit_or_the_end_of_input(
+    ending: str, through_python: None
+) -> None:
     written: list[dict[str, Any]] = []
     runner = RecordingRunner()
-    server = Server(written.append, runner=runner)
+    server = serve_bridge.server_for(written.append, runner=runner)
     for request_id in (1, 2, 3):
         message = {"jsonrpc": "2.0", "id": request_id, "method": "run"}
         message["params"] = {"argv": ["deploy", "--strategy", "PRODUCTION"]}
@@ -653,7 +694,7 @@ def test_sigterm_stops_the_run_so_its_plan_copy_is_removed(
     assert answer["id"] == 1 and answer["result"]["exit_code"] == 130
 
 
-def test_a_client_that_disconnects_ends_the_session_with_zero() -> None:
+def test_a_client_that_disconnects_ends_the_session_with_zero(through_python: None) -> None:
     writes: list[dict[str, Any]] = []
 
     def write(message: dict[str, Any]) -> None:
@@ -662,7 +703,7 @@ def test_a_client_that_disconnects_ends_the_session_with_zero() -> None:
         writes.append(message)
 
     runner = RecordingRunner()
-    server = Server(write, runner=runner)
+    server = serve_bridge.server_for(write, runner=runner)
     for request_id in (1, 2, 3):
         message = {"jsonrpc": "2.0", "id": request_id, "method": "run"}
         message["params"] = {"argv": ["validate"]}
@@ -686,7 +727,7 @@ def test_a_cancel_for_a_finished_run_changes_nothing(client: Client) -> None:
     assert client.answer(request_id)["result"]["exit_code"] == 0
     # A cancel for an id never sent is not kept either.
     client.send({"method": "$/cancelRequest", "params": {"id": "never-sent"}})
-    assert client.server._cancelled == set()
+    assert client.server.pending_cancels() == 0
 
 
 def test_a_crash_answers_internal_and_the_server_keeps_serving(

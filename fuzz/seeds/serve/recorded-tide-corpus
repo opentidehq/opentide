@@ -1,0 +1,8 @@
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}
+{"jsonrpc":"2.0","id":2,"method":"run","params":{"argv":["validate"]}}
+{"jsonrpc":"2.0","id":3,"method":"run","params":{"argv":["info"]}}
+{"jsonrpc":"2.0","id":4,"method":"run","params":{"argv":["tui"]}}
+not json
+{"jsonrpc":"2.0","id":5,"method":"nope"}
+{"jsonrpc":"2.0","id":6,"method":"shutdown"}
+{"jsonrpc":"2.0","method":"exit"}
