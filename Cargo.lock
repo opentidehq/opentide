@@ -4952,6 +4952,7 @@ dependencies = [
  "indexmap",
  "jsonschema",
  "opentide-analysis",
+ "opentide-cassette",
  "opentide-cli",
  "opentide-compare",
  "opentide-compile",

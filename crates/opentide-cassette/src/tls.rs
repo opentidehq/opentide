@@ -74,6 +74,14 @@ impl TestCa {
         let mut params =
             CertificateParams::new(vec![host.to_owned()]).map_err(|error| error.to_string())?;
         params.distinguished_name.push(DnType::CommonName, host);
+        // Python 3.13 verifies strictly (VERIFY_X509_STRICT): a leaf names
+        // its issuer's key.
+        params.use_authority_key_identifier_extension = true;
+        params.key_usages = vec![
+            KeyUsagePurpose::DigitalSignature,
+            KeyUsagePurpose::KeyEncipherment,
+        ];
+        params.extended_key_usages = vec![rcgen::ExtendedKeyUsagePurpose::ServerAuth];
         let cert = params
             .signed_by(&key, &self.issuer)
             .map_err(|error| error.to_string())?;

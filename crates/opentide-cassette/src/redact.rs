@@ -4,8 +4,9 @@
 //!
 //! - **Transport headers** are left out: what the HTTP library adds, not the
 //!   client (`Host`, `User-Agent`, `Accept-Encoding`, `Connection`,
-//!   `Content-Length`, proxy headers). `requests`, `urllib` and reqwest each
-//!   write their own; none of them is the platform's API.
+//!   `Content-Length`, proxy headers), and `Accept: */*`, which means what
+//!   no `Accept` header means. `requests`, `urllib` and reqwest each write
+//!   their own; none of them is the platform's API.
 //! - **Secret headers** keep their scheme and lose their value
 //!   (`Authorization: Bearer REDACTED`): `Authorization`, cookies, and any
 //!   header whose name speaks of a key, token, secret, password, signature
@@ -143,6 +144,9 @@ impl Redaction {
             .into_iter()
             .map(|(name, value)| (name.to_ascii_lowercase(), value))
             .filter(|(name, _)| !TRANSPORT_HEADERS.contains(&name.as_str()))
+            // `Accept: */*` says what no Accept header says (RFC 9110,
+            // 12.5.1); `requests` and reqwest send it unasked, urllib not.
+            .filter(|(name, value)| !(name == "accept" && value.trim() == "*/*"))
             .map(|(name, value)| {
                 let value = self.header(&name, value);
                 (name, value)

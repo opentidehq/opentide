@@ -2,6 +2,12 @@
 //! request in its place, in order, and [`Replay::verify`] then asserts that
 //! the requests received are the recorded ones, byte for byte once
 //! normalised ([`crate::redact`]), in the same order.
+//!
+//! A cassette replays as many times as it is run through: after its last
+//! interaction the next request is compared with its first. Each pass must
+//! be whole. `OPENTIDE_ENGINE=compare` runs the Python and the Rust
+//! implementation one after the other, and each must send the scenario's
+//! requests.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -72,6 +78,7 @@ pub fn received(
 /// is the recorded one.
 struct InOrder {
     index: usize,
+    len: usize,
     expected: cassette::Request,
     answer: cassette::Response,
     next: Arc<AtomicUsize>,
@@ -81,7 +88,7 @@ struct InOrder {
 
 impl wiremock::Match for InOrder {
     fn matches(&self, request: &wiremock::Request) -> bool {
-        self.next.load(Ordering::SeqCst) == self.index
+        self.next.load(Ordering::SeqCst) % self.len == self.index
             && received(request, self.origin.as_deref(), &self.redaction) == self.expected
     }
 }
@@ -119,11 +126,13 @@ impl Replay {
     pub async fn start(cassette: Cassette, redaction: Redaction, origin: Option<String>) -> Self {
         let server = MockServer::builder().start().await;
         let next = Arc::new(AtomicUsize::new(0));
+        let len = cassette.interactions.len().max(1);
         for (index, Interaction { request, response }) in
             cassette.interactions.iter().cloned().enumerate()
         {
             let rule = InOrder {
                 index,
+                len,
                 expected: request,
                 answer: response.clone(),
                 next: next.clone(),
@@ -132,6 +141,7 @@ impl Replay {
             };
             let responder = InOrder {
                 index,
+                len,
                 expected: rule.expected.clone(),
                 answer: response,
                 next: next.clone(),
@@ -140,7 +150,6 @@ impl Replay {
             };
             Mock::given(rule)
                 .respond_with(responder)
-                .up_to_n_times(1)
                 .with_priority(1)
                 .mount(&server)
                 .await;
@@ -177,15 +186,21 @@ impl Replay {
             .collect()
     }
 
-    /// Every difference between the requests received and the cassette's.
+    /// Every difference between the requests received and the cassette's,
+    /// played as many whole times as the requests need (at least once).
     pub async fn verify(&self) -> Vec<Mismatch> {
+        let received = self.requests().await;
+        let len = self.cassette.interactions.len().max(1);
+        let passes = received.len().div_ceil(len).max(1);
         let expected: Vec<&cassette::Request> = self
             .cassette
             .interactions
             .iter()
             .map(|interaction| &interaction.request)
+            .cycle()
+            .take(self.cassette.interactions.len() * passes)
             .collect();
-        compare(&expected, &self.requests().await)
+        compare(&expected, &received)
     }
 }
 

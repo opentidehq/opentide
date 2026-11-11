@@ -51,8 +51,9 @@ pub struct DeployRequest {
     pub rule_id: String,
     /// What to do.
     pub operation: Operation,
-    /// The request body.
-    pub body: serde_json::Value,
+    /// The request body, as `opentide-compile` wrote it: bytes, so the key
+    /// order and layout the platform receives are the compiled ones.
+    pub body: Vec<u8>,
 }
 
 /// What a deploy did.
