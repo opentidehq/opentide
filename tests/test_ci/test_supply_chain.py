@@ -128,6 +128,8 @@ def test_cargo_deny_gates_every_pull_request_at_a_pinned_version() -> None:
     job = ci["jobs"]["deny"]
     assert job["permissions"] == {"contents": "read"}
     assert "continue-on-error" not in job
+    # A core gate: no `if`, so it runs on every pull request, not only in the full set.
+    assert "if" not in job
     steps = job["steps"]
     assert not [s for s in steps if "continue-on-error" in s]
     installs = [s for s in steps if "taiki-e/install-action" in s.get("uses", "")]

@@ -12,10 +12,10 @@ Each gate below runs in CI; the required ones are in `.github/AGENTS.md` ("Requi
 |------|-------|------|----------|
 | `cargo deny check` | ci.yml `deny` (Supply chain (cargo deny)) | every pull request and push | a licence not on the list, a RustSec advisory, a second version of a shipped crate, OpenSSL, a source other than crates.io |
 | `cargo audit` (every `Cargo.lock`) | `rust-audit.yml` | daily | an advisory published since the last change; opens or comments on one issue |
-| Fuzz smoke | ci.yml `fuzz-smoke` | every pull request and push | a panic or a timeout in 60 s of any target |
+| Fuzz smoke | ci.yml `fuzz-smoke` | the full set (nightly, every push to `development` and `integration/unified-core`, Run workflow, and a pull request with the `full-ci` label) | a panic or a timeout in 60 s of any target |
 | Nightly fuzz | `engine-fuzz.yml` | nightly | a panic or a timeout in 10 minutes of any target; the input is uploaded |
 | Unsafe policy | clippy, `xtask/tests/lint_policy.rs`, `xtask/tests/unsafe_listing.rs` | every pull request | `unsafe` outside two crates, a block without `// SAFETY:` or with two operations, a site missing from [Unsafe code](./unsafe.md) |
-| SBOMs | `engine-release-build.yml` `sbom` (Engine release (dry run) / SBOMs) | every pull request (dry run) and every engine release | an SBOM that does not validate against CycloneDX 1.5 |
+| SBOMs | `engine-release-build.yml` `sbom` (Engine release (dry run) / SBOMs) | the dry run in the full set (nightly, every push to `development` and `integration/unified-core`, Run workflow, and a pull request with the `full-ci` label), and on a pull request that changes the release's inputs; every engine release | an SBOM that does not validate against CycloneDX 1.5 |
 
 ## deny.toml
 
@@ -89,7 +89,7 @@ checks each against the schema (cyclonedx-python-lib, pinned) and for references
 | `opentide-lsp-client.cdx.json`, `opentide-lsp-worker.cdx.json` | the npm packages | `npm sbom`, no dev dependencies |
 
 The engine's four are assets of every engine release, listed in `SHA256SUMS` and covered by its
-provenance attestation. The wheel's is generated and validated on every pull request and engine
+provenance attestation. The wheel's is generated and validated in every dry run (CI's full set) and engine
 release and uploaded as the `sbom-wheel` workflow artifact; it is not an engine asset (the wheel
 ships on PyPI, and its `splunk-sdk` dependency is a name the oracle licence scan refuses in engine
 assets). Attaching it to the PyPI GitHub Release is left to the release train (UC-5.5, #840). Rust SBOMs leave out build dependencies and name workspace crates by their path in

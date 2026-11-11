@@ -20,7 +20,12 @@
 name: Publish dry run
 
 on:
+  # Every pull request, but its jobs run only in the full set (ci.yml's header):
+  # a pull request with the `full-ci` label. A pull request that changes what
+  # is published (the paths below) should carry it.
   pull_request:
+  push:
+    branches: [development, integration/unified-core]
     paths:
       - "publishing/**"
       - ".github/workflows/publish-dry-run.yml"
@@ -42,22 +47,8 @@ on:
       # docs/internal/publishing.md.
       - "CHANGELOG.md"
       - "scripts/build/release.py"
-  push:
-    branches: [development]
-    paths:
-      - "publishing/**"
-      - ".github/workflows/publish-dry-run.yml"
-      - "pyproject.toml"
-      - "hatch_build.py"
-      - "analysis/**"
-      - "crates/**"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "rust-toolchain.toml"
-      - "README.md"
-      - "LICENSE"
-      - "CHANGELOG.md"
-      - "scripts/build/release.py"
+  schedule:
+    - cron: "7 2 * * *"
   workflow_dispatch:
 
 permissions:
@@ -65,7 +56,7 @@ permissions:
 
 # A dry run publishes nothing, so a newer push may cancel a stale run.
 concurrency:
-  group: publish-dry-run-${{ github.ref }}
+  group: publish-dry-run-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -73,6 +64,7 @@ jobs:
   # `cargo publish --dry-run -p opentide` and the placeholder goes.
   crate:
     name: crates.io (opentide)
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -106,6 +98,7 @@ jobs:
 
   npm:
     name: npm (@opentide/opentide, opentide)
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -171,6 +164,7 @@ jobs:
   # is missing. maturin replaces this build in UC-5.5.
   pypi:
     name: PyPI (wheels and sdist)
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:

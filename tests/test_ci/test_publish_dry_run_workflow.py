@@ -56,7 +56,12 @@ FORBIDDEN = (
 )
 #: The workflow's whole trigger set: no `pull_request_target` or `workflow_run`,
 #: which run with the base repository's token and secrets.
-TRIGGERS = {"pull_request", "push", "workflow_dispatch"}
+TRIGGERS = {"pull_request", "push", "schedule", "workflow_dispatch"}
+#: A pull request runs the jobs only in ci.yml's full set (the `full-ci` label).
+FULL_SET = (
+    "github.event_name != 'pull_request' || "
+    "contains(github.event.pull_request.labels.*.name, 'full-ci')"
+)
 #: What a release builds from, besides the placeholders and this workflow.
 #: `crates/**`, `Cargo.toml`, `Cargo.lock` and `rust-toolchain.toml` arrive
 #: with UC-0.2, which compiles the engine from a root Cargo workspace.
@@ -304,11 +309,18 @@ def test_no_expression_is_interpolated_into_a_script(workflow: dict[Any, Any]) -
 
 
 def test_runs_whenever_what_is_published_changes(workflow: dict[Any, Any]) -> None:
+    """Every push that changes what is published, nightly and on demand; on a
+    pull request, in ci.yml's full set (the `full-ci` label)."""
     triggers = _triggers(workflow)
-    paths = triggers["pull_request"]["paths"]
+    paths = triggers["push"]["paths"]
     assert set(paths) >= PUBLISHED_FROM, sorted(PUBLISHED_FROM - set(paths))
-    assert triggers["push"] == {"branches": ["development"], "paths": paths}
+    assert triggers["push"]["branches"] == ["development", "integration/unified-core"]
+    # No path filter on the pull request: the label must reach the jobs.
+    assert triggers["pull_request"] is None
+    assert len(triggers["schedule"]) == 1
     assert "workflow_dispatch" in triggers
+    for name, job in workflow["jobs"].items():
+        assert job.get("if") == FULL_SET, name
 
 
 def test_runs_on_no_trigger_that_carries_the_base_repository_secrets(
