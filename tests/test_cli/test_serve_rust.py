@@ -12,6 +12,7 @@ import io
 import json
 import os
 import subprocess
+import threading
 from collections.abc import Iterator
 from pathlib import Path
 from types import ModuleType
@@ -198,6 +199,83 @@ def test_a_run_that_may_write_drops_the_warm_workspaces(
     counts = rust_client.run("info")["document"]["counts"]
     expected, _ = oracle(["info"])
     assert counts == expected["counts"]
+
+
+def test_a_rust_run_that_may_write_drops_the_warm_workspaces(
+    rust_client: Client, native: ModuleType, rust_runs: list[list[str]]
+) -> None:
+    rust_client.run("info")
+    assert native.workspace_stats()["kept"] == 1
+    made = rust_client.run("generate", "exports")
+    assert made["exit_code"] == 0, made["document"]
+    assert rust_runs == [["--json", "info"], ["--json", "generate", "exports"]]
+    assert native.workspace_stats()["kept"] == 0
+
+
+def test_a_rust_runs_progress_events_arrive_as_notifications(
+    rust_client: Client, native: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    event = {"event": "progress", "step": "objects", "done": 1, "total": 1}
+    real = native.run_cli
+
+    def with_events(argv: list[str], env: dict[str, str], *args: Any) -> Any:
+        """The engine's contract: events on stderr when ``OPENTIDE_PROGRESS=json``."""
+        code, stdout, stderr = real(argv, env, *args)
+        if progress_events.requested(env):
+            stderr = json.dumps(event).encode() + b"\n" + stderr
+        return code, stdout, stderr
+
+    monkeypatch.setattr(native, "run_cli", with_events)
+    request_id = rust_client.request("run", {"argv": ["info"]})
+    assert rust_client.answer(request_id)["result"]["exit_code"] == 0
+    forwarded = [n["params"] for n in rust_client.notifications if n["method"] == "progress"]
+    assert forwarded == [{"id": request_id, "event": event}]
+
+
+def test_a_cancel_interrupts_the_rust_run_in_progress(
+    rust_client: Client, native: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    started = threading.Event()
+    released = threading.Event()
+    interrupts: list[bool] = []
+
+    def blocking(argv: list[str], *args: Any) -> Any:
+        started.set()
+        # Waits in C, as the engine runs: no Python frame for a cancel to
+        # raise in until the engine is interrupted and returns.
+        released.wait(TIMEOUT)
+        return (130, b"", b"") if released.is_set() else (0, b'{"ok": true}', b"")
+
+    def interrupt() -> bool:
+        interrupts.append(True)
+        released.set()
+        return True
+
+    monkeypatch.setattr(native, "run_cli", blocking)
+    monkeypatch.setattr(native, "interrupt_cli", interrupt)
+    request_id = rust_client.request("run", {"argv": ["info"]})
+    assert started.wait(TIMEOUT)
+    rust_client.send({"method": "$/cancelRequest", "params": {"id": request_id}})
+    result = rust_client.answer(request_id)["result"]
+    assert interrupts == [True]
+    assert result["exit_code"] == 130
+    assert result["document"]["failure"]["code"] == "interrupted"
+    monkeypatch.undo()
+    assert rust_client.run("info")["exit_code"] == 0
+
+
+def test_a_cancel_before_the_engine_returned_answers_130(
+    rust_client: Client, native: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def cancelled(argv: list[str], *args: Any) -> Any:
+        # The KeyboardInterrupt a cancel raises, landing as the engine returns.
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(native, "run_cli", cancelled)
+    outcome = rust_client.server.runner.run(["info"])
+    assert outcome.exit_code == 130
+    assert outcome.document["exit_code"] == 130
+    assert outcome.document["failure"]["code"] == "interrupted"
 
 
 def test_a_fix_runs_cold(rust_client: Client) -> None:

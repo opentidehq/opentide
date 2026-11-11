@@ -126,12 +126,20 @@ def _rust_validation(**options: Any) -> dict[str, Any]:
         raise ToolError(f"{exc.code}: {exc}") from exc
 
 
-def _shadow(surface: str, python: Any, rust: dict[str, Any]) -> None:
-    """``OPENTIDE_ENGINE=compare``: log and record how the Rust report differs from *python*."""
-    from opentide.registry.discovery import discover_workspace
-    from opentide.validation.engine import compared, report_from
+def _shadow(surface: str, python: Any, **options: Any) -> None:
+    """``OPENTIDE_ENGINE=compare``: log and record how the Rust run differs from *python*.
 
-    compared(python, report_from(rust["report"]), surface=surface, workspace=discover_workspace())
+    A Rust run that fails is recorded as a difference: the tool still
+    answers with *python*.
+    """
+    from opentide.validation import engine as engines
+
+    engines.shadowed(
+        python,
+        lambda: engines.run_rust(engines.RustRequest(**options)),
+        surface=surface,
+        workspace=engines.current_workspace(),
+    )
 
 
 def _rule_platforms(uuid: str) -> list[str]:
@@ -204,7 +212,7 @@ def tool_validate_rule(uuid: str) -> dict[str, Any]:
     else:
         report = _python_validation(engine, scope=ValidationScope.narrow(uuids=frozenset({uuid})))
         if engine == "compare":
-            _shadow("validate_rule", report, _rust_validation(uuids=(uuid,)))
+            _shadow("validate_rule", report, uuids=(uuid,))
         ok = report.ok
         dumped = report.model_dump_json_ready()
         diagnostics = _annotate(dumped, report, ("issues",))
@@ -319,7 +327,7 @@ def tool_validation_report(
             queries_as_warnings=mode is QueriesMode.warn,
         )
         if engine == "compare":
-            _shadow("validation_report", report, _rust_validation(**rust_options))
+            _shadow("validation_report", report, **rust_options)
         payload = report.model_dump_json_ready()
         diagnostics = _annotate(payload, report, ("issues", "warnings"))
     arguments = {

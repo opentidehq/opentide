@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 import os
 from collections import Counter
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -177,15 +177,53 @@ def compared(
     reports. Some differences are approved (``tests/golden/APPROVED_DIFFS.toml``,
     the YAML 1.2 rules); the report lists every one.
     """
-    found = differences(python, rust)
-    if found:
-        from opentide.core.logging import get_logger
-
-        written = write_report(surface, found, workspace)
-        get_logger(__name__).warning(
-            ENGINE_MISMATCH, surface=surface, differences=len(found), report=written
-        )
+    _record(surface, differences(python, rust), workspace)
     return python
+
+
+def shadowed(
+    python: ValidationReport,
+    rust: Callable[[], Mapping[str, Any]],
+    *,
+    surface: str,
+    workspace: Path | None,
+) -> ValidationReport:
+    """*python*, after running *rust* (:func:`run_rust`) and comparing: ``compare``.
+
+    The Rust half never fails the call: a run that raises (no engine, a
+    configuration it does not resolve, a defect) is a difference, logged
+    and written to the diff report as one line, and *python* is returned,
+    as :func:`compared` returns it for a report that differs.
+    """
+    try:
+        candidate = report_from(rust()["report"])
+    except Exception as exc:  # shadow mode: the Python result stands, the failure is recorded
+        code = getattr(exc, "code", None) or type(exc).__name__
+        _record(surface, [f"rust: failed: {code}: {exc}"], workspace)
+        return python
+    return compared(python, candidate, surface=surface, workspace=workspace)
+
+
+def _record(surface: str, found: Sequence[str], workspace: Path | None) -> None:
+    """Log *found* as ``engine_mismatch`` and write its diff report; nothing when empty."""
+    if not found:
+        return
+    from opentide.core.logging import get_logger
+
+    written = write_report(surface, found, workspace)
+    get_logger(__name__).warning(
+        ENGINE_MISMATCH, surface=surface, differences=len(found), report=written
+    )
+
+
+def current_workspace() -> Path | None:
+    """The workspace a diff report redacts, or ``None`` when none is found."""
+    from opentide.registry.discovery import discover_workspace
+
+    try:
+        return discover_workspace()
+    except Exception:  # a report is still worth writing
+        return None
 
 
 def _placeheld(line: str, workspace: Path | None) -> str:

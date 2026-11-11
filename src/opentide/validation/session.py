@@ -105,7 +105,8 @@ def run_validation(
     (:mod:`opentide.validation.engine`, #822): Python by default; ``rust``
     validates on the Rust workspace and returns its report as this model;
     ``compare`` runs both and returns Python's, logging any difference
-    (``engine_mismatch``) with a diff report: shadow mode. A run no
+    (``engine_mismatch``) with a diff report: shadow mode, where a Rust run
+    that fails is a difference too, never the call's failure. A run no
     ``validate`` command line can make (a given *index*, a set of checks
     that is neither the defaults nor one check) runs Python.
     """
@@ -117,23 +118,17 @@ def run_validation(
         return _run_python(
             scope, checks, index=index, workers=workers, queries_as_warnings=queries_as_warnings
         )
-    rust = engines.report_from(engines.run_rust(request)["report"])
     if selected == engines.RUST:
-        return rust
+        return engines.report_from(engines.run_rust(request)["report"])
     python = _run_python(
         scope, checks, index=index, workers=workers, queries_as_warnings=queries_as_warnings
     )
-    return engines.compared(python, rust, surface="run_validation", workspace=_workspace())
-
-
-def _workspace() -> Path | None:
-    """The workspace a diff report redacts."""
-    from opentide.registry.discovery import discover_workspace
-
-    try:
-        return discover_workspace()
-    except Exception:  # a report is still worth writing
-        return None
+    return engines.shadowed(
+        python,
+        lambda: engines.run_rust(request),
+        surface="run_validation",
+        workspace=engines.current_workspace(),
+    )
 
 
 def _rust_request(

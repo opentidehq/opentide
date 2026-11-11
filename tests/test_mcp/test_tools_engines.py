@@ -42,7 +42,17 @@ EDITS: dict[str, Callable[[Path], None]] = {
     "dangling-ref": _edit(
         f"detection_model: {CORPUS_OBJECTIVE_UUID}", f"detection_model: {MISSING_UUID}"
     ),
+    # The rule's sentinel block, for a platform the workspace disables: a warning.
+    "disabled-platform": lambda repo: _disable_sentinel(repo),
 }
+
+
+def _disable_sentinel(repo: Path) -> None:
+    path = repo / ".opentide" / "configurations" / "platforms" / "sentinel.toml"
+    text = path.read_text(encoding="utf-8")
+    assert "enabled = true\n" in text
+    path.write_text(text.replace("enabled = true\n", "enabled = false\n", 1), encoding="utf-8")
+
 
 #: An approved difference (``unknown-revision``, tests/golden/APPROVED_DIFFS.toml,
 #: #813): Rust checks a rule of an unknown revision against the newest one and
@@ -82,7 +92,14 @@ def rust_calls(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
     real = validation_engine.run_rust
 
     def counting(request: validation_engine.RustRequest) -> dict[str, Any]:
-        seen.append({"files": request.files, "uuids": request.uuids, "queries": request.queries})
+        seen.append(
+            {
+                "files": request.files,
+                "uuids": request.uuids,
+                "types": request.types,
+                "queries": request.queries,
+            }
+        )
         return real(request)
 
     monkeypatch.setattr(validation_engine, "run_rust", counting)
@@ -137,9 +154,11 @@ def test_the_rust_request_carries_the_scope(
     monkeypatch.setenv("OPENTIDE_ENGINE", "rust")
     tools.tool_validation_report(file=_RULE, queries="warn")
     tools.tool_validate_rule(_UUID)
+    tools.tool_validation_report(object_type="objective", queries="off")
     assert rust_calls == [
-        {"files": (_RULE,), "uuids": (), "queries": "warn"},
-        {"files": (), "uuids": (_UUID,), "queries": "error"},
+        {"files": (_RULE,), "uuids": (), "types": (), "queries": "warn"},
+        {"files": (), "uuids": (_UUID,), "types": (), "queries": "error"},
+        {"files": (), "uuids": (), "types": ("objective",), "queries": "off"},
     ]
 
 
@@ -187,6 +206,128 @@ def test_compare_records_a_difference_and_still_answers_with_python(
     assert str(tide_corpus_repo) not in written[0].read_text(encoding="utf-8")
 
 
+def _divergent(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Rust runs that report the first issue with another message."""
+    real = validation_engine.run_rust
+
+    def divergent(request: validation_engine.RustRequest) -> dict[str, Any]:
+        result = real(request)
+        result["report"]["issues"][0]["message"] = "a different message"
+        return result
+
+    monkeypatch.setattr(validation_engine, "run_rust", divergent)
+
+
+def _written(reports: Path) -> dict[str, Any]:
+    written = list(reports.glob("*.json"))
+    assert len(written) == 1, written
+    return json.loads(written[0].read_text(encoding="utf-8"))
+
+
+def test_validate_rule_under_compare_records_a_difference_and_answers_with_python(
+    tide_corpus_repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    reports = _state(tmp_path, monkeypatch)
+    EDITS["vocab-typo"](tide_corpus_repo)
+    python = _call("rule", "python", monkeypatch)
+    _divergent(monkeypatch)
+    assert _call("rule", "compare", monkeypatch) == python
+    report = _written(reports)
+    assert report["surface"] == "validate_rule"
+    assert any("a different message" in line for line in report["differences"])
+
+
+def _failing(error: Exception) -> Callable[[validation_engine.RustRequest], dict[str, Any]]:
+    def fail(request: validation_engine.RustRequest) -> dict[str, Any]:
+        raise error
+
+    return fail
+
+
+#: How a Rust run fails: no engine, or a configuration it does not resolve.
+FAILURES: dict[str, Callable[[], Exception]] = {
+    "engine-unavailable": lambda: __import__(
+        "opentide.analysis", fromlist=["EngineUnavailableError"]
+    ).EngineUnavailableError("no module"),
+    "run-stopped": lambda: validation_engine.RustValidationError(
+        "command_failed", "the configuration does not resolve"
+    ),
+}
+
+
+@pytest.mark.parametrize("failure", list(FAILURES))
+@pytest.mark.parametrize(
+    ("call", "surface"),
+    [("report", "validation_report"), ("rule", "validate_rule"), ("sdk", "run_validation")],
+)
+def test_under_compare_a_failed_rust_run_is_a_difference_not_a_failure(
+    tide_corpus_repo: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure: str,
+    call: str,
+    surface: str,
+) -> None:
+    from opentide.validation.session import run_validation
+
+    reports = _state(tmp_path, monkeypatch)
+    EDITS["vocab-typo"](tide_corpus_repo)
+
+    def answer(engine: str) -> dict[str, Any]:
+        if call != "sdk":
+            return _call(call, engine, monkeypatch)
+        monkeypatch.setenv("OPENTIDE_ENGINE", engine)
+        clear_runtime_caches()
+        return _without_timing(run_validation().model_dump_json_ready())
+
+    python = answer("python")
+    error = FAILURES[failure]()
+    monkeypatch.setattr(validation_engine, "run_rust", _failing(error))
+    assert answer("compare") == python
+    report = _written(reports)
+    assert report["surface"] == surface
+    assert report["differences"] == [f"rust: failed: {error.code}: {error}"]  # type: ignore[attr-defined]
+
+
+def test_on_rust_a_failed_run_still_fails_the_call(
+    tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from opentide.validation.session import run_validation
+
+    error = validation_engine.RustValidationError("command_failed", "stopped")
+    monkeypatch.setattr(validation_engine, "run_rust", _failing(error))
+    monkeypatch.setenv("OPENTIDE_ENGINE", "rust")
+    with pytest.raises(validation_engine.RustValidationError, match="stopped"):
+        run_validation()
+
+
+def test_validate_rule_on_rust_lists_only_errors_as_errors(
+    tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def report(request: validation_engine.RustRequest) -> dict[str, Any]:
+        def entry(severity: str, message: str) -> dict[str, Any]:
+            return {"code": "x", "severity": severity, "field_path": ["a"], "message": message}
+
+        return {
+            "report": {
+                "ok": False,
+                "issues": [entry("error", "broken"), entry("warning", "doubtful")],
+                "warnings": [entry("warning", "noted")],
+                "stats": {},
+            }
+        }
+
+    monkeypatch.setattr(validation_engine, "run_rust", report)
+    monkeypatch.setenv("OPENTIDE_ENGINE", "rust")
+    result = tools.tool_validate_rule(_UUID)
+    assert (result["valid"], result["errors"], result["warnings"]) == (
+        False,
+        ["a: broken"],
+        ["a: noted"],
+    )
+    assert [issue["message"] for issue in result["issues"]] == ["broken", "doubtful"]
+
+
 def test_a_bad_engine_is_a_tool_error(
     tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -224,6 +365,10 @@ def test_run_validation_returns_the_same_report_on_rust(
         None,
         ValidationScope.narrow(files=frozenset({_RULE})),
         ValidationScope.narrow(uuids=frozenset({_UUID}), types=frozenset({"rule"})),
+        # Types that exclude what is named, and a type alone.
+        ValidationScope.narrow(uuids=frozenset({_UUID}), types=frozenset({"objective"})),
+        ValidationScope.narrow(files=frozenset({_RULE}), types=frozenset({"objective"})),
+        ValidationScope.narrow(types=frozenset({"objective"})),
     ):
         reports = {}
         for engine in ("python", "rust"):
@@ -231,6 +376,45 @@ def test_run_validation_returns_the_same_report_on_rust(
             clear_runtime_caches()
             reports[engine] = _without_timing(run_validation(scope).model_dump_json_ready())
         assert reports["rust"] == reports["python"], scope
+
+
+def test_run_validation_on_rust_returns_the_rust_report_and_compare_pythons(
+    tide_corpus_repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from opentide.validation.session import run_validation
+
+    reports = _state(tmp_path, monkeypatch)
+    EDITS["vocab-typo"](tide_corpus_repo)
+    monkeypatch.setenv("OPENTIDE_ENGINE", "python")
+    python = _without_timing(run_validation().model_dump_json_ready())
+    _divergent(monkeypatch)
+    monkeypatch.setenv("OPENTIDE_ENGINE", "rust")
+    rust = run_validation()
+    assert rust.issues[0].message == "a different message"
+    assert not reports.exists()
+    monkeypatch.setenv("OPENTIDE_ENGINE", "compare")
+    clear_runtime_caches()
+    assert _without_timing(run_validation().model_dump_json_ready()) == python
+    report = _written(reports)
+    assert report["surface"] == "run_validation"
+    assert any("a different message" in line for line in report["differences"])
+
+
+def test_run_validation_asks_rust_for_the_scope_it_was_given(
+    tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch, rust_calls: list[dict[str, Any]]
+) -> None:
+    from opentide.validation.scope import ValidationScope
+    from opentide.validation.session import run_validation
+
+    monkeypatch.setenv("OPENTIDE_ENGINE", "rust")
+    run_validation(ValidationScope.narrow(files=frozenset({_RULE})))
+    run_validation(
+        ValidationScope.narrow(uuids=frozenset({_UUID}), types=frozenset({"rule", "objective"}))
+    )
+    assert rust_calls == [
+        {"files": (_RULE,), "uuids": (), "types": (), "queries": "error"},
+        {"files": (), "uuids": (_UUID,), "types": ("objective", "rule"), "queries": "error"},
+    ]
 
 
 def test_run_validation_runs_python_for_what_no_command_line_does(

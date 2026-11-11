@@ -74,6 +74,66 @@ mod session {
         assert_eq!(reads, [PathBuf::from("/ws/objects/rules/r1.yaml")]);
         assert_eq!(after, fresh(&fs));
         assert_eq!(session.stats().refreshes, 1);
+        // The edit is now the kept state: the next open reads nothing again.
+        fs.reset_reads();
+        assert_eq!(open(&mut session, &fs), after);
+        assert!(fs.reads().is_empty(), "{:?}", fs.reads());
+        assert_eq!(session.stats().refreshes, 1);
+    }
+
+    /// A filesystem whose stamps fail for the files under one folder.
+    struct Unstampable {
+        inner: Arc<MemoryFs>,
+        under: PathBuf,
+    }
+
+    impl FileSystem for Unstampable {
+        fn read(&self, path: &std::path::Path) -> std::io::Result<Vec<u8>> {
+            self.inner.read(path)
+        }
+
+        fn kind(
+            &self,
+            path: &std::path::Path,
+        ) -> std::io::Result<opentide_workspace::fs::EntryKind> {
+            self.inner.kind(path)
+        }
+
+        fn read_dir(
+            &self,
+            path: &std::path::Path,
+        ) -> std::io::Result<Vec<opentide_workspace::fs::DirEntry>> {
+            self.inner.read_dir(path)
+        }
+
+        fn resolve(&self, path: &std::path::Path) -> PathBuf {
+            self.inner.resolve(path)
+        }
+
+        fn stamp(&self, path: &std::path::Path) -> std::io::Result<opentide_workspace::Stamp> {
+            if path.starts_with(&self.under) {
+                return Err(std::io::Error::other("no stamp"));
+            }
+            self.inner.stamp(path)
+        }
+    }
+
+    #[test]
+    fn a_folder_replaced_by_a_file_without_a_stamp_is_read() {
+        let memory = sample();
+        memory.create_dir("/ws/objects/rules/r3.yaml");
+        let fs: Arc<dyn FileSystem> = Arc::new(Unstampable {
+            inner: Arc::clone(&memory),
+            under: PathBuf::from("/ws/objects/rules/r3.yaml"),
+        });
+        let mut session = Session::new();
+        let first = session.open(Arc::clone(&fs), options("/ws"));
+        assert!(first.is_ok_and(|ws| ws.index().get("rule", "r-3").is_none()));
+        // A file now, whose stamp cannot be taken: it counts as changed.
+        memory.remove("/ws/objects/rules/r3.yaml");
+        memory.write("/ws/objects/rules/r3.yaml", object("r-3", "new"));
+        let after = session.open(Arc::clone(&fs), options("/ws"));
+        assert!(after.is_ok_and(|ws| ws.index().get("rule", "r-3").is_some()));
     }
 
     #[test]
@@ -193,6 +253,33 @@ mod session {
         assert_eq!(kept, fresh(&fs));
     }
 
+    /// A linked folder is not entered, as discovery does not enter it: an
+    /// edit behind the link is not a change of the workspace.
+    #[cfg(unix)]
+    #[test]
+    fn a_linked_folder_is_not_entered() {
+        let dir = tempfile::tempdir().unwrap_or_else(|error| panic!("{error}"));
+        let root = dir.path().join("ws");
+        let outside = dir.path().join("outside");
+        std::fs::create_dir_all(root.join(".opentide/configurations"))
+            .and_then(|()| std::fs::create_dir_all(root.join("objects/rules")))
+            .and_then(|()| std::fs::create_dir_all(&outside))
+            .and_then(|()| std::fs::write(root.join("objects/rules/r.yaml"), object("r-1", "a")))
+            .and_then(|()| std::fs::write(outside.join("x.yaml"), object("r-x", "x")))
+            .and_then(|()| std::os::unix::fs::symlink(&outside, root.join("objects/rules/linked")))
+            .unwrap_or_else(|error| panic!("{error}"));
+        let fs: Arc<dyn FileSystem> = Arc::new(opentide_workspace::OsFs);
+        let mut session = Session::new();
+        let place = options(&root.to_string_lossy());
+        let first = session.open(Arc::clone(&fs), place.clone());
+        assert!(first.is_ok_and(|ws| ws.index().get("rule", "r-x").is_none()));
+        std::fs::write(outside.join("y.yaml"), object("r-y", "y"))
+            .unwrap_or_else(|error| panic!("{error}"));
+        assert!(session.open(Arc::clone(&fs), place).is_ok());
+        let stats = session.stats();
+        assert_eq!((stats.hits, stats.refreshes), (1, 0));
+    }
+
     /// The process-wide session: only while activated, and only on the disk.
     #[test]
     fn the_process_session_serves_the_disk_while_active() {
@@ -232,7 +319,31 @@ mod session {
                 opentide_workspace::session::invalidate(&[root.join("objects/rules/r.yaml")]),
                 1
             );
+            // A path outside the workspace loads it again, inside the
+            // session's refresh: never through the session itself, which
+            // is locked then.
+            opentide_workspace::session::invalidate(&[
+                std::env::temp_dir().join("opentide-session-elsewhere.toml")
+            ]);
+            let (sender, received) = std::sync::mpsc::channel();
+            let place = options(&root.to_string_lossy());
+            std::thread::spawn(move || {
+                let opened = Workspace::open(Arc::new(opentide_workspace::OsFs), place);
+                let _ = sender.send(opened.map(|ws| ws.stats().file_reads));
+            });
+            let reloaded = received
+                .recv_timeout(std::time::Duration::from_secs(60))
+                .unwrap_or_else(|_| panic!("a full reload under the session deadlocked"));
+            assert_eq!(reloaded.ok(), Some(2), "read again, once");
+            assert_eq!(
+                opentide_workspace::session::stats().refreshes,
+                before.refreshes + 1
+            );
         }
+        // The guard dropped: opens go around the session again.
+        let opens = opentide_workspace::session::stats().opens;
+        assert_eq!(disk().stats().file_reads, 1);
+        assert_eq!(opentide_workspace::session::stats().opens, opens);
         opentide_workspace::session::clear();
         assert_eq!(opentide_workspace::session::stats().kept, 0);
     }

@@ -58,7 +58,7 @@ Default pipeline checks: id uniqueness, UUID format, schema, configuration. CVE 
 | empty or unset | `validate`'s default: Python today |
 | `python` | The Python implementation |
 | `rust` | The Rust workspace (`opentide._native`); its report comes back as the same `ValidationReport` |
-| `compare` | Both; returns the Python report, and logs a warning (`engine_mismatch`) with a diff report in `$XDG_STATE_HOME/opentide/compare/` when they differ |
+| `compare` | Both; returns the Python report, and logs a warning (`engine_mismatch`) with a diff report in `$XDG_STATE_HOME/opentide/compare/` when they differ, or when the Rust run fails (no engine, a configuration it does not resolve) |
 
 Any other value raises `opentide.validation.engine.EngineSelectionError`. A call no `validate` command line can make runs Python whatever the variable says: one with `index=`, or with a set of `checks` that is neither the defaults, the defaults without `queries`, nor one check. `workers=` is a Python setting: the Rust workspace picks its own threads. Under `rust`, a workspace whose configuration does not resolve raises `opentide.validation.engine.RustValidationError` (its `code` is `command_failed`).
 
