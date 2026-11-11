@@ -365,6 +365,13 @@ pub fn golden(
         }
         reports.push(report);
     }
+    // The recorded MCP sessions' entries are `cargo xtask mcp replay`'s to
+    // apply, and to find stale.
+    for (index, entry) in ledger.entries.iter().enumerate() {
+        if crate::mcp::owns(entry) {
+            usage.mark(index);
+        }
+    }
     // A ledger entry is stale only when it applied nowhere in a complete run.
     let report = if complete && failed == 0 {
         opentide_compare::RunReport::new(reports, &ledger, &usage)

@@ -76,7 +76,11 @@ mode against every fixture it lists:
 | `json` | pipes, with `--json` right after `opentide` |
 | `agent` | pipes, with `AI_AGENT=golden` |
 
-`mcp` mode (`opentide mcp start`) is UC-3.7's. The environment is exactly the one in each case's
+`mcp` mode (`opentide mcp start`) is not a mode of these cases: its recorded sessions are in
+[`mcp/`](mcp/) (UC-3.7, #829): `sessions.toml` holds the requests, `cargo xtask mcp record` writes
+each session's answers from the Python server, and `cargo xtask mcp replay --engine
+python|rust|compare mcp/*.jsonl` replays them against either server or both; the Rust server's
+differences are approved in `APPROVED_DIFFS.toml` (command `mcp start`, case `<session>/<step>`). The environment is exactly the one in each case's
 `case.toml`: no CI or agent variable unless the case sets one, `HOME` and `TMPDIR` inside the case's
 directory (cases live under `/tmp`, whatever `TMPDIR` says, so absolute paths have one length), `TZ=UTC`, `LANG=C.UTF-8`, `PYTHONHASHSEED=0`, git without system or user configuration.
 Network traffic goes to a proxy on `127.0.0.1:9`, which refuses it: tenant-contacting paths
