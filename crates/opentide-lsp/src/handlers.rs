@@ -152,7 +152,8 @@ pub mod custom {
         pub ms: u64,
     }
 
-    /// Debug builds: how many analyses ran, for the cache tests.
+    /// Debug builds: how many analyses ran, and what the roots' workspaces
+    /// read and parsed, for the cache and invalidation tests.
     #[cfg(all(debug_assertions, not(fuzzing)))]
     pub enum Stats {}
     #[cfg(all(debug_assertions, not(fuzzing)))]
@@ -258,7 +259,18 @@ pub(crate) fn request(session: &mut Session, request: Request) -> Response {
     #[cfg(all(debug_assertions, not(fuzzing)))]
     let dispatcher = dispatcher
         .on::<custom::Panic>(|_, _| panic!("opentide/__panic was requested"))
-        .on::<custom::Stats>(|s, _| json!({ "analyses": s.analyses.get() }))
+        .on::<custom::Stats>(|s, _| {
+            let loading = s.workspace_stats();
+            json!({
+                "analyses": s.analyses.get(),
+                "editorIndexed": s.editor_indexed(),
+                "workspace": {
+                    "fileReads": loading.file_reads,
+                    "parses": loading.parses,
+                    "configResolutions": loading.config_resolutions,
+                },
+            })
+        })
         .on::<custom::Sleep>(|_, p| std::thread::sleep(std::time::Duration::from_millis(p.ms)));
     dispatcher
         .on::<Initialize>(|s, p| initialize(s, p, raw.as_ref().unwrap_or(&Value::Null)))
@@ -642,10 +654,6 @@ fn did_close(session: &mut Session, params: lsp::DidCloseTextDocumentParams) {
         session.reactivate();
         session.mark_all();
     } else if closed.language == LanguageId::Config {
-        if Session::is_lint(uri) {
-            // The Tide checks follow the file on disk again (#214).
-            session.reactivate();
-        }
         // The others read the file on disk again.
         session.mark_all();
     }
@@ -681,22 +689,8 @@ fn document_changed(session: &mut Session, uri: &str, language: LanguageId, root
             mark_configuration(session);
         }
     } else if language == LanguageId::Config {
-        let parses = !Session::is_lint(uri)
-            || session
-                .docs
-                .get(uri)
-                .is_none_or(|d| opentide_analysis::check_lint(&d.text).is_ok());
-        if parses {
-            if Session::is_lint(uri) {
-                // lint.toml decides the filename and metadata checks (#214).
-                session.reactivate();
-            }
-            session.mark_all();
-        } else {
-            // Mid-edit lint.toml keeps the settings that last parsed (#214):
-            // the Tide checks are as they were.
-            mark_configuration(session);
-        }
+        // A configuration buffer changes what validate reports on objects.
+        session.mark_all();
     }
 }
 
@@ -756,6 +750,9 @@ fn watched_files_changed(session: &mut Session, params: lsp::DidChangeWatchedFil
                 everything = true;
             }
         } else if Session::is_visibility(uri) {
+            if let Some(root) = session.root_for(&path).and_then(|i| session.roots.get(i)) {
+                root.checks.borrow_mut().changed([PathBuf::from(&path)]);
+            }
             let open = session
                 .root_for(&path)
                 .and_then(|i| session.roots.get(i))
@@ -767,16 +764,9 @@ fn watched_files_changed(session: &mut Session, params: lsp::DidChangeWatchedFil
             }
         } else if normalized.contains(".opentide/configurations/") {
             session.touch();
-            if Session::is_lint(uri) && !session.docs.contains_key(uri) {
-                // A file that does not parse keeps the settings in use
-                // (#214); one that is gone is the defaults.
-                let parses = std::fs::read_to_string(&path)
-                    .map_or(true, |text| opentide_analysis::check_lint(&text).is_ok());
-                if !parses {
-                    mark_configuration(session);
-                    continue;
-                }
-                session.reactivate();
+            // The workspace resolves its configuration again.
+            if let Some(root) = session.root_for(&path).and_then(|i| session.roots.get(i)) {
+                root.checks.borrow_mut().changed([PathBuf::from(&path)]);
             }
             everything = true;
         } else if normalized.contains(crate::server::WORKSPACE_CATALOGS) {
@@ -1045,6 +1035,7 @@ fn handle_workspace_diagnostics(
             let Some(uri) = file_uri(&path) else {
                 continue;
             };
+            let mut diagnostics = session.closed_findings(root, &path, &text);
             let response = opentide_analysis::analyze(
                 &host,
                 opentide_analysis::AnalyzeRequest {
@@ -1053,8 +1044,8 @@ fn handle_workspace_diagnostics(
                     text,
                 },
             );
-            let found: Vec<lsp::Diagnostic> = response
-                .diagnostics
+            diagnostics.extend(response.diagnostics);
+            let found: Vec<lsp::Diagnostic> = diagnostics
                 .iter()
                 .map(|d| lsp_diagnostic(session, Some(root), &path, d))
                 .collect();
@@ -1671,7 +1662,7 @@ fn handle_code_action(
             let Some(suggestion) = &finding.suggestion else {
                 continue;
             };
-            if finding.code == codes::FILENAME_SLUG {
+            if finding.code == FILENAME_MISMATCH {
                 // A file name, not text: rename the file where the client can.
                 actions.extend(rename_action(session, &uri, finding, suggestion));
                 continue;
@@ -1710,7 +1701,12 @@ fn handle_code_action(
     Some(actions)
 }
 
-/// "Rename the file to {name}" for `filename_slug` (#215): its suggestion is
+/// lint's file-name finding, whose suggestion is the file name the object
+/// should have (KG-03: it retires the editor's `filename_slug`; the server
+/// reports it once `lint::lint_file` is wired in, #905).
+const FILENAME_MISMATCH: &str = "filename_mismatch";
+
+/// "Rename the file to {name}" for a file-name finding (#215): its suggestion is
 /// the file name the object should have, next to the file. Only for a client
 /// that applies `RenameFile`; the others get no action, since editing the
 /// text the finding underlines (the object's name) would rename the object.
@@ -1939,7 +1935,7 @@ fn fix_all(session: &Session, uri: &lsp::Uri) -> Option<lsp::CodeActionOrCommand
         .diagnostics
         .iter()
         // A file name is not an edit of the text (#215).
-        .filter(|d| d.code != codes::FILENAME_SLUG)
+        .filter(|d| d.code != FILENAME_MISMATCH)
         .filter_map(|d| {
             let text = session.docs.get(uri.as_str()).map(|doc| doc.text.as_str());
             Some((
@@ -2217,6 +2213,12 @@ fn handle_custom_analyze(session: &mut Session, params: custom::TextParams) -> V
         .and_then(LanguageId::parse)
         .unwrap_or(LanguageId::TideYaml);
     let uri = params.uri.unwrap_or_else(|| "memory".to_string());
+    // The object checks are validate's, as for an open document.
+    let mut diagnostics = if language == LanguageId::TideYaml {
+        session.analyze_findings(&uri, opentide_core::strip_bom(&params.text))
+    } else {
+        Vec::new()
+    };
     let host = session.host_for(&uri);
     let response = opentide_analysis::analyze(
         &host,
@@ -2226,7 +2228,8 @@ fn handle_custom_analyze(session: &mut Session, params: custom::TextParams) -> V
             text: params.text,
         },
     );
-    json!({ "diagnostics": response.diagnostics })
+    diagnostics.extend(response.diagnostics);
+    json!({ "diagnostics": diagnostics })
 }
 
 /// `opentide/catalog` (#198): each root's indexed objects, with their

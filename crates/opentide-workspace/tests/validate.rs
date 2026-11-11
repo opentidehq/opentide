@@ -605,6 +605,110 @@ mod validate {
         paths
     }
 
+    /// A filesystem that counts the paths it resolves.
+    struct CountingFs {
+        inner: Arc<MemoryFs>,
+        resolved: std::sync::atomic::AtomicUsize,
+    }
+
+    impl FileSystem for CountingFs {
+        fn read(&self, path: &Path) -> std::io::Result<Vec<u8>> {
+            self.inner.read(path)
+        }
+
+        fn kind(&self, path: &Path) -> std::io::Result<opentide_workspace::fs::EntryKind> {
+            self.inner.kind(path)
+        }
+
+        fn read_dir(&self, path: &Path) -> std::io::Result<Vec<opentide_workspace::fs::DirEntry>> {
+            self.inner.read_dir(path)
+        }
+
+        fn resolve(&self, path: &Path) -> PathBuf {
+            self.resolved
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            self.inner.resolve(path)
+        }
+    }
+
+    /// `--file` on one object of a large workspace (the language server
+    /// checks the open documents this way) resolves the target and the
+    /// object folders, not every object's path: resolving each component of
+    /// each path cost more than checking the object (#821).
+    #[test]
+    fn a_file_selection_resolves_folders_not_every_object() {
+        let memory = workspace();
+        for i in 0..200 {
+            let uuid = format!("{i:08x}-1111-4111-8111-111111111111");
+            memory.write(format!("/ws/objects/rules/r{i:03}.yaml"), rule(&uuid, "R"));
+        }
+        let fs = Arc::new(CountingFs {
+            inner: Arc::clone(&memory),
+            resolved: std::sync::atomic::AtomicUsize::new(0),
+        });
+        let workspace = Workspace::open(
+            Arc::clone(&fs) as Arc<dyn FileSystem>,
+            opentide_workspace::Options {
+                roots: RootOptions {
+                    repo: Some(PathBuf::from(ROOT)),
+                    cwd: PathBuf::from(ROOT),
+                    ..RootOptions::default()
+                },
+            },
+        )
+        .unwrap();
+        fs.resolved.store(0, std::sync::atomic::Ordering::SeqCst);
+        let validation = workspace.validate(&Options {
+            selection: Some(&files(&["objects/rules/r007.yaml"])),
+            ..Options::default()
+        });
+        assert_eq!(validation.summary.objects, 1);
+        assert!(with_code(&validation, "scope_no_match").is_empty());
+        let resolved = fs.resolved.load(std::sync::atomic::Ordering::SeqCst);
+        assert!(
+            resolved < 20,
+            "{resolved} paths resolved to select one file of 200"
+        );
+    }
+
+    /// An object file that is a symbolic link is selected by its own path
+    /// and by its target's, as `fs.resolve` resolves them.
+    #[cfg(unix)]
+    #[test]
+    fn a_file_selection_selects_a_linked_object_by_link_or_target() {
+        let dir =
+            std::env::temp_dir().join(format!("opentide-ws-scope-link-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("objects/rules")).unwrap();
+        std::fs::create_dir_all(dir.join("shared")).unwrap();
+        std::fs::write(dir.join("shared/x.yaml"), rule(U1, "Linked")).unwrap();
+        std::fs::write(dir.join("objects/rules/plain.yaml"), rule(U2, "Plain")).unwrap();
+        std::os::unix::fs::symlink(
+            dir.join("shared/x.yaml"),
+            dir.join("objects/rules/link.yaml"),
+        )
+        .unwrap();
+        let workspace = Workspace::open_os(Some(dir.clone())).unwrap();
+        let selected = |target: &str| {
+            let validation = workspace.validate(&Options {
+                check: Some(Check::UuidFormat),
+                selection: Some(&files(&[target])),
+                ..Options::default()
+            });
+            (
+                validation.summary.objects,
+                with_code(&validation, "scope_no_match").len(),
+            )
+        };
+        let target = dir.join("shared/x.yaml").display().to_string();
+        let link = dir.join("objects/rules/link.yaml").display().to_string();
+        assert_eq!(selected(&target), (1, 0));
+        assert_eq!(selected(&link), (1, 0));
+        assert_eq!(selected("objects/rules/plain.yaml"), (1, 0));
+        assert_eq!(selected("objects/rules/none.yaml"), (0, 1));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn a_narrowed_run_reports_the_duplicates_it_selects() {
         let fs = workspace();

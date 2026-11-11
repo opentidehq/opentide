@@ -296,6 +296,38 @@
 #   a non-empty list or mapping `uuid` is `missing_uuid` where the oracle
 #   crashed ("**The workspace is loaded by the Rust engine**").
 
+# UC-2.6 (#821), decided by the maintainer on #893 (KG-03, KG-05) and the
+# comment on #821: the language server reports `validate`'s findings, checked
+# kind by kind by `cargo xtask lsp parity --corpus faults` (codes,
+# severities, ranges in UTF-16). No golden case records the editor, and the
+# commands whose recordings name the four retired codes (`explain` list,
+# `lint` and `validate` `--format sarif`) run on the frozen oracle until they
+# route to Rust (UC-3.5), so an entry now would apply to no case and fail as
+# stale. Entered, with their rules, when those cases route to Rust:
+#
+# - `filename_slug` retired (KG-03): the editor no longer reports it;
+#   `opentide lint`'s `filename_mismatch` is the one file-name rule. In
+#   `explain` (every mode, `none/list`) the line shows the retired code's
+#   meaning, and SARIF tags its rule `retired` ("**The editor reports what
+#   `opentide validate` reports**").
+# - `missing_author`, `missing_organisation`, `recommended_field_missing`
+#   retired (KG-05): `opentide lint`'s `metadata_recommended`; the same
+#   `explain` and SARIF changes ("**The editor reports what `opentide
+#   validate` reports**").
+# - `filename_pattern` leaves the engine's code list (`opentide._native.CODES`):
+#   the editor no longer reports it (it did from language-server 0.11.0); it is
+#   `opentide lint`'s alone, as it always was on the command line ("**The
+#   editor reports what `opentide validate` reports**", and the Upgrade entry).
+# - The editor's `schema_validation` quick fix for a string where a list is
+#   required (`- {text}`) is gone: `validate`'s finding carries no fix there,
+#   and a quick fix is now the one edit `validate --fix` would write ("**The
+#   editor reports what `opentide validate` reports**").
+# - The editor's object findings are `validate`'s: their messages, ranges
+#   (the value or key `validate` places, not the engine's guess) and codes
+#   (a file that is not YAML is `yaml_parse`, not `schema_validation`; a
+#   missing UUID is `missing_uuid`) ("**The editor reports what `opentide
+#   validate` reports**").
+
 # UC-2.4 (#819): `info` and `rules unreviewed` on the Rust engine. Every
 # difference is the fault fixture's unquoted `reviewed: 2026-02-30`, read as
 # YAML 1.2 (UC-1.3's `yaml-1-2-dates`, UC-2.1's index).

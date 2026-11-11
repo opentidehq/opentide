@@ -22,7 +22,7 @@ def engine_reports(monkeypatch: pytest.MonkeyPatch) -> list[Finding]:
     reported: list[Finding] = []
     monkeypatch.setattr(analysis, "install_workspace_visibility", lambda root: None)
     monkeypatch.setattr(analysis, "workspace", lambda root: object())
-    monkeypatch.setattr(analysis, "check_file", lambda space, path, text: list(reported))
+    monkeypatch.setattr(analysis, "check_file", lambda space, path, text, **_: list(reported))
     monkeypatch.setattr(
         "opentide.cli.ui.diagnostics.diagnostic_from_engine", lambda finding, **_: {}
     )

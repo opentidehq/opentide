@@ -191,6 +191,68 @@ fn references_resolve_against_the_workspace_the_host_supplies() {
     assert!(!codes(&open(&mut documents, uri, "opentide-yaml", RULE)).contains(&"invalid_ref"));
 }
 
+/// #914: a Tide document no workspace holds (an unsaved buffer, a text an
+/// `opentide/analyze` request names) is checked in a workspace of its own,
+/// with what the host supplied: a reference to an object neither holds is
+/// `invalid_ref`, one the host knows resolves.
+#[test]
+fn a_document_outside_every_workspace_still_reports_an_unknown_reference() {
+    let analyzed = |session: &mut MessageSession, id: u64, uri: &str| -> Vec<String> {
+        let result = request(
+            session,
+            id,
+            "opentide/analyze",
+            json!({ "language": "opentide-yaml", "text": RULE, "uri": uri }),
+        );
+        result["diagnostics"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|d| d["code"].as_str().map(str::to_string))
+            .collect()
+    };
+    let mut alone = start(Value::Null);
+    for (id, uri) in [(2, "untitled:query.yaml"), (3, "memory")] {
+        let codes = analyzed(&mut alone, id, uri);
+        assert!(
+            codes.contains(&"invalid_ref".to_string()),
+            "{uri}: {codes:?}"
+        );
+    }
+    let unsaved = open(&mut alone, "untitled:Untitled-1", "opentide-yaml", RULE);
+    assert!(codes(&unsaved).contains(&"invalid_ref"), "{unsaved:?}");
+    let invalid = unsaved.iter().find(|d| d["code"] == "invalid_ref").unwrap();
+    let line = RULE
+        .lines()
+        .position(|l| l.starts_with("detection_model:"))
+        .unwrap();
+    assert_eq!(invalid["range"]["start"]["line"], line, "{invalid}");
+    // Another text for the same URI is checked as it is, not as the last one.
+    let resolved = RULE.replace(
+        "detection_model: 00000000-0000-4000-8002-000000000001\n",
+        "",
+    );
+    assert_ne!(resolved, RULE);
+    let result = request(
+        &mut alone,
+        4,
+        "opentide/analyze",
+        json!({ "language": "opentide-yaml", "text": resolved, "uri": "untitled:query.yaml" }),
+    );
+    assert!(!result.to_string().contains("invalid_ref"), "{result}");
+
+    let mut known = start(json!({ "workspace": { "objects": [
+        { "uuid": OBJECTIVE, "schema": "objective::1.0", "name": "Suspicious process creation" }
+    ] } }));
+    let codes_known = analyzed(&mut known, 2, "untitled:query.yaml");
+    assert!(
+        !codes_known.contains(&"invalid_ref".to_string()),
+        "{codes_known:?}"
+    );
+    let unsaved = open(&mut known, "untitled:Untitled-1", "opentide-yaml", RULE);
+    assert!(!codes(&unsaved).contains(&"invalid_ref"), "{unsaved:?}");
+}
+
 #[test]
 fn malformed_messages_unknown_methods_and_exit() {
     let mut session = MessageSession::new();

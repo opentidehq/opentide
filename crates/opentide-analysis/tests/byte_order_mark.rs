@@ -82,7 +82,6 @@ fn a_bom_rule_reports_the_same_findings_at_the_same_places() {
             .any(|(code, line, ..)| code == codes::KQL_UNKNOWN_OPERATOR && *line == 25),
         "{plain:?}"
     );
-    assert!(plain.iter().any(|(_, line, ..)| *line == 0), "{plain:?}");
     assert_eq!(tide_diagnostics(&with_bom()), plain);
 }
 

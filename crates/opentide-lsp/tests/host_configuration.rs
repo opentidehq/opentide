@@ -1,17 +1,15 @@
-//! A host that checks configuration TOML (`opentide lsp start`): the server
-//! publishes the checker's findings at their places, re-checks the other
-//! configuration buffers when one changes, and answers hover and completion
-//! from the host's schemas. The checker is process-wide, so this test has a
-//! binary of its own.
+//! Configuration TOML: the server checks it with opentide-schema's models
+//! (UC-2.6, #821), publishes the findings at their places, re-checks the
+//! other configuration buffers when one changes, and answers hover and
+//! completion from the host's schemas. The schemas are process-wide, so this
+//! test has a binary of its own.
 
 #![expect(
     clippy::unwrap_used,
     reason = "test helpers outside #[test] functions: a panic fails the test"
 )]
 
-use opentide_analysis::{
-    ConfigIssue, ConfigRequest, Severity, install_configuration_schemas, set_configuration_checker,
-};
+use opentide_analysis::install_configuration_schemas;
 use serde_json::{Value, json};
 use std::path::PathBuf;
 
@@ -62,36 +60,6 @@ fn install_schemas() {
     install_configuration_schemas(router.as_deref(), &schemas).unwrap();
 }
 
-/// Like opentide's check: `distribution` is an unknown key, and a
-/// `rule_statuses` entry must be a status the open `deployment.toml` names.
-fn checker(request: &ConfigRequest<'_>) -> Result<Vec<ConfigIssue>, String> {
-    let mut issues = Vec::new();
-    if !request.path.ends_with("sharing.toml") {
-        return Ok(issues);
-    }
-    if request.text.contains("distribution") {
-        issues.push(ConfigIssue {
-            code: "unknown_key".into(),
-            field_path: vec!["misp".into(), "0".into(), "distribution".into()],
-            severity: Severity::Error,
-            message: "unknown key".into(),
-        });
-    }
-    let staging_declared = request
-        .open
-        .iter()
-        .any(|(path, text)| path.ends_with("deployment.toml") && text.contains("STAGING"));
-    if request.text.contains("STAGING") && !staging_declared {
-        issues.push(ConfigIssue {
-            code: "rule_status_unknown".into(),
-            field_path: vec!["misp".into(), "0".into(), "rule_statuses".into()],
-            severity: Severity::Error,
-            message: "STAGING is not a deployment status".into(),
-        });
-    }
-    Ok(issues)
-}
-
 fn published(messages: &[Value], uri: &str) -> Vec<Vec<(String, u64)>> {
     messages
         .iter()
@@ -114,7 +82,6 @@ fn published(messages: &[Value], uri: &str) -> Vec<Vec<(String, u64)>> {
 
 #[test]
 fn the_host_checks_configuration_and_the_server_places_it() {
-    set_configuration_checker(Some(Box::new(checker)));
     install_schemas();
 
     let sharing = "[[misp]]\nname = \"misp-internal\"\ndistribution = \"this-community\"\nrule_statuses = [\"STAGING\"]\nmax_tlp = \"red\"\n";
@@ -140,7 +107,7 @@ fn the_host_checks_configuration_and_the_server_places_it() {
         frames(&output)
     };
 
-    // #172: the host says who it is; its checker and schemas are reported.
+    // #172: the host says who it is; the native checks and its schemas are reported.
     opentide_lsp::set_host_info("opentide", "9.9.9");
     // STAGING is not a status of the open deployment.toml.
     let messages = session(&opens);
@@ -155,6 +122,9 @@ fn the_host_checks_configuration_and_the_server_places_it() {
     assert_eq!(
         published(&messages, SHARING),
         [[
+            // `url` and `api_key` are missing: on the block's header.
+            ("missing_field".to_string(), 0),
+            ("missing_field".to_string(), 0),
             ("unknown_key".to_string(), 2),
             ("rule_status_unknown".to_string(), 3)
         ]],
@@ -178,11 +148,14 @@ fn the_host_checks_configuration_and_the_server_places_it() {
         "textDocument": {"uri": SHARING}}}),
     ]);
     let messages = session(&bodies);
-    set_configuration_checker(None);
     install_configuration_schemas(None, &[]).unwrap();
     assert_eq!(
         published(&messages, SHARING),
-        [[("unknown_key".to_string(), 2)]],
+        [[
+            ("missing_field".to_string(), 0),
+            ("missing_field".to_string(), 0),
+            ("unknown_key".to_string(), 2)
+        ]],
         "editing deployment.toml re-checks sharing.toml"
     );
     assert!(

@@ -23,7 +23,6 @@ default-filter = """
 not (
     binary_id(opentide-lsp::catalog)
     | binary_id(opentide-lsp::e2e_stdio)
-    | binary_id(opentide-lsp::lint_toml)
     | binary_id(opentide-lsp::protocol)
     | binary_id(opentide-analysis::tide_corpus)
     | binary_id(opentide-analysis::deep_queries)
