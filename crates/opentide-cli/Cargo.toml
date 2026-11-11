@@ -43,6 +43,10 @@ opentide-core.workspace = true
 opentide-compile.workspace = true
 opentide-schema.workspace = true
 opentide-workspace.workspace = true
+# `lsp start` (UC-3.6b, #947): the language server the command line hosts,
+# the tier below this crate in xtask/layers.toml.
+opentide-lsp.workspace = true
+anyhow.workspace = true
 indexmap = "2"
 jiff.workspace = true
 form_urlencoded = "1.2"
@@ -95,6 +99,11 @@ rustix = { version = "1.1", default-features = false, features = ["std", "stdio"
 # `serve` (UC-3.8, #830): SIGTERM and SIGHUP end the session as the end of
 # input does, so the run in progress is cancelled and cleans up.
 signal-hook = { version = "0.3", default-features = false, features = ["iterator"] }
+
+[target.'cfg(unix)'.dev-dependencies]
+# `tests/tui_terminal.rs`: the pseudo-terminals `tui` runs in at a terminal;
+# `tests/lsp_start.rs`: the Ctrl-C (SIGINT) a person sends `lsp start`.
+rustix = { version = "1.1", default-features = false, features = ["std", "fs", "process", "pty", "termios"] }
 
 [dev-dependencies]
 # The goldens' recorded HTTP (UC-4.1): the replaying proxy of a cassette case.

@@ -13,9 +13,12 @@
 //!   with the folder as its root, every object file that has a finding (and
 //!   every target) opened.
 //!
-//! Per file, the multiset of `(code, severity, range)` must be equal: the
-//! range is `validate`'s 1-based line and code-point columns (end exclusive)
-//! converted here to LSP's 0-based lines and UTF-16 columns. What the editor
+//! What the editor shows is `validate`'s findings, and lint's file name and
+//! metadata findings on the same files (`lint::lint_file`, run here file by
+//! file: KG-03 and KG-05, #926). Per file, the multiset of `(code,
+//! severity, range)` must be equal: the range is the 1-based line and
+//! code-point columns (end exclusive) converted here to LSP's 0-based lines
+//! and UTF-16 columns. What the editor
 //! adds of its own (the query and platform-block analysis of
 //! `opentide-analysis`, which `validate`'s queries check covers in UC-2.5)
 //! is the engine's standalone analysis of the same text, taken out first.
@@ -36,8 +39,9 @@ pub const USAGE: &str = "\
 usage: cargo xtask lsp parity --corpus faults [--only ID,...] [--keep DIR]
 
   For each fault kind `opentide validate` reports, the language server's
-  published diagnostics must equal validate's findings, file by file:
-  codes, severities and ranges (code points converted to UTF-16).
+  published diagnostics must equal validate's findings, with lint's file
+  name and metadata findings, file by file: codes, severities and ranges
+  (code points converted to UTF-16).
 ";
 
 /// One finding as both sides are compared: code, severity, and the range
@@ -195,6 +199,24 @@ fn validate(dir: &Path, files: &[PathBuf]) -> Option<ByFile> {
             by_file.entry(file).or_default().push(finding);
         }
     }
+    // Lint's file name and metadata findings on each file the editor opens,
+    // with the workspace's `lint.toml`: one `lint_file` per file.
+    if let Ok(config) = opentide_schema::configuration::lint::parse_lint_config(
+        workspace.configuration().resolved.get("lint"),
+    ) {
+        for file in files {
+            let found = opentide_workspace::lint::lint_file(
+                workspace.fs().as_ref(),
+                workspace.root(),
+                &config,
+                file,
+            );
+            for finding in found {
+                let file = finding.diagnostic.file_path.clone().unwrap_or(file.clone());
+                by_file.entry(file).or_default().push(finding.diagnostic);
+            }
+        }
+    }
     Some(by_file)
 }
 
@@ -222,10 +244,10 @@ fn expected(text: &str, finding: &opentide_workspace::Diagnostic) -> Key {
         .map(|line| line.strip_suffix('\r').unwrap_or(line))
         .collect();
     let at = |line: usize| lines.get(line.saturating_sub(1)).copied().unwrap_or("");
-    let severity = if finding.is_error() {
-        "error"
-    } else {
-        "warning"
+    let severity = match finding.severity {
+        opentide_workspace::Severity::Error => "error",
+        opentide_workspace::Severity::Warning => "warning",
+        _ => "information",
     };
     let range = match finding.line.filter(|line| *line > 0) {
         None => ((0, 0), (0, 0)),

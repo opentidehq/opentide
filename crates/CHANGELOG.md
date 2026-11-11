@@ -9,12 +9,23 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 ### Upgrade
 
 - If you build an `opentide_analysis::QueryReport` with a struct literal, set its new `placeholder` field (`false` for a query you checked).
+- If you called `opentide_analysis::install_configuration_schemas`, build an `opentide_analysis::ConfigurationSchemas` (`ConfigurationSchemas::parse(router, &schemas)`) and pass it to `configuration_hover` and `configuration_completions`.
+- If your client reads `capabilities.experimental.opentide.catalog`, accept `models`: the server generates its Tide field catalogs and no longer reports `workspace` or `bundled`.
+- If you called `opentide_lsp::server::install_workspace_catalog` or read `opentide_lsp::WORKSPACE_CATALOGS`, drop it: the server installs the catalogs it generates for each root.
 
 ### Breaking
+
+- **Configuration hover and completion take their schemas as an argument** ([opentide#926](https://github.com/opentidehq/opentide/issues/926)). `configuration_hover` and `configuration_completions` take a `ConfigurationSchemas`; `install_configuration_schemas` and `has_configuration_schemas` are gone. `opentide-lsp` generates the schemas from `opentide-schema` in every host, so `configurationSchemas` is always `true`.
+
+- **`opentide-lsp` generates its Tide field catalogs from the models** ([opentide#926](https://github.com/opentidehq/opentide/issues/926)). Each root's `fields.json` and `deprecations.json` come from `opentide-schema` and the root's resolved configuration, on a thread of their own, and are handed to the engine; `.opentide/lsp/catalogs/generated/` is not read or watched, `install_workspace_catalog` and `WORKSPACE_CATALOGS` are gone, and `catalog` is `models` (or `host`, for a host that supplies its own).
 
 - **`opentide_analysis::QueryReport` has a public `placeholder` field** ([opentide#820](https://github.com/opentidehq/opentide/issues/820)). `analyze_queries` says which query is still the stand-in `opentide new` wrote, so a host need not read the file again to skip it. A struct literal of `QueryReport` without the field no longer compiles.
 
 ### Added
+
+- **The language server reports lint's `filename_mismatch` and `metadata_recommended`** ([opentide#926](https://github.com/opentidehq/opentide/issues/926)). Open objects, and closed ones for a client that pulls, get them as `opentide lint` reports them with the root's `lint.toml`; `filename_mismatch`'s suggestion is the file name, which the rename quick fix uses. `opentide_workspace::Workspace::editor_lint` runs them over the workspace's own parse, and `cargo xtask lsp parity` compares them too.
+
+- **`opentide_tide::index_value`** ([opentide#926](https://github.com/opentidehq/opentide/issues/926)) indexes an object a host has already parsed. The server's index (hover, completion, references, `opentide/catalog`, `opentide/catalogChanged`) reads the parse `opentide-workspace` made of each file instead of a second serde_yaml parse.
 
 - **`opentide_schema::node::load_keeping_repeated_keys`** ([opentide#928](https://github.com/opentidehq/opentide/issues/928)). It and `load_bytes_keeping_repeated_keys` read a document as `load` does but keep every entry of a mapping that repeats a key, in the order written, for a tool that edits values over their spans (`migrate vocab-scope`); `load` still refuses a repeated key.
 

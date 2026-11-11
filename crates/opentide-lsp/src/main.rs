@@ -152,7 +152,6 @@ fn cmd_analyze(file: &Path, language: Option<&str>, platform: Option<&str>) -> R
     if let Some(root) = &root {
         collect_yaml(root, &mut files);
         if let Some(workspace) = root.parent() {
-            server::install_workspace_catalog(workspace);
             let config = workspace.join(opentide_analysis::ELASTIC_CONFIGURATION);
             if let Ok(text) = std::fs::read_to_string(&config) {
                 files.push((config.display().to_string(), text));

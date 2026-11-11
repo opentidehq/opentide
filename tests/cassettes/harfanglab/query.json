@@ -1,0 +1,136 @@
+{
+  "format": 1,
+  "scenario": "harfanglab/query",
+  "recorded_from": [
+    "{python}",
+    "tests/cassettes/harfanglab/client.py",
+    "query"
+  ],
+  "digest": "sha256:112e5e133e08ca3a48b165b6418fedcee22ef8729fb5af9c21260e5c36665628",
+  "interactions": [
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://hl-tenant.invalid/api/data/telemetry/Processes/?process_name=cmd.exe&commandline__icontains=a+b&image_name=C%3A%5CWindows%5CSystem32%5Ccmd.exe&parent_name=%2A~x%40y&%40event_create_date__gte=2026-10-26T08%3A00%3A00.000Z&%40event_create_date__lte=2026-10-27T08%3A00%3A00.250Z&ordering=-%40event_create_date&limit=2&offset=0",
+        "headers": [
+          [
+            "authorization",
+            "Token REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "hl-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"count\": 5, \"next\": null, \"previous\": null, \"results\": [{\"process_name\": \"cmd.exe\", \"agent\": {\"hostname\": \"ws-01\", \"agentid\": \"a1\"}, \"@event_create_date\": \"2026-10-26T09:00:00.000Z\"}, {\"process_name\": \"cmd.exe\", \"agent\": {\"hostname\": \"ws-02\"}, \"pid\": 4242}]}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://hl-tenant.invalid/api/data/telemetry/DNSResolution/?requested_name=example.org&%40event_create_date__gte=2026-10-26T08%3A00%3A00.000Z&%40event_create_date__lte=2026-10-27T08%3A00%3A00.250Z&ordering=-%40event_create_date&limit=11&offset=0",
+        "headers": [
+          [
+            "authorization",
+            "Token REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "hl-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"count\": 5, \"next\": null, \"previous\": null, \"results\": [{\"process_name\": \"cmd.exe\", \"agent\": {\"hostname\": \"ws-01\", \"agentid\": \"a1\"}, \"@event_create_date\": \"2026-10-26T09:00:00.000Z\"}, {\"process_name\": \"cmd.exe\", \"agent\": {\"hostname\": \"ws-02\"}, \"pid\": 4242}]}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://hl-tenant.invalid/api/data/telemetry/Processes/?process_name=broken.exe&%40event_create_date__gte=2026-10-26T08%3A00%3A00.000Z&%40event_create_date__lte=2026-10-27T08%3A00%3A00.250Z&ordering=-%40event_create_date&limit=101&offset=0",
+        "headers": [
+          [
+            "authorization",
+            "Token REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 400,
+        "headers": [
+          [
+            "server",
+            "hl-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"detail\": \"Unknown field: process_nam\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://hl-tenant.invalid/api/data/telemetry/Processes/?process_name=gateway.exe&%40event_create_date__gte=2026-10-26T08%3A00%3A00.000Z&%40event_create_date__lte=2026-10-27T08%3A00%3A00.250Z&ordering=-%40event_create_date&limit=101&offset=0",
+        "headers": [
+          [
+            "authorization",
+            "Token REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 502,
+        "headers": [
+          [
+            "server",
+            "hl-stand-in"
+          ],
+          [
+            "content-type",
+            "text/html; charset=utf-8"
+          ]
+        ],
+        "body": "<html><head><title>502 Bad Gateway</title></head><body>nginx</body></html>"
+      }
+    }
+  ]
+}

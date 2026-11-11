@@ -467,3 +467,22 @@ def test_the_informational_jobs_are_not_required() -> None:
     assert sorted(informational) == ["Benchmarks (informational)", "LSP clients (informational)"]
     for name in informational:
         assert name not in _documented_checks()
+
+
+def test_only_report_uploads_may_fail_without_failing_their_job() -> None:
+    """A report upload is for reading, not a gate.
+
+    When GitHub's artifact service is down, ``actions/upload-artifact`` fails
+    after its retries, and that must not fail a job whose checks passed. No
+    other step in ci.yml may set continue-on-error.
+    """
+    uploads = 0
+    for job_id, spec in _ci_jobs().items():
+        for step in spec.get("steps") or []:
+            if str(step.get("uses", "")).startswith("actions/upload-artifact@"):
+                uploads += 1
+                assert step.get("continue-on-error") is True, (job_id, step.get("name"))
+            else:
+                label = step.get("name") or step.get("run")
+                assert "continue-on-error" not in step, (job_id, label)
+    assert uploads >= 7

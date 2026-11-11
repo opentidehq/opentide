@@ -9,7 +9,7 @@ The opentide LSP owns Tide diagnostics. Disable yamlls / Red Hat YAML on `object
 
 ### Tide diagnostics
 
-An object's diagnostics are `opentide validate`'s findings on it (the queries check is the engine's own analysis of the same text): the same codes and severities, placed from the finding's 1-based line and code-point columns (end column exclusive) to LSP's 0-based lines and UTF-16 columns. A finding without a line is at the start of the file; one with a column and no end column, on its own line, is a point at that column; one with no column covers its line (to its end line's end when it names one). `cargo xtask lsp parity --corpus faults` (CI's corpus job) compares the two on every fault kind `validate` reports.
+An object's diagnostics are `opentide validate`'s findings on it (the queries check is the engine's own analysis of the same text), and `opentide lint`'s file name and metadata findings on it (`filename_mismatch` and `metadata_recommended`, as `.opentide/configurations/lint.toml` enables them and at its severities: lint's `info` is information): the same codes and severities, placed from the finding's 1-based line and code-point columns (end column exclusive) to LSP's 0-based lines and UTF-16 columns. A finding without a line is at the start of the file; one with a column and no end column, on its own line, is a point at that column; one with no column covers its line (to its end line's end when it names one). `cargo xtask lsp parity --corpus faults` (CI's corpus job) compares the server's with `validate`'s and lint's on every fault kind `validate` reports.
 
 Languages: `opentide-yaml`, `kql`, `spl`, `esql`, `eql`, `kuery` (Kibana KQL), `lucene`, `falco`, `cql` (CrowdStrike Query Language) and `opentide-config`. There is no `sql`.
 
@@ -21,7 +21,7 @@ The Tide grammar (`tide.tmLanguage.json`, `source.opentide-yaml`) marks the quer
 
 `.opentide/configurations/**/*.toml` is `opentide-config`, whatever language id the editor sends. Any other `.toml` (`Cargo.toml`, `pyproject.toml`) is not read.
 
-- **opentide checks it.** The findings are the configuration checks `opentide validate` runs (`opentide-schema`'s), placed on the keys they name. `opentide-lsp` runs them itself, on its own, in the WASI build and in the browser too (UC-2.6). Hover and completion come from the schemas `opentide lsp start` hands the server, so they need it. See [ARCHITECTURE.md](ARCHITECTURE.md#configuration-toml).
+- **opentide checks it.** The findings are the configuration checks `opentide validate` runs (`opentide-schema`'s), placed on the keys they name. `opentide-lsp` runs them itself, on its own, in the WASI build and in the browser too (UC-2.6). Hover and completion come from the configuration schemas `opentide-schema` generates (what `opentide generate schemas` writes), which the server generates itself, in every host. See [ARCHITECTURE.md](ARCHITECTURE.md#configuration-toml).
 - **The editor's TOML grammar highlights it.** The server sends no semantic tokens for `opentide-config`, and there is no opentide TOML grammar.
 - **Keep generic TOML language servers off `.opentide/configurations/**`** (taplo, Even Better TOML, tombi), so a file is not reported twice. Give the glob its own language (`opentide-config`), as the samples do.
 - Editing one configuration file re-checks the others that are open: a status added to `deployment.toml` is one `sharing.toml` may name. `visibility.toml` still declares datasets live, and is checked like the other files.
@@ -90,8 +90,12 @@ the `Deprecated` tag on deprecation codes, the other file of a `duplicate_id`
 in `relatedInformation`, and the document `version` on a published set.
 
 `capabilities.experimental.opentide` says who runs the server: `{ host:
-{ name, version } | null, engine, catalog: "host" | "workspace" | "bundled",
-configurationChecks, configurationSchemas, workspaceUpdates }`.
+{ name, version } | null, engine, catalog: "models" | "host",
+configurationChecks, configurationSchemas, workspaceUpdates }`. `catalog` is
+`models` when the server generates the Tide field catalogs hover, completion
+and highlighting read from opentide's models for each root's configuration
+(#926), and `host` when the host supplied them; servers before #926 said
+`workspace` or `bundled`. `configurationSchemas` is always `true` since #926.
 `workspaceUpdates` is `true` when the server takes `opentide/didChangeWorkspace`
 (the release after 0.10.0 on); a client of an older server restarts it to give it a new
 workspace. `opentide lsp start` sets the
@@ -121,7 +125,7 @@ Suggestions the KQL, SPL and Tide engines attach. Every one is chosen by the rul
 | `spl_command_without_pipe` | the command word | `\| {command}` |
 | `spl_unknown_datamodel`, `spl_unknown_datamodel_field` | the data model reference | the corrected name ([spl/cim-fields.md](spl/cim-fields.md)) |
 | A `validate` finding whose fix is one edit (`vocab_unknown`, `invalid_ref`, the other value typos) | the value | the replacement `validate --fix` would write ([OBJECTS.md](OBJECTS.md)) |
-| `filename_mismatch` (lint's, once the editor reports it, #905) | the `name` value | a file name: the quick fix renames the file (`RenameFile`, for a client with `workspaceEdit.documentChanges` and `resourceOperations: ["rename"]`) beside it, only for a `file:` document and when no other file, open document or supplied document has that name (the same file under another case is renamed), and is never a text edit nor part of `source.fixAll.opentide` |
+| `filename_mismatch` (lint's, #926) | the start of the file | a file name: the quick fix renames the file (`RenameFile`, for a client with `workspaceEdit.documentChanges` and `resourceOperations: ["rename"]`) beside it, only for a `file:` document and when no other file, open document or supplied document has that name (the same file under another case is renamed), and is never a text edit nor part of `source.fixAll.opentide` |
 
 A reference finding (`invalid_ref` on `detection_model`, on each
 `objective.threats` entry and on a `threat.chaining` `vector`) is on the UUID
@@ -171,7 +175,7 @@ The workspace index, for catalogue, graph and search views that follow unsaved e
 }
 ```
 
-- **Objects** are the ones the other requests see: each object file of the root, an open document in place of its file, and the objects a host supplied on `initialize` (`initializationOptions.workspace`; one known by its metadata alone has the `uri` the host gave, else `opentide-object:<uuid>`, and no refs). They are sorted by path, then UUID.
+- **Objects** are the ones the other requests see: each object file of the root, an open document in place of its file, and the objects a host supplied on `initialize` (`initializationOptions.workspace`; one known by its metadata alone has the `uri` the host gave, else `opentide-object:<uuid>`, and no refs). They are sorted by path, then UUID. Each file is read from the parse the root's workspace made of it for `validate` (#926), not parsed a second time; a file the workspace does not read is parsed with the same parser.
 - **`range`** is the `name` value's (the key's when the value is not on its line; the file's start without a `name`). Positions are UTF-16, as everywhere.
 - **`refs`** are the values the reference fields of the body hold, other than the object's own `metadata.uuid` and empty ones, in document order: a rule's `detection_model`, an objective's `objective.threats.<i>` and `objective.signals.<i>.parent`, and a threat's `threat.chaining.<i>.vector`. A signal's own UUID is listed too (`objective.signals.0.uuid`): signals live inside their objective and are not objects here, so this is where a client finds them, and a rule's `detection_model` naming a signal is a ref to one of those. Other UUID-valued fields identify something that is not an object and are not refs: `metadata.organisation.uuid`, a platform's ids (`configurations.sentinel.template.uuid`). Any other ref whose `uuid` no object of the root carries dangles (the object's diagnostics say `invalid_ref` where the check applies). A value that is not a UUID (a typo, `TODO`) is such a ref too, with that value as its `uuid`, as `invalid_ref` reports it. Ranges are those of the indexed text: the open buffer, else the file.
 - The references are kept in the index, found once per text; `textDocument/references` and the reference lens read them too.

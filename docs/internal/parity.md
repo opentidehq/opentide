@@ -14,13 +14,13 @@ The Python CLI at the frozen tag is the oracle ([plan §5](https://github.com/op
 | | |
 |---|---:|
 | Commands | 59 |
-| Commands with a Rust implementation | 37 |
+| Commands with a Rust implementation | 39 |
 | Commands flipped to Rust | 0 |
 | Recordings (command × corpus × mode) | 669 |
-| … no Rust yet | 171 (25.5%) |
+| … no Rust yet | 160 (23.9%) |
 | … compare passing | 0 (0.0%) |
 | … compare failing | 0 (0.0%) |
-| … compare not run | 498 (74.4%) |
+| … compare not run | 509 (76.0%) |
 | … flipped | 0 (0.0%) |
 | Approved diffs (`tests/golden/APPROVED_DIFFS.toml`) | 866 |
 | Diagnostic codes with a fault kind | 163 of 175 (93.1%) |
@@ -284,7 +284,7 @@ No compare results were given: every command with a Rust implementation that is 
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
-| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| none | compare not run | compare not run | compare not run | compare not run |
 
 ### `opentide mcp`
 
@@ -531,8 +531,8 @@ No compare results were given: every command with a Rust implementation that is 
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
-| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| tide-corpus | no Rust yet | not recorded | no Rust yet | no Rust yet |
+| none | compare not run | compare not run | compare not run | compare not run |
+| tide-corpus | compare not run | not recorded | compare not run | compare not run |
 
 ### `opentide validate`
 

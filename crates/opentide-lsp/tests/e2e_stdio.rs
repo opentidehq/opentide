@@ -1082,28 +1082,33 @@ fn falco_hover_over_stdio() {
     assert!(h.to_lowercase().contains("status"), "{h}");
 }
 
-/// Open a rule and list what completion offers for its `metadata.tlp` value
-/// (line 4, after `  tlp: `).
-fn tlp_values(lsp: &mut Lsp, uri: &str, text: &str) -> Vec<String> {
-    published_codes(lsp, uri, "opentide-yaml", text);
+/// What completion offers at `line`, `character` of `uri`.
+fn completion_labels(lsp: &mut Lsp, uri: &str, line: u32, character: u32) -> Vec<String> {
     let reply = lsp.request(
         "textDocument/completion",
-        json!({ "textDocument": { "uri": uri }, "position": { "line": 4, "character": 7 } }),
+        json!({ "textDocument": { "uri": uri }, "position": { "line": line, "character": character } }),
     );
-    let items = reply["result"]
+    reply["result"]
         .as_array()
         .cloned()
         .or_else(|| reply["result"]["items"].as_array().cloned())
-        .unwrap_or_default();
-    items
+        .unwrap_or_default()
         .iter()
         .filter_map(|item| item["label"].as_str().map(str::to_string))
         .collect()
 }
 
+/// #926: hover and completion read the field catalog the models generate
+/// for the root's configuration (its `deployment.toml` names the teams a
+/// rule's `response.responders` takes), not a copy `opentide generate
+/// schemas` committed under `.opentide/lsp/catalogs/generated/`, which here
+/// offers a TLP the models do not know. The catalog is generated on a
+/// thread of its own once the root's workspace has loaded: completion
+/// offers the root's teams once it is ready.
 #[test]
-fn initialize_installs_the_workspace_field_catalog() {
-    let root = std::env::temp_dir().join(format!("opentide-lsp-catalog-{}", std::process::id()));
+fn the_field_catalog_is_generated_from_the_models_for_the_root() {
+    let scratch = Scratch::new("models-catalog");
+    let root = &scratch.0;
     let catalogs = root.join(".opentide/lsp/catalogs/generated");
     std::fs::create_dir_all(&catalogs).unwrap();
     std::fs::create_dir_all(root.join("objects/rules")).unwrap();
@@ -1115,43 +1120,41 @@ fn initialize_installs_the_workspace_field_catalog() {
              "enum": ["clear", "house"]}]}"#,
     )
     .unwrap();
-    let rule = "name: House Rule\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000001\n  schema: rule::1.0\n  tlp: house\n";
+    std::fs::create_dir_all(root.join(".opentide/configurations")).unwrap();
+    std::fs::write(
+        root.join(".opentide/configurations/deployment.toml"),
+        "[[responders]]\nname = \"House Team\"\ndescription = \"Our own\"\n",
+    )
+    .unwrap();
+    let rule = "name: House Rule\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000001\n  schema: rule::1.0\n  tlp: \nresponse:\n  responders: \n";
     let uri = file_uri(&root.join("objects/rules/house-rule.yaml"));
-
     let mut lsp = Lsp::spawn();
-    lsp.request(
+    let init = lsp.request(
         "initialize",
-        json!({ "capabilities": {}, "rootUri": file_uri(&root) }),
+        json!({ "capabilities": {}, "rootUri": file_uri(root) }),
     );
-    let with_catalog = tlp_values(&mut lsp, &uri, rule);
-    drop(lsp);
-
-    // Without a root, the workspace around the document is found (#185
-    // P2.1): its catalog applies.
-    let mut lsp = Lsp::spawn();
-    lsp.request("initialize", json!({ "capabilities": {} }));
-    let discovered = tlp_values(&mut lsp, &uri, rule);
-    drop(lsp);
-
-    // A document in no workspace gets the bundled catalogs.
-    let mut lsp = Lsp::spawn();
-    lsp.request("initialize", json!({ "capabilities": {} }));
-    let bundled = tlp_values(
-        &mut lsp,
-        "file:///opentide-no-such-workspace/objects/rules/house-rule.yaml",
-        rule,
+    assert_eq!(
+        init["result"]["capabilities"]["experimental"]["opentide"]["catalog"], "models",
+        "{init}"
     );
-    std::fs::remove_dir_all(&root).ok();
-
-    assert_eq!(discovered, with_catalog);
-
-    // The field catalog is what hover and completion read; the object
-    // checks are validate's, whatever catalog is installed (UC-2.6).
+    published_codes(&mut lsp, &uri, "opentide-yaml", rule);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(120);
+    let teams = loop {
+        let teams = completion_labels(&mut lsp, &uri, 6, 14);
+        if teams.iter().any(|team| team.contains("House Team"))
+            || std::time::Instant::now() > deadline
+        {
+            break teams;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    };
     assert!(
-        with_catalog.contains(&"house".to_string()),
-        "{with_catalog:?}"
+        teams.iter().any(|team| team.contains("House Team")),
+        "{teams:?}"
     );
-    assert!(!bundled.contains(&"house".to_string()), "{bundled:?}");
+    let tlp = completion_labels(&mut lsp, &uri, 4, 7);
+    assert!(tlp.contains(&"amber+strict".to_string()), "{tlp:?}");
+    assert!(!tlp.contains(&"house".to_string()), "{tlp:?}");
 }
 
 fn cli_codes(file: &std::path::Path) -> Vec<String> {

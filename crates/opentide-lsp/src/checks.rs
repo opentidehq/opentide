@@ -8,6 +8,7 @@
 
 use opentide_core::{Diagnostic as EngineDiagnostic, Position, Range, Severity};
 use opentide_workspace::fs::{DirEntry, EntryKind};
+use opentide_workspace::lint;
 use opentide_workspace::validate::{Options as ValidateOptions, QueriesMode, Selection};
 use opentide_workspace::{
     Change, Diagnostic, FileSystem, MemoryFs, OpenError, Options, OsFs, RootOptions, Workspace,
@@ -135,6 +136,8 @@ pub(crate) struct RootChecks {
     all: Option<(u64, Findings)>,
     /// Why the configuration does not resolve, when it does not.
     pub failure: Option<String>,
+    /// The field catalogs generated for the workspace.
+    catalog: crate::models::FieldCatalog,
 }
 
 impl Default for RootChecks {
@@ -149,6 +152,7 @@ impl Default for RootChecks {
             findings: None,
             all: None,
             failure: None,
+            catalog: crate::models::FieldCatalog::default(),
         }
     }
 }
@@ -402,6 +406,47 @@ impl RootChecks {
 }
 
 impl RootChecks {
+    /// The workspace's parse of each object file it read, by the
+    /// [`path_key`](crate::session::path_key) of the file under `root` as
+    /// the editor names it (the walk's path): what the editor's index reads
+    /// instead of parsing the files again (#926). Empty until the workspace
+    /// has loaded. It never loads the workspace or hands it what changed.
+    pub(crate) fn parses_under(
+        &self,
+        root: &Path,
+    ) -> HashMap<String, Arc<opentide_schema::node::Document>> {
+        let Some(workspace) = self.workspace.as_ref() else {
+            return HashMap::new();
+        };
+        let resolved = self.resolve(root);
+        workspace
+            .index()
+            .sources
+            .iter()
+            .filter_map(|source| {
+                let relative = source.path.strip_prefix(&resolved).ok()?;
+                let path = root.join(relative).display().to_string();
+                Some((
+                    crate::session::path_key(&path),
+                    Arc::clone(&source.document),
+                ))
+            })
+            .collect()
+    }
+
+    /// The Tide field catalogs the models generate for this root's
+    /// configuration, as the workspace last resolved it
+    /// ([`crate::models::FieldCatalog`]). `None` until the workspace has
+    /// loaded and they are generated, and while its configuration does not
+    /// resolve. It never loads the workspace or hands it what changed: the
+    /// checks do.
+    pub(crate) fn field_catalog(&mut self) -> Option<Arc<opentide_analysis::Catalog>> {
+        let workspace = self.workspace.as_ref()?;
+        self.catalog.for_workspace(workspace)
+    }
+}
+
+impl RootChecks {
     /// What `validate` reports on every object of the root, by file: run
     /// once per `generation` (a client that pulls the workspace's
     /// diagnostics).
@@ -425,20 +470,45 @@ impl RootChecks {
                 queries: QueriesMode::Off,
                 ..ValidateOptions::default()
             }),
+            None,
         ));
         self.all = Some((generation, Arc::clone(&found)));
         found
     }
 }
 
-/// A run's findings by file, resolved.
+/// A run's findings by file, resolved, and lint's file name and metadata
+/// findings on the same files (`files`, or every object file for `None`).
 fn by_file(
     workspace: &Workspace,
     run: opentide_workspace::validate::Validation,
+    files: Option<&[PathBuf]>,
 ) -> HashMap<PathBuf, Vec<Diagnostic>> {
     let mut by_file: HashMap<PathBuf, Vec<Diagnostic>> = HashMap::new();
     let fs = workspace.fs();
-    for finding in run.report.issues.into_iter().chain(run.report.warnings) {
+    // KG-03 and KG-05 (#893): the editor shows lint's `filename_mismatch`
+    // and `metadata_recommended` (#926).
+    let lint = workspace.editor_lint(files).into_iter().map(|finding| {
+        let mut diagnostic = finding.diagnostic;
+        if diagnostic.code == lint::codes::FILENAME {
+            // The rename quick fix's suggestion: the file name the object
+            // should have, beside the file.
+            diagnostic.suggestion = finding
+                .json
+                .get("expected")
+                .and_then(serde_json::Value::as_str)
+                .and_then(|expected| Path::new(expected).file_name())
+                .map(|name| name.to_string_lossy().into_owned());
+        }
+        diagnostic
+    });
+    for finding in run
+        .report
+        .issues
+        .into_iter()
+        .chain(run.report.warnings)
+        .chain(lint)
+    {
         let Some(file) = finding.file_path.as_deref() else {
             continue;
         };
@@ -448,7 +518,8 @@ fn by_file(
 }
 
 /// `validate`'s findings on `files`, as `opentide validate --file` reports
-/// them (the queries check is the editor's own analysis), by file, resolved.
+/// them (the queries check is the editor's own analysis), and lint's file
+/// name and metadata findings on them, by file, resolved.
 pub(crate) fn validate_files(
     workspace: &Workspace,
     files: &[PathBuf],
@@ -465,7 +536,7 @@ pub(crate) fn validate_files(
         queries: QueriesMode::Off,
         ..ValidateOptions::default()
     });
-    by_file(workspace, run)
+    by_file(workspace, run, Some(files))
 }
 
 /// The UTF-16 column of the code-point column `column` (from 0) of `line`,
@@ -522,7 +593,9 @@ pub(crate) fn finding_range(text: &str, finding: &Diagnostic) -> Range {
 
 /// A finding as the editor's diagnostic: its code, severity, message and
 /// field path, placed in `text`. A fix of one edit (it replaces the value
-/// the finding underlines) is the suggestion a quick fix applies.
+/// the finding underlines) is the suggestion a quick fix applies; lint's
+/// `filename_mismatch` suggests the file name, which the quick fix renames
+/// the file to.
 pub(crate) fn engine_diagnostic(text: &str, finding: &Diagnostic) -> EngineDiagnostic {
     let severity = match finding.severity {
         opentide_workspace::Severity::Error => Severity::Error,
@@ -534,7 +607,12 @@ pub(crate) fn engine_diagnostic(text: &str, finding: &Diagnostic) -> EngineDiagn
         .as_ref()
         .filter(|fix| fix.edits.len() == 1)
         .and_then(|fix| fix.edits.first())
-        .map(|edit| edit.replacement.clone());
+        .map(|edit| edit.replacement.clone())
+        .or_else(|| {
+            (finding.code == lint::codes::FILENAME)
+                .then(|| finding.suggestion.clone())
+                .flatten()
+        });
     EngineDiagnostic {
         code: finding.code.clone(),
         severity,

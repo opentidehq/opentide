@@ -5,7 +5,7 @@
 use crate::checks::{
     Buffers, Findings, RootChecks, Stub, configuration_issues, engine_diagnostic, validate_files,
 };
-use crate::server::{collect_objects, install_workspace_catalog_from, workspace_root};
+use crate::server::{collect_objects, workspace_root};
 use crate::uri::uri_to_path;
 use lsp_server::{Message, Notification, ReqQueue, Response};
 use opentide_analysis::{
@@ -18,6 +18,7 @@ use rayon::prelude::*;
 use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, OnceLock};
 
 /// An open document.
@@ -290,12 +291,29 @@ impl DiskFile {
         }
     }
 
-    /// Its index entry ([`opentide_analysis::index_object`]); `None` for a
-    /// file that is no object.
-    fn indexed(&self) -> Option<&IndexedObject> {
+    /// Its index entry; `None` for a file that is no object. It is read
+    /// from `parsed`, the workspace's parse of the file, when that is of
+    /// this text; else the file is parsed here, with the same parser, and
+    /// `parsed_here` counts it (#926).
+    fn indexed(
+        &self,
+        parsed: Option<&Arc<opentide_schema::node::Document>>,
+        parsed_here: &AtomicUsize,
+    ) -> Option<&IndexedObject> {
         self.indexed
-            .get_or_init(|| opentide_analysis::index_object(&self.path, &self.text))
+            .get_or_init(|| match parsed.filter(|doc| doc.source() == self.text) {
+                Some(document) => crate::index::index_document(&self.path, document),
+                None => {
+                    parsed_here.fetch_add(1, Ordering::Relaxed);
+                    crate::index::index_text(&self.path, &self.text)
+                }
+            })
             .as_ref()
+    }
+
+    /// Its index entry, once indexed.
+    fn entry(&self) -> Option<&IndexedObject> {
+        self.indexed.get().and_then(Option::as_ref)
     }
 }
 
@@ -304,6 +322,9 @@ impl DiskFile {
 struct DiskObjects {
     loaded: bool,
     files: BTreeMap<String, DiskFile>,
+    /// How many files the index parsed itself, not reading the workspace's
+    /// parse (`opentide/__stats`).
+    parsed_here: AtomicUsize,
 }
 
 impl DiskObjects {
@@ -319,7 +340,7 @@ impl DiskObjects {
             .files
             .iter()
             .filter(|(key, _)| !found.contains_key(*key))
-            .filter_map(|(_, file)| file.indexed().map(|o| PathBuf::from(&o.path)))
+            .map(|(_, file)| PathBuf::from(&file.path))
             .collect();
         if !self.loaded && found.is_empty() {
             changed.push(root.join("objects"));
@@ -339,14 +360,24 @@ impl DiskObjects {
     }
 
     /// Index the files `keep` accepts that are not indexed yet, in
-    /// parallel: on the first request that reads the editor's index, every
-    /// object file of the root.
-    fn index_matching(&self, keep: &(dyn Fn(&str) -> bool + Sync)) -> &BTreeMap<String, DiskFile> {
+    /// parallel, from the workspace's parse of each (`parses`, by
+    /// [`path_key`], read only when a file needs it): on the first request
+    /// that reads the editor's index, every object file of the root.
+    fn index_matching(
+        &self,
+        keep: &(dyn Fn(&str) -> bool + Sync),
+        parses: &dyn Fn() -> HashMap<String, Arc<opentide_schema::node::Document>>,
+    ) -> &BTreeMap<String, DiskFile> {
+        let pending = |file: &DiskFile| file.indexed.get().is_none() && keep(&file.text);
+        if !self.files.values().any(pending) {
+            return &self.files;
+        }
+        let parses = parses();
         self.files
             .par_iter()
-            .filter(|(_, file)| keep(&file.text))
-            .for_each(|(_, file)| {
-                file.indexed();
+            .filter(|(_, file)| pending(file))
+            .for_each(|(key, file)| {
+                file.indexed(parses.get(key), &self.parsed_here);
             });
         &self.files
     }
@@ -403,7 +434,7 @@ impl Supplied {
                 .flatten()
         };
         let mut add = |path: String, text: String| {
-            let indexed = opentide_analysis::index_object(&path, &text);
+            let indexed = crate::index::index_text(&path, &text);
             supplied
                 .files
                 .insert(path_key(&path), (path, text, indexed));
@@ -529,6 +560,9 @@ pub(crate) struct Session {
     /// The workspaces of documents outside every root, by the folder that
     /// holds their `objects/`.
     loose_checks: RefCell<HashMap<PathBuf, RootChecks>>,
+    /// The Tide field catalogs the engine has installed: the ones the models
+    /// generate for the root of the last request ([`Session::host`]).
+    installed_catalog: RefCell<Option<Arc<opentide_analysis::Catalog>>>,
 }
 
 /// `path` as the workspace reads it: an absolute path as it is; anything
@@ -668,21 +702,29 @@ impl SessionHost<'_> {
             })
             .collect();
         let mut index: Vec<IndexedObject> = match self.root {
-            Some(i) => session.roots[i]
-                .disk
-                .borrow()
-                .index_matching(keep)
-                .iter()
-                .filter(|(path, _)| !open.contains_key(*path))
-                .filter(|(_, file)| keep(&file.text))
-                .filter_map(|(_, file)| file.indexed().cloned())
-                .collect(),
+            Some(i) => {
+                let root = &session.roots[i];
+                let parses = || {
+                    root.checks
+                        .try_borrow()
+                        .map(|checks| checks.parses_under(&root.path))
+                        .unwrap_or_default()
+                };
+                root.disk
+                    .borrow()
+                    .index_matching(keep, &parses)
+                    .iter()
+                    .filter(|(path, _)| !open.contains_key(*path))
+                    .filter(|(_, file)| keep(&file.text))
+                    .filter_map(|(_, file)| file.entry().cloned())
+                    .collect()
+            }
             None => Vec::new(),
         };
         index.extend(
             open.values()
                 .filter(|(_, text)| keep(text))
-                .filter_map(|(path, text)| opentide_analysis::index_object(path, text)),
+                .filter_map(|(path, text)| crate::index::index_text(path, text)),
         );
         // What the host supplied stands in for objects the session has no
         // file for: an object open or on disk is itself, not a duplicate of
@@ -782,6 +824,7 @@ impl Session {
             }
         }
         self.activate(root);
+        self.install_field_catalog(root);
         SessionHost {
             session: self,
             root,
@@ -805,10 +848,6 @@ impl Session {
         }
         self.active.set(Some(root));
         let r = root.and_then(|i| self.roots.get(i));
-        if let Err(err) = install_workspace_catalog_from(r.map(|r| r.path.as_path())) {
-            self.log_warning(&err);
-            self.warn_once(&err);
-        }
         let Some(r) = r else {
             if let Err(err) = install_visibility(self.supplied.visibility.as_deref()) {
                 self.log_warning(&format!("opentide-lsp: {err}; no datasets are declared"));
@@ -853,6 +892,48 @@ impl Session {
                 }
                 let _ = install_visibility(kept.flatten().as_deref());
             }
+        }
+    }
+
+    /// Hand the engine the Tide field catalogs hover, completion and
+    /// highlighting read for a document of `root`: the ones the models
+    /// generate for the root's configuration, else, until they are generated or while its configuration
+    /// does not resolve, and outside every root, for the bundled
+    /// configuration (#926); until those are generated too, the engine keeps
+    /// the catalogs compiled into it. A catalog the engine already has is not
+    /// installed again; another one bumps the generation, so analyses read
+    /// it. A host that
+    /// supplied its own catalogs keeps them
+    /// ([`use_host_catalogs`](crate::use_host_catalogs)).
+    fn install_field_catalog(&self, root: Option<usize>) {
+        if crate::server::host_catalogs() {
+            return;
+        }
+        let own = root
+            .and_then(|i| self.roots.get(i))
+            .and_then(|r| r.checks.try_borrow_mut().ok()?.field_catalog());
+        let Some(catalog) = own.or_else(crate::models::default_catalog_if_ready) else {
+            return;
+        };
+        let mut installed = self.installed_catalog.borrow_mut();
+        if let Some(known) = installed.as_ref() {
+            if Arc::ptr_eq(known, &catalog) {
+                return;
+            }
+            if known.fields == catalog.fields && known.deprecations == catalog.deprecations {
+                *installed = Some(catalog);
+                return;
+            }
+        }
+        match opentide_analysis::install_catalog(&catalog) {
+            Ok(()) => {
+                if installed.replace(catalog).is_some() {
+                    self.touch();
+                }
+            }
+            Err(err) => self.log_warning(&format!(
+                "opentide-lsp: the generated field catalog does not install: {err}"
+            )),
         }
     }
 
@@ -1151,6 +1232,16 @@ impl Session {
             .sum()
     }
 
+    /// How many object files on disk the editor's index parsed itself,
+    /// over every root, rather than reading the workspace's parse (#926).
+    #[cfg(all(debug_assertions, not(fuzzing)))]
+    pub(crate) fn editor_parsed(&self) -> usize {
+        self.roots
+            .iter()
+            .map(|r| r.disk.borrow().parsed_here.load(Ordering::Relaxed))
+            .sum()
+    }
+
     /// What the roots' workspaces read, parsed and resolved, summed.
     #[cfg(all(debug_assertions, not(fuzzing)))]
     pub(crate) fn workspace_stats(&self) -> opentide_workspace::Stats {
@@ -1368,11 +1459,17 @@ impl Session {
         let Some(r) = self.roots.get(root) else {
             return Vec::new();
         };
+        let parses = || {
+            r.checks
+                .try_borrow()
+                .map(|checks| checks.parses_under(&r.path))
+                .unwrap_or_default()
+        };
         r.disk
             .borrow()
-            .index_matching(&|_| true)
+            .index_matching(&|_| true, &parses)
             .values()
-            .filter_map(|file| Some((file.indexed()?.path.clone(), file.text.clone())))
+            .filter_map(|file| Some((file.entry()?.path.clone(), file.text.clone())))
             .collect()
     }
 
@@ -1742,7 +1839,7 @@ impl Session {
 
 #[cfg(test)]
 mod tests {
-    use super::{DiskObjects, may_read_index, root_key};
+    use super::{Arc, DiskObjects, HashMap, Ordering, may_read_index, path_key, root_key};
 
     /// #914: only a document that can hold an Elastic block reads the
     /// editor's index; an escape can spell `elastic` too.
@@ -1765,7 +1862,9 @@ mod tests {
     }
 
     /// #914: reading a root's object files indexes none of them; the first
-    /// request for the index indexes each, as `index_object` does.
+    /// request for the index indexes each, as `index_object` does, from the
+    /// workspace's parse of the file where it has one of the same text
+    /// (#926).
     #[test]
     fn object_files_are_indexed_when_the_index_is_read() {
         let root = std::env::temp_dir().join(format!("opentide-lsp-disk-{}", std::process::id()));
@@ -1780,13 +1879,22 @@ mod tests {
         let changed = disk.refresh(&root);
         assert_eq!(changed.len(), 2, "{changed:?}");
         assert!(disk.files.values().all(|file| file.indexed.get().is_none()));
-        let indexed: Vec<_> = disk
-            .index_matching(&|_| true)
-            .values()
-            .map(|file| file.indexed().cloned())
-            .collect();
-        assert!(disk.files.values().all(|file| file.indexed.get().is_some()));
         let path = rules.join("r.yaml").display().to_string();
+        // The workspace parsed the rule: the index reads that parse, and
+        // parses only the other file itself.
+        let parses = || {
+            HashMap::from([(
+                path_key(&path),
+                Arc::new(opentide_schema::node::load(rule).unwrap()),
+            )])
+        };
+        let indexed: Vec<_> = disk
+            .index_matching(&|_| true, &parses)
+            .values()
+            .map(|file| file.entry().cloned())
+            .collect();
+        assert_eq!(disk.parsed_here.load(Ordering::Relaxed), 1);
+        assert!(disk.files.values().all(|file| file.indexed.get().is_some()));
         let expected = opentide_analysis::index_object(&path, rule).unwrap();
         let found: Vec<_> = indexed.into_iter().flatten().collect();
         assert_eq!(found.len(), 1);

@@ -92,12 +92,7 @@ Slow-query rules: [kql/DESIGN.md](kql/DESIGN.md#slow-query-warnings), [spl/searc
 
 ## Catalogs
 
-Snapshot from `opentide generate schemas` into `data/catalogs/tide/`. That is the fallback: a workspace that ran `opentide generate schemas` has its own catalogs under `.opentide/lsp/catalogs/generated/`, in the same shapes, and they replace the bundled ones when the server starts (`initialize`), in `opentide-lsp analyze`, and in the `opentide` CLI:
-
-- `fields.json` replaces `data/catalogs/tide/generated/fields.json`: hover, completion and the enum checks follow the workspace's schemas, custom vocabulary included.
-- `deprecations.json` adds `deprecated_field` warnings on top of `data/catalogs/tide/generated/deprecations.json`.
-
-A file that does not parse is reported on stderr, and the bundled catalogs are used. Hosts embedding the engine call `opentide_analysis::install_catalog`, `opentide_analysis::set_default_catalog` puts the host's own catalogs where the bundled ones would be used, and `opentide_analysis::bundled_catalog` returns the bundled catalogs so a host can check they match its own models.
+Snapshot from `opentide generate schemas` into `data/catalogs/tide/`: what the engine uses when no host hands it others. The language server generates the same catalogs (`fields.json`, `deprecations.json`) from `opentide-schema` for each root, from the models and the root's resolved configuration, on a thread of its own once the root's workspace has loaded, and hands them to the engine (#926): hover, completion and highlighting follow the workspace's configuration. Until they are ready, the root uses the catalogs for the bundled configuration. The copy `opentide generate schemas` writes to `.opentide/lsp/catalogs/generated/` is not read. Hosts embedding the engine call `opentide_analysis::install_catalog`, `opentide_analysis::set_default_catalog` puts the host's own catalogs where the bundled ones would be used, and `opentide_analysis::bundled_catalog` returns the bundled catalogs so a host can check they match its own models.
 
 Snippets come from the same templates `opentide generate` writes (`data/catalogs/tide/templates/`).
 

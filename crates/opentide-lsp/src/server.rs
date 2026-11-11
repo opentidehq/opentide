@@ -5,12 +5,11 @@
 use crate::protocol::{self, Direct};
 use crate::session::Session;
 use anyhow::Result;
-use opentide_analysis::{Catalog, install_catalog};
 use serde_json::{Value, json};
 use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
 use std::sync::RwLock;
-use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 /// Serves one client on stdin and stdout until it exits; [`run_stdio_status`]
 /// also says whether it shut the server down first.
@@ -53,7 +52,7 @@ pub fn run_listen(addr: &str) -> Result<()> {
 }
 
 /// Parses, on a thread of its own, what the first check of a process reads
-/// once and keeps: the editor's bundled vocabularies (all of them, on the
+/// once and keeps (and generates what the editor reads of the models): the editor's bundled vocabularies (all of them, on the
 /// first Tide document), `validate`'s revision schemas and the bundled
 /// vocabularies a rule's fields name (rules are what an editor opens most),
 /// while the server reads the workspace. (`validate` parses a vocabulary on
@@ -67,6 +66,10 @@ fn warm_up() {
         .spawn(|| {
             opentide_tide::bundled_vocabs();
             opentide_workspace::validate::objects::warm_up("rule::1.1");
+            // What the editor reads of the models until a root's workspace
+            // has loaded, and the configuration files' schemas.
+            crate::models::default_catalog();
+            crate::models::configuration_schemas();
         });
 }
 
@@ -202,30 +205,23 @@ pub fn set_host_info(name: &str, version: &str) {
     *HOST.write().unwrap_or_else(|p| p.into_inner()) = Some((name.into(), version.into()));
 }
 
-/// The catalogs in use: 0 bundled, 1 the workspace's generated ones, 2 the
-/// host's.
-static CATALOG_SOURCE: AtomicU8 = AtomicU8::new(0);
-
 /// What a client can learn about the server before it uses it, the same at
 /// `initialize` (`capabilities.experimental.opentide`) and from
 /// `opentide-lsp --version --json`. A key is added in a minor release and
 /// never removed (docs/engine/EDITORS.md).
 pub fn host_info() -> Value {
     let host = HOST.read().unwrap_or_else(|p| p.into_inner()).clone();
-    let catalog = if HOST_CATALOGS.load(Ordering::SeqCst) {
-        "host"
-    } else if CATALOG_SOURCE.load(Ordering::SeqCst) == 1 {
-        "workspace"
-    } else {
-        "bundled"
-    };
+    // The models' catalog, generated in the server for each root (#926),
+    // unless the host supplied its own.
+    let catalog = if host_catalogs() { "host" } else { "models" };
     json!({
         "host": host.map(|(name, version)| json!({ "name": name, "version": version })),
         "engine": crate::VERSION,
         "catalog": catalog,
         // Native since UC-2.6 (#821): opentide-schema's checks, in every host.
         "configurationChecks": true,
-        "configurationSchemas": opentide_analysis::has_configuration_schemas(),
+        // opentide-schema's, generated in the server (#926).
+        "configurationSchemas": true,
         // The supplied workspace follows `opentide/didChangeWorkspace`.
         "workspaceUpdates": true,
     })
@@ -318,61 +314,21 @@ impl ObjectFindings {
 // ---------------------------------------------------------------------------
 // Catalogs.
 
-/// Where `opentide generate schemas` writes the workspace catalogs.
-pub const WORKSPACE_CATALOGS: &str = ".opentide/lsp/catalogs/generated";
-
 /// Set by a host that installed the catalogs itself
 /// ([`opentide_analysis::set_default_catalog`]): the server then leaves them
-/// alone instead of reading the workspace's.
+/// alone instead of installing the ones it generates from the models.
 static HOST_CATALOGS: AtomicBool = AtomicBool::new(false);
 
-/// Keep the catalogs the host installed: the server does not read
-/// `.opentide/lsp/catalogs/generated/`. opentide generates the catalogs from
-/// its own models for the workspace it serves, so a committed copy, possibly
-/// from an older opentide, must not replace them. Process-wide.
+/// Keep the catalogs the host installed: the server does not install the
+/// Tide field catalogs it generates from the models for each root (#926).
+/// Process-wide.
 pub fn use_host_catalogs() {
     HOST_CATALOGS.store(true, Ordering::SeqCst);
 }
 
-/// Install the workspace's `fields.json` and `deprecations.json` when they
-/// exist, and the bundled catalogs otherwise. A file that does not parse is
-/// reported on stderr and leaves the bundled catalogs in place.
-pub fn install_workspace_catalog(root: &Path) {
-    let root = (!root.as_os_str().is_empty()).then_some(root);
-    if let Err(err) = install_workspace_catalog_from(root) {
-        eprintln!("opentide-lsp: {err}");
-    }
-}
-
-/// [`install_workspace_catalog`] for a root, or the bundled catalogs for
-/// none; what went wrong, if the workspace's do not parse.
-pub(crate) fn install_workspace_catalog_from(root: Option<&Path>) -> Result<(), String> {
-    if HOST_CATALOGS.load(Ordering::SeqCst) {
-        return Ok(());
-    }
-    let dir = root.map(|r| r.join(WORKSPACE_CATALOGS));
-    let read = |name: &str| std::fs::read_to_string(dir.as_ref()?.join(name)).ok();
-    let catalog = Catalog {
-        fields: read("fields.json"),
-        deprecations: read("deprecations.json"),
-        // visibility.toml is installed on its own, so edits apply live.
-        visibility: None,
-    };
-    let from_workspace = catalog.fields.is_some() || catalog.deprecations.is_some();
-    match install_catalog(&catalog) {
-        Ok(()) => {
-            CATALOG_SOURCE.store(u8::from(from_workspace), Ordering::SeqCst);
-            Ok(())
-        }
-        Err(err) => {
-            let _ = install_catalog(&Catalog::default());
-            CATALOG_SOURCE.store(0, Ordering::SeqCst);
-            Err(format!(
-                "ignoring {}: {err}; using the bundled catalogs",
-                dir.map(|d| d.display().to_string()).unwrap_or_default()
-            ))
-        }
-    }
+/// Whether a host supplied the catalogs ([`use_host_catalogs`]).
+pub(crate) fn host_catalogs() -> bool {
+    HOST_CATALOGS.load(Ordering::SeqCst)
 }
 
 // ---------------------------------------------------------------------------
@@ -468,6 +424,6 @@ mod tests {
     fn host_info_names_the_engine_and_no_host_by_default() {
         let info = host_info();
         assert_eq!(info["engine"], crate::VERSION);
-        assert!(["bundled", "workspace", "host"].contains(&info["catalog"].as_str().unwrap()));
+        assert_eq!(info["catalog"], "models");
     }
 }

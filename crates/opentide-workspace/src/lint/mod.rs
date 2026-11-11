@@ -416,6 +416,23 @@ pub fn lint(
     config: &LintConfig,
     options: &LintOptions<'_>,
 ) -> LintReport {
+    lint_with(fs, writer, root, config, options, &Parses::new())
+}
+
+/// Object files already parsed, by path: what a [`crate::Workspace`]'s
+/// index holds. Lint reads such a file from its parse, not the disk; the
+/// parse is the same (`load::parse` reads a file as lint does).
+type Parses = std::collections::HashMap<PathBuf, std::sync::Arc<node::Document>>;
+
+/// [`lint`], reading the files `parses` holds from there.
+fn lint_with(
+    fs: &dyn FileSystem,
+    writer: Option<&dyn WriteFs>,
+    root: &Path,
+    config: &LintConfig,
+    options: &LintOptions<'_>,
+    parses: &Parses,
+) -> LintReport {
     let target = fs.resolve(root);
     let selected: Vec<LintCheck> = if options.checks.is_empty() {
         enabled_checks(config)
@@ -438,7 +455,7 @@ pub fn lint(
     let mut records: Vec<Record> = object_files
         .iter()
         .filter(|path| every || in_scope(path))
-        .map(|path| load_record(fs, &target, path))
+        .map(|path| load_record(fs, &target, path, parses.get(path)))
         .collect();
     let shown: Vec<usize> = (0..records.len())
         .filter(|&index| in_scope(&records[index].path))
@@ -526,20 +543,42 @@ pub fn lint_file(
     config: &LintConfig,
     file: &Path,
 ) -> Vec<LintFinding> {
+    editor_findings(
+        fs,
+        root,
+        config,
+        Some(&[file.to_path_buf()]),
+        &Parses::new(),
+    )
+}
+
+/// [`lint_file`] on `files`, or on every object file for `None`, in one
+/// run, reading the files `parses` holds from there.
+fn editor_findings(
+    fs: &dyn FileSystem,
+    root: &Path,
+    config: &LintConfig,
+    files: Option<&[PathBuf]>,
+    parses: &Parses,
+) -> Vec<LintFinding> {
     let checks: Vec<LintCheck> = enabled_checks(config)
         .into_iter()
         .filter(|check| matches!(check, LintCheck::Filenames | LintCheck::Metadata))
         .collect();
-    if checks.is_empty() {
+    if checks.is_empty() || files.is_some_and(<[PathBuf]>::is_empty) {
         return Vec::new();
     }
     let options = LintOptions {
         checks,
-        files: vec![file.to_string_lossy().into_owned()],
+        files: files
+            .unwrap_or_default()
+            .iter()
+            .map(|file| file.to_string_lossy().into_owned())
+            .collect(),
         cwd: root.to_path_buf(),
         ..LintOptions::default()
     };
-    let report = lint(fs, None, root, config, &options);
+    let report = lint_with(fs, None, root, config, &options, parses);
     report
         .findings
         .into_iter()
@@ -701,7 +740,12 @@ fn as_str(node: Option<&Node>) -> Option<String> {
         .map(str::to_owned)
 }
 
-fn load_record(fs: &dyn FileSystem, root: &Path, path: &Path) -> Record {
+fn load_record(
+    fs: &dyn FileSystem,
+    root: &Path,
+    path: &Path,
+    parsed: Option<&std::sync::Arc<node::Document>>,
+) -> Record {
     let relative = path.strip_prefix(root).map_or_else(|_| posix(path), posix);
     let parts: Vec<&str> = relative.split('/').collect();
     let kind = (parts.len() == 3 && parts[0] == "objects").then(|| parts[1].to_owned());
@@ -711,6 +755,9 @@ fn load_record(fs: &dyn FileSystem, root: &Path, path: &Path) -> Record {
         kind,
         ..Record::default()
     };
+    if let Some(document) = parsed {
+        return read_document(record, document.source().to_owned(), document);
+    }
     let bytes = match fs.read(path) {
         Ok(bytes) => bytes,
         Err(error) => {
@@ -738,10 +785,15 @@ fn load_record(fs: &dyn FileSystem, root: &Path, path: &Path) -> Record {
             return record;
         }
     };
+    read_document(record, text, &document)
+}
+
+/// The record of a file whose `text` parsed to `document`.
+fn read_document(mut record: Record, text: String, document: &node::Document) -> Record {
     record.key_lines = top_level_key_lines(&text);
     record.placeholders = placeholder_lines(&text);
     record.text = Some(text);
-    if let Some(problem) = crate::load::root_mapping_problem(&document) {
+    if let Some(problem) = crate::load::root_mapping_problem(document) {
         record.parse_error = Some(problem);
         return record;
     }
@@ -1605,6 +1657,27 @@ fn report(
 }
 
 impl crate::Workspace {
+    /// [`lint_file`] on each of `files`, or on every object file for
+    /// `None`, with this workspace's resolved `lint.toml`, in one run that
+    /// reads the object files from this workspace's parse: what the language
+    /// server reports for its open documents, and for every file when a
+    /// client pulls the workspace's diagnostics. A `lint.toml` opentide
+    /// cannot use gives none (`lint` refuses to run).
+    pub fn editor_lint(&self, files: Option<&[PathBuf]>) -> Vec<LintFinding> {
+        let Ok(config) = opentide_schema::configuration::lint::parse_lint_config(
+            self.configuration().resolved.get("lint"),
+        ) else {
+            return Vec::new();
+        };
+        let parses: Parses = self
+            .index()
+            .sources
+            .iter()
+            .map(|source| (source.path.clone(), std::sync::Arc::clone(&source.document)))
+            .collect();
+        editor_findings(self.fs().as_ref(), self.root(), &config, files, &parses)
+    }
+
     /// `lint` on this workspace, with its resolved `lint.toml`. A `lint.toml`
     /// opentide cannot use refuses the run (exit 2) with the key it names.
     pub fn lint(&self, writer: Option<&dyn WriteFs>, options: &LintOptions<'_>) -> LintReport {
