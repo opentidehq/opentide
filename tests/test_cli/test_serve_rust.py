@@ -318,6 +318,19 @@ def test_help_and_unported_commands_go_through_python(
     assert rust_runs == []
 
 
+def test_a_run_the_rust_implementation_does_not_cover_is_refused_as_at_a_terminal(
+    rust_client: Client, rust_runs: list[list[str]]
+) -> None:
+    """``doctor`` reaches PyPI without ``--offline``: serve refuses it, as the CLI does."""
+    refused = rust_client.run("doctor")
+    assert refused["exit_code"] == 2
+    assert refused["document"]["failure"]["code"] == "engine_not_ported"
+    assert rust_runs == []
+    offline = rust_client.run("doctor", "--offline")
+    assert rust_runs == [["--json", "doctor", "--offline"]]
+    assert offline["document"]["command"] == "doctor"
+
+
 def test_a_rust_run_in_a_missing_directory_fails(rust_client: Client, tmp_path: Path) -> None:
     result = rust_client.run("info", cwd=str(tmp_path / "missing"))
     assert result["exit_code"] == 1

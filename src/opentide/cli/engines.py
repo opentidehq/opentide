@@ -156,16 +156,25 @@ def selected(words: Sequence[str], env: Mapping[str, str] | None = None) -> str:
     return engine if engine == PYTHON or tuple(words) in RUST_COMMANDS else PYTHON
 
 
-def rust_command(words: Sequence[str], env: Mapping[str, str] | None = None) -> RustCommand | None:
+def rust_command(
+    words: Sequence[str],
+    env: Mapping[str, str] | None = None,
+    args: Sequence[str] | None = None,
+) -> RustCommand | None:
     """The Rust implementation that runs *words* now, or ``None`` when Python does (or must refuse).
 
     For hosts that run commands in their own process (``serve``): ``rust``
-    selected and a Rust implementation to run. ``compare``, an unknown engine
-    and ``rust`` for a command without one go through :func:`dispatch`.
+    selected and a Rust implementation that covers *args*, the run's command
+    line (:meth:`RustCommand.covers`). ``compare``, an unknown engine and
+    ``rust`` for a command, or a run of it, without one go through
+    :func:`dispatch`, which refuses as at a terminal.
     """
     if selected(words, env) != RUST:
         return None
-    return RUST_COMMANDS.get(tuple(words))
+    rust = RUST_COMMANDS.get(tuple(words))
+    if rust is None or (args is not None and not rust.covers(args)):
+        return None
+    return rust
 
 
 def dispatch(cli_ctx: CliContext, click_ctx: _click.Context) -> None:
