@@ -1,16 +1,18 @@
 """golden.yml runs on every pull request into integration/unified-core (#803).
 
-Branch protection on ``integration/unified-core`` requires golden.yml's checks
-(the second list in ``.github/AGENTS.md``). A required check that never starts
-blocks the merge, so the ``pull_request`` trigger takes no path or branch
-filter: the ``changes`` job (``Golden paths``) filters by path inside the
-workflow, and a job its ``if`` skips reports success.
+Branch protection on ``integration/unified-core`` requires two of golden.yml's
+checks (the second list in ``.github/AGENTS.md``). A required check that never
+starts blocks the merge, so the ``pull_request`` trigger takes no path or
+branch filter: the ``changes`` job (``Golden paths``) filters by path inside
+the workflow, and a job its ``if`` skips reports success.
 
 - ``Golden check (python)`` runs on every pull request into the integration
-  branch, and on other bases when a golden input changed.
-- ``Golden determinism`` records every case twice (about 26 minutes), so it
-  stays path-filtered on every base.
-- Both run when the filter did not succeed, and on every push and schedule.
+  branch, on other bases when a golden input changed, and when the filter did
+  not succeed.
+- ``Golden determinism`` records every case twice (about 26 minutes): it is in
+  ci.yml's full set, so on a pull request it runs only with the ``full-ci``
+  label, and it is not required.
+- Both run on every push, the nightly schedule and Run workflow.
 """
 
 from __future__ import annotations
@@ -29,12 +31,16 @@ GOLDEN = ROOT / ".github" / "workflows" / "golden.yml"
 GUIDE = ROOT / ".github" / "AGENTS.md"
 INTEGRATION = "integration/unified-core"
 
-# The jobs branch protection requires, by id: renaming one breaks the rule.
+# The jobs, by id: renaming a required one breaks the rule.
 JOB_NAMES = {
     "changes": "Golden paths",
     "check": "Golden check (python)",
     "determinism": "Golden determinism",
 }
+# The ones integration/unified-core requires: they run on every pull request
+# into it (a job its `if` skips counts as passing).
+REQUIRED = ["changes", "check"]
+FULL_CI = "full-ci"
 
 # The pull_request path filter golden.yml had before #803, as bash patterns,
 # plus the renderers' oracle snapshots and their driver (UC-3.4, #826).
@@ -72,16 +78,22 @@ def _paths_step() -> dict[str, Any]:
 # GitHub's status-check functions, for one run that was not cancelled and
 # whose only dependency is `changes`.
 STATUS = re.compile(r"(!\s*)?\b(success|failure|always|cancelled)\(\)")
+# Whether the pull request carries a label: the one call to `contains` the
+# workflows make. `labels` in the context is the comma-separated label names.
+LABELLED = re.compile(r"contains\(github\.event\.pull_request\.labels\.\*\.name,\s*'([^']+)'\)")
 
 
 def _evaluate(condition: str, context: dict[str, str]) -> bool:
     """Evaluate a job's `if` for one event: the subset of GitHub's expression
-    language golden.yml uses (status functions, `!`, `&&`, `||`, `==`, `!=`).
+    language golden.yml and ci.yml use (status functions, `!`, `&&`, `||`,
+    `==`, `!=`, and `contains` on the pull request's label names).
 
     As on GitHub, a condition with no status function gets an implicit
     `success()`: the job is skipped when a job it needs did not succeed."""
     if not STATUS.search(condition):
         condition = f"success() && ({condition})"
+    labels = [label for label in context.get("labels", "").split(",") if label]
+    condition = LABELLED.sub(lambda m: repr(m.group(1) in labels), condition)
     result = context["needs.changes.result"]
     status = {
         "success": result == "success",
@@ -96,7 +108,7 @@ def _evaluate(condition: str, context: dict[str, str]) -> bool:
 
     expression = STATUS.sub(call, condition)
     expression = expression.replace("&&", " and ").replace("||", " or ")
-    names = re.compile(r"\b(?:github|needs)\.[A-Za-z0-9_.]+")
+    names = re.compile(r"\b(?:github|needs)\.[A-Za-z0-9_.*]+")
     unknown = {name for name in names.findall(expression) if name not in context}
     assert not unknown, f"the test does not know {unknown}"
     expression = names.sub(lambda m: repr(context[m.group(0)]), expression)
@@ -105,12 +117,13 @@ def _evaluate(condition: str, context: dict[str, str]) -> bool:
     return bool(eval(expression, {"__builtins__": {}}))
 
 
-def _context(event: str, base: str, result: str, golden: str) -> dict[str, str]:
+def _context(event: str, base: str, result: str, golden: str, labels: str = "") -> dict[str, str]:
     return {
         "github.event_name": event,
         "github.base_ref": base,
         "needs.changes.result": result,
         "needs.changes.outputs.golden": golden,
+        "labels": labels,
     }
 
 
@@ -121,10 +134,11 @@ def test_the_pull_request_trigger_has_no_filter() -> None:
     assert pull_request == {}, f"golden.yml's pull_request trigger is filtered: {pull_request}"
 
 
-def test_push_and_schedule_are_unchanged() -> None:
+def test_push_and_the_nightly_schedule() -> None:
     triggers = _triggers()
     assert triggers["push"] == {"branches": ["development", INTEGRATION]}
-    assert triggers["schedule"] == [{"cron": "17 4 * * 1"}]
+    # Nightly: the determinism run is in the full set.
+    assert triggers["schedule"] == [{"cron": "17 4 * * *"}]
     assert "workflow_dispatch" in triggers
 
 
@@ -132,14 +146,15 @@ def test_the_job_names_are_stable() -> None:
     jobs = _workflow()["jobs"]
     assert {job_id: job["name"] for job_id, job in jobs.items()} == JOB_NAMES
     assert jobs["check"]["needs"] == "changes"
-    assert jobs["determinism"]["needs"] == "changes"
+    # The determinism run reads no path filter: the label decides on a pull request.
+    assert "needs" not in jobs["determinism"]
 
 
 def test_the_integration_branch_requires_the_golden_jobs() -> None:
     text = GUIDE.read_text(encoding="utf-8")
     block = re.search(r"<!-- required-checks-integration -->\n```text\n(.*?)```", text, re.DOTALL)
     assert block is not None, ".github/AGENTS.md lists integration/unified-core's extra checks"
-    assert block.group(1).splitlines() == list(JOB_NAMES.values())
+    assert block.group(1).splitlines() == [JOB_NAMES[job] for job in REQUIRED]
     # None of them may be informational.
     for job in _workflow()["jobs"].values():
         assert job.get("continue-on-error") is not True
@@ -153,35 +168,45 @@ def test_the_check_runs_on_every_pull_request_into_integration(result: str, gold
 
 
 @pytest.mark.parametrize(
-    ("job", "event", "base", "result", "golden", "runs"),
+    ("job", "event", "base", "result", "golden", "labels", "runs"),
     [
         # Other bases keep the path filter.
-        ("check", "pull_request", "development", "success", "false", False),
-        ("check", "pull_request", "development", "success", "true", True),
-        ("check", "pull_request", "feat/stacked", "success", "false", False),
-        # Determinism is path-filtered on every base, the integration branch included.
-        ("determinism", "pull_request", INTEGRATION, "success", "false", False),
-        ("determinism", "pull_request", INTEGRATION, "success", "true", True),
-        ("determinism", "pull_request", "development", "success", "false", False),
-        ("determinism", "pull_request", "development", "success", "true", True),
+        ("check", "pull_request", "development", "success", "false", "", False),
+        ("check", "pull_request", "development", "success", "true", "", True),
+        ("check", "pull_request", "feat/stacked", "success", "false", "", False),
         # The filter fails open.
-        ("check", "pull_request", "development", "failure", "", True),
-        ("determinism", "pull_request", INTEGRATION, "failure", "", True),
+        ("check", "pull_request", "development", "failure", "", "", True),
+        # Determinism is in the full set: on a pull request, only with the label,
+        # whatever the base and whatever changed.
+        ("determinism", "pull_request", INTEGRATION, "success", "true", "", False),
+        ("determinism", "pull_request", "development", "success", "true", "", False),
+        ("determinism", "pull_request", INTEGRATION, "success", "", "", False),
+        ("determinism", "pull_request", "development", "success", "false", "perf", False),
+        ("determinism", "pull_request", INTEGRATION, "success", "false", FULL_CI, True),
+        ("determinism", "pull_request", "development", "success", "false", f"perf,{FULL_CI}", True),
         # Pushes, the schedule and Run workflow run both.
-        ("check", "push", "", "success", "true", True),
-        ("determinism", "push", "", "success", "true", True),
-        ("determinism", "schedule", "", "success", "true", True),
-        ("determinism", "workflow_dispatch", "", "failure", "", True),
+        ("check", "push", "", "success", "true", "", True),
+        ("determinism", "push", "", "success", "true", "", True),
+        ("determinism", "schedule", "", "success", "true", "", True),
+        # (determinism needs no job: `changes` failing does not skip it.)
+        ("determinism", "workflow_dispatch", "", "success", "", "", True),
     ],
 )
 def test_when_each_job_runs(
-    job: str, event: str, base: str, result: str, golden: str, runs: bool
+    job: str, event: str, base: str, result: str, golden: str, labels: str, runs: bool
 ) -> None:
     condition = _workflow()["jobs"][job]["if"]
-    assert _evaluate(condition, _context(event, base, result, golden)) is runs
+    assert _evaluate(condition, _context(event, base, result, golden, labels)) is runs
 
 
-@pytest.mark.parametrize("job", ["check", "determinism"])
+def test_the_evaluator_reads_labels() -> None:
+    condition = "contains(github.event.pull_request.labels.*.name, 'full-ci')"
+    assert _evaluate(condition, _context("pull_request", "", "success", "", FULL_CI))
+    assert not _evaluate(condition, _context("pull_request", "", "success", "", "full-ci-x"))
+    assert not _evaluate(condition, _context("pull_request", "", "success", ""))
+
+
+@pytest.mark.parametrize("job", ["check"])
 def test_without_not_cancelled_a_failed_filter_skips_the_job(job: str) -> None:
     # GitHub adds `success()` to an `if` with no status function, so dropping
     # `!cancelled() &&` skips the job (a passing check) when `Golden paths`

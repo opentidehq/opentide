@@ -67,7 +67,8 @@ from `framing`).
 
 `.github/workflows/engine-fuzz.yml` runs every target for ten minutes every night,
 keeps each target's corpus in the Actions cache, and uploads what crashed.
-ci.yml's `fuzz-smoke` runs every target for 60 s on each pull request: a panic
-or a timeout there fails the PR. `tests/test_ci/test_one_ci.py` and
+ci.yml's `fuzz-smoke` runs every target for 60 s in CI's full set (nightly,
+every push to `development` and `integration/unified-core`, Run workflow, and a
+pull request with the `full-ci` label): a panic or a timeout there fails the run. `tests/test_ci/test_one_ci.py` and
 `tests/test_ci/test_supply_chain.py` fail when a target is missing from either
 matrix.

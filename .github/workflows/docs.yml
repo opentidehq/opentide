@@ -1,23 +1,21 @@
 name: Docs
 
 # Content-only checks in opentide. Build and deploy live in opentidehq/website (Fumadocs).
+#
+# In the full set (ci.yml's header): nightly, every push to development and
+# integration/unified-core, Run workflow, and a pull request with the
+# `full-ci` label. Not a required check.
 
 on:
   push:
-    branches: [development]
-    paths:
-      - 'docs/**'
-      - 'scripts/validate-docs.sh'
-      - '.github/workflows/docs.yml'
+    branches: [development, integration/unified-core]
   pull_request:
-    paths:
-      - 'docs/**'
-      - 'scripts/validate-docs.sh'
-      - '.github/workflows/docs.yml'
+  schedule:
+    - cron: "53 1 * * *"
   workflow_dispatch:
 
 concurrency:
-  group: docs-${{ github.workflow }}-${{ github.ref }}
+  group: docs-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -26,6 +24,7 @@ permissions:
 jobs:
   validate:
     name: Validate docs structure
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

@@ -80,7 +80,7 @@ the resolver back to boto3 0.0.3. `mcp>=2.3,<3` since the MCPServer migration (#
 
 - **Always** `uv run …` — do not activate `.venv` manually or call bare `python` / `pip`.
 - Lockfile: `uv.lock` — commit when dependencies change.
-- Python: `requires-python = ">=3.10"`; CI matrix 3.10–3.14.
+- Python: `requires-python = ">=3.10"`; CI runs 3.10 and 3.14 on every pull request, 3.11–3.13 in the full set (`.github/AGENTS.md`).
 - There are no optional extras: `pip install opentide` ships every platform SDK. Day-to-day dev uses `--group dev`. Never add an extra; a new runtime dependency goes in `[project] dependencies`.
 
 ## Hooks
