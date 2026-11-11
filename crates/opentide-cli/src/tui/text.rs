@@ -124,34 +124,64 @@ pub fn fit_label(label: &Line<'static>, width: usize, tail: usize) -> Line<'stat
     assemble(&cut(&chars, width))
 }
 
-/// `path` relative to `root` when inside it, with `/`; `.` for `root`
-/// itself; else `path` as given.
-pub fn relative(path: Option<&Path>, root: &Path) -> String {
-    let Some(path) = path else {
-        return String::new();
+/// `path` relative to `root`, with `/` between its parts on every
+/// system; `.` for `root` itself; `None` when it is not inside `root`.
+/// Compared as written first, then resolved (symbolic links, `..`), as far
+/// as the paths exist.
+pub fn inside(path: &Path, root: &Path) -> Option<String> {
+    let resolve = |path: &Path| {
+        soft_canonicalize::soft_canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
     };
-    let resolve = |path: &Path| path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
-    match resolve(path).strip_prefix(resolve(root)) {
-        Ok(inside) if inside.as_os_str().is_empty() => ".".to_owned(),
-        Ok(inside) => inside
+    let found = path
+        .strip_prefix(root)
+        .ok()
+        .map(Path::to_path_buf)
+        .or_else(|| {
+            resolve(path)
+                .strip_prefix(resolve(root))
+                .ok()
+                .map(Path::to_path_buf)
+        })?;
+    if found.as_os_str().is_empty() {
+        return Some(".".to_owned());
+    }
+    Some(
+        found
             .components()
             .map(|part| part.as_os_str().to_string_lossy().into_owned())
             .collect::<Vec<_>>()
             .join("/"),
-        Err(_) => path.display().to_string(),
+    )
+}
+
+/// `path` as the UI shows it: with `/` between its parts, as the renderers
+/// write a path, on every system.
+pub fn slashed(path: &Path) -> String {
+    let text = path.display().to_string();
+    if std::path::MAIN_SEPARATOR == '/' {
+        text
+    } else {
+        text.replace(std::path::MAIN_SEPARATOR, "/")
     }
+}
+
+/// `path` relative to `root` when inside it ([`inside`]); else `path`
+/// itself, with `/`.
+pub fn relative(path: Option<&Path>, root: &Path) -> String {
+    path.map(|path| inside(path, root).unwrap_or_else(|| slashed(path)))
+        .unwrap_or_default()
 }
 
 /// The tree's only line when the workspace holds no object, its path
 /// relative to `cwd`.
 pub fn empty_state(repo: &Path, cwd: &Path) -> String {
-    let at = relative(Some(repo), cwd);
-    if at == "." || Path::new(&at).is_absolute() {
-        // The workspace itself, or outside the current directory: relative
+    match inside(repo, cwd) {
+        // Outside the current directory, or the workspace itself: relative
         // to the workspace, the path is the workspace.
-        return "No detection objects in this workspace".to_owned();
+        None => "No detection objects in this workspace".to_owned(),
+        Some(at) if at == "." => "No detection objects in this workspace".to_owned(),
+        Some(at) => format!("No detection objects under {at}"),
     }
-    format!("No detection objects under {at}")
 }
 
 /// The plain text of a line.

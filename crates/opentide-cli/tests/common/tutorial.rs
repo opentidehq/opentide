@@ -36,7 +36,10 @@ impl std::io::Write for Buffer {
     }
 }
 
+/// The YAML fence after `heading`, every line ending a `\n`: a checkout
+/// with `core.autocrlf` (Windows) has the tutorial with `\r\n`.
 fn yaml_after(markdown: &str, heading: &str) -> String {
+    let markdown = markdown.replace("\r\n", "\n");
     let at = markdown.find(heading).unwrap();
     let start = markdown[at..].find("```yaml").unwrap() + at + 7;
     let end = markdown[start..].find("```").unwrap() + start;
@@ -98,7 +101,10 @@ pub fn tutorial() -> (tempfile::TempDir, PathBuf) {
 /// Rewrites `path` under `repo` with `from` replaced by `to`, once.
 pub fn edit(repo: &Path, path: &str, from: &str, to: &str) {
     let path = repo.join(path);
-    let text = std::fs::read_to_string(&path).unwrap();
+    // Compared with `\n` line endings, whatever the file was written with.
+    let text = std::fs::read_to_string(&path)
+        .unwrap()
+        .replace("\r\n", "\n");
     assert!(text.contains(from), "{from} not in {}", path.display());
     std::fs::write(&path, text.replacen(from, to, 1)).unwrap();
 }
@@ -106,4 +112,13 @@ pub fn edit(repo: &Path, path: &str, from: &str, to: &str) {
 /// The rule's TLP made a value its vocabulary does not have (`clearr`).
 pub fn break_tlp(repo: &Path) {
     edit(repo, RULE_FILE, "tlp: clear\n", "tlp: clearr\n");
+}
+
+#[test]
+fn the_tutorial_reads_the_same_with_windows_line_endings() {
+    let markdown = "Intro\r\nCreate `x.yaml`:\r\n\r\n```yaml\r\nname: A\r\nmetadata:\r\n  tlp: clear\r\n```\r\n";
+    assert_eq!(
+        yaml_after(markdown, "Create `x.yaml`:"),
+        "name: A\nmetadata:\n  tlp: clear\n"
+    );
 }

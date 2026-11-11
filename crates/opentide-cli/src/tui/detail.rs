@@ -14,7 +14,7 @@ use ratatui::text::{Line, Span};
 use unicode_width::UnicodeWidthChar;
 
 use super::model::Finding;
-use super::text::{WHITE, relative};
+use super::text::{WHITE, inside, slashed};
 
 /// The frame's blue.
 const FRAME: Color = Color::Blue;
@@ -269,10 +269,15 @@ pub fn diagnostic_text(finding: &Finding, root: &Path, cwd: &Path) -> Vec<Line<'
         ),
         Span::styled(format!(": {}", finding.message), bold()),
     ])];
-    let mut at = relative(finding.path.as_deref(), cwd);
-    if Path::new(&at).is_absolute() {
-        at = relative(finding.path.as_deref(), root);
-    }
+    let mut at = finding
+        .path
+        .as_deref()
+        .map(|path| {
+            inside(path, cwd)
+                .or_else(|| inside(path, root))
+                .unwrap_or_else(|| slashed(path))
+        })
+        .unwrap_or_default();
     if !at.is_empty() && finding.line.is_some() {
         if let Some(line) = finding.line {
             at = format!("{at}:{line}");
@@ -854,7 +859,12 @@ mod tests {
             severity: "error".into(),
             message: "'clearr' is not a TLP value".into(),
             object_uuid: String::new(),
-            path: Some(PathBuf::from("/ws/objects/rules/r.yaml")),
+            path: Some(
+                PathBuf::from("ws")
+                    .join("objects")
+                    .join("rules")
+                    .join("r.yaml"),
+            ),
             line,
             column: line.map(|_| 8),
             end_column: line.map(|_| 14),
@@ -864,15 +874,24 @@ mod tests {
         }
     }
 
-    #[test]
-    fn a_diagnostic_reads_as_the_frame_without_its_source() {
-        let item = finding(Some(8), Some("clear"), From::Validate);
-        let lines: Vec<String> = diagnostic_text(&item, Path::new("/ws"), Path::new("/elsewhere"))
+    /// `item` placed in a workspace under a real absolute folder, read
+    /// from a working directory outside it: its frame's lines.
+    fn framed(item: &Finding, base: &Path) -> Vec<String> {
+        let mut item = item.clone();
+        item.path = item.path.map(|path| base.join(path));
+        let elsewhere = base.join("elsewhere");
+        diagnostic_text(&item, &base.join("ws"), &elsewhere)
             .iter()
             .map(plain)
-            .collect();
+            .collect()
+    }
+
+    #[test]
+    fn a_diagnostic_reads_as_the_frame_without_its_source() {
+        let base = tempfile::tempdir().unwrap();
+        let item = finding(Some(8), Some("clear"), From::Validate);
         assert_eq!(
-            lines,
+            framed(&item, base.path()),
             [
                 "error[vocab_unknown]: 'clearr' is not a TLP value",
                 "  ╭─▶ objects/rules/r.yaml:8:8",
@@ -881,11 +900,31 @@ mod tests {
         );
         // No line: the field stands in; no help: the location closes the frame.
         let loose = finding(None, None, From::Validate);
-        let lines: Vec<String> = diagnostic_text(&loose, Path::new("/ws"), Path::new("/elsewhere"))
+        assert_eq!(
+            framed(&loose, base.path())[1],
+            "  ╰─▶ objects/rules/r.yaml · metadata.tlp"
+        );
+        // Relative to the working directory first, when the file is in it.
+        let mut item = item;
+        item.path = Some(base.path().join("ws").join("objects").join("r.yaml"));
+        let lines: Vec<String> = diagnostic_text(&item, base.path(), &base.path().join("ws"))
             .iter()
             .map(plain)
             .collect();
-        assert_eq!(lines[1], "  ╰─▶ objects/rules/r.yaml · metadata.tlp");
+        assert_eq!(lines[1], "  ╭─▶ objects/r.yaml:8:8");
+        // Outside both: the path as it is, with `/`.
+        let outside = base.path().join("other").join("r.yaml");
+        item.path = Some(outside.clone());
+        let lines: Vec<String> =
+            diagnostic_text(&item, &base.path().join("ws"), &base.path().join("ws"))
+                .iter()
+                .map(plain)
+                .collect();
+        assert_eq!(
+            lines[1],
+            format!("  ╭─▶ {}:8:8", super::super::text::slashed(&outside))
+        );
+        assert!(!lines[1].contains('\\'));
     }
 
     #[test]
@@ -914,10 +953,11 @@ mod tests {
         let mut warning = finding(Some(28), None, From::Validate);
         warning.severity = "warning".into();
         let loose = finding(None, None, From::Validate);
+        let base = tempfile::tempdir().unwrap();
         let lines: Vec<String> = findings_summary(
             &[&placed, &warning, &loose],
-            Path::new("/ws"),
-            Path::new("/ws"),
+            &base.path().join("ws"),
+            &base.path().join("ws"),
         )
         .iter()
         .map(plain)
