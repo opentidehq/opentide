@@ -6,7 +6,7 @@
 //! command = "commands"                      # the command path, exactly
 //! case = "json/*"                           # a glob over case ids
 //! target = "stdout"                         # stdout | stderr | exit_code | file:<path>
-//! rule = "json:/environment"                # json:<JSON pointer> | json-extend:<JSON pointer> | text | lines
+//! rule = "json:/environment"                # json:<JSON pointer> | json-extend:<JSON pointer> | text | lines | sha256
 //! oracle = '[...]'                          # what the oracle has there
 //! candidate = '[...]'                       # what the candidate has instead
 //! reason = "OPENTIDE_ENGINE is read by the launcher (#805)"
@@ -35,7 +35,14 @@
 //! still a difference. Given the oracle, it fixes the candidate's array as
 //! a whole-value `json:` entry would, without quoting the oracle's elements;
 //! a `json:` entry under the same pointer addresses the array with the added
-//! elements set aside (the oracle's indices). A
+//! elements set aside (the oracle's indices). A `sha256` rule, on a file
+//! only, approves one whole file: its `oracle` and `candidate` are the
+//! SHA-256 digests (64 lower-case hex digits) of each side's bytes after
+//! normalisation, so it applies only where both files are exactly the ones
+//! the entry was written for, and approves nothing else. It is for a
+//! generated file compared by another check than its text (a JSON Schema
+//! compared by verdict, `cargo xtask codegen --check`), which the entry's
+//! `reason` names. A
 //! line ends at `\n` (or `\r\n`): a value may hold a `\r` inside a line, as
 //! a terminal's cursor movements do, but no line of it ends in one. An entry applies only
 //! where both values are found as written; an entry that applies nowhere in a
@@ -143,6 +150,14 @@ pub enum Rule {
         /// Each added element, by its index in the candidate's array, in
         /// increasing order of index.
         added: Vec<(usize, Json)>,
+    },
+    /// A whole file, by the SHA-256 digests of the oracle's and the
+    /// candidate's bytes (`sha256`).
+    Sha256 {
+        /// The oracle's digest, 64 lower-case hex digits.
+        oracle: String,
+        /// The candidate's digest.
+        candidate: String,
     },
     /// The exit code.
     ExitCode {
@@ -407,6 +422,28 @@ fn check_entry(raw: RawEntry) -> Result<Entry, Vec<String>> {
             problems.push("on `exit_code`, `rule` is `text`".to_owned());
             None
         }
+        (Some(Target::File(_)), "sha256") => {
+            if [&raw.oracle, &raw.candidate]
+                .iter()
+                .all(|value| is_digest(value))
+            {
+                Some(Rule::Sha256 {
+                    oracle: raw.oracle.clone(),
+                    candidate: raw.candidate.clone(),
+                })
+            } else {
+                problems.push(
+                    "a `sha256` rule's `oracle` and `candidate` are SHA-256 digests, 64 \
+                     lower-case hex digits each"
+                        .to_owned(),
+                );
+                None
+            }
+        }
+        (_, "sha256") => {
+            problems.push("a `sha256` rule approves a file: `target` is file:<path>".to_owned());
+            None
+        }
         (_, "text")
             if [&raw.oracle, &raw.candidate]
                 .iter()
@@ -489,7 +526,7 @@ fn check_entry(raw: RawEntry) -> Result<Entry, Vec<String>> {
             None => {
                 if !rule.trim().is_empty() {
                     problems.push(format!(
-                        "`rule` {rule:?} is not `text`, `lines`, `json:<pointer>` or \
+                        "`rule` {rule:?} is not `text`, `lines`, `sha256`, `json:<pointer>` or \
                          `json-extend:<pointer>`"
                     ));
                 }
@@ -504,6 +541,7 @@ fn check_entry(raw: RawEntry) -> Result<Entry, Vec<String>> {
         Some(Rule::Text { oracle, candidate }) => oracle == candidate,
         Some(Rule::Lines { oracle, candidate }) => oracle == candidate,
         Some(Rule::ExitCode { oracle, candidate }) => oracle == candidate,
+        Some(Rule::Sha256 { oracle, candidate }) => oracle == candidate,
         // Parsed only with at least one added element.
         Some(Rule::JsonExtend { .. }) | None => false,
     };
@@ -527,6 +565,26 @@ fn check_entry(raw: RawEntry) -> Result<Entry, Vec<String>> {
     }
 }
 
+/// Whether `value` is a SHA-256 digest as the ledger writes it.
+fn is_digest(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+}
+
+/// The SHA-256 digest of `bytes`, as a `sha256` rule writes it.
+pub fn sha256_hex(bytes: &[u8]) -> String {
+    use sha2::Digest;
+    use std::fmt::Write as _;
+    sha2::Sha256::digest(bytes)
+        .iter()
+        .fold(String::with_capacity(64), |mut hex, byte| {
+            let _ = write!(hex, "{byte:02x}");
+            hex
+        })
+}
+
 /// Whether two rules of the same kind approve the same place: a `text` or
 /// `lines` rule is placed by its oracle side, every other kind by its rule
 /// text alone (its pointer).
@@ -534,6 +592,7 @@ fn same_place(left: &Rule, right: &Rule) -> bool {
     match (left, right) {
         (Rule::Text { oracle: a, .. }, Rule::Text { oracle: b, .. }) => a == b,
         (Rule::Lines { oracle: a, .. }, Rule::Lines { oracle: b, .. }) => a == b,
+        (Rule::Sha256 { oracle: a, .. }, Rule::Sha256 { oracle: b, .. }) => a == b,
         _ => true,
     }
 }

@@ -37,6 +37,10 @@ goes when compare mode does (UC-6.2, #841).
   (outer arrays first) and what is left is compared with the oracle's array as any value is: an
   oracle element changed, dropped or moved, or an added element it does not name, is still a
   difference. JSON rules address an extended array by the oracle's indices.
+- A sha256 rule approves one whole file by the SHA-256 digests of the oracle's and the
+  candidate's normalised bytes: it applies only where both files are exactly the pinned ones. It
+  is for a generated file another check compares (an editor JSON Schema, by verdict in `cargo
+  xtask codegen --check`), never for one whose text is the behaviour.
 - A lines rule is a block of whole lines on each side, naming its one case; a case may have
   several, one per block, each placed by its oracle side (the same block twice is a duplicate).
   Its candidate may be

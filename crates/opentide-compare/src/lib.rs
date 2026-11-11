@@ -294,6 +294,29 @@ impl Comparison<'_> {
         if oracle == candidate {
             return;
         }
+        // A whole file approved by its two digests.
+        let digests: Vec<(usize, String, String)> = self
+            .ledger
+            .entries_for(self.case.command, self.case.id, target)
+            .filter_map(|(index, entry)| match &entry.rule {
+                Rule::Sha256 {
+                    oracle: expected_oracle,
+                    candidate: expected_candidate,
+                } => Some((index, expected_oracle.clone(), expected_candidate.clone())),
+                _ => None,
+            })
+            .collect();
+        if !digests.is_empty() {
+            let (found_oracle, found_candidate) =
+                (ledger::sha256_hex(oracle), ledger::sha256_hex(candidate));
+            if let Some((index, ..)) = digests
+                .iter()
+                .find(|(_, o, c)| *o == found_oracle && *c == found_candidate)
+            {
+                self.approve(target, *index);
+                return;
+            }
+        }
         match (json::parse(oracle), json::parse(candidate)) {
             (Some(oracle_doc), Some(candidate_doc)) => {
                 self.json_content(target, oracle, candidate, &oracle_doc, candidate_doc);
@@ -847,6 +870,99 @@ changelog = "**x**"
         let report = compare(case, &oracle, &other, &ledger, &mut usage);
         assert!(!report.equal);
         assert_eq!(report.differences[0].at.as_deref(), Some("line 2, byte 14"));
+    }
+
+    /// A `sha256` entry approves one file exactly: the oracle's and the
+    /// candidate's bytes it names, and no other file, side or target.
+    #[test]
+    fn a_sha256_entry_approves_exactly_the_two_files_it_names() {
+        let file = |bytes: &[u8]| {
+            BTreeMap::from([(
+                "ws/s.json".to_owned(),
+                FileState::Written {
+                    mode: 0o644,
+                    bytes: bytes.to_vec(),
+                },
+            )])
+        };
+        let ledger = Ledger::parse(&format!(
+            r#"
+[[diff]]
+command = "generate"
+case = "*/tide-corpus/*"
+target = "file:ws/s.json"
+rule = "sha256"
+oracle = "{}"
+candidate = "{}"
+reason = "compared by verdict"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**x**"
+"#,
+            ledger::sha256_hex(b"{\"a\": 1}"),
+            ledger::sha256_hex(b"{\"b\": 2}"),
+        ))
+        .unwrap();
+        let case = Case {
+            command: "generate",
+            id: "generate/json/tide-corpus/schemas",
+        };
+        let oracle = Run {
+            files: file(b"{\"a\": 1}"),
+            ..Run::default()
+        };
+        let mut usage = Usage::default();
+        let approved = Run {
+            files: file(b"{\"b\": 2}"),
+            ..Run::default()
+        };
+        let report = compare(case, &oracle, &approved, &ledger, &mut usage);
+        assert!(report.equal, "{report:?}");
+        assert!(usage.is_used(0));
+        // One byte more on the candidate's side is not that file.
+        let other = Run {
+            files: file(b"{\"b\": 2} "),
+            ..Run::default()
+        };
+        assert!(!compare(case, &oracle, &other, &ledger, &mut usage).equal);
+        // Nor is another oracle file.
+        let elsewhere = Run {
+            files: file(b"{\"a\": 2}"),
+            ..Run::default()
+        };
+        assert!(!compare(case, &elsewhere, &approved, &ledger, &mut usage).equal);
+        // Nor another fixture's case.
+        let vscode = Case {
+            command: "generate",
+            id: "generate/json/vscode/schemas",
+        };
+        assert!(!compare(vscode, &oracle, &approved, &ledger, &mut Usage::default()).equal);
+    }
+
+    /// A `sha256` rule takes two digests and a file target.
+    #[test]
+    fn a_sha256_rule_is_two_digests_on_a_file() {
+        let entry = |target: &str, oracle: &str| {
+            format!(
+                r#"
+[[diff]]
+command = "generate"
+case = "x"
+target = "{target}"
+rule = "sha256"
+oracle = "{oracle}"
+candidate = "{}"
+reason = "r"
+issue = "https://github.com/opentidehq/opentide/issues/933"
+changelog = "**x**"
+"#,
+                "b".repeat(64)
+            )
+        };
+        assert!(Ledger::parse(&entry("file:a.json", &"a".repeat(64))).is_ok());
+        assert!(Ledger::parse(&entry("stdout", &"a".repeat(64))).is_err());
+        assert!(Ledger::parse(&entry("file:a.json", "abc")).is_err());
+        assert!(Ledger::parse(&entry("file:a.json", &"A".repeat(64))).is_err());
+        assert!(Ledger::parse(&entry("file:a.json", &"b".repeat(64))).is_err());
     }
 
     /// A `lines` entry with an `(absent)` candidate approves the oracle's
