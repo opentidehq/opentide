@@ -6,6 +6,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Added
+
+- **Rule pages say where and how a rule deploys.** A Deployment section lists, per platform block, the status, the strategy `deployment.toml` maps it to, the runs that act on it (`PREVIEW`, `RELEASE`), and the tenants those runs reach, by deploy's own rules: a block's `tenants` list, otherwise every tenant that is not `manual`, and only tenants that accept the run. Tenant targeting adds each tenant's remote rule id from `.opentide/states/deployment/`. Warnings name a platform the workspace does not enable, a status `deployment.toml` does not define, a listed tenant that does not exist, and a platform with no tenant. Credentials are never resolved.
+- **Rule pages show every platform setting.** Platform configuration documents each value a block holds, by its YAML path (`scheduling.frequency`) with the field's description and model defaults marked, instead of the alert title, entity mappings and query alone. Queries, YARA signatures and investigation guides are fenced in their own language (KQL, SPL, Kibana KQL, EQL, ES|QL, S1QL, CQL, Lucene, YARA); lists of small objects (exclusions, criteria, mappings) are tables. A field or platform added to the rule model is documented with no change to the generator.
+- **The docs root is a catalogue overview.** `docs/README.md` adds rules per platform and status, and how many threat vectors are addressed by an objective, objectives and signals implemented by a rule, and ATT&CK techniques detected.
+
+### Changed
+
+- **Object pages have one layout.** Every page opens with an overview table (a rule's severity, detection model, techniques and platforms; an objective's priority, threats, signals and rules; a threat's criticality, kill chain and detection coverage), then a contents list (`[[_TOC_]]` on GitLab and Azure DevOps), the sections, and Metadata last. A threat with no detection objective is flagged. ATT&CK tables show tactics and the first sentence of the description, without citation markers. Folder indexes show a rule's platforms with their status, an objective's signals and threats, and a threat's kill chain.
+- **Mermaid diagrams are redrawn.** Detection coverage runs left to right from threat vectors to objectives, signals, rules and, on a rule page, the platforms with their status; a rule page no longer draws every sibling rule of its objective. Threat chaining is laned by kill-chain phase in kill-chain order, draws each relation pair one way (`B succeeds A` is `A preceeds B`), and gives sequence, composition and support relations their own line style. Nodes are coloured by kind with the page's object outlined, names keep their punctuation, and a legend names the shapes and lines. Azure DevOps gets the subset its Mermaid renders (`graph`, no lanes or styles) with the kill-chain phase under each threat; GitHub and GitLab add screen-reader titles.
+
 ## [0.25.0] — 2026-11-11
 
 Bitdefender GravityZone rules deploy from a `configurations.bitdefender` block, as a custom detection rule or a YARA rule. HarfangLab rules take a whole YARA signature, and `validate`, `lint`, the editor and `opentide tui` check YARA as libyara 4.5 compiles it.

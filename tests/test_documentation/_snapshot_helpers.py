@@ -14,9 +14,15 @@ from opentide.documentation.catalog import (
     SignalRecord,
 )
 from opentide.documentation.context import DocumentationContext
+from opentide.documentation.facts.deployment import (
+    StaticEnvironment,
+    StatusDefinition,
+    TenantInfo,
+)
 from opentide.documentation.format.factory import formatter_for
 from opentide.documentation.types import DocumentFlavor, DocumentRecord, DocumentScope
 from opentide.loading.objective_loader import load_objective_from_dict
+from opentide.models.deployment_enums import StatusStrategy
 from opentide.models.objective import DetectionObjective
 from opentide.models.rule import DetectionRule
 from opentide.models.threat import ThreatVector
@@ -202,10 +208,32 @@ def load_documentation_bundle() -> DocumentationBundle:
     )
 
 
-def github_context(tmp_path: Path) -> DocumentationContext:
-    flavor = DocumentFlavor.github
+#: A workspace with a staging and a production Sentinel tenant, and a remote
+#: id already recorded for the staging one.
+SNAPSHOT_ENVIRONMENT = StaticEnvironment(
+    status_definitions=(
+        StatusDefinition("STAGING", "Under test on the staging tenant", StatusStrategy.PREVIEW),
+        StatusDefinition("PRODUCTION", "Live detection", StatusStrategy.RELEASE),
+    ),
+    enabled_platforms=frozenset({"sentinel"}),
+    platform_tenants={
+        "sentinel": (
+            TenantInfo("staging", "Pre-production workspace", (StatusStrategy.PREVIEW,)),
+            TenantInfo("production", "Production workspace", (StatusStrategy.RELEASE,)),
+        )
+    },
+    states={"00000000-0000-4000-8103-000000000001": {"sentinel": {"staging": "rule-7f3a"}}},
+)
+
+
+def context(tmp_path: Path, flavor: DocumentFlavor = DocumentFlavor.github) -> DocumentationContext:
     return DocumentationContext(
         flavor=flavor,
         output_dir=tmp_path / "docs-output",
         formatter=formatter_for(flavor),
+        environment=SNAPSHOT_ENVIRONMENT,
     )
+
+
+def github_context(tmp_path: Path) -> DocumentationContext:
+    return context(tmp_path, DocumentFlavor.github)

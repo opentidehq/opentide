@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
-from typing import Literal
 
+from opentide.documentation.diagram.mermaid import MermaidDialect
 from opentide.documentation.format.protocol import BaseFormatter
 
 
@@ -32,19 +31,8 @@ class AzureDevOpsFormatter(BaseFormatter):
         safe = slug.replace(" ", "-")
         return f"{safe}.md"
 
-    def diagram_relations_type(self) -> Literal["mindmap", "flowchart", "graph"]:
-        return "graph"
-
-    def diagram_chaining_type(self) -> Literal["flowchart", "graph"]:
-        return "graph"
-
-    def diagram_supports_subgraphs(self) -> bool:
-        return False
-
-    def diagram_flowchart(self, diagram: str) -> str:
-        # Microsoft docs: flowchart keyword and long arrows may fail at render time.
-        downgraded = diagram.replace("flowchart", "graph", 1)
-        return re.sub(r"-{4,}>", "-->", downgraded)
-
-    def diagram_mindmap(self, diagram: str) -> str:
-        return self.diagram_flowchart(diagram.replace("mindmap", "graph", 1))
+    def mermaid_dialect(self) -> MermaidDialect:
+        # The wiki's Mermaid release fails a whole diagram on the `flowchart`
+        # keyword, on subgraphs and on styles; shapes and the legend still
+        # carry every node's kind.
+        return MermaidDialect(keyword="graph", lanes=False, styles=False, accessibility=False)

@@ -4,75 +4,62 @@ from __future__ import annotations
 
 from opentide.documentation.catalog import DocumentationCatalog
 from opentide.documentation.context import DocumentationContext
-from opentide.documentation.diagram.builders import render_chaining_diagram
-from opentide.documentation.markdown.links import object_link
+from opentide.documentation.diagram.builders import chaining_diagram, render_diagram
+from opentide.documentation.diagram.model import NodeKind
+from opentide.documentation.markdown.page import Section, section
 from opentide.documentation.objects.base import ObjectRenderer
-from opentide.documentation.parts import sections
-from opentide.documentation.vocabulary import enrich
+from opentide.documentation.parts import common
+from opentide.documentation.parts import threat as parts
 from opentide.models.threat import ThreatVector
 
 
 class ThreatRenderer(ObjectRenderer):
-    """Render threat vectors to markdown."""
+    """Render threat vectors to markdown.
+
+    Reading order: the threat (overview, description, terrain, assessment),
+    who and what it involves, how it chains with other threats, and how it is
+    detected.
+    """
 
     folder = "threats"
+    kind = NodeKind.threat
 
     def render(self, obj: ThreatVector) -> str:
         threat = obj
-        blocks = [
-            self.title_block(threat.name),
-            sections.render_metadata(threat.metadata, self.formatter),
-            sections.render_references(threat.references, self.formatter),
-            sections.render_threat_body(threat, self.formatter),
-            self._chaining(threat),
-            self.coverage_block(threat.metadata.uuid, threat.name),
-        ]
-        return self.assemble(blocks)
-
-    def _chaining(self, threat: ThreatVector) -> str:
-        diagram = render_chaining_diagram(
-            self.formatter,
-            self.catalog,
-            uuid=threat.metadata.uuid,
-            name=threat.name,
+        body = threat.threat
+        uuid = threat.metadata.uuid
+        coverage = parts.coverage_counts(self.catalog.coverage_graph(uuid))
+        page = self.page(threat.name)
+        page.add_lead(parts.overview(threat, self.links, coverage=coverage))
+        if coverage[0] == 0:
+            page.add_lead(
+                self.formatter.callout(
+                    "warning", "No detection objective addresses this threat vector yet."
+                )
+            )
+        page.add(section("Description", common.prose(self.formatter, body.description)))
+        page.add(section("Criticality", parts.criticality_body(threat, self.formatter)))
+        page.add(section("Terrain", common.prose(self.formatter, body.terrain)))
+        page.add(section("Threat assessment", parts.assessment_table(body, self.formatter)))
+        page.add(section("Surface", parts.surface_table(body, self.formatter)))
+        page.add(section("Actors", parts.actors_table(body, self.formatter)))
+        page.add(
+            section("ATT&CK techniques", common.attack_table(body.mitre_attack, self.formatter))
         )
-        details = self._chaining_details(threat)
-        if not diagram and not details:
-            return ""
-        return self.formatter.heading(2, "Chaining") + diagram + details
+        page.add(section("CVE", parts.cve_body(body.cve, self.formatter)))
+        page.add(self._chaining(threat))
+        page.add(self.coverage_section(uuid, threat.name))
+        page.add(self.references_section(threat.references))
+        page.add(self.metadata_section(threat.metadata))
+        return page.render()
 
-    def _chaining_details(self, threat: ThreatVector) -> str:
-        if not threat.threat.chaining:
-            return ""
-        chunks: list[str] = [self.formatter.heading(3, "Chaining details")]
-        for entry in threat.threat.chaining:
-            target = (
-                entry.get("vector") or entry.get("target") or entry.get("uuid") or entry.get("id")
-            )
-            if not target:
-                continue
-            relation_key = str(entry.get("relation") or "").strip()
-            relation = enrich("chaining_relations", relation_key) if relation_key else None
-            relation_label = relation.label if relation else "Related"
-            target_link = object_link(
-                self.formatter,
-                self.catalog,
-                str(target),
-                from_folder=self.folder,
-                uuid_permalinks=self.ctx.uuid_permalinks,
-                wiki=self.wiki_links,
-            )
-            heading = f"{relation_label} -> {target_link}"
-            if relation_key and relation_key != relation_label:
-                heading += f" (`{relation_key}`)"
-            chunks.append(self.formatter.heading(4, heading))
-            description = str(entry.get("description") or "").strip()
-            if not description and relation:
-                description = relation.description
-            if description:
-                chunks.append(self.formatter.paragraph(description))
-            chunks.append(f"- **Target UUID**: `{target}`\n")
-        return "".join(chunks)
+    def _chaining(self, threat: ThreatVector) -> Section:
+        diagram = chaining_diagram(self.catalog, threat.metadata.uuid, name=threat.name)
+        return section(
+            "Chaining",
+            render_diagram(self.formatter, diagram),
+            children=[section("Chaining relations", parts.chaining_table(threat, self.links))],
+        )
 
 
 def render_threat_page(

@@ -1,8 +1,19 @@
-"""Index page generation."""
+"""Index pages: one per object folder, and the catalogue overview at the root.
+
+A folder index is a sortable table of its objects with the facts a reader
+scans for: a rule's severity and where it deploys at which status, an
+objective's signals and rules, a threat's kill chain and detection coverage.
+The root page summarises the catalogue: how many objects of each family,
+how many rules sit at each status on each platform, and how much of the
+threat landscape is covered.
+"""
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from opentide.documentation.context import DocumentationContext
+from opentide.documentation.facts.platforms import platform_label
 from opentide.documentation.format.protocol import MarkdownFormatter
 from opentide.documentation.markdown.links import (
     FOLDER_BY_SCOPE,
@@ -10,10 +21,16 @@ from opentide.documentation.markdown.links import (
     page_slug,
     render_link,
 )
+from opentide.documentation.markdown.page import Page, join, section
+from opentide.documentation.markdown.text import inline_code, join_lines, plural, table_cell
 from opentide.documentation.publish.writer import write_page
 from opentide.documentation.types import DocumentRecord, DocumentScope, PublishTarget
+from opentide.documentation.vocabulary import enrich
 from opentide.generation import framework as fw
 from opentide.generation.errors import rendering
+from opentide.models.objective import DetectionObjective
+from opentide.models.rule import DetectionRule
+from opentide.models.threat import ThreatVector
 
 _INDEX_ICON_BY_SCOPE = {
     "rules": ":shield:",
@@ -25,6 +42,33 @@ _SCOPE_BY_FOLDER = {
     "rules": DocumentScope.rules,
     "objectives": DocumentScope.objectives,
     "threats": DocumentScope.threats,
+}
+
+_FOLDERS = (
+    ("rules", "Detection Rules"),
+    ("objectives", "Detection Objectives"),
+    ("threats", "Threat Vectors"),
+)
+
+_NOUNS = {
+    DocumentScope.rules: "rule",
+    DocumentScope.objectives: "objective",
+    DocumentScope.threats: "threat vector",
+}
+
+_INTRODUCTIONS = {
+    DocumentScope.rules: (
+        "Detection rules: the queries opentide deploys, with the status each platform block "
+        "carries."
+    ),
+    DocumentScope.objectives: (
+        "Detection objectives: what to detect about a threat, broken into signals that rules "
+        "implement."
+    ),
+    DocumentScope.threats: (
+        "Threat vectors: adversary behaviours, assessed and chained, with the detection "
+        "coverage they have."
+    ),
 }
 
 
@@ -44,33 +88,64 @@ def _relation_count(record: DocumentRecord, ctx: DocumentationContext) -> int:
 
 
 def _as_cell(value: object) -> str:
-    return value if isinstance(value, str) else ""
+    return table_cell(value) if isinstance(value, str) and value else "-"
 
 
 def _extra_headers(scope: DocumentScope | None) -> list[str]:
     if scope == DocumentScope.rules:
-        return ["Status", "Severity"]
+        return ["Severity", "Platforms and status", "ATT&CK"]
     if scope == DocumentScope.objectives:
-        return ["Priority"]
+        return ["Priority", "Signals", "Threats"]
     if scope == DocumentScope.threats:
-        return ["Criticality"]
+        return ["Criticality", "Kill chain", "ATT&CK"]
     return []
 
 
 def _extra_cells(record: DocumentRecord) -> list[str]:
     model = record.model
     if record.object_type == DocumentScope.rules:
-        # What deploy reads, never a model default (see ``render_rule_status``).
-        statuses = getattr(model, "platform_statuses", None) or {}
-        status = ", ".join(sorted(set(statuses.values()))) if isinstance(statuses, dict) else ""
-        severity = _as_cell(getattr(model, "displayed_severity", None))
-        return [status, severity]
+        # What deploy reads, never a model default (see ``DetectionRule.platform_statuses``).
+        statuses = getattr(model, "platform_statuses", None)
+        platforms = (
+            join_lines(
+                f"{platform_label(platform)} {inline_code(status)}"
+                for platform, status in statuses.items()
+            )
+            if isinstance(statuses, dict)
+            else ""
+        )
+        techniques = getattr(model, "techniques", None)
+        return [
+            _as_cell(getattr(model, "displayed_severity", None)),
+            platforms or "-",
+            _codes(techniques),
+        ]
     if record.object_type == DocumentScope.objectives:
-        body = getattr(model, "objective", None)
-        return [_as_cell(getattr(body, "priority", None))]
+        if not isinstance(model, DetectionObjective):
+            return ["-", "-", "-"]
+        body = model.objective
+        return [
+            _as_cell(body.priority),
+            str(len(body.signals)),
+            str(len(body.threats or [])),
+        ]
     if record.object_type == DocumentScope.threats:
-        return [_as_cell(getattr(model, "criticality", None))]
+        if not isinstance(model, ThreatVector):
+            return [_as_cell(getattr(model, "criticality", None)), "-", "-"]
+        killchain = model.threat.killchain
+        phases = [killchain] if isinstance(killchain, str) else list(killchain or [])
+        return [
+            enrich("criticality", model.criticality).label,
+            ", ".join(phases) or "-",
+            _codes(model.threat.mitre_attack),
+        ]
     return []
+
+
+def _codes(values: object) -> str:
+    if not isinstance(values, list) or not values:
+        return "-"
+    return ", ".join(inline_code(value) for value in values if isinstance(value, str)) or "-"
 
 
 def _page_filename(ctx: DocumentationContext, record: DocumentRecord) -> str:
@@ -99,7 +174,6 @@ def render_index(
 ) -> str:
     """Render a folder index page."""
     scope = records[0].object_type if records else _SCOPE_BY_FOLDER.get(folder)
-    extra_headers = _extra_headers(scope)
     from_folder = ""
     if scope is not None:
         from_folder = FOLDER_BY_SCOPE.get(scope, folder)
@@ -116,21 +190,20 @@ def render_index(
             href,
             wiki=ctx.flavor.value in {"gitlab", "azure_devops"},
         )
-        row = [link, record.uuid, *_extra_cells(record)]
+        row = [link, *_extra_cells(record), inline_code(record.uuid)]
         if ctx.index_relation_counts:
             with rendering(record.uuid):
                 row.append(str(_relation_count(record, ctx)))
         rows.append(row)
-    toc = formatter.table_of_contents()
-    headers = ["Name", "UUID", *extra_headers]
+    headers = ["Name", *_extra_headers(scope), "UUID"]
     if ctx.index_relation_counts:
         headers.append("Related")
-    table = formatter.index_table(headers, rows)
     parts = [formatter.heading(1, title)]
-    if toc:
-        parts.append(toc)
-    parts.append(table)
-    return "".join(parts)
+    if scope in _INTRODUCTIONS:
+        count = plural(len(records), _NOUNS[scope])
+        parts.append(formatter.paragraph(f"{_INTRODUCTIONS[scope]} {count}."))
+    parts.append(formatter.index_table(headers, rows))
+    return join(parts) + "\n"
 
 
 def write_index(
@@ -141,16 +214,18 @@ def write_index(
     objectives: list[DocumentRecord],
     threats: list[DocumentRecord],
 ) -> None:
-    """Write folder index pages and optional root README."""
+    """Write folder index pages and the root catalogue overview."""
     if not ctx.folder_index_pages:
         return
 
-    folders = (
-        (catalog_targets.rules_dir, "rules", "Detection Rules", rules),
-        (catalog_targets.objectives_dir, "objectives", "Detection Objectives", objectives),
-        (catalog_targets.threats_dir, "threats", "Threat Vectors", threats),
-    )
-    for folder_path, folder_name, title, records in folders:
+    by_folder = {"rules": rules, "objectives": objectives, "threats": threats}
+    folder_paths = {
+        "rules": catalog_targets.rules_dir,
+        "objectives": catalog_targets.objectives_dir,
+        "threats": catalog_targets.threats_dir,
+    }
+    for folder_name, title in _FOLDERS:
+        records = by_folder[folder_name]
         content = render_index(
             ctx.formatter,
             title=title,
@@ -158,35 +233,119 @@ def write_index(
             records=records,
             ctx=ctx,
         )
-        write_page(folder_path / "README.md", content)
+        write_page(folder_paths[folder_name] / "README.md", content)
         if ctx.flavor.value == "gitlab":
             order_entries = _folder_order_entries(ctx, records)
-            write_page(folder_path / ".order", "\n".join(order_entries) + "\n")
+            write_page(folder_paths[folder_name] / ".order", "\n".join(order_entries) + "\n")
 
-    root_rows: list[list[str]] = []
-    for folder_name, title in (
-        ("rules", "Detection Rules"),
-        ("objectives", "Detection Objectives"),
-        ("threats", "Threat Vectors"),
-    ):
-        section_title = title
+    write_page(
+        catalog_targets.output_root / "README.md",
+        render_root_index(ctx, rules=rules, objectives=objectives, threats=threats),
+    )
+
+
+def render_root_index(
+    ctx: DocumentationContext,
+    *,
+    rules: Sequence[DocumentRecord],
+    objectives: Sequence[DocumentRecord],
+    threats: Sequence[DocumentRecord],
+) -> str:
+    """The catalogue overview: sections, deployment status matrix and coverage."""
+    formatter = ctx.formatter
+    by_folder = {"rules": rules, "objectives": objectives, "threats": threats}
+    section_rows: list[list[str]] = []
+    for folder_name, title in _FOLDERS:
+        label = title
         if ctx.index_icons:
-            icon = _INDEX_ICON_BY_SCOPE.get(folder_name, "")
-            if icon:
-                section_title = f"{icon} {title}"
-        row = [
-            render_link(ctx.formatter, section_title, f"{folder_name}/README.md"),
-            folder_name,
+            label = f"{_INDEX_ICON_BY_SCOPE[folder_name]} {title}"
+        row = [render_link(formatter, label, f"{folder_name}/README.md"), folder_name]
+        if ctx.index_relation_counts:
+            row.append(str(len(by_folder[folder_name])))
+        section_rows.append(row)
+    headers = ["Section", "Folder"]
+    if ctx.index_relation_counts:
+        headers.append("Objects")
+
+    page = Page(formatter, "opentide Documentation")
+    page.add_lead(
+        formatter.paragraph(
+            f"Detection catalogue of {plural(len(threats), 'threat vector')}, "
+            f"{plural(len(objectives), 'detection objective')} and "
+            f"{plural(len(rules), 'detection rule')}, generated by opentide."
+        ),
+        formatter.index_table(headers, section_rows),
+    )
+    page.add(section("Deployment status", _status_matrix(ctx, rules)))
+    page.add(section("Coverage", _coverage_summary(formatter, rules, objectives, threats)))
+    return page.render()
+
+
+def _status_matrix(ctx: DocumentationContext, records: Sequence[DocumentRecord]) -> str:
+    """Rules per platform and status: what each platform runs and at which maturity."""
+    counts: dict[str, dict[str, int]] = {}
+    for record in records:
+        statuses = getattr(record.model, "platform_statuses", None)
+        if not isinstance(statuses, dict):
+            continue
+        for platform, status in statuses.items():
+            per_platform = counts.setdefault(platform, {})
+            per_platform[status] = per_platform.get(status, 0) + 1
+    if not counts:
+        return ""
+    configured = [status.name for status in ctx.environment.statuses()]
+    seen = {status for per_platform in counts.values() for status in per_platform}
+    columns = [name for name in configured if name in seen]
+    columns += sorted(seen - set(columns))
+    rows = [
+        [
+            platform_label(platform),
+            *[str(counts[platform].get(status, 0) or "-") for status in columns],
+            str(sum(counts[platform].values())),
         ]
-        if ctx.index_relation_counts:
-            count = len({"rules": rules, "objectives": objectives, "threats": threats}[folder_name])
-            row.append(str(count))
-        root_rows.append(row)
-    if root_rows:
-        headers = ["Section", "Folder"]
-        if ctx.index_relation_counts:
-            headers.append("Objects")
-        root = ctx.formatter.heading(1, "opentide Documentation") + ctx.formatter.index_table(
-            headers, root_rows
-        )
-        write_page(catalog_targets.output_root / "README.md", root)
+        for platform in sorted(counts, key=platform_label)
+    ]
+    headers = ["Platform", *[inline_code(status) for status in columns], "Total"]
+    return ctx.formatter.table(headers, rows)
+
+
+def _coverage_summary(
+    formatter: MarkdownFormatter,
+    rules: Sequence[DocumentRecord],
+    objectives: Sequence[DocumentRecord],
+    threats: Sequence[DocumentRecord],
+) -> str:
+    """How much of the catalogue is detected, from the objects' own links."""
+    rule_models = [record.model for record in rules if isinstance(record.model, DetectionRule)]
+    objective_models = [
+        record.model for record in objectives if isinstance(record.model, DetectionObjective)
+    ]
+    if not rule_models and not objective_models and not threats:
+        return ""
+    implemented = {rule.detection_model for rule in rule_models if rule.detection_model}
+    addressed = {uuid for model in objective_models for uuid in model.objective.threats or []}
+    signals = [signal for model in objective_models for signal in model.objective.signals]
+    objective_done = [
+        model
+        for model in objective_models
+        if model.metadata.uuid in implemented
+        or any(signal.uuid in implemented for signal in model.objective.signals)
+    ]
+    techniques = {technique for rule in rule_models for technique in rule.techniques}
+
+    def ratio(done: int, total: int) -> str:
+        return f"{done} of {total}" + (f" ({round(100 * done / total)}%)" if total else "")
+
+    rows: list[tuple[str, str]] = [
+        (
+            "Threat vectors addressed by an objective",
+            ratio(sum(1 for record in threats if record.uuid in addressed), len(threats)),
+        ),
+        ("Objectives implemented by a rule", ratio(len(objective_done), len(objective_models))),
+        (
+            "Signals implemented by a rule",
+            ratio(sum(1 for signal in signals if signal.uuid in implemented), len(signals)),
+        ),
+        ("ATT&CK techniques detected by rules", str(len(techniques))),
+    ]
+    return formatter.table(["Measure", "Value"], [list(row) for row in rows])

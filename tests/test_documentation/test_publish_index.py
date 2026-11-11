@@ -41,8 +41,9 @@ def test_render_index_builds_table() -> None:
     assert "[Rule A](rule-a.md)" in content
     assert "u1" in content
     assert "Related" in content
-    assert "Status" in content
+    assert "Platforms and status" in content
     assert "Severity" in content
+    assert "`u1`" in content
     assert "0" in content
 
 
@@ -236,3 +237,93 @@ def test_write_index_writes_section_pages_when_every_folder_is_empty(tmp_path: P
         assert title in text
         assert f"{folder}/README.md" in root
         assert "| --- |" in text
+
+
+def test_root_index_summarises_status_per_platform_and_coverage(
+    tmp_path: Path, metadata: dict
+) -> None:
+    from opentide.documentation.facts.deployment import StaticEnvironment, StatusDefinition
+    from opentide.documentation.publish.index import render_root_index
+    from opentide.loading.objective_loader import load_objective_from_dict
+    from opentide.models.deployment_enums import StatusStrategy
+    from opentide.models.rule import DetectionRule
+
+    signal_uuid = "00000000-0000-4000-8000-0000000000a1"
+    objective = load_objective_from_dict(
+        {
+            "name": "Goal",
+            "metadata": {
+                **metadata,
+                "uuid": "00000000-0000-4000-8000-0000000000b1",
+                "schema": "objective::1.0",
+            },
+            "objective": {
+                "priority": "High",
+                "type": "Threat",
+                "description": "d",
+                "composition": {"strategy": "synergetic", "description": "c"},
+                "threats": ["threat-1"],
+                "signals": [
+                    {
+                        "name": "S",
+                        "uuid": signal_uuid,
+                        "description": "d",
+                        "severity": "High",
+                        "methodology": "Monitor process creation",
+                        "entities": ["host"],
+                        "data": {"availability": "Complete", "requirements": "logs"},
+                    }
+                ],
+            },
+        }
+    )
+
+    def rule(uuid: str, **blocks: dict) -> DetectionRule:
+        return DetectionRule.from_yaml_dict(
+            {
+                "name": uuid,
+                "metadata": {**metadata, "uuid": uuid},
+                "description": "d",
+                "techniques": ["T1059"],
+                "detection_model": signal_uuid,
+                "configurations": blocks,
+            }
+        )
+
+    splunk = {"status": "PRODUCTION", "query": "index=main"}
+    rules = [
+        DocumentRecord(DocumentScope.rules, "r1", "r1", rule("r1", splunk=splunk)),
+        DocumentRecord(
+            DocumentScope.rules, "r2", "r2", rule("r2", splunk={**splunk, "status": "DRAFT"})
+        ),
+    ]
+    ctx = DocumentationContext(
+        flavor=DocumentFlavor.github,
+        output_dir=tmp_path,
+        formatter=formatter_for(DocumentFlavor.github),
+        environment=StaticEnvironment(
+            status_definitions=(
+                StatusDefinition("DRAFT", "", StatusStrategy.INERT),
+                StatusDefinition("PRODUCTION", "", StatusStrategy.RELEASE),
+            )
+        ),
+    )
+    page = render_root_index(
+        ctx,
+        rules=rules,
+        objectives=[DocumentRecord(DocumentScope.objectives, "o", "Goal", objective)],
+        threats=[
+            DocumentRecord(DocumentScope.threats, "threat-1", "T1", MagicMock()),
+            DocumentRecord(DocumentScope.threats, "threat-2", "T2", MagicMock()),
+        ],
+    )
+    assert (
+        "Detection catalogue of 2 threat vectors, 1 detection objective and 2 detection rules"
+        in page
+    )
+    assert "| Platform | `DRAFT` | `PRODUCTION` | Total |" in page
+    assert "| Splunk Enterprise Security | 1 | 1 | 2 |" in page
+    assert "| Threat vectors addressed by an objective | 1 of 2 (50%) |" in page
+    assert "| Objectives implemented by a rule | 1 of 1 (100%) |" in page
+    assert "| Signals implemented by a rule | 1 of 1 (100%) |" in page
+    assert "| ATT&CK techniques detected by rules | 1 |" in page

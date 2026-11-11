@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 from urllib.parse import urlsplit
 
+from opentide.documentation.facts.deployment import DeploymentEnvironment, LiveEnvironment
 from opentide.documentation.format.protocol import MarkdownFormatter
 from opentide.documentation.types import DocumentFlavor
 
@@ -91,3 +92,6 @@ class DocumentationContext:
     relations_direction: Literal["upstream", "downstream", "both"] = "both"
     index_relation_counts: bool = True
     index_icons: bool = False
+    #: Statuses, tenants and deployment state the rule pages read. Tests pass
+    #: a ``StaticEnvironment``; generation reads the workspace.
+    environment: DeploymentEnvironment = field(default_factory=LiveEnvironment)

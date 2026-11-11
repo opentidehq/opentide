@@ -1,31 +1,97 @@
-"""Threat and objective documentation renderers."""
+"""Object renderers: section order, empty sections and per-flavor layout."""
 
 from __future__ import annotations
 
 from typing import Any
 from unittest.mock import MagicMock, patch
 
+import pytest
+from tests.test_documentation._snapshot_helpers import context, load_documentation_bundle
+
+from opentide.documentation.catalog import CoverageGraph, DocumentationCatalog
 from opentide.documentation.objects.objective import ObjectiveRenderer, render_objective_page
+from opentide.documentation.objects.rule import render_rule_page
 from opentide.documentation.objects.threat import ThreatRenderer, render_threat_page
+from opentide.documentation.types import DocumentFlavor
 from opentide.loading.objective_loader import load_objective_from_dict
+from opentide.models.rule import DetectionRule
 from opentide.models.threat import ThreatVector
 
 
-def _objective_payload(metadata: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "name": "Detect lateral movement",
-        "metadata": {**metadata, "schema": "objective::1.0"},
-        "objective": {
-            "priority": "High",
-            "type": "Threat",
-            "description": "Find lateral movement",
-            "composition": {"strategy": "synergetic", "description": "compose"},
-            "signals": [],
-        },
-    }
+def _headings(markdown: str, level: int = 2) -> list[str]:
+    prefix = "#" * level + " "
+    return [line[len(prefix) :] for line in markdown.splitlines() if line.startswith(prefix)]
 
 
-def test_threat_renderer_includes_diagram_sections(metadata: dict[str, Any]) -> None:
+def _empty_catalog() -> DocumentationCatalog:
+    catalog = MagicMock(spec=DocumentationCatalog)
+    catalog.rules = []
+    catalog.coverage_graph.return_value = CoverageGraph()
+    catalog.chaining_network.return_value = CoverageGraph()
+    catalog.chaining_entries.return_value = []
+    catalog.related_entries.return_value = []
+    catalog.rules_for_signal.return_value = []
+    catalog.resolve_record.return_value = None
+    catalog.resolve_signal.return_value = None
+    catalog.resolve_name.side_effect = lambda uuid: uuid
+    return catalog
+
+
+def test_rule_page_reads_from_overview_to_metadata(tmp_path) -> None:
+    bundle = load_documentation_bundle()
+    rendered = render_rule_page(bundle.rule, context(tmp_path), bundle.catalog)
+    assert _headings(rendered) == [
+        "Description",
+        "Deployment",
+        "Platform configuration",
+        "Response",
+        "ATT&CK techniques",
+        "Detection coverage",
+        "Metadata",
+    ]
+    lead = rendered.split("**Contents**")[0]
+    assert "| Severity | High |" in lead
+    assert "| Platforms | Microsoft Sentinel: `STAGING` (PREVIEW runs) |" in lead
+
+
+def test_rule_page_states_tenants_and_remote_ids(tmp_path) -> None:
+    bundle = load_documentation_bundle()
+    rendered = render_rule_page(bundle.rule, context(tmp_path), bundle.catalog)
+    assert (
+        "| Microsoft Sentinel | `STAGING` | `PREVIEW` | PREVIEW runs | `staging` | yes |"
+        in rendered
+    )
+    assert "- `STAGING`: Under test on the staging tenant" in rendered
+    assert (
+        "| Microsoft Sentinel | `staging`<br>Pre-production workspace | PREVIEW runs "
+        "| `rule-7f3a` |" in rendered
+    )
+    assert "| Microsoft Sentinel | `production`<br>Production workspace | no run | - |" in rendered
+
+
+@pytest.mark.parametrize("flavor", list(DocumentFlavor))
+def test_every_flavor_renders_the_rule_page(tmp_path, flavor: DocumentFlavor) -> None:
+    bundle = load_documentation_bundle()
+    rendered = render_rule_page(bundle.rule, context(tmp_path, flavor), bundle.catalog)
+    assert "## Platform configuration" in rendered
+    native_toc = flavor in {DocumentFlavor.gitlab, DocumentFlavor.azure_devops}
+    assert ("[[_TOC_]]" in rendered) is native_toc
+    assert ("**Contents**" in rendered) is not native_toc
+    fence = "::: mermaid" if flavor is DocumentFlavor.azure_devops else "```mermaid"
+    assert fence in rendered
+    assert rendered.endswith("\n") and not rendered.endswith("\n\n")
+
+
+def test_a_rule_without_platforms_says_so(tmp_path, rule_payload: dict[str, Any]) -> None:
+    rule = DetectionRule.from_yaml_dict(rule_payload)
+    rendered = render_rule_page(rule, context(tmp_path), _empty_catalog())
+    assert "# Test rule" in rendered
+    assert "> [!NOTE]\n> This rule has no platform configuration" in rendered
+    assert "## Platform configuration" not in rendered
+    assert "| UUID | `00000000-0000-4000-8000-000000000001` |" in rendered
+
+
+def test_an_uncovered_threat_is_flagged(tmp_path, metadata: dict[str, Any]) -> None:
     threat = ThreatVector.from_yaml_dict(
         {
             "name": "Credential Access",
@@ -43,73 +109,29 @@ def test_threat_renderer_includes_diagram_sections(metadata: dict[str, Any]) -> 
             },
         }
     )
-    ctx = MagicMock()
-    ctx.formatter.heading.side_effect = lambda _level, text: f"## {text}\n"
-    catalog = MagicMock()
-    with (
-        patch(
-            "opentide.documentation.objects.threat.render_chaining_diagram",
-            return_value="chain-diagram",
-        ),
-        patch(
-            "opentide.documentation.objects.base.render_relations_diagram",
-            return_value="relations-diagram",
-        ),
-        patch(
-            "opentide.documentation.objects.threat.sections.render_metadata",
-            return_value="meta\n",
-        ),
-        patch(
-            "opentide.documentation.objects.threat.sections.render_threat_body",
-            return_value="body\n",
-        ),
-    ):
-        rendered = ThreatRenderer(ctx, catalog).render(threat)
-    assert "Credential Access" in rendered
-    assert "chain-diagram" in rendered
-    assert "relations-diagram" in rendered
-    assert "## Coverage" not in rendered
-    assert "## Relations" in rendered
+    rendered = ThreatRenderer(context(tmp_path), _empty_catalog()).render(threat)
+    assert "> [!WARNING]\n> No detection objective addresses this threat vector yet." in rendered
+    assert "| Detection coverage | None |" in rendered
+    assert "## Chaining" not in rendered
 
 
-def test_objective_renderer_includes_relations(metadata: dict[str, Any]) -> None:
-    objective = load_objective_from_dict(_objective_payload(metadata))
-    ctx = MagicMock()
-    ctx.formatter.heading.side_effect = lambda _level, text: f"## {text}\n"
-    catalog = MagicMock()
-    with (
-        patch(
-            "opentide.documentation.objects.base.render_relations_diagram",
-            return_value="relations-diagram",
-        ),
-        patch(
-            "opentide.documentation.objects.objective.sections.render_metadata",
-            return_value="meta\n",
-        ),
-        patch(
-            "opentide.documentation.objects.objective.sections.render_description",
-            return_value="desc\n",
-        ),
-        patch(
-            "opentide.documentation.objects.objective.sections.render_objective_meta",
-            return_value="objective-meta\n",
-        ),
-        patch(
-            "opentide.documentation.objects.objective.sections.render_signals",
-            return_value="signals\n",
-        ),
-        patch(
-            "opentide.documentation.objects.objective.sections.render_signal_mdr_coverage",
-            return_value="signal-matrix\n",
-        ),
-    ):
-        rendered = ObjectiveRenderer(ctx, catalog).render(objective)
-    assert "Detect lateral movement" in rendered
-    assert "objective-meta" in rendered
-    assert "signal-matrix" in rendered
-    assert "relations-diagram" in rendered
-    assert "## Coverage" not in rendered
-    assert "## Relations" in rendered
+def test_objective_page_lists_its_parts(tmp_path, metadata: dict[str, Any]) -> None:
+    objective = load_objective_from_dict(
+        {
+            "name": "Detect lateral movement",
+            "metadata": {**metadata, "schema": "objective::1.0"},
+            "objective": {
+                "priority": "High",
+                "type": "Threat",
+                "description": "Find lateral movement",
+                "composition": {"strategy": "synergetic", "description": "compose"},
+                "signals": [],
+            },
+        }
+    )
+    rendered = ObjectiveRenderer(context(tmp_path), _empty_catalog()).render(objective)
+    assert _headings(rendered) == ["Description", "Composition", "Metadata"]
+    assert "| Detection rules | 0 rules |" in rendered
 
 
 def test_render_page_helpers_delegate_to_renderer() -> None:
