@@ -1861,14 +1861,14 @@ mod tests {
             "{}",
             help.stdout
         );
-        let refused = dispatched("--json deploy", &[], false);
+        let refused = dispatched("--json share push", &[], false);
         assert_eq!(refused.code, 2);
         assert!(refused.stdout.contains("\"code\":\"engine_not_ported\""));
         assert!(refused.stdout.contains("\"argument\":\"OPENTIDE_ENGINE\""));
-        let plain = dispatched("deploy", &[], false);
+        let plain = dispatched("share push", &[], false);
         assert_eq!(
             plain.stderr,
-            "error: opentide deploy has no Rust implementation yet: unset OPENTIDE_ENGINE, or set it to python or compare.\n"
+            "error: opentide share push has no Rust implementation yet: unset OPENTIDE_ENGINE, or set it to python or compare.\n"
         );
         let file =
             std::env::temp_dir().join(format!("opentide-cli-not-a-dir-{}", std::process::id()));
@@ -2024,7 +2024,7 @@ mod tests {
         assert_eq!(plain.code, 0);
         assert!(plain.stdout.contains("commands"), "{}", plain.stdout);
         // Parsed, then refused as not ported: no usage error.
-        let strict = dispatched("--json deploy --dry-run --dry-run", &[], false);
+        let strict = dispatched("--json share push --dry-run --dry-run", &[], false);
         assert!(
             strict.stdout.contains("\"code\":\"engine_not_ported\""),
             "{}",
