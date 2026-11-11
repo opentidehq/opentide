@@ -253,6 +253,8 @@ def test_the_integration_branch_gets_ci_after_each_merge(name: str) -> None:
         ("engine", "cargo doc --no-deps --workspace --locked"),
         ("engine-test", "cargo nextest run --workspace --locked --profile ci"),
         ("engine-test", "cargo test --workspace --locked --doc"),
+        # The tests leave the checkout as they found it (#931).
+        ("engine-test", 'git status --porcelain --untracked-files=all > "$RUNNER_TEMP/tree-after"'),
         ("engine-wasm", "bash scripts/engine/build-wasm.sh"),
         ("engine-wasm", "node scripts/engine/check-npm-packs.mjs"),
         ("engine-package", "bash scripts/engine/license-scan.sh target/package/*.crate"),
