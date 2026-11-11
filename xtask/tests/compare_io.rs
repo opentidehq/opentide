@@ -213,16 +213,22 @@ fn the_dispatch_table_is_read_from_the_repository_cli() {
 
     write(
         &python,
-        "#!/bin/sh\necho '{\"validate\": [], \"info rules\": [], \"deploy\": [\"--dry-run\"]}'\n",
+        "#!/bin/sh\necho '{\"validate\": {\"requires\": [], \"refuses\": []}, \"info rules\": {}, \
+         \"deploy\": {\"requires\": [\"--dry-run\"]}, \"validate query\": {\"refuses\": [\"--live\"]}}'\n",
     );
     std::fs::set_permissions(&python, std::fs::Permissions::from_mode(0o755)).unwrap();
     let paths = xtask::compare::rust_commands(dir.path()).unwrap();
+    let coverage = |requires: &[&str], refuses: &[&str]| xtask::compare::Coverage {
+        requires: requires.iter().map(|flag| (*flag).to_owned()).collect(),
+        refuses: refuses.iter().map(|flag| (*flag).to_owned()).collect(),
+    };
     assert_eq!(
         paths.into_iter().collect::<Vec<_>>(),
         [
-            ("deploy".to_owned(), vec!["--dry-run".to_owned()]),
-            ("info rules".to_owned(), Vec::new()),
-            ("validate".to_owned(), Vec::new()),
+            ("deploy".to_owned(), coverage(&["--dry-run"], &[])),
+            ("info rules".to_owned(), coverage(&[], &[])),
+            ("validate".to_owned(), coverage(&[], &[])),
+            ("validate query".to_owned(), coverage(&[], &["--live"])),
         ]
     );
 

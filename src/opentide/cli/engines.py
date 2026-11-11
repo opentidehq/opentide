@@ -80,20 +80,31 @@ class RustCommand:
     implementation to cover it (``deploy`` runs in Rust with ``--dry-run``
     only); a run without any is a command with no Rust implementation:
     ``rust`` refuses it with ``engine_not_ported`` and ``compare`` runs
-    Python alone.
+    Python alone. *refuses* names flags a run must carry none of: ``validate
+    query --live`` checks the queries on the tenants, which stays Python's
+    until UC-4.1, so a run with it is one with no Rust implementation.
     """
 
     launch: tuple[str, ...]
     rules: tuple[str, ...] = ()
     side_effects: bool = False
     requires: tuple[str, ...] = ()
+    refuses: tuple[str, ...] = ()
 
     def covers(self, args: Sequence[str]) -> bool:
         """Whether the Rust implementation runs the command with *args*."""
-        if not self.requires:
-            return True
         options = args[: args.index("--")] if "--" in args else args
-        return any(flag in options for flag in self.requires)
+        if any(flag in options for flag in self.refuses):
+            return False
+        return not self.requires or any(flag in options for flag in self.requires)
+
+    def uncovered(self, path: str, args: Sequence[str]) -> str:
+        """*path* as a run of *args* it does not cover reads: ``deploy without --dry-run``."""
+        options = args[: args.index("--")] if "--" in args else args
+        refused = [flag for flag in self.refuses if flag in options]
+        if refused:
+            return f"{path} with {' and '.join(refused)}"
+        return f"{path} without {' or '.join(self.requires)}"
 
 
 #: Commands that host others and apply ``OPENTIDE_ENGINE`` to what they run
@@ -113,14 +124,16 @@ RUST_CLI: tuple[str, ...] = (sys.executable, "-m", "opentide.cli.rust")
 #: ``generate explorer``, ``generate inflight`` and its ``prune``, and ``setup ci``
 #: with UC-3.2c (#916); ``deploy --dry-run`` with UC-3.1c (#896): a deploy that
 #: sends stays Python's; ``commands``, ``explain``, ``lint`` and ``validate`` with
-#: UC-3.5 (#827); ``migrate vocab-scope`` and ``doctor --offline`` with UC-3.5c
-#: (#928): a doctor that reaches PyPI and the proxy stays Python's.
+#: UC-3.5 (#827); offline ``validate query`` with UC-3.5b (#927): ``--live`` stays
+#: Python's; ``migrate vocab-scope`` and ``doctor --offline`` with UC-3.5c (#928): a
+#: doctor that reaches PyPI and the proxy stays Python's.
 RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
     ("commands",): RustCommand(launch=RUST_CLI),
     ("explain",): RustCommand(launch=RUST_CLI),
     ("info",): RustCommand(launch=RUST_CLI),
     ("lint",): RustCommand(launch=RUST_CLI),
     ("validate",): RustCommand(launch=RUST_CLI),
+    ("validate", "query"): RustCommand(launch=RUST_CLI, refuses=("--live",)),
     ("rules", "unreviewed"): RustCommand(launch=RUST_CLI),
     ("deploy",): RustCommand(launch=RUST_CLI, requires=("--dry-run",)),
     ("doctor",): RustCommand(launch=RUST_CLI, rules=("host-git",), requires=("--offline",)),
@@ -228,7 +241,7 @@ def dispatch(cli_ctx: CliContext, click_ctx: _click.Context) -> None:
         return
     rust = RUST_COMMANDS.get(words)
     if rust is not None and not rust.covers(args):
-        path = f"{path} without {' or '.join(rust.requires)}"
+        path = rust.uncovered(path, args)
         rust = None
     if rust is None:
         if engine == RUST:
@@ -267,12 +280,56 @@ def _run_rust(rust: RustCommand, args: Sequence[str]) -> int:
         previous = signal.signal(signal.SIGINT, lambda *_: None)
     except ValueError:  # not the main thread: nothing to hand Ctrl-C over
         previous = None
+    # A stream this process replaced in memory (an embedding host's capture,
+    # Click's test runner) has no file descriptor for the child to inherit:
+    # the child's bytes are passed through it, or they would bypass it.
+    own_out, own_err, own_in = (_descriptor(s) for s in (sys.stdout, sys.stderr, sys.stdin))
+    given = None if own_in is not None else _read_all(sys.stdin)
     try:
-        child = subprocess.run([*rust.launch, *args], env=_environment(RUST), check=False)
+        child = subprocess.run(
+            [*rust.launch, *args],
+            env=_environment(RUST),
+            check=False,
+            stdout=None if own_out is not None else subprocess.PIPE,
+            stderr=None if own_err is not None else subprocess.PIPE,
+            input=given,
+        )
     finally:
         if previous is not None:
             signal.signal(signal.SIGINT, previous)
+    for captured, stream in ((child.stdout, sys.stdout), (child.stderr, sys.stderr)):
+        if captured:
+            _write_through(stream, captured)
     return 128 - child.returncode if child.returncode < 0 else child.returncode
+
+
+def _descriptor(stream: Any) -> int | None:
+    """*stream*'s file descriptor, or ``None`` when it lives in memory."""
+    try:
+        return int(stream.fileno())
+    except (AttributeError, OSError, ValueError):
+        return None
+
+
+def _read_all(stream: Any) -> bytes:
+    """What an in-memory stdin holds, for the child: nothing when it holds nothing readable."""
+    try:
+        data = stream.buffer.read() if hasattr(stream, "buffer") else stream.read()
+    except (AttributeError, OSError, ValueError):
+        return b""
+    return data.encode("utf-8") if isinstance(data, str) else bytes(data or b"")
+
+
+def _write_through(stream: Any, data: bytes) -> None:
+    """*data* written to *stream* as bytes when it takes them, else as UTF-8 text."""
+    buffer = getattr(stream, "buffer", None)
+    if buffer is not None:
+        stream.flush()
+        buffer.write(data)
+        buffer.flush()
+    else:
+        stream.write(data.decode("utf-8", errors="replace"))
+    stream.flush()
 
 
 def _fail(

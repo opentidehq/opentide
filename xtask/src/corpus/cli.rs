@@ -51,7 +51,10 @@ commands:
                  the kinds validate reports query findings for (UC-2.5): the
                  Rust validate with the query engines, every finding of the
                  queries check compared with the oracle's, every key, and the
-                 number of queries checked; without --only, every group runs
+                 number of queries checked; and the kinds lint's queries
+                 check reports (UC-3.5b): the Rust lint with the query
+                 engines, every finding of its queries check compared with
+                 the oracle's, every key; without --only, every group runs
   faults --out DIR [--catalogue FILE]
                  write one workspace ([combined] counts) with every fault
                  kind not marked isolated applied once (twice if cross-file)
@@ -708,7 +711,8 @@ fn rust_check(parsed: &FaultArgs, catalogue: &Catalogue) -> Result<u8> {
 
 /// `faults --check --engine rust --only queries`: the kinds `validate`
 /// reports query findings for, the Rust `validate` with the query engines
-/// against the oracle, finding for finding ([`queries`]).
+/// against the oracle, and the kinds lint's queries check reports, the Rust
+/// `lint` against the oracle's, finding for finding ([`queries`]).
 fn queries_check(parsed: &FaultArgs, catalogue: &Catalogue, ids: &BTreeSet<String>) -> Result<u8> {
     let bin = oracle_bin(parsed.oracle.as_deref());
     check_oracle_version(&bin, &catalogue.oracle)?;
@@ -749,9 +753,18 @@ fn queries_check(parsed: &FaultArgs, catalogue: &Catalogue, ids: &BTreeSet<Strin
         env.entry("XDG_STATE_HOME".to_string())
             .or_insert_with(|| scratch.join("_state").to_string_lossy().into_owned());
         let document = run_oracle(&bin, &dir, &kind.command, &env)?;
-        let (oracle, oracle_count) = queries::engine_findings(&document["report"]);
-        let (rust_report, crowdstrike) = queries::rust_report(&dir, &kind.command)?;
-        let (rust, rust_count) = queries::engine_findings(&rust_report);
+        let lint = queries::is_lint_kind(kind);
+        let (oracle, oracle_count, rust, rust_count, crowdstrike) = if lint {
+            // lint counts no queries: its findings are compared, every key.
+            let oracle = queries::lint_findings(&document);
+            let rust = queries::rust_lint(&dir, &kind.command)?;
+            (oracle, json!(null), rust, json!(null), 0)
+        } else {
+            let (oracle, oracle_count) = queries::engine_findings(&document["report"]);
+            let (rust_report, crowdstrike) = queries::rust_report(&dir, &kind.command)?;
+            let (rust, rust_count) = queries::engine_findings(&rust_report);
+            (oracle, oracle_count, rust, rust_count, crowdstrike)
+        };
         let mut problems = Vec::new();
         let mut approved = 0usize;
         for difference in queries::differences(&oracle, &rust) {
@@ -790,11 +803,13 @@ fn queries_check(parsed: &FaultArgs, catalogue: &Catalogue, ids: &BTreeSet<Strin
             }
         }
         // Not vacuous: the kind's codes are among the findings compared.
-        for code in kind
-            .codes
-            .iter()
-            .filter(|code| queries::is_engine_code(code))
-        {
+        for code in kind.codes.iter().filter(|code| {
+            if lint {
+                queries::is_lint_query_code(code)
+            } else {
+                queries::is_engine_code(code)
+            }
+        }) {
             if !oracle.iter().any(|item| item["code"] == code.as_str()) {
                 problems.push(format!(
                     "the oracle reports no `{code}` from the queries check"
@@ -802,8 +817,13 @@ fn queries_check(parsed: &FaultArgs, catalogue: &Catalogue, ids: &BTreeSet<Strin
             }
         }
         let status = if problems.is_empty() { "ok  " } else { "FAIL" };
+        let compared = if lint {
+            "lint".to_owned()
+        } else {
+            format!("{oracle_count} queries")
+        };
         println!(
-            "{status} {id:<48} {} finding(s), {oracle_count} queries compared{}",
+            "{status} {id:<48} {} finding(s), {compared} compared{}",
             oracle.len(),
             if approved > 0 {
                 format!(", {approved} approved difference(s)")

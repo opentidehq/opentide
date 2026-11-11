@@ -365,8 +365,15 @@ class CommandRunner:
             # A cancel raised once the engine had returned: its answer stands.
             if code is None:
                 code = CANCELLED_EXIT_CODE
+        except Exception as error:
+            # The engine raised instead of answering: a crash, reported as the
+            # Python path reports one (error[internal], its crash log).
+            code, stdout = self._crash_document(argv, error, values)
         finally:
             self._rust_running = False
+            # As after a Python run, the process is back in the server's directory.
+            with contextlib.suppress(OSError):
+                os.chdir(self.cwd)
             if not keep:
                 self.snapshots.clear()
                 self._clear_rust_workspaces()
@@ -374,6 +381,26 @@ class CommandRunner:
         self._forward_stderr(stderr)
         text = stdout.decode("utf-8", errors="replace")
         return RunOutcome(self._document(argv, text, code), code)
+
+    @staticmethod
+    def _crash_document(
+        argv: Sequence[str], error: BaseException, env: Mapping[str, str]
+    ) -> tuple[int, bytes]:
+        """The exit code and the ``--json`` crash document for *error*, raised by a Rust run."""
+        from opentide.cli import _command_path, _raw_command_words
+        from opentide.cli.ui.crash import handle_crash
+
+        args = ["--json", *argv]
+        buffer = io.StringIO()
+        code = handle_crash(
+            error,
+            argv=args,
+            command=_command_path(args),
+            words=_raw_command_words(args),
+            env=env,
+            stdout=buffer,
+        )
+        return code, buffer.getvalue().encode("utf-8")
 
     @staticmethod
     def _forward_stderr(stderr: bytes) -> None:
