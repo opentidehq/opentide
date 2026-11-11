@@ -102,9 +102,9 @@ opentide-cassette.workspace = true
 # The goldens' normalisation, for the generate cases (tests/generate_goldens.rs).
 opentide-compare.workspace = true
 tempfile = "3"
-# The `setup` wizard's pseudo-terminal test (tests/setup_wizard.rs): a pty on
-# Unix, ConPTY on Windows.
-expectrl = "0.9"
+# The `setup` wizard's pseudo-terminal test (tests/setup_wizard.rs), on
+# wezterm's portable-pty: a pty on Unix, ConPTY on Windows.
+portable-pty = "0.9"
 # The goldens' case.toml and outcome.toml (tests/framework_goldens.rs).
 
 # The renderers' snapshots, written by the oracle (tests/render.rs).

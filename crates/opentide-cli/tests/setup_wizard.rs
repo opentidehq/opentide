@@ -1,5 +1,5 @@
 //! The setup wizards (UC-3.6c, #951) at a pseudo-terminal: the `opentide`
-//! binary started on a pty (ConPTY on Windows) through expectrl, its
+//! binary started on a pty (ConPTY on Windows) through portable-pty, its
 //! questions answered with the keys a person presses, and the files it
 //! writes and the way it ends checked.
 
@@ -9,67 +9,138 @@
     reason = "a test: a session that does not go as scripted is a failure"
 )]
 
+use std::io::{Read as _, Write};
 use std::path::Path;
-use std::process::Command;
-use std::time::Duration;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
-use expectrl::{Expect, Session};
+use portable_pty::{Child, CommandBuilder, MasterPty, PtySize, native_pty_system};
 
 const ENTER: &str = "\r";
 const SPACE: &str = " ";
 const DOWN: &str = "\u{1b}[B";
 const CTRL_C: &str = "\u{3}";
 
+/// How long a question may take to appear.
+const TIMEOUT: Duration = Duration::from_secs(60);
+
+/// A run on a pseudo-terminal: what it printed so far, read on a thread of
+/// its own, and the keys typed into it.
+struct Session {
+    child: Box<dyn Child + Send + Sync>,
+    writer: Arc<Mutex<Box<dyn Write + Send>>>,
+    printed: Arc<Mutex<Vec<u8>>>,
+    /// How much of `printed` an expectation has consumed.
+    seen: usize,
+    _master: Box<dyn MasterPty + Send>,
+}
+
 /// `opentide <args>` in `cwd` on a pseudo-terminal, in `human` mode
 /// whatever agent or CI the test runs under.
-fn spawn(cwd: &Path, args: &[&str]) -> expectrl::session::OsSession {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_opentide"));
-    command.args(args).current_dir(cwd);
-    command
-        .env("OPENTIDE_OUTPUT", "human")
-        .env("TERM", "xterm")
-        .env("GIT_CEILING_DIRECTORIES", cwd)
-        .env_remove("OPENTIDE_REPO_ROOT")
-        .env_remove("OPENTIDE_TIDE_WORKSPACE")
-        .env_remove("OPENTIDE_MCP_SERVER");
-    let mut session = Session::spawn(command).expect("spawn opentide on a pseudo-terminal");
-    session.set_expect_timeout(Some(Duration::from_secs(60)));
-    session
+fn spawn(cwd: &Path, args: &[&str]) -> Session {
+    let pair = native_pty_system()
+        .openpty(PtySize {
+            rows: 40,
+            cols: 100,
+            pixel_width: 0,
+            pixel_height: 0,
+        })
+        .expect("open a pseudo-terminal");
+    let mut command = CommandBuilder::new(env!("CARGO_BIN_EXE_opentide"));
+    command.args(args);
+    command.cwd(cwd);
+    command.env("OPENTIDE_OUTPUT", "human");
+    command.env("TERM", "xterm");
+    command.env("GIT_CEILING_DIRECTORIES", cwd);
+    for name in [
+        "OPENTIDE_REPO_ROOT",
+        "OPENTIDE_TIDE_WORKSPACE",
+        "OPENTIDE_MCP_SERVER",
+    ] {
+        command.env_remove(name);
+    }
+    let child = pair
+        .slave
+        .spawn_command(command)
+        .expect("spawn opentide on a pseudo-terminal");
+    drop(pair.slave);
+    let mut reader = pair.master.try_clone_reader().unwrap();
+    let writer = Arc::new(Mutex::new(pair.master.take_writer().unwrap()));
+    let printed = Arc::new(Mutex::new(Vec::new()));
+    let (sink, answers) = (Arc::clone(&printed), Arc::clone(&writer));
+    std::thread::spawn(move || {
+        let mut chunk = [0_u8; 4096];
+        while let Ok(read) = reader.read(&mut chunk) {
+            if read == 0 {
+                break;
+            }
+            let bytes = &chunk[..read];
+            // A pseudo console asks where the cursor is before it draws:
+            // answer as a terminal would.
+            if bytes.windows(4).any(|window| window == b"\x1b[6n") {
+                let mut writer = answers.lock().unwrap();
+                let _ = writer.write_all(b"\x1b[1;1R");
+                let _ = writer.flush();
+            }
+            sink.lock().unwrap().extend_from_slice(bytes);
+        }
+    });
+    Session {
+        child,
+        writer,
+        printed,
+        seen: 0,
+        _master: pair.master,
+    }
+}
+
+impl Session {
+    /// Waits until the run prints `text` after what was last expected;
+    /// everything it printed up to there.
+    fn expect(&mut self, text: &str) -> String {
+        let started = Instant::now();
+        loop {
+            {
+                let printed = self.printed.lock().unwrap();
+                let shown = String::from_utf8_lossy(&printed[self.seen..]).into_owned();
+                if let Some(at) = shown.find(text) {
+                    let upto = shown[..at + text.len()].len();
+                    self.seen += upto;
+                    return String::from_utf8_lossy(&printed[..self.seen]).into_owned();
+                }
+                assert!(
+                    started.elapsed() < TIMEOUT,
+                    "waiting for {text:?}; printed:\n{}",
+                    String::from_utf8_lossy(&printed)
+                );
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
+
+    /// Types `keys`.
+    fn send(&self, keys: &str) {
+        let mut writer = self.writer.lock().unwrap();
+        writer.write_all(keys.as_bytes()).unwrap();
+        writer.flush().unwrap();
+    }
 }
 
 /// Waits for `text`, then types `keys`.
-fn answer(session: &mut expectrl::session::OsSession, text: &str, keys: &[&str]) {
-    session
-        .expect(text)
-        .unwrap_or_else(|error| panic!("waiting for {text:?}: {error}"));
+fn answer(session: &mut Session, text: &str, keys: &[&str]) {
+    session.expect(text);
     for key in keys {
-        session.send(key).unwrap();
+        session.send(key);
     }
 }
 
 /// What the session prints up to `last`, the end of its output, and its
 /// exit code. The run is awaited, not the end of its output, which a
 /// pseudo console on Windows does not signal while it is open.
-fn finish(mut session: expectrl::session::OsSession, last: &str) -> (String, i64) {
-    let found = session
-        .expect(last)
-        .unwrap_or_else(|error| panic!("waiting for {last:?}: {error}"));
-    let mut printed = String::from_utf8_lossy(found.before()).into_owned();
-    printed.push_str(last);
-    (printed, exit_code(&session))
-}
-
-#[cfg(unix)]
-fn exit_code(session: &expectrl::session::OsSession) -> i64 {
-    match session.get_process().wait().unwrap() {
-        expectrl::process::unix::WaitStatus::Exited(_, code) => i64::from(code),
-        other => panic!("{other:?}"),
-    }
-}
-
-#[cfg(windows)]
-fn exit_code(session: &expectrl::session::OsSession) -> i64 {
-    i64::from(session.get_process().wait(None).unwrap())
+fn finish(mut session: Session, last: &str) -> (String, i64) {
+    let printed = session.expect(last);
+    let status = session.child.wait().unwrap();
+    (printed, i64::from(status.exit_code()))
 }
 
 /// The `setup` wizard: each question answered as a person would, then the
@@ -153,10 +224,9 @@ fn the_mcp_wizard_writes_the_hosts_chosen() {
         "Select at least one option",
         &[DOWN, SPACE, ENTER],
     );
-    // `Target:` and `Hosts:` are bold.
-    session
-        .expect(expectrl::Regex("Hosts:[^\n]* cursor"))
-        .expect("the hosts chosen");
+    // `Hosts:` is bold, the host after it.
+    answer(&mut session, "Hosts:", &[]);
+    answer(&mut session, "cursor", &[]);
     answer(&mut session, "Write these MCP configurations?", &[ENTER]);
     let (printed, code) = finish(session, "Wrote .cursor/mcp.json");
     assert_eq!(code, 0, "{printed}");
