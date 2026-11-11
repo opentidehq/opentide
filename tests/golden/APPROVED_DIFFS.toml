@@ -8576,3 +8576,18 @@ candidate = '"Error executing tool validation_report: argument file must be a st
 reason = "a tool that runs in Rust checks its own arguments: the call is refused the same way (isError, one text block naming the tool and the argument), worded by opentide rather than as Pydantic's validation error, whose text and documentation link follow the Pydantic release"
 issue = "https://github.com/opentidehq/opentide/issues/829"
 changelog = "**`OPENTIDE_ENGINE=rust opentide mcp start` serves MCP from Rust**"
+
+# UC-3.7 (#829): a workspace whose configuration does not parse. The Python
+# tool raises an exception with no message, so its refusal names nothing; the
+# Rust tool refuses the same way (isError, one text block) with validate's own
+# failure: its code and the file and error it found.
+[[diff]]
+command = "mcp start"
+case = "tools-validation-broken-config/validation-report-all"
+target = "stdout"
+rule = "json:/result/content/0/text"
+oracle = '"Error executing tool validation_report"'
+candidate = '"Error executing tool validation_report: command_failed: <WS>/.opentide/configurations/platforms/sentinel.toml: invalid string"'
+reason = "a workspace whose configuration does not parse is refused the same way (isError, one text block naming the tool), and the Rust refusal says why: validate's failure code and the file and error, where the Python tool's exception carries no message"
+issue = "https://github.com/opentidehq/opentide/issues/829"
+changelog = "**`OPENTIDE_ENGINE=rust opentide mcp start` serves MCP from Rust**"

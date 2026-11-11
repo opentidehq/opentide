@@ -110,3 +110,32 @@ def test_start_applies_the_plugin_launch(tmp_path: Path, monkeypatch: pytest.Mon
     bridge.start()
     problem = bridge.workspace_problem()
     assert problem is not None and problem.startswith("workspace_not_found")
+
+
+def test_start_exports_the_root_options(
+    tide_corpus_repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``--repo`` and the other root options reach the Python half's environment.
+
+    The Rust command line parsed them, so nothing else exports them: without
+    this, a server started outside the workspace with ``--repo`` served the
+    folder it was started in to every delegated tool.
+    """
+    import os
+
+    from opentide.core.root import get_repo_root
+
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    monkeypatch.chdir(outside)
+    for name in workspace.WORKSPACE_VARIABLES:
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("OPENTIDE_DEBUG", "0")
+    get_repo_root.cache_clear()
+    assert get_repo_root() != tide_corpus_repo
+    bridge.start({"OPENTIDE_REPO_ROOT": str(tide_corpus_repo)})
+    assert os.environ["OPENTIDE_REPO_ROOT"] == str(tide_corpus_repo)
+    assert get_repo_root() == tide_corpus_repo
+    answer = json.loads(bridge.call_tool("search", json.dumps({"query": "Rule"})))
+    assert answer["result"]["isError"] is False
+    assert answer["result"]["structuredContent"]["result"], answer

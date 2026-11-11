@@ -93,8 +93,48 @@ pub struct SessionSpec {
     /// The version `initialize` asks for.
     #[serde(default)]
     pub protocol_version: Option<String>,
+    /// How the client starts the server.
+    #[serde(default)]
+    pub launch: Launch,
     /// The messages.
     pub steps: Vec<Step>,
+}
+
+/// How a session's client starts `opentide mcp start`.
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum Launch {
+    /// In the workspace, which `OPENTIDE_REPO_ROOT` and
+    /// `OPENTIDE_TIDE_WORKSPACE` also name.
+    #[default]
+    Workspace,
+    /// In an empty folder outside the workspace, with no workspace variable:
+    /// `opentide --repo <workspace> mcp start`.
+    RepoOption,
+    /// In the fixture as an Agent Plugin root (`plugin.json`), with no
+    /// workspace variable and `PWD` the plugin root: a host that names no
+    /// workspace.
+    PluginRoot,
+}
+
+impl Launch {
+    /// The name `sessions.toml` and a recording's header give it.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Launch::Workspace => "workspace",
+            Launch::RepoOption => "repo-option",
+            Launch::PluginRoot => "plugin-root",
+        }
+    }
+
+    fn parse(text: &str) -> Result<Launch> {
+        Ok(match text {
+            "workspace" => Launch::Workspace,
+            "repo-option" => Launch::RepoOption,
+            "plugin-root" => Launch::PluginRoot,
+            other => bail!("unknown launch `{other}`"),
+        })
+    }
 }
 
 /// One message of a session.
@@ -126,6 +166,8 @@ pub struct Recording {
     pub session: String,
     /// The fixture's name.
     pub fixture: String,
+    /// How the server was started.
+    pub launch: Launch,
     /// The exchanges, the handshake's first.
     pub exchanges: Vec<Exchange>,
 }
@@ -134,7 +176,10 @@ impl Recording {
     /// The recording as JSON lines.
     pub fn to_jsonl(&self) -> String {
         let mut out = String::new();
-        let header = json!({"session": self.session, "fixture": self.fixture});
+        let mut header = json!({"session": self.session, "fixture": self.fixture});
+        if self.launch != Launch::Workspace {
+            header["launch"] = json!(self.launch.as_str());
+        }
         out.push_str(&header.to_string());
         out.push('\n');
         for exchange in &self.exchanges {
@@ -183,9 +228,14 @@ impl Recording {
                 response,
             });
         }
+        let launch = match header.get("launch") {
+            None => Launch::Workspace,
+            Some(value) => Launch::parse(value.as_str().context("`launch` is not a string")?)?,
+        };
         Ok(Recording {
             session: field("session")?,
             fixture: field("fixture")?,
+            launch,
             exchanges,
         })
     }
@@ -359,10 +409,18 @@ fn record(repo: &Path, python: &Path, sessions: &Sessions, only: Option<&str>) -
         }
         found = true;
         let fixture = &sessions.fixtures[&session.fixture];
-        let exchanges = run_session(repo, python, "python", fixture, &messages(session)?)?;
+        let exchanges = run_session(
+            repo,
+            python,
+            "python",
+            fixture,
+            session.launch,
+            &messages(session)?,
+        )?;
         let recording = Recording {
             session: session.name.clone(),
             fixture: session.fixture.clone(),
+            launch: session.launch,
             exchanges,
         };
         let path = mcp_dir(repo).join(format!("{}.jsonl", session.name));
@@ -392,9 +450,7 @@ fn replay(
             .with_context(|| format!("read {}", ledger_path.display()))?,
     )
     .map_err(|error| anyhow::anyhow!("{}: {error}", ledger_path.display()))?;
-    let mut usage = Usage::default();
-    let mut failures = 0usize;
-    let mut compared = 0usize;
+    let mut tally = Tally::new(&ledger, show_approved);
     let mut replayed = std::collections::BTreeSet::new();
     for file in files {
         let text =
@@ -416,47 +472,15 @@ fn replay(
             .collect();
         let mut python_live = None;
         for engine in engines {
-            let live = run_session(repo, python, engine, fixture, &sent)?;
+            let live = run_session(repo, python, engine, fixture, recording.launch, &sent)?;
             // The Rust server against the Python server's live answers when
             // both run, else against the recording; Python always against
-            // the recording, with no ledger: it is the oracle.
-            let (oracle, approve) = match (*engine, &python_live) {
-                ("python", _) => (&recording.exchanges, false),
-                (_, Some(answers)) => (answers, true),
-                (_, None) => (&recording.exchanges, true),
+            // the recording.
+            let oracle = match (*engine, &python_live) {
+                ("python", _) | (_, None) => &recording.exchanges,
+                (_, Some(answers)) => answers,
             };
-            for (expected, got) in oracle.iter().zip(&live) {
-                compared += 1;
-                let case = format!("{}/{}", recording.session, expected.step);
-                let report = compare_answers(
-                    &case,
-                    expected.response.as_ref(),
-                    got.response.as_ref(),
-                    approve.then_some(&ledger),
-                    &mut usage,
-                );
-                if !report.equal {
-                    failures += 1;
-                    println!("DIFFERENT {engine} {case}");
-                    for difference in &report.differences {
-                        println!(
-                            "  {} at {}:\n    expected {}\n    got      {}",
-                            difference.kind.as_str(),
-                            difference.pointer.as_deref().unwrap_or("(document)"),
-                            excerpt(&difference.oracle),
-                            excerpt(&difference.candidate)
-                        );
-                    }
-                } else if show_approved && !report.approved.is_empty() {
-                    println!("APPROVED {engine} {case}");
-                    for approval in &report.approved {
-                        println!(
-                            "  entry {} ({}): {}",
-                            approval.entry, approval.rule, approval.reason
-                        );
-                    }
-                }
-            }
+            tally.judge(engine, &recording.session, oracle, &live);
             if *engine == "python" {
                 python_live = Some(live);
             }
@@ -467,25 +491,110 @@ fn replay(
         .session
         .iter()
         .all(|session| replayed.contains(&session.name));
-    let mut stale = 0usize;
-    if complete && engines.contains(&"rust") {
-        for (index, entry) in ledger.entries.iter().enumerate() {
-            if owns(entry) && !usage.is_used(index) {
-                stale += 1;
-                println!(
-                    "STALE ledger entry {} ({} {}): it approved nothing",
-                    index + 1,
-                    entry.case,
-                    entry.rule_text
-                );
-            }
+    let (passed, lines) = tally.finish(complete, engines);
+    for line in lines {
+        println!("{line}");
+    }
+    Ok(passed)
+}
+
+/// The replay's verdict as it builds up: each answer compared, each
+/// difference and approval, and at the end the approvals that went unused.
+pub struct Tally<'a> {
+    ledger: &'a Ledger,
+    usage: Usage,
+    show_approved: bool,
+    compared: usize,
+    failures: usize,
+    lines: Vec<String>,
+}
+
+impl<'a> Tally<'a> {
+    /// An empty tally against `ledger`; `show_approved` reports approvals too.
+    pub fn new(ledger: &'a Ledger, show_approved: bool) -> Tally<'a> {
+        Tally {
+            ledger,
+            usage: Usage::default(),
+            show_approved,
+            compared: 0,
+            failures: 0,
+            lines: Vec::new(),
         }
     }
-    println!(
-        "{compared} answers compared, {failures} different, {stale} stale approvals ({})",
-        engines.join(" + ")
-    );
-    Ok(failures == 0 && stale == 0)
+
+    /// Compares `engine`'s `live` answers in `session` with `oracle`'s. The
+    /// Python server is the oracle: only another engine's difference may be
+    /// approved by the ledger.
+    pub fn judge(&mut self, engine: &str, session: &str, oracle: &[Exchange], live: &[Exchange]) {
+        let approve = engine != "python";
+        for (expected, got) in oracle.iter().zip(live) {
+            self.compared += 1;
+            let case = format!("{session}/{}", expected.step);
+            let report = compare_answers(
+                &case,
+                expected.response.as_ref(),
+                got.response.as_ref(),
+                approve.then_some(self.ledger),
+                &mut self.usage,
+            );
+            if !report.equal {
+                self.failures += 1;
+                self.lines.push(format!("DIFFERENT {engine} {case}"));
+                for difference in &report.differences {
+                    self.lines.push(format!(
+                        "  {} at {}:\n    expected {}\n    got      {}",
+                        difference.kind.as_str(),
+                        difference.pointer.as_deref().unwrap_or("(document)"),
+                        excerpt(&difference.oracle),
+                        excerpt(&difference.candidate)
+                    ));
+                }
+            } else if self.show_approved && !report.approved.is_empty() {
+                self.lines.push(format!("APPROVED {engine} {case}"));
+                for approval in &report.approved {
+                    self.lines.push(format!(
+                        "  entry {} ({}): {}",
+                        approval.entry, approval.rule, approval.reason
+                    ));
+                }
+            }
+        }
+        if live.len() != oracle.len() {
+            self.failures += 1;
+            self.lines.push(format!(
+                "DIFFERENT {engine} {session}: {} answers, expected {}",
+                live.len(),
+                oracle.len()
+            ));
+        }
+    }
+
+    /// Whether the replay passed, and what it reports. When `complete` (every
+    /// session replayed) and the Rust server ran, a replay ledger entry
+    /// ([`owns`]) that approved nothing is stale, and fails the replay.
+    pub fn finish(mut self, complete: bool, engines: &[&str]) -> (bool, Vec<String>) {
+        let mut stale = 0usize;
+        if complete && engines.contains(&"rust") {
+            for (index, entry) in self.ledger.entries.iter().enumerate() {
+                if owns(entry) && !self.usage.is_used(index) {
+                    stale += 1;
+                    self.lines.push(format!(
+                        "STALE ledger entry {} ({} {}): it approved nothing",
+                        index + 1,
+                        entry.case,
+                        entry.rule_text
+                    ));
+                }
+            }
+        }
+        self.lines.push(format!(
+            "{} answers compared, {} different, {stale} stale approvals ({})",
+            self.compared,
+            self.failures,
+            engines.join(" + ")
+        ));
+        (self.failures == 0 && stale == 0, self.lines)
+    }
 }
 
 fn excerpt(text: &str) -> String {
@@ -603,6 +712,7 @@ pub fn run_session(
     python: &Path,
     engine: &str,
     fixture: &FixtureSpec,
+    launch: Launch,
     messages: &[(String, Value)],
 ) -> Result<Vec<Exchange>> {
     let scratch = tempfile::Builder::new()
@@ -621,7 +731,9 @@ pub fn run_session(
     // The longest first, so a path is never half replaced.
     workspaces.sort_by_key(|path| std::cmp::Reverse(path.len()));
     workspaces.dedup();
-    let mut server = Server::start(python, engine, &ws, &home)?;
+    let outside = scratch.path().join("outside");
+    std::fs::create_dir_all(&outside)?;
+    let mut server = Server::start(python, engine, launch, &ws, &outside, &home)?;
     let mut exchanges = Vec::new();
     for (step, message) in messages {
         let response = server
@@ -646,11 +758,17 @@ struct Server {
 }
 
 impl Server {
-    fn start(python: &Path, engine: &str, ws: &Path, home: &Path) -> Result<Server> {
+    fn start(
+        python: &Path,
+        engine: &str,
+        launch: Launch,
+        ws: &Path,
+        outside: &Path,
+        home: &Path,
+    ) -> Result<Server> {
         let mut command = Command::new(python);
+        command.args(["-m", "opentide"]);
         command
-            .args(["-m", "opentide", "mcp", "start"])
-            .current_dir(ws)
             .env_clear()
             .env("PATH", std::env::var_os("PATH").unwrap_or_default())
             .env("HOME", home)
@@ -660,8 +778,6 @@ impl Server {
             .env("PYTHONHASHSEED", "0")
             .env("CI", "true")
             .env("OPENTIDE_ENGINE", engine)
-            .env("OPENTIDE_REPO_ROOT", ws)
-            .env("OPENTIDE_TIDE_WORKSPACE", ws)
             .env("GIT_CONFIG_NOSYSTEM", "1")
             .env("GIT_CONFIG_GLOBAL", "/dev/null")
             // No network: a proxy that refuses every connection.
@@ -669,7 +785,23 @@ impl Server {
             .env("HTTPS_PROXY", "http://127.0.0.1:9")
             .env("http_proxy", "http://127.0.0.1:9")
             .env("https_proxy", "http://127.0.0.1:9")
-            .env("NO_PROXY", "")
+            .env("NO_PROXY", "");
+        match launch {
+            Launch::Workspace => {
+                command
+                    .current_dir(ws)
+                    .env("OPENTIDE_REPO_ROOT", ws)
+                    .env("OPENTIDE_TIDE_WORKSPACE", ws);
+            }
+            Launch::RepoOption => {
+                command.arg("--repo").arg(ws).current_dir(outside);
+            }
+            Launch::PluginRoot => {
+                command.current_dir(ws).env("PWD", ws);
+            }
+        }
+        command
+            .args(["mcp", "start"])
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
@@ -834,6 +966,7 @@ mod tests {
         let recording = Recording {
             session: "s".into(),
             fixture: "f".into(),
+            launch: Launch::Workspace,
             exchanges: vec![
                 Exchange {
                     step: "initialized".into(),
@@ -848,6 +981,16 @@ mod tests {
             ],
         };
         assert_eq!(Recording::parse(&recording.to_jsonl()).unwrap(), recording);
+        assert!(!recording.to_jsonl().contains("launch"));
+        let mut outside = recording.clone();
+        outside.launch = Launch::RepoOption;
+        assert!(
+            outside
+                .to_jsonl()
+                .starts_with(r#"{"fixture":"f","launch":"repo-option","session":"s"}"#)
+        );
+        assert_eq!(Recording::parse(&outside.to_jsonl()).unwrap(), outside);
+        assert!(Recording::parse(r#"{"session":"s","fixture":"f","launch":"x"}"#).is_err());
     }
 
     #[test]
@@ -856,6 +999,7 @@ mod tests {
             name: "s".into(),
             fixture: "f".into(),
             protocol_version: Some("2024-11-05".into()),
+            launch: Launch::Workspace,
             steps: vec![Step {
                 id: "ping".into(),
                 message: r#"{"method": "ping"}"#.into(),
@@ -944,6 +1088,81 @@ changelog = "c"
         .unwrap();
         let owned: Vec<bool> = ledger.entries.iter().map(owns).collect();
         assert_eq!(owned, [true, false, false]);
+    }
+
+    const APPROVAL: &str = r#"
+[[diff]]
+command = "mcp start"
+case = "s/x"
+target = "stdout"
+rule = "json:/result/a"
+oracle = '1'
+candidate = '2'
+reason = "r"
+issue = "https://github.com/opentidehq/opentide/issues/829"
+changelog = "c"
+"#;
+
+    fn answered(step: &str, a: i64) -> Vec<Exchange> {
+        vec![Exchange {
+            step: step.into(),
+            request: json!({"jsonrpc": "2.0", "id": 1, "method": "m"}),
+            response: Some(json!({"jsonrpc": "2.0", "id": 1, "result": {"a": a}})),
+        }]
+    }
+
+    #[test]
+    fn the_replay_passes_on_equal_answers_and_fails_on_a_difference() {
+        let ledger = Ledger::default();
+        let mut tally = Tally::new(&ledger, false);
+        tally.judge("rust", "s", &answered("x", 1), &answered("x", 1));
+        let (passed, lines) = tally.finish(true, &["rust"]);
+        assert!(passed, "{lines:?}");
+        let mut tally = Tally::new(&ledger, false);
+        tally.judge("rust", "s", &answered("x", 1), &answered("x", 2));
+        let (passed, lines) = tally.finish(true, &["rust"]);
+        assert!(!passed);
+        assert_eq!(lines[0], "DIFFERENT rust s/x");
+        assert!(lines.last().unwrap().contains("1 different"), "{lines:?}");
+        // A server that answered fewer messages than were recorded fails too.
+        let mut tally = Tally::new(&ledger, false);
+        tally.judge("rust", "s", &answered("x", 1), &[]);
+        assert!(!tally.finish(true, &["rust"]).0);
+    }
+
+    #[test]
+    fn a_rust_approval_never_excuses_the_python_server() {
+        let ledger = Ledger::parse(APPROVAL).unwrap();
+        let mut tally = Tally::new(&ledger, true);
+        tally.judge("rust", "s", &answered("x", 1), &answered("x", 2));
+        let (passed, lines) = tally.finish(true, &["rust"]);
+        assert!(passed, "{lines:?}");
+        assert_eq!(lines[0], "APPROVED rust s/x");
+        let mut tally = Tally::new(&ledger, false);
+        tally.judge("python", "s", &answered("x", 1), &answered("x", 2));
+        let (passed, lines) = tally.finish(true, &["python"]);
+        assert!(!passed);
+        assert_eq!(lines[0], "DIFFERENT python s/x");
+    }
+
+    #[test]
+    fn an_approval_unused_by_a_complete_rust_replay_is_stale() {
+        let ledger = Ledger::parse(APPROVAL).unwrap();
+        let mut tally = Tally::new(&ledger, false);
+        tally.judge("rust", "s", &answered("x", 1), &answered("x", 1));
+        let (passed, lines) = tally.finish(true, &["python", "rust"]);
+        assert!(!passed);
+        assert!(
+            lines[0].starts_with("STALE ledger entry 1 (s/x "),
+            "{lines:?}"
+        );
+        // Only a complete replay of the Rust server can tell.
+        let mut tally = Tally::new(&ledger, false);
+        tally.judge("rust", "s", &answered("x", 1), &answered("x", 1));
+        assert!(tally.finish(false, &["rust"]).0);
+        let mut tally = Tally::new(&ledger, false);
+        tally.judge("python", "s", &answered("x", 1), &answered("x", 1));
+        assert!(tally.finish(true, &["python"]).0);
     }
 
     #[test]

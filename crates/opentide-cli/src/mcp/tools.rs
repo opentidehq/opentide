@@ -141,6 +141,10 @@ pub fn validation_report(
     queries: &str,
     context: &Context<'_>,
 ) -> Result<Json, String> {
+    // The Python tool asks for the workspace before it reads an argument.
+    if let Some(problem) = &context.workspace_problem {
+        return Err(problem.clone());
+    }
     if !QUERIES_MODES.contains(&queries) {
         return Ok(Json::object([
             ("ok", Json::Bool(false)),
@@ -153,9 +157,6 @@ pub fn validation_report(
                 )),
             ),
         ]));
-    }
-    if let Some(problem) = &context.workspace_problem {
-        return Err(problem.clone());
     }
     let one = |value: &str| {
         if value.is_empty() {
@@ -187,6 +188,17 @@ pub fn validation_report(
     let Some(Json::Object(mut payload)) = result.get("report").cloned() else {
         return Err("command_failed: validate returned no report".into());
     };
+    let diagnostics = diagnostics_of(&payload);
+    let again = again_action(file, uuid, object_type, queries);
+    payload.push((
+        "next_actions".into(),
+        Json::Array(validation_next_actions(&diagnostics, again)),
+    ));
+    Ok(Json::Object(payload))
+}
+
+/// The report's issues, then its warnings: every diagnostic a next step reads.
+fn diagnostics_of(payload: &[(String, Json)]) -> Vec<Json> {
     let mut diagnostics = Vec::new();
     for bucket in ["issues", "warnings"] {
         if let Some(Json::Array(items)) = payload
@@ -197,6 +209,12 @@ pub fn validation_report(
             diagnostics.extend(items.iter().cloned());
         }
     }
+    diagnostics
+}
+
+/// The same report again, as an MCP call and as the command line that keeps
+/// the selection and a `--queries` mode that is not the default.
+fn again_action(file: &str, uuid: &str, object_type: &str, queries: &str) -> Json {
     let mut arguments = Vec::new();
     let mut flags = String::new();
     for (key, flag, value) in [
@@ -213,17 +231,12 @@ pub fn validation_report(
         flags.push_str(&format!(" --queries {queries}"));
         arguments.push(("queries", Json::str(queries)));
     }
-    let again = next_action(
+    next_action(
         "validation_report",
         Json::object(arguments),
         &format!("opentide --json validate{flags}"),
         "",
-    );
-    payload.push((
-        "next_actions".into(),
-        Json::Array(validation_next_actions(&diagnostics, again)),
-    ));
-    Ok(Json::Object(payload))
+    )
 }
 
 /// A word of a command line, quoted for a POSIX shell when it needs it.
@@ -411,6 +424,90 @@ mod tests {
         assert_eq!(
             result["content"][0]["text"],
             "Error executing tool validation_report: workspace_not_found: set OPENTIDE_REPO_ROOT"
+        );
+    }
+
+    #[test]
+    fn without_a_workspace_even_a_bad_queries_mode_is_refused_with_the_reason() {
+        let env = Env::from_pairs::<&str, &str>([]);
+        let context = Context {
+            env: &env,
+            cwd: None,
+            repo: None,
+            workspace_problem: Some("workspace_not_found: no workspace".into()),
+        };
+        let result = call(
+            "validation_report",
+            &serde_json::from_value(json!({"queries": "loud"})).unwrap(),
+            &context,
+        );
+        assert_eq!(result["isError"], true);
+        assert_eq!(
+            result["content"][0]["text"],
+            "Error executing tool validation_report: workspace_not_found: no workspace"
+        );
+    }
+
+    #[test]
+    fn validating_again_keeps_the_selection_quoted_and_a_queries_mode() {
+        let action = again_action("rules/a b.yaml", "u-1", "rule", "warn");
+        assert_eq!(
+            action.get("command"),
+            Some(&Json::str(
+                "opentide --json validate --file 'rules/a b.yaml' --uuid u-1 --type rule --queries warn"
+            ))
+        );
+        assert_eq!(
+            action.get("arguments"),
+            Some(&Json::object([
+                ("file", Json::str("rules/a b.yaml")),
+                ("uuid", Json::str("u-1")),
+                ("object_type", Json::str("rule")),
+                ("queries", Json::str("warn")),
+            ]))
+        );
+        assert_eq!(action.get("tool"), Some(&Json::str("validation_report")));
+        let plain = again_action("", "", "", "error");
+        assert_eq!(
+            plain.get("command"),
+            Some(&Json::str("opentide --json validate"))
+        );
+        assert_eq!(plain.get("arguments"), Some(&Json::object::<&str>([])));
+        let off = again_action("", "", "threat", "off");
+        assert_eq!(
+            off.get("command"),
+            Some(&Json::str(
+                "opentide --json validate --type threat --queries off"
+            ))
+        );
+    }
+
+    #[test]
+    fn a_fix_on_a_warning_alone_still_shapes_the_rerun() {
+        let safe = Json::object([("safe", Json::Bool(true))]);
+        let payload = vec![
+            (
+                "issues".to_owned(),
+                Json::Array(vec![issue("e", "error", Json::Null)]),
+            ),
+            (
+                "warnings".to_owned(),
+                Json::Array(vec![issue("w", "warning", safe)]),
+            ),
+        ];
+        let diagnostics = diagnostics_of(&payload);
+        assert_eq!(diagnostics.len(), 2);
+        let actions =
+            validation_next_actions(&diagnostics, again_action("a b.yaml", "", "", "warn"));
+        assert_eq!(
+            actions[1].get("command"),
+            Some(&Json::str(
+                "opentide --json validate --fix --file 'a b.yaml' --queries warn"
+            ))
+        );
+        assert_eq!(
+            actions[1].get("reason"),
+            Some(&Json::str("apply the safe fixes, then validate again"))
         );
     }
 

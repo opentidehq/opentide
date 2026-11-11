@@ -26,12 +26,24 @@ from typing import Any
 Answer = dict[str, Any]
 
 
-def start() -> None:
-    """What the Python server does before it serves: ``server.main`` without the transport."""
+def start(environment: dict[str, str] | None = None) -> None:
+    """What the Python server does before it serves: ``server.main`` without the transport.
+
+    *environment* is what the root options (``--repo``, ``--data``,
+    ``--proxy``, ``--debug``) export, as ``CliContext.apply_environment``
+    exports them before the Python server starts: the Rust command line
+    parsed them, and the Python handlers, and the processes they start, read
+    the workspace from the environment.
+    """
+    import os
+
     from opentide.cli.ui.mode import OutputMode, set_mode
     from opentide.core.logging import LoggingConfig, init_logging
+    from opentide.core.root import get_repo_root
     from opentide.mcp_server.workspace import apply_plugin_launch, resolve_plugin_launch
 
+    os.environ.update(environment or {})
+    get_repo_root.cache_clear()
     set_mode(OutputMode.MCP)
     apply_plugin_launch(resolve_plugin_launch())
     init_logging(LoggingConfig(json_output=True, plain=True), force=True)

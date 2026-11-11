@@ -286,8 +286,12 @@ fn bridge<T>(call: impl for<'py> FnOnce(Bound<'py, PyModule>) -> PyResult<T>) ->
 }
 
 impl opentide_cli::mcp::Delegate for McpBridge {
-    fn start(&self) -> Result<(), String> {
-        bridge(|module| module.call_method0("start").map(drop))
+    fn start(&self, environment: &[(String, String)]) -> Result<(), String> {
+        let environment: HashMap<&str, &str> = environment
+            .iter()
+            .map(|(name, value)| (name.as_str(), value.as_str()))
+            .collect();
+        bridge(|module| module.call_method1("start", (environment,)).map(drop))
     }
 
     fn workspace_problem(&self) -> Option<String> {

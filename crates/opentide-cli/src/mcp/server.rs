@@ -33,7 +33,7 @@ impl Manifest {
     /// The compiled-in manifest, with the package's `version`.
     #[expect(
         clippy::expect_used,
-        reason = "the manifest is compiled in, and tests/mcp.rs reads every part of it"
+        reason = "the manifest is compiled in, and the_manifest_reads_into_every_part (and tests/test_mcp/test_bridge.py) reads every part of it"
     )]
     fn load(version: &str) -> Manifest {
         let manifest: Value = serde_json::from_str(MANIFEST).expect("data/mcp/manifest.json");
@@ -348,6 +348,45 @@ mod tests {
             };
             assert_eq!(error["code"], ErrorCode::INTERNAL_ERROR.0);
         }
+    }
+
+    /// A host with no workspace to serve.
+    struct NoWorkspace;
+
+    impl Delegate for NoWorkspace {
+        fn start(&self, _environment: &[(String, String)]) -> Result<(), String> {
+            Ok(())
+        }
+        fn workspace_problem(&self) -> Option<String> {
+            Some("workspace_not_found: nothing here".into())
+        }
+        fn call_tool(&self, _name: &str, _arguments: &str) -> Result<String, String> {
+            Err("not delegated in this test".into())
+        }
+        fn read_resource(&self, _uri: &str) -> Result<String, String> {
+            Err("not delegated in this test".into())
+        }
+    }
+
+    #[test]
+    fn a_native_tool_hears_the_hosts_workspace_problem() {
+        let host: &'static dyn Delegate = Box::leak(Box::new(NoWorkspace));
+        let server = Server::new(
+            Env::from_pairs::<&str, &str>([]),
+            None,
+            None,
+            "1",
+            Some(host),
+        );
+        let arguments = serde_json::from_value(json!({"queries": "loud"})).unwrap();
+        let Answer::Result(result) = server.call("validation_report", &arguments) else {
+            panic!("not a result");
+        };
+        assert_eq!(result["isError"], true);
+        assert_eq!(
+            result["content"][0]["text"],
+            "Error executing tool validation_report: workspace_not_found: nothing here"
+        );
     }
 
     #[test]

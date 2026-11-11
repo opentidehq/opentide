@@ -140,6 +140,8 @@ pub struct Globals {
     pub repo: Option<String>,
     /// `--proxy`, from the command line or `OPENTIDE_PROXY`.
     pub proxy: Option<String>,
+    /// `--data`, as typed on the command line (not from the environment).
+    pub data: Option<String>,
 }
 
 /// Reads the root's options, before the command, from hoisted arguments.
@@ -170,9 +172,7 @@ pub fn globals(root: &clap::Command, args: &[String], env: &Env) -> Globals {
             "--help" | "-h" => globals.help = true,
             "--repo" => globals.repo = value(),
             "--proxy" => globals.proxy = value(),
-            "--data" => {
-                let _data = value();
-            }
+            "--data" => globals.data = value(),
             _ => {}
         }
     }
@@ -591,12 +591,16 @@ impl Run<'_> {
             }
             "mcp start" => {
                 // stdout is JSON-RPC's: nothing is emitted around the server.
-                let repo = self
-                    .globals
-                    .repo
-                    .as_deref()
-                    .map(|repo| self.resolve(repo).display().to_string());
-                crate::mcp::serve(self.host.cwd.clone(), repo, &self.host.version)
+                let resolved =
+                    |path: Option<&str>| path.map(|path| self.resolve(path).display().to_string());
+                let launch = crate::mcp::Launch {
+                    cwd: self.host.cwd.clone(),
+                    repo: resolved(self.globals.repo.as_deref()),
+                    data: resolved(self.globals.data.as_deref()),
+                    proxy: self.globals.proxy.clone(),
+                    debug: self.globals.debug || self.env.debug_requested(),
+                };
+                crate::mcp::serve(&launch, &self.host.version)
             }
             "setup ci" => {
                 let report = self.setup_ci(&matches);

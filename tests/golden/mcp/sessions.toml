@@ -12,6 +12,12 @@
 # `notifications/initialized`; then each step is one JSON-RPC message
 # (`method` and `params`: the recorder numbers it), sent once the answer to
 # the step before it has arrived.
+#
+# `launch` is how the client starts the server: `workspace` (the default: in
+# the workspace, which OPENTIDE_REPO_ROOT and OPENTIDE_TIDE_WORKSPACE name),
+# `repo-option` (in an empty folder outside it, as `opentide --repo <ws> mcp
+# start`, with no workspace variable) or `plugin-root` (in the fixture as an
+# Agent Plugin root, with no workspace variable: a host that names none).
 
 [fixtures.tide-corpus]
 kind = "tide-corpus"
@@ -23,6 +29,17 @@ kind = "tide-corpus"
 source = "tests/fixtures/tide_corpus/current"
 about = "tide-corpus with an unknown TLP on the Sentinel rule: an issue with a fix"
 edits = [{ path = "Objects/Detection Rules/rule-0001-sentinel-kql.yaml", find = "  tlp: clear\n", replace = "  tlp: clearr\n" }]
+
+[fixtures.tide-corpus-broken-config]
+kind = "tide-corpus"
+source = "tests/fixtures/tide_corpus/current"
+about = "tide-corpus whose Sentinel platform configuration is not TOML: a workspace that does not open"
+edits = [{ path = ".opentide/configurations/platforms/sentinel.toml", find = "[platform]\nenabled = true\n", replace = "[platform]\nenabled = tru\n" }]
+
+[fixtures.agent-plugin]
+kind = "copy"
+source = "tests/fixtures/agent_plugin_root"
+about = "an Agent Plugin root (plugin.json, skills) that is no detection workspace"
 
 # The protocol: the handshake's answer (instructions, capabilities, version
 # negotiation), every list, and the protocol errors.
@@ -149,6 +166,53 @@ steps = [
     { id = "deploy-rule-unknown-rule", message = '{"method": "tools/call", "params": {"name": "deploy_rule", "arguments": {"uuid": "00000000-0000-0000-0000-000000000000", "platform": "sentinel"}}}' },
     { id = "deploy-rule-unknown-platform", message = '{"method": "tools/call", "params": {"name": "deploy_rule", "arguments": {"uuid": "00000000-0000-4000-8003-000000000001", "platform": "nowhere"}}}' },
     { id = "deploy-rule-missing-platform", message = '{"method": "tools/call", "params": {"name": "deploy_rule", "arguments": {"uuid": "00000000-0000-4000-8003-000000000001"}}}' },
+]
+
+# Started outside the workspace with `--repo` naming it: the catalogue tools,
+# the native report and a resource all serve the named workspace.
+[[session]]
+name = "launch-repo-option"
+fixture = "tide-corpus"
+launch = "repo-option"
+steps = [
+    { id = "search-platform", message = '{"method": "tools/call", "params": {"name": "search", "arguments": {"query": "Rule", "platform": "sentinel"}}}' },
+    { id = "validation-report-file", message = '{"method": "tools/call", "params": {"name": "validation_report", "arguments": {"file": "objects/rules/rule-0001-sentinel-kql.yaml"}}}' },
+    { id = "deployment-status", message = '{"method": "tools/call", "params": {"name": "deployment_status", "arguments": {"uuid": "00000000-0000-4000-8003-000000000001"}}}' },
+    { id = "rules", message = '{"method": "resources/read", "params": {"uri": "opentide://rules"}}' },
+]
+
+# Started in an Agent Plugin root by a host that names no workspace: the
+# catalogue tools and the native report refuse with workspace_not_found
+# (before they read an argument), the tools that need no catalogue answer.
+[[session]]
+name = "launch-plugin-root"
+fixture = "agent-plugin"
+launch = "plugin-root"
+steps = [
+    { id = "validation-report", message = '{"method": "tools/call", "params": {"name": "validation_report", "arguments": {}}}' },
+    { id = "validation-report-bad-queries", message = '{"method": "tools/call", "params": {"name": "validation_report", "arguments": {"queries": "loud"}}}' },
+    { id = "search", message = '{"method": "tools/call", "params": {"name": "search", "arguments": {"query": ""}}}' },
+    { id = "explain", message = '{"method": "tools/call", "params": {"name": "explain", "arguments": {"code": "workspace_not_found"}}}' },
+    { id = "index", message = '{"method": "resources/read", "params": {"uri": "opentide://index"}}' },
+]
+
+# A workspace whose configuration does not parse: the report's refusal.
+[[session]]
+name = "tools-validation-broken-config"
+fixture = "tide-corpus-broken-config"
+steps = [
+    { id = "validation-report-all", message = '{"method": "tools/call", "params": {"name": "validation_report", "arguments": {}}}' },
+    { id = "validation-report-bad-queries", message = '{"method": "tools/call", "params": {"name": "validation_report", "arguments": {"queries": "loud"}}}' },
+]
+
+# A report with errors whose next steps keep a --queries mode and a path that
+# needs quoting (the rule's file through the corpus's own `Detection Rules`).
+[[session]]
+name = "tools-validation-next-actions"
+fixture = "tide-corpus-typo"
+steps = [
+    { id = "validation-report-warn", message = '{"method": "tools/call", "params": {"name": "validation_report", "arguments": {"file": "Objects/Detection Rules/rule-0001-sentinel-kql.yaml", "queries": "warn"}}}' },
+    { id = "validation-report-quoted", message = '{"method": "tools/call", "params": {"name": "validation_report", "arguments": {"file": "Objects/Detection Rules/rule-0001-sentinel-kql.yaml", "queries": "off"}}}' },
 ]
 
 # Every resource and resource template, and the errors of each.

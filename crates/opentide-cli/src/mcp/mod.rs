@@ -31,6 +31,39 @@ use std::sync::OnceLock;
 
 pub use server::Server;
 
+#[cfg(test)]
+mod launch_tests {
+    use super::Launch;
+
+    #[test]
+    fn the_root_options_export_what_the_python_root_callback_does() {
+        assert!(Launch::default().environment().is_empty());
+        let launch = Launch {
+            cwd: None,
+            repo: Some("/ws".into()),
+            data: Some("/data".into()),
+            proxy: Some("http://p:3128".into()),
+            debug: true,
+        };
+        let environment = launch.environment();
+        let get = |name: &str| {
+            environment
+                .iter()
+                .find(|(key, _)| key == name)
+                .map(|(_, value)| value.as_str())
+        };
+        assert_eq!(get("OPENTIDE_REPO_ROOT"), Some("/ws"));
+        assert_eq!(get("OPENTIDE_TIDE_WORKSPACE"), Some("/ws"));
+        assert_eq!(get("OPENTIDE_DATA_ROOT"), Some("/data"));
+        for name in ["HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"] {
+            assert_eq!(get(name), Some("http://p:3128"), "{name}");
+        }
+        assert_eq!(get("OPENTIDE_DEBUG"), Some("1"));
+        assert_eq!(get("DEBUG_ENABLED"), Some("1"));
+        assert_eq!(environment.len(), 9);
+    }
+}
+
 /// The tools that run in Rust; every other tool is the [`Delegate`]'s.
 pub const NATIVE_TOOLS: &[&str] = &["explain", "validation_report"];
 
@@ -69,14 +102,15 @@ pub const DELEGATED_TOOLS: &[(&str, &str)] = &[
 
 /// What the host of the Rust server (the Python package) answers for it.
 pub trait Delegate: Send + Sync {
-    /// The Python server's start-up, before anything is answered: its output
-    /// mode, the Agent Plugin launch (which may name the workspace through
-    /// the environment), its logging.
+    /// The Python server's start-up, before anything is answered: the
+    /// variables the root options export ([`Launch::environment`]) put in
+    /// the host's environment, then its output mode, the Agent Plugin launch
+    /// (which may name the workspace through the environment), its logging.
     ///
     /// # Errors
     ///
     /// Why the host could not start.
-    fn start(&self) -> Result<(), String>;
+    fn start(&self, environment: &[(String, String)]) -> Result<(), String>;
 
     /// Why there is no workspace to serve (`workspace_not_found`), or `None`.
     fn workspace_problem(&self) -> Option<String>;
@@ -108,28 +142,85 @@ fn delegate() -> Option<&'static dyn Delegate> {
     DELEGATE.get().map(AsRef::as_ref)
 }
 
-/// Serves MCP on stdio until the client closes stdin; the exit code. `repo`
-/// is `--repo`, resolved.
+/// The root options `mcp start` runs with.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Launch {
+    /// The server's working directory.
+    pub cwd: Option<PathBuf>,
+    /// `--repo`, resolved.
+    pub repo: Option<String>,
+    /// `--data`, resolved.
+    pub data: Option<String>,
+    /// `--proxy` (or `OPENTIDE_PROXY`).
+    pub proxy: Option<String>,
+    /// `--debug` (or `OPENTIDE_DEBUG`).
+    pub debug: bool,
+}
+
+impl Launch {
+    /// The variables the Python CLI's root callback exports for these
+    /// options (`CliContext.apply_environment`), which the Python half and
+    /// the processes it starts read the workspace, the data and the proxy
+    /// from: only what an option names, the rest is the process's own.
+    pub fn environment(&self) -> Vec<(String, String)> {
+        let mut out = Vec::new();
+        let mut put = |name: &str, value: &str| out.push((name.to_owned(), value.to_owned()));
+        if let Some(repo) = &self.repo {
+            put("OPENTIDE_REPO_ROOT", repo);
+            put("OPENTIDE_TIDE_WORKSPACE", repo);
+        }
+        if let Some(data) = &self.data {
+            put("OPENTIDE_DATA_ROOT", data);
+        }
+        if let Some(proxy) = &self.proxy {
+            for name in ["HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"] {
+                put(name, proxy);
+            }
+        }
+        if self.debug {
+            put("OPENTIDE_DEBUG", "1");
+            put("DEBUG_ENABLED", "1");
+        }
+        out
+    }
+}
+
+/// Serves MCP on stdio until the client closes stdin; the exit code.
 ///
 /// # Errors
 ///
 /// An I/O error setting up stdio or the runtime.
-pub fn serve(cwd: Option<PathBuf>, repo: Option<String>, version: &str) -> std::io::Result<i32> {
+pub fn serve(launch: &Launch, version: &str) -> std::io::Result<i32> {
     use std::io::Write;
+    let environment = launch.environment();
     if let Some(delegate) = delegate()
-        && let Err(problem) = delegate.start()
+        && let Err(problem) = delegate.start(&environment)
     {
         tracing::error!(problem = %problem, "the MCP server's Python half did not start");
         return Ok(1);
     }
-    // The Python half may have named the workspace (an Agent Plugin launch).
-    let env = crate::env::Env::from_process();
+    // The Python half may have named the workspace (an Agent Plugin launch);
+    // the root options' variables hold without it too.
+    let process = crate::env::Env::from_process();
+    let env = crate::env::Env::from_pairs(
+        process.iter().chain(
+            environment
+                .iter()
+                .map(|(name, value)| (name.as_str(), value.as_str())),
+        ),
+    );
     std::io::stdout().flush()?;
     let rpc = stdio::reserve_stdout()?;
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?;
-    let server = Server::new(env, cwd, repo, version, delegate());
+    let server = Server::new(
+        env,
+        launch.cwd.clone(),
+        launch.repo.clone(),
+        version,
+        delegate(),
+    );
     let outcome = runtime.block_on(server.run(rpc.file()?));
     rpc.restore()?;
     outcome?;
