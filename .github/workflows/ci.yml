@@ -1,16 +1,37 @@
 name: CI
 
+# Two scopes (.github/AGENTS.md, "What runs where"; tests/test_ci/test_ci_scope.py):
+#
+# - The core gates run on every pull request, push, schedule and manual run:
+#   lint, engine lint, engine tests on three OSes, Python 3.10 and 3.14,
+#   E2E, GitLab CI lint, golden compare, corpus and cargo deny. They are the
+#   required checks, and their jobs carry no `if`.
+# - The full set adds the rest: Python 3.11-3.13, the engine release dry run,
+#   WebAssembly, crate packaging, grammars, the Elastic sweep, fuzz smoke, the
+#   Windows CLI smoke, LSP clients and benchmarks. It runs nightly, on every
+#   push to development and integration/unified-core, on Run workflow, and on
+#   a pull request that carries the `full-ci` label (read at each push: add
+#   the label, then push, or Run workflow on the branch). Each of these jobs
+#   has an `if` on that condition; the release dry run (and crate packaging)
+#   also runs on a pull request that changes the release's inputs, and the
+#   grammar checks on one that changes the grammars (the `changes` job).
+
 on:
   push:
     # integration/unified-core: the Unified Core PRs merge there before development.
     branches: [main, development, integration/unified-core]
-  # Run workflow, as language-server's engine CI had.
+  # Run workflow, as language-server's engine CI had: the full set.
   workflow_dispatch:
   pull_request:
     # All base branches: a stacked PR targets the branch below it, not development.
+  schedule:
+    # Nightly on the default branch (development): the full set.
+    - cron: "11 1 * * *"
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  # The event in the group, so that the nightly run and a push to development
+  # do not cancel each other.
+  group: ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -22,6 +43,67 @@ env:
   COVERAGE_PYTHON: "3.14"
 
 jobs:
+  # Whether a pull request changes the inputs of the jobs that run on a pull
+  # request only when it does: the engine release (its workflows and release
+  # scripts; not Cargo.toml or Cargo.lock, which most pull requests touch) and
+  # the grammars.
+  # Bash patterns, one a line; `*` matches `/` too. Anything but a pull
+  # request, and a checkout that is not the pull request's merge commit,
+  # counts as a change; the jobs that read it also run when it fails.
+  changes:
+    name: CI paths
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      release: ${{ steps.paths.outputs.release }}
+      grammars: ${{ steps.paths.outputs.grammars }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The merge commit and its first parent, the base branch's tip.
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Detect changes to the release and grammar inputs
+        id: paths
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          RELEASE_PATHS: |
+            .github/workflows/engine-release*.yml
+            scripts/engine/release*
+          GRAMMARS_PATHS: |
+            grammars/*
+            highlights/*
+            scripts/engine/check-grammars.sh
+        run: |
+          set -euo pipefail
+          outputs=(release grammars)
+          if [[ "${EVENT_NAME}" != "pull_request" ]] || ! git rev-parse --verify --quiet HEAD^2 >/dev/null; then
+            for output in "${outputs[@]}"; do
+              echo "${output}=true" >> "$GITHUB_OUTPUT"
+            done
+            exit 0
+          fi
+          changed="$(git diff --no-renames --name-only HEAD^1 HEAD)"
+          for output in "${outputs[@]}"; do
+            patterns_var="${output^^}_PATHS"
+            patterns="${!patterns_var}"
+            value=false
+            while IFS= read -r file; do
+              [[ -n "${file}" ]] || continue
+              while IFS= read -r pattern; do
+                # Unquoted on the right: a pattern, not a string.
+                if [[ -n "${pattern}" && "${file}" == ${pattern} ]]; then
+                  echo "${output} input changed: ${file}"
+                  value=true
+                fi
+              done <<<"${patterns}"
+            done <<<"${changed}"
+            echo "${output}=${value}" >> "$GITHUB_OUTPUT"
+          done
+
   lint:
     name: Lint
     runs-on: ubuntu-latest
@@ -328,6 +410,9 @@ jobs:
   # and WASI servers.
   engine-wasm:
     name: Engine WebAssembly and npm packages
+    # The full set (the workflow's header); the release dry run builds the
+    # WebAssembly assets too.
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -395,6 +480,15 @@ jobs:
   # catches an oracle reference here rather than at release time.
   engine-package:
     name: Engine crates package and licence scan
+    needs: changes
+    # The full set, and a pull request that changes the release's inputs.
+    if: >-
+      !cancelled() && (
+        github.event_name != 'pull_request'
+        || contains(github.event.pull_request.labels.*.name, 'full-ci')
+        || needs.changes.result != 'success'
+        || needs.changes.outputs.release == 'true'
+      )
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -477,6 +571,15 @@ jobs:
   # from its grammar.js (crates/AGENTS.md: never hand-edited).
   grammars:
     name: Grammars regenerate
+    needs: changes
+    # The full set, and a pull request that changes the grammars.
+    if: >-
+      !cancelled() && (
+        github.event_name != 'pull_request'
+        || contains(github.event.pull_request.labels.*.name, 'full-ci')
+        || needs.changes.result != 'success'
+        || needs.changes.outputs.grammars == 'true'
+      )
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -493,6 +596,14 @@ jobs:
   # The generated grammars as VS Code reads them (language-server#171).
   textmate:
     name: TextMate grammars (vscode-textmate)
+    needs: changes
+    if: >-
+      !cancelled() && (
+        github.event_name != 'pull_request'
+        || contains(github.event.pull_request.labels.*.name, 'full-ci')
+        || needs.changes.result != 'success'
+        || needs.changes.outputs.grammars == 'true'
+      )
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -513,6 +624,7 @@ jobs:
   # vendored.
   elastic-sweep:
     name: Elastic detection-rules sweep
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -550,11 +662,12 @@ jobs:
         run: cargo test --locked -p opentide-analysis --test elastic_detection_rules -- --nocapture
 
   # Each fuzz target (fuzz/, cargo-fuzz on nightly) for 60 seconds from its
-  # seeds and saved regressions: a panic or a timeout on a pull request fails
-  # here. engine-fuzz.yml runs each for ten minutes a night with the corpus
+  # seeds and saved regressions: a panic or a timeout fails here, in the full
+  # set. engine-fuzz.yml runs each for ten minutes a night with the corpus
   # it keeps.
   fuzz-smoke:
     name: Fuzz smoke (${{ matrix.targets }})
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -569,7 +682,7 @@ jobs:
         with:
           persist-credentials: false
       # The dated nightly fuzz/NIGHTLY pins, which scripts/engine/fuzz.sh also
-      # reads: a new nightly reaches this required check in a change of its own.
+      # reads: a new nightly reaches this check in a change of its own.
       - name: Set up Rust (nightly)
         id: nightly
         run: |
@@ -611,6 +724,17 @@ jobs:
   # (v0.11.0) with this version in their names.
   engine-release-dry-run:
     name: Engine release (dry run)
+    needs: changes
+    # The full set, and a pull request that changes the release's inputs
+    # (`changes`: its workflows, the Cargo manifests and lock, the toolchain,
+    # scripts/engine/release*).
+    if: >-
+      !cancelled() && (
+        github.event_name != 'pull_request'
+        || contains(github.event.pull_request.labels.*.name, 'full-ci')
+        || needs.changes.result != 'success'
+        || needs.changes.outputs.release == 'true'
+      )
     permissions:
       contents: read
     uses: ./.github/workflows/engine-release-build.yml
@@ -657,6 +781,8 @@ jobs:
     name: LSP clients (informational)
     runs-on: ubuntu-latest
     continue-on-error: true
+    # The full set (the workflow's header).
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')
     permissions:
       contents: read
     env:
@@ -699,6 +825,7 @@ jobs:
     name: Benchmarks (informational)
     runs-on: ubuntu-latest
     continue-on-error: true
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')
     permissions:
       contents: read
     env:
@@ -877,6 +1004,8 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  # The oldest and newest Python on every pull request; `test-full` adds the
+  # ones between in the full set.
   test:
     name: Test (${{ matrix.python-version }})
     runs-on: ubuntu-latest
@@ -887,7 +1016,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+        python-version: ["3.10", "3.14"]
 
     steps:
       # PR head commit (not merge commit) so coverage line numbers map to the diff.
@@ -993,6 +1122,48 @@ jobs:
           name: htmlcov
           path: htmlcov/
           retention-days: 14
+
+  # The Python versions between the oldest and the newest, in the full set
+  # (the workflow's header): `test`'s run without coverage, which 3.14 keeps.
+  test-full:
+    name: Test (${{ matrix.python-version }})
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Set up Rust
+        run: rustup toolchain install --profile minimal --no-self-update
+
+      # The `test` job's cache of the binding `uv sync` builds.
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: python-engine
+          save-if: false
+
+      - name: Install dependencies
+        run: uv sync --group dev
+
+      - name: Pytest
+        run: uv run pytest tests/ --no-cov -q -n 4 -m "not cli_e2e and not cli_smoke and not gitlab_ci_lint"
 
   cli-e2e:
     name: E2E (3.14, shard ${{ matrix.shard }}/4)
@@ -1182,6 +1353,9 @@ jobs:
 
   cli-windows-smoke:
     name: CLI Windows smoke
+    # The full set (the workflow's header): `Engine tests (windows-latest)`
+    # covers Windows on every pull request.
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')
     runs-on: windows-latest
     # Also not gated on `test`: a 36 s job that waited ~5 min for a matrix it
     # shares nothing with. Left serial — two small test files, so workers would

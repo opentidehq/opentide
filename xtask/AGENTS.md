@@ -129,6 +129,11 @@ cargo xtask check-layers
   off (`GIT_CONFIG_COUNT`: `maintenance.auto=false`, `gc.auto=0`; `payloads::git::QUIET_GIT`):
   either works under `.git` in the background after a commit, and a copy of `.git` made meanwhile
   failed (#934). A state's copy leaves git's `*.lock` files out and fails loudly otherwise.
+- A test never spawns `cargo xtask` (or `cargo run`) on this workspace: under `cargo nextest run --workspace` the
+  spawned cargo builds xtask alone, with other features than the test build (resolver 2 unifies
+  them across the workspace), and recompiled much of it, which held the corpus tests for minutes
+  on Windows (#948). A `generated` fixture whose argv is `cargo xtask corpus ...` therefore runs
+  the corpus command in-process (`golden::fixture`); `cargo metadata` is fine.
 - `src/layers.rs` unit tests: synthetic tables and metadata, including a deliberate upward
   dependency on the repository's own table, which must fail.
 - `tests/cli.rs`: the binary through trycmd (`tests/cmd/*.trycmd`, fixtures in
