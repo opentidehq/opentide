@@ -7997,3 +7997,196 @@ candidate = "warning: Docs changed requires git · detail: changed-object discov
 reason = "no spinner while the run looks for git: the warning is one log line, printed before the failed checklist row instead of inside Rich's live region and wrapped at the terminal's width"
 issue = "https://github.com/opentidehq/opentide/issues/915"
 changelog = "**`generate docs` runs on the Rust engine**"
+
+# UC-3.2c (#916): `generate explorer` on a terminal prints its checklist row
+# once the explorer files are written, without the spinner the oracle drew
+# while it ran (as `generate exports`, above).
+
+[[diff]]
+command = "generate explorer"
+case = "generate.explorer/human/tide-corpus/default"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mexplorer\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;32m\u2713\u001b[0m  \u001b[1mexplorer\u001b[0m  \u001b[2m2 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2m.opentide/exports/\u001b[0m"
+candidate = "  \u001b[1;32m\u2713\u001b[0m  \u001b[1mexplorer\u001b[0m  \u001b[2m2 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2m.opentide/exports/\u001b[0m"
+reason = "the explorer files are written in milliseconds: the checklist row is printed when they are done, without the spinner Python drew while they ran"
+issue = "https://github.com/opentidehq/opentide/issues/916"
+changelog = "**`generate explorer`, `generate inflight` and `setup ci` run on the Rust engine**"
+
+[[diff]]
+command = "generate explorer"
+case = "generate.explorer/human/tide-corpus/visibility"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mexplorer\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;32m\u2713\u001b[0m  \u001b[1mexplorer\u001b[0m  \u001b[2m3 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2m.opentide/exports/\u001b[0m"
+candidate = "  \u001b[1;32m\u2713\u001b[0m  \u001b[1mexplorer\u001b[0m  \u001b[2m3 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2m.opentide/exports/\u001b[0m"
+reason = "the explorer files are written in milliseconds: the checklist row is printed when they are done, without the spinner Python drew while they ran"
+issue = "https://github.com/opentidehq/opentide/issues/916"
+changelog = "**`generate explorer`, `generate inflight` and `setup ci` run on the Rust engine**"
+
+[[diff]]
+command = "generate explorer"
+case = "generate.explorer/human/vscode/default"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mexplorer\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;31m\u2717\u001b[0m  \u001b[1mexplorer\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+candidate = "  \u001b[1;31m\u2717\u001b[0m  \u001b[1mexplorer\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+reason = "the explorer files are written in milliseconds: the checklist row is printed when they are done, without the spinner Python drew while they ran"
+issue = "https://github.com/opentidehq/opentide/issues/916"
+changelog = "**`generate explorer`, `generate inflight` and `setup ci` run on the Rust engine**"
+
+
+# UC-3.2c (#916): `generate inflight` outside a git repository logs that it
+# found no baseline. Under `--json` the Rust command line writes each log line
+# as JSON without structlog's `logger` module name (as `deploy --dry-run` and
+# `generate docs`, above); at a terminal it writes it unwrapped and
+# uncoloured, before the checklist row, where the oracle wrapped and coloured
+# it inside its spinner's live region. `generate inflight prune` prints its
+# checklist row without the spinner, as `generate exports` does.
+
+[[diff]]
+command = "generate inflight"
+case = "generate.inflight/json/tide-corpus/default"
+target = "stderr"
+rule = "lines"
+oracle = "{\"detail\":\"changed-object discovery requires a git repository with at least one commit\",\"event\":\"inflight_no_git_baseline\",\"logger\":\"opentide.indexing.inflight\",\"level\":\"warning\",\"timestamp\":\"0000-00-00 00:00:00\"}\n{\"event\":\"inflight_no_local_git_diff_found\",\"logger\":\"opentide.indexing.inflight\",\"level\":\"warning\",\"timestamp\":\"0000-00-00 00:00:00\"}"
+candidate = "{\"detail\":\"changed-object discovery requires a git repository with at least one commit\",\"event\":\"inflight_no_git_baseline\",\"level\":\"warning\",\"timestamp\":\"0000-00-00 00:00:00\"}\n{\"event\":\"inflight_no_local_git_diff_found\",\"level\":\"warning\",\"timestamp\":\"0000-00-00 00:00:00\"}"
+reason = "`logger` named the Python module that logged the line (structlog's logger name); the Rust CLI's JSON log lines carry the event, level, timestamp and the event's fields, not a module path. Two JSON lines are not one document, so the lines are approved whole: they differ only by `logger`."
+issue = "https://github.com/opentidehq/opentide/issues/896"
+changelog = "**`deploy --dry-run` runs on the Rust command line**"
+
+[[diff]]
+command = "generate inflight"
+case = "generate.inflight/human/tide-corpus/default"
+target = "stderr"
+rule = "lines"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36minflight\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[1;33mwarning: \u001b[0mInflight no git baseline · detail: changed-object discovery requires a git repository with \nat least one commit\n\u001b[1;33mwarning: \u001b[0mInflight no local git diff found\n\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;32m✓\u001b[0m  \u001b[1minflight\u001b[0m  \u001b[2m0 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+candidate = "warning: Inflight no git baseline · detail: changed-object discovery requires a git repository with at least one commit\nwarning: Inflight no local git diff found\n  \u001b[1;32m✓\u001b[0m  \u001b[1minflight\u001b[0m  \u001b[2m0 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+reason = "the Rust command line logs a warning as one text line in every mode (OPENTIDE_LOG_JSON=1 for JSON lines), as it is written, before the checklist row; the oracle wrote structlog JSON under --json, and at a terminal wrapped, coloured lines inside its spinner"
+issue = "https://github.com/opentidehq/opentide/issues/916"
+changelog = "**`generate explorer`, `generate inflight` and `setup ci` run on the Rust engine**"
+
+[[diff]]
+command = "generate inflight prune"
+case = "generate.inflight.prune/human/tide-corpus/default"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36minflight prune\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;32m✓\u001b[0m  \u001b[1minflight prune\u001b[0m  \u001b[2m0 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+candidate = "  \u001b[1;32m✓\u001b[0m  \u001b[1minflight prune\u001b[0m  \u001b[2m0 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+reason = "the shards are pruned in milliseconds: the checklist row is printed when they are done, without the spinner Python drew while they ran"
+issue = "https://github.com/opentidehq/opentide/issues/916"
+changelog = "**`generate explorer`, `generate inflight` and `setup ci` run on the Rust engine**"
+
+[[diff]]
+command = "generate inflight"
+case = "generate.inflight/json/vscode/default"
+target = "stderr"
+rule = "lines"
+oracle = "{\"detail\":\"changed-object discovery requires a git repository with at least one commit\",\"event\":\"inflight_no_git_baseline\",\"logger\":\"opentide.indexing.inflight\",\"level\":\"warning\",\"timestamp\":\"0000-00-00 00:00:00\"}\n{\"event\":\"inflight_no_local_git_diff_found\",\"logger\":\"opentide.indexing.inflight\",\"level\":\"warning\",\"timestamp\":\"0000-00-00 00:00:00\"}"
+candidate = "{\"detail\":\"changed-object discovery requires a git repository with at least one commit\",\"event\":\"inflight_no_git_baseline\",\"level\":\"warning\",\"timestamp\":\"0000-00-00 00:00:00\"}\n{\"event\":\"inflight_no_local_git_diff_found\",\"level\":\"warning\",\"timestamp\":\"0000-00-00 00:00:00\"}"
+reason = "`logger` named the Python module that logged the line (structlog's logger name); the Rust CLI's JSON log lines carry the event, level, timestamp and the event's fields, not a module path. Two JSON lines are not one document, so the lines are approved whole: they differ only by `logger`."
+issue = "https://github.com/opentidehq/opentide/issues/896"
+changelog = "**`deploy --dry-run` runs on the Rust command line**"
+
+[[diff]]
+command = "generate inflight"
+case = "generate.inflight/human/vscode/default"
+target = "stderr"
+rule = "lines"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36minflight\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[1;33mwarning: \u001b[0mInflight no git baseline · detail: changed-object discovery requires a git repository with \nat least one commit\n\u001b[1;33mwarning: \u001b[0mInflight no local git diff found\n\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;32m✓\u001b[0m  \u001b[1minflight\u001b[0m  \u001b[2m0 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+candidate = "warning: Inflight no git baseline · detail: changed-object discovery requires a git repository with at least one commit\nwarning: Inflight no local git diff found\n  \u001b[1;32m✓\u001b[0m  \u001b[1minflight\u001b[0m  \u001b[2m0 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+reason = "the Rust command line logs a warning as one text line in every mode (OPENTIDE_LOG_JSON=1 for JSON lines), as it is written, before the checklist row; the oracle wrote structlog JSON under --json, and at a terminal wrapped, coloured lines inside its spinner"
+issue = "https://github.com/opentidehq/opentide/issues/916"
+changelog = "**`generate explorer`, `generate inflight` and `setup ci` run on the Rust engine**"
+
+[[diff]]
+command = "generate inflight prune"
+case = "generate.inflight.prune/human/vscode/default"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36minflight prune\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;32m✓\u001b[0m  \u001b[1minflight prune\u001b[0m  \u001b[2m0 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+candidate = "  \u001b[1;32m✓\u001b[0m  \u001b[1minflight prune\u001b[0m  \u001b[2m0 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+reason = "the shards are pruned in milliseconds: the checklist row is printed when they are done, without the spinner Python drew while they ran"
+issue = "https://github.com/opentidehq/opentide/issues/916"
+changelog = "**`generate explorer`, `generate inflight` and `setup ci` run on the Rust engine**"
+
+# UC-3.2c (#916): `setup ci githb` is refused as every other invalid choice
+# is on the Rust command line: the value and the choices, and the closest
+# choice as the suggestion.
+
+[[diff]]
+command = "setup ci"
+case = "setup.ci/json/tide-corpus/typo-choice"
+target = "stdout"
+rule = "json:/error"
+oracle = "\"Invalid value for 'ci_platform': Choose github, gitlab, or azure\""
+candidate = "\"Invalid value for 'ci_platform': 'githb' is not one of 'github', 'gitlab', 'azure'.\""
+reason = "the Rust command line words a value outside an argument's choices as it words every other one (the value, then the choices) and suggests the closest, as for --check and --platform; the oracle's 0.23.0 setup ci had a sentence of its own and no suggestion"
+issue = "https://github.com/opentidehq/opentide/issues/916"
+changelog = "**`generate explorer`, `generate inflight` and `setup ci` run on the Rust engine**"
+
+[[diff]]
+command = "setup ci"
+case = "setup.ci/json/tide-corpus/typo-choice"
+target = "stdout"
+rule = "json:/message"
+oracle = "\"Invalid value for 'ci_platform': Choose github, gitlab, or azure\""
+candidate = "\"Invalid value for 'ci_platform': 'githb' is not one of 'github', 'gitlab', 'azure'.\""
+reason = "the Rust command line words a value outside an argument's choices as it words every other one (the value, then the choices) and suggests the closest, as for --check and --platform; the oracle's 0.23.0 setup ci had a sentence of its own and no suggestion"
+issue = "https://github.com/opentidehq/opentide/issues/916"
+changelog = "**`generate explorer`, `generate inflight` and `setup ci` run on the Rust engine**"
+
+[[diff]]
+command = "setup ci"
+case = "setup.ci/json/tide-corpus/typo-choice"
+target = "stdout"
+rule = "json:/failure/message"
+oracle = "\"Invalid value for 'ci_platform': Choose github, gitlab, or azure\""
+candidate = "\"Invalid value for 'ci_platform': 'githb' is not one of 'github', 'gitlab', 'azure'.\""
+reason = "the Rust command line words a value outside an argument's choices as it words every other one (the value, then the choices) and suggests the closest, as for --check and --platform; the oracle's 0.23.0 setup ci had a sentence of its own and no suggestion"
+issue = "https://github.com/opentidehq/opentide/issues/916"
+changelog = "**`generate explorer`, `generate inflight` and `setup ci` run on the Rust engine**"
+
+[[diff]]
+command = "setup ci"
+case = "setup.ci/json/tide-corpus/typo-choice"
+target = "stdout"
+rule = "json:/failure/suggestion"
+oracle = "null"
+candidate = "\"github\""
+reason = "the Rust command line words a value outside an argument's choices as it words every other one (the value, then the choices) and suggests the closest, as for --check and --platform; the oracle's 0.23.0 setup ci had a sentence of its own and no suggestion"
+issue = "https://github.com/opentidehq/opentide/issues/916"
+changelog = "**`generate explorer`, `generate inflight` and `setup ci` run on the Rust engine**"
+
+[[diff]]
+command = "setup ci"
+case = "setup.ci/plain/tide-corpus/typo-choice"
+target = "stderr"
+rule = "lines"
+oracle = "error: Invalid value for 'ci_platform': Choose github, gitlab, or azure"
+candidate = "error: Invalid value for 'ci_platform': 'githb' is not one of 'github', 'gitlab', 'azure'.\n  help: did you mean 'github'?"
+reason = "the Rust command line words a value outside an argument's choices as it words every other one (the value, then the choices) and suggests the closest, as for --check and --platform; the oracle's 0.23.0 setup ci had a sentence of its own and no suggestion"
+issue = "https://github.com/opentidehq/opentide/issues/916"
+changelog = "**`generate explorer`, `generate inflight` and `setup ci` run on the Rust engine**"
+
+[[diff]]
+command = "setup ci"
+case = "setup.ci/agent/tide-corpus/typo-choice"
+target = "stderr"
+rule = "lines"
+oracle = "error: Invalid value for 'ci_platform': Choose github, gitlab, or azure"
+candidate = "error: Invalid value for 'ci_platform': 'githb' is not one of 'github', 'gitlab', 'azure'.\n  help: did you mean 'github'?"
+reason = "the Rust command line words a value outside an argument's choices as it words every other one (the value, then the choices) and suggests the closest, as for --check and --platform; the oracle's 0.23.0 setup ci had a sentence of its own and no suggestion"
+issue = "https://github.com/opentidehq/opentide/issues/916"
+changelog = "**`generate explorer`, `generate inflight` and `setup ci` run on the Rust engine**"
+
+[[diff]]
+command = "setup ci"
+case = "setup.ci/human/tide-corpus/typo-choice"
+target = "stderr"
+rule = "lines"
+oracle = "\u001b[1;31merror:\u001b[0m Invalid value for 'ci_platform': Choose github, gitlab, or azure"
+candidate = "\u001b[1;31merror:\u001b[0m Invalid value for 'ci_platform': 'githb' is not one of 'github', 'gitlab', 'azure'.\n  \u001b[1;36mhelp:\u001b[0m did you mean 'github'?"
+reason = "the Rust command line words a value outside an argument's choices as it words every other one (the value, then the choices) and suggests the closest, as for --check and --platform; the oracle's 0.23.0 setup ci had a sentence of its own and no suggestion"
+issue = "https://github.com/opentidehq/opentide/issues/916"
+changelog = "**`generate explorer`, `generate inflight` and `setup ci` run on the Rust engine**"

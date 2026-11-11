@@ -110,8 +110,10 @@ RUST_CLI: tuple[str, ...] = (sys.executable, "-m", "opentide.cli.rust")
 #: the change that ports it. ``info`` (every section) and ``rules unreviewed``
 #: came with UC-2.4 (#819); ``generate exports`` and its three exports with
 #: UC-3.2 (#824); ``generate docs`` and its four scopes with UC-3.2b (#915);
-#: ``deploy --dry-run`` with UC-3.1c (#896): a deploy that sends stays Python's;
-#: ``commands``, ``explain``, ``lint`` and ``validate`` with UC-3.5 (#827).
+#: ``generate explorer``, ``generate inflight`` and its ``prune``, and ``setup ci``
+#: with UC-3.2c (#916); ``deploy --dry-run`` with UC-3.1c (#896): a deploy that
+#: sends stays Python's; ``commands``, ``explain``, ``lint`` and ``validate`` with
+#: UC-3.5 (#827).
 RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
     ("commands",): RustCommand(launch=RUST_CLI),
     ("explain",): RustCommand(launch=RUST_CLI),
@@ -129,6 +131,10 @@ RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
     ("generate", "docs", "objectives"): RustCommand(launch=RUST_CLI),
     ("generate", "docs", "threats"): RustCommand(launch=RUST_CLI),
     ("generate", "docs", "index"): RustCommand(launch=RUST_CLI),
+    ("generate", "explorer"): RustCommand(launch=RUST_CLI),
+    ("generate", "inflight"): RustCommand(launch=RUST_CLI),
+    ("generate", "inflight", "prune"): RustCommand(launch=RUST_CLI),
+    ("setup", "ci"): RustCommand(launch=RUST_CLI),
 }
 
 

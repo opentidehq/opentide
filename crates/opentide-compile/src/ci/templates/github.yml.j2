@@ -1,0 +1,305 @@
+{#- GitHub Actions: `.github/workflows/opentide.yml` (`ci/github.py`). -#}
+{% import "scripts.sh.j2" as sh %}
+{% macro setup(full_history=false, ref=none) -%}
+- uses: actions/checkout@v4
+{% if ref %}
+  with:
+    ref: [[ ref ]]
+    fetch-depth: 0
+{% elif full_history %}
+  with:
+    fetch-depth: 0
+{% endif %}
+- uses: actions/setup-python@v5
+  with:
+    python-version: "[[ python ]]"
+- run: [[ pip ]]
+{%- endmacro %}
+{% macro secrets() -%}
+env:
+{% for name in credentials %}
+  [[ name ]]: ${{ secrets.[[ name ]] }}
+{% endfor %}
+{%- endmacro %}
+{% macro reviewed(name, commands, cond=none) -%}
+- name: [[ name ]]
+{% if cond %}
+  if: ${{ [[ cond ]] }}
+{% endif %}
+  run: |
+{% for line in restore + commands %}
+    [[ line ]]
+{% endfor %}
+{%- endmacro %}
+{% set identity = 'git config user.name "github-actions[bot]"\ngit config user.email "github-actions[bot]@users.noreply.github.com"' %}
+[[ header ]]name: opentide
+
+on:
+  pull_request:
+  push:
+    branches:
+      - [[ branch ]]
+
+env:
+  OPENTIDE_REPO_ROOT: ${{ github.workspace }}
+  [[ version_entry ]]
+
+{% if explorer_pages %}
+permissions:
+  contents: read
+
+{% endif %}
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    [[ secrets() | indent(4) ]]
+    steps:
+      [[ setup(full_history=(queries or lint_changed)) | indent(6) ]]
+{% for command in validate_sarif %}
+      - run: [[ command ]]
+{% endfor %}
+{% if queries %}
+      [[ reviewed("Validate queries on reviewed tenants", queries, not_skipped) | indent(6) ]]
+{% endif %}
+      - name: Upload opentide reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: opentide-reports
+          path: opentide-reports/
+          if-no-files-found: ignore
+  code_scanning:
+    name: Code scanning
+    runs-on: ubuntu-latest
+    needs: validate
+    if: ${{ !cancelled() && !github.event.repository.private }}
+    permissions:
+      security-events: write
+    steps:
+      - name: Download opentide reports
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: opentide-reports
+          path: opentide-reports/
+{% for command in gate_commands %}
+      - name: Upload [[ command ]] findings to code scanning
+        if: ${{ hashFiles('opentide-reports/[[ command ]].sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@v4
+        continue-on-error: true
+        with:
+          sarif_file: opentide-reports/[[ command ]].sarif
+{% endfor %}
+  generate:
+    name: Generate
+    runs-on: ubuntu-latest
+    needs: validate
+    steps:
+      [[ setup() | indent(6) ]]
+      - run: opentide generate
+{% if staging %}
+  deploy_staging:
+    name: Deploy Staging
+    runs-on: ubuntu-latest
+    needs: generate
+    if: ${{ [[ premerge ]] && [[ not_skipped ]] }}
+    [[ secrets() | indent(4) ]]
+    steps:
+      [[ setup(full_history=true) | indent(6) ]]
+      [[ reviewed("Deploy staging to reviewed tenants", staging_commands) | indent(6) ]]
+{% endif %}
+{% if inflight %}
+  inflight_shards:
+    name: Update inflight preview shards
+    needs: generate
+    if: [[ premerge ]]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout pull request head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "[[ python ]]"
+      - run: [[ pip ]]
+      - name: Merge inflight shards from default branch
+        run: |
+          git fetch origin [[ branch ]]
+          [[ sh.default_branch_shards("origin/" ~ branch) | indent(10) ]]
+      - name: Write inflight shards for changed objects
+        run: opentide generate inflight
+        env:
+          OPENTIDE_REPO_ROOT: ${{ github.workspace }}
+      - name: Push inflight shards to default branch
+        run: |
+          [[ identity | indent(10) ]]
+          [[ sh.publish_shards('git push origin "HEAD:' ~ branch ~ '"', "git fetch origin " ~ branch) | indent(10) ]]
+  inflight_prune:
+    name: Prune inflight preview shards
+    needs: generate
+    if: [[ production ]]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "[[ python ]]"
+      - run: [[ pip ]]
+      - name: Prune superseded inflight shards
+        run: opentide generate inflight prune
+        env:
+          OPENTIDE_REPO_ROOT: ${{ github.workspace }}
+      - name: Push pruned inflight shards
+        run: |
+          [[ identity | indent(10) ]]
+          [[ sh.commit_and_push("ci: prune inflight preview shards [skip ci]", "No inflight prune changes", "git push origin HEAD:" ~ branch, "git fetch origin " ~ branch) | indent(10) ]]
+{% endif %}
+  deploy_production:
+    name: Deploy Production
+    runs-on: ubuntu-latest
+    needs: generate
+    if: ${{ [[ production ]] && [[ not_skipped ]] }}
+    permissions:
+      contents: write
+    [[ secrets() | indent(4) ]]
+    steps:
+      [[ setup(full_history=true) | indent(6) ]]
+      - name: Use the default branch's deployment state
+        run: |
+          [[ identity | indent(10) ]]
+          [[ sh.overlay("git fetch origin " ~ branch) | indent(10) ]]
+      - run: [[ dry_run ]]
+      - name: Deploy
+        id: deploy
+        run: [[ deploy ]]
+      - name: Commit deployment write-backs
+        if: ${{ always() && steps.deploy.outcome != 'skipped' }}
+        run: |
+          [[ identity | indent(10) ]]
+          [[ sh.writeback(rules, 'git push origin "HEAD:' ~ branch ~ '"', "git fetch origin " ~ branch, 'git push origin "$state_commit:refs/opentide/deployment-state/$state_commit"') | indent(10) ]]
+{% if sharing %}
+  share:
+    name: Share
+    runs-on: ubuntu-latest
+    needs: [generate, deploy_production]
+    if: ${{ !cancelled() && needs.generate.result == 'success' && [[ production ]] && [[ not_skipped ]] }}
+    steps:
+      [[ setup(ref=branch) | indent(6) ]]
+      # API key environment variables named in sharing.toml come from the CI secret store.
+      - run: opentide share push --changed
+{% endif %}
+  document:
+    name: Document
+    runs-on: ubuntu-latest
+    needs: generate
+    if: [[ production ]]
+    steps:
+      [[ setup() | indent(6) ]]
+{% for command in docs %}
+      - run: [[ command ]]
+{% endfor %}
+{% if docs %}
+      - name: Upload documentation
+        uses: actions/upload-artifact@v4
+        with:
+          name: opentide-docs
+          path: [[ docs_path ]]
+{% endif %}
+{% if explorer_pages %}
+  explorer:
+    name: Build explorer
+    runs-on: ubuntu-latest
+    needs: document
+    env:
+      HAS_GITHUB_APP: ${{ secrets.GH_APP_ID && secrets.GH_APP_KEY && 'true' || 'false' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Generate GitHub App token
+        id: generate_token
+        if: ${{ env.HAS_GITHUB_APP == 'true' }}
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.GH_APP_ID }}
+          private-key: ${{ secrets.GH_APP_KEY }}
+          owner: opentidehq
+          repositories: opentide
+
+      - name: Checkout opentide
+        uses: actions/checkout@v4
+        with:
+          repository: opentidehq/opentide
+          ref: development
+          path: opentide
+          token: ${{ steps.generate_token.outputs.token || secrets.OPENTIDE_REPO_TOKEN }}
+
+      - name: Checkout explorer
+        uses: actions/checkout@v4
+        with:
+          repository: opentidehq/explorer
+          ref: main
+          path: explorer
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "[[ python ]]"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install opentide
+        run: pip install -e ./opentide
+
+      - name: Export explorer bundle
+        run: opentide --json generate explorer
+        env:
+          OPENTIDE_REPO_ROOT: ${{ github.workspace }}
+
+      - name: Build explorer static site
+        working-directory: explorer
+        run: |
+          npm ci
+          npm run build
+        env:
+          OPENTIDE_BUNDLE: ${{ github.workspace }}/.opentide/exports/explorer.bundle.json
+          NEXT_PUBLIC_BASE_PATH: /${{ github.event.repository.name }}
+
+      - name: Collect static site
+        run: |
+          mkdir -p ./out
+          mv explorer/out ./out/explorer
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./out/explorer
+  deploy-explorer:
+    name: Deploy explorer to GitHub Pages
+    runs-on: ubuntu-latest
+    needs: explorer
+    if: [[ production ]]
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+{% endif %}
