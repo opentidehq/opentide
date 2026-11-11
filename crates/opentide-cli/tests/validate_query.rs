@@ -523,3 +523,250 @@ fn options_typed_before_query_are_its_own_or_refused() {
             .contains("Pass --strict once, before or after `query`, not both")
     );
 }
+
+/// Runs git in `dir`, without the host's configuration.
+fn git(dir: &Path, args: &[&str]) {
+    let status = std::process::Command::new("git")
+        .args(["-c", "user.name=t", "-c", "user.email=t@example.com"])
+        .args(args)
+        .current_dir(dir)
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .status()
+        .unwrap();
+    assert!(status.success(), "git {args:?}");
+}
+
+#[test]
+fn a_platform_s_profile_decides_which_tables_a_query_file_may_read() {
+    let (_scratch, ws) = corpus();
+    // `SecurityEvent` is a Sentinel table, not a Defender for Endpoint one.
+    std::fs::write(ws.join("c.kql"), "SecurityEvent | take 1\n").unwrap();
+    let plain = opentide(
+        &ws,
+        &["--json", "validate", "query", "--file", "c.kql"],
+        &[],
+    );
+    assert_eq!(plain.code, 0, "{}", plain.stdout);
+    assert_eq!(plain.json()["status"], "passed");
+    let profiled = opentide(
+        &ws,
+        &[
+            "--json",
+            "validate",
+            "query",
+            "--platform",
+            "defender_for_endpoint",
+            "--file",
+            "c.kql",
+        ],
+        &[],
+    );
+    let document = profiled.json();
+    assert_eq!(profiled.code, 1, "{}", profiled.stdout);
+    assert_eq!(document["status"], "failed");
+    assert_eq!(failure_code(&document), "issues_found");
+    let codes: Vec<&str> = document["diagnostics"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|item| item["code"].as_str().unwrap())
+        .collect();
+    assert_eq!(codes, ["kql_unknown_table"], "{document}");
+}
+
+#[test]
+fn error_files_counts_each_file_once() {
+    let (_scratch, ws) = corpus();
+    let path = ws.join(SENTINEL_RULE);
+    let text = std::fs::read_to_string(&path).unwrap();
+    let broken = text.replace(
+        "      SecurityEvent\n      | where EventID == 4688\n      | take 1\n",
+        "      SecurityEvent | where\n",
+    );
+    assert_ne!(broken, text);
+    // A second rejected query in the same file, on another platform.
+    let broken = format!(
+        "{broken}  defender_for_endpoint:\n    query: |\n      DeviceProcessEvents | where\n"
+    );
+    std::fs::write(&path, broken).unwrap();
+    let ran = opentide(
+        &ws,
+        &["--json", "validate", "query", "--file", SENTINEL_RULE],
+        &[],
+    );
+    let document = ran.json();
+    assert_eq!(ran.code, 1, "{}", ran.stdout);
+    assert_eq!(document["queries_validated"], 2);
+    assert_eq!(document["summary"]["errors"], 2, "{document}");
+    assert_eq!(document["summary"]["error_files"], 1, "{document}");
+}
+
+#[test]
+fn a_placeholder_query_is_neither_checked_nor_counted_by_validate_query() {
+    let (_scratch, ws) = corpus();
+    let path = ws.join(SENTINEL_RULE);
+    let text = std::fs::read_to_string(&path).unwrap();
+    let placeholder = text.replace(
+        "    query: |\n      SecurityEvent\n      | where EventID == 4688\n      | take 1\n",
+        "    query: ...  # opentide:placeholder\n",
+    );
+    assert_ne!(placeholder, text);
+    std::fs::write(&path, placeholder).unwrap();
+    std::fs::write(ws.join("a.kql"), "SecurityEvent | take 1\n").unwrap();
+    let ran = opentide(
+        &ws,
+        &[
+            "--json",
+            "validate",
+            "query",
+            "--file",
+            SENTINEL_RULE,
+            "--file",
+            "a.kql",
+        ],
+        &[],
+    );
+    let document = ran.json();
+    assert_eq!(ran.code, 0, "{}", ran.stdout);
+    assert_eq!(document["queries_validated"], 1, "{document}");
+    assert_eq!(document["queries"][0]["path"], "a.kql");
+    assert_eq!(document["diagnostics"], serde_json::json!([]));
+}
+
+#[test]
+fn a_query_file_is_shown_relative_to_the_workspace_root_or_as_typed() {
+    let (scratch, ws) = corpus();
+    let sub = ws.join("sub");
+    std::fs::create_dir_all(&sub).unwrap();
+    std::fs::write(sub.join("a.kql"), "SecurityEvent | take 1\n").unwrap();
+    let inside = opentide(
+        &sub,
+        &["--json", "validate", "query", "--file", "a.kql"],
+        &[],
+    );
+    assert_eq!(inside.code, 0, "{}", inside.stdout);
+    assert_eq!(inside.json()["queries"][0]["path"], "sub/a.kql");
+    // A file outside the workspace keeps the path it was given.
+    let outside = scratch.path().join("outside.kql");
+    std::fs::write(&outside, "SecurityEvent | take 1\n").unwrap();
+    let ran = opentide(
+        &ws,
+        &["--json", "validate", "query", "--file", "../outside.kql"],
+        &[],
+    );
+    assert_eq!(ran.code, 0, "{}", ran.stdout);
+    assert_eq!(ran.json()["queries"][0]["path"], "../outside.kql");
+}
+
+#[test]
+fn changed_refuses_a_query_file() {
+    let (_scratch, ws) = corpus();
+    std::fs::write(ws.join("q.kql"), "SecurityEvent | take 1\n").unwrap();
+    let ran = opentide(
+        &ws,
+        &[
+            "--json",
+            "validate",
+            "query",
+            "--changed",
+            "--file",
+            "q.kql",
+        ],
+        &[],
+    );
+    let document = ran.json();
+    assert_eq!(ran.code, 2, "{}", ran.stdout);
+    assert_eq!(failure_code(&document), "usage_error");
+    assert_eq!(
+        document["message"],
+        "--changed cannot be combined with --file or --uuid"
+    );
+}
+
+#[test]
+fn changed_in_a_repository_with_no_commit_warns() {
+    let (_scratch, ws) = corpus();
+    git(&ws, &["init", "-q", "-b", "main"]);
+    let ran = opentide(
+        &ws,
+        &["--json", "validate", "query", "--changed"],
+        &[(
+            "GIT_CEILING_DIRECTORIES",
+            ws.parent().unwrap().to_str().unwrap(),
+        )],
+    );
+    let document = ran.json();
+    assert_eq!(ran.code, 0, "{}", ran.stdout);
+    assert_eq!(document["scope"], "changed");
+    assert_eq!(document["queries_validated"], 0);
+    let warnings = document["warnings"].as_array().unwrap();
+    assert!(
+        warnings.iter().any(|warning| warning
+            .as_str()
+            .unwrap()
+            .ends_with("commit the rules, or drop --changed to check every rule")),
+        "{document}"
+    );
+}
+
+#[test]
+fn file_strict_and_queries_typed_before_query_are_handed_down() {
+    let (_scratch, ws) = corpus();
+    std::fs::write(ws.join("bad.kql"), "SecurityEvent | where\n").unwrap();
+    // --file on `validate`: only the query file is checked.
+    let file = opentide(
+        &ws,
+        &["--json", "validate", "--file", "bad.kql", "query"],
+        &[],
+    );
+    let document = file.json();
+    assert_eq!(file.code, 1, "{}", file.stdout);
+    assert_eq!(document["queries_validated"], 1);
+    assert_eq!(document["queries"][0]["path"], "bad.kql");
+    // --queries warn on `validate`: the rejection is a warning.
+    let warned = opentide(
+        &ws,
+        &[
+            "--json",
+            "validate",
+            "--queries",
+            "warn",
+            "query",
+            "--file",
+            "bad.kql",
+        ],
+        &[],
+    );
+    let document = warned.json();
+    assert_eq!(warned.code, 0, "{}", warned.stdout);
+    assert_eq!(document["diagnostics"][0]["severity"], "warning");
+    // --strict on `validate`: the warning fails the run.
+    let strict = opentide(
+        &ws,
+        &[
+            "--json",
+            "validate",
+            "--strict",
+            "query",
+            "--file",
+            "bad.kql",
+            "--queries",
+            "warn",
+        ],
+        &[],
+    );
+    let document = strict.json();
+    assert_eq!(strict.code, 1, "{}", strict.stdout);
+    assert_eq!(failure_code(&document), "issues_found");
+    // --type is `validate`'s own: refused, not dropped.
+    let typed = opentide(&ws, &["--json", "validate", "--type", "rule", "query"], &[]);
+    let document = typed.json();
+    assert_eq!(typed.code, 2, "{}", typed.stdout);
+    assert_eq!(failure_code(&document), "usage_invalid_value");
+    assert_eq!(
+        document["message"],
+        "Invalid value: --type configures `opentide validate` itself and would be ignored by \
+         `opentide validate query`."
+    );
+}
