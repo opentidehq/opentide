@@ -34,6 +34,25 @@ pub fn generated(name: &str) -> Option<PathBuf> {
     })
 }
 
+/// A case's root directory, named and placed as `cargo xtask golden check`
+/// places it (`xtask/src/golden/run.rs`: `/tmp/golden-XXXXXX` on Unix,
+/// whatever `TMPDIR` says). Paths in a frame or a message wrap by their
+/// length, so a root of another length (`tempfile::tempdir()`'s
+/// `.tmpXXXXXX`, or a `TMPDIR` elsewhere) wraps lines the real compare does
+/// not, and a ledger entry drafted from this replay would not apply there.
+pub fn case_root() -> tempfile::TempDir {
+    let parent = if Path::new("/tmp").is_dir() {
+        PathBuf::from("/tmp")
+    } else {
+        std::env::temp_dir()
+    };
+    tempfile::Builder::new()
+        .prefix("golden-")
+        .rand_bytes(6)
+        .tempdir_in(parent)
+        .unwrap()
+}
+
 /// The fixtures this module lays out.
 pub const FIXTURES: &[&str] = &["none", "empty", "tide-corpus", "tide-corpus-typo", "vscode"];
 
@@ -220,7 +239,7 @@ pub fn replay(id: &str, dir: &Path, ledger: &Ledger, usage: &mut Usage) -> Vec<S
         .map(|arg| arg.as_str().unwrap().to_owned())
         .collect();
     let mode = case["mode"].as_str().unwrap();
-    let scratch = tempfile::tempdir().unwrap();
+    let scratch = case_root();
     let root = std::fs::canonicalize(scratch.path()).unwrap();
     let (home, tmp, ws) = (root.join("home"), root.join("tmp"), root.join("ws"));
     for folder in [&home, &tmp, &ws] {
