@@ -9,11 +9,18 @@
 //! terminal, and anything that cannot answer (`--json`, an agent, no
 //! terminal) is refused with `usage_needs_input`.
 
+pub mod files;
+pub mod hooks;
+pub mod jsonc;
+pub mod run;
+pub mod stage;
+
 use std::io::{BufRead as _, IsTerminal as _, Write as _};
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 
 use indexmap::IndexMap;
 use opentide_compile::ci::{self, Provider};
+use opentide_schema::configuration::resolve::Resolved;
 use opentide_schema::node::Value;
 
 use super::{Block, Report, USAGE_INVALID_VALUE};
@@ -26,6 +33,16 @@ use crate::render::table::columns;
 use crate::render::text::{Style, Text};
 
 const COMMAND: &str = "setup ci";
+
+/// `path` relative to `base` (`os.path.relpath`), through `..` when it is
+/// outside it, with `/` between parts; `.` for `base` itself.
+pub(crate) fn shown_relative(path: &Path, base: &Path) -> String {
+    match pathdiff::diff_paths(path, base) {
+        Some(relative) if relative.as_os_str().is_empty() => ".".to_owned(),
+        Some(relative) => relative.to_string_lossy().replace('\\', "/"),
+        None => path.to_string_lossy().replace('\\', "/"),
+    }
+}
 
 /// `failure.code` of a prompt nobody can answer.
 pub const USAGE_NEEDS_INPUT: &str = "usage_needs_input";
@@ -82,10 +99,12 @@ pub struct Context<'a> {
     pub mode: Mode,
     /// opentide's version, which the pipeline pins.
     pub version: &'a str,
+    /// `--quiet`: no summary of the files written.
+    pub quiet: bool,
 }
 
 /// An app-level usage error, as Click words a `BadParameter`.
-fn bad_parameter(message: &str, hint: &[&str], argument: Option<&str>) -> Box<Report> {
+pub(crate) fn bad_parameter(message: &str, hint: &[&str], argument: Option<&str>) -> Box<Report> {
     let shown = if hint.is_empty() {
         format!("Invalid value: {message}")
     } else {
@@ -98,16 +117,17 @@ fn bad_parameter(message: &str, hint: &[&str], argument: Option<&str>) -> Box<Re
 }
 
 /// A prompt nobody can answer: exit 2 naming the flag that answers it.
-fn needs_input(message: String) -> Box<Report> {
+/// A prompt nobody can answer in `command`: exit 2 naming the flag that answers it.
+pub(crate) fn needs_input_for(command: &str, message: String) -> Box<Report> {
     Box::new(Report::failed(
-        COMMAND,
+        command,
         USAGE_EXIT_CODE,
         Failure::new(USAGE_NEEDS_INPUT, message),
     ))
 }
 
 /// Python's `repr()` of a string, for the messages that quote one.
-fn repr(text: &str) -> String {
+pub(crate) fn repr(text: &str) -> String {
     opentide_schema::configuration::repr::quote(text)
 }
 
@@ -130,40 +150,17 @@ pub fn is_valid_branch_name(name: &str) -> bool {
             .is_some_and(|read| read == name)
 }
 
-/// `path` made absolute against `cwd` and normalised, its existing part
-/// with links resolved (`Path.resolve()`).
-fn resolved(cwd: &Path, path: &Path) -> PathBuf {
-    let joined = if path.is_absolute() {
-        path.to_path_buf()
-    } else {
-        cwd.join(path)
-    };
-    let mut normal = PathBuf::new();
-    for part in joined.components() {
-        match part {
-            Component::ParentDir => {
-                normal.pop();
-            }
-            Component::CurDir => {}
-            other => normal.push(other.as_os_str()),
-        }
-    }
-    let mut existing = normal.clone();
-    let mut rest = Vec::new();
-    while !existing.exists() {
-        match existing.file_name() {
-            Some(name) => rest.push(name.to_owned()),
-            None => break,
-        }
-        if !existing.pop() {
-            break;
-        }
-    }
-    let mut out = std::fs::canonicalize(&existing).unwrap_or(existing);
-    for name in rest.into_iter().rev() {
-        out.push(name);
-    }
-    out
+/// `path` made absolute against `cwd` as `Path.resolve()` gives it: the
+/// links of its existing part resolved (before the `..` that follow them),
+/// `.` and `..` folded, the part that does not exist yet kept.
+pub(crate) fn resolved(cwd: &Path, path: &Path) -> PathBuf {
+    real(&cwd.join(path))
+}
+
+/// An absolute `path` resolved as [`resolved`] does (soft_canonicalize:
+/// it need not exist); kept as given when resolving fails.
+pub(crate) fn real(path: &Path) -> PathBuf {
+    soft_canonicalize::soft_canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
 }
 
 /// The repository `setup ci` writes to (`_option_path`): the one path the
@@ -207,30 +204,55 @@ fn target(args: &CiArgs, cx: &Context<'_>) -> Result<PathBuf, Box<Report>> {
 /// Asks a person to confirm the write, at the terminal (`_confirm_write`).
 /// `Ok(false)` when they decline.
 fn confirm(shown: &Path, absolute: &Path, cx: &Context<'_>) -> Result<bool, Box<Report>> {
+    confirm_write(
+        COMMAND,
+        shown,
+        absolute,
+        cx,
+        "Write this CI/CD configuration?",
+    )
+}
+
+/// Asks a person to confirm a write to `absolute` with `question`
+/// (`_confirm_write`); refuses where nobody can answer.
+pub(crate) fn confirm_write(
+    command: &str,
+    shown: &Path,
+    absolute: &Path,
+    cx: &Context<'_>,
+    question: &str,
+) -> Result<bool, Box<Report>> {
     if cx.mode == Mode::Json {
-        return Err(needs_input(format!(
-            "--json cannot prompt for confirmation. Add --yes to write to '{}'.",
-            shown.to_string_lossy().replace('\\', "/")
-        )));
+        return Err(needs_input_for(
+            command,
+            format!(
+                "--json cannot prompt for confirmation. Add --yes to write to '{}'.",
+                shown.to_string_lossy().replace('\\', "/")
+            ),
+        ));
     }
     if cx.mode == Mode::Agent {
         let reader = crate::mode::detect_agent(cx.env).map_or_else(
             || "agent output mode".to_owned(),
             |agent| format!("a coding agent ({agent})"),
         );
-        return Err(needs_input(format!(
-            "Interactive setup does not prompt in {reader}. Add --yes to confirm this write."
-        )));
+        return Err(needs_input_for(
+            command,
+            format!(
+                "Interactive setup does not prompt in {reader}. Add --yes to confirm this write."
+            ),
+        ));
     }
     if !std::io::stdin().is_terminal() {
-        return Err(needs_input(
+        return Err(needs_input_for(
+            command,
             "Interactive setup requires a terminal. Add --yes to confirm this write.".to_owned(),
         ));
     }
     let mut stdout = std::io::stdout();
     let _ = write!(
         stdout,
-        "Target: {}\n? Write this CI/CD configuration? (Y/n) ",
+        "Target: {}\n? {question} (Y/n) ",
         absolute.display()
     );
     let _ = stdout.flush();
@@ -259,10 +281,10 @@ fn promotion_defaults() -> toml::Table {
 
 /// The `deployment.toml` a promotion flag writes, with its new text.
 #[derive(Debug)]
-struct PromotionOverride {
-    path: PathBuf,
+pub(crate) struct PromotionOverride {
+    pub(crate) path: PathBuf,
     /// `None` when the file already says what was asked.
-    content: Option<String>,
+    pub(crate) content: Option<String>,
 }
 
 /// The flags' names, as the refusals name them.
@@ -271,22 +293,23 @@ const PROMOTION_TARGET_FLAG: &str = "--promotion-target";
 
 /// What `.opentide/configurations/deployment.toml` needs so `deploy`
 /// promotes as asked (`plan_promotion_override`).
-fn promotion_override(
+pub(crate) fn promotion_override(
     root: &Path,
-    args: &CiArgs,
+    promotion: Option<bool>,
+    promotion_target: Option<&str>,
     statuses: impl FnOnce() -> Result<Vec<String>, String>,
 ) -> Result<Option<PromotionOverride>, Box<Report>> {
     let defaults = promotion_defaults();
     let mut requested = toml::Table::new();
     let mut hint = Vec::new();
-    if let Some(enabled) = args.promotion {
+    if let Some(enabled) = promotion {
         requested.insert("enabled".into(), toml::Value::Boolean(enabled));
         hint.push(PROMOTION_FLAG);
     }
-    if let Some(status) = &args.promotion_target {
+    if let Some(status) = promotion_target {
         requested.insert(
             "promotion_target".into(),
-            toml::Value::String(status.clone()),
+            toml::Value::String(status.to_owned()),
         );
         hint.push(PROMOTION_TARGET_FLAG);
     }
@@ -319,7 +342,7 @@ fn promotion_override(
             ));
         }
     };
-    if let Some(status) = &args.promotion_target {
+    if let Some(status) = promotion_target {
         let known = statuses().map_err(|problem| {
             bad_parameter(
                 &format!("cannot read the statuses of {}: {problem}", root.display()),
@@ -327,7 +350,7 @@ fn promotion_override(
                 None,
             )
         })?;
-        if !known.contains(status) {
+        if !known.iter().any(|known| known == status) {
             return Err(bad_parameter(
                 &format!(
                     "{} is not a status in this repository's deployment.toml; use one of: {}",
@@ -392,26 +415,21 @@ fn promotion_override(
 
 /// The platforms whose file under `.opentide/configurations/platforms/`
 /// enables them, by file name (`discover_enabled_platforms`).
-fn enabled_platforms(root: &Path) -> Vec<String> {
+fn enabled_platforms(stage: &stage::Stage, root: &Path) -> Vec<String> {
     let dir = root.join(".opentide/configurations/platforms");
-    let Ok(entries) = std::fs::read_dir(&dir) else {
-        return Vec::new();
-    };
-    let mut files: Vec<PathBuf> = entries
-        .filter_map(Result::ok)
-        .map(|entry| entry.path())
-        .filter(|path| path.extension().is_some_and(|ext| ext == "toml"))
-        .collect();
-    files.sort();
-    files
+    stage
+        .entries(&dir)
         .into_iter()
-        .filter(|path| {
-            std::fs::read_to_string(path)
-                .map(|text| ci::enables(&text))
-                .unwrap_or(false)
+        .filter(|name| Path::new(name).extension().is_some_and(|ext| ext == "toml"))
+        .filter(|name| {
+            files::read_text(stage, &dir.join(name))
+                .ok()
+                .flatten()
+                .is_some_and(|text| ci::enables(&text))
         })
-        .filter_map(|path| {
-            path.file_stem()
+        .filter_map(|name| {
+            Path::new(&name)
+                .file_stem()
                 .map(|stem| stem.to_string_lossy().into_owned())
         })
         .collect()
@@ -500,24 +518,20 @@ fn default_branch_warnings(env: &Env, path: &Path, branch: &str, source: &str) -
     Vec::new()
 }
 
-/// What the workspace at `root` tells the pipeline: its rules folder (from
-/// the repository root, links resolved), the statuses `deployment.toml`
-/// defines, and each enabled platform's tenant variables.
-struct WorkspaceFacts {
-    rules_folder: String,
-    statuses: Result<Vec<String>, String>,
-}
-
-fn workspace_facts(root: &Path, cx: &Context<'_>) -> WorkspaceFacts {
-    let options = opentide_workspace::RootOptions {
+/// Where `setup ci` finds the workspace at `root`.
+fn root_options(root: &Path, cx: &Context<'_>) -> opentide_workspace::RootOptions {
+    opentide_workspace::RootOptions {
         repo: Some(root.to_path_buf()),
         repo_root_env: Some(root.to_path_buf()),
         tide_workspace_env: Some(root.to_path_buf()),
         cwd: cx.cwd.to_path_buf(),
-    };
-    let opened = super::open(options);
-    let rules_folder = opened
-        .as_ref()
+    }
+}
+
+/// The rules folder of the workspace at `root`, from the repository root,
+/// links resolved.
+fn rules_folder(root: &Path, cx: &Context<'_>) -> String {
+    super::open(root_options(root, cx))
         .ok()
         .and_then(|workspace| {
             workspace
@@ -536,50 +550,67 @@ fn workspace_facts(root: &Path, cx: &Context<'_>) -> WorkspaceFacts {
                 .to_owned();
             (!text.is_empty() && text != ".").then_some(text)
         })
-        .unwrap_or_else(|| ci::DEFAULT_RULES_FOLDER.to_owned());
-    let statuses = opened.map(|workspace| {
-        let Some(Value::Seq(entries)) = workspace
-            .configuration()
-            .resolved
-            .get("deployment")
-            .and_then(|deployment| deployment.get("statuses"))
-            .map(|statuses| &statuses.value)
-        else {
-            return Vec::new();
-        };
-        entries
-            .iter()
-            .map(|entry| {
-                entry.get("name").map_or_else(
-                    || "None".to_owned(),
-                    |name| match &name.value {
-                        Value::Str(text) => text.clone(),
-                        _ => opentide_schema::configuration::repr::node(name),
-                    },
-                )
-            })
-            .collect()
-    });
-    WorkspaceFacts {
-        rules_folder,
-        statuses,
-    }
+        .unwrap_or_else(|| ci::DEFAULT_RULES_FOLDER.to_owned())
+}
+
+/// The statuses `deployment.toml` defines in the workspace at `root`, read
+/// from the merged files without checking them, as the oracle's
+/// `resolve_configurations` reads them: a `paths.toml` its model refuses
+/// does not hide them (#957).
+pub(crate) fn statuses(root: &Path, cx: &Context<'_>) -> Result<Vec<String>, String> {
+    let fs = opentide_workspace::OsFs;
+    let roots = opentide_workspace::root::resolve(&fs, &root_options(root, cx));
+    opentide_workspace::config::resolve_only(&fs, &roots)
+        .map(|resolved| deployment_statuses(&resolved))
+        .map_err(|error| error.to_string())
+}
+
+/// The names of the statuses `deployment.toml` defines, in order (`str(entry.get("name"))`).
+fn deployment_statuses(resolved: &Resolved) -> Vec<String> {
+    let Some(Value::Seq(entries)) = resolved
+        .get("deployment")
+        .and_then(|deployment| deployment.get("statuses"))
+        .map(|statuses| &statuses.value)
+    else {
+        return Vec::new();
+    };
+    entries
+        .iter()
+        .map(|entry| {
+            entry.get("name").map_or_else(
+                || "None".to_owned(),
+                |name| match &name.value {
+                    Value::Str(text) => text.clone(),
+                    _ => opentide_schema::configuration::repr::node(name),
+                },
+            )
+        })
+        .collect()
 }
 
 /// What a run did, or would do.
-struct Run {
+pub(crate) struct Run {
     /// The files written, relative to the repository, in order.
-    files: Vec<(String, Option<Vec<u8>>, bool)>,
-    warnings: Vec<String>,
-    platforms: Vec<String>,
-    branch: String,
+    pub(crate) files: Vec<(String, Option<Vec<u8>>, bool)>,
+    pub(crate) warnings: Vec<String>,
+    pub(crate) platforms: Vec<String>,
+    pub(crate) branch: String,
 }
 
 /// `run_ci_setup`: everything but the writing.
-fn prepare(args: &CiArgs, root: &Path, cx: &Context<'_>) -> Result<Run, Box<Report>> {
-    let facts = workspace_facts(root, cx);
-    let promotion = promotion_override(root, args, || facts.statuses.clone())?;
-    let platforms = enabled_platforms(root);
+pub(crate) fn prepare(
+    stage: &stage::Stage,
+    args: &CiArgs,
+    root: &Path,
+    cx: &Context<'_>,
+) -> Result<Run, Box<Report>> {
+    let promotion = promotion_override(
+        root,
+        args.promotion,
+        args.promotion_target.as_deref(),
+        || statuses(root, cx),
+    )?;
+    let platforms = enabled_platforms(stage, root);
     let mut warnings = Vec::new();
     if platforms.is_empty() {
         warnings.push(NO_PLATFORMS_WARNING.to_owned());
@@ -612,9 +643,9 @@ fn prepare(args: &CiArgs, root: &Path, cx: &Context<'_>) -> Result<Run, Box<Repo
             let file = root
                 .join(".opentide/configurations/platforms")
                 .join(format!("{platform}.toml"));
-            let names = std::fs::read(&file)
+            let names = files::read_text(stage, &file)
                 .ok()
-                .and_then(|bytes| String::from_utf8(bytes).ok())
+                .flatten()
                 .map(|text| ci::tenant_variables(&text))
                 .unwrap_or_default();
             credentials.insert(platform.clone(), names);
@@ -632,7 +663,7 @@ fn prepare(args: &CiArgs, root: &Path, cx: &Context<'_>) -> Result<Run, Box<Repo
         opentide_version: cx.version.to_owned(),
         default_branch: branch.clone(),
         docs_output: "docs".to_owned(),
-        rules_folder: facts.rules_folder,
+        rules_folder: rules_folder(root, cx),
         credentials,
     };
     let text = ci::render(&options)
@@ -716,7 +747,7 @@ pub fn ci(args: &CiArgs, cx: &Context<'_>) -> Report {
             Err(report) => return *report,
         }
     }
-    let run = match prepare(args, &root, cx) {
+    let run = match prepare(&stage::Stage::new(), args, &root, cx) {
         Ok(run) => run,
         Err(report) => return *report,
     };
@@ -880,6 +911,47 @@ mod tests {
     use super::*;
 
     #[test]
+    fn resolved_joins_folds_and_keeps_the_missing_tail() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = soft_canonicalize::soft_canonicalize(dir.path()).unwrap();
+        std::fs::create_dir(root.join("a")).unwrap();
+        assert_eq!(
+            resolved(&root, Path::new("a/./b/../new/file")),
+            root.join("a").join("new").join("file")
+        );
+        assert_eq!(resolved(&root, Path::new(".")), root);
+        assert_eq!(resolved(&root, &root.join("a")), root.join("a"));
+    }
+
+    /// `..` after a link climbs from where the link points, as
+    /// `Path.resolve()` does, not from the link's own folder.
+    #[cfg(unix)]
+    #[test]
+    fn resolved_follows_a_link_before_its_parent_step() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = soft_canonicalize::soft_canonicalize(dir.path()).unwrap();
+        std::fs::create_dir_all(root.join("real").join("deep")).unwrap();
+        std::os::unix::fs::symlink(root.join("real").join("deep"), root.join("link")).unwrap();
+        assert_eq!(
+            resolved(&root, Path::new("link/../ws")),
+            root.join("real").join("ws")
+        );
+    }
+
+    fn po(
+        root: &Path,
+        args: &CiArgs,
+        statuses: impl FnOnce() -> Result<Vec<String>, String>,
+    ) -> Result<Option<PromotionOverride>, Box<Report>> {
+        promotion_override(
+            root,
+            args.promotion,
+            args.promotion_target.as_deref(),
+            statuses,
+        )
+    }
+
+    #[test]
     fn branch_names_are_checked_as_the_pipelines_need() {
         for good in ["main", "release/v1.2", "feature_x-1", "on", "yes"] {
             assert!(is_valid_branch_name(good), "{good}");
@@ -915,11 +987,11 @@ mod tests {
         let statuses = || Ok(vec!["STAGING".to_owned(), "PRODUCTION".to_owned()]);
         // The defaults already say so: nothing to write.
         assert!(
-            promotion_override(root, &args(Some(true), None), statuses)
+            po(root, &args(Some(true), None), statuses)
                 .unwrap()
                 .is_none()
         );
-        let written = promotion_override(root, &args(Some(false), Some("STAGING")), statuses)
+        let written = po(root, &args(Some(false), Some("STAGING")), statuses)
             .unwrap()
             .unwrap();
         assert_eq!(
@@ -929,7 +1001,7 @@ mod tests {
         let config = root.join(".opentide/configurations");
         std::fs::create_dir_all(&config).unwrap();
         std::fs::write(config.join("deployment.toml"), "[x]\na = 1\n").unwrap();
-        let appended = promotion_override(root, &args(Some(false), None), statuses)
+        let appended = po(root, &args(Some(false), None), statuses)
             .unwrap()
             .unwrap();
         assert_eq!(
@@ -941,16 +1013,16 @@ mod tests {
             "[promotion]\nenabled = false\n",
         )
         .unwrap();
-        let same = promotion_override(root, &args(Some(false), None), statuses)
+        let same = po(root, &args(Some(false), None), statuses)
             .unwrap()
             .unwrap();
         assert!(same.content.is_none());
-        let refused = promotion_override(root, &args(Some(true), None), statuses).unwrap_err();
+        let refused = po(root, &args(Some(true), None), statuses).unwrap_err();
         assert_eq!(
             refused.outcome.message,
             "Invalid value for '--promotion/--no-promotion': .opentide/configurations/deployment.toml already has a [promotion] table, which setup does not rewrite. Set enabled = true in it, or delete it and re-run setup."
         );
-        let unknown = promotion_override(root, &args(None, Some("NOPE")), statuses).unwrap_err();
+        let unknown = po(root, &args(None, Some("NOPE")), statuses).unwrap_err();
         assert_eq!(
             unknown.outcome.message,
             "Invalid value for '--promotion-target': 'NOPE' is not a status in this repository's deployment.toml; use one of: STAGING, PRODUCTION"
@@ -986,7 +1058,7 @@ mod tests {
             yes: true,
             group_only: Vec::new(),
         };
-        let refused = promotion_override(root, &args, || Ok(Vec::new())).unwrap_err();
+        let refused = po(root, &args, || Ok(Vec::new())).unwrap_err();
         assert_eq!(refused.outcome.exit_code, 2);
         assert!(
             refused.outcome.message.starts_with(

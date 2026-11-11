@@ -579,12 +579,14 @@ jobs:
       # opentide-lsp and opentide-wasm (publish = false) take their checks
       # from opentide-workspace and opentide-schema (UC-2.6, ADR 0010's
       # addendum): left out of the package step too, their sources scanned.
-      # So is the opentide facade (UC-5.1), which wraps all of them.
-      - run: cargo package --locked --workspace --exclude opentide-native --exclude xtask --exclude opentide-compare --exclude opentide-schema --exclude opentide-workspace --exclude opentide-compile --exclude opentide-cli --exclude opentide-lsp --exclude opentide-wasm --exclude opentide --allow-dirty
+      # opentide-connectors (publish = false, UC-4.1) reads tenant settings
+      # through opentide-workspace: left out too, its sources scanned. So is
+      # the opentide facade (UC-5.1), which wraps all of them.
+      - run: cargo package --locked --workspace --exclude opentide-native --exclude xtask --exclude opentide-compare --exclude opentide-schema --exclude opentide-workspace --exclude opentide-compile --exclude opentide-cli --exclude opentide-lsp --exclude opentide-wasm --exclude opentide-connectors --exclude opentide --allow-dirty
       - name: license scan (no oracle references)
         run: |
           bash scripts/engine/license-scan.sh target/package/*.crate
-          bash scripts/engine/license-scan.sh crates/opentide-schema crates/opentide-schema-derive crates/opentide-compare crates/opentide-workspace crates/opentide-compile crates/opentide-lsp crates/opentide-wasm crates/opentide
+          bash scripts/engine/license-scan.sh crates/opentide-schema crates/opentide-schema-derive crates/opentide-compare crates/opentide-workspace crates/opentide-compile crates/opentide-lsp crates/opentide-wasm crates/opentide-connectors crates/opentide
           cargo package --list --locked --allow-dirty -p opentide-cli | (cd crates/opentide-cli && while IFS= read -r f; do if [ -f "$f" ]; then printf '%s\0' "$f"; fi; done | xargs -0 bash ../../scripts/engine/license-scan.sh)
 
   # The supply-chain gate (#843, deny.toml): licences of what we ship,

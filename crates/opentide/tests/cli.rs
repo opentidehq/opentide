@@ -1,11 +1,6 @@
 //! The command line the facade carries (`cli` feature): the `opentide`
 //! binary and `cli::run_json`, against the PyPI CLI's recordings.
 
-#![expect(
-    clippy::unwrap_used,
-    reason = "test helpers: a fixture that does not lay out is a failure"
-)]
-
 mod common;
 
 use std::process::Command;

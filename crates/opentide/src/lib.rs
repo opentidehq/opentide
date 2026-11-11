@@ -50,8 +50,10 @@
 //! off ([`validate::QueriesMode::Off`]) to validate without it.
 //!
 //! The async platform connectors (deploy, live query validation, query runs)
-//! will come behind a `connectors` feature once their crate exists (plan §4,
-//! Phase 4). A `wasm32` build takes the default features.
+//! will come behind a `connectors` feature once the platforms are ported onto
+//! them (plan §4, Phase 4): `opentide-connectors` holds only their HTTP
+//! framework today, whose API is not yet one to promise. A `wasm32` build
+//! takes the default features.
 //!
 //! ## Errors
 //!

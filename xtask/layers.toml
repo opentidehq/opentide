@@ -49,11 +49,18 @@
 # - opentide-compile (UC-3.1, #823) is domain tier 1, beside
 #   opentide-analysis: the plan's domain crate that compiles request bodies and
 #   the deploy plan reads the workspace opentide-workspace loads.
+# - opentide-connectors (UC-4.1, #831) is domain tier 2: the plan's domain
+#   crate that sends to tenants builds on opentide-workspace (credentials'
+#   placeholders) today and on opentide-compile's bodies from UC-4.2.
+# - opentide-cassette (UC-4.1, #831) is foundation tier 0: the recorded-HTTP
+#   harness depends on no workspace crate; opentide-connectors' and
+#   opentide-cli's tests and xtask (`cargo xtask cassettes`) use it. Never
+#   shipped (publish = false).
 
 [[layer]]
 name = "foundation"
 tiers = [
-    ["opentide-core", "opentide-compare", "opentide-schema-derive"],
+    ["opentide-core", "opentide-compare", "opentide-schema-derive", "opentide-cassette"],
     ["opentide-syntax", "opentide-highlight", "opentide-ecs"],
     ["opentide-kql", "opentide-spl", "opentide-kuery", "opentide-lucene", "opentide-falco", "opentide-cql"],
     ["opentide-esql", "opentide-eql"],
@@ -65,6 +72,7 @@ name = "domain"
 tiers = [
     ["opentide-tide", "opentide-workspace"],
     ["opentide-analysis", "opentide-compile"],
+    ["opentide-connectors"],
 ]
 
 [[layer]]

@@ -1,0 +1,9 @@
+[1mmitre-attack[0m
+MITRE ATT&CK mapping discipline and technique reference for opentide threats, objectives and 
+detection rules — technique vs sub-technique selection, tactic assignment, multi-technique chaining,
+version pinning, revocation handling, coverage gap analysis, platform matrix awareness, and a 
+locally searchable technique index. Use when populating threat.att&ck fields in threats, mapping 
+objective signals to techniques, tagging detection rules, assessing detection coverage against the 
+ATT&CK matrix, or looking up technique IDs and descriptions.
+[2mnot installed[0m
+[1;36m→[0m [1mopentide setup skills --install mitre-attack --generic --yes[0m[2m · [0m[2minstall it[0m

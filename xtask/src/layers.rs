@@ -733,6 +733,8 @@ mod tests {
         ),
         ("opentide-schema-derive", &[]),
         ("opentide-cli", &[]),
+        ("opentide-cassette", &[]),
+        ("opentide-connectors", &[("opentide-workspace", None)]),
         ("opentide-workspace", &[("opentide-schema", None)]),
         (
             "opentide-compile",
@@ -759,7 +761,7 @@ mod tests {
     fn the_repository_table_places_todays_workspace() {
         let report = check(&table(REPOSITORY_TABLE), &metadata(WORKSPACE));
         assert_eq!(report.violations, []);
-        assert_eq!(report.crates, 25);
+        assert_eq!(report.crates, 27);
     }
 
     #[test]

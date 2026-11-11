@@ -1,0 +1,3 @@
+✗ inflight prune · <SECONDS>
+error: inflight-prune: ConfigurationError: paths.toml is invalid: paths.core: unknown key
+tip: add --json for machine-readable output

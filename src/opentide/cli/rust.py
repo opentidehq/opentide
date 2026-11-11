@@ -17,6 +17,13 @@ import sys
 #: pair whose status is ``null`` when it imports here, else why not.
 PYTHON_MODULES_ENV = "OPENTIDE_PYTHON_MODULES"
 
+#: What ``opentide setup mcp`` (and ``setup --mcp``) on Rust reads to report
+#: whether ``opentide mcp start``, which every configuration it writes
+#: launches, can start here (``MCP_SERVER_ENV`` in
+#: ``crates/opentide-cli/src/commands/setup/files.rs``): the imports it cannot
+#: satisfy and the command that repairs them.
+MCP_SERVER_ENV = "OPENTIDE_MCP_SERVER"
+
 
 def python_modules(argv: list[str]) -> str | None:
     """The import status of each platform's SDKs for a ``doctor`` run, as JSON; else ``None``.
@@ -39,6 +46,20 @@ def python_modules(argv: list[str]) -> str | None:
     )
 
 
+def mcp_server(argv: list[str]) -> str | None:
+    """Whether the MCP server can start here, as JSON, for ``setup`` with MCP; else ``None``.
+
+    The server is still Python's (``opentide mcp start``), so only this
+    environment can say whether it imports; only a run that writes MCP
+    configurations pays for the probe.
+    """
+    if "setup" not in argv or not any(arg == "mcp" or arg.startswith("--mcp") for arg in argv):
+        return None
+    from opentide.mcp_server.launcher import MCP_INSTALL_HINT, missing_requirements
+
+    return json.dumps({"missing": missing_requirements(), "hint": MCP_INSTALL_HINT})
+
+
 def main() -> int:
     """Run the Rust CLI on this process's arguments; its exit code."""
     from opentide import __version__
@@ -47,6 +68,9 @@ def main() -> int:
     modules = python_modules(sys.argv[1:])
     if modules is not None:
         os.environ[PYTHON_MODULES_ENV] = modules
+    server = mcp_server(sys.argv[1:])
+    if server is not None:
+        os.environ[MCP_SERVER_ENV] = server
     # Flush what Python buffered before the engine writes to the same streams.
     sys.stdout.flush()
     sys.stderr.flush()

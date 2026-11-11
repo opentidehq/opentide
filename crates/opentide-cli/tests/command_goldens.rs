@@ -42,6 +42,14 @@ fn a_case_root_is_as_long_as_the_golden_checks() {
     assert_eq!(root.path().parent().unwrap(), std::path::Path::new("/tmp"));
 }
 
+/// `setup skills discover` and `setup skills show` (UC-4.1, #831): the
+/// network refused, and the catalogue served from its cassette
+/// (`tests/cassettes/skills/manifest.json`), the requests checked against it.
+#[test]
+fn skills_catalogue_cases_are_the_oracles() {
+    check(&["setup.skills.discover", "setup.skills.show"], 20);
+}
+
 #[test]
 fn explain_cases_are_the_oracles() {
     check(&["explain"], 12);
@@ -335,7 +343,8 @@ fn the_replay_tolerates_a_refusal_only_where_rust_commands_does_not_cover_the_ru
     assert!(replay::covers("new threat", &words("new threat --name x")));
     assert!(replay::covers("doctor", &words("doctor --offline")));
     assert!(!replay::covers("doctor", &words("doctor")));
-    assert!(!replay::covers("setup", &words("setup")));
+    assert!(replay::covers("setup", &words("setup --plan")));
+    assert!(!replay::covers("setup vscode", &words("setup vscode")));
     // A multi-line entry, and one the parser cannot read, which is no table.
     let source = "x = 1\nRUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {\n    \
                   (\"a\",): RustCommand(launch=RUST_CLI),\n    (\"b\", \"c\"): RustCommand(\n        \
@@ -358,4 +367,21 @@ fn generate_phase_cases_are_the_oracles() {
     if std::env::var_os("OPENTIDE_REPLAY_FILTER").is_none() {
         assert!(refused >= 8, "only {refused} refused");
     }
+}
+
+/// `setup` and its file-writing subcommands (UC-3.6, #828): plan mode and
+/// non-interactive runs with the files written, and the wizard's refusals.
+#[test]
+fn setup_cases_are_the_oracles() {
+    check(
+        &[
+            "setup",
+            "setup.env",
+            "setup.hooks",
+            "setup.mcp",
+            "setup.platforms",
+            "setup.repo",
+        ],
+        40,
+    );
 }

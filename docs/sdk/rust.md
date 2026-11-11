@@ -35,7 +35,7 @@ cargo install --git https://github.com/opentidehq/opentide opentide --features c
 | `cli` | no | `opentide::cli::main(argv)`, `opentide::cli::run_json(argv)` and the `opentide` binary; implies `compile` and `queries` |
 | `lsp` | no | `opentide::lsp`: the language server, on stdio or one message at a time |
 
-Without `queries`, a queries check is never skipped: `validate` reports one `engine_unavailable` error and `lint` fails with that code. Turn the check off (`QueriesMode::Off`) to validate without it. The platform connectors (deploy, live query validation, query runs) will come behind a `connectors` feature.
+Without `queries`, a queries check is never skipped: `validate` reports one `engine_unavailable` error and `lint` fails with that code. Turn the check off (`QueriesMode::Off`) to validate without it. The platform connectors (deploy, live query validation, query runs) will come behind a `connectors` feature once the platforms run on them.
 
 ## Open a workspace
 
