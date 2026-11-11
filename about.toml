@@ -26,3 +26,10 @@ ignore-dev-dependencies = true
 # (UC-1.8b, #900). deny.toml carries the same single-crate exception.
 [borrow-or-share]
 accepted = ["MIT-0"]
+
+# Mozilla's root certificates as data (CDLA-Permissive-2.0), through
+# rustls-platform-verifier, which reqwest 0.13's rustls backend requires (the
+# connectors' HTTP client, UC-4.1, #831). deny.toml carries the same
+# single-crate exception.
+[webpki-root-certs]
+accepted = ["CDLA-Permissive-2.0"]
