@@ -153,8 +153,8 @@ fn strategy_suggestion(values: &[String]) -> Option<String> {
     None
 }
 
-/// The rules folder as the workspace spells it (`rules_folder_in_repo`).
-fn rules_folder(workspace: &Workspace) -> (PathBuf, String) {
+/// The rules folder, and as the workspace spells it (`rules_folder_in_repo`).
+pub fn rules_folder(workspace: &Workspace) -> (PathBuf, String) {
     let folder = workspace
         .configuration()
         .folder("rule")
@@ -167,9 +167,10 @@ fn rules_folder(workspace: &Workspace) -> (PathBuf, String) {
     (folder, spelled)
 }
 
-/// The rule files `--file` and `--uuid` select, and each value that selects
-/// none (`_selected_rule_scope`).
-fn selected_scope(
+/// The rule files `--file` and `--uuid` (`request.files`, `request.uuids`)
+/// select among `local`'s, and each value that selects none
+/// (`_selected_rule_scope`); `deploy` and `validate query` share it.
+pub fn selected_scope(
     fs: &dyn FileSystem,
     workspace: &Workspace,
     local: &Scope,

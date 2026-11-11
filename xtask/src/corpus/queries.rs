@@ -7,9 +7,11 @@
 //! checked. A difference fails the kind unless an approved rule explains it:
 //! `xtask validate diff`'s, or one of [`APPROVED`], which only the kinds reach.
 //!
-//! The kinds `opentide lint` reports (`command = ["lint"]`) come with lint
-//! on the Rust engine (UC-2.3): lint's queries check reads the editor's
-//! analysis of the whole object, not this hook.
+//! The kinds `opentide lint` reports from its queries check (`command =
+//! ["lint"]`, UC-3.5b): each workspace linted by `opentide-workspace` with
+//! the query engines (`opentide_cli::queries::EngineLintQueries`, the
+//! editor's analysis of the whole object), and every finding of the
+//! `queries` check compared with the oracle's `lint --json`, every key of it.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -93,12 +95,43 @@ const ENGINE_PREFIXES: [&str; 9] = [
     "kql_", "spl_", "esql_", "eql_", "kuery_", "lucene_", "ecs_", "falco_", "cql_",
 ];
 
+/// The codes lint's queries check reports beside the engines' own: the
+/// Elastic block advisories, Sysdig's self-referencing list and the
+/// datasets `visibility.toml` does not declare.
+const LINT_QUERY_CODES: [&str; 9] = [
+    "lookback_zero",
+    "lookback_long",
+    "threshold_lookback",
+    "risk_band",
+    "technique_not_enterprise",
+    "sysdig_list_self_reference",
+    "kql_table_not_declared",
+    "spl_dataset_not_declared",
+    "elastic_dataset_not_declared",
+];
+
 /// Whether `kind` is one of the group: `validate` reports an engine code
-/// for it.
+/// for it, or `lint` reports one of its queries check's codes.
 pub fn is_query_kind(kind: &Kind) -> bool {
+    is_validate_kind(kind) || is_lint_kind(kind)
+}
+
+/// A kind `validate` reports an engine code for.
+pub fn is_validate_kind(kind: &Kind) -> bool {
     kind.command.first().map(String::as_str) == Some("validate")
         && kind.command.get(1).is_none_or(|word| word.starts_with('-'))
         && kind.codes.iter().any(|code| is_engine_code(code))
+}
+
+/// A kind `lint` reports from its queries check.
+pub fn is_lint_kind(kind: &Kind) -> bool {
+    kind.command.first().map(String::as_str) == Some("lint")
+        && kind.codes.iter().any(|code| is_lint_query_code(code))
+}
+
+/// Whether lint's queries check reports `code`.
+pub fn is_lint_query_code(code: &str) -> bool {
+    is_engine_code(code) || LINT_QUERY_CODES.contains(&code)
 }
 
 /// Whether `code` is a query engine's.
@@ -168,6 +201,59 @@ pub fn rust_report(dir: &Path, command: &[String]) -> Result<(Json, usize)> {
         serde_json::to_value(&validation.report)?,
         counting.crowdstrike(),
     ))
+}
+
+/// The findings of lint's queries check in a `lint --json` document.
+pub fn lint_findings(document: &Json) -> Vec<Json> {
+    document["findings"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|item| item["check"] == "queries")
+        .cloned()
+        .collect()
+}
+
+/// What the Rust `lint` reports for `command` in the workspace at `dir`:
+/// its findings, as `lint --json` lists them.
+///
+/// # Errors
+///
+/// The command is not a plain `lint`, or the workspace does not open.
+pub fn rust_lint(dir: &Path, command: &[String]) -> Result<Vec<Json>> {
+    if command.len() != 1 || command[0] != "lint" {
+        return Err(anyhow!("`{}` is not a plain lint", command.join(" ")));
+    }
+    let workspace = Workspace::open(
+        Arc::new(OsFs),
+        opentide_workspace::Options {
+            roots: RootOptions {
+                repo: Some(dir.to_path_buf()),
+                repo_root_env: None,
+                tide_workspace_env: None,
+                cwd: dir.to_path_buf(),
+            },
+        },
+    )
+    .map_err(|error| anyhow!("{}: open: {error}", dir.display()))?;
+    let _engine = opentide_cli::queries::ENGINE
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let queries = opentide_cli::queries::EngineLintQueries::install(&OsFs, workspace.root());
+    let report = workspace.lint(
+        None,
+        &opentide_workspace::lint::LintOptions {
+            checks: Vec::new(),
+            fix: false,
+            strict: false,
+            files: Vec::new(),
+            changed: None,
+            cwd: dir.to_path_buf(),
+            query_check: Some(&queries),
+        },
+    );
+    let document = json!({"findings": serde_json::to_value(&report.findings)?});
+    Ok(lint_findings(&document))
 }
 
 /// The approved differences only the fault kinds reach: no recorded
@@ -287,13 +373,24 @@ mod tests {
     }
 
     #[test]
-    fn the_group_is_validate_s_engine_codes() {
+    fn the_group_is_validate_s_engine_codes_and_lint_s_queries_check() {
         assert!(is_query_kind(&kind(&["validate"], &["kql_parse_error"])));
         assert!(is_query_kind(&kind(
             &["validate", "--queries", "warn"],
             &["vocab_unknown", "falco_value_type"]
         )));
-        assert!(!is_query_kind(&kind(&["lint"], &["kql_unscoped_search"])));
+        assert!(is_query_kind(&kind(&["lint"], &["kql_unscoped_search"])));
+        assert!(is_lint_kind(&kind(&["lint"], &["risk_band"])));
+        assert!(is_lint_kind(&kind(
+            &["lint"],
+            &["elastic_dataset_not_declared"]
+        )));
+        assert!(!is_query_kind(&kind(&["lint"], &["filename_mismatch"])));
+        assert!(!is_query_kind(&kind(&["lint"], &["placeholder"])));
+        assert!(!is_validate_kind(&kind(
+            &["lint"],
+            &["kql_unscoped_search"]
+        )));
         assert!(!is_query_kind(&kind(&["validate"], &["vocab_unknown"])));
         assert!(!is_query_kind(&kind(
             &["validate", "query"],
@@ -337,6 +434,41 @@ mod tests {
         assert_eq!(approved(Some(&block), Some(&block_rust)), None);
         // A finding on one side only is not a platform that differs.
         assert_eq!(approved(None, Some(&rust)), None);
+    }
+
+    #[test]
+    fn only_lint_s_queries_findings_are_read() {
+        let document = json!({"findings": [
+            {"check": "queries", "code": "kql_x"},
+            {"check": "filenames", "code": "filename_mismatch"},
+        ]});
+        assert_eq!(
+            lint_findings(&document),
+            vec![json!({"check": "queries", "code": "kql_x"})]
+        );
+        assert!(lint_findings(&json!({})).is_empty());
+    }
+
+    #[test]
+    fn the_catalogue_s_lint_query_kinds_are_in_the_group() {
+        let catalogue = Catalogue::parse(
+            &std::fs::read_to_string(
+                Path::new(env!("CARGO_MANIFEST_DIR")).join("../tests/corpora/faults.toml"),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        let ids = kinds(&catalogue);
+        let lint = catalogue
+            .kinds
+            .iter()
+            .filter(|kind| ids.contains(&kind.id) && is_lint_kind(kind))
+            .count();
+        // Every lint kind whose code the queries check reports, none of the
+        // file-name, metadata, placeholder or YAML kinds.
+        assert_eq!(lint, 66);
+        assert!(ids.iter().any(|id| id == "kql-deprecated-function"));
+        assert!(!ids.iter().any(|id| id == "lint-filename-mismatch"));
     }
 
     #[test]
