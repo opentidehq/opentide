@@ -59,7 +59,7 @@ url.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 # SARIF and Code Quality fingerprints (RustCrypto).
-sha2 = "0.10"
+sha2 = "0.11"
 shlex = "2.0"
 strsim = "0.11"
 terminal_size = "0.4"
@@ -70,6 +70,16 @@ unicode-width = "0.2"
 # `doctor` (UC-3.5c): whether git and an MCP server's command are on PATH.
 which = "7"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["registry", "std"] }
+# `mcp start` (UC-3.7, #829): the official Rust MCP SDK serves the protocol on
+# stdio, on a current-thread tokio runtime (stdin, and the duplicate of stdout
+# the frames go to).
+rmcp = { version = "3.9", default-features = false, features = ["server"] }
+tokio = { version = "1.48", default-features = false, features = ["rt", "io-std", "io-util", "fs"] }
+
+[target.'cfg(unix)'.dependencies]
+# `mcp start` points descriptor 1 at stderr while it serves, so nothing but a
+# frame reaches stdout (`dup2`, safely).
+rustix = { version = "1.1", default-features = false, features = ["std", "stdio"] }
 
 [dev-dependencies]
 # The goldens' normalisation, for the generate cases (tests/generate_goldens.rs).

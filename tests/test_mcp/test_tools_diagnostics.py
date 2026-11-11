@@ -31,6 +31,12 @@ _RULE = Path("objects/rules/rule-0001-sentinel-kql.yaml")
 _UUID = CORPUS_RULE_UUIDS["sentinel"]
 
 
+#: The CLI run in this process: under ``OPENTIDE_ENGINE=rust`` a command's
+#: Rust implementation runs in a child process, whose output CliRunner does
+#: not capture. The tool under test still runs on the engine the suite selects.
+_PYTHON_CLI = {"OPENTIDE_ENGINE": "python"}
+
+
 @pytest.fixture
 def broken_rule(tide_corpus_repo: Path) -> Path:
     """The Sentinel rule with ``tlp: clearr``: a typo with a fix to review (not safe)."""
@@ -87,7 +93,9 @@ def test_mcp_and_validate_json_carry_the_same_diagnostic_fields(broken_rule: Pat
     from opentide.cli import app
 
     mcp_issue = _tlp_issue(tools.tool_validation_report(file=str(_RULE))["issues"])
-    result = CliRunner().invoke(app, ["--json", "validate", "--file", str(_RULE)])
+    # The CLI in this process, whatever OPENTIDE_ENGINE the tool ran on: its
+    # Rust implementation runs in a child CliRunner does not capture.
+    result = CliRunner().invoke(app, ["--json", "validate", "--file", str(_RULE)], env=_PYTHON_CLI)
     cli_issue = _tlp_issue(json.loads(result.stdout)["report"]["issues"])
     assert mcp_issue == cli_issue
 
@@ -143,7 +151,7 @@ def test_a_safe_fix_makes_the_rerun_validate_fix(safe_typo_rule: Path) -> None:
     assert rule["next_actions"][-1]["command"] == (f"opentide --json validate --fix --uuid {_UUID}")
     # The command is one the CLI runs: it writes the fix and validates clean.
     argv = shlex.split(rerun["command"])[1:]
-    result = CliRunner().invoke(app, argv)
+    result = CliRunner().invoke(app, argv, env=_PYTHON_CLI)
     assert result.exit_code == 0, result.stdout + result.stderr
     assert json.loads(result.stdout)["ok"] is True
     assert "  tlp: clear\n" in safe_typo_rule.read_text(encoding="utf-8")

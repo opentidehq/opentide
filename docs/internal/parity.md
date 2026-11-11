@@ -14,15 +14,15 @@ The Python CLI at the frozen tag is the oracle ([plan §5](https://github.com/op
 | | |
 |---|---:|
 | Commands | 59 |
-| Commands with a Rust implementation | 23 |
+| Commands with a Rust implementation | 24 |
 | Commands flipped to Rust | 0 |
 | Recordings (command × corpus × mode) | 637 |
-| … no Rust yet | 305 (47.8%) |
+| … no Rust yet | 301 (47.2%) |
 | … compare passing | 0 (0.0%) |
 | … compare failing | 0 (0.0%) |
-| … compare not run | 332 (52.1%) |
+| … compare not run | 336 (52.7%) |
 | … flipped | 0 (0.0%) |
-| Approved diffs (`tests/golden/APPROVED_DIFFS.toml`) | 760 |
+| Approved diffs (`tests/golden/APPROVED_DIFFS.toml`) | 763 |
 | Diagnostic codes with a fault kind | 163 of 175 (93.1%) |
 | … with no fault kind, evidence recorded | 12 |
 | … with neither (missing) | 0 |
@@ -287,9 +287,11 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide mcp start`
 
+3 approved diff(s).
+
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
-| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| none | compare not run | compare not run | compare not run | compare not run |
 
 ### `opentide migrate`
 
