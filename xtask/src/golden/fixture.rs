@@ -218,7 +218,7 @@ pub fn copy_tree(from: &Path, to: &Path) -> Result<()> {
 }
 
 #[cfg(unix)]
-fn symlink_dir(link: &Path, target: &Path) -> Result<()> {
+pub(crate) fn symlink_dir(link: &Path, target: &Path) -> Result<()> {
     std::os::unix::fs::symlink(link, target)
         .with_context(|| format!("link {} to {}", target.display(), link.display()))
 }
@@ -226,7 +226,7 @@ fn symlink_dir(link: &Path, target: &Path) -> Result<()> {
 /// Windows creates a directory symbolic link; that needs Developer Mode or
 /// an elevated shell, which GitHub's Windows runners have.
 #[cfg(windows)]
-fn symlink_dir(link: &Path, target: &Path) -> Result<()> {
+pub(crate) fn symlink_dir(link: &Path, target: &Path) -> Result<()> {
     std::os::windows::fs::symlink_dir(link, target).with_context(|| {
         format!(
             "link {} to {} (directory symbolic links on Windows need Developer Mode or an elevated shell)",
@@ -237,7 +237,7 @@ fn symlink_dir(link: &Path, target: &Path) -> Result<()> {
 }
 
 #[cfg(not(any(unix, windows)))]
-fn symlink_dir(_link: &Path, target: &Path) -> Result<()> {
+pub(crate) fn symlink_dir(_link: &Path, target: &Path) -> Result<()> {
     bail!(
         "{}: golden fixtures with symbolic links need a Unix or Windows host",
         target.display()
