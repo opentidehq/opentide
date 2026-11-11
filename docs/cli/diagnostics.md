@@ -154,25 +154,32 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`graylog_aggregation`](#graylog_aggregation) | A Graylog aggregation condition does not parse, or a call has the wrong arguments. |
 | [`graylog_alias_unknown`](#graylog_alias_unknown) | A Graylog block names a stream or notification alias the tenant does not define. |
 | [`graylog_all_streams`](#graylog_all_streams) | A Graylog definition names no stream, so it searches every stream. |
+| [`graylog_analyzed_field`](#graylog_analyzed_field) | A regex, wildcard or range applies to Graylog's analysed message field. |
 | [`graylog_create_unconfirmed`](#graylog_create_unconfirmed) | A Graylog create got no answer, so the definition may exist without a binding. |
 | [`graylog_definition_immutable`](#graylog_definition_immutable) | Graylog refuses to change or delete an event definition outside the default scope. |
 | [`graylog_definition_in_use`](#graylog_definition_in_use) | Graylog refuses to delete an event definition another one depends on. |
 | [`graylog_definition_invalid`](#graylog_definition_invalid) | Graylog refused an event definition, naming the fields at fault. |
 | [`graylog_definition_missing`](#graylog_definition_missing) | The recorded Graylog event definition was gone when deploy came to disable it. |
 | [`graylog_definition_recreated`](#graylog_definition_recreated) | The recorded Graylog event definition was gone, so deploy created it again. |
+| [`graylog_double_backslash`](#graylog_double_backslash) | A Graylog query holds four backslashes in a row. |
 | [`graylog_event_field`](#graylog_event_field) | A Graylog event field has an invalid name or value. |
 | [`graylog_event_key`](#graylog_event_key) | A Graylog event_key item is not an event field of the block. |
 | [`graylog_event_limit`](#graylog_event_limit) | A Graylog block's event_limit is out of range, or set on an aggregation. |
 | [`graylog_field_name`](#graylog_field_name) | A Graylog aggregation groups by a name that is not a field name. |
 | [`graylog_field_unsupported_version`](#graylog_field_unsupported_version) | A Graylog block sets a field the tenant's version cannot take. |
 | [`graylog_forbidden`](#graylog_forbidden) | Graylog refused a request for want of a permission. |
+| [`graylog_leading_wildcard`](#graylog_leading_wildcard) | A Graylog query term starts with `*` or `?`. |
 | [`graylog_list_shape`](#graylog_list_shape) | A Graylog list field is not a string or a list of distinct, non-blank strings. |
+| [`graylog_open_range`](#graylog_open_range) | A Graylog range has an open end, which Graylog's validator refuses. |
 | [`graylog_overlapping_window`](#graylog_overlapping_window) | A Graylog filter searches a window longer than its interval. |
 | [`graylog_priority`](#graylog_priority) | A Graylog block's priority is not one of Graylog's priorities. |
 | [`graylog_priority_collapsed`](#graylog_priority_collapsed) | Graylog before 7.1 has no Informational priority: the definition is sent as Low. |
 | [`graylog_query_blank`](#graylog_query_blank) | A Graylog block has no query, or an empty one. |
 | [`graylog_query_invalid`](#graylog_query_invalid) | Graylog refused a query, so deploy saved nothing. |
 | [`graylog_query_warning`](#graylog_query_warning) | Graylog has a reservation about a query. |
+| [`graylog_regex_operator`](#graylog_regex_operator) | A Graylog regex holds a character Lucene reads as a regex operator. |
+| [`graylog_regex_quote`](#graylog_regex_quote) | A Graylog regex holds an unescaped double quote. |
+| [`graylog_regex_unsupported`](#graylog_regex_unsupported) | A Graylog regex uses syntax Lucene's regex engine does not have. |
 | [`graylog_request_failed`](#graylog_request_failed) | A Graylog request failed for a reason the failure table does not name. |
 | [`graylog_schedule`](#graylog_schedule) | A Graylog block's schedule is invalid. |
 | [`graylog_tenant_unauthorized`](#graylog_tenant_unauthorized) | A Graylog tenant refused the access token. |
@@ -2806,6 +2813,24 @@ configurations:
 
 Set `streams` on the block, or default `streams` on the tenant's `[tenants.setup]`.
 
+## graylog_analyzed_field
+
+A regex, wildcard or range applies to Graylog's analysed message field.
+
+Severity: warning. Reported by the analysis engine on a Graylog query (graylog-1.0, Query diagnostics): the `query` of a `graylog` block and `.lucene` files under `--platform graylog`, in `opentide validate`, `opentide validate query`, `opentide lint`, the editor and `opentide tui`. `message` and `full_message` are tokenised and lower-cased, so a regex or wildcard matches single tokens, never the whole value.
+
+### Example
+
+```yaml
+configurations:
+  graylog:
+    query: message:/.*powershell -enc.*/
+```
+
+### How to fix
+
+Match a keyword field the pipeline extracts, or search the words as a phrase (`message:"powershell -enc"`).
+
 ## graylog_create_unconfirmed
 
 A Graylog create got no answer, so the definition may exist without a binding.
@@ -2903,6 +2928,24 @@ graylog_definition_recreated: the recorded definition no longer exists on the te
 ### How to fix
 
 Commit the updated deployment state. Delete definitions through a `DELETION` status, not in Graylog.
+
+## graylog_double_backslash
+
+A Graylog query holds four backslashes in a row.
+
+Severity: warning. Reported by the analysis engine on a Graylog query (graylog-1.0, Query diagnostics): the `query` of a `graylog` block and `.lucene` files under `--platform graylog`, in `opentide validate`, `opentide validate query`, `opentide lint`, the editor and `opentide tui`. In a Graylog query, `\\` is one literal backslash, so `\\\\` matches two, which a Windows path does not have.
+
+### Example
+
+```yaml
+configurations:
+  graylog:
+    query: 'image_lc:/.*\\\\\\\\mshta\.exe/'
+```
+
+### How to fix
+
+Write one literal backslash as `\\` in the query text (in single-quoted YAML, as written).
 
 ## graylog_event_field
 
@@ -3012,6 +3055,24 @@ graylog_forbidden: POST /api/events/definitions?schedule=true was refused (HTTP 
 
 Grant the token's user the permissions, most often `streams:read` on the definition's streams.
 
+## graylog_leading_wildcard
+
+A Graylog query term starts with `*` or `?`.
+
+Severity: error. Reported by the analysis engine on a Graylog query (graylog-1.0, Query diagnostics): the `query` of a `graylog` block and `.lucene` files under `--platform graylog`, in `opentide validate`, `opentide validate query`, `opentide lint`, the editor and `opentide tui`. Graylog passes the query to `query_string` with `allow_leading_wildcard` from the server's `allow_leading_wildcard_searches`, `false` by default, and refuses the query ("'*' or '?' not allowed as first character"). opentide drops the finding when every tenant the block deploys to sets `allow_leading_wildcard = true`; offline, with no tenant, it is an error.
+
+### Example
+
+```yaml
+configurations:
+  graylog:
+    query: image_lc:*\\mshta.exe
+```
+
+### How to fix
+
+Write a regex with a leading `.*` (`image_lc:/.*\\mshta\.exe/`), or set `allow_leading_wildcard = true` on every tenant whose server allows leading wildcards.
+
 ## graylog_list_shape
 
 A Graylog list field is not a string or a list of distinct, non-blank strings.
@@ -3029,6 +3090,24 @@ configurations:
 ### How to fix
 
 Write one string, or a list whose items are non-blank and not repeated.
+
+## graylog_open_range
+
+A Graylog range has an open end, which Graylog's validator refuses.
+
+Severity: error. Reported by the analysis engine on a Graylog query (graylog-1.0, Query diagnostics): the `query` of a `graylog` block and `.lucene` files under `--platform graylog`, in `opentide validate`, `opentide validate query`, `opentide lint`, the editor and `opentide tui`. `[1 TO *]` and `{* TO 5}` are refused by `POST /api/search/validate`, so deploy would never save the definition.
+
+### Example
+
+```yaml
+configurations:
+  graylog:
+    query: EventID:[4624 TO *]
+```
+
+### How to fix
+
+Write the bound as a comparison (`EventID:>=4624`), or give both ends.
 
 ## graylog_overlapping_window
 
@@ -3133,6 +3212,60 @@ graylog_query_warning: Invalid operator: Query contains invalid operator "and" (
 ### How to fix
 
 Read Graylog's explanation and change the query; an operator is upper case (`AND`).
+
+## graylog_regex_operator
+
+A Graylog regex holds a character Lucene reads as a regex operator.
+
+Severity: warning. Reported by the analysis engine on a Graylog query (graylog-1.0, Query diagnostics): the `query` of a `graylog` block and `.lucene` files under `--platform graylog`, in `opentide validate`, `opentide validate query`, `opentide lint`, the editor and `opentide tui`. An unescaped `#`, `&`, `<`, `>` or `~`, other than a numeric interval `<n-m>`, is an operator in Lucene's regex syntax, and Graylog's validator still says OK.
+
+### Example
+
+```yaml
+configurations:
+  graylog:
+    query: url_lc:/.*#section.*/
+```
+
+### How to fix
+
+Escape the character (`\#`) when you mean it literally.
+
+## graylog_regex_quote
+
+A Graylog regex holds an unescaped double quote.
+
+Severity: warning. Reported by the analysis engine on a Graylog query (graylog-1.0, Query diagnostics): the `query` of a `graylog` block and `.lucene` files under `--platform graylog`, in `opentide validate`, `opentide validate query`, `opentide lint`, the editor and `opentide tui`. The regex then matches nothing.
+
+### Example
+
+```yaml
+configurations:
+  graylog:
+    query: 'command_line_lc:/.*"c:.*/'
+```
+
+### How to fix
+
+Escape the quote (`\"`), or match without it.
+
+## graylog_regex_unsupported
+
+A Graylog regex uses syntax Lucene's regex engine does not have.
+
+Severity: error. Reported by the analysis engine on a Graylog query (graylog-1.0, Query diagnostics): the `query` of a `graylog` block and `.lucene` files under `--platform graylog`, in `opentide validate`, `opentide validate query`, `opentide lint`, the editor and `opentide tui`. An inline flag such as `(?i)`, `\b`, `\B`, lookahead or lookbehind, or a backreference: Lucene's regex engine accepts none of them, and Graylog matches nothing without saying so.
+
+### Example
+
+```yaml
+configurations:
+  graylog:
+    query: command_line:/(?i).*mimikatz.*/
+```
+
+### How to fix
+
+Match a lower-cased copy of the field instead (`command_line_lc:/.*mimikatz.*/`), written by a tenant pipeline; see the case section of the Graylog platform spec.
 
 ## graylog_request_failed
 
