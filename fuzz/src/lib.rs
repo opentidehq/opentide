@@ -245,7 +245,22 @@ pub fn cli(data: &[u8]) {
     }
 }
 
-/// Runs `opentide` in-process on `argv`: exit code, stdout, stderr.
+/// The folder the fuzzed command lines run in: a line such as `generate docs`
+/// writes files where it runs, and never in the source tree (#931).
+fn cli_scratch() -> std::path::PathBuf {
+    static SCRATCH: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+    SCRATCH
+        .get_or_init(|| {
+            let dir =
+                std::env::temp_dir().join(format!("opentide-fuzz-cli-{}", std::process::id()));
+            let _ = std::fs::create_dir_all(&dir);
+            dir
+        })
+        .clone()
+}
+
+/// Runs `opentide` in-process on `argv` in [`cli_scratch`]: exit code,
+/// stdout, stderr.
 pub fn run_cli(argv: &[String]) -> (i32, String, String) {
     use std::sync::{Arc, Mutex};
     #[derive(Clone, Default)]
@@ -267,7 +282,7 @@ pub fn run_cli(argv: &[String]) -> (i32, String, String) {
         stdout_tty: false,
         stderr_tty: false,
         log_sink: Arc::new(Mutex::new(err.clone())),
-        cwd: None,
+        cwd: Some(cli_scratch()),
         width: None,
         interrupt: opentide_cli::app::Interrupt::default(),
     };
