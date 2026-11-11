@@ -45,8 +45,13 @@ cargo xtask golden lock                         # rewrite oracle-requirements.tx
    empty),
    each block quoted exactly and the entry naming its one case (no `*`): a block one character
    off, or one the output extends by a line, is not approved, and the lines after an approved
-   block are compared at their new place; a
-   JSON rule is one value at one pointer.
+   block are compared at their new place; a case may take one lines entry per block, each placed
+   by its oracle lines; a
+   JSON rule is one value at one pointer; a `json-extend:` rule names the elements a candidate
+   adds to the oracle's array at one pointer, each by its index in the candidate's array: the
+   rest must be the oracle's elements, in order, compared as any value is, so it fixes the
+   candidate's array as a whole-value entry would without quoting the oracle's elements, and a
+   JSON rule under it addresses the array by the oracle's indices.
 
 ## The oracle
 

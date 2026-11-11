@@ -9,10 +9,15 @@ cases that share it:
 
 - a JSON document (both sides parse): one ``json:`` entry per node that
   differs: a scalar, an object whose keys differ or are in another order, an
-  array of another length;
-- text: one ``lines`` entry per case and target, from the first line
-  ``difflib`` finds changed to the last, with a line of context when the block
-  only adds or only drops lines.
+  array of another length; where the candidate's array is the oracle's with
+  elements added (matched by their ``id``, ``code`` or ``name`` member, or
+  whole), a ``json-extend:`` entry naming the added elements, and the
+  oracle's elements compared one by one at the oracle's indices;
+- text: one ``lines`` entry per block ``difflib`` finds changed, with lines
+  of context around a block that only adds or only drops lines (or whose one
+  side is blank), until both sides hold a line that is not blank; blocks
+  whose context would touch are one block, and a block that recurs in a
+  case is one entry.
 
 Each entry's ``reason``, ``issue`` and ``changelog`` come from the first rule
 of a ``--reasons`` TOML file whose ``match`` (a regular expression) is found
@@ -68,35 +73,104 @@ def pointer_part(key: object) -> str:
     return str(key).replace("~", "~0").replace("/", "~1")
 
 
+IDENTITIES = ("id", "code", "name")
+
+
+def identity(item: object) -> str:
+    """What names an array element: its ``id``, ``code`` or ``name`` member,
+    else the whole element."""
+    if isinstance(item, dict):
+        for key in IDENTITIES:
+            if isinstance(item.get(key), str):
+                return f"{key}={item[key]}"
+    return compact(item)
+
+
+def extension(oracle: list, candidate: list) -> list[int | None] | None:
+    """For each candidate element, the index of the oracle element it is
+    (``None`` for an added one), where the candidate's array is the oracle's
+    with elements added: every oracle element's identity found once, in order,
+    or else (elements without one) ``difflib`` finding only added elements and
+    elements changed in place. ``None`` otherwise."""
+    if len(candidate) <= len(oracle):
+        return None
+    names = [identity(item) for item in oracle]
+    if len(set(names)) != len(names):
+        return in_place(oracle, candidate)
+    out: list[int | None] = []
+    at = 0
+    for item in candidate:
+        if at < len(names) and identity(item) == names[at]:
+            out.append(at)
+            at += 1
+        elif identity(item) in names:
+            return None
+        else:
+            out.append(None)
+    return out if at == len(names) else in_place(oracle, candidate)
+
+
+def in_place(oracle: list, candidate: list) -> list[int | None] | None:
+    """:func:`extension` by ``difflib``: elements added, and elements changed
+    one for one, and nothing dropped or moved."""
+    matcher = difflib.SequenceMatcher(
+        a=[compact(item) for item in oracle],
+        b=[compact(item) for item in candidate],
+        autojunk=False,
+    )
+    out: list[int | None] = []
+    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+        if tag == "insert":
+            out += [None] * (j2 - j1)
+        elif tag in ("equal", "replace") and i2 - i1 == j2 - j1:
+            out += list(range(i1, i2))
+        else:
+            return None
+    return out
+
+
 def json_entries(
     oracle: object, candidate: object, pointer: str = ""
-) -> list[tuple[str, str, str]]:
-    """``(pointer, oracle JSON, candidate JSON)`` for each node that differs."""
+) -> list[tuple[str, str, str, str]]:
+    """``(rule, pointer, oracle side, candidate side)`` for each node that
+    differs: ``json`` with the two values, or ``json-extend`` with the oracle
+    array's length and the added elements by candidate index."""
     if isinstance(oracle, dict) and isinstance(candidate, dict):
         if list(oracle) != list(candidate):
-            return [(pointer, compact(oracle), compact(candidate))]
-        out: list[tuple[str, str, str]] = []
+            return [("json", pointer, compact(oracle), compact(candidate))]
+        out: list[tuple[str, str, str, str]] = []
         for key in oracle:
             out += json_entries(oracle[key], candidate[key], f"{pointer}/{pointer_part(key)}")
         return out
     if isinstance(oracle, list) and isinstance(candidate, list):
         if len(oracle) != len(candidate):
-            return [(pointer, compact(oracle), compact(candidate))]
+            matched = extension(oracle, candidate)
+            if matched is None:
+                return [("json", pointer, compact(oracle), compact(candidate))]
+            added = OrderedDict(
+                (str(index), candidate[index]) for index, at in enumerate(matched) if at is None
+            )
+            out = [("json-extend", pointer, str(len(oracle)), compact(added))]
+            for index, at in enumerate(matched):
+                if at is not None:
+                    out += json_entries(oracle[at], candidate[index], f"{pointer}/{at}")
+            return out
         out = []
         for index, (left, right) in enumerate(zip(oracle, candidate, strict=True)):
             out += json_entries(left, right, f"{pointer}/{index}")
         return out
     if compact(oracle) != compact(candidate) or type(oracle) is not type(candidate):
-        return [(pointer, compact(oracle), compact(candidate))]
+        return [("json", pointer, compact(oracle), compact(candidate))]
     return []
 
 
 def text_entries(oracle: str, candidate: str) -> list[tuple[str, str]]:
-    """``(oracle lines, candidate lines)``: the one block from the first changed
-    line to the last, as a ``lines`` rule takes it (one per case and target),
-    with a line of context when it only adds or only drops lines. The
-    candidate's side is ``(absent)`` where it has no line there (a stream it
-    leaves empty)."""
+    """``(oracle lines, candidate lines)`` for each block ``difflib`` finds
+    changed, as ``lines`` rules take them: a block that only adds or only
+    drops lines, or whose one side is blank, takes lines of context around it
+    until both sides hold a line that is not blank; blocks whose lines would
+    touch are merged. The candidate's side is ``(absent)`` where it has no
+    line there (a stream it leaves empty). A block found twice is one."""
     left, right = oracle.split("\n"), candidate.split("\n")
     # An empty stream has no line.
     if not oracle:
@@ -109,18 +183,36 @@ def text_entries(oracle: str, candidate: str) -> list[tuple[str, str]]:
     if candidate.endswith("\n"):
         right.pop()
     matcher = difflib.SequenceMatcher(a=left, b=right, autojunk=False)
-    changed = [op for op in matcher.get_opcodes() if op[0] != "equal"]
-    if not changed:
-        return []
-    i1, j1 = changed[0][1], changed[0][3]
-    i2, j2 = changed[-1][2], changed[-1][4]
-    if i1 == i2 or j1 == j2:
-        # Only added or only dropped lines: anchor on the line before.
-        if i1 > 0 and j1 > 0:
-            i1, j1 = i1 - 1, j1 - 1
+    blocks: list[list[int]] = []
+    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+        if tag == "equal":
+            continue
+        before = True
+        while not (
+            any(line.strip() for line in left[i1:i2])
+            and (not right or any(line.strip() for line in right[j1:j2]))
+        ):
+            # Context, alternately before and after, while there is some.
+            if before and i1 > 0 and j1 > 0:
+                i1, j1 = i1 - 1, j1 - 1
+            elif i2 < len(left) and j2 < len(right):
+                i2, j2 = i2 + 1, j2 + 1
+            elif i1 > 0 and j1 > 0:
+                i1, j1 = i1 - 1, j1 - 1
+            else:
+                break
+            before = not before
+        if blocks and (i1 <= blocks[-1][1] or j1 <= blocks[-1][3]):
+            blocks[-1][1] = max(blocks[-1][1], i2)
+            blocks[-1][3] = max(blocks[-1][3], j2)
         else:
-            i2, j2 = i2 + 1, j2 + 1
-    return [("\n".join(left[i1:i2]), "\n".join(right[j1:j2]) if right[j1:j2] else ABSENT)]
+            blocks.append([i1, i2, j1, j2])
+    out: list[tuple[str, str]] = []
+    for i1, i2, j1, j2 in blocks:
+        block = ("\n".join(left[i1:i2]), "\n".join(right[j1:j2]) if right[j1:j2] else ABSENT)
+        if block not in out:
+            out.append(block)
+    return out
 
 
 def case_glob(ids: list[str]) -> str:
@@ -165,8 +257,8 @@ def main() -> int:
                 continue
             left, right = load_json(oracle), load_json(candidate)
             if left is not None and right is not None:
-                for pointer, old, new in json_entries(left, right):
-                    key = (command, target, f"json:{pointer}", old, new, "")
+                for rule, pointer, old, new in json_entries(left, right):
+                    key = (command, target, f"{rule}:{pointer}", old, new, "")
                     grouped.setdefault(key, []).append(case_id)
                 continue
             for old, new in text_entries(oracle.decode("utf-8"), candidate.decode("utf-8")):
