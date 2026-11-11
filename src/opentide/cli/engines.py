@@ -118,8 +118,8 @@ class RustCommand:
 #: start`` (UC-3.6b, #947) is one too: an editor's session has one server on
 #: stdio, so ``compare`` runs the Python host and ``rust`` the Rust one. So is
 #: ``tui``: a full-screen UI cannot run twice to be compared, so ``compare``
-#: opens the Python one; under ``rust`` its refusals run on Rust and, where
-#: the UI would open, it is refused as not ported.
+#: opens the Python one; under ``rust`` its refusals and its UI (on ratatui,
+#: UC-3.6d, #951) run on Rust.
 ENGINE_HOSTS: frozenset[tuple[str, ...]] = frozenset(
     {("serve",), ("mcp", "start"), ("lsp", "start"), ("tui",)}
 )
@@ -153,8 +153,8 @@ RUST_CLI: tuple[str, ...] = (sys.executable, "-m", "opentide.cli.rust")
 #: Rust implementation itself and hands every other run to this package's
 #: runner in its own process (``opentide.cli.services.serve_bridge``).
 #: ``lsp start`` with UC-3.6b (#947): the language server hosted by the Rust
-#: command line, and ``tui``'s refusals (``usage_tui_needs_tty``): its terminal
-#: UI is not ported yet.
+#: command line, and ``tui``'s refusals (``usage_tui_needs_tty``); ``tui``'s
+#: terminal UI with UC-3.6d (#951), on ratatui.
 RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
     ("commands",): RustCommand(launch=RUST_CLI),
     ("explain",): RustCommand(launch=RUST_CLI),

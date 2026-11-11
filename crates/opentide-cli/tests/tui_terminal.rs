@@ -2,6 +2,7 @@
 //! cannot record, in pseudo-terminals. stdin and stdout are terminals here,
 //! so the UI would open in `human` mode; a setting that puts the run in
 //! `plain` mode is named, with a `help:` that says how to open it anyway.
+//! The UI itself opening at a terminal (UC-3.6d, #951) is `tests/tui_pty.rs`.
 
 #![cfg(unix)]
 #![expect(
@@ -126,21 +127,6 @@ fn a_setting_that_makes_the_run_plain_is_named_with_how_to_open_it_anyway() {
         // Bold and dim in plain mode at a terminal: compare the words.
         assert_eq!(strip_sgr(&stderr), expected, "{pairs:?} {args:?}");
     }
-}
-
-#[test]
-fn the_ui_itself_runs_on_python_where_it_would_open() {
-    let (code, stdout, stderr) = tui(&[], &[]);
-    assert_eq!(code, 2);
-    assert_eq!(stdout, "");
-    let stderr = strip_sgr(&stderr);
-    assert!(
-        stderr.starts_with(
-            "error: opentide tui's terminal UI has no Rust implementation yet: \
-             unset OPENTIDE_ENGINE, or set it to python or compare."
-        ),
-        "{stderr}"
-    );
 }
 
 #[test]
