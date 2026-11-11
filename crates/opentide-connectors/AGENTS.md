@@ -14,24 +14,24 @@ adds the Python plugin hook to its registry.
 | `credentials.rs` | `$NAME`/`${NAME}` (opentide-workspace's `env_reference`), the 0.21.0 `$text` reading, placeholders for runs that send nothing; `Secret` prints `***` | `core/environment.py` `fetch_config_envvar`, `defer_missing_envvars` |
 | `tenant.rs` | `Tenant` from a `setup` table: `ssl` words and `$VAR`, every other value a credential; `TenantLabel` | `platforms/config.py` `_tenant_ssl`, `transport.tenant_tls_verify` |
 | `error.rs` | `ConnectorError` and its `failure.code`; messages name `scheme://host[:port]` only, never a path, query or credential | `transport.py` `TenantUnreachableError`, `reaching_tenant` |
-| `connector.rs` | `Deployer`, `LiveValidator`, `QueryRunner`, `Sharer`, `StateMigrator`, `Platform` and the `Registry` | `platforms/base.py`, `registry.py` |
+| `connector.rs` | `Deployer`, `LiveValidator`, `QueryRunner`, `Sharer`, `StateMigrator`, `Platform` and the `Registry`; the query types every runner shares: `QueryRequest`, `QueryOutcome`, `QueryColumn`, `TimeWindow`, `LiveCheck`, `flatten`, `columns_of`, `kql_with_limit`; `lib.rs`'s `builtin()` registers the six platforms | `platforms/base.py`, `registry.py`, `query/models.py`, `query/runner.py` |
 | `runtime.rs` | `block_on` (a runtime per call, for the synchronous CLI), `fan_out` over tenants (bounded, ordered, cancellable), `cancel_when` (Ctrl-C) | the query and deploy loops |
 | `progress.rs` | `tenant` progress events (`OPENTIDE_PROGRESS=json`) | `core/progress_events.py` `tenant` |
 | `body.rs` | `python_json`: a body as `json.dumps` writes it (`, ` and `: `, ASCII escapes), through a serde_json formatter | `requests`' `json=` |
-| `answer.rs` | `Answer`: a tenant's answer read whole (status, type, bytes, time to headers); `describe_answer` for one that is not the API's JSON (a gateway's page) | `transport.py` `describe_answer`, `not_json_detail` |
-| `encode.rs` | Query strings and form bodies as `requests` encodes them (`quote_plus`), through `percent-encoding` | `urllib.parse.urlencode` |
+| `answer.rs` | `Answer`: a tenant's answer read whole (status, type, bytes, time to headers), `exchange`; `describe_answer` for one that is not the API's JSON (a gateway's page), quoting as Python's `repr` | `transport.py` `describe_answer`, `not_json_detail` |
+| `python.rs` | Python's `str` and `repr` of a parsed JSON value, as the clients interpolate a body into a message | `repr()`, `str()` |
+| `encode.rs` | Query strings and form bodies as `requests` encodes them (`quote_plus`), through `percent-encoding`; `quote(text, safe)` for a path | `urllib.parse.urlencode`, `quote` |
 | `crowdstrike.rs` | CrowdStrike (UC-4.2): the OAuth2 token (once per tenant for a deploy), correlation rules, Next-Gen SIEM query jobs stopped when the runner stops waiting | `platforms/crowdstrike/` |
 | `harfanglab.rs` | HarfangLab (UC-4.2): Sigma rules (`PUT`, `POST` on a 404), YARA files, telemetry searches (`shlex` words) | `platforms/harfanglab/` |
 | `sysdig.rs` | Sysdig (UC-4.2): Falco rules and runtime policies, `deploy_rule` with the deployment-state change it makes | `platforms/sysdig/client.py`, `deployer.py` |
-| `search.rs` | What the query runners share: `SearchRequest`, `SearchResult`, `SearchError` (refused, timed out, tenant), `TimeWindow`, `kql_with_limit`, `flatten`, `describe_answer`, `quote`/`urlencode` as `urllib` writes them | `query/models.py`, `query/runner.py`, `transport.describe_answer` |
-| `defender.rs`, `elastic.rs`, `sentinel_one.rs` | The platforms of UC-4.2b (#832): client, deploy calls, live check and query runner of each, request for request; Elastic's Elasticsearch checks, rule preview, query text and advisories | `platforms/<platform>/` |
+| `defender.rs`, `elastic.rs`, `sentinel_one.rs` | The platforms of UC-4.2b (#832): client, deploy calls, live check (`LiveValidator`) and query runner (`QueryRunner`) of each, request for request, on the shared query types (UC-4.2c); Elastic's Elasticsearch checks, rule preview, query text and advisories. Elastic has no `Deployer`: its deploy takes the rule's block (`deploy_rule`) | `platforms/<platform>/` |
 
 ## Place
 
 domain, tier 2 (`xtask/layers.toml`): it builds on `opentide-workspace` and on
 `opentide-compile` (its ordered `Json` for bodies and rows; the platforms send the bodies it
-compiles). `opentide-cli` uses it (`setup skills`); `deploy` and `query` route to the platforms
-once every platform is ported.
+compiles). `opentide-cli` uses it (`setup skills`, and `query` on the platforms with a runner, UC-4.2c);
+`deploy` routes to the platforms once every platform is ported.
 
 ## Invariants
 

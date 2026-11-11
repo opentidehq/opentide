@@ -1,0 +1,2 @@
+error: Environment variable missing · detail: Unset configuration variables: $DEFENDER_CLIENT_SECRET · advice: Set those environment variables before a live check.
+error: 1 of 1 queries failed on 1 defender_for_endpoint tenant: lab: Microsoft Graph credentials are unset ($DEFENDER_CLIENT_SECRET). Set those environment variables before a live check.

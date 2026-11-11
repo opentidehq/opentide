@@ -1,0 +1,60 @@
+{
+  "format": 1,
+  "scenario": "golden/query-elastic",
+  "recorded_from": [
+    "{oracle}/opentide",
+    "--repo",
+    "tests/golden/fixtures/tenants",
+    "--json",
+    "query",
+    "--platform",
+    "elastic",
+    "--from",
+    "2099-01-01T00:00:00Z",
+    "--to",
+    "2099-01-01T01:00:00Z",
+    "FROM logs-* | WHERE process.name == \"cmd.exe\""
+  ],
+  "digest": "sha256:4a5444fc17dcb3c616105f2957fbe9e1c400841deb2ed36b2044eddbe592740d",
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://es.elastic.invalid/_query",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "ApiKey REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "elastic-api-version",
+            "2023-10-31"
+          ]
+        ],
+        "body": "{\"query\": \"FROM logs-* | WHERE process.name == \\\"cmd.exe\\\"\\n| LIMIT 101\", \"filter\": {\"range\": {\"@timestamp\": {\"gte\": \"2099-01-01T00:00:00.000Z\", \"lte\": \"2099-01-01T01:00:00.000Z\", \"format\": \"strict_date_optional_time\"}}}}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "elastic-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"columns\": [{\"name\": \"host.name\", \"type\": \"keyword\"}, {\"name\": \"user.name\", \"type\": \"keyword\"}], \"values\": [[\"ws-1\", \"alice\"], [\"ws-2\", \"bob\"]], \"is_partial\": false}"
+      }
+    }
+  ]
+}

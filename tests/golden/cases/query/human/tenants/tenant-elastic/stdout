@@ -1,0 +1,7 @@
+[1msoc[0m  [2m2 rows[0m
+[1mhost.name[0m[1m [0m┃[1m [0m[1muser.name[0m
+━━━━━━━━━━╇━━━━━━━━━━
+ws-1      │ alice    
+ws-2      │ bob      
+
+[1;32m✓[0m 2 rows from 1 elastic tenant

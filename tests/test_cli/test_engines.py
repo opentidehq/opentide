@@ -188,27 +188,73 @@ def test_a_rust_command_that_refuses_a_flag_covers_only_runs_without_it() -> Non
     # After ``--`` it is an argument, not the flag.
     assert command.covers(["validate", "query", "--", "--live"])
     assert command.uncovered("validate query", ["--live"]) == "validate query with --live"
-    assert engines.RUST_COMMANDS[("validate", "query")].refuses == ("--live",)
-    assert not engines.RUST_COMMANDS[("validate", "query")].covers(["--live"])
+    assert engines.RUST_COMMANDS[("setup",)].refuses == ("--skills", "--plugin")
+    assert not engines.RUST_COMMANDS[("setup",)].covers(["setup", "--skills"])
+
+
+def test_a_command_that_reaches_tenants_is_routed_by_the_platforms_it_names() -> None:
+    """``query`` runs on Rust where every ``--platform`` it names has a Rust connector."""
+    query = engines.RUST_COMMANDS[("query",)]
+    assert query.platforms == engines.RUST_QUERY_PLATFORMS
+    assert query.side_effects
+    for platform in ("crowdstrike", "defender_for_endpoint", "elastic", "harfanglab"):
+        assert query.covers(["query", "--platform", platform, "x"])
+    assert query.covers(["query", "--platform=sentinel_one", "x"])
+    for platform in ("sentinel", "splunk", "carbon_black_cloud", "sysdig"):
+        assert not query.covers(["query", "--platform", platform, "x"])
+        assert query.uncovered("query", ["--platform", platform]) == f"query on {platform}"
+    # Every platform it names counts; none named is the workspace's to say.
+    assert not query.covers(["query", "--platform", "elastic", "--platform", "sentinel"])
+    assert not query.covers(["query", "x"])
+    assert query.uncovered("query", ["x"]) == "query without --platform"
+    # After ``--`` it is an argument, not the flag.
+    assert not query.covers(["query", "--", "--platform", "elastic"])
+    # A rule's query carries its tenants' exclusions: Python's.
+    assert not query.covers(["query", "--platform", "elastic", "--rule", "x"])
+    assert not query.covers(["query", "--platform", "elastic", "--file", "r.yaml"])
+
+
+def test_validate_query_is_routed_by_platform_with_live_only() -> None:
+    """Offline, every platform is Rust's; ``--live`` only where no tenant check is sent."""
+    command = engines.RUST_COMMANDS[("validate", "query")]
+    assert command.platform_scope == ("--live",)
+    assert command.covers(["validate", "query", "--platform", "sentinel"])
+    assert command.covers(["validate", "query"])
+    for platform in ("crowdstrike", "harfanglab", "sysdig"):
+        assert command.covers(["validate", "query", "--live", "--platform", platform])
+    for platform in ("elastic", "defender_for_endpoint", "sentinel_one", "sentinel", "splunk"):
+        assert not command.covers(["validate", "query", "--live", "--platform", platform])
+    assert not command.covers(["validate", "query", "--live"])
+    assert (
+        command.uncovered("validate query", ["--live", "--platform", "elastic"])
+        == "validate query --live on elastic"
+    )
+    uncovered = command.uncovered("validate query", ["--live"])
+    assert uncovered == "validate query --live without --platform"
 
 
 def test_rust_refuses_validate_query_live_and_compare_runs_python_alone(
     workspace: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """``validate query --live`` checks tenants: Python's until UC-4.1 (#927)."""
+    """``validate query --live`` on a tenant that checks queries stays Python's (#832)."""
     launch = (sys.executable, str(FAKE), "exit")
     monkeypatch.setitem(
         engines.RUST_COMMANDS,
         ("validate", "query"),
-        RustCommand(launch=launch, refuses=("--live",)),
+        RustCommand(
+            launch=launch,
+            platforms=engines.RUST_LIVE_VALIDATION_PLATFORMS,
+            platform_scope=("--live",),
+        ),
     )
     args = ["--json", "--repo", str(workspace), "validate", "query", "--live"]
+    args += ["--platform", "elastic"]
     code, stdout, _ = invoke(args, "rust")
     doc = document(stdout)
     assert code == 2
     assert doc["failure"]["code"] == "engine_not_ported"
     assert (
-        "opentide validate query with --live has no Rust implementation yet"
+        "opentide validate query --live on elastic has no Rust implementation yet"
         in (doc["failure"]["message"])
     )
     # compare never starts the (failing) fake: Python's answer is the result.
@@ -216,6 +262,16 @@ def test_rust_refuses_validate_query_live_and_compare_runs_python_alone(
     code, stdout, _ = invoke(args, "compare")
     assert code == python_code
     assert document(stdout)["failure"] == document(python_stdout)["failure"]
+
+
+def test_rust_refuses_a_query_on_a_platform_without_a_connector(workspace: Path) -> None:
+    """``query --platform sentinel`` has no Rust connector yet: refused, never half-run."""
+    args = ["--json", "--repo", str(workspace), "query", "--platform", "sentinel", "T"]
+    code, stdout, _ = invoke(args, "rust")
+    doc = document(stdout)
+    assert code == 2
+    assert doc["failure"]["code"] == "engine_not_ported"
+    assert "opentide query on sentinel has no Rust implementation yet" in doc["failure"]["message"]
 
 
 def test_rust_output_reaches_a_stream_that_lives_in_memory(

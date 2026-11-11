@@ -226,6 +226,7 @@ fn query(text: &str, limit: usize, index: &[&str], timeout: Duration) -> QueryRe
         window: window(),
         limit,
         index: index.iter().map(|name| (*name).to_owned()).collect(),
+        data_view: None,
         timeout,
     }
 }

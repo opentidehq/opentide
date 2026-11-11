@@ -9,9 +9,10 @@
 mod support;
 
 use opentide_compile::json::Json;
+use opentide_connectors::ConnectorError;
+use opentide_connectors::connector::QueryRequest;
 use opentide_connectors::elastic::{self, Deployed, Elastic, ElasticError, ElasticRule, Strategy};
 use opentide_connectors::runtime::block_on;
-use opentide_connectors::search::{SearchError, SearchRequest};
 use support::{Replayed, fixture, items, text, timestamp, window};
 
 const SETUP: &str = r#"
@@ -20,6 +21,7 @@ url = "https://kibana.elastic.invalid"
 elasticsearch_url = "https://es.elastic.invalid"
 api_key = "$ELASTIC_API_KEY"
 space = "soc"
+index = ["logs-*", "winlogbeat-*"]
 "#;
 
 fn setup_index() -> Vec<String> {
@@ -143,12 +145,15 @@ fn elastic_query_sends_what_the_python_runner_sent() {
     let outcomes = block_on(async {
         let mut outcomes = Vec::new();
         for item in items(query.get("queries").unwrap()) {
-            let mut request = SearchRequest::new(text(item.get("text").unwrap()), window);
+            let mut request = QueryRequest::new(text(item.get("text").unwrap()), "", window);
             request.limit = match item.get("limit") {
                 Some(Json::Int(limit)) => usize::try_from(*limit).unwrap(),
                 _ => 100,
             };
-            request.language = item.get("language").map(|l| text(l).to_owned());
+            request.language = item
+                .get("language")
+                .map(|l| text(l).to_owned())
+                .unwrap_or_default();
             request.index = item
                 .get("index")
                 .map(|index| items(index).iter().map(|i| text(i).to_owned()).collect())
@@ -165,7 +170,7 @@ fn elastic_query_sends_what_the_python_runner_sent() {
         (
             serde_json::to_string(&result.rows).unwrap(),
             result.truncated,
-            result.language.clone(),
+            result.language.clone().unwrap_or_default(),
         )
     };
     assert_eq!(
@@ -210,7 +215,7 @@ fn elastic_query_sends_what_the_python_runner_sent() {
     let refusals: Vec<String> = [1, 7, 8]
         .iter()
         .map(|&at| match &outcomes[at] {
-            Err(refused @ SearchError::Refused { .. }) => refused.text(),
+            Err(refused @ ConnectorError::Refused { .. }) => refused.text(),
             other => panic!("{other:?}"),
         })
         .collect();
@@ -271,4 +276,48 @@ fn elastic_advisories_name_the_codes_of_a_rule() {
         elastic::advisories(&rule.block, severity, true, false).unwrap(),
         Vec::<String>::new()
     );
+}
+
+#[test]
+fn elastic_query_runs_through_the_framework_traits_with_the_tenant_index() {
+    use opentide_connectors::Platform as _;
+    let inputs = fixture("elastic");
+    let query = inputs.get("query").unwrap();
+    let window = window(query.get("window").unwrap());
+    let tenant = replay("elastic/query");
+    assert_eq!(tenant.tenant.list("index"), setup_index().as_slice());
+    let runner = Elastic.query_runner().unwrap();
+    assert!(Elastic.live_validator().is_some());
+    assert!(
+        Elastic.deployer().is_none(),
+        "deploy takes the rule's block: deploy_rule"
+    );
+    let outcomes = block_on(async {
+        let mut outcomes = Vec::new();
+        for item in items(query.get("queries").unwrap()) {
+            let mut request = QueryRequest::new(text(item.get("text").unwrap()), "", window);
+            request.limit = match item.get("limit") {
+                Some(Json::Int(limit)) => usize::try_from(*limit).unwrap(),
+                _ => 100,
+            };
+            request.language = item
+                .get("language")
+                .map(|l| text(l).to_owned())
+                .unwrap_or_default();
+            request.index = item
+                .get("index")
+                .map(|index| items(index).iter().map(|i| text(i).to_owned()).collect())
+                .unwrap_or_default();
+            request.data_view = item.get("data_view").map(|v| text(v).to_owned());
+            outcomes.push(runner.run(tenant.cx(), &request).await);
+        }
+        outcomes
+    })
+    .unwrap();
+    assert_eq!(tenant.verify(), Vec::new());
+    assert_eq!(
+        outcomes[0].as_ref().unwrap().language.as_deref(),
+        Some("esql")
+    );
+    assert!(matches!(outcomes[1], Err(ConnectorError::Refused { .. })));
 }

@@ -107,6 +107,21 @@ pub enum ConnectorError {
         /// The tenant's reason, when it gave one.
         detail: Option<String>,
     },
+    /// The tenant refused the credentials (Python's
+    /// `TenantConnectionError`): every call to the tenant fails alike. The
+    /// message is the client's (`Cannot authenticate with the tenant
+    /// configuration`); *detail* is what it logged.
+    #[error("{message}")]
+    Authentication {
+        /// The platform's identifier.
+        platform: String,
+        /// The tenant's name.
+        tenant: String,
+        /// What the client says.
+        message: String,
+        /// What the tenant answered, when it is worth logging.
+        detail: Option<String>,
+    },
     /// An asynchronous search outlived its timeout and was stopped
     /// (Python's `QueryTimedOut`).
     #[error("{message}")]
@@ -128,6 +143,49 @@ pub enum ConnectorError {
 }
 
 impl ConnectorError {
+    /// A refusal by the tenant *tenant* of *platform* (Python's `QueryRefused`).
+    pub fn refused(
+        platform: &str,
+        tenant: &str,
+        message: impl Into<String>,
+        detail: Option<String>,
+    ) -> Self {
+        Self::Refused {
+            platform: platform.to_owned(),
+            tenant: tenant.to_owned(),
+            message: message.into(),
+            detail,
+        }
+    }
+
+    /// The tenant *tenant* of *platform* refused the credentials.
+    pub fn authentication(platform: &str, tenant: &str, message: impl Into<String>) -> Self {
+        Self::Authentication {
+            platform: platform.to_owned(),
+            tenant: tenant.to_owned(),
+            message: message.into(),
+            detail: None,
+        }
+    }
+
+    /// A refusal and the vendor's own message as one line
+    /// (`live_validation.refusal_text`); any other failure as it displays.
+    pub fn text(&self) -> String {
+        match self {
+            Self::Refused {
+                message,
+                detail: Some(detail),
+                ..
+            }
+            | Self::QueryTimedOut {
+                message,
+                detail: Some(detail),
+                ..
+            } if !detail.is_empty() => format!("{message}: {detail}"),
+            other => other.to_string(),
+        }
+    }
+
     /// The `failure.code` a command reports this failure with.
     pub fn failure_code(&self) -> &'static str {
         match self {

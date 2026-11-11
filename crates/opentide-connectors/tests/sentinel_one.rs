@@ -8,8 +8,9 @@
 mod support;
 
 use opentide_compile::json::Json;
+use opentide_connectors::ConnectorError;
+use opentide_connectors::connector::QueryRequest;
 use opentide_connectors::runtime::block_on;
-use opentide_connectors::search::{SearchError, SearchRequest};
 use opentide_connectors::sentinel_one::{self, QueryValidation, SentinelOne, SentinelOneError};
 use support::{Replayed, fixture, items, text, window};
 
@@ -123,7 +124,8 @@ fn sentinel_one_query_polls_as_the_python_runner_does() {
     let outcomes = block_on(async {
         let mut outcomes = Vec::new();
         for item in items(query.get("queries").unwrap()) {
-            let mut request = SearchRequest::new(text(item.get("text").unwrap()), window);
+            let mut request =
+                QueryRequest::new(text(item.get("text").unwrap()), "powerquery", window);
             request.limit = limit(item);
             outcomes.push(SentinelOne.run(tenant.cx(), &request).await);
         }
@@ -139,7 +141,10 @@ fn sentinel_one_query_polls_as_the_python_runner_does() {
         [serde_json::from_str::<Json>(
             r#"{"src.process.name": "cmd.exe", "endpoint.name": "ws-1"}"#
         )
-        .unwrap()]
+        .unwrap()
+        .as_object()
+        .unwrap()
+        .clone()]
     );
     assert_eq!(
         polled.warnings,
@@ -151,7 +156,7 @@ fn sentinel_one_query_polls_as_the_python_runner_does() {
     let refusals: Vec<String> = outcomes[2..]
         .iter()
         .map(|outcome| match outcome {
-            Err(refused @ SearchError::Refused { .. }) => refused.text(),
+            Err(refused @ ConnectorError::Refused { .. }) => refused.text(),
             other => panic!("{other:?}"),
         })
         .collect();
@@ -169,8 +174,9 @@ fn sentinel_one_query_gives_up_at_the_timeout() {
     let inputs = fixture("sentinel_one");
     let query = inputs.get("query").unwrap();
     let first = &items(query.get("queries").unwrap())[0];
-    let mut request = SearchRequest::new(
+    let mut request = QueryRequest::new(
         text(first.get("text").unwrap()),
+        "powerquery",
         window(query.get("window").unwrap()),
     );
     request.limit = limit(first);
@@ -178,14 +184,14 @@ fn sentinel_one_query_gives_up_at_the_timeout() {
     let tenant = replay("sentinel_one/query");
     let outcome = block_on(async { SentinelOne.run(tenant.cx(), &request).await }).unwrap();
     match outcome {
-        Err(SearchError::TimedOut {
+        Err(ConnectorError::QueryTimedOut {
             message, timeout, ..
         }) => {
             assert_eq!(
                 message,
                 "the PowerQuery did not finish within 0.3s on replayed"
             );
-            assert!((timeout - 0.3).abs() < f64::EPSILON);
+            assert_eq!(timeout, std::time::Duration::from_millis(300));
         }
         other => panic!("{other:?}"),
     }
@@ -201,7 +207,10 @@ fn sentinel_one_validate_checks_one_row_over_the_minute() {
         let mut rows = Vec::new();
         for query in items(validate.get("queries").unwrap()) {
             let checked = SentinelOne
-                .check(tenant.cx(), &SearchRequest::new(text(query), window))
+                .check(
+                    tenant.cx(),
+                    &QueryRequest::new(text(query), "powerquery", window),
+                )
                 .await
                 .unwrap();
             rows.push((checked.rows.len(), checked.truncated, checked.sent));
@@ -224,5 +233,55 @@ fn sentinel_one_validate_checks_one_row_over_the_minute() {
                 Some("src.process.name = 'cmd.exe'\n| limit 2".to_owned())
             ),
         ]
+    );
+}
+
+#[test]
+fn sentinel_one_query_and_check_run_through_the_framework_traits() {
+    use opentide_connectors::Platform as _;
+    let inputs = fixture("sentinel_one");
+    let query = inputs.get("query").unwrap();
+    let span = window(query.get("window").unwrap());
+    let tenant = replay("sentinel_one/query");
+    let runner = SentinelOne.query_runner().unwrap();
+    let outcomes = block_on(async {
+        let mut outcomes = Vec::new();
+        for item in items(query.get("queries").unwrap()) {
+            let mut request =
+                QueryRequest::new(text(item.get("text").unwrap()), "powerquery", span);
+            request.limit = limit(item);
+            outcomes.push(runner.run(tenant.cx(), &request).await);
+        }
+        outcomes
+    })
+    .unwrap();
+    assert_eq!(tenant.verify(), Vec::new());
+    assert_eq!(
+        outcomes[0].as_ref().unwrap().vendor_query_id.as_deref(),
+        Some("pq-1")
+    );
+    assert_eq!(
+        outcomes[3].as_ref().unwrap_err().text(),
+        "the PowerQuery ended failed: out of memory"
+    );
+
+    let validate = inputs.get("validate").unwrap();
+    let minute = window(validate.get("window").unwrap());
+    let tenant = replay("sentinel_one/validate");
+    let validator = SentinelOne.live_validator().unwrap();
+    let checks = block_on(async {
+        let mut checks = Vec::new();
+        for query in items(validate.get("queries").unwrap()) {
+            let request = QueryRequest::new(text(query), "powerquery", minute);
+            checks.push(validator.validate(tenant.cx(), &request).await.unwrap());
+        }
+        checks
+    })
+    .unwrap();
+    assert_eq!(tenant.verify(), Vec::new());
+    assert!(
+        checks
+            .iter()
+            .all(|check| check.errors.is_empty() && check.result.is_some())
     );
 }

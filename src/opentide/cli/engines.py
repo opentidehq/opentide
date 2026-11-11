@@ -81,9 +81,17 @@ class RustCommand:
     Rust with ``--dry-run`` only); a run without any is a command with no
     Rust implementation:
     ``rust`` refuses it with ``engine_not_ported`` and ``compare`` runs
-    Python alone. *refuses* names flags a run must carry none of: ``validate
-    query --live`` checks the queries on the tenants, which stays Python's
-    until UC-4.1, so a run with it is one with no Rust implementation.
+    Python alone. *refuses* names flags a run must carry none of.
+
+    *platforms* names the platforms with a Rust connector (UC-4.2, #832) for
+    a command that reaches tenants: a run is covered only when every
+    ``--platform`` it names is one of them, and a run that names none is not
+    (the platforms it would touch are the workspace's). *platform_scope*
+    names the flags under which *platforms* applies (``validate query`` is
+    offline, every platform covered, unless it carries ``--live``); empty, it
+    applies to every run. The Rust side refuses with ``engine_not_ported``
+    any run whose tenants it does not reach, as a second check
+    (:data:`REFUSAL_ENV`).
     """
 
     launch: tuple[str, ...]
@@ -91,11 +99,15 @@ class RustCommand:
     side_effects: bool = False
     requires: tuple[str, ...] = ()
     refuses: tuple[str, ...] = ()
+    platforms: tuple[str, ...] = ()
+    platform_scope: tuple[str, ...] = ()
 
     def covers(self, args: Sequence[str]) -> bool:
         """Whether the Rust implementation runs the command with *args*."""
         options = args[: args.index("--")] if "--" in args else args
         if any(flag in options for flag in self.refuses):
+            return False
+        if self._uncovered_platforms(options) is not None:
             return False
         return not self.requires or any(flag in options for flag in self.requires)
 
@@ -105,7 +117,60 @@ class RustCommand:
         refused = [flag for flag in self.refuses if flag in options]
         if refused:
             return f"{path} with {' and '.join(refused)}"
+        platforms = self._uncovered_platforms(options)
+        if platforms is not None:
+            scope = [flag for flag in self.platform_scope if flag in options]
+            where = f"{path} {' '.join(scope)}".rstrip()
+            if not platforms:
+                return f"{where} without --platform"
+            return f"{where} on {', '.join(platforms)}"
         return f"{path} without {' or '.join(self.requires)}"
+
+    def _uncovered_platforms(self, options: Sequence[str]) -> list[str] | None:
+        """The platforms *options* name that have no Rust connector (``[]``: none named).
+
+        ``None`` when the run's platforms are covered, or *platforms* does not apply.
+        """
+        if not self.platforms:
+            return None
+        if self.platform_scope and not any(flag in options for flag in self.platform_scope):
+            return None
+        named = platform_values(options)
+        if not named:
+            return []
+        missing = [name for name in dict.fromkeys(named) if name not in self.platforms]
+        return missing or None
+
+
+def platform_values(options: Sequence[str]) -> list[str]:
+    """The values of every ``--platform`` in *options* (``--platform x`` and ``--platform=x``)."""
+    values: list[str] = []
+    for index, token in enumerate(options):
+        if token == "--platform" and index + 1 < len(options):
+            values.append(options[index + 1])
+        elif token.startswith("--platform="):
+            values.append(token.partition("=")[2])
+    return values
+
+
+#: The platforms with a Rust connector (``crates/opentide-connectors``, UC-4.2,
+#: #832) whose ``query`` and ``validate query --live`` run on Rust: the REST
+#: platforms with a query runner. Sysdig has no runner; Sentinel, Splunk and
+#: Carbon Black stay Python's until UC-4.3.
+RUST_QUERY_PLATFORMS: tuple[str, ...] = (
+    "crowdstrike",
+    "defender_for_endpoint",
+    "elastic",
+    "harfanglab",
+    "sentinel_one",
+)
+
+#: The platforms whose ``validate query --live`` runs on Rust: those whose
+#: tenants cannot check a query (CrowdStrike, HarfangLab, Sysdig), which
+#: answer ``supported: False`` before any request. Defender, Elastic and
+#: SentinelOne check on the tenant, and stay Python's until their live
+#: validation is ported onto the connectors' ``LiveValidator``.
+RUST_LIVE_VALIDATION_PLATFORMS: tuple[str, ...] = ("crowdstrike", "harfanglab", "sysdig")
 
 
 #: Commands that host others and apply ``OPENTIDE_ENGINE`` to what they run
@@ -155,13 +220,20 @@ RUST_CLI: tuple[str, ...] = (sys.executable, "-m", "opentide.cli.rust")
 #: ``lsp start`` with UC-3.6b (#947): the language server hosted by the Rust
 #: command line, and ``tui``'s refusals (``usage_tui_needs_tty``); ``tui``'s
 #: terminal UI with UC-3.6d (#951), on ratatui.
+#: ``query`` on the platforms of :data:`RUST_QUERY_PLATFORMS`, and ``validate
+#: query --live`` on those of :data:`RUST_LIVE_VALIDATION_PLATFORMS`, with
+#: UC-4.2c (#832): *platforms* routes each run by the ``--platform`` it names; a
+#: rule's query (``--rule``, ``--file``: its tenants' exclusions) stays Python's.
+#: A deploy that sends stays Python's.
 RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
     ("commands",): RustCommand(launch=RUST_CLI),
     ("explain",): RustCommand(launch=RUST_CLI),
     ("info",): RustCommand(launch=RUST_CLI),
     ("lint",): RustCommand(launch=RUST_CLI),
     ("validate",): RustCommand(launch=RUST_CLI),
-    ("validate", "query"): RustCommand(launch=RUST_CLI, refuses=("--live",)),
+    ("validate", "query"): RustCommand(
+        launch=RUST_CLI, platforms=RUST_LIVE_VALIDATION_PLATFORMS, platform_scope=("--live",)
+    ),
     ("rules", "unreviewed"): RustCommand(launch=RUST_CLI),
     ("deploy",): RustCommand(launch=RUST_CLI, requires=("--dry-run",)),
     ("doctor",): RustCommand(launch=RUST_CLI, rules=("host-git",), requires=("--offline",)),
@@ -198,6 +270,12 @@ RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
     ("serve",): RustCommand(launch=RUST_CLI),
     ("lsp", "start"): RustCommand(launch=RUST_CLI),
     ("tui",): RustCommand(launch=RUST_CLI),
+    ("query",): RustCommand(
+        launch=RUST_CLI,
+        side_effects=True,
+        refuses=("--rule", "--file"),
+        platforms=RUST_QUERY_PLATFORMS,
+    ),
 }
 
 

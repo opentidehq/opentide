@@ -13,8 +13,8 @@ use std::path::{Path, PathBuf};
 use opentide_cassette::{Cassette, Mismatch, Mode, Proxy, Redaction};
 use opentide_compile::json::Json;
 use opentide_connectors::connector::TenantContext;
+use opentide_connectors::connector::TimeWindow;
 use opentide_connectors::credentials::Mode as Resolve;
-use opentide_connectors::search::TimeWindow;
 use opentide_connectors::{Environment, HttpClient, HttpSettings, Tenant};
 use tokio_util::sync::CancellationToken;
 

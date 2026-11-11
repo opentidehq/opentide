@@ -64,6 +64,11 @@ kind = "copy"
 source = "tests/golden/fixtures/setup-merge"
 about = "a workspace whose files `setup` merges into: a .vscode/mcp.json with a byte-order mark, comments and a trailing comma, a .vscode/settings.json with a comment and the yaml.schemas mapping earlier `setup vscode` releases wrote, and a sentinel.toml with `enabled = false`"
 
+[fixtures.tenants]
+kind = "copy"
+source = "tests/golden/fixtures/tenants"
+about = "a workspace whose Defender, SentinelOne, CrowdStrike, Elastic and HarfangLab tenants are the stand-in tenants of tests/cassettes/<platform>/tenant.py, their credentials `$NAME`s the cases set: only the cassette cases use it (UC-4.2c)"
+
 [fixtures.empty]
 kind = "skeleton"
 dirs = [".opentide"]
@@ -756,6 +761,26 @@ variant = "live-elastic"
 args = ["validate", "query", "--live", "--platform", "elastic"]
 fixtures = ["tide-corpus"]
 
+# UC-4.2c (#832): a platform whose tenants cannot check a query answers
+# `supported: false` before any request.
+[[case]]
+command = "validate query"
+variant = "live-unsupported-crowdstrike"
+args = ["validate", "query", "--live", "--platform", "crowdstrike"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "validate query"
+variant = "live-unsupported-harfanglab"
+args = ["validate", "query", "--live", "--platform", "harfanglab"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "validate query"
+variant = "live-unsupported-sysdig"
+args = ["validate", "query", "--live", "--platform", "sysdig", "--check-timeout", "5"]
+fixtures = ["tide-corpus"]
+
 # ---- query ----
 
 # Tenant-contacting: recorded as its failure without tenants.
@@ -806,6 +831,99 @@ command = "query"
 variant = "typo-choice"
 args = ["query", "--platform", "sentinal", "x"]
 fixtures = ["tide-corpus"]
+
+
+# UC-4.2c (#832): `opentide query` on the REST platforms with a Rust connector,
+# served from cassettes recorded from the oracle (tests/cassettes/golden/, the
+# `golden/query-*` scenarios of tests/cassettes/scenarios.toml) on the `tenants`
+# fixture; the window is fixed in 2099. The credential variable is set to a
+# stand-in value: the cassette redacts it.
+
+[[case]]
+command = "query"
+variant = "tenant-defender"
+args = ["query", "--platform", "defender_for_endpoint", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "--limit", "1", "DeviceProcessEvents | project Timestamp, DeviceName"]
+fixtures = ["tenants"]
+env = { DEFENDER_CLIENT_SECRET = "golden-stand-in-credential" }
+cassette = "golden/query-defender"
+
+[[case]]
+command = "query"
+variant = "tenant-defender-jsonl"
+args = ["query", "--platform", "defender_for_endpoint", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "--limit", "1", "--format", "jsonl", "DeviceProcessEvents | project Timestamp, DeviceName"]
+fixtures = ["tenants"]
+modes = ["plain", "json"]
+env = { DEFENDER_CLIENT_SECRET = "golden-stand-in-credential" }
+cassette = "golden/query-defender"
+
+[[case]]
+command = "query"
+variant = "tenant-defender-csv"
+args = ["query", "--platform", "defender_for_endpoint", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "--limit", "1", "--format", "csv", "DeviceProcessEvents | project Timestamp, DeviceName"]
+fixtures = ["tenants"]
+modes = ["plain"]
+env = { DEFENDER_CLIENT_SECRET = "golden-stand-in-credential" }
+cassette = "golden/query-defender"
+
+[[case]]
+command = "query"
+variant = "tenant-sentinel-one"
+args = ["query", "--platform", "sentinel_one", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "src.process.name = 'cmd.exe'"]
+fixtures = ["tenants"]
+env = { S1_API_TOKEN = "golden-stand-in-credential" }
+cassette = "golden/query-sentinel-one"
+
+[[case]]
+command = "query"
+variant = "tenant-crowdstrike"
+args = ["query", "--platform", "crowdstrike", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "#event_simpleName=ProcessRollup2"]
+fixtures = ["tenants"]
+env = { CROWDSTRIKE_CLIENT_SECRET = "golden-stand-in-credential" }
+cassette = "golden/query-crowdstrike"
+
+[[case]]
+command = "query"
+variant = "tenant-elastic"
+args = ["query", "--platform", "elastic", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "FROM logs-* | WHERE process.name == \"cmd.exe\""]
+fixtures = ["tenants"]
+env = { ELASTIC_API_KEY = "golden-stand-in-credential" }
+cassette = "golden/query-elastic"
+
+[[case]]
+command = "query"
+variant = "tenant-elastic-eql-sequence"
+args = ["query", "--platform", "elastic", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "--language", "eql", "sequence [process where true] [process where true]"]
+fixtures = ["tenants"]
+env = { ELASTIC_API_KEY = "golden-stand-in-credential" }
+cassette = "golden/query-elastic-eql"
+
+[[case]]
+command = "query"
+variant = "unset-defender-for-endpoint"
+args = ["query", "--platform", "defender_for_endpoint", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "DeviceEvents | take 1"]
+fixtures = ["tenants"]
+modes = ["plain", "json"]
+
+[[case]]
+command = "query"
+variant = "unset-sentinel-one"
+args = ["query", "--platform", "sentinel_one", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "src.process.name = 'cmd.exe'"]
+fixtures = ["tenants"]
+modes = ["plain", "json"]
+
+[[case]]
+command = "query"
+variant = "unset-crowdstrike"
+args = ["query", "--platform", "crowdstrike", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "#event_simpleName=ProcessRollup2"]
+fixtures = ["tenants"]
+modes = ["plain", "json"]
+
+[[case]]
+command = "query"
+variant = "unset-harfanglab"
+args = ["query", "--platform", "harfanglab", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "processes process_name=cmd.exe"]
+fixtures = ["tenants"]
+modes = ["plain", "json"]
 
 # ---- lint ----
 

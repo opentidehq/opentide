@@ -1,0 +1,6 @@
+lab  1 row (more matched; raise --limit)
+Timestamp                    ┃ DeviceName          
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━
+2026-10-27T07:51:00.0000000Z │ ws-1.contoso.example
+
+✓ 1 row from 1 defender_for_endpoint tenant (limited to 1 per tenant)

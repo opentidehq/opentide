@@ -1,0 +1,2 @@
+error: Environment variable missing · detail: Unset configuration variables: $HARFANGLAB_API_TOKEN · advice: Set those environment variables before a live check.
+error: 1 of 1 queries failed on 1 harfanglab tenant: lab: HarfangLab credentials are unset ($HARFANGLAB_API_TOKEN). Set those environment variables before a live check.

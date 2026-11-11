@@ -1,0 +1,7 @@
+[1mlab[0m  [2m2 rows[0m
+[1mComputerName[0m[1m [0m┃[1m [0m[1maid.id[0m[1m [0m┃[1m [0m[1maid.cid[0m[1m [0m┃[1m [0m[1m@timestamp   [0m[1m [0m┃[1m [0m[1mUserName[0m[1m [0m┃[1m [0m[1mtags   [0m
+━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━
+ws-01        │ a1     │ c1      │ 1761465600000 │          │        
+ws-02        │ a2     │         │               │ Ünïcode  │ ["x",1]
+
+[1;32m✓[0m 2 rows from 1 crowdstrike tenant

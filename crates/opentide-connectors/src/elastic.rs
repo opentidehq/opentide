@@ -17,14 +17,15 @@
 
 use opentide_compile::json::{Json, Object};
 
+use crate::answer::Answer;
 use crate::body::python_json;
-use crate::connector::TenantContext;
-use crate::error::ConnectorError;
-use crate::retry::RetryPolicy;
-use crate::search::{
-    self, Answer, Column, SearchError, SearchRequest, SearchResult, TimeWindow, columns_of,
-    flatten, python_repr, python_str, python_string_repr, quote, urlencode, utc_z,
+use crate::connector::{BoxFuture, LiveCheck, LiveValidator, Platform, QueryRunner, TenantContext};
+use crate::connector::{
+    QueryColumn, QueryOutcome, QueryRequest, Row, TimeWindow, columns_of, flatten, utc_z,
 };
+use crate::error::ConnectorError;
+use crate::python::{python_repr, python_str, python_string_repr};
+use crate::retry::RetryPolicy;
 use crate::{Credential, HttpSettings};
 
 /// The platform's identifier.
@@ -209,7 +210,7 @@ impl Client {
                 message: format!("the request body cannot be written: {error}"),
             })?);
         }
-        search::exchange(cx, builder).await
+        crate::answer::exchange(cx, builder).await
     }
 
     fn rules(&self) -> String {
@@ -217,7 +218,11 @@ impl Client {
     }
 
     fn rule_query(&self, rule_id: &str) -> String {
-        format!("{}?{}", self.rules(), urlencode(&[("rule_id", rule_id)]))
+        format!(
+            "{}?{}",
+            self.rules(),
+            crate::encode::urlencode([("rule_id", rule_id)])
+        )
     }
 
     /// `get_rule`.
@@ -340,7 +345,7 @@ impl Client {
     ) -> Result<Answer, ConnectorError> {
         let url = self.es(&format!(
             "/_resolve/index/{}?ignore_unavailable=true&allow_no_indices=true",
-            quote(pattern, "")
+            crate::encode::quote(pattern, "")
         ));
         self.call(cx, reqwest::Method::GET, &url, None, false).await
     }
@@ -354,8 +359,8 @@ impl Client {
     ) -> Result<Answer, ConnectorError> {
         let url = self.es(&format!(
             "/{}/_field_caps?fields={}&ignore_unavailable=true&allow_no_indices=true",
-            quote(sources, ",*-_"),
-            quote(&fields.join(","), ",*-_.")
+            crate::encode::quote(sources, ",*-_"),
+            crate::encode::quote(&fields.join(","), ",*-_.")
         ));
         self.call(cx, reqwest::Method::GET, &url, None, false).await
     }
@@ -1029,27 +1034,35 @@ impl Elastic {
         cx: TenantContext<'_>,
         payload: &Json,
         end: jiff::Timestamp,
-    ) -> Result<Json, SearchError> {
+    ) -> Result<Json, ConnectorError> {
         let client = client(cx)?;
         let tenant = &cx.tenant.label.tenant;
         let answer = client.preview_rule(cx, payload, 1, &utc_ms(end)).await?;
         match answer.status {
             400 => {
-                return Err(SearchError::refused(
+                return Err(ConnectorError::refused(
+                    PLATFORM,
+                    tenant,
                     format!("Rule schema error on preview: {}", answer.text()),
                     None,
                 ));
             }
             401 | 403 => {
-                return Err(SearchError::Tenant(format!(
-                    "Tenant authentication/authorization failed: HTTP {}",
-                    answer.status
-                )));
+                return Err(ConnectorError::authentication(
+                    PLATFORM,
+                    tenant,
+                    format!(
+                        "Tenant authentication/authorization failed: HTTP {}",
+                        answer.status
+                    ),
+                ));
             }
             200 => {}
             status => {
                 let detail = answer.not_json_detail().unwrap_or_else(|| answer.text());
-                return Err(SearchError::refused(
+                return Err(ConnectorError::refused(
+                    PLATFORM,
+                    tenant,
                     format!("Preview failed (HTTP {status}): {detail}"),
                     None,
                 ));
@@ -1058,7 +1071,9 @@ impl Elastic {
         match answer.json() {
             Some(body @ Json::Object(_)) => Ok(body),
             Some(_) => Ok(Json::Object(Object::new())),
-            None => Err(SearchError::refused(
+            None => Err(ConnectorError::refused(
+                PLATFORM,
+                tenant,
                 format!("Kibana answered the preview on {tenant} with a body that is not JSON"),
                 answer.not_json_detail(),
             )),
@@ -1079,9 +1094,13 @@ impl Elastic {
         let mut warnings = self.checks(cx, &rule.block, setup_index).await?;
         let preview = match self.preview_rule(cx, &rule.payload, now).await {
             Ok(preview) => preview,
-            Err(SearchError::Connector(error)) => return Err(error.into()),
-            Err(SearchError::Tenant(error)) => return Err(ElasticError::Tenant(error)),
-            Err(refused) => return Err(ElasticError::Rule(refused.text())),
+            Err(ConnectorError::Authentication { message, .. }) => {
+                return Err(ElasticError::Tenant(message));
+            }
+            Err(
+                refused @ (ConnectorError::Refused { .. } | ConnectorError::QueryTimedOut { .. }),
+            ) => return Err(ElasticError::Rule(refused.text())),
+            Err(error) => return Err(error.into()),
         };
         if matches!(preview.get("isAborted"), Some(Json::Bool(true))) {
             warnings.push("Kibana aborted the preview before it finished".into());
@@ -1120,12 +1139,16 @@ impl Elastic {
     pub async fn run(
         &self,
         cx: TenantContext<'_>,
-        request: &SearchRequest,
+        request: &QueryRequest,
         setup_index: &[String],
-    ) -> Result<SearchResult, SearchError> {
+    ) -> Result<QueryOutcome, ConnectorError> {
         let client = client(cx)?;
         let tenant = cx.tenant.label.tenant.as_str();
-        let language = request.language.as_deref().unwrap_or("esql");
+        let language = if request.language.is_empty() {
+            "esql"
+        } else {
+            request.language.as_str()
+        };
         if language == "esql" {
             return esql(&client, cx, request, tenant).await;
         }
@@ -1144,10 +1167,56 @@ impl Elastic {
     pub async fn check(
         &self,
         cx: TenantContext<'_>,
-        request: &SearchRequest,
+        request: &QueryRequest,
         setup_index: &[String],
-    ) -> Result<SearchResult, SearchError> {
+    ) -> Result<QueryOutcome, ConnectorError> {
         self.run(cx, &request.for_check(), setup_index).await
+    }
+}
+
+impl QueryRunner for Elastic {
+    /// ES|QL, EQL, Lucene or KQL (a rule preview) over the request's
+    /// window; the tenant's `index` is read when the request names none.
+    fn run<'a>(
+        &'a self,
+        cx: TenantContext<'a>,
+        request: &'a QueryRequest,
+    ) -> BoxFuture<'a, Result<QueryOutcome, ConnectorError>> {
+        Box::pin(async move { Elastic::run(self, cx, request, cx.tenant.list("index")).await })
+    }
+}
+
+impl LiveValidator for Elastic {
+    /// The runner's check of one query: one row over the request's window.
+    /// (`validate query --live` checks a rule as a whole with
+    /// [`Elastic::validate_rule`]: its Elasticsearch checks and a preview.)
+    fn validate<'a>(
+        &'a self,
+        cx: TenantContext<'a>,
+        request: &'a QueryRequest,
+    ) -> BoxFuture<'a, Result<LiveCheck, ConnectorError>> {
+        Box::pin(async move {
+            let result = self.check(cx, request, cx.tenant.list("index")).await?;
+            Ok(LiveCheck {
+                result: Some(result),
+                errors: Vec::new(),
+                warnings: Vec::new(),
+            })
+        })
+    }
+}
+
+impl Platform for Elastic {
+    fn id(&self) -> &'static str {
+        PLATFORM
+    }
+
+    fn live_validator(&self) -> Option<&dyn LiveValidator> {
+        Some(self)
+    }
+
+    fn query_runner(&self) -> Option<&dyn QueryRunner> {
+        Some(self)
     }
 }
 
@@ -1286,9 +1355,11 @@ pub fn esql_with_limit(query: &str, limit: usize) -> String {
 }
 
 /// `_body`: the answer's JSON object, or the refusal it is.
-fn body(answer: &Answer, tenant: &str, what: &str) -> Result<Json, SearchError> {
+fn body(answer: &Answer, tenant: &str, what: &str) -> Result<Json, ConnectorError> {
     let Some(body) = answer.json() else {
-        return Err(SearchError::refused(
+        return Err(ConnectorError::refused(
+            PLATFORM,
+            tenant,
             format!("Elastic did not answer the {what} query on {tenant} with JSON"),
             answer.not_json_detail(),
         ));
@@ -1321,7 +1392,9 @@ fn body(answer: &Answer, tenant: &str, what: &str) -> Result<Json, SearchError> 
             }
         }
         let detail = reason.unwrap_or_else(|| answer.text().chars().take(500).collect());
-        return Err(SearchError::refused(
+        return Err(ConnectorError::refused(
+            PLATFORM,
+            tenant,
             format!(
                 "Elastic refused the {what} query on {tenant} (HTTP {})",
                 answer.status
@@ -1387,12 +1460,21 @@ fn list(value: Option<&Json>) -> Vec<Json> {
     }
 }
 
+/// The first *limit* rows, each an object.
+fn objects(rows: &[Json], limit: usize) -> Vec<Row> {
+    rows.iter()
+        .take(limit)
+        .filter_map(Json::as_object)
+        .cloned()
+        .collect()
+}
+
 async fn esql(
     client: &Client,
     cx: TenantContext<'_>,
-    request: &SearchRequest,
+    request: &QueryRequest,
     tenant: &str,
-) -> Result<SearchResult, SearchError> {
+) -> Result<QueryOutcome, ConnectorError> {
     let sent = esql_with_limit(&request.text, request.limit);
     let payload = object(vec![
         ("query", Json::Str(sent.clone())),
@@ -1408,10 +1490,10 @@ async fn esql(
         )
         .await?;
     let body = body(&answer, tenant, "ES|QL")?;
-    let columns: Vec<Column> = list(body.get("columns"))
+    let columns: Vec<QueryColumn> = list(body.get("columns"))
         .iter()
         .filter(|column| column.as_object().is_some())
-        .map(|column| Column {
+        .map(|column| QueryColumn {
             name: column.get("name").map_or_else(|| "None".into(), python_str),
             kind: column.get("type").filter(|t| !t.is_null()).map(python_str),
         })
@@ -1430,31 +1512,34 @@ async fn esql(
         })
         .collect();
     let truncated = rows.len() > request.limit;
-    Ok(SearchResult {
+    Ok(QueryOutcome {
         columns,
-        rows: rows.into_iter().take(request.limit).collect(),
+        rows: objects(&rows, request.limit),
         truncated,
         partial: body.get("is_partial").is_some_and(Json::truthy),
         warnings: Vec::new(),
         vendor_query_id: None,
         sent: (sent != request.text.trim()).then_some(sent),
-        language: "esql".into(),
+        language: Some("esql".into()),
     })
 }
 
 async fn eql(
     client: &Client,
     cx: TenantContext<'_>,
-    request: &SearchRequest,
+    request: &QueryRequest,
     indices: &str,
     tenant: &str,
-) -> Result<SearchResult, SearchError> {
+) -> Result<QueryOutcome, ConnectorError> {
     let payload = object(vec![
         ("query", Json::Str(request.text.clone())),
         ("size", int(request.limit.saturating_add(1))),
         ("filter", range(&request.window)),
     ]);
-    let url = client.es(&format!("/{}/_eql/search", quote(indices, ",*-_.")));
+    let url = client.es(&format!(
+        "/{}/_eql/search",
+        crate::encode::quote(indices, ",*-_.")
+    ));
     let answer = client
         .call(cx, reqwest::Method::POST, &url, Some(&payload), false)
         .await?;
@@ -1476,8 +1561,8 @@ async fn eql(
         .filter(|event| event.as_object().is_some())
         .map(event_row)
         .collect();
-    let kept: Vec<Json> = rows.iter().take(request.limit).cloned().collect();
-    Ok(SearchResult {
+    let kept = objects(&rows, request.limit);
+    Ok(QueryOutcome {
         columns: columns_of(&kept),
         truncated: rows.len() > request.limit || exceeds(total(&hits), request.limit),
         rows: kept,
@@ -1485,17 +1570,17 @@ async fn eql(
         warnings: Vec::new(),
         vendor_query_id: None,
         sent: None,
-        language: "eql".into(),
+        language: Some("eql".into()),
     })
 }
 
 async fn lucene(
     client: &Client,
     cx: TenantContext<'_>,
-    request: &SearchRequest,
+    request: &QueryRequest,
     indices: &str,
     tenant: &str,
-) -> Result<SearchResult, SearchError> {
+) -> Result<QueryOutcome, ConnectorError> {
     let query_string = object(vec![(
         "query_string",
         object(vec![("query", Json::Str(request.text.clone()))]),
@@ -1514,7 +1599,10 @@ async fn lucene(
         ),
         ("sort", newest_first()),
     ]);
-    let url = client.es(&format!("/{}/_search", quote(indices, ",*-_.")));
+    let url = client.es(&format!(
+        "/{}/_search",
+        crate::encode::quote(indices, ",*-_.")
+    ));
     let answer = client
         .call(cx, reqwest::Method::POST, &url, Some(&payload), false)
         .await?;
@@ -1525,8 +1613,8 @@ async fn lucene(
         .filter(|hit| hit.as_object().is_some())
         .map(event_row)
         .collect();
-    let kept: Vec<Json> = rows.iter().take(request.limit).cloned().collect();
-    Ok(SearchResult {
+    let kept = objects(&rows, request.limit);
+    Ok(QueryOutcome {
         columns: columns_of(&kept),
         truncated: rows.len() > request.limit || exceeds(total(&hits), request.limit),
         rows: kept,
@@ -1534,17 +1622,17 @@ async fn lucene(
         warnings: Vec::new(),
         vendor_query_id: None,
         sent: None,
-        language: "lucene".into(),
+        language: Some("lucene".into()),
     })
 }
 
 async fn kuery_preview(
     client: &Client,
     cx: TenantContext<'_>,
-    request: &SearchRequest,
+    request: &QueryRequest,
     indices: &str,
     tenant: &str,
-) -> Result<SearchResult, SearchError> {
+) -> Result<QueryOutcome, ConnectorError> {
     let alerts = (request.limit.saturating_add(1)).min(MAX_PREVIEW_ALERTS);
     let seconds = request.window.seconds();
     let mut payload = Object::new();
@@ -1588,7 +1676,9 @@ async fn kuery_preview(
         .map(|error| python_str(&error))
         .collect();
     if !errors.is_empty() {
-        return Err(SearchError::refused(
+        return Err(ConnectorError::refused(
+            PLATFORM,
+            tenant,
             format!("Kibana refused the KQL query on {tenant}"),
             Some(errors.join("; ")),
         ));
@@ -1599,7 +1689,9 @@ async fn kuery_preview(
         .map(python_str)
         .unwrap_or_default();
     if preview_id.is_empty() {
-        return Err(SearchError::refused(
+        return Err(ConnectorError::refused(
+            PLATFORM,
+            tenant,
             format!("Kibana returned no preview id on {tenant}"),
             None,
         ));
@@ -1620,7 +1712,7 @@ async fn kuery_preview(
     ]);
     let url = client.es(&format!(
         "/.preview.alerts-security.alerts-{}/_search",
-        quote(&client.space, "")
+        crate::encode::quote(&client.space, "")
     ));
     let found = client
         .call(cx, reqwest::Method::POST, &url, Some(&search), false)
@@ -1651,8 +1743,8 @@ async fn kuery_preview(
     if aborted {
         warnings.push("Kibana aborted the preview before it finished".into());
     }
-    let kept: Vec<Json> = rows.iter().take(request.limit).cloned().collect();
-    Ok(SearchResult {
+    let kept = objects(&rows, request.limit);
+    Ok(QueryOutcome {
         columns: columns_of(&kept),
         truncated: rows.len() > request.limit || (rows.len() >= alerts && alerts <= request.limit),
         rows: kept,
@@ -1660,7 +1752,7 @@ async fn kuery_preview(
         warnings,
         vendor_query_id: Some(preview_id),
         sent: None,
-        language: "kuery".into(),
+        language: Some("kuery".into()),
     })
 }
 
@@ -1668,17 +1760,19 @@ async fn kuery_preview(
 async fn indices(
     client: &Client,
     cx: TenantContext<'_>,
-    request: &SearchRequest,
+    request: &QueryRequest,
     tenant: &str,
     setup_index: &[String],
-) -> Result<String, SearchError> {
+) -> Result<String, ConnectorError> {
     if !request.index.is_empty() {
         return Ok(request.index.join(","));
     }
     if let Some(view) = &request.data_view {
         let answer = client.data_view(cx, view).await?;
         if answer.status != 200 {
-            return Err(SearchError::refused(
+            return Err(ConnectorError::refused(
+                PLATFORM,
+                tenant,
                 format!(
                     "cannot read data view {} on {tenant} (HTTP {})",
                     python_string_repr(view),
@@ -1688,7 +1782,9 @@ async fn indices(
             ));
         }
         let Some(body) = answer.json() else {
-            return Err(SearchError::refused(
+            return Err(ConnectorError::refused(
+                PLATFORM,
+                tenant,
                 format!(
                     "cannot read data view {} on {tenant}",
                     python_string_repr(view)
@@ -1703,7 +1799,9 @@ async fn indices(
     if !setup_index.is_empty() {
         return Ok(setup_index.join(","));
     }
-    Err(SearchError::refused(
+    Err(ConnectorError::refused(
+        PLATFORM,
+        tenant,
         format!("no index to search on {tenant}"),
         Some("pass --index, or set index in the tenant's [tenants.setup]".into()),
     ))

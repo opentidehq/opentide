@@ -160,3 +160,54 @@ tenant = ["{python}", "tests/cassettes/sentinel_one/tenant.py"]
 routes = ["s1.invalid"]
 secrets = ["S1_API_TOKEN"]
 cwd = "repo"
+
+# ---- UC-4.2c (#832): the cassettes of `opentide query`'s golden cases ----
+# The client is the oracle's command line, on tests/golden/fixtures/tenants (the
+# golden fixture `tenants`), against the platforms' stand-in tenants above; the
+# case in tests/golden/cases.toml that names the cassette runs the same arguments,
+# with a window in 2099 so no retention or clock moves the requests.
+
+[[scenario]]
+name = "golden/query-defender"
+description = "opentide query on Defender for Endpoint's stand-in, the golden cases' cassette: sign in, then one hunting query whose two rows pass --limit 1."
+client = ["{oracle}/opentide", "--repo", "tests/golden/fixtures/tenants", "--json", "query", "--platform", "defender_for_endpoint", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "--limit", "1", "DeviceProcessEvents | project Timestamp, DeviceName"]
+tenant = ["{python}", "tests/cassettes/defender/tenant.py"]
+routes = ["login.microsoftonline.com", "graph.microsoft.com"]
+secrets = ["DEFENDER_CLIENT_SECRET"]
+cwd = "repo"
+
+[[scenario]]
+name = "golden/query-sentinel-one"
+description = "opentide query on SentinelOne's stand-in, the golden cases' cassette: a PowerQuery that finishes at once."
+client = ["{oracle}/opentide", "--repo", "tests/golden/fixtures/tenants", "--json", "query", "--platform", "sentinel_one", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "src.process.name = 'cmd.exe'"]
+tenant = ["{python}", "tests/cassettes/sentinel_one/tenant.py"]
+routes = ["s1.invalid"]
+secrets = ["S1_API_TOKEN"]
+cwd = "repo"
+
+[[scenario]]
+name = "golden/query-crowdstrike"
+description = "opentide query on CrowdStrike's stand-in, the golden cases' cassette: the token, then a Next-Gen SIEM query job polled until done."
+client = ["{oracle}/opentide", "--repo", "tests/golden/fixtures/tenants", "--json", "query", "--platform", "crowdstrike", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "#event_simpleName=ProcessRollup2"]
+tenant = ["{python}", "tests/cassettes/crowdstrike/tenant.py"]
+routes = ["api.eu-1.crowdstrike.com"]
+secrets = ["CROWDSTRIKE_CLIENT_SECRET"]
+cwd = "repo"
+
+[[scenario]]
+name = "golden/query-elastic"
+description = "opentide query on Elastic's stand-in, the golden cases' cassette: an ES|QL query over the window."
+client = ["{oracle}/opentide", "--repo", "tests/golden/fixtures/tenants", "--json", "query", "--platform", "elastic", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "FROM logs-* | WHERE process.name == \"cmd.exe\""]
+tenant = ["{python}", "tests/cassettes/elastic/tenant.py"]
+routes = ["kibana.elastic.invalid", "es.elastic.invalid"]
+secrets = ["ELASTIC_API_KEY"]
+cwd = "repo"
+
+[[scenario]]
+name = "golden/query-elastic-eql"
+description = "opentide query on Elastic's stand-in, the golden cases' cassette: an EQL sequence on the tenant's index."
+client = ["{oracle}/opentide", "--repo", "tests/golden/fixtures/tenants", "--json", "query", "--platform", "elastic", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "--language", "eql", "sequence [process where true] [process where true]"]
+tenant = ["{python}", "tests/cassettes/elastic/tenant.py"]
+routes = ["kibana.elastic.invalid", "es.elastic.invalid"]
+secrets = ["ELASTIC_API_KEY"]
+cwd = "repo"
