@@ -13,6 +13,7 @@
 //! built here once, as `ci/stages.py` and `ci/gates.py` build them.
 
 use std::borrow::Cow;
+use std::sync::LazyLock;
 
 use indexmap::IndexMap;
 use minijinja::syntax::SyntaxConfig;
@@ -149,7 +150,11 @@ pub struct RenderError {
 ///
 /// A template that does not render.
 pub fn render(options: &Options) -> Result<String, RenderError> {
-    let env = environment();
+    render_in(&environment_from(&SOURCES), options)
+}
+
+/// [`render`] with the templates of `env`.
+fn render_in(env: &Environment<'_>, options: &Options) -> Result<String, RenderError> {
     let provider = options.provider;
     let fail = |source| RenderError {
         provider: provider.name(),
@@ -160,7 +165,21 @@ pub fn render(options: &Options) -> Result<String, RenderError> {
     Ok(format!("{}\n", text.trim_end_matches('\n')))
 }
 
-fn environment() -> Environment<'static> {
+/// The templates, each with LF line endings whatever the checkout wrote: the
+/// pipeline is a file the user commits, so it is the same bytes on every OS
+/// (a Windows checkout with `core.autocrlf` would otherwise compile CRLF
+/// templates in, and the filters join their lines with LF).
+static SOURCES: LazyLock<Vec<(&'static str, String)>> = LazyLock::new(|| lf_sources(&TEMPLATES));
+
+/// `templates` with every CRLF line ending as LF.
+fn lf_sources(templates: &[(&'static str, &str)]) -> Vec<(&'static str, String)> {
+    templates
+        .iter()
+        .map(|(name, source)| (*name, source.replace("\r\n", "\n")))
+        .collect()
+}
+
+fn environment_from(sources: &'static [(&'static str, String)]) -> Environment<'static> {
     let mut env = Environment::new();
     if let Ok(syntax) = SyntaxConfig::builder()
         .variable_delimiters("[[", "]]")
@@ -183,10 +202,10 @@ fn environment() -> Environment<'static> {
     env.add_filter("lines", |text: String| -> Vec<String> {
         text.lines().map(str::to_owned).collect()
     });
-    for (name, source) in TEMPLATES {
+    for (name, source) in sources {
         // A template that does not parse fails every render, which the
         // tests of each provider catch.
-        let _ = env.add_template(name, source);
+        let _ = env.add_template(name, source.as_str());
     }
     env
 }
@@ -540,5 +559,54 @@ mod tests {
         assert_eq!(tenant_variables("[tenants.setup]\nx = \"$X\"\n"), ["X"]);
         assert!(tenant_variables("not toml [").is_empty());
         assert_eq!(references("a $AB_1 $x ${Y} $9"), ["AB_1"]);
+    }
+
+    fn options(provider: Provider) -> Options {
+        Options {
+            provider,
+            platforms: vec!["sentinel".into(), "splunk".into()],
+            staging: true,
+            inflight: true,
+            sharing: true,
+            lint_changed: true,
+            explorer_pages: true,
+            python_version: "3.12".into(),
+            opentide_version: "0.23.0".into(),
+            default_branch: "main".into(),
+            docs_output: "docs".into(),
+            rules_folder: "Objects/Detection Rules".into(),
+            credentials: IndexMap::from([(
+                "sentinel".to_owned(),
+                vec!["AZURE_CLIENT_ID".to_owned()],
+            )]),
+        }
+    }
+
+    #[test]
+    fn crlf_templates_write_lf_pipelines() {
+        // A Windows checkout with core.autocrlf compiles CRLF templates in.
+        let crlf: Vec<(&'static str, String)> = TEMPLATES
+            .iter()
+            .map(|(name, source)| (*name, source.replace('\n', "\r\n")))
+            .collect();
+        assert!(crlf.iter().all(|(_, source)| source.contains("\r\n")));
+        let crlf: Vec<(&'static str, &str)> = crlf
+            .iter()
+            .map(|(name, source)| (*name, source.as_str()))
+            .collect();
+        let crlf = environment_from(Box::leak(lf_sources(&crlf).into_boxed_slice()));
+        assert!(SOURCES.iter().all(|(_, source)| !source.contains('\r')));
+        let lf = environment_from(&SOURCES);
+        for provider in [Provider::GitHub, Provider::GitLab, Provider::Azure] {
+            let options = options(provider);
+            let written = render_in(&crlf, &options).unwrap();
+            assert!(
+                !written.contains('\r'),
+                "{}: CR in the pipeline",
+                provider.name()
+            );
+            assert_eq!(written, render_in(&lf, &options).unwrap());
+            assert_eq!(written, render(&options).unwrap());
+        }
     }
 }

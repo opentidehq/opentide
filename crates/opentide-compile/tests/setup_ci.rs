@@ -100,6 +100,18 @@ fn pipelines_are_the_oracles() {
                 continue;
             }
         };
+        // A file the user commits: LF on every OS, as the oracle recorded it.
+        if rendered.contains('\r') || oracle.contains('\r') {
+            problems.push(format!(
+                "{name}: CR in the {} pipeline",
+                if rendered.contains('\r') {
+                    "rendered"
+                } else {
+                    "oracle's"
+                }
+            ));
+            continue;
+        }
         if let Some(dir) = std::env::var_os("OPENTIDE_CI_RENDERED") {
             std::fs::write(Path::new(&dir).join(format!("{name}.yml")), &rendered).unwrap();
         }
