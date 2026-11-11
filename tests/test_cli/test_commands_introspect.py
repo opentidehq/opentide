@@ -307,6 +307,9 @@ _UNDOCUMENTED_ENV = {
     # OPENTIDE_ENGINE=compare sets it for its own Rust run, to learn that the
     # Rust engine handed the input back (engines.py REFUSAL_ENV); never a user's.
     "OPENTIDE_ENGINE_REFUSAL",
+    # The Python launcher sets it for the Rust doctor (cli/rust.py): the platform
+    # SDKs' import results; never a user's.
+    "OPENTIDE_PYTHON_MODULES",
     # An Azure pipeline variable the generated pipeline sets and reads.
     "OPENTIDE_DEPLOY_STARTED",
     # Variables of the generated pipelines, read by their shell steps
