@@ -68,6 +68,19 @@ EOF
 skip() { echo "==> SKIPPED: $*"; skipped+=("$1"); }
 skipped=()
 
+# A test writes under a temporary folder, never in the checkout (#931), as
+# ci.yml's engine-test job checks: `git status` before and after the tests.
+tree_state() { git status --porcelain --untracked-files=all; }
+tree_unchanged() {
+  local after
+  after="$(tree_state)"
+  if [[ "$after" != "$1" ]]; then
+    echo "A test wrote into the checkout: write under a temporary folder (tempfile::tempdir) instead." >&2
+    diff <(printf '%s\n' "$1") <(printf '%s\n' "$after") >&2 || true
+    exit 1
+  fi
+}
+
 # ci.yml's Rust jobs (engine, engine-test, engine-package, engine-wasm, grammars,
 # fuzz-smoke) for --full; rustfmt, clippy and the layers ran above.
 rust_jobs() {
@@ -76,9 +89,12 @@ rust_jobs() {
     echo "cargo-nextest is not installed: cargo install cargo-nextest --locked" >&2
     exit 1
   fi
+  local before
+  before="$(tree_state)"
   cargo nextest run --workspace --locked --profile ci
   echo "==> Cargo workspace: doctests"
   cargo test --workspace --locked --doc --quiet
+  tree_unchanged "$before"
   echo "==> The editor's diagnostics are validate's (corpus job: lsp parity)"
   cargo xtask lsp parity --corpus faults
   echo "==> rustdoc (RUSTDOCFLAGS=-D warnings)"
@@ -208,7 +224,9 @@ if [[ "$mode" == "full" ]]; then
   rust_jobs
 else
   echo "==> Cargo workspace: tests"
+  before="$(tree_state)"
   cargo test --workspace --locked --quiet
+  tree_unchanged "$before"
 fi
 echo "==> The engine release script's tests"
 uv run python -m unittest discover -s scripts/engine -p "test_*.py"

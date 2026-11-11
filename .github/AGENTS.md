@@ -15,7 +15,7 @@ merge first; CodeQL and the oracles run there too). Jobs run in parallel; a new 
 |-----|----------------|
 | `lint` | ruff, ty, `uv build` and `twine check`; the vocabulary drift gate and the model field descriptions (below) when their files change |
 | `engine` | rustfmt, clippy `-D warnings`, `cargo xtask check-layers`, `cargo doc --no-deps --workspace` with `RUSTDOCFLAGS=-D warnings`, the engine's invariant scripts (`check-io-free.sh`, `check-names.sh`, `validate-skills.sh`, `generate-highlights --check`), the bundled Tide catalog test and the engine release script's tests |
-| `engine-test` | `cargo nextest run --workspace --profile ci` on Linux, macOS and Windows (after `uv sync`: one test runs the Pydantic models); the doctests (`cargo test --doc`) on Linux |
+| `engine-test` | `cargo nextest run --workspace --profile ci` on Linux, macOS and Windows (after `uv sync`: one test runs the Pydantic models); the doctests (`cargo test --doc`) on Linux; fails when the tests leave a file in the checkout that `git status` shows (#931) |
 | `engine-wasm` | `scripts/engine/build-wasm.sh` (both WebAssembly artifacts, and `clippy` for the code only wasm32 compiles), the npm packages (`check-npm-packs.mjs`) and the TypeScript client against the native, worker and WASI servers |
 | `engine-package` | Every engine crate packaged as crates.io builds it, and `license-scan.sh` over the packages (no oracle reference ships) |
 | `grammars`, `textmate` | Every vendored `parser.c` is what tree-sitter-cli 0.25.10 generates (`check-grammars.sh`); the TextMate grammars as VS Code reads them |
