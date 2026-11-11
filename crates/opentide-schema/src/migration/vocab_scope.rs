@@ -193,17 +193,15 @@ impl ScopeIndex {
                 .iter()
                 .map(|stage| format!("{stage}{SCOPE_SEPARATOR}{key}"))
                 .collect();
+            // Two forms or keys that differ only by case: the later one in
+            // the vocabulary wins, as the oracle's dicts keep the last.
             for form in &forms {
                 index.key_by_scoped.insert(form.clone(), key.clone());
                 index
                     .scoped_by_lower
-                    .entry(form.to_lowercase())
-                    .or_insert_with(|| form.clone());
+                    .insert(form.to_lowercase(), form.clone());
             }
-            index
-                .key_by_lower
-                .entry(key.to_lowercase())
-                .or_insert_with(|| key.clone());
+            index.key_by_lower.insert(key.to_lowercase(), key.clone());
             index.scoped_by_key.insert(key.clone(), forms);
         }
         index
@@ -462,12 +460,9 @@ pub fn verify(original: &node::Document, updated: &str, plan: &Plan<'_>) -> Opti
         .then(|| "rewrite altered a value outside the migration plan".to_owned())
 }
 
+/// Each value and how often it occurs, as the map's own `Debug` writes it.
 fn pairs(counts: &BTreeMap<String, usize>) -> String {
-    let items: Vec<String> = counts
-        .iter()
-        .map(|(value, count)| format!("({}, {count})", quote(value)))
-        .collect();
-    format!("[{}]", items.join(", "))
+    format!("{counts:?}")
 }
 
 /// The document as JSON with the value at each of `paths` removed.
@@ -559,6 +554,49 @@ name = "Security::Kerberos"
             Some("Host::Process")
         );
         assert!(index.is_staged());
+    }
+
+    #[test]
+    fn a_case_collision_keeps_the_later_key() {
+        // Two keys, and two scoped forms, that differ only by case: the
+        // oracle's dict comprehensions keep the later one.
+        let vocabulary = Vocabulary::from_file(
+            "signal.entities.vocab.toml",
+            r#"
+name = "Entities"
+field = "signal.entities"
+description = "d"
+key = "name"
+[[stages]]
+id = "Host"
+
+[[keys]]
+version = "1.0"
+name = "Pipe"
+"tide.vocab.stages" = "Host"
+
+[[keys]]
+version = "1.0"
+name = "PIPE"
+"tide.vocab.stages" = "Host"
+"#,
+        )
+        .unwrap();
+        let index = ScopeIndex::new(&vocabulary);
+        assert_eq!(
+            index.resolve("pipe").resolved.as_deref(),
+            Some("Host::PIPE")
+        );
+        assert_eq!(
+            index.resolve("host::pipe").resolved.as_deref(),
+            Some("Host::PIPE")
+        );
+        // An exact key or form is never folded.
+        assert_eq!(
+            index.resolve("Pipe").resolved.as_deref(),
+            Some("Host::Pipe")
+        );
+        assert_eq!(index.resolve("Host::Pipe").status, Status::Scoped);
     }
 
     #[test]
@@ -676,7 +714,7 @@ platforms:
         assert_eq!(
             verify(&document, &outside, &plan).as_deref(),
             Some(
-                "rewrite of 'entities' did not match the plan (expected [('Account', 1), ('Host::Process', 3), ('host::process', 1)], got [('Account', 1), ('Host::Process', 1), ('Process', 2), ('host::process', 1)])"
+                "rewrite of 'entities' did not match the plan (expected {\"Account\": 1, \"Host::Process\": 3, \"host::process\": 1}, got {\"Account\": 1, \"Host::Process\": 1, \"Process\": 2, \"host::process\": 1})"
             )
         );
         let (updated, _) = rewrite(&document, &plan);

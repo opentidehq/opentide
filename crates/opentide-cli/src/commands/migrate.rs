@@ -531,6 +531,116 @@ objective:
     }
 
     #[test]
+    fn a_rewrite_that_fails_verification_is_never_written() {
+        // The anchored scalar's span takes in `&p `: the rewrite drops the
+        // anchor, `*p` no longer resolves, and the read-back refuses it.
+        let text = "x: &p Process\nobjective:\n  signals:\n    - entities: [*p]\n";
+        let dir = workspace(&[("objects/o.yaml", text)]);
+        let report = run_in(
+            dir.path(),
+            &Args {
+                apply: true,
+                ..Args::default()
+            },
+        );
+        assert_eq!(report.outcome.exit_code, 1);
+        assert_eq!(report.outcome.status, "issues");
+        assert_eq!(report.outcome.failure.as_ref().unwrap().code, ISSUES_FOUND);
+        let Json::Object(failed) = data(&report, "failed_files") else {
+            panic!("failed_files is an object");
+        };
+        assert_eq!(failed.len(), 1);
+        assert_eq!(failed[0].0, "objects/o.yaml");
+        let Json::Str(reason) = &failed[0].1 else {
+            panic!("a reason is a string");
+        };
+        assert!(
+            reason.starts_with("rewrite produced unparseable YAML"),
+            "{reason}"
+        );
+        assert_eq!(data(&report, "changed_files"), &Json::Array(Vec::new()));
+        let on_disk = std::fs::read(dir.path().join("objects/o.yaml")).unwrap();
+        assert_eq!(on_disk, text.as_bytes());
+    }
+
+    #[test]
+    fn an_already_scoped_corpus_is_clean() {
+        let dir = workspace(&[
+            (
+                "objects/o.yaml",
+                "objective:\n  signals:\n    - entities: [Host::Process, Cloud::Account]\n    - entities: [Host::Process]\n",
+            ),
+            ("objects/t.yaml", "threat:\n  surface: [OS::Windows]\n"),
+        ]);
+        let report = run_in(dir.path(), &Args::default());
+        assert_eq!(report.outcome.exit_code, 0);
+        assert!(report.outcome.failure.is_none());
+        assert_eq!(data(&report, "changed_files"), &Json::Array(Vec::new()));
+        let Json::Object(fields) = data(&report, "fields") else {
+            panic!("fields is an object");
+        };
+        let field = |name: &str| {
+            let Json::Object(field) = &fields.iter().find(|(key, _)| key == name).unwrap().1 else {
+                panic!("a field is an object");
+            };
+            field.clone()
+        };
+        let member = |field: &[(String, Json)], key: &str| {
+            field
+                .iter()
+                .find(|(name, _)| name == key)
+                .unwrap()
+                .1
+                .clone()
+        };
+        let entities = field("entities");
+        assert_eq!(member(&entities, "blocked"), Json::Object(Vec::new()));
+        assert_eq!(member(&entities, "rewrites"), Json::Object(Vec::new()));
+        assert_eq!(
+            member(&entities, "by_status"),
+            Json::Object(vec![("scoped".to_owned(), Json::Int(3))])
+        );
+        let surface = field("surface");
+        assert_eq!(member(&surface, "blocked"), Json::Object(Vec::new()));
+        assert_eq!(
+            member(&surface, "by_status"),
+            Json::Object(vec![("scoped".to_owned(), Json::Int(1))])
+        );
+    }
+
+    #[test]
+    fn a_repeated_key_is_left_alone_and_exits_1() {
+        // Intended difference (CHANGELOG): read as YAML 1.2 a repeated key
+        // makes the file unreadable, where the oracle's `yaml.compose`
+        // accepted it and rewrote the file.
+        let text = "objective:\n  signals:\n    - entities: [Process]\nobjective: {}\n";
+        let dir = workspace(&[("objects/o.yaml", text)]);
+        let report = run_in(
+            dir.path(),
+            &Args {
+                apply: true,
+                ..Args::default()
+            },
+        );
+        assert_eq!(report.outcome.exit_code, 1);
+        assert_eq!(report.outcome.failure.as_ref().unwrap().code, ISSUES_FOUND);
+        let Json::Object(failed) = data(&report, "failed_files") else {
+            panic!("failed_files is an object");
+        };
+        assert_eq!(failed[0].0, "objects/o.yaml");
+        let Json::Str(reason) = &failed[0].1 else {
+            panic!("a reason is a string");
+        };
+        assert!(
+            reason.starts_with("unreadable: the key 'objective' is repeated"),
+            "{reason}"
+        );
+        assert_eq!(data(&report, "scanned"), &Json::Int(0));
+        let on_disk = std::fs::read(dir.path().join("objects/o.yaml")).unwrap();
+        assert_eq!(on_disk, text.as_bytes());
+    }
+
+    #[test]
     fn an_unknown_field_is_refused() {
         let dir = workspace(&[]);
         let args = Args {
