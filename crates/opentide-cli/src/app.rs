@@ -727,7 +727,8 @@ impl Run<'_> {
                 let report = self.setup_skills_catalogue(&matches, &path);
                 self.emit_report(&report, out, err)
             }
-            "setup env" | "setup hooks" | "setup platforms" | "setup repo" | "setup mcp" => {
+            "setup env" | "setup hooks" | "setup platforms" | "setup repo" | "setup mcp"
+            | "setup vscode" => {
                 let report = self.setup_step(&matches);
                 self.emit_report(&report, out, err)
             }
@@ -825,7 +826,7 @@ impl Run<'_> {
     /// `opentide setup ci`, from its parsed arguments and the `setup`
     /// group's.
     fn setup_ci(&self, matches: &clap::ArgMatches) -> crate::commands::Report {
-        use crate::commands::setup::{CiArgs, Context, ci};
+        use crate::commands::setup::{CiArgs, ci};
         let Some((_, group)) = matches.subcommand() else {
             return crate::commands::Report::error("setup ci", "no setup command");
         };
@@ -872,17 +873,7 @@ impl Run<'_> {
             group_only,
         };
         let cwd = self.host.cwd.clone().unwrap_or_default();
-        ci(
-            &parsed,
-            &Context {
-                repo: self.globals.repo.as_deref(),
-                env: self.env,
-                cwd: &cwd,
-                mode: self.mode,
-                version: &self.host.version,
-                quiet: self.globals.quiet,
-            },
-        )
+        ci(&parsed, &self.setup_context(&cwd))
     }
 
     /// The `setup` group's own options given on the command line before a
@@ -937,10 +928,13 @@ impl Run<'_> {
             mode: self.mode,
             version: &self.host.version,
             quiet: self.globals.quiet,
+            terminal: self.terminal(),
+            interrupt: self.host.interrupt.clone(),
+            stderr: self.host.log_sink.clone(),
         }
     }
 
-    /// `opentide setup env|hooks|platforms|repo|mcp`.
+    /// `opentide setup env|hooks|platforms|repo|mcp|vscode`.
     fn setup_step(&self, matches: &clap::ArgMatches) -> crate::commands::Report {
         use crate::commands::setup::files::RepoOptions;
         use crate::commands::setup::run::{Paths, Step, subcommand};
@@ -1011,6 +1005,15 @@ impl Run<'_> {
                     .filter_map(|platform| platform.to_possible_value())
                     .map(|value| value.get_name().to_owned())
                     .collect(),
+            }),
+            "vscode" => Step::Vscode(crate::commands::setup::vscode::Options {
+                generate: !flag("no_generate"),
+                merge: !flag("no_merge"),
+                mcp: flag("mcp"),
+                ..crate::commands::setup::vscode::Options::from_flags(
+                    flag("settings"),
+                    flag("snippets"),
+                )
             }),
             _ => Step::Mcp(
                 [

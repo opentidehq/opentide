@@ -62,7 +62,7 @@ about = "UC-0.6's fault workspace: seed 1, 120 threats, 60 objectives, 600 rules
 [fixtures.setup-merge]
 kind = "copy"
 source = "tests/golden/fixtures/setup-merge"
-about = "a workspace whose files `setup` merges into: a .vscode/mcp.json with a byte-order mark, comments and a trailing comma, and a sentinel.toml with `enabled = false`"
+about = "a workspace whose files `setup` merges into: a .vscode/mcp.json with a byte-order mark, comments and a trailing comma, a .vscode/settings.json with a comment and the yaml.schemas mapping earlier `setup vscode` releases wrote, and a sentinel.toml with `enabled = false`"
 
 [fixtures.empty]
 kind = "skeleton"
@@ -1384,6 +1384,32 @@ fixtures = ["tide-corpus"]
 command = "setup vscode"
 variant = "snippets"
 args = ["setup", "vscode", "--snippets"]
+fixtures = ["tide-corpus"]
+
+# UC-3.6c (#951): the plan of `setup vscode`, its merges into the user's
+# .vscode files, its failure without templates, and `setup --vscode-setup`.
+[[case]]
+command = "setup vscode"
+variant = "plan"
+args = ["setup", "vscode", "--plan"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "setup vscode"
+variant = "merge"
+args = ["setup", "vscode", "--settings", "--mcp", "--no-generate"]
+fixtures = ["setup-merge"]
+
+[[case]]
+command = "setup vscode"
+variant = "no-templates"
+args = ["setup", "vscode", "--snippets", "--no-generate"]
+fixtures = ["empty"]
+
+[[case]]
+command = "setup"
+variant = "vscode-setup"
+args = ["setup", "--yes", "--vscode-setup"]
 fixtures = ["tide-corpus"]
 
 [[case]]

@@ -46,14 +46,29 @@ def python_modules(argv: list[str]) -> str | None:
     )
 
 
+def _setup_wizard(argv: list[str]) -> bool:
+    """Whether *argv* opens the ``setup`` wizard: ``setup`` with nothing after it but ``--path``."""
+    rest = argv[argv.index("setup") + 1 :]
+    while rest:
+        if rest[0] in ("--path", "-C"):
+            rest = rest[2:]
+        elif rest[0].startswith("--path="):
+            rest = rest[1:]
+        else:
+            return False
+    return True
+
+
 def mcp_server(argv: list[str]) -> str | None:
     """Whether the MCP server can start here, as JSON, for ``setup`` with MCP; else ``None``.
 
     The server is still Python's (``opentide mcp start``), so only this
     environment can say whether it imports; only a run that writes MCP
-    configurations pays for the probe.
+    configurations, or the wizard, which may, pays for the probe.
     """
-    if "setup" not in argv or not any(arg == "mcp" or arg.startswith("--mcp") for arg in argv):
+    if "setup" not in argv:
+        return None
+    if not _setup_wizard(argv) and not any(arg == "mcp" or arg.startswith("--mcp") for arg in argv):
         return None
     from opentide.mcp_server.launcher import MCP_INSTALL_HINT, missing_requirements
 

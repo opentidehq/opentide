@@ -1,0 +1,1 @@
+{"detail":"opentide setup vscode is deprecated and will be removed when the opentide VS Code extension ships with a bundled language server and template actions.","event":"vscode_setup_deprecated","logger":"opentide.cli.services.setup.vscode","level":"warning","timestamp":"0000-00-00 00:00:00"}

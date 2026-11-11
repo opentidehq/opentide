@@ -51,4 +51,16 @@ def test_setup_mcp_gets_whether_the_mcp_server_can_start(monkeypatch: pytest.Mon
 
 def test_setup_without_mcp_pays_for_no_probe() -> None:
     assert rust.mcp_server(["setup", "env"]) is None
+    assert rust.mcp_server(["setup", "--yes", "--name", "x"]) is None
     assert rust.mcp_server(["info"]) is None
+
+
+def test_the_setup_wizard_gets_whether_the_mcp_server_can_start(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The wizard may write MCP configurations: its answers are not on the command line."""
+    from opentide.mcp_server import launcher
+
+    monkeypatch.setattr(launcher, "missing_requirements", lambda: ["mcp"])
+    for argv in (["setup"], ["--no-color", "setup", "-C", "repo"], ["setup", "--path=x"]):
+        assert json.loads(rust.mcp_server(argv) or "{}")["missing"] == ["mcp"]

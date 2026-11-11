@@ -14,6 +14,8 @@ pub mod hooks;
 pub mod jsonc;
 pub mod run;
 pub mod stage;
+pub mod vscode;
+pub mod wizard;
 
 use std::io::{BufRead as _, IsTerminal as _, Write as _};
 use std::path::{Path, PathBuf};
@@ -101,6 +103,16 @@ pub struct Context<'a> {
     pub version: &'a str,
     /// `--quiet`: no summary of the files written.
     pub quiet: bool,
+    /// The streams' styles and widths: what a step prints as it runs (the
+    /// wizard's screens, `setup vscode`'s deprecation).
+    pub terminal: crate::commands::Terminal,
+    /// Ctrl-C for this run: a wizard question answered with Ctrl-C stops the
+    /// run as Ctrl-C does elsewhere (`error: interrupted`, exit 130).
+    pub interrupt: crate::app::Interrupt,
+    /// stderr, shared with the log lines: what a step prints there as it
+    /// runs comes before the log lines it writes after (`setup vscode`'s
+    /// deprecation).
+    pub stderr: crate::logging::Sink,
 }
 
 /// An app-level usage error, as Click words a `BadParameter`.
@@ -265,7 +277,7 @@ pub(crate) fn confirm_write(
 }
 
 /// The bundled `[promotion]` table `deploy` uses when a repository sets none.
-fn promotion_defaults() -> toml::Table {
+pub(crate) fn promotion_defaults() -> toml::Table {
     opentide_schema::configuration::bundled::FILES
         .iter()
         .find(|(path, _)| *path == "deployment.toml")
@@ -519,7 +531,7 @@ fn default_branch_warnings(env: &Env, path: &Path, branch: &str, source: &str) -
 }
 
 /// Where `setup ci` finds the workspace at `root`.
-fn root_options(root: &Path, cx: &Context<'_>) -> opentide_workspace::RootOptions {
+pub(crate) fn root_options(root: &Path, cx: &Context<'_>) -> opentide_workspace::RootOptions {
     opentide_workspace::RootOptions {
         repo: Some(root.to_path_buf()),
         repo_root_env: Some(root.to_path_buf()),

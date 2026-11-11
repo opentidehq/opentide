@@ -78,6 +78,9 @@ textwrap = { version = "0.16", default-features = false, features = ["unicode-wi
 toml.workspace = true
 tracing = "0.1"
 unicode-width = "0.2"
+# The `setup` wizard (UC-3.6c, #951): its questions at a terminal, on
+# crossterm (Linux, macOS and Windows consoles).
+inquire = { version = "0.9", default-features = false, features = ["crossterm"] }
 # `new`'s fresh object identifiers.
 uuid = { workspace = true, features = ["v4"] }
 # `doctor` (UC-3.5c): whether git and an MCP server's command are on PATH.
@@ -114,6 +117,9 @@ opentide-cassette.workspace = true
 # The goldens' normalisation, for the generate cases (tests/generate_goldens.rs).
 opentide-compare.workspace = true
 tempfile = "3"
+# The `setup` wizard's pseudo-terminal test (tests/setup_wizard.rs), on
+# wezterm's portable-pty: a pty on Unix, ConPTY on Windows.
+portable-pty = "0.9"
 # The goldens' case.toml and outcome.toml (tests/framework_goldens.rs).
 
 # The renderers' snapshots, written by the oracle (tests/render.rs).
