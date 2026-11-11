@@ -653,4 +653,231 @@ mod tests {
         // Refused by the proxy the environment names: no catalogue.
         assert_eq!(load(false, network).unwrap_err(), unavailable());
     }
+
+    /// The skills repository's raw host, answered by a local stand-in through
+    /// the recording proxy (nothing is recorded or written): each request's
+    /// path gets the status and body *answers* name for it, else a 404.
+    struct Catalogue {
+        _proxy: opentide_cassette::Proxy,
+        _ca: tempfile::NamedTempFile,
+        env: Env,
+    }
+
+    impl Catalogue {
+        fn serving(answers: &[(&str, u16, &str)]) -> Self {
+            use std::io::{Read as _, Write as _};
+            let answers: Vec<(String, u16, String)> = answers
+                .iter()
+                .map(|(path, status, body)| ((*path).to_owned(), *status, (*body).to_owned()))
+                .collect();
+            let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+            let upstream = format!("http://{}", listener.local_addr().unwrap());
+            std::thread::spawn(move || {
+                for mut stream in listener.incoming().flatten() {
+                    let mut buffer = [0u8; 8192];
+                    let read = stream.read(&mut buffer).unwrap_or(0);
+                    let request = String::from_utf8_lossy(&buffer[..read]).into_owned();
+                    let path = request.split_whitespace().nth(1).unwrap_or("").to_owned();
+                    let (status, body) = answers
+                        .iter()
+                        .find(|(wanted, _, _)| *wanted == path)
+                        .map_or((404, "404: Not Found".to_owned()), |(_, status, body)| {
+                            (*status, body.clone())
+                        });
+                    let _ = write!(
+                        stream,
+                        "HTTP/1.1 {status} X\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                        body.len()
+                    );
+                }
+            });
+            let proxy = opentide_cassette::Proxy::start(
+                opentide_cassette::Mode::Record {
+                    routes: std::collections::BTreeMap::from([(RAW_HOST.to_owned(), upstream)]),
+                },
+                opentide_cassette::Redaction::default(),
+            )
+            .unwrap();
+            let mut ca = tempfile::NamedTempFile::new().unwrap();
+            ca.write_all(proxy.ca_pem().as_bytes()).unwrap();
+            let env = Env::from_pairs(
+                proxy
+                    .client_env(ca.path().to_str().unwrap())
+                    .iter()
+                    .map(|(name, value)| (name.as_str(), value.as_str())),
+            );
+            Self {
+                _proxy: proxy,
+                _ca: ca,
+                env,
+            }
+        }
+    }
+
+    const MANIFEST_PATH: &str = "/opentidehq/skills/main/manifest.json";
+    const MANIFEST: &str = r#"{"skills": [
+        {"slug": "fancy-skill", "name": "Fancy Name", "description": "Remote one"},
+        {"slug": "opentide-detection-rule", "name": "Rule", "description": "Rules"}
+    ]}"#;
+
+    fn never() -> bool {
+        false
+    }
+
+    fn network(env: &Env) -> Network<'_> {
+        Network {
+            env,
+            proxy: None,
+            interrupted: &never,
+        }
+    }
+
+    fn data<'a>(report: &'a Report, key: &str) -> &'a Json {
+        &report
+            .outcome
+            .data
+            .iter()
+            .find(|(name, _)| name == key)
+            .unwrap_or_else(|| panic!("no {key} in {:?}", report.outcome.data))
+            .1
+    }
+
+    #[test]
+    fn a_catalogue_answer_that_is_not_2xx_is_no_catalogue() {
+        // The body is a manifest: only the status says it is not one.
+        let served = Catalogue::serving(&[(MANIFEST_PATH, 200, MANIFEST)]);
+        let manifest = load(false, network(&served.env)).unwrap();
+        assert_eq!(manifest.entries[0].slug, "fancy-skill");
+        for status in [404, 500, 503] {
+            let failing = Catalogue::serving(&[(MANIFEST_PATH, status, MANIFEST)]);
+            assert_eq!(
+                load(false, network(&failing.env)).unwrap_err(),
+                unavailable(),
+                "{status}"
+            );
+            let report = discover(
+                &DiscoverArgs {
+                    repo: PathBuf::from("."),
+                    query: None,
+                    installed_only: false,
+                    refresh: false,
+                },
+                network(&failing.env),
+                80,
+            );
+            assert_eq!(report.outcome.exit_code, 1);
+            let failure = report.outcome.failure.as_ref().unwrap();
+            assert_eq!(failure.code, "command_failed");
+            assert!(
+                failure
+                    .message
+                    .starts_with("Could not fetch skills catalogue")
+            );
+        }
+    }
+
+    #[test]
+    fn installed_skills_are_the_folders_with_a_skill_md() {
+        let repo = tempfile::tempdir().unwrap();
+        let skills = repo.path().join(".agents").join("skills");
+        for slug in ["opentide-detection-rule", "fancy-skill", "no-skill-md"] {
+            std::fs::create_dir_all(skills.join(slug)).unwrap();
+        }
+        std::fs::write(skills.join("opentide-detection-rule").join("SKILL.md"), "x").unwrap();
+        std::fs::write(skills.join("fancy-skill").join("SKILL.md"), "x").unwrap();
+        // A file named like a skill is not one.
+        std::fs::write(skills.join("loose-file"), "x").unwrap();
+        assert_eq!(
+            installed(repo.path()),
+            ["fancy-skill", "opentide-detection-rule"]
+        );
+        assert!(installed(&repo.path().join("missing")).is_empty());
+
+        let served = Catalogue::serving(&[(MANIFEST_PATH, 200, MANIFEST)]);
+        let report = discover(
+            &DiscoverArgs {
+                repo: repo.path().to_path_buf(),
+                query: None,
+                installed_only: true,
+                refresh: false,
+            },
+            network(&served.env),
+            80,
+        );
+        assert_eq!(report.outcome.exit_code, 0);
+        let Json::Array(listed) = data(&report, "skills") else {
+            panic!("skills is not a list")
+        };
+        let slugs: Vec<&Json> = listed
+            .iter()
+            .filter_map(|entry| entry.get("slug"))
+            .collect();
+        assert_eq!(
+            slugs,
+            [
+                &Json::str("fancy-skill"),
+                &Json::str("opentide-detection-rule")
+            ]
+        );
+        assert!(
+            listed
+                .iter()
+                .all(|entry| entry.get("installed") == Some(&Json::Bool(true)))
+        );
+        assert_eq!(
+            report.outcome.summary,
+            vec![
+                ("skills".to_owned(), Json::Int(2)),
+                ("installed".to_owned(), Json::Int(2))
+            ]
+        );
+
+        // `show` of an installed skill says so and offers no install.
+        let shown = show(
+            "fancy-skill",
+            repo.path(),
+            false,
+            network(&served.env),
+            true,
+        );
+        assert_eq!(
+            data(&shown, "skill").get("installed"),
+            Some(&Json::Bool(true))
+        );
+        assert_eq!(
+            shown.body.len(),
+            1,
+            "no install hint for an installed skill"
+        );
+        let elsewhere = tempfile::tempdir().unwrap();
+        let missing = show(
+            "fancy-skill",
+            elsewhere.path(),
+            false,
+            network(&served.env),
+            true,
+        );
+        assert_eq!(
+            data(&missing, "skill").get("installed"),
+            Some(&Json::Bool(false))
+        );
+        assert_eq!(missing.body.len(), 2);
+    }
+
+    #[test]
+    fn show_finds_a_skill_by_its_display_name() {
+        let served = Catalogue::serving(&[(MANIFEST_PATH, 200, MANIFEST)]);
+        let repo = tempfile::tempdir().unwrap();
+        for name in ["Fancy Name", " fancy name ", "FANCY-SKILL"] {
+            let report = show(name, repo.path(), false, network(&served.env), true);
+            assert_eq!(report.outcome.exit_code, 0, "{name}");
+            assert_eq!(
+                data(&report, "skill").get("slug"),
+                Some(&Json::str("fancy-skill")),
+                "{name}"
+            );
+        }
+        let report = show("Fancy", repo.path(), false, network(&served.env), true);
+        assert_eq!(report.outcome.exit_code, 1);
+    }
 }

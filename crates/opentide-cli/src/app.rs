@@ -1332,7 +1332,6 @@ impl Run<'_> {
     }
 }
 
-/// `--format`'s value as the renderers name it.
 impl Run<'_> {
     /// `setup skills discover` and `setup skills show` (UC-4.1, #831): the
     /// target the command and its groups name, then the catalogue.
@@ -1503,6 +1502,7 @@ impl Run<'_> {
     }
 }
 
+/// `--format`'s value as the renderers name it.
 fn report_format(format: crate::tree::ReportFormat) -> crate::render::report::ReportFormat {
     match format {
         crate::tree::ReportFormat::Text => crate::render::report::ReportFormat::Text,
@@ -2713,6 +2713,77 @@ mod tests {
             Ok(0)
         });
         assert_eq!(text.stderr, "warning: Debug field · detail: \"***\"\n");
+    }
+
+    #[test]
+    fn framework_a_failing_tenant_request_leaves_no_credential_in_logs_or_crash_logs() {
+        // A tenant request that fails (refused), with credentials in the
+        // URL's user info and query: the connector's error, logged at every
+        // level and ending the run, reaches neither the output, the log nor
+        // the crash log. The values are in no variable, so the run's own
+        // redaction cannot be what hides them.
+        let state = std::env::temp_dir().join(format!(
+            "opentide-cli-tenant-failure-{}",
+            std::process::id()
+        ));
+        let state_text = state.display().to_string();
+        let pairs = [
+            ("XDG_STATE_HOME", state_text.as_str()),
+            ("HOME", state_text.as_str()),
+            ("USERPROFILE", state_text.as_str()),
+            ("LOCALAPPDATA", state_text.as_str()),
+        ];
+        let (secret, password) = ("q7Zk-tenant-credential-41", "pw-x9Lm3-proxy");
+        let closed = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = closed.local_addr().unwrap().port();
+        drop(closed);
+        let url = format!("http://user:{password}@127.0.0.1:{port}/api?token={secret}");
+        for line in ["--debug --json x", "--debug x"] {
+            let result = ran(line, &pairs, false, |_, _, _| {
+                let label = opentide_connectors::TenantLabel::new("splunk", "prod");
+                let client = opentide_connectors::HttpClient::new(
+                    &label,
+                    &opentide_connectors::HttpSettings::default(),
+                    &opentide_connectors::Environment::default(),
+                    None,
+                )?;
+                let error = opentide_connectors::runtime::block_on(async {
+                    let request = client.request(reqwest::Method::GET, &url).build()?;
+                    let cancel = tokio_util::sync::CancellationToken::new();
+                    Ok::<_, reqwest::Error>(client.send(request, &cancel).await)
+                })??
+                .unwrap_err();
+                tracing::error!(detail = %error, "tenant_request_failed");
+                tracing::debug!(error = ?error, "tenant_request_debug");
+                Err(error.into())
+            });
+            let mut texts = vec![
+                ("stdout", result.stdout.clone()),
+                ("stderr", result.stderr.clone()),
+            ];
+            if let Some(crate::json::Json::Str(log)) = crate::json::Json::parse(&result.stdout)
+                .ok()
+                .and_then(|document| document.get("failure").cloned())
+                .and_then(|failure| failure.get("crash_log").cloned())
+            {
+                texts.push(("crash log", std::fs::read_to_string(log).unwrap()));
+            }
+            let all: String = texts.iter().map(|(_, text)| text.as_str()).collect();
+            // The failure was reported, by its origin.
+            assert!(
+                all.contains(&format!("http://127.0.0.1:{port}")),
+                "{line}: {all}"
+            );
+            for (name, text) in &texts {
+                for value in [secret, password] {
+                    assert!(
+                        !text.contains(value),
+                        "{line}: {value} in the {name}:\n{text}"
+                    );
+                }
+            }
+        }
+        let _ = std::fs::remove_dir_all(&state);
     }
 
     #[test]
