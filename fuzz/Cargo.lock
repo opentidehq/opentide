@@ -1569,6 +1569,7 @@ version = "2.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "86886cf6dbf4e614b19c9a1eec9775f021869d7eadde0fc73921a81b90c9b4c9"
 dependencies = [
+ "aho-corasick",
  "memo-map",
  "serde",
 ]
@@ -1792,8 +1793,10 @@ dependencies = [
  "serde",
  "serde-saphyr",
  "serde_json",
+ "shlex",
  "textwrap",
  "thiserror",
+ "toml",
  "tracing",
  "unicode-properties",
 ]

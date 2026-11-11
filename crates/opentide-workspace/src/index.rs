@@ -597,9 +597,12 @@ impl Index {
         true
     }
 
-    /// Indexes again the signals of `objectives`: the ones they no longer
-    /// define leave the index, and each one's signals are indexed from its
-    /// body (`drop_objective_signals`, `index_objective_signals`).
+    /// Indexes the signals of `objectives` again from their documents, after
+    /// their documents were replaced (`drop_objective_signals`, then
+    /// `index_objective_signals` for each, in order): a signal one of them
+    /// no longer defines leaves the index, and one moved between two of them
+    /// lands on the objective that defines it now, whichever was replaced
+    /// first.
     pub fn reindex_signals(&mut self, objectives: &[String]) {
         self.signals
             .retain(|_, signal| !objectives.contains(&signal.owner));

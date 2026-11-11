@@ -415,6 +415,26 @@ impl Run<'_> {
                 );
                 self.emit_report(&report, out, err)
             }
+            "generate explorer" => {
+                let parsed = leaf(&matches);
+                let options = crate::commands::generate::ExplorerOptions {
+                    include_visibility: parsed.get_flag("include_visibility"),
+                    visibility_tlp: (parsed.value_source("visibility_tlp")
+                        == Some(ValueSource::CommandLine))
+                    .then(|| parsed.get_one::<String>("visibility_tlp").cloned())
+                    .flatten(),
+                };
+                let cwd = self.host.cwd.clone().unwrap_or_default();
+                let report = crate::commands::generate::explorer(
+                    &options,
+                    &crate::commands::generate::Context {
+                        repo: self.globals.repo.as_deref(),
+                        env: self.env,
+                        cwd: &cwd,
+                    },
+                );
+                self.emit_report(&report, out, err)
+            }
             "validate" => {
                 // A person at a terminal sees what runs until the result
                 // replaces it.
@@ -555,6 +575,24 @@ impl Run<'_> {
                 );
                 self.emit_report(&report, out, err)
             }
+            "generate inflight" | "generate inflight prune" => {
+                let cwd = self.host.cwd.clone().unwrap_or_default();
+                let cx = crate::commands::generate::Context {
+                    repo: self.globals.repo.as_deref(),
+                    env: self.env,
+                    cwd: &cwd,
+                };
+                let report = if path == "generate inflight" {
+                    crate::commands::generate::inflight_shards(&cx)
+                } else {
+                    crate::commands::generate::inflight_prune(&cx)
+                };
+                self.emit_report(&report, out, err)
+            }
+            "setup ci" => {
+                let report = self.setup_ci(&matches);
+                self.emit_report(&report, out, err)
+            }
             "rules unreviewed" => {
                 let older_than = leaf(&matches)
                     .get_one::<String>("older_than")
@@ -594,6 +632,99 @@ impl Run<'_> {
                 self.emit(&outcome, &[], &[], out, err)
             }
         }
+    }
+
+    /// `opentide setup ci`, from its parsed arguments and the `setup`
+    /// group's.
+    fn setup_ci(&self, matches: &clap::ArgMatches) -> crate::commands::Report {
+        use crate::commands::setup::{CiArgs, Context, ci};
+        let Some((_, group)) = matches.subcommand() else {
+            return crate::commands::Report::error("setup ci", "no setup command");
+        };
+        let args = leaf(matches);
+        let given = |matches: &clap::ArgMatches, id: &str| {
+            matches.value_source(id) == Some(ValueSource::CommandLine)
+        };
+        let flag = |id: &str| args.get_flag(id);
+        let text = |id: &str| args.get_one::<String>(id).cloned();
+        let provider = args
+            .get_one::<crate::tree::CiPlatform>("ci_platform")
+            .map_or(
+                opentide_compile::ci::Provider::GitHub,
+                |platform| match platform {
+                    crate::tree::CiPlatform::Github => opentide_compile::ci::Provider::GitHub,
+                    crate::tree::CiPlatform::Gitlab => opentide_compile::ci::Provider::GitLab,
+                    crate::tree::CiPlatform::Azure => opentide_compile::ci::Provider::Azure,
+                },
+            );
+        // The group's own options, which `setup ci` would ignore, named as
+        // the group's help names them (`--staging/--no-staging`).
+        let setup = self.root.find_subcommand("setup");
+        let mut group_only: Vec<String> = Vec::new();
+        for arg in setup.into_iter().flat_map(clap::Command::get_arguments) {
+            let id = arg.get_id().as_str();
+            if matches!(id, "path" | "yes" | "plan") || !given(group, id) {
+                continue;
+            }
+            let long = |arg: &clap::Arg| arg.get_long().map(|long| format!("--{long}"));
+            let partner = setup
+                .into_iter()
+                .flat_map(clap::Command::get_arguments)
+                .find(|other| {
+                    other.get_id() != arg.get_id()
+                        && (other.get_id().as_str() == format!("no_{id}")
+                            || id == format!("no_{}", other.get_id().as_str())
+                            || (id, other.get_id().as_str()) == ("lint_all", "lint_changed")
+                            || (id, other.get_id().as_str()) == ("lint_changed", "lint_all"))
+                });
+            let name = match (long(arg), partner.and_then(long)) {
+                (Some(own), Some(other)) if id.starts_with("no_") || id == "lint_all" => {
+                    format!("{other}/{own}")
+                }
+                (Some(own), Some(other)) => format!("{own}/{other}"),
+                (Some(own), None) => own,
+                _ => id.to_owned(),
+            };
+            if !group_only.contains(&name) {
+                group_only.push(name);
+            }
+        }
+        let parsed = CiArgs {
+            provider,
+            path: given(args, "path").then(|| text("path")).flatten(),
+            group_path: given(group, "path")
+                .then(|| group.get_one::<String>("path").cloned())
+                .flatten(),
+            staging: !flag("no_staging"),
+            inflight: !flag("no_inflight"),
+            sharing: flag("sharing"),
+            lint_changed: flag("lint_changed"),
+            promotion: if flag("promotion") {
+                Some(true)
+            } else if flag("no_promotion") {
+                Some(false)
+            } else {
+                None
+            },
+            promotion_target: text("promotion_target"),
+            python_version: text("python_version").unwrap_or_else(|| "3.12".to_owned()),
+            explorer_pages: flag("explorer_pages"),
+            default_branch: text("default_branch"),
+            plan: flag("plan") || group.get_flag("plan"),
+            yes: flag("yes") || group.get_flag("yes"),
+            group_only,
+        };
+        let cwd = self.host.cwd.clone().unwrap_or_default();
+        ci(
+            &parsed,
+            &Context {
+                repo: self.globals.repo.as_deref(),
+                env: self.env,
+                cwd: &cwd,
+                mode: self.mode,
+                version: &self.host.version,
+            },
+        )
     }
 
     /// `opentide info`, from its parsed arguments.
