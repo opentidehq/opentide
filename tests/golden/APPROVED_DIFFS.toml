@@ -8073,6 +8073,273 @@ reason = "Both engines refuse `[paths.core]` in paths.toml, which no paths model
 issue = "https://github.com/opentidehq/opentide/issues/936"
 changelog = "**`generate docs` runs on the Rust engine**"
 
+# #946: the same configuration fails the step of every other generate command,
+# as #936 made `generate docs` do: the message is each loader's own.
+
+[[diff]]
+command = "generate exports"
+case = "generate.exports/human/vscode-docs-folder/config-refused"
+target = "stderr"
+rule = "lines"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;31m✗\u001b[0m  \u001b[1mexports\u001b[0m \u001b[2m<SECONDS>\u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;31m✗\u001b[0m  \u001b[1mexports\u001b[0m \u001b[2m<SECONDS>\u001b[0m\n\u001b[1;31merror:\u001b[0m exports: ConfigurationError: paths.toml is invalid: paths.core: unknown key"
+candidate = "  \u001b[1;31m✗\u001b[0m  \u001b[1mexports\u001b[0m \u001b[2m<SECONDS>\u001b[0m\n\u001b[1;31merror:\u001b[0m exports: paths.toml: paths.core: Extra inputs are not permitted"
+reason = "the configuration fails in milliseconds: the failed checklist row is printed once, without the spinner Python drew while it ran. Both engines refuse `[paths.core]` in paths.toml, which no paths model has, and both read the configuration inside the `exports` step (#946): exit 1, `failure.code` `command_failed`, `phase` `exports`, a failed `exports` row, nothing written. The message is the Rust workspace loader's own wording of the paths.toml error, without Python's exception class name"
+issue = "https://github.com/opentidehq/opentide/issues/946"
+changelog = "**`generate exports` runs on the Rust engine**"
+
+[[diff]]
+command = "generate exports"
+case = "generate.exports/plain/vscode-docs-folder/config-refused"
+target = "stderr"
+rule = "text"
+oracle = "error: exports: ConfigurationError: paths.toml is invalid: paths.core: unknown key"
+candidate = "error: exports: paths.toml: paths.core: Extra inputs are not permitted"
+reason = "Both engines refuse `[paths.core]` in paths.toml, which no paths model has, and both read the configuration inside the `exports` step (#946): exit 1, `failure.code` `command_failed`, `phase` `exports`, a failed `exports` row, nothing written. The message is the Rust workspace loader's own wording of the paths.toml error, without Python's exception class name"
+issue = "https://github.com/opentidehq/opentide/issues/946"
+changelog = "**`generate exports` runs on the Rust engine**"
+
+[[diff]]
+command = "generate exports"
+case = "generate.exports/agent/vscode-docs-folder/config-refused"
+target = "stderr"
+rule = "text"
+oracle = "error: exports: ConfigurationError: paths.toml is invalid: paths.core: unknown key"
+candidate = "error: exports: paths.toml: paths.core: Extra inputs are not permitted"
+reason = "Both engines refuse `[paths.core]` in paths.toml, which no paths model has, and both read the configuration inside the `exports` step (#946): exit 1, `failure.code` `command_failed`, `phase` `exports`, a failed `exports` row, nothing written. The message is the Rust workspace loader's own wording of the paths.toml error, without Python's exception class name"
+issue = "https://github.com/opentidehq/opentide/issues/946"
+changelog = "**`generate exports` runs on the Rust engine**"
+
+[[diff]]
+command = "generate exports"
+case = "generate.exports/json/vscode-docs-folder/config-refused"
+target = "stdout"
+rule = "json:/message"
+oracle = "\"exports: ConfigurationError: paths.toml is invalid: paths.core: unknown key\""
+candidate = "\"exports: paths.toml: paths.core: Extra inputs are not permitted\""
+reason = "Both engines refuse `[paths.core]` in paths.toml, which no paths model has, and both read the configuration inside the `exports` step (#946): exit 1, `failure.code` `command_failed`, `phase` `exports`, a failed `exports` row, nothing written. The message is the Rust workspace loader's own wording of the paths.toml error, without Python's exception class name"
+issue = "https://github.com/opentidehq/opentide/issues/946"
+changelog = "**`generate exports` runs on the Rust engine**"
+
+[[diff]]
+command = "generate exports"
+case = "generate.exports/json/vscode-docs-folder/config-refused"
+target = "stdout"
+rule = "json:/error"
+oracle = "\"exports: ConfigurationError: paths.toml is invalid: paths.core: unknown key\""
+candidate = "\"exports: paths.toml: paths.core: Extra inputs are not permitted\""
+reason = "Both engines refuse `[paths.core]` in paths.toml, which no paths model has, and both read the configuration inside the `exports` step (#946): exit 1, `failure.code` `command_failed`, `phase` `exports`, a failed `exports` row, nothing written. The message is the Rust workspace loader's own wording of the paths.toml error, without Python's exception class name"
+issue = "https://github.com/opentidehq/opentide/issues/946"
+changelog = "**`generate exports` runs on the Rust engine**"
+
+[[diff]]
+command = "generate exports"
+case = "generate.exports/json/vscode-docs-folder/config-refused"
+target = "stdout"
+rule = "json:/failure/message"
+oracle = "\"exports: ConfigurationError: paths.toml is invalid: paths.core: unknown key\""
+candidate = "\"exports: paths.toml: paths.core: Extra inputs are not permitted\""
+reason = "Both engines refuse `[paths.core]` in paths.toml, which no paths model has, and both read the configuration inside the `exports` step (#946): exit 1, `failure.code` `command_failed`, `phase` `exports`, a failed `exports` row, nothing written. The message is the Rust workspace loader's own wording of the paths.toml error, without Python's exception class name"
+issue = "https://github.com/opentidehq/opentide/issues/946"
+changelog = "**`generate exports` runs on the Rust engine**"
+
+[[diff]]
+command = "generate explorer"
+case = "generate.explorer/human/vscode-docs-folder/config-refused"
+target = "stderr"
+rule = "lines"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;31m✗\u001b[0m  \u001b[1mexplorer\u001b[0m \u001b[2m<SECONDS>\u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;31m✗\u001b[0m  \u001b[1mexplorer\u001b[0m \u001b[2m<SECONDS>\u001b[0m\n\u001b[1;31merror:\u001b[0m explorer: ConfigurationError: paths.toml is invalid: paths.core: unknown key"
+candidate = "  \u001b[1;31m✗\u001b[0m  \u001b[1mexplorer\u001b[0m \u001b[2m<SECONDS>\u001b[0m\n\u001b[1;31merror:\u001b[0m explorer: paths.toml: paths.core: Extra inputs are not permitted"
+reason = "the configuration fails in milliseconds: the failed checklist row is printed once, without the spinner Python drew while it ran. Both engines refuse `[paths.core]` in paths.toml, which no paths model has, and both read the configuration inside the `explorer` step (#946): exit 1, `failure.code` `command_failed`, `phase` `explorer`, a failed `explorer` row, nothing written. The message is the Rust workspace loader's own wording of the paths.toml error, without Python's exception class name"
+issue = "https://github.com/opentidehq/opentide/issues/946"
+changelog = "**`generate explorer`, `generate inflight` and `setup ci` run on the Rust engine**"
+
+[[diff]]
+command = "generate explorer"
+case = "generate.explorer/plain/vscode-docs-folder/config-refused"
+target = "stderr"
+rule = "text"
+oracle = "error: explorer: ConfigurationError: paths.toml is invalid: paths.core: unknown key"
+candidate = "error: explorer: paths.toml: paths.core: Extra inputs are not permitted"
+reason = "Both engines refuse `[paths.core]` in paths.toml, which no paths model has, and both read the configuration inside the `explorer` step (#946): exit 1, `failure.code` `command_failed`, `phase` `explorer`, a failed `explorer` row, nothing written. The message is the Rust workspace loader's own wording of the paths.toml error, without Python's exception class name"
+issue = "https://github.com/opentidehq/opentide/issues/946"
+changelog = "**`generate explorer`, `generate inflight` and `setup ci` run on the Rust engine**"
+
+[[diff]]
+command = "generate explorer"
+case = "generate.explorer/agent/vscode-docs-folder/config-refused"
+target = "stderr"
+rule = "text"
+oracle = "error: explorer: ConfigurationError: paths.toml is invalid: paths.core: unknown key"
+candidate = "error: explorer: paths.toml: paths.core: Extra inputs are not permitted"
+reason = "Both engines refuse `[paths.core]` in paths.toml, which no paths model has, and both read the configuration inside the `explorer` step (#946): exit 1, `failure.code` `command_failed`, `phase` `explorer`, a failed `explorer` row, nothing written. The message is the Rust workspace loader's own wording of the paths.toml error, without Python's exception class name"
+issue = "https://github.com/opentidehq/opentide/issues/946"
+changelog = "**`generate explorer`, `generate inflight` and `setup ci` run on the Rust engine**"
+
+[[diff]]
+command = "generate explorer"
+case = "generate.explorer/json/vscode-docs-folder/config-refused"
+target = "stdout"
+rule = "json:/message"
+oracle = "\"explorer: ConfigurationError: paths.toml is invalid: paths.core: unknown key\""
+candidate = "\"explorer: paths.toml: paths.core: Extra inputs are not permitted\""
+reason = "Both engines refuse `[paths.core]` in paths.toml, which no paths model has, and both read the configuration inside the `explorer` step (#946): exit 1, `failure.code` `command_failed`, `phase` `explorer`, a failed `explorer` row, nothing written. The message is the Rust workspace loader's own wording of the paths.toml error, without Python's exception class name"
+issue = "https://github.com/opentidehq/opentide/issues/946"
+changelog = "**`generate explorer`, `generate inflight` and `setup ci` run on the Rust engine**"
+
+[[diff]]
+command = "generate explorer"
+case = "generate.explorer/json/vscode-docs-folder/config-refused"
+target = "stdout"
+rule = "json:/error"
+oracle = "\"explorer: ConfigurationError: paths.toml is invalid: paths.core: unknown key\""
+candidate = "\"explorer: paths.toml: paths.core: Extra inputs are not permitted\""
+reason = "Both engines refuse `[paths.core]` in paths.toml, which no paths model has, and both read the configuration inside the `explorer` step (#946): exit 1, `failure.code` `command_failed`, `phase` `explorer`, a failed `explorer` row, nothing written. The message is the Rust workspace loader's own wording of the paths.toml error, without Python's exception class name"
+issue = "https://github.com/opentidehq/opentide/issues/946"
+changelog = "**`generate explorer`, `generate inflight` and `setup ci` run on the Rust engine**"
+
+[[diff]]
+command = "generate explorer"
+case = "generate.explorer/json/vscode-docs-folder/config-refused"
+target = "stdout"
+rule = "json:/failure/message"
+oracle = "\"explorer: ConfigurationError: paths.toml is invalid: paths.core: unknown key\""
+candidate = "\"explorer: paths.toml: paths.core: Extra inputs are not permitted\""
+reason = "Both engines refuse `[paths.core]` in paths.toml, which no paths model has, and both read the configuration inside the `explorer` step (#946): exit 1, `failure.code` `command_failed`, `phase` `explorer`, a failed `explorer` row, nothing written. The message is the Rust workspace loader's own wording of the paths.toml error, without Python's exception class name"
+issue = "https://github.com/opentidehq/opentide/issues/946"
+changelog = "**`generate explorer`, `generate inflight` and `setup ci` run on the Rust engine**"
+
+[[diff]]
+command = "generate inflight"
+case = "generate.inflight/human/vscode-docs-folder/config-refused"
+target = "stderr"
+rule = "lines"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;31m✗\u001b[0m  \u001b[1minflight\u001b[0m \u001b[2m<SECONDS>\u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;31m✗\u001b[0m  \u001b[1minflight\u001b[0m \u001b[2m<SECONDS>\u001b[0m\n\u001b[1;31merror:\u001b[0m inflight: ConfigurationError: paths.toml is invalid: paths.core: unknown key"
+candidate = "  \u001b[1;31m✗\u001b[0m  \u001b[1minflight\u001b[0m \u001b[2m<SECONDS>\u001b[0m\n\u001b[1;31merror:\u001b[0m inflight: paths.toml: paths.core: Extra inputs are not permitted"
+reason = "the configuration fails in milliseconds: the failed checklist row is printed once, without the spinner Python drew while it ran. Both engines refuse `[paths.core]` in paths.toml, which no paths model has, and both read the configuration inside the `inflight` step (#946): exit 1, `failure.code` `command_failed`, `phase` `inflight`, a failed `inflight` row, nothing written. The message is the Rust workspace loader's own wording of the paths.toml error, without Python's exception class name"
+issue = "https://github.com/opentidehq/opentide/issues/946"
+changelog = "**`generate explorer`, `generate inflight` and `setup ci` run on the Rust engine**"
+
+[[diff]]
+command = "generate inflight"
+case = "generate.inflight/plain/vscode-docs-folder/config-refused"
+target = "stderr"
+rule = "text"
+oracle = "error: inflight: ConfigurationError: paths.toml is invalid: paths.core: unknown key"
+candidate = "error: inflight: paths.toml: paths.core: Extra inputs are not permitted"
+reason = "Both engines refuse `[paths.core]` in paths.toml, which no paths model has, and both read the configuration inside the `inflight` step (#946): exit 1, `failure.code` `command_failed`, `phase` `inflight`, a failed `inflight` row, nothing written. The message is the Rust workspace loader's own wording of the paths.toml error, without Python's exception class name"
+issue = "https://github.com/opentidehq/opentide/issues/946"
+changelog = "**`generate explorer`, `generate inflight` and `setup ci` run on the Rust engine**"
+
+[[diff]]
+command = "generate inflight"
+case = "generate.inflight/agent/vscode-docs-folder/config-refused"
+target = "stderr"
+rule = "text"
+oracle = "error: inflight: ConfigurationError: paths.toml is invalid: paths.core: unknown key"
+candidate = "error: inflight: paths.toml: paths.core: Extra inputs are not permitted"
+reason = "Both engines refuse `[paths.core]` in paths.toml, which no paths model has, and both read the configuration inside the `inflight` step (#946): exit 1, `failure.code` `command_failed`, `phase` `inflight`, a failed `inflight` row, nothing written. The message is the Rust workspace loader's own wording of the paths.toml error, without Python's exception class name"
+issue = "https://github.com/opentidehq/opentide/issues/946"
+changelog = "**`generate explorer`, `generate inflight` and `setup ci` run on the Rust engine**"
+
+[[diff]]
+command = "generate inflight"
+case = "generate.inflight/json/vscode-docs-folder/config-refused"
+target = "stdout"
+rule = "json:/message"
+oracle = "\"inflight: ConfigurationError: paths.toml is invalid: paths.core: unknown key\""
+candidate = "\"inflight: paths.toml: paths.core: Extra inputs are not permitted\""
+reason = "Both engines refuse `[paths.core]` in paths.toml, which no paths model has, and both read the configuration inside the `inflight` step (#946): exit 1, `failure.code` `command_failed`, `phase` `inflight`, a failed `inflight` row, nothing written. The message is the Rust workspace loader's own wording of the paths.toml error, without Python's exception class name"
+issue = "https://github.com/opentidehq/opentide/issues/946"
+changelog = "**`generate explorer`, `generate inflight` and `setup ci` run on the Rust engine**"
+
+[[diff]]
+command = "generate inflight"
+case = "generate.inflight/json/vscode-docs-folder/config-refused"
+target = "stdout"
+rule = "json:/error"
+oracle = "\"inflight: ConfigurationError: paths.toml is invalid: paths.core: unknown key\""
+candidate = "\"inflight: paths.toml: paths.core: Extra inputs are not permitted\""
+reason = "Both engines refuse `[paths.core]` in paths.toml, which no paths model has, and both read the configuration inside the `inflight` step (#946): exit 1, `failure.code` `command_failed`, `phase` `inflight`, a failed `inflight` row, nothing written. The message is the Rust workspace loader's own wording of the paths.toml error, without Python's exception class name"
+issue = "https://github.com/opentidehq/opentide/issues/946"
+changelog = "**`generate explorer`, `generate inflight` and `setup ci` run on the Rust engine**"
+
+[[diff]]
+command = "generate inflight"
+case = "generate.inflight/json/vscode-docs-folder/config-refused"
+target = "stdout"
+rule = "json:/failure/message"
+oracle = "\"inflight: ConfigurationError: paths.toml is invalid: paths.core: unknown key\""
+candidate = "\"inflight: paths.toml: paths.core: Extra inputs are not permitted\""
+reason = "Both engines refuse `[paths.core]` in paths.toml, which no paths model has, and both read the configuration inside the `inflight` step (#946): exit 1, `failure.code` `command_failed`, `phase` `inflight`, a failed `inflight` row, nothing written. The message is the Rust workspace loader's own wording of the paths.toml error, without Python's exception class name"
+issue = "https://github.com/opentidehq/opentide/issues/946"
+changelog = "**`generate explorer`, `generate inflight` and `setup ci` run on the Rust engine**"
+
+[[diff]]
+command = "generate inflight prune"
+case = "generate.inflight.prune/human/vscode-docs-folder/config-refused"
+target = "stderr"
+rule = "lines"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;31m✗\u001b[0m  \u001b[1minflight prune\u001b[0m \u001b[2m<SECONDS>\u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;31m✗\u001b[0m  \u001b[1minflight prune\u001b[0m \u001b[2m<SECONDS>\u001b[0m\n\u001b[1;31merror:\u001b[0m inflight-prune: ConfigurationError: paths.toml is invalid: paths.core: unknown key"
+candidate = "  \u001b[1;31m✗\u001b[0m  \u001b[1minflight prune\u001b[0m \u001b[2m<SECONDS>\u001b[0m\n\u001b[1;31merror:\u001b[0m inflight-prune: paths.toml: paths.core: Extra inputs are not permitted"
+reason = "the configuration fails in milliseconds: the failed checklist row is printed once, without the spinner Python drew while it ran. Both engines refuse `[paths.core]` in paths.toml, which no paths model has, and both read the configuration inside the `inflight-prune` step (#946): exit 1, `failure.code` `command_failed`, `phase` `inflight-prune`, a failed `inflight prune` row, nothing written. The message is the Rust workspace loader's own wording of the paths.toml error, without Python's exception class name"
+issue = "https://github.com/opentidehq/opentide/issues/946"
+changelog = "**`generate explorer`, `generate inflight` and `setup ci` run on the Rust engine**"
+
+[[diff]]
+command = "generate inflight prune"
+case = "generate.inflight.prune/plain/vscode-docs-folder/config-refused"
+target = "stderr"
+rule = "text"
+oracle = "error: inflight-prune: ConfigurationError: paths.toml is invalid: paths.core: unknown key"
+candidate = "error: inflight-prune: paths.toml: paths.core: Extra inputs are not permitted"
+reason = "Both engines refuse `[paths.core]` in paths.toml, which no paths model has, and both read the configuration inside the `inflight-prune` step (#946): exit 1, `failure.code` `command_failed`, `phase` `inflight-prune`, a failed `inflight prune` row, nothing written. The message is the Rust workspace loader's own wording of the paths.toml error, without Python's exception class name"
+issue = "https://github.com/opentidehq/opentide/issues/946"
+changelog = "**`generate explorer`, `generate inflight` and `setup ci` run on the Rust engine**"
+
+[[diff]]
+command = "generate inflight prune"
+case = "generate.inflight.prune/agent/vscode-docs-folder/config-refused"
+target = "stderr"
+rule = "text"
+oracle = "error: inflight-prune: ConfigurationError: paths.toml is invalid: paths.core: unknown key"
+candidate = "error: inflight-prune: paths.toml: paths.core: Extra inputs are not permitted"
+reason = "Both engines refuse `[paths.core]` in paths.toml, which no paths model has, and both read the configuration inside the `inflight-prune` step (#946): exit 1, `failure.code` `command_failed`, `phase` `inflight-prune`, a failed `inflight prune` row, nothing written. The message is the Rust workspace loader's own wording of the paths.toml error, without Python's exception class name"
+issue = "https://github.com/opentidehq/opentide/issues/946"
+changelog = "**`generate explorer`, `generate inflight` and `setup ci` run on the Rust engine**"
+
+[[diff]]
+command = "generate inflight prune"
+case = "generate.inflight.prune/json/vscode-docs-folder/config-refused"
+target = "stdout"
+rule = "json:/message"
+oracle = "\"inflight-prune: ConfigurationError: paths.toml is invalid: paths.core: unknown key\""
+candidate = "\"inflight-prune: paths.toml: paths.core: Extra inputs are not permitted\""
+reason = "Both engines refuse `[paths.core]` in paths.toml, which no paths model has, and both read the configuration inside the `inflight-prune` step (#946): exit 1, `failure.code` `command_failed`, `phase` `inflight-prune`, a failed `inflight prune` row, nothing written. The message is the Rust workspace loader's own wording of the paths.toml error, without Python's exception class name"
+issue = "https://github.com/opentidehq/opentide/issues/946"
+changelog = "**`generate explorer`, `generate inflight` and `setup ci` run on the Rust engine**"
+
+[[diff]]
+command = "generate inflight prune"
+case = "generate.inflight.prune/json/vscode-docs-folder/config-refused"
+target = "stdout"
+rule = "json:/error"
+oracle = "\"inflight-prune: ConfigurationError: paths.toml is invalid: paths.core: unknown key\""
+candidate = "\"inflight-prune: paths.toml: paths.core: Extra inputs are not permitted\""
+reason = "Both engines refuse `[paths.core]` in paths.toml, which no paths model has, and both read the configuration inside the `inflight-prune` step (#946): exit 1, `failure.code` `command_failed`, `phase` `inflight-prune`, a failed `inflight prune` row, nothing written. The message is the Rust workspace loader's own wording of the paths.toml error, without Python's exception class name"
+issue = "https://github.com/opentidehq/opentide/issues/946"
+changelog = "**`generate explorer`, `generate inflight` and `setup ci` run on the Rust engine**"
+
+[[diff]]
+command = "generate inflight prune"
+case = "generate.inflight.prune/json/vscode-docs-folder/config-refused"
+target = "stdout"
+rule = "json:/failure/message"
+oracle = "\"inflight-prune: ConfigurationError: paths.toml is invalid: paths.core: unknown key\""
+candidate = "\"inflight-prune: paths.toml: paths.core: Extra inputs are not permitted\""
+reason = "Both engines refuse `[paths.core]` in paths.toml, which no paths model has, and both read the configuration inside the `inflight-prune` step (#946): exit 1, `failure.code` `command_failed`, `phase` `inflight-prune`, a failed `inflight prune` row, nothing written. The message is the Rust workspace loader's own wording of the paths.toml error, without Python's exception class name"
+issue = "https://github.com/opentidehq/opentide/issues/946"
+changelog = "**`generate explorer`, `generate inflight` and `setup ci` run on the Rust engine**"
+
 # UC-3.5b (#927): offline `validate query` on the Rust command line. Its
 # `--live` cases stay Python's (RUST_COMMANDS refuses `--live`) until UC-4.1.
 
