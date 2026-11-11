@@ -214,3 +214,57 @@ fn a_union_field_is_a_plain_value_and_an_enum_reference_offers_no_choices() {
             .list
     );
 }
+
+/// `tlp` starts at `amber` and `version` at 1 where the schema allows them;
+/// where its enum leaves them out, the first value it allows is written as a
+/// placeholder, never the default the schema refuses.
+#[test]
+fn a_default_the_schema_refuses_is_its_first_choice_marked() {
+    let root = json!({
+        "required": ["tlp", "version"],
+        "properties": {"tlp": {"type": "string"}, "version": {"type": "integer"}},
+    });
+    let model = Model::new(&root);
+    let fields = collect_fields(&model, &root, &[], &[]);
+    let fill = |schema: &Value| {
+        fill_template(
+            "tlp: \nversion: \n",
+            &Fill {
+                fields: &fields,
+                values: &HashMap::new(),
+                schema,
+                model: &model,
+                marked: &HashSet::new(),
+                make_uuid: &|| "fresh".to_owned(),
+            },
+        )
+    };
+    let allowed = fill(&json!({"properties": {
+        "tlp": {"enum": ["clear", "amber"]}, "version": {"enum": [1, 2]},
+    }}));
+    assert_eq!(allowed.text, "tlp: amber\nversion: 1\n");
+    assert!(allowed.placeholders.is_empty());
+    let free = fill(&json!({"properties": {}}));
+    assert_eq!(free.text, "tlp: amber\nversion: 1\n");
+    let refused = fill(&json!({"properties": {
+        "tlp": {"enum": ["red", "green"]}, "version": {"enum": [2, 3]},
+    }}));
+    assert_eq!(
+        refused.text,
+        "tlp: red  # opentide:placeholder\nversion: 2  # opentide:placeholder\n"
+    );
+    assert_eq!(refused.placeholders, ["tlp", "version"]);
+}
+
+/// Dropping two adjacent platform blocks leaves one blank line between
+/// what stays, never two in a row.
+#[test]
+fn dropping_adjacent_blocks_leaves_one_blank_line() {
+    let text = "name: x\nconfigurations:\n  splunk:\n    query: q\n\n  #sentinel:\n    #query: \n\n  #elastic:\n    #a: \n\n  #crowdstrike:\n    #b: \n\nmeta: 1\n";
+    let kept = keep_platform_blocks(text, &["splunk".to_owned()], "t.yaml");
+    assert_eq!(
+        kept,
+        "name: x\nconfigurations:\n  # Other platforms: copy a block from t.yaml\n  splunk:\n    query: q\n\nmeta: 1\n"
+    );
+    assert!(!kept.contains("\n\n\n"), "{kept}");
+}

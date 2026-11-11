@@ -231,6 +231,77 @@ thread_local! {
     static REFUSED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
+/// The dispatch table, `RUST_COMMANDS` in `src/opentide/cli/engines.py`:
+/// each command path (`"generate docs"`) with the words of which a run must
+/// carry one for the Rust implementation to cover it (`requires`; none:
+/// every run). Read from the source, as `scripts/parity_engines.py` reads
+/// it, so the replay needs no Python environment.
+pub fn rust_commands() -> &'static BTreeMap<String, Vec<String>> {
+    static CELL: std::sync::OnceLock<BTreeMap<String, Vec<String>>> = std::sync::OnceLock::new();
+    CELL.get_or_init(|| {
+        let source = std::fs::read_to_string(repo().join("src/opentide/cli/engines.py")).unwrap();
+        parse_rust_commands(&source)
+    })
+}
+
+/// [`rust_commands`] of `source`: the `RUST_COMMANDS: ... = {` literal, one
+/// entry per `(...): RustCommand(...)`, an entry running over lines until the
+/// next key. Panics on a table it cannot read, rather than covering nothing.
+pub fn parse_rust_commands(source: &str) -> BTreeMap<String, Vec<String>> {
+    let start = source
+        .find("\nRUST_COMMANDS:")
+        .unwrap_or_else(|| panic!("engines.py: no RUST_COMMANDS"));
+    let body = &source[start..];
+    let body = &body[body
+        .find("{\n")
+        .unwrap_or_else(|| panic!("RUST_COMMANDS: no dict literal"))
+        + 2..];
+    let body = &body[..body
+        .find("\n}")
+        .unwrap_or_else(|| panic!("RUST_COMMANDS: unterminated"))];
+    let entry = regex::Regex::new(
+        r#"(?s)\(((?:\s*"[^"]*"\s*,?)+)\)\s*:\s*RustCommand\((.*?)\),\s*(?:\n|$)"#,
+    )
+    .unwrap();
+    let word = regex::Regex::new(r#""([^"]*)""#).unwrap();
+    let requires = regex::Regex::new(r"(?s)requires\s*=\s*\(([^)]*)\)").unwrap();
+    let mut table = BTreeMap::new();
+    let mut read = 0;
+    for found in entry.captures_iter(body) {
+        let path: Vec<&str> = word
+            .captures_iter(&found[1])
+            .map(|word| word.get(1).unwrap().as_str())
+            .collect();
+        let flags = requires
+            .captures(&found[2])
+            .map(|flags| {
+                word.captures_iter(&flags[1])
+                    .map(|word| word[1].to_owned())
+                    .collect()
+            })
+            .unwrap_or_default();
+        table.insert(path.join(" "), flags);
+        read += 1;
+    }
+    let keys = body.matches("RustCommand(").count();
+    assert_eq!(read, keys, "RUST_COMMANDS: read {read} of {keys} entries");
+    table
+}
+
+/// Whether `RUST_COMMANDS` covers a run of `command` with `argv`: the
+/// command is in it, and the arguments before `--` carry one of the words it
+/// requires, if any (`RustCommand.covers`, `xtask::compare::covers`).
+pub fn covers(command: &str, argv: &[String]) -> bool {
+    let Some(requires) = rust_commands().get(command) else {
+        return false;
+    };
+    let options = argv
+        .iter()
+        .position(|arg| arg == "--")
+        .map_or(argv, |end| &argv[..end]);
+    requires.is_empty() || requires.iter().any(|flag| options.contains(flag))
+}
+
 /// The UUIDs in the package's data (`src/opentide`), which no run mints:
 /// `cargo xtask compare`'s `package_uuids`.
 fn package_uuids() -> &'static std::collections::BTreeSet<String> {
@@ -337,6 +408,16 @@ pub fn replay(id: &str, dir: &Path, ledger: &Ledger, usage: &mut Usage) -> Vec<S
     let mut err = stderr.clone();
     let exit_code = run(&argv, &env, &host, &mut out, &mut err);
     if refusal.exists() {
+        // Python runs alone only where `RUST_COMMANDS` does not cover the run
+        // (a bare `generate`): a refusal of a run it covers is a failure, as
+        // `cargo xtask golden check --engine compare` counts it.
+        let command = case["command"].as_str().unwrap();
+        if covers(command, &argv) {
+            return vec![format!(
+                "{id}: the CLI refused (engine_not_ported) a run of `{command}` that \
+                 RUST_COMMANDS covers: exit {exit_code}"
+            )];
+        }
         REFUSED.with(|count| count.set(count.get() + 1));
         return Vec::new();
     }

@@ -81,8 +81,23 @@ pub fn dump(document: &Json) -> String {
 /// extras carry `tide.meta.deprecation`, sorted by schema and path. The core
 /// families' root extras deprecate no field.
 pub fn deprecations_catalog(version: &str) -> Json {
+    Json::Object(Object::from([
+        ("opentide".to_owned(), Json::from(version)),
+        ("generator".to_owned(), Json::from(GENERATOR)),
+        (
+            "fields".to_owned(),
+            Json::Array(deprecation_rows(all_root_extras())),
+        ),
+    ]))
+}
+
+/// The `fields` of `deprecations.json` from each platform's root extras: a
+/// `rule` row at `configurations.{platform}.{name}` for every property extra
+/// whose `tide.meta.deprecation` is truthy, with that message, sorted by
+/// schema, path and message.
+fn deprecation_rows(extras: impl IntoIterator<Item = (&'static str, Value)>) -> Vec<Json> {
     let mut rows: Vec<(String, String, String)> = Vec::new();
-    for (platform, extras) in all_root_extras() {
+    for (platform, extras) in extras {
         let Some(Value::Object(properties)) = extras.get("property_extras") else {
             continue;
         };
@@ -99,8 +114,7 @@ pub fn deprecations_catalog(version: &str) -> Json {
         }
     }
     rows.sort();
-    let fields = rows
-        .into_iter()
+    rows.into_iter()
         .map(|(schema, path, message)| {
             Json::Object(Object::from([
                 ("schema".to_owned(), Json::from(schema)),
@@ -108,12 +122,7 @@ pub fn deprecations_catalog(version: &str) -> Json {
                 ("message".to_owned(), Json::from(message)),
             ]))
         })
-        .collect();
-    Json::Object(Object::from([
-        ("opentide".to_owned(), Json::from(version)),
-        ("generator".to_owned(), Json::from(GENERATOR)),
-        ("fields".to_owned(), Json::Array(fields)),
-    ]))
+        .collect()
 }
 
 /// The `fields.json` document for every registered object revision, from
@@ -590,11 +599,8 @@ fn field_row(
     facts: &Facts,
 ) -> Row {
     let spec = effective(root, raw);
-    let (mut values, mut docs, is_array) = enum_of(root, &spec);
-    if values == [""] {
-        values.clear();
-        docs.clear();
-    }
+    // `clean_enum` drops an empty value, so an enum of `""` alone is empty.
+    let (mut values, docs, is_array) = enum_of(root, &spec);
     let mut docs: Vec<String> = if values.len() > ENUM_DOC_MAX {
         Vec::new()
     } else {
@@ -616,7 +622,9 @@ fn field_row(
         values.clear();
         docs.clear();
     }
+    // An empty constant offers no value (the oracle tests it for truth).
     if let Some(constant) = &constant
+        && !constant.is_empty()
         && values.is_empty()
     {
         values = vec![constant.clone()];
