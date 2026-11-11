@@ -97,7 +97,7 @@ is required (#805):
 |-------|-------|
 | command | The command path |
 | case glob | The cases it applies to, as narrow as possible |
-| rule | A JSON pointer; a text rule: one whole line on each side, approved where the oracle and candidate lines match it at the same line number; or a lines rule: consecutive whole lines on each side, approved where the candidate has its block where the oracle has its own (an inserted or removed row) |
+| rule | A JSON pointer; a text rule: one whole line on each side, approved where the oracle and candidate lines match it at the same line number (`<SHA256>` once in the candidate: any digest there, for a digest over the version); or a lines rule: consecutive whole lines on each side, approved where the candidate has its block where the oracle has its own (an inserted or removed row) |
 | oracle value | What Python prints or writes |
 | candidate value | What Rust prints or writes |
 | reason | Why the difference is right |

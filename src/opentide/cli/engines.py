@@ -148,6 +148,9 @@ RUST_CLI: tuple[str, ...] = (sys.executable, "-m", "opentide.cli.rust")
 #: ``new threat|objective|rule`` and ``generate`` with phases named
 #: (``generate schemas templates``) with UC-3.5d (#933): its *requires* are
 #: the phase words, so a bare ``generate`` (the full pipeline) stays Python's.
+#: ``serve`` with UC-3.8 (#830): the Rust host, which runs each command with a
+#: Rust implementation itself and hands every other run to this package's
+#: runner in its own process (``opentide.cli.services.serve_bridge``).
 #: ``lsp start`` with UC-3.6b (#947): the language server hosted by the Rust
 #: command line, and ``tui``'s refusals (``usage_tui_needs_tty``): its terminal
 #: UI is not ported yet.
@@ -190,6 +193,7 @@ RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
     ("new", "threat"): RustCommand(launch=RUST_CLI, rules=("fresh-uuids",)),
     ("new", "objective"): RustCommand(launch=RUST_CLI, rules=("fresh-uuids",)),
     ("new", "rule"): RustCommand(launch=RUST_CLI, rules=("fresh-uuids",)),
+    ("serve",): RustCommand(launch=RUST_CLI),
     ("lsp", "start"): RustCommand(launch=RUST_CLI),
     ("tui",): RustCommand(launch=RUST_CLI),
 }

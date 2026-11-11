@@ -38,7 +38,9 @@ cargo xtask golden lock                         # rewrite oracle-requirements.tx
    the recordings outgrow their budget.
 7. **An approved difference is as narrow as the change**: an entry in `APPROVED_DIFFS.toml`
    (UC-0.7) names one command, a case glob and a target. A text rule is one whole line on each
-   side, approved where the oracle and candidate lines match it at the same line number; a lines
+   side, approved where the oracle and candidate lines match it at the same line number (its
+   candidate may write `<SHA256>` once, for any digest there, where the oracle's line is the same
+   with a digest in its place: a digest over the installed version, which every build changes); a lines
    rule is a block of consecutive whole lines on each side, of any length, approved where the
    candidate has its block at the place the oracle has its own (a row a port adds or drops;
    `(absent)` on the candidate's side where it writes no line there, as in a stream it leaves

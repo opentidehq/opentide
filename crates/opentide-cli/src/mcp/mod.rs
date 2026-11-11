@@ -227,7 +227,7 @@ pub fn serve(launch: &Launch, version: &str) -> std::io::Result<i32> {
     Ok(0)
 }
 
-mod stdio {
+pub(crate) mod stdio {
     //! stdout for JSON-RPC alone.
 
     use std::fs::File;
@@ -243,6 +243,11 @@ mod stdio {
         /// A handle on the frames' stream for the transport.
         pub fn file(&self) -> std::io::Result<tokio::fs::File> {
             Ok(tokio::fs::File::from_std(self.rpc.try_clone()?))
+        }
+
+        /// A handle on the frames' stream for a blocking writer (`serve`).
+        pub fn writer(&self) -> std::io::Result<File> {
+            self.rpc.try_clone()
         }
 
         /// Points descriptor 1 back at the stream it was.

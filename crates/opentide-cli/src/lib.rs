@@ -31,6 +31,7 @@ pub mod queries;
 pub mod redact;
 pub mod render;
 pub mod schemas;
+pub mod serve;
 pub mod suggest;
 pub mod tree;
 mod tree_meta;

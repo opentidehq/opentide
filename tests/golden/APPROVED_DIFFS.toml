@@ -33,7 +33,11 @@
 #              a json-extend: rule: the number of elements of the oracle's
 #              array, in decimal;
 #              a text rule: one whole line of the oracle's target, without
-#              its line ending; a lines rule: its lines, and on the
+#              its line ending (a text rule's candidate may write <SHA256>
+#              once: any SHA-256 digest there, the rest literal, where the
+#              oracle's line is the same with a digest in its place; for a
+#              digest over something two builds differ in, such as the
+#              version); a lines rule: its lines, and on the
 #              candidate's side (absent) where the candidate writes no line
 #              in their place (a block dropped from a stream left empty);
 #              exit_code: the oracle's code
@@ -860,6 +864,42 @@ changelog = "**`info` draws its tables with comfy-table**"
 #   result.
 # - On Rust the MCP tools and `run_validation` show `validate`'s own announced
 #   differences (`unknown-revision`, `yaml-1-2-dates`, `yaml-error-text`).
+
+# UC-3.8 (#830): `opentide serve` under `OPENTIDE_ENGINE=rust` is the Rust
+# host (`crates/opentide-cli/src/serve`). `serve` is in `RUST_COMMANDS`, so
+# `cargo xtask golden check --engine compare` runs its recorded sessions on
+# the Rust host (a user's `OPENTIDE_ENGINE=compare` still runs Python's), and
+# `crates/opentide-cli/tests/serve.rs` replays them too. The one difference
+# they show is entered below: `initialize`'s `commands_digest`, the SHA-256 of
+# `opentide --json commands`. That document names the installed version
+# (normalised to <OPENTIDE_VERSION> in the goldens, not inside the digest),
+# which differs between two builds of the same commit, and the command tree,
+# which has changed since the oracle under the `commands` entries above (CQL,
+# #790; `OPENTIDE_ENGINE`, #805). Today's Python host answers the same digest
+# as the Rust host, and serve.rs checks the host's digest is that of today's
+# `commands` document, so the entry approves any digest in that one place
+# (<SHA256>). No recorded session reaches the differences that follow.
+# Announced under
+# "**`OPENTIDE_ENGINE=rust opentide serve` is the Rust host**":
+#
+# - `serve-json-strict`: a line Python's `json` reads but JSON does not allow
+#   (`NaN`, `Infinity`, a lone surrogate, nesting past 128) answers `-32700`
+#   with serde_json's message.
+# - `serve-ids-as-written`: request ids are compared by their JSON text.
+# - `serve-ignored-signals`: SIGTERM and SIGHUP stop the server even when it was started
+#   ignoring it (no safe way to read a disposition without `unsafe`).
+# - `serve-duration`: `duration_ms` is 0 in the documents the host builds.
+
+[[diff]]
+command = "serve"
+case = "serve/plain/*/session"
+target = "stdout"
+rule = "text"
+oracle = "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"protocol\":1,\"version\":\"<OPENTIDE_VERSION>\",\"commands_digest\":\"536a2117f452a33a8a278c30a7a53b5ceed339309ec1090ed8e0bc8064ae474b\"}}"
+candidate = "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"protocol\":1,\"version\":\"<OPENTIDE_VERSION>\",\"commands_digest\":\"<SHA256>\"}}"
+reason = "initialize's commands_digest is the SHA-256 of `opentide --json commands` (duration_ms left out), a document that names the installed version, different in every build, and the command tree, changed since the oracle under the approved `commands` entries (CrowdStrike CQL, OPENTIDE_ENGINE): the digest names today's build, as the Python host's does, and crates/opentide-cli/tests/serve.rs checks it is that of today's document; protocol and version are unchanged"
+issue = "https://github.com/opentidehq/opentide/issues/830"
+changelog = "**`OPENTIDE_ENGINE=rust opentide serve` is the Rust host**"
 
 # UC-3.2 (#824): `generate exports` on a terminal in `human` mode prints its
 # checklist row once the exports are written. The Rust engine writes them in

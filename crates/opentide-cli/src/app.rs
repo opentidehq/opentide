@@ -49,6 +49,7 @@ pub const PORTED: &[&str] = &[
     "generate docs threats",
     "generate docs index",
     "deploy",
+    "serve",
 ];
 
 /// The file in which a run refused with `engine_not_ported` records its
@@ -677,6 +678,19 @@ impl Run<'_> {
                     debug: self.globals.debug || self.env.debug_requested(),
                 };
                 crate::mcp::serve(&launch, &self.host.version)
+            }
+            "serve" => {
+                // stdout is JSON-RPC's: nothing is emitted around the server.
+                let resolved =
+                    |path: Option<&str>| path.map(|path| self.resolve(path).display().to_string());
+                let launch = crate::serve::Launch {
+                    cwd: self.host.cwd.clone(),
+                    repo: resolved(self.globals.repo.as_deref()),
+                    data: resolved(self.globals.data.as_deref()),
+                    proxy: self.globals.proxy.clone(),
+                    debug: self.globals.debug || self.env.debug_requested(),
+                };
+                crate::serve::serve(&launch, &self.host.version, &self.host.interrupt)
             }
             "tui" => {
                 use std::io::IsTerminal as _;

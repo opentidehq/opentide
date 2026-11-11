@@ -20,6 +20,8 @@ use std::path::PathBuf;
 
 use opentide_cli::env::Env;
 
+mod serve;
+
 /// One finding, in the CLI's coordinates.
 #[pyclass(frozen, get_all, module = "opentide._native")]
 #[derive(Clone)]
@@ -269,6 +271,7 @@ fn analyze_query(
 #[pyfunction]
 fn cli_main(py: Python<'_>, argv: Vec<String>, version: String) -> i32 {
     opentide_cli::mcp::set_delegate(Box::new(McpBridge));
+    opentide_cli::serve::set_delegate_factory(Box::new(serve::BridgeFactory));
     py.detach(|| opentide_cli::main(&argv, &version))
 }
 
@@ -726,6 +729,10 @@ mod _native {
         language_for_path, run_cli, serve_stdio, set_default_catalog, set_host_info,
         use_host_catalogs, validate_report, workspace_stats,
     };
+
+    /// `opentide serve`'s Rust host, driven from Python (UC-3.8, #830).
+    #[pymodule_export]
+    use super::serve::ServeHost;
 
     /// The Tide models (UC-1.9, #815): `opentide._native.models`.
     #[pymodule_export]

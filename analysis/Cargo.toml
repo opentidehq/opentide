@@ -32,6 +32,8 @@ opentide-schema = { workspace = true, features = ["python"] }
 # The Rust command line, for the commands ported to it (`cli_main`, run by
 # `python -m opentide.cli.rust`).
 opentide-cli.workspace = true
+# What the serve host's Python side could not do, logged as the CLI logs.
+tracing = "0.1"
 
 [features]
 # PyO3's introspection data, from which `cargo xtask stubs` writes the

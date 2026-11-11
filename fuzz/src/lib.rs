@@ -345,3 +345,78 @@ where
         }
     }
 }
+
+/// `opentide serve`'s message reader (UC-3.8, #830): the input is what a
+/// client sends on stdin, read as the host reads it (one message a line),
+/// and the session is served to its end with runs that run nothing. A panic,
+/// an answer that is not one JSON-RPC message on one line, a `-32603`
+/// (the loop caught a failure of its own) or a session that does not end
+/// is the failure.
+pub fn serve(data: &[u8]) {
+    for line in serve_session(data) {
+        assert!(!line.contains('\n'), "{line}");
+        assert!(
+            line.starts_with("{\"jsonrpc\":\"2.0\","),
+            "not a JSON-RPC message: {line}"
+        );
+        assert!(
+            !line.contains("\"code\":-32603"),
+            "an internal error: {line}"
+        );
+    }
+}
+
+/// Serves `data` as a session's input with [`NoRuns`]; every message written.
+pub fn serve_session(data: &[u8]) -> Vec<String> {
+    use opentide_cli::serve::{Server, Writer};
+    use std::sync::{Arc, Mutex};
+    let written = Arc::new(Mutex::new(Vec::new()));
+    let sink = Arc::clone(&written);
+    let write: Writer = Box::new(move |line: &str| {
+        if let Ok(mut lines) = sink.lock() {
+            lines.push(line.to_owned());
+        }
+        Ok(())
+    });
+    let server = Server::new(write, Arc::new(NoRuns), "0.0.0");
+    opentide_cli::serve::read_lines(data, &server);
+    assert!(server.serve(&|| false), "the session did not end");
+    drop(server);
+    written
+        .lock()
+        .map(|lines| lines.clone())
+        .unwrap_or_default()
+}
+
+/// A runner that runs nothing: each run answers `{"ok": true}`.
+pub struct NoRuns;
+
+impl opentide_cli::serve::Runner for NoRuns {
+    fn plan(&self, request: &opentide_cli::serve::RunRequest) -> opentide_cli::serve::Plan {
+        let words: Vec<String> = request.argv.iter().take(1).cloned().collect();
+        opentide_cli::serve::Plan {
+            refused: opentide_cli::serve::runner::refusal(&words),
+            keep: opentide_cli::serve::runner::keeps_workspace(&words, &request.argv),
+            words,
+            rust: None,
+        }
+    }
+
+    fn run(
+        &self,
+        _: &opentide_cli::serve::RunRequest,
+        plan: &opentide_cli::serve::Plan,
+        job: &std::sync::Arc<opentide_cli::serve::Job>,
+        _: opentide_cli::serve::EventSink,
+    ) -> opentide_cli::serve::RunOutcome {
+        job.finish();
+        match &plan.refused {
+            Some(message) => opentide_cli::serve::runner::usage(&plan.words, message),
+            None => opentide_cli::serve::runner::document(&plan.words, "{\"ok\": true}", 0),
+        }
+    }
+
+    fn interrupt(&self) {}
+
+    fn invalidate(&self, _: &[String]) {}
+}
