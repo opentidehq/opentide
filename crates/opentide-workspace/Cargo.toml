@@ -54,3 +54,5 @@ notify = "8.2"
 
 [dev-dependencies]
 proptest.workspace = true
+# The process session's test opens a workspace on the disk.
+tempfile = "3"

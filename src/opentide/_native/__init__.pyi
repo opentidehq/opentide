@@ -1,6 +1,7 @@
 """Type stubs for the compiled module. Keep in step with ``src/lib.rs``."""
 
-from collections.abc import Sequence
+import os
+from collections.abc import Mapping, Sequence
 from typing import Final, Literal, final
 
 # The Tide models (UC-1.9), whose stub `cargo xtask stubs` generates.
@@ -91,6 +92,29 @@ def describe_code(code: str) -> str | None: ...
 def language_for_path(path: str) -> Language | None: ...
 def serve_stdio() -> bool: ...
 def cli_main(argv: Sequence[str], version: str) -> int: ...
+def run_cli(
+    argv: Sequence[str],
+    env: Mapping[str, str],
+    cwd: str | os.PathLike[str],
+    version: str,
+    warm: bool = False,
+) -> tuple[int, bytes, bytes]: ...
+def interrupt_cli() -> bool: ...
+def invalidate_workspaces(paths: Sequence[str | os.PathLike[str]]) -> int: ...
+def clear_workspaces() -> None: ...
+def workspace_stats() -> dict[str, int]: ...
+def validate_report(
+    cwd: str | os.PathLike[str],
+    env: Mapping[str, str],
+    *,
+    repo: str | None = None,
+    check: str | None = None,
+    files: Sequence[str] = (),
+    uuids: Sequence[str] = (),
+    types: Sequence[str] = (),
+    queries: str = "error",
+    strict: bool = False,
+) -> str: ...
 
 #: One side of ``compare_runs``: exit code, stdout, stderr, the files the run
 #: left different (``(path, mode, bytes)``, ``mode`` and ``bytes`` ``None`` for

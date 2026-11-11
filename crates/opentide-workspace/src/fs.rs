@@ -82,6 +82,13 @@ pub trait FileSystem: Send + Sync {
         Ok(Stamp::of_bytes(&bytes))
     }
 
+    /// Whether every instance reads the same files, so a workspace opened
+    /// through one may be kept warm for the next ([`crate::session`]): the
+    /// disk. An in-memory tree is its own.
+    fn shared(&self) -> bool {
+        false
+    }
+
     /// Whether `path` is a directory.
     fn is_dir(&self, path: &Path) -> bool {
         matches!(self.kind(path), Ok(EntryKind::Dir))
@@ -182,6 +189,10 @@ pub struct OsFs;
 impl FileSystem for OsFs {
     fn read(&self, path: &Path) -> io::Result<Vec<u8>> {
         std::fs::read(path)
+    }
+
+    fn shared(&self) -> bool {
+        true
     }
 
     fn stamp(&self, path: &Path) -> io::Result<Stamp> {
