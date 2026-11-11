@@ -9,20 +9,14 @@
 //!
 //! - says on stderr, when a person runs it at a terminal, that an editor
 //!   starts it;
-//! - hands the server the configuration schemas, for hover and completion
-//!   in `.opentide/configurations/` (`opentide-schema` generates them, as
-//!   `generate schemas` writes them);
 //! - names itself, `("opentide", <version>)`, which clients read at
 //!   `initialize` (`capabilities.experimental.opentide.host`).
 //!
-//! - hands the server opentide's own Tide field catalog and keeps it: a
-//!   catalog a workspace committed, possibly from an older opentide, never
-//!   replaces it (#677), and clients read `catalog: "host"` at
-//!   `initialize`. Until the Rust field-catalog generator (UC-3.5d, #941)
-//!   lands, the catalog is the one compiled into the engine, which CI holds
-//!   equal to what these models generate (`scripts/build/check_engine_catalog.py`);
-//!   the Python host generates it for the workspace, which differs only where
-//!   the workspace's configuration adds vocabulary.
+//! It hands the server neither catalogs nor configuration schemas: the
+//! server builds both from `opentide-schema` and each root's configuration
+//! (#926), so hover and completion include the vocabulary a workspace adds,
+//! a catalog a workspace committed is never read (#677), and clients read
+//! `catalog: "models"` at `initialize`.
 //!
 //! The exit code is LSP's: 0 when the editor shut the server down before it
 //! exited, 1 otherwise, and 1 when the server stops on an error, which
@@ -54,19 +48,6 @@ pub fn start(
     if host.stdin_tty {
         writeln!(err, "{TERMINAL_HINT}")?;
     }
-    if let Err(problem) = supply_catalogs() {
-        writeln!(
-            err,
-            "warning: opentide's catalogs could not be installed ({problem}); \
-             using the workspace's, or the engine's bundled ones"
-        )?;
-    }
-    if let Err(problem) = supply_configuration_schemas() {
-        writeln!(
-            err,
-            "warning: configuration files get no hover or completion ({problem})"
-        )?;
-    }
     opentide_lsp::set_host_info(crate::catalog::PROGRAM, host.version);
     err.flush()?;
     match serve() {
@@ -88,30 +69,6 @@ pub fn start_stdio(version: &str, err: &mut dyn Write) -> std::io::Result<i32> {
         stdin_tty: std::io::stdin().is_terminal(),
     };
     start(&host, err, opentide_lsp::run_stdio_status)
-}
-
-/// Hands the server opentide's own Tide catalogs and has it keep them at
-/// `initialize`; process-wide.
-fn supply_catalogs() -> Result<(), String> {
-    opentide_analysis::set_default_catalog(&opentide_analysis::bundled_catalog())?;
-    opentide_lsp::use_host_catalogs();
-    Ok(())
-}
-
-/// Hands the server the configuration schemas `generate schemas` writes, for
-/// hover and completion in configuration files; process-wide.
-fn supply_configuration_schemas() -> Result<(), String> {
-    use opentide_schema::generate::configuration::{ROUTER_NAME, configuration_schemas, render};
-    let mut router = None;
-    let mut schemas = Vec::new();
-    for (name, document) in configuration_schemas() {
-        if name == ROUTER_NAME {
-            router = Some(render(&document));
-        } else {
-            schemas.push((name, render(&document)));
-        }
-    }
-    opentide_analysis::install_configuration_schemas(router.as_deref(), &schemas)
 }
 
 #[cfg(test)]
