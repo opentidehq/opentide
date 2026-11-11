@@ -485,9 +485,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
                 )];
             }
         } else {
-            if !fix.changes.is_empty() || fix.unwritten_fixes > 0 {
-                next.retain(|action| !action.command.starts_with("opentide validate --fix"));
-            }
+            drop_fix_action(&mut next, fix.changes.len(), fix.unwritten_fixes);
             for line in &fix.unwritten {
                 let warning = format!("Could not write the fix to {line}");
                 warnings.push(warning.clone());
@@ -610,6 +608,15 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     report
 }
 
+/// Once `--fix` wrote its `changed` values or could not write `unwritten`
+/// of them, running it again is not a next step: what it left is the
+/// person's.
+fn drop_fix_action(next: &mut Vec<NextAction>, changed: usize, unwritten: usize) {
+    if changed > 0 || unwritten > 0 {
+        next.retain(|action| !action.command.starts_with("opentide validate --fix"));
+    }
+}
+
 /// `OPENTIDE_PROGRESS=json`'s events for a run that checked `summary`'s
 /// objects and queries: one per object, then the queries.
 fn progress_lines(env: &Env, summary: &opentide_workspace::validate::Summary) -> String {
@@ -704,7 +711,13 @@ mod tests {
         assert_eq!(failure.code, USAGE_WATCH_NEEDS_TTY);
         assert_eq!(report.outcome.exit_code, 2);
         assert_eq!(report.outcome.next_actions[0].command, "opentide validate");
+        // Every mode a program reads refuses it; a person's modes run it.
+        for mode in [Mode::Agent, Mode::Mcp] {
+            let failure = refuse(&args, mode).unwrap().outcome.failure.unwrap();
+            assert_eq!(failure.code, USAGE_WATCH_NEEDS_TTY, "{mode:?}");
+        }
         assert!(refuse(&args, Mode::Plain).is_none());
+        assert!(refuse(&args, Mode::Human).is_none());
         args.watch = false;
         args.selection.types = vec!["rulez".into()];
         let failure = refuse(&args, Mode::Plain).unwrap().outcome.failure.unwrap();
@@ -717,6 +730,27 @@ mod tests {
         assert!(refuse(&args, Mode::Plain).is_none());
         args.queries = Some(QueriesMode::Off);
         assert!(refuse(&args, Mode::Plain).is_some());
+    }
+
+    #[test]
+    fn a_fix_that_wrote_or_failed_drops_the_rerun() {
+        let actions = || {
+            vec![
+                NextAction::new("opentide validate --fix --check schema", "apply 1 safe fix"),
+                NextAction::new("opentide explain vocab_unknown", "how to fix it"),
+            ]
+        };
+        let commands = |next: &[NextAction]| -> Vec<String> {
+            next.iter().map(|action| action.command.clone()).collect()
+        };
+        let mut next = actions();
+        drop_fix_action(&mut next, 0, 0);
+        assert_eq!(next.len(), 2);
+        for (changed, unwritten) in [(1, 0), (0, 1)] {
+            let mut next = actions();
+            drop_fix_action(&mut next, changed, unwritten);
+            assert_eq!(commands(&next), ["opentide explain vocab_unknown"]);
+        }
     }
 
     #[test]

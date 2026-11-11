@@ -299,6 +299,25 @@ mod tests {
         assert_eq!(page(""), None);
     }
 
+    /// `build.rs` compiles in every page of the package's folder.
+    #[test]
+    fn every_page_of_the_package_is_compiled_in() {
+        let folder = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../src/opentide/data/diagnostics");
+        let mut on_disk: Vec<String> = std::fs::read_dir(folder)
+            .unwrap()
+            .filter_map(|entry| {
+                let path = entry.unwrap().path();
+                (path.extension().and_then(|ext| ext.to_str()) == Some("md"))
+                    .then(|| path.file_stem().unwrap().to_string_lossy().into_owned())
+            })
+            .collect();
+        on_disk.sort();
+        let compiled: Vec<&str> = pages::PAGES.iter().map(|(code, _)| *code).collect();
+        assert!(compiled.len() > 100, "{}", compiled.len());
+        assert_eq!(compiled, on_disk);
+    }
+
     #[test]
     fn codes_are_sorted_and_unique() {
         let codes = codes();

@@ -577,6 +577,101 @@ mod tests {
         assert!(!is_safe_replacement("vocab_unknown", "amber", "amber"));
     }
 
+    fn vocab(vocab: &str) -> Diagnostic {
+        Diagnostic::error("vocab_unknown", "x").with("vocab", vocab)
+    }
+
+    #[test]
+    fn a_value_headline_names_the_vocabulary_as_a_person_reads_it() {
+        // The acronyms are upper-case, every other name is words.
+        for (name, noun) in [("tlp", "TLP"), ("pap", "PAP"), ("rsit", "RSIT")] {
+            assert_eq!(
+                value_message(&vocab(&format!("{name}::1.0")), "x").as_deref(),
+                Some(format!("'x' is not a {noun} value").as_str())
+            );
+        }
+        assert_eq!(
+            value_message(&vocab("signal.entities::1.0"), "Host::Gizmo").as_deref(),
+            Some("'Host::Gizmo' is not a signal entities value")
+        );
+        assert_eq!(
+            value_message(&vocab("alert_severity"), "high").as_deref(),
+            Some("'high' is not a alert severity value")
+        );
+        assert_eq!(
+            value_message(&Diagnostic::error("vocab_unknown", "x"), "v"),
+            None
+        );
+        let setting =
+            |name: &str| Diagnostic::error("config_enum_unknown", "x").with("setting", name);
+        assert_eq!(
+            value_message(&setting("statuses"), "LIVE").as_deref(),
+            Some("'LIVE' is not a configured status")
+        );
+        assert_eq!(
+            value_message(&setting("responders"), "soc").as_deref(),
+            Some("'soc' is not a configured responder")
+        );
+        assert_eq!(
+            value_message(&setting("tiers"), "t9").as_deref(),
+            Some("'t9' is not a configured tiers")
+        );
+        assert_eq!(
+            value_message(&Diagnostic::error("invalid_ref", "x"), "v"),
+            None
+        );
+    }
+
+    #[test]
+    fn a_duplicate_names_the_other_object_or_says_another() {
+        let duplicate = |original: serde_json::Value| {
+            Diagnostic::error("duplicate_id", "x").with("original", original)
+        };
+        let uuid = "00000000-0000-4000-8003-000000000001";
+        assert_eq!(
+            duplicate_message(&duplicate(serde_json::json!({"name": "First"})), Some(uuid))
+                .as_deref(),
+            Some(format!("UUID {uuid} is also used by 'First'").as_str())
+        );
+        for original in [serde_json::json!({"name": ""}), serde_json::json!({})] {
+            assert_eq!(
+                duplicate_message(&duplicate(original), Some(uuid)).as_deref(),
+                Some(format!("UUID {uuid} is also used by another object").as_str())
+            );
+        }
+        // Without the value or the original, the engine's sentence stays.
+        assert_eq!(
+            duplicate_message(&duplicate(serde_json::json!({"name": "First"})), None),
+            None
+        );
+        assert_eq!(
+            duplicate_message(&Diagnostic::error("duplicate_id", "x"), Some(uuid)),
+            None
+        );
+    }
+
+    #[test]
+    fn labels_say_where_a_value_is_missing_from() {
+        assert_eq!(
+            label(&vocab("tlp::1.0")).as_deref(),
+            Some("not in tlp::1.0")
+        );
+        assert_eq!(
+            label(&Diagnostic::error("invalid_ref", "x")).as_deref(),
+            Some("no object has this id")
+        );
+        assert_eq!(
+            label(&Diagnostic::error("config_enum_unknown", "x").with("setting", "statuses"))
+                .as_deref(),
+            Some("not in [[statuses]]")
+        );
+        assert_eq!(
+            label(&Diagnostic::error("chaining_relation_unknown", "x")).as_deref(),
+            Some("not a chaining relation")
+        );
+        assert_eq!(label(&Diagnostic::error("yaml_parse", "x")), None);
+    }
+
     #[test]
     fn the_first_content_line_skips_comments_and_markers() {
         assert_eq!(first_content_span("# c\n---\n  - a # x\n"), Some((3, 3, 6)));

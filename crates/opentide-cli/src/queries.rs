@@ -660,6 +660,46 @@ mod tests {
         );
     }
 
+    /// A finding of the engine on `line`.
+    fn at(line: usize) -> Finding {
+        Finding {
+            code: "kuery_free_text".into(),
+            severity: EngineSeverity::Hint,
+            message: String::new(),
+            line,
+            column: 1,
+            end_line: line,
+            end_column: 4,
+            field_path: Vec::new(),
+            suggestion: None,
+        }
+    }
+
+    #[test]
+    fn a_finding_in_a_marked_stand_in_is_the_placeholders_check_s() {
+        let text = "a:\n  query: ...  # opentide:placeholder\n  b: |  # opentide:placeholder\n    \
+                    ...\n  c: |  # opentide:placeholder\n    written ...\n  d: ...\n";
+        let lines: Vec<&str> = text.lines().collect();
+        let marked: Vec<usize> = lines
+            .iter()
+            .enumerate()
+            .filter(|(_, line)| PLACEHOLDER_MARK.is_match(line))
+            .map(|(number, _)| number + 1)
+            .collect();
+        assert_eq!(marked, [2, 3, 5]);
+        // Inline: the value after the key; on the next line: the line itself.
+        assert!(in_placeholder(&at(2), &lines, &marked));
+        assert!(in_placeholder(&at(4), &lines, &marked));
+        // The marked key's own line holds `|`, not the stand-in.
+        assert!(!in_placeholder(&at(3), &lines, &marked));
+        // A value written under a marker, and a stand-in nobody marked.
+        assert!(!in_placeholder(&at(6), &lines, &marked));
+        assert!(!in_placeholder(&at(7), &lines, &marked));
+        // Outside the text.
+        assert!(!in_placeholder(&at(0), &lines, &marked));
+        assert!(!in_placeholder(&at(9), &lines, &[8]));
+    }
+
     #[test]
     fn files_are_read_as_text_mode_reads_them() {
         assert_eq!(decode(b"\xef\xbb\xbfa\r\nb\rc\n").unwrap(), "a\nb\nc\n");

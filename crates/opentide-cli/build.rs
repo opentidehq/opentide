@@ -9,22 +9,34 @@ use std::path::PathBuf;
 
 #[expect(
     clippy::unwrap_used,
+    clippy::panic,
     reason = "a build script: cargo sets its variables, and a page that cannot be listed fails the build"
 )]
 fn main() {
     let manifest = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
     let pages = manifest.join("../../src/opentide/data/diagnostics");
     let mut found: Vec<(String, PathBuf)> = Vec::new();
-    if let Ok(entries) = std::fs::read_dir(&pages) {
-        for entry in entries {
-            let path = entry.unwrap().path();
-            if path.extension().and_then(|ext| ext.to_str()) == Some("md")
-                && let Some(stem) = path.file_stem().and_then(|stem| stem.to_str())
-            {
-                found.push((stem.to_owned(), path.canonicalize().unwrap()));
-            }
+    // A folder that cannot be read is a build error: without its pages,
+    // `explain` would list no code and SARIF would carry no rules.
+    let entries = std::fs::read_dir(&pages).unwrap_or_else(|error| {
+        panic!(
+            "the explain pages are read from {}: {error}",
+            pages.display()
+        )
+    });
+    for entry in entries {
+        let path = entry.unwrap().path();
+        if path.extension().and_then(|ext| ext.to_str()) == Some("md")
+            && let Some(stem) = path.file_stem().and_then(|stem| stem.to_str())
+        {
+            found.push((stem.to_owned(), path.canonicalize().unwrap()));
         }
     }
+    assert!(
+        !found.is_empty(),
+        "no explain page (*.md) in {}",
+        pages.display()
+    );
     found.sort();
     let mut out = String::from("/// The explain pages: (code, Markdown), sorted by code.\n");
     out.push_str("pub const PAGES: &[(&str, &str)] = &[\n");
