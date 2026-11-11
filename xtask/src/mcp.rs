@@ -20,8 +20,9 @@
 //! case `<session>/<step>`, whose target is `stdout`, the response.
 //!
 //! What a comparison sees of a message ([`canonical`]): the workspace's path
-//! reads `<WS>` and the server's version `<VERSION>` (they differ between
-//! runs); a text block or resource text that is a JSON document is compared
+//! reads `<WS>`, the installed `opentide` package's directory (where its
+//! bundled data lives) `<PACKAGE>`, and the server's version `<VERSION>`
+//! (they differ between runs and checkouts); a text block or resource text that is a JSON document is compared
 //! as that document (an MCP client parses it; its spacing is the
 //! serialiser's); keys are sorted, since JSON-RPC objects are unordered; a
 //! validation report's `wall_ms` (its run's wall time) reads `<MS>`. Nothing
@@ -672,33 +673,78 @@ pub fn canonical(value: &Value) -> Value {
     }
 }
 
-/// An answer as recorded: the workspace's path is `<WS>`, the server's
+/// An answer as recorded: each path of `roots` (`(path, placeholder)`, the
+/// longest first, as [`roots`] lists them) is its placeholder, the server's
 /// version `<VERSION>`.
-pub fn normalise(mut answer: Value, workspaces: &[String]) -> Value {
+pub fn normalise(mut answer: Value, roots: &[(String, String)]) -> Value {
     if let Some(version) = answer.pointer_mut("/result/serverInfo/version") {
         *version = json!("<VERSION>");
     }
-    replace_strings(&mut answer, workspaces);
+    replace_strings(&mut answer, roots);
     answer
 }
 
-fn replace_strings(value: &mut Value, workspaces: &[String]) {
+/// The paths a recording hides, with the golden runner's machinery: the
+/// workspace `<WS>` and the `opentide` package directory `<PACKAGE>`, each
+/// also in its canonical spelling, the longest first so a path is never
+/// half replaced.
+pub fn roots(ws: &Path, package: &Path) -> Vec<(String, String)> {
+    let ws = ws.to_path_buf();
+    let package = package.to_path_buf();
+    let mut roots =
+        crate::golden::run::path_literals(&[(&ws, crate::golden::case::WS), (&package, PACKAGE)]);
+    roots.sort_by(|a, b| b.0.len().cmp(&a.0.len()).then_with(|| a.cmp(b)));
+    roots.dedup();
+    roots
+}
+
+/// Placeholder for the installed `opentide` package's directory.
+pub const PACKAGE: &str = "<PACKAGE>";
+
+/// The directory of the `opentide` package `python` imports (its bundled
+/// data is under it): `src/opentide` in an editable checkout, a
+/// `site-packages` folder otherwise. Found without importing the package.
+pub fn package_dir(python: &Path) -> Result<PathBuf> {
+    let output = Command::new(python)
+        .args([
+            "-c",
+            "import importlib.util as u; print(u.find_spec('opentide').submodule_search_locations[0])",
+        ])
+        .stderr(Stdio::inherit())
+        .output()
+        .with_context(|| format!("run {}", python.display()))?;
+    ensure!(
+        output.status.success(),
+        "{} could not find the opentide package",
+        python.display()
+    );
+    let dir = String::from_utf8(output.stdout).context("the package directory is not UTF-8")?;
+    let dir = PathBuf::from(dir.trim_end_matches(['\r', '\n']));
+    ensure!(
+        dir.is_dir(),
+        "{}: the opentide package is not a directory",
+        dir.display()
+    );
+    Ok(dir)
+}
+
+fn replace_strings(value: &mut Value, roots: &[(String, String)]) {
     match value {
         Value::String(text) => {
-            for workspace in workspaces {
-                if text.contains(workspace.as_str()) {
-                    *text = text.replace(workspace.as_str(), "<WS>");
+            for (path, placeholder) in roots {
+                if !path.is_empty() && text.contains(path.as_str()) {
+                    *text = text.replace(path.as_str(), placeholder);
                 }
             }
         }
         Value::Array(items) => {
             for item in items {
-                replace_strings(item, workspaces);
+                replace_strings(item, roots);
             }
         }
         Value::Object(map) => {
             for item in map.values_mut() {
-                replace_strings(item, workspaces);
+                replace_strings(item, roots);
             }
         }
         _ => {}
@@ -724,13 +770,7 @@ pub fn run_session(
     std::fs::create_dir_all(&ws)?;
     std::fs::create_dir_all(home.join("tmp"))?;
     fixture.materialise(repo, &ws)?;
-    let mut workspaces = vec![ws.display().to_string()];
-    if let Ok(canonical) = dunce::canonicalize(&ws) {
-        workspaces.push(canonical.display().to_string());
-    }
-    // The longest first, so a path is never half replaced.
-    workspaces.sort_by_key(|path| std::cmp::Reverse(path.len()));
-    workspaces.dedup();
+    let roots = roots(&ws, &package_dir(python)?);
     let outside = scratch.path().join("outside");
     std::fs::create_dir_all(&outside)?;
     let mut server = Server::start(python, engine, launch, &ws, &outside, &home)?;
@@ -742,7 +782,7 @@ pub fn run_session(
         exchanges.push(Exchange {
             step: step.clone(),
             request: message.clone(),
-            response: response.map(|answer| normalise(answer, &workspaces)),
+            response: response.map(|answer| normalise(answer, &roots)),
         });
     }
     server.finish()?;
@@ -955,10 +995,48 @@ mod tests {
                 "other": "1.2.3",
             }
         });
-        let normalised = normalise(answer, &["/tmp/opentide-mcp-x/ws".into()]);
+        let normalised = normalise(answer, &[("/tmp/opentide-mcp-x/ws".into(), "<WS>".into())]);
         assert_eq!(normalised["result"]["serverInfo"]["version"], "<VERSION>");
         assert_eq!(normalised["result"]["path"], "<WS>/objects/a.yaml");
         assert_eq!(normalised["result"]["other"], "1.2.3");
+    }
+
+    #[test]
+    fn the_package_directory_reads_package_wherever_the_checkout_is() {
+        // resources/index names the bundled data's directories: a recording
+        // made in one checkout must replay in another (CI's).
+        let scratch = tempfile::tempdir().unwrap();
+        let ws = scratch.path().join("tmp/opentide-mcp-x/ws");
+        let package = scratch.path().join("checkout/src/opentide");
+        std::fs::create_dir_all(&ws).unwrap();
+        std::fs::create_dir_all(&package).unwrap();
+        let roots = roots(&ws, &package);
+        let index = format!(
+            r#"{{"vocabularies": "{}/data/vocabulary", "file": "{}/objects/a.yaml"}}"#,
+            package.display(),
+            ws.display()
+        );
+        let answer = json!({"result": {"contents": [{"uri": "opentide://index", "text": index}]}});
+        let normalised = normalise(answer, &roots);
+        let text = normalised["result"]["contents"][0]["text"]
+            .as_str()
+            .unwrap();
+        let document: Value = serde_json::from_str(text).unwrap();
+        assert_eq!(document["vocabularies"], "<PACKAGE>/data/vocabulary");
+        assert_eq!(document["file"], "<WS>/objects/a.yaml");
+        assert!(!text.contains(&scratch.path().display().to_string()));
+    }
+
+    #[test]
+    fn the_longest_root_is_replaced_first() {
+        let scratch = tempfile::tempdir().unwrap();
+        // A package inside the workspace must read <PACKAGE>, not <WS>/...
+        let ws = scratch.path().join("ws");
+        let package = ws.join("venv/opentide");
+        std::fs::create_dir_all(&package).unwrap();
+        let roots = roots(&ws, &package);
+        let answer = json!({"result": format!("{}/data", package.display())});
+        assert_eq!(normalise(answer, &roots)["result"], "<PACKAGE>/data");
     }
 
     #[test]

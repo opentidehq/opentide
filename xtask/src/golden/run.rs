@@ -137,7 +137,7 @@ pub fn run_case(case: &Case, ctx: &RunContext) -> Result<Recording> {
 }
 
 /// Each path, and its canonical form when that differs (`/tmp` behind a link).
-fn path_literals(paths: &[(&PathBuf, &str)]) -> Vec<(String, String)> {
+pub(crate) fn path_literals(paths: &[(&PathBuf, &str)]) -> Vec<(String, String)> {
     let mut out = Vec::new();
     for (path, placeholder) in paths {
         out.push((
