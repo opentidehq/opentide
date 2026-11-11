@@ -1019,6 +1019,14 @@ pub fn snippet(kind: &str) -> Option<&'static str> {
 pub fn index_object(path: &str, source: &str) -> Option<IndexedObject> {
     let source = opentide_core::strip_bom(source);
     let value: serde_yaml::Value = serde_yaml::from_str(source).ok()?;
+    index_value(path, source, value)
+}
+
+/// [`index_object`] for a file a host has already parsed: `value` is what
+/// `source` (without a byte-order mark) holds, and the ranges are found in
+/// `source`. The language server indexes the parse `opentide-workspace`
+/// made of each file this way, not a second one.
+pub fn index_value(path: &str, source: &str, value: serde_yaml::Value) -> Option<IndexedObject> {
     let meta = value.get("metadata")?;
     let uuid = meta.get("uuid")?.as_str()?.to_string();
     let schema = meta.get("schema")?.as_str().unwrap_or("").to_string();

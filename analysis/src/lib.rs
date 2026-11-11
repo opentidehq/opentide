@@ -478,20 +478,6 @@ fn set_default_catalog(
     .map_err(PyValueError::new_err)
 }
 
-/// Install the configuration schemas hover and completion read, for the
-/// whole process: the router (`configurations.router.json`) and the schema
-/// documents as `(file name, text)`. `None` removes them. Raises
-/// `ValueError`, and changes nothing, when a document is not JSON.
-#[pyfunction]
-#[pyo3(signature = (router=None, schemas=Vec::new()))]
-fn install_configuration_schemas(
-    router: Option<String>,
-    schemas: Vec<(String, String)>,
-) -> PyResult<()> {
-    opentide_analysis::install_configuration_schemas(router.as_deref(), &schemas)
-        .map_err(PyValueError::new_err)
-}
-
 /// Declare the datasets a workspace's `visibility.toml` (the file's text)
 /// names, leaving the Tide catalogs in use as they are. `None` declares none.
 /// Raises `ValueError`, and changes nothing, when the text is not TOML.
@@ -736,9 +722,9 @@ mod _native {
     use super::{
         Diagnostic, QueryReport, Workspace, analyze_query, bundled_catalog, catalog_is_workspace,
         catalog_version, clear_workspaces, cli_main, compare_runs, dataset_status, describe_code,
-        highlight, install_catalog, install_configuration_schemas, install_visibility,
-        interrupt_cli, invalidate_workspaces, language_for_path, run_cli, serve_stdio,
-        set_default_catalog, set_host_info, use_host_catalogs, validate_report, workspace_stats,
+        highlight, install_catalog, install_visibility, interrupt_cli, invalidate_workspaces,
+        language_for_path, run_cli, serve_stdio, set_default_catalog, set_host_info,
+        use_host_catalogs, validate_report, workspace_stats,
     };
 
     /// The Tide models (UC-1.9, #815): `opentide._native.models`.
