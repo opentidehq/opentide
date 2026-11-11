@@ -1,15 +1,22 @@
-"""``python -m opentide.cli.rust``: the Rust command line, compiled into ``opentide._native``.
+"""The Rust command line, compiled into ``opentide._native``, run in this process.
 
-``OPENTIDE_ENGINE=rust`` and ``compare`` run a ported command here
-(:data:`opentide.cli.engines.RUST_COMMANDS`); it prints and exits as the
-command does. The Python launcher replaces it in UC-3.8 (#830).
+``OPENTIDE_ENGINE=rust`` runs a ported command
+(:data:`opentide.cli.engines.RUST_COMMANDS`) through :func:`run_in_process`:
+the console script does so before Typer is imported
+(:mod:`opentide.cli.launch`, UC-3.8b, #960), and the root callback for an
+entry point that went through Typer (:func:`opentide.cli.engines.dispatch`).
+``python -m opentide.cli.rust`` is the Rust side of ``OPENTIDE_ENGINE=compare``,
+which runs each implementation as a child process of its own.
 """
 
 from __future__ import annotations
 
-import json
 import os
 import sys
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
 
 #: What ``opentide doctor`` on Rust reads to check the platforms' Python
 #: modules (``PYTHON_MODULES_ENV`` in ``crates/opentide-cli/src/commands/doctor.rs``):
@@ -35,6 +42,8 @@ def python_modules(argv: list[str]) -> str | None:
     """
     if "doctor" not in argv:
         return None
+    import json
+
     from opentide.cli.services.doctor import PLATFORM_SDKS, _importable
 
     status = {module: _importable(module) for names in PLATFORM_SDKS.values() for module in names}
@@ -70,26 +79,59 @@ def mcp_server(argv: list[str]) -> str | None:
         return None
     if not _setup_wizard(argv) and not any(arg == "mcp" or arg.startswith("--mcp") for arg in argv):
         return None
+    import json
+
     from opentide.mcp_server.launcher import MCP_INSTALL_HINT, missing_requirements
 
     return json.dumps({"missing": missing_requirements(), "hint": MCP_INSTALL_HINT})
 
 
-def main() -> int:
-    """Run the Rust CLI on this process's arguments; its exit code."""
+def run_in_process(argv: Sequence[str], env: Mapping[str, str] | None = None) -> int:
+    """Run the Rust command line on *argv* in this process; its exit code.
+
+    It runs with exactly the environment *env* (this process's when ``None``)
+    and what it reads from this package (:data:`PYTHON_MODULES_ENV`,
+    :data:`MCP_SERVER_ENV`), as a child process started with that environment
+    would; this process's environment is put back when it returns. The
+    engine releases the GIL while it runs and installs its own Ctrl-C handler:
+    Ctrl-C ends the run with ``error: interrupted`` and 130, and a signal
+    such as SIGTERM reaches the command itself (``serve`` exits 143).
+    """
     from opentide import __version__
     from opentide._native import cli_main
 
-    modules = python_modules(sys.argv[1:])
+    args = list(argv)
+    run_env = dict(os.environ if env is None else env)
+    modules = python_modules(args)
     if modules is not None:
-        os.environ[PYTHON_MODULES_ENV] = modules
-    server = mcp_server(sys.argv[1:])
+        run_env[PYTHON_MODULES_ENV] = modules
+    server = mcp_server(args)
     if server is not None:
-        os.environ[MCP_SERVER_ENV] = server
+        run_env[MCP_SERVER_ENV] = server
     # Flush what Python buffered before the engine writes to the same streams.
-    sys.stdout.flush()
-    sys.stderr.flush()
-    return cli_main(sys.argv[1:], __version__)
+    for stream in (sys.stdout, sys.stderr):
+        if stream is not None:
+            stream.flush()
+    saved = dict(os.environ)
+    _set_environment(run_env)
+    try:
+        return cli_main(args, __version__)
+    finally:
+        _set_environment(saved)
+
+
+def _set_environment(target: Mapping[str, str]) -> None:
+    """Make this process's environment exactly *target*, the variables the engine reads included."""
+    for name in [name for name in os.environ if name not in target]:
+        del os.environ[name]
+    for name, value in target.items():
+        if os.environ.get(name) != value:
+            os.environ[name] = value
+
+
+def main() -> int:
+    """Run the Rust command line on this process's arguments; its exit code."""
+    return run_in_process(sys.argv[1:])
 
 
 if __name__ == "__main__":

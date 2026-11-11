@@ -146,7 +146,7 @@ Repository = "https://github.com/opentidehq/opentide"
 Issues = "https://github.com/opentidehq/opentide/issues"
 
 [project.scripts]
-opentide = "opentide.cli:main"
+opentide = "opentide._native:main"
 
 [project.entry-points."opentide.platforms"]
 sentinel = "opentide.platforms.sentinel:declare"

@@ -115,7 +115,7 @@ opentide --help
 in constrained environment you may create a PS function
 
 ```powershell
-function opentide { python -c "from opentide.cli import main; main()" @args }
+function opentide { python -m opentide @args }
 opentide --help
 ```
 

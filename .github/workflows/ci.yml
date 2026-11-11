@@ -1474,6 +1474,13 @@ jobs:
           uv run pytest tests/test_cli/e2e/test_console_script_smoke.py
           -m cli_smoke -q --no-cov
 
+      # Ctrl-C through the console script (opentide._native:main, UC-3.8b, #960): a
+      # CTRL_BREAK_EVENT to `serve` in a process group of its own; SIGTERM is POSIX's.
+      - name: Ctrl-C through the console script
+        run: >-
+          uv run pytest tests/test_cli/e2e/test_launcher_signals_e2e.py
+          -m cli_smoke -q --no-cov
+
       # Promotion rewrites rule files in place: on Windows they are usually CRLF,
       # and the replace of the temporary file must work on NTFS.
       - name: Promotion keeps a rule file's line endings

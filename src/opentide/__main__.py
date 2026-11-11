@@ -1,6 +1,6 @@
-"""``python -m opentide`` entry point."""
+"""``python -m opentide``: the console script's entry point, ``opentide._native:main``."""
 
-from opentide.cli import main
+from opentide._native import main
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
