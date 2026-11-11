@@ -40,7 +40,7 @@ edits = [{ path = "objects/objectives/detect-lsass-access.yaml", find = "\n  tlp
 [fixtures.vscode-docs-folder]
 kind = "copy"
 source = "tests/golden/fixtures/vscode-workspace"
-about = "vscode with the legacy `paths.core.docs_folder` set and no documentation.toml `output`, the folder `generate docs` falls back to"
+about = "vscode with the legacy `[paths.core]` `docs_folder` set and no documentation.toml `output`, which both engines refuse in the `generate docs` docs step (#936)"
 edits = [{ path = ".opentide/configurations/paths.toml", find = "[paths.objects]\n", replace = "[paths.core]\ndocs_folder = \"site\"\n\n[paths.objects]\n" }]
 
 [fixtures.vscode]
@@ -1595,8 +1595,8 @@ variant = "output"
 args = ["generate", "docs", "--output", "docs"]
 fixtures = ["tide-corpus"]
 
-# paths.core.docs_folder set, no documentation.toml output: the pages go
-# under that folder (#936).
+# Legacy [paths.core] docs_folder with no documentation.toml output: both
+# engines refuse the configuration in the docs step (exit 1, no pages, #936).
 [[case]]
 command = "generate docs"
 variant = "docs-folder"
