@@ -149,27 +149,26 @@ fn cmd_analyze(file: &Path, language: Option<&str>, platform: Option<&str>) -> R
     let root = (language == LanguageId::TideYaml)
         .then(|| find_objects_root(file))
         .flatten();
-    if let Some(root) = root {
-        collect_yaml(&root, &mut files);
+    if let Some(root) = &root {
+        collect_yaml(root, &mut files);
         if let Some(workspace) = root.parent() {
             server::install_workspace_catalog(workspace);
             let config = workspace.join(opentide_analysis::ELASTIC_CONFIGURATION);
             if let Ok(text) = std::fs::read_to_string(&config) {
                 files.push((config.display().to_string(), text));
             }
-            // The filename and metadata checks follow the workspace's
-            // lint.toml, as the server and `opentide lint` do (#214).
-            let lint = workspace.join(opentide_analysis::LINT_CONFIGURATION);
-            if let Ok(text) = std::fs::read_to_string(&lint) {
-                if let Err(err) = opentide_analysis::install_lint(Some(&text)) {
-                    eprintln!(
-                        "opentide-lsp: {}: {err}; opentide lint's defaults apply",
-                        lint.display()
-                    );
-                }
-            }
         }
     }
+    // The object checks are validate's, as the server reports them.
+    let mut diagnostics = match (language, root.as_deref().and_then(Path::parent)) {
+        // A file no workspace holds is checked on its own, as the server
+        // checks a document outside every root.
+        (LanguageId::TideYaml, _) if server::workspace_root(file).is_none() => {
+            server::validate_standalone(file, &text)
+        }
+        (LanguageId::TideYaml, Some(workspace)) => server::validate_file(workspace, file, &text),
+        _ => Vec::new(),
+    };
     let host = MemoryWorkspace { files };
     let response = opentide_analysis::analyze(
         &host,
@@ -179,7 +178,8 @@ fn cmd_analyze(file: &Path, language: Option<&str>, platform: Option<&str>) -> R
             text,
         },
     );
-    println!("{}", serde_json::to_string_pretty(&response.diagnostics)?);
+    diagnostics.extend(response.diagnostics);
+    println!("{}", serde_json::to_string_pretty(&diagnostics)?);
     Ok(())
 }
 

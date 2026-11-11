@@ -22,18 +22,15 @@ pub use position::LineStarts;
 
 pub mod config;
 pub use config::{
-    CONFIGURATIONS_DIRECTORY, ConfigChecker, ConfigIssue, ConfigRequest, configuration_completions,
-    configuration_diagnostics, configuration_hover, configuration_path, has_configuration_checker,
-    has_configuration_schemas, install_configuration_schemas, is_configuration_path,
-    set_configuration_checker,
+    CONFIGURATIONS_DIRECTORY, ConfigIssue, configuration_completions, configuration_hover,
+    configuration_path, has_configuration_schemas, install_configuration_schemas,
+    is_configuration_path, place_configuration_issues,
 };
 pub use opentide_core::{
     CompletionItem, Diagnostic, LanguageId, Position, Range, Severity, SignatureHelp, codes,
 };
 pub use opentide_highlight::{HighlightResult, HighlightToken, SemanticTokens};
-pub use opentide_tide::{
-    DocumentSymbol, ElasticTenant, IndexedObject, LINT_CONFIGURATION, LintSettings, lint_settings,
-};
+pub use opentide_tide::{DocumentSymbol, ElasticTenant, IndexedObject};
 
 use opentide_highlight::{HighlightSpec, encode_lsp_semantic_tokens};
 use opentide_kql::Profile;
@@ -197,20 +194,14 @@ pub fn analyze_with_index(
                 symbols: Vec::new(),
             }
         }
-        LanguageId::Config => {
-            // The other open configuration buffers: an unsaved
-            // deployment.toml decides what sharing.toml may name.
-            let open: Vec<(String, String)> = host
-                .documents()
-                .into_iter()
-                .filter(|(path, _)| path != &request.uri && is_configuration_path(path))
-                .collect();
-            AnalyzeResponse {
-                diagnostics: configuration_diagnostics(&request.uri, &request.text, &open),
-                tokens: Vec::new(),
-                symbols: Vec::new(),
-            }
-        }
+        // A configuration file's findings are the host's: it checks the
+        // buffer with opentide-schema's models and places them
+        // ([`place_configuration_issues`]).
+        LanguageId::Config => AnalyzeResponse {
+            diagnostics: Vec::new(),
+            tokens: Vec::new(),
+            symbols: Vec::new(),
+        },
         LanguageId::Falco => {
             let r = opentide_falco::analyze(&request.text);
             AnalyzeResponse {
@@ -355,8 +346,8 @@ pub fn analyze_query(request: &QueryRequest) -> Vec<Diagnostic> {
 pub struct Catalog {
     /// `fields.json`: the Tide field catalog (hover, completion, enum checks).
     pub fields: Option<String>,
-    /// `deprecations.json`: `deprecated_field` warnings on top of the bundled
-    /// ones.
+    /// `deprecations.json`: checked to parse, and otherwise unused since
+    /// `deprecated_field` is `validate`'s finding (UC-2.6, #821).
     pub deprecations: Option<String>,
     /// The text of the workspace's `visibility.toml`: the table, index,
     /// sourcetype, macro, index pattern or data view each of its log sources
@@ -404,23 +395,6 @@ pub fn install_visibility(text: Option<&str>) -> Result<(), String> {
     Ok(())
 }
 
-/// Whether `lint.toml` text parses, without installing it.
-pub fn check_lint(text: &str) -> Result<(), String> {
-    opentide_tide::parse_lint_settings(text).map(|_| ())
-}
-
-/// Follow a workspace's `.opentide/configurations/lint.toml` (the file's
-/// text) in the Tide checks, for the whole process, as `opentide lint` does:
-/// `[filenames]` decides `filename_slug` and `filename_pattern`, `[metadata]`
-/// decides `missing_author` and `missing_organisation` (#214). `None` goes
-/// back to `opentide lint`'s defaults. Text that is not TOML is an error and
-/// keeps the settings in use.
-pub fn install_lint(text: Option<&str>) -> Result<(), String> {
-    let settings = text.map(opentide_tide::parse_lint_settings).transpose()?;
-    opentide_tide::install_lint_settings(settings);
-    Ok(())
-}
-
 fn set_dataset_layer(workspace: bool, datasets: Option<DeclaredDatasets>) {
     let mut layers = dataset_layers()
         .write()
@@ -437,15 +411,10 @@ fn set_dataset_layer(workspace: bool, datasets: Option<DeclaredDatasets>) {
 /// to the bundled catalog. A part that does not parse is an error and changes
 /// nothing.
 pub fn install_catalog(catalog: &Catalog) -> Result<(), String> {
-    let deprecations = match &catalog.deprecations {
-        Some(text) => opentide_tide::parse_deprecation_overlay(text)
-            .map_err(|err| format!("deprecations.json: {err}"))?,
-        None => Vec::new(),
-    };
+    check_deprecations(catalog)?;
     let datasets = parse_visibility(catalog.visibility.as_deref())?;
     opentide_highlight::install_tide_fields(catalog.fields.as_deref())
         .map_err(|err| format!("fields.json: {err}"))?;
-    opentide_tide::install_deprecation_overlay(deprecations);
     set_dataset_layer(true, datasets);
     Ok(())
 }
@@ -458,18 +427,23 @@ pub fn install_catalog(catalog: &Catalog) -> Result<(), String> {
 /// finds no workspace catalog. A `None` part goes back to the bundled one. A
 /// part that does not parse is an error and changes nothing.
 pub fn set_default_catalog(catalog: &Catalog) -> Result<(), String> {
-    let deprecations = catalog
+    check_deprecations(catalog)?;
+    let datasets = parse_visibility(catalog.visibility.as_deref())?;
+    opentide_highlight::set_default_tide_fields(catalog.fields.as_deref())
+        .map_err(|err| format!("fields.json: {err}"))?;
+    set_dataset_layer(false, datasets);
+    Ok(())
+}
+
+/// A catalog's `deprecations.json` must parse, as it always had to.
+fn check_deprecations(catalog: &Catalog) -> Result<(), String> {
+    catalog
         .deprecations
         .as_deref()
         .map(opentide_tide::parse_deprecation_overlay)
         .transpose()
-        .map_err(|err| format!("deprecations.json: {err}"))?;
-    let datasets = parse_visibility(catalog.visibility.as_deref())?;
-    opentide_highlight::set_default_tide_fields(catalog.fields.as_deref())
-        .map_err(|err| format!("fields.json: {err}"))?;
-    opentide_tide::set_default_deprecations(deprecations);
-    set_dataset_layer(false, datasets);
-    Ok(())
+        .map(|_| ())
+        .map_err(|err| format!("deprecations.json: {err}"))
 }
 
 /// The declared datasets the query checks use: the workspace's

@@ -1,17 +1,17 @@
 //! Configuration TOML under `.opentide/configurations/`: the host checks, the
 //! engine places.
 //!
-//! opentide's models are the only authority on these files. A host installs a
-//! checker ([`set_configuration_checker`]); `opentide lsp start` installs
-//! opentide's `configuration_text_issues`. The engine never decides what is
-//! wrong with a configuration file. It turns each finding's `field_path` into
-//! a range in the buffer, as it does for Tide objects. The host's schemas
-//! ([`install_configuration_schemas`]) give hover and completion.
+//! opentide's models are the only authority on these files: the host checks
+//! a buffer with `opentide-schema`'s configuration checks (the language
+//! server does, natively, since UC-2.6, #821) and hands the findings to
+//! [`place_configuration_issues`], which turns each finding's `field_path`
+//! into a range in the buffer, as it does for Tide objects. The host's
+//! schemas ([`install_configuration_schemas`]) give hover and completion.
 //!
-//! Without a checker there are no diagnostics, and without schemas there is no
-//! hover and no completion: nothing here guesses what opentide would say.
+//! Without schemas there is no hover and no completion: nothing here guesses
+//! what opentide would say.
 
-use opentide_core::{ByteSpan, CompletionItem, Diagnostic, Range, Severity, codes, span_to_range};
+use opentide_core::{ByteSpan, CompletionItem, Diagnostic, Range, Severity, span_to_range};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock, RwLock};
@@ -20,56 +20,15 @@ use toml_edit::{ImDocument, Item, Table};
 /// The directory configuration files live in, relative to the workspace.
 pub const CONFIGURATIONS_DIRECTORY: &str = ".opentide/configurations/";
 
-/// What the engine asks the host's checker about one configuration buffer.
-#[derive(Debug, Clone, Copy)]
-pub struct ConfigRequest<'a> {
-    /// The file's path, as the host named it (absolute in the language server).
-    pub path: &'a str,
-    /// The buffer, without a byte-order mark.
-    pub text: &'a str,
-    /// The other open configuration buffers, `(path, text)`. An unsaved
-    /// `deployment.toml` changes which statuses `sharing.toml` may name.
-    pub open: &'a [(String, String)],
-}
-
-/// One finding from the host's checker, in the shape opentide's
-/// `configuration_text_issues` returns. `field_path` is a key path into the
-/// buffer, list items by index (`["misp", "0", "max_tlp"]`); an empty path is
-/// about the whole file.
+/// One finding of the host's configuration checks. `field_path` is a key
+/// path into the buffer, list items by index (`["misp", "0", "max_tlp"]`);
+/// an empty path is about the whole file.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConfigIssue {
     pub code: String,
     pub field_path: Vec<String>,
     pub severity: Severity,
     pub message: String,
-}
-
-/// A host's configuration checker. An `Err` is reported as one
-/// `config_check_failed` warning on the buffer.
-pub type ConfigChecker =
-    dyn Fn(&ConfigRequest<'_>) -> Result<Vec<ConfigIssue>, String> + Send + Sync;
-
-fn checker_slot() -> &'static RwLock<Option<Arc<ConfigChecker>>> {
-    static SLOT: OnceLock<RwLock<Option<Arc<ConfigChecker>>>> = OnceLock::new();
-    SLOT.get_or_init(Default::default)
-}
-
-/// Install the host's configuration checker for the whole process, or remove
-/// it with `None`. The engine calls it from the thread that analyses a
-/// buffer, without holding any engine lock.
-pub fn set_configuration_checker(checker: Option<Box<ConfigChecker>>) {
-    let mut slot = checker_slot()
-        .write()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    *slot = checker.map(Arc::from);
-}
-
-/// Whether a host installed a configuration checker.
-pub fn has_configuration_checker() -> bool {
-    checker_slot()
-        .read()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .is_some()
 }
 
 /// The path of `path` relative to `.opentide/configurations/`, when it is a
@@ -91,30 +50,8 @@ pub fn is_configuration_path(path: &str) -> bool {
     configuration_path(path).is_some()
 }
 
-/// The host checker's findings on `text`, each at its place in the buffer.
-/// No checker: none.
-pub fn configuration_diagnostics(
-    path: &str,
-    text: &str,
-    open: &[(String, String)],
-) -> Vec<Diagnostic> {
-    let checker = checker_slot()
-        .read()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .clone();
-    let Some(checker) = checker else {
-        return Vec::new();
-    };
-    let issues = match checker(&ConfigRequest { path, text, open }) {
-        Ok(issues) => issues,
-        Err(problem) => {
-            return vec![Diagnostic::warning(
-                codes::CONFIG_CHECK_FAILED,
-                format!("opentide could not check this file: {problem}"),
-                first_line(text),
-            )];
-        }
-    };
+/// `issues`, the host's findings on `text`, each at its place in the buffer.
+pub fn place_configuration_issues(text: &str, issues: Vec<ConfigIssue>) -> Vec<Diagnostic> {
     let parsed = ImDocument::parse(text);
     issues
         .into_iter()

@@ -27,6 +27,8 @@ pub fn run_stdio_status() -> Result<bool> {
     let stdout = std::io::stdout();
     let mut writer = stdout.lock();
     let mut session = Session::default();
+    #[cfg(not(target_family = "wasm"))]
+    warm_up();
     #[cfg(not(target_os = "wasi"))]
     let mut source = protocol::Threaded::spawn(|| std::io::stdin().lock())?;
     #[cfg(target_os = "wasi")]
@@ -42,10 +44,30 @@ pub fn run_listen(addr: &str) -> Result<()> {
     eprintln!("opentide-lsp listening on {addr}");
     let (stream, _) = listener.accept()?;
     let reader = stream.try_clone()?;
+    #[cfg(not(target_family = "wasm"))]
+    warm_up();
     let mut source = protocol::Threaded::spawn(move || std::io::BufReader::new(reader))?;
     let mut writer = stream;
     let mut session = Session::default();
     protocol::run(&mut source, &mut writer, &mut session).map(|_| ())
+}
+
+/// Parses, on a thread of its own, what the first check of a process reads
+/// once and keeps: the editor's bundled vocabularies (all of them, on the
+/// first Tide document), `validate`'s revision schemas and the bundled
+/// vocabularies a rule's fields name (rules are what an editor opens most),
+/// while the server reads the workspace. (`validate` parses a vocabulary on
+/// first use, only those its objects name: warming all of them costs more
+/// than it saves.) A thread that cannot start leaves them to be parsed on
+/// first use, as before.
+#[cfg(not(target_family = "wasm"))]
+fn warm_up() {
+    let _ = std::thread::Builder::new()
+        .name("opentide-lsp-warm-up".to_owned())
+        .spawn(|| {
+            opentide_tide::bundled_vocabs();
+            opentide_workspace::validate::objects::warm_up("rule::1.1");
+        });
 }
 
 /// Fails: `--listen` needs sockets, which wasm32-wasip1 does not have.
@@ -201,11 +223,96 @@ pub fn host_info() -> Value {
         "host": host.map(|(name, version)| json!({ "name": name, "version": version })),
         "engine": crate::VERSION,
         "catalog": catalog,
-        "configurationChecks": opentide_analysis::has_configuration_checker(),
+        // Native since UC-2.6 (#821): opentide-schema's checks, in every host.
+        "configurationChecks": true,
         "configurationSchemas": opentide_analysis::has_configuration_schemas(),
         // The supplied workspace follows `opentide/didChangeWorkspace`.
         "workspaceUpdates": true,
     })
+}
+
+/// What `opentide validate --file` reports on `file` of the workspace at
+/// `root`, on disk, placed in `text` (the file's text, without a byte-order
+/// mark): the object checks the server reports for an open document. A
+/// configuration that does not resolve stops the checks: none.
+pub fn validate_file(root: &Path, file: &Path, text: &str) -> Vec<opentide_core::Diagnostic> {
+    let mut checks = crate::checks::RootChecks::default();
+    let file = std::path::absolute(file).unwrap_or_else(|_| file.to_path_buf());
+    let found = checks.findings(
+        root,
+        crate::checks::Buffers::default(),
+        vec![file.clone()],
+        0,
+    );
+    found
+        .get(&checks.resolve(&file))
+        .map(|findings| {
+            findings
+                .iter()
+                .map(|finding| crate::checks::engine_diagnostic(text, finding))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// What `validate` reports on the Tide object `text` of `file`, a file no
+/// workspace holds (no `objects/` or `.opentide/` above it), placed in
+/// `text`: the object checked in a workspace of its own, as the server
+/// checks a document outside every root, so a reference to an object it
+/// does not hold is `invalid_ref`.
+pub fn validate_standalone(file: &Path, text: &str) -> Vec<opentide_core::Diagnostic> {
+    let mut checks = crate::checks::RootChecks::default();
+    let root = PathBuf::from(crate::session::VIRTUAL_ROOT);
+    let mut buffers = crate::checks::Buffers::default();
+    let Some(placed) = checks.standalone_path(&root, &buffers, &file.display().to_string(), text)
+    else {
+        return Vec::new();
+    };
+    buffers.files.insert(placed.clone(), text.to_string());
+    let found = checks.findings(&root, buffers, vec![placed.clone()], 0);
+    found
+        .get(&checks.resolve(&placed))
+        .map(|findings| {
+            findings
+                .iter()
+                .map(|finding| crate::checks::engine_diagnostic(text, finding))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// What `opentide validate` reports on every object of the workspace at
+/// `root`, on disk, by file: for a host that checks many files of one
+/// workspace (the `opentide` package's `check_file`, `opentide tui`), one
+/// load and one run.
+pub struct ObjectFindings {
+    checks: crate::checks::RootChecks,
+    found: crate::checks::Findings,
+}
+
+impl ObjectFindings {
+    /// Load the workspace at `root` and validate it. A configuration that
+    /// does not resolve gives no finding (`validate` stops there).
+    pub fn validate(root: &Path) -> Self {
+        let mut checks = crate::checks::RootChecks::default();
+        let found = checks.all_findings(root, crate::checks::Buffers::default(), 0);
+        Self { checks, found }
+    }
+
+    /// The findings on `file`, placed in `text` (its text, without a
+    /// byte-order mark).
+    pub fn for_file(&self, file: &Path, text: &str) -> Vec<opentide_core::Diagnostic> {
+        let file = std::path::absolute(file).unwrap_or_else(|_| file.to_path_buf());
+        self.found
+            .get(&self.checks.resolve(&file))
+            .map(|findings| {
+                findings
+                    .iter()
+                    .map(|finding| crate::checks::engine_diagnostic(text, finding))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
 }
 
 // ---------------------------------------------------------------------------

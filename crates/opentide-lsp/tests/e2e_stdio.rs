@@ -1082,6 +1082,25 @@ fn falco_hover_over_stdio() {
     assert!(h.to_lowercase().contains("status"), "{h}");
 }
 
+/// Open a rule and list what completion offers for its `metadata.tlp` value
+/// (line 4, after `  tlp: `).
+fn tlp_values(lsp: &mut Lsp, uri: &str, text: &str) -> Vec<String> {
+    published_codes(lsp, uri, "opentide-yaml", text);
+    let reply = lsp.request(
+        "textDocument/completion",
+        json!({ "textDocument": { "uri": uri }, "position": { "line": 4, "character": 7 } }),
+    );
+    let items = reply["result"]
+        .as_array()
+        .cloned()
+        .or_else(|| reply["result"]["items"].as_array().cloned())
+        .unwrap_or_default();
+    items
+        .iter()
+        .filter_map(|item| item["label"].as_str().map(str::to_string))
+        .collect()
+}
+
 #[test]
 fn initialize_installs_the_workspace_field_catalog() {
     let root = std::env::temp_dir().join(format!("opentide-lsp-catalog-{}", std::process::id()));
@@ -1104,37 +1123,35 @@ fn initialize_installs_the_workspace_field_catalog() {
         "initialize",
         json!({ "capabilities": {}, "rootUri": file_uri(&root) }),
     );
-    let with_catalog = published_codes(&mut lsp, &uri, "opentide-yaml", rule);
+    let with_catalog = tlp_values(&mut lsp, &uri, rule);
     drop(lsp);
 
     // Without a root, the workspace around the document is found (#185
     // P2.1): its catalog applies.
     let mut lsp = Lsp::spawn();
     lsp.request("initialize", json!({ "capabilities": {} }));
-    let discovered = published_codes(&mut lsp, &uri, "opentide-yaml", rule);
+    let discovered = tlp_values(&mut lsp, &uri, rule);
     drop(lsp);
 
     // A document in no workspace gets the bundled catalogs.
     let mut lsp = Lsp::spawn();
     lsp.request("initialize", json!({ "capabilities": {} }));
-    let bundled = published_codes(
+    let bundled = tlp_values(
         &mut lsp,
         "file:///opentide-no-such-workspace/objects/rules/house-rule.yaml",
-        "opentide-yaml",
         rule,
     );
     std::fs::remove_dir_all(&root).ok();
 
     assert_eq!(discovered, with_catalog);
 
+    // The field catalog is what hover and completion read; the object
+    // checks are validate's, whatever catalog is installed (UC-2.6).
     assert!(
-        !with_catalog.contains(&"vocab_unknown".to_string()),
+        with_catalog.contains(&"house".to_string()),
         "{with_catalog:?}"
     );
-    assert!(
-        bundled.contains(&"vocab_unknown".to_string()),
-        "{bundled:?}"
-    );
+    assert!(!bundled.contains(&"house".to_string()), "{bundled:?}");
 }
 
 fn cli_codes(file: &std::path::Path) -> Vec<String> {
@@ -1154,6 +1171,38 @@ fn cli_codes(file: &std::path::Path) -> Vec<String> {
         .collect();
     codes.sort();
     codes
+}
+
+/// #914: a Tide file no workspace holds is checked on its own: `analyze`
+/// reports a reference to an object it does not hold as `invalid_ref`, as
+/// the server does for an unsaved buffer (`opentide/analyze`), and both
+/// report the same codes (the lsp-client package holds every transport to
+/// the CLI's).
+#[test]
+fn a_file_outside_every_workspace_reports_what_the_server_does() {
+    let root = std::env::temp_dir().join(format!("opentide-standalone-{}", std::process::id()));
+    std::fs::create_dir_all(root.join("q")).unwrap();
+    let file = root.join("q/query.yaml");
+    let rule = "name: Two platforms\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000099\n  schema: rule::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: Sentinel in a rule.\nstatus: STAGING\ndetection_model: 00000000-0000-4000-8002-000000000001\nconfigurations:\n  sentinel:\n    query: |\n      SecurityEvent\n      | where EventID == 4688\n";
+    std::fs::write(&file, rule).unwrap();
+    let cli = cli_codes(&file);
+    std::fs::remove_dir_all(&root).ok();
+    assert!(cli.contains(&"invalid_ref".to_string()), "{cli:?}");
+
+    let mut lsp = Lsp::spawn();
+    lsp.request("initialize", json!({ "capabilities": {} }));
+    let reply = lsp.request(
+        "opentide/analyze",
+        json!({ "language": "opentide-yaml", "text": rule, "uri": "untitled:query.yaml" }),
+    );
+    let mut server: Vec<String> = reply["result"]["diagnostics"]
+        .as_array()
+        .unwrap_or_else(|| panic!("{reply}"))
+        .iter()
+        .map(|d| d["code"].as_str().unwrap().to_string())
+        .collect();
+    server.sort();
+    assert_eq!(server, cli);
 }
 
 /// One workspace file that is not UTF-8 is left out of the index. It used to
@@ -1533,11 +1582,12 @@ fn a_bom_tide_document_is_analysed_like_one_without() {
     );
 }
 
-/// The standalone binary has no configuration checker: a configuration file
-/// is `opentide-config`, never parsed as YAML, and gets no diagnostics, no
-/// tokens and no hover. Other TOML is not read at all.
+/// The standalone binary checks a configuration file natively, with
+/// opentide-schema's models (UC-2.6, #821): it is `opentide-config`, never
+/// parsed as YAML, and gets the models' findings, but no tokens, and no
+/// hover without the host's schemas. Other TOML is not read at all.
 #[test]
-fn configuration_toml_without_a_host_checker_reports_nothing() {
+fn configuration_toml_is_checked_natively_without_a_host() {
     let mut lsp = Lsp::spawn();
     lsp.request(
         "initialize",
@@ -1567,7 +1617,27 @@ fn configuration_toml_without_a_host_checker_reports_nothing() {
     let msg = lsp.read();
     assert_eq!(msg["method"], "textDocument/publishDiagnostics", "{msg}");
     assert_eq!(msg["params"]["uri"], sharing, "{msg}");
-    assert_eq!(msg["params"]["diagnostics"], json!([]), "{msg}");
+    let found: Vec<(&str, &str)> = msg["params"]["diagnostics"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|d| {
+            (
+                d["code"].as_str().unwrap(),
+                d["data"]["field_path"][2].as_str().unwrap(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        found,
+        [
+            ("missing_field", "url"),
+            ("missing_field", "api_key"),
+            ("missing_field", "max_tlp"),
+            ("unknown_key", "distribution"),
+        ],
+        "{msg}"
+    );
 
     let tokens = lsp.request(
         "textDocument/semanticTokens/full",

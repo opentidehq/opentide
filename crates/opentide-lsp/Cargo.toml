@@ -12,6 +12,10 @@ readme = "README.md"
 keywords = ["lsp", "kql", "spl", "esql", "detection"]
 categories = ["development-tools", "command-line-utilities"]
 default-run = "opentide-lsp"
+# Not published while opentide-schema and opentide-workspace are not (ADR
+# 0010's addendum, UC-2.6 #821): the server reads its checks from them, in
+# this workspace. `cargo package` leaves it out (ci.yml).
+publish = false
 
 [lints]
 workspace = true
@@ -37,6 +41,11 @@ opentide-highlight.workspace = true
 opentide-kql.workspace = true
 opentide-spl.workspace = true
 opentide-tide.workspace = true
+# Tide diagnostics are `validate`'s, and configuration checks the models' (UC-2.6).
+opentide-workspace.workspace = true
+opentide-schema.workspace = true
+# The object files of a root are indexed in parallel on start-up.
+rayon.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 clap.workspace = true

@@ -9,8 +9,8 @@
 //! position is converted here, against the text it points into.
 
 use opentide_analysis::{
-    AnalyzeRequest, Catalog, ConfigIssue, ConfigRequest, Declaration, IndexedObject, LanguageId,
-    LineStarts, MemoryWorkspace, QueryRequest, Range, Severity, codes,
+    AnalyzeRequest, Catalog, Declaration, IndexedObject, LanguageId, LineStarts, MemoryWorkspace,
+    QueryRequest, Range, codes,
 };
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
@@ -78,6 +78,32 @@ impl QueryReport {
 struct Workspace {
     host: MemoryWorkspace,
     index: Vec<IndexedObject>,
+    /// What `validate` reports on the objects of each workspace a file
+    /// was analysed in, by the workspace's folder: loaded once (UC-2.6).
+    objects: std::sync::Mutex<
+        std::collections::HashMap<std::path::PathBuf, std::sync::Arc<opentide_lsp::ObjectFindings>>,
+    >,
+}
+
+impl Workspace {
+    /// `validate`'s findings on the object file at `path`, from the
+    /// workspace around it (loaded and validated once per workspace).
+    fn object_findings(&self, path: &str, text: &str) -> Vec<opentide_analysis::Diagnostic> {
+        let file = std::path::Path::new(path);
+        let Some(root) = opentide_lsp::server::workspace_root(file) else {
+            return Vec::new();
+        };
+        let findings = {
+            let mut cache = self
+                .objects
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            std::sync::Arc::clone(cache.entry(root.clone()).or_insert_with(|| {
+                std::sync::Arc::new(opentide_lsp::ObjectFindings::validate(&root))
+            }))
+        };
+        findings.for_file(file, text)
+    }
 }
 
 #[pymethods]
@@ -91,7 +117,11 @@ impl Workspace {
         py.detach(|| {
             let host = MemoryWorkspace { files };
             let index = opentide_analysis::index_workspace(&host);
-            Self { host, index }
+            Self {
+                host,
+                index,
+                objects: std::sync::Mutex::default(),
+            }
         })
     }
 
@@ -101,16 +131,21 @@ impl Workspace {
         self.index.len()
     }
 
-    /// Everything the language server reports for one file: a Tide object, or
-    /// a standalone query file. *language* defaults to the one the file name
-    /// implies (`.yaml` is a Tide object).
-    #[pyo3(signature = (path, text, language=None))]
+    /// Everything the language server reports for one file: a Tide object
+    /// (what `opentide validate` reports on it, when it is in a workspace on
+    /// disk, and the engine's query and block checks), or a standalone query
+    /// file. *language* defaults to the one the file name implies (`.yaml` is
+    /// a Tide object). *objects* false leaves `validate`'s findings out (and
+    /// the run that makes them): the engine's own checks alone, for `lint`'s
+    /// queries check.
+    #[pyo3(signature = (path, text, language=None, objects=true))]
     fn analyze(
         &self,
         py: Python<'_>,
         path: String,
         text: String,
         language: Option<&str>,
+        objects: bool,
     ) -> PyResult<Vec<Diagnostic>> {
         let language = match language {
             Some(name) => parse_language(name)?,
@@ -121,6 +156,11 @@ impl Workspace {
             })?,
         };
         Ok(py.detach(|| {
+            let mut diagnostics = if objects && language == LanguageId::TideYaml {
+                self.object_findings(&path, &text)
+            } else {
+                Vec::new()
+            };
             let response = opentide_analysis::analyze_with_index(
                 &self.host,
                 &self.index,
@@ -130,7 +170,8 @@ impl Workspace {
                     text: text.clone(),
                 },
             );
-            convert_all(&text, response.diagnostics)
+            diagnostics.extend(response.diagnostics);
+            convert_all(&text, diagnostics)
         }))
     }
 
@@ -291,50 +332,6 @@ fn set_default_catalog(
     .map_err(PyValueError::new_err)
 }
 
-/// Check configuration TOML (`.opentide/configurations/**/*.toml`) with
-/// `checker`, for the whole process; `None` removes it. The language server
-/// calls `checker(path, text, open)` for each configuration buffer, on its own
-/// thread, holding the GIL only for the call. `open` lists the other open
-/// configuration buffers as `(path, text)`. It returns
-/// `[(code, field_path, severity, message)]`, which the engine places on the
-/// buffer's keys. An exception, or a result of another shape, becomes one
-/// `config_check_failed` warning.
-#[pyfunction]
-#[pyo3(signature = (checker=None))]
-fn set_configuration_checker(checker: Option<Py<PyAny>>) {
-    let Some(checker) = checker else {
-        opentide_analysis::set_configuration_checker(None);
-        return;
-    };
-    opentide_analysis::set_configuration_checker(Some(Box::new(
-        move |request: &ConfigRequest<'_>| {
-            Python::attach(|py| {
-                let found = checker
-                    .call1(py, (request.path, request.text, request.open.to_vec()))
-                    .map_err(|err| err.to_string())?;
-                let issues: Vec<(String, Vec<String>, String, String)> =
-                    found
-                        .bind(py)
-                        .extract()
-                        .map_err(|err| format!("the checker returned {err}"))?;
-                issues
-                    .into_iter()
-                    .map(|(code, field_path, severity, message)| {
-                        let severity = Severity::parse(&severity)
-                            .ok_or_else(|| format!("unknown severity {severity:?} for {code}"))?;
-                        Ok(ConfigIssue {
-                            code,
-                            field_path,
-                            severity,
-                            message,
-                        })
-                    })
-                    .collect()
-            })
-        },
-    )));
-}
-
 /// Install the configuration schemas hover and completion read, for the
 /// whole process: the router (`configurations.router.json`) and the schema
 /// documents as `(file name, text)`. `None` removes them. Raises
@@ -356,18 +353,6 @@ fn install_configuration_schemas(
 #[pyo3(signature = (text=None))]
 fn install_visibility(text: Option<&str>) -> PyResult<()> {
     opentide_analysis::install_visibility(text).map_err(PyValueError::new_err)
-}
-
-/// Follow a workspace's `.opentide/configurations/lint.toml` (the file's
-/// text) in the Tide checks, as `opentide lint` does: `[filenames]` decides
-/// `filename_slug` and `filename_pattern`, `[metadata]` decides
-/// `missing_author` and `missing_organisation`. `None` goes back to
-/// `opentide lint`'s defaults. Raises `ValueError`, and changes nothing, when
-/// the text is not TOML.
-#[pyfunction]
-#[pyo3(signature = (text=None))]
-fn install_lint(text: Option<&str>) -> PyResult<()> {
-    opentide_analysis::install_lint(text).map_err(PyValueError::new_err)
 }
 
 /// What the declared datasets in use (the workspace's `visibility.toml`, else
@@ -605,9 +590,8 @@ mod _native {
     use super::{
         Diagnostic, QueryReport, Workspace, analyze_query, bundled_catalog, catalog_is_workspace,
         catalog_version, cli_main, compare_runs, dataset_status, describe_code, highlight,
-        install_catalog, install_configuration_schemas, install_lint, install_visibility,
-        language_for_path, serve_stdio, set_configuration_checker, set_default_catalog,
-        set_host_info, use_host_catalogs,
+        install_catalog, install_configuration_schemas, install_visibility, language_for_path,
+        serve_stdio, set_default_catalog, set_host_info, use_host_catalogs,
     };
 
     /// The Tide models (UC-1.9, #815): `opentide._native.models`.

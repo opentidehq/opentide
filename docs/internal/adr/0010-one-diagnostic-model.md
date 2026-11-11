@@ -86,6 +86,40 @@ invariant 3 holds every code's meaning, severity, field path and position rules.
   invariant 3), and the language server's "Apply suggestion" edit replaces only the word the stage
   starts with. The CLI's query findings carry no fix, so nothing else changes.
 
+## Addendum: the language server on `opentide-workspace` (UC-2.6)
+
+Decided in [#821](https://github.com/opentidehq/opentide/issues/821), by the maintainer for
+KG-03 and KG-05 (on #893) and by this item for publishing:
+
+1. **The editor reports `validate`'s findings.** `opentide-lsp` loads each root with
+   `Workspace::open` over the disk and the editor's buffers, keeps it current with
+   `Workspace::invalidate`, and publishes `validate`'s findings (the queries check off: the
+   engine's own query analysis stays) with their ranges converted to UTF-16. The duplicate
+   object checks of `opentide-tide` are removed. `cargo xtask lsp parity --corpus faults`
+   compares the two on every fault kind `validate` reports.
+2. **KG-03, KG-05 carried out.** `filename_slug`, `missing_author`, `missing_organisation` and
+   `recommended_field_missing` are retired (they stay explainable,
+   `src/opentide/cli/services/retired_codes.py`). The editor shows `lint`'s `filename_mismatch`
+   and `metadata_recommended` once `lint::lint_file` (UC-2.3, #905) is on the integration
+   branch; until then it shows `validate`'s findings alone.
+3. **Configuration checks are native.** The server calls `opentide-schema`'s `buffer_issues`;
+   `set_configuration_checker` and the `lint.toml` settings the engine read are gone.
+   `install_configuration_schemas` stays for hover and completion until the configuration
+   models derive their JSON Schemas (UC-1.8).
+4. **Publishing: `opentide-schema` stays unpublished.** The language server reads its checks
+   from `opentide-workspace` and `opentide-schema` in this workspace, so `opentide-lsp` and
+   `opentide-wasm` are `publish = false` too until the release train publishes the new crates
+   (UC-5.5): the package step leaves them out and scans their sources. `opentide-lsp`'s
+   binaries, the WASI build and the browser build keep shipping as release assets, and
+   `opentide-analysis` and `opentide-tide` stay publishable (neither depends on the new crates).
+   The field metadata the editor reads (`data/catalogs/tide/generated/fields.json`) moves to
+   `opentide-schema` in a later change: `opentide-tide`, which reads it, is published, and
+   would stop being so. `opentide-lsp` being unpublished does not change that: it only hands a
+   workspace's `fields.json` to `opentide-analysis`'s `install_catalog`; hover, completion and
+   highlighting read the catalog in `opentide-tide` and `opentide-analysis`, both published.
+   Building the catalog from `opentide-schema` in `opentide-lsp` instead (and handing it to
+   the engine) is the way to move it without unpublishing them, and is left open on #821.
+
 ## Evidence
 
 - Issue [#817](https://github.com/opentidehq/opentide/issues/817); plan
