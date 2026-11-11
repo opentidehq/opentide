@@ -1,0 +1,218 @@
+{#- GitLab CI: `.gitlab-ci.yml` (`ci/gitlab.py`). Every value the run
+    chooses goes through `scalar`, which writes it plain when YAML reads it
+    back as the same string, quoted otherwise, and a multi-line script as a
+    `|` block; `items` writes a list of them, one `- ` item a line. -#}
+{% import "scripts.sh.j2" as sh %}
+{% macro skip_rules() %}
+    - if: $CI_COMMIT_MESSAGE =~ /\[skip deploy\]/
+      when: never
+    - if: $CI_MERGE_REQUEST_TITLE =~ /\[skip deploy\]/
+      when: never
+    - if: $CI_MERGE_REQUEST_LABELS =~ /(^|,)skip-deploy(,|$)/
+      when: never
+{%- endmacro %}
+{% macro install(git=false) %}
+  before_script:
+{% if git %}
+    - apt-get update -qq && apt-get install -y -qq --no-install-recommends git > /dev/null
+{% endif %}
+    - [[ pip | scalar(6) ]]
+{%- endmacro %}
+{% macro summary(expose=none) %}
+  artifacts:
+    when: always
+{% if expose %}
+    expose_as: [[ expose | scalar(6) ]]
+{% endif %}
+    paths:
+      - opentide-reports/summary.md
+{%- endmacro %}
+{% set push_url = '"${OPENTIDE_PUSH_URL:-https://gitlab-ci-token:${CI_JOB_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git}"' %}
+{% set push = "git push " ~ push_url ~ ' "HEAD:$CI_DEFAULT_BRANCH"' %}
+{% set side_push = "git push " ~ push_url ~ ' "$state_commit:refs/opentide/deployment-state/$state_commit"' %}
+{% set fetch = 'git fetch origin "$CI_DEFAULT_BRANCH"' %}
+{% set preamble = [sh.gitlab_push_setup() ~ "\n", 'git config user.email "gitlab-ci@opentide.local"', 'git config user.name "gitlab-ci"'] %}
+{% set image = "python:" ~ python ~ "-slim" %}
+[[ header ]]
+# Merge request and default-branch pipelines only. Every job then runs in
+# merge request pipelines, and a push to a branch with an open merge request
+# starts one pipeline, not two.
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+variables:
+  OPENTIDE_REPO_ROOT: $CI_PROJECT_DIR
+  OPENTIDE_VERSION: [[ version | scalar(4) ]]
+
+stages:
+  - validate
+  - generate
+  - deploy
+{% if sharing %}
+  - share
+{% endif %}
+{% if docs %}
+  - document
+{% endif %}
+
+default:
+  image: [[ image | scalar(4) ]]
+
+validate:
+  stage: validate
+  image: [[ image | scalar(4) ]]
+{% if lint_changed %}
+  variables:
+    GIT_DEPTH: "0"
+{% endif %}
+  artifacts:
+    when: always
+    expose_as: opentide reports
+    paths:
+      - opentide-reports/
+    reports:
+      codequality: opentide-reports/codequality.json
+[[ install(git=lint_changed) ]]
+  script:
+[[ (validate_codequality) | items(4) ]]
+  after_script:
+    - [[ codequality_merge | scalar(6) ]]
+
+generate:
+  stage: generate
+  image: [[ image | scalar(4) ]]
+[[ install() ]]
+  script:
+    - opentide generate
+  needs:
+    - validate
+{% for query in queries %}
+    - job: validate_query_[[ query.id ]]
+      optional: true
+{% endfor %}
+{% for query in queries %}
+
+validate_query_[[ query.id ]]:
+  stage: validate
+  image: [[ image | scalar(4) ]]
+  rules:
+[[ skip_rules() ]]
+    - when: on_success
+  variables:
+    GIT_DEPTH: "0"
+[[ summary("opentide query " ~ query.platform) ]]
+[[ install(git=true) ]]
+  script:
+[[ (restore + [query.command]) | items(4) ]]
+{% endfor %}
+{% if staging %}
+
+deploy_staging:
+  stage: deploy
+  image: [[ image | scalar(4) ]]
+  rules:
+[[ skip_rules() ]]
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $CI_DEFAULT_BRANCH
+  variables:
+    GIT_DEPTH: "0"
+  environment:
+    name: staging/mr-$CI_MERGE_REQUEST_IID
+    deployment_tier: staging
+    auto_stop_in: 1 week
+[[ summary("opentide staging plan") ]]
+[[ install(git=true) ]]
+  script:
+[[ (restore + staging_commands) | items(4) ]]
+  needs:
+    - generate
+{% endif %}
+
+deploy_production:
+  stage: deploy
+  image: [[ image | scalar(4) ]]
+  rules:
+[[ skip_rules() ]]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  variables:
+    GIT_DEPTH: "0"
+  resource_group: opentide-production
+  environment:
+    name: production
+    deployment_tier: production
+[[ summary() ]]
+[[ install(git=true) ]]
+  script:
+[[ (preamble + [sh.overlay(fetch) ~ "\n", dry_run, sh.deploy_then_writeback(deploy, rules, push, fetch, side_push) ~ "\n"]) | items(4) ]]
+  after_script:
+[[ ([sh.writeback_after_cancel(rules, push, fetch, side_push) ~ "\n"]) | items(4) ]]
+  needs:
+    - generate
+{% if inflight %}
+
+inflight_shards:
+  stage: deploy
+  image: [[ image | scalar(4) ]]
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $CI_DEFAULT_BRANCH
+  variables:
+    GIT_DEPTH: "0"
+[[ install(git=true) ]]
+  script:
+[[ ([fetch] + (sh.default_branch_shards("origin/$CI_DEFAULT_BRANCH") | lines) + ['export OPENTIDE_REPO_ROOT="$CI_PROJECT_DIR"', "opentide generate inflight"] + preamble + [sh.publish_shards(push, fetch) ~ "\n"]) | items(4) ]]
+  needs:
+    - generate
+
+inflight_prune:
+  stage: deploy
+  image: [[ image | scalar(4) ]]
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  variables:
+    GIT_DEPTH: "0"
+[[ install(git=true) ]]
+  script:
+[[ (['export OPENTIDE_REPO_ROOT="$CI_PROJECT_DIR"', "opentide generate inflight prune"] + preamble + [sh.commit_and_push("ci: prune inflight preview shards [skip ci]", "No inflight prune changes", push, fetch) ~ "\n"]) | items(4) ]]
+  needs:
+    - generate
+{% endif %}
+{% if sharing %}
+
+share:
+  stage: share
+  image: [[ image | scalar(4) ]]
+  rules:
+[[ skip_rules() ]]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE != "merge_request_event"
+      when: always
+  variables:
+    GIT_DEPTH: "0"
+[[ install(git=true) ]]
+  script:
+    - git fetch origin "$CI_DEFAULT_BRANCH"
+    - git checkout -q FETCH_HEAD
+    - opentide validate --strict
+    - opentide share push --changed
+  needs:
+    - generate
+    - job: deploy_production
+      optional: true
+{% endif %}
+{% if docs %}
+
+document:
+  stage: document
+  image: [[ image | scalar(4) ]]
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  artifacts:
+    name: opentide-docs
+    paths:
+      - [[ (docs_output ~ "/") | scalar(8) ]]
+[[ install() ]]
+  script:
+[[ (docs) | items(4) ]]
+  needs:
+    - generate
+{% endif %}

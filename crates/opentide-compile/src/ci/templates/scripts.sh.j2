@@ -1,0 +1,204 @@
+{#- The shell every provider's pipeline runs (`ci/writeback.py`,
+    `ci/inflight.py`): each macro is one script, its lines without a final
+    newline. The provider templates place them with `indent`. -#}
+
+{#- Replace the checkout's deployment state with the default branch's, and
+    record it as a local commit the write-back builds on
+    (`overlay_default_branch_state`). -#}
+{% macro overlay(fetch) -%}
+[[ fetch ]]
+rm -rf -- .opentide/states/deployment
+git rm -r -q --cached --ignore-unmatch -- .opentide/states/deployment
+if git cat-file -e "FETCH_HEAD:.opentide/states/deployment" 2>/dev/null; then
+  git checkout FETCH_HEAD -- .opentide/states/deployment
+fi
+if git diff --cached --quiet -- .opentide/states/deployment; then
+  state_base=$(git rev-parse HEAD)
+else
+  state_base=$(git commit-tree "$(git write-tree)" -p HEAD -m "opentide: deployment state of the default branch")
+fi
+echo "$state_base" > "$(git rev-parse --git-path opentide-state-base)"
+{%- endmacro %}
+
+{#- Stage the deployment state folder, deletions included (`_stage_states`). -#}
+{% macro stage_states(pad="") -%}
+[[ pad ]]if [ -d .opentide/states/deployment ] || [ -n "$(git ls-files -- .opentide/states/deployment)" ]; then
+[[ pad ]]  git add -A -- .opentide/states/deployment
+[[ pad ]]fi
+{%- endmacro %}
+
+{#- Commit the production write-backs on the overlay commit and push them;
+    the deployment state is published whatever happens to the rule files
+    (`production_writeback`). `rules` is the rules folder as a shell word,
+    `side_push` the push with its refspec replaced by the per-commit side
+    ref. -#}
+{% macro writeback(rules, push, fetch, side_push) -%}
+if [ -f "$(git rev-parse --git-path opentide-state-base)" ]; then
+  git reset -q --soft "$(cat "$(git rev-parse --git-path opentide-state-base)")"
+fi
+writeback_status=0
+[[ stage_states() ]]
+git diff -z --name-only -- [[ rules ]] > "$(git rev-parse --git-path opentide-rule-files)"
+set --
+while IFS= read -r -d '' rule_file; do
+  set -- "$@" --file "$rule_file"
+done < "$(git rev-parse --git-path opentide-rule-files)"
+if [ "$#" -gt 0 ]; then
+  if opentide validate --strict "$@"; then
+    git add -u -- [[ rules ]]
+  else
+    echo "opentide validate --strict failed on the deployed rule files: committing the deployment state only, not the rule files." >&2
+    writeback_status=1
+  fi
+fi
+if git diff --staged --quiet; then
+  echo "No deployment write-backs to commit"
+  exit "$writeback_status"
+fi
+git commit -q -m "ci: record production deployment [skip ci]"
+git reset -q --hard HEAD
+state_commit=$(git rev-parse HEAD)
+state_published=0
+# shellcheck disable=SC2317,SC2329 # run by the EXIT trap below
+opentide_state_exit() {
+  exit_status=$?
+  if [ "$state_published" -ne 1 ]; then
+    echo "The deployment state did not reach the default branch. The vendor ids this run recorded are printed below and pushed to refs/opentide/deployment-state/<commit>; record them before the next deploy." >&2
+    git --no-pager diff "$state_commit^" "$state_commit" -- .opentide/states/deployment >&2 || true
+    [[ side_push ]] >&2 || true
+  fi
+  exit "$exit_status"
+}
+trap opentide_state_exit EXIT
+push_attempt=1
+until [[ push ]]; do
+  if [ "$push_attempt" -ge 5 ]; then
+    echo "Push rejected $push_attempt times; giving up." >&2
+    exit 1
+  fi
+  push_attempt=$((push_attempt + 1))
+  [[ fetch ]]
+  if ! git rebase -q --onto FETCH_HEAD HEAD~1; then
+    git rebase --abort
+    echo "The rule write-back conflicts with the default branch: pushing the deployment state alone so no vendor id is lost." >&2
+    writeback_status=1
+    git reset -q --hard FETCH_HEAD
+    if ! opentide deploy replay-state "$state_commit"; then
+      echo "Could not replay the deployment state onto the default branch." >&2
+      exit 1
+    fi
+[[ stage_states("    ") ]]
+    if git diff --staged --quiet; then
+      echo "The default branch already holds this deployment state." >&2
+      state_published=1
+      exit 1
+    fi
+    git commit -q -m "ci: record production deployment [skip ci]"
+    state_commit=$(git rev-parse HEAD)
+  fi
+done
+state_published=1
+exit "$writeback_status"
+{%- endmacro %}
+
+{#- Deploy, always write back, and keep the deploy's exit status, for a
+    provider whose script stops at the first failing line
+    (`deploy_then_writeback`). -#}
+{% macro deploy_then_writeback(deploy, rules, push, fetch, side_push) -%}
+deploy_status=0
+touch "$(git rev-parse --git-path opentide-deploy-started)"
+[[ deploy ]] || deploy_status=$?
+if [ "$deploy_status" -ne 0 ]; then
+  echo "Deploy failed (exit $deploy_status); committing what it recorded before it stopped." >&2
+fi
+set +e
+(
+set -e
+[[ writeback(rules, push, fetch, side_push) ]]
+)
+writeback_exit=$?
+touch "$(git rev-parse --git-path opentide-writeback-done)"
+set -e
+if [ "$deploy_status" -ne 0 ]; then
+  exit "$deploy_status"
+fi
+exit "$writeback_exit"
+{%- endmacro %}
+
+{#- GitLab's `after_script`: the write-back of a job cancelled mid-deploy
+    (`writeback_after_cancel`). -#}
+{% macro writeback_after_cancel(rules, push, fetch, side_push) -%}
+if [ -f "$(git rev-parse --git-path opentide-deploy-started)" ] && [ ! -f "$(git rev-parse --git-path opentide-writeback-done)" ]; then
+  echo "The job stopped after the deploy started and before its write-back: committing what the deploy recorded." >&2
+  git rebase --abort 2>/dev/null || true
+(
+set -e
+[[ writeback(rules, push, fetch, side_push) ]]
+)
+fi
+{%- endmacro %}
+
+{#- Stage the inflight shards, commit when something changed, and push onto
+    the latest default branch, retrying on a moved tip (`_commit_and_push`). -#}
+{% macro commit_and_push(message, empty_note, push, fetch) -%}
+mkdir -p .opentide/inflight
+git add .opentide/inflight/
+if git diff --staged --quiet; then
+  echo "[[ empty_note ]]"
+  exit 0
+fi
+git commit -m "[[ message ]]"
+push_attempt=1
+until [[ push ]]; do
+  if [ "$push_attempt" -ge 5 ]; then
+    echo "Push rejected $push_attempt times; giving up." >&2
+    exit 1
+  fi
+  push_attempt=$((push_attempt + 1))
+  [[ fetch ]]
+  git rebase FETCH_HEAD
+done
+{%- endmacro %}
+
+{#- Start from exactly the default branch's shards (`_default_branch_shards`). -#}
+{% macro default_branch_shards(ref) -%}
+rm -rf .opentide/inflight
+git rev-parse "[[ ref ]]" > "$(git rev-parse --git-path opentide-inflight-base)"
+git checkout "$(cat "$(git rev-parse --git-path opentide-inflight-base)")" -- .opentide/inflight 2>/dev/null || mkdir -p .opentide/inflight
+{%- endmacro %}
+
+{#- Commit the regenerated shards in a worktree of the default branch, never
+    on the pull request (`_publish_on_default_branch`). -#}
+{% macro publish_shards(push, fetch) -%}
+shards_repo="$PWD"
+shards_base="$(mktemp -d)"
+git worktree add --detach "$shards_base" "$(cat "$(git rev-parse --git-path opentide-inflight-base)")"
+trap 'cd "$shards_repo" && git worktree remove --force "$shards_base"' EXIT
+rm -rf "$shards_base/.opentide/inflight"
+mkdir -p "$shards_base/.opentide"
+cp -R .opentide/inflight "$shards_base/.opentide/inflight"
+cd "$shards_base" || exit
+[[ commit_and_push("ci: update inflight preview shards [skip ci]", "No inflight shard changes", push, fetch) ]]
+{%- endmacro %}
+
+{#- Push and sign with the SSH key in OPENTIDE_PUSH_SSH_KEY, when it is set
+    (`gitlab_push_setup`). -#}
+{% macro gitlab_push_setup() -%}
+if [ -n "${OPENTIDE_PUSH_SSH_KEY:-}" ]; then
+  if [ ! -f "$OPENTIDE_PUSH_SSH_KEY" ]; then
+    echo "OPENTIDE_PUSH_SSH_KEY must be a CI/CD variable of type File holding the private key." >&2
+    exit 1
+  fi
+  if [ ! -s "${OPENTIDE_PUSH_SSH_KNOWN_HOSTS:-}" ]; then
+    echo "OPENTIDE_PUSH_SSH_KEY is set, but OPENTIDE_PUSH_SSH_KNOWN_HOSTS is not a File variable holding the server's known_hosts lines; refusing to push to an unchecked host." >&2
+    exit 1
+  fi
+  command -v ssh-keygen > /dev/null || apt-get install -y -qq --no-install-recommends openssh-client > /dev/null
+  chmod 600 "$OPENTIDE_PUSH_SSH_KEY"
+  git config core.sshCommand "ssh -i \"$OPENTIDE_PUSH_SSH_KEY\" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=\"$OPENTIDE_PUSH_SSH_KNOWN_HOSTS\""
+  git config gpg.format ssh
+  git config user.signingkey "$OPENTIDE_PUSH_SSH_KEY"
+  git config commit.gpgsign true
+  echo 'Pushing and signing with the OPENTIDE_PUSH_SSH_KEY key.'
+fi
+{%- endmacro %}

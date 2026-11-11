@@ -21,6 +21,7 @@ pub mod embed;
 pub mod env;
 pub mod envelope;
 pub mod explain;
+pub mod git_baseline;
 pub mod hoist;
 pub mod json;
 pub mod logging;
