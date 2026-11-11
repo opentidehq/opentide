@@ -25,6 +25,20 @@ How a run stays the same as a spawned command:
 Requests are handled one at a time, in the order they arrive. ``$/cancelRequest``
 acts at once; ``invalidate`` is queued with the requests, so it takes effect
 after the running command and before the next one.
+
+**The Rust engine (#822).** A run whose command the engine selection
+(``OPENTIDE_ENGINE`` in the server's or the run's environment, else the
+command's default, :mod:`opentide.cli.engine_defaults`) gives to its Rust
+implementation runs that implementation in this process
+(``opentide._native.run_cli``), with the run's environment and working
+directory, and answers with the document it prints. A read-only run keeps
+its workspace loaded in the Rust session for the next one
+(``opentide-workspace``'s ``session``): it is brought up to date at each run
+(an edit on disk is read without an ``invalidate``, and only the files that
+changed are read again), ``invalidate`` reaches it, and a run that may
+write drops it, as for the registry. Its progress events are forwarded as
+``progress`` notifications once it returns. ``compare`` runs both
+implementations, as at a terminal.
 """
 
 from __future__ import annotations
@@ -172,6 +186,10 @@ class CommandRunner:
         #: Registry snapshots of read-only runs, kept between runs (``IndexManager._retained``).
         self.snapshots: dict[Any, Any] = {}
         self._group: Any = None
+        #: Whether a run used the Rust engine, whose session may keep workspaces.
+        self._used_rust = False
+        #: Whether a Rust run is in progress: a cancel interrupts it.
+        self._rust_running = False
 
     @property
     def group(self) -> Any:
@@ -225,6 +243,9 @@ class CommandRunner:
             message = f"opentide {' '.join(self.command_words(argv))} cannot run under serve"
             return RunOutcome(self._usage_document(argv, message), 2)
         keep = self.keeps_registry(argv)
+        rust = self._rust_command(argv, env, cwd_given=bool(cwd))
+        if rust is not None:
+            return self._run_rust(argv, env, cwd, keep=keep, on_done=on_done)
         saved_stdout = sys.stdout
         buffer = io.BytesIO()
         capture = io.TextIOWrapper(buffer, encoding="utf-8", newline="\n", write_through=True)
@@ -267,13 +288,13 @@ class CommandRunner:
             if not keep:
                 # It may have written any workspace (--repo names one), so keep none.
                 self.snapshots.clear()
+                self._clear_rust_workspaces()
         capture.flush()
         text = buffer.getvalue().decode("utf-8", errors="replace")
         return RunOutcome(self._document(argv, text, code), code)
 
-    @contextlib.contextmanager
-    def _environment(self, env: Mapping[str, str] | None, *, cwd_given: bool) -> Generator[None]:
-        """The server's starting environment, then *env*; put back afterwards."""
+    def run_environment(self, env: Mapping[str, str] | None, *, cwd_given: bool) -> dict[str, str]:
+        """The variables a run sees: the server's starting environment, then *env*."""
         values = dict(self.base_env)
         if cwd_given:
             # cwd comes before OPENTIDE_REPO_ROOT: drop the inherited one (an
@@ -283,6 +304,115 @@ class CommandRunner:
         values.update(env or {})
         if cwd_given and env and "OPENTIDE_REPO_ROOT" in env:
             values.pop("OPENTIDE_REPO_ROOT")
+        return values
+
+    def _rust_command(
+        self, argv: Sequence[str], env: Mapping[str, str] | None, *, cwd_given: bool
+    ) -> Any:
+        """The Rust implementation that runs *argv*, or ``None`` when it goes through Python.
+
+        Help is the command tree's (Click's), and ``compare``, an engine that
+        is none and ``rust`` for a command without a Rust implementation are
+        the dispatcher's, as at a terminal.
+        """
+        options = list(argv[: list(argv).index("--")] if "--" in argv else argv)
+        if "--help" in options or "-h" in options:
+            return None
+        words = self.command_words(argv)
+        if not words:
+            return None
+        from opentide.cli.engines import rust_command
+
+        return rust_command(words, self.run_environment(env, cwd_given=cwd_given))
+
+    def _run_rust(
+        self,
+        argv: Sequence[str],
+        env: Mapping[str, str] | None,
+        cwd: str | None,
+        *,
+        keep: bool,
+        on_done: Callable[[], None] | None,
+    ) -> RunOutcome:
+        """Run *argv* on its Rust implementation in this process; *keep*: warm."""
+        from opentide import __version__
+        from opentide.analysis import EngineUnavailableError, engine
+        from opentide.core import progress_events
+
+        directory = Path(cwd) if cwd else self.cwd
+        if not directory.is_dir():
+            message = f"[Errno 2] No such file or directory: {str(directory)!r}"
+            return RunOutcome(self._failure_document(argv, message, 1), 1)
+        values = self.run_environment(env, cwd_given=bool(cwd))
+        values["OPENTIDE_ENGINE"] = "rust"
+        # Events come back on stderr, and are forwarded as notifications.
+        values[progress_events.PROGRESS_ENV] = progress_events.JSON_VALUE
+        try:
+            native = engine()
+        except EngineUnavailableError as error:
+            return RunOutcome(self._failure_document(argv, str(error), 1), 1)
+        code: int | None = None
+        stdout = stderr = b""
+        try:
+            self._rust_running = True
+            code, stdout, stderr = native.run_cli(
+                ["--json", *argv], values, str(directory), __version__, keep
+            )
+            if on_done is not None:
+                on_done()
+        except KeyboardInterrupt:
+            # A cancel raised once the engine had returned: its answer stands.
+            if code is None:
+                code = CANCELLED_EXIT_CODE
+        finally:
+            self._rust_running = False
+            if not keep:
+                self.snapshots.clear()
+                self._clear_rust_workspaces()
+        self._used_rust = True
+        self._forward_stderr(stderr)
+        text = stdout.decode("utf-8", errors="replace")
+        return RunOutcome(self._document(argv, text, code), code)
+
+    @staticmethod
+    def _forward_stderr(stderr: bytes) -> None:
+        """A Rust run's stderr: progress events to the run's sink, the rest to stderr."""
+        from opentide.core import progress_events
+
+        rest: list[str] = []
+        for line in stderr.decode("utf-8", errors="replace").splitlines(keepends=True):
+            try:
+                event = json.loads(line) if line.startswith("{") else None
+            except ValueError:
+                event = None
+            if isinstance(event, dict) and "event" in event:
+                progress_events.emit(event)
+            else:
+                rest.append(line)
+        if rest:
+            with contextlib.suppress(OSError, ValueError):
+                sys.stderr.write("".join(rest))
+                sys.stderr.flush()
+
+    def interrupt_rust(self) -> bool:
+        """Interrupt the Rust run in progress, as Ctrl-C would; whether one was."""
+        if not self._rust_running:
+            return False
+        from opentide.analysis import engine
+
+        return bool(engine().interrupt_cli())
+
+    def _clear_rust_workspaces(self) -> None:
+        """Forget the Rust session's warm workspaces, if a Rust run kept any."""
+        if self._used_rust:
+            from opentide.analysis import engine
+
+            engine().clear_workspaces()
+
+    @contextlib.contextmanager
+    def _environment(self, env: Mapping[str, str] | None, *, cwd_given: bool) -> Generator[None]:
+        """The server's starting environment, then *env*; put back afterwards."""
+        values = self.run_environment(env, cwd_given=cwd_given)
         os.environ.clear()
         os.environ.update(values)
         try:
@@ -374,6 +504,11 @@ class CommandRunner:
         snapshot drops them all: it may be a file a configuration points at.
         """
         resolved = [Path(path) for path in paths]
+        if resolved and self._used_rust:
+            from opentide.analysis import engine
+
+            # Taken into account at each warm workspace's next run.
+            engine().invalidate_workspaces([str(path) for path in resolved])
         if not resolved or not self.snapshots:
             return 0
         dropped = 0
@@ -527,13 +662,14 @@ class Server:
         if job is not None:
             self._interrupt(job)
 
-    @staticmethod
-    def _interrupt(job: _Job) -> None:
+    def _interrupt(self, job: _Job) -> None:
         with job.lock:
             if job.finished or job.cancelled or job.thread_id is None:
                 job.cancelled = True
                 return
             job.cancelled = True
+            # A Rust run holds no Python frame to raise in until it returns.
+            self.runner.interrupt_rust()
             _raise_in_thread(job.thread_id, KeyboardInterrupt)
 
     # --- the loop -------------------------------------------------------------------

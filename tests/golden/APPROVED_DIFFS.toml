@@ -820,6 +820,35 @@ changelog = "**`info` draws its tables with comfy-table**"
 #   and still looks every 0.5 s; a scoped pass reloads only the changed
 #   files. The pass rules (full or scoped) are the oracle's.
 
+# UC-2.7 (#822): `serve`, the MCP validation tools and the SDK's
+# `run_validation` follow `OPENTIDE_ENGINE`. No golden case records `serve`,
+# MCP or the SDK, and `OPENTIDE_ENGINE` changes nothing when unset (no default
+# has flipped), so no entry can apply to a case. Announced under "**`opentide
+# serve`, the MCP validation tools and `run_validation` follow
+# `OPENTIDE_ENGINE`, and each command has a default engine**":
+#
+# - `engine-hosts`: `opentide serve` and `opentide mcp start` start under
+#   `OPENTIDE_ENGINE=rust` and `compare`, where they exited `2` with
+#   `engine_not_ported`; the engine applies to what they run. Under `rust`, a
+#   `serve` run of a command with a Rust implementation answers with its
+#   document, where it used to print on stderr and answer that the command
+#   printed no document.
+# - `compare-pins-python`: under `compare`, a command with no Rust
+#   implementation runs Python alone and sets `OPENTIDE_ENGINE=python` for the
+#   rest of its process, so the `run_validation` it calls runs Python too
+#   instead of comparing again.
+# - `rust-config-error`: under `rust`, MCP `validate_rule` and
+#   `validation_report` answer a configuration that does not resolve with a
+#   ToolError `command_failed: ...` (the TOML error without its line and
+#   column), and `run_validation` raises `RustValidationError`, where Python
+#   raised `ConfigFileError` (tests/test_mcp/test_tools_engines.py pins it).
+# - `compare-rust-failure`: under `compare`, a Rust half that fails (no
+#   engine, a configuration it does not resolve) is a difference, logged as
+#   `engine_mismatch` with a diff report, and the call answers with the Python
+#   result.
+# - On Rust the MCP tools and `run_validation` show `validate`'s own announced
+#   differences (`unknown-revision`, `yaml-1-2-dates`, `yaml-error-text`).
+
 # UC-3.2 (#824): `generate exports` on a terminal in `human` mode prints its
 # checklist row once the exports are written. The Rust engine writes them in
 # milliseconds and draws no spinner while they run; the oracle's first line
