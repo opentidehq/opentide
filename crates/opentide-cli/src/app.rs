@@ -556,6 +556,15 @@ impl Run<'_> {
                 };
                 self.emit_report(&report, out, err)
             }
+            "mcp start" => {
+                // stdout is JSON-RPC's: nothing is emitted around the server.
+                let repo = self
+                    .globals
+                    .repo
+                    .as_deref()
+                    .map(|repo| self.resolve(repo).display().to_string());
+                crate::mcp::serve(self.host.cwd.clone(), repo, &self.host.version)
+            }
             "setup ci" => {
                 let report = self.setup_ci(&matches);
                 self.emit_report(&report, out, err)

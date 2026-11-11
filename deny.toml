@@ -114,6 +114,13 @@ skip = [
   { crate = "fluent-uri@0.4.1", reason = "only xtask (tooling, never shipped) uses it, through jsonschema's referencing; the shipped crates use fluent-uri 0.1 through lsp-types" },
   { crate = "getrandom@0.3.4", reason = "only xtask (tooling, never shipped) uses it, through jsonschema's ahash; the shipped crates use getrandom 0.4 through gix" },
   { crate = "r-efi@5.3.0", reason = "only xtask (tooling, never shipped) uses it, through getrandom 0.3 (jsonschema's ahash), on UEFI targets" },
+  # rmcp (the MCP server, UC-3.7, #829) hashes with sha2 0.11, RustCrypto's
+  # digest 0.11 generation; gix's sha1 and opentide-cli's fingerprints are on
+  # digest 0.10. Drop these when gix and opentide-cli move to digest 0.11.
+  { crate = "sha2@0.11.1", reason = "rmcp 3.9 depends on sha2 0.11; opentide-cli's SARIF fingerprints use sha2 0.10, gix's sha1 digest 0.10" },
+  { crate = "digest@0.11.3", reason = "sha2 0.11 (rmcp 3.9) is on digest 0.11; gix's sha1 and sha2 0.10 are on digest 0.10" },
+  { crate = "block-buffer@0.12.1", reason = "digest 0.11 (sha2 0.11, rmcp 3.9) beside digest 0.10 (gix's sha1)" },
+  { crate = "crypto-common@0.2.2", reason = "digest 0.11 (sha2 0.11, rmcp 3.9) beside digest 0.10 (gix's sha1)" },
   { crate = "syn@2.0.119", reason = "garde_derive 0.23 (opentide-schema's validation derive, plan D-2) depends on syn 2 and no garde release uses syn 3 yet; every other proc macro uses syn 3. Drop this when garde moves" },
 ]
 
