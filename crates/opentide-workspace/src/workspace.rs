@@ -306,6 +306,11 @@ impl Workspace {
         self.stats
     }
 
+    /// Each object file that is a symbolic link, and what it resolves to.
+    pub(crate) fn links(&self) -> &HashMap<PathBuf, PathBuf> {
+        &self.links
+    }
+
     /// The filesystem.
     pub fn fs(&self) -> &Arc<dyn FileSystem> {
         &self.fs

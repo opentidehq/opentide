@@ -1,9 +1,8 @@
 //! Every input the `config` fuzz target saved (`fuzz/regressions/config/`,
 //! #843), and its seeds, run through the engine on stable Rust as
-//! `fuzz/src/lib.rs::configuration` runs them: a checker that reports the
-//! input's field paths, the schemas installed, then analysis, hover and
-//! completion. The checker and the schemas are process-wide, so this file is
-//! its own test binary.
+//! `fuzz/src/lib.rs::configuration` runs them: the input's field paths placed
+//! as findings, the schemas installed, then hover and completion. The
+//! schemas are process-wide, so this file is its own test binary.
 
 #![expect(
     clippy::unwrap_used,
@@ -12,9 +11,8 @@
 )]
 
 use opentide_analysis::{
-    AnalyzeRequest, CONFIGURATIONS_DIRECTORY, ConfigIssue, ConfigRequest, LanguageId,
-    MemoryWorkspace, Severity, configuration_completions, configuration_hover,
-    install_configuration_schemas, set_configuration_checker,
+    CONFIGURATIONS_DIRECTORY, ConfigIssue, Severity, configuration_completions,
+    configuration_hover, install_configuration_schemas,
 };
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -78,13 +76,13 @@ fn exercise(data: &[u8]) {
         return;
     };
     let mut issues = Vec::new();
-    let mut fail = false;
     for part in parts {
         let Ok(path) = std::str::from_utf8(part) else {
             continue;
         };
+        // `!` made a host's checker fail; the checks are native now and
+        // cannot (UC-2.6): the saved inputs that hold it place nothing for it.
         if path == "!" {
-            fail = true;
             continue;
         }
         let severity = match path.len() % 4 {
@@ -104,32 +102,11 @@ fn exercise(data: &[u8]) {
             message: path.to_string(),
         });
     }
-    set_configuration_checker(Some(Box::new(move |_: &ConfigRequest<'_>| {
-        if fail {
-            Err("the host's checker failed".to_string())
-        } else {
-            Ok(issues.clone())
-        }
-    })));
     let file = FILES[usize::from(pick) % FILES.len()];
     let path = format!("/w/{CONFIGURATIONS_DIRECTORY}{file}");
-    let other = format!("/w/{CONFIGURATIONS_DIRECTORY}deployment.toml");
-    let host = MemoryWorkspace {
-        files: vec![
-            (path.clone(), text.to_string()),
-            (other, "[deployment]\n".to_string()),
-        ],
-    };
-    let response = opentide_analysis::analyze(
-        &host,
-        AnalyzeRequest {
-            uri: path.clone(),
-            language: LanguageId::Config,
-            text: text.to_string(),
-        },
-    );
+    let diagnostics = opentide_analysis::place_configuration_issues(text, issues);
     let lines = u32::try_from(text.split('\n').count()).unwrap();
-    for d in &response.diagnostics {
+    for d in &diagnostics {
         assert!(d.range.start.line < lines.max(1), "{d:?}");
         assert!(d.range.end.line < lines.max(1), "{d:?}");
         assert!(
@@ -163,7 +140,6 @@ fn saved_configuration_inputs_do_not_crash_or_hang() {
             ran += 1;
         }
     }
-    set_configuration_checker(None);
     assert!(ran >= 10, "the seeds ran ({ran})");
 }
 

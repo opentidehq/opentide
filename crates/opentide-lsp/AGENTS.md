@@ -7,8 +7,9 @@ JSON or text. The Python package serves it as `opentide lsp start`.
 
 ## Place
 
-application: depends on opentide-core, -analysis, -highlight, -kql, -spl and -tide. Used by
-opentide-wasm and opentide-native.
+application: depends on opentide-core, -analysis, -highlight, -kql, -spl, -tide, -workspace
+and -schema. Used by opentide-wasm, opentide-native and xtask (`lsp parity`). `publish = false`
+while opentide-workspace and opentide-schema are (ADR 0010's addendum).
 
 ## Invariants
 
@@ -17,6 +18,10 @@ opentide-wasm and opentide-native.
 - Positions are UTF-16 at the protocol edge, converted once in `handlers.rs` (`offset`).
 - The `opentide/*` custom requests are a cross-repository contract (plan §3, invariant 4).
 - It may read files (it is the native host); the engines it calls may not.
+- Tide object diagnostics are `validate`'s (`src/checks.rs`): each root's `Workspace` over the
+  disk and the open buffers (`OverlayFs`), kept current with `Workspace::invalidate`; never add
+  an object check here or in the engine. Configuration buffers are checked with
+  `opentide_schema::configuration::checks::buffer_issues`.
 
 ## Test
 
@@ -24,10 +29,11 @@ opentide-wasm and opentide-native.
 cargo nextest run --profile fast -p opentide-lsp        # in-process MessageSession tests, trycmd CLI
 cargo nextest run --profile ci -p opentide-lsp          # adds the stdio server tests
 cargo run -p opentide-lsp -- generate-highlights --check
+cargo xtask lsp parity --corpus faults                  # published diagnostics = validate's
 ```
 
-`tests/cli.rs` runs `tests/cmd/*.trycmd`. `tests/e2e_stdio.rs`, `protocol.rs`, `catalog.rs` and
-`lint_toml.rs` drive the binary over stdio (`tests/common/`). CI also runs this crate on Windows
+`tests/cli.rs` runs `tests/cmd/*.trycmd`. `tests/e2e_stdio.rs`, `protocol.rs` and `catalog.rs`
+drive the binary over stdio (`tests/common/`). CI also runs this crate on Windows
 and the `scripts/engine/clients` pytest-lsp and Neovim checks.
 
 ## Do not
@@ -37,7 +43,8 @@ and the `scripts/engine/clients` pytest-lsp and Neovim checks.
 
 ## Work items that change this crate
 
-- UC-2.6 (#821): the server on `opentide-workspace`, duplicate checks removed.
+- UC-2.6 (#821): the server on `opentide-workspace`, duplicate checks removed (done; lint's
+  findings wait for #905).
 - UC-3.6 (#828): `opentide lsp start` and `serve` in the Rust CLI.
 - UC-5.3 (#838): the fate of `@opentide/lsp-client` and `@opentide/lsp-worker`.
 

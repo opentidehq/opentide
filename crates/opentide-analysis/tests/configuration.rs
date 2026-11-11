@@ -1,6 +1,6 @@
 //! Configuration TOML: the host checks, the engine places, and the host's
-//! schemas give hover and completion. The checker and the schemas are
-//! process-wide, so this binary has its own process and its tests take a lock.
+//! schemas give hover and completion. The schemas are process-wide, so this
+//! binary has its own process and its tests take a lock.
 
 #![expect(
     clippy::expect_used,
@@ -9,12 +9,12 @@
 )]
 
 use opentide_analysis::{
-    AnalyzeRequest, ConfigIssue, ConfigRequest, LanguageId, MemoryWorkspace, Severity, analyze,
-    codes, configuration_completions, configuration_diagnostics, configuration_hover,
-    install_configuration_schemas, set_configuration_checker,
+    AnalyzeRequest, ConfigIssue, LanguageId, MemoryWorkspace, Severity, analyze,
+    configuration_completions, configuration_hover, install_configuration_schemas,
+    place_configuration_issues,
 };
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Mutex, MutexGuard};
 
 static LOCK: Mutex<()> = Mutex::new(());
 
@@ -50,34 +50,8 @@ fn issue(code: &str, path: &[&str], severity: Severity, message: &str) -> Config
     }
 }
 
-/// A checker that returns `issues` whatever it is asked, and records the
-/// requests.
-/// Each request a checker saw: its path and the open buffers' paths.
-type Seen = Arc<Mutex<Vec<(String, Vec<String>)>>>;
-
-fn fake_checker(issues: Vec<ConfigIssue>) -> Seen {
-    let seen = Arc::new(Mutex::new(Vec::new()));
-    let record = Arc::clone(&seen);
-    set_configuration_checker(Some(Box::new(move |request: &ConfigRequest<'_>| {
-        record.lock().unwrap().push((
-            request.path.to_string(),
-            request.open.iter().map(|(path, _)| path.clone()).collect(),
-        ));
-        Ok(issues.clone())
-    })));
-    seen
-}
-
 fn line_text(text: &str, line: u32) -> &str {
     text.lines().nth(line as usize).unwrap_or("")
-}
-
-#[test]
-fn without_a_checker_there_are_no_diagnostics() {
-    let _guard = lock();
-    set_configuration_checker(None);
-    let text = "[[misp]]\ndistribution = \"this-community\"\n";
-    assert!(configuration_diagnostics(SHARING, text, &[]).is_empty());
 }
 
 #[test]
@@ -88,40 +62,41 @@ fn without_a_checker_there_are_no_diagnostics() {
 fn each_finding_is_placed_on_its_key() {
     let _guard = lock();
     let text = "# Sharing\n[[misp]]\nname = \"misp-internal\"\ndistribution = \"this-community\"\n\n[[misp]]\nname = \"misp-lab\"\nmax_tlp = \"white\"\n";
-    fake_checker(vec![
-        issue(
-            "unknown_key",
-            &["misp", "0", "distribution"],
-            Severity::Error,
-            "unknown key",
-        ),
-        issue(
-            "max_tlp_unknown",
-            &["misp", "1", "max_tlp"],
-            Severity::Error,
-            "not a tlp",
-        ),
-        issue(
-            "missing_field",
-            &["misp", "1", "url"],
-            Severity::Error,
-            "Field required",
-        ),
-        issue(
-            "missing_field",
-            &["misp", "1", "api_key"],
-            Severity::Error,
-            "[[misp]] block 'misp-lab' is missing api_key.",
-        ),
-        issue(
-            "sharing_directory",
-            &[],
-            Severity::Error,
-            "configurations/sharing/ is not a sharing configuration.",
-        ),
-    ]);
-    let found = configuration_diagnostics(SHARING, text, &[]);
-    set_configuration_checker(None);
+    let found = place_configuration_issues(
+        text,
+        vec![
+            issue(
+                "unknown_key",
+                &["misp", "0", "distribution"],
+                Severity::Error,
+                "unknown key",
+            ),
+            issue(
+                "max_tlp_unknown",
+                &["misp", "1", "max_tlp"],
+                Severity::Error,
+                "not a tlp",
+            ),
+            issue(
+                "missing_field",
+                &["misp", "1", "url"],
+                Severity::Error,
+                "Field required",
+            ),
+            issue(
+                "missing_field",
+                &["misp", "1", "api_key"],
+                Severity::Error,
+                "[[misp]] block 'misp-lab' is missing api_key.",
+            ),
+            issue(
+                "sharing_directory",
+                &[],
+                Severity::Error,
+                "configurations/sharing/ is not a sharing configuration.",
+            ),
+        ],
+    );
     assert_eq!(found.len(), 5);
 
     let unknown = &found[0];
@@ -164,67 +139,40 @@ fn each_finding_is_placed_on_its_key() {
 fn a_parse_error_is_placed_where_toml_breaks() {
     let _guard = lock();
     let text = "[promotion]\nenabled = \n";
-    fake_checker(vec![issue(
-        "config_parse",
-        &[],
-        Severity::Error,
-        "Not valid TOML: TOMLDecodeError.",
-    )]);
-    let found = configuration_diagnostics("/w/.opentide/configurations/deployment.toml", text, &[]);
-    set_configuration_checker(None);
+    let found = place_configuration_issues(
+        text,
+        vec![issue(
+            "config_parse",
+            &[],
+            Severity::Error,
+            "Not valid TOML: TOMLDecodeError.",
+        )],
+    );
     assert_eq!(found.len(), 1);
     assert_eq!(found[0].code, "config_parse");
     assert_eq!(found[0].range.start.line, 1, "{:?}", found[0]);
 }
 
+/// The engine reports nothing on a configuration buffer by itself: the
+/// host's checks are the findings (UC-2.6, #821).
 #[test]
-fn a_failing_checker_is_one_warning() {
-    let _guard = lock();
-    set_configuration_checker(Some(Box::new(|_: &ConfigRequest<'_>| {
-        Err("ImportError: no module".to_string())
-    })));
-    let found = configuration_diagnostics(SHARING, "[[misp]]\n", &[]);
-    set_configuration_checker(None);
-    assert_eq!(found.len(), 1);
-    assert_eq!(found[0].code, codes::CONFIG_CHECK_FAILED);
-    assert_eq!(found[0].severity, Severity::Warning);
-    assert!(found[0].message.contains("ImportError"));
-}
-
-#[test]
-fn analyze_hands_the_checker_the_other_open_configuration_buffers() {
-    let _guard = lock();
-    let seen = fake_checker(Vec::new());
-    let deployment = "/w/.opentide/configurations/deployment.toml";
+fn analyze_leaves_configuration_findings_to_the_host() {
     let host = MemoryWorkspace {
-        files: vec![
-            (SHARING.into(), "[[misp]]\n".into()),
-            (
-                deployment.into(),
-                "[[statuses]]\nname = \"STAGING\"\n".into(),
-            ),
-            ("/w/objects/rule.yaml".into(), "name: R\n".into()),
-            ("/w/Cargo.toml".into(), "[package]\n".into()),
-        ],
+        files: vec![(SHARING.into(), "[[misp]]\ndistribution = 1\n".into())],
     };
     let response = analyze(
         &host,
         AnalyzeRequest {
             uri: SHARING.into(),
             language: LanguageId::Config,
-            text: "[[misp]]\n".into(),
+            text: "[[misp]]\ndistribution = 1\n".into(),
         },
     );
-    set_configuration_checker(None);
     assert!(response.diagnostics.is_empty());
     assert!(
         response.tokens.is_empty(),
         "configuration TOML has no tokens"
     );
-    let seen = seen.lock().unwrap();
-    assert_eq!(seen.len(), 1);
-    assert_eq!(seen[0].0, SHARING);
-    assert_eq!(seen[0].1, vec![deployment.to_string()]);
 }
 
 fn labels(path: &str, text: &str) -> Vec<String> {
