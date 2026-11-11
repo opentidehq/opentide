@@ -341,7 +341,9 @@ fn an_editor_session_from_initialize_to_exit() {
         // The client can tell `opentide lsp start` from the bare binary.
         let host = &init["result"]["capabilities"]["experimental"]["opentide"];
         assert_eq!(host["host"]["name"], "opentide", "{flags:?}");
-        assert_eq!(host["catalog"], "host");
+        // The server builds the field catalogs and the configuration schemas
+        // from opentide-schema itself (#926): `lsp start` hands it neither.
+        assert_eq!(host["catalog"], "models");
         assert_eq!(host["configurationChecks"], true);
         assert_eq!(host["configurationSchemas"], true);
         assert_eq!(published["method"], "textDocument/publishDiagnostics");
