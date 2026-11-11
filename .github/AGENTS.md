@@ -37,6 +37,12 @@ name a toolchain, the dated nightly `fuzz/NIGHTLY` pins. Every job that runs car
 `RUSTFLAGS=-Dwarnings` (the nightly fuzz build aside); the test jobs also set
 `CARGO_PROFILE_DEV_DEBUG=line-tables-only` and `INSTA_UPDATE=no` (CI never writes a snapshot).
 
+**No Ubuntu apt in ci.yml or the engine release** (`tests/test_ci/test_pinned_ci_tools.py`): GitHub's
+runners lost Ubuntu's mirrors on 2026-11-11, so the tools these jobs need come from their upstream
+releases, pinned by version and sha256: the musl targets' `musl-gcc` from musl's tarball
+(`scripts/engine/install-musl.sh`, Debian's copy of the same tarball as the fallback) and the
+`clients` job's Neovim from its GitHub release (`scripts/engine/install-neovim.sh`).
+
 **Rust caches, one strategy** (`tests/test_ci/test_rust_caches.py`): every rust-cache step in
 ci.yml names its cache (`shared-key`, plus `key` per OS or target), and each name has one job that
 saves it; readers use `save-if: false` and repeat its runner and `CARGO*`/`RUST*` environment,

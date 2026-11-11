@@ -652,7 +652,7 @@ jobs:
   # Real clients against the server (language-server#185 P2.8): pytest-lsp
   # replays the capabilities VS Code, Neovim and Emacs send and checks each
   # response against them, and Neovim's own client must show each diagnostic
-  # once. Informational while the recorded capabilities and Ubuntu's Neovim move.
+  # once. Informational while the recorded capabilities move.
   clients:
     name: LSP clients (informational)
     runs-on: ubuntu-latest
@@ -687,10 +687,13 @@ jobs:
         run: |
           pip install -r scripts/engine/clients/requirements.txt
           cd scripts/engine/clients && python -m pytest -q
+      # Neovim's GitHub release, pinned by version and sha256
+      # (scripts/engine/install-neovim.sh), not Ubuntu's apt archive.
       - name: Neovim headless
         run: |
-          sudo apt-get update -q && sudo apt-get install -y -q neovim
-          nvim --headless --clean -l scripts/engine/nvim-smoke.lua target/debug/opentide-lsp
+          set -euo pipefail
+          bash scripts/engine/install-neovim.sh "$RUNNER_TEMP/nvim"
+          "$RUNNER_TEMP/nvim/bin/nvim" --headless --clean -l scripts/engine/nvim-smoke.lua target/debug/opentide-lsp
 
   # analyze() per language and hover in a 1,000-object workspace
   # (language-server#181). The numbers go in the job summary for comparing

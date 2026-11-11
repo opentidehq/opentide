@@ -117,9 +117,15 @@ jobs:
         with:
           shared-key: engine-release
           key: ${{ matrix.target }}
+      # musl-gcc, as Ubuntu's musl-tools ships it, built from musl's release
+      # tarball pinned by sha256: no dependency on Ubuntu's apt mirrors.
       - name: musl linker
         if: contains(matrix.target, 'musl')
-        run: sudo apt-get update && sudo apt-get install -y musl-tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/engine/install-musl.sh "$RUNNER_TEMP/musl"
+          echo "$RUNNER_TEMP/musl/bin" >> "$GITHUB_PATH"
       - name: build
         shell: bash
         env:
