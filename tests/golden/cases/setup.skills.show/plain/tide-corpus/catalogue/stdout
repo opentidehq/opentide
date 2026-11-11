@@ -1,0 +1,4 @@
+opentide-detection-rule  Detection rules
+Author rules as rule::1.1 YAML under objects/rules/.
+not installed
+→ opentide setup skills --install opentide-detection-rule --generic --yes · install it

@@ -17,12 +17,15 @@
 //!   transforms;
 //! - [`configuration`]: each configuration file's schema and their router;
 //! - [`workspace`]: the files of the `schemas`, `templates` and `snippets`
-//!   phases, from a workspace's resolved configuration.
+//!   phases, from a workspace's resolved configuration;
+//! - [`catalog`]: the language server's field catalog (`fields.json`,
+//!   `deprecations.json`), from each revision's model and editor schema.
 //!
 //! The module is I/O-free: hosts (`cargo xtask codegen`, the CLI) write the
 //! files.
 
 pub mod annotate;
+pub mod catalog;
 pub mod configuration;
 pub mod json;
 pub mod models;

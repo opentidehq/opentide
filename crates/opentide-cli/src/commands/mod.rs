@@ -1,7 +1,7 @@
 //! The commands that run on this crate (UC-2.4: `info`, `rules unreviewed`;
 //! UC-3.2: `generate exports`; UC-3.5: `validate`, `validate query`, `lint`,
 //! `explain`; UC-3.1c: `deploy --dry-run`; UC-3.5c: `doctor --offline`,
-//! `migrate vocab-scope`).
+//! `migrate vocab-scope`; UC-3.5d: `new`, `generate <phase>`).
 //!
 //! A command reads its arguments and the workspace and returns a
 //! [`Report`]: the JSON envelope's parts, and what the text modes print
@@ -17,8 +17,10 @@ pub mod info;
 pub mod lint;
 pub mod lsp;
 pub mod migrate;
+pub mod new;
 pub mod rules;
 pub mod setup;
+pub mod skills;
 pub mod tui;
 pub mod validate;
 pub mod validate_query;
@@ -64,6 +66,9 @@ pub struct Report {
     /// Written on stderr first, in every mode (`OPENTIDE_PROGRESS=json`'s
     /// events).
     pub stderr_first: String,
+    /// The next steps as a numbered list under a `Next steps` header, for a
+    /// sequence the reader follows step by step (`setup`).
+    pub numbered_next: bool,
 }
 
 /// One part of a body.
@@ -158,6 +163,7 @@ impl Report {
             whole_stdout: None,
             body_only: false,
             stderr_first: String::new(),
+            numbered_next: false,
         }
     }
 
@@ -173,6 +179,7 @@ impl Report {
             whole_stdout: None,
             body_only: false,
             stderr_first: String::new(),
+            numbered_next: false,
         }
     }
 

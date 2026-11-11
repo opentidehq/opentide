@@ -32,11 +32,17 @@ instead, so an exclusion never quietly shrinks the scan.
 from __future__ import annotations
 
 import re
+import sys
 from pathlib import Path
 from typing import Any
 
 import pytest
 import yaml
+
+if sys.version_info >= (3, 11):
+    import tomllib
+else:
+    import tomli as tomllib
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
@@ -279,16 +285,61 @@ def _check_excluded_crates_are_scanned(text: str, root: Path = ROOT) -> None:
         )
 
 
+_DEPENDENCY_SECTIONS = ("dependencies", "build-dependencies")
+
+
+def _check_packaged_crates_avoid_excluded(text: str, root: Path = ROOT) -> None:
+    """A crate ``cargo package`` packages cannot depend on one it leaves out.
+
+    The left-out crates are unpublished, so the packaged crate's dependency on
+    one resolves against crates.io and the whole step fails (opentide-connectors
+    on opentide-workspace, UC-4.1).
+    """
+    excluded, _ = _package_and_scan(text)
+    for manifest_path in sorted((root / "crates").glob("*/Cargo.toml")):
+        manifest = tomllib.loads(manifest_path.read_text(encoding="utf-8"))
+        name = manifest.get("package", {}).get("name", manifest_path.parent.name)
+        if name in excluded:
+            continue
+        for section in _DEPENDENCY_SECTIONS:
+            for dependency in manifest.get(section, {}):
+                assert dependency not in excluded, (
+                    f"{name} is packaged but its {section} name {dependency}, which "
+                    f"`cargo package` leaves out: exclude {name} too and scan its sources"
+                )
+
+
 def test_engine_package_scans_the_crates_it_does_not_package(workflow: dict[str, Any]) -> None:
     text = _engine_package_text(workflow)
     assert "opentide-schema" in _package_and_scan(text)[0]
     _check_excluded_crates_are_scanned(text)
+    _check_packaged_crates_avoid_excluded(text)
 
 
 def test_local_ci_scans_the_crates_it_does_not_package() -> None:
     text = LOCAL_CI.read_text(encoding="utf-8")
     assert "opentide-schema" in _package_and_scan(text)[0]
     _check_excluded_crates_are_scanned(text)
+    _check_packaged_crates_avoid_excluded(text)
+
+
+def test_the_dependency_check_fails_for_a_packaged_crate_on_an_excluded_one(
+    tmp_path: Path,
+) -> None:
+    crate = tmp_path / "crates" / "opentide-connectors"
+    crate.mkdir(parents=True)
+    (crate / "Cargo.toml").write_text(
+        '[package]\nname = "opentide-connectors"\npublish = false\n'
+        "[dependencies]\nopentide-schema.workspace = true\n"
+        "[dev-dependencies]\nopentide-cassette.workspace = true\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(AssertionError, match="opentide-connectors is packaged"):
+        _check_packaged_crates_avoid_excluded(_EXCLUDED_SCANNED, tmp_path)
+    excluded_too = _EXCLUDED_SCANNED.replace(
+        "--exclude opentide-schema", "--exclude opentide-schema --exclude opentide-connectors"
+    )
+    _check_packaged_crates_avoid_excluded(excluded_too, tmp_path)
 
 
 _EXCLUDED_UNSCANNED = (

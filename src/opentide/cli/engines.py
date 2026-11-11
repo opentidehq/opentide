@@ -76,9 +76,10 @@ class RustCommand:
     workspace (a tenant, MISP): ``compare`` refuses it, since both runs would
     reach it and nothing would compare what they did there.
 
-    *requires* names flags of which a run must carry one for the Rust
-    implementation to cover it (``deploy`` runs in Rust with ``--dry-run``
-    only); a run without any is a command with no Rust implementation:
+    *requires* names flags (or words: ``generate``'s phases) of which a run
+    must carry one for the Rust implementation to cover it (``deploy`` runs in
+    Rust with ``--dry-run`` only); a run without any is a command with no
+    Rust implementation:
     ``rust`` refuses it with ``engine_not_ported`` and ``compare`` runs
     Python alone. *refuses* names flags a run must carry none of: ``validate
     query --live`` checks the queries on the tenants, which stays Python's
@@ -139,9 +140,17 @@ RUST_CLI: tuple[str, ...] = (sys.executable, "-m", "opentide.cli.rust")
 #: doctor that reaches PyPI and the proxy stays Python's; ``mcp start`` with UC-3.7
 #: (#829): the Rust server, which hands the tools and resources it has no
 #: implementation of to the Python server's handlers in its own process
-#: (``opentide.mcp_server.bridge``); ``lsp start`` with UC-3.6b (#947): the
-#: language server hosted by the Rust command line, and ``tui``'s refusals
-#: (``usage_tui_needs_tty``): its terminal UI is not ported yet.
+#: (``opentide.mcp_server.bridge``); ``setup skills discover`` and ``setup skills
+#: show`` with UC-4.1 (#831): the opentidehq/skills catalogue through the connectors'
+#: HTTP client; ``setup`` (scripted runs and ``--plan``) and its ``env``, ``hooks``,
+#: ``mcp``, ``platforms`` and ``repo`` with UC-3.6 (#828): the wizard at a terminal,
+#: ``--vscode-setup``, ``--skills`` and ``--plugin`` stay Python's.
+#: ``new threat|objective|rule`` and ``generate`` with phases named
+#: (``generate schemas templates``) with UC-3.5d (#933): its *requires* are
+#: the phase words, so a bare ``generate`` (the full pipeline) stays Python's.
+#: ``lsp start`` with UC-3.6b (#947): the language server hosted by the Rust
+#: command line, and ``tui``'s refusals (``usage_tui_needs_tty``): its terminal
+#: UI is not ported yet.
 RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
     ("commands",): RustCommand(launch=RUST_CLI),
     ("explain",): RustCommand(launch=RUST_CLI),
@@ -166,7 +175,21 @@ RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
     ("generate", "inflight"): RustCommand(launch=RUST_CLI),
     ("generate", "inflight", "prune"): RustCommand(launch=RUST_CLI),
     ("setup", "ci"): RustCommand(launch=RUST_CLI),
+    ("setup", "skills", "discover"): RustCommand(launch=RUST_CLI),
+    ("setup", "skills", "show"): RustCommand(launch=RUST_CLI),
+    ("setup",): RustCommand(launch=RUST_CLI, refuses=("--vscode-setup", "--skills", "--plugin")),
+    ("setup", "env"): RustCommand(launch=RUST_CLI),
+    ("setup", "hooks"): RustCommand(launch=RUST_CLI),
+    ("setup", "mcp"): RustCommand(launch=RUST_CLI),
+    ("setup", "platforms"): RustCommand(launch=RUST_CLI),
+    ("setup", "repo"): RustCommand(launch=RUST_CLI),
     ("mcp", "start"): RustCommand(launch=RUST_CLI),
+    ("generate",): RustCommand(
+        launch=RUST_CLI, requires=("schemas", "templates", "vocabs", "snippets")
+    ),
+    ("new", "threat"): RustCommand(launch=RUST_CLI, rules=("fresh-uuids",)),
+    ("new", "objective"): RustCommand(launch=RUST_CLI, rules=("fresh-uuids",)),
+    ("new", "rule"): RustCommand(launch=RUST_CLI, rules=("fresh-uuids",)),
     ("lsp", "start"): RustCommand(launch=RUST_CLI),
     ("tui",): RustCommand(launch=RUST_CLI),
 }

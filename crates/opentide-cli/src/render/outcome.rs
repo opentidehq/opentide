@@ -162,6 +162,42 @@ impl Console {
     }
 
     /// At most [`MAX_NEXT_ACTIONS`] `→` lines, printed after the outcome line.
+    /// At most three next steps, numbered, under a `Next steps` header
+    /// (the brand's mark beside it in `human` mode), after a blank line.
+    pub fn numbered_next_actions(self, actions: &[NextAction], mode: Mode) -> String {
+        let shown: Vec<&NextAction> = actions.iter().take(MAX_NEXT_ACTIONS).collect();
+        if shown.is_empty() {
+            return String::new();
+        }
+        let mut out = String::from("\n");
+        let bold = Style::new("bold");
+        let mut header = Text::default();
+        if mode == Mode::Human {
+            let mark = if self.colour == Colour::Full {
+                Style::new("bold color(231) on_color(18)")
+            } else {
+                Style::new("bold reverse")
+            };
+            header.append(" \u{224b} ", &mark);
+            header.push_str(" ");
+        }
+        header.append("Next steps", &bold);
+        out.push_str(&self.line(&header));
+        let dim = Style::new("dim");
+        for (number, action) in shown.iter().enumerate() {
+            let mut line = Text::styled(&format!("  {}  ", number + 1), &dim);
+            // The row is dim, the command bold on top of it (Rich's nesting).
+            line.append(&action.command, &Style::new("bold dim"));
+            if !action.reason.is_empty() {
+                line.append(&format!(" {} ", glyphs::SEPARATOR), &dim);
+                line.append(&action.reason, &dim);
+            }
+            out.push_str(&self.print_line(&line, 5));
+        }
+        out
+    }
+
+    /// At most three `→` next steps.
     pub fn next_actions(self, actions: &[NextAction]) -> String {
         actions
             .iter()
@@ -358,6 +394,8 @@ pub struct ResultView {
     pub warnings: Vec<String>,
     /// Next steps.
     pub next_actions: Vec<NextAction>,
+    /// The next steps as a numbered list under a `Next steps` header.
+    pub numbered_next: bool,
 }
 
 /// A result's text: `(stdout, stderr)`.
@@ -424,7 +462,11 @@ pub fn render_result(
         out.push_str(&stdout.outcome(kind, &line));
         if !quiet {
             out.push_str(&stdout.notes(&notes));
-            out.push_str(&stdout.next_actions(&result.next_actions));
+            if result.numbered_next {
+                out.push_str(&stdout.numbered_next_actions(&result.next_actions, mode));
+            } else {
+                out.push_str(&stdout.next_actions(&result.next_actions));
+            }
         }
         if !result.ok && mode == Mode::Agent {
             err.push_str(&stderr.labelled("tip", AGENT_TIP, 0));
@@ -538,6 +580,32 @@ mod tests {
         assert_eq!(
             err,
             "warning: w\nerror: No such type\n  help: look\n  help: did you mean 'rule'?\n→ opentide x · why\n"
+        );
+        let numbered = ResultView {
+            message: "Created X here".into(),
+            status: "completed".into(),
+            ok: true,
+            next_actions: vec![
+                NextAction::new("opentide generate", "schemas"),
+                NextAction::new("opentide validate", ""),
+            ],
+            numbered_next: true,
+            ..ResultView::default()
+        };
+        assert_eq!(
+            render_result(&numbered, PIPE, PIPE, Mode::Plain, false).0,
+            "✓ Created X here\n\nNext steps\n  1  opentide generate · schemas\n  2  opentide validate\n"
+        );
+        let full = Console {
+            colour: Colour::Full,
+            width: None,
+        };
+        assert!(
+            render_result(&numbered, full, PIPE, Mode::Human, false)
+                .0
+                .contains(
+                    "\n\u{1b}[1;38;5;231;48;5;18m \u{224b} \u{1b}[0m \u{1b}[1mNext steps\u{1b}[0m\n"
+                )
         );
         let plan = ResultView {
             message: "Plan: 1 to create".into(),

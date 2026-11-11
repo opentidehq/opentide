@@ -1,0 +1,2 @@
+✗ exports · <SECONDS>
+error: exports: ConfigurationError: paths.toml is invalid: paths.core: unknown key

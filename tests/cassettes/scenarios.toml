@@ -1,0 +1,30 @@
+# The recorded-HTTP scenarios (UC-4.1, #831): each one is a client run whose
+# requests `cargo xtask cassettes record <name>` records through the
+# recording proxy into `<name>.json` beside this file. Never write or edit a
+# cassette by hand; `cargo xtask cassettes check` fails on one whose digest
+# does not match, on one that still holds anything redaction removes, and on a
+# scenario without its cassette or a cassette without its scenario.
+#
+# client: the command line; `{python}` is the oracle's interpreter and
+#   `{oracle}` its bin directory (tests/golden/ORACLE), so the client is the
+#   frozen Python implementation.
+# tenant: a stand-in tenant to start first; it prints its port on its first
+#   line, and every host in `routes` is sent to it.
+# secrets: environment variables given a fresh random value for the run; the
+#   value is redacted wherever it appears.
+# cwd: `tmp` (an empty directory) or `repo`.
+
+[[scenario]]
+name = "mock-platform/deploy"
+description = "The sample connector: look up, create, update and disable a rule, then read one that is not there (404)."
+client = ["{python}", "tests/cassettes/mock_platform/client.py"]
+tenant = ["{python}", "tests/cassettes/mock_platform/tenant.py"]
+routes = ["mock-tenant.invalid"]
+secrets = ["MOCK_PLATFORM_TOKEN"]
+cwd = "repo"
+
+[[scenario]]
+name = "skills/manifest"
+description = "The opentidehq/skills catalogue (manifest.json on main), as `setup skills discover` fetches it; every skills golden case replays it."
+client = ["{oracle}/opentide", "--json", "setup", "skills", "discover"]
+cwd = "tmp"

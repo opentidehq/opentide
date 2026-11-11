@@ -26,14 +26,6 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant, SystemTime};
 
-/// The string the command's keys hold under `key`, if any.
-fn outcome_text(outcome: &Outcome, key: &str) -> Option<String> {
-    outcome.data.iter().find_map(|(name, value)| match value {
-        crate::json::Json::Str(text) if name == key => Some(text.clone()),
-        _ => None,
-    })
-}
-
 /// Command paths with a Rust implementation; every other one is refused with
 /// `engine_not_ported`, as `OPENTIDE_ENGINE=rust` refuses it.
 /// `deploy` runs here with `--dry-run` only (UC-3.1c); a deploy that sends is
@@ -363,7 +355,50 @@ impl Run<'_> {
                 return self.emit(&outcome, &problem.notes, &[], out, err);
             }
         };
-        let words = command_path(&matches);
+        let mut words = command_path(&matches);
+        // `generate schemas templates`: the words after `generate` that are
+        // no subcommand of it are its phases.
+        let mut generate_phases = Vec::new();
+        if words.first().map(String::as_str) == Some("generate")
+            && let Some(("generate", group)) = matches.subcommand()
+            && let Some((first, external)) = group.subcommand()
+            && self
+                .root
+                .find_subcommand("generate")
+                .is_some_and(|generate| generate.find_subcommand(first).is_none())
+        {
+            generate_phases.push(first.to_owned());
+            if let Ok(Some(rest)) = external.try_get_many::<String>("") {
+                generate_phases.extend(rest.cloned());
+            } else if let Ok(Some(rest)) = external.try_get_many::<std::ffi::OsString>("") {
+                generate_phases.extend(rest.map(|word| word.to_string_lossy().into_owned()));
+            }
+            words.truncate(1);
+            // The phases end at the first word that starts with `-`
+            // (`GeneratePhaseGroup`): what follows is `generate`'s own
+            // options, parsed as such, so `generate schemas --bogus` is an
+            // unknown option and `generate schemas --help` the group's help.
+            if let Some(end) = generate_phases
+                .iter()
+                .position(|word| word.starts_with('-'))
+            {
+                let options = generate_phases.split_off(end);
+                let start = hoist::root_options_end(&self.root, &self.args);
+                let mut reparsed = self.args[..=start].to_vec();
+                reparsed.extend(options);
+                let argv =
+                    std::iter::once(catalog::PROGRAM.to_owned()).chain(reparsed.iter().cloned());
+                if let Err(error) = self.root.clone().try_get_matches_from(argv) {
+                    if error.kind() == clap::error::ErrorKind::DisplayHelp {
+                        return self.help(&words, 0, out);
+                    }
+                    let problem = usage::describe(&self.root, &reparsed, &error);
+                    let outcome =
+                        Outcome::failed(&problem.command, USAGE_EXIT_CODE, problem.failure);
+                    return self.emit(&outcome, &problem.notes, &[], out, err);
+                }
+            }
+        }
         if matches.value_source("repo") == Some(ValueSource::CommandLine)
             && let Some(repo) = &self.globals.repo
             && words.first().map(String::as_str) != Some("setup")
@@ -433,6 +468,23 @@ impl Run<'_> {
                         cwd: &cwd,
                     },
                 );
+                self.emit_report(&report, out, err)
+            }
+            "generate" => {
+                let cwd = self.host.cwd.clone().unwrap_or_default();
+                let report = crate::commands::generate::phases(
+                    &generate_phases,
+                    &crate::commands::generate::Context {
+                        repo: self.globals.repo.as_deref(),
+                        env: self.env,
+                        cwd: &cwd,
+                    },
+                    &self.host.version,
+                );
+                self.emit_report(&report, out, err)
+            }
+            "new threat" | "new objective" | "new rule" => {
+                let report = self.new_object(&matches, &words[1]);
                 self.emit_report(&report, out, err)
             }
             "generate explorer" => {
@@ -657,6 +709,18 @@ impl Run<'_> {
                 let report = self.setup_ci(&matches);
                 self.emit_report(&report, out, err)
             }
+            "setup skills discover" | "setup skills show" => {
+                let report = self.setup_skills_catalogue(&matches, &path);
+                self.emit_report(&report, out, err)
+            }
+            "setup env" | "setup hooks" | "setup platforms" | "setup repo" | "setup mcp" => {
+                let report = self.setup_step(&matches);
+                self.emit_report(&report, out, err)
+            }
+            "setup" => {
+                let report = self.setup_group(&matches);
+                self.emit_report(&report, out, err)
+            }
             "rules unreviewed" => {
                 let older_than = leaf(&matches)
                     .get_one::<String>("older_than")
@@ -698,6 +762,52 @@ impl Run<'_> {
         }
     }
 
+    /// `opentide new <family>`, from its parsed arguments.
+    fn new_object(&self, matches: &clap::ArgMatches, family: &str) -> crate::commands::Report {
+        use crate::commands::new::{Context, NewArgs, run, stdin_is_terminal};
+        let args = leaf(matches);
+        let text = |id: &str| args.try_get_one::<String>(id).ok().flatten().cloned();
+        let many = |id: &str| -> Vec<String> {
+            args.try_get_many::<String>(id)
+                .ok()
+                .flatten()
+                .map(|values| values.cloned().collect())
+                .unwrap_or_default()
+        };
+        let platforms: Vec<String> = args
+            .try_get_many::<crate::tree::Platform>("platform")
+            .ok()
+            .flatten()
+            .map(|values| {
+                values
+                    .filter_map(|platform| {
+                        clap::ValueEnum::to_possible_value(platform)
+                            .map(|value| value.get_name().to_owned())
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        let parsed = NewArgs {
+            family: family.to_owned(),
+            name: text("name"),
+            path: text("path"),
+            platforms,
+            objective: text("objective"),
+            threats: many("threat"),
+        };
+        let cwd = self.host.cwd.clone().unwrap_or_default();
+        run(
+            &parsed,
+            &Context {
+                repo: self.globals.repo.as_deref(),
+                env: self.env,
+                cwd: &cwd,
+                version: &self.host.version,
+                can_prompt: self.mode == Mode::Human && stdin_is_terminal(),
+            },
+        )
+    }
+
     /// `opentide setup ci`, from its parsed arguments and the `setup`
     /// group's.
     fn setup_ci(&self, matches: &clap::ArgMatches) -> crate::commands::Report {
@@ -721,38 +831,7 @@ impl Run<'_> {
                     crate::tree::CiPlatform::Azure => opentide_compile::ci::Provider::Azure,
                 },
             );
-        // The group's own options, which `setup ci` would ignore, named as
-        // the group's help names them (`--staging/--no-staging`).
-        let setup = self.root.find_subcommand("setup");
-        let mut group_only: Vec<String> = Vec::new();
-        for arg in setup.into_iter().flat_map(clap::Command::get_arguments) {
-            let id = arg.get_id().as_str();
-            if matches!(id, "path" | "yes" | "plan") || !given(group, id) {
-                continue;
-            }
-            let long = |arg: &clap::Arg| arg.get_long().map(|long| format!("--{long}"));
-            let partner = setup
-                .into_iter()
-                .flat_map(clap::Command::get_arguments)
-                .find(|other| {
-                    other.get_id() != arg.get_id()
-                        && (other.get_id().as_str() == format!("no_{id}")
-                            || id == format!("no_{}", other.get_id().as_str())
-                            || (id, other.get_id().as_str()) == ("lint_all", "lint_changed")
-                            || (id, other.get_id().as_str()) == ("lint_changed", "lint_all"))
-                });
-            let name = match (long(arg), partner.and_then(long)) {
-                (Some(own), Some(other)) if id.starts_with("no_") || id == "lint_all" => {
-                    format!("{other}/{own}")
-                }
-                (Some(own), Some(other)) => format!("{own}/{other}"),
-                (Some(own), None) => own,
-                _ => id.to_owned(),
-            };
-            if !group_only.contains(&name) {
-                group_only.push(name);
-            }
-        }
+        let group_only = self.setup_group_only(group);
         let parsed = CiArgs {
             provider,
             path: given(args, "path").then(|| text("path")).flatten(),
@@ -787,8 +866,236 @@ impl Run<'_> {
                 cwd: &cwd,
                 mode: self.mode,
                 version: &self.host.version,
+                quiet: self.globals.quiet,
             },
         )
+    }
+
+    /// The `setup` group's own options given on the command line before a
+    /// subcommand, which it would ignore, named as the group's help names
+    /// them (`--staging/--no-staging`).
+    fn setup_group_only(&self, group: &clap::ArgMatches) -> Vec<String> {
+        let given = |matches: &clap::ArgMatches, id: &str| {
+            matches.value_source(id) == Some(ValueSource::CommandLine)
+        };
+        let setup = self.root.find_subcommand("setup");
+        let mut group_only: Vec<String> = Vec::new();
+        for arg in setup.into_iter().flat_map(clap::Command::get_arguments) {
+            let id = arg.get_id().as_str();
+            if matches!(id, "path" | "yes" | "plan") || !given(group, id) {
+                continue;
+            }
+            let long = |arg: &clap::Arg| arg.get_long().map(|long| format!("--{long}"));
+            let partner = setup
+                .into_iter()
+                .flat_map(clap::Command::get_arguments)
+                .find(|other| {
+                    other.get_id() != arg.get_id()
+                        && (other.get_id().as_str() == format!("no_{id}")
+                            || id == format!("no_{}", other.get_id().as_str())
+                            || (id, other.get_id().as_str()) == ("lint_all", "lint_changed")
+                            || (id, other.get_id().as_str()) == ("lint_changed", "lint_all"))
+                });
+            let name = match (long(arg), partner.and_then(long)) {
+                (Some(own), Some(other)) if id.starts_with("no_") || id == "lint_all" => {
+                    format!("{other}/{own}")
+                }
+                (Some(own), Some(other)) => format!("{own}/{other}"),
+                (Some(own), None) => own,
+                _ => id.to_owned(),
+            };
+            if !group_only.contains(&name) {
+                group_only.push(name);
+            }
+        }
+        group_only
+    }
+
+    /// The setup commands' context.
+    fn setup_context<'a>(
+        &'a self,
+        cwd: &'a std::path::Path,
+    ) -> crate::commands::setup::Context<'a> {
+        crate::commands::setup::Context {
+            repo: self.globals.repo.as_deref(),
+            env: self.env,
+            cwd,
+            mode: self.mode,
+            version: &self.host.version,
+            quiet: self.globals.quiet,
+        }
+    }
+
+    /// `opentide setup env|hooks|platforms|repo|mcp`.
+    fn setup_step(&self, matches: &clap::ArgMatches) -> crate::commands::Report {
+        use crate::commands::setup::files::RepoOptions;
+        use crate::commands::setup::run::{Paths, Step, subcommand};
+        use clap::ValueEnum;
+        let Some((_, group)) = matches.subcommand() else {
+            return crate::commands::Report::error("setup", "no setup command");
+        };
+        let Some((name, args)) = group.subcommand() else {
+            return crate::commands::Report::error("setup", "no setup command");
+        };
+        let given = |matches: &clap::ArgMatches, id: &str| {
+            matches.value_source(id) == Some(ValueSource::CommandLine)
+        };
+        let text = |id: &str| args.get_one::<String>(id).cloned();
+        let flag_given = given(args, "path_flag");
+        let positional_given = given(args, "path");
+        let paths = Paths {
+            own: if flag_given {
+                text("path_flag")
+            } else if positional_given {
+                text("path")
+            } else {
+                None
+            },
+            group: given(group, "path")
+                .then(|| group.get_one::<String>("path").cloned())
+                .flatten(),
+            both: flag_given && positional_given,
+            group_only: self.setup_group_only(group),
+        };
+        let flag = |id: &str| {
+            args.try_get_one::<bool>(id)
+                .ok()
+                .flatten()
+                .copied()
+                .unwrap_or(false)
+        };
+        let step = match name {
+            "env" => Step::Env,
+            "hooks" => Step::Hooks {
+                install: !flag("no_install"),
+            },
+            "platforms" => Step::Platforms(
+                [
+                    ("sentinel", "sentinel"),
+                    ("splunk", "splunk"),
+                    ("crowdstrike", "crowdstrike"),
+                    ("defender_for_endpoint", "defender_for_endpoint"),
+                    ("sentinel_one", "sentinel_one"),
+                    ("carbon_black_cloud", "carbon_black_cloud"),
+                    ("harfanglab", "harfanglab"),
+                    ("elastic", "elastic"),
+                    ("sysdig", "sysdig"),
+                ]
+                .into_iter()
+                .filter(|(id, _)| flag(id))
+                .map(|(_, value)| value.to_owned())
+                .collect(),
+            ),
+            "repo" => Step::Repo(RepoOptions {
+                name: text("name"),
+                org: text("org"),
+                description: text("description"),
+                platforms: args
+                    .get_many::<crate::tree::Platform>("platform")
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|platform| platform.to_possible_value())
+                    .map(|value| value.get_name().to_owned())
+                    .collect(),
+            }),
+            _ => Step::Mcp(
+                [
+                    ("vscode", "vscode"),
+                    ("cursor", "cursor"),
+                    ("claude_code", "claude-code"),
+                    ("generic", "generic"),
+                ]
+                .into_iter()
+                .filter(|(id, _)| flag(id))
+                .map(|(_, value)| value.to_owned())
+                .collect(),
+            ),
+        };
+        let cwd = self.host.cwd.clone().unwrap_or_default();
+        subcommand(
+            &step,
+            &paths,
+            flag("yes") || group.get_flag("yes"),
+            flag("plan") || group.get_flag("plan"),
+            &self.setup_context(&cwd),
+        )
+    }
+
+    /// `opentide setup` without a subcommand.
+    fn setup_group(&self, matches: &clap::ArgMatches) -> crate::commands::Report {
+        use crate::commands::setup::files::RepoOptions;
+        use crate::commands::setup::run::{GroupArgs, group};
+        use clap::ValueEnum;
+        let args = leaf(matches);
+        let flag = |id: &str| args.get_flag(id);
+        let text = |id: &str| args.get_one::<String>(id).cloned();
+        let names = |values: Vec<Option<clap::builder::PossibleValue>>| -> Vec<String> {
+            let mut out: Vec<String> = Vec::new();
+            for value in values.into_iter().flatten() {
+                let name = value.get_name().to_owned();
+                if !out.contains(&name) {
+                    out.push(name);
+                }
+            }
+            out
+        };
+        let parsed = GroupArgs {
+            path: text("path").unwrap_or_else(|| ".".to_owned()),
+            repo: RepoOptions {
+                name: text("name"),
+                org: text("org"),
+                description: text("description"),
+                platforms: args
+                    .get_many::<crate::tree::Platform>("platform")
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|platform| platform.to_possible_value())
+                    .map(|value| value.get_name().to_owned())
+                    .collect(),
+            },
+            ci: args
+                .get_one::<crate::tree::Ci>("ci")
+                .and_then(|ci| ci.to_possible_value())
+                .map(|value| value.get_name().to_owned()),
+            pipeline: None,
+            staging: !flag("no_staging"),
+            inflight: !flag("no_inflight"),
+            sharing: flag("sharing"),
+            lint_changed: flag("lint_changed"),
+            explorer_pages: flag("explorer_pages"),
+            promotion: if flag("promotion") {
+                Some(true)
+            } else if flag("no_promotion") {
+                Some(false)
+            } else {
+                None
+            },
+            promotion_target: text("promotion_target"),
+            python_version: text("python_version").unwrap_or_else(|| "3.12".to_owned()),
+            default_branch: text("default_branch"),
+            vscode_setup: flag("vscode_setup"),
+            mcp: names(
+                args.get_many::<crate::tree::Mcp>("mcp")
+                    .into_iter()
+                    .flatten()
+                    .map(ValueEnum::to_possible_value)
+                    .collect(),
+            ),
+            skills: names(
+                args.get_many::<crate::tree::Skills>("skills")
+                    .into_iter()
+                    .flatten()
+                    .map(ValueEnum::to_possible_value)
+                    .collect(),
+            ),
+            plugin: flag("plugin"),
+            hooks: flag("hooks"),
+            env: flag("env"),
+            plan: flag("plan"),
+            yes: flag("yes"),
+        };
+        let cwd = self.host.cwd.clone().unwrap_or_default();
+        group(&parsed, &self.setup_context(&cwd))
     }
 
     /// `opentide info`, from its parsed arguments.
@@ -1178,6 +1485,7 @@ impl Run<'_> {
             advice: run.advice(),
             warnings: run.warnings.clone(),
             next_actions: outcome.next_actions.clone(),
+            numbered_next: false,
         };
         let (result_out, result_err) =
             render_result(&view, stdout, stderr, self.mode, self.globals.quiet);
@@ -1327,12 +1635,13 @@ impl Run<'_> {
                 .failure
                 .as_ref()
                 .map(|failure| (failure.code.clone(), failure.suggestion.clone())),
-            // What to do about the result (`REMEDIATION_FIELDS`): a `note:`
-            // and a `help:` line in the text modes.
-            detail: outcome_text(outcome, "detail"),
-            advice: outcome_text(outcome, "advice"),
+            // A result's `detail` is a `note:` and its `advice` a `help:`
+            // under the outcome (`REMEDIATION_FIELDS`).
+            detail: data_text(&outcome.data, "detail"),
+            advice: data_text(&outcome.data, "advice"),
             warnings: report.warnings.clone(),
             next_actions: outcome.next_actions.clone(),
+            numbered_next: report.numbered_next,
         };
         let (text_out, text_err) = render_result(
             &view,
@@ -1373,6 +1682,176 @@ impl Run<'_> {
     }
 }
 
+impl Run<'_> {
+    /// `setup skills discover` and `setup skills show` (UC-4.1, #831): the
+    /// target the command and its groups name, then the catalogue.
+    fn setup_skills_catalogue(
+        &self,
+        matches: &clap::ArgMatches,
+        path: &str,
+    ) -> crate::commands::Report {
+        use crate::commands::skills;
+        let cwd = self.host.cwd.clone().unwrap_or_default();
+        let given = |matches: &clap::ArgMatches, id: &str| {
+            matches.value_source(id) == Some(ValueSource::CommandLine)
+        };
+        // The groups' own options, which the subcommand would ignore, and
+        // their paths, which it takes (`_hand_down`, `_group_path`).
+        let mut group_paths: Vec<String> = Vec::new();
+        let mut refusal: Option<String> = None;
+        let mut current = matches;
+        let mut command = self.root.clone();
+        let mut words = vec![crate::catalog::PROGRAM.to_owned()];
+        while let Some((name, sub)) = current.subcommand() {
+            let Some(group) = command.find_subcommand(name).cloned() else {
+                break;
+            };
+            words.push(name.to_owned());
+            if sub.subcommand().is_none() {
+                break;
+            }
+            let invoked = sub.subcommand_name().unwrap_or_default().to_owned();
+            let ignored: Vec<String> = group
+                .get_arguments()
+                .filter(|arg| {
+                    let id = arg.get_id().as_str();
+                    !matches!(id, "path" | "yes" | "plan") && given(sub, id)
+                })
+                .map(|arg| {
+                    let mut names: Vec<String> = Vec::new();
+                    if let Some(long) = arg.get_long() {
+                        names.push(format!("--{long}"));
+                    }
+                    if let Some(short) = arg.get_short() {
+                        names.push(format!("-{short}"));
+                    }
+                    names.join("/")
+                })
+                .collect();
+            if !ignored.is_empty() && refusal.is_none() {
+                let verb = if ignored.len() == 1 {
+                    "configures"
+                } else {
+                    "configure"
+                };
+                refusal = Some(format!(
+                    "{} {verb} `{}` itself and would be ignored by `{} {invoked}`.",
+                    ignored.join(", "),
+                    words.join(" "),
+                    words.join(" ")
+                ));
+            }
+            if given(sub, "path")
+                && let Some(value) = sub.get_one::<String>("path")
+            {
+                group_paths.push(value.clone());
+            }
+            current = sub;
+            command = group;
+        }
+        let leaf = leaf(matches);
+        let usage = |message: String| {
+            let mut failure = crate::envelope::Failure::new(
+                code::USAGE_INVALID_VALUE,
+                format!("Invalid value: {message}"),
+            );
+            failure.argument = None;
+            crate::commands::Report::failed(path, USAGE_EXIT_CODE, failure)
+        };
+        if let Some(refusal) = refusal {
+            return usage(refusal);
+        }
+        let mut warnings = Vec::new();
+        let own = if path == "setup skills discover" {
+            let flag = given(leaf, "path_flag");
+            let positional = given(leaf, "path");
+            if flag && positional {
+                return usage(
+                    "Pass the repository path once: use --path/-C or the positional PATH, not both."
+                        .to_owned(),
+                );
+            }
+            if positional {
+                let value = leaf.get_one::<String>("path").cloned().unwrap_or_default();
+                let legacy = format!("positional PATH (opentide setup skills discover {value})");
+                if self.mode == Mode::Json {
+                    tracing::warn!(
+                        legacy = legacy.as_str(),
+                        use_instead = "--path/-C",
+                        "cli_command_deprecated"
+                    );
+                } else {
+                    warnings.push(format!("{legacy} is deprecated; use --path/-C"));
+                }
+                Some(value)
+            } else if flag {
+                leaf.get_one::<String>("path_flag").cloned()
+            } else {
+                None
+            }
+        } else {
+            given(leaf, "path")
+                .then(|| leaf.get_one::<String>("path").cloned())
+                .flatten()
+        };
+        let setup_path = |given: &str| -> std::path::PathBuf {
+            let candidate = std::path::Path::new(given);
+            match self.globals.repo.as_deref() {
+                Some(repo)
+                    if candidate == std::path::Path::new(".")
+                        && crate::commands::setup::resolved(&cwd, std::path::Path::new(repo))
+                            != crate::commands::setup::resolved(&cwd, &cwd) =>
+                {
+                    cwd.join(repo)
+                }
+                _ => cwd.join(candidate),
+            }
+        };
+        let named: Vec<String> = group_paths.into_iter().chain(own).collect();
+        let mut targets: Vec<std::path::PathBuf> = named
+            .iter()
+            .map(|given| crate::commands::setup::resolved(&cwd, &setup_path(given)))
+            .collect();
+        targets.dedup();
+        if targets.len() > 1 {
+            return usage(format!(
+                "Pass the repository path once: {} name different targets.",
+                named.join(" and ")
+            ));
+        }
+        let repo = setup_path(named.last().map_or(".", String::as_str));
+        let interrupt = &self.host.interrupt;
+        let interrupted = || interrupt.requested();
+        let network = skills::Network {
+            env: self.env,
+            proxy: self.globals.proxy.as_deref(),
+            interrupted: &interrupted,
+        };
+        let mut report = if path == "setup skills discover" {
+            skills::discover(
+                &skills::DiscoverArgs {
+                    repo,
+                    query: leaf.get_one::<String>("query").cloned(),
+                    installed_only: leaf.get_flag("installed"),
+                    refresh: leaf.get_flag("refresh"),
+                },
+                network,
+                self.stdout_width(),
+            )
+        } else {
+            skills::show(
+                &leaf.get_one::<String>("name").cloned().unwrap_or_default(),
+                &repo,
+                leaf.get_flag("refresh"),
+                network,
+                self.mode == Mode::Json,
+            )
+        };
+        report.warnings.splice(0..0, warnings);
+        report
+    }
+}
+
 /// `--format`'s value as the renderers name it.
 fn report_format(format: crate::tree::ReportFormat) -> crate::render::report::ReportFormat {
     match format {
@@ -1392,6 +1871,16 @@ fn leaf(matches: &clap::ArgMatches) -> &clap::ArgMatches {
 }
 
 /// The subcommand path `matches` ran.
+/// The string a result holds at `key`, if any.
+fn data_text(data: &[(String, crate::json::Json)], key: &str) -> Option<String> {
+    data.iter()
+        .find(|(name, _)| name == key)
+        .and_then(|(_, value)| match value {
+            crate::json::Json::Str(text) => Some(text.clone()),
+            _ => None,
+        })
+}
+
 fn command_path(matches: &clap::ArgMatches) -> Vec<String> {
     let mut words = Vec::new();
     let mut current = matches;
@@ -1690,16 +2179,19 @@ mod tests {
     #[test]
     fn a_reports_detail_and_advice_are_its_note_and_help() {
         let mut outcome = Outcome::failed("tui", 2, Failure::new("x", "m"));
-        assert_eq!(outcome_text(&outcome, "advice"), None);
+        assert_eq!(data_text(&outcome.data, "advice"), None);
         outcome
             .data
             .push(("advice".into(), crate::json::Json::str("do this")));
         outcome
             .data
             .push(("detail".into(), crate::json::Json::Int(1)));
-        assert_eq!(outcome_text(&outcome, "advice").as_deref(), Some("do this"));
+        assert_eq!(
+            data_text(&outcome.data, "advice").as_deref(),
+            Some("do this")
+        );
         // Only a string is a line to print.
-        assert_eq!(outcome_text(&outcome, "detail"), None);
+        assert_eq!(data_text(&outcome.data, "detail"), None);
     }
 
     /// Counts its drops, to tell a freed value from a leaked one.
@@ -2612,6 +3104,77 @@ mod tests {
     }
 
     #[test]
+    fn framework_a_failing_tenant_request_leaves_no_credential_in_logs_or_crash_logs() {
+        // A tenant request that fails (refused), with credentials in the
+        // URL's user info and query: the connector's error, logged at every
+        // level and ending the run, reaches neither the output, the log nor
+        // the crash log. The values are in no variable, so the run's own
+        // redaction cannot be what hides them.
+        let state = std::env::temp_dir().join(format!(
+            "opentide-cli-tenant-failure-{}",
+            std::process::id()
+        ));
+        let state_text = state.display().to_string();
+        let pairs = [
+            ("XDG_STATE_HOME", state_text.as_str()),
+            ("HOME", state_text.as_str()),
+            ("USERPROFILE", state_text.as_str()),
+            ("LOCALAPPDATA", state_text.as_str()),
+        ];
+        let (secret, password) = ("q7Zk-tenant-credential-41", "pw-x9Lm3-proxy");
+        let closed = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = closed.local_addr().unwrap().port();
+        drop(closed);
+        let url = format!("http://user:{password}@127.0.0.1:{port}/api?token={secret}");
+        for line in ["--debug --json x", "--debug x"] {
+            let result = ran(line, &pairs, false, |_, _, _| {
+                let label = opentide_connectors::TenantLabel::new("splunk", "prod");
+                let client = opentide_connectors::HttpClient::new(
+                    &label,
+                    &opentide_connectors::HttpSettings::default(),
+                    &opentide_connectors::Environment::default(),
+                    None,
+                )?;
+                let error = opentide_connectors::runtime::block_on(async {
+                    let request = client.request(reqwest::Method::GET, &url).build()?;
+                    let cancel = tokio_util::sync::CancellationToken::new();
+                    Ok::<_, reqwest::Error>(client.send(request, &cancel).await)
+                })??
+                .unwrap_err();
+                tracing::error!(detail = %error, "tenant_request_failed");
+                tracing::debug!(error = ?error, "tenant_request_debug");
+                Err(error.into())
+            });
+            let mut texts = vec![
+                ("stdout", result.stdout.clone()),
+                ("stderr", result.stderr.clone()),
+            ];
+            if let Some(crate::json::Json::Str(log)) = crate::json::Json::parse(&result.stdout)
+                .ok()
+                .and_then(|document| document.get("failure").cloned())
+                .and_then(|failure| failure.get("crash_log").cloned())
+            {
+                texts.push(("crash log", std::fs::read_to_string(log).unwrap()));
+            }
+            let all: String = texts.iter().map(|(_, text)| text.as_str()).collect();
+            // The failure was reported, by its origin.
+            assert!(
+                all.contains(&format!("http://127.0.0.1:{port}")),
+                "{line}: {all}"
+            );
+            for (name, text) in &texts {
+                for value in [secret, password] {
+                    assert!(
+                        !text.contains(value),
+                        "{line}: {value} in the {name}:\n{text}"
+                    );
+                }
+            }
+        }
+        let _ = std::fs::remove_dir_all(&state);
+    }
+
+    #[test]
     fn framework_crash_log_masks_short_secret_named_variables() {
         let state =
             std::env::temp_dir().join(format!("opentide-cli-short-secret-{}", std::process::id()));
@@ -2693,5 +3256,56 @@ mod tests {
     fn globals_of(root: &clap::Command, text: &str, env: &Env) -> Globals {
         let args: Vec<String> = text.split_whitespace().map(str::to_owned).collect();
         globals(root, &args, env)
+    }
+
+    /// `generate <phase>...`: the words after `generate` that are no
+    /// subcommand are its phases. An unknown phase is a usage error; the full
+    /// pipeline is refused for the Python engine; the subcommands still run
+    /// as subcommands.
+    #[test]
+    fn generate_takes_its_phases_as_words() {
+        let unknown = dispatched("--json generate schemas explrer", &[], false);
+        assert_eq!(unknown.code, 2, "{}", unknown.stdout);
+        assert!(
+            unknown.stdout.contains(
+                "Unknown generation phase explrer. Pass one or more of: schemas, snippets, templates, vocabs."
+            ),
+            "{}",
+            unknown.stdout
+        );
+        assert!(unknown.stdout.contains("\"code\":\"usage_invalid_choice\""));
+        assert!(unknown.stdout.contains("\"argument\":\"phase\""));
+        let refused = dispatched("--json generate", &[], false);
+        assert_eq!(refused.code, 2);
+        assert!(refused.stdout.contains("\"code\":\"engine_not_ported\""));
+        // The phases end at the first `-` word: what follows is
+        // `generate`'s own options (`GeneratePhaseGroup`).
+        for (argv, option) in [
+            ("--json generate schemas --bogus", "--bogus"),
+            ("--json generate schemas templates --repo .", "--repo"),
+        ] {
+            let flag = dispatched(argv, &[], false);
+            assert_eq!(flag.code, 2, "{}", flag.stdout);
+            assert!(
+                flag.stdout.contains("\"code\":\"usage_unknown_option\""),
+                "{}",
+                flag.stdout
+            );
+            assert!(flag.stdout.contains(option), "{}", flag.stdout);
+            assert!(!flag.stdout.contains("generation phase"), "{}", flag.stdout);
+        }
+        let help = dispatched("generate schemas --help", &[], false);
+        assert_eq!(help.code, 0, "{}", help.stdout);
+        assert!(
+            help.stdout.contains("Usage: opentide generate"),
+            "{}",
+            help.stdout
+        );
+        let subcommand = dispatched("--json generate inflight prune --bogus", &[], false);
+        assert!(
+            subcommand.stdout.contains("usage_unknown_option"),
+            "{}",
+            subcommand.stdout
+        );
     }
 }

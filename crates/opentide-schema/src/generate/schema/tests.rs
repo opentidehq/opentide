@@ -357,6 +357,37 @@ fn the_enum_lands_on_the_string_or_array_branch() {
 }
 
 #[test]
+fn a_vocabulary_union_defined_apart_is_written_in_place() {
+    let mut schema = json!({
+        "properties": {
+            "killchain": {"anyOf": [{"$ref": "#/$defs/Killchain"}, {"type": "null"}], "tide.vocab": true},
+            "other": {"anyOf": [{"$ref": "#/$defs/Killchain"}, {"type": "null"}]},
+            "body": {"anyOf": [{"$ref": "#/$defs/Body"}, {"type": "null"}], "tide.vocab": true},
+        },
+        "$defs": {
+            "Killchain": {"anyOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}]},
+            "Body": {"type": "object", "properties": {"a": {"type": "string"}}},
+        },
+    });
+    let defs = schema["$defs"].clone();
+    inline_vocabulary_unions(&mut schema);
+    assert_eq!(
+        schema["properties"]["killchain"]["anyOf"],
+        json!([{"type": "string"}, {"type": "array", "items": {"type": "string"}}, {"type": "null"}])
+    );
+    // A field without a vocabulary, a model, and the definitions are kept.
+    assert_eq!(
+        schema["properties"]["other"]["anyOf"][0],
+        json!({"$ref": "#/$defs/Killchain"})
+    );
+    assert_eq!(
+        schema["properties"]["body"]["anyOf"][0],
+        json!({"$ref": "#/$defs/Body"})
+    );
+    assert_eq!(schema["$defs"], defs);
+}
+
+#[test]
 fn objects_are_closed_unless_they_say_otherwise() {
     let mut schema = Schema::try_from(json!({
         "properties": {
@@ -457,4 +488,34 @@ fn no_model_carries_a_keyword_the_generator_does_not_resolve() {
             );
         }
     }
+}
+
+/// The description summary is worked out once per distinct text: a hit
+/// answers what the Markdown clean-up answers, an edited description is
+/// worked out afresh, and the cache starts over at its bound.
+#[test]
+fn a_description_summary_is_kept_by_its_text_and_bounded() {
+    use std::collections::HashMap;
+    use std::sync::Mutex;
+
+    let cache = Mutex::new(HashMap::new());
+    let text = "Runs **commands** through [a shell](https://example.org). And more.";
+    let expected =
+        super::super::annotate::first_sentence(&super::super::annotate::plain_text(text, true));
+    assert_eq!(expected, "Runs commands through a shell.");
+    assert_eq!(summary_in(&cache, 2, text), expected);
+    assert_eq!(cache.lock().unwrap().get(text), Some(&expected));
+    // A hit is the cached answer, not a fresh one.
+    cache
+        .lock()
+        .unwrap()
+        .insert(text.to_owned(), "cached".to_owned());
+    assert_eq!(summary_in(&cache, 2, text), "cached");
+    // Another text is its own entry; the third starts the cache over.
+    assert_eq!(summary_in(&cache, 2, "Second. Third."), "Second.");
+    assert_eq!(cache.lock().unwrap().len(), 2);
+    assert_eq!(summary_in(&cache, 2, "Fourth `x`."), "Fourth x.");
+    let kept = cache.lock().unwrap();
+    assert_eq!(kept.len(), 1);
+    assert!(kept.contains_key("Fourth `x`."));
 }

@@ -52,7 +52,11 @@ jiff.workspace = true
 form_urlencoded = "1.2"
 # `doctor` (UC-3.5c): VS Code's and the MCP hosts' JSON with comments and
 # trailing commas, as VS Code reads them.
-jsonc-parser = { version = "0.26", features = ["serde"] }
+jsonc-parser = { version = "0.26", features = ["cst", "serde"] }
+# `setup`'s paths: a path shown relative to another (`os.path.relpath`), and
+# a path resolved where it exists and kept where it does not (`Path.resolve()`).
+pathdiff = "0.2"
+soft-canonicalize = { version = "0.5", default-features = false, features = ["dunce"] }
 # Percent-encoded paths in links and SARIF URIs.
 percent-encoding = "2.3"
 # `opentide explain <code>` in human mode: the page's Markdown, parsed for the terminal.
@@ -71,6 +75,8 @@ textwrap = { version = "0.16", default-features = false, features = ["unicode-wi
 toml.workspace = true
 tracing = "0.1"
 unicode-width = "0.2"
+# `new`'s fresh object identifiers.
+uuid = { workspace = true, features = ["v4"] }
 # `doctor` (UC-3.5c): whether git and an MCP server's command are on PATH.
 which = "7"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["registry", "std"] }
@@ -79,6 +85,12 @@ tracing-subscriber = { version = "0.3", default-features = false, features = ["r
 # the frames go to).
 rmcp = { version = "3.9", default-features = false, features = ["server"] }
 tokio = { version = "1.48", default-features = false, features = ["rt", "io-std", "io-util", "fs"] }
+# `setup skills` (UC-4.1, #831): the opentidehq/skills catalogue, fetched with
+# the connectors' HTTP client, through the proxy and CA bundle the
+# environment names.
+opentide-connectors.workspace = true
+reqwest.workspace = true
+tokio-util = { workspace = true, features = ["rt"] }
 
 [target.'cfg(unix)'.dependencies]
 # `mcp start` points descriptor 1 at stderr while it serves, so nothing but a
@@ -91,6 +103,8 @@ rustix = { version = "1.1", default-features = false, features = ["std", "stdio"
 rustix = { version = "1.1", default-features = false, features = ["std", "fs", "process", "pty", "termios"] }
 
 [dev-dependencies]
+# The goldens' recorded HTTP (UC-4.1): the replaying proxy of a cassette case.
+opentide-cassette.workspace = true
 # The goldens' normalisation, for the generate cases (tests/generate_goldens.rs).
 opentide-compare.workspace = true
 tempfile = "3"

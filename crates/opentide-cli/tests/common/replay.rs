@@ -20,7 +20,7 @@ use opentide_cli::env::Env;
 use opentide_cli::logging::Sink;
 use opentide_cli::{Host, run};
 use opentide_compare::ledger::{Ledger, Usage};
-use opentide_compare::normalise::{Normaliser, Volatile};
+use opentide_compare::normalise::{Normaliser, Rule, Volatile};
 use opentide_compare::{FileState, Run};
 
 /// A generated fixture laid out already (`cargo xtask corpus faults --out
@@ -60,6 +60,7 @@ pub const FIXTURES: &[&str] = &[
     "tide-corpus",
     "tide-corpus-typo",
     "vscode",
+    "setup-merge",
     "vscode-docs-folder",
 ];
 
@@ -132,6 +133,7 @@ pub fn fixture(name: &str, ws: &Path) {
             }
         }
         "vscode" => copy_tree(&repo().join("tests/golden/fixtures/vscode-workspace"), ws),
+        "setup-merge" => copy_tree(&repo().join("tests/golden/fixtures/setup-merge"), ws),
         "vscode-docs-folder" => {
             fixture("vscode", ws);
             let path = ws.join(".opentide/configurations/paths.toml");
@@ -224,7 +226,7 @@ pub fn recorded_files(dir: &Path, outcome: &toml::Table) -> BTreeMap<String, Fil
                     Some(blob) => {
                         std::fs::read(repo().join("tests/golden/blobs").join(blob)).unwrap()
                     }
-                    None => std::fs::read(dir.join("files").join(path)).unwrap(),
+                    None => std::fs::read(dir.join("files").join(escape(path))).unwrap(),
                 },
             },
             other => panic!("{path}: a recorded {other:?} this test does not read"),
@@ -234,12 +236,134 @@ pub fn recorded_files(dir: &Path, outcome: &toml::Table) -> BTreeMap<String, Fil
     out
 }
 
+/// A recorded file's path under `files/`, as `cargo xtask golden record`
+/// escapes it (`xtask/src/golden/recording.rs` `escape`): a component that
+/// starts with `.git` or `~` gets a `~` before it. The other escapes (`%XX`,
+/// Windows' reserved names) name no file the replayed commands write.
+fn escape(path: &str) -> PathBuf {
+    path.split('/')
+        .map(|part| {
+            if part.starts_with(".git") || part.starts_with('~') {
+                format!("~{part}")
+            } else {
+                part.to_owned()
+            }
+        })
+        .collect()
+}
+
 /// The ledger, as `cargo xtask golden check` reads it.
 pub fn ledger() -> Ledger {
     Ledger::parse(
         &std::fs::read_to_string(repo().join("tests/golden/APPROVED_DIFFS.toml")).unwrap(),
     )
     .unwrap()
+}
+
+/// How many runs this thread replayed that the Rust CLI refused with
+/// `engine_not_ported` (Python runs those alone under `compare`).
+pub fn refused() -> usize {
+    REFUSED.with(std::cell::Cell::get)
+}
+
+thread_local! {
+    static REFUSED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// The dispatch table, `RUST_COMMANDS` in `src/opentide/cli/engines.py`:
+/// each command path (`"generate docs"`) with the words of which a run must
+/// carry one for the Rust implementation to cover it (`requires`; none:
+/// every run). Read from the source, as `scripts/parity_engines.py` reads
+/// it, so the replay needs no Python environment.
+pub fn rust_commands() -> &'static BTreeMap<String, Vec<String>> {
+    static CELL: std::sync::OnceLock<BTreeMap<String, Vec<String>>> = std::sync::OnceLock::new();
+    CELL.get_or_init(|| {
+        let source = std::fs::read_to_string(repo().join("src/opentide/cli/engines.py")).unwrap();
+        parse_rust_commands(&source)
+    })
+}
+
+/// [`rust_commands`] of `source`: the `RUST_COMMANDS: ... = {` literal, one
+/// entry per `(...): RustCommand(...)`, an entry running over lines until the
+/// next key. Panics on a table it cannot read, rather than covering nothing.
+pub fn parse_rust_commands(source: &str) -> BTreeMap<String, Vec<String>> {
+    let start = source
+        .find("\nRUST_COMMANDS:")
+        .unwrap_or_else(|| panic!("engines.py: no RUST_COMMANDS"));
+    let body = &source[start..];
+    let body = &body[body
+        .find("{\n")
+        .unwrap_or_else(|| panic!("RUST_COMMANDS: no dict literal"))
+        + 2..];
+    let body = &body[..body
+        .find("\n}")
+        .unwrap_or_else(|| panic!("RUST_COMMANDS: unterminated"))];
+    let entry = regex::Regex::new(
+        r#"(?s)\(((?:\s*"[^"]*"\s*,?)+)\)\s*:\s*RustCommand\((.*?)\),\s*(?:\n|$)"#,
+    )
+    .unwrap();
+    let word = regex::Regex::new(r#""([^"]*)""#).unwrap();
+    let requires = regex::Regex::new(r"(?s)requires\s*=\s*\(([^)]*)\)").unwrap();
+    let mut table = BTreeMap::new();
+    let mut read = 0;
+    for found in entry.captures_iter(body) {
+        let path: Vec<&str> = word
+            .captures_iter(&found[1])
+            .map(|word| word.get(1).unwrap().as_str())
+            .collect();
+        let flags = requires
+            .captures(&found[2])
+            .map(|flags| {
+                word.captures_iter(&flags[1])
+                    .map(|word| word[1].to_owned())
+                    .collect()
+            })
+            .unwrap_or_default();
+        table.insert(path.join(" "), flags);
+        read += 1;
+    }
+    let keys = body.matches("RustCommand(").count();
+    assert_eq!(read, keys, "RUST_COMMANDS: read {read} of {keys} entries");
+    table
+}
+
+/// Whether `RUST_COMMANDS` covers a run of `command` with `argv`: the
+/// command is in it, and the arguments before `--` carry one of the words it
+/// requires, if any (`RustCommand.covers`, `xtask::compare::covers`).
+pub fn covers(command: &str, argv: &[String]) -> bool {
+    let Some(requires) = rust_commands().get(command) else {
+        return false;
+    };
+    let options = argv
+        .iter()
+        .position(|arg| arg == "--")
+        .map_or(argv, |end| &argv[..end]);
+    requires.is_empty() || requires.iter().any(|flag| options.contains(flag))
+}
+
+/// The UUIDs in the package's data (`src/opentide`), which no run mints:
+/// `cargo xtask compare`'s `package_uuids`.
+fn package_uuids() -> &'static std::collections::BTreeSet<String> {
+    static CELL: std::sync::OnceLock<std::collections::BTreeSet<String>> =
+        std::sync::OnceLock::new();
+    CELL.get_or_init(|| {
+        fn walk(dir: &Path, out: &mut std::collections::BTreeSet<String>) {
+            let Ok(entries) = std::fs::read_dir(dir) else {
+                return;
+            };
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    walk(&path, out);
+                } else if let Ok(text) = std::fs::read_to_string(&path) {
+                    out.extend(opentide_compare::normalise::uuids_in(&text));
+                }
+            }
+        }
+        let mut out = std::collections::BTreeSet::new();
+        walk(&repo().join("src/opentide"), &mut out);
+        out
+    })
 }
 
 /// Replays the recording in `dir`; the differences found, if any.
@@ -280,15 +404,52 @@ pub fn replay(id: &str, dir: &Path, ledger: &Ledger, usage: &mut Usage) -> Vec<S
         .iter()
         .map(|(_, root)| (files(root), dirs(root)))
         .collect();
-    let env = Env::from_pairs(case["env"].as_table().unwrap().iter().map(|(key, value)| {
-        let value = value
-            .as_str()
+    // A refusal (`engine_not_ported`) is recorded where `compare` reads it:
+    // Python then runs alone, and there is nothing to compare.
+    let refusal_dir = tempfile::tempdir().unwrap();
+    let refusal = refusal_dir.path().join("refusal");
+    // A cassette case (UC-4.1): the network is the replaying proxy, its CA
+    // where the case's CA bundle variables point.
+    let proxy = case
+        .get("cassette")
+        .and_then(|name| name.as_str())
+        .map(|name| {
+            let text = std::fs::read_to_string(repo().join(format!("tests/cassettes/{name}.json")))
+                .unwrap();
+            let proxy = opentide_cassette::Proxy::start(
+                opentide_cassette::Mode::Replay {
+                    cassette: opentide_cassette::Cassette::parse(&text).unwrap(),
+                },
+                opentide_cassette::Redaction::default(),
+            )
+            .unwrap();
+            std::fs::write(tmp.join("cassette-ca.pem"), proxy.ca_pem()).unwrap();
+            proxy
+        });
+    let proxy_url = proxy.as_ref().map_or_else(
+        || "http://127.0.0.1:9".to_owned(),
+        opentide_cassette::Proxy::url,
+    );
+    let env = Env::from_pairs(
+        case["env"]
+            .as_table()
             .unwrap()
-            .replace("<HOME>", &home.display().to_string())
-            .replace("<TMP>", &tmp.display().to_string())
-            .replace("<WS>", &ws.display().to_string());
-        (key.clone(), value)
-    }));
+            .iter()
+            .map(|(key, value)| {
+                let value = value
+                    .as_str()
+                    .unwrap()
+                    .replace("<CASSETTE_PROXY>", &proxy_url)
+                    .replace("<HOME>", &home.display().to_string())
+                    .replace("<TMP>", &tmp.display().to_string())
+                    .replace("<WS>", &ws.display().to_string());
+                (key.clone(), value)
+            })
+            .chain(std::iter::once((
+                "OPENTIDE_ENGINE_REFUSAL".to_owned(),
+                refusal.display().to_string(),
+            ))),
+    );
     let terminal = mode == "human";
     let stderr = Buffer::default();
     let sink: Sink = Arc::new(Mutex::new(stderr.clone()));
@@ -308,7 +469,49 @@ pub fn replay(id: &str, dir: &Path, ledger: &Ledger, usage: &mut Usage) -> Vec<S
     let mut out = Vec::new();
     let mut err = stderr.clone();
     let exit_code = run(&argv, &env, &host, &mut out, &mut err);
+    if refusal.exists() {
+        // Python runs alone only where `RUST_COMMANDS` does not cover the run
+        // (a bare `generate`): a refusal of a run it covers is a failure, as
+        // `cargo xtask golden check --engine compare` counts it.
+        let command = case["command"].as_str().unwrap();
+        if covers(command, &argv) {
+            return vec![format!(
+                "{id}: the CLI refused (engine_not_ported) a run of `{command}` that \
+                 RUST_COMMANDS covers: exit {exit_code}"
+            )];
+        }
+        REFUSED.with(|count| count.set(count.get() + 1));
+        return Vec::new();
+    }
     let today = opentide_compare::normalise::utc_date(std::time::SystemTime::now());
+    // The case's opt-in rules (`fresh-uuids` for a command that mints
+    // identifiers), with the UUIDs that are not fresh as the golden check
+    // knows them: the fixture's, the case's argv and the package's data.
+    let rules: Vec<Rule> = case
+        .get("normalise")
+        .and_then(|rules| rules.as_array())
+        .map(|rules| {
+            rules
+                .iter()
+                .filter_map(|rule| rule.as_str())
+                .filter_map(|rule| {
+                    serde_json::from_value(serde_json::Value::String(rule.to_owned())).ok()
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let mut known_uuids = std::collections::BTreeSet::new();
+    if rules.contains(&Rule::FreshUuids) {
+        for arg in &argv {
+            known_uuids.extend(opentide_compare::normalise::uuids_in(arg));
+        }
+        known_uuids.extend(package_uuids().iter().cloned());
+    }
+    let fixture_text: Vec<String> = before
+        .iter()
+        .flat_map(|(files, _)| files.values())
+        .map(|bytes| String::from_utf8_lossy(bytes).into_owned())
+        .collect();
     let mut normaliser = Normaliser::new(
         &Volatile {
             literals: vec![
@@ -317,14 +520,20 @@ pub fn replay(id: &str, dir: &Path, ledger: &Ledger, usage: &mut Usage) -> Vec<S
                 (tmp.display().to_string(), "<TMP>".into()),
             ],
             dates: vec![today],
+            known_uuids,
             ..Volatile::default()
         },
-        &[],
-        std::iter::empty(),
+        &rules,
+        fixture_text.iter().map(String::as_str),
     );
     let stdout = normaliser.text(&String::from_utf8(out).unwrap());
     let stderr = normaliser.text(&String::from_utf8(stderr.0.lock().unwrap().clone()).unwrap());
     let mut problems = Vec::new();
+    if let Some(proxy) = &proxy {
+        for mismatch in proxy.verify() {
+            problems.push(format!("{id}: not the cassette's requests: {mismatch}"));
+        }
+    }
     // `generate` prints its checklist once the work is done: no live display.
     if mode == "human" && id.starts_with("generate") && stderr.contains("\x1b[?25l") {
         problems.push(format!(

@@ -42,6 +42,14 @@ fn a_case_root_is_as_long_as_the_golden_checks() {
     assert_eq!(root.path().parent().unwrap(), std::path::Path::new("/tmp"));
 }
 
+/// `setup skills discover` and `setup skills show` (UC-4.1, #831): the
+/// network refused, and the catalogue served from its cassette
+/// (`tests/cassettes/skills/manifest.json`), the requests checked against it.
+#[test]
+fn skills_catalogue_cases_are_the_oracles() {
+    check(&["setup.skills.discover", "setup.skills.show"], 20);
+}
+
 #[test]
 fn explain_cases_are_the_oracles() {
     check(&["explain"], 12);
@@ -212,5 +220,176 @@ fn a_scoped_run_that_matches_nothing_is_not_an_empty_workspace() {
     assert_eq!(
         document["next_actions"][0]["command"],
         "opentide --json setup"
+    );
+}
+
+/// `new threat|objective|rule` (UC-3.5d, #933): the object written, the
+/// templates and schemas generated first, the failures. One test per family,
+/// so nextest runs them side by side: each case generates the schemas.
+#[test]
+fn new_threat_cases_are_the_oracles() {
+    check(&["new.threat"], 23);
+}
+
+#[test]
+fn new_objective_cases_are_the_oracles() {
+    check(&["new.objective"], 8);
+}
+
+#[test]
+fn new_rule_cases_are_the_oracles() {
+    check(&["new.rule"], 11);
+}
+
+/// `new rule --objective` takes the UUID of an existing objective in any
+/// case: the catalogue's UUIDs are compared in lower case, so an upper-case
+/// one is the same object, not `reference_not_found`.
+#[test]
+fn new_finds_a_reference_whatever_the_case_of_its_uuid() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
+    replay::fixture("vscode", &ws);
+    for (uuid, name) in [
+        (
+            "04149254-2A5B-4C1E-9F0E-3C1D2B5A6E7F",
+            "Upper Case Reference",
+        ),
+        (
+            "04149254-2a5b-4c1e-9f0e-3c1d2b5a6e7f",
+            "Lower Case Reference",
+        ),
+    ] {
+        let (code, stdout) = run_at(
+            &ws,
+            &["--json", "new", "rule", "--name", name, "--objective", uuid],
+        );
+        assert_eq!(code, 0, "{stdout}");
+        let document: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+        assert_eq!(document["ok"], true, "{stdout}");
+    }
+    // An objective that is not there is still refused.
+    let (code, stdout) = run_at(
+        &ws,
+        &[
+            "--json",
+            "new",
+            "rule",
+            "--name",
+            "Missing",
+            "--objective",
+            "04149254-2A5B-4C1E-9F0E-3C1D2B5A6E70",
+        ],
+    );
+    assert_eq!(code, 2, "{stdout}");
+    let document: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(document["failure"]["code"], "reference_not_found");
+}
+
+/// `new` warns when the file it wrote does not match the `lint.toml`
+/// `[filenames]` pattern (the kind's own table first), naming the key, and
+/// not when it does.
+#[test]
+fn new_warns_when_the_file_breaks_the_lint_filename_pattern() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
+    replay::fixture("tide-corpus", &ws);
+    let lint = ws.join(".opentide/configurations/lint.toml");
+    std::fs::write(
+        &lint,
+        "[filenames]\npattern = \"rule-.*\"\n\n[filenames.threats]\npattern = \"tv-.*\"\n",
+    )
+    .unwrap();
+    let (code, stdout) = run_at(
+        &ws,
+        &["--json", "new", "threat", "--name", "Credential Dumping"],
+    );
+    assert_eq!(code, 0, "{stdout}");
+    let document: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(
+        document["warnings"][0],
+        "credential-dumping.yaml does not match lint.toml [filenames.threats].pattern tv-.*; \
+         rename it before opentide lint runs",
+        "{stdout}"
+    );
+    // A name the pattern takes: no warning.
+    let (code, stdout) = run_at(&ws, &["--json", "new", "threat", "--name", "TV Dumping"]);
+    assert_eq!(code, 0, "{stdout}");
+    let document: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    let warnings = document["warnings"].as_array().unwrap();
+    assert!(!warnings.is_empty(), "{stdout}");
+    assert!(
+        warnings.iter().all(|warning| !warning
+            .as_str()
+            .unwrap()
+            .contains("does not match lint.toml")),
+        "{stdout}"
+    );
+}
+
+/// The replay reads `RUST_COMMANDS` as the dispatch does: every entry, with
+/// its `requires`, so it tolerates a refusal only of a run the table does not
+/// cover (a bare `generate`) and fails on any other.
+#[test]
+fn the_replay_tolerates_a_refusal_only_where_rust_commands_does_not_cover_the_run() {
+    let words =
+        |text: &str| -> Vec<String> { text.split_whitespace().map(str::to_owned).collect() };
+    let table = replay::rust_commands();
+    assert_eq!(table["validate"], Vec::<String>::new());
+    assert_eq!(table["deploy"], ["--dry-run"]);
+    assert_eq!(
+        table["generate"],
+        ["schemas", "templates", "vocabs", "snippets"]
+    );
+    assert_eq!(table["generate docs rules"], Vec::<String>::new());
+    assert!(replay::covers(
+        "generate",
+        &words("--json generate schemas")
+    ));
+    assert!(!replay::covers("generate", &words("--json generate")));
+    assert!(!replay::covers("generate", &words("generate --help")));
+    assert!(!replay::covers("generate", &words("generate -- schemas")));
+    assert!(replay::covers("new threat", &words("new threat --name x")));
+    assert!(replay::covers("doctor", &words("doctor --offline")));
+    assert!(!replay::covers("doctor", &words("doctor")));
+    assert!(replay::covers("setup", &words("setup --plan")));
+    assert!(!replay::covers("setup vscode", &words("setup vscode")));
+    // A multi-line entry, and one the parser cannot read, which is no table.
+    let source = "x = 1\nRUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {\n    \
+                  (\"a\",): RustCommand(launch=RUST_CLI),\n    (\"b\", \"c\"): RustCommand(\n        \
+                  launch=RUST_CLI, requires=(\"--x\", \"y\")\n    ),\n}\n";
+    let parsed = replay::parse_rust_commands(source);
+    assert_eq!(parsed.len(), 2);
+    assert_eq!(parsed["b c"], ["--x", "y"]);
+    let unreadable = source.replace("(\"a\",)", "KEY");
+    assert!(std::panic::catch_unwind(|| replay::parse_rust_commands(&unreadable)).is_err());
+}
+
+/// `generate <phase>...` (UC-3.5d, #933): the `schemas`, `templates`,
+/// `vocabs` and `snippets` phases run in Rust; the full pipeline is refused
+/// with `engine_not_ported` (Python runs it alone under `compare`).
+#[test]
+fn generate_phase_cases_are_the_oracles() {
+    let refused = replay::refused();
+    check(&["generate"], 4);
+    let refused = replay::refused() - refused;
+    if std::env::var_os("OPENTIDE_REPLAY_FILTER").is_none() {
+        assert!(refused >= 8, "only {refused} refused");
+    }
+}
+
+/// `setup` and its file-writing subcommands (UC-3.6, #828): plan mode and
+/// non-interactive runs with the files written, and the wizard's refusals.
+#[test]
+fn setup_cases_are_the_oracles() {
+    check(
+        &[
+            "setup",
+            "setup.env",
+            "setup.hooks",
+            "setup.mcp",
+            "setup.platforms",
+            "setup.repo",
+        ],
+        40,
     );
 }

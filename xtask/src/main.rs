@@ -94,6 +94,11 @@ commands:
                  record the MCP sessions of tests/golden/mcp/sessions.toml from
                  the Python server, and replay them against the Python server,
                  the Rust server or both (UC-3.7, #829)
+  cassettes <check|record|list>
+                 the recorded-HTTP cassettes of tests/cassettes (UC-4.1,
+                 #831): record a scenario from the oracle through the
+                 recording proxy, or check every cassette's digest and
+                 redaction
   golden <record|check|diff|lock|coverage> [options]
                  record what the frozen Python CLI does, and check an engine
                  against the recordings (tests/golden/README.md);
@@ -219,6 +224,13 @@ fn main() -> ExitCode {
             Ok(code) => ExitCode::from(code),
             Err(error) => {
                 eprintln!("xtask codegen: {error:#}");
+                ExitCode::from(2)
+            }
+        },
+        "cassettes" => match xtask::cassettes::run(rest) {
+            Ok(code) => ExitCode::from(code),
+            Err(error) => {
+                eprintln!("xtask cassettes: {error:#}");
                 ExitCode::from(2)
             }
         },

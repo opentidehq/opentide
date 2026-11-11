@@ -51,9 +51,11 @@ cargo xtask golden lock                         # rewrite oracle-requirements.tx
    adds to the oracle's array at one pointer, each by its index in the candidate's array: the
    rest must be the oracle's elements, in order, compared as any value is, so it fixes the
    candidate's array as a whole-value entry would without quoting the oracle's elements, and a
-   JSON rule under it addresses the array by the oracle's indices; a presence rule
-   (`oracle = "written"`, `candidate = "(absent)"`) approves one file the oracle wrote and the
-   candidate did not, named by its exact path, and only in the oracle's language-server catalog
+   JSON rule under it addresses the array by the oracle's indices; a `sha256` rule approves one
+   whole file by the digests of both sides' normalised bytes, for a generated file compared by
+   another check (each editor schema `generate schemas` writes, judged by verdict in `cargo
+   xtask codegen --check`); a presence rule (`oracle = "written"`, `candidate = "(absent)"`)
+   approves one file the oracle wrote and the candidate did not, named by its exact path, and only in the oracle's language-server catalog
    cache (`home/.cache/opentide/lsp-catalogs/<CATALOG-FINGERPRINT>/`, and the folders above it
    it creates): a cache outside the workspace is not a file a user commits, and any other file
    only one side wrote is still a difference.
@@ -92,7 +94,13 @@ in an Agent Plugin root that names no workspace. The environment is exactly the 
 directory (cases live under `/tmp`, whatever `TMPDIR` says, so absolute paths have one length), `TZ=UTC`, `LANG=C.UTF-8`, `PYTHONHASHSEED=0`, git without system or user configuration.
 Network traffic goes to a proxy on `127.0.0.1:9`, which refuses it: tenant-contacting paths
 (`deploy`, `query`, `share`, `validate query --live`, `generate extract`) are recorded as their
-failure without tenants; their success paths are UC-4.1's recorded HTTP cassettes. On Linux each
+failure without tenants; their success paths are UC-4.1's recorded HTTP cassettes. A case with
+`cassette = "<name>"` in `cases.toml` is served from `tests/cassettes/<name>.json` instead: its
+proxy variables are `<CASSETTE_PROXY>`, a replaying proxy started for the case, and `SSL_CERT_FILE`,
+`REQUESTS_CA_BUNDLE` and `CURL_CA_BUNDLE` name that proxy's CA (`<TMP>/cassette-ca.pem`). The run
+fails unless its requests are the cassette's, byte for byte and in order (a compare run sends them
+twice: once per implementation). Cassettes are recorded from the oracle with `cargo xtask cassettes
+record <name>` and checked with `cargo xtask cassettes check` (`crates/opentide-cassette/AGENTS.md`). On Linux each
 case runs in a session of its own (`setsid`), so it never reaches the terminal of whoever records.
 
 The arguments come from the examples of `opentide --json commands` and `docs/cli/`, the error cases
@@ -128,6 +136,7 @@ the same with `--json` or `AI_AGENT` set; a terminal adds nothing but the echo o
 | `vscode-ambiguous` | `vscode` with one declared edit: `Account`, defined under two stages, which `migrate vocab-scope` leaves for a person (exit 2), beside `Process`, which it rewrites |
 | `heavy-small` | UC-0.6's generator, seed 1: 30 threats, 30 objectives, 50 rules (`cargo xtask corpus generate`), generated once per run and copied per case, never committed |
 | `fault` | UC-0.6's fault workspace (`cargo xtask corpus faults`), likewise generated; its outputs are recorded as they are, not asserted against the fault manifest |
+| `setup-merge` | [`fixtures/setup-merge/`](fixtures/setup-merge/): the files `setup` merges into, a `.vscode/mcp.json` with a byte-order mark, comments and a trailing comma, and a `sentinel.toml` with `enabled = false` |
 | `empty` | a workspace with an empty `.opentide/` |
 | `none` | no workspace: an empty directory |
 
