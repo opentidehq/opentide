@@ -7,6 +7,7 @@
 
 pub mod generate;
 pub mod info;
+pub mod migrate;
 pub mod rules;
 
 use std::path::{Path, PathBuf};

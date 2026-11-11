@@ -433,6 +433,25 @@ impl Run<'_> {
                 );
                 self.emit_report(&report, out, err)
             }
+            "migrate vocab-scope" => {
+                let options = leaf(&matches);
+                let parsed = crate::commands::migrate::Args {
+                    apply: options.get_flag("apply"),
+                    fields: options
+                        .get_many::<String>("field")
+                        .map(|values| values.cloned().collect())
+                        .unwrap_or_default(),
+                    force: options.get_flag("force"),
+                };
+                let cwd = self.host.cwd.clone().unwrap_or_default();
+                let report = crate::commands::migrate::run(
+                    &parsed,
+                    self.globals.repo.as_deref(),
+                    self.env,
+                    &cwd,
+                );
+                self.emit_report(&report, out, err)
+            }
             "rules unreviewed" => {
                 let older_than = leaf(&matches)
                     .get_one::<String>("older_than")

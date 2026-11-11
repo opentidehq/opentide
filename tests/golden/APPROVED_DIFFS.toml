@@ -1045,3 +1045,105 @@ candidate = "warning: Docs changed requires git · detail: changed-object discov
 reason = "no spinner while the run looks for git: the warning is one log line, printed before the failed checklist row instead of inside Rich's live region and wrapped at the terminal's width"
 issue = "https://github.com/opentidehq/opentide/issues/915"
 changelog = "**`generate docs` runs on the Rust engine**"
+
+# migrate vocab-scope on the Rust command line (UC-3.5c, #928).
+
+[[diff]]
+command = "migrate vocab-scope"
+case = "migrate.vocab-scope/json/fault/default"
+target = "stdout"
+rule = "json:/failed_files/objects~1rules~1encoded-spray-rule-0023.yaml"
+oracle = "\"unreadable: while parsing a flow sequence\\n  in \\\"<unicode string>\\\", line 52, column 9:\\n    broken: [unclosed\\n            ^\\nexpected ',' or ']', but got '<stream end>'\\n  in \\\"<unicode string>\\\", line 53, column 1:\\n    \\n    ^\""
+candidate = "\"unreadable: while parsing a flow sequence, expected ',' or ']' (line 53, column 1)\""
+reason = "The Rust command line reads object files with saphyr (YAML 1.2, opentide-schema's node tree) where the Python CLI used PyYAML: a file it cannot read is reported with saphyr's description of the problem and its line and column, on one line, instead of PyYAML's multi-line report quoting the source. The same three files are unreadable, and every other value of the report is the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/928"
+changelog = "**`migrate vocab-scope` runs on the Rust command line**"
+
+[[diff]]
+command = "migrate vocab-scope"
+case = "migrate.vocab-scope/json/fault/default"
+target = "stdout"
+rule = "json:/failed_files/objects~1rules~1lateral-injection-rule-0024.yaml"
+oracle = "\"unreadable: while scanning for the next token\\nfound character '\\\\t' that cannot start any token\\n  in \\\"<unicode string>\\\", line 68, column 1:\\n    \\tindent: tab\\n    ^\""
+candidate = "\"unreadable: tabs disallowed within this context (block indentation) (line 68, column 2)\""
+reason = "The Rust command line reads object files with saphyr (YAML 1.2, opentide-schema's node tree) where the Python CLI used PyYAML: a file it cannot read is reported with saphyr's description of the problem and its line and column, on one line, instead of PyYAML's multi-line report quoting the source. The same three files are unreadable, and every other value of the report is the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/928"
+changelog = "**`migrate vocab-scope` runs on the Rust command line**"
+
+[[diff]]
+command = "migrate vocab-scope"
+case = "migrate.vocab-scope/json/fault/default"
+target = "stdout"
+rule = "json:/failed_files/objects~1rules~1rogue-relay-rule-0035.yaml"
+oracle = "\"unreadable: while parsing a flow sequence\\n  in \\\"<unicode string>\\\", line 58, column 9:\\n    broken: [unclosed\\n            ^\\nexpected ',' or ']', but got '<stream end>'\\n  in \\\"<unicode string>\\\", line 59, column 1:\\n    \\n    ^\""
+candidate = "\"unreadable: while parsing a flow sequence, expected ',' or ']' (line 59, column 1)\""
+reason = "The Rust command line reads object files with saphyr (YAML 1.2, opentide-schema's node tree) where the Python CLI used PyYAML: a file it cannot read is reported with saphyr's description of the problem and its line and column, on one line, instead of PyYAML's multi-line report quoting the source. The same three files are unreadable, and every other value of the report is the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/928"
+changelog = "**`migrate vocab-scope` runs on the Rust command line**"
+
+[[diff]]
+command = "migrate vocab-scope"
+case = "migrate.vocab-scope/json/fault/default"
+target = "stdout"
+rule = "json:/warnings/1"
+oracle = "\"objects/rules/encoded-spray-rule-0023.yaml: unreadable: while parsing a flow sequence\\n  in \\\"<unicode string>\\\", line 52, column 9:\\n    broken: [unclosed\\n            ^\\nexpected ',' or ']', but got '<stream end>'\\n  in \\\"<unicode string>\\\", line 53, column 1:\\n    \\n    ^\""
+candidate = "\"objects/rules/encoded-spray-rule-0023.yaml: unreadable: while parsing a flow sequence, expected ',' or ']' (line 53, column 1)\""
+reason = "The Rust command line reads object files with saphyr (YAML 1.2, opentide-schema's node tree) where the Python CLI used PyYAML: a file it cannot read is reported with saphyr's description of the problem and its line and column, on one line, instead of PyYAML's multi-line report quoting the source. The same three files are unreadable, and every other value of the report is the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/928"
+changelog = "**`migrate vocab-scope` runs on the Rust command line**"
+
+[[diff]]
+command = "migrate vocab-scope"
+case = "migrate.vocab-scope/json/fault/default"
+target = "stdout"
+rule = "json:/warnings/2"
+oracle = "\"objects/rules/lateral-injection-rule-0024.yaml: unreadable: while scanning for the next token\\nfound character '\\\\t' that cannot start any token\\n  in \\\"<unicode string>\\\", line 68, column 1:\\n    \\tindent: tab\\n    ^\""
+candidate = "\"objects/rules/lateral-injection-rule-0024.yaml: unreadable: tabs disallowed within this context (block indentation) (line 68, column 2)\""
+reason = "The Rust command line reads object files with saphyr (YAML 1.2, opentide-schema's node tree) where the Python CLI used PyYAML: a file it cannot read is reported with saphyr's description of the problem and its line and column, on one line, instead of PyYAML's multi-line report quoting the source. The same three files are unreadable, and every other value of the report is the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/928"
+changelog = "**`migrate vocab-scope` runs on the Rust command line**"
+
+[[diff]]
+command = "migrate vocab-scope"
+case = "migrate.vocab-scope/json/fault/default"
+target = "stdout"
+rule = "json:/warnings/3"
+oracle = "\"objects/rules/rogue-relay-rule-0035.yaml: unreadable: while parsing a flow sequence\\n  in \\\"<unicode string>\\\", line 58, column 9:\\n    broken: [unclosed\\n            ^\\nexpected ',' or ']', but got '<stream end>'\\n  in \\\"<unicode string>\\\", line 59, column 1:\\n    \\n    ^\""
+candidate = "\"objects/rules/rogue-relay-rule-0035.yaml: unreadable: while parsing a flow sequence, expected ',' or ']' (line 59, column 1)\""
+reason = "The Rust command line reads object files with saphyr (YAML 1.2, opentide-schema's node tree) where the Python CLI used PyYAML: a file it cannot read is reported with saphyr's description of the problem and its line and column, on one line, instead of PyYAML's multi-line report quoting the source. The same three files are unreadable, and every other value of the report is the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/928"
+changelog = "**`migrate vocab-scope` runs on the Rust command line**"
+
+[[diff]]
+command = "migrate vocab-scope"
+case = "migrate.vocab-scope/plain/fault/default"
+target = "stderr"
+rule = "lines"
+oracle = "warning: objects/rules/encoded-spray-rule-0023.yaml: unreadable: while parsing a flow sequence\n  in \"<unicode string>\", line 52, column 9:\n    broken: [unclosed\n            ^\nexpected ',' or ']', but got '<stream end>'\n  in \"<unicode string>\", line 53, column 1:\n    \n    ^\nwarning: objects/rules/lateral-injection-rule-0024.yaml: unreadable: while scanning for the next token\nfound character '\\t' that cannot start any token\n  in \"<unicode string>\", line 68, column 1:\n        indent: tab\n    ^\nwarning: objects/rules/rogue-relay-rule-0035.yaml: unreadable: while parsing a flow sequence\n  in \"<unicode string>\", line 58, column 9:\n    broken: [unclosed\n            ^\nexpected ',' or ']', but got '<stream end>'\n  in \"<unicode string>\", line 59, column 1:\n    \n    ^"
+candidate = "warning: objects/rules/encoded-spray-rule-0023.yaml: unreadable: while parsing a flow sequence, expected ',' or ']' (line 53, column 1)\nwarning: objects/rules/lateral-injection-rule-0024.yaml: unreadable: tabs disallowed within this context (block indentation) (line 68, column 2)\nwarning: objects/rules/rogue-relay-rule-0035.yaml: unreadable: while parsing a flow sequence, expected ',' or ']' (line 59, column 1)"
+reason = "The Rust command line reads object files with saphyr (YAML 1.2, opentide-schema's node tree) where the Python CLI used PyYAML: a file it cannot read is reported with saphyr's description of the problem and its line and column, on one line, instead of PyYAML's multi-line report quoting the source. The same three files are unreadable, and every other value of the report is the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/928"
+changelog = "**`migrate vocab-scope` runs on the Rust command line**"
+
+[[diff]]
+command = "migrate vocab-scope"
+case = "migrate.vocab-scope/agent/fault/default"
+target = "stderr"
+rule = "lines"
+oracle = "warning: objects/rules/encoded-spray-rule-0023.yaml: unreadable: while parsing a flow sequence\n  in \"<unicode string>\", line 52, column 9:\n    broken: [unclosed\n            ^\nexpected ',' or ']', but got '<stream end>'\n  in \"<unicode string>\", line 53, column 1:\n    \n    ^\nwarning: objects/rules/lateral-injection-rule-0024.yaml: unreadable: while scanning for the next token\nfound character '\\t' that cannot start any token\n  in \"<unicode string>\", line 68, column 1:\n        indent: tab\n    ^\nwarning: objects/rules/rogue-relay-rule-0035.yaml: unreadable: while parsing a flow sequence\n  in \"<unicode string>\", line 58, column 9:\n    broken: [unclosed\n            ^\nexpected ',' or ']', but got '<stream end>'\n  in \"<unicode string>\", line 59, column 1:\n    \n    ^"
+candidate = "warning: objects/rules/encoded-spray-rule-0023.yaml: unreadable: while parsing a flow sequence, expected ',' or ']' (line 53, column 1)\nwarning: objects/rules/lateral-injection-rule-0024.yaml: unreadable: tabs disallowed within this context (block indentation) (line 68, column 2)\nwarning: objects/rules/rogue-relay-rule-0035.yaml: unreadable: while parsing a flow sequence, expected ',' or ']' (line 59, column 1)"
+reason = "The Rust command line reads object files with saphyr (YAML 1.2, opentide-schema's node tree) where the Python CLI used PyYAML: a file it cannot read is reported with saphyr's description of the problem and its line and column, on one line, instead of PyYAML's multi-line report quoting the source. The same three files are unreadable, and every other value of the report is the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/928"
+changelog = "**`migrate vocab-scope` runs on the Rust command line**"
+
+[[diff]]
+command = "migrate vocab-scope"
+case = "migrate.vocab-scope/human/fault/default"
+target = "stderr"
+rule = "lines"
+oracle = "\u001b[1;33mwarning:\u001b[0m objects/rules/encoded-spray-rule-0023.yaml: unreadable: while parsing a flow sequence\n  in\n         \"<unicode string>\", line 52, column 9:\n    broken: [unclosed\n            ^\nexpected ',' or\n         ']', but got '<stream end>'\n  in \"<unicode string>\", line 53, column 1:\n    \n    ^\n\u001b[1;33mwarning:\u001b[0m objects/rules/lateral-injection-rule-0024.yaml: unreadable: while scanning for the next\n         token\nfound character '\\t' that cannot start any token\n  in \"<unicode string>\", line 68,\n         column 1:\n        indent: tab\n    ^\n\u001b[1;33mwarning:\u001b[0m objects/rules/rogue-relay-rule-0035.yaml: unreadable: while parsing a flow sequence\n  in\n         \"<unicode string>\", line 58, column 9:\n    broken: [unclosed\n            ^\nexpected ',' or\n         ']', but got '<stream end>'\n  in \"<unicode string>\", line 59, column 1:\n    \n    ^"
+candidate = "\u001b[1;33mwarning:\u001b[0m objects/rules/encoded-spray-rule-0023.yaml: unreadable: while parsing a flow sequence,\n         expected ',' or ']' (line 53, column 1)\n\u001b[1;33mwarning:\u001b[0m objects/rules/lateral-injection-rule-0024.yaml: unreadable: tabs disallowed within this\n         context (block indentation) (line 68, column 2)\n\u001b[1;33mwarning:\u001b[0m objects/rules/rogue-relay-rule-0035.yaml: unreadable: while parsing a flow sequence,\n         expected ',' or ']' (line 59, column 1)"
+reason = "The Rust command line reads object files with saphyr (YAML 1.2, opentide-schema's node tree) where the Python CLI used PyYAML: a file it cannot read is reported with saphyr's description of the problem and its line and column, on one line, instead of PyYAML's multi-line report quoting the source. The same three files are unreadable, and every other value of the report is the oracle's. At a terminal the shorter lines wrap at the terminal's width under the label."
+issue = "https://github.com/opentidehq/opentide/issues/928"
+changelog = "**`migrate vocab-scope` runs on the Rust command line**"
+
