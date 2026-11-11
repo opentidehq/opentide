@@ -14,7 +14,9 @@
 //!   then the order of every object's keys, which is the oracle's contract,
 //!   then the bytes), else as bytes;
 //! - every file the command created, changed or deleted: presence, mode and
-//!   bytes, the bytes as JSON or text as a stream is.
+//!   bytes, the bytes as JSON or text as a stream is. A file only the oracle
+//!   wrote is approved missing only in its catalog cache
+//!   ([`ledger::ORACLE_CACHE`]), by a `presence` entry naming its path.
 
 #![forbid(unsafe_code)]
 
@@ -513,8 +515,23 @@ impl Comparison<'_> {
             };
             match (oracle.get(path), candidate.get(path)) {
                 (Some(left), None) => {
-                    let found = simple(Kind::FileMissing, describe(left), ledger::ABSENT);
-                    self.differ(vec![found]);
+                    // Only a file the oracle wrote in its catalog cache can be
+                    // approved missing, by an entry naming its exact path.
+                    let approving = matches!(left, FileState::Written { .. })
+                        .then(|| {
+                            self.ledger
+                                .entries_for(self.case.command, self.case.id, &target)
+                                .find(|(_, entry)| entry.rule == Rule::Presence)
+                                .map(|(index, _)| index)
+                        })
+                        .flatten();
+                    match approving {
+                        Some(index) => self.approve(&target, index),
+                        None => {
+                            let found = simple(Kind::FileMissing, describe(left), ledger::ABSENT);
+                            self.differ(vec![found]);
+                        }
+                    }
                 }
                 (None, Some(right)) => {
                     let found = simple(Kind::FileExtra, ledger::ABSENT, describe(right));
@@ -847,6 +864,99 @@ changelog = "**x**"
         let report = compare(case, &oracle, &other, &ledger, &mut usage);
         assert!(!report.equal);
         assert_eq!(report.differences[0].at.as_deref(), Some("line 2, byte 14"));
+    }
+
+    const CACHE_FIELDS: &str =
+        "home/.cache/opentide/lsp-catalogs/<CATALOG-FINGERPRINT>/fields.json";
+
+    fn presence_ledger() -> Ledger {
+        Ledger::parse(&format!(
+            r#"
+[[diff]]
+command = "doctor"
+case = "json/*/offline"
+target = "file:{CACHE_FIELDS}"
+rule = "presence"
+oracle = "written"
+candidate = "(absent)"
+reason = "the oracle caches the catalog it generates; the candidate's is compiled in"
+issue = "https://github.com/opentidehq/opentide/issues/928"
+changelog = "**x**"
+"#
+        ))
+        .unwrap()
+    }
+
+    fn written(bytes: &[u8]) -> FileState {
+        FileState::Written {
+            mode: 0o644,
+            bytes: bytes.to_vec(),
+        }
+    }
+
+    fn with_files(files: &[(&str, FileState)]) -> Run {
+        Run {
+            files: files
+                .iter()
+                .map(|(path, state)| ((*path).to_owned(), state.clone()))
+                .collect(),
+            ..Run::default()
+        }
+    }
+
+    /// A `presence` entry approves the one cache file it names, written by
+    /// the oracle and not the candidate, and nothing else.
+    #[test]
+    fn a_presence_entry_approves_only_its_cache_file_missing() {
+        let ledger = presence_ledger();
+        let case = Case {
+            command: "doctor",
+            id: "json/vscode/offline",
+        };
+        let mut usage = Usage::default();
+        let oracle = with_files(&[(CACHE_FIELDS, written(b"{}"))]);
+        let report = compare(case, &oracle, &Run::default(), &ledger, &mut usage);
+        assert!(report.equal, "{report:?}");
+        assert_eq!(report.approved.len(), 1);
+        assert!(usage.is_used(0));
+
+        // The candidate wrote it and the oracle did not: still a difference.
+        let mut usage = Usage::default();
+        let report = compare(case, &Run::default(), &oracle, &ledger, &mut usage);
+        assert!(!report.equal);
+        assert_eq!(report.differences[0].kind, Kind::FileExtra);
+        assert!(!usage.is_used(0));
+
+        // The oracle deleted it: not a file it wrote.
+        let deleted = with_files(&[(CACHE_FIELDS, FileState::Deleted)]);
+        let report = compare(case, &deleted, &Run::default(), &ledger, &mut usage);
+        assert_eq!(report.differences[0].kind, Kind::FileMissing);
+
+        // Another file of the cache, and a workspace file: not approved.
+        for path in [
+            "home/.cache/opentide/lsp-catalogs/<CATALOG-FINGERPRINT>/deprecations.json",
+            "ws/fields.json",
+        ] {
+            let oracle = with_files(&[(path, written(b"{}"))]);
+            let report = compare(case, &oracle, &Run::default(), &ledger, &mut usage);
+            assert!(!report.equal, "{path}");
+            assert_eq!(report.differences[0].kind, Kind::FileMissing);
+            assert_eq!(report.differences[0].target, format!("file:{path}"));
+        }
+
+        // Both wrote it: the bytes are compared, the entry approves nothing.
+        let candidate = with_files(&[(CACHE_FIELDS, written(b"[]"))]);
+        let report = compare(case, &oracle, &candidate, &ledger, &mut usage);
+        assert!(!report.equal);
+        assert!(report.approved.is_empty());
+
+        // Another case of the command: not approved.
+        let other = Case {
+            command: "doctor",
+            id: "json/vscode/default",
+        };
+        let report = compare(other, &oracle, &Run::default(), &ledger, &mut usage);
+        assert_eq!(report.differences[0].kind, Kind::FileMissing);
     }
 
     /// A `lines` entry with an `(absent)` candidate approves the oracle's

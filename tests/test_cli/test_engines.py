@@ -140,6 +140,12 @@ def test_a_rust_command_that_requires_a_flag_covers_only_runs_with_it() -> None:
     assert not command.covers(["deploy", "--", "--dry-run"])
     assert RustCommand(launch=("x",)).covers(["info"])
     assert engines.RUST_COMMANDS[("deploy",)].requires == ("--dry-run",)
+    # ``doctor`` reaches PyPI and the proxy without ``--offline``: that run stays Python's.
+    doctor = engines.RUST_COMMANDS[("doctor",)]
+    assert doctor.requires == ("--offline",)
+    assert doctor.rules == ("host-git",)
+    assert doctor.covers(["doctor", "--offline"])
+    assert not doctor.covers(["doctor"])
 
 
 def test_a_rust_command_that_refuses_a_flag_covers_only_runs_without_it() -> None:
@@ -707,6 +713,19 @@ def test_the_variable_wins_over_the_default(monkeypatch: pytest.MonkeyPatch) -> 
     assert engines.rust_command(("explain",), {}) is engines.RUST_COMMANDS[("explain",)]
     assert engines.rust_command(("explain",), {"OPENTIDE_ENGINE": "python"}) is None
     assert engines.rust_command(("explain",), {"OPENTIDE_ENGINE": "compare"}) is None
+
+
+def test_a_host_runs_rust_only_for_a_run_its_implementation_covers() -> None:
+    """``serve`` asks with the run's arguments: an uncovered run goes to the dispatcher."""
+    rust = {"OPENTIDE_ENGINE": "rust"}
+    doctor = engines.RUST_COMMANDS[("doctor",)]
+    assert engines.rust_command(("doctor",), rust, ["doctor", "--offline"]) is doctor
+    assert engines.rust_command(("doctor",), rust, ["doctor"]) is None
+    assert engines.rust_command(("doctor",), rust, ["doctor", "--", "--offline"]) is None
+    deploy = engines.RUST_COMMANDS[("deploy",)]
+    assert engines.rust_command(("deploy",), rust, ["deploy", "--dry-run"]) is deploy
+    assert engines.rust_command(("deploy",), rust, ["deploy"]) is None
+    assert engines.rust_command(("info",), rust, ["info"]) is engines.RUST_COMMANDS[("info",)]
 
 
 def test_a_rust_default_without_a_rust_implementation_runs_python(

@@ -312,7 +312,8 @@ class CommandRunner:
         """The Rust implementation that runs *argv*, or ``None`` when it goes through Python.
 
         Help is the command tree's (Click's), and ``compare``, an engine that
-        is none and ``rust`` for a command without a Rust implementation are
+        is none and ``rust`` for a command without a Rust implementation, or
+        for a run it does not cover (``doctor`` without ``--offline``), are
         the dispatcher's, as at a terminal.
         """
         options = list(argv[: list(argv).index("--")] if "--" in argv else argv)
@@ -323,7 +324,7 @@ class CommandRunner:
             return None
         from opentide.cli.engines import rust_command
 
-        return rust_command(words, self.run_environment(env, cwd_given=cwd_given))
+        return rust_command(words, self.run_environment(env, cwd_given=cwd_given), argv)
 
     def _run_rust(
         self,
