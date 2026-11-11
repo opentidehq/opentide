@@ -1,0 +1,379 @@
+{
+  "format": 1,
+  "scenario": "elastic/validate",
+  "recorded_from": [
+    "{python}",
+    "tests/cassettes/elastic/client.py",
+    "validate"
+  ],
+  "digest": "sha256:321fd30cc42811f54be5e93a6b7d05c88af4b91ebe9a7f9b797b610f0ec80061",
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://kibana.elastic.invalid/s/soc/api/detection_engine/rules/preview",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "ApiKey REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "elastic-api-version",
+            "2023-10-31"
+          ],
+          [
+            "kbn-xsrf",
+            "true"
+          ]
+        ],
+        "body": "{\"rule_id\": \"6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0011\", \"type\": \"query\", \"name\": \"Elastic rule 11\", \"description\": \"Rule 11 of the Elastic connector's cassettes.\", \"enabled\": true, \"severity\": \"high\", \"risk_score\": 73, \"interval\": \"5m\", \"from\": \"now-6m\", \"to\": \"now\", \"language\": \"kuery\", \"query\": \"process.name: \\\"powershell.exe\\\"\", \"index\": [\"logs-*\"], \"tags\": [\"OpenTide\"], \"author\": [\"Detection Engineering\"], \"invocationCount\": 1, \"timeframeEnd\": \"2026-10-27T08:00:00.000Z\"}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "elastic-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"previewId\": \"p-1\", \"logs\": [{\"errors\": [], \"warnings\": [\"the rule matched no index yet\"]}], \"isAborted\": false}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://es.elastic.invalid/_query",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "ApiKey REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "elastic-api-version",
+            "2023-10-31"
+          ]
+        ],
+        "body": "{\"query\": \"FROM missing-* METADATA _id\\n| WHERE process.name == \\\"cmd.exe\\\"\\n| LIMIT 0\"}"
+      },
+      "response": {
+        "status": 400,
+        "headers": [
+          [
+            "server",
+            "elastic-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"error\": {\"root_cause\": [{\"type\": \"verification_exception\", \"reason\": \"Unknown index [missing-*]\"}], \"type\": \"verification_exception\", \"reason\": \"Unknown index [missing-*]\"}, \"status\": 400}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://es.elastic.invalid/_resolve/index/missing-%2A?ignore_unavailable=true&allow_no_indices=true",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "ApiKey REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "elastic-api-version",
+            "2023-10-31"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "elastic-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"indices\": [], \"aliases\": [], \"data_streams\": []}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://kibana.elastic.invalid/s/soc/api/detection_engine/rules/preview",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "ApiKey REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "elastic-api-version",
+            "2023-10-31"
+          ],
+          [
+            "kbn-xsrf",
+            "true"
+          ]
+        ],
+        "body": "{\"rule_id\": \"6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0012\", \"type\": \"esql\", \"name\": \"Elastic rule 12\", \"description\": \"Rule 12 of the Elastic connector's cassettes.\", \"enabled\": true, \"severity\": \"high\", \"risk_score\": 73, \"interval\": \"5m\", \"from\": \"now-6m\", \"to\": \"now\", \"language\": \"esql\", \"query\": \"FROM missing-* METADATA _id\\n| WHERE process.name == \\\"cmd.exe\\\"\", \"tags\": [\"OpenTide\"], \"author\": [\"Detection Engineering\"], \"invocationCount\": 1, \"timeframeEnd\": \"2026-10-27T08:00:00.000Z\"}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "elastic-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"previewId\": \"p-2\", \"logs\": [{\"errors\": [], \"warnings\": [\"the rule matched no index yet\"]}], \"isAborted\": false}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://es.elastic.invalid/_query",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "ApiKey REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "elastic-api-version",
+            "2023-10-31"
+          ]
+        ],
+        "body": "{\"query\": \"FROM logs-* | parse error\\n| LIMIT 0\"}"
+      },
+      "response": {
+        "status": 400,
+        "headers": [
+          [
+            "server",
+            "elastic-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"error\": {\"root_cause\": [{\"type\": \"parsing_exception\", \"reason\": \"line 1:20: mismatched input 'error'\"}], \"type\": \"parsing_exception\", \"reason\": \"line 1:20: mismatched input 'error'\"}, \"status\": 400}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://kibana.elastic.invalid/s/soc/api/detection_engine/rules/preview",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "ApiKey REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "elastic-api-version",
+            "2023-10-31"
+          ],
+          [
+            "kbn-xsrf",
+            "true"
+          ]
+        ],
+        "body": "{\"rule_id\": \"6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0014\", \"type\": \"query\", \"name\": \"Elastic rule 14\", \"description\": \"Rule 14 of the Elastic connector's cassettes.\", \"enabled\": true, \"severity\": \"high\", \"risk_score\": 73, \"interval\": \"5m\", \"from\": \"now-6m\", \"to\": \"now\", \"language\": \"kuery\", \"query\": \"a::b\", \"index\": [\"logs-*\"], \"tags\": [\"OpenTide\"], \"author\": [\"Detection Engineering\"], \"invocationCount\": 1, \"timeframeEnd\": \"2026-10-27T08:00:00.000Z\"}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "elastic-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"previewId\": \"p-3\", \"logs\": [{\"errors\": [\"Expected AND but found ':'\"], \"warnings\": []}], \"isAborted\": false}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://kibana.elastic.invalid/s/soc/api/data_views/data_view/dv-logs",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "ApiKey REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "elastic-api-version",
+            "2023-10-31"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "elastic-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"data_view\": {\"id\": \"dv-logs\", \"title\": \"logs-*,winlogbeat-*\", \"name\": \"Logs\"}}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://kibana.elastic.invalid/s/soc/api/detection_engine/rules/preview",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "ApiKey REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "elastic-api-version",
+            "2023-10-31"
+          ],
+          [
+            "kbn-xsrf",
+            "true"
+          ]
+        ],
+        "body": "{\"rule_id\": \"6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0015\", \"type\": \"query\", \"name\": \"Elastic rule 15\", \"description\": \"Rule 15 of the Elastic connector's cassettes.\", \"enabled\": true, \"severity\": \"high\", \"risk_score\": 73, \"interval\": \"5m\", \"from\": \"now-6m\", \"to\": \"now\", \"language\": \"kuery\", \"query\": \"bad-schema: x\", \"data_view_id\": \"dv-logs\", \"tags\": [\"OpenTide\"], \"author\": [\"Detection Engineering\"], \"invocationCount\": 1, \"timeframeEnd\": \"2026-10-27T08:00:00.000Z\"}"
+      },
+      "response": {
+        "status": 400,
+        "headers": [
+          [
+            "server",
+            "elastic-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"statusCode\": 400, \"error\": \"Bad Request\", \"message\": \"[from]: bad\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://es.elastic.invalid/logs-*/_field_caps?fields=message&ignore_unavailable=true&allow_no_indices=true",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "ApiKey REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "elastic-api-version",
+            "2023-10-31"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "elastic-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"indices\": [\"logs-*\"], \"fields\": {\"message\": {\"text\": {\"type\": \"text\", \"searchable\": true, \"aggregatable\": false}}}}"
+      }
+    }
+  ]
+}

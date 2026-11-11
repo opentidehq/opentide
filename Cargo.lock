@@ -2672,6 +2672,7 @@ dependencies = [
  "jiff",
  "opentide-cassette",
  "opentide-compile",
+ "opentide-core",
  "opentide-schema",
  "opentide-workspace",
  "percent-encoding",

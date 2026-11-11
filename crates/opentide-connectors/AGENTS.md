@@ -23,6 +23,8 @@ adds the Python plugin hook to its registry.
 | `crowdstrike.rs` | CrowdStrike (UC-4.2): the OAuth2 token (once per tenant for a deploy), correlation rules, Next-Gen SIEM query jobs stopped when the runner stops waiting | `platforms/crowdstrike/` |
 | `harfanglab.rs` | HarfangLab (UC-4.2): Sigma rules (`PUT`, `POST` on a 404), YARA files, telemetry searches (`shlex` words) | `platforms/harfanglab/` |
 | `sysdig.rs` | Sysdig (UC-4.2): Falco rules and runtime policies, `deploy_rule` with the deployment-state change it makes | `platforms/sysdig/client.py`, `deployer.py` |
+| `search.rs` | What the query runners share: `SearchRequest`, `SearchResult`, `SearchError` (refused, timed out, tenant), `TimeWindow`, `kql_with_limit`, `flatten`, `describe_answer`, `quote`/`urlencode` as `urllib` writes them | `query/models.py`, `query/runner.py`, `transport.describe_answer` |
+| `defender.rs`, `elastic.rs`, `sentinel_one.rs` | The platforms of UC-4.2b (#832): client, deploy calls, live check and query runner of each, request for request; Elastic's Elasticsearch checks, rule preview, query text and advisories | `platforms/<platform>/` |
 
 ## Place
 
@@ -65,3 +67,8 @@ proxy, `no_proxy`, `--proxy`, timeouts and retries with tenants of different set
 run; credentials; redaction; fan-out, cancellation, progress; bodies) and `tests/harness.rs` (the
 sample connector against `tests/cassettes/mock-platform/deploy.json`; one byte off fails; no
 credential in any cassette).
+
+`cargo nextest run -p opentide-connectors defender elastic sentinel_one`: each platform against its
+cassettes (`tests/cassettes/<platform>/<scenario>.json`, recorded from the oracle against the stand-in tenant
+`tenant.py` beside them), the inputs the Python client was given in `tests/fixtures/<platform>.json` (written by
+`client.py fixture`); one byte off fails.

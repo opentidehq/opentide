@@ -1,0 +1,163 @@
+{
+  "format": 1,
+  "scenario": "defender/query",
+  "recorded_from": [
+    "{python}",
+    "tests/cassettes/defender/client.py",
+    "query"
+  ],
+  "digest": "sha256:35f2f7f50a8226290434f667a60b9f5ba44c23541051d8e0c11ca64c8ec6018f",
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://login.microsoftonline.com/contoso-tenant-id/oauth2/v2.0/token",
+        "headers": [
+          [
+            "content-type",
+            "application/x-www-form-urlencoded"
+          ]
+        ],
+        "body": "client_id=opentide-app-id&client_secret=REDACTED&grant_type=client_credentials&scope=https%3A%2F%2Fgraph.microsoft.com%2F.default"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "defender-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"token_type\": \"REDACTED\", \"expires_in\": 3599, \"ext_expires_in\": 3599, \"access_token\": \"REDACTED\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://graph.microsoft.com/beta/security/runHuntingQuery",
+        "headers": [
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"Query\": \"DeviceProcessEvents\\n| where FileName =~ 'powershell.exe'\\n| take 2\", \"Timespan\": \"2026-10-26T08:00:00.000Z/2026-10-27T08:00:00.000Z\"}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "defender-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"schema\": [{\"name\": \"Timestamp\", \"type\": \"DateTime\"}, {\"name\": \"DeviceId\", \"type\": \"String\"}, {\"name\": \"DeviceName\", \"type\": \"String\"}, {\"name\": \"ReportId\", \"type\": \"Int64\"}], \"results\": [{\"Timestamp\": \"2026-10-27T07:51:00.0000000Z\", \"DeviceId\": \"dev-1\", \"DeviceName\": \"ws-1.contoso.example\", \"ReportId\": 1001}, {\"Timestamp\": \"2026-10-27T07:52:00.0000000Z\", \"DeviceId\": \"dev-2\", \"DeviceName\": \"ws-2.contoso.example\", \"ReportId\": 1002}]}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://graph.microsoft.com/beta/security/runHuntingQuery",
+        "headers": [
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"Query\": \"DeviceProcessEvents | whre x\\n| take 101\", \"Timespan\": \"2026-10-26T08:00:00.000Z/2026-10-27T08:00:00.000Z\"}"
+      },
+      "response": {
+        "status": 400,
+        "headers": [
+          [
+            "server",
+            "defender-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"error\": {\"code\": \"REDACTED\", \"message\": \"Syntax error near 'whre'\"}}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://graph.microsoft.com/beta/security/runHuntingQuery",
+        "headers": [
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"Query\": \"// forbidden\\nEmailEvents\\n| take 101\", \"Timespan\": \"2026-10-26T08:00:00.000Z/2026-10-27T08:00:00.000Z\"}"
+      },
+      "response": {
+        "status": 403,
+        "headers": [
+          [
+            "server",
+            "defender-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"error\": {\"code\": \"REDACTED\", \"message\": \"Insufficient privileges to complete the operation.\"}}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://graph.microsoft.com/beta/security/runHuntingQuery",
+        "headers": [
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"Query\": \"// gateway\\nDeviceEvents\\n| take 101\", \"Timespan\": \"2026-10-26T08:00:00.000Z/2026-10-27T08:00:00.000Z\"}"
+      },
+      "response": {
+        "status": 502,
+        "headers": [
+          [
+            "server",
+            "defender-tenant"
+          ],
+          [
+            "content-type",
+            "text/html"
+          ]
+        ],
+        "body": "<html><head><title>502 Bad Gateway</title></head><body></body></html>"
+      }
+    }
+  ]
+}
