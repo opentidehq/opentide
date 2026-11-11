@@ -146,12 +146,6 @@ struct GitLayout {
     hooks_shared: bool,
 }
 
-/// `path` as `Path.resolve()` gives it: links of its existing part
-/// resolved, `.` and `..` folded, the rest kept.
-fn normalised(path: &Path) -> PathBuf {
-    soft_canonicalize::soft_canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
-}
-
 /// Asks Git where the repository around `target` is (`_git_layout`).
 fn git_layout(env: &Env, target: &Path) -> Option<GitLayout> {
     let probe = target
@@ -173,14 +167,14 @@ fn git_layout(env: &Env, target: &Path) -> Option<GitLayout> {
     let [top, hooks, common] = lines.as_slice() else {
         return None;
     };
-    let top_level = normalised(Path::new(top));
-    let relative = normalised(target)
+    let top_level = super::real(Path::new(top));
+    let relative = super::real(target)
         .strip_prefix(&top_level)
         .ok()?
         .to_string_lossy()
         .replace('\\', "/");
-    let hooks_dir = normalised(&probe.join(hooks));
-    let common_dir = normalised(&probe.join(common));
+    let hooks_dir = super::real(&probe.join(hooks));
+    let common_dir = super::real(&probe.join(common));
     Some(GitLayout {
         hooks_shared: !(hooks_dir.starts_with(&top_level) || hooks_dir.starts_with(&common_dir)),
         top_level,
@@ -195,7 +189,7 @@ fn git_layout(env: &Env, target: &Path) -> Option<GitLayout> {
 
 /// `dest` relative to `target`, both resolved first.
 fn shown_relative(dest: &Path, target: &Path) -> String {
-    super::shown_relative(&normalised(dest), &normalised(target))
+    super::shown_relative(&super::real(dest), &super::real(target))
 }
 
 /// The workspace an opentide `entry` pins: `""` for the Git root, `None`

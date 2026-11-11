@@ -42,8 +42,9 @@ def state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return home / "opentide" / "compare"
 
 
-#: A command line with no Rust implementation: ``setup`` (UC-3.6).
-UNPORTED = ("setup", "--plan", "--platform", "sentinel")
+#: A command line with no Rust implementation: the deprecated ``setup vscode``
+#: (``setup`` itself runs on Rust since UC-3.6, #828).
+UNPORTED = ("setup", "vscode", "--plan", "--settings", "--no-generate")
 
 
 def fake(mode: str) -> RustCommand:
@@ -81,10 +82,10 @@ def test_rust_on_a_command_without_rust_is_engine_not_ported(workspace: Path) ->
     assert code == 2
     doc = document(stdout)
     assert doc["exit_code"] == 2
-    assert doc["command"] == "setup"
+    assert doc["command"] == "setup vscode"
     assert doc["failure"]["code"] == "engine_not_ported"
     assert doc["failure"]["argument"] == "OPENTIDE_ENGINE"
-    assert "opentide setup has no Rust implementation yet" in doc["failure"]["message"]
+    assert "opentide setup vscode has no Rust implementation yet" in doc["failure"]["message"]
     assert stdout.endswith("}\n") and stdout.count("\n") == 1
 
 
@@ -100,7 +101,7 @@ def test_rust_without_json_is_one_error_line(workspace: Path) -> None:
     code, stdout, stderr = invoke(["--no-color", "--repo", str(workspace), *UNPORTED], "rust")
     assert code == 2
     assert stdout == ""
-    assert "error: opentide setup has no Rust implementation yet" in stderr
+    assert "error: opentide setup vscode has no Rust implementation yet" in stderr
 
 
 def test_an_unknown_engine_is_a_usage_error_with_a_suggestion(workspace: Path) -> None:

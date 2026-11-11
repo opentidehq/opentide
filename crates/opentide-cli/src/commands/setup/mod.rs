@@ -16,7 +16,7 @@ pub mod run;
 pub mod stage;
 
 use std::io::{BufRead as _, IsTerminal as _, Write as _};
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 
 use indexmap::IndexMap;
 use opentide_compile::ci::{self, Provider};
@@ -149,40 +149,17 @@ pub fn is_valid_branch_name(name: &str) -> bool {
             .is_some_and(|read| read == name)
 }
 
-/// `path` made absolute against `cwd` and normalised, its existing part
-/// with links resolved (`Path.resolve()`).
+/// `path` made absolute against `cwd` as `Path.resolve()` gives it: the
+/// links of its existing part resolved (before the `..` that follow them),
+/// `.` and `..` folded, the part that does not exist yet kept.
 pub(crate) fn resolved(cwd: &Path, path: &Path) -> PathBuf {
-    let joined = if path.is_absolute() {
-        path.to_path_buf()
-    } else {
-        cwd.join(path)
-    };
-    let mut normal = PathBuf::new();
-    for part in joined.components() {
-        match part {
-            Component::ParentDir => {
-                normal.pop();
-            }
-            Component::CurDir => {}
-            other => normal.push(other.as_os_str()),
-        }
-    }
-    let mut existing = normal.clone();
-    let mut rest = Vec::new();
-    while !existing.exists() {
-        match existing.file_name() {
-            Some(name) => rest.push(name.to_owned()),
-            None => break,
-        }
-        if !existing.pop() {
-            break;
-        }
-    }
-    let mut out = std::fs::canonicalize(&existing).unwrap_or(existing);
-    for name in rest.into_iter().rev() {
-        out.push(name);
-    }
-    out
+    real(&cwd.join(path))
+}
+
+/// An absolute `path` resolved as [`resolved`] does (soft_canonicalize:
+/// it need not exist); kept as given when resolving fails.
+pub(crate) fn real(path: &Path) -> PathBuf {
+    soft_canonicalize::soft_canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
 }
 
 /// The repository `setup ci` writes to (`_option_path`): the one path the
@@ -928,6 +905,34 @@ fn plan(root: &Path, run: &Run) -> Report {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn resolved_joins_folds_and_keeps_the_missing_tail() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = soft_canonicalize::soft_canonicalize(dir.path()).unwrap();
+        std::fs::create_dir(root.join("a")).unwrap();
+        assert_eq!(
+            resolved(&root, Path::new("a/./b/../new/file")),
+            root.join("a").join("new").join("file")
+        );
+        assert_eq!(resolved(&root, Path::new(".")), root);
+        assert_eq!(resolved(&root, &root.join("a")), root.join("a"));
+    }
+
+    /// `..` after a link climbs from where the link points, as
+    /// `Path.resolve()` does, not from the link's own folder.
+    #[cfg(unix)]
+    #[test]
+    fn resolved_follows_a_link_before_its_parent_step() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = soft_canonicalize::soft_canonicalize(dir.path()).unwrap();
+        std::fs::create_dir_all(root.join("real").join("deep")).unwrap();
+        std::os::unix::fs::symlink(root.join("real").join("deep"), root.join("link")).unwrap();
+        assert_eq!(
+            resolved(&root, Path::new("link/../ws")),
+            root.join("real").join("ws")
+        );
+    }
 
     fn po(
         root: &Path,
