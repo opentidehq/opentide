@@ -1,6 +1,6 @@
 """Platforms whose queries can be checked against a tenant.
 
-CrowdStrike and HarfangLab have no tenant check, so their capability entry is
+CrowdStrike, HarfangLab, Sysdig and Bitdefender have no tenant check, so their capability entry is
 ``can_validate False``. HarfangLab's YARA is checked offline.
 """
 
@@ -14,6 +14,7 @@ QUERY_VALIDATION_PLATFORMS: frozenset[str] = frozenset(
         "sentinel_one",
         "carbon_black_cloud",
         "elastic",
+        "graylog",
     }
 )
 
@@ -24,6 +25,7 @@ QUERY_VALIDATION_PLATFORMS: frozenset[str] = frozenset(
 #: Bitdefender's ``yara.signature`` is checked offline only, under the engine's
 #: bitdefender profile (ASCII, 30,000 characters; bitdefender-1.0): GravityZone has
 #: no dry run.
+#: Graylog's query is Lucene, checked in the engine's Graylog dialect (graylog-1.0).
 #: SentinelOne (S1QL) is checked on the tenant only (``validate query --live``).
 #: CrowdStrike is never checked: no fake validation.
 OFFLINE_QUERY_LANGUAGES: dict[str, tuple[str, ...]] = {
@@ -35,5 +37,6 @@ OFFLINE_QUERY_LANGUAGES: dict[str, tuple[str, ...]] = {
     "sysdig": ("falco",),
     "harfanglab": ("yara",),
     "bitdefender": ("yara",),
+    "graylog": ("lucene",),
 }
 OFFLINE_QUERY_PLATFORMS = frozenset(OFFLINE_QUERY_LANGUAGES)

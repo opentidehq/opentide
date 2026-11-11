@@ -61,6 +61,7 @@ PLATFORMS = (
     "elastic",
     "sysdig",
     "bitdefender",
+    "graylog",
 )
 
 #: ``--strategy`` values and what each deploys, as

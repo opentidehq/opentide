@@ -625,6 +625,7 @@ def setup_platforms_cmd(
     elastic: bool = typer.Option(False, "--elastic", help="Enable Elastic Security"),
     sysdig: bool = typer.Option(False, "--sysdig", help="Enable Sysdig Secure (Falco)"),
     bitdefender: bool = typer.Option(False, "--bitdefender", help="Enable Bitdefender GravityZone"),
+    graylog: bool = typer.Option(False, "--graylog", help="Enable Graylog"),
     plan: bool = PLAN_OPTION,
     yes: bool = typer.Option(False, "--yes", "-y", help=_YES_HELP),
 ) -> None:
@@ -655,6 +656,8 @@ def setup_platforms_cmd(
         platforms.append(DetectionPlatform.sysdig)
     if bitdefender:
         platforms.append(DetectionPlatform.bitdefender)
+    if graylog:
+        platforms.append(DetectionPlatform.graylog)
     if not platforms:
         raise typer.BadParameter("Choose at least one platform flag (e.g. --sentinel --splunk)")
     if _planning(ctx, plan):

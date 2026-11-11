@@ -281,6 +281,24 @@ class ConfigurationModels:
 
             tenants: Sequence[Tenant] | None = None
 
+        @dataclass
+        class Graylog(SystemConfig):
+            @dataclass
+            class Tenant(SystemConfig.Tenant):
+                @dataclass
+                class Setup(SystemConfig.Tenant.Setup):
+                    url: str = ""
+                    token: str = ""
+                    allow_leading_wildcard: bool = False
+                    streams: str | Sequence[str] | None = None
+                    stream_ids: Mapping[str, str] | None = None
+                    notification_ids: Mapping[str, str] | None = None
+                    tags: str | Sequence[str] | None = None
+
+                setup: Setup
+
+            tenants: Sequence[Tenant] | None = None
+
 
 @dataclass
 class DeploymentBatch:
@@ -343,3 +361,7 @@ class TenantDeployment:
     @dataclass
     class Bitdefender(DeploymentBatch):
         tenant: ConfigurationModels.Systems.Bitdefender.Tenant
+
+    @dataclass
+    class Graylog(DeploymentBatch):
+        tenant: ConfigurationModels.Systems.Graylog.Tenant

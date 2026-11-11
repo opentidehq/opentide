@@ -33,7 +33,7 @@ class RowFormat(str, Enum):
 
 TENANT_HELP = "Run on this tenant (repeatable), or 'all'. Default: the only tenant configured"
 SINCE_HELP = "Look back this far from --to or now: 15m, 24h, 7d, PT1H. Default: 24h"
-INDEX_HELP = "Elastic index pattern or CrowdStrike repository (repeatable)"
+INDEX_HELP = "Elastic index pattern, CrowdStrike repository or Graylog stream alias (repeatable)"
 LANGUAGE_HELP = "Elastic only: esql (default), eql, lucene or kuery"
 
 
