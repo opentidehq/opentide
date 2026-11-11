@@ -59,7 +59,7 @@ url.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 # SARIF and Code Quality fingerprints (RustCrypto).
-sha2 = "0.10"
+sha2 = "0.11"
 shlex = "2.0"
 strsim = "0.11"
 terminal_size = "0.4"
