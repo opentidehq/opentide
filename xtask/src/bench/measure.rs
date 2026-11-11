@@ -425,6 +425,12 @@ mod tests {
     #[cfg(target_os = "linux")]
     #[test]
     fn memory_xtask_touches_after_the_reset_is_part_of_the_floor() {
+        if !crate::bench::measured_alone(
+            module_path!(),
+            "memory_xtask_touches_after_the_reset_is_part_of_the_floor",
+        ) {
+            return;
+        }
         // 16 MiB touched between the reset and the spawn is in the floor the
         // child inherits: a floor read before it would let `sh -c true`
         // pass for a command that peaks above xtask.
@@ -449,6 +455,12 @@ mod tests {
     #[cfg(target_os = "linux")]
     #[test]
     fn memory_the_spawn_itself_touches_is_part_of_the_floor() {
+        if !crate::bench::measured_alone(
+            module_path!(),
+            "memory_the_spawn_itself_touches_is_part_of_the_floor",
+        ) {
+            return;
+        }
         // No fault before the spawn: `Command::spawn` alone copies this
         // 1.5 MiB environment (into the map it captures, then into the
         // C strings `execve` gets) before `posix_spawn`, and those pages are
@@ -490,6 +502,12 @@ mod tests {
     #[cfg(target_os = "linux")]
     #[test]
     fn memory_xtask_touches_after_the_exec_is_not_part_of_the_floor() {
+        if !crate::bench::measured_alone(
+            module_path!(),
+            "memory_xtask_touches_after_the_exec_is_not_part_of_the_floor",
+        ) {
+            return;
+        }
         // 128 MiB touched once the spawn has returned (as the language
         // server's session allocates while the server runs) was never the
         // child's: the floor `spawn` reads leaves it out, and a 64 MiB child
@@ -558,6 +576,12 @@ mod tests {
     #[cfg(target_os = "linux")]
     #[test]
     fn memory_xtask_freed_before_the_spawn_does_not_raise_the_floor() {
+        if !crate::bench::measured_alone(
+            module_path!(),
+            "memory_xtask_freed_before_the_spawn_does_not_raise_the_floor",
+        ) {
+            return;
+        }
         // 256 MiB touched and freed: without the reset of VmHWM before the
         // spawn, a 64 MiB child would report this process's 256 MiB peak,
         // and the guard would refuse it.
