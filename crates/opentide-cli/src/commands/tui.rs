@@ -209,6 +209,14 @@ mod tests {
                 "{pairs:?}"
             );
         }
+        // Not at a terminal: no setting is named, even one that is set.
+        assert_eq!(
+            refusal(Mode::Plain, false, false, &[("NO_COLOR", "1")]),
+            Some((
+                "opentide tui needs an interactive terminal; this run is in plain mode".into(),
+                None
+            ))
+        );
         // No setting to name (`CI=false` is not CI): the plain refusal.
         assert_eq!(
             refusal(Mode::Plain, true, false, &[("CI", "false")]),

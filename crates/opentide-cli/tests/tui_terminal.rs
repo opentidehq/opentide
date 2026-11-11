@@ -53,7 +53,24 @@ fn drain(mut master: File) -> String {
 /// `opentide tui` with stdin, stdout and stderr each a terminal: exit
 /// code, stdout, stderr.
 fn tui(pairs: &[(&str, &str)], args: &[&str]) -> (i32, String, String) {
+    tui_reading(pairs, args, true)
+}
+
+/// `opentide tui` with stdout and stderr each a terminal, and stdin one
+/// only when `stdin_terminal` (otherwise `/dev/null`): exit code, stdout,
+/// stderr.
+fn tui_reading(
+    pairs: &[(&str, &str)],
+    args: &[&str],
+    stdin_terminal: bool,
+) -> (i32, String, String) {
     let (input_master, input) = terminal();
+    let stdin = if stdin_terminal {
+        Stdio::from(input)
+    } else {
+        drop(input);
+        Stdio::null()
+    };
     let (out_master, out) = terminal();
     let (err_master, err) = terminal();
     let dir = tempfile::tempdir().unwrap();
@@ -65,7 +82,7 @@ fn tui(pairs: &[(&str, &str)], args: &[&str]) -> (i32, String, String) {
         .env("HOME", dir.path())
         .env("TERM", "xterm-256color")
         .envs(pairs.iter().copied())
-        .stdin(Stdio::from(input))
+        .stdin(stdin)
         .stdout(Stdio::from(out))
         .stderr(Stdio::from(err))
         .spawn()
@@ -135,6 +152,21 @@ fn an_agent_at_a_terminal_is_refused_by_mode() {
         format!(
             "error: opentide tui needs an interactive terminal; this run is in agent mode\n\
              {NEXT}tip: add --json for machine-readable output\n"
+        )
+    );
+}
+
+/// `opentide tui </dev/null` at a terminal: stdout is one, stdin is not,
+/// so nobody can use the UI.
+#[test]
+fn stdin_that_is_not_a_terminal_is_refused() {
+    let (code, stdout, stderr) = tui_reading(&[], &[], false);
+    assert_eq!(code, 2);
+    assert_eq!(stdout, "");
+    assert_eq!(
+        strip_sgr(&stderr),
+        format!(
+            "error: opentide tui needs an interactive terminal; stdin or stdout is not one\n{NEXT}"
         )
     );
 }

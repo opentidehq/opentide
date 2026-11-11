@@ -96,6 +96,7 @@ pub struct Host {
 pub struct Interrupt {
     requested: Arc<AtomicBool>,
     reported: Arc<AtomicBool>,
+    at_once: Arc<AtomicBool>,
 }
 
 impl Interrupt {
@@ -107,6 +108,13 @@ impl Interrupt {
     /// Whether Ctrl-C was pressed: long jobs poll this and stop.
     pub fn requested(&self) -> bool {
         self.requested.load(Ordering::SeqCst)
+    }
+
+    /// Has the first Ctrl-C end the process at once, with no grace: for a
+    /// run that blocks without polling [`Interrupt::requested`] and holds
+    /// nothing to clean up (`lsp start`'s server on stdio).
+    pub fn stop_at_once(&self) {
+        self.at_once.store(true, Ordering::SeqCst);
     }
 
     /// Takes back a Ctrl-C a command handled as its way to stop
@@ -639,6 +647,9 @@ impl Run<'_> {
                 self.emit(&outcome, &[], &[], out, err)
             }
             "lsp start" => {
+                // The server blocks on stdin and polls no interrupt: Ctrl-C
+                // ends it at once, with 130, as it ends the Python host.
+                self.host.interrupt.stop_at_once();
                 // stdout is the protocol's: nothing is emitted around the server.
                 crate::commands::lsp::start_stdio(&self.host.version, err)
             }
@@ -1611,9 +1622,11 @@ pub fn install_interrupt_handler(interrupt: Interrupt) {
 }
 
 /// One Ctrl-C: the first tells the jobs and returns `None` (the run stops
-/// and reports it); a second reports it now and returns the exit code, 130.
+/// and reports it); a second, or the first in a run that stops at once
+/// ([`Interrupt::stop_at_once`]), reports it now and returns the exit code,
+/// 130.
 pub fn on_interrupt(interrupt: &Interrupt, err: &mut dyn Write) -> Option<i32> {
-    if interrupt.request() {
+    if interrupt.request() || interrupt.at_once.load(Ordering::SeqCst) {
         Some(interrupt.report(err))
     } else {
         None
@@ -2076,6 +2089,15 @@ mod tests {
         assert_eq!(err, b"error: interrupted\n");
         // Reported once, whoever reports it first.
         assert_eq!(interrupt.report(&mut err), 130);
+        assert_eq!(err, b"error: interrupted\n");
+    }
+
+    #[test]
+    fn framework_interrupt_a_run_that_stops_at_once_exits_130_on_the_first() {
+        let interrupt = Interrupt::default();
+        interrupt.stop_at_once();
+        let mut err = Vec::new();
+        assert_eq!(on_interrupt(&interrupt, &mut err), Some(130));
         assert_eq!(err, b"error: interrupted\n");
     }
 

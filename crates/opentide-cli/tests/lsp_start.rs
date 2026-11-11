@@ -32,6 +32,25 @@ configurations:
       | wher EventID == 4688
 ";
 
+fn until_diagnostics(stdout: &mut BufReader<ChildStdout>, uri: &str) -> Value {
+    loop {
+        let message = read(stdout);
+        if message["method"] == "textDocument/publishDiagnostics" && message["params"]["uri"] == uri
+        {
+            return message["params"]["diagnostics"].clone();
+        }
+    }
+}
+
+fn until_reply(stdout: &mut BufReader<ChildStdout>, id: i64) -> Value {
+    loop {
+        let message = read(stdout);
+        if message["id"] == id {
+            return message;
+        }
+    }
+}
+
 fn server(cwd: &Path, flags: &[&str]) -> Child {
     Command::new(env!("CARGO_BIN_EXE_opentide"))
         .args(["lsp", "start"])
@@ -192,5 +211,151 @@ fn the_server_checks_with_opentides_catalog_not_a_committed_copy() {
         .collect();
     assert!(messages.is_empty(), "{messages:?}");
     assert_eq!(child.wait().unwrap().code(), Some(0));
+    drop(dir);
+}
+
+const SHARING: &str = r#"[[misp]]
+name = "misp-internal"
+url = "https://misp.example"
+api_key = "${MISP_KEY}"
+max_tlp = "amber"
+distribution = "this-community"
+"#;
+
+/// #730: a configuration buffer gets what opentide's configuration models
+/// find, on the key they name, an override in a nested workspace is checked
+/// against its parent instance, and completion comes from the schemas the
+/// host generates.
+#[test]
+fn configuration_toml_is_checked_with_opentides_models() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().canonicalize().unwrap();
+    let sharing = root.join(".opentide/configurations/sharing.toml");
+    let lab = root.join("lab/.opentide/configurations/sharing.toml");
+    std::fs::create_dir_all(sharing.parent().unwrap()).unwrap();
+    std::fs::create_dir_all(lab.parent().unwrap()).unwrap();
+    // The parent instance holds misp-internal: an override in a nested
+    // workspace may restate only `name` and what it changes.
+    std::fs::write(
+        &sharing,
+        SHARING.replace("distribution = \"this-community\"\n", ""),
+    )
+    .unwrap();
+    let mut child = server(&root, &[]);
+    let mut stdin = child.stdin.take().unwrap();
+    let mut stdout = BufReader::new(child.stdout.take().unwrap());
+    send(
+        &mut stdin,
+        &json!({"jsonrpc": "2.0", "id": 1, "method": "initialize",
+                "params": {"capabilities": {}, "rootUri": uri(&root)}}),
+    );
+    read(&mut stdout);
+    send(
+        &mut stdin,
+        &json!({"jsonrpc": "2.0", "method": "initialized", "params": {}}),
+    );
+    let open = |stdin: &mut ChildStdin, path: &Path, text: &str| {
+        send(
+            stdin,
+            &json!({"jsonrpc": "2.0", "method": "textDocument/didOpen", "params": {
+                "textDocument": {"uri": uri(path), "languageId": "toml",
+                                 "version": 1, "text": text}}}),
+        );
+    };
+
+    open(&mut stdin, &sharing, SHARING);
+    let diagnostics = until_diagnostics(&mut stdout, &uri(&sharing));
+    let found: Vec<(&str, u64)> = diagnostics
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|item| {
+            (
+                item["code"].as_str().unwrap(),
+                item["range"]["start"]["line"].as_u64().unwrap(),
+            )
+        })
+        .collect();
+    assert_eq!(found, [("unknown_key", 5)], "{diagnostics}");
+
+    open(
+        &mut stdin,
+        &lab,
+        "[[misp]]\nname = \"misp-internal\"\nmax_tlp = \"red\"\n",
+    );
+    assert_eq!(until_diagnostics(&mut stdout, &uri(&lab)), json!([]));
+
+    send(
+        &mut stdin,
+        &json!({"jsonrpc": "2.0", "id": 2, "method": "textDocument/completion", "params": {
+            "textDocument": {"uri": uri(&sharing)},
+            "position": {"line": 4, "character": "max_tlp = ".len()}}}),
+    );
+    let reply = until_reply(&mut stdout, 2);
+    let labels: Vec<&str> = reply["result"]
+        .as_array()
+        .expect("a completion list")
+        .iter()
+        .map(|item| item["label"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        labels,
+        [
+            r#""clear""#,
+            r#""green""#,
+            r#""amber""#,
+            r#""amber+strict""#,
+            r#""red""#
+        ]
+    );
+
+    send(
+        &mut stdin,
+        &json!({"jsonrpc": "2.0", "id": 3, "method": "shutdown"}),
+    );
+    until_reply(&mut stdout, 3);
+    send(&mut stdin, &json!({"jsonrpc": "2.0", "method": "exit"}));
+    drop(stdin);
+    assert_eq!(child.wait().unwrap().code(), Some(0));
+    drop(dir);
+}
+
+/// Ctrl-C stops a server a person started at once, with 130: the server
+/// blocks on stdin, so the run gets no grace to stop on its own.
+#[cfg(unix)]
+#[test]
+fn ctrl_c_stops_the_server_at_once_with_130() {
+    use rustix::process::{Pid, Signal, kill_process};
+    let dir = tempfile::tempdir().unwrap();
+    let mut child = server(dir.path(), &[]);
+    let mut stdin = child.stdin.take().unwrap();
+    let mut stdout = BufReader::new(child.stdout.take().unwrap());
+    // Serving: the reply to `initialize` comes after the handler is in place.
+    send(
+        &mut stdin,
+        &json!({"jsonrpc": "2.0", "id": 1, "method": "initialize",
+                "params": {"capabilities": {}, "rootUri": uri(dir.path())}}),
+    );
+    assert_eq!(read(&mut stdout)["id"], 1);
+    let started = std::time::Instant::now();
+    let pid = Pid::from_raw(i32::try_from(child.id()).unwrap()).unwrap();
+    kill_process(pid, Signal::INT).unwrap();
+    let status = child.wait().unwrap();
+    // Well inside the 5-second grace a run that polls gets.
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(3),
+        "{:?}",
+        started.elapsed()
+    );
+    assert_eq!(status.code(), Some(130));
+    let mut stderr = String::new();
+    child
+        .stderr
+        .take()
+        .unwrap()
+        .read_to_string(&mut stderr)
+        .unwrap();
+    assert_eq!(stderr, "error: interrupted\n");
+    drop(stdin);
     drop(dir);
 }
