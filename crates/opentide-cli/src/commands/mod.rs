@@ -5,6 +5,7 @@
 //! before the outcome line. `app::Run::emit_report` writes it in the run's
 //! mode.
 
+pub mod doctor;
 pub mod generate;
 pub mod info;
 pub mod migrate;
@@ -50,6 +51,9 @@ pub enum Block {
     Lines(Vec<Text>),
     /// A table, laid out at the stream's width.
     Table(crate::render::table::Table),
+    /// Lines wrapped at words on a terminal, each with the indent its
+    /// continued rows take (`doctor`'s checklist).
+    Hanging(Vec<(Text, usize)>),
 }
 
 impl Report {

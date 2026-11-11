@@ -433,6 +433,20 @@ impl Run<'_> {
                 );
                 self.emit_report(&report, out, err)
             }
+            "doctor" => {
+                let cwd = self.host.cwd.clone().unwrap_or_default();
+                let report = crate::commands::doctor::run(
+                    leaf(&matches).get_flag("offline"),
+                    &crate::commands::doctor::Context {
+                        repo: self.globals.repo.as_deref(),
+                        env: self.env,
+                        cwd: &cwd,
+                        version: &self.host.version,
+                        text: self.mode != Mode::Json && !self.globals.quiet,
+                    },
+                );
+                self.emit_report(&report, out, err)
+            }
             "migrate vocab-scope" => {
                 let options = leaf(&matches);
                 let parsed = crate::commands::migrate::Args {
@@ -598,6 +612,11 @@ impl Run<'_> {
                     Block::Table(table) => {
                         for line in table.render(width) {
                             out.write_all(stdout.line(&line).as_bytes())?;
+                        }
+                    }
+                    Block::Hanging(lines) => {
+                        for (line, hang) in lines {
+                            out.write_all(stdout.print_line(line, *hang).as_bytes())?;
                         }
                     }
                 }
