@@ -785,6 +785,71 @@ changelog = "**x**"
         assert_eq!(report.differences[0].at.as_deref(), Some("line 2, byte 14"));
     }
 
+    /// A `lines` entry with an `(absent)` candidate approves the oracle's
+    /// block where the candidate writes nothing in its place, even a stream
+    /// the candidate leaves empty; a block one character off, or a line the
+    /// candidate still writes, is reported.
+    #[test]
+    fn a_lines_entry_approves_a_dropped_block() {
+        let ledger = Ledger::parse(
+            r#"
+[[diff]]
+command = "validate"
+case = "json/fault/default"
+target = "stderr"
+rule = "lines"
+oracle = "warn: a\nwarn: b"
+candidate = "(absent)"
+reason = "no such step"
+issue = "https://github.com/opentidehq/opentide/issues/827"
+changelog = "**x**"
+"#,
+        )
+        .unwrap();
+        let case = Case {
+            command: "validate",
+            id: "json/fault/default",
+        };
+        let oracle = Run {
+            stderr: b"warn: a\nwarn: b\n".to_vec(),
+            ..Run::default()
+        };
+        let mut usage = Usage::default();
+        let report = compare(case, &oracle, &Run::default(), &ledger, &mut usage);
+        assert!(report.equal, "{report:?}");
+        assert!(usage.is_used(0));
+
+        let kept = Run {
+            stderr: b"warn: z\n".to_vec(),
+            ..Run::default()
+        };
+        let report = compare(case, &oracle, &kept, &ledger, &mut Usage::default());
+        assert!(
+            !report.equal,
+            "a line the candidate writes is still compared"
+        );
+
+        let other = Run {
+            stderr: b"warn: a\nwarn: c\n".to_vec(),
+            ..Run::default()
+        };
+        let mut usage = Usage::default();
+        let report = compare(case, &other, &Run::default(), &ledger, &mut usage);
+        assert!(!report.equal, "a block one character off is not approved");
+        assert!(!usage.is_used(0));
+
+        let middle = Run {
+            stderr: b"x\nwarn: a\nwarn: b\ny\n".to_vec(),
+            ..Run::default()
+        };
+        let candidate = Run {
+            stderr: b"x\ny\n".to_vec(),
+            ..Run::default()
+        };
+        let report = compare(case, &middle, &candidate, &ledger, &mut Usage::default());
+        assert!(report.equal, "{report:?}");
+    }
+
     #[test]
     fn a_line_splits_from_its_ending() {
         assert_eq!(split_ending(b"a\n"), (&b"a"[..], &b"\n"[..]));

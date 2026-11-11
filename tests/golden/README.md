@@ -40,7 +40,9 @@ cargo xtask golden lock                         # rewrite oracle-requirements.tx
    (UC-0.7) names one command, a case glob and a target. A text rule is one whole line on each
    side, approved where the oracle and candidate lines match it at the same line number; a lines
    rule is a block of consecutive whole lines on each side, of any length, approved where the
-   candidate has its block at the place the oracle has its own (a row a port adds or drops),
+   candidate has its block at the place the oracle has its own (a row a port adds or drops;
+   `(absent)` on the candidate's side where it writes no line there, as in a stream it leaves
+   empty),
    each block quoted exactly and the entry naming its one case (no `*`): a block one character
    off, or one the output extends by a line, is not approved, and the lines after an approved
    block are compared at their new place; a

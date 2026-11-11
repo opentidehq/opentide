@@ -43,6 +43,8 @@ else:  # Python 3.10
     import tomli as tomllib
 
 REPO = Path(__file__).resolve().parents[2]
+# A `lines` rule's candidate where the candidate has no line in its place.
+ABSENT = "(absent)"
 CASES = REPO / "tests" / "golden" / "cases"
 
 
@@ -92,8 +94,15 @@ def json_entries(
 def text_entries(oracle: str, candidate: str) -> list[tuple[str, str]]:
     """``(oracle lines, candidate lines)``: the one block from the first changed
     line to the last, as a ``lines`` rule takes it (one per case and target),
-    with a line of context when it only adds or only drops lines."""
+    with a line of context when it only adds or only drops lines. The
+    candidate's side is ``(absent)`` where it has no line there (a stream it
+    leaves empty)."""
     left, right = oracle.split("\n"), candidate.split("\n")
+    # An empty stream has no line.
+    if not oracle:
+        left = []
+    if not candidate:
+        right = []
     # A final line ending ends a line: it starts none.
     if oracle.endswith("\n"):
         left.pop()
@@ -111,7 +120,7 @@ def text_entries(oracle: str, candidate: str) -> list[tuple[str, str]]:
             i1, j1 = i1 - 1, j1 - 1
         else:
             i2, j2 = i2 + 1, j2 + 1
-    return [("\n".join(left[i1:i2]), "\n".join(right[j1:j2]))]
+    return [("\n".join(left[i1:i2]), "\n".join(right[j1:j2]) if right[j1:j2] else ABSENT)]
 
 
 def case_glob(ids: list[str]) -> str:
@@ -166,7 +175,8 @@ def main() -> int:
                 grouped.setdefault(key, []).append(case_id)
     for (command, target, rule, old, new, _), ids in grouped.items():
         if rule == "lines" and not (old.strip() and new.strip()):
-            # The ledger refuses a blank side: a stream one run leaves empty.
+            # The ledger refuses a blank side; a candidate with no line there
+            # is (absent), and an oracle's side is always quoted.
             print(f"cannot approve: {', '.join(ids)} {target}: one side is blank", file=sys.stderr)
             continue
         found = None

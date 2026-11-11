@@ -20,7 +20,9 @@
 //! without its ending; a `lines` rule's are
 //! one or more whole lines, without the last line's ending: the oracle's
 //! lines, consecutive, read as the candidate's where the candidate has them
-//! at the same place, so a row the candidate adds or drops is one entry. A
+//! at the same place, so a row the candidate adds or drops is one entry; a
+//! `lines` rule's `candidate` is `(absent)` where the candidate writes no line
+//! in their place (a block dropped from a target it leaves empty). A
 //! line ends at `\n` (or `\r\n`): a value may hold a `\r` inside a line, as
 //! a terminal's cursor movements do, but no line of it ends in one. An entry applies only
 //! where both values are found as written; an entry that applies nowhere in a
@@ -111,7 +113,8 @@ pub enum Rule {
     Lines {
         /// The oracle's lines, without their endings.
         oracle: Vec<String>,
-        /// The candidate's lines, without their endings.
+        /// The candidate's lines, without their endings: none where the
+        /// ledger writes `(absent)`, so the oracle's block is dropped.
         candidate: Vec<String>,
     },
     /// The exit code.
@@ -405,9 +408,20 @@ fn check_entry(raw: RawEntry) -> Result<Entry, Vec<String>> {
             ));
             None
         }
+        (_, "lines") if raw.oracle == ABSENT => {
+            problems.push(format!(
+                "a `lines` rule's `oracle` is the oracle's lines: only `candidate` may be {ABSENT} \
+                 (the candidate writes none of them)"
+            ));
+            None
+        }
         (_, "lines") => Some(Rule::Lines {
             oracle: raw.oracle.split('\n').map(str::to_owned).collect(),
-            candidate: raw.candidate.split('\n').map(str::to_owned).collect(),
+            candidate: if raw.candidate == ABSENT {
+                Vec::new()
+            } else {
+                raw.candidate.split('\n').map(str::to_owned).collect()
+            },
         }),
         (_, "text") => Some(Rule::Text {
             oracle: raw.oracle.clone(),
@@ -727,6 +741,46 @@ changelog = "**Nested rules**"
                 "{rule} {value}: {error}"
             );
         }
+    }
+
+    /// A `lines` rule whose `candidate` is `(absent)` drops the oracle's
+    /// block: the candidate has no line there (a stream it leaves empty). The
+    /// oracle's side is always quoted, so `(absent)` there is refused.
+    #[test]
+    fn a_lines_rule_may_drop_its_block() {
+        let dropped = ENTRY
+            .replace("case = \"json/*\"", "case = \"json/one\"")
+            .replace("json:/summary/rules", "lines")
+            .replace("oracle = \"1\"", "oracle = \"a\\nb\"")
+            .replace("candidate = \"2\"", "candidate = \"(absent)\"");
+        let ledger = Ledger::parse(&dropped).unwrap();
+        assert_eq!(
+            ledger.entries[0].rule,
+            Rule::Lines {
+                oracle: vec!["a".into(), "b".into()],
+                candidate: Vec::new(),
+            }
+        );
+        let added = ENTRY
+            .replace("case = \"json/*\"", "case = \"json/one\"")
+            .replace("json:/summary/rules", "lines")
+            .replace("oracle = \"1\"", "oracle = \"(absent)\"");
+        let error = Ledger::parse(&added).unwrap_err().to_string();
+        assert!(
+            error.contains("only `candidate` may be (absent)"),
+            "{error}"
+        );
+        let text = ENTRY
+            .replace("json:/summary/rules", "text")
+            .replace("candidate = \"2\"", "candidate = \"(absent)\"");
+        assert_eq!(
+            Ledger::parse(&text).unwrap().entries[0].rule,
+            Rule::Text {
+                oracle: "1".into(),
+                candidate: "(absent)".into(),
+            },
+            "a text rule's value is a line, read literally"
+        );
     }
 
     #[test]

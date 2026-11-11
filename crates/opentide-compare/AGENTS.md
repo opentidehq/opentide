@@ -32,6 +32,9 @@ goes when compare mode does (UC-6.2, #841).
 - A text rule is one whole line on each side, approved where the oracle and candidate lines match
   it at the same line number (without the line ending, which is still compared). Part of a line
   approves nothing.
+- A lines rule is a block of whole lines on each side, naming its one case. Its candidate may be
+  `(absent)`: the oracle's block is dropped and the candidate writes no line in its place. Its
+  oracle side is always quoted.
 - A ledger entry that applies to no case in a complete run is stale, and the run fails
   (`RunReport::new`). A single CLI run (`compare_normalised`) does not check staleness.
 - Every ledger field is required; the schema is in the comment at the top of

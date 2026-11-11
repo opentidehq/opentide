@@ -20,7 +20,9 @@
 #              one entry and the lines after it are compared at their place)
 #   oracle     a json: rule: the oracle's value there, as JSON, or (absent);
 #              a text rule: one whole line of the oracle's target, without
-#              its line ending;
+#              its line ending; a lines rule: its lines, and on the
+#              candidate's side (absent) where the candidate writes no line
+#              in their place (a block dropped from a stream left empty);
 #              exit_code: the oracle's code
 #   candidate  the same, for the candidate
 #   reason     why the difference is intended
@@ -873,10 +875,10 @@ changelog = "**`generate exports` runs on the Rust engine**"
 # after the oracle (the CQL codes, the retired `crowdstrike_unsupported`): each
 # such entry holds the whole catalogue, since a rule names one value; a text
 # target's `lines` entry is the one block from its first changed line to its
-# last, since a case takes one `lines` entry per target. Not entered, since a
-# rule cannot leave a side blank: the stderr of `validate/json/fault/*` (six
-# cases), where the oracle logged `vocabulary_not_found` for its own schema
-# walk and the Rust run logs nothing (#827, "Needs a maintainer").
+# last, since a case takes one `lines` entry per target. The stderr of
+# `validate/json/fault/*` (six cases), where the oracle logged
+# `vocabulary_not_found` for its own schema walk and the Rust run writes
+# nothing, is a `lines` entry whose candidate is (absent).
 
 [[diff]]
 command = "explain"
@@ -2613,6 +2615,72 @@ rule = "lines"
 oracle = "\u001b[?25l<LIVE>\u001b[1;36m<SPIN>\u001b[0m Validating objects</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K\u001b[1;31m✗\u001b[0m 11 errors in 2 files · 2 objects checked · 1 query · <SECONDS>"
 candidate = "\u001b[?25l<LIVE>\u001b[1;36m<SPIN>\u001b[0m Validating objects</LIVE>\u001b[?25h\u001b[1;31m✗\u001b[0m 11 errors in 2 files · 2 objects checked · 1 query · <SECONDS>"
 reason = "The checks take milliseconds: the status line `⠋ Validating objects` is drawn once, without spinning, and cleared with a carriage return where Python's live region moved up a line to clear it"
+issue = "https://github.com/opentidehq/opentide/issues/827"
+changelog = "**`validate`, `lint` and `explain` run on the Rust command line**"
+
+[[diff]]
+command = "validate"
+case = "validate/json/fault/check-schema"
+target = "stderr"
+rule = "lines"
+oracle = "{\"vocab\":\"reviewed\",\"event\":\"vocabulary_not_found\",\"logger\":\"opentide.validation.vocab_resolver\",\"level\":\"warning\",\"timestamp\":\"0000-00-00 00:00:00\"}\n{\"vocab\":\"rule_id\",\"event\":\"vocabulary_not_found\",\"logger\":\"opentide.validation.vocab_resolver\",\"level\":\"warning\",\"timestamp\":\"0000-00-00 00:00:00\"}"
+candidate = "(absent)"
+reason = "The two `vocabulary_not_found` warnings the Python implementation logged, as JSON log lines on stderr, from its own schema walk (vocabularies named after the `reviewed` and `rule_id` keys) are not written: the Rust engine takes no such step, and a `--json` run with nothing to warn about leaves stderr empty"
+issue = "https://github.com/opentidehq/opentide/issues/827"
+changelog = "**`validate`, `lint` and `explain` run on the Rust command line**"
+
+[[diff]]
+command = "validate"
+case = "validate/json/fault/ci-sink-azure"
+target = "stderr"
+rule = "lines"
+oracle = "{\"vocab\":\"reviewed\",\"event\":\"vocabulary_not_found\",\"logger\":\"opentide.validation.vocab_resolver\",\"level\":\"warning\",\"timestamp\":\"0000-00-00 00:00:00\"}\n{\"vocab\":\"rule_id\",\"event\":\"vocabulary_not_found\",\"logger\":\"opentide.validation.vocab_resolver\",\"level\":\"warning\",\"timestamp\":\"0000-00-00 00:00:00\"}"
+candidate = "(absent)"
+reason = "The two `vocabulary_not_found` warnings the Python implementation logged, as JSON log lines on stderr, from its own schema walk (vocabularies named after the `reviewed` and `rule_id` keys) are not written: the Rust engine takes no such step, and a `--json` run with nothing to warn about leaves stderr empty"
+issue = "https://github.com/opentidehq/opentide/issues/827"
+changelog = "**`validate`, `lint` and `explain` run on the Rust command line**"
+
+[[diff]]
+command = "validate"
+case = "validate/json/fault/ci-sink-github"
+target = "stderr"
+rule = "lines"
+oracle = "{\"vocab\":\"reviewed\",\"event\":\"vocabulary_not_found\",\"logger\":\"opentide.validation.vocab_resolver\",\"level\":\"warning\",\"timestamp\":\"0000-00-00 00:00:00\"}\n{\"vocab\":\"rule_id\",\"event\":\"vocabulary_not_found\",\"logger\":\"opentide.validation.vocab_resolver\",\"level\":\"warning\",\"timestamp\":\"0000-00-00 00:00:00\"}"
+candidate = "(absent)"
+reason = "The two `vocabulary_not_found` warnings the Python implementation logged, as JSON log lines on stderr, from its own schema walk (vocabularies named after the `reviewed` and `rule_id` keys) are not written: the Rust engine takes no such step, and a `--json` run with nothing to warn about leaves stderr empty"
+issue = "https://github.com/opentidehq/opentide/issues/827"
+changelog = "**`validate`, `lint` and `explain` run on the Rust command line**"
+
+[[diff]]
+command = "validate"
+case = "validate/json/fault/ci-sink-gitlab"
+target = "stderr"
+rule = "lines"
+oracle = "{\"vocab\":\"reviewed\",\"event\":\"vocabulary_not_found\",\"logger\":\"opentide.validation.vocab_resolver\",\"level\":\"warning\",\"timestamp\":\"0000-00-00 00:00:00\"}\n{\"vocab\":\"rule_id\",\"event\":\"vocabulary_not_found\",\"logger\":\"opentide.validation.vocab_resolver\",\"level\":\"warning\",\"timestamp\":\"0000-00-00 00:00:00\"}"
+candidate = "(absent)"
+reason = "The two `vocabulary_not_found` warnings the Python implementation logged, as JSON log lines on stderr, from its own schema walk (vocabularies named after the `reviewed` and `rule_id` keys) are not written: the Rust engine takes no such step, and a `--json` run with nothing to warn about leaves stderr empty"
+issue = "https://github.com/opentidehq/opentide/issues/827"
+changelog = "**`validate`, `lint` and `explain` run on the Rust command line**"
+
+[[diff]]
+command = "validate"
+case = "validate/json/fault/default"
+target = "stderr"
+rule = "lines"
+oracle = "{\"vocab\":\"reviewed\",\"event\":\"vocabulary_not_found\",\"logger\":\"opentide.validation.vocab_resolver\",\"level\":\"warning\",\"timestamp\":\"0000-00-00 00:00:00\"}\n{\"vocab\":\"rule_id\",\"event\":\"vocabulary_not_found\",\"logger\":\"opentide.validation.vocab_resolver\",\"level\":\"warning\",\"timestamp\":\"0000-00-00 00:00:00\"}"
+candidate = "(absent)"
+reason = "The two `vocabulary_not_found` warnings the Python implementation logged, as JSON log lines on stderr, from its own schema walk (vocabularies named after the `reviewed` and `rule_id` keys) are not written: the Rust engine takes no such step, and a `--json` run with nothing to warn about leaves stderr empty"
+issue = "https://github.com/opentidehq/opentide/issues/827"
+changelog = "**`validate`, `lint` and `explain` run on the Rust command line**"
+
+[[diff]]
+command = "validate"
+case = "validate/json/fault/strict"
+target = "stderr"
+rule = "lines"
+oracle = "{\"vocab\":\"reviewed\",\"event\":\"vocabulary_not_found\",\"logger\":\"opentide.validation.vocab_resolver\",\"level\":\"warning\",\"timestamp\":\"0000-00-00 00:00:00\"}\n{\"vocab\":\"rule_id\",\"event\":\"vocabulary_not_found\",\"logger\":\"opentide.validation.vocab_resolver\",\"level\":\"warning\",\"timestamp\":\"0000-00-00 00:00:00\"}"
+candidate = "(absent)"
+reason = "The two `vocabulary_not_found` warnings the Python implementation logged, as JSON log lines on stderr, from its own schema walk (vocabularies named after the `reviewed` and `rule_id` keys) are not written: the Rust engine takes no such step, and a `--json` run with nothing to warn about leaves stderr empty"
 issue = "https://github.com/opentidehq/opentide/issues/827"
 changelog = "**`validate`, `lint` and `explain` run on the Rust command line**"
 
