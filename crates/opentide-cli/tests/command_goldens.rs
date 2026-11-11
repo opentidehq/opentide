@@ -344,7 +344,11 @@ fn the_replay_tolerates_a_refusal_only_where_rust_commands_does_not_cover_the_ru
     assert!(replay::covers("doctor", &words("doctor --offline")));
     assert!(!replay::covers("doctor", &words("doctor")));
     assert!(replay::covers("setup", &words("setup --plan")));
-    assert!(!replay::covers("setup vscode", &words("setup vscode")));
+    assert!(replay::covers("setup vscode", &words("setup vscode")));
+    assert!(!replay::covers(
+        "setup skills",
+        &words("setup skills --claude-code")
+    ));
     // A multi-line entry, and one the parser cannot read, which is no table.
     let source = "x = 1\nRUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {\n    \
                   (\"a\",): RustCommand(launch=RUST_CLI),\n    (\"b\", \"c\"): RustCommand(\n        \
@@ -381,7 +385,8 @@ fn setup_cases_are_the_oracles() {
             "setup.mcp",
             "setup.platforms",
             "setup.repo",
+            "setup.vscode",
         ],
-        40,
+        48,
     );
 }

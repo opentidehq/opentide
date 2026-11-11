@@ -14,15 +14,15 @@ The Python CLI at the frozen tag is the oracle ([plan §5](https://github.com/op
 | | |
 |---|---:|
 | Commands | 59 |
-| Commands with a Rust implementation | 36 |
+| Commands with a Rust implementation | 37 |
 | Commands flipped to Rust | 0 |
-| Recordings (command × corpus × mode) | 669 |
-| … no Rust yet | 177 (26.4%) |
+| Recordings (command × corpus × mode) | 681 |
+| … no Rust yet | 169 (24.8%) |
 | … compare passing | 0 (0.0%) |
 | … compare failing | 0 (0.0%) |
-| … compare not run | 492 (73.5%) |
+| … compare not run | 512 (75.1%) |
 | … flipped | 0 (0.0%) |
-| Approved diffs (`tests/golden/APPROVED_DIFFS.toml`) | 865 |
+| Approved diffs (`tests/golden/APPROVED_DIFFS.toml`) | 883 |
 | Diagnostic codes with a fault kind | 163 of 175 (93.1%) |
 | … with no fault kind, evidence recorded | 12 |
 | … with neither (missing) | 0 |
@@ -391,10 +391,13 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide setup`
 
+6 approved diff(s).
+
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
 | empty | compare not run | compare not run | compare not run | compare not run |
 | none | compare not run | compare not run | compare not run | compare not run |
+| tide-corpus | compare not run | compare not run | compare not run | compare not run |
 
 ### `opentide setup ci`
 
@@ -474,10 +477,14 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide setup vscode`
 
+12 approved diff(s).
+
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
-| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| empty | compare not run | compare not run | compare not run | compare not run |
+| none | compare not run | compare not run | compare not run | compare not run |
+| setup-merge | compare not run | compare not run | compare not run | compare not run |
+| tide-corpus | compare not run | compare not run | compare not run | compare not run |
 
 ### `opentide share`
 

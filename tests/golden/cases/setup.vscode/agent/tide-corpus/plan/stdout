@@ -1,0 +1,26 @@
+vscode
+  create  .opentide/lsp/catalogs/generated/deprecations.json
+  create  .opentide/lsp/catalogs/generated/fields.json
+  create  .opentide/schemas/objective.1.0.schema.json
+  create  .opentide/schemas/opentide.schema.json
+  create  .opentide/schemas/rule.1.0.schema.json
+  create  .opentide/schemas/rule.1.1.schema.json
+  create  .opentide/schemas/threat.1.0.schema.json
+  create  .opentide/schemas/visibility.1.0.schema.json
+  create  .opentide/templates/objective.1.0.template.yaml
+  create  .opentide/templates/platforms/carbon_black_cloud.template.yaml
+  create  .opentide/templates/platforms/crowdstrike.template.yaml
+  create  .opentide/templates/platforms/defender_for_endpoint.template.yaml
+  create  .opentide/templates/platforms/elastic.template.yaml
+  create  .opentide/templates/platforms/harfanglab.template.yaml
+  create  .opentide/templates/platforms/sentinel.template.yaml
+  create  .opentide/templates/platforms/sentinel_one.template.yaml
+  create  .opentide/templates/platforms/splunk.template.yaml
+  create  .opentide/templates/platforms/sysdig.template.yaml
+  create  .opentide/templates/rule.1.0.template.yaml
+  create  .opentide/templates/rule.1.1.template.yaml
+  create  .opentide/templates/threat.1.0.template.yaml
+  create  .vscode/extensions.json
+  create  .vscode/model-templates.code-snippets
+
+Plan: 23 files to write (23 new, 0 changed) · nothing written

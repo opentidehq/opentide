@@ -1,0 +1,26 @@
+[1mvscode[0m
+  create  [1m.opentide/lsp/catalogs/generated/deprecations.json[0m
+  create  [1m.opentide/lsp/catalogs/generated/fields.json[0m
+  create  [1m.opentide/schemas/objective.1.0.schema.json[0m
+  create  [1m.opentide/schemas/opentide.schema.json[0m
+  create  [1m.opentide/schemas/rule.1.0.schema.json[0m
+  create  [1m.opentide/schemas/rule.1.1.schema.json[0m
+  create  [1m.opentide/schemas/threat.1.0.schema.json[0m
+  create  [1m.opentide/schemas/visibility.1.0.schema.json[0m
+  create  [1m.opentide/templates/objective.1.0.template.yaml[0m
+  create  [1m.opentide/templates/platforms/carbon_black_cloud.template.yaml[0m
+  create  [1m.opentide/templates/platforms/crowdstrike.template.yaml[0m
+  create  [1m.opentide/templates/platforms/defender_for_endpoint.template.yaml[0m
+  create  [1m.opentide/templates/platforms/elastic.template.yaml[0m
+  create  [1m.opentide/templates/platforms/harfanglab.template.yaml[0m
+  create  [1m.opentide/templates/platforms/sentinel.template.yaml[0m
+  create  [1m.opentide/templates/platforms/sentinel_one.template.yaml[0m
+  create  [1m.opentide/templates/platforms/splunk.template.yaml[0m
+  create  [1m.opentide/templates/platforms/sysdig.template.yaml[0m
+  create  [1m.opentide/templates/rule.1.0.template.yaml[0m
+  create  [1m.opentide/templates/rule.1.1.template.yaml[0m
+  create  [1m.opentide/templates/threat.1.0.template.yaml[0m
+  create  [1m.vscode/extensions.json[0m
+  create  [1m.vscode/model-templates.code-snippets[0m
+
+[1mPlan:[0m 23 files to write (23 new, 0 changed) · nothing written

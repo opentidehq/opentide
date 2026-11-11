@@ -361,7 +361,7 @@ const OPENTIDE_IGNORES: [&str; 3] = [
 ];
 
 /// `setup repo`'s README and scaffold choices.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct RepoOptions {
     /// `--name`.
     pub name: Option<String>,

@@ -1097,7 +1097,7 @@ fn schema_sources(workspace: &Workspace) -> opentide_schema::generate::schema::S
 }
 
 /// The files one of the phases this engine runs writes, under `root`.
-fn phase_outputs(
+pub(crate) fn phase_outputs(
     phase: &str,
     workspace: &Workspace,
     root: &Path,

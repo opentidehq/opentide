@@ -47,6 +47,8 @@ pub enum Step {
     Repo(files::RepoOptions),
     /// `setup mcp`, the hosts in the flags' order.
     Mcp(Vec<String>),
+    /// `setup vscode` (deprecated).
+    Vscode(super::vscode::Options),
 }
 
 impl Step {
@@ -57,6 +59,7 @@ impl Step {
             Step::Platforms(_) => "platforms",
             Step::Repo(_) => "repo",
             Step::Mcp(_) => "mcp",
+            Step::Vscode(_) => "vscode",
         }
     }
 
@@ -67,6 +70,8 @@ impl Step {
             Step::Platforms(_) => "Write these platform configurations?",
             Step::Repo(_) => "Create this repository scaffold?",
             Step::Mcp(_) => "Write these MCP configurations?",
+            // `setup vscode` never asks.
+            Step::Vscode(_) => "",
         }
     }
 
@@ -77,6 +82,7 @@ impl Step {
             Step::Platforms(_) => "Platform setup cancelled",
             Step::Repo(_) => "Repository setup cancelled",
             Step::Mcp(_) => "MCP setup cancelled",
+            Step::Vscode(_) => "",
         }
     }
 
@@ -93,6 +99,9 @@ impl Step {
                 hosts,
                 files::McpServer::from_env(cx.env).as_ref(),
             )),
+            Step::Vscode(options) => {
+                super::vscode::run(stage, root, *options, cx).map(|done| done.result)
+            }
         }
     }
 }
@@ -201,9 +210,21 @@ pub(crate) fn cannot_prompt(cx: &Context<'_>) -> Option<String> {
     None
 }
 
+/// The wizards a command opens when its flags answer nothing.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Wizard {
+    /// `setup`.
+    Setup,
+    /// `setup repo`.
+    Repo,
+    /// `setup mcp`.
+    Mcp,
+}
+
 /// A wizard nobody can answer, refused naming the flags that answer it; at
-/// a terminal, the wizard, which runs on the Python implementation.
-fn wizard(command: &str, cx: &Context<'_>, flags: &str) -> Report {
+/// a terminal, the wizard ([`super::wizard`]), its questions asked with
+/// inquire.
+fn wizard(command: &str, cx: &Context<'_>, flags: &str, kind: Wizard, shown: &Path) -> Report {
     let scripted = format!("Run 'opentide {command}' with --yes and explicit flags ({flags}).");
     if cx.mode == Mode::Json {
         return *needs_input_for(
@@ -216,7 +237,110 @@ fn wizard(command: &str, cx: &Context<'_>, flags: &str) -> Report {
     if let Some(reason) = cannot_prompt(cx) {
         return *needs_input_for(command, format!("{reason} {scripted}"));
     }
-    not_ported(command, &format!("opentide {command}'s interactive wizard"))
+    let mut prompter = super::wizard::Inquire::new(cx.terminal.stderr.colour);
+    let mut stdout = std::io::stdout();
+    let mut screen = super::wizard::Screen {
+        out: &mut stdout,
+        console: cx.terminal.stdout,
+        mode: cx.mode,
+        version: cx.version,
+    };
+    interactive(command, kind, &mut prompter, &mut screen, shown, cx)
+}
+
+/// Runs the wizard `kind` with `prompter`, then the steps its answers ask
+/// for, as the scripted command runs them.
+fn interactive(
+    command: &str,
+    kind: Wizard,
+    prompter: &mut dyn super::wizard::Prompter,
+    screen: &mut super::wizard::Screen<'_>,
+    shown: &Path,
+    cx: &Context<'_>,
+) -> Report {
+    use super::wizard::{self, Gathered, Stop};
+    let root = root_of(cx, shown);
+    let stopped = |stop: Stop| match stop {
+        Stop::Interrupted => {
+            // The run reports it: `error: interrupted`, exit 130.
+            cx.interrupt.request();
+            cancelled(command, "interrupted")
+        }
+        Stop::Failed(message) => Report::error(command, message),
+    };
+    match kind {
+        Wizard::Setup => {
+            let promoting = promotion_enabled(&root, cx);
+            let shown_text = shown.to_string_lossy().replace('\\', "/");
+            match wizard::setup(prompter, screen, &shown_text, &root, promoting) {
+                Err(stop) => stopped(stop),
+                Ok(Gathered::Declined(warnings)) => {
+                    let mut report = Report::completed(
+                        command,
+                        vec![("steps".to_owned(), Json::Array(Vec::new()))],
+                    );
+                    report.outcome.status = "skipped".into();
+                    "Setup cancelled; no files were written"
+                        .clone_into(&mut report.outcome.message);
+                    report.warnings = warnings;
+                    report
+                }
+                Ok(Gathered::Apply(answers)) => {
+                    let args = GroupArgs {
+                        path: shown_text,
+                        repo: answers.repo.clone(),
+                        ci: answers.ci.clone(),
+                        staging: answers.staging,
+                        inflight: answers.inflight,
+                        sharing: answers.sharing,
+                        explorer_pages: answers.explorer_pages,
+                        promotion: answers.promotion,
+                        python_version: "3.12".to_owned(),
+                        mcp: answers.mcp.clone(),
+                        ..GroupArgs::default()
+                    };
+                    let run_ci = args.ci.is_some();
+                    execute(&args, &root, answers.warnings, true, run_ci, None, cx)
+                }
+            }
+        }
+        Wizard::Repo => match wizard::repo(prompter, screen, &root) {
+            Err(stop) => stopped(stop),
+            Ok(None) => cancelled(command, "Repository setup cancelled"),
+            Ok(Some(options)) => run_step(command, &Step::Repo(options), &root, cx),
+        },
+        Wizard::Mcp => match wizard::mcp(prompter, screen, &root) {
+            Err(stop) => stopped(stop),
+            Ok(None) => cancelled(command, "MCP setup cancelled"),
+            Ok(Some(hosts)) => run_step(command, &Step::Mcp(hosts), &root, cx),
+        },
+    }
+}
+
+/// Whether the repository at `root` promotes statuses now: its
+/// `[promotion] enabled` over the bundled default (`effective_promotion`).
+fn promotion_enabled(root: &Path, cx: &Context<'_>) -> bool {
+    let fs = opentide_workspace::OsFs;
+    let roots = opentide_workspace::root::resolve(&fs, &super::root_options(root, cx));
+    let configured = opentide_workspace::config::resolve_only(&fs, &roots)
+        .ok()
+        .and_then(|resolved| {
+            match resolved
+                .get("deployment")
+                .and_then(|deployment| deployment.get("promotion"))
+                .and_then(|promotion| promotion.get("enabled"))
+                .map(|enabled| &enabled.value)
+            {
+                Some(opentide_schema::node::Value::Bool(enabled)) => Some(*enabled),
+                _ => None,
+            }
+        });
+    configured.unwrap_or_else(|| {
+        super::promotion_defaults()
+            .get("enabled")
+            .and_then(toml::Value::as_bool)
+            .unwrap_or(false)
+    })
 }
 
 /// A run this implementation does not cover: `engine_not_ported`.
@@ -270,7 +394,13 @@ pub fn subcommand(step: &Step, paths: &Paths, yes: bool, plan: bool, cx: &Contex
                     "Choose at least one MCP host (--vscode, --cursor, --claude-code, --generic)",
                 );
             }
-            return wizard(&command, cx, "--vscode, --cursor, --claude-code");
+            return wizard(
+                &command,
+                cx,
+                "--vscode, --cursor, --claude-code",
+                Wizard::Mcp,
+                &shown,
+            );
         }
         Step::Repo(options)
             if !yes
@@ -280,8 +410,9 @@ pub fn subcommand(step: &Step, paths: &Paths, yes: bool, plan: bool, cx: &Contex
                 && options.description.is_none()
                 && options.platforms.is_empty() =>
         {
-            return wizard(&command, cx, "--name, --platform");
+            return wizard(&command, cx, "--name, --platform", Wizard::Repo, &shown);
         }
+        Step::Vscode(options) => return vscode(*options, &shown, plan, cx),
         _ => {}
     }
     let root = root_of(cx, &shown);
@@ -292,19 +423,65 @@ pub fn subcommand(step: &Step, paths: &Paths, yes: bool, plan: bool, cx: &Contex
             Err(report) => return *report,
         }
     }
-    let mut stage = Stage::new();
-    let result = match step.run(&mut stage, &root, cx) {
-        Ok(result) => result,
-        Err(message) => return Report::error(&command, message),
-    };
     if plan {
+        let mut stage = Stage::new();
+        let result = match step.run(&mut stage, &root, cx) {
+            Ok(result) => result,
+            Err(message) => return Report::error(&command, message),
+        };
         let planned = planned(&mut stage, &root, step.name(), &result);
         return plan_report(&command, &root, vec![planned], &[], cx);
     }
+    run_step(&command, step, &root, cx)
+}
+
+/// Runs `step` on `root` and writes what it staged: the report of a
+/// confirmed run.
+fn run_step(command: &str, step: &Step, root: &Path, cx: &Context<'_>) -> Report {
+    let mut stage = Stage::new();
+    let result = match step.run(&mut stage, root, cx) {
+        Ok(result) => result,
+        Err(message) => return Report::error(command, message),
+    };
     if let Err(message) = stage.commit() {
-        return Report::error(&command, message);
+        return Report::error(command, message);
     }
-    finish(&command, result, None, &root, cx)
+    finish(command, result, None, root, cx)
+}
+
+/// `opentide setup vscode` (deprecated): it never asks, says it is
+/// deprecated first, and fails (exit 1) when the snippets it was asked for
+/// could not be written, keeping what it wrote.
+fn vscode(options: super::vscode::Options, shown: &Path, plan: bool, cx: &Context<'_>) -> Report {
+    const COMMAND: &str = "setup vscode";
+    let root = root_of(cx, shown);
+    super::vscode::deprecation(cx);
+    let mut stage = Stage::new();
+    match super::vscode::run(&mut stage, &root, options, cx) {
+        Err(message) => Report::error(COMMAND, message),
+        Ok(done) if plan => {
+            let planned = planned(&mut stage, &root, "vscode", &done.result);
+            let mut report = plan_report(COMMAND, &root, vec![planned], &[], cx);
+            if done.failed {
+                failed(&mut report, done.result.text("message").unwrap_or_default());
+            }
+            report
+        }
+        Ok(done) => match stage.commit() {
+            Err(message) => Report::error(COMMAND, message),
+            Ok(()) => finish(COMMAND, done.result, None, &root, cx),
+        },
+    }
+}
+
+/// `report` as a run that failed with `message`: status `failed`, exit 1,
+/// `command_failed` (a service's `status: failed` with `_exit_code`).
+fn failed(report: &mut Report, message: &str) {
+    report.outcome.status = "failed".into();
+    message.clone_into(&mut report.outcome.message);
+    report.outcome.exit_code = 1;
+    report.outcome.failure = Some(Failure::new(crate::commands::COMMAND_FAILED, message));
+    report.outcome.next_actions.clear();
 }
 
 // ---------------------------------------------------------------- the plan
@@ -661,7 +838,15 @@ fn finish(
         })
         .unwrap_or_default();
     let warnings = result.take("warnings");
-    let (message, actions) = outcome(&result, name, root, cx);
+    let status = result.take("status").and_then(|status| match status {
+        Json::Str(text) => Some(text),
+        _ => None,
+    });
+    // A failed or skipped run keeps its own message (`setup_outcome`).
+    let (message, actions) = match status.as_deref() {
+        Some("failed" | "skipped") => (None, Vec::new()),
+        _ => outcome(&result, name, root, cx),
+    };
     let body = if cx.mode == Mode::Json || cx.quiet {
         Vec::new()
     } else {
@@ -682,6 +867,14 @@ fn finish(
     }
     if !body.is_empty() {
         report.body = vec![Block::Lines(body)];
+    }
+    if let Some(status) = status {
+        if status == "failed" {
+            let message = report.outcome.message.clone();
+            failed(&mut report, &message);
+        } else {
+            report.outcome.status = status;
+        }
     }
     report
 }
@@ -784,6 +977,9 @@ struct Recorder<'a> {
     steps: Vec<StepResult>,
     planned: Vec<Planned>,
     warnings: Vec<String>,
+    /// The message of the step that failed the run, which still wrote what
+    /// it wrote (the `vscode` step without its snippets).
+    failed: Option<String>,
     cx: &'a Context<'a>,
 }
 
@@ -807,26 +1003,26 @@ impl Recorder<'_> {
     }
 }
 
-/// `opentide setup`: a scripted setup, or its plan.
+/// `opentide setup`: a scripted setup, or its plan; at a terminal with
+/// nothing on the command line to answer, the wizard.
 pub fn group(args: &GroupArgs, cx: &Context<'_>) -> Report {
     const COMMAND: &str = "setup";
-    if args.vscode_setup || args.plugin || !args.skills.is_empty() {
-        return not_ported(
-            COMMAND,
-            "opentide setup with --vscode-setup, --skills or --plugin",
-        );
+    if args.plugin || !args.skills.is_empty() {
+        return not_ported(COMMAND, "opentide setup with --skills or --plugin");
     }
     let has_repo = args.repo.name.is_some()
         || args.repo.org.is_some()
         || args.repo.description.is_some()
         || !args.repo.platforms.is_empty();
     let answers = !args.mcp.is_empty() || args.hooks || args.env;
-    let only_ci_none = args.ci.as_deref() == Some("none") && !args.yes && !has_repo && !answers;
-    let scripted =
-        args.plan || (!only_ci_none && (args.yes || has_repo || args.ci.is_some() || answers));
-    if !scripted {
-        return wizard(COMMAND, cx, "--platform, --ci");
-    }
+    let only_ci_none = args.ci.as_deref() == Some("none")
+        && !args.yes
+        && !has_repo
+        && !args.vscode_setup
+        && !answers;
+    let scripted = args.plan
+        || (!only_ci_none
+            && (args.yes || has_repo || args.ci.is_some() || args.vscode_setup || answers));
     let shown = match target(
         cx,
         COMMAND,
@@ -838,6 +1034,9 @@ pub fn group(args: &GroupArgs, cx: &Context<'_>) -> Report {
         Ok(shown) => shown,
         Err(report) => return *report,
     };
+    if !scripted {
+        return wizard(COMMAND, cx, "--platform, --ci", Wizard::Setup, &shown);
+    }
     let root = root_of(cx, &shown);
     if !args.plan && !args.yes {
         match confirm_write(COMMAND, &shown, &root, cx, "Apply this setup?") {
@@ -848,23 +1047,51 @@ pub fn group(args: &GroupArgs, cx: &Context<'_>) -> Report {
     }
     let consent = args.yes || args.plan;
     let run_ci = args.ci.as_deref().is_some_and(|ci| ci != "none");
-    let run_repo = has_repo || (consent && !run_ci && !answers);
+    // The other steps asked for, like --ci, leave the scaffold alone.
+    let run_repo = has_repo || (consent && !run_ci && !answers && !args.vscode_setup);
+    execute(
+        args,
+        &root,
+        ignored_ci_flags(args),
+        run_repo,
+        run_ci,
+        args.repo.name.as_deref(),
+        cx,
+    )
+}
+
+/// Runs the group's steps on `root` (`run_setup`), or plans them; `name` is
+/// the `--name` the outcome line takes first.
+fn execute(
+    args: &GroupArgs,
+    root: &Path,
+    warnings: Vec<String>,
+    run_repo: bool,
+    run_ci: bool,
+    name: Option<&str>,
+    cx: &Context<'_>,
+) -> Report {
+    const COMMAND: &str = "setup";
     let mut recorder = Recorder {
         stage: Stage::new(),
-        root: root.clone(),
+        root: root.to_path_buf(),
         plan: args.plan,
         steps: Vec::new(),
         planned: Vec::new(),
-        warnings: ignored_ci_flags(args),
+        warnings,
+        failed: None,
         cx,
     };
     let run_warnings = recorder.warnings.clone();
-    match run_steps(&mut recorder, args, run_repo, run_ci) {
-        Ok(()) => {}
-        Err(report) => return *report,
+    if let Err(report) = run_steps(&mut recorder, args, run_repo, run_ci) {
+        return *report;
     }
     if args.plan {
-        return plan_report(COMMAND, &root, recorder.planned, &run_warnings, cx);
+        let mut report = plan_report(COMMAND, root, recorder.planned, &run_warnings, cx);
+        if let Some(message) = &recorder.failed {
+            failed(&mut report, message);
+        }
+        return report;
     }
     let platforms = recorder
         .steps
@@ -876,7 +1103,7 @@ pub fn group(args: &GroupArgs, cx: &Context<'_>) -> Report {
                 .unwrap_or(Json::Array(Vec::new()))
         });
     let mut fields = vec![
-        ("path".to_owned(), Json::str(files::shown(&root))),
+        ("path".to_owned(), Json::str(files::shown(root))),
         (
             "steps".to_owned(),
             Json::Array(
@@ -888,18 +1115,18 @@ pub fn group(args: &GroupArgs, cx: &Context<'_>) -> Report {
             ),
         ),
         ("warnings".to_owned(), strings(&recorder.warnings)),
-        ("message".to_owned(), Json::str("Setup complete")),
     ];
+    match &recorder.failed {
+        Some(message) => {
+            fields.push(("status".to_owned(), Json::str("failed")));
+            fields.push(("message".to_owned(), Json::str(message)));
+        }
+        None => fields.push(("message".to_owned(), Json::str("Setup complete"))),
+    }
     if run_repo && let Some(platforms) = platforms {
         fields.push(("platforms".to_owned(), platforms));
     }
-    finish(
-        COMMAND,
-        StepResult { fields },
-        args.repo.name.as_deref(),
-        &root,
-        cx,
-    )
+    finish(COMMAND, StepResult { fields }, name, root, cx)
 }
 
 fn run_steps(
@@ -973,6 +1200,25 @@ fn run_steps(
             files::McpServer::from_env(cx.env).as_ref(),
         );
         recorder.record("mcp", result).map_err(failed)?;
+    }
+    if args.vscode_setup {
+        super::vscode::deprecation(cx);
+        let done = super::vscode::run(
+            &mut recorder.stage,
+            &root,
+            super::vscode::Options::all(),
+            cx,
+        )
+        .map_err(failed)?;
+        if done.failed {
+            recorder.failed = Some(
+                done.result
+                    .text("message")
+                    .unwrap_or("VS Code setup failed")
+                    .to_owned(),
+            );
+        }
+        recorder.record("vscode", done.result).map_err(failed)?;
     }
     Ok(())
 }
@@ -1106,6 +1352,9 @@ mod tests {
             mode: Mode::Json,
             version: "0.0.0",
             quiet: false,
+            terminal: crate::commands::Terminal::plain(Mode::Json),
+            interrupt: crate::app::Interrupt::default(),
+            stderr: std::sync::Arc::new(std::sync::Mutex::new(std::io::sink())),
         }
     }
 
