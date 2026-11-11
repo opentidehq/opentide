@@ -1,10 +1,12 @@
 """One CI for the repository (#801), and the release workflows' triggers.
 
-``ci.yml`` checks the whole repository on every pull request and push: the
-Python jobs, and the Cargo workspace's (rustfmt, clippy, nextest on three
-operating systems, rustdoc, WebAssembly, grammars, npm packs, the licence scan,
-a fuzz smoke run of every target, and a dry run of the engine release). The
-checks branch protection requires are the list ``.github/AGENTS.md`` gives.
+``ci.yml`` checks the whole repository: the Python jobs, and the Cargo
+workspace's (rustfmt, clippy, nextest on three operating systems, rustdoc,
+WebAssembly, grammars, npm packs, the licence scan, a fuzz smoke run of every
+target, and a dry run of the engine release). A pull request runs the core
+gates; the rest is the full set (``tests/test_ci/test_ci_scope.py``). The
+checks branch protection requires are the core gates that run on every pull
+request, the list ``.github/AGENTS.md`` gives.
 
 Releases: ``v*`` tags are opentide's (publish-pypi.yml); the engine releases
 from ``engine-v*`` tags (engine-release.yml). No other workflow may run on a
@@ -223,6 +225,17 @@ def test_checkouts_keep_no_credentials(name: str) -> None:
                 )
 
 
+def _scope() -> Any:
+    """test_ci_scope.py: which ci.yml jobs run on every pull request."""
+    spec = importlib.util.spec_from_file_location(
+        "ci_scope_rules", ROOT / "tests" / "test_ci" / "test_ci_scope.py"
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def _step_runs(job: dict[str, Any]) -> str:
     return "\n".join(str(step.get("run", "")) for step in job.get("steps") or [])
 
@@ -235,6 +248,8 @@ def test_ci_runs_on_every_pull_request_and_on_development() -> None:
     triggers = _triggers(_load(CI))
     assert triggers["pull_request"] is None, "every base branch, no path filter"
     assert "development" in triggers["push"]["branches"]
+    # The full set, nightly.
+    assert "schedule" in triggers
 
 
 @pytest.mark.parametrize("name", ["ci.yml", "codeql.yml", "oracle.yml"])
@@ -285,7 +300,9 @@ def test_ci_runs_the_rust_gates(job: str, command: str) -> None:
     step = steps[0]
     assert "continue-on-error" not in step, (job, command)
     assert "continue-on-error" not in spec, job
-    assert "if" not in spec, job
+    # Only the scope's condition: the core gates have none, the full set's
+    # jobs exactly theirs (test_ci_scope.py).
+    assert spec.get("if") == _scope().expected_condition(job), job
     # The doctests run once, on Linux; nothing else is conditional.
     allowed = {("engine-test", "cargo test --workspace --locked --doc"): "runner.os == 'Linux'"}
     assert step.get("if") == allowed.get((job, command)), (job, command, step.get("if"))
@@ -411,15 +428,38 @@ def _documented_checks() -> list[str]:
     return block.group(1).splitlines()
 
 
-def test_the_required_checks_are_every_gating_check() -> None:
-    expected = [
-        name
-        for path in (CI, WORKFLOWS / "codeql.yml")
-        for name, gating in _check_names(path)
-        if gating
-    ]
+def _every_pull_request(jobs: dict[str, Any], job_id: str) -> bool:
+    """Whether the job runs on every pull request: no `if`, and every job it
+    needs runs on every pull request too (a skipped one skips it)."""
+    job = jobs[job_id]
+    needs = job.get("needs") or []
+    needs = [needs] if isinstance(needs, str) else needs
+    return "if" not in job and all(_every_pull_request(jobs, need) for need in needs)
+
+
+def _required_names(path: Path) -> list[str]:
+    """The gating checks of the jobs that run on every pull request."""
+    workflow = _load(path)
+    jobs = workflow["jobs"]
+    names: list[str] = []
+    for job_id, job in jobs.items():
+        if not _every_pull_request(jobs, job_id) or job.get("continue-on-error") is True:
+            continue
+        names += _expand(str(job.get("name", job_id)), job)
+    return names
+
+
+def test_the_required_checks_are_the_gates_of_every_pull_request() -> None:
+    """A required check must start on every pull request (one that never
+    starts blocks the merge), so the full set's jobs are not required."""
+    expected = [name for path in (CI, WORKFLOWS / "codeql.yml") for name in _required_names(path)]
     assert len(expected) == len(set(expected)), "check names are unique"
     assert sorted(_documented_checks()) == sorted(expected)
+    gating = {name for name, gating in _check_names(CI) if gating}
+    assert set(_required_names(CI)) <= gating
+    # The full set's jobs do run as checks, just not on every pull request.
+    assert {"Test (3.11)", "Fuzz smoke (cli)", "Engine release (dry run) / SBOMs"} <= gating
+    assert not {"Test (3.11)", "Fuzz smoke (cli)"} & set(_documented_checks())
 
 
 def test_the_informational_jobs_are_not_required() -> None:

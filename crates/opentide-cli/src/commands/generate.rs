@@ -389,9 +389,17 @@ pub fn docs(args: &DocsArgs, cx: &Context<'_>) -> Report {
         failure.argument = Some("--changed".into());
         return Report::failed(&command, crate::envelope::USAGE_EXIT_CODE, failure);
     }
-    let workspace = match workspace(&command, cx) {
+    // The oracle reads the configuration inside the docs phase, so a
+    // configuration that does not resolve (a paths.toml its model refuses,
+    // #936) fails that phase, as one of the docs settings would.
+    let (_, options) = placement(cx.repo, cx.env, cx.cwd);
+    let workspace = match open(options) {
         Ok(workspace) => workspace,
-        Err(report) => return *report,
+        Err(detail) => {
+            let phase = run_phase("docs", &[], cx.cwd, cx.cwd, || Err(detail));
+            let detail = phase.error.clone().unwrap_or_default();
+            return phase_failed(&command, "docs", &detail, Vec::new(), vec![phase.step]);
+        }
     };
     let root = workspace.root().to_path_buf();
     let base = output_base(&workspace);

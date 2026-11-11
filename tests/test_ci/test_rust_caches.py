@@ -43,7 +43,12 @@ ENGINE_DEBUG_PRODUCER = ("ci.yml", "engine-test", "ubuntu-latest")
 ENGINE_DEBUG_READERS = (("ci.yml", "clients"), ("ci.yml", "elastic-sweep"))
 # The Python jobs' `uv sync` build of the binding: test's 3.14 cell saves it.
 PYTHON_PRODUCER = ("ci.yml", "test")
-PYTHON_READERS = (("ci.yml", "lint"), ("ci.yml", "cli-e2e"), ("ci.yml", "gitlab-ci-lint"))
+PYTHON_READERS = (
+    ("ci.yml", "lint"),
+    ("ci.yml", "test-full"),
+    ("ci.yml", "cli-e2e"),
+    ("ci.yml", "gitlab-ci-lint"),
+)
 
 
 class RustCache(NamedTuple):
@@ -192,7 +197,7 @@ def test_the_python_jobs_build_the_binding_once() -> None:
     caches = _rust_caches()
     cells = [c for c in caches if (c.workflow, c.job) == PYTHON_PRODUCER]
     assert {c.shared_key for c in cells} == {"python-engine"}
-    # The coverage cell (3.14) saves; the other four read.
+    # The coverage cell (3.14) saves; 3.10 reads, as test-full's cells do.
     assert [c.saves for c in cells].count(True) == 1
     for workflow, job in PYTHON_READERS:
         for reader in (c for c in caches if (c.workflow, c.job) == (workflow, job)):

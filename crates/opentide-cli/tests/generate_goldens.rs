@@ -1109,3 +1109,28 @@ fn docs_with_cve_details_are_left_to_python() {
         "{page}"
     );
 }
+
+/// `[paths.core] docs_folder` (CoreTIDE's docs folder) is not a key of
+/// paths.toml: the oracle's `load_settings` falls back to it, but its paths
+/// model refuses the table first, so the docs step fails and writes nothing,
+/// neither under that folder nor under `docs/` (#936). Pinned here so a
+/// later fallback cannot start writing pages the oracle never wrote, and the
+/// failure stays the docs step's (`phase`), as the oracle reports it.
+#[test]
+fn docs_refuse_the_legacy_core_docs_folder() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
+    fixture("vscode-docs-folder", &ws);
+    let before = replay::files(&ws);
+    let (code, stdout) = run_at(&ws, &["--json", "generate", "docs"]);
+    assert_eq!(code, 1, "{stdout}");
+    let document = document(&stdout);
+    assert_eq!(document["failure"]["code"], "command_failed", "{stdout}");
+    assert_eq!(document["phase"], "docs", "{stdout}");
+    let message = document["failure"]["message"].as_str().unwrap();
+    assert!(message.starts_with("docs: paths.toml"), "{message}");
+    assert!(message.contains("paths.core"), "{message}");
+    assert!(!ws.join("site").exists());
+    assert!(!ws.join("docs").exists());
+    assert_eq!(replay::files(&ws), before);
+}

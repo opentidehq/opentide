@@ -16,7 +16,7 @@ changing; the parity dashboard says how far each command has come against the Py
 
 | | |
 |---|---|
-| Workflow | [`.github/workflows/coverage.yml`](https://github.com/opentidehq/opentide/blob/development/.github/workflows/coverage.yml), job **Rust coverage gates**, on every pull request and push to `development` and `integration/unified-core` |
+| Workflow | [`.github/workflows/coverage.yml`](https://github.com/opentidehq/opentide/blob/development/.github/workflows/coverage.yml), job **Rust coverage gates**, in CI's full set: nightly, on every push to `development` and `integration/unified-core`, on demand, and on a pull request with the `full-ci` label |
 | Policy | [`xtask/coverage.toml`](https://github.com/opentidehq/opentide/blob/development/xtask/coverage.toml) |
 | Check | `cargo xtask coverage gate --report target/coverage.json` |
 | Python | unchanged: 85% (`fail_under` in `pyproject.toml`), ci.yml's `test` job on Python 3.14 |
@@ -118,7 +118,7 @@ cargo mutants -p opentide-analysis --in-diff /tmp/change.diff
 | Fault catalogue | `tests/corpora/codes.toml` (every diagnostic code, generated from the oracle) and `tests/corpora/faults.toml` (each kind's `codes`) | read once both exist: UC-0.6 ([#804](https://github.com/opentidehq/opentide/issues/804)) adds them |
 
 The [`parity`](https://github.com/opentidehq/opentide/blob/development/.github/workflows/parity.yml)
-workflow renders it on every pull request, push, daily schedule and manual run, into the job
+workflow renders it on every push, daily schedule, manual run and pull request with the `full-ci` label, into the job
 summary and the `parity-dashboard` artifact, with a read-only token. By default nothing is pushed.
 The same job fails when the committed page differs from the rendering (`--check`), so a change
 to the goldens, the engine state, the ledger or the fault catalogue regenerates the page in its own
