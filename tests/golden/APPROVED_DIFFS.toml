@@ -9567,3 +9567,42 @@ candidate = "76c75e5ad9323637bca452de1357f73f5f2e4e02a0ccd9433575bb5658adae3b"
 reason = "the JSON Schema is generated from the Rust models with schemars (UC-1.8b, #900): its text differs as the schema-* kinds above say, and it accepts and refuses every corpus object, configuration file and fault as the oracle's does (cargo xtask codegen --check judges this recording's schemas by verdict); the digests pin both files"
 issue = "https://github.com/opentidehq/opentide/issues/933"
 changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and `snippets` run on the Rust engine**"
+
+# UC-3.7 (#829): the Rust MCP server's own refusal of an argument of the
+# wrong type, where MCPServer quotes Pydantic's validation error.
+[[diff]]
+command = "mcp start"
+case = "tools-explain/explain-bad-type"
+target = "stdout"
+rule = "json:/result/content/0/text"
+oracle = '"Error executing tool explain: 1 validation error for explainArguments\ncode\n  Input should be a valid string [type=string_type, input_value=5, input_type=int]\n    For further information visit https://errors.pydantic.dev/2.14/v/string_type"'
+candidate = '"Error executing tool explain: argument code must be a string, not a number"'
+reason = "a tool that runs in Rust checks its own arguments: the call is refused the same way (isError, one text block naming the tool and the argument), worded by opentide rather than as Pydantic's validation error, whose text and documentation link follow the Pydantic release"
+issue = "https://github.com/opentidehq/opentide/issues/829"
+changelog = "**`OPENTIDE_ENGINE=rust opentide mcp start` serves MCP from Rust**"
+
+[[diff]]
+command = "mcp start"
+case = "tools-validation/validation-report-bad-type"
+target = "stdout"
+rule = "json:/result/content/0/text"
+oracle = '"Error executing tool validation_report: 1 validation error for validation_reportArguments\nfile\n  Input should be a valid string [type=string_type, input_value=3, input_type=int]\n    For further information visit https://errors.pydantic.dev/2.14/v/string_type"'
+candidate = '"Error executing tool validation_report: argument file must be a string, not a number"'
+reason = "a tool that runs in Rust checks its own arguments: the call is refused the same way (isError, one text block naming the tool and the argument), worded by opentide rather than as Pydantic's validation error, whose text and documentation link follow the Pydantic release"
+issue = "https://github.com/opentidehq/opentide/issues/829"
+changelog = "**`OPENTIDE_ENGINE=rust opentide mcp start` serves MCP from Rust**"
+
+# UC-3.7 (#829): a workspace whose configuration does not parse. The Python
+# tool raises an exception with no message, so its refusal names nothing; the
+# Rust tool refuses the same way (isError, one text block) with validate's own
+# failure: its code and the file and error it found.
+[[diff]]
+command = "mcp start"
+case = "tools-validation-broken-config/validation-report-all"
+target = "stdout"
+rule = "json:/result/content/0/text"
+oracle = '"Error executing tool validation_report"'
+candidate = '"Error executing tool validation_report: command_failed: <WS>/.opentide/configurations/platforms/sentinel.toml: invalid string"'
+reason = "a workspace whose configuration does not parse is refused the same way (isError, one text block naming the tool), and the Rust refusal says why: validate's failure code and the file and error, where the Python tool's exception carries no message"
+issue = "https://github.com/opentidehq/opentide/issues/829"
+changelog = "**`OPENTIDE_ENGINE=rust opentide mcp start` serves MCP from Rust**"

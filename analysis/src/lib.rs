@@ -268,7 +268,57 @@ fn analyze_query(
 /// ported refuse with `engine_not_ported`.
 #[pyfunction]
 fn cli_main(py: Python<'_>, argv: Vec<String>, version: String) -> i32 {
+    opentide_cli::mcp::set_delegate(Box::new(McpBridge));
     py.detach(|| opentide_cli::main(&argv, &version))
+}
+
+/// The Python half of `opentide mcp start` (UC-3.7, #829):
+/// `opentide.mcp_server.bridge`, which answers, with the Python server's own
+/// handlers, the tools and resources the Rust server has no implementation of
+/// yet. Called from the server's thread, which holds no GIL until it attaches.
+struct McpBridge;
+
+/// Runs `call` on the module `opentide.mcp_server.bridge`, with the GIL; a
+/// Python exception as its text.
+fn bridge<T>(call: impl for<'py> FnOnce(Bound<'py, PyModule>) -> PyResult<T>) -> Result<T, String> {
+    Python::attach(|py| call(py.import("opentide.mcp_server.bridge")?))
+        .map_err(|error| error.to_string())
+}
+
+impl opentide_cli::mcp::Delegate for McpBridge {
+    fn start(&self, environment: &[(String, String)]) -> Result<(), String> {
+        let environment: HashMap<&str, &str> = environment
+            .iter()
+            .map(|(name, value)| (name.as_str(), value.as_str()))
+            .collect();
+        bridge(|module| module.call_method1("start", (environment,)).map(drop))
+    }
+
+    fn workspace_problem(&self) -> Option<String> {
+        bridge(|module| {
+            module
+                .call_method0("workspace_problem")?
+                .extract::<Option<String>>()
+        })
+        .ok()
+        .flatten()
+    }
+
+    fn call_tool(&self, name: &str, arguments: &str) -> Result<String, String> {
+        bridge(|module| {
+            module
+                .call_method1("call_tool", (name, arguments))?
+                .extract::<String>()
+        })
+    }
+
+    fn read_resource(&self, uri: &str) -> Result<String, String> {
+        bridge(|module| {
+            module
+                .call_method1("read_resource", (uri,))?
+                .extract::<String>()
+        })
+    }
 }
 
 /// Runs the Rust command line with *argv* (without the program name) in this

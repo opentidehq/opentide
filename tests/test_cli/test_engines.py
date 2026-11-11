@@ -840,3 +840,25 @@ def test_hosts_run_under_any_engine_but_not_a_bad_one(workspace: Path) -> None:
     code, stdout, stderr = invoke(["--json", "--repo", str(workspace), "serve"], "Rust")
     assert (code, stdout) == (2, "")
     assert "OPENTIDE_ENGINE=Rust is not an engine" in stderr
+
+
+@pytest.mark.parametrize(
+    ("engine", "rust_runs"),
+    [(None, False), ("python", False), ("compare", False), ("rust", True)],
+)
+def test_mcp_start_is_the_rust_server_under_rust_and_the_python_host_otherwise(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch, engine: str | None, rust_runs: bool
+) -> None:
+    """``mcp start`` (UC-3.7, #829): ``rust`` serves from Rust; otherwise Python hosts.
+
+    Under ``compare`` an MCP call answers with Python's result and records how
+    Rust differs (#822), so the Python server is the host there too.
+    """
+    assert ("mcp", "start") in engines.RUST_COMMANDS
+    monkeypatch.setitem(engines.RUST_COMMANDS, ("mcp", "start"), fake("exit"))
+    served: list[bool] = []
+    monkeypatch.setattr("opentide.mcp_server.launcher.main", lambda: served.append(True))
+    code, _, _ = invoke(["--repo", str(workspace), "mcp", "start"], engine)
+    assert served == ([] if rust_runs else [True])
+    # The fake runs the Python server on an empty stdin (exit 0) and adds one.
+    assert code == (1 if rust_runs else 0)

@@ -8,10 +8,11 @@ from __future__ import annotations
 
 import os
 import sys
-from collections.abc import Generator
+import textwrap
+from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from io import TextIOWrapper
-from typing import TextIO
+from typing import Any, TextIO, TypeVar
 
 from mcp.server.mcpserver import MCPServer
 
@@ -80,8 +81,30 @@ mcp = MCPServer(
     instructions=INSTRUCTIONS,
 )
 
+_Tool = TypeVar("_Tool", bound=Callable[..., Any])
 
-@mcp.tool()
+
+def docstring(fn: Callable[..., Any]) -> str | None:
+    """*fn*'s docstring as Python 3.13 and later compile it, on every Python.
+
+    From 3.13 the compiler strips the indentation of a docstring's lines
+    after the first; 3.10 to 3.12 keep it. The SDK reads ``__doc__`` as the
+    tool's description, so without this the descriptions agents read in
+    ``tools/list`` would depend on the Python the server runs on.
+    """
+    doc = fn.__doc__
+    if doc is None:
+        return None
+    first, newline, rest = doc.partition("\n")
+    return first.lstrip() + newline + textwrap.dedent(rest)
+
+
+def tool(fn: _Tool) -> _Tool:
+    """``@mcp.tool()`` with :func:`docstring` as the description."""
+    return mcp.tool(description=docstring(fn))(fn)
+
+
+@tool
 def search(
     query: str,
     type: str = "",
@@ -106,7 +129,7 @@ def search(
     )
 
 
-@mcp.tool()
+@tool
 def get_chaining(uuid: str) -> dict:
     """Threat -> objective -> rule lineage of any object, before you edit or add one.
 
@@ -119,7 +142,7 @@ def get_chaining(uuid: str) -> dict:
     return tool_get_chaining(uuid)
 
 
-@mcp.tool()
+@tool
 def coverage(technique: str = "", tactic: str = "") -> dict:
     """ATT&CK coverage: which rules detect a technique, and where the gaps are.
 
@@ -131,7 +154,7 @@ def coverage(technique: str = "", tactic: str = "") -> dict:
     return tool_coverage(technique=technique, tactic=tactic)
 
 
-@mcp.tool()
+@tool
 def validate_rule(uuid: str) -> dict:
     """Validate one rule by UUID: schema, vocabularies and references.
 
@@ -144,7 +167,7 @@ def validate_rule(uuid: str) -> dict:
     return tool_validate_rule(uuid)
 
 
-@mcp.tool()
+@tool
 def validation_report(
     file: str = "",
     uuid: str = "",
@@ -175,7 +198,7 @@ def validation_report(
     )
 
 
-@mcp.tool()
+@tool
 def explain(code: str = "") -> dict:
     """What a diagnostic code means, an example, and how to fix it.
 
@@ -212,7 +235,7 @@ def validate_query(
     return tool_validate_query(query, platform, live=live, language=language, stack=stack)
 
 
-@mcp.tool()
+@tool
 def run_query(
     query: str,
     platform: str,
@@ -249,7 +272,7 @@ def run_query(
     )
 
 
-@mcp.tool()
+@tool
 def deploy_rule(uuid: str, platform: str, dry_run: bool = True) -> dict:
     """Preview one rule's deployment to a platform. dry_run false deploys it for real.
 
@@ -262,7 +285,7 @@ def deploy_rule(uuid: str, platform: str, dry_run: bool = True) -> dict:
     return tool_deploy_rule(uuid, platform, dry_run=dry_run)
 
 
-@mcp.tool()
+@tool
 def deployment_status(uuid: str) -> dict:
     """Where a rule is deployed: vendor ids and tenants per platform.
 

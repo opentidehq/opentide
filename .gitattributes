@@ -9,6 +9,8 @@ tests/golden/fixtures/** -text
 # the harnesses lay them out and compare the bytes `--fix` writes with the
 # recordings, so a Windows checkout must hold the recorded (LF) bytes too.
 tests/fixtures/tide_corpus/** -text
+# The MCP sessions' Agent Plugin root (tests/golden/mcp/sessions.toml), laid out the same way.
+tests/fixtures/agent_plugin_root/** -text
 # The minijinja templates compiled in with include_str! (setup ci's pipelines,
 # generate docs' pages) and setup ci's oracle pipelines: files a user commits,
 # compared byte for byte, so a Windows checkout holds the LF bytes too.

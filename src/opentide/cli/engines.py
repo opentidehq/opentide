@@ -111,7 +111,10 @@ class RustCommand:
 #: Commands that host others and apply ``OPENTIDE_ENGINE`` to what they run
 #: rather than to themselves: ``serve`` runs each request on the engine its
 #: command selects (#822), and the MCP server's read tools do the same. They
-#: always run, under any engine.
+#: run under any engine; one that is also in :data:`RUST_COMMANDS` runs its
+#: Rust implementation under ``rust`` (``mcp start``, UC-3.7, #829), and its
+#: Python one, the host, under ``compare``: an MCP call under ``compare``
+#: answers with Python's result and records a Rust difference (#822).
 ENGINE_HOSTS: frozenset[tuple[str, ...]] = frozenset({("serve",), ("mcp", "start")})
 
 #: The Rust command line compiled into ``opentide._native`` (:mod:`opentide.cli.rust`).
@@ -127,7 +130,10 @@ RUST_CLI: tuple[str, ...] = (sys.executable, "-m", "opentide.cli.rust")
 #: sends stays Python's; ``commands``, ``explain``, ``lint`` and ``validate`` with
 #: UC-3.5 (#827); offline ``validate query`` with UC-3.5b (#927): ``--live`` stays
 #: Python's; ``migrate vocab-scope`` and ``doctor --offline`` with UC-3.5c (#928): a
-#: doctor that reaches PyPI and the proxy stays Python's.
+#: doctor that reaches PyPI and the proxy stays Python's; ``mcp start`` with UC-3.7
+#: (#829): the Rust server, which hands the tools and resources it has no
+#: implementation of to the Python server's handlers in its own process
+#: (``opentide.mcp_server.bridge``).
 #: ``new threat|objective|rule`` and ``generate`` with phases named
 #: (``generate schemas templates``) with UC-3.5d (#933): its *requires* are
 #: the phase words, so a bare ``generate`` (the full pipeline) stays Python's.
@@ -155,6 +161,7 @@ RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
     ("generate", "inflight"): RustCommand(launch=RUST_CLI),
     ("generate", "inflight", "prune"): RustCommand(launch=RUST_CLI),
     ("setup", "ci"): RustCommand(launch=RUST_CLI),
+    ("mcp", "start"): RustCommand(launch=RUST_CLI),
     ("generate",): RustCommand(
         launch=RUST_CLI, requires=("schemas", "templates", "vocabs", "snippets")
     ),
@@ -246,7 +253,7 @@ def dispatch(cli_ctx: CliContext, click_ctx: _click.Context) -> None:
             argument=ENGINE_ENV,
             suggestion=did_you_mean(engine, ENGINES),
         )
-    if words in ENGINE_HOSTS:
+    if words in ENGINE_HOSTS and not (engine == RUST and words in RUST_COMMANDS):
         # The host runs; what it runs reads the engine.
         return
     rust = RUST_COMMANDS.get(words)
