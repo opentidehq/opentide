@@ -81,6 +81,17 @@ pub enum ConnectorError {
         /// The variable's name (never a value).
         variable: String,
     },
+    /// The tenant's work stopped on a bug (a panic) before it returned: the
+    /// tenant failed, the other tenants of the run go on.
+    #[error("{platform} tenant '{tenant}': the connector stopped unexpectedly: {message}")]
+    Crashed {
+        /// The platform's identifier.
+        platform: String,
+        /// The tenant's name.
+        tenant: String,
+        /// The panic's message, when it has one.
+        message: String,
+    },
     /// The run was cancelled (Ctrl-C, `$/cancelRequest`).
     #[error("interrupted")]
     Cancelled,

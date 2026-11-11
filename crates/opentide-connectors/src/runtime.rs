@@ -7,6 +7,7 @@
 //! finished stopped when the run's [`CancellationToken`] fires (Ctrl-C, a
 //! client's `$/cancelRequest`; [`cancel_when`] wires a polled flag to it).
 
+use std::collections::HashMap;
 use std::future::Future;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -73,7 +74,8 @@ impl Rows for () {}
 
 /// Runs *work* for every tenant, at most *limit* at once, in the order
 /// given; the results come back in that order. A tenant whose turn comes
-/// after *cancel* fired is not started; one running is stopped.
+/// after *cancel* fired is not started; one running is stopped. A tenant
+/// whose work panics fails with [`ConnectorError::Crashed`].
 pub async fn fan_out<T, W, F>(
     tenants: Vec<TenantLabel>,
     limit: usize,
@@ -88,12 +90,14 @@ where
 {
     let permits = Arc::new(Semaphore::new(limit.max(1)));
     let mut set = JoinSet::new();
+    let mut spawned: HashMap<tokio::task::Id, (usize, TenantLabel, Instant)> = HashMap::new();
     for (index, label) in tenants.into_iter().enumerate() {
         let token = cancel.child_token();
         let future = work(label.clone(), token.clone());
         let permits = permits.clone();
         let progress = progress.clone();
-        set.spawn(async move {
+        let tenant = label.clone();
+        let handle = set.spawn(async move {
             let started = Instant::now();
             let result = tokio::select! {
                 biased;
@@ -107,16 +111,7 @@ where
                 } => outcome,
             };
             let elapsed = started.elapsed();
-            let rows = result.as_ref().map_or(0, Rows::rows);
-            if !matches!(result, Err(ConnectorError::Cancelled)) {
-                progress.emit(&TenantEvent::new(
-                    &label.platform,
-                    &label.tenant,
-                    result.is_ok(),
-                    rows,
-                    u64::try_from(elapsed.as_millis()).unwrap_or(u64::MAX),
-                ));
-            }
+            report(progress.as_ref(), &label, &result, elapsed);
             (
                 index,
                 TenantRun {
@@ -126,13 +121,70 @@ where
                 },
             )
         });
+        spawned.insert(handle.id(), (index, tenant, Instant::now()));
     }
     let mut runs: Vec<(usize, TenantRun<T>)> = Vec::new();
-    while let Some(joined) = set.join_next().await {
-        if let Ok(run) = joined {
-            runs.push(run);
+    while let Some(joined) = set.join_next_with_id().await {
+        match joined {
+            Ok((_, run)) => runs.push(run),
+            // A tenant whose work panicked failed: it is reported like any
+            // other failure, never dropped from the run.
+            Err(failure) => {
+                let Some((index, label, started)) = spawned.remove(&failure.id()) else {
+                    continue;
+                };
+                let elapsed = started.elapsed();
+                let result = Err(ConnectorError::Crashed {
+                    platform: label.platform.clone(),
+                    tenant: label.tenant.clone(),
+                    message: panic_message(failure),
+                });
+                report(progress.as_ref(), &label, &result, elapsed);
+                runs.push((
+                    index,
+                    TenantRun {
+                        label,
+                        result,
+                        elapsed,
+                    },
+                ));
+            }
         }
     }
     runs.sort_by_key(|(index, _)| *index);
     runs.into_iter().map(|(_, run)| run).collect()
+}
+
+/// The tenant's progress event, unless it was cancelled.
+fn report<T: Rows>(
+    progress: &dyn ProgressSink,
+    label: &TenantLabel,
+    result: &Result<T, ConnectorError>,
+    elapsed: Duration,
+) {
+    if matches!(result, Err(ConnectorError::Cancelled)) {
+        return;
+    }
+    progress.emit(&TenantEvent::new(
+        &label.platform,
+        &label.tenant,
+        result.is_ok(),
+        result.as_ref().map_or(0, Rows::rows),
+        u64::try_from(elapsed.as_millis()).unwrap_or(u64::MAX),
+    ));
+}
+
+/// What a task that did not finish says: its panic's text, when it has one.
+fn panic_message(failure: tokio::task::JoinError) -> String {
+    if !failure.is_panic() {
+        return failure.to_string();
+    }
+    let payload = failure.into_panic();
+    if let Some(text) = payload.downcast_ref::<&str>() {
+        (*text).to_owned()
+    } else if let Some(text) = payload.downcast_ref::<String>() {
+        text.clone()
+    } else {
+        "a panic".to_owned()
+    }
 }

@@ -4,13 +4,29 @@
 //! Sysdig retry 3 times on 429, 500, 502, 503 and 504 with a backoff factor
 //! of 0.5, Sentinel's ARM client 3 times on 408 as well with 0.8 and the
 //! answer's `Retry-After`; the others do not retry. A [`RetryPolicy`] says
-//! the same; backon schedules the waits (exponential from the factor). A
-//! status still failing after the last retry is returned as the answer,
-//! never raised (urllib3's `raise_on_status=False`).
+//! the same, and is applied as urllib3 2.x applies it:
+//!
+//! - the waits ([`RetryPolicy::delays`]): none before the first retry, then
+//!   `factor * 2^(n-1)` before the n-th, at most 120 s (urllib3's
+//!   `get_backoff_time` and `DEFAULT_BACKOFF_MAX`), scheduled by backon;
+//! - a status in the list, or a read timeout, is retried only for a method
+//!   in the list; a connection that could not be made (DNS, refused, a
+//!   connect timeout) is retried whatever the method, as urllib3 counts it
+//!   against `connect`;
+//! - a status still failing after the last retry is returned as the answer,
+//!   never raised (urllib3's `raise_on_status=False`).
+//!
+//! One difference: a `Retry-After` longer than 120 s is waited for 120 s,
+//! where urllib3 waits as long as the tenant asks, so one tenant cannot hold
+//! a run for an unbounded time.
 
 use std::time::Duration;
 
 use backon::{BackoffBuilder, ExponentialBuilder};
+
+/// The longest wait before a retry (urllib3's `DEFAULT_BACKOFF_MAX`), and of
+/// a `Retry-After`.
+pub const MAX_BACKOFF: Duration = Duration::from_secs(120);
 
 /// When and how often a request is sent again.
 #[derive(Clone, Debug, PartialEq)]
@@ -51,7 +67,9 @@ impl RetryPolicy {
         }
     }
 
-    /// Whether a request with *method* is retried at all.
+    /// Whether a request with *method* is retried on a status or a read
+    /// timeout (a connection that could not be made is retried whatever
+    /// the method, while [`RetryPolicy::total`] allows).
     pub fn retries(&self, method: &str) -> bool {
         self.total > 0 && self.methods.iter().any(|allowed| allowed == method)
     }
@@ -61,14 +79,17 @@ impl RetryPolicy {
         self.statuses.contains(&status)
     }
 
-    /// The waits before each retry, in order.
+    /// The waits before each retry, in order: none before the first, then
+    /// `backoff_factor * 2^(n-1)` seconds before the n-th, at most 120 s.
     pub fn delays(&self) -> impl Iterator<Item = Duration> + use<> {
-        ExponentialBuilder::new()
-            .with_min_delay(Duration::from_secs_f32(self.backoff_factor.max(0.0)))
+        let factor = self.backoff_factor.max(0.0);
+        let later = ExponentialBuilder::new()
+            .with_min_delay(Duration::from_secs_f32(factor * 2.0))
             .with_factor(2.0)
-            .with_max_delay(Duration::from_secs(120))
-            .with_max_times(self.total)
-            .build()
+            .with_max_delay(MAX_BACKOFF)
+            .with_max_times(self.total.saturating_sub(1))
+            .build();
+        std::iter::repeat_n(Duration::ZERO, self.total.min(1)).chain(later)
     }
 
     /// The wait an answer asks for in its `Retry-After` (seconds), when
@@ -78,7 +99,8 @@ impl RetryPolicy {
             return None;
         }
         let seconds: f64 = header?.trim().parse().ok()?;
-        (seconds.is_finite() && seconds >= 0.0).then(|| Duration::from_secs_f64(seconds.min(120.0)))
+        (seconds.is_finite() && seconds >= 0.0)
+            .then(|| Duration::from_secs_f64(seconds.min(MAX_BACKOFF.as_secs_f64())))
     }
 }
 

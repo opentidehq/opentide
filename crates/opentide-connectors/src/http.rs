@@ -77,7 +77,13 @@ impl HttpClient {
             .tls_backend_preconfigured(tls)
             .http1_only()
             .connect_timeout(settings.timeout)
-            .read_timeout(settings.timeout)
+            // reqwest's read timeout runs from the start of the request, the
+            // connection included, so at `timeout` it would race the connect
+            // timeout and report a tenant that cannot be reached as a slow
+            // one. `requests` gives the answer `timeout` once connected (at
+            // most twice `timeout` from the start); the body's reads are held
+            // to `timeout` each by `bytes`.
+            .read_timeout(settings.timeout.saturating_mul(2))
             .no_proxy();
         for proxy in ProxySettings::from_env(env, explicit_proxy)
             .proxies()
@@ -125,7 +131,9 @@ impl HttpClient {
         };
         let url = request.url().clone();
         let retry = &self.settings.retry;
-        let retried = retry.retries(request.method().as_str());
+        // urllib3 retries a status or a read timeout for the methods in its
+        // list only, and a connection that could not be made for any.
+        let method_retried = retry.retries(request.method().as_str());
         let mut delays = retry.delays();
         let mut pending = Some(request);
         loop {
@@ -133,13 +141,19 @@ impl HttpClient {
                 return Err(ConnectorError::Cancelled);
             };
             // A body that cannot be cloned (a stream) is sent once.
-            let next = if retried { current.try_clone() } else { None };
+            let next = if retry.total > 0 {
+                current.try_clone()
+            } else {
+                None
+            };
             let outcome = tokio::select! {
                 () = cancel.cancelled() => return Err(ConnectorError::Cancelled),
                 outcome = self.client.execute(current) => outcome,
             };
             let wait = match &outcome {
-                Ok(response) if retry.retries_status(response.status().as_u16()) => {
+                Ok(response)
+                    if method_retried && retry.retries_status(response.status().as_u16()) =>
+                {
                     let after = response
                         .headers()
                         .get(reqwest::header::RETRY_AFTER)
@@ -150,7 +164,10 @@ impl HttpClient {
                         .flatten()
                 }
                 Ok(_) => None,
-                Err(failure) if failure.is_connect() || failure.is_timeout() => {
+                Err(failure) if failure.is_connect() => {
+                    next.is_some().then(|| delays.next()).flatten()
+                }
+                Err(failure) if failure.is_timeout() && method_retried => {
                     next.is_some().then(|| delays.next()).flatten()
                 }
                 Err(_) => None,
@@ -176,18 +193,44 @@ impl HttpClient {
         }
     }
 
-    /// Reads an answer's body, mapping a failure as [`HttpClient::send`] does.
+    /// Reads an answer's body, mapping a failure as [`HttpClient::send`] does;
+    /// each read must bring data within the tenant's timeout (`requests`'
+    /// read timeout).
     pub async fn bytes(
         &self,
-        response: reqwest::Response,
+        mut response: reqwest::Response,
         cancel: &CancellationToken,
     ) -> Result<Vec<u8>, ConnectorError> {
         let url = response.url().clone();
+        let timeout = self.settings.timeout;
+        let read = async {
+            let mut body = Vec::new();
+            loop {
+                match tokio::time::timeout(timeout, response.chunk()).await {
+                    Ok(Ok(Some(chunk))) => body.extend_from_slice(&chunk),
+                    Ok(Ok(None)) => return Ok(body),
+                    Ok(Err(failure)) => {
+                        return Err(error::from_reqwest(
+                            failure,
+                            &self.label,
+                            &url,
+                            timeout.as_secs(),
+                        ));
+                    }
+                    Err(_) => {
+                        return Err(ConnectorError::Timeout {
+                            platform: self.label.platform.clone(),
+                            tenant: self.label.tenant.clone(),
+                            address: error::origin(&url),
+                            seconds: timeout.as_secs(),
+                        });
+                    }
+                }
+            }
+        };
         tokio::select! {
             () = cancel.cancelled() => Err(ConnectorError::Cancelled),
-            body = response.bytes() => body.map(|bytes| bytes.to_vec()).map_err(|failure| {
-                error::from_reqwest(failure, &self.label, &url, self.settings.timeout.as_secs())
-            }),
+            body = read => body,
         }
     }
 }

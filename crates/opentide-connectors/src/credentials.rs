@@ -108,7 +108,9 @@ pub fn resolve(
     origin: Origin<'_>,
 ) -> Result<Resolved, ConnectorError> {
     if let Some(variable) = opentide_workspace::info::env_reference(value) {
-        let credential = match (env.raw(variable).filter(|v| !v.is_empty()), mode) {
+        // A variable that is set, even to nothing, is the value (Python's
+        // `os.environ.get(env_name, "")`): only an unset one is missing.
+        let credential = match (env.raw(variable), mode) {
             (Some(found), _) => Credential::Value(Secret::new(found)),
             (None, Mode::Counting) => Credential::Placeholder {
                 variable: variable.to_owned(),

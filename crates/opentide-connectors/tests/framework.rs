@@ -18,7 +18,8 @@ use std::time::Duration;
 use opentide_cassette::tls::TestCa;
 use opentide_cassette::{Mode, Proxy, Redaction};
 use opentide_connectors::credentials::{self, Credential, Mode as Resolve, Origin};
-use opentide_connectors::progress::{Ndjson, ProgressSink, Silent, TenantEvent};
+use opentide_connectors::progress::{Ndjson, ProgressSink, TenantEvent};
+use opentide_connectors::proxy::ProxySettings;
 use opentide_connectors::retry::RetryPolicy;
 use opentide_connectors::runtime::{block_on, fan_out};
 use opentide_connectors::tls::TlsSettings;
@@ -313,6 +314,309 @@ fn framework_proxy_per_tenant_no_proxy_and_explicit_proxy() {
     assert_eq!(proxy.interactions().len(), 4);
 }
 
+/// A proxy that answers every `CONNECT` with *reply* (or, when `None`, takes
+/// the connection and never answers), counting the connections it takes.
+fn fake_proxy(reply: Option<&'static str>) -> (String, Arc<AtomicUsize>) {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let url = format!("http://127.0.0.1:{}", listener.local_addr().unwrap().port());
+    let taken = Arc::new(AtomicUsize::new(0));
+    let counter = taken.clone();
+    std::thread::spawn(move || {
+        let mut held = Vec::new();
+        for mut stream in listener.incoming().flatten() {
+            counter.fetch_add(1, Ordering::SeqCst);
+            match reply {
+                Some(reply) => {
+                    use std::io::Read as _;
+                    let mut buffer = [0u8; 4096];
+                    let _ = stream.read(&mut buffer);
+                    let _ = stream.write_all(reply.as_bytes());
+                }
+                None => held.push(stream),
+            }
+        }
+    });
+    (url, taken)
+}
+
+#[test]
+fn framework_proxy_variables_as_python_reads_them() {
+    // Lower case wins over upper case; all_proxy serves both schemes when
+    // neither scheme variable is set; --proxy, then OPENTIDE_PROXY, replace
+    // the scheme variables; no_proxy is read the same way.
+    let env = Environment::from_pairs([
+        ("https_proxy", "http://lower-https:1"),
+        ("HTTPS_PROXY", "http://upper-https:1"),
+        ("HTTP_PROXY", "http://upper-http:1"),
+        ("NO_PROXY", "upper.invalid"),
+        ("no_proxy", "lower.invalid"),
+    ]);
+    assert_eq!(
+        ProxySettings::from_env(&env, None),
+        ProxySettings {
+            https: Some("http://lower-https:1".into()),
+            http: Some("http://upper-http:1".into()),
+            no_proxy: Some("lower.invalid".into()),
+        }
+    );
+    let all = Environment::from_pairs([("ALL_PROXY", "http://all:1")]);
+    assert_eq!(
+        ProxySettings::from_env(&all, None),
+        ProxySettings {
+            https: Some("http://all:1".into()),
+            http: Some("http://all:1".into()),
+            no_proxy: None,
+        }
+    );
+    let both = all.clone().with("all_proxy", "http://lower-all:1");
+    assert_eq!(
+        ProxySettings::from_env(&both, None).https.as_deref(),
+        Some("http://lower-all:1")
+    );
+    let scheme_wins = all.clone().with("HTTPS_PROXY", "http://https:1");
+    let settings = ProxySettings::from_env(&scheme_wins, None);
+    assert_eq!(settings.https.as_deref(), Some("http://https:1"));
+    assert_eq!(settings.http.as_deref(), Some("http://all:1"));
+    let opentide = env.clone().with("OPENTIDE_PROXY", "http://opentide:1");
+    let settings = ProxySettings::from_env(&opentide, None);
+    assert_eq!(settings.https.as_deref(), Some("http://opentide:1"));
+    assert_eq!(settings.http.as_deref(), Some("http://opentide:1"));
+    let settings = ProxySettings::from_env(&opentide, Some(" http://flag:1 "));
+    assert_eq!(settings.https.as_deref(), Some("http://flag:1"));
+    assert_eq!(settings.http.as_deref(), Some("http://flag:1"));
+    // A blank --proxy is no proxy given.
+    let settings = ProxySettings::from_env(&env, Some("  "));
+    assert_eq!(settings.https.as_deref(), Some("http://lower-https:1"));
+}
+
+#[test]
+fn framework_https_proxy_spellings_all_proxy_and_no_proxy_on_the_wire() {
+    let (_runtime, upstream) = wiremock();
+    tokio::runtime::Runtime::new().unwrap().block_on(
+        Mock::given(method("GET"))
+            .respond_with(ResponseTemplate::new(200))
+            .mount(&upstream),
+    );
+    let proxy = Proxy::start(
+        Mode::Record {
+            routes: BTreeMap::from([("tenant-a.invalid".to_owned(), upstream.uri())]),
+        },
+        Redaction::default(),
+    )
+    .unwrap();
+    let bundle = write_ca(proxy.ca_pem());
+    let ca = bundle.path().to_str().unwrap().to_owned();
+    let settings = HttpSettings::default();
+    let url = "https://tenant-a.invalid/ping";
+    let refusing = "http://127.0.0.1:9";
+    // https_proxy wins over HTTPS_PROXY for an https:// request.
+    let lower = Environment::from_pairs([
+        ("https_proxy", proxy.url().as_str()),
+        ("HTTPS_PROXY", refusing),
+        ("SSL_CERT_FILE", ca.as_str()),
+    ]);
+    assert_eq!(get("lower", &settings, &lower, None, url).unwrap(), 200);
+    let upper = Environment::from_pairs([
+        ("https_proxy", refusing),
+        ("HTTPS_PROXY", proxy.url().as_str()),
+        ("SSL_CERT_FILE", ca.as_str()),
+    ]);
+    assert!(
+        get("upper", &settings, &upper, None, url)
+            .unwrap_err()
+            .is_unreachable()
+    );
+    // ALL_PROXY alone serves an https:// request.
+    let all = Environment::from_pairs([
+        ("ALL_PROXY", proxy.url().as_str()),
+        ("SSL_CERT_FILE", ca.as_str()),
+    ]);
+    assert_eq!(get("all", &settings, &all, None, url).unwrap(), 200);
+    assert_eq!(proxy.interactions().len(), 2);
+
+    // An https:// tenant in no_proxy goes direct though HTTPS_PROXY is set.
+    let tenant_ca = TestCa::new().unwrap();
+    let (_server, port) = tls_server(&tenant_ca);
+    let tenant_bundle = write_ca(tenant_ca.pem());
+    let trusting = HttpSettings {
+        tls: TlsSettings {
+            verify: true,
+            ca_bundle: Some(tenant_bundle.path().to_path_buf()),
+        },
+        ..HttpSettings::default()
+    };
+    let direct_url = format!("https://localhost:{port}/");
+    let proxied = Environment::from_pairs([("HTTPS_PROXY", refusing)]);
+    assert!(
+        get("proxied", &trusting, &proxied, None, &direct_url)
+            .unwrap_err()
+            .is_unreachable()
+    );
+    let direct = proxied.clone().with("no_proxy", "localhost");
+    assert_eq!(
+        get("direct", &trusting, &direct, None, &direct_url).unwrap(),
+        200
+    );
+}
+
+#[test]
+fn framework_a_connect_timeout_is_unreachable() {
+    // A proxy that takes the connection and never answers the CONNECT: the
+    // tunnel is part of connecting, so the tenant could not be reached.
+    let (silent, _) = fake_proxy(None);
+    let env = Environment::from_pairs([("HTTPS_PROXY", silent.as_str())]);
+    let short = HttpSettings {
+        timeout: Duration::from_millis(200),
+        ..HttpSettings::default()
+    };
+    let error = get("slow", &short, &env, None, "https://tenant.invalid/q").unwrap_err();
+    assert!(
+        matches!(error, ConnectorError::Unreachable { .. }),
+        "a connect timeout is an unreachable tenant: {error:?}"
+    );
+}
+
+#[test]
+fn framework_a_connection_that_fails_is_retried_for_any_method() {
+    let env_for = |url: &str| Environment::from_pairs([("HTTPS_PROXY", url)]);
+    let policy = RetryPolicy::urllib3(2, 0.01, &[503], &["GET"]);
+    let send = |settings: &HttpSettings, env: &Environment, verb: reqwest::Method| {
+        let client = HttpClient::new(&label("t"), settings, env, None).unwrap();
+        block_on(async {
+            let request = client
+                .request(verb, "https://tenant.invalid/q")
+                .build()
+                .unwrap();
+            client.send(request, &CancellationToken::new()).await
+        })
+        .unwrap()
+    };
+    let retrying = HttpSettings {
+        retry: policy,
+        ..HttpSettings::default()
+    };
+    // The proxy refuses the tunnel every time: one attempt and two retries,
+    // for a method the policy does not list too (urllib3's `connect`).
+    for verb in [reqwest::Method::GET, reqwest::Method::POST] {
+        let (refusing, taken) = fake_proxy(Some(
+            "HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n",
+        ));
+        let error = send(&retrying, &env_for(&refusing), verb.clone()).unwrap_err();
+        assert!(error.is_unreachable(), "{error:?}");
+        assert_eq!(taken.load(Ordering::SeqCst), 3, "{verb}");
+    }
+    // No retries: once.
+    let (refusing, taken) = fake_proxy(Some(
+        "HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n",
+    ));
+    send(
+        &HttpSettings::default(),
+        &env_for(&refusing),
+        reqwest::Method::GET,
+    )
+    .unwrap_err();
+    assert_eq!(taken.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn framework_retry_waits_as_urllib3_and_for_retry_after() {
+    // urllib3 2.x: no wait before the first retry, then factor * 2^(n-1).
+    let policy = RetryPolicy::urllib3(4, 0.5, &[503], &["GET"]);
+    let delays: Vec<Duration> = policy.delays().collect();
+    assert_eq!(
+        delays,
+        [
+            Duration::ZERO,
+            Duration::from_secs(1),
+            Duration::from_secs(2),
+            Duration::from_secs(4)
+        ]
+    );
+    assert_eq!(RetryPolicy::none().delays().count(), 0);
+    let capped: Vec<Duration> = RetryPolicy::urllib3(10, 60.0, &[503], &["GET"])
+        .delays()
+        .collect();
+    assert_eq!(capped[0], Duration::ZERO);
+    assert_eq!(capped[9], Duration::from_secs(120));
+    assert_eq!(
+        policy.retry_after(429, Some("1000")),
+        Some(Duration::from_secs(120))
+    );
+    // send() waits as long as the answer's Retry-After asks, not the
+    // (zero) backoff.
+    let (_runtime, server) = wiremock();
+    tokio::runtime::Runtime::new().unwrap().block_on(async {
+        Mock::given(path("/busy"))
+            .respond_with(ResponseTemplate::new(503).insert_header("Retry-After", "1"))
+            .up_to_n_times(1)
+            .with_priority(1)
+            .mount(&server)
+            .await;
+        Mock::given(path("/busy"))
+            .respond_with(ResponseTemplate::new(200))
+            .with_priority(2)
+            .mount(&server)
+            .await;
+    });
+    let settings = HttpSettings {
+        retry: RetryPolicy::urllib3(3, 0.0, &[503], &["GET"]),
+        ..HttpSettings::default()
+    };
+    let started = std::time::Instant::now();
+    assert_eq!(
+        get(
+            "busy",
+            &settings,
+            &Environment::default(),
+            None,
+            &format!("{}/busy", server.uri())
+        )
+        .unwrap(),
+        200
+    );
+    assert!(started.elapsed() >= Duration::from_millis(950));
+}
+
+#[test]
+fn framework_max_in_flight_bounds_a_tenants_requests() {
+    let (_runtime, server) = wiremock();
+    tokio::runtime::Runtime::new().unwrap().block_on(
+        Mock::given(method("GET"))
+            .respond_with(ResponseTemplate::new(200).set_delay(Duration::from_millis(300)))
+            .mount(&server),
+    );
+    let three = |max_in_flight: usize| {
+        let settings = HttpSettings {
+            max_in_flight,
+            ..HttpSettings::default()
+        };
+        let client =
+            HttpClient::new(&label("t"), &settings, &Environment::default(), None).unwrap();
+        let cancel = CancellationToken::new();
+        let started = std::time::Instant::now();
+        block_on(async {
+            let one = || async {
+                let request = client
+                    .request(reqwest::Method::GET, &server.uri())
+                    .build()
+                    .unwrap();
+                client
+                    .send(request, &cancel)
+                    .await
+                    .unwrap()
+                    .status()
+                    .as_u16()
+            };
+            let (a, b, c) = tokio::join!(one(), one(), one());
+            assert_eq!([a, b, c], [200, 200, 200]);
+        })
+        .unwrap();
+        started.elapsed()
+    };
+    assert!(three(1) >= Duration::from_millis(890));
+    assert!(three(3) < Duration::from_millis(890));
+}
+
 #[test]
 fn framework_timeout_per_tenant() {
     // A tenant that takes the connection and never answers.
@@ -328,7 +632,7 @@ fn framework_timeout_per_tenant() {
     let (_runtime, server) = wiremock();
     tokio::runtime::Runtime::new().unwrap().block_on(
         Mock::given(method("GET"))
-            .respond_with(ResponseTemplate::new(200).set_delay(Duration::from_millis(400)))
+            .respond_with(ResponseTemplate::new(200).set_delay(Duration::from_millis(700)))
             .mount(&server),
     );
     let short = HttpSettings {
@@ -353,13 +657,54 @@ fn framework_timeout_per_tenant() {
         "a read timeout, not an unreachable tenant: {error:?}"
     );
     assert!(!error.is_unreachable());
-    // The same 400 ms answer: too slow for one tenant, in time for the other.
+    // The same 700 ms answer: too slow for one tenant (200 ms once
+    // connected), in time for the other.
     let url = format!("{}/q", server.uri());
     assert!(matches!(
         get("short", &short, &env, None, &url),
         Err(ConnectorError::Timeout { .. })
     ));
     assert_eq!(get("long", &long, &env, None, &url).unwrap(), 200);
+
+    // An answer whose body stops coming: each read of the body has the
+    // tenant's timeout, as `requests`' read timeout.
+    let stalling = TcpListener::bind("127.0.0.1:0").unwrap();
+    let stalling_port = stalling.local_addr().unwrap().port();
+    let kept = held.clone();
+    std::thread::spawn(move || {
+        for mut stream in stalling.incoming().flatten() {
+            use std::io::Read as _;
+            let mut buffer = [0u8; 4096];
+            let _ = stream.read(&mut buffer);
+            let _ = stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 10\r\n\r\nab");
+            let _ = stream.flush();
+            kept.lock().unwrap().push(stream);
+        }
+    });
+    let client = HttpClient::new(&label("stall"), &short, &env, None).unwrap();
+    let cancel = CancellationToken::new();
+    let started = std::time::Instant::now();
+    let outcome = block_on(async {
+        let request = client
+            .request(
+                reqwest::Method::GET,
+                &format!("http://127.0.0.1:{stalling_port}/q"),
+            )
+            .build()
+            .unwrap();
+        let answer = client.send(request, &cancel).await.unwrap();
+        client.bytes(answer, &cancel).await
+    })
+    .unwrap();
+    assert!(
+        matches!(outcome, Err(ConnectorError::Timeout { .. })),
+        "{outcome:?}"
+    );
+    assert!(
+        started.elapsed() < Duration::from_millis(390),
+        "{:?}",
+        started.elapsed()
+    );
 }
 
 #[test]
@@ -497,6 +842,13 @@ fn framework_credentials_placeholders_and_errors() {
     let legacy = credentials::resolve("$AZ-SECRET", &env, Resolve::Required, origin).unwrap();
     assert_eq!(legacy.credential.secret().unwrap().expose(), "legacy-value");
     assert_eq!(legacy.legacy_variable.as_deref(), Some("AZ-SECRET"));
+    // A variable set to nothing is the value, as Python sends it
+    // (`os.environ.get(name, "")`): only an unset one is missing.
+    let empty = env.clone().with("EMPTY_TOKEN", "");
+    for mode in [Resolve::Required, Resolve::Counting] {
+        let resolved = credentials::resolve("$EMPTY_TOKEN", &empty, mode, origin).unwrap();
+        assert_eq!(resolved.credential.secret().unwrap().expose(), "");
+    }
 
     // A tenant's setup: ssl words, $VAR ssl, credentials.
     let setup: toml::Table = toml::from_str(
@@ -533,6 +885,25 @@ fn framework_credentials_placeholders_and_errors() {
     let b = Tenant::from_setup("mock", "b", &second, &env, Resolve::Required, &defaults).unwrap();
     assert!(!a.http.tls.verify);
     assert!(b.http.tls.verify);
+    // The words are read trimmed and in any case, written or from a variable
+    // (`tenant_tls_verify`).
+    for (written, verify) in [
+        ("False", false),
+        (" Yes ", true),
+        ("OFF", false),
+        (" On", true),
+        ("0 ", false),
+    ] {
+        let literal: toml::Table = toml::from_str(&format!("ssl = {written:?}")).unwrap();
+        let tenant =
+            Tenant::from_setup("mock", "w", &literal, &env, Resolve::Required, &defaults).unwrap();
+        assert_eq!(tenant.http.tls.verify, verify, "ssl = {written:?}");
+        let variable = env.clone().with("MOCK_SSL", written);
+        let tenant =
+            Tenant::from_setup("mock", "v", &setup, &variable, Resolve::Required, &defaults)
+                .unwrap();
+        assert_eq!(tenant.http.tls.verify, verify, "MOCK_SSL={written:?}");
+    }
 }
 
 #[test]
@@ -584,6 +955,7 @@ impl ProgressSink for Events {
     }
 }
 
+#[derive(Debug)]
 struct Rows(u64);
 
 impl opentide_connectors::runtime::Rows for Rows {
@@ -653,12 +1025,14 @@ fn framework_fan_out_is_bounded_ordered_reported_and_cancellable() {
     let cancel = CancellationToken::new();
     let trigger = cancel.clone();
     let counted = started.clone();
+    let events = Arc::new(Events::default());
+    let cancelled_events = events.clone();
     let runs = block_on(async move {
         let handle = tokio::spawn(async move {
             tokio::time::sleep(Duration::from_millis(50)).await;
             trigger.cancel();
         });
-        let runs = fan_out(tenants, 1, &cancel, Arc::new(Silent), move |_, token| {
+        let runs = fan_out(tenants, 1, &cancel, cancelled_events, move |_, token| {
             let counted = counted.clone();
             async move {
                 counted.fetch_add(1, Ordering::SeqCst);
@@ -677,6 +1051,40 @@ fn framework_fan_out_is_bounded_ordered_reported_and_cancellable() {
             .all(|run| matches!(run.result, Err(ConnectorError::Cancelled)))
     );
     assert_eq!(ConnectorError::Cancelled.failure_code(), "interrupted");
+    // A cancelled tenant is not reported as failed: no event at all.
+    assert_eq!(events.0.lock().unwrap().len(), 0);
+}
+
+#[test]
+fn framework_fan_out_reports_a_tenant_whose_work_panics() {
+    let events = Arc::new(Events::default());
+    let tenants: Vec<TenantLabel> = (0..3).map(|n| label(&format!("t{n}"))).collect();
+    let runs = block_on(fan_out(
+        tenants,
+        2,
+        &CancellationToken::new(),
+        events.clone(),
+        |tenant, _token| async move {
+            assert!(tenant.tenant != "t1", "the t1 connector broke");
+            Ok(Rows(1))
+        },
+    ))
+    .unwrap();
+    let names: Vec<&str> = runs.iter().map(|run| run.label.tenant.as_str()).collect();
+    assert_eq!(names, ["t0", "t1", "t2"]);
+    assert!(runs[0].result.is_ok());
+    assert!(runs[2].result.is_ok());
+    let error = runs[1].result.as_ref().unwrap_err();
+    assert!(matches!(error, ConnectorError::Crashed { .. }), "{error:?}");
+    assert_eq!(
+        error.to_string(),
+        "mock tenant 't1': the connector stopped unexpectedly: the t1 connector broke"
+    );
+    assert_eq!(error.failure_code(), "command_failed");
+    let mut seen = events.0.lock().unwrap().clone();
+    seen.sort_by(|a, b| a.tenant.cmp(&b.tenant));
+    let statuses: Vec<&str> = seen.iter().map(|event| event.status).collect();
+    assert_eq!(statuses, ["ok", "failed", "ok"]);
 }
 
 #[test]
