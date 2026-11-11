@@ -1,8 +1,7 @@
 //! Every input the `config` fuzz target saved (`fuzz/regressions/config/`,
 //! #843), and its seeds, run through the engine on stable Rust as
 //! `fuzz/src/lib.rs::configuration` runs them: the input's field paths placed
-//! as findings, the schemas installed, then hover and completion. The
-//! schemas are process-wide, so this file is its own test binary.
+//! as findings, then hover and completion with the schemas.
 
 #![expect(
     clippy::unwrap_used,
@@ -11,8 +10,8 @@
 )]
 
 use opentide_analysis::{
-    CONFIGURATIONS_DIRECTORY, ConfigIssue, Severity, configuration_completions,
-    configuration_hover, install_configuration_schemas,
+    CONFIGURATIONS_DIRECTORY, ConfigIssue, ConfigurationSchemas, Severity,
+    configuration_completions, configuration_hover,
 };
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -41,7 +40,7 @@ const FILES: &[&str] = &[
     "platforms/other.toml",
 ];
 
-fn install_schemas() {
+fn schemas() -> ConfigurationSchemas {
     let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../testdata/config/schemas");
     let mut router = None;
     let mut schemas = Vec::new();
@@ -55,7 +54,7 @@ fn install_schemas() {
             schemas.push((name, text));
         }
     }
-    install_configuration_schemas(router.as_deref(), &schemas).expect("schemas");
+    ConfigurationSchemas::parse(&router.expect("the router"), &schemas).expect("schemas")
 }
 
 fn boundary(text: &str, offset: usize) -> usize {
@@ -67,7 +66,7 @@ fn boundary(text: &str, offset: usize) -> usize {
 }
 
 /// `fuzz/src/lib.rs::configuration`, with the same input format.
-fn exercise(data: &[u8]) {
+fn exercise(schemas: &ConfigurationSchemas, data: &[u8]) {
     let Some((&pick, rest)) = data.split_first() else {
         return;
     };
@@ -117,14 +116,14 @@ fn exercise(data: &[u8]) {
     }
     for offset in [0, text.len() / 3, text.len() / 2, text.len()] {
         let offset = boundary(text, offset);
-        let _ = configuration_hover(&path, text, offset);
-        let _ = configuration_completions(&path, text, offset);
+        let _ = configuration_hover(schemas, &path, text, offset);
+        let _ = configuration_completions(schemas, &path, text, offset);
     }
 }
 
 #[test]
 fn saved_configuration_inputs_do_not_crash_or_hang() {
-    install_schemas();
+    let schemas = schemas();
     let fuzz = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fuzz");
     let mut ran = 0;
     for dir in ["seeds/config", "regressions/config"] {
@@ -134,7 +133,7 @@ fn saved_configuration_inputs_do_not_crash_or_hang() {
         for entry in entries.flatten() {
             let bytes = std::fs::read(entry.path()).unwrap();
             let start = Instant::now();
-            exercise(&bytes);
+            exercise(&schemas, &bytes);
             let took = start.elapsed();
             assert!(took < BUDGET, "{}: {took:?}", entry.path().display());
             ran += 1;

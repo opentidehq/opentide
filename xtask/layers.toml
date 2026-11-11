@@ -35,8 +35,12 @@
 #   may depend on the model; every domain crate may.
 # - opentide-cli (UC-3.3, #825) is an application, the host the plan and
 #   ADR 0003 make it: the command line, which owns the terminal, the process
-#   and the filesystem, beside opentide-lsp, the editor's host. The bindings
-#   (`main(argv)` from Python and npm, ADR 0003) sit above it.
+#   and the filesystem. It is the application tier above opentide-lsp
+#   (UC-3.6b, #947, decided on #828): `opentide lsp start` hosts the language
+#   server, a library the command line serves on stdio, as the plan and
+#   ADR 0003 describe it; the server never reaches back into the command
+#   line. The bindings (`main(argv)` from Python and npm, ADR 0003) sit above
+#   both.
 # - opentide-schema-derive (UC-1.2, #808) is foundation tier 0: the
 #   `#[derive(FromNode)]` proc-macro opentide-schema uses depends on no
 #   workspace crate (syn, quote), and its expansion names opentide-schema's
@@ -78,7 +82,8 @@ tiers = [
 [[layer]]
 name = "application"
 tiers = [
-    ["opentide-lsp", "opentide-cli"],
+    ["opentide-lsp"],
+    ["opentide-cli"],
 ]
 
 # The `opentide` facade crate (UC-5.1, #836): the public Rust API over the

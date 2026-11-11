@@ -10,8 +10,8 @@ uv run python -m opentide.generation.configuration_schemas crates/testdata/confi
 The files here came from opentide at `615cbdc` (the `claude/friendly-bardeen-y8tdxm` branch, after CoreTIDE's `[tide]` table was dropped). Only
 the tests read them (`crates/opentide-analysis/tests/configuration.rs`): they
 exercise the engine's schema walker for hover and completion. The engine
-bundles no configuration schema. At run time the host installs its own
-(`opentide_analysis::install_configuration_schemas`), generated from the
+bundles no configuration schema. At run time the language server generates
+them from `opentide-schema` (`opentide_analysis::ConfigurationSchemas`), the
 models it validates with, so these copies going stale changes nothing a user
 sees. Do not edit them by hand. Regenerate them when a test needs a newer
 schema.

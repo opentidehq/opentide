@@ -1,17 +1,16 @@
 //! Configuration TOML: the server checks it with opentide-schema's models
 //! (UC-2.6, #821), publishes the findings at their places, re-checks the
 //! other configuration buffers when one changes, and answers hover and
-//! completion from the host's schemas. The schemas are process-wide, so this
-//! test has a binary of its own.
+//! completion from the schemas opentide-schema generates, with no host
+//! supplying any (#926). The host info is process-wide, so this test has a
+//! binary of its own.
 
 #![expect(
     clippy::unwrap_used,
     reason = "test helpers outside #[test] functions: a panic fails the test"
 )]
 
-use opentide_analysis::install_configuration_schemas;
 use serde_json::{Value, json};
-use std::path::PathBuf;
 
 const SHARING: &str = "file:///w/.opentide/configurations/sharing.toml";
 const DEPLOYMENT: &str = "file:///w/.opentide/configurations/deployment.toml";
@@ -43,23 +42,6 @@ fn frames(output: &[u8]) -> Vec<Value> {
     out
 }
 
-fn install_schemas() {
-    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../testdata/config/schemas");
-    let mut router = None;
-    let mut schemas = Vec::new();
-    for entry in std::fs::read_dir(&dir).unwrap() {
-        let path = entry.unwrap().path();
-        let name = path.file_name().unwrap().to_string_lossy().to_string();
-        let text = std::fs::read_to_string(&path).unwrap();
-        if name == "configurations.router.json" {
-            router = Some(text);
-        } else {
-            schemas.push((name, text));
-        }
-    }
-    install_configuration_schemas(router.as_deref(), &schemas).unwrap();
-}
-
 fn published(messages: &[Value], uri: &str) -> Vec<Vec<(String, u64)>> {
     messages
         .iter()
@@ -81,9 +63,7 @@ fn published(messages: &[Value], uri: &str) -> Vec<Vec<(String, u64)>> {
 }
 
 #[test]
-fn the_host_checks_configuration_and_the_server_places_it() {
-    install_schemas();
-
+fn the_server_checks_configuration_and_answers_from_the_models_schemas() {
     let sharing = "[[misp]]\nname = \"misp-internal\"\ndistribution = \"this-community\"\nrule_statuses = [\"STAGING\"]\nmax_tlp = \"red\"\n";
     let opens = [
         json!({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"capabilities": {}}}),
@@ -107,7 +87,8 @@ fn the_host_checks_configuration_and_the_server_places_it() {
         frames(&output)
     };
 
-    // #172: the host says who it is; the native checks and its schemas are reported.
+    // #172: the host says who it is; the native checks and the models'
+    // schemas and catalogs are reported.
     opentide_lsp::set_host_info("opentide", "9.9.9");
     // STAGING is not a status of the open deployment.toml.
     let messages = session(&opens);
@@ -119,6 +100,7 @@ fn the_host_checks_configuration_and_the_server_places_it() {
     );
     assert_eq!(info["configurationChecks"], true);
     assert_eq!(info["configurationSchemas"], true);
+    assert_eq!(info["catalog"], "models");
     assert_eq!(
         published(&messages, SHARING),
         [[
@@ -148,7 +130,6 @@ fn the_host_checks_configuration_and_the_server_places_it() {
         "textDocument": {"uri": SHARING}}}),
     ]);
     let messages = session(&bodies);
-    install_configuration_schemas(None, &[]).unwrap();
     assert_eq!(
         published(&messages, SHARING),
         [[
@@ -184,6 +165,7 @@ fn the_host_checks_configuration_and_the_server_places_it() {
         .as_str()
         .unwrap()
         .to_string();
-    assert!(hover.contains("Max Tlp"), "{hover}");
+    assert!(hover.contains("max_tlp"), "{hover}");
+    assert!(hover.contains("`tlp` vocabulary"), "{hover}");
     assert_eq!(reply(4)["result"]["data"], json!([]));
 }

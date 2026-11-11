@@ -400,6 +400,9 @@ jobs:
       - name: Upload the JUnit report
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        # A report for reading, not a gate: an outage of GitHub's artifact
+        # service must not fail a job whose checks passed.
+        continue-on-error: true
         with:
           name: nextest-junit-${{ matrix.os }}
           path: target/nextest/ci/junit.xml
@@ -773,6 +776,9 @@ jobs:
           done
       - if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        # A report for reading, not a gate: an outage of GitHub's artifact
+        # service must not fail a job whose checks passed.
+        continue-on-error: true
         with:
           name: fuzz-smoke-artifacts-${{ strategy.job-index }}
           path: fuzz/artifacts
@@ -976,6 +982,9 @@ jobs:
       - name: Upload the fault report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        # A report for reading, not a gate: an outage of GitHub's artifact
+        # service must not fail a job whose checks passed.
+        continue-on-error: true
         with:
           name: corpus-faults-report
           path: ${{ runner.temp }}/faults.json
@@ -994,6 +1003,9 @@ jobs:
       - name: Upload the object model report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        # A report for reading, not a gate: an outage of GitHub's artifact
+        # service must not fail a job whose checks passed.
+        continue-on-error: true
         with:
           name: schema-diff-report
           path: ${{ runner.temp }}/schema-diff.json
@@ -1059,6 +1071,9 @@ jobs:
       - name: Upload the vocabulary report
         if: ${{ !cancelled() && steps.vocab_resolution.outputs.changed == 'true' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        # A report for reading, not a gate: an outage of GitHub's artifact
+        # service must not fail a job whose checks passed.
+        continue-on-error: true
         with:
           name: vocab-diff-report
           path: ${{ runner.temp }}/vocab-diff.json
@@ -1179,6 +1194,9 @@ jobs:
       - name: Upload HTML coverage report
         if: matrix.python-version == env.COVERAGE_PYTHON
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        # A report for reading, not a gate: an outage of GitHub's artifact
+        # service must not fail a job whose checks passed.
+        continue-on-error: true
         with:
           name: htmlcov
           path: htmlcov/
@@ -1407,6 +1425,9 @@ jobs:
       - name: Upload the report
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        # A report for reading, not a gate: an outage of GitHub's artifact
+        # service must not fail a job whose checks passed.
+        continue-on-error: true
         with:
           name: golden-compare
           path: golden-compare.json

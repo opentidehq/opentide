@@ -264,6 +264,7 @@ pub(crate) fn request(session: &mut Session, request: Request) -> Response {
             json!({
                 "analyses": s.analyses.get(),
                 "editorIndexed": s.editor_indexed(),
+                "editorParsed": s.editor_parsed(),
                 "workspace": {
                     "fileReads": loading.file_reads,
                     "parses": loading.parses,
@@ -524,8 +525,9 @@ fn initialize(
 
 /// Ask to watch what the analysis reads from disk: `objects/` and what is in
 /// it (object YAML, and the folders, since a client reports a deleted folder
-/// as one event for it), the configuration TOML (with `visibility.toml`),
-/// and the generated catalogs (P2.2).
+/// as one event for it), and the configuration TOML (with
+/// `visibility.toml`). The field catalogs are generated from the models
+/// (#926): `.opentide/lsp/catalogs/generated/` is not read.
 fn initialized(session: &mut Session) {
     if !session.caps.watch_files {
         return;
@@ -534,7 +536,6 @@ fn initialized(session: &mut Session) {
         "**/objects".to_string(),
         "**/objects/**".to_string(),
         "**/.opentide/configurations/**/*.toml".to_string(),
-        format!("**/{}/*", crate::server::WORKSPACE_CATALOGS),
     ]
     .into_iter()
     .map(|glob| lsp::FileSystemWatcher {
@@ -730,8 +731,8 @@ fn apply_content_changes(text: &str, changes: &[lsp::TextDocumentContentChangeEv
 
 /// Read again the files a watcher reports: an object file re-indexes its
 /// root, and so does a folder under `objects/` that is or was one of
-/// objects; `visibility.toml` (unless open), a configuration file or a
-/// catalog re-checks every open document.
+/// objects; `visibility.toml` (unless open) or a configuration file
+/// re-checks every open document.
 fn watched_files_changed(session: &mut Session, params: lsp::DidChangeWatchedFilesParams) {
     let mut everything = false;
     for change in &params.changes {
@@ -768,10 +769,6 @@ fn watched_files_changed(session: &mut Session, params: lsp::DidChangeWatchedFil
             if let Some(root) = session.root_for(&path).and_then(|i| session.roots.get(i)) {
                 root.checks.borrow_mut().changed([PathBuf::from(&path)]);
             }
-            everything = true;
-        } else if normalized.contains(crate::server::WORKSPACE_CATALOGS) {
-            session.log_info(&format!("{path} changed: reading the catalogs again"));
-            session.reactivate();
             everything = true;
         }
     }
@@ -1082,7 +1079,12 @@ fn handle_workspace_diagnostics(
 fn handle_hover(session: &mut Session, params: lsp::HoverParams) -> Option<lsp::Hover> {
     let (uri, doc, offset) = at(session, &params.text_document_position_params)?;
     let value = if doc.language == LanguageId::Config {
-        configuration_hover(&uri_to_path(uri), &doc.text, offset)?
+        configuration_hover(
+            crate::models::configuration_schemas(),
+            &uri_to_path(uri),
+            &doc.text,
+            offset,
+        )?
     } else {
         let host = session.host(doc.root);
         hover(&host, doc.language, &doc.text, offset)?
@@ -1149,7 +1151,12 @@ fn handle_completion(
             .saturating_sub(dotted.encode_utf16().count() as u32),
     );
     let found = if doc.language == LanguageId::Config {
-        configuration_completions(&uri_to_path(uri), &doc.text, offset)
+        configuration_completions(
+            crate::models::configuration_schemas(),
+            &uri_to_path(uri),
+            &doc.text,
+            offset,
+        )
     } else {
         let host = session.host(doc.root);
         completions(&host, doc.language, &doc.text, offset)

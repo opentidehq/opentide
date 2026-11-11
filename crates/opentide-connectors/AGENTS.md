@@ -18,11 +18,18 @@ adds the Python plugin hook to its registry.
 | `runtime.rs` | `block_on` (a runtime per call, for the synchronous CLI), `fan_out` over tenants (bounded, ordered, cancellable), `cancel_when` (Ctrl-C) | the query and deploy loops |
 | `progress.rs` | `tenant` progress events (`OPENTIDE_PROGRESS=json`) | `core/progress_events.py` `tenant` |
 | `body.rs` | `python_json`: a body as `json.dumps` writes it (`, ` and `: `, ASCII escapes), through a serde_json formatter | `requests`' `json=` |
+| `answer.rs` | `Answer`: a tenant's answer read whole (status, type, bytes, time to headers); `describe_answer` for one that is not the API's JSON (a gateway's page) | `transport.py` `describe_answer`, `not_json_detail` |
+| `encode.rs` | Query strings and form bodies as `requests` encodes them (`quote_plus`), through `percent-encoding` | `urllib.parse.urlencode` |
+| `crowdstrike.rs` | CrowdStrike (UC-4.2): the OAuth2 token (once per tenant for a deploy), correlation rules, Next-Gen SIEM query jobs stopped when the runner stops waiting | `platforms/crowdstrike/` |
+| `harfanglab.rs` | HarfangLab (UC-4.2): Sigma rules (`PUT`, `POST` on a 404), YARA files, telemetry searches (`shlex` words) | `platforms/harfanglab/` |
+| `sysdig.rs` | Sysdig (UC-4.2): Falco rules and runtime policies, `deploy_rule` with the deployment-state change it makes | `platforms/sysdig/client.py`, `deployer.py` |
 
 ## Place
 
-domain, tier 2 (`xtask/layers.toml`): it builds on `opentide-workspace` and, from UC-4.2, on
-`opentide-compile`'s bodies. `opentide-cli` uses it (`setup skills`).
+domain, tier 2 (`xtask/layers.toml`): it builds on `opentide-workspace` and on
+`opentide-compile` (its ordered `Json` for bodies and rows; the platforms send the bodies it
+compiles). `opentide-cli` uses it (`setup skills`); `deploy` and `query` route to the platforms
+once every platform is ported.
 
 ## Invariants
 
@@ -42,9 +49,18 @@ domain, tier 2 (`xtask/layers.toml`): it builds on `opentide-workspace` and, fro
   order, with the cassette recorded from the Python client (`opentide-cassette`,
   `tests/cassettes/`, `cargo xtask cassettes`). `tests/harness.rs` is the pattern.
 
+## Platforms
+
+Each platform is a module with its client (the requests), its `Platform` (the traits it
+implements: no `LiveValidator` where the API cannot check a query) and `http_defaults()` (the
+timeout and retries its Python client mounts). A cassette scenario per platform and operation
+(`tests/cassettes/<platform>/`, a `tenant.py` stand-in built from what the Python tests mock and a
+`client.py` that drives the oracle's own client or deployer) is replayed by
+`tests/<platform>.rs`, which also asserts the outcomes `client.py` printed when it recorded.
+
 ## Tests
 
-`cargo nextest run -p opentide-connectors framework harness`: `tests/framework.rs` (TLS, CA,
+`cargo nextest run -p opentide-connectors framework harness crowdstrike harfanglab sysdig`: `tests/framework.rs` (TLS, CA,
 proxy, `no_proxy`, `--proxy`, timeouts and retries with tenants of different settings in one
 run; credentials; redaction; fan-out, cancellation, progress; bodies) and `tests/harness.rs` (the
 sample connector against `tests/cassettes/mock-platform/deploy.json`; one byte off fails; no

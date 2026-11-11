@@ -31,7 +31,6 @@ def serve() -> int:
     if sys.stdin.isatty():
         print(TERMINAL_HINT, file=sys.stderr)  # noqa: T201 -- stderr, outside the protocol
     _supply_catalogs()
-    _supply_configuration_schemas()
     _name_the_host()
     failure: list[BaseException] = []
     clean: list[bool] = []
@@ -92,21 +91,3 @@ def _name_the_host() -> None:
     from opentide.analysis import engine
 
     engine().set_host_info("opentide", __version__)
-
-
-def _supply_configuration_schemas() -> None:
-    """Hand the server the configuration schemas for hover and completion.
-
-    The server checks configuration files itself (UC-2.6); without the
-    schemas it answers no hover or completion there, and stderr says why.
-    """
-    from opentide.analysis import install_configuration_schemas
-
-    try:
-        install_configuration_schemas()
-    except Exception as exc:  # the server still starts, without hover and completion there
-        print(  # noqa: T201 -- stderr, outside the protocol
-            "warning: configuration files get no hover or completion "
-            f"({type(exc).__name__}: {exc})",
-            file=sys.stderr,
-        )

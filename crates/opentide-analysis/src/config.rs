@@ -5,16 +5,14 @@
 //! a buffer with `opentide-schema`'s configuration checks (the language
 //! server does, natively, since UC-2.6, #821) and hands the findings to
 //! [`place_configuration_issues`], which turns each finding's `field_path`
-//! into a range in the buffer, as it does for Tide objects. The host's
-//! schemas ([`install_configuration_schemas`]) give hover and completion.
-//!
-//! Without schemas there is no hover and no completion: nothing here guesses
-//! what opentide would say.
+//! into a range in the buffer, as it does for Tide objects. The schemas
+//! `opentide-schema` generates ([`ConfigurationSchemas`], which the language
+//! server builds from the models) give hover and completion: nothing here
+//! guesses what opentide would say.
 
 use opentide_core::{ByteSpan, CompletionItem, Diagnostic, Range, Severity, span_to_range};
 use serde_json::Value;
 use std::collections::HashMap;
-use std::sync::{Arc, OnceLock, RwLock};
 use toml_edit::{ImDocument, Item, Table};
 
 /// The directory configuration files live in, relative to the workspace.
@@ -193,7 +191,13 @@ fn value_child<'a>(value: &'a toml_edit::Value, segment: &str) -> Option<(Option
 
 // --- Schemas, for hover and completion ---------------------------------------
 
-struct Schemas {
+/// The configuration schemas hover and completion read: the router
+/// (`configurations.router.json`) and the schema documents by file name, as
+/// `opentide-schema` generates them (`generate::configuration`, UC-1.8b). The
+/// language server builds them from the models; the engine never holds a
+/// process-wide copy.
+#[derive(Debug, Clone, Default)]
+pub struct ConfigurationSchemas {
     /// The router's `files`: router key → `{ "schema": <file name>, ... }`.
     files: serde_json::Map<String, Value>,
     /// Schema documents by file name.
@@ -203,61 +207,40 @@ struct Schemas {
 /// The router key a platform file without a dedicated entry falls back to.
 const GENERIC_PLATFORM_FILE: &str = "platforms/*.toml";
 
-fn schemas_slot() -> &'static RwLock<Option<Arc<Schemas>>> {
-    static SLOT: OnceLock<RwLock<Option<Arc<Schemas>>>> = OnceLock::new();
-    SLOT.get_or_init(Default::default)
-}
+impl ConfigurationSchemas {
+    /// The schemas from the router document and the schema documents by file
+    /// name. A router without `files` is an error.
+    pub fn new(
+        router: &Value,
+        documents: impl IntoIterator<Item = (String, Value)>,
+    ) -> Result<Self, String> {
+        let files = router
+            .get("files")
+            .and_then(Value::as_object)
+            .cloned()
+            .ok_or("configurations.router.json: no `files` table")?;
+        Ok(Self {
+            files,
+            documents: documents.into_iter().collect(),
+        })
+    }
 
-/// Install the host's configuration schemas for the whole process: the router
-/// (`configurations.router.json`) and the schema documents by file name, as
-/// opentide's `generate_configuration_schemas()` returns them. `None` removes
-/// them. Text that is not JSON, or a router without `files`, is an error and
-/// changes nothing.
-pub fn install_configuration_schemas(
-    router: Option<&str>,
-    schemas: &[(String, String)],
-) -> Result<(), String> {
-    let installed = match router {
-        None => None,
-        Some(router) => {
-            let router: Value = serde_json::from_str(router)
-                .map_err(|err| format!("configurations.router.json: {err}"))?;
-            let files = router
-                .get("files")
-                .and_then(Value::as_object)
-                .cloned()
-                .ok_or("configurations.router.json: no `files` table")?;
-            let mut documents = HashMap::new();
-            for (name, text) in schemas {
-                let document: Value =
-                    serde_json::from_str(text).map_err(|err| format!("{name}: {err}"))?;
-                documents.insert(name.clone(), document);
-            }
-            Some(Arc::new(Schemas { files, documents }))
+    /// [`Self::new`] from the files' texts: the router, and each schema as
+    /// `(file name, text)`. Text that is not JSON is an error.
+    pub fn parse(router: &str, schemas: &[(String, String)]) -> Result<Self, String> {
+        let router: Value = serde_json::from_str(router)
+            .map_err(|err| format!("configurations.router.json: {err}"))?;
+        let mut documents = Vec::with_capacity(schemas.len());
+        for (name, text) in schemas {
+            let document: Value =
+                serde_json::from_str(text).map_err(|err| format!("{name}: {err}"))?;
+            documents.push((name.clone(), document));
         }
-    };
-    *schemas_slot()
-        .write()
-        .unwrap_or_else(|poisoned| poisoned.into_inner()) = installed;
-    Ok(())
+        Self::new(&router, documents)
+    }
 }
 
-/// Whether a host installed configuration schemas.
-pub fn has_configuration_schemas() -> bool {
-    schemas_slot()
-        .read()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .is_some()
-}
-
-fn installed_schemas() -> Option<Arc<Schemas>> {
-    schemas_slot()
-        .read()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .clone()
-}
-
-impl Schemas {
+impl ConfigurationSchemas {
     /// The schema of the file at `relative` (under the configurations
     /// directory): its router entry, or the generic platform entry.
     fn for_file(&self, relative: &str) -> Option<&Value> {
@@ -699,9 +682,13 @@ fn present_keys(text: &str, body_start: usize) -> Vec<String> {
 /// Hover on a key or a table header in the configuration file at `path`:
 /// its schema's title, type, description, allowed values and default. Never
 /// the value in the buffer.
-pub fn configuration_hover(path: &str, text: &str, offset: usize) -> Option<String> {
+pub fn configuration_hover(
+    schemas: &ConfigurationSchemas,
+    path: &str,
+    text: &str,
+    offset: usize,
+) -> Option<String> {
     let relative = configuration_path(path)?;
-    let schemas = installed_schemas()?;
     let walker = Walker {
         root: schemas.for_file(&relative)?,
     };
@@ -738,11 +725,13 @@ pub fn configuration_hover(path: &str, text: &str, offset: usize) -> Option<Stri
 /// Completion in the configuration file at `path`: keys of the table at the
 /// cursor (not those already set), table names in a header, and allowed
 /// values after `=`.
-pub fn configuration_completions(path: &str, text: &str, offset: usize) -> Vec<CompletionItem> {
+pub fn configuration_completions(
+    schemas: &ConfigurationSchemas,
+    path: &str,
+    text: &str,
+    offset: usize,
+) -> Vec<CompletionItem> {
     let Some(relative) = configuration_path(path) else {
-        return Vec::new();
-    };
-    let Some(schemas) = installed_schemas() else {
         return Vec::new();
     };
     let Some(root) = schemas.for_file(&relative) else {

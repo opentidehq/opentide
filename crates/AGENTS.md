@@ -35,7 +35,7 @@ One workspace (root `Cargo.toml`, one `Cargo.lock`; `fuzz/` keeps its own). A cr
 | foundation 3 | [`opentide-esql`](opentide-esql/AGENTS.md), [`opentide-eql`](opentide-eql/AGENTS.md) |
 | foundation 4 | [`opentide-schema`](opentide-schema/AGENTS.md) |
 | domain 0, 1, 2 | [`opentide-tide`](opentide-tide/AGENTS.md) and [`opentide-workspace`](opentide-workspace/AGENTS.md) (loading and the index, UC-2.1), then [`opentide-analysis`](opentide-analysis/AGENTS.md) and [`opentide-compile`](opentide-compile/AGENTS.md) (deploy compile and plan, UC-3.1), then [`opentide-connectors`](opentide-connectors/AGENTS.md) (tenant HTTP, UC-4.1) |
-| application | [`opentide-lsp`](opentide-lsp/AGENTS.md), [`opentide-cli`](opentide-cli/AGENTS.md) (the command line, UC-3.3) |
+| application 0, 1 | [`opentide-lsp`](opentide-lsp/AGENTS.md), then [`opentide-cli`](opentide-cli/AGENTS.md) (the command line, UC-3.3, which hosts the language server: `lsp start`) |
 | facade | [`opentide`](opentide/AGENTS.md): the Rust SDK, the only crate with a stability promise (UC-5.1, #836) |
 | bindings | [`opentide-native`](../analysis/AGENTS.md) (`analysis/`), [`opentide-wasm`](opentide-wasm/AGENTS.md) |
 | tooling | [`xtask`](../xtask/AGENTS.md) |
