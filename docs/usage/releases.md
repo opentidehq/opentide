@@ -9,7 +9,7 @@ Every version of the [`opentide`](https://pypi.org/project/opentide/) package, n
 
 ## 0.25.0 — 11 November 2026
 
-Bitdefender GravityZone is a tenth deploy platform, for custom detection and YARA rules. HarfangLab rules take a whole YARA signature, and `validate`, `lint`, the editor and `opentide tui` check YARA as libyara 4.5 compiles it.
+Bitdefender GravityZone rules deploy from a `configurations.bitdefender` block, as a custom detection rule or a YARA rule. HarfangLab rules take a whole YARA signature, and `validate`, `lint`, the editor and `opentide tui` check YARA as libyara 4.5 compiles it.
 
 **Install**
 
@@ -29,7 +29,7 @@ opentide validate --strict
 
 **Added**
 
-- **Bitdefender GravityZone is a tenth deploy platform.** A `configurations.bitdefender` block is a GravityZone custom detection rule, Basic criteria or a YARA signature. `validate` checks it against GravityZone's criteria catalogue; deploy creates, updates, disables and deletes it. Enable it with `opentide setup platforms --bitdefender`. See [Platforms](concepts/platforms.md).
+- **Bitdefender GravityZone rules deploy from opentide.** A `configurations.bitdefender` block is a GravityZone custom detection rule, Basic criteria or a YARA signature. `validate` checks it against GravityZone's criteria catalogue; deploy creates, updates, disables and deletes it. Enable it with `opentide setup platforms --bitdefender`. See [Platforms](concepts/platforms.md).
 - **HarfangLab YARA as a whole signature: `yara.signature`.** Write imports and one or more YARA rules; deploy sends the text verbatim.
 - **`validate`, `lint`, the editor and `opentide tui` check YARA** as libyara 4.5 compiles it, with a warning where YARA-X differs. `validate query` checks HarfangLab and Bitdefender YARA offline, `.yar` files included.
 
