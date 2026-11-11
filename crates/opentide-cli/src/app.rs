@@ -2515,8 +2515,8 @@ mod tests {
 
     /// `generate <phase>...`: the words after `generate` that are no
     /// subcommand are its phases. An unknown phase is a usage error; the full
-    /// pipeline and `vocabs` are refused for the Python engine; the
-    /// subcommands still run as subcommands.
+    /// pipeline is refused for the Python engine; the subcommands still run
+    /// as subcommands.
     #[test]
     fn generate_takes_its_phases_as_words() {
         let unknown = dispatched("--json generate schemas explrer", &[], false);
@@ -2530,14 +2530,9 @@ mod tests {
         );
         assert!(unknown.stdout.contains("\"code\":\"usage_invalid_choice\""));
         assert!(unknown.stdout.contains("\"argument\":\"phase\""));
-        for line in ["--json generate", "--json generate schemas vocabs"] {
-            let refused = dispatched(line, &[], false);
-            assert_eq!(refused.code, 2, "{line}");
-            assert!(
-                refused.stdout.contains("\"code\":\"engine_not_ported\""),
-                "{line}"
-            );
-        }
+        let refused = dispatched("--json generate", &[], false);
+        assert_eq!(refused.code, 2);
+        assert!(refused.stdout.contains("\"code\":\"engine_not_ported\""));
         let subcommand = dispatched("--json generate inflight prune --bogus", &[], false);
         assert!(
             subcommand.stdout.contains("usage_unknown_option"),

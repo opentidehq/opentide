@@ -1105,11 +1105,15 @@ fn phase_outputs(
             let snippet = snippets(config, &on_disk)?;
             Ok(vec![Output::text(at(&snippet.path), snippet.text)])
         }
+        // The object vocabularies are built from the index whenever a
+        // schema or a check needs them; the phase writes nothing
+        // (`object_vocab.run`).
+        "vocabs" => Ok(Vec::new()),
         other => Err(format!("Unknown generation phase: {other}")),
     }
 }
 
-/// Runs `phases` (each `schemas`, `templates` or `snippets`) on `workspace`
+/// Runs `phases` (each `schemas`, `templates`, `vocabs` or `snippets`) on `workspace`
 /// in order, each as a checklist step, until one fails.
 pub fn run_phases(
     phases: &[String],
@@ -1120,7 +1124,13 @@ pub fn run_phases(
     let root = workspace.root().to_path_buf();
     let mut steps = Vec::new();
     for phase in phases {
-        let ran = run_phase(phase, std::slice::from_ref(&root), cwd, &root, || {
+        // The checklist names `vocabs` by what it builds.
+        let name = if phase == "vocabs" {
+            "vocabularies"
+        } else {
+            phase.as_str()
+        };
+        let ran = run_phase(name, std::slice::from_ref(&root), cwd, &root, || {
             write(&phase_outputs(phase, workspace, &root, version)?)
         });
         steps.push(ran.step);
@@ -1138,9 +1148,9 @@ pub fn run_phases(
 }
 
 /// `opentide generate <phase>...` (`generate_all` with named phases): the
-/// `schemas`, `templates` and `snippets` phases. The full pipeline (no
-/// phase) and `vocabs` are the Python engine's: refused with
-/// `engine_not_ported`, so `OPENTIDE_ENGINE=compare` runs Python alone.
+/// `schemas`, `templates`, `vocabs` and `snippets` phases. The full pipeline
+/// (no phase) is the Python engine's: refused with `engine_not_ported`, and
+/// the dispatch table sends it to Python (`requires`).
 pub fn phases(names: &[String], cx: &Context<'_>, version: &str) -> Report {
     let command = "generate";
     let unknown: Vec<&str> = names
@@ -1162,19 +1172,11 @@ pub fn phases(names: &[String], cx: &Context<'_>, version: &str) -> Report {
             &NAMED_PHASES,
         );
     }
-    let ported = ["schemas", "templates", "snippets"];
-    if names.is_empty() || names.iter().any(|name| !ported.contains(&name.as_str())) {
-        let what = if names.is_empty() {
-            "opentide generate (the full pipeline)".to_owned()
-        } else {
-            "opentide generate vocabs".to_owned()
-        };
+    if names.is_empty() {
         let mut failure = Failure::new(
             crate::envelope::code::ENGINE_NOT_PORTED,
-            format!(
-                "{what} has no Rust implementation yet: unset OPENTIDE_ENGINE, or set it to \
-                 python or compare."
-            ),
+            "opentide generate without schemas, templates, vocabs or snippets has no Rust \
+             implementation yet: unset OPENTIDE_ENGINE, or set it to python or compare.",
         );
         failure.argument = Some("OPENTIDE_ENGINE".into());
         return Report::failed(command, crate::envelope::USAGE_EXIT_CODE, failure);
