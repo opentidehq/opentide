@@ -3,6 +3,11 @@
 Most tests drive :class:`opentide.cli.services.serve.Server` in this process,
 feeding it lines as the reading thread does and reading what it writes. The
 last ones spawn the console script and speak the protocol over its stdio.
+
+Every test runs on both engines (#927): ``OPENTIDE_ENGINE`` unset runs each
+command's Python implementation, ``rust`` the Rust one where the command has
+it (``validate``, ``info``, ``lint``, ``explain``, ...), in the server and in
+the fresh run it is compared with.
 """
 
 from __future__ import annotations
@@ -16,7 +21,7 @@ import subprocess
 import sys
 import threading
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator, Sized
 from pathlib import Path
 from typing import Any
 
@@ -32,6 +37,22 @@ from opentide.cli.services.serve import CommandRunner, Server, commands_digest
 RULE_FILE = "Objects/Detection Rules/rule-0001-sentinel-kql.yaml"
 #: How long a test waits for an answer before it fails.
 TIMEOUT = 120.0
+
+
+@pytest.fixture(autouse=True, params=["python", "rust"])
+def engine(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> str:
+    """The engine every run of the test selects: the default (Python) or ``rust``."""
+    if request.param == "rust":
+        monkeypatch.setenv("OPENTIDE_ENGINE", "rust")
+    else:
+        monkeypatch.delenv("OPENTIDE_ENGINE", raising=False)
+    return str(request.param)
+
+
+#: A request's environment for a command with no Rust implementation yet:
+#: ``OPENTIDE_ENGINE=rust`` refuses it by contract (``engine_not_ported``), so
+#: it takes the per-request escape hatch and runs Python's on either engine.
+PYTHON_ONLY = {"OPENTIDE_ENGINE": "python"}
 
 
 #: Wall-clock times, which differ between any two runs of the same command.
@@ -222,7 +243,7 @@ def test_a_command_failure_is_a_result_not_an_error(client: Client) -> None:
 
 
 def test_a_command_that_would_prompt_needs_input(client: Client) -> None:
-    result = client.run("setup")
+    result = client.run("setup", env=PYTHON_ONLY)
     assert result["exit_code"] == 2
     assert result["document"]["failure"]["code"] == "usage_needs_input"
 
@@ -276,9 +297,29 @@ def test_progress_events_arrive_as_notifications(client: Client) -> None:
 # --- caching ---------------------------------------------------------------------------
 
 
+class _RustLoads:
+    """The Rust session's workspace loads since it was made: each cold open and each refresh."""
+
+    def __init__(self) -> None:
+        from opentide.analysis import engine
+
+        self.native = engine()
+        self.native.clear_workspaces()
+        self.start = self._loads()
+
+    def _loads(self) -> int:
+        stats = self.native.workspace_stats()
+        return int(stats["opens"] - stats["hits"] + stats["refreshes"])
+
+    def __len__(self) -> int:
+        return self._loads() - self.start
+
+
 @pytest.fixture
-def builds(monkeypatch: pytest.MonkeyPatch) -> list[float]:
-    """Each registry build, as it happens."""
+def builds(engine: str, monkeypatch: pytest.MonkeyPatch) -> Sized:
+    """Each registry build, as it happens; on Rust, each load of a session workspace."""
+    if engine == "rust":
+        return _RustLoads()
     from opentide.core import index_manager
 
     built: list[float] = []
@@ -366,7 +407,7 @@ def test_a_command_that_writes_keeps_nothing(
     client.run("info")
     client.run("info")
     assert len(builds) == 1
-    result = client.run("new", "threat", "--name", "Served Threat")
+    result = client.run("new", "threat", "--name", "Served Threat", env=PYTHON_ONLY)
     assert result["exit_code"] == 0, result["document"]
     after_new = len(builds)
     counts = client.run("info")["document"]["counts"]
@@ -389,13 +430,48 @@ def test_a_fix_is_not_read_only(client: Client) -> None:
 # --- cancel and crash ------------------------------------------------------------------
 
 
+@pytest.fixture
+def validate_runs(
+    engine: str, monkeypatch: pytest.MonkeyPatch
+) -> Callable[[Callable[[], Any]], None]:
+    """``install(work)``: ``validate`` runs *work* instead, on the engine the test selects.
+
+    Python's ``run_validate``; on Rust, the engine's ``run_cli`` for a
+    ``validate`` run (*work* returning is exit 0, ``SystemExit`` its code).
+    """
+
+    def install(work: Callable[[], Any]) -> None:
+        if engine == "python":
+            monkeypatch.setattr(
+                "opentide.cli.services.validation.run_validate", lambda *_, **__: work()
+            )
+            return
+        from opentide.analysis import engine as native_engine
+
+        native = native_engine()
+        real = native.run_cli
+
+        def run_cli(argv: list[str], *args: Any) -> Any:
+            if "validate" not in argv:
+                return real(argv, *args)
+            try:
+                work()
+            except SystemExit as exit_:
+                return int(exit_.code or 0), b"", b""
+            return 0, b"", b""
+
+        monkeypatch.setattr(native, "run_cli", run_cli)
+
+    return install
+
+
 def test_cancel_stops_the_run_with_130_and_cleanup_runs(
-    client: Client, monkeypatch: pytest.MonkeyPatch
+    client: Client, monkeypatch: pytest.MonkeyPatch, validate_runs: Callable[..., None]
 ) -> None:
     started = threading.Event()
     cleaned = threading.Event()
 
-    def forever(*args: Any, **kwargs: Any) -> Any:
+    def forever() -> Any:
         started.set()
         try:
             while True:
@@ -403,7 +479,7 @@ def test_cancel_stops_the_run_with_130_and_cleanup_runs(
         finally:
             cleaned.set()
 
-    monkeypatch.setattr("opentide.cli.services.validation.run_validate", forever)
+    validate_runs(forever)
     request_id = client.request("run", {"argv": ["validate"]})
     assert started.wait(TIMEOUT)
     client.send({"method": "$/cancelRequest", "params": {"id": request_id}})
@@ -417,19 +493,19 @@ def test_cancel_stops_the_run_with_130_and_cleanup_runs(
 
 
 def test_cancelling_a_queued_run_answers_130_without_running_it(
-    client: Client, monkeypatch: pytest.MonkeyPatch
+    client: Client, validate_runs: Callable[..., None]
 ) -> None:
     release = threading.Event()
     started = threading.Event()
     calls: list[str] = []
 
-    def slow(*args: Any, **kwargs: Any) -> Any:
+    def slow() -> Any:
         calls.append("run")
         started.set()
         release.wait(TIMEOUT)
         raise SystemExit(0)
 
-    monkeypatch.setattr("opentide.cli.services.validation.run_validate", slow)
+    validate_runs(slow)
     first = client.request("run", {"argv": ["validate"]})
     assert started.wait(TIMEOUT)
     second = client.request("run", {"argv": ["validate"]})
@@ -614,12 +690,15 @@ def test_a_cancel_for_a_finished_run_changes_nothing(client: Client) -> None:
 
 
 def test_a_crash_answers_internal_and_the_server_keeps_serving(
-    client: Client, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    client: Client,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    validate_runs: Callable[..., None],
 ) -> None:
-    def explode(*args: Any, **kwargs: Any) -> Any:
+    def explode() -> Any:
         raise RuntimeError("index exploded")
 
-    monkeypatch.setattr("opentide.cli.services.validation.run_validate", explode)
+    validate_runs(explode)
     result = client.run("validate")
     assert result["exit_code"] == 1
     failure = result["document"]["failure"]
@@ -789,7 +868,11 @@ def test_over_stdio_a_run_that_reads_stdin_reads_nothing_of_the_protocol(
     client = StdioClient(tide_corpus_repo, stdio_env)
     try:
         client.send(
-            {"id": 1, "method": "run", "params": {"argv": ["query", "-", "--platform", "sentinel"]}}
+            {
+                "id": 1,
+                "method": "run",
+                "params": {"argv": ["query", "-", "--platform", "sentinel"], "env": PYTHON_ONLY},
+            }
         )
         client.send({"id": 2, "method": "run", "params": {"argv": ["explain", "vocab_unknown"]}})
         answers: dict[int, dict[str, Any]] = {}
