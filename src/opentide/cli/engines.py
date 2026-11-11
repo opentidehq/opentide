@@ -4,7 +4,10 @@ During the move to one Rust core, a command can have two implementations:
 the Python one, which every command has and which is the oracle, and a Rust
 one. ``OPENTIDE_ENGINE`` chooses, read once per process by the root callback:
 
-- ``python`` (the default, also when unset or empty): the Python implementation.
+- unset or empty: the command's default engine
+  (:mod:`opentide.cli.engine_defaults`), Python until its rollout flips it.
+- ``python``: the Python implementation, whatever the default (the escape
+  hatch for the release after a command's default flips).
 - ``rust``: the Rust implementation. A command without one is a usage error,
   ``failure.code`` ``engine_not_ported``, exit 2.
 - ``compare``: both, each on its own copy of the workspace, and their exit
@@ -42,10 +45,8 @@ if TYPE_CHECKING:
     from opentide.analysis import CompareRun
     from opentide.cli.context import CliContext
 
-#: The variable that chooses the implementation.
-ENGINE_ENV = "OPENTIDE_ENGINE"
-PYTHON = "python"
-RUST = "rust"
+from opentide.cli.engine_defaults import ENGINE_ENV, PYTHON, RUST, default_engine
+
 COMPARE = "compare"
 #: The values ``OPENTIDE_ENGINE`` accepts.
 ENGINES = (PYTHON, RUST, COMPARE)
@@ -95,6 +96,12 @@ class RustCommand:
         return any(flag in options for flag in self.requires)
 
 
+#: Commands that host others and apply ``OPENTIDE_ENGINE`` to what they run
+#: rather than to themselves: ``serve`` runs each request on the engine its
+#: command selects (#822), and the MCP server's read tools do the same. They
+#: always run, under any engine.
+ENGINE_HOSTS: frozenset[tuple[str, ...]] = frozenset({("serve",), ("mcp", "start")})
+
 #: The Rust command line compiled into ``opentide._native`` (:mod:`opentide.cli.rust`).
 RUST_CLI: tuple[str, ...] = (sys.executable, "-m", "opentide.cli.rust")
 
@@ -137,6 +144,32 @@ def requested(env: Mapping[str, str] | None = None) -> str:
     return env.get(ENGINE_ENV, "").strip() or PYTHON
 
 
+def selected(words: Sequence[str], env: Mapping[str, str] | None = None) -> str:
+    """The engine that runs the command *words*: ``OPENTIDE_ENGINE`` as written, else its default.
+
+    A default of ``rust`` counts only for a command that has a Rust
+    implementation (:data:`RUST_COMMANDS`).
+    """
+    env = os.environ if env is None else env
+    written = env.get(ENGINE_ENV, "").strip()
+    if written:
+        return written
+    engine = default_engine(tuple(words))
+    return engine if engine == PYTHON or tuple(words) in RUST_COMMANDS else PYTHON
+
+
+def rust_command(words: Sequence[str], env: Mapping[str, str] | None = None) -> RustCommand | None:
+    """The Rust implementation that runs *words* now, or ``None`` when Python does (or must refuse).
+
+    For hosts that run commands in their own process (``serve``): ``rust``
+    selected and a Rust implementation to run. ``compare``, an unknown engine
+    and ``rust`` for a command without one go through :func:`dispatch`.
+    """
+    if selected(words, env) != RUST:
+        return None
+    return RUST_COMMANDS.get(tuple(words))
+
+
 def dispatch(cli_ctx: CliContext, click_ctx: _click.Context) -> None:
     """Run the command as ``OPENTIDE_ENGINE`` says: return to run Python, or exit.
 
@@ -151,14 +184,17 @@ def dispatch(cli_ctx: CliContext, click_ctx: _click.Context) -> None:
         did_you_mean,
     )
 
-    engine = requested()
-    if engine == PYTHON or click_ctx.resilient_parsing:
+    if click_ctx.resilient_parsing or (requested() == PYTHON and os.environ.get(ENGINE_ENV)):
+        # OPENTIDE_ENGINE=python: Python, whatever the command's default.
         return
     args = list(click_ctx.meta.get(ROOT_ARGS_KEY, ()))
     if "--help" in (args[: args.index("--")] if "--" in args else args):
         # Help is the command tree's, printed by Click, not an implementation's.
         return
     words = command_words(click_ctx.command, args)
+    engine = selected(words)
+    if engine == PYTHON:
+        return
     path = " ".join(words) or "(no command)"
     if engine not in ENGINES:
         _fail(
@@ -170,6 +206,9 @@ def dispatch(cli_ctx: CliContext, click_ctx: _click.Context) -> None:
             argument=ENGINE_ENV,
             suggestion=did_you_mean(engine, ENGINES),
         )
+    if words in ENGINE_HOSTS:
+        # The host runs; what it runs reads the engine.
+        return
     rust = RUST_COMMANDS.get(words)
     if rust is not None and not rust.covers(args):
         path = f"{path} without {' or '.join(rust.requires)}"
@@ -185,10 +224,12 @@ def dispatch(cli_ctx: CliContext, click_ctx: _click.Context) -> None:
                 exit_code=USAGE_EXIT_CODE,
                 argument=ENGINE_ENV,
             )
-        # compare: there is nothing to compare with yet, so Python runs alone.
+        # compare: there is nothing to compare with yet, so Python runs alone,
+        # and what it calls in this process (run_validation) runs Python too.
         from opentide.core.logging import get_logger
 
         get_logger(__name__).debug("engine_compare_python_only", command=path)
+        os.environ[ENGINE_ENV] = PYTHON
         return
     if engine == RUST:
         raise SystemExit(_run_rust(rust, args))

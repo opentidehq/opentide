@@ -147,11 +147,15 @@ def main_callback(
             code=USAGE_INVALID_VALUE,
             next_actions=steps,
         )
-    # OPENTIDE_ENGINE (#805): returns to run the Python implementation, else
-    # runs the Rust one, or both, and exits. Unset, nothing more is imported.
+    # OPENTIDE_ENGINE (#805), else the command's default engine (#822): returns
+    # to run the Python implementation, else runs the Rust one, or both, and
+    # exits. Python by default, nothing more is imported.
     import os
 
-    if os.environ.get("OPENTIDE_ENGINE", "").strip() not in ("", "python"):
+    from opentide.cli.engine_defaults import any_default
+
+    engine = os.environ.get("OPENTIDE_ENGINE", "").strip()
+    if engine not in ("", "python") or (not engine and any_default(words)):
         from opentide.cli.engines import dispatch
 
         dispatch(cli_ctx, ctx)

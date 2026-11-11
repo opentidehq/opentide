@@ -13,7 +13,8 @@
 //! - [`index`]: objects by family and UUID, duplicates, load errors,
 //!   references, signals and chaining.
 //! - [`Workspace`]: the whole, with [`Workspace::invalidate`] for the hosts
-//!   that keep it between runs; [`Registry`], the SDK's lifecycle.
+//!   that keep it between runs; [`Registry`], the SDK's lifecycle;
+//!   [`session`], workspaces kept warm between `serve`'s runs.
 //!
 //! - [`validate`]: every check of `opentide validate`, reported as
 //!   [`Diagnostic`]s, the one finding type of the CLI, the SDK, MCP and the
@@ -39,6 +40,7 @@ pub mod load;
 pub mod registry;
 pub mod review;
 pub mod root;
+pub mod session;
 pub mod state;
 pub mod validate;
 pub mod vocabularies;
@@ -51,4 +53,5 @@ pub use fs::{FileSystem, MemoryFs, OsFs, Stamp, WriteError, WriteFs};
 pub use index::{Index, Object};
 pub use registry::Registry;
 pub use root::RootOptions;
+pub use session::{Session, SessionStats};
 pub use workspace::{Change, ChangeKind, Invalidation, OpenError, Options, Stats, Workspace};

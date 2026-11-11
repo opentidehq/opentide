@@ -207,6 +207,20 @@ def test_every_code_in_the_source_is_registered() -> None:
     )
 
 
+def test_an_unknown_engine_for_the_sdk_and_mcp_is_the_clis_failure_code() -> None:
+    """The SDK's and MCP's engine refusal is a ``failure.code`` with a page, not a finding."""
+    from opentide.validation.engine import EngineSelectionError, validation_engine
+
+    with pytest.raises(EngineSelectionError) as raised:
+        validation_engine({"OPENTIDE_ENGINE": "rsut"})
+    code = raised.value.code
+    assert code == "usage_invalid_choice"
+    assert code in failure_codes()
+    assert code not in VALIDATION_CODES
+    page = load_page(code)
+    assert page is not None and page.code == code
+
+
 def test_the_table_covers_what_the_scan_cannot_see() -> None:
     """``code="missing_field" if … else "name_invalid"`` hides the second code from the scan."""
     assert "name_invalid" in REGISTERED

@@ -17,6 +17,7 @@ pub mod app;
 pub mod catalog;
 pub mod commands;
 pub mod crash;
+pub mod embed;
 pub mod env;
 pub mod envelope;
 pub mod git_baseline;
