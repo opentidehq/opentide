@@ -12,7 +12,7 @@
     reason = "a test helper: a broken recording is a failure"
 )]
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use opentide_cli::env::Env;
