@@ -19,6 +19,8 @@ anyhow.workspace = true
 # with `/` does not resolve under it, and the oracle names no such path.
 dunce = "1"
 opentide-compare.workspace = true
+# `cargo xtask cassettes` (UC-4.1, #831): the recording proxy and the cassettes.
+opentide-cassette.workspace = true
 # The object models' oracle comparisons (`corpus faults --engine rust`,
 # `schema diff`), the rules' platform blocks included (UC-1.4).
 opentide-schema = { workspace = true }

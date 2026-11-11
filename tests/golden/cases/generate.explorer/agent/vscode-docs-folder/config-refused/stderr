@@ -1,0 +1,3 @@
+✗ explorer · <SECONDS>
+error: explorer: ConfigurationError: paths.toml is invalid: paths.core: unknown key
+tip: add --json for machine-readable output

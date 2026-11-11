@@ -45,6 +45,12 @@ ignore = [
 # that lets us distribute it with EUPL-1.2 code. The list is about.toml's
 # (cargo-about renders THIRD-PARTY-LICENSES.html from it for each release),
 # so the two cannot disagree: tests/test_ci/test_supply_chain.py checks it.
+#
+# Policy (maintainer, #952): a permissive open-source licence (MIT, MIT-0,
+# Apache-2.0, BSD, ISC, Zlib, CC0, CDLA-Permissive, Unicode, BSL-1.0 and the
+# like) goes on this list, for every crate, never as a per-crate exception.
+# A copyleft (GPL, LGPL, MPL, AGPL, EPL) or field-of-use-restricted licence
+# needs a maintainer's decision. docs/internal/supply-chain.md says why.
 [licenses]
 version = 2
 allow = [
@@ -58,9 +64,9 @@ allow = [
   "Unicode-DFS-2016",
   "Zlib",
   "EUPL-1.2",
-  # A public-domain dedication: notify, which --watch uses, is CC0-1.0 in every
-  # release. Approved for any crate by the maintainer (UC-2.3, #818).
   "CC0-1.0",
+  "MIT-0",
+  "CDLA-Permissive-2.0",
 ]
 confidence-threshold = 0.93
 # Only crates we ship need a licence on this list. dev-dependencies (test
@@ -69,13 +75,6 @@ confidence-threshold = 0.93
 include-dev = false
 include-build = false
 unused-allowed-license = "allow"
-# One crate under a licence outside the list, never shipped: borrow-or-share
-# (MIT-0, MIT without the attribution clause) reaches only xtask, through the
-# jsonschema crate `cargo xtask codegen --check` validates the corpora with
-# (UC-1.8b, #900).
-exceptions = [
-  { crate = "borrow-or-share", allow = ["MIT-0"] },
-]
 
 [licenses.private]
 # Unpublished members (publish = false: xtask, the binding in analysis/,
@@ -122,6 +121,14 @@ skip = [
   { crate = "digest@0.11.3", reason = "sha2 0.11 (rmcp 3.9, opentide-cli) is on digest 0.11; gix's sha1 0.10 is on digest 0.10" },
   { crate = "block-buffer@0.12.1", reason = "digest 0.11 (sha2 0.11: rmcp 3.9, opentide-cli) beside digest 0.10 (gix's sha1)" },
   { crate = "crypto-common@0.2.2", reason = "digest 0.11 (sha2 0.11: rmcp 3.9, opentide-cli) beside digest 0.10 (gix's sha1)" },
+  # The connectors' HTTP client (UC-4.1, #831): ring 0.17, rustls's crypto
+  # provider (chosen over aws-lc-rs: no C build, no OpenSSL licence), still
+  # uses getrandom 0.2 and, on Windows, windows-sys 0.52.
+  { crate = "getrandom@0.2.17", reason = "ring 0.17 (rustls's provider for the connectors, UC-4.1) uses getrandom 0.2; gix uses 0.4" },
+  { crate = "windows-sys@0.52.0", reason = "ring 0.17 (rustls's provider for the connectors, UC-4.1) uses windows-sys 0.52 on Windows" },
+  # wiremock (the recorded-HTTP harness, opentide-cassette: test tooling,
+  # never shipped) is on base64 0.22; hyper-util (reqwest) is on 0.23.
+  { crate = "base64@0.22.1", reason = "only opentide-cassette (test tooling, never shipped) uses it, through wiremock 0.6; reqwest's hyper-util uses base64 0.23" },
   { crate = "syn@2.0.119", reason = "garde_derive 0.23 (opentide-schema's validation derive, plan D-2) depends on syn 2 and no garde release uses syn 3 yet; every other proc macro uses syn 3. Drop this when garde moves" },
 ]
 

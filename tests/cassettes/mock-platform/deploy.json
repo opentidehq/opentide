@@ -1,0 +1,186 @@
+{
+  "format": 1,
+  "scenario": "mock-platform/deploy",
+  "recorded_from": [
+    "{python}",
+    "tests/cassettes/mock_platform/client.py"
+  ],
+  "digest": "sha256:11bea500ef61fa51bcb4f9cddb58d7c61504fb282b65d514577604f96a6eb1b7",
+  "interactions": [
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://mock-tenant.invalid/api/v1/rules?rule_id=5f1c3a2e-0b7d-4c1e-9a58-2f6d7e8c9b01",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "mock-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"data\": []}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://mock-tenant.invalid/api/v1/rules",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"rule_id\": \"5f1c3a2e-0b7d-4c1e-9a58-2f6d7e8c9b01\", \"name\": \"Encoded PowerShell \\u2014 \\u00dcn\\u00efcode\", \"enabled\": true, \"query\": \"process where process.name == \\\"powershell.exe\\\" and process.args : \\\"-enc*\\\"\", \"tags\": [\"attack.t1059.001\", \"opentide\"], \"severity\": 73, \"risk\": 0.5, \"references\": null}"
+      },
+      "response": {
+        "status": 201,
+        "headers": [
+          [
+            "server",
+            "mock-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"id\": \"r-1\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://mock-tenant.invalid/api/v1/rules/r-1",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"rule_id\": \"5f1c3a2e-0b7d-4c1e-9a58-2f6d7e8c9b01\", \"name\": \"Encoded PowerShell \\u2014 \\u00dcn\\u00efcode\", \"enabled\": true, \"query\": \"process where process.name == \\\"powershell.exe\\\" and process.args : \\\"-enc*\\\"\", \"tags\": [\"attack.t1059.001\", \"opentide\"], \"severity\": 73, \"risk\": 0.5, \"references\": null, \"description\": \"Tuned: 2 exclusions\"}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "mock-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"id\": \"r-1\", \"updated\": true}"
+      }
+    },
+    {
+      "request": {
+        "method": "PATCH",
+        "url": "https://mock-tenant.invalid/api/v1/rules/r-1",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"enabled\": false}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "mock-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"id\": \"r-1\", \"enabled\": false}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://mock-tenant.invalid/api/v1/rules/r-404",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 404,
+        "headers": [
+          [
+            "server",
+            "mock-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"error\": \"not found\"}"
+      }
+    }
+  ]
+}

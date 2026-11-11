@@ -20,9 +20,16 @@ Each gate below runs in CI; the required ones are in `.github/AGENTS.md` ("Requi
 ## deny.toml
 
 **Licences.** The allow-list is `about.toml`'s, which cargo-about uses to render
-`THIRD-PARTY-LICENSES.html` for each release: permissive licences, CC0-1.0 (a public-domain dedication; notify uses it) and EUPL-1.2 itself,
+`THIRD-PARTY-LICENSES.html` for each release: permissive licences and EUPL-1.2 itself,
 every one compatible with distributing the engine under EUPL-1.2. `tests/test_ci/test_supply_chain.py` keeps
-the two lists equal. Only what ships is checked: dev-dependencies (test tools) never leave a
+the two lists equal, and keeps both free of per-crate exceptions.
+
+*Policy (maintainer decision, #952).* A permissive open-source licence (MIT, MIT-0, Apache-2.0,
+BSD-2/3-Clause, ISC, Zlib, CC0-1.0, CDLA-Permissive-2.0, Unicode-3.0, BSL-1.0 and the like) goes on
+the global list in both files when a new dependency brings it, for every crate, never as a
+`[licenses] exceptions` entry or an `about.toml` crate table, and needs no maintainer. A copyleft
+licence (GPL, LGPL, MPL, AGPL, EPL) or one that restricts the field of use needs a maintainer's
+decision before it is added anywhere. Only what ships is checked: dev-dependencies (test tools) never leave a
 checkout, and build dependencies (`cc`) run at build time and link nothing in, as `about.toml`'s
 `ignore-build-dependencies` says.
 
@@ -41,7 +48,7 @@ reviewed and harmless because none of them ships: `trycmd`'s `toml_edit` 0.25 (w
 `trycmd`'s `shlex` 1 beside `cc`'s `shlex` 2; `insta`'s `similar` 2 beside `snapbox`'s `similar` 3
 (the shipped `opentide-workspace`, for `validate --fix --dry-run`'s diff, and xtask use `similar` 2,
 so the shipped graph holds one `similar`);
-`tempfile`'s `bitflags` 2 beside `lsp-types`'s `bitflags` 1. `trybuild`'s `toml` 1 (with its `toml_*` crates) beside the engine's `toml` 0.8, for `opentide-schema`'s compile-fail tests. xtask (tooling, never shipped) uses `rustix` (the golden runner's pseudo-terminals) and `tempfile` at run time, and `opentide-workspace` uses `tempfile` (`validate --fix`'s writes) and `notify` (`--watch`), whose `inotify` brings `bitflags` 2 while `kqueue-sys` (BSD, macOS) keeps `bitflags` 1: `skip` names `bitflags@2.13.2` with that reason. xtask's schema comparison (`cargo xtask codegen --check`, UC-1.8b) validates with the `jsonschema` crate, which brings `fancy-regex` 0.20, `fluent-uri` 0.4, `getrandom` 0.3 and `r-efi` 5 beside the shipped crates' versions: `skip` names each, with that reason; and `borrow-or-share` under MIT-0, which `[licenses] exceptions` allows for that crate alone. `openssl-sys`, `openssl` and
+`tempfile`'s `bitflags` 2 beside `lsp-types`'s `bitflags` 1. `trybuild`'s `toml` 1 (with its `toml_*` crates) beside the engine's `toml` 0.8, for `opentide-schema`'s compile-fail tests. xtask (tooling, never shipped) uses `rustix` (the golden runner's pseudo-terminals) and `tempfile` at run time, and `opentide-workspace` uses `tempfile` (`validate --fix`'s writes) and `notify` (`--watch`), whose `inotify` brings `bitflags` 2 while `kqueue-sys` (BSD, macOS) keeps `bitflags` 1: `skip` names `bitflags@2.13.2` with that reason. xtask's schema comparison (`cargo xtask codegen --check`, UC-1.8b) validates with the `jsonschema` crate, which brings `fancy-regex` 0.20, `fluent-uri` 0.4, `getrandom` 0.3 and `r-efi` 5 beside the shipped crates' versions: `skip` names each, with that reason; and `borrow-or-share` under MIT-0, which the global list allows. The connectors' HTTP client (UC-4.1, #831: reqwest 0.13 on rustls with ring, the one HTTP client of the workspace) brings ring's `getrandom` 0.2 and, on Windows, `windows-sys` 0.52, and the recorded-HTTP harness (`opentide-cassette`, never shipped) wiremock's `base64` 0.22: `skip` names each with that reason. reqwest's rustls backend requires `rustls-platform-verifier`, which brings `webpki-root-certs` (Mozilla's root certificates as data, CDLA-Permissive-2.0, on the global list). `openssl-sys`, `openssl` and
 `native-tls` are banned: TLS is rustls (plan D-8; per-tenant TLS settings are a §3 invariant), with
 no system library to link on every wheel target. Wildcard version requirements fail.
 

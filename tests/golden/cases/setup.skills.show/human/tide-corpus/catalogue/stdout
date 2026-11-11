@@ -1,0 +1,4 @@
+[1mopentide-detection-rule[0m[1;2m  Detection rules[0m
+Author rules as rule::1.1 YAML under objects/rules/.
+[2mnot installed[0m
+[1;36m→[0m [1mopentide setup skills --install opentide-detection-rule --generic --yes[0m[2m · [0m[2minstall it[0m

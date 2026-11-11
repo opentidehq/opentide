@@ -1,0 +1,6 @@
+﻿{
+  // The team's MCP servers.
+  "servers": {
+    /* keep */ "other": {"command": "other-server", "args": []},
+  },
+}

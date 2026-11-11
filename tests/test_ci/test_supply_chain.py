@@ -38,6 +38,20 @@ def test_deny_allows_the_licences_about_accepts() -> None:
     assert not [lic for lic in deny["allow"] if "GPL" in lic or "MPL" in lic]
 
 
+def test_licences_are_allowed_globally_never_per_crate() -> None:
+    """Permissive licences go on the global list (maintainer policy, #952).
+
+    A per-crate exception in either file would let the two lists agree while
+    one crate's licence is allowed nowhere else, which the policy rules out.
+    """
+    deny = _toml("deny.toml")["licenses"]
+    about = _toml("about.toml")
+    assert deny.get("exceptions", []) == []
+    assert not [key for key, value in about.items() if isinstance(value, dict)]
+    for licence in ("CC0-1.0", "MIT-0", "CDLA-Permissive-2.0"):
+        assert licence in deny["allow"]
+
+
 def test_every_advisory_exception_has_a_reason_and_an_issue() -> None:
     advisories = _toml("deny.toml")["advisories"]
     for entry in advisories.get("ignore", []):
