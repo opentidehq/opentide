@@ -9,6 +9,8 @@
 
 mod checks;
 mod handlers;
+mod index;
+mod models;
 mod protocol;
 pub mod server;
 mod session;
@@ -16,8 +18,8 @@ pub mod uri;
 
 pub use handlers::{DIAGNOSTICS_DOCS, SHOW_REFERENCES};
 pub use server::{
-    MessageSession, ObjectFindings, WORKSPACE_CATALOGS, host_info, run_listen, run_stdio,
-    run_stdio_status, serve, serve_with_status, set_host_info, use_host_catalogs,
+    MessageSession, ObjectFindings, host_info, run_listen, run_stdio, run_stdio_status, serve,
+    serve_with_status, set_host_info, use_host_catalogs,
 };
 
 /// The server's version: the crate version every `opentide-*` crate shares.

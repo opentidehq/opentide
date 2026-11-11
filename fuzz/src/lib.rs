@@ -119,8 +119,9 @@ macro_rules! schema {
     };
 }
 
-/// opentide's configuration schemas, as a host installs them
-/// (`install_configuration_schemas`): the copies the engine's tests use.
+/// opentide's configuration schemas, as the language server builds them
+/// ([`opentide_analysis::ConfigurationSchemas`]): the copies the engine's
+/// tests use.
 const SCHEMAS: &[(&str, &str)] = &[
     schema!("deployment.schema.json"),
     schema!("documentation.schema.json"),
@@ -141,24 +142,26 @@ const SCHEMAS: &[(&str, &str)] = &[
 
 const ROUTER: &str = include_str!("../../crates/testdata/config/schemas/configurations.router.json");
 
-/// Install the schemas once per process: hover and completion read them.
-pub fn install_schemas() {
-    static ONCE: std::sync::Once = std::sync::Once::new();
-    ONCE.call_once(|| {
+/// The schemas, read once per process: hover and completion walk them.
+pub fn schemas() -> &'static opentide_analysis::ConfigurationSchemas {
+    static SCHEMAS_READ: std::sync::OnceLock<opentide_analysis::ConfigurationSchemas> =
+        std::sync::OnceLock::new();
+    SCHEMAS_READ.get_or_init(|| {
         let schemas: Vec<(String, String)> = SCHEMAS
             .iter()
             .map(|(name, text)| (name.to_string(), text.to_string()))
             .collect();
-        if let Err(err) = opentide_analysis::install_configuration_schemas(Some(ROUTER), &schemas) {
-            panic!("the test schemas do not install: {err}");
+        match opentide_analysis::ConfigurationSchemas::parse(ROUTER, &schemas) {
+            Ok(schemas) => schemas,
+            Err(err) => panic!("the test schemas do not parse: {err}"),
         }
-    });
+    })
 }
 
 /// Configuration TOML as the engine sees it in an editor
 /// (`opentide_analysis::config`): the host's checks report findings by
 /// `field_path`, and the engine places each in the buffer; hover and
-/// completion walk the host's schemas.
+/// completion walk the schemas.
 ///
 /// The input is `<file byte><text>\0<field path>\0<field path>…`: the first
 /// byte picks the file from [`CONFIGURATION_FILES`], the text is the buffer,
@@ -202,7 +205,7 @@ pub fn configuration(data: &[u8]) {
             message: path.to_string(),
         });
     }
-    install_schemas();
+    let schemas = schemas();
     let file = CONFIGURATION_FILES[usize::from(pick) % CONFIGURATION_FILES.len()];
     let path = format!("/w/{}{file}", opentide_analysis::CONFIGURATIONS_DIRECTORY);
     let diagnostics = opentide_analysis::place_configuration_issues(text, issues);
@@ -218,8 +221,8 @@ pub fn configuration(data: &[u8]) {
     }
     for offset in [0, text.len() / 3, text.len() / 2, text.len()] {
         let offset = boundary(text, offset);
-        let _ = opentide_analysis::configuration_hover(&path, text, offset);
-        let _ = opentide_analysis::configuration_completions(&path, text, offset);
+        let _ = opentide_analysis::configuration_hover(schemas, &path, text, offset);
+        let _ = opentide_analysis::configuration_completions(schemas, &path, text, offset);
     }
 }
 

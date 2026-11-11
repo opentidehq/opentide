@@ -29,6 +29,51 @@ description = "The opentidehq/skills catalogue (manifest.json on main), as `setu
 client = ["{oracle}/opentide", "--json", "setup", "skills", "discover"]
 cwd = "tmp"
 
+[[scenario]]
+name = "crowdstrike/deploy"
+description = "CrowdStrike's deploy client: the OAuth2 token, then create, update, disable and delete a correlation rule, and a create, an update and a delete the tenant refuses."
+client = ["{python}", "tests/cassettes/crowdstrike/client.py", "deploy"]
+tenant = ["{python}", "tests/cassettes/crowdstrike/tenant.py"]
+routes = ["api.eu-1.crowdstrike.com"]
+secrets = ["CROWDSTRIKE_CLIENT_SECRET"]
+cwd = "repo"
+
+[[scenario]]
+name = "crowdstrike/query"
+description = "CrowdStrike's CQL runner: a Next-Gen SIEM query job polled until done, one with its own head, one stopped when it outlives its timeout, one the tenant cancels, a 403 and a refusal before any request."
+client = ["{python}", "tests/cassettes/crowdstrike/client.py", "query"]
+tenant = ["{python}", "tests/cassettes/crowdstrike/tenant.py"]
+routes = ["api.eu-1.crowdstrike.com"]
+secrets = ["CROWDSTRIKE_CLIENT_SECRET"]
+cwd = "repo"
+
+[[scenario]]
+name = "harfanglab/deploy"
+description = "HarfangLab's deploy client: a Sigma rule created (PUT 404, then POST), updated, disabled and deleted, a YARA file created and deleted, and a 400, a 403 and deletes of rules the tenant does not hold."
+client = ["{python}", "tests/cassettes/harfanglab/client.py", "deploy"]
+tenant = ["{python}", "tests/cassettes/harfanglab/tenant.py"]
+routes = ["hl-tenant.invalid"]
+secrets = ["HARFANGLAB_API_TOKEN"]
+cwd = "repo"
+
+[[scenario]]
+name = "harfanglab/query"
+description = "HarfangLab's telemetry runner: a source filtered by quoted and Windows-path values, a 400, a gateway's HTML page, and queries refused before any request."
+client = ["{python}", "tests/cassettes/harfanglab/client.py", "query"]
+tenant = ["{python}", "tests/cassettes/harfanglab/tenant.py"]
+routes = ["hl-tenant.invalid"]
+secrets = ["HARFANGLAB_API_TOKEN"]
+cwd = "repo"
+
+[[scenario]]
+name = "sysdig/deploy"
+description = "Sysdig's deployer on the tide corpus's Falco rule: create and join the runtime policy, update, rename, disable (leave the policy), delete, recreate a rule the tenant lost, forget one to disable, a missing policy, a rule the tenant rejects and a refused token."
+client = ["{python}", "tests/cassettes/sysdig/client.py"]
+tenant = ["{python}", "tests/cassettes/sysdig/tenant.py"]
+routes = ["sysdig-tenant.invalid"]
+secrets = ["SYSDIG_SECURE_API_TOKEN"]
+cwd = "repo"
+
 # ---- UC-4.2b (#832): Defender for Endpoint, Elastic, SentinelOne ----
 # Each platform's stand-in tenant (tenant.py) answers as the Python suite's mocks
 # do; client.py drives the oracle's own client, runner, deployer or validator

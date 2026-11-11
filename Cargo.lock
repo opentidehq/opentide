@@ -2559,6 +2559,7 @@ dependencies = [
 name = "opentide-cli"
 version = "0.12.0"
 dependencies = [
+ "anyhow",
  "clap",
  "comfy-table",
  "ctrlc",
@@ -2574,6 +2575,7 @@ dependencies = [
  "opentide-compile",
  "opentide-connectors",
  "opentide-core",
+ "opentide-lsp",
  "opentide-schema",
  "opentide-workspace",
  "pathdiff",
@@ -2672,12 +2674,14 @@ dependencies = [
  "opentide-core",
  "opentide-schema",
  "opentide-workspace",
+ "percent-encoding",
  "regex",
  "reqwest",
  "rustls",
  "rustls-native-certs",
  "serde",
  "serde_json",
+ "shlex 2.0.1",
  "tempfile",
  "thiserror",
  "tokio",

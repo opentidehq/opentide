@@ -1,6 +1,5 @@
-//! Configuration TOML: the host checks, the engine places, and the host's
-//! schemas give hover and completion. The schemas are process-wide, so this
-//! binary has its own process and its tests take a lock.
+//! Configuration TOML: the host checks, the engine places, and the schemas
+//! the caller passes give hover and completion.
 
 #![expect(
     clippy::expect_used,
@@ -9,22 +8,14 @@
 )]
 
 use opentide_analysis::{
-    AnalyzeRequest, ConfigIssue, LanguageId, MemoryWorkspace, Severity, analyze,
-    configuration_completions, configuration_hover, install_configuration_schemas,
-    place_configuration_issues,
+    AnalyzeRequest, ConfigIssue, ConfigurationSchemas, LanguageId, MemoryWorkspace, Severity,
+    analyze, configuration_completions, configuration_hover, place_configuration_issues,
 };
 use std::path::PathBuf;
-use std::sync::{Mutex, MutexGuard};
-
-static LOCK: Mutex<()> = Mutex::new(());
-
-fn lock() -> MutexGuard<'static, ()> {
-    LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
-}
 
 const SHARING: &str = "/w/.opentide/configurations/sharing.toml";
 
-fn install_schemas() {
+fn schemas() -> ConfigurationSchemas {
     let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../testdata/config/schemas");
     let mut router = None;
     let mut schemas = Vec::new();
@@ -38,7 +29,7 @@ fn install_schemas() {
             schemas.push((name, text));
         }
     }
-    install_configuration_schemas(router.as_deref(), &schemas).expect("schemas");
+    ConfigurationSchemas::parse(&router.expect("the router"), &schemas).expect("schemas")
 }
 
 fn issue(code: &str, path: &[&str], severity: Severity, message: &str) -> ConfigIssue {
@@ -60,7 +51,6 @@ fn line_text(text: &str, line: u32) -> &str {
     reason = "positions in a test document of a few lines"
 )]
 fn each_finding_is_placed_on_its_key() {
-    let _guard = lock();
     let text = "# Sharing\n[[misp]]\nname = \"misp-internal\"\ndistribution = \"this-community\"\n\n[[misp]]\nname = \"misp-lab\"\nmax_tlp = \"white\"\n";
     let found = place_configuration_issues(
         text,
@@ -137,7 +127,6 @@ fn each_finding_is_placed_on_its_key() {
 
 #[test]
 fn a_parse_error_is_placed_where_toml_breaks() {
-    let _guard = lock();
     let text = "[promotion]\nenabled = \n";
     let found = place_configuration_issues(
         text,
@@ -175,8 +164,8 @@ fn analyze_leaves_configuration_findings_to_the_host() {
     );
 }
 
-fn labels(path: &str, text: &str) -> Vec<String> {
-    configuration_completions(path, text, text.len())
+fn labels(schemas: &ConfigurationSchemas, path: &str, text: &str) -> Vec<String> {
+    configuration_completions(schemas, path, text, text.len())
         .into_iter()
         .map(|item| item.label)
         .collect()
@@ -184,10 +173,9 @@ fn labels(path: &str, text: &str) -> Vec<String> {
 
 #[test]
 fn completion_offers_the_schema_keys_and_values() {
-    let _guard = lock();
-    install_schemas();
+    let schemas = schemas();
     assert_eq!(
-        labels(SHARING, "[[misp]]\nname = \"a\"\nmax_tlp = "),
+        labels(&schemas, SHARING, "[[misp]]\nname = \"a\"\nmax_tlp = "),
         [
             "\"clear\"",
             "\"green\"",
@@ -197,9 +185,9 @@ fn completion_offers_the_schema_keys_and_values() {
         ]
     );
     // Inside the quotes, the bare names.
-    assert!(labels(SHARING, "[[misp]]\nmax_tlp = \"").contains(&"clear".to_string()));
+    assert!(labels(&schemas, SHARING, "[[misp]]\nmax_tlp = \"").contains(&"clear".to_string()));
 
-    let keys = labels(SHARING, "[[misp]]\nname = \"a\"\n");
+    let keys = labels(&schemas, SHARING, "[[misp]]\nname = \"a\"\n");
     for key in [
         "enabled",
         "url",
@@ -213,62 +201,66 @@ fn completion_offers_the_schema_keys_and_values() {
     assert!(!keys.contains(&"name".to_string()), "name is already set");
     assert!(!keys.contains(&"distribution".to_string()));
 
-    assert_eq!(labels(SHARING, "[["), ["misp"]);
-    assert_eq!(labels(SHARING, "[[misp]]\nenabled = "), ["true", "false"]);
+    assert_eq!(labels(&schemas, SHARING, "[["), ["misp"]);
     assert_eq!(
-        labels(SHARING, "[[misp]]\nobject_types = [\"threat\", "),
+        labels(&schemas, SHARING, "[[misp]]\nenabled = "),
+        ["true", "false"]
+    );
+    assert_eq!(
+        labels(&schemas, SHARING, "[[misp]]\nobject_types = [\"threat\", "),
         ["\"threat\"", "\"objective\"", "\"rule\""]
     );
-    install_configuration_schemas(None, &[]).unwrap();
 }
 
 #[test]
 fn hover_shows_the_schema_and_never_the_value() {
-    let _guard = lock();
-    install_schemas();
+    let schemas = schemas();
     let text = "[[misp]]\napi_key = \"literal-secret\"\nmax_tlp = \"red\"\n";
-    let hover =
-        configuration_hover(SHARING, text, text.find("api_key").unwrap() + 2).expect("hover");
+    let hover = configuration_hover(&schemas, SHARING, text, text.find("api_key").unwrap() + 2)
+        .expect("hover");
     assert!(hover.contains("Api Key"), "{hover}");
     assert!(hover.contains("${NAME}"), "{hover}");
     assert!(!hover.contains("literal-secret"), "{hover}");
 
     let on_value =
-        configuration_hover(SHARING, text, text.find("literal").unwrap()).expect("hover");
+        configuration_hover(&schemas, SHARING, text, text.find("literal").unwrap()).expect("hover");
     assert!(!on_value.contains("literal-secret"), "{on_value}");
 
-    let tlp = configuration_hover(SHARING, text, text.find("max_tlp").unwrap()).expect("hover");
+    let tlp =
+        configuration_hover(&schemas, SHARING, text, text.find("max_tlp").unwrap()).expect("hover");
     assert!(tlp.contains("`\"amber+strict\"`"), "{tlp}");
     assert!(!tlp.contains("white"), "{tlp}");
 
-    let header = configuration_hover(SHARING, text, 3).expect("header hover");
+    let header = configuration_hover(&schemas, SHARING, text, 3).expect("header hover");
     assert!(header.contains("MISP instances"), "{header}");
-    install_configuration_schemas(None, &[]).unwrap();
 }
 
 #[test]
 fn files_route_through_the_router() {
-    let _guard = lock();
-    install_schemas();
+    let schemas = schemas();
     // A third-party platform file falls back to the generic platform schema.
     let acme = "/w/.opentide/configurations/platforms/acme.toml";
     let text = "[platform]\nenabled = ";
-    assert_eq!(labels(acme, text), ["true", "false"]);
+    assert_eq!(labels(&schemas, acme, text), ["true", "false"]);
     // A file without a schema gets nothing.
     let resources = "/w/.opentide/configurations/resources.toml";
-    assert!(labels(resources, "[").is_empty());
-    assert!(configuration_hover(resources, "[x]\n", 1).is_none());
+    assert!(labels(&schemas, resources, "[").is_empty());
+    assert!(configuration_hover(&schemas, resources, "[x]\n", 1).is_none());
     // Without schemas, nothing either.
-    install_configuration_schemas(None, &[]).unwrap();
-    assert!(labels(SHARING, "[[").is_empty());
+    let none = ConfigurationSchemas::default();
+    assert!(labels(&none, SHARING, "[[").is_empty());
+    assert!(configuration_hover(&none, SHARING, "[[misp]]\n", 3).is_none());
 }
 
 #[test]
-fn schemas_that_are_not_json_change_nothing() {
-    let _guard = lock();
-    install_schemas();
-    let err = install_configuration_schemas(Some("{"), &[]).unwrap_err();
+fn schemas_that_are_not_json_or_lack_the_router_s_files_are_refused() {
+    let err = ConfigurationSchemas::parse("{", &[]).unwrap_err();
     assert!(err.contains("configurations.router.json"), "{err}");
-    assert_eq!(labels(SHARING, "[["), ["misp"]);
-    install_configuration_schemas(None, &[]).unwrap();
+    let err = ConfigurationSchemas::parse("{}", &[]).unwrap_err();
+    assert!(err.contains("no `files`"), "{err}");
+    let err = ConfigurationSchemas::parse(r#"{"files": {}}"#, &[("a.json".into(), "[".into())])
+        .unwrap_err();
+    assert!(err.starts_with("a.json"), "{err}");
+    let schemas = schemas();
+    assert_eq!(labels(&schemas, SHARING, "[["), ["misp"]);
 }

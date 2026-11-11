@@ -20,8 +20,12 @@ while opentide-workspace and opentide-schema are (ADR 0010's addendum).
 - It may read files (it is the native host); the engines it calls may not.
 - Tide object diagnostics are `validate`'s (`src/checks.rs`): each root's `Workspace` over the
   disk and the open buffers (`OverlayFs`), kept current with `Workspace::invalidate`; never add
-  an object check here or in the engine. Configuration buffers are checked with
+  an object check here or in the engine. Lint's file name and metadata findings come from
+  `Workspace::editor_lint`. Configuration buffers are checked with
   `opentide_schema::configuration::checks::buffer_issues`.
+- What the editor reads of the models is generated here from `opentide-schema`
+  (`src/models.rs`): the Tide field catalogs of each root and the configuration schemas.
+  Nothing reads `.opentide/lsp/catalogs/`.
 
 ## Test
 
@@ -43,8 +47,9 @@ and the `scripts/engine/clients` pytest-lsp and Neovim checks.
 
 ## Work items that change this crate
 
-- UC-2.6 (#821): the server on `opentide-workspace`, duplicate checks removed (done; lint's
-  findings wait for #905).
+- UC-2.6 (#821, #926): the server on `opentide-workspace`, duplicate checks removed, lint's
+  findings, and the field catalogs, configuration schemas and index from the models and the
+  workspace's parse (done; the `lsp_first_diagnostics` bench waiver is its own change).
 - UC-3.6 (#828): `opentide lsp start` and `serve` in the Rust CLI.
 - UC-5.3 (#838): the fate of `@opentide/lsp-client` and `@opentide/lsp-worker`.
 

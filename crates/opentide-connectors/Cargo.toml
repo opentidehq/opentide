@@ -17,14 +17,9 @@ workspace = true
 [dependencies]
 # `$NAME` and `${NAME}` placeholders: the one parser the workspace's `info` uses.
 opentide-workspace.workspace = true
-# The platforms (UC-4.2): request bodies and rows keep their key order
-# (`opentide_compile::json::Json`); Elastic's durations; the advisory codes;
-# Python's float `repr` in messages.
-opentide-compile.workspace = true
+# Elastic's advisory codes (UC-4.2b) and Python's float `repr` in messages.
 opentide-core.workspace = true
 opentide-schema.workspace = true
-jiff.workspace = true
-regex.workspace = true
 reqwest.workspace = true
 rustls.workspace = true
 rustls-native-certs.workspace = true
@@ -36,8 +31,18 @@ serde_json.workspace = true
 thiserror.workspace = true
 url.workspace = true
 toml.workspace = true
+# The platforms (UC-4.2): bodies and rows as ordered JSON, a search's window,
+# a gateway page's title, query strings encoded as `requests` encodes them,
+# HarfangLab's telemetry words; Elastic's durations (UC-4.2b).
+opentide-compile.workspace = true
+jiff.workspace = true
+regex.workspace = true
+percent-encoding = "2"
+shlex = "2.0"
 
 [dev-dependencies]
+# The Sysdig test compiles the tide corpus's rule as deploy does.
+opentide-schema.workspace = true
 # The recorded-HTTP harness: the sample connector's cassette is replayed with
 # wiremock (tests/harness.rs).
 opentide-cassette.workspace = true

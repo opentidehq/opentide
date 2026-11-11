@@ -11,16 +11,24 @@
 //! ([`runtime`]), progress events ([`progress`]) and the errors with the
 //! failure codes they map to ([`error`]).
 //!
+//! The platforms built on it (UC-4.2, #832): [`crowdstrike`], [`harfanglab`]
+//! and [`sysdig`], each a request-for-request port of its Python client,
+//! deployer and query runner.
+//!
 //! The recorded-HTTP harness that proves a connector sends what the Python
 //! client sends is `opentide-cassette`, a test crate.
 
+pub mod answer;
 pub mod body;
 pub mod connector;
 pub mod credentials;
+pub mod crowdstrike;
 pub mod defender;
 pub mod elastic;
+pub mod encode;
 pub mod env;
 pub mod error;
+pub mod harfanglab;
 pub mod http;
 pub mod progress;
 pub mod proxy;
@@ -28,6 +36,7 @@ pub mod retry;
 pub mod runtime;
 pub mod search;
 pub mod sentinel_one;
+pub mod sysdig;
 pub mod tenant;
 pub mod tls;
 

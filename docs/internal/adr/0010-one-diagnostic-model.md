@@ -101,11 +101,12 @@ KG-03 and KG-05 (on #893) and by this item for publishing:
    `recommended_field_missing` are retired (they stay explainable,
    `src/opentide/cli/services/retired_codes.py`). The editor shows `lint`'s `filename_mismatch`
    and `metadata_recommended` once `lint::lint_file` (UC-2.3, #905) is on the integration
-   branch; until then it shows `validate`'s findings alone.
+   branch; until then it shows `validate`'s findings alone. (Done in #926.)
 3. **Configuration checks are native.** The server calls `opentide-schema`'s `buffer_issues`;
    `set_configuration_checker` and the `lint.toml` settings the engine read are gone.
    `install_configuration_schemas` stays for hover and completion until the configuration
-   models derive their JSON Schemas (UC-1.8).
+   models derive their JSON Schemas (UC-1.8). (Done in #926: the server generates them with
+   `opentide-schema`, and `install_configuration_schemas` is gone.)
 4. **Publishing: `opentide-schema` stays unpublished.** The language server reads its checks
    from `opentide-workspace` and `opentide-schema` in this workspace, so `opentide-lsp` and
    `opentide-wasm` are `publish = false` too until the release train publishes the new crates
@@ -119,6 +120,9 @@ KG-03 and KG-05 (on #893) and by this item for publishing:
    highlighting read the catalog in `opentide-tide` and `opentide-analysis`, both published.
    Building the catalog from `opentide-schema` in `opentide-lsp` instead (and handing it to
    the engine) is the way to move it without unpublishing them, and is left open on #821.
+   (Done in #926: `opentide-lsp` generates each root's catalogs from `opentide-schema` and
+   the root's configuration and hands them to the engine; the compiled-in snapshot stays the
+   engine's default for the published crates' other hosts.)
 
 ## Evidence
 

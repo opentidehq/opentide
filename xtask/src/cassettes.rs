@@ -275,6 +275,10 @@ pub fn record(scenario: &Scenario, repo: &Path, bin: &Path) -> Result<Cassette> 
             String::from_utf8_lossy(&output.stderr)
         );
     }
+    // What the client printed (the outcomes a scenario's Rust test expects).
+    for line in String::from_utf8_lossy(&output.stdout).lines() {
+        eprintln!("cassettes record: {}: {line}", scenario.name);
+    }
     let interactions = proxy.interactions();
     if interactions.is_empty() {
         bail!(
