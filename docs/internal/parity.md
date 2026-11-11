@@ -14,13 +14,13 @@ The Python CLI at the frozen tag is the oracle ([plan §5](https://github.com/op
 | | |
 |---|---:|
 | Commands | 59 |
-| Commands with a Rust implementation | 30 |
+| Commands with a Rust implementation | 28 |
 | Commands flipped to Rust | 0 |
 | Recordings (command × corpus × mode) | 637 |
-| … no Rust yet | 245 (38.4%) |
+| … no Rust yet | 249 (39.0%) |
 | … compare passing | 0 (0.0%) |
 | … compare failing | 0 (0.0%) |
-| … compare not run | 392 (61.5%) |
+| … compare not run | 388 (60.9%) |
 | … flipped | 0 (0.0%) |
 | Approved diffs (`tests/golden/APPROVED_DIFFS.toml`) | 822 |
 | Diagnostic codes with a fault kind | 163 of 175 (93.1%) |
@@ -92,9 +92,9 @@ No compare results were given: every command with a Rust implementation that is 
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
-| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| vscode | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| none | compare not run | compare not run | compare not run | compare not run |
+| tide-corpus | compare not run | compare not run | compare not run | compare not run |
+| vscode | compare not run | compare not run | compare not run | compare not run |
 
 ### `opentide generate docs`
 
@@ -326,8 +326,8 @@ No compare results were given: every command with a Rust implementation that is 
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
-| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| none | compare not run | compare not run | compare not run | compare not run |
+| tide-corpus | compare not run | compare not run | compare not run | compare not run |
 
 ### `opentide new rule`
 
@@ -335,9 +335,9 @@ No compare results were given: every command with a Rust implementation that is 
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
-| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| vscode | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| none | compare not run | compare not run | compare not run | compare not run |
+| tide-corpus | compare not run | compare not run | compare not run | compare not run |
+| vscode | compare not run | compare not run | compare not run | compare not run |
 
 ### `opentide new threat`
 
@@ -345,11 +345,11 @@ No compare results were given: every command with a Rust implementation that is 
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
-| empty | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| heavy-small | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| vscode | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| empty | compare not run | compare not run | compare not run | compare not run |
+| heavy-small | compare not run | compare not run | compare not run | compare not run |
+| none | compare not run | compare not run | compare not run | compare not run |
+| tide-corpus | compare not run | compare not run | compare not run | compare not run |
+| vscode | compare not run | compare not run | compare not run | compare not run |
 
 ### `opentide query`
 
@@ -388,8 +388,8 @@ No compare results were given: every command with a Rust implementation that is 
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
-| empty | compare not run | compare not run | compare not run | compare not run |
-| none | compare not run | compare not run | compare not run | compare not run |
+| empty | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
 
 ### `opentide setup ci`
 
@@ -404,38 +404,38 @@ No compare results were given: every command with a Rust implementation that is 
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
-| empty | compare not run | compare not run | compare not run | compare not run |
-| none | compare not run | compare not run | compare not run | compare not run |
-| tide-corpus | compare not run | compare not run | compare not run | compare not run |
+| empty | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
 
 ### `opentide setup hooks`
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
-| none | compare not run | compare not run | compare not run | compare not run |
-| tide-corpus | compare not run | compare not run | compare not run | compare not run |
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
 
 ### `opentide setup mcp`
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
-| none | compare not run | compare not run | compare not run | compare not run |
-| tide-corpus | compare not run | compare not run | compare not run | compare not run |
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
 
 ### `opentide setup platforms`
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
-| empty | compare not run | compare not run | compare not run | compare not run |
-| none | compare not run | compare not run | compare not run | compare not run |
-| tide-corpus | compare not run | compare not run | compare not run | compare not run |
+| empty | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
 
 ### `opentide setup repo`
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
-| none | compare not run | compare not run | compare not run | compare not run |
-| tide-corpus | compare not run | compare not run | compare not run | compare not run |
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
 
 ### `opentide setup skills`
 
