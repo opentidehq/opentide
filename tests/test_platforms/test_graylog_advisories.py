@@ -78,7 +78,7 @@ def test_an_overlapping_window_is_reported_at_the_schedule() -> None:
         ({}, [_tenant()], []),
         ({}, [_tenant(streams=None)], [ALL_STREAMS]),
         ({}, [_tenant(), _tenant("lab", streams=[])], [ALL_STREAMS]),
-        ({}, [], [ALL_STREAMS]),
+        ({}, [], []),
         ({"streams": "sysmon"}, [_tenant(streams=None)], []),
         ({"stream_categories": ["edr"]}, [_tenant(streams=None)], []),
         ({"tenants": ["prod"]}, [_tenant(), _tenant("lab", streams=None)], []),

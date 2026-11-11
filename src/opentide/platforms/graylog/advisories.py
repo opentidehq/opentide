@@ -89,20 +89,16 @@ def _all_streams(block: Mapping[str, Any], tenants: Sequence[Any]) -> Advisory |
         return None  # graylog_list_shape is the finding
     if as_list(block.get("streams")) or as_list(block.get("stream_categories")):
         return None
+    # Without a tenant there is no default to judge: the tenant may name streams.
     reached = targeted_tenants(block, tenants)
     bare = [tenant.name for tenant in reached if not as_list(tenant.setup.streams)]
-    if reached and not bare:
+    if not bare:
         return None
-    where = (
-        f"tenant(s) {', '.join(bare)} set no streams either"
-        if bare
-        else "no Graylog tenant is configured to name default streams"
-    )
     return Advisory(
         ALL_STREAMS,
         _BLOCK,
-        f"the block sets no streams or stream_categories, and {where}: the definition searches "
-        "every stream the token's user can read",
+        f"the block sets no streams or stream_categories, and tenant(s) {', '.join(bare)} set "
+        "no streams either: the definition searches every stream the token's user can read",
     )
 
 
