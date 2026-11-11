@@ -1322,6 +1322,15 @@ variant = "typo-choice"
 args = ["setup", "ci", "githb", "--yes"]
 fixtures = ["tide-corpus"]
 
+# --promotion-target reads the statuses from the merged configuration,
+# unchecked: a paths.toml its model refuses (legacy [paths.core]) does not
+# stop it (#957).
+[[case]]
+command = "setup ci"
+variant = "promotion-target"
+args = ["setup", "ci", "github", "--promotion-target", "STAGING", "--yes"]
+fixtures = ["vscode-docs-folder"]
+
 [[case]]
 command = "setup env"
 variant = "example"

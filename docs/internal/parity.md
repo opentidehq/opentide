@@ -16,11 +16,11 @@ The Python CLI at the frozen tag is the oracle ([plan §5](https://github.com/op
 | Commands | 59 |
 | Commands with a Rust implementation | 24 |
 | Commands flipped to Rust | 0 |
-| Recordings (command × corpus × mode) | 641 |
-| … no Rust yet | 301 (46.9%) |
+| Recordings (command × corpus × mode) | 645 |
+| … no Rust yet | 301 (46.6%) |
 | … compare passing | 0 (0.0%) |
 | … compare failing | 0 (0.0%) |
-| … compare not run | 340 (53.0%) |
+| … compare not run | 344 (53.3%) |
 | … flipped | 0 (0.0%) |
 | Approved diffs (`tests/golden/APPROVED_DIFFS.toml`) | 769 |
 | Diagnostic codes with a fault kind | 163 of 175 (93.1%) |
@@ -392,6 +392,7 @@ No compare results were given: every command with a Rust implementation that is 
 |--------|------|------|------|------|
 | none | compare not run | compare not run | compare not run | compare not run |
 | tide-corpus | compare not run | compare not run | compare not run | compare not run |
+| vscode-docs-folder | compare not run | compare not run | compare not run | compare not run |
 
 ### `opentide setup env`
 

@@ -1,0 +1,4 @@
+  .github/workflows/opentide.yml             GitHub Actions pipeline
+  .opentide/configurations/deployment.toml
+
+✓ Wrote 2 files
