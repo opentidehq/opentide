@@ -48,6 +48,26 @@ def test_the_manifest_is_what_the_server_says_of_itself() -> None:
     assert manifest["protocolVersion"] == "2025-11-25"
 
 
+def test_a_tool_description_is_the_same_on_every_python() -> None:
+    """Python 3.10-3.12 keep a docstring's indentation; 3.13 strips it: agents read 3.13's."""
+    from opentide.mcp_server.server import docstring, mcp
+
+    def indented() -> None:
+        pass
+
+    # What 3.10-3.12 compile a docstring to, whatever Python runs the test.
+    indented.__doc__ = "First line.\n\n    Details: one,\n      two.\n    "
+    assert docstring(indented) == "First line.\n\nDetails: one,\n  two.\n"
+    # Already 3.13's form: unchanged.
+    indented.__doc__ = "First line.\n\nDetails: one,\n  two.\n"
+    assert docstring(indented) == "First line.\n\nDetails: one,\n  two.\n"
+    indented.__doc__ = None
+    assert docstring(indented) is None
+    for tool in mcp._tool_manager.list_tools():
+        lines = tool.description.splitlines()[1:]
+        assert not any(line.startswith("    ") for line in lines), tool.name
+
+
 def test_a_tool_call_is_the_wire_result(tide_corpus_repo: Path) -> None:
     answer = json.loads(
         bridge.call_tool("search", json.dumps({"query": CORPUS_RULE_UUIDS["sentinel"]}))
