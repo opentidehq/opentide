@@ -29,11 +29,15 @@ use std::time::{Duration, Instant, SystemTime};
 /// Command paths with a Rust implementation; every other one is refused with
 /// `engine_not_ported`, as `OPENTIDE_ENGINE=rust` refuses it.
 /// `deploy` runs here with `--dry-run` only (UC-3.1c); a deploy that sends is
-/// refused as unported.
+/// refused as unported, and `validate query` offline only (UC-3.5b): a
+/// `--live` run is refused the same way.
 pub const PORTED: &[&str] = &[
     "commands",
     "explain",
     "info",
+    "lint",
+    "validate",
+    "validate query",
     "rules unreviewed",
     "generate exports",
     "generate exports navigator",
@@ -552,6 +556,10 @@ impl Run<'_> {
                 self.host.interrupt.consume();
                 Ok(code)
             }
+            "validate query" => {
+                let report = self.validate_query(&matches);
+                self.emit_report(&report, out, err)
+            }
             "lint" => {
                 let report = self.lint(&matches);
                 self.emit_report(&report, out, err)
@@ -925,6 +933,124 @@ impl Run<'_> {
             },
         );
         (parsed, Some(report))
+    }
+
+    /// `opentide validate query`, from its parsed arguments. The options of
+    /// `validate` it also takes, typed before `query`, are its own
+    /// (`hand_down`); the others are refused, as is one typed on both.
+    fn validate_query(&self, matches: &clap::ArgMatches) -> crate::commands::Report {
+        use crate::commands::validate_query::{Args, COMMAND, Context, run};
+        use clap::ValueEnum;
+        let args = leaf(matches);
+        let group = matches.subcommand_matches("validate");
+        let typed =
+            |on: &clap::ArgMatches, id: &str| on.value_source(id) == Some(ValueSource::CommandLine);
+        if let Some(group) = group {
+            // `validate`'s options in its order, with their flags.
+            const GROUP: [(&str, &str, bool); 11] = [
+                ("check", "--check", false),
+                ("file", "--file", true),
+                ("uuid", "--uuid", true),
+                ("object_type", "--type", false),
+                ("strict", "--strict", true),
+                ("queries", "--queries", true),
+                ("fix", "--fix", false),
+                ("dry_run", "--dry-run", false),
+                ("watch", "--watch", false),
+                ("report_format", "--format", false),
+                ("output", "--output", false),
+            ];
+            let refused: Vec<&str> = GROUP
+                .iter()
+                .filter(|(id, _, shared)| !shared && typed(group, id))
+                .map(|(_, flag, _)| *flag)
+                .collect();
+            let problem = if refused.is_empty() {
+                // `validate query`'s own options, in its order.
+                let twice: Vec<&str> = [
+                    ("file", "--file"),
+                    ("uuid", "--uuid"),
+                    ("strict", "--strict"),
+                    ("queries", "--queries"),
+                ]
+                .iter()
+                .filter(|(id, _)| typed(group, id) && typed(args, id))
+                .map(|(_, flag)| *flag)
+                .collect();
+                (!twice.is_empty()).then(|| {
+                    format!(
+                        "Pass {} once, before or after `query`, not both: `opentide validate \
+                         query` would use only the second.",
+                        twice.join(", ")
+                    )
+                })
+            } else {
+                let verb = if refused.len() == 1 {
+                    "configures"
+                } else {
+                    "configure"
+                };
+                Some(format!(
+                    "{} {verb} `opentide validate` itself and would be ignored by `opentide \
+                     validate query`.",
+                    refused.join(", ")
+                ))
+            };
+            if let Some(problem) = problem {
+                let failure = Failure::new(
+                    code::USAGE_INVALID_VALUE,
+                    format!("Invalid value: {problem}"),
+                );
+                return crate::commands::Report::failed(COMMAND, USAGE_EXIT_CODE, failure);
+            }
+        }
+        // An option typed on `validate` alone is the subcommand's.
+        let pick = |id: &str| -> &clap::ArgMatches {
+            let shared = ["file", "uuid", "strict", "queries"].contains(&id);
+            match group {
+                Some(group) if shared && typed(group, id) && !typed(args, id) => group,
+                _ => args,
+            }
+        };
+        let strings = |id: &str| -> Vec<String> {
+            pick(id)
+                .get_many::<String>(id)
+                .map(|values| values.cloned().collect())
+                .unwrap_or_default()
+        };
+        let parsed = Args {
+            platform: args
+                .get_one::<crate::tree::Platform>("platform")
+                .and_then(|platform| platform.to_possible_value())
+                .map(|value| value.get_name().to_owned()),
+            strategies: strings("strategy"),
+            plan: args.get_one::<String>("plan").cloned(),
+            wide: args.get_flag("wide"),
+            live: args.get_flag("live"),
+            changed: args.get_flag("changed"),
+            files: strings("file"),
+            uuids: strings("uuid"),
+            strict: pick("strict").get_flag("strict"),
+            queries: pick("queries")
+                .get_one::<crate::tree::Queries>("queries")
+                .map(|queries| match queries {
+                    crate::tree::Queries::Error => opentide_workspace::validate::QueriesMode::Error,
+                    crate::tree::Queries::Warn => opentide_workspace::validate::QueriesMode::Warn,
+                    crate::tree::Queries::Off => opentide_workspace::validate::QueriesMode::Off,
+                }),
+            check_timeout: args.get_one::<String>("check_timeout").cloned(),
+        };
+        let cwd = self.host.cwd.clone().unwrap_or_default();
+        let terminal = self.terminal();
+        run(
+            &parsed,
+            &Context {
+                repo: self.globals.repo.as_deref(),
+                env: self.env,
+                cwd: &cwd,
+                terminal: &terminal,
+            },
+        )
     }
 
     /// `opentide lint`, from its parsed arguments.
@@ -2380,13 +2506,27 @@ mod tests {
         assert!(run.stdout.starts_with("{\"program\""));
         let plain = dispatched("-- commands", &[], false);
         assert_eq!((plain.code, plain.stderr.as_str()), (0, ""));
+        // `validate query` runs on this CLI (UC-3.5b): the separator is dropped
+        // and the subcommand runs, not a usage error.
         let nested = dispatched("--json validate -- query", &[], false);
         assert!(
             nested.stdout.contains("\"command\":\"validate query\""),
             "{}",
             nested.stdout
         );
-        assert!(nested.stdout.contains("engine_not_ported"));
+        assert!(
+            !nested.stdout.contains("\"code\":\"usage_"),
+            "{}",
+            nested.stdout
+        );
+        // An unported subcommand after a separator is refused by its path.
+        let unported = dispatched("--json share -- status", &[], false);
+        assert!(
+            unported.stdout.contains("\"command\":\"share status\""),
+            "{}",
+            unported.stdout
+        );
+        assert!(unported.stdout.contains("engine_not_ported"));
         // `validate -- --json`: an unknown option of validate, not a command.
         let option = dispatched("--json validate -- --json", &[], false);
         assert_eq!(option.code, 2);

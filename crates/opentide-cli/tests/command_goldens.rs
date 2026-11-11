@@ -52,6 +52,12 @@ fn validate_cases_are_the_oracles() {
     check(&["validate"], 100);
 }
 
+/// Offline `validate query` (UC-3.5b, #927); its `--live` cases are Python's.
+#[test]
+fn validate_query_cases_are_the_oracles() {
+    check(&["validate.query"], 20);
+}
+
 /// `validate --watch` in `plain` mode: one pass's frames and outcome line,
 /// then Ctrl-C (already pressed here) stops it with exit 0 and nothing on
 /// stderr.

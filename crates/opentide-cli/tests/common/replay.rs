@@ -569,7 +569,8 @@ pub fn replay(id: &str, dir: &Path, ledger: &Ledger, usage: &mut Usage) -> Vec<S
 }
 
 /// Replays every recorded case of `commands` on the fixtures this module lays
-/// out, but `--help` (the Python launcher's, until UC-3.8); the problems, and
+/// out, but `--help` (the Python launcher's, until UC-3.8) and `validate query
+/// --live` (the tenants' check, Python's until UC-4.1); the problems, and
 /// how many cases ran. A ledger entry of these commands that applied to
 /// nothing is a problem when `complete`.
 pub fn replay_commands(commands: &[&str], complete: bool) -> (Vec<String>, usize) {
@@ -599,7 +600,8 @@ pub fn replay_commands(commands: &[&str], complete: bool) -> (Vec<String>, usize
                         dir.file_name().unwrap().to_string_lossy()
                     );
                     let case = std::fs::read_to_string(dir.join("case.toml")).unwrap();
-                    if case.contains("\"--help\"") || !id.contains(&filter) {
+                    let live = *command == "validate.query" && case.contains("\"--live\"");
+                    if case.contains("\"--help\"") || live || !id.contains(&filter) {
                         continue;
                     }
                     problems.extend(replay(&id, &dir, &ledger, &mut usage));
@@ -610,9 +612,11 @@ pub fn replay_commands(commands: &[&str], complete: bool) -> (Vec<String>, usize
     }
     if complete && filter.is_empty() {
         for (index, entry) in ledger.entries.iter().enumerate() {
+            // `--help` cases are not replayed here (the Python launcher's help):
+            // `cargo xtask golden check --engine compare` applies their entries.
             let elsewhere = ["fault", "heavy-small"].iter().any(|fixture| {
                 entry.case.contains(&format!("/{fixture}/")) && generated(fixture).is_none()
-            });
+            }) || entry.case.ends_with("/help");
             if commands.contains(&entry.command.replace(' ', ".").as_str())
                 && !elsewhere
                 && !usage.is_used(index)

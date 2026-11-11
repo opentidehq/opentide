@@ -178,6 +178,70 @@ def test_a_bare_generate_stays_python(workspace: Path) -> None:
     assert engines.selected(("generate",), {}) == engines.PYTHON
 
 
+def test_a_rust_command_that_refuses_a_flag_covers_only_runs_without_it() -> None:
+    command = RustCommand(launch=("x",), refuses=("--live",))
+    assert command.covers(["validate", "query", "--platform", "elastic"])
+    assert not command.covers(["validate", "query", "--live", "--platform", "elastic"])
+    # After ``--`` it is an argument, not the flag.
+    assert command.covers(["validate", "query", "--", "--live"])
+    assert command.uncovered("validate query", ["--live"]) == "validate query with --live"
+    assert engines.RUST_COMMANDS[("validate", "query")].refuses == ("--live",)
+    assert not engines.RUST_COMMANDS[("validate", "query")].covers(["--live"])
+
+
+def test_rust_refuses_validate_query_live_and_compare_runs_python_alone(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``validate query --live`` checks tenants: Python's until UC-4.1 (#927)."""
+    launch = (sys.executable, str(FAKE), "exit")
+    monkeypatch.setitem(
+        engines.RUST_COMMANDS,
+        ("validate", "query"),
+        RustCommand(launch=launch, refuses=("--live",)),
+    )
+    args = ["--json", "--repo", str(workspace), "validate", "query", "--live"]
+    code, stdout, _ = invoke(args, "rust")
+    doc = document(stdout)
+    assert code == 2
+    assert doc["failure"]["code"] == "engine_not_ported"
+    assert (
+        "opentide validate query with --live has no Rust implementation yet"
+        in (doc["failure"]["message"])
+    )
+    # compare never starts the (failing) fake: Python's answer is the result.
+    python_code, python_stdout, _ = invoke(args, "python")
+    code, stdout, _ = invoke(args, "compare")
+    assert code == python_code
+    assert document(stdout)["failure"] == document(python_stdout)["failure"]
+
+
+def test_rust_output_reaches_a_stream_that_lives_in_memory(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Click's runner (or a host's capture) replaces stdout: the Rust run's document lands there."""
+    monkeypatch.setitem(engines.RUST_COMMANDS, ("explain",), fake("same"))
+    code, stdout, _ = invoke(["--json", "--repo", str(workspace), "explain", "internal"], "rust")
+    assert code == 0
+    assert document(stdout)["command"] == "explain"
+
+
+def test_rust_reads_a_stdin_that_lives_in_memory(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Click's runner (or a host) replaces stdin: the Rust run reads what it holds."""
+    echo = (sys.executable, "-c", "import sys; sys.stdout.write(sys.stdin.read())")
+    monkeypatch.setitem(engines.RUST_COMMANDS, ("explain",), RustCommand(launch=echo))
+    result = CliRunner().invoke(
+        app,
+        ["--json", "--repo", str(workspace), "explain", "internal"],
+        input="given on stdin\n",
+        env={"OPENTIDE_ENGINE": "rust"},
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 0
+    assert result.stdout == "given on stdin\n"
+
+
 def test_rust_refuses_a_run_its_implementation_does_not_cover(
     workspace: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
