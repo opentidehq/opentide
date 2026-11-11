@@ -1382,6 +1382,53 @@ variant = "unknown"
 args = ["setup", "skills", "show", "no-such-skill"]
 fixtures = ["tide-corpus"]
 
+# The skills catalogue, served from a recorded cassette (UC-4.1, #831):
+# tests/cassettes/skills/manifest.json, recorded from the oracle with `cargo
+# xtask cassettes record skills/manifest`. The cases above record the same
+# commands with the network refused.
+
+[[case]]
+command = "setup skills discover"
+variant = "catalogue"
+args = ["setup", "skills", "discover"]
+fixtures = ["none"]
+cassette = "skills/manifest"
+
+[[case]]
+command = "setup skills discover"
+variant = "catalogue-query"
+args = ["setup", "skills", "discover", "--query", "rule"]
+fixtures = ["tide-corpus"]
+cassette = "skills/manifest"
+
+[[case]]
+command = "setup skills discover"
+variant = "catalogue-installed"
+args = ["setup", "skills", "discover", "--installed"]
+fixtures = ["tide-corpus"]
+cassette = "skills/manifest"
+
+[[case]]
+command = "setup skills show"
+variant = "catalogue"
+args = ["setup", "skills", "show", "opentide-detection-rule"]
+fixtures = ["tide-corpus"]
+cassette = "skills/manifest"
+
+[[case]]
+command = "setup skills show"
+variant = "catalogue-remote"
+args = ["setup", "skills", "show", "mitre-attack"]
+fixtures = ["none"]
+cassette = "skills/manifest"
+
+[[case]]
+command = "setup skills show"
+variant = "catalogue-unknown"
+args = ["setup", "skills", "show", "no-such-skill"]
+fixtures = ["none"]
+cassette = "skills/manifest"
+
 # ---- doctor, migrate, tui, explain, commands ----
 
 [[case]]

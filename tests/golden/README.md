@@ -92,7 +92,13 @@ in an Agent Plugin root that names no workspace. The environment is exactly the 
 directory (cases live under `/tmp`, whatever `TMPDIR` says, so absolute paths have one length), `TZ=UTC`, `LANG=C.UTF-8`, `PYTHONHASHSEED=0`, git without system or user configuration.
 Network traffic goes to a proxy on `127.0.0.1:9`, which refuses it: tenant-contacting paths
 (`deploy`, `query`, `share`, `validate query --live`, `generate extract`) are recorded as their
-failure without tenants; their success paths are UC-4.1's recorded HTTP cassettes. On Linux each
+failure without tenants; their success paths are UC-4.1's recorded HTTP cassettes. A case with
+`cassette = "<name>"` in `cases.toml` is served from `tests/cassettes/<name>.json` instead: its
+proxy variables are `<CASSETTE_PROXY>`, a replaying proxy started for the case, and `SSL_CERT_FILE`,
+`REQUESTS_CA_BUNDLE` and `CURL_CA_BUNDLE` name that proxy's CA (`<TMP>/cassette-ca.pem`). The run
+fails unless its requests are the cassette's, byte for byte and in order (a compare run sends them
+twice: once per implementation). Cassettes are recorded from the oracle with `cargo xtask cassettes
+record <name>` and checked with `cargo xtask cassettes check` (`crates/opentide-cassette/AGENTS.md`). On Linux each
 case runs in a session of its own (`setsid`), so it never reaches the terminal of whoever records.
 
 The arguments come from the examples of `opentide --json commands` and `docs/cli/`, the error cases

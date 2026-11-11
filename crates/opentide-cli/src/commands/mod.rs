@@ -18,6 +18,7 @@ pub mod lint;
 pub mod migrate;
 pub mod rules;
 pub mod setup;
+pub mod skills;
 pub mod validate;
 pub mod validate_query;
 pub mod watch;

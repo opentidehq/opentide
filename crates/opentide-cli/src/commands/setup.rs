@@ -132,7 +132,7 @@ pub fn is_valid_branch_name(name: &str) -> bool {
 
 /// `path` made absolute against `cwd` and normalised, its existing part
 /// with links resolved (`Path.resolve()`).
-fn resolved(cwd: &Path, path: &Path) -> PathBuf {
+pub(crate) fn resolved(cwd: &Path, path: &Path) -> PathBuf {
     let joined = if path.is_absolute() {
         path.to_path_buf()
     } else {

@@ -134,6 +134,7 @@ fn recording(exit_code: i32, stderr: &str, files: Vec<FileRecord>) -> Recording 
             },
             timeout_secs: 60,
             normalise: Vec::new(),
+            cassette: None,
         },
         stdout: Vec::new(),
         stderr: stderr.as_bytes().to_vec(),

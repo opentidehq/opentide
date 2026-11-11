@@ -614,6 +614,10 @@ impl Run<'_> {
                 let report = self.setup_ci(&matches);
                 self.emit_report(&report, out, err)
             }
+            "setup skills discover" | "setup skills show" => {
+                let report = self.setup_skills_catalogue(&matches, &path);
+                self.emit_report(&report, out, err)
+            }
             "rules unreviewed" => {
                 let older_than = leaf(&matches)
                     .get_one::<String>("older_than")
@@ -1329,6 +1333,176 @@ impl Run<'_> {
 }
 
 /// `--format`'s value as the renderers name it.
+impl Run<'_> {
+    /// `setup skills discover` and `setup skills show` (UC-4.1, #831): the
+    /// target the command and its groups name, then the catalogue.
+    fn setup_skills_catalogue(
+        &self,
+        matches: &clap::ArgMatches,
+        path: &str,
+    ) -> crate::commands::Report {
+        use crate::commands::skills;
+        let cwd = self.host.cwd.clone().unwrap_or_default();
+        let given = |matches: &clap::ArgMatches, id: &str| {
+            matches.value_source(id) == Some(ValueSource::CommandLine)
+        };
+        // The groups' own options, which the subcommand would ignore, and
+        // their paths, which it takes (`_hand_down`, `_group_path`).
+        let mut group_paths: Vec<String> = Vec::new();
+        let mut refusal: Option<String> = None;
+        let mut current = matches;
+        let mut command = self.root.clone();
+        let mut words = vec![crate::catalog::PROGRAM.to_owned()];
+        while let Some((name, sub)) = current.subcommand() {
+            let Some(group) = command.find_subcommand(name).cloned() else {
+                break;
+            };
+            words.push(name.to_owned());
+            if sub.subcommand().is_none() {
+                break;
+            }
+            let invoked = sub.subcommand_name().unwrap_or_default().to_owned();
+            let ignored: Vec<String> = group
+                .get_arguments()
+                .filter(|arg| {
+                    let id = arg.get_id().as_str();
+                    !matches!(id, "path" | "yes" | "plan") && given(sub, id)
+                })
+                .map(|arg| {
+                    let mut names: Vec<String> = Vec::new();
+                    if let Some(long) = arg.get_long() {
+                        names.push(format!("--{long}"));
+                    }
+                    if let Some(short) = arg.get_short() {
+                        names.push(format!("-{short}"));
+                    }
+                    names.join("/")
+                })
+                .collect();
+            if !ignored.is_empty() && refusal.is_none() {
+                let verb = if ignored.len() == 1 {
+                    "configures"
+                } else {
+                    "configure"
+                };
+                refusal = Some(format!(
+                    "{} {verb} `{}` itself and would be ignored by `{} {invoked}`.",
+                    ignored.join(", "),
+                    words.join(" "),
+                    words.join(" ")
+                ));
+            }
+            if given(sub, "path")
+                && let Some(value) = sub.get_one::<String>("path")
+            {
+                group_paths.push(value.clone());
+            }
+            current = sub;
+            command = group;
+        }
+        let leaf = leaf(matches);
+        let usage = |message: String| {
+            let mut failure = crate::envelope::Failure::new(
+                code::USAGE_INVALID_VALUE,
+                format!("Invalid value: {message}"),
+            );
+            failure.argument = None;
+            crate::commands::Report::failed(path, USAGE_EXIT_CODE, failure)
+        };
+        if let Some(refusal) = refusal {
+            return usage(refusal);
+        }
+        let mut warnings = Vec::new();
+        let own = if path == "setup skills discover" {
+            let flag = given(leaf, "path_flag");
+            let positional = given(leaf, "path");
+            if flag && positional {
+                return usage(
+                    "Pass the repository path once: use --path/-C or the positional PATH, not both."
+                        .to_owned(),
+                );
+            }
+            if positional {
+                let value = leaf.get_one::<String>("path").cloned().unwrap_or_default();
+                let legacy = format!("positional PATH (opentide setup skills discover {value})");
+                if self.mode == Mode::Json {
+                    tracing::warn!(
+                        legacy = legacy.as_str(),
+                        use_instead = "--path/-C",
+                        "cli_command_deprecated"
+                    );
+                } else {
+                    warnings.push(format!("{legacy} is deprecated; use --path/-C"));
+                }
+                Some(value)
+            } else if flag {
+                leaf.get_one::<String>("path_flag").cloned()
+            } else {
+                None
+            }
+        } else {
+            given(leaf, "path")
+                .then(|| leaf.get_one::<String>("path").cloned())
+                .flatten()
+        };
+        let setup_path = |given: &str| -> std::path::PathBuf {
+            let candidate = std::path::Path::new(given);
+            match self.globals.repo.as_deref() {
+                Some(repo)
+                    if candidate == std::path::Path::new(".")
+                        && crate::commands::setup::resolved(&cwd, std::path::Path::new(repo))
+                            != crate::commands::setup::resolved(&cwd, &cwd) =>
+                {
+                    cwd.join(repo)
+                }
+                _ => cwd.join(candidate),
+            }
+        };
+        let named: Vec<String> = group_paths.into_iter().chain(own).collect();
+        let mut targets: Vec<std::path::PathBuf> = named
+            .iter()
+            .map(|given| crate::commands::setup::resolved(&cwd, &setup_path(given)))
+            .collect();
+        targets.dedup();
+        if targets.len() > 1 {
+            return usage(format!(
+                "Pass the repository path once: {} name different targets.",
+                named.join(" and ")
+            ));
+        }
+        let repo = setup_path(named.last().map_or(".", String::as_str));
+        let interrupt = &self.host.interrupt;
+        let interrupted = || interrupt.requested();
+        let network = skills::Network {
+            env: self.env,
+            proxy: self.globals.proxy.as_deref(),
+            interrupted: &interrupted,
+        };
+        let mut report = if path == "setup skills discover" {
+            skills::discover(
+                &skills::DiscoverArgs {
+                    repo,
+                    query: leaf.get_one::<String>("query").cloned(),
+                    installed_only: leaf.get_flag("installed"),
+                    refresh: leaf.get_flag("refresh"),
+                },
+                network,
+                self.stdout_width(),
+            )
+        } else {
+            skills::show(
+                &leaf.get_one::<String>("name").cloned().unwrap_or_default(),
+                &repo,
+                leaf.get_flag("refresh"),
+                network,
+                self.mode == Mode::Json,
+            )
+        };
+        report.warnings.splice(0..0, warnings);
+        report
+    }
+}
+
 fn report_format(format: crate::tree::ReportFormat) -> crate::render::report::ReportFormat {
     match format {
         crate::tree::ReportFormat::Text => crate::render::report::ReportFormat::Text,

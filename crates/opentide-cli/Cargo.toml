@@ -75,6 +75,12 @@ tracing-subscriber = { version = "0.3", default-features = false, features = ["r
 # the frames go to).
 rmcp = { version = "3.9", default-features = false, features = ["server"] }
 tokio = { version = "1.48", default-features = false, features = ["rt", "io-std", "io-util", "fs"] }
+# `setup skills` (UC-4.1, #831): the opentidehq/skills catalogue, fetched with
+# the connectors' HTTP client, through the proxy and CA bundle the
+# environment names.
+opentide-connectors.workspace = true
+reqwest.workspace = true
+tokio-util = { workspace = true, features = ["rt"] }
 
 [target.'cfg(unix)'.dependencies]
 # `mcp start` points descriptor 1 at stderr while it serves, so nothing but a
@@ -82,6 +88,8 @@ tokio = { version = "1.48", default-features = false, features = ["rt", "io-std"
 rustix = { version = "1.1", default-features = false, features = ["std", "stdio"] }
 
 [dev-dependencies]
+# The goldens' recorded HTTP (UC-4.1): the replaying proxy of a cassette case.
+opentide-cassette.workspace = true
 # The goldens' normalisation, for the generate cases (tests/generate_goldens.rs).
 opentide-compare.workspace = true
 tempfile = "3"
