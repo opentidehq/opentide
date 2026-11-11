@@ -20,6 +20,7 @@ pub mod crash;
 pub mod embed;
 pub mod env;
 pub mod envelope;
+pub mod explain;
 pub mod hoist;
 pub mod json;
 pub mod logging;

@@ -64,6 +64,17 @@ pub mod codes {
     pub const NESTED: &str = "nested_object_file";
 }
 
+/// Every code a lint rule reports (`LINT_CODES.values()`).
+pub const LINT_CODES: [&str; 7] = [
+    codes::PARSE,
+    codes::NAME,
+    codes::FILENAME,
+    codes::FILENAME_PATTERN,
+    codes::METADATA,
+    codes::PLACEHOLDER,
+    codes::NESTED,
+];
+
 /// The step a placeholder finding suggests.
 pub const PLACEHOLDER_HELP: &str =
     "replace the value, then delete the '# opentide:placeholder' comment";

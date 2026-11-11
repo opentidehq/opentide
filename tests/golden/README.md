@@ -40,15 +40,22 @@ cargo xtask golden lock                         # rewrite oracle-requirements.tx
    (UC-0.7) names one command, a case glob and a target. A text rule is one whole line on each
    side, approved where the oracle and candidate lines match it at the same line number; a lines
    rule is a block of consecutive whole lines on each side, of any length, approved where the
-   candidate has its block at the place the oracle has its own (a row a port adds or drops),
+   candidate has its block at the place the oracle has its own (a row a port adds or drops;
+   `(absent)` on the candidate's side where it writes no line there, as in a stream it leaves
+   empty),
    each block quoted exactly and the entry naming its one case (no `*`): a block one character
    off, or one the output extends by a line, is not approved, and the lines after an approved
-   block are compared at their new place; a
-   JSON rule is one value at one pointer; a presence rule (`oracle = "written"`,
-   `candidate = "(absent)"`) approves one file the oracle wrote and the candidate did not, named
-   by its exact path, and only in the oracle's language-server catalog cache
-   (`home/.cache/opentide/lsp-catalogs/<CATALOG-FINGERPRINT>/`, and the folders above it it
-   creates): a cache outside the workspace is not a file a user commits, and any other file
+   block are compared at their new place; a case may take one lines entry per block, each placed
+   by its oracle lines; a
+   JSON rule is one value at one pointer; a `json-extend:` rule names the elements a candidate
+   adds to the oracle's array at one pointer, each by its index in the candidate's array: the
+   rest must be the oracle's elements, in order, compared as any value is, so it fixes the
+   candidate's array as a whole-value entry would without quoting the oracle's elements, and a
+   JSON rule under it addresses the array by the oracle's indices; a presence rule
+   (`oracle = "written"`, `candidate = "(absent)"`) approves one file the oracle wrote and the
+   candidate did not, named by its exact path, and only in the oracle's language-server catalog
+   cache (`home/.cache/opentide/lsp-catalogs/<CATALOG-FINGERPRINT>/`, and the folders above it
+   it creates): a cache outside the workspace is not a file a user commits, and any other file
    only one side wrote is still a difference.
 
 ## The oracle

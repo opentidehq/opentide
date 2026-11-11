@@ -6,7 +6,7 @@
 //! command = "commands"                      # the command path, exactly
 //! case = "json/*"                           # a glob over case ids
 //! target = "stdout"                         # stdout | stderr | exit_code | file:<path>
-//! rule = "json:/environment"                # json:<JSON pointer> | text | lines
+//! rule = "json:/environment"                # json:<JSON pointer> | json-extend:<JSON pointer> | text | lines
 //! oracle = '[...]'                          # what the oracle has there
 //! candidate = '[...]'                       # what the candidate has instead
 //! reason = "OPENTIDE_ENGINE is read by the launcher (#805)"
@@ -20,7 +20,22 @@
 //! without its ending; a `lines` rule's are
 //! one or more whole lines, without the last line's ending: the oracle's
 //! lines, consecutive, read as the candidate's where the candidate has them
-//! at the same place, so a row the candidate adds or drops is one entry. A
+//! at the same place, so a row the candidate adds or drops is one entry; a
+//! `lines` rule's `candidate` is `(absent)` where the candidate writes no line
+//! in their place (a block dropped from a target it leaves empty). A
+//! `json-extend:` rule approves elements the candidate adds to an array: its
+//! `oracle` is the length of the oracle's array (`227`), its `candidate` a
+//! JSON object from the candidate's index of each added element, in
+//! increasing order, to the element (`{"57": {...}, "58": {...}}`). It
+//! applies where the oracle's array has that length and the candidate's has
+//! exactly those elements at exactly those indices, and as many more as the
+//! oracle has; the added elements are set aside and the rest is compared with
+//! the oracle's array as any other value is, so an oracle element changed,
+//! dropped or moved, or an element added that the entry does not name, is
+//! still a difference. Given the oracle, it fixes the candidate's array as
+//! a whole-value `json:` entry would, without quoting the oracle's elements;
+//! a `json:` entry under the same pointer addresses the array with the added
+//! elements set aside (the oracle's indices). A
 //! line ends at `\n` (or `\r\n`): a value may hold a `\r` inside a line, as
 //! a terminal's cursor movements do, but no line of it ends in one. A
 //! `presence` rule approves a file the oracle wrote and the candidate did not
@@ -141,12 +156,27 @@ pub enum Rule {
     Lines {
         /// The oracle's lines, without their endings.
         oracle: Vec<String>,
-        /// The candidate's lines, without their endings.
+        /// The candidate's lines, without their endings: none where the
+        /// ledger writes `(absent)`, so the oracle's block is dropped.
         candidate: Vec<String>,
     },
     /// The oracle wrote the file and the candidate did not: only in the
     /// oracle's catalog cache ([`ORACLE_CACHE`]).
     Presence,
+    /// Elements the candidate adds to an array the oracle has: where the
+    /// oracle's array at `pointer` has `oracle_len` elements and the
+    /// candidate's has exactly the `added` ones at their indices plus as many
+    /// others, the added ones are set aside and the rest is compared with the
+    /// oracle's array (`json-extend:<pointer>`).
+    JsonExtend {
+        /// The pointer's tokens.
+        pointer: Vec<String>,
+        /// The number of elements of the oracle's array.
+        oracle_len: usize,
+        /// Each added element, by its index in the candidate's array, in
+        /// increasing order of index.
+        added: Vec<(usize, Json)>,
+    },
     /// The exit code.
     ExitCode {
         /// The oracle's code.
@@ -247,7 +277,10 @@ impl Ledger {
     /// first: a missing or unknown field, a blank value, a target, rule or
     /// value that does not parse, an entry whose two values are the same, an
     /// issue that is not an opentidehq issue URL, and two entries for the same
-    /// command, case glob, target and rule.
+    /// command, case glob, target and rule, and for a `text` or `lines` rule
+    /// the same oracle side (each approves the place its oracle side is
+    /// found: two blocks of one case are two places, the same block twice is
+    /// one).
     pub fn parse(text: &str) -> Result<Ledger, LedgerError> {
         let file: LedgerFile = toml::from_str(text).map_err(|error| LedgerError {
             problems: vec![error.message().to_owned() + &location(text, error.span())],
@@ -262,6 +295,7 @@ impl Ledger {
                             && other.case == entry.case
                             && other.target == entry.target
                             && other.rule_text == entry.rule_text
+                            && same_place(&other.rule, &entry.rule)
                     });
                     if let Some(first) = duplicate {
                         problems.push(format!(
@@ -462,14 +496,28 @@ fn check_entry(raw: RawEntry) -> Result<Entry, Vec<String>> {
             }
             None => None,
         },
+        (_, "lines") if raw.oracle == ABSENT => {
+            problems.push(format!(
+                "a `lines` rule's `oracle` is the oracle's lines: only `candidate` may be {ABSENT} \
+                 (the candidate writes none of them)"
+            ));
+            None
+        }
         (_, "lines") => Some(Rule::Lines {
             oracle: raw.oracle.split('\n').map(str::to_owned).collect(),
-            candidate: raw.candidate.split('\n').map(str::to_owned).collect(),
+            candidate: if raw.candidate == ABSENT {
+                Vec::new()
+            } else {
+                raw.candidate.split('\n').map(str::to_owned).collect()
+            },
         }),
         (_, "text") => Some(Rule::Text {
             oracle: raw.oracle.clone(),
             candidate: raw.candidate.clone(),
         }),
+        (_, rule) if rule.starts_with("json-extend:") => {
+            extend_rule(&rule["json-extend:".len()..], &raw, &mut problems)
+        }
         (_, rule) => match rule.strip_prefix("json:") {
             Some(pointer) => match json::parse_pointer(pointer) {
                 Some(pointer) => {
@@ -498,7 +546,8 @@ fn check_entry(raw: RawEntry) -> Result<Entry, Vec<String>> {
             None => {
                 if !rule.trim().is_empty() {
                     problems.push(format!(
-                        "`rule` {rule:?} is not `text`, `lines`, `presence` or `json:<pointer>`"
+                        "`rule` {rule:?} is not `text`, `lines`, `presence`, `json:<pointer>` or \
+                         `json-extend:<pointer>`"
                     ));
                 }
                 None
@@ -512,7 +561,8 @@ fn check_entry(raw: RawEntry) -> Result<Entry, Vec<String>> {
         Some(Rule::Text { oracle, candidate }) => oracle == candidate,
         Some(Rule::Lines { oracle, candidate }) => oracle == candidate,
         Some(Rule::ExitCode { oracle, candidate }) => oracle == candidate,
-        Some(Rule::Presence) | None => false,
+        // A JsonExtend is parsed only with at least one added element.
+        Some(Rule::Presence | Rule::JsonExtend { .. }) | None => false,
     };
     if same {
         problems.push(
@@ -531,6 +581,88 @@ fn check_entry(raw: RawEntry) -> Result<Entry, Vec<String>> {
             changelog: raw.changelog,
         }),
         _ => Err(problems),
+    }
+}
+
+/// Whether two rules of the same kind approve the same place: a `text` or
+/// `lines` rule is placed by its oracle side, every other kind by its rule
+/// text alone (its pointer).
+fn same_place(left: &Rule, right: &Rule) -> bool {
+    match (left, right) {
+        (Rule::Text { oracle: a, .. }, Rule::Text { oracle: b, .. }) => a == b,
+        (Rule::Lines { oracle: a, .. }, Rule::Lines { oracle: b, .. }) => a == b,
+        _ => true,
+    }
+}
+
+/// A `json-extend:` rule: its pointer, the oracle array's length (`oracle`)
+/// and the added elements by candidate index (`candidate`, a JSON object
+/// whose keys are increasing array indices).
+fn extend_rule(pointer: &str, raw: &RawEntry, problems: &mut Vec<String>) -> Option<Rule> {
+    let mut ok = true;
+    let pointer = json::parse_pointer(pointer).or_else(|| {
+        problems.push(format!(
+            "`rule` {:?}: {pointer:?} is not a JSON pointer (empty, or starting with /)",
+            raw.rule
+        ));
+        None
+    });
+    let oracle_len = raw.oracle.trim().parse::<usize>().ok().filter(|_| {
+        raw.oracle.trim() == raw.oracle && raw.oracle.bytes().all(|b| b.is_ascii_digit())
+    });
+    if oracle_len.is_none() {
+        problems.push(format!(
+            "a `json-extend:` rule's `oracle` is the length of the oracle's array, in decimal, \
+             not {:?}",
+            raw.oracle
+        ));
+        ok = false;
+    }
+    let mut added = Vec::new();
+    match json::parse_str(&raw.candidate) {
+        Some(Json::Object(members)) if !members.is_empty() => {
+            for (key, value) in members {
+                let index = json::array_index(&key);
+                match index {
+                    Some(index) if added.last().is_none_or(|(last, _)| *last < index) => {
+                        added.push((index, value));
+                    }
+                    _ => {
+                        problems.push(format!(
+                            "a `json-extend:` rule's `candidate` keys are the added elements' \
+                             indices in the candidate's array, increasing: {key:?} is not"
+                        ));
+                        ok = false;
+                    }
+                }
+            }
+        }
+        _ => {
+            problems.push(
+                "a `json-extend:` rule's `candidate` is a JSON object from the candidate's index \
+                 of each added element to the element, with at least one"
+                    .to_owned(),
+            );
+            ok = false;
+        }
+    }
+    if let (Some(oracle_len), Some((last, _))) = (oracle_len, added.last())
+        && *last >= oracle_len + added.len()
+    {
+        problems.push(format!(
+            "a `json-extend:` rule's index {last} is past the candidate's array, which has \
+             {} elements",
+            oracle_len + added.len()
+        ));
+        ok = false;
+    }
+    match (pointer, oracle_len) {
+        (Some(pointer), Some(oracle_len)) if ok => Some(Rule::JsonExtend {
+            pointer,
+            oracle_len,
+            added,
+        }),
+        _ => None,
     }
 }
 
@@ -850,6 +982,46 @@ changelog = "**x**"
         }
     }
 
+    /// A `lines` rule whose `candidate` is `(absent)` drops the oracle's
+    /// block: the candidate has no line there (a stream it leaves empty). The
+    /// oracle's side is always quoted, so `(absent)` there is refused.
+    #[test]
+    fn a_lines_rule_may_drop_its_block() {
+        let dropped = ENTRY
+            .replace("case = \"json/*\"", "case = \"json/one\"")
+            .replace("json:/summary/rules", "lines")
+            .replace("oracle = \"1\"", "oracle = \"a\\nb\"")
+            .replace("candidate = \"2\"", "candidate = \"(absent)\"");
+        let ledger = Ledger::parse(&dropped).unwrap();
+        assert_eq!(
+            ledger.entries[0].rule,
+            Rule::Lines {
+                oracle: vec!["a".into(), "b".into()],
+                candidate: Vec::new(),
+            }
+        );
+        let added = ENTRY
+            .replace("case = \"json/*\"", "case = \"json/one\"")
+            .replace("json:/summary/rules", "lines")
+            .replace("oracle = \"1\"", "oracle = \"(absent)\"");
+        let error = Ledger::parse(&added).unwrap_err().to_string();
+        assert!(
+            error.contains("only `candidate` may be (absent)"),
+            "{error}"
+        );
+        let text = ENTRY
+            .replace("json:/summary/rules", "text")
+            .replace("candidate = \"2\"", "candidate = \"(absent)\"");
+        assert_eq!(
+            Ledger::parse(&text).unwrap().entries[0].rule,
+            Rule::Text {
+                oracle: "1".into(),
+                candidate: "(absent)".into(),
+            },
+            "a text rule's value is a line, read literally"
+        );
+    }
+
     #[test]
     fn duplicates_fail() {
         let text = format!("{ENTRY}{ENTRY}");
@@ -858,6 +1030,83 @@ changelog = "**x**"
                 .unwrap_err()
                 .to_string()
                 .contains("as entry 1")
+        );
+    }
+
+    /// Two `lines` (or `text`) entries of one case and target are two
+    /// places when their oracle sides differ, and a duplicate when they are
+    /// the same block.
+    #[test]
+    fn line_entries_are_placed_by_their_oracle_side() {
+        for rule in ["lines", "text"] {
+            let entry = |oracle: &str, candidate: &str| {
+                ENTRY
+                    .replace("json:/summary/rules", rule)
+                    .replace("json/*", "json/ws/default")
+                    .replace("oracle = \"1\"", &format!("oracle = \"{oracle}\""))
+                    .replace("candidate = \"2\"", &format!("candidate = \"{candidate}\""))
+            };
+            let two = format!("{}{}", entry("a", "b"), entry("c", "d"));
+            assert_eq!(Ledger::parse(&two).unwrap().entries.len(), 2, "{rule}");
+            let same = format!("{}{}", entry("a", "b"), entry("a", "z"));
+            assert!(
+                Ledger::parse(&same)
+                    .unwrap_err()
+                    .to_string()
+                    .contains("as entry 1"),
+                "{rule}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_json_extend_entry_parses() {
+        let text = ENTRY
+            .replace("json:/summary/rules", "json-extend:/rules")
+            .replace("oracle = \"1\"", "oracle = \"2\"")
+            .replace(
+                "candidate = \"2\"",
+                r#"candidate = '{"1": {"id": "c"}, "3": 4}'"#,
+            );
+        let ledger = Ledger::parse(&text).unwrap();
+        assert_eq!(
+            ledger.entries[0].rule,
+            Rule::JsonExtend {
+                pointer: vec!["rules".into()],
+                oracle_len: 2,
+                added: vec![
+                    (1, json::parse_str(r#"{"id": "c"}"#).unwrap()),
+                    (3, json::parse_str("4").unwrap()),
+                ],
+            }
+        );
+    }
+
+    #[test]
+    fn a_json_extend_entry_is_checked() {
+        for (oracle, candidate, problem) in [
+            ("two", r#"'{"1": 1}'"#, "the length of the oracle's array"),
+            ("-1", r#"'{"1": 1}'"#, "the length of the oracle's array"),
+            ("2", r#"'{}'"#, "with at least one"),
+            ("2", r#"'[1]'"#, "with at least one"),
+            ("2", r#""(absent)""#, "with at least one"),
+            ("2", r#"'{"3": 1, "1": 2}'"#, "increasing"),
+            ("2", r#"'{"01": 1}'"#, "increasing"),
+            ("2", r#"'{"3": 1}'"#, "past the candidate's array"),
+        ] {
+            let text = ENTRY
+                .replace("json:/summary/rules", "json-extend:/rules")
+                .replace("oracle = \"1\"", &format!("oracle = \"{oracle}\""))
+                .replace("candidate = \"2\"", &format!("candidate = {candidate}"));
+            let error = Ledger::parse(&text).unwrap_err().to_string();
+            assert!(error.contains(problem), "{oracle} {candidate}: {error}");
+        }
+        let text = ENTRY.replace("json:/summary/rules", "json-extend:rules");
+        assert!(
+            Ledger::parse(&text)
+                .unwrap_err()
+                .to_string()
+                .contains("is not a JSON pointer")
         );
     }
 

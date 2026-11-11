@@ -14,15 +14,15 @@ The Python CLI at the frozen tag is the oracle ([plan §5](https://github.com/op
 | | |
 |---|---:|
 | Commands | 59 |
-| Commands with a Rust implementation | 14 |
+| Commands with a Rust implementation | 18 |
 | Commands flipped to Rust | 0 |
 | Recordings (command × corpus × mode) | 637 |
-| … no Rust yet | 425 (66.7%) |
+| … no Rust yet | 365 (57.2%) |
 | … compare passing | 0 (0.0%) |
 | … compare failing | 0 (0.0%) |
-| … compare not run | 212 (33.2%) |
+| … compare not run | 272 (42.7%) |
 | … flipped | 0 (0.0%) |
-| Approved diffs (`tests/golden/APPROVED_DIFFS.toml`) | 153 |
+| Approved diffs (`tests/golden/APPROVED_DIFFS.toml`) | 712 |
 | Diagnostic codes with a fault kind | 163 of 175 (93.1%) |
 | … with no fault kind, evidence recorded | 12 |
 | … with neither (missing) | 0 |
@@ -40,9 +40,11 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide commands`
 
+4 approved diff(s).
+
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
-| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| none | compare not run | compare not run | compare not run | compare not run |
 
 ### `opentide deploy`
 
@@ -78,9 +80,11 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide explain`
 
+18 approved diff(s).
+
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
-| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| none | compare not run | compare not run | compare not run | compare not run |
 
 ### `opentide generate`
 
@@ -246,14 +250,16 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide lint`
 
+133 approved diff(s).
+
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
-| empty | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| fault | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| heavy-small | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| vscode | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| empty | compare not run | compare not run | compare not run | compare not run |
+| fault | compare not run | compare not run | compare not run | compare not run |
+| heavy-small | compare not run | compare not run | compare not run | compare not run |
+| none | compare not run | compare not run | compare not run | compare not run |
+| tide-corpus | compare not run | compare not run | compare not run | compare not run |
+| vscode | compare not run | compare not run | compare not run | compare not run |
 
 ### `opentide lsp`
 
@@ -496,15 +502,17 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide validate`
 
+404 approved diff(s).
+
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
-| empty | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| fault | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| heavy-small | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| tide-corpus-typo | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| vscode | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| empty | compare not run | compare not run | compare not run | compare not run |
+| fault | compare not run | compare not run | compare not run | compare not run |
+| heavy-small | compare not run | compare not run | compare not run | compare not run |
+| none | compare not run | compare not run | compare not run | compare not run |
+| tide-corpus | compare not run | compare not run | compare not run | compare not run |
+| tide-corpus-typo | compare not run | compare not run | compare not run | compare not run |
+| vscode | compare not run | compare not run | compare not run | compare not run |
 
 ### `opentide validate query`
 
