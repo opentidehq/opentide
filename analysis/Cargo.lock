@@ -551,8 +551,7 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 [[package]]
 name = "opentide-analysis"
 version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eb5049cf1b51bbbe387c078f7a250fd6ac0d211e720e45b22ee90924a47bba02"
+source = "git+https://github.com/opentidehq/language-server?rev=f5731c733912b3b2eaf72c2468043d05cd95f60b#f5731c733912b3b2eaf72c2468043d05cd95f60b"
 dependencies = [
  "opentide-core",
  "opentide-cql",
@@ -576,8 +575,7 @@ dependencies = [
 [[package]]
 name = "opentide-core"
 version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d18c76d826d3532a63e67cfb3eb0e16880f0a63755332e4e75424675b5695b92"
+source = "git+https://github.com/opentidehq/language-server?rev=f5731c733912b3b2eaf72c2468043d05cd95f60b#f5731c733912b3b2eaf72c2468043d05cd95f60b"
 dependencies = [
  "serde",
  "thiserror",
@@ -587,8 +585,7 @@ dependencies = [
 [[package]]
 name = "opentide-cql"
 version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "42aea7d3da32578d8c954ae970cc32a837622b36b5e39edd30352da81853c320"
+source = "git+https://github.com/opentidehq/language-server?rev=f5731c733912b3b2eaf72c2468043d05cd95f60b#f5731c733912b3b2eaf72c2468043d05cd95f60b"
 dependencies = [
  "opentide-core",
  "opentide-highlight",
@@ -601,8 +598,7 @@ dependencies = [
 [[package]]
 name = "opentide-ecs"
 version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "96aadff69b4e76d4494402b9ec3fa6a8b46565993e23d7a7539cf52f677c59d7"
+source = "git+https://github.com/opentidehq/language-server?rev=f5731c733912b3b2eaf72c2468043d05cd95f60b#f5731c733912b3b2eaf72c2468043d05cd95f60b"
 dependencies = [
  "opentide-core",
  "serde",
@@ -612,8 +608,7 @@ dependencies = [
 [[package]]
 name = "opentide-eql"
 version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf6f08a34414cfba7141e97fadee5d826ad96c94dfe18e39015ee8fa82b4bb98"
+source = "git+https://github.com/opentidehq/language-server?rev=f5731c733912b3b2eaf72c2468043d05cd95f60b#f5731c733912b3b2eaf72c2468043d05cd95f60b"
 dependencies = [
  "opentide-core",
  "opentide-ecs",
@@ -628,8 +623,7 @@ dependencies = [
 [[package]]
 name = "opentide-esql"
 version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "37516b72b292cedc1600ce99d79791fd024ecb9197aec896d137152db3d40776"
+source = "git+https://github.com/opentidehq/language-server?rev=f5731c733912b3b2eaf72c2468043d05cd95f60b#f5731c733912b3b2eaf72c2468043d05cd95f60b"
 dependencies = [
  "opentide-core",
  "opentide-ecs",
@@ -644,8 +638,7 @@ dependencies = [
 [[package]]
 name = "opentide-falco"
 version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4c36c7875fbcd01595e7bcdde558f0f07b0b96d230086e5619c1b08052c8a029"
+source = "git+https://github.com/opentidehq/language-server?rev=f5731c733912b3b2eaf72c2468043d05cd95f60b#f5731c733912b3b2eaf72c2468043d05cd95f60b"
 dependencies = [
  "opentide-core",
  "opentide-highlight",
@@ -659,8 +652,7 @@ dependencies = [
 [[package]]
 name = "opentide-highlight"
 version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1942be92603fb0bcd004ab3568744c76d81980ad3abee5f64f25c0ae675e2a34"
+source = "git+https://github.com/opentidehq/language-server?rev=f5731c733912b3b2eaf72c2468043d05cd95f60b#f5731c733912b3b2eaf72c2468043d05cd95f60b"
 dependencies = [
  "opentide-core",
  "regex",
@@ -673,8 +665,7 @@ dependencies = [
 [[package]]
 name = "opentide-kql"
 version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "557eb50ce11b81346bfa80b7dfd3ae3af90cdd819eb40e483d478d23828aaa02"
+source = "git+https://github.com/opentidehq/language-server?rev=f5731c733912b3b2eaf72c2468043d05cd95f60b#f5731c733912b3b2eaf72c2468043d05cd95f60b"
 dependencies = [
  "opentide-core",
  "opentide-highlight",
@@ -688,8 +679,7 @@ dependencies = [
 [[package]]
 name = "opentide-kuery"
 version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "06e68131cd979e4c042d44f5a2e7f19f58a9afc92c1362ceb818e460468ed498"
+source = "git+https://github.com/opentidehq/language-server?rev=f5731c733912b3b2eaf72c2468043d05cd95f60b#f5731c733912b3b2eaf72c2468043d05cd95f60b"
 dependencies = [
  "opentide-core",
  "opentide-ecs",
@@ -702,8 +692,7 @@ dependencies = [
 [[package]]
 name = "opentide-lsp"
 version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d146751c7e8e083723fdb52a43e4fc792a4235c7caf7f549e03a9ead78ca7ecc"
+source = "git+https://github.com/opentidehq/language-server?rev=f5731c733912b3b2eaf72c2468043d05cd95f60b#f5731c733912b3b2eaf72c2468043d05cd95f60b"
 dependencies = [
  "anyhow",
  "clap",
@@ -725,8 +714,7 @@ dependencies = [
 [[package]]
 name = "opentide-lucene"
 version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5c4f196278b9396fc0e03def3385587464539ce496c1ce1cf942756e0b36b1da"
+source = "git+https://github.com/opentidehq/language-server?rev=f5731c733912b3b2eaf72c2468043d05cd95f60b#f5731c733912b3b2eaf72c2468043d05cd95f60b"
 dependencies = [
  "opentide-core",
  "opentide-ecs",
@@ -750,8 +738,7 @@ dependencies = [
 [[package]]
 name = "opentide-spl"
 version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a98a9371f1425249a8f7028f06f6ba337b5e1d29ef8866f85dc0f697bb19033"
+source = "git+https://github.com/opentidehq/language-server?rev=f5731c733912b3b2eaf72c2468043d05cd95f60b#f5731c733912b3b2eaf72c2468043d05cd95f60b"
 dependencies = [
  "opentide-core",
  "opentide-highlight",
@@ -764,8 +751,7 @@ dependencies = [
 [[package]]
 name = "opentide-syntax"
 version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "56c3324b6faf3d91148a3ca044eca1cf077cb7afba035d40a7c1e21935ca1de2"
+source = "git+https://github.com/opentidehq/language-server?rev=f5731c733912b3b2eaf72c2468043d05cd95f60b#f5731c733912b3b2eaf72c2468043d05cd95f60b"
 dependencies = [
  "cc",
  "opentide-core",
@@ -775,8 +761,7 @@ dependencies = [
 [[package]]
 name = "opentide-tide"
 version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6d8c4434058b4b18ca8a21135bb9a7a29c6f98fdff6246f90e3797aa2085197e"
+source = "git+https://github.com/opentidehq/language-server?rev=f5731c733912b3b2eaf72c2468043d05cd95f60b#f5731c733912b3b2eaf72c2468043d05cd95f60b"
 dependencies = [
  "opentide-core",
  "opentide-cql",
@@ -801,8 +786,7 @@ dependencies = [
 [[package]]
 name = "opentide-yara"
 version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "70fe7ee7d6c011dc0469153b328e34e98b9a72730657c99511a244790bcf2a72"
+source = "git+https://github.com/opentidehq/language-server?rev=f5731c733912b3b2eaf72c2468043d05cd95f60b#f5731c733912b3b2eaf72c2468043d05cd95f60b"
 dependencies = [
  "opentide-core",
  "opentide-highlight",
