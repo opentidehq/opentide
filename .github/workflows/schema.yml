@@ -6,15 +6,36 @@ name: Schema
 # and tests the workspace without features, so the Python class and the wasm32
 # build are linted and tested here. Its own workflow until UC-0.3 (#801) brings
 # CI together.
+#
+# On a pull request only when it changes opentide-schema, what it builds on or
+# its generated stubs (the paths below; not a required check); on every push to
+# main, development and integration/unified-core, nightly and on Run workflow,
+# as ci.yml's full set.
 
 on:
   push:
-    branches: [main, development]
+    branches: [main, development, integration/unified-core]
   pull_request:
     # All base branches: a stacked PR targets the branch below it, not development.
+    paths:
+      - "crates/opentide-schema/**"
+      - "crates/opentide-schema-derive/**"
+      - "crates/opentide-core/**"
+      - "src/opentide/_native/**"
+      - "xtask/src/stubs.rs"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - ".cargo/**"
+      - ".github/workflows/schema.yml"
+  schedule:
+    - cron: "29 1 * * *"
+  workflow_dispatch:
 
 concurrency:
-  group: schema-${{ github.ref }}
+  # The event in the group, so that the nightly run and a push to development
+  # do not cancel each other.
+  group: schema-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
