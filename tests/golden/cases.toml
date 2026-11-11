@@ -40,7 +40,7 @@ edits = [{ path = "objects/objectives/detect-lsass-access.yaml", find = "\n  tlp
 [fixtures.vscode-docs-folder]
 kind = "copy"
 source = "tests/golden/fixtures/vscode-workspace"
-about = "vscode with the legacy `[paths.core]` `docs_folder` set and no documentation.toml `output`, which both engines refuse in the `generate docs` docs step (#936)"
+about = "vscode with the legacy `[paths.core]` `docs_folder` set and no documentation.toml `output`: a paths.toml both engines refuse in the step of every `generate` command (#936, #946), and which `setup ci` does not read"
 edits = [{ path = ".opentide/configurations/paths.toml", find = "[paths.objects]\n", replace = "[paths.core]\ndocs_folder = \"site\"\n\n[paths.objects]\n" }]
 
 [fixtures.vscode]
@@ -1610,6 +1610,39 @@ fixtures = ["tide-corpus"]
 command = "generate docs"
 variant = "docs-folder"
 args = ["generate", "docs"]
+fixtures = ["vscode-docs-folder"]
+
+# The same configuration, which neither engine loads, fails the step of
+# every other generate command (#946). `setup ci` writes its pipeline all
+# the same, with the default rules folder.
+[[case]]
+command = "generate exports"
+variant = "config-refused"
+args = ["generate", "exports"]
+fixtures = ["vscode-docs-folder"]
+
+[[case]]
+command = "generate explorer"
+variant = "config-refused"
+args = ["generate", "explorer"]
+fixtures = ["vscode-docs-folder"]
+
+[[case]]
+command = "generate inflight"
+variant = "config-refused"
+args = ["generate", "inflight"]
+fixtures = ["vscode-docs-folder"]
+
+[[case]]
+command = "generate inflight prune"
+variant = "config-refused"
+args = ["generate", "inflight", "prune"]
+fixtures = ["vscode-docs-folder"]
+
+[[case]]
+command = "setup ci"
+variant = "config-refused"
+args = ["setup", "ci", "github", "--yes"]
 fixtures = ["vscode-docs-folder"]
 
 [[case]]
