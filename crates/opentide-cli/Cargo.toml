@@ -46,6 +46,9 @@ opentide-workspace.workspace = true
 indexmap = "2"
 jiff.workspace = true
 form_urlencoded = "1.2"
+# `doctor` (UC-3.5c): VS Code's and the MCP hosts' JSON with comments and
+# trailing commas, as VS Code reads them.
+jsonc-parser = { version = "0.26", features = ["serde"] }
 # Percent-encoded paths in links and SARIF URIs.
 percent-encoding = "2.3"
 # `opentide explain <code>` in human mode: the page's Markdown, parsed for the terminal.
@@ -66,6 +69,8 @@ tracing = "0.1"
 unicode-width = "0.2"
 # `new`'s fresh object identifiers.
 uuid = { workspace = true, features = ["v4"] }
+# `doctor` (UC-3.5c): whether git and an MCP server's command are on PATH.
+which = "7"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["registry", "std"] }
 
 [dev-dependencies]

@@ -96,28 +96,97 @@ pub fn readable_event(event: &str) -> String {
     })
 }
 
+/// A field's value, its type kept: a JSON line writes numbers and booleans
+/// as JSON numbers and booleans, a text line writes each as `Debug` does.
+#[derive(Clone, Debug, PartialEq)]
+enum Value {
+    Text(String),
+    Int(i64),
+    UInt(u64),
+    Float(f64),
+    Bool(bool),
+}
+
+impl Value {
+    /// The value as a text line writes it.
+    fn text(&self) -> String {
+        match self {
+            Value::Text(text) => text.clone(),
+            Value::Int(value) => format!("{value:?}"),
+            Value::UInt(value) => format!("{value:?}"),
+            Value::Float(value) => format!("{value:?}"),
+            Value::Bool(value) => format!("{value:?}"),
+        }
+    }
+
+    /// The value as a JSON line writes it.
+    fn json(&self) -> Json {
+        match self {
+            Value::Text(text) => Json::str(text),
+            Value::Int(value) => Json::Int(*value),
+            Value::UInt(value) => Json::UInt(*value),
+            Value::Float(value) => Json::Float(*value),
+            Value::Bool(value) => Json::Bool(*value),
+        }
+    }
+
+    /// The value redacted: a typed value a secret matches becomes the
+    /// redacted text, so the line never carries the secret as a number.
+    fn redacted(self, redactor: &Redactor) -> Value {
+        match self {
+            Value::Text(text) => Value::Text(redactor.redact(&text)),
+            typed => {
+                let text = typed.text();
+                let redacted = redactor.redact(&text);
+                if redacted == text {
+                    typed
+                } else {
+                    Value::Text(redacted)
+                }
+            }
+        }
+    }
+}
+
 #[derive(Default)]
 struct Fields {
     message: String,
-    pairs: Vec<(String, String)>,
+    pairs: Vec<(String, Value)>,
+}
+
+impl Fields {
+    fn push(&mut self, field: &Field, value: Value) {
+        if field.name() == "message" {
+            self.message = value.text();
+        } else {
+            self.pairs.push((field.name().to_owned(), value));
+        }
+    }
 }
 
 impl Visit for Fields {
     fn record_str(&mut self, field: &Field, value: &str) {
-        if field.name() == "message" {
-            value.clone_into(&mut self.message);
-        } else {
-            self.pairs.push((field.name().to_owned(), value.to_owned()));
-        }
+        self.push(field, Value::Text(value.to_owned()));
+    }
+
+    fn record_i64(&mut self, field: &Field, value: i64) {
+        self.push(field, Value::Int(value));
+    }
+
+    fn record_u64(&mut self, field: &Field, value: u64) {
+        self.push(field, Value::UInt(value));
+    }
+
+    fn record_f64(&mut self, field: &Field, value: f64) {
+        self.push(field, Value::Float(value));
+    }
+
+    fn record_bool(&mut self, field: &Field, value: bool) {
+        self.push(field, Value::Bool(value));
     }
 
     fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
-        let text = format!("{value:?}");
-        if field.name() == "message" {
-            self.message = text;
-        } else {
-            self.pairs.push((field.name().to_owned(), text));
-        }
+        self.push(field, Value::Text(format!("{value:?}")));
     }
 }
 
@@ -130,7 +199,7 @@ impl LogLayer {
             let mut members: Vec<(String, Json)> = fields
                 .pairs
                 .iter()
-                .map(|(key, value)| (key.clone(), Json::str(value)))
+                .map(|(key, value)| (key.clone(), value.json()))
                 .collect();
             members.extend([
                 ("event".to_owned(), Json::str(&fields.message)),
@@ -153,7 +222,7 @@ impl LogLayer {
             readable_event(&fields.message)
         );
         for (key, value) in &fields.pairs {
-            let _ = write!(line, " · {key}: {value}");
+            let _ = write!(line, " · {key}: {}", value.text());
         }
         line.push('\n');
         line
@@ -177,9 +246,10 @@ impl<S: Subscriber> Layer<S> for LogLayer {
         // in it must match as written. The whole line is redacted again for
         // what spans a field and its key (`token=...`).
         fields.message = self.redactor.redact(&fields.message);
-        for (_, value) in &mut fields.pairs {
-            *value = self.redactor.redact(value);
-        }
+        fields.pairs = std::mem::take(&mut fields.pairs)
+            .into_iter()
+            .map(|(key, value)| (key, value.redacted(&self.redactor)))
+            .collect();
         let line = self.redactor.redact(&self.line(level, &fields));
         if let Ok(mut sink) = self.sink.lock() {
             let _ = sink.write_all(line.as_bytes());
@@ -256,8 +326,57 @@ mod tests {
         });
         assert_eq!(
             text,
-            "{\"token\":\"***\",\"count\":\"3\",\"event\":\"proxy_failed\",\"level\":\"warning\",\"timestamp\":\"12:00:00\"}\n"
+            "{\"token\":\"***\",\"count\":3,\"event\":\"proxy_failed\",\"level\":\"warning\",\"timestamp\":\"12:00:00\"}\n"
         );
+    }
+
+    #[test]
+    fn a_json_line_keeps_each_field_type() {
+        let emit = || {
+            tracing::warn!(
+                objects = 12,
+                negative = -4,
+                files = 7_usize,
+                big = u64::MAX,
+                ratio = 0.5,
+                whole = 2.0,
+                changed = true,
+                dry_run = false,
+                name = "x",
+                path = ?"a/b",
+                "indexed"
+            );
+        };
+        assert_eq!(
+            capture(config(false, false, true), emit),
+            "{\"objects\":12,\"negative\":-4,\"files\":7,\"big\":18446744073709551615,\"ratio\":0.5,\"whole\":2.0,\"changed\":true,\"dry_run\":false,\"name\":\"x\",\"path\":\"\\\"a/b\\\"\",\"event\":\"indexed\",\"level\":\"warning\",\"timestamp\":\"12:00:00\"}\n"
+        );
+        // A text line is as it was.
+        assert_eq!(
+            capture(config(false, false, false), emit),
+            "warning: Indexed · objects: 12 · negative: -4 · files: 7 · big: 18446744073709551615 · ratio: 0.5 · whole: 2.0 · changed: true · dry_run: false · name: x · path: \"a/b\"\n"
+        );
+    }
+
+    #[test]
+    fn a_secret_logged_as_a_number_is_redacted_as_text() {
+        let run = |json_lines: bool| {
+            let buffer = Buffer::default();
+            let sink: Sink = Arc::new(Mutex::new(buffer.clone()));
+            let redactor = Redactor::new(vec!["987654".to_owned()], Vec::new());
+            let layer = LogLayer::new(config(false, false, json_lines), sink, redactor, || {
+                "12:00:00".to_owned()
+            });
+            tracing::subscriber::with_default(subscriber(layer), || {
+                tracing::warn!(pin = 987_654, count = 3, "login");
+            });
+            String::from_utf8(buffer.0.lock().unwrap().clone()).unwrap()
+        };
+        assert_eq!(
+            run(true),
+            "{\"pin\":\"***\",\"count\":3,\"event\":\"login\",\"level\":\"warning\",\"timestamp\":\"12:00:00\"}\n"
+        );
+        assert_eq!(run(false), "warning: Login · pin: *** · count: 3\n");
     }
 
     #[test]
