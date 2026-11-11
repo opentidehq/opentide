@@ -703,14 +703,15 @@ impl Run<'_> {
                 if let Some(report) = crate::commands::tui::gate(&place) {
                     return self.emit_report(&report, out, err);
                 }
-                // A person at a terminal: the UI, which runs on Python.
-                let message = "opentide tui's terminal UI has no Rust implementation yet: \
-                     unset OPENTIDE_ENGINE, or set it to python or compare."
-                    .to_owned();
-                let mut failure = Failure::new(code::ENGINE_NOT_PORTED, message);
-                failure.argument = Some("OPENTIDE_ENGINE".into());
-                let outcome = Outcome::failed(&path, USAGE_EXIT_CODE, failure);
-                self.emit(&outcome, &[], &[], out, err)
+                // A person at a terminal: the UI (UC-3.6d), which owns the
+                // terminal until it quits.
+                let launch = crate::tui::Launch {
+                    repo: self.globals.repo.clone(),
+                    env: self.env.clone(),
+                    cwd: self.host.cwd.clone().unwrap_or_default(),
+                    version: self.host.version.clone(),
+                };
+                crate::tui::open(&launch)
             }
             "lsp start" => {
                 // The server blocks on stdin and polls no interrupt: Ctrl-C
@@ -1551,6 +1552,10 @@ impl Run<'_> {
         }
         let outcome = &report.outcome;
         self.record_refusal(outcome)?;
+        if KEEPING_DOCUMENT.with(std::cell::Cell::get) {
+            let document = outcome.document(self.duration_ms());
+            KEPT_DOCUMENT.with(|kept| *kept.borrow_mut() = Some(document));
+        }
         if !report.stderr_first.is_empty() {
             err.write_all(report.stderr_first.as_bytes())?;
             err.flush()?;
@@ -1966,6 +1971,34 @@ fn log_clock() -> String {
         .replace('T', " ")
         .trim_end_matches('Z')
         .to_owned()
+}
+
+thread_local! {
+    /// Whether [`run_keeping_document`] runs on this thread.
+    static KEEPING_DOCUMENT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// The JSON document of the report the run printed, as `--json` would
+    /// print it, while [`KEEPING_DOCUMENT`] is set.
+    static KEPT_DOCUMENT: RefCell<Option<crate::json::Json>> = const { RefCell::new(None) };
+}
+
+/// [`run`] for a host that shows a run's output itself (`opentide tui`'s
+/// Results tab): the exit code, and the JSON document `--json` would print
+/// for the report the run printed, built from the same report (no second
+/// run). `None` when the run printed no report (a usage error, a dry run's
+/// plan).
+pub fn run_keeping_document(
+    argv: &[String],
+    env: &Env,
+    host: &Host,
+    out: &mut dyn Write,
+    err: &mut dyn Write,
+) -> (i32, Option<crate::json::Json>) {
+    KEPT_DOCUMENT.with(|kept| kept.borrow_mut().take());
+    KEEPING_DOCUMENT.with(|keeping| keeping.set(true));
+    let code = run(argv, env, host, out, err);
+    KEEPING_DOCUMENT.with(|keeping| keeping.set(false));
+    let document = KEPT_DOCUMENT.with(|kept| kept.borrow_mut().take());
+    (code, document)
 }
 
 /// Runs `opentide` with `argv` (without the program name); the exit code.

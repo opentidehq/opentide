@@ -50,6 +50,14 @@ opentide-workspace.workspace = true
 # the tier below this crate in xtask/layers.toml.
 opentide-lsp.workspace = true
 anyhow.workspace = true
+# `opentide tui` (UC-3.6d, #951) uses the same tier for what the language
+# server reports on each object file (`ObjectFindings`, the findings
+# `opentide lsp start` publishes).
+# `opentide tui`'s terminal UI: ratatui, drawn through crossterm; and the
+# output of a command run from it, printed by the renderers as SGR runs at a
+# terminal, read back into ratatui's text for the Results tab.
+ratatui = { version = "0.30", default-features = false, features = ["crossterm", "underline-color"] }
+ansi-to-tui = { version = "8.0", default-features = false }
 indexmap = "2"
 jiff.workspace = true
 form_urlencoded = "1.2"
@@ -110,6 +118,13 @@ signal-hook = { version = "0.3", default-features = false, features = ["iterator
 # `tests/tui_terminal.rs`: the pseudo-terminals `tui` runs in at a terminal;
 # `tests/lsp_start.rs`: the Ctrl-C (SIGINT) a person sends `lsp start`.
 rustix = { version = "1.1", default-features = false, features = ["std", "fs", "process", "pty", "termios"] }
+# `tests/tui_pty.rs`: `opentide tui` driven in a pseudo-terminal (open, run
+# validate, quit), as a person at a terminal runs it. rexpect, the rust-cli
+# expect crate: expectrl reaches the unmaintained pin-utils through nix 0.26
+# (RUSTSEC-2026-0441), which cargo deny refuses. vt100 reads what the UI drew
+# back into a screen: ratatui writes only the cells that changed.
+rexpect = "0.7"
+vt100 = "0.18"
 
 [dev-dependencies]
 # The goldens' recorded HTTP (UC-4.1): the replaying proxy of a cassette case.

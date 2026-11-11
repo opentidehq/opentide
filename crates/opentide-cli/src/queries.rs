@@ -425,7 +425,13 @@ pub fn universal_newlines(text: &str) -> Cow<'_, str> {
     }
 }
 
-fn finding(text: &str, lines: &LineStarts, diagnostic: opentide_analysis::Diagnostic) -> Finding {
+/// An engine finding in the CLI's coordinates: lines and columns from 1,
+/// columns in code points (`opentide tui` places the language server's so).
+pub fn finding(
+    text: &str,
+    lines: &LineStarts,
+    diagnostic: opentide_analysis::Diagnostic,
+) -> Finding {
     let (line, column, end_line, end_column) = lines.convert(text, diagnostic.range);
     let (end_line, end_column) = span_end(line, column, end_line, end_column, text);
     Finding {

@@ -35,6 +35,7 @@ pub mod serve;
 pub mod suggest;
 pub mod tree;
 mod tree_meta;
+pub mod tui;
 pub mod usage;
 
 pub use app::{Host, exit, main, run};

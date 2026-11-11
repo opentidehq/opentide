@@ -761,7 +761,7 @@ fn dataset_reads(
 /// The visibility report of the (overlaid) `index` (`load_visibility`):
 /// the declared log sources, read through their model, and the datasets the
 /// rules' files read.
-fn visibility_report(
+pub fn visibility_report(
     workspace: &Workspace,
     index: &opentide_workspace::Index,
     root: &Path,
@@ -1082,7 +1082,7 @@ pub struct PhasesRun {
 
 /// The sources of the `schemas` phase: the workspace's resolved
 /// configuration, the bundled vocabularies and its object vocabularies.
-fn schema_sources(workspace: &Workspace) -> opentide_schema::generate::schema::Sources {
+pub fn schema_sources(workspace: &Workspace) -> opentide_schema::generate::schema::Sources {
     let tree = workspace.configuration().resolved.tree.clone();
     let mut vocabularies = Vocabularies::bundled();
     for vocabulary in
