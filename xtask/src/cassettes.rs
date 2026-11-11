@@ -451,7 +451,10 @@ mod tests {
         for (header, body) in [
             (("authorization", "Bearer abc123"), "{}"),
             (("user-agent", "python-requests/2.32"), "{}"),
-            (("accept", "*/*"), "{\"client_secret\": \"hunter22\"}"),
+            (
+                ("accept", "application/json"),
+                "{\"client_secret\": \"hunter22\"}",
+            ),
         ] {
             let leaky = Cassette::new("s", vec![], vec![interaction(header, body)]);
             assert_eq!(
