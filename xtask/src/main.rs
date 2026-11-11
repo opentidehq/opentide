@@ -89,6 +89,11 @@ commands:
                  `opentide generate` writes with each golden recording of an
                  `opentide generate` that ran its schemas, templates and
                  snippets phases and exited 0 (UC-1.8, #814)
+  mcp record [--only NAME] [--python PATH]
+  mcp replay --engine python|rust|compare FILE...
+                 record the MCP sessions of tests/golden/mcp/sessions.toml from
+                 the Python server, and replay them against the Python server,
+                 the Rust server or both (UC-3.7, #829)
   golden <record|check|diff|lock|coverage> [options]
                  record what the frozen Python CLI does, and check an engine
                  against the recordings (tests/golden/README.md);
@@ -193,6 +198,13 @@ fn main() -> ExitCode {
             Ok(code) => ExitCode::from(code),
             Err(error) => {
                 eprintln!("xtask validate: {error:#}");
+                ExitCode::from(2)
+            }
+        },
+        "mcp" => match xtask::mcp::run(rest) {
+            Ok(code) => ExitCode::from(code),
+            Err(error) => {
+                eprintln!("xtask mcp: {error:#}");
                 ExitCode::from(2)
             }
         },

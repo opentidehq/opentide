@@ -2,10 +2,24 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from unittest.mock import patch
+
+import pytest
 
 from opentide.mcp_server.tools import tool_validation_report
 from opentide.validation.issues import ValidationReport
+
+
+@pytest.fixture(autouse=True)
+def _python_engine(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """These drive the Python implementation's ``run_validation`` call.
+
+    The Rust request's scope is ``test_tools_engines.py``'s; the Rust server's
+    report, the recorded sessions' (``cargo xtask mcp replay``).
+    """
+    monkeypatch.setenv("OPENTIDE_ENGINE", "python")
+    yield
 
 
 def test_tool_validation_report_full_scope() -> None:

@@ -1,0 +1,241 @@
+# The MCP sessions `cargo xtask mcp record` sends to the Python server
+# (`opentide mcp start`, src/opentide/mcp_server/) and records, one file per
+# session, as `<name>.jsonl` beside this file; `cargo xtask mcp replay` sends
+# them again to the Python server, the Rust server, or both (UC-3.7, #829).
+#
+# This file is the reviewed source: the requests. The responses are only ever
+# recorded (`cargo xtask mcp record`), never written by hand.
+#
+# Each session runs against a fresh copy of its fixture (the golden fixtures'
+# kinds, xtask/src/golden/fixture.rs), with no network (a proxy on
+# 127.0.0.1:9 that refuses it). It starts with `initialize` and
+# `notifications/initialized`; then each step is one JSON-RPC message
+# (`method` and `params`: the recorder numbers it), sent once the answer to
+# the step before it has arrived.
+#
+# `launch` is how the client starts the server: `workspace` (the default: in
+# the workspace, which OPENTIDE_REPO_ROOT and OPENTIDE_TIDE_WORKSPACE name),
+# `repo-option` (in an empty folder outside it, as `opentide --repo <ws> mcp
+# start`, with no workspace variable) or `plugin-root` (in the fixture as an
+# Agent Plugin root, with no workspace variable: a host that names none).
+
+[fixtures.tide-corpus]
+kind = "tide-corpus"
+source = "tests/fixtures/tide_corpus/current"
+about = "tests/fixtures/tide_corpus, in the .opentide/ layout the Python suite gives it"
+
+[fixtures.tide-corpus-typo]
+kind = "tide-corpus"
+source = "tests/fixtures/tide_corpus/current"
+about = "tide-corpus with an unknown TLP on the Sentinel rule: an issue with a fix"
+edits = [{ path = "Objects/Detection Rules/rule-0001-sentinel-kql.yaml", find = "  tlp: clear\n", replace = "  tlp: clearr\n" }]
+
+[fixtures.tide-corpus-broken-config]
+kind = "tide-corpus"
+source = "tests/fixtures/tide_corpus/current"
+about = "tide-corpus whose Sentinel platform configuration is not TOML: a workspace that does not open"
+edits = [{ path = ".opentide/configurations/platforms/sentinel.toml", find = "[platform]\nenabled = true\n", replace = "[platform]\nenabled = tru\n" }]
+
+[fixtures.agent-plugin]
+kind = "copy"
+source = "tests/fixtures/agent_plugin_root"
+about = "an Agent Plugin root (plugin.json, skills) that is no detection workspace"
+
+# The protocol: the handshake's answer (instructions, capabilities, version
+# negotiation), every list, and the protocol errors.
+[[session]]
+name = "protocol"
+fixture = "tide-corpus"
+steps = [
+    { id = "tools-list", message = '{"method": "tools/list"}' },
+    { id = "resources-list", message = '{"method": "resources/list"}' },
+    { id = "resource-templates-list", message = '{"method": "resources/templates/list"}' },
+    { id = "prompts-list", message = '{"method": "prompts/list"}' },
+    { id = "ping", message = '{"method": "ping"}' },
+    { id = "unknown-method", message = '{"method": "bogus/method"}' },
+    { id = "unknown-tool", message = '{"method": "tools/call", "params": {"name": "no_such_tool", "arguments": {}}}' },
+]
+
+# A client that asks for a protocol version the server does not know gets
+# the newest one it does.
+[[session]]
+name = "protocol-old-client"
+fixture = "tide-corpus"
+protocol_version = "2024-11-05"
+steps = [
+    { id = "ping", message = '{"method": "ping"}' },
+]
+
+[[session]]
+name = "protocol-unknown-version"
+fixture = "tide-corpus"
+protocol_version = "1999-01-01"
+steps = [
+    { id = "ping", message = '{"method": "ping"}' },
+]
+
+# The tools that need no tenant: each with valid input and with invalid input
+# (a missing argument, a value of the wrong type, a value the tool refuses).
+[[session]]
+name = "tools-catalogue"
+fixture = "tide-corpus"
+steps = [
+    { id = "search-uuid", message = '{"method": "tools/call", "params": {"name": "search", "arguments": {"query": "00000000-0000-4000-8003-000000000001"}}}' },
+    { id = "search-platform", message = '{"method": "tools/call", "params": {"name": "search", "arguments": {"query": "Rule", "platform": "sentinel"}}}' },
+    { id = "search-technique", message = '{"method": "tools/call", "params": {"name": "search", "arguments": {"query": "", "technique": "t1059"}}}' },
+    { id = "search-none", message = '{"method": "tools/call", "params": {"name": "search", "arguments": {"query": "nothing matches this"}}}' },
+    { id = "search-missing-query", message = '{"method": "tools/call", "params": {"name": "search", "arguments": {}}}' },
+    { id = "search-bad-type", message = '{"method": "tools/call", "params": {"name": "search", "arguments": {"query": 7}}}' },
+    { id = "get-chaining-rule", message = '{"method": "tools/call", "params": {"name": "get_chaining", "arguments": {"uuid": "00000000-0000-4000-8003-000000000001"}}}' },
+    { id = "get-chaining-threat", message = '{"method": "tools/call", "params": {"name": "get_chaining", "arguments": {"uuid": "00000000-0000-4000-8001-000000000001"}}}' },
+    { id = "get-chaining-unknown", message = '{"method": "tools/call", "params": {"name": "get_chaining", "arguments": {"uuid": "00000000-0000-0000-0000-000000000000"}}}' },
+    { id = "get-chaining-missing", message = '{"method": "tools/call", "params": {"name": "get_chaining", "arguments": {}}}' },
+    { id = "coverage-technique", message = '{"method": "tools/call", "params": {"name": "coverage", "arguments": {"technique": "T1059"}}}' },
+    { id = "coverage-matrix", message = '{"method": "tools/call", "params": {"name": "coverage", "arguments": {"tactic": "execution"}}}' },
+    { id = "coverage-bad-type", message = '{"method": "tools/call", "params": {"name": "coverage", "arguments": {"technique": ["T1059"]}}}' },
+    { id = "deployment-status", message = '{"method": "tools/call", "params": {"name": "deployment_status", "arguments": {"uuid": "00000000-0000-4000-8003-000000000001"}}}' },
+    { id = "deployment-status-unknown", message = '{"method": "tools/call", "params": {"name": "deployment_status", "arguments": {"uuid": "00000000-0000-0000-0000-000000000000"}}}' },
+    { id = "deployment-status-missing", message = '{"method": "tools/call", "params": {"name": "deployment_status", "arguments": {}}}' },
+]
+
+[[session]]
+name = "tools-explain"
+fixture = "tide-corpus"
+steps = [
+    { id = "explain-code", message = '{"method": "tools/call", "params": {"name": "explain", "arguments": {"code": "vocab_unknown"}}}' },
+    { id = "explain-engine-code", message = '{"method": "tools/call", "params": {"name": "explain", "arguments": {"code": "kql_unknown_table"}}}' },
+    { id = "explain-upper-case", message = '{"method": "tools/call", "params": {"name": "explain", "arguments": {"code": " INVALID_REF "}}}' },
+    { id = "explain-retired", message = '{"method": "tools/call", "params": {"name": "explain", "arguments": {"code": "missing_author"}}}' },
+    { id = "explain-unknown", message = '{"method": "tools/call", "params": {"name": "explain", "arguments": {"code": "vocab_unknwn"}}}' },
+    { id = "explain-nothing-close", message = '{"method": "tools/call", "params": {"name": "explain", "arguments": {"code": "zzzzzzzz"}}}' },
+    { id = "explain-path", message = '{"method": "tools/call", "params": {"name": "explain", "arguments": {"code": "../vocab_unknown"}}}' },
+    { id = "explain-list", message = '{"method": "tools/call", "params": {"name": "explain", "arguments": {}}}' },
+    { id = "explain-bad-type", message = '{"method": "tools/call", "params": {"name": "explain", "arguments": {"code": 5}}}' },
+]
+
+[[session]]
+name = "tools-validation"
+fixture = "tide-corpus"
+steps = [
+    { id = "validation-report-all", message = '{"method": "tools/call", "params": {"name": "validation_report", "arguments": {}}}' },
+    { id = "validation-report-file", message = '{"method": "tools/call", "params": {"name": "validation_report", "arguments": {"file": "objects/rules/rule-0001-sentinel-kql.yaml"}}}' },
+    { id = "validation-report-uuid", message = '{"method": "tools/call", "params": {"name": "validation_report", "arguments": {"uuid": "00000000-0000-4000-8003-000000000001", "queries": "warn"}}}' },
+    { id = "validation-report-type", message = '{"method": "tools/call", "params": {"name": "validation_report", "arguments": {"object_type": "threat", "queries": "off"}}}' },
+    { id = "validation-report-bad-queries", message = '{"method": "tools/call", "params": {"name": "validation_report", "arguments": {"queries": "loud"}}}' },
+    { id = "validation-report-bad-type", message = '{"method": "tools/call", "params": {"name": "validation_report", "arguments": {"file": 3}}}' },
+    { id = "validate-rule", message = '{"method": "tools/call", "params": {"name": "validate_rule", "arguments": {"uuid": "00000000-0000-4000-8003-000000000001"}}}' },
+    { id = "validate-rule-inert", message = '{"method": "tools/call", "params": {"name": "validate_rule", "arguments": {"uuid": "00000000-0000-4000-8003-000000000103"}}}' },
+    { id = "validate-rule-unknown", message = '{"method": "tools/call", "params": {"name": "validate_rule", "arguments": {"uuid": "00000000-0000-0000-0000-000000000000"}}}' },
+    { id = "validate-rule-missing", message = '{"method": "tools/call", "params": {"name": "validate_rule", "arguments": {}}}' },
+]
+
+[[session]]
+name = "tools-validation-typo"
+fixture = "tide-corpus-typo"
+steps = [
+    { id = "validation-report-file", message = '{"method": "tools/call", "params": {"name": "validation_report", "arguments": {"file": "objects/rules/rule-0001-sentinel-kql.yaml"}}}' },
+    { id = "validation-report-all", message = '{"method": "tools/call", "params": {"name": "validation_report", "arguments": {}}}' },
+    { id = "validate-rule", message = '{"method": "tools/call", "params": {"name": "validate_rule", "arguments": {"uuid": "00000000-0000-4000-8003-000000000001"}}}' },
+]
+
+[[session]]
+name = "tools-queries"
+fixture = "tide-corpus"
+steps = [
+    { id = "validate-query-kql", message = '{"method": "tools/call", "params": {"name": "validate_query", "arguments": {"query": "SecurityEvent | where EventID == 4625", "platform": "sentinel"}}}' },
+    { id = "validate-query-kql-error", message = '{"method": "tools/call", "params": {"name": "validate_query", "arguments": {"query": "SecurityEvent | wher EventID == 4625", "platform": "sentinel"}}}' },
+    { id = "validate-query-spl", message = '{"method": "tools/call", "params": {"name": "validate_query", "arguments": {"query": "index=main sourcetype=WinEventLog EventCode=4625", "platform": "splunk"}}}' },
+    { id = "validate-query-esql", message = '{"method": "tools/call", "params": {"name": "validate_query", "arguments": {"query": "FROM logs-* | WHERE event.code == \"4625\"", "platform": "elastic", "language": "esql", "stack": "9.1"}}}' },
+    { id = "validate-query-bad-language", message = '{"method": "tools/call", "params": {"name": "validate_query", "arguments": {"query": "x", "platform": "elastic", "language": "sql"}}}' },
+    { id = "validate-query-empty", message = '{"method": "tools/call", "params": {"name": "validate_query", "arguments": {"query": "  ", "platform": "sentinel"}}}' },
+    { id = "validate-query-tenant-only", message = '{"method": "tools/call", "params": {"name": "validate_query", "arguments": {"query": "x", "platform": "sentinel_one"}}}' },
+    { id = "validate-query-unsupported", message = '{"method": "tools/call", "params": {"name": "validate_query", "arguments": {"query": "x", "platform": "harfanglab"}}}' },
+    { id = "validate-query-missing-platform", message = '{"method": "tools/call", "params": {"name": "validate_query", "arguments": {"query": "x"}}}' },
+    { id = "validate-query-bad-live", message = '{"method": "tools/call", "params": {"name": "validate_query", "arguments": {"query": "x", "platform": "sentinel", "live": "sometimes"}}}' },
+    { id = "run-query-not-live", message = '{"method": "tools/call", "params": {"name": "run_query", "arguments": {"query": "SecurityEvent | take 5", "platform": "sentinel", "tenant": "a,b", "since": "7d", "limit": 5}}}' },
+    { id = "run-query-rule-not-live", message = '{"method": "tools/call", "params": {"name": "run_query", "arguments": {"query": "", "platform": "elastic", "rule": "00000000-0000-4000-8003-000000000009", "language": "eql", "index": "logs-*,winlogbeat-*"}}}' },
+    { id = "run-query-unsupported", message = '{"method": "tools/call", "params": {"name": "run_query", "arguments": {"query": "x", "platform": "sysdig"}}}' },
+    { id = "run-query-bad-limit", message = '{"method": "tools/call", "params": {"name": "run_query", "arguments": {"query": "x", "platform": "sentinel", "limit": "many"}}}' },
+]
+
+[[session]]
+name = "tools-deploy"
+fixture = "tide-corpus"
+steps = [
+    { id = "deploy-rule-dry-run", message = '{"method": "tools/call", "params": {"name": "deploy_rule", "arguments": {"uuid": "00000000-0000-4000-8003-000000000001", "platform": "sentinel"}}}' },
+    { id = "deploy-rule-unknown-rule", message = '{"method": "tools/call", "params": {"name": "deploy_rule", "arguments": {"uuid": "00000000-0000-0000-0000-000000000000", "platform": "sentinel"}}}' },
+    { id = "deploy-rule-unknown-platform", message = '{"method": "tools/call", "params": {"name": "deploy_rule", "arguments": {"uuid": "00000000-0000-4000-8003-000000000001", "platform": "nowhere"}}}' },
+    { id = "deploy-rule-missing-platform", message = '{"method": "tools/call", "params": {"name": "deploy_rule", "arguments": {"uuid": "00000000-0000-4000-8003-000000000001"}}}' },
+]
+
+# Started outside the workspace with `--repo` naming it: the catalogue tools,
+# the native report and a resource all serve the named workspace.
+[[session]]
+name = "launch-repo-option"
+fixture = "tide-corpus"
+launch = "repo-option"
+steps = [
+    { id = "search-platform", message = '{"method": "tools/call", "params": {"name": "search", "arguments": {"query": "Rule", "platform": "sentinel"}}}' },
+    { id = "validation-report-file", message = '{"method": "tools/call", "params": {"name": "validation_report", "arguments": {"file": "objects/rules/rule-0001-sentinel-kql.yaml"}}}' },
+    { id = "deployment-status", message = '{"method": "tools/call", "params": {"name": "deployment_status", "arguments": {"uuid": "00000000-0000-4000-8003-000000000001"}}}' },
+    { id = "rules", message = '{"method": "resources/read", "params": {"uri": "opentide://rules"}}' },
+]
+
+# Started in an Agent Plugin root by a host that names no workspace: the
+# catalogue tools and the native report refuse with workspace_not_found
+# (before they read an argument), the tools that need no catalogue answer.
+[[session]]
+name = "launch-plugin-root"
+fixture = "agent-plugin"
+launch = "plugin-root"
+steps = [
+    { id = "validation-report", message = '{"method": "tools/call", "params": {"name": "validation_report", "arguments": {}}}' },
+    { id = "validation-report-bad-queries", message = '{"method": "tools/call", "params": {"name": "validation_report", "arguments": {"queries": "loud"}}}' },
+    { id = "search", message = '{"method": "tools/call", "params": {"name": "search", "arguments": {"query": ""}}}' },
+    { id = "explain", message = '{"method": "tools/call", "params": {"name": "explain", "arguments": {"code": "workspace_not_found"}}}' },
+    { id = "index", message = '{"method": "resources/read", "params": {"uri": "opentide://index"}}' },
+]
+
+# A workspace whose configuration does not parse: the report's refusal.
+[[session]]
+name = "tools-validation-broken-config"
+fixture = "tide-corpus-broken-config"
+steps = [
+    { id = "validation-report-all", message = '{"method": "tools/call", "params": {"name": "validation_report", "arguments": {}}}' },
+    { id = "validation-report-bad-queries", message = '{"method": "tools/call", "params": {"name": "validation_report", "arguments": {"queries": "loud"}}}' },
+]
+
+# A report with errors whose next steps keep a --queries mode and a path that
+# needs quoting (the rule's file through the corpus's own `Detection Rules`).
+[[session]]
+name = "tools-validation-next-actions"
+fixture = "tide-corpus-typo"
+steps = [
+    { id = "validation-report-warn", message = '{"method": "tools/call", "params": {"name": "validation_report", "arguments": {"file": "Objects/Detection Rules/rule-0001-sentinel-kql.yaml", "queries": "warn"}}}' },
+    { id = "validation-report-quoted", message = '{"method": "tools/call", "params": {"name": "validation_report", "arguments": {"file": "Objects/Detection Rules/rule-0001-sentinel-kql.yaml", "queries": "off"}}}' },
+]
+
+# Every resource and resource template, and the errors of each.
+[[session]]
+name = "resources"
+fixture = "tide-corpus"
+steps = [
+    { id = "index", message = '{"method": "resources/read", "params": {"uri": "opentide://index"}}' },
+    { id = "rules", message = '{"method": "resources/read", "params": {"uri": "opentide://rules"}}' },
+    { id = "rule", message = '{"method": "resources/read", "params": {"uri": "opentide://rules/00000000-0000-4000-8003-000000000001"}}' },
+    { id = "rule-unknown", message = '{"method": "resources/read", "params": {"uri": "opentide://rules/00000000-0000-0000-0000-000000000000"}}' },
+    { id = "threats", message = '{"method": "resources/read", "params": {"uri": "opentide://threats"}}' },
+    { id = "threat", message = '{"method": "resources/read", "params": {"uri": "opentide://threats/00000000-0000-4000-8001-000000000001"}}' },
+    { id = "objectives", message = '{"method": "resources/read", "params": {"uri": "opentide://objectives"}}' },
+    { id = "objective", message = '{"method": "resources/read", "params": {"uri": "opentide://objectives/00000000-0000-4000-8002-000000000001"}}' },
+    { id = "schema-rule", message = '{"method": "resources/read", "params": {"uri": "opentide://schemas/rule"}}' },
+    { id = "schema-unknown", message = '{"method": "resources/read", "params": {"uri": "opentide://schemas/widget"}}' },
+    { id = "template-threat", message = '{"method": "resources/read", "params": {"uri": "opentide://templates/threat"}}' },
+    { id = "vocabularies", message = '{"method": "resources/read", "params": {"uri": "opentide://vocabularies"}}' },
+    # att&ck.groups, not att&ck: the same `&` in the name, at an eighth of the size.
+    { id = "vocabulary-ampersand", message = '{"method": "resources/read", "params": {"uri": "opentide://vocabularies/att&ck.groups"}}' },
+    { id = "vocabulary-ampersand-encoded", message = '{"method": "resources/read", "params": {"uri": "opentide://vocabularies/att%26ck.groups"}}' },
+    { id = "vocabulary-unknown", message = '{"method": "resources/read", "params": {"uri": "opentide://vocabularies/nope"}}' },
+    { id = "platforms", message = '{"method": "resources/read", "params": {"uri": "opentide://platforms"}}' },
+    { id = "unknown-resource", message = '{"method": "resources/read", "params": {"uri": "opentide://nothing"}}' },
+]
