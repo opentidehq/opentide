@@ -6,6 +6,7 @@
 pub mod bitdefender;
 mod elastic;
 mod falco;
+pub mod graylog;
 mod injection;
 mod intel;
 mod lint;
@@ -872,6 +873,15 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
             &rule,
             block,
         ));
+    }
+
+    if let Some(block) = object
+        .configurations
+        .as_ref()
+        .and_then(|c| c.get("graylog"))
+        .filter(|b| b.is_mapping())
+    {
+        diagnostics.extend(graylog::constraint_diagnostics(input.source, block));
     }
 
     if let Some(block) = object.configurations.as_ref().and_then(|c| c.get("sysdig")) {
