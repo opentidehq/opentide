@@ -425,7 +425,7 @@ pub fn rewrite(document: &node::Document, plan: &Plan<'_>) -> (String, usize) {
 /// it is sound: `updated` reads, each planned field holds the values the
 /// plan projects, and nothing outside those fields differs.
 pub fn verify(original: &node::Document, updated: &str, plan: &Plan<'_>) -> Option<String> {
-    let after = match node::load(updated) {
+    let after = match node::load_keeping_repeated_keys(updated) {
         Ok(after) => after,
         Err(error) => return Some(format!("rewrite produced unparseable YAML: {error}")),
     };

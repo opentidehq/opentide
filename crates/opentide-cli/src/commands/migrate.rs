@@ -142,7 +142,7 @@ fn migrate(root: &Path, fields: &[&ScopedField], apply: bool) -> Result<Migratio
             .is_ok_and(|bytes| bytes.starts_with("\u{feff}".as_bytes()))
             .then_some('\u{feff}');
         let document = bytes.map_err(|error| error.to_string()).and_then(|bytes| {
-            node::load_bytes(&bytes).map_err(|error| match error.mark {
+            node::load_bytes_keeping_repeated_keys(&bytes).map_err(|error| match error.mark {
                 Some(mark) => format!(
                     "{} (line {}, column {})",
                     error.problem, mark.line, mark.column
@@ -609,11 +609,12 @@ objective:
     }
 
     #[test]
-    fn a_repeated_key_is_left_alone_and_exits_1() {
-        // Intended difference (CHANGELOG): read as YAML 1.2 a repeated key
-        // makes the file unreadable, where the oracle's `yaml.compose`
-        // accepted it and rewrote the file.
-        let text = "objective:\n  signals:\n    - entities: [Process]\nobjective: {}\n";
+    fn a_repeated_key_is_migrated_as_the_oracle_does() {
+        // The oracle's `yaml.compose` accepts a mapping that repeats a key and
+        // rewrites the values under every copy; changing that would change the
+        // exit code, so the run reads such a file and rewrites both.
+        let text = "objective:\n  signals:\n    - entities: [Process]\n\
+                    objective:\n  signals:\n    - entities: [host::Hostname]\n";
         let dir = workspace(&[("objects/o.yaml", text)]);
         let report = run_in(
             dir.path(),
@@ -622,22 +623,20 @@ objective:
                 ..Args::default()
             },
         );
-        assert_eq!(report.outcome.exit_code, 1);
-        assert_eq!(report.outcome.failure.as_ref().unwrap().code, ISSUES_FOUND);
-        let Json::Object(failed) = data(&report, "failed_files") else {
-            panic!("failed_files is an object");
-        };
-        assert_eq!(failed[0].0, "objects/o.yaml");
-        let Json::Str(reason) = &failed[0].1 else {
-            panic!("a reason is a string");
-        };
-        assert!(
-            reason.starts_with("unreadable: the key 'objective' is repeated"),
-            "{reason}"
+        assert_eq!(report.outcome.exit_code, 0, "{}", report.outcome.message);
+        assert!(report.outcome.failure.is_none());
+        assert_eq!(data(&report, "failed_files"), &Json::Object(Vec::new()));
+        assert_eq!(data(&report, "scanned"), &Json::Int(1));
+        assert_eq!(
+            data(&report, "changed_files"),
+            &Json::Array(vec![Json::str("objects/o.yaml")])
         );
-        assert_eq!(data(&report, "scanned"), &Json::Int(0));
-        let on_disk = std::fs::read(dir.path().join("objects/o.yaml")).unwrap();
-        assert_eq!(on_disk, text.as_bytes());
+        let on_disk = std::fs::read_to_string(dir.path().join("objects/o.yaml")).unwrap();
+        assert_eq!(
+            on_disk,
+            text.replace("[Process]", "[Host::Process]")
+                .replace("[host::Hostname]", "[Host::Hostname]")
+        );
     }
 
     #[test]
