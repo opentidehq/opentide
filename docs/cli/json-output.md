@@ -148,15 +148,24 @@ Where the log goes, what it holds and how to report the bug: [Troubleshooting](.
 
 ## Choosing the implementation
 
-opentide is moving its commands from Python to Rust, one at a time ([#790](https://github.com/opentidehq/opentide/issues/790)). Until a command's default changes, its Python implementation runs. `OPENTIDE_ENGINE` chooses another, read when the command starts:
+opentide is moving its commands from Python to Rust, one at a time ([#790](https://github.com/opentidehq/opentide/issues/790)). Each command has a default implementation, Python until its default changes. `OPENTIDE_ENGINE` chooses another, read when the command starts:
 
 | Value | Runs |
 |-------|------|
-| `python`, empty or unset | The Python implementation, as before |
+| empty or unset | The command's default implementation: Python for every command today |
+| `python` | The Python implementation, whatever the command's default |
 | `rust` | The Rust implementation. A command that has none exits `2` with `failure.code` `engine_not_ported` and `failure.argument` `OPENTIDE_ENGINE`, and so does a run whose input it does not cover yet (`generate docs` on threats that list CVEs while `[cve] retrieve_details` is on: only the Python implementation fetches their details) |
 | `compare` | Both, each on its own copy of the workspace, and compares their exit codes, stdout, stderr and the files each created, changed or deleted. JSON is compared by its data, then by the order of every object's keys, then byte for byte. If they agree, the Python run's output and exit code are the command's. If not, the command exits `70` with `failure.code` `engine_mismatch`, and `failure.message` names the diff report. A command that has no Rust implementation, or a run whose input its Rust implementation refuses with `engine_not_ported`, runs Python alone |
 
-Any other value is a usage error (`usage_invalid_choice`, exit `2`, `argument` `OPENTIDE_ENGINE`). Today `info`, `rules unreviewed` and `deploy --dry-run` have one. A command's Rust implementation can cover only some of its runs: `deploy` runs in Rust with `--dry-run` only, so `rust` refuses a deploy that sends with `engine_not_ported`, and `compare` runs it in Python alone. The variable chooses the implementation, never what a command does: the documents on this site are the contract both implementations print.
+Any other value is a usage error (`usage_invalid_choice`, exit `2`, `argument` `OPENTIDE_ENGINE`). `info` (every section), `rules unreviewed`, `generate exports`, `generate docs` and `deploy --dry-run` have a Rust implementation today; `rust` refuses the other commands and `compare` runs them on Python alone. A command's Rust implementation can cover only some of its runs: `deploy` runs in Rust with `--dry-run` only, so `rust` refuses a deploy that sends with `engine_not_ported`, and `compare` runs it in Python alone. The variable chooses the implementation, never what a command does: the documents on this site are the contract both implementations print.
+
+A command's default moves to Rust one at a time, in three releases ([#822](https://github.com/opentidehq/opentide/issues/822)):
+
+1. The Rust implementation ships, Python stays the default, and `compare` (in opentide's CI on every corpus, and in yours if you opt in) shows any difference.
+2. After a release with no difference, the default changes to Rust, with a changelog entry. `OPENTIDE_ENGINE=python` still runs Python for that release: the escape hatch if your workspace finds what the corpora did not.
+3. The release after, the Python implementation goes.
+
+No command's default has changed yet. `opentide serve` and `opentide mcp start` run under any engine: the engine applies to the commands `serve` runs and to the MCP validation tools (`validate_rule`, `validation_report`), not to the servers themselves ([opentide serve](./serve.md#the-rust-engine), [MCP tools](../mcp/tools.md#choosing-the-implementation)). The SDK's `run_validation` follows `OPENTIDE_ENGINE` the same way ([Validation](../sdk/validation.md#choosing-the-implementation)).
 
 ```bash
 OPENTIDE_ENGINE=compare opentide --json validate

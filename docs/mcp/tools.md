@@ -260,6 +260,10 @@ Every rule query is checked offline with the analysis engine, as `opentide valid
 
 A report with errors points at `explain` for the first error code, then at `validation_report` again. When any fix is `safe`, that last step's `command` is `opentide --json validate --fix` with the same `--file`, `--uuid` or `--type`, which writes the safe fixes and validates again in one run, and its `reason` is `apply the safe fixes, then validate again`; `validate_rule` does the same with `--uuid`. A clean report has `ok: true` and an empty `next_actions`.
 
+### Choosing the implementation
+
+`validate_rule` and `validation_report` run `validate` on the implementation `OPENTIDE_ENGINE` selects for it, read at each call from the server's environment ([Choosing the implementation](../cli/json-output.md#choosing-the-implementation)): Python by default; `rust` validates on the Rust workspace and returns the same payload; `compare` runs both and returns the Python payload, logging a warning (`engine_mismatch`) and writing a diff report to `$XDG_STATE_HOME/opentide/compare/` when they differ or when the Rust run fails, so a call never fails over a difference or the Rust half. Some differences are intended and announced in the changelog (YAML 1.2 dates, YAML error wording, an unknown schema revision checked against the newest); the report lists them too. An engine that is none fails the call with `usage_invalid_choice`. `validate_query` checks queries on the Rust engine whatever the variable says; the other tools run Python.
+
 ### Diagnostic fields
 
 Each entry of `issues` and `warnings` (and of `validate_rule`'s `issues`) carries the same fields as [`opentide --json validate`](../cli/json-output.md). They are added; every existing key keeps its value.
