@@ -207,18 +207,21 @@ impl Formatter for PythonFormatter {
         writer: &mut W,
         fragment: &str,
     ) -> io::Result<()> {
+        // ASCII runs are written whole: a schema is megabytes of them, and
+        // a write per character was most of the time spent writing it.
         let mut units = [0_u16; 2];
-        for character in fragment.chars() {
+        let mut run = 0;
+        for (at, character) in fragment.char_indices() {
             if character.is_ascii() {
-                let mut byte = [0_u8; 1];
-                writer.write_all(character.encode_utf8(&mut byte).as_bytes())?;
-            } else {
-                for unit in character.encode_utf16(&mut units) {
-                    write!(writer, "\\u{unit:04x}")?;
-                }
+                continue;
             }
+            writer.write_all(&fragment.as_bytes()[run..at])?;
+            for unit in character.encode_utf16(&mut units) {
+                write!(writer, "\\u{unit:04x}")?;
+            }
+            run = at + character.len_utf8();
         }
-        Ok(())
+        writer.write_all(&fragment.as_bytes()[run..])
     }
 
     fn write_char_escape<W: ?Sized + io::Write>(

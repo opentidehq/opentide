@@ -192,6 +192,24 @@ impl Settings {
     }
 }
 
+/// The templates folder (`[paths.opentide] templates`, `.opentide/templates/`
+/// by default), relative to the workspace.
+pub fn templates_dir(config: &Node) -> String {
+    Settings::of(config).templates_dir
+}
+
+/// The schemas folder (`[paths.opentide] schemas`, `.opentide/schemas/` by
+/// default), relative to the workspace.
+pub fn schemas_dir(config: &Node) -> String {
+    Settings::of(config).schemas_dir
+}
+
+/// `dir` joined with `name`, `/`-separated (`a/` and `b` are `a/b`; `.` and
+/// an empty `dir` are dropped).
+pub fn join_path(dir: &str, name: &str) -> String {
+    join(dir, name)
+}
+
 /// Platforms with a rule block whose merged `[platform] enabled` is `true`,
 /// in the configuration's order, each with its display name
 /// (`enabled_platforms`, `_entry_name`).

@@ -23,7 +23,7 @@
 //! frame, SARIF and CI annotations are drawn from. Lint's `info` is
 //! [`Severity::Info`]: the JSON says `info`, the frame says `note`.
 
-mod stems;
+pub mod stems;
 
 use std::path::{Path, PathBuf};
 

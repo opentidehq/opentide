@@ -36,7 +36,8 @@
 //! descriptions, key order, `type` arrays where Pydantic writes `anyOf` with
 //! `null`) are recorded in `tests/golden/APPROVED_DIFFS.toml`.
 
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex, OnceLock};
 
 use schemars::generate::SchemaSettings;
 use schemars::transform::Transform;
@@ -93,16 +94,30 @@ pub fn revision_model_schema(identifier: &str) -> Option<Schema> {
 /// applied, before the hover annotations; `None` for an identifier that
 /// names no revision.
 pub fn revision_schema(identifier: &str, sources: &Sources) -> Option<Schema> {
+    transformed(identifier, sources, true)
+}
+
+/// [`revision_schema`] without [`Recompose`]: `configurations` stays the
+/// model's, every platform block as its model declares it. The language
+/// server's catalog is built from it ([`super::catalog`]), so its rows are
+/// the same whichever platforms a workspace enables.
+pub fn unrecomposed_revision_schema(identifier: &str, sources: &Sources) -> Option<Schema> {
+    transformed(identifier, sources, false)
+}
+
+fn transformed(identifier: &str, sources: &Sources, recompose: bool) -> Option<Schema> {
     let mut schema = revision_model_schema(identifier)?;
     let family = identifier.split("::").next().unwrap_or_default();
     RootExtras { family }.transform(&mut schema);
     if let Some(pins) = PinTable::bundled().get(identifier) {
         ApplyPins { pins }.transform(&mut schema);
     }
-    Recompose {
-        config: &sources.config,
+    if recompose {
+        Recompose {
+            config: &sources.config,
+        }
+        .transform(&mut schema);
     }
-    .transform(&mut schema);
     ResolveValues { sources }.transform(&mut schema);
     CloseObjects.transform(&mut schema);
     PinIdentifier { identifier }.transform(&mut schema);
@@ -494,7 +509,63 @@ pub struct ResolveValues<'a> {
 
 impl Transform for ResolveValues<'_> {
     fn transform(&mut self, schema: &mut Schema) {
-        with_value(schema, |value| resolve_node(value, None, self.sources));
+        with_value(schema, |value| {
+            inline_vocabulary_unions(value);
+            resolve_node(value, None, self.sources);
+        });
+    }
+}
+
+/// A vocabulary field whose union is a definition of its own
+/// (`killchain: str | list[str]`, `{"anyOf": [{"$ref": "#/$defs/Killchain"},
+/// {"type": "null"}]}`) gets that definition's branches in place of the
+/// reference, so its string and array branches take the vocabulary's enum as
+/// a union written in place does; the definition, which other fields share,
+/// stays as it is.
+fn inline_vocabulary_unions(schema: &mut Value) {
+    let Some(Value::Object(defs)) = schema.get("$defs").cloned() else {
+        return;
+    };
+    inline_unions_in(schema, &defs);
+}
+
+fn inline_unions_in(node: &mut Value, defs: &Map<String, Value>) {
+    match node {
+        Value::Object(map) => {
+            if map.contains_key(keys::VOCAB)
+                && let Some(Value::Array(branches)) = map.get_mut("anyOf")
+            {
+                let mut inlined = Vec::with_capacity(branches.len());
+                for branch in branches.drain(..) {
+                    let union = branch
+                        .get("$ref")
+                        .and_then(Value::as_str)
+                        .and_then(|reference| reference.strip_prefix("#/$defs/"))
+                        .and_then(|name| defs.get(name))
+                        .filter(|target| target.get("properties").is_none())
+                        .and_then(|target| target.get("anyOf"))
+                        .and_then(Value::as_array);
+                    match union {
+                        Some(union) if branch.as_object().is_some_and(|map| map.len() == 1) => {
+                            inlined.extend(union.iter().cloned());
+                        }
+                        _ => inlined.push(branch),
+                    }
+                }
+                *branches = inlined;
+            }
+            for (name, child) in map.iter_mut() {
+                if name != "enum" && name != "const" && name != "default" {
+                    inline_unions_in(child, defs);
+                }
+            }
+        }
+        Value::Array(items) => {
+            for item in items {
+                inline_unions_in(item, defs);
+            }
+        }
+        _ => {}
     }
 }
 
@@ -855,7 +926,7 @@ fn plain(value: &str, entry: &Entry) -> String {
     } else {
         entry.name.trim()
     };
-    let description = first_sentence(&plain_text(&entry.description, true));
+    let description = summary(&entry.description);
     if !display.is_empty() && !value.ends_with(display) {
         if description.is_empty() {
             display.to_owned()
@@ -865,6 +936,46 @@ fn plain(value: &str, entry: &Entry) -> String {
     } else {
         description
     }
+}
+
+/// The first sentence of `description` as plain text, worked out once per
+/// distinct description. One `generate schemas` offers a vocabulary in many
+/// fields of every schema and in the field catalog, and the Markdown
+/// clean-up of its descriptions was most of the phase's time (each
+/// `opentide new` that generates the schemas first paid it again per
+/// field). Keyed by the text itself, so an edited description is a miss,
+/// never a stale answer.
+fn summary(description: &str) -> String {
+    static CACHE: OnceLock<Mutex<HashMap<String, String>>> = OnceLock::new();
+    summary_in(
+        CACHE.get_or_init(Mutex::default),
+        SUMMARY_LIMIT,
+        description,
+    )
+}
+
+/// How many descriptions [`summary`] keeps before it starts over: more
+/// than every bundled vocabulary holds, so a long-running process (the
+/// language server) that sees many workspaces stays bounded.
+const SUMMARY_LIMIT: usize = 1 << 16;
+
+/// [`summary`] with its cache and bound given.
+fn summary_in(cache: &Mutex<HashMap<String, String>>, limit: usize, description: &str) -> String {
+    if let Some(found) = cache
+        .lock()
+        .ok()
+        .and_then(|cache| cache.get(description).cloned())
+    {
+        return found;
+    }
+    let computed = first_sentence(&plain_text(description, true));
+    if let Ok(mut cache) = cache.lock() {
+        if cache.len() >= limit {
+            cache.clear();
+        }
+        cache.insert(description.to_owned(), computed.clone());
+    }
+    computed
 }
 
 /// The Markdown an editor shows for an entry in a dropdown: its name, its

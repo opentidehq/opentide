@@ -2169,6 +2169,11 @@ pub enum GenerateCommand {
         subcommand_value_name = "COMMAND"
     )]
     Inflight(GenerateInflightArgs),
+    /// The phases named as words (`generate schemas templates`): a word that
+    /// is not a subcommand starts them (`GeneratePhaseGroup`). Not a
+    /// subcommand, so not in the catalogue.
+    #[command(external_subcommand)]
+    Phases(Vec<String>),
 }
 
 /// The subcommands of `opentide generate inflight`.

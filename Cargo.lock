@@ -2188,6 +2188,7 @@ dependencies = [
  "tracing-subscriber",
  "unicode-width",
  "url",
+ "uuid",
  "which",
 ]
 
@@ -2198,6 +2199,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
+ "sha2",
  "toml 0.8.23",
 ]
 

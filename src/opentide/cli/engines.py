@@ -76,9 +76,10 @@ class RustCommand:
     workspace (a tenant, MISP): ``compare`` refuses it, since both runs would
     reach it and nothing would compare what they did there.
 
-    *requires* names flags of which a run must carry one for the Rust
-    implementation to cover it (``deploy`` runs in Rust with ``--dry-run``
-    only); a run without any is a command with no Rust implementation:
+    *requires* names flags (or words: ``generate``'s phases) of which a run
+    must carry one for the Rust implementation to cover it (``deploy`` runs in
+    Rust with ``--dry-run`` only); a run without any is a command with no
+    Rust implementation:
     ``rust`` refuses it with ``engine_not_ported`` and ``compare`` runs
     Python alone. *refuses* names flags a run must carry none of: ``validate
     query --live`` checks the queries on the tenants, which stays Python's
@@ -133,6 +134,9 @@ RUST_CLI: tuple[str, ...] = (sys.executable, "-m", "opentide.cli.rust")
 #: (#829): the Rust server, which hands the tools and resources it has no
 #: implementation of to the Python server's handlers in its own process
 #: (``opentide.mcp_server.bridge``).
+#: ``new threat|objective|rule`` and ``generate`` with phases named
+#: (``generate schemas templates``) with UC-3.5d (#933): its *requires* are
+#: the phase words, so a bare ``generate`` (the full pipeline) stays Python's.
 RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
     ("commands",): RustCommand(launch=RUST_CLI),
     ("explain",): RustCommand(launch=RUST_CLI),
@@ -158,6 +162,12 @@ RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
     ("generate", "inflight", "prune"): RustCommand(launch=RUST_CLI),
     ("setup", "ci"): RustCommand(launch=RUST_CLI),
     ("mcp", "start"): RustCommand(launch=RUST_CLI),
+    ("generate",): RustCommand(
+        launch=RUST_CLI, requires=("schemas", "templates", "vocabs", "snippets")
+    ),
+    ("new", "threat"): RustCommand(launch=RUST_CLI, rules=("fresh-uuids",)),
+    ("new", "objective"): RustCommand(launch=RUST_CLI, rules=("fresh-uuids",)),
+    ("new", "rule"): RustCommand(launch=RUST_CLI, rules=("fresh-uuids",)),
 }
 
 

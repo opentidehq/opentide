@@ -171,7 +171,7 @@ fn count_json(count: usize) -> Json {
 
 /// A phase that failed (`phase_failure`): exit 1, the phase named in
 /// `phase` and leading the message.
-fn phase_failed(
+pub(crate) fn phase_failed(
     command: &str,
     phase: &str,
     detail: &str,
@@ -1047,6 +1047,170 @@ pub fn inflight_prune(cx: &Context<'_>) -> Report {
             vec![phase.step],
         ),
     }
+}
+
+/// The phases `opentide generate` names as words (`generate schemas
+/// templates`), sorted as the usage error lists them.
+pub const NAMED_PHASES: [&str; 4] = ["schemas", "snippets", "templates", "vocabs"];
+
+/// What a run of named phases did: the steps, and the phase that failed
+/// with its detail.
+pub struct PhasesRun {
+    /// One step per phase that ran, in order.
+    pub steps: Vec<Step>,
+    /// The phase that failed and why; the phases after it did not run.
+    pub failed: Option<(String, String)>,
+}
+
+/// The sources of the `schemas` phase: the workspace's resolved
+/// configuration, the bundled vocabularies and its object vocabularies.
+fn schema_sources(workspace: &Workspace) -> opentide_schema::generate::schema::Sources {
+    let tree = workspace.configuration().resolved.tree.clone();
+    let mut vocabularies = Vocabularies::bundled();
+    for vocabulary in
+        opentide_workspace::vocabularies::object_vocabularies(workspace.index(), &tree)
+    {
+        vocabularies.insert(vocabulary);
+    }
+    opentide_schema::generate::schema::Sources {
+        config: std::sync::Arc::new(tree),
+        vocabularies: std::sync::Arc::new(vocabularies),
+    }
+}
+
+/// The files one of the phases this engine runs writes, under `root`.
+fn phase_outputs(
+    phase: &str,
+    workspace: &Workspace,
+    root: &Path,
+    version: &str,
+) -> Result<Vec<Output>, String> {
+    use opentide_schema::generate::catalog::{CATALOG_DIR, catalog_texts};
+    use opentide_schema::generate::workspace::{
+        router_artifact, schema_artifacts, snippets, templates,
+    };
+    let config = &workspace.configuration().resolved.tree;
+    let at = |path: &str| root.join(path);
+    match phase {
+        "templates" => Ok(templates(config)
+            .map_err(|error| error.to_string())?
+            .into_iter()
+            .map(|artifact| Output::text(at(&artifact.path), artifact.text))
+            .collect()),
+        "schemas" => {
+            let sources = schema_sources(workspace);
+            let mut outputs: Vec<Output> = schema_artifacts(&sources)
+                .into_iter()
+                .chain(std::iter::once(router_artifact(config)))
+                .map(|artifact| Output::text(at(&artifact.path), artifact.text))
+                .collect();
+            for (name, text) in catalog_texts(version, &sources) {
+                outputs.push(Output::text(at(CATALOG_DIR).join(name), text));
+            }
+            Ok(outputs)
+        }
+        "snippets" => {
+            // The snippets quote the templates as they are on disk.
+            let on_disk: Vec<_> = templates(config)
+                .map_err(|error| error.to_string())?
+                .into_iter()
+                .filter_map(|mut artifact| {
+                    artifact.text = std::fs::read_to_string(at(&artifact.path)).ok()?;
+                    Some(artifact)
+                })
+                .collect();
+            let snippet = snippets(config, &on_disk)?;
+            Ok(vec![Output::text(at(&snippet.path), snippet.text)])
+        }
+        // The object vocabularies are built from the index whenever a
+        // schema or a check needs them; the phase writes nothing
+        // (`object_vocab.run`).
+        "vocabs" => Ok(Vec::new()),
+        other => Err(format!("Unknown generation phase: {other}")),
+    }
+}
+
+/// Runs `phases` (each `schemas`, `templates`, `vocabs` or `snippets`) on `workspace`
+/// in order, each as a checklist step, until one fails.
+pub fn run_phases(
+    phases: &[String],
+    workspace: &Workspace,
+    cwd: &Path,
+    version: &str,
+) -> PhasesRun {
+    let root = workspace.root().to_path_buf();
+    let mut steps = Vec::new();
+    for phase in phases {
+        // The checklist names `vocabs` by what it builds.
+        let name = if phase == "vocabs" {
+            "vocabularies"
+        } else {
+            phase.as_str()
+        };
+        let ran = run_phase(name, std::slice::from_ref(&root), cwd, &root, || {
+            write(&phase_outputs(phase, workspace, &root, version)?)
+        });
+        steps.push(ran.step);
+        if let Some(detail) = ran.error {
+            return PhasesRun {
+                steps,
+                failed: Some((phase.clone(), detail)),
+            };
+        }
+    }
+    PhasesRun {
+        steps,
+        failed: None,
+    }
+}
+
+/// `opentide generate <phase>...` (`generate_all` with named phases): the
+/// `schemas`, `templates`, `vocabs` and `snippets` phases. The full pipeline
+/// (no phase) is the Python engine's: refused with `engine_not_ported`, and
+/// the dispatch table sends it to Python (`requires`).
+pub fn phases(names: &[String], cx: &Context<'_>, version: &str) -> Report {
+    let command = "generate";
+    let unknown: Vec<&str> = names
+        .iter()
+        .map(String::as_str)
+        .filter(|name| !NAMED_PHASES.contains(name))
+        .collect();
+    if let Some(first) = unknown.first() {
+        return Report::usage(
+            command,
+            format!(
+                "Unknown generation phase {}. Pass one or more of: {}.",
+                unknown.join(", "),
+                NAMED_PHASES.join(", ")
+            ),
+            super::USAGE_INVALID_CHOICE,
+            "phase",
+            Some(first),
+            &NAMED_PHASES,
+        );
+    }
+    if names.is_empty() {
+        let mut failure = Failure::new(
+            crate::envelope::code::ENGINE_NOT_PORTED,
+            "opentide generate without schemas, templates, vocabs or snippets has no Rust \
+             implementation yet: unset OPENTIDE_ENGINE, or set it to python or compare.",
+        );
+        failure.argument = Some("OPENTIDE_ENGINE".into());
+        return Report::failed(command, crate::envelope::USAGE_EXIT_CODE, failure);
+    }
+    let workspace = match workspace(command, cx) {
+        Ok(workspace) => workspace,
+        Err(report) => return *report,
+    };
+    let run = run_phases(names, &workspace, cx.cwd, version);
+    if let Some((phase, detail)) = run.failed {
+        return phase_failed(command, &phase, &detail, Vec::new(), run.steps);
+    }
+    generated(
+        command,
+        vec![("phases".to_owned(), strings_json(names))],
+        run.steps,
+    )
 }
 
 #[cfg(test)]
