@@ -57,7 +57,8 @@ stdout (progress goes to stderr); --out writes it to FILE as well.
                     and `validate_*` (opentide-workspace's load and validate
                     examples; validate without the queries check, UC-2.5)
                     and the commands the Rust CLI runs (info, info catalog,
-                    rules unreviewed, generate exports navigator), built
+                    rules unreviewed, generate exports navigator, generate
+                    docs), built
                     --release; every other command
                     reports \"no Rust yet\"
   --scale 1|10      the heavy workspace's size (default 1)
@@ -634,6 +635,7 @@ const RUST_CLI: &[&str] = &[
     "info_catalog",
     "rules_unreviewed",
     "generate_exports_navigator",
+    "generate_docs",
 ];
 
 /// The program a scenario runs. For `--engine rust`, `opentide` is the Rust
