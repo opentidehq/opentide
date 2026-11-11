@@ -136,6 +136,12 @@ def test_a_rust_command_that_requires_a_flag_covers_only_runs_with_it() -> None:
     assert not command.covers(["deploy", "--", "--dry-run"])
     assert RustCommand(launch=("x",)).covers(["info"])
     assert engines.RUST_COMMANDS[("deploy",)].requires == ("--dry-run",)
+    # ``doctor`` reaches PyPI and the proxy without ``--offline``: that run stays Python's.
+    doctor = engines.RUST_COMMANDS[("doctor",)]
+    assert doctor.requires == ("--offline",)
+    assert doctor.rules == ("host-git",)
+    assert doctor.covers(["doctor", "--offline"])
+    assert not doctor.covers(["doctor"])
 
 
 def test_rust_refuses_a_run_its_implementation_does_not_cover(

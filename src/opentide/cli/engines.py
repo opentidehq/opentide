@@ -104,11 +104,13 @@ RUST_CLI: tuple[str, ...] = (sys.executable, "-m", "opentide.cli.rust")
 #: came with UC-2.4 (#819); ``generate exports`` and its three exports with
 #: UC-3.2 (#824); ``generate docs`` and its four scopes with UC-3.2b (#915);
 #: ``deploy --dry-run`` with UC-3.1c (#896): a deploy that sends stays Python's;
-#: ``migrate vocab-scope`` with UC-3.5c (#928).
+#: ``migrate vocab-scope`` and ``doctor --offline`` with UC-3.5c (#928): a doctor
+#: that reaches PyPI and the proxy stays Python's.
 RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
     ("info",): RustCommand(launch=RUST_CLI),
     ("rules", "unreviewed"): RustCommand(launch=RUST_CLI),
     ("deploy",): RustCommand(launch=RUST_CLI, requires=("--dry-run",)),
+    ("doctor",): RustCommand(launch=RUST_CLI, rules=("host-git",), requires=("--offline",)),
     ("migrate", "vocab-scope"): RustCommand(launch=RUST_CLI),
     ("generate", "exports"): RustCommand(launch=RUST_CLI),
     ("generate", "exports", "navigator"): RustCommand(launch=RUST_CLI),

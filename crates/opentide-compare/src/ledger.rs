@@ -22,7 +22,12 @@
 //! lines, consecutive, read as the candidate's where the candidate has them
 //! at the same place, so a row the candidate adds or drops is one entry. A
 //! line ends at `\n` (or `\r\n`): a value may hold a `\r` inside a line, as
-//! a terminal's cursor movements do, but no line of it ends in one. An entry applies only
+//! a terminal's cursor movements do, but no line of it ends in one. A
+//! `presence` rule approves a file the oracle wrote and the candidate did not
+//! (`oracle = "written"`, `candidate = "(absent)"`), and only in the oracle's
+//! language-server catalog cache, [`ORACLE_CACHE`]: the target is one exact
+//! path there (the fingerprint as normalised, `<CATALOG-FINGERPRINT>`), never
+//! a file in the workspace, which a user commits. An entry applies only
 //! where both values are found as written; an entry that applies nowhere in a
 //! complete run is stale, and a stale entry fails the run.
 
@@ -34,6 +39,31 @@ use std::fmt;
 /// The value of `oracle` or `candidate` that says this side has no value at
 /// the pointer.
 pub const ABSENT: &str = "(absent)";
+
+/// What a `presence` rule's `oracle` holds: the oracle wrote the file.
+pub const WRITTEN: &str = "written";
+
+/// The folder of a golden case in which the oracle caches the language-server
+/// catalog it generates (`~/.cache/opentide/lsp-catalogs/<fingerprint>/`,
+/// the fingerprint normalised): the one place a `presence` rule may approve a
+/// file the oracle wrote and the candidate did not. A cache outside the
+/// workspace is not a file a user commits (#928).
+pub const ORACLE_CACHE: &str = "home/.cache/opentide/lsp-catalogs/<CATALOG-FINGERPRINT>";
+
+/// Whether a `presence` rule may name `path`: [`ORACLE_CACHE`], a file
+/// directly in it, or a folder above it the oracle created to hold it
+/// (`home/.cache` and below).
+pub fn in_oracle_cache(path: &str) -> bool {
+    let in_cache = path
+        .strip_prefix(ORACLE_CACHE)
+        .and_then(|rest| rest.strip_prefix('/'))
+        .is_some_and(|name| !name.is_empty() && !name.contains('/'));
+    let above_cache = path.starts_with("home/.cache")
+        && ORACLE_CACHE
+            .strip_prefix(path)
+            .is_some_and(|rest| rest.starts_with('/'));
+    path == ORACLE_CACHE || in_cache || above_cache
+}
 
 /// What a run compares: the exit code, a stream, or a file the command wrote.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -114,6 +144,9 @@ pub enum Rule {
         /// The candidate's lines, without their endings.
         candidate: Vec<String>,
     },
+    /// The oracle wrote the file and the candidate did not: only in the
+    /// oracle's catalog cache ([`ORACLE_CACHE`]).
+    Presence,
     /// The exit code.
     ExitCode {
         /// The oracle's code.
@@ -132,7 +165,8 @@ pub struct Entry {
     pub case: String,
     /// What it applies to.
     pub target: Target,
-    /// The rule, as written in the ledger: `json:/pointer`, `text` or `lines`.
+    /// The rule, as written in the ledger: `json:/pointer`, `text`, `lines`
+    /// or `presence`.
     pub rule_text: String,
     /// What it expects on each side.
     pub rule: Rule,
@@ -405,6 +439,29 @@ fn check_entry(raw: RawEntry) -> Result<Entry, Vec<String>> {
             ));
             None
         }
+        (_, "presence") => match &target {
+            Some(Target::File(path)) if in_oracle_cache(path) => {
+                if raw.oracle == WRITTEN && raw.candidate == ABSENT {
+                    Some(Rule::Presence)
+                } else {
+                    problems.push(format!(
+                        "a `presence` rule approves a file the oracle wrote and the candidate \
+                         did not: `oracle = \"{WRITTEN}\"`, `candidate = \"{ABSENT}\"`"
+                    ));
+                    None
+                }
+            }
+            Some(_) => {
+                problems.push(format!(
+                    "a `presence` rule names a file in the oracle's catalog cache \
+                     (`file:{ORACLE_CACHE}/<name>`), not {:?}: a file the user commits is \
+                     compared, never approved missing",
+                    raw.target
+                ));
+                None
+            }
+            None => None,
+        },
         (_, "lines") => Some(Rule::Lines {
             oracle: raw.oracle.split('\n').map(str::to_owned).collect(),
             candidate: raw.candidate.split('\n').map(str::to_owned).collect(),
@@ -441,7 +498,7 @@ fn check_entry(raw: RawEntry) -> Result<Entry, Vec<String>> {
             None => {
                 if !rule.trim().is_empty() {
                     problems.push(format!(
-                        "`rule` {rule:?} is not `text`, `lines` or `json:<pointer>`"
+                        "`rule` {rule:?} is not `text`, `lines`, `presence` or `json:<pointer>`"
                     ));
                 }
                 None
@@ -455,7 +512,7 @@ fn check_entry(raw: RawEntry) -> Result<Entry, Vec<String>> {
         Some(Rule::Text { oracle, candidate }) => oracle == candidate,
         Some(Rule::Lines { oracle, candidate }) => oracle == candidate,
         Some(Rule::ExitCode { oracle, candidate }) => oracle == candidate,
-        None => false,
+        Some(Rule::Presence) | None => false,
     };
     if same {
         problems.push(
@@ -725,6 +782,70 @@ changelog = "**Nested rules**"
             assert!(
                 error.contains("one whole line each") || error.contains("none ending in `\\r`"),
                 "{rule} {value}: {error}"
+            );
+        }
+    }
+
+    fn presence(target: &str, oracle: &str, candidate: &str) -> Result<Ledger, LedgerError> {
+        Ledger::parse(&format!(
+            r#"
+[[diff]]
+command = "doctor"
+case = "json/*/offline"
+target = "{target}"
+rule = "presence"
+oracle = "{oracle}"
+candidate = "{candidate}"
+reason = "the oracle's cache"
+issue = "https://github.com/opentidehq/opentide/issues/928"
+changelog = "**x**"
+"#
+        ))
+    }
+
+    #[test]
+    fn a_presence_rule_names_a_path_in_the_oracle_cache_only() {
+        for path in [
+            "home/.cache",
+            "home/.cache/opentide",
+            "home/.cache/opentide/lsp-catalogs",
+            ORACLE_CACHE,
+            "home/.cache/opentide/lsp-catalogs/<CATALOG-FINGERPRINT>/fields.json",
+        ] {
+            let ledger = presence(&format!("file:{path}"), WRITTEN, ABSENT).unwrap();
+            assert_eq!(ledger.entries[0].rule, Rule::Presence, "{path}");
+        }
+        for target in [
+            "file:ws/.opentide/config.toml",
+            "file:fields.json",
+            "file:home",
+            "file:home/.cachex",
+            "file:home/.config/opentide/x.json",
+            "file:home/.cache/opentide/other/fields.json",
+            "file:home/.cache/opentide/lsp-catalogs/0123abcd/fields.json",
+            "file:home/.cache/opentide/lsp-catalogs/<CATALOG-FINGERPRINT>/a/fields.json",
+            "file:home/.cache/opentide/lsp-catalogs/<CATALOG-FINGERPRINT>x/fields.json",
+            "stdout",
+            "exit_code",
+        ] {
+            let error = presence(target, WRITTEN, ABSENT).unwrap_err();
+            assert!(!error.problems.is_empty(), "{target}");
+        }
+    }
+
+    #[test]
+    fn a_presence_rule_approves_only_a_file_the_oracle_wrote() {
+        let cache = format!("file:{ORACLE_CACHE}/fields.json");
+        for (oracle, candidate) in [
+            (ABSENT, WRITTEN),
+            ("deleted", ABSENT),
+            (WRITTEN, "deleted"),
+            (WRITTEN, WRITTEN),
+        ] {
+            let error = presence(&cache, oracle, candidate).unwrap_err();
+            assert!(
+                error.problems[0].contains("a `presence` rule approves a file the oracle wrote"),
+                "{oracle} {candidate}: {error}"
             );
         }
     }

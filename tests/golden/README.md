@@ -44,7 +44,12 @@ cargo xtask golden lock                         # rewrite oracle-requirements.tx
    each block quoted exactly and the entry naming its one case (no `*`): a block one character
    off, or one the output extends by a line, is not approved, and the lines after an approved
    block are compared at their new place; a
-   JSON rule is one value at one pointer.
+   JSON rule is one value at one pointer; a presence rule (`oracle = "written"`,
+   `candidate = "(absent)"`) approves one file the oracle wrote and the candidate did not, named
+   by its exact path, and only in the oracle's language-server catalog cache
+   (`home/.cache/opentide/lsp-catalogs/<CATALOG-FINGERPRINT>/`, and the folders above it it
+   creates): a cache outside the workspace is not a file a user commits, and any other file
+   only one side wrote is still a difference.
 
 ## The oracle
 

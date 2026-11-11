@@ -1635,6 +1635,20 @@ mod tests {
             );
             std::fs::remove_file(&file).unwrap();
         }
+        // doctor runs here with --offline only: without it, the network
+        // checks are Python's, and compare runs Python alone on the refusal.
+        for line in ["--json doctor", "doctor"] {
+            let refused = dispatched(line, &[(REFUSAL_ENV, &path)], false);
+            assert_eq!(refused.code, 2, "{line}");
+            let recorded = std::fs::read_to_string(&file).unwrap();
+            assert!(
+                recorded.starts_with(
+                    "opentide doctor without --offline has no Rust implementation yet"
+                ),
+                "{line}: {recorded}"
+            );
+            std::fs::remove_file(&file).unwrap();
+        }
         let ran = dispatched("--json commands", &[(REFUSAL_ENV, &path)], false);
         assert_eq!(ran.code, 0);
         assert!(!file.exists());
