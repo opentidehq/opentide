@@ -282,6 +282,27 @@ impl Profiles {
     }
 }
 
+/// One query on its own (a query file), in its own coordinates, with
+/// `platform`'s profile when one is given (`check_query`). Hold [`ENGINE`]
+/// with the workspace's [`Profiles`] installed: the declared datasets apply.
+pub fn check_query_text(
+    text: &str,
+    language: opentide_analysis::LanguageId,
+    platform: Option<&str>,
+) -> Vec<Finding> {
+    let text = universal_newlines(text);
+    let lines = LineStarts::new(&text);
+    opentide_analysis::analyze_query(&opentide_analysis::QueryRequest {
+        language,
+        platform: platform.map(str::to_owned),
+        stack: None,
+        text: text.clone().into_owned(),
+    })
+    .into_iter()
+    .map(|diagnostic| finding(&text, &lines, diagnostic))
+    .collect()
+}
+
 /// The marker `opentide new` writes after a value to fill in.
 static PLACEHOLDER_MARK: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
     #[expect(clippy::expect_used, reason = "a literal pattern")]

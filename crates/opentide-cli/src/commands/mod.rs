@@ -19,6 +19,7 @@ pub mod migrate;
 pub mod rules;
 pub mod setup;
 pub mod validate;
+pub mod validate_query;
 pub mod watch;
 
 use std::path::{Path, PathBuf};
