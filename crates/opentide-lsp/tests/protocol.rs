@@ -100,13 +100,14 @@ fn capabilities_say_what_the_server_does_and_who_hosts_it() {
     assert!(kinds.contains(&json!("source.fixAll.opentide")), "{caps}");
     assert!(caps["documentLinkProvider"].is_object());
     assert!(caps["codeLensProvider"].is_object());
-    // #172: the binary alone has no host or schemas; it checks configuration
-    // natively (UC-2.6).
+    // #172: the binary alone has no host; it checks configuration natively
+    // (UC-2.6), and generates the field catalogs and configuration schemas
+    // from the models (#926).
     let opentide = &caps["experimental"]["opentide"];
     assert!(opentide["host"].is_null(), "{opentide}");
-    assert_eq!(opentide["catalog"], "bundled");
+    assert_eq!(opentide["catalog"], "models");
     assert_eq!(opentide["configurationChecks"], true);
-    assert_eq!(opentide["configurationSchemas"], false);
+    assert_eq!(opentide["configurationSchemas"], true);
     assert_eq!(opentide["engine"], init["serverInfo"]["version"]);
 
     let (_lsp, init) =
@@ -127,7 +128,7 @@ fn version_json_matches_initialize() {
     assert!(out.status.success());
     let info: Value = serde_json::from_slice(&out.stdout).unwrap();
     assert!(info["host"].is_null(), "{info}");
-    assert_eq!(info["catalog"], "bundled");
+    assert_eq!(info["catalog"], "models");
     assert_eq!(info["engine"], env!("CARGO_PKG_VERSION"));
 }
 
@@ -351,7 +352,6 @@ fn files_changed_on_disk_reach_the_open_documents() {
             "**/objects",
             "**/objects/**",
             "**/.opentide/configurations/**/*.toml",
-            "**/.opentide/lsp/catalogs/generated/*"
         ]
     );
     lsp.write(&json!({ "jsonrpc": "2.0", "id": register["id"], "result": null }));
@@ -367,17 +367,13 @@ fn files_changed_on_disk_reach_the_open_documents() {
     let codes = codes_of(&published_for(&mut lsp, &rule_uri));
     assert!(codes.contains(&"invalid_ref".to_string()), "{codes:?}");
 
-    // A configuration file and a catalog changed on disk re-check it too.
-    for changed in [
-        root.join(".opentide/configurations/platforms/sentinel.toml"),
-        root.join(".opentide/lsp/catalogs/generated/fields.json"),
-    ] {
-        lsp.notify(
-            "workspace/didChangeWatchedFiles",
-            json!({ "changes": [{ "uri": file_uri(&changed), "type": 2 }] }),
-        );
-        published_for(&mut lsp, &rule_uri);
-    }
+    // A configuration file changed on disk re-checks it too.
+    let changed = root.join(".opentide/configurations/platforms/sentinel.toml");
+    lsp.notify(
+        "workspace/didChangeWatchedFiles",
+        json!({ "changes": [{ "uri": file_uri(&changed), "type": 2 }] }),
+    );
+    published_for(&mut lsp, &rule_uri);
 }
 
 fn loading(lsp: &mut Lsp) -> (u64, u64) {
@@ -457,7 +453,9 @@ fn editor_indexed(lsp: &mut Lsp) -> u64 {
 
 /// #914: the first diagnostics of a Tide object that cannot read the other
 /// objects (no Elastic block) do not wait for the editor's index of the
-/// root: it is built on the first request that reads it, every file then.
+/// root: it is built on the first request that reads it, every file then,
+/// from the parse the workspace made of each for `validate` (#926): no file
+/// is parsed a second time.
 #[test]
 fn the_first_diagnostics_do_not_build_the_editor_index() {
     let scratch = workspace("lazy-index", true);
@@ -482,6 +480,8 @@ fn the_first_diagnostics_do_not_build_the_editor_index() {
         .collect();
     assert_eq!(names, ["Credential Access Objective"], "{symbols}");
     assert_eq!(editor_indexed(&mut lsp), 2);
+    let parsed = lsp.request("opentide/__stats", Value::Null)["result"]["editorParsed"].clone();
+    assert_eq!(parsed, 0, "the index read the workspace's parses");
 }
 
 /// #914: an Elastic rule's advisories still read the objects on disk: a
@@ -895,48 +895,6 @@ fn the_server_follows_what_the_client_can_do() {
     assert!(!in_kql["result"].as_array().unwrap().is_empty(), "{in_kql}");
 }
 
-/// P0.9: a value two fields share is documented from the field it was
-/// completed for, through the item's `data`.
-#[test]
-fn resolve_documents_a_value_from_its_own_field() {
-    let scratch = Scratch::new("enum-docs");
-    let catalogs = scratch.0.join(".opentide/lsp/catalogs/generated");
-    std::fs::create_dir_all(&catalogs).unwrap();
-    std::fs::write(
-        catalogs.join("fields.json"),
-        r#"{"opentide": "0.19.0", "fields": [
-            {"schema": "rule", "path": "metadata", "name": "metadata", "type": "object"},
-            {"schema": "rule", "path": "metadata.tlp", "name": "tlp", "type": "string",
-             "enum": ["clear"], "enum_docs": ["TLP clear: anyone."]},
-            {"schema": "rule", "path": "metadata.status", "name": "status", "type": "string",
-             "enum": ["clear"], "enum_docs": ["Status clear: no finding."]}]}"#,
-    )
-    .unwrap();
-    let (mut lsp, _) = start(json!({ "capabilities": {}, "rootUri": file_uri(&scratch.0) }));
-    let uri = file_uri(&scratch.0.join("objects/rules/r.yaml"));
-    let text = "name: R\nmetadata:\n  schema: rule::1.0\n  status: \n";
-    open(&mut lsp, &uri, "opentide-yaml", text);
-    let items = lsp.request(
-        "textDocument/completion",
-        json!({ "textDocument": { "uri": uri }, "position": { "line": 3, "character": 10 } }),
-    );
-    let mut item = items["result"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|i| i["label"] == "clear")
-        .unwrap_or_else(|| panic!("{items}"))
-        .clone();
-    assert_eq!(item["data"]["field_path"], "metadata.status", "{item}");
-    // A client that resolves documentation lazily sends the item without it.
-    item.as_object_mut().unwrap().remove("documentation");
-    let resolved = lsp.request("completionItem/resolve", item);
-    let docs = resolved["result"]["documentation"]["value"]
-        .as_str()
-        .unwrap();
-    assert!(docs.contains("Status clear"), "{resolved}");
-}
-
 /// P3.1: a Tide object's symbols nest: sections, platform blocks, queries.
 #[test]
 fn tide_symbols_are_a_tree() {
@@ -1031,6 +989,72 @@ fn file_name_finding(text: &str, suggestion: &str) -> Value {
         "message": "the file name is not the object's",
         "data": { "field_path": ["name"], "suggestion": suggestion }
     })
+}
+
+/// #926 (KG-03, KG-05): the editor shows lint's file name and metadata
+/// findings, with `lint.toml`'s severities: `filename_mismatch`, which
+/// suggests the file name the object's name gives and is renamed to it, and
+/// `metadata_recommended`; a `lint.toml` that turns the checks off leaves
+/// both out.
+#[test]
+fn lint_s_file_name_and_metadata_findings_are_published() {
+    let scratch = workspace("lint-findings", true);
+    let root = &scratch.0;
+    let path = root.join("objects/rules/rule-1.0.yaml");
+    let uri = file_uri(&path);
+    let renaming = json!({ "workspace": { "workspaceEdit": {
+        "documentChanges": true, "resourceOperations": ["create", "rename"]
+    } } });
+    let (mut lsp, _) = start(json!({ "capabilities": renaming, "rootUri": file_uri(root) }));
+    open(&mut lsp, &uri, "opentide-yaml", &fixture(RULE));
+    let published = published_for(&mut lsp, &uri);
+    let found = |code: &str| {
+        published
+            .iter()
+            .find(|d| d["code"] == code)
+            .unwrap_or_else(|| panic!("no {code} in {published:#?}"))
+            .clone()
+    };
+    let file_name = found("filename_mismatch");
+    assert_eq!(file_name["severity"], 2, "{file_name}");
+    assert_eq!(
+        file_name["data"]["suggestion"], "sentinel-kql-rule.yaml",
+        "{file_name}"
+    );
+    // No author, no organisation: lint's `info`.
+    let metadata = found("metadata_recommended");
+    assert_eq!(metadata["severity"], 3, "{metadata}");
+    let actions = lsp.request(
+        "textDocument/codeAction",
+        json!({ "textDocument": { "uri": uri },
+                "range": { "start": { "line": 0, "character": 0 }, "end": { "line": 0, "character": 0 } },
+                "context": { "diagnostics": [file_name] } }),
+    );
+    let titles: Vec<&str> = actions["result"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|a| a["title"].as_str())
+        .collect();
+    assert_eq!(titles, ["Rename the file to sentinel-kql-rule.yaml"]);
+    drop(lsp);
+
+    std::fs::create_dir_all(root.join(".opentide/configurations")).unwrap();
+    std::fs::write(
+        root.join(".opentide/configurations/lint.toml"),
+        "[filenames]\nenabled = false\n\n[metadata]\nenabled = false\n",
+    )
+    .unwrap();
+    let (mut lsp, _) = start(json!({ "capabilities": {}, "rootUri": file_uri(root) }));
+    let codes = codes_for(&mut lsp, &uri, &fixture(RULE));
+    assert!(
+        !codes.contains(&"filename_mismatch".to_string()),
+        "{codes:?}"
+    );
+    assert!(
+        !codes.contains(&"metadata_recommended".to_string()),
+        "{codes:?}"
+    );
 }
 
 /// #219: a file-name rename is offered only where it can land: not

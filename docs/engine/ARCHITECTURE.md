@@ -24,7 +24,7 @@ editors / @opentide/lsp-client / WASM worker
 ## Layers
 
 - **Grammars** (`grammars/tree-sitter-opentide-{kql,spl,esql,eql,kuery,lucene}`) vendored `parser.c`. CI regenerates and fails on drift.
-- **Catalogs** (`data/catalogs/`) compiled into the engine with `include_str!`. Workspace override path: `.opentide/lsp/catalogs/`.
+- **Catalogs** (`data/catalogs/`) compiled into the engine with `include_str!`. The language server generates each root's Tide field catalogs from `opentide-schema` and hands them to the engine (#926); it does not read `.opentide/lsp/catalogs/`.
 - **HighlightSpec** (`highlights/spec.toml`) is frozen. Capture rename = major. Generated tmLanguage / Monaco / Helix maps are CI-checked.
 - **Injection**: block-scalar indent is stripped for analysis; tokens are remapped onto YAML coordinates.
 
@@ -81,8 +81,7 @@ The object checks are `opentide-workspace`'s `validate`: the language server loa
   - a path that exists only in part (a missing key): the deepest key or header that exists, and the message names the path (`misp[1].url: Field required`);
   - an empty path, or one held by another layer: the first line;
   - `config_parse`: where `toml_edit` stops parsing.
-- **The host's schemas** (`install_configuration_schemas`: the router and one JSON Schema per file, as opentide's `generate_configuration_schemas()` returns them) give hover and completion. Hover shows title, type, description, allowed values and default, never the buffer's value. Completion offers the keys a table may still take, table names in a header, and allowed values after `=`. A walker reads the schema (`$ref`, `anyOf`, `items`, `additionalProperties`); it does not validate.
-- **Without a host's schemas**, as in `opentide-lsp` on its own or WASM, a configuration file gets its diagnostics but no hover and no completion: the configuration models do not derive their JSON Schemas yet (UC-1.8), so `install_configuration_schemas` stays until they do.
+- **The models' schemas** (`ConfigurationSchemas`: the router and one JSON Schema per file, as `opentide-schema`'s `generate::configuration` writes them, which `opentide-lsp` generates once per process and passes to `configuration_hover` and `configuration_completions`) give hover and completion, in every host (#926). Hover shows title, type, description, allowed values and default, never the buffer's value. Completion offers the keys a table may still take, table names in a header, and allowed values after `=`. A walker reads the schema (`$ref`, `anyOf`, `items`, `additionalProperties`); it does not validate.
 - **No highlighting.** The editor's TOML grammar stays: no semantic tokens for `opentide-config`, no HighlightSpec captures, no TOML grammar here.
 
 ## Hosts

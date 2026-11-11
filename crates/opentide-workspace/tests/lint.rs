@@ -701,6 +701,61 @@ mod lint {
         );
     }
 
+    /// The language server's lint (#926): `lint_file`'s findings on the
+    /// files it names, or on every object file, in one run that reads the
+    /// objects from the workspace's own parse.
+    #[test]
+    fn the_editor_lint_reads_the_workspace_s_parse() {
+        use opentide_workspace::lint::lint_file;
+        let fs = Arc::new(workspace());
+        fs.write("/ws/objects/rules/a.yaml", rule(U1, "A"));
+        fs.write(
+            "/ws/objects/rules/a-v2.yaml",
+            format!("name: A\nmetadata:\n  uuid: {U2}\n  author: me\n"),
+        );
+        let workspace = Workspace::open(
+            Arc::clone(&fs) as Arc<dyn FileSystem>,
+            opentide_workspace::Options {
+                roots: RootOptions {
+                    repo: Some(PathBuf::from(ROOT)),
+                    cwd: PathBuf::from(ROOT),
+                    ..RootOptions::default()
+                },
+            },
+        )
+        .unwrap();
+        let v2 = PathBuf::from("/ws/objects/rules/a-v2.yaml");
+        let shown = |found: &[LintFinding]| {
+            found
+                .iter()
+                .map(|f| (f.code().to_owned(), f.path().to_owned()))
+                .collect::<Vec<_>>()
+        };
+        let on_disk = lint_file(fs.as_ref(), Path::new(ROOT), &LintConfig::default(), &v2);
+        let expected = vec![
+            (
+                "metadata_recommended".to_owned(),
+                "objects/rules/a-v2.yaml".to_owned(),
+            ),
+            (
+                "filename_mismatch".to_owned(),
+                "objects/rules/a-v2.yaml".to_owned(),
+            ),
+        ];
+        assert_eq!(shown(&on_disk), expected);
+        assert_eq!(
+            shown(&workspace.editor_lint(Some(std::slice::from_ref(&v2)))),
+            expected
+        );
+        assert_eq!(shown(&workspace.editor_lint(None)), expected);
+        assert!(workspace.editor_lint(Some(&[])).is_empty());
+        // The file fixed on disk, the workspace not told: lint reads it
+        // from the disk, the editor's from the workspace's parse.
+        fs.write("/ws/objects/rules/a-v2.yaml", rule(U2, "A v2"));
+        assert!(lint_file(fs.as_ref(), Path::new(ROOT), &LintConfig::default(), &v2).is_empty());
+        assert_eq!(shown(&workspace.editor_lint(Some(&[v2]))), expected);
+    }
+
     #[test]
     fn no_workspace_points_at_setup() {
         let fs = MemoryFs::new();

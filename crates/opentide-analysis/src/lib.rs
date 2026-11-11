@@ -22,9 +22,8 @@ pub use position::LineStarts;
 
 pub mod config;
 pub use config::{
-    CONFIGURATIONS_DIRECTORY, ConfigIssue, configuration_completions, configuration_hover,
-    configuration_path, has_configuration_schemas, install_configuration_schemas,
-    is_configuration_path, place_configuration_issues,
+    CONFIGURATIONS_DIRECTORY, ConfigIssue, ConfigurationSchemas, configuration_completions,
+    configuration_hover, configuration_path, is_configuration_path, place_configuration_issues,
 };
 pub use opentide_core::{
     CompletionItem, Diagnostic, LanguageId, Position, Range, Severity, SignatureHelp, codes,
