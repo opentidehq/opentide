@@ -3,6 +3,12 @@
 //! here against the `opentide` binary. An editor spawns the command and
 //! speaks `Content-Length` framed JSON-RPC on its stdio: stdout carries
 //! nothing else, and the exit code is LSP's.
+//!
+//! The harness never blocks on the server: a thread reads its stdout frame
+//! by frame and another drains its stderr, and every wait (a message, the
+//! end of stdout, the exit) gives up after [`PATIENCE`] with what it waited
+//! for and the server's stderr, so a server that stays silent fails the test
+//! instead of hanging it until the runner kills it.
 
 #![expect(
     clippy::unwrap_used,
@@ -13,6 +19,9 @@
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::Path;
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
+use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, channel};
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
 
@@ -32,108 +41,283 @@ configurations:
       | wher EventID == 4688
 ";
 
-fn until_diagnostics(stdout: &mut BufReader<ChildStdout>, uri: &str) -> Value {
+/// How long the server has to send a message, close stdout or exit. A whole
+/// session takes well under a second; past this the test fails and says what
+/// it waited for.
+const PATIENCE: Duration = Duration::from_secs(30);
+
+/// What the reader thread found next on the server's stdout.
+enum Event {
+    Message(Value),
+    /// End of stdout between two frames.
+    Closed,
+    /// Anything but a protocol frame.
+    Garbled(String),
+}
+
+/// `opentide lsp start` in a child process, as an editor drives it.
+struct Server {
+    child: Child,
+    stdin: Option<ChildStdin>,
+    events: Receiver<Event>,
+    stderr: Arc<Mutex<Vec<u8>>>,
+    stderr_closed: Receiver<()>,
+    /// How long each wait lasts: [`PATIENCE`].
+    patience: Duration,
+}
+
+impl Server {
+    fn start(cwd: &Path, flags: &[&str]) -> Self {
+        let mut child = Command::new(env!("CARGO_BIN_EXE_opentide"))
+            .args(["lsp", "start"])
+            .args(flags)
+            .current_dir(cwd)
+            .env_clear()
+            .env("HOME", cwd)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let stdin = child.stdin.take();
+        let stdout = child.stdout.take().unwrap();
+        let (sender, events) = channel();
+        std::thread::spawn(move || frames(stdout, &sender));
+        let mut pipe = child.stderr.take().unwrap();
+        let stderr = Arc::new(Mutex::new(Vec::new()));
+        let (closed, stderr_closed) = channel();
+        let sink = Arc::clone(&stderr);
+        std::thread::spawn(move || {
+            let mut chunk = [0; 4096];
+            while let Ok(read @ 1..) = pipe.read(&mut chunk) {
+                sink.lock().unwrap().extend_from_slice(&chunk[..read]);
+            }
+            let _ = closed.send(());
+        });
+        Self {
+            child,
+            stdin,
+            events,
+            stderr,
+            stderr_closed,
+            patience: PATIENCE,
+        }
+    }
+
+    fn send(&mut self, message: &Value) {
+        let stdin = self.stdin.as_mut().expect("stdin is open");
+        let body = message.to_string();
+        write!(stdin, "Content-Length: {}\r\n\r\n{body}", body.len()).unwrap();
+        stdin.flush().unwrap();
+    }
+
+    /// The next message, or `None` once stdout is closed.
+    fn next(&self, waiting_for: &str) -> Option<Value> {
+        match self.events.recv_timeout(self.patience) {
+            Ok(Event::Message(message)) => Some(message),
+            Ok(Event::Closed) | Err(RecvTimeoutError::Disconnected) => None,
+            Ok(Event::Garbled(what)) => panic!(
+                "stdout carries the protocol and nothing else: {what}; stderr: {}",
+                self.stderr_so_far()
+            ),
+            Err(RecvTimeoutError::Timeout) => panic!(
+                "the server sent nothing in {:?} while the test waited for {waiting_for}; \
+                 stderr: {}",
+                self.patience,
+                self.stderr_so_far()
+            ),
+        }
+    }
+
+    fn read(&self, waiting_for: &str) -> Value {
+        self.next(waiting_for).unwrap_or_else(|| {
+            panic!(
+                "the server closed stdout while the test waited for {waiting_for}; stderr: {}",
+                self.stderr_so_far()
+            )
+        })
+    }
+
+    fn until_diagnostics(&self, uri: &str) -> Value {
+        let waiting_for = format!("the diagnostics of {uri}");
+        loop {
+            let message = self.read(&waiting_for);
+            if message["method"] == "textDocument/publishDiagnostics"
+                && message["params"]["uri"] == uri
+            {
+                return message["params"]["diagnostics"].clone();
+            }
+        }
+    }
+
+    fn until_reply(&self, id: i64) -> Value {
+        let waiting_for = format!("the reply to request {id}");
+        loop {
+            let message = self.read(&waiting_for);
+            // A reply, not a request the server sends the client.
+            if message["id"] == id && message.get("method").is_none() {
+                return message;
+            }
+        }
+    }
+
+    /// `initialize` for `root`; the reply, which must be a result.
+    fn initialize(&mut self, root: &Path) -> Value {
+        self.send(&json!({"jsonrpc": "2.0", "id": 1, "method": "initialize",
+                          "params": {"capabilities": {}, "rootUri": uri(root)}}));
+        let reply = self.until_reply(1);
+        // A refused `initialize` leaves the server uninitialized, and it then
+        // drops every notification: say so here rather than wait for
+        // diagnostics that never come.
+        assert!(reply.get("error").is_none(), "initialize failed: {reply}");
+        reply
+    }
+
+    /// `shutdown`, then `exit` and stdin closed: stdout carries nothing after
+    /// the reply to `shutdown`; the exit code.
+    fn shut_down(&mut self) -> Option<i32> {
+        self.send(&json!({"jsonrpc": "2.0", "id": 99, "method": "shutdown"}));
+        let reply = self.until_reply(99);
+        assert!(reply.get("error").is_none(), "shutdown failed: {reply}");
+        self.send(&json!({"jsonrpc": "2.0", "method": "exit"}));
+        self.close_stdin()
+    }
+
+    /// Closes stdin; the exit code, once stdout is closed with nothing more
+    /// on it.
+    fn close_stdin(&mut self) -> Option<i32> {
+        drop(self.stdin.take());
+        if let Some(message) = self.next("stdout to close") {
+            panic!("stdout carries the protocol and nothing else: {message} after the session");
+        }
+        self.wait()
+    }
+
+    /// The exit code, within [`PATIENCE`].
+    fn wait(&mut self) -> Option<i32> {
+        let started = Instant::now();
+        loop {
+            if let Some(status) = self.child.try_wait().unwrap() {
+                return status.code();
+            }
+            if started.elapsed() > self.patience {
+                let _ = self.child.kill();
+                panic!(
+                    "the server did not exit in {:?}; stderr: {}",
+                    self.patience,
+                    self.stderr_so_far()
+                );
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    /// All of stderr, once the server closed it.
+    fn stderr(&self) -> String {
+        assert!(
+            self.stderr_closed.recv_timeout(self.patience).is_ok(),
+            "the server did not close stderr in {:?}: {}",
+            self.patience,
+            self.stderr_so_far()
+        );
+        self.stderr_so_far()
+    }
+
+    fn stderr_so_far(&self) -> String {
+        String::from_utf8_lossy(&self.stderr.lock().unwrap()).into_owned()
+    }
+}
+
+impl Drop for Server {
+    /// A test that failed leaves no server behind.
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+}
+
+/// The reader thread: the server's stdout, one event per frame, until it
+/// closes or carries something that is not a frame.
+fn frames(stdout: ChildStdout, events: &Sender<Event>) {
+    let mut stdout = BufReader::new(stdout);
     loop {
-        let message = read(stdout);
-        if message["method"] == "textDocument/publishDiagnostics" && message["params"]["uri"] == uri
-        {
-            return message["params"]["diagnostics"].clone();
+        let event = match frame(&mut stdout) {
+            Ok(Some(message)) => Event::Message(message),
+            Ok(None) => Event::Closed,
+            Err(what) => Event::Garbled(what),
+        };
+        let last = !matches!(event, Event::Message(_));
+        if events.send(event).is_err() || last {
+            return;
         }
     }
 }
 
-fn until_reply(stdout: &mut BufReader<ChildStdout>, id: i64) -> Value {
-    loop {
-        let message = read(stdout);
-        if message["id"] == id {
-            return message;
-        }
-    }
-}
-
-fn server(cwd: &Path, flags: &[&str]) -> Child {
-    Command::new(env!("CARGO_BIN_EXE_opentide"))
-        .args(["lsp", "start"])
-        .args(flags)
-        .current_dir(cwd)
-        .env_clear()
-        .env("HOME", cwd)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .unwrap()
-}
-
-fn send(stdin: &mut ChildStdin, message: &Value) {
-    let body = message.to_string();
-    write!(stdin, "Content-Length: {}\r\n\r\n{body}", body.len()).unwrap();
-    stdin.flush().unwrap();
-}
-
-fn read(stdout: &mut BufReader<ChildStdout>) -> Value {
+/// One `Content-Length` framed message; `None` at the end of stdout between
+/// two frames.
+fn frame(stdout: &mut impl BufRead) -> Result<Option<Value>, String> {
     let mut length = None;
+    let mut headers = 0;
     loop {
         let mut line = String::new();
-        assert!(
-            stdout.read_line(&mut line).unwrap() > 0,
-            "the server closed stdout"
-        );
+        let read = stdout
+            .read_line(&mut line)
+            .map_err(|err| format!("stdout: {err}"))?;
+        if read == 0 {
+            return if headers == 0 {
+                Ok(None)
+            } else {
+                Err("stdout closed inside a frame's headers".to_owned())
+            };
+        }
+        headers += 1;
         if line == "\r\n" || line == "\n" {
             break;
         }
-        let (name, value) = line.split_once(':').expect("a protocol header");
-        assert!(
-            name.eq_ignore_ascii_case("content-length"),
-            "not a protocol header: {line:?}"
+        let Some((name, value)) = line.split_once(':') else {
+            return Err(format!("not a protocol header: {line:?}"));
+        };
+        if !name.eq_ignore_ascii_case("content-length") {
+            return Err(format!("not a protocol header: {line:?}"));
+        }
+        length = Some(
+            value
+                .trim()
+                .parse::<usize>()
+                .map_err(|err| format!("{line:?}: {err}"))?,
         );
-        length = Some(value.trim().parse::<usize>().unwrap());
     }
-    let mut body = vec![0; length.expect("Content-Length")];
-    stdout.read_exact(&mut body).unwrap();
-    serde_json::from_slice(&body).unwrap()
+    let mut body = vec![0; length.ok_or("a frame without Content-Length")?];
+    stdout
+        .read_exact(&mut body)
+        .map_err(|err| format!("a frame's body: {err}"))?;
+    serde_json::from_slice(&body)
+        .map(Some)
+        .map_err(|err| format!("a frame's body is not JSON: {err}"))
 }
 
+/// The `file:` URI an editor sends for `path`. On Windows `path` is
+/// `\\?\C:\...` (`canonicalize`): pasted after `file://` it is no URI, the
+/// server refuses `initialize` and drops the session's notifications, so the
+/// URI is built as the server reads it back.
 fn uri(path: &Path) -> String {
-    format!("file://{}", path.display())
+    opentide_lsp::uri::path_to_uri(&path.display().to_string())
 }
 
-/// Opens the rule in a session: the diagnostics the server publishes for it.
-fn session(cwd: &Path, flags: &[&str], rule: &Path) -> (Value, Value, Child) {
-    let mut child = server(cwd, flags);
-    let mut stdin = child.stdin.take().unwrap();
-    let mut stdout = BufReader::new(child.stdout.take().unwrap());
-    send(
-        &mut stdin,
-        &json!({"jsonrpc": "2.0", "id": 1, "method": "initialize",
-                "params": {"capabilities": {}, "rootUri": uri(cwd)}}),
-    );
-    let init = read(&mut stdout);
-    send(
-        &mut stdin,
-        &json!({"jsonrpc": "2.0", "method": "initialized", "params": {}}),
-    );
-    send(
-        &mut stdin,
+/// Opens the rule in a session: the reply to `initialize`, the diagnostics
+/// the server publishes for the rule, and the exit code.
+fn session(cwd: &Path, flags: &[&str], rule: &Path) -> (Value, Value, Option<i32>) {
+    let mut server = Server::start(cwd, flags);
+    let init = server.initialize(cwd);
+    server.send(&json!({"jsonrpc": "2.0", "method": "initialized", "params": {}}));
+    server.send(
         &json!({"jsonrpc": "2.0", "method": "textDocument/didOpen", "params": {
             "textDocument": {"uri": uri(rule), "languageId": "opentide-yaml",
                              "version": 1, "text": RULE}}}),
     );
-    let published = read(&mut stdout);
-    send(
-        &mut stdin,
-        &json!({"jsonrpc": "2.0", "id": 2, "method": "shutdown"}),
-    );
-    assert_eq!(read(&mut stdout)["id"], 2);
-    send(&mut stdin, &json!({"jsonrpc": "2.0", "method": "exit"}));
-    drop(stdin);
-    let mut rest = Vec::new();
-    stdout.read_to_end(&mut rest).unwrap();
-    assert!(
-        rest.is_empty(),
-        "stdout carries the protocol and nothing else"
-    );
-    (init, published, child)
+    let published = server.read(&format!("the diagnostics of {}", uri(rule)));
+    let code = server.shut_down();
+    (init, published, code)
 }
 
 fn workspace() -> (tempfile::TempDir, std::path::PathBuf) {
@@ -150,7 +334,7 @@ fn an_editor_session_from_initialize_to_exit() {
     for flags in [&[][..], &["--stdio"][..]] {
         let (dir, rule) = workspace();
         let root = rule.ancestors().nth(3).unwrap().to_path_buf();
-        let (init, published, mut child) = session(&root, flags, &rule);
+        let (init, published, code) = session(&root, flags, &rule);
         assert_eq!(init["id"], 1);
         assert_eq!(init["result"]["serverInfo"]["name"], "opentide-lsp");
         assert_eq!(init["result"]["capabilities"]["hoverProvider"], true);
@@ -161,6 +345,7 @@ fn an_editor_session_from_initialize_to_exit() {
         assert_eq!(host["configurationChecks"], true);
         assert_eq!(host["configurationSchemas"], true);
         assert_eq!(published["method"], "textDocument/publishDiagnostics");
+        assert_eq!(published["params"]["uri"], uri(&rule));
         let codes: Vec<&str> = published["params"]["diagnostics"]
             .as_array()
             .unwrap()
@@ -168,7 +353,7 @@ fn an_editor_session_from_initialize_to_exit() {
             .filter_map(|item| item["code"].as_str())
             .collect();
         assert!(codes.contains(&"kql_unknown_operator"), "{codes:?}");
-        assert_eq!(child.wait().unwrap().code(), Some(0));
+        assert_eq!(code, Some(0));
         drop(dir);
     }
 }
@@ -176,13 +361,34 @@ fn an_editor_session_from_initialize_to_exit() {
 #[test]
 fn closing_stdin_ends_the_server_with_1() {
     let dir = tempfile::tempdir().unwrap();
-    let mut child = server(dir.path(), &[]);
-    drop(child.stdin.take());
-    let output = child.wait_with_output().unwrap();
-    assert_eq!(output.status.code(), Some(1));
-    assert!(output.stdout.is_empty());
+    let mut server = Server::start(dir.path(), &[]);
+    assert_eq!(server.close_stdin(), Some(1));
     // Not a terminal: an editor, which needs no hint.
-    assert!(output.stderr.is_empty(), "{:?}", output.stderr);
+    assert_eq!(server.stderr(), "");
+    drop(server);
+    drop(dir);
+}
+
+/// The harness gives up on a silent server and says what it waited for:
+/// a session the server ignores fails here, not at the runner's timeout.
+#[test]
+fn a_server_that_ignores_the_session_fails_the_test_not_hangs_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let started = Instant::now();
+    let failure = std::panic::catch_unwind(|| {
+        let mut server = Server::start(dir.path(), &[]);
+        server.patience = Duration::from_millis(500);
+        // Nothing sent: the server waits for `initialize`.
+        server.read("a message the server never sends")
+    })
+    .expect_err("the server sent nothing");
+    assert!(started.elapsed() < PATIENCE, "{:?}", started.elapsed());
+    let message = failure.downcast_ref::<String>().unwrap();
+    assert!(
+        message.contains("while the test waited for a message the server never sends"),
+        "{message}"
+    );
+    drop(dir);
 }
 
 /// #677: a catalog committed by an older opentide (one whose TLP
@@ -201,7 +407,8 @@ fn the_server_checks_with_opentides_catalog_not_a_committed_copy() {
         ],
     });
     std::fs::write(committed.join("fields.json"), stale.to_string()).unwrap();
-    let (_, published, mut child) = session(&root, &[], &rule);
+    let (_, published, code) = session(&root, &[], &rule);
+    assert_eq!(published["method"], "textDocument/publishDiagnostics");
     let messages: Vec<&str> = published["params"]["diagnostics"]
         .as_array()
         .unwrap()
@@ -210,7 +417,7 @@ fn the_server_checks_with_opentides_catalog_not_a_committed_copy() {
         .filter(|message| message.contains("tlp"))
         .collect();
     assert!(messages.is_empty(), "{messages:?}");
-    assert_eq!(child.wait().unwrap().code(), Some(0));
+    assert_eq!(code, Some(0));
     drop(dir);
 }
 
@@ -241,30 +448,19 @@ fn configuration_toml_is_checked_with_opentides_models() {
         SHARING.replace("distribution = \"this-community\"\n", ""),
     )
     .unwrap();
-    let mut child = server(&root, &[]);
-    let mut stdin = child.stdin.take().unwrap();
-    let mut stdout = BufReader::new(child.stdout.take().unwrap());
-    send(
-        &mut stdin,
-        &json!({"jsonrpc": "2.0", "id": 1, "method": "initialize",
-                "params": {"capabilities": {}, "rootUri": uri(&root)}}),
-    );
-    read(&mut stdout);
-    send(
-        &mut stdin,
-        &json!({"jsonrpc": "2.0", "method": "initialized", "params": {}}),
-    );
-    let open = |stdin: &mut ChildStdin, path: &Path, text: &str| {
-        send(
-            stdin,
+    let mut server = Server::start(&root, &[]);
+    server.initialize(&root);
+    server.send(&json!({"jsonrpc": "2.0", "method": "initialized", "params": {}}));
+    let open = |server: &mut Server, path: &Path, text: &str| {
+        server.send(
             &json!({"jsonrpc": "2.0", "method": "textDocument/didOpen", "params": {
                 "textDocument": {"uri": uri(path), "languageId": "toml",
                                  "version": 1, "text": text}}}),
         );
     };
 
-    open(&mut stdin, &sharing, SHARING);
-    let diagnostics = until_diagnostics(&mut stdout, &uri(&sharing));
+    open(&mut server, &sharing, SHARING);
+    let diagnostics = server.until_diagnostics(&uri(&sharing));
     let found: Vec<(&str, u64)> = diagnostics
         .as_array()
         .unwrap()
@@ -279,19 +475,18 @@ fn configuration_toml_is_checked_with_opentides_models() {
     assert_eq!(found, [("unknown_key", 5)], "{diagnostics}");
 
     open(
-        &mut stdin,
+        &mut server,
         &lab,
         "[[misp]]\nname = \"misp-internal\"\nmax_tlp = \"red\"\n",
     );
-    assert_eq!(until_diagnostics(&mut stdout, &uri(&lab)), json!([]));
+    assert_eq!(server.until_diagnostics(&uri(&lab)), json!([]));
 
-    send(
-        &mut stdin,
+    server.send(
         &json!({"jsonrpc": "2.0", "id": 2, "method": "textDocument/completion", "params": {
             "textDocument": {"uri": uri(&sharing)},
             "position": {"line": 4, "character": "max_tlp = ".len()}}}),
     );
-    let reply = until_reply(&mut stdout, 2);
+    let reply = server.until_reply(2);
     let labels: Vec<&str> = reply["result"]
         .as_array()
         .expect("a completion list")
@@ -309,14 +504,8 @@ fn configuration_toml_is_checked_with_opentides_models() {
         ]
     );
 
-    send(
-        &mut stdin,
-        &json!({"jsonrpc": "2.0", "id": 3, "method": "shutdown"}),
-    );
-    until_reply(&mut stdout, 3);
-    send(&mut stdin, &json!({"jsonrpc": "2.0", "method": "exit"}));
-    drop(stdin);
-    assert_eq!(child.wait().unwrap().code(), Some(0));
+    assert_eq!(server.shut_down(), Some(0));
+    drop(server);
     drop(dir);
 }
 
@@ -327,35 +516,22 @@ fn configuration_toml_is_checked_with_opentides_models() {
 fn ctrl_c_stops_the_server_at_once_with_130() {
     use rustix::process::{Pid, Signal, kill_process};
     let dir = tempfile::tempdir().unwrap();
-    let mut child = server(dir.path(), &[]);
-    let mut stdin = child.stdin.take().unwrap();
-    let mut stdout = BufReader::new(child.stdout.take().unwrap());
+    let mut server = Server::start(dir.path(), &[]);
     // Serving: the reply to `initialize` comes after the handler is in place.
-    send(
-        &mut stdin,
-        &json!({"jsonrpc": "2.0", "id": 1, "method": "initialize",
-                "params": {"capabilities": {}, "rootUri": uri(dir.path())}}),
-    );
-    assert_eq!(read(&mut stdout)["id"], 1);
-    let started = std::time::Instant::now();
-    let pid = Pid::from_raw(i32::try_from(child.id()).unwrap()).unwrap();
+    assert_eq!(server.initialize(dir.path())["id"], 1);
+    let started = Instant::now();
+    let pid = Pid::from_raw(i32::try_from(server.child.id()).unwrap()).unwrap();
     kill_process(pid, Signal::INT).unwrap();
-    let status = child.wait().unwrap();
+    // stdin stays open: the signal alone stops the server.
+    let code = server.wait();
     // Well inside the 5-second grace a run that polls gets.
     assert!(
-        started.elapsed() < std::time::Duration::from_secs(3),
+        started.elapsed() < Duration::from_secs(3),
         "{:?}",
         started.elapsed()
     );
-    assert_eq!(status.code(), Some(130));
-    let mut stderr = String::new();
-    child
-        .stderr
-        .take()
-        .unwrap()
-        .read_to_string(&mut stderr)
-        .unwrap();
-    assert_eq!(stderr, "error: interrupted\n");
-    drop(stdin);
+    assert_eq!(code, Some(130));
+    assert_eq!(server.stderr(), "error: interrupted\n");
+    drop(server);
     drop(dir);
 }
