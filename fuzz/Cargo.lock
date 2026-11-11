@@ -1776,6 +1776,7 @@ dependencies = [
  "serde_json",
  "textwrap",
  "thiserror",
+ "tracing",
  "unicode-properties",
 ]
 

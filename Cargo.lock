@@ -2056,6 +2056,7 @@ dependencies = [
  "textwrap",
  "thiserror",
  "toml 0.8.23",
+ "tracing",
  "unicode-properties",
 ]
 

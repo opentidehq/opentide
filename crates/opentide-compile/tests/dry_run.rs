@@ -252,6 +252,34 @@ fn a_selection_that_matches_nothing_fails() {
 }
 
 #[test]
+fn a_selected_rule_without_a_status_fails_the_plan_and_keeps_the_scope() {
+    let ws = workspace(&[(
+        "objects/rules/a.yaml",
+        "name: A\nmetadata:\n  uuid: 00000000-0000-4000-8000-00000000000a\n  schema: rule::1.0\n\
+         description: d\nconfigurations:\n  sentinel:\n    query: x\n",
+    )]);
+    let selected = Request {
+        all: false,
+        uuids: vec!["00000000-0000-4000-8000-00000000000a".into()],
+        ..all(&["PREVIEW"])
+    };
+    let outcome = run(&ws, selected, &[]);
+    assert_eq!(outcome.exit_code, 1);
+    assert_eq!(
+        text(&outcome, "message"),
+        "\"\\\"'A' (00000000-0000-4000-8000-00000000000a): configurations.sentinel.status is \
+         required for deployment\\\"\""
+    );
+    let keys: Vec<&String> = outcome.payload.keys().collect();
+    assert_eq!(keys, ["status", "message", "scope"]);
+    assert_eq!(text(&outcome, "scope"), "\"selected\"");
+    // Without a selection, no scope.
+    let outcome = run(&ws, all(&["PREVIEW"]), &[]);
+    assert_eq!(outcome.exit_code, 1);
+    assert!(!outcome.payload.contains_key("scope"));
+}
+
+#[test]
 fn without_a_checkout_the_changed_rules_fail_with_the_baselines_message() {
     let ws = workspace(&[]);
     let outcome = run(
