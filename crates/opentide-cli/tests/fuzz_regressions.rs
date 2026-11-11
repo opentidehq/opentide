@@ -2,6 +2,10 @@
 //! `fuzz/regressions/cli`), replayed on stable Rust: each is `\0`-separated
 //! arguments, and none may crash the run (`error[internal]`) or exit with
 //! anything but 0, 1 or 2. The loop is `fuzz/src/lib.rs::cli`'s.
+//!
+//! Each test runs its command lines in a temporary folder of its own: a line
+//! such as `generate docs` writes files where it runs, and never in the source
+//! tree (#931).
 
 #![expect(
     clippy::unwrap_used,
@@ -12,6 +16,7 @@ use opentide_cli::env::Env;
 use opentide_cli::{Host, run};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
+use tempfile::TempDir;
 
 #[derive(Clone, Default)]
 struct Buffer(Arc<Mutex<Vec<u8>>>);
@@ -26,7 +31,13 @@ impl std::io::Write for Buffer {
     }
 }
 
-fn replay(data: &[u8]) -> (i32, String) {
+/// The folder a test's command lines run in.
+fn scratch() -> TempDir {
+    tempfile::tempdir().unwrap()
+}
+
+/// Runs `data` as `opentide`'s arguments with `cwd` as the working directory.
+fn replay(data: &[u8], cwd: &Path) -> (i32, String) {
     let argv: Vec<String> = data
         .split(|b| *b == 0)
         .map(|part| String::from_utf8_lossy(part).into_owned())
@@ -37,7 +48,7 @@ fn replay(data: &[u8]) -> (i32, String) {
         stdout_tty: false,
         stderr_tty: false,
         log_sink: Arc::new(Mutex::new(err.clone())),
-        cwd: None,
+        cwd: Some(cwd.to_path_buf()),
         width: None,
         interrupt: opentide_cli::app::Interrupt::default(),
     };
@@ -50,6 +61,7 @@ fn replay(data: &[u8]) -> (i32, String) {
 #[test]
 fn framework_fuzz_seeds_and_regressions_do_not_crash() {
     let fuzz = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fuzz");
+    let cwd = scratch();
     let mut ran = 0;
     for dir in ["seeds/cli", "regressions/cli"] {
         let Ok(entries) = std::fs::read_dir(fuzz.join(dir)) else {
@@ -57,7 +69,7 @@ fn framework_fuzz_seeds_and_regressions_do_not_crash() {
         };
         for entry in entries {
             let path = entry.unwrap().path();
-            let (code, stderr) = replay(&std::fs::read(&path).unwrap());
+            let (code, stderr) = replay(&std::fs::read(&path).unwrap(), cwd.path());
             assert!(
                 !stderr.contains("error[internal]"),
                 "{}: {stderr}",
@@ -72,6 +84,7 @@ fn framework_fuzz_seeds_and_regressions_do_not_crash() {
 
 #[test]
 fn framework_fuzz_odd_arguments_do_not_crash() {
+    let cwd = scratch();
     for data in [
         &b""[..],
         b"\0",
@@ -85,7 +98,7 @@ fn framework_fuzz_odd_arguments_do_not_crash() {
         b"query\0--platform=\0x",
         b"--proxy\0http://u:p@h\0commands",
     ] {
-        let (code, stderr) = replay(data);
+        let (code, stderr) = replay(data, cwd.path());
         assert!(!stderr.contains("error[internal]"), "{data:?}: {stderr}");
         assert!(matches!(code, 0..=2), "{data:?}: exit {code}");
     }
@@ -128,6 +141,7 @@ fn framework_fuzz_random_command_lines_do_not_crash() {
         state ^= state >> 27;
         state.wrapping_mul(0x2545_F491_4F6C_DD1D)
     };
+    let cwd = scratch();
     for _ in 0..3000 {
         let count = usize::try_from(next() % 7).unwrap();
         let line: Vec<u8> = (0..count)
@@ -135,8 +149,19 @@ fn framework_fuzz_random_command_lines_do_not_crash() {
             .collect::<Vec<_>>()
             .join("\0")
             .into_bytes();
-        let (code, stderr) = replay(&line);
+        let (code, stderr) = replay(&line, cwd.path());
         assert!(!stderr.contains("error[internal]"), "{line:?}: {stderr}");
         assert!(matches!(code, 0..=2), "{line:?}: exit {code}");
     }
+}
+
+/// A replayed line writes under its test's temporary folder: `generate docs`
+/// once wrote `crates/opentide-cli/docs/` from the crate folder, where cargo
+/// runs the tests (#931).
+#[test]
+fn framework_fuzz_lines_write_in_their_temporary_folder() {
+    let cwd = scratch();
+    let (code, stderr) = replay(b"generate\0docs", cwd.path());
+    assert_eq!(code, 0, "{stderr}");
+    assert!(cwd.path().join("docs/README.md").is_file(), "{stderr}");
 }
