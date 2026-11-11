@@ -610,6 +610,10 @@ impl Run<'_> {
                 };
                 crate::mcp::serve(&launch, &self.host.version)
             }
+            "lsp start" => {
+                // stdout is the protocol's: nothing is emitted around the server.
+                crate::commands::lsp::start_stdio(&self.host.version, err)
+            }
             "setup ci" => {
                 let report = self.setup_ci(&matches);
                 self.emit_report(&report, out, err)

@@ -806,6 +806,9 @@ def test_hosts_run_under_any_engine_but_not_a_bad_one(workspace: Path) -> None:
     """``serve`` and ``mcp start`` apply the engine to what they run, not to themselves."""
     assert ("serve",) in engines.ENGINE_HOSTS
     assert ("mcp", "start") in engines.ENGINE_HOSTS
+    # One server per editor session: compare runs the Python host alone.
+    assert ("lsp", "start") in engines.ENGINE_HOSTS
+    assert ("lsp", "start") in engines.RUST_COMMANDS
     # serve's stdout is the protocol's: the refusal is a line on stderr.
     code, stdout, stderr = invoke(["--json", "--repo", str(workspace), "serve"], "Rust")
     assert (code, stdout) == (2, "")

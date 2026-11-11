@@ -15,6 +15,7 @@ pub mod findings;
 pub mod generate;
 pub mod info;
 pub mod lint;
+pub mod lsp;
 pub mod migrate;
 pub mod rules;
 pub mod setup;

@@ -113,8 +113,12 @@ class RustCommand:
 #: run under any engine; one that is also in :data:`RUST_COMMANDS` runs its
 #: Rust implementation under ``rust`` (``mcp start``, UC-3.7, #829), and its
 #: Python one, the host, under ``compare``: an MCP call under ``compare``
-#: answers with Python's result and records a Rust difference (#822).
-ENGINE_HOSTS: frozenset[tuple[str, ...]] = frozenset({("serve",), ("mcp", "start")})
+#: answers with Python's result and records a Rust difference (#822). ``lsp
+#: start`` (UC-3.6b, #947) is one too: an editor's session has one server on
+#: stdio, so ``compare`` runs the Python host and ``rust`` the Rust one.
+ENGINE_HOSTS: frozenset[tuple[str, ...]] = frozenset(
+    {("serve",), ("mcp", "start"), ("lsp", "start")}
+)
 
 #: The Rust command line compiled into ``opentide._native`` (:mod:`opentide.cli.rust`).
 RUST_CLI: tuple[str, ...] = (sys.executable, "-m", "opentide.cli.rust")
@@ -132,7 +136,8 @@ RUST_CLI: tuple[str, ...] = (sys.executable, "-m", "opentide.cli.rust")
 #: doctor that reaches PyPI and the proxy stays Python's; ``mcp start`` with UC-3.7
 #: (#829): the Rust server, which hands the tools and resources it has no
 #: implementation of to the Python server's handlers in its own process
-#: (``opentide.mcp_server.bridge``).
+#: (``opentide.mcp_server.bridge``); ``lsp start`` with UC-3.6b (#947): the
+#: language server hosted by the Rust command line.
 RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
     ("commands",): RustCommand(launch=RUST_CLI),
     ("explain",): RustCommand(launch=RUST_CLI),
@@ -158,6 +163,7 @@ RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
     ("generate", "inflight", "prune"): RustCommand(launch=RUST_CLI),
     ("setup", "ci"): RustCommand(launch=RUST_CLI),
     ("mcp", "start"): RustCommand(launch=RUST_CLI),
+    ("lsp", "start"): RustCommand(launch=RUST_CLI),
 }
 
 
