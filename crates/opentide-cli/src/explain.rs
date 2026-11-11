@@ -45,20 +45,74 @@ pub struct Retired {
     pub level: &'static str,
 }
 
-/// The retired codes.
-pub const RETIRED: &[Retired] = &[Retired {
-    code: "crowdstrike_unsupported",
-    retired_in: "engine 0.12.0",
-    successor: "CrowdStrike queries are now checked as CQL: see the `cql_*` codes",
-    meaning: "CrowdStrike queries were not validated, and the engine said so rather than fake it.",
-    reported_by: "Until engine 0.12.0, the analysis engine reported it as a warning on a \
-        CrowdStrike rule's `crowdstrike` block: an editor running `opentide lsp start` and \
-        `opentide tui` showed it. Engine 0.12.0 checks the query as the CrowdStrike Query \
-        Language (CQL) instead, and reports what it finds with the `cql_*` codes \
-        (`opentide explain` lists them). No command reports `crowdstrike_unsupported` now.",
-    example: "opentide explain cql_unknown_function",
-    level: "warning",
-}];
+/// The retired codes, as `cli/services/retired_codes.py` lists them.
+pub const RETIRED: &[Retired] = &[
+    Retired {
+        code: "crowdstrike_unsupported",
+        retired_in: "engine 0.12.0",
+        successor: "CrowdStrike queries are now checked as CQL: see the `cql_*` codes",
+        meaning: "CrowdStrike queries were not validated, and the engine said so rather than \
+            fake it.",
+        reported_by: "Until engine 0.12.0, the analysis engine reported it as a warning on a \
+            CrowdStrike rule's `crowdstrike` block: an editor running `opentide lsp start` and \
+            `opentide tui` showed it. Engine 0.12.0 checks the query as the CrowdStrike Query \
+            Language (CQL) instead, and reports what it finds with the `cql_*` codes \
+            (`opentide explain` lists them). No command reports `crowdstrike_unsupported` now.",
+        example: "opentide explain cql_unknown_function",
+        level: "warning",
+    },
+    Retired {
+        code: "filename_slug",
+        retired_in: "opentide 0.24.0",
+        successor: "`opentide lint` reports a file name that is not the object's as \
+            `filename_mismatch`",
+        meaning: "The file name was not the one `lint.toml`'s `[filenames]` style derives from \
+            the object's name.",
+        reported_by: "Until opentide 0.24.0, the language server reported it as a warning on an \
+            object's `name`, with a looser rule than `opentide lint` (any stem that started with \
+            the slug passed). The editor now reports what `opentide validate` reports, and \
+            `opentide lint` keeps the one file-name rule, `filename_mismatch` (KG-03).",
+        example: "opentide lint --check filenames",
+        level: "warning",
+    },
+    Retired {
+        code: "missing_author",
+        retired_in: "opentide 0.24.0",
+        successor: "`opentide lint` reports a missing recommended metadata field as \
+            `metadata_recommended`",
+        meaning: "The recommended `metadata.author` field was missing.",
+        reported_by: "Until opentide 0.24.0, the language server reported it as a warning on \
+            every object without an author, where `opentide validate` reported nothing and \
+            `opentide lint` reported `metadata_recommended` (KG-05).",
+        example: "opentide lint --check metadata",
+        level: "warning",
+    },
+    Retired {
+        code: "missing_organisation",
+        retired_in: "opentide 0.24.0",
+        successor: "`opentide lint` reports a missing recommended metadata field as \
+            `metadata_recommended`",
+        meaning: "The recommended `metadata.organisation` field was missing.",
+        reported_by: "Until opentide 0.24.0, the language server reported it as a warning on \
+            every object without an organisation, where `opentide validate` reported nothing \
+            and `opentide lint` reported `metadata_recommended` (KG-05).",
+        example: "opentide lint --check metadata",
+        level: "warning",
+    },
+    Retired {
+        code: "recommended_field_missing",
+        retired_in: "opentide 0.24.0",
+        successor: "`opentide lint` reports a missing recommended metadata field as \
+            `metadata_recommended`",
+        meaning: "A field the templates ask for was missing; `opentide validate` accepted the \
+            object without it.",
+        reported_by: "Until opentide 0.24.0, the language server reported it as a warning. The \
+            editor now reports what `opentide validate` reports, and recommendations are \
+            `opentide lint`'s `metadata_recommended` (KG-05).",
+        example: "opentide lint --check metadata",
+        level: "warning",
+    },
+];
 
 /// The engine's advisories on an Elastic rule block (`ELASTIC_ADVISORY_CODES`).
 pub const ELASTIC_ADVISORY_CODES: [&str; 5] = [
@@ -71,14 +125,6 @@ pub const ELASTIC_ADVISORY_CODES: [&str; 5] = [
 
 /// The engine's advisories on a Sysdig rule block (`SYSDIG_ADVISORY_CODES`).
 pub const SYSDIG_ADVISORY_CODES: [&str; 1] = ["sysdig_list_self_reference"];
-
-/// Engine codes about a Tide object, not a query.
-const OBJECT_CODES: [&str; 4] = [
-    "filename_slug",
-    "filename_pattern",
-    "missing_author",
-    "missing_organisation",
-];
 
 /// The first paragraph that is not a heading, its whitespace collapsed.
 fn summary_of(markdown: &str) -> String {
@@ -179,17 +225,11 @@ fn engine_page(code: &str) -> Option<Page> {
                 .to_owned(),
         )
     } else {
-        let scope = if OBJECT_CODES.contains(&code) {
-            "a Tide object"
-        } else {
-            "an object file"
-        };
         (
-            format!(
-                "Reported by the analysis engine for {scope}: an editor running \
-                 `opentide lsp start` shows it. `opentide validate` and `opentide lint` are \
-                 the authority for objects and name the same problem with their own code."
-            ),
+            "Reported by the analysis engine for an object file: an editor running \
+             `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the \
+             authority for objects and name the same problem with their own code."
+                .to_owned(),
             "opentide validate",
             "Change the file where the frame points, then run `opentide validate` again."
                 .to_owned(),
@@ -297,6 +337,66 @@ mod tests {
         assert_eq!(page("../vocab_unknown"), None);
         assert_eq!(page("no_such_code"), None);
         assert_eq!(page(""), None);
+    }
+
+    /// A code the language server stopped reporting keeps its page and its
+    /// SARIF rule, tagged retired: a suppression list or baseline may name
+    /// it (the Upgrade notes send users to `opentide explain filename_slug`).
+    #[test]
+    fn the_editors_retired_codes_stay_explainable() {
+        let catalogue = rule_catalogue();
+        for (code, successor) in [
+            ("filename_slug", "`filename_mismatch`"),
+            ("missing_author", "`metadata_recommended`"),
+            ("missing_organisation", "`metadata_recommended`"),
+            ("recommended_field_missing", "`metadata_recommended`"),
+        ] {
+            let page = page(code).unwrap_or_else(|| panic!("{code}: no page"));
+            assert!(page.retired, "{code}");
+            assert!(
+                page.summary.starts_with("Retired in opentide 0.24.0; ")
+                    && page.summary.contains(successor),
+                "{code}: {}",
+                page.summary
+            );
+            assert!(codes().contains(&code), "{code}");
+            assert!(
+                catalogue
+                    .rules
+                    .iter()
+                    .any(|rule| rule.code == code && rule.retired),
+                "{code}: not a retired SARIF rule"
+            );
+        }
+    }
+
+    /// The retired codes are the Python CLI's (`retired_codes.py`), each
+    /// with the release that retired it.
+    #[test]
+    fn the_retired_codes_are_the_python_clis() {
+        let source = std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../src/opentide/cli/services/retired_codes.py"),
+        )
+        .unwrap();
+        let mut python: Vec<(&str, &str)> = source
+            .split("RetiredCode(")
+            .skip(1)
+            .map(|entry| {
+                let field = |name: &str| {
+                    let start = entry.find(&format!("{name}=\"")).unwrap() + name.len() + 2;
+                    &entry[start..start + entry[start..].find('"').unwrap()]
+                };
+                (field("code"), field("retired_in"))
+            })
+            .collect();
+        python.sort_unstable();
+        let mut rust: Vec<(&str, &str)> = RETIRED
+            .iter()
+            .map(|retired| (retired.code, retired.retired_in))
+            .collect();
+        rust.sort_unstable();
+        assert_eq!(rust, python);
     }
 
     /// `build.rs` compiles in every page of the package's folder.
