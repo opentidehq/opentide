@@ -112,7 +112,18 @@ pub struct Case {
     /// Extra normalisation rules.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub normalise: Vec<Rule>,
+    /// The recorded-HTTP cassette the case's network traffic is served
+    /// from (`tests/cassettes/<name>.json`, UC-4.1): the proxy variables
+    /// point at the replaying proxy ([`CASSETTE_PROXY`]) and the CA bundle
+    /// variables at its CA ([`CASSETTE_CA`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cassette: Option<String>,
 }
+
+/// The replaying proxy's URL in a cassette case's environment.
+pub const CASSETTE_PROXY: &str = "<CASSETTE_PROXY>";
+/// Its CA bundle's path in a cassette case's environment.
+pub const CASSETTE_CA: &str = "<TMP>/cassette-ca.pem";
 
 impl Case {
     /// The directory name of a command path: words joined by `.`, `_root` for the root.
@@ -195,6 +206,10 @@ pub struct CaseSpec {
     /// Extra normalisation rules.
     #[serde(default)]
     pub normalise: Vec<Rule>,
+    /// A recorded-HTTP cassette (`tests/cassettes/<name>.json`) that answers
+    /// the case's network traffic, instead of the refusing proxy.
+    #[serde(default)]
+    pub cassette: Option<String>,
 }
 
 impl Spec {
@@ -319,6 +334,16 @@ fn build(spec: &CaseSpec, mode: Mode, fixture: &str, arguments: Vec<String>, tim
     }
     argv.extend(arguments);
     let mut env = base_env(mode);
+    if spec.cassette.is_some() {
+        for value in env.values_mut() {
+            if value == REFUSING_PROXY {
+                CASSETTE_PROXY.clone_into(value);
+            }
+        }
+        for name in ["SSL_CERT_FILE", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE"] {
+            env.insert(name.to_owned(), CASSETTE_CA.to_owned());
+        }
+    }
     env.extend(spec.env.clone());
     let stdin = match (mode, spec.input.is_empty()) {
         (Mode::Human, _) => Stdin {
@@ -355,8 +380,13 @@ fn build(spec: &CaseSpec, mode: Mode, fixture: &str, arguments: Vec<String>, tim
         stdin,
         timeout_secs: spec.timeout_secs.unwrap_or(timeout),
         normalise,
+        cassette: spec.cassette.clone(),
     }
 }
+
+/// The proxy every case's network traffic goes to: the discard port, which
+/// refuses it.
+pub const REFUSING_PROXY: &str = "http://127.0.0.1:9";
 
 /// The environment every case starts from; nothing is inherited.
 ///

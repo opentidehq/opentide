@@ -1,0 +1,2 @@
+[?25l<LIVE>  [1;31m✗[0m  [1mexplorer[0m [2m<SECONDS>[0m</LIVE>[?25h[1A[2K  [1;31m✗[0m  [1mexplorer[0m [2m<SECONDS>[0m
+[1;31merror:[0m explorer: ConfigurationError: paths.toml is invalid: paths.core: unknown key

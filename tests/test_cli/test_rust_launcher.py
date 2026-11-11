@@ -36,3 +36,19 @@ def test_a_module_that_does_not_import_says_why(monkeypatch: pytest.MonkeyPatch)
 def test_other_commands_pay_for_no_imports() -> None:
     assert rust.python_modules(["info"]) is None
     assert rust.python_modules(["migrate", "vocab-scope"]) is None
+
+
+def test_setup_mcp_gets_whether_the_mcp_server_can_start(monkeypatch: pytest.MonkeyPatch) -> None:
+    from opentide.mcp_server import launcher
+
+    monkeypatch.setattr(launcher, "missing_requirements", lambda: ["mcp.server.mcpserver"])
+    for argv in (["setup", "mcp", "--vscode"], ["--json", "setup", "--mcp", "cursor", "--yes"]):
+        server = json.loads(rust.mcp_server(argv) or "{}")
+        assert server == {"missing": ["mcp.server.mcpserver"], "hint": launcher.MCP_INSTALL_HINT}
+    monkeypatch.setattr(launcher, "missing_requirements", list)
+    assert json.loads(rust.mcp_server(["setup", "mcp", "--generic"]) or "{}")["missing"] == []
+
+
+def test_setup_without_mcp_pays_for_no_probe() -> None:
+    assert rust.mcp_server(["setup", "env"]) is None
+    assert rust.mcp_server(["info"]) is None

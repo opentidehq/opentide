@@ -193,6 +193,25 @@ fn workspace(command: &str, cx: &Context<'_>) -> Result<Workspace, Box<Report>> 
     open(options).map_err(|message| Box::new(Report::error(command, message)))
 }
 
+/// The workspace a generate command reads, opened as the first work of its
+/// step `step`: the oracle reads the configuration inside the phase, so a
+/// configuration that does not resolve (a paths.toml its model refuses,
+/// #936, #946) fails that phase, with `phase`, `extra` and the failed row.
+fn workspace_in_step(
+    command: &str,
+    step: &str,
+    phase: &str,
+    extra: Vec<(String, Json)>,
+    cx: &Context<'_>,
+) -> Result<Workspace, Box<Report>> {
+    let (_, options) = placement(cx.repo, cx.env, cx.cwd);
+    open(options).map_err(|detail| {
+        let ran = run_phase(step, &[], cx.cwd, cx.cwd, || Err(detail));
+        let detail = ran.error.clone().unwrap_or_default();
+        Box::new(phase_failed(command, phase, &detail, extra, vec![ran.step]))
+    })
+}
+
 /// Writes `outputs`, as one phase's work.
 fn write(outputs: &[Output]) -> Result<(), String> {
     write_all(outputs).map_err(|(path, error)| format!("{}: {error}", path.display()))
@@ -204,7 +223,19 @@ pub fn exports(target: Option<Target>, cx: &Context<'_>) -> Report {
         Some(target) => format!("generate exports {}", target.name()),
         None => "generate exports".to_owned(),
     };
-    let workspace = match workspace(&command, cx) {
+    let name = target.map_or_else(
+        || "exports".to_owned(),
+        |one| format!("exports {}", one.name()),
+    );
+    let target_key =
+        |target: Option<Target>| target.map(|one| ("target".to_owned(), Json::str(one.name())));
+    let workspace = match workspace_in_step(
+        &command,
+        &name,
+        "exports",
+        target_key(target).into_iter().collect(),
+        cx,
+    ) {
         Ok(workspace) => workspace,
         Err(report) => return *report,
     };
@@ -212,10 +243,6 @@ pub fn exports(target: Option<Target>, cx: &Context<'_>) -> Report {
     let settings = Settings::new(workspace.configuration(), &root);
     let vocabularies = Vocabularies::bundled();
     let targets: Vec<Target> = target.map_or_else(|| Target::ALL.to_vec(), |one| vec![one]);
-    let name = target.map_or_else(
-        || "exports".to_owned(),
-        |one| format!("exports {}", one.name()),
-    );
     let phase = run_phase(&name, std::slice::from_ref(&root), cx.cwd, &root, || {
         let mut outputs = Vec::new();
         for target in &targets {
@@ -231,8 +258,6 @@ pub fn exports(target: Option<Target>, cx: &Context<'_>) -> Report {
         }
         write(&outputs)
     });
-    let target_key =
-        |target: Option<Target>| target.map(|one| ("target".to_owned(), Json::str(one.name())));
     match phase.error {
         Some(detail) => phase_failed(
             &command,
@@ -389,17 +414,9 @@ pub fn docs(args: &DocsArgs, cx: &Context<'_>) -> Report {
         failure.argument = Some("--changed".into());
         return Report::failed(&command, crate::envelope::USAGE_EXIT_CODE, failure);
     }
-    // The oracle reads the configuration inside the docs phase, so a
-    // configuration that does not resolve (a paths.toml its model refuses,
-    // #936) fails that phase, as one of the docs settings would.
-    let (_, options) = placement(cx.repo, cx.env, cx.cwd);
-    let workspace = match open(options) {
+    let workspace = match workspace_in_step(&command, "docs", "docs", Vec::new(), cx) {
         Ok(workspace) => workspace,
-        Err(detail) => {
-            let phase = run_phase("docs", &[], cx.cwd, cx.cwd, || Err(detail));
-            let detail = phase.error.clone().unwrap_or_default();
-            return phase_failed(&command, "docs", &detail, Vec::new(), vec![phase.step]);
-        }
+        Err(report) => return *report,
     };
     let root = workspace.root().to_path_buf();
     let base = output_base(&workspace);
@@ -808,7 +825,7 @@ pub fn explorer(options: &ExplorerOptions, cx: &Context<'_>) -> Report {
             &explorer::TLP_CHOICES,
         );
     }
-    let workspace = match workspace(COMMAND, cx) {
+    let workspace = match workspace_in_step(COMMAND, "explorer", "explorer", Vec::new(), cx) {
         Ok(workspace) => workspace,
         Err(report) => return *report,
     };
@@ -941,7 +958,7 @@ fn source_path(root: &Path, path: &Path) -> String {
 /// change set touches, under `.opentide/inflight/`.
 pub fn inflight_shards(cx: &Context<'_>) -> Report {
     const COMMAND: &str = "generate inflight";
-    let workspace = match workspace(COMMAND, cx) {
+    let workspace = match workspace_in_step(COMMAND, "inflight", "inflight", Vec::new(), cx) {
         Ok(workspace) => workspace,
         Err(report) => return *report,
     };
@@ -1010,10 +1027,11 @@ pub fn inflight_shards(cx: &Context<'_>) -> Report {
 /// branch has caught up with.
 pub fn inflight_prune(cx: &Context<'_>) -> Report {
     const COMMAND: &str = "generate inflight prune";
-    let workspace = match workspace(COMMAND, cx) {
-        Ok(workspace) => workspace,
-        Err(report) => return *report,
-    };
+    let workspace =
+        match workspace_in_step(COMMAND, "inflight prune", "inflight-prune", Vec::new(), cx) {
+            Ok(workspace) => workspace,
+            Err(report) => return *report,
+        };
     let root = workspace.root().to_path_buf();
     let dir = root.join(".opentide").join("inflight");
     let phase = run_phase(

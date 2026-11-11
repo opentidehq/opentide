@@ -62,6 +62,12 @@ pub struct Style {
     underline: bool,
     /// The SGR foreground code: `31` red, `96` bright cyan.
     fg: Option<u8>,
+    /// Reverse video (`7`): the brand mark without colour.
+    reverse: bool,
+    /// A 256-colour foreground (`38;5;n`), `color(n)`.
+    fg256: Option<u8>,
+    /// A 256-colour background (`48;5;n`), `on_color(n)`.
+    bg256: Option<u8>,
     link: Option<String>,
 }
 
@@ -76,6 +82,19 @@ impl Style {
                 "dim" => style.dim = true,
                 "italic" => style.italic = true,
                 "underline" => style.underline = true,
+                "reverse" => style.reverse = true,
+                other if other.starts_with("color(") || other.starts_with("on_color(") => {
+                    let number = other
+                        .trim_end_matches(')')
+                        .rsplit('(')
+                        .next()
+                        .and_then(|number| number.parse::<u8>().ok());
+                    if other.starts_with("on_") {
+                        style.bg256 = number;
+                    } else {
+                        style.fg256 = number;
+                    }
+                }
                 other => {
                     if let Some(code) = colour_code(other) {
                         style.fg = Some(code);
@@ -107,6 +126,9 @@ impl Style {
             italic: self.italic || other.italic,
             underline: self.underline || other.underline,
             fg: other.fg.or(self.fg),
+            reverse: self.reverse || other.reverse,
+            fg256: other.fg256.or(self.fg256),
+            bg256: other.bg256.or(self.bg256),
             link: other.link.clone().or_else(|| self.link.clone()),
         }
     }
@@ -124,10 +146,19 @@ impl Style {
                 codes.push(code.to_owned());
             }
         }
-        if colour == Colour::Full
-            && let Some(fg) = self.fg
-        {
-            codes.push(fg.to_string());
+        if self.reverse {
+            codes.push("7".to_owned());
+        }
+        if colour == Colour::Full {
+            if let Some(fg) = self.fg {
+                codes.push(fg.to_string());
+            }
+            if let Some(fg) = self.fg256 {
+                codes.push(format!("38;5;{fg}"));
+            }
+            if let Some(bg) = self.bg256 {
+                codes.push(format!("48;5;{bg}"));
+            }
         }
         codes.join(";")
     }

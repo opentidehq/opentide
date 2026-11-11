@@ -348,6 +348,52 @@ fn setup_ci_refuses_then_writes() {
     );
 }
 
+/// `--promotion-target` reads the statuses from the merged configuration,
+/// unchecked, as the oracle does: a `paths.toml` its model refuses (a legacy
+/// `[paths.core]` table) does not stop it (#957).
+#[test]
+fn setup_ci_reads_the_statuses_of_a_refused_paths_toml() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
+    fixture("vscode-docs-folder", &ws);
+    let (code, stdout) = run_json(
+        &ws,
+        &[
+            "setup",
+            "ci",
+            "github",
+            "--promotion-target",
+            "STAGING",
+            "--yes",
+        ],
+    );
+    assert_eq!(code, 0, "{stdout}");
+    assert_eq!(
+        std::fs::read_to_string(ws.join(".opentide/configurations/deployment.toml")).unwrap(),
+        "[promotion]\npromotion_target = \"STAGING\"\n"
+    );
+    // A status the merged files do not define is still refused.
+    let (code, stdout) = run_json(
+        &ws,
+        &[
+            "setup",
+            "ci",
+            "github",
+            "--promotion-target",
+            "NOPE",
+            "--yes",
+        ],
+    );
+    assert_eq!(code, 2, "{stdout}");
+    assert!(
+        document(&stdout)["failure"]["message"]
+            .as_str()
+            .unwrap()
+            .starts_with("Invalid value for '--promotion-target': 'NOPE' is not a status in this repository's deployment.toml; use one of: DESIGN, "),
+        "{stdout}"
+    );
+}
+
 /// The parsed document of a run's stdout.
 fn document(stdout: &str) -> serde_json::Value {
     serde_json::from_str(stdout).unwrap()
@@ -1133,4 +1179,96 @@ fn docs_refuse_the_legacy_core_docs_folder() {
     assert!(!ws.join("site").exists());
     assert!(!ws.join("docs").exists());
     assert_eq!(replay::files(&ws), before);
+}
+
+/// A configuration that does not load fails the step of every `generate`
+/// command, as the oracle reports it: the oracle reads the configuration
+/// inside the phase, so the envelope leads with `phase`, the message with
+/// the phase's name, and plain mode prints the failed checklist row before
+/// the error. Opened before the step, the workspace's error was a bare
+/// command error, with neither (#946). Nothing is written.
+#[test]
+fn generate_steps_fail_on_a_configuration_they_cannot_load() {
+    for (words, step, phase) in [
+        (&["generate", "exports"][..], "exports", "exports"),
+        (
+            &["generate", "exports", "navigator"][..],
+            "exports navigator",
+            "exports",
+        ),
+        (&["generate", "explorer"][..], "explorer", "explorer"),
+        (&["generate", "inflight"][..], "inflight", "inflight"),
+        (
+            &["generate", "inflight", "prune"][..],
+            "inflight prune",
+            "inflight-prune",
+        ),
+    ] {
+        let scratch = tempfile::tempdir().unwrap();
+        let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
+        fixture("vscode-docs-folder", &ws);
+        let before = replay::files(&ws);
+
+        let json: Vec<&str> = std::iter::once("--json")
+            .chain(words.iter().copied())
+            .collect();
+        let (code, stdout) = run_at(&ws, &json);
+        assert_eq!(code, 1, "{words:?}: {stdout}");
+        let document = document(&stdout);
+        assert_eq!(
+            stdout.find("\"phase\""),
+            Some(1),
+            "{words:?}: `phase` leads the envelope: {stdout}"
+        );
+        assert_eq!(document["phase"], phase, "{words:?}: {stdout}");
+        assert_eq!(document["failure"]["code"], "command_failed", "{stdout}");
+        let message = document["failure"]["message"].as_str().unwrap();
+        assert!(
+            message.starts_with(&format!("{phase}: paths.toml")),
+            "{words:?}: {message}"
+        );
+        assert!(message.contains("paths.core"), "{words:?}: {message}");
+        if let ["generate", "exports", target] = words {
+            assert_eq!(document["target"], *target, "{words:?}: {stdout}");
+        }
+
+        let (code, stderr) = run_plain(&ws, words);
+        assert_eq!(code, 1, "{words:?}: {stderr}");
+        let lines: Vec<&str> = stderr.lines().collect();
+        assert!(
+            lines
+                .first()
+                .is_some_and(|row| row.starts_with(&format!("✗ {step} · "))),
+            "{words:?}: the failed row first: {stderr}"
+        );
+        assert_eq!(
+            lines.get(1).copied(),
+            Some(format!("error: {message}").as_str()),
+            "{words:?}: {stderr}"
+        );
+        assert_eq!(replay::files(&ws), before, "{words:?}");
+    }
+}
+
+/// Runs the CLI in-process at `ws` in plain mode; the exit code and stderr.
+fn run_plain(ws: &Path, words: &[&str]) -> (i32, String) {
+    let sink: Sink = Arc::new(Mutex::new(Buffer::default()));
+    let host = Host {
+        version: "0.23.0".into(),
+        stdout_tty: false,
+        stderr_tty: false,
+        log_sink: sink,
+        cwd: Some(ws.to_path_buf()),
+        width: None,
+        interrupt: opentide_cli::app::Interrupt::default(),
+    };
+    let argv: Vec<String> = words.iter().map(|word| (*word).to_owned()).collect();
+    let home = ws.with_file_name("home");
+    std::fs::create_dir_all(&home).unwrap();
+    let env = Env::from_pairs([("HOME".to_owned(), home.display().to_string())]);
+    let err = Buffer::default();
+    let mut out = Vec::new();
+    let exit_code = run(&argv, &env, &host, &mut out, &mut err.clone());
+    let stderr = String::from_utf8(err.0.lock().unwrap().clone()).unwrap();
+    (exit_code, stderr)
 }

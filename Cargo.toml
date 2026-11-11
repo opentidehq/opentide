@@ -30,6 +30,8 @@ members = [
     "crates/opentide-wasm",
     "crates/opentide-compare",
     "crates/opentide-cli",
+    "crates/opentide-connectors",
+    "crates/opentide-cassette",
     "analysis",
     "xtask",
 ]
@@ -65,6 +67,8 @@ opentide-compile = { path = "crates/opentide-compile", version = "=0.12.0" }
 opentide-analysis = { path = "crates/opentide-analysis", version = "=0.12.0" }
 opentide-lsp = { path = "crates/opentide-lsp", version = "=0.12.0" }
 opentide-compare = { path = "crates/opentide-compare", version = "=0.12.0" }
+opentide-connectors = { path = "crates/opentide-connectors", version = "=0.12.0" }
+opentide-cassette = { path = "crates/opentide-cassette", version = "=0.12.0" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml = "0.8"
@@ -135,6 +139,29 @@ proptest = { version = "1", default-features = false, features = ["std"] }
 # Data parallelism (opentide-workspace: each object file read and parsed on
 # its own thread). The version trycmd already locks.
 rayon = "1.12"
+# The connectors (UC-4.1, #831, plan D-8): the workspace's one HTTP client.
+# reqwest on rustls with ring (no aws-lc-rs: its C build and its OpenSSL
+# licence), HTTP/1.1 only as `requests` speaks it, no system proxy lookup: the
+# proxies and the CA bundle come from the environment the CLI passes, per
+# tenant. tokio runs it; tokio-util cancels; backon schedules retries.
+reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+rustls-native-certs = "0.8"
+tokio = { version = "1.48", default-features = false }
+tokio-util = { version = "0.7", default-features = false }
+backon = { version = "1", default-features = false, features = ["tokio-sleep"] }
+# The recorded-HTTP harness (opentide-cassette, never shipped): wiremock
+# replays cassettes; the recording proxy terminates TLS with a CA rcgen makes
+# for the run (tokio-rustls, hyper's server).
+wiremock = "0.6"
+rcgen = { version = "0.14", default-features = false, features = ["ring", "pem", "crypto"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
+hyper = { version = "1", features = ["server", "http1"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+http-body-util = "0.1"
+# The version wiremock locks.
+base64 = "0.22"
+sha2 = "0.11"
 # xtask only: `cargo xtask bench` reads each benchmarked process's peak RSS
 # from wait4(2), whose safe wrapper this is (the workspace forbids `unsafe`).
 wait4 = "0.2"

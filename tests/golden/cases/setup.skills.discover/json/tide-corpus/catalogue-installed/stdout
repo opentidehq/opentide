@@ -1,0 +1,1 @@
+{"source":"opentidehq/skills@main","manifest_source":"remote","manifest_refreshed":false,"skills":[],"count":0,"ok":true,"status":"completed","message":"Completed successfully","schema_version":1,"command":"setup skills discover","duration_ms":0,"exit_code":0,"summary":{"skills":0,"installed":0},"next_actions":[],"failure":null}
