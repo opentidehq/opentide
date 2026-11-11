@@ -1182,7 +1182,7 @@ pub struct DeployArgs {
         value_name = "PLATFORM"
     )]
     pub platform: Option<Platform>,
-    #[arg(long = "strategy", help = "Status strategy this run deploys (repeatable). PREVIEW: rules whose status maps to PREVIEW or UNIVERSAL. RELEASE: rules whose status maps to RELEASE or UNIVERSAL, and disables or deletes those mapping to DISABLEMENT or DELETION. Each rule goes to the tenants whose 'strategies' accept the run's strategy. Status names such as STAGING or PRODUCTION are not strategies", value_parser = clap::builder::PossibleValuesParser::new(["PREVIEW", "RELEASE"]), action = clap::ArgAction::Append)]
+    #[arg(long = "strategy", help = "Status strategy this run deploys (repeatable). PREVIEW: rules whose status maps to PREVIEW or UNIVERSAL. RELEASE: rules whose status maps to RELEASE or UNIVERSAL, and disables or deletes those mapping to DISABLEMENT or DELETION. Each rule goes to the tenants whose 'strategies' accept the run's strategy. Status names such as STAGING or PRODUCTION are not strategies", action = clap::ArgAction::Append)]
     pub strategy: Vec<String>,
     #[arg(
         long = "all",

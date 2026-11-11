@@ -38,7 +38,8 @@ opentide-analysis.workspace = true
 # the queries check of validate on the query engines (src/queries.rs, UC-2.5):
 # the workspace and its one Diagnostic, and the quoting of a suggestion.
 opentide-core.workspace = true
-# `generate` (UC-3.2): the files it writes.
+# `generate` (UC-3.2): the files it writes; `deploy --dry-run` (UC-3.1c): the
+# plan, the compiled bodies, the git baseline.
 opentide-compile.workspace = true
 opentide-schema.workspace = true
 opentide-workspace.workspace = true

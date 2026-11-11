@@ -1,12 +1,13 @@
 //! The commands that run on this crate (UC-2.4: `info`, `rules unreviewed`;
 //! UC-3.2: `generate exports`; UC-3.5: `validate`, `validate query`, `lint`,
-//! `explain`).
+//! `explain`; UC-3.1c: `deploy --dry-run`).
 //!
 //! A command reads its arguments and the workspace and returns a
 //! [`Report`]: the JSON envelope's parts, and what the text modes print
 //! before the outcome line. `app::Run::emit_report` writes it in the run's
 //! mode.
 
+pub mod deploy;
 pub mod explain;
 pub mod findings;
 pub mod generate;

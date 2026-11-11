@@ -125,22 +125,26 @@ impl LogLayer {
     /// One line for an event: `label: Event · key: value`.
     fn line(&self, level: Level, fields: &Fields) -> String {
         if self.config.json_lines {
-            let mut members = vec![
+            // The event's fields, then the event, its level and its time, in
+            // the order structlog's JSON lines have them.
+            let mut members: Vec<(String, Json)> = fields
+                .pairs
+                .iter()
+                .map(|(key, value)| (key.clone(), Json::str(value)))
+                .collect();
+            members.extend([
                 ("event".to_owned(), Json::str(&fields.message)),
                 ("level".to_owned(), Json::str(label(level))),
                 ("timestamp".to_owned(), Json::Str((self.clock)())),
-            ];
-            members.extend(
-                fields
-                    .pairs
-                    .iter()
-                    .map(|(key, value)| (key.clone(), Json::str(value))),
-            );
+            ]);
             return document_text(&Json::Object(members), false);
         }
         let mut line = String::new();
         if self.config.debug {
-            let _ = write!(line, "{} ", (self.clock)());
+            // The time of day: the clock's date-time without its date.
+            let clock = (self.clock)();
+            let time = clock.rsplit(' ').next().unwrap_or_default();
+            let _ = write!(line, "{time} ");
         }
         let _ = write!(
             line,
@@ -252,7 +256,30 @@ mod tests {
         });
         assert_eq!(
             text,
-            "{\"event\":\"proxy_failed\",\"level\":\"warning\",\"timestamp\":\"12:00:00\",\"token\":\"***\",\"count\":\"3\"}\n"
+            "{\"token\":\"***\",\"count\":\"3\",\"event\":\"proxy_failed\",\"level\":\"warning\",\"timestamp\":\"12:00:00\"}\n"
+        );
+    }
+
+    #[test]
+    fn a_json_line_carries_the_date_and_a_debug_line_the_time() {
+        let run = |config: Config| {
+            let buffer = Buffer::default();
+            let sink: Sink = Arc::new(Mutex::new(buffer.clone()));
+            let layer = LogLayer::new(config, sink, Redactor::new(Vec::new(), Vec::new()), || {
+                "2026-11-09 12:00:00".to_owned()
+            });
+            tracing::subscriber::with_default(subscriber(layer), || {
+                tracing::error!(system = "sentinel", "platform_status_missing");
+            });
+            String::from_utf8(buffer.0.lock().unwrap().clone()).unwrap()
+        };
+        assert_eq!(
+            run(config(true, false, false)),
+            "12:00:00 error: Platform status missing · system: sentinel\n"
+        );
+        assert_eq!(
+            run(config(false, false, true)),
+            "{\"system\":\"sentinel\",\"event\":\"platform_status_missing\",\"level\":\"error\",\"timestamp\":\"2026-11-09 12:00:00\"}\n"
         );
     }
 
