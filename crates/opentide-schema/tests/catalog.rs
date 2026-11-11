@@ -55,6 +55,22 @@ fn rows(document: &Value) -> Vec<(String, Value)> {
         .collect()
 }
 
+/// The bundled catalog as checked out holds the LF bytes the generator
+/// writes: `.gitattributes` turns end-of-line conversion off for it, so a
+/// Windows checkout (`core.autocrlf`) does not turn the byte comparison below
+/// into a line-ending one.
+#[test]
+fn the_bundled_catalog_is_checked_out_with_lf() {
+    let dir = repo().join("data/catalogs/tide/generated");
+    for name in [FIELDS_FILE, DEPRECATIONS_FILE] {
+        let bytes = std::fs::read(dir.join(name)).unwrap();
+        assert!(
+            !bytes.contains(&b'\r'),
+            "{name} was checked out with CRLF: .gitattributes pins data/catalogs/tide/generated/*.json to LF"
+        );
+    }
+}
+
 #[test]
 fn the_catalog_is_the_oracles() {
     let dir = repo().join("data/catalogs/tide/generated");

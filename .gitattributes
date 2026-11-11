@@ -34,3 +34,8 @@ crates/testdata/objects/** -text
 # include_str!) and read by the Python CLI: the bytes as committed, LF, on a
 # Windows checkout too.
 src/opentide/data/diagnostics/*.md -text
+
+# The language server field catalog opentide-schema generates and compares byte for
+# byte with the oracle's (crates/opentide-schema/tests/catalog.rs): the bytes as
+# committed, LF, on a Windows checkout too.
+data/catalogs/tide/generated/*.json -text
