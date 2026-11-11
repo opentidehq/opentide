@@ -1,6 +1,8 @@
 //! The command line the facade carries (`cli` feature): the `opentide`
 //! binary and `cli::run_json`, against the PyPI CLI's recordings.
 
+#![cfg(feature = "cli")]
+
 mod common;
 
 use std::process::Command;

@@ -45,8 +45,11 @@ unpublished; `cargo package` leaves it out and the licence scan reads its source
 - **Docs.** `missing_docs` holds; every public item has a doc comment, and a sample is a doctest.
   `cargo doc -p opentide --all-features --no-deps` with `RUSTDOCFLAGS=-D warnings` is clean.
 - **Features.** A build without `queries` never skips a queries check: it reports
-  `engine_unavailable`. A feature's API is tested in a test target with `required-features`;
-  CI's `facade` job runs them all (`--all-features`), and the workspace's run the default ones.
+  `engine_unavailable`. A feature's tests gate themselves (`#![cfg(feature = "...")]` at the file's
+  top), never with a `[[test]]` table: the Python sdist leaves `tests/` out, and a table naming a
+  missing file stops its manifest from parsing (`tests/test_package/test_layout.py` checks every
+  member). CI's `facade` job runs them all (`--all-features`), and the workspace's run the default
+  ones.
 - **The binary.** opentide-cli also builds a binary named `opentide`; this crate's is built only
   with `cli`, so a workspace build never builds both, and opentide-cli's is not documented
   (`doc = false`), whose page would take this crate's path (cargo#6313).

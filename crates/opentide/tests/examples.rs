@@ -1,6 +1,7 @@
 //! The examples of `examples/`, each run on a workspace: CI runs them with
 //! the tests.
 
+#![cfg(feature = "compile")]
 #![expect(
     clippy::unwrap_used,
     reason = "test helpers: a fixture that does not lay out is a failure"

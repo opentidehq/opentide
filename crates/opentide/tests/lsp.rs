@@ -1,5 +1,7 @@
 //! The language server the facade carries (`lsp` feature).
 
+#![cfg(feature = "lsp")]
+
 use std::io::Cursor;
 
 fn frame(body: &str) -> String {

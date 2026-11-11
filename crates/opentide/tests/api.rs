@@ -1,6 +1,7 @@
 //! The facade's API on a workspace: open, validate, lint, info, the
 //! catalogue, coverage and the deploy plan.
 
+#![cfg(feature = "compile")]
 #![expect(
     clippy::unwrap_used,
     reason = "test helpers: a fixture that does not lay out is a failure"

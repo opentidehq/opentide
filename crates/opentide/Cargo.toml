@@ -41,7 +41,8 @@ required-features = ["cli"]
 # The library's documentation is the crate's; the binary has none of its own.
 doc = false
 
-# The three examples of the Rust page in docs/sdk. Each is also compiled into
+# The three examples of the Rust page in docs/sdk (the sdist ships
+# examples/, so these entries parse there). Each is also compiled into
 # tests/examples.rs, which runs it on a workspace, so CI runs them with the
 # tests (`cargo nextest run --workspace`).
 [[example]]
@@ -56,23 +57,12 @@ required-features = ["workspace"]
 name = "deploy_plan"
 required-features = ["compile"]
 
-[[test]]
-name = "examples"
-required-features = ["compile"]
-
-[[test]]
-name = "api"
-required-features = ["compile"]
-
-# The binary and `cli::run_json`: CI's `facade` job runs them with every
-# feature (`cargo nextest run -p opentide --all-features`).
-[[test]]
-name = "cli"
-required-features = ["cli"]
-
-[[test]]
-name = "lsp"
-required-features = ["lsp"]
+# The integration tests gate themselves on the features they need
+# (`#![cfg(feature = "...")]` at each file's top), as cargo discovers them:
+# an explicit `[[test]]` would name a file the Python sdist leaves out
+# (`/crates/*/tests`, pyproject.toml), and the sdist's manifest would not
+# parse. tests/cli.rs and tests/lsp.rs run with every feature (CI's `facade`
+# job: `cargo test -p opentide --all-features`).
 
 [features]
 default = ["schema", "workspace", "compile"]
