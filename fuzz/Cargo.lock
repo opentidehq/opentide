@@ -2196,12 +2196,17 @@ name = "opentide-connectors"
 version = "0.12.0"
 dependencies = [
  "backon",
+ "jiff",
+ "opentide-compile",
  "opentide-workspace",
+ "percent-encoding",
+ "regex",
  "reqwest",
  "rustls",
  "rustls-native-certs",
  "serde",
  "serde_json",
+ "shlex",
  "thiserror",
  "tokio",
  "tokio-util",

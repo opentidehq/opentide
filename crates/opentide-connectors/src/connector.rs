@@ -11,6 +11,7 @@
 
 use std::future::Future;
 use std::pin::Pin;
+use std::time::Duration;
 
 use tokio_util::sync::CancellationToken;
 
@@ -65,20 +66,113 @@ pub struct DeployOutcome {
     pub operation: Operation,
 }
 
-/// One query to run or check.
+/// Rows returned when the caller names no limit (`query.models.DEFAULT_LIMIT`).
+pub const DEFAULT_LIMIT: usize = 100;
+/// How long an asynchronous search may run when the caller names no timeout
+/// (`query.models.DEFAULT_TIMEOUT`).
+pub const DEFAULT_QUERY_TIMEOUT: Duration = Duration::from_secs(120);
+
+/// A UTC interval, `start` inclusive (Python's `TimeWindow`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TimeWindow {
+    /// Where it starts.
+    pub start: jiff::Timestamp,
+    /// Where it ends.
+    pub end: jiff::Timestamp,
+}
+
+impl TimeWindow {
+    /// *at* as `format_utc_z` writes it: `2026-10-26T08:00:00.000Z`.
+    pub fn utc_z(at: jiff::Timestamp) -> String {
+        at.strftime("%Y-%m-%dT%H:%M:%S%.3fZ").to_string()
+    }
+}
+
+/// One query to run or check on one tenant (Python's `query.models.QueryRequest`).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct QueryRequest {
     /// The query text.
     pub text: String,
-    /// Its language (`kql`, `esql`).
+    /// Its language (`kql`, `esql`, `cql`, `telemetry`).
     pub language: String,
+    /// The time the search covers.
+    pub window: TimeWindow,
+    /// The most rows to return; a runner asks for one more, to tell a cut.
+    pub limit: usize,
+    /// Elastic indices, the HarfangLab telemetry source, the CrowdStrike
+    /// repository (`--index`).
+    pub index: Vec<String>,
+    /// How long an asynchronous search may run (`--timeout`).
+    pub timeout: Duration,
 }
 
-/// What a query returned.
+/// A column of a query's rows.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct QueryColumn {
+    /// Its name (`process.name`).
+    pub name: String,
+    /// The vendor's type name, verbatim; `None` when the platform names none.
+    pub kind: Option<String>,
+}
+
+/// One row: its columns in the order they came (`opentide_compile`'s
+/// ordered JSON, since serde_json's map sorts its keys).
+pub type Row = opentide_compile::json::Object;
+
+/// What a query returned (Python's `query.models.QueryResult`).
 #[derive(Clone, Debug, PartialEq, Default)]
 pub struct QueryOutcome {
-    /// The rows.
-    pub rows: Vec<serde_json::Value>,
+    /// The columns, in order.
+    pub columns: Vec<QueryColumn>,
+    /// The rows, at most the request's limit.
+    pub rows: Vec<Row>,
+    /// More rows matched than the limit let through.
+    pub truncated: bool,
+    /// The platform stopped early and says the rows are incomplete.
+    pub partial: bool,
+    /// The platform's reservations about the result.
+    pub warnings: Vec<String>,
+    /// The platform's id of the search (CrowdStrike's job id).
+    pub vendor_query_id: Option<String>,
+    /// What was sent, when the runner changed the query (a `head` it added).
+    pub sent: Option<String>,
+    /// The language the runner used.
+    pub language: Option<String>,
+}
+
+/// Nested objects as dotted keys (`process.name`), in order; lists and empty
+/// objects stay values (`query.models.flatten`).
+pub fn flatten(document: &Row) -> Row {
+    fn into(flat: &mut Row, document: &Row, prefix: &str) {
+        for (key, value) in document {
+            let name = format!("{prefix}{key}");
+            match value {
+                opentide_compile::Json::Object(inner) if !inner.is_empty() => {
+                    into(flat, inner, &format!("{name}."));
+                }
+                _ => {
+                    flat.insert(name, value.clone());
+                }
+            }
+        }
+    }
+    let mut flat = Row::new();
+    into(&mut flat, document, "");
+    flat
+}
+
+/// The union of the rows' keys, in first-seen order, for a platform that
+/// names no schema (`query.models.columns_of`).
+pub fn columns_of(rows: &[Row]) -> Vec<QueryColumn> {
+    let mut seen = std::collections::BTreeSet::new();
+    rows.iter()
+        .flat_map(|row| row.keys())
+        .filter(|name| seen.insert(name.as_str()))
+        .map(|name| QueryColumn {
+            name: name.clone(),
+            kind: None,
+        })
+        .collect()
 }
 
 /// A live check's verdict.
