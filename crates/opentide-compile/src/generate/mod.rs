@@ -19,6 +19,7 @@
 //! only [`files`] touches the disk, and [`inflight`], which reads the shards
 //! it lays over the index and the object files it compares them with.
 
+pub mod docs;
 pub mod explorer;
 pub mod exports;
 pub mod files;

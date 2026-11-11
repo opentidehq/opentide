@@ -69,10 +69,20 @@ commands:
                  load every corpus with opentide-workspace and compare its
                  index (objects, UUIDs, types, paths, load errors, references,
                  signals), as JSON, with the Python registry's (UC-2.1, #816)
+  lsp parity --corpus faults [--only ID,...] [--keep DIR]
+                 for each fault kind `opentide validate` reports, the
+                 language server's published diagnostics against validate's
+                 findings: codes, severities, ranges in UTF-16 (UC-2.6, #821)
   validate diff [--filter GLOB] [--keep DIR] [--show-approved]
                  run opentide-workspace's validate on every recorded
-                 `validate --json` case that only checks, and compare its
+                 `validate --json` case that checks or fixes, and compare its
                  report, checks and summary with the recording (UC-2.2, #817)
+                 and, for --fix and --fix --dry-run, what it fixed, the diff
+                 and the files written (UC-2.3, #818)
+  lint diff [--filter GLOB] [--keep DIR] [--show-approved]
+                 run opentide-workspace's lint on every recorded `lint --json`
+                 case and compare its findings, verdict, next steps and the
+                 files --fix renamed with the recording (UC-2.3, #818)
   codegen [--check]
                  write the artifacts generated from the Rust model (the
                  platform templates); --check compares them, and what
@@ -172,10 +182,24 @@ fn main() -> ExitCode {
                 ExitCode::from(2)
             }
         },
+        "lsp" => match xtask::lsp::run(rest) {
+            Ok(code) => ExitCode::from(code),
+            Err(error) => {
+                eprintln!("xtask lsp: {error:#}");
+                ExitCode::from(2)
+            }
+        },
         "validate" => match xtask::validate::run(rest) {
             Ok(code) => ExitCode::from(code),
             Err(error) => {
                 eprintln!("xtask validate: {error:#}");
+                ExitCode::from(2)
+            }
+        },
+        "lint" => match xtask::lint::run(rest) {
+            Ok(code) => ExitCode::from(code),
+            Err(error) => {
+                eprintln!("xtask lint: {error:#}");
                 ExitCode::from(2)
             }
         },

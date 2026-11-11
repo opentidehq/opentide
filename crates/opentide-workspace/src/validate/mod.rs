@@ -21,7 +21,8 @@ pub mod objects;
 pub mod scope;
 pub mod states;
 
-use std::collections::BTreeSet;
+use std::cell::RefCell;
+use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
@@ -33,6 +34,7 @@ use rayon::prelude::*;
 use serde::Serialize;
 
 use crate::diagnostic::{ContextValue, Diagnostic, Severity};
+use crate::fs::FileSystem;
 use crate::index::Index;
 use crate::workspace::Workspace;
 use objects::{Graph, ObjectChecks, Subject};
@@ -535,13 +537,30 @@ fn nested_message(path: &str, folder: &str) -> String {
     )
 }
 
+/// When the run started, where the target has a clock.
+///
+/// The browser build (wasm32-unknown-unknown, which the language server's
+/// `opentide/analyze` reaches through [`validate`]) has none: std's
+/// `Instant::now` panics there ("time not implemented"), which traps the
+/// whole WebAssembly worker. Its runs report a `wall_ms` of 0.
+#[cfg(not(all(target_family = "wasm", target_os = "unknown")))]
+fn clock_start() -> Option<Instant> {
+    Some(Instant::now())
+}
+
+/// The browser build has no clock: see the native [`clock_start`].
+#[cfg(all(target_family = "wasm", target_os = "unknown"))]
+fn clock_start() -> Option<Instant> {
+    None
+}
+
 /// Runs `validate` over `ws`.
 #[expect(
     clippy::too_many_lines,
     reason = "the run's phases in the oracle's order (session.py run_validation), read top to bottom"
 )]
 pub fn validate(ws: &Workspace, options: &Options<'_>) -> Validation {
-    let started = Instant::now();
+    let started = clock_start();
     let fs = ws.fs().as_ref();
     let index = ws.index();
     let root = ws.root().to_path_buf();
@@ -559,12 +578,17 @@ pub fn validate(ws: &Workspace, options: &Options<'_>) -> Validation {
     let resolved = &ws.configuration().resolved;
 
     let mut graph = Graph::new(index, Vocabularies::bundled(), resolved.get("deployment"));
+    let listed = ListedPaths::new(fs, ws.links());
     let work: Vec<Subject<'_>> = index
         .objects
         .iter()
         .filter(|(family, _)| opentide_schema::vocab::OBJECT_TYPES.contains(&family.as_str()))
         .flat_map(|(_, objects)| objects.values())
-        .filter(|object| scope.includes_object(fs, &object.uuid, &object.family, &object.path))
+        .filter(|object| {
+            scope.includes_object_with(&object.uuid, &object.family, &object.path, || {
+                listed.resolve(&object.path)
+            })
+        })
         .map(|object| Subject {
             uuid: &object.uuid,
             family: &object.family,
@@ -590,7 +614,9 @@ pub fn validate(ws: &Workspace, options: &Options<'_>) -> Validation {
             .filter(|error| {
                 scope.is_full()
                     || (!scope.excludes_type(&error.family)
-                        && (!scope.has_targets() || scope.matches_file(fs, &error.path)))
+                        && (!scope.has_targets()
+                            || scope
+                                .matches_file_with(&error.path, || listed.resolve(&error.path))))
             })
             .map(|error| {
                 Diagnostic::error(error.code, error.message())
@@ -726,7 +752,12 @@ pub fn validate(ws: &Workspace, options: &Options<'_>) -> Validation {
                 check_shard: false,
             };
             for duplicate in &index.duplicates {
-                if !scope.includes_object(fs, &duplicate.uuid, &duplicate.family, &duplicate.path) {
+                if !scope.includes_object_with(
+                    &duplicate.uuid,
+                    &duplicate.family,
+                    &duplicate.path,
+                    || listed.resolve(&duplicate.path),
+                ) {
                     continue;
                 }
                 let subject = Subject {
@@ -804,7 +835,9 @@ pub fn validate(ws: &Workspace, options: &Options<'_>) -> Validation {
     let mut sources = annotate::Sources::new(fs, index);
     annotate::annotate(&mut issues, &mut sources, &root);
     annotate::annotate(&mut warnings, &mut sources, &root);
-    stats.wall_ms = (started.elapsed().as_secs_f64() * 100_000.0).round() / 100.0;
+    stats.wall_ms = started.map_or(0.0, |started| {
+        (started.elapsed().as_secs_f64() * 100_000.0).round() / 100.0
+    });
 
     let report = Report {
         ok: issues.is_empty(),
@@ -844,12 +877,11 @@ pub fn validate(ws: &Workspace, options: &Options<'_>) -> Validation {
         files: files_with(Severity::Error),
         warning_files: files_with(Severity::Warning),
         queries: report.stats.queries_checked,
-        fixable: report
-            .issues
-            .iter()
-            .chain(&report.warnings)
-            .filter(|item| item.fix.as_ref().is_some_and(|fix| fix.safe))
-            .count(),
+        // What `--fix` would apply: the safe fixes that still fit their file
+        // (`plan_fixes`), not every finding that offers one.
+        fixable: crate::fix::plan(fs, report.issues.iter().chain(&report.warnings))
+            .changes
+            .len(),
     };
     Validation {
         checks: check_list,
@@ -857,6 +889,46 @@ pub fn validate(ws: &Workspace, options: &Options<'_>) -> Validation {
         summary,
         failed,
         warned,
+    }
+}
+
+/// The object files discovery listed, resolved as [`FileSystem::resolve`]
+/// resolves them, without resolving each path component by component: such
+/// a file is in its object folder, so it resolves to its folder resolved
+/// (once per folder) and its name, or, when it is a symbolic link, to what
+/// the load resolved it to. Selecting one file of a large workspace then
+/// resolves a handful of folders, not every object's path.
+struct ListedPaths<'a> {
+    fs: &'a dyn FileSystem,
+    links: &'a HashMap<PathBuf, PathBuf>,
+    folders: RefCell<HashMap<PathBuf, PathBuf>>,
+}
+
+impl<'a> ListedPaths<'a> {
+    fn new(fs: &'a dyn FileSystem, links: &'a HashMap<PathBuf, PathBuf>) -> Self {
+        Self {
+            fs,
+            links,
+            folders: RefCell::default(),
+        }
+    }
+
+    /// `path` (a listed object file) resolved.
+    fn resolve(&self, path: &Path) -> PathBuf {
+        if let Some(target) = self.links.get(path) {
+            return target.clone();
+        }
+        let (Some(folder), Some(name)) = (path.parent(), path.file_name()) else {
+            return self.fs.resolve(path);
+        };
+        if folder.as_os_str().is_empty() {
+            return self.fs.resolve(path);
+        }
+        self.folders
+            .borrow_mut()
+            .entry(folder.to_path_buf())
+            .or_insert_with(|| self.fs.resolve(folder))
+            .join(name)
     }
 }
 

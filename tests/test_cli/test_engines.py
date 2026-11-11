@@ -128,6 +128,49 @@ def test_rust_runs_the_rust_implementation(
     assert code == python[0] + 1
 
 
+def test_a_rust_command_that_requires_a_flag_covers_only_runs_with_it() -> None:
+    command = RustCommand(launch=("x",), requires=("--dry-run",))
+    assert command.covers(["deploy", "--strategy", "PREVIEW", "--dry-run"])
+    assert not command.covers(["deploy", "--strategy", "PREVIEW"])
+    # After ``--`` it is an argument, not the flag.
+    assert not command.covers(["deploy", "--", "--dry-run"])
+    assert RustCommand(launch=("x",)).covers(["info"])
+    assert engines.RUST_COMMANDS[("deploy",)].requires == ("--dry-run",)
+
+
+def test_rust_refuses_a_run_its_implementation_does_not_cover(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``deploy`` without ``--dry-run`` has no Rust implementation: refused by name."""
+    monkeypatch.setitem(
+        engines.RUST_COMMANDS, ("explain",), RustCommand(launch=("x",), requires=("--never",))
+    )
+    code, stdout, _ = invoke(["--json", "--repo", str(workspace), "explain", "internal"], "rust")
+    assert code == 2
+    doc = document(stdout)
+    assert doc["command"] == "explain"
+    assert doc["failure"]["code"] == "engine_not_ported"
+    assert (
+        "opentide explain without --never has no Rust implementation yet"
+        in doc["failure"]["message"]
+    )
+
+
+def test_compare_runs_python_alone_where_rust_does_not_cover_the_run(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A launch that would fail if it ran: compare must not start it.
+    monkeypatch.setitem(
+        engines.RUST_COMMANDS,
+        ("explain",),
+        RustCommand(launch=(sys.executable, str(FAKE), "exit"), requires=("--never",)),
+    )
+    args = ["--json", "--repo", str(workspace), "explain", "internal"]
+    code, stdout, _ = invoke(args, "compare")
+    assert code == 0
+    assert document(stdout)["ok"] is True
+
+
 def test_compare_replays_python_when_both_agree(
     workspace: Path, state: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -345,6 +388,40 @@ def test_an_agreed_compare_is_the_python_run(
     assert {**document(stdout), "duration_ms": 0} == {**document(python_stdout), "duration_ms": 0}
     assert (workspace / "fake-rust.txt").read_text(encoding="utf-8") == "written by the fake\n"
     assert not state.exists()
+
+
+def test_compare_runs_python_alone_where_rust_refuses_the_input(
+    workspace: Path, state: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A Rust run refused with ``engine_not_ported`` (``generate docs`` on CVE details) is no
+    mismatch: the Python run is the result, its writes in the workspace, the refused run's not."""
+    monkeypatch.chdir(workspace)
+    monkeypatch.setattr(engines, "python_launch", lambda: (sys.executable, str(FAKE), "file"))
+    monkeypatch.setitem(engines.RUST_COMMANDS, ("info",), fake("refuse"))
+    args = ["--json", "--repo", str(workspace), "info", "rules"]
+    code, stdout, _ = invoke(args, "compare")
+    python_code, python_stdout, _ = invoke(args, "python")
+    assert code == python_code == 0
+    assert {**document(stdout), "duration_ms": 0} == {**document(python_stdout), "duration_ms": 0}
+    assert (workspace / "fake-rust.txt").read_text(encoding="utf-8") == "written by the fake\n"
+    assert not state.exists()
+    # Without the record, the same run is a mismatch: the refusal file is the signal.
+    (workspace / "fake-rust.txt").unlink()
+    monkeypatch.setattr(engines, "REFUSAL_ENV", "OPENTIDE_NOT_THE_REFUSAL_FILE")
+    code, stdout, _ = invoke(args, "compare")
+    assert code == 70
+    assert document(stdout)["failure"]["code"] == "engine_mismatch"
+    assert not (workspace / "fake-rust.txt").exists()
+
+
+def test_rust_mode_shows_the_refusal(workspace: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """``rust`` runs the Rust implementation alone: its refusal is the result, recorded nowhere."""
+    monkeypatch.chdir(workspace)
+    monkeypatch.delenv("OPENTIDE_ENGINE_REFUSAL", raising=False)
+    monkeypatch.setitem(engines.RUST_COMMANDS, ("info",), fake("refuse"))
+    code, _, _ = invoke(["--json", "--repo", str(workspace), "info", "rules"], "rust")
+    assert code == 2
+    assert (workspace / "fake-rust.txt").exists()
 
 
 def test_compare_does_not_fail_on_wall_time(

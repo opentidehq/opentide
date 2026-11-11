@@ -242,8 +242,8 @@ jobs:
 
   # Every test of the workspace with nextest (.config/nextest.toml, profile
   # `ci`) on Linux, macOS and Windows; the doctests (which nextest does not
-  # run) on Linux. pydantic_object_issues_are_subset_of_lsp runs src/opentide's
-  # models with the interpreter `uv sync` installs (.venv), so every OS syncs.
+  # run) on Linux. Tests that run src/opentide's models use the interpreter
+  # `uv sync` installs (.venv), so every OS syncs.
   engine-test:
     name: Engine tests (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -409,11 +409,14 @@ jobs:
       # cannot be packaged either: its scan reads the files `cargo package
       # --list` names, as its package would hold them (its CI-only oracle
       # data under tests/render/ is excluded from the package, as before).
-      - run: cargo package --locked --workspace --exclude opentide-native --exclude xtask --exclude opentide-compare --exclude opentide-schema --exclude opentide-workspace --exclude opentide-compile --exclude opentide-cli --allow-dirty
+      # opentide-lsp and opentide-wasm (publish = false) take their checks
+      # from opentide-workspace and opentide-schema (UC-2.6, ADR 0010's
+      # addendum): left out of the package step too, their sources scanned.
+      - run: cargo package --locked --workspace --exclude opentide-native --exclude xtask --exclude opentide-compare --exclude opentide-schema --exclude opentide-workspace --exclude opentide-compile --exclude opentide-cli --exclude opentide-lsp --exclude opentide-wasm --allow-dirty
       - name: license scan (no oracle references)
         run: |
           bash scripts/engine/license-scan.sh target/package/*.crate
-          bash scripts/engine/license-scan.sh crates/opentide-schema crates/opentide-schema-derive crates/opentide-compare crates/opentide-workspace crates/opentide-compile
+          bash scripts/engine/license-scan.sh crates/opentide-schema crates/opentide-schema-derive crates/opentide-compare crates/opentide-workspace crates/opentide-compile crates/opentide-lsp crates/opentide-wasm
           cargo package --list --locked --allow-dirty -p opentide-cli | (cd crates/opentide-cli && while IFS= read -r f; do if [ -f "$f" ]; then printf '%s\0' "$f"; fi; done | xargs -0 bash ../../scripts/engine/license-scan.sh)
 
   # The supply-chain gate (#843, deny.toml): licences of what we ship,
@@ -707,8 +710,9 @@ jobs:
     name: Corpus (generator, faults, coverage) against opentide 0.23.0
     runs-on: ubuntu-latest
     # 45: the object models' comparison (UC-1.3) validates every corpus again;
-    # 60: the index comparison (UC-2.1) loads every corpus and fault kind again.
-    timeout-minutes: 60
+    # 60: the index comparison (UC-2.1) loads every corpus and fault kind again;
+    # 70: the editor's comparison with validate (UC-2.6) serves every fault kind.
+    timeout-minutes: 70
     permissions:
       contents: read
     env:
@@ -813,11 +817,26 @@ jobs:
           cargo xtask payloads git --against python
           --python "$RUNNER_TEMP/oracle/bin/python"
       # opentide-workspace's validate against the recordings of `validate
-      # --json` (UC-2.2, #817): every recorded case that only checks; each
-      # difference is explained by an approved rule (xtask/src/validate.rs
-      # `APPROVED`), none stale. It reads tests/golden/cases, not the oracle.
+      # --json` (UC-2.2, #817): every recorded case that checks, and the
+      # --fix and --fix --dry-run cases with their diff and the files they
+      # wrote (UC-2.3, #818); each difference is explained by an approved
+      # rule (xtask/src/validate.rs `APPROVED`), none stale. It reads
+      # tests/golden/cases, not the oracle.
       - name: Validate against the recordings (validate diff)
         run: cargo xtask validate diff
+      # The language server's diagnostics against validate's findings (UC-2.6,
+      # #821): every fault kind `validate` alone reports, applied to the clean
+      # workspace and opened in opentide-lsp in process; per file the same
+      # codes, severities and ranges (code points converted to UTF-16). It
+      # needs neither the oracle nor the recordings.
+      - name: The editor's diagnostics are validate's (lsp parity)
+        run: cargo xtask lsp parity --corpus faults
+      # opentide-workspace's lint against the recordings of `lint --json`
+      # (UC-2.3, #818): every finding with its keys in order, the verdict,
+      # next steps and the files --fix renamed; approved rules in
+      # xtask/src/lint.rs `APPROVED`, none stale.
+      - name: Lint against the recordings (lint diff)
+        run: cargo xtask lint diff
       - name: The code inventory is the oracle's
         run: |
           cargo xtask corpus codes --engine python > "$RUNNER_TEMP/codes.toml"

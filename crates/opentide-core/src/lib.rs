@@ -546,12 +546,6 @@ pub mod codes {
     pub const THRESHOLD_LOOKBACK: &str = "threshold_lookback";
     pub const RISK_BAND: &str = "risk_band";
     pub const TECHNIQUE_NOT_ENTERPRISE: &str = "technique_not_enterprise";
-    pub const FILENAME_SLUG: &str = "filename_slug";
-    pub const FILENAME_PATTERN: &str = "filename_pattern";
-    pub const MISSING_AUTHOR: &str = "missing_author";
-    pub const MISSING_ORGANISATION: &str = "missing_organisation";
-    /// A field the templates ask for and validation does not require.
-    pub const RECOMMENDED_FIELD_MISSING: &str = "recommended_field_missing";
     pub const DEFENDER_OUTPUT_COLUMNS: &str = "defender_output_columns";
     /// `::type` names no Elasticsearch release can cast to.
     pub const ESQL_UNKNOWN_TYPE: &str = "esql_unknown_type";
@@ -711,11 +705,6 @@ pub mod codes {
         THRESHOLD_LOOKBACK,
         RISK_BAND,
         TECHNIQUE_NOT_ENTERPRISE,
-        FILENAME_SLUG,
-        FILENAME_PATTERN,
-        MISSING_AUTHOR,
-        MISSING_ORGANISATION,
-        RECOMMENDED_FIELD_MISSING,
         DEFENDER_OUTPUT_COLUMNS,
         ESQL_UNKNOWN_TYPE,
         ESQL_GROUP_BY_COLUMN,
@@ -946,17 +935,6 @@ pub mod codes {
             RISK_BAND => "The risk score is outside the band of the rule's severity.",
             TECHNIQUE_NOT_ENTERPRISE => {
                 "The ATT&CK technique is not in the Enterprise matrix that Elastic maps."
-            }
-            FILENAME_SLUG => {
-                "The file name is not the one lint.toml's [filenames] style derives from the object's name."
-            }
-            FILENAME_PATTERN => {
-                "The file name does not match the pattern lint.toml's [filenames] sets."
-            }
-            MISSING_AUTHOR => "The recommended metadata.author field is missing.",
-            MISSING_ORGANISATION => "The recommended metadata.organisation field is missing.",
-            RECOMMENDED_FIELD_MISSING => {
-                "A field the templates ask for is missing; opentide validate accepts the object without it."
             }
             DEFENDER_OUTPUT_COLUMNS => {
                 "A Defender custom detection must return the columns Defender requires."

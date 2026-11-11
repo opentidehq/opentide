@@ -304,6 +304,9 @@ def test_document_names_the_version_and_the_environment(tree: dict) -> None:
 _UNDOCUMENTED_ENV = {
     # deploy --persist-state-externally sets it for its own run.
     "OPENTIDE_PERSIST_STATE_EXTERNALLY",
+    # OPENTIDE_ENGINE=compare sets it for its own Rust run, to learn that the
+    # Rust engine handed the input back (engines.py REFUSAL_ENV); never a user's.
+    "OPENTIDE_ENGINE_REFUSAL",
     # An Azure pipeline variable the generated pipeline sets and reads.
     "OPENTIDE_DEPLOY_STARTED",
     # Variables of the generated pipelines, read by their shell steps

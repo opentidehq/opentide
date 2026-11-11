@@ -29,6 +29,11 @@ opentide-workspace.workspace = true
 opentide-cli.workspace = true
 # xtask payloads (src/payloads/): the deploy compile against the oracle.
 opentide-compile.workspace = true
+# `lsp parity` (UC-2.6): the language server in this process, and the
+# engine's own analysis it adds to validate's findings.
+opentide-lsp.workspace = true
+opentide-analysis.workspace = true
+opentide-core.workspace = true
 schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -41,7 +46,7 @@ glob = "0.3"
 similar = "2.7"
 tempfile = "3"
 # xtask vocab (src/vocab/) also reads opentide-schema's vocabularies.
-indexmap = "2"
+indexmap = { version = "2", features = ["serde"] }
 # xtask stubs (UC-1.9, #815): the stubs of opentide._native.models, read from
 # the introspection data PyO3 compiles into the extension (`maturin
 # generate-stubs` uses the same crate). Its version is PyO3's.

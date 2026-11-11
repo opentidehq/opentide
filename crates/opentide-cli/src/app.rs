@@ -28,7 +28,16 @@ use std::time::{Duration, Instant, SystemTime};
 
 /// Command paths with a Rust implementation; every other one is refused with
 /// `engine_not_ported`, as `OPENTIDE_ENGINE=rust` refuses it.
-pub const PORTED: &[&str] = &["commands", "info", "rules unreviewed"];
+/// `deploy` runs here with `--dry-run` only (UC-3.1c); a deploy that sends is
+/// refused as unported.
+pub const PORTED: &[&str] = &["commands", "info", "rules unreviewed", "deploy"];
+
+/// The file in which a run refused with `engine_not_ported` records its
+/// message, when the variable names one. `OPENTIDE_ENGINE=compare`
+/// (`src/opentide/cli/engines.py`) sets it for the Rust side: a command this
+/// engine runs for some inputs only (`generate docs` without CVE details)
+/// refuses the others, and the Python side's run is then the result.
+pub const REFUSAL_ENV: &str = "OPENTIDE_ENGINE_REFUSAL";
 
 /// What the embedding process tells the run about itself.
 pub struct Host {
@@ -188,6 +197,7 @@ impl Run<'_> {
         if self.interrupted() {
             return Ok(INTERRUPTED_EXIT_CODE);
         }
+        self.record_refusal(outcome)?;
         match self.mode {
             Mode::Json => {
                 let text = document_text(&outcome.document(self.duration_ms()), self.indent);
@@ -222,6 +232,22 @@ impl Run<'_> {
         out.flush()?;
         err.flush()?;
         Ok(outcome.exit_code)
+    }
+
+    /// Writes an `engine_not_ported` refusal's message to the file
+    /// [`REFUSAL_ENV`] names, if it names one.
+    fn record_refusal(&self, outcome: &Outcome) -> std::io::Result<()> {
+        let Some(failure) = outcome
+            .failure
+            .as_ref()
+            .filter(|failure| failure.code == code::ENGINE_NOT_PORTED)
+        else {
+            return Ok(());
+        };
+        match self.env.get(REFUSAL_ENV).filter(|path| !path.is_empty()) {
+            Some(path) => std::fs::write(path, failure.message.as_bytes()),
+            None => Ok(()),
+        }
     }
 
     /// The stream the lines go to: colour in `human` mode, bold and dim only
@@ -388,6 +414,47 @@ impl Run<'_> {
                 );
                 self.emit_report(&report, out, err)
             }
+            "generate docs"
+            | "generate docs rules"
+            | "generate docs objectives"
+            | "generate docs threats"
+            | "generate docs index" => {
+                use crate::commands::generate::{DocsArgs, DocsScope};
+                use opentide_compile::generate::docs::catalog::Scope;
+                let docs = leaf(&matches);
+                let flag = |name: &str| {
+                    docs.try_get_one::<bool>(name)
+                        .ok()
+                        .flatten()
+                        .copied()
+                        .unwrap_or(false)
+                };
+                let parsed = DocsArgs {
+                    scope: match words.get(2).map(String::as_str) {
+                        Some("rules") => Some(DocsScope::Objects(Scope::Rules)),
+                        Some("objectives") => Some(DocsScope::Objects(Scope::Objectives)),
+                        Some("threats") => Some(DocsScope::Objects(Scope::Threats)),
+                        Some("index") => Some(DocsScope::Index),
+                        _ => None,
+                    },
+                    output: docs.get_one::<String>("output").cloned(),
+                    flavor: docs.get_one::<String>("flavor").cloned(),
+                    rules: flag("rules"),
+                    threats: flag("threats"),
+                    objectives: flag("objectives"),
+                    changed: flag("changed"),
+                };
+                let cwd = self.host.cwd.clone().unwrap_or_default();
+                let report = crate::commands::generate::docs(
+                    &parsed,
+                    &crate::commands::generate::Context {
+                        repo: self.globals.repo.as_deref(),
+                        env: self.env,
+                        cwd: &cwd,
+                    },
+                );
+                self.emit_report(&report, out, err)
+            }
             "generate inflight" | "generate inflight prune" => {
                 let cwd = self.host.cwd.clone().unwrap_or_default();
                 let cx = crate::commands::generate::Context {
@@ -421,6 +488,19 @@ impl Run<'_> {
                     self.mode != Mode::Json,
                 );
                 self.emit_report(&report, out, err)
+            }
+            "deploy" if leaf(&matches).get_flag("dry_run") => {
+                let run = self.deploy(&matches);
+                self.emit_deploy(&run, out, err)
+            }
+            "deploy" => {
+                let message = "opentide deploy without --dry-run has no Rust implementation yet: \
+                     unset OPENTIDE_ENGINE, or set it to python or compare."
+                    .to_owned();
+                let mut failure = Failure::new(code::ENGINE_NOT_PORTED, message);
+                failure.argument = Some("OPENTIDE_ENGINE".into());
+                let outcome = Outcome::failed(&path, USAGE_EXIT_CODE, failure);
+                self.emit(&outcome, &[], &[], out, err)
             }
             _ => {
                 let message = format!(
@@ -554,6 +634,147 @@ impl Run<'_> {
         )
     }
 
+    /// `opentide deploy --dry-run`, from its parsed arguments.
+    fn deploy(&self, matches: &clap::ArgMatches) -> crate::commands::deploy::DryRun {
+        use clap::ValueEnum;
+        let args = leaf(matches);
+        let strings = |id: &str| -> Vec<String> {
+            args.get_many::<String>(id)
+                .map(|values| values.cloned().collect())
+                .unwrap_or_default()
+        };
+        let keep_deprecated = if args.get_flag("keep_deprecated") {
+            Some(true)
+        } else if args.get_flag("drop_deprecated") {
+            Some(false)
+        } else {
+            None
+        };
+        let parsed = crate::commands::deploy::Args {
+            strategies: strings("strategy"),
+            all: args.get_flag("all_files"),
+            uuids: strings("uuids"),
+            files: strings("files"),
+            platform: args
+                .get_one::<crate::tree::Platform>("platform")
+                .and_then(|platform| platform.to_possible_value())
+                .map(|value| value.get_name().to_owned()),
+            plan: args.get_one::<String>("plan").cloned(),
+            wide: args.get_flag("wide"),
+            keep_deprecated,
+        };
+        let cwd = self.host.cwd.clone().unwrap_or_default();
+        crate::commands::deploy::run(
+            &parsed,
+            &crate::commands::deploy::Context {
+                repo: self.globals.repo.as_deref(),
+                env: self.env,
+                cwd: &cwd,
+            },
+        )
+    }
+
+    /// Prints a dry run in this run's mode, in the oracle's order: the
+    /// progress events, then the plan (stdout), the rules that would fail
+    /// (stderr), the CI job summary, the result, and the closing note.
+    fn emit_deploy(
+        &self,
+        run: &crate::commands::deploy::DryRun,
+        out: &mut dyn Write,
+        err: &mut dyn Write,
+    ) -> std::io::Result<i32> {
+        use crate::render::outcome::{ResultView, render_result};
+        use crate::render::{ci, progress, summary};
+        if self.interrupted() {
+            return Ok(INTERRUPTED_EXIT_CODE);
+        }
+        let outcome = &run.outcome;
+        if progress::Progress::from_env(self.env).enabled() {
+            let total = run.compiled.len();
+            for (index, platform) in run.compiled.iter().enumerate() {
+                let event = progress::progress_event(platform, index + 1, Some(total));
+                err.write_all(progress::event_line(&event).as_bytes())?;
+            }
+            err.flush()?;
+        }
+        if self.mode == Mode::Json {
+            let document = run.document(self.duration_ms());
+            out.write_all(document_text(&document, self.indent).as_bytes())?;
+            out.flush()?;
+            return Ok(outcome.exit_code);
+        }
+        let stdout = self.console(self.host.stdout_tty);
+        let stderr = self.console(self.host.stderr_tty);
+        let text_out = self.mode != Mode::Mcp;
+        if !run.refused && !self.globals.quiet && text_out {
+            for (line, hang) in run.plan_lines() {
+                let text = match hang {
+                    Some(hang) => stdout.print_line(&line, hang),
+                    None => stdout.line(&line),
+                };
+                out.write_all(text.as_bytes())?;
+            }
+            out.flush()?;
+        }
+        if !run.diagnostics.is_empty() {
+            // Errors print under --quiet too: the tally that follows counts them.
+            let frames = crate::render::codeframe::Frames {
+                colour: stderr.colour,
+                links: self.mode == Mode::Human && self.host.stderr_tty,
+                columns: stderr.width,
+                highlight: self.mode == Mode::Human,
+                cwd: self.host.cwd.clone().unwrap_or_default(),
+                env: self.env.clone(),
+            };
+            let mut sources = crate::render::diagnostic::SourceFiles::default();
+            err.write_all(
+                frames
+                    .render(&run.diagnostics, &mut sources, false)
+                    .as_bytes(),
+            )?;
+            err.flush()?;
+        }
+        if !run.refused && outcome.exit_code != USAGE_EXIT_CODE {
+            let markdown = summary::fit(
+                &summary::deploy_summary(&run.result, None, Some(true)),
+                summary::MAX_SUMMARY_BYTES,
+            );
+            let cwd = self.host.cwd.clone().unwrap_or_default();
+            let written = ci::append_summary(&markdown, "deploy", self.mode, self.env, &cwd);
+            for line in &written.stdout {
+                out.write_all(format!("{line}\n").as_bytes())?;
+            }
+        }
+        let view = ResultView {
+            message: outcome.message.clone(),
+            outcome: run.outcome_line.clone(),
+            status: outcome.status.clone(),
+            ok: outcome.ok(),
+            outcome_kind: run.plan_kind.then_some(OutcomeKind::Plan),
+            failure: outcome
+                .failure
+                .as_ref()
+                .map(|failure| (failure.code.clone(), failure.suggestion.clone())),
+            detail: run.detail(),
+            advice: run.advice(),
+            warnings: run.warnings.clone(),
+            next_actions: outcome.next_actions.clone(),
+        };
+        let (result_out, result_err) =
+            render_result(&view, stdout, stderr, self.mode, self.globals.quiet);
+        if text_out {
+            out.write_all(result_out.as_bytes())?;
+        }
+        err.write_all(result_err.as_bytes())?;
+        if !run.refused && !self.globals.quiet && text_out {
+            let note = Text::styled(crate::commands::deploy::DRY_RUN_NOTE, &Style::new("dim"));
+            out.write_all(stdout.line(&note).as_bytes())?;
+        }
+        out.flush()?;
+        err.flush()?;
+        Ok(outcome.exit_code)
+    }
+
     /// The width a table or a long line is laid out at on stdout: `COLUMNS`,
     /// else the terminal's, else 80.
     fn stdout_width(&self) -> usize {
@@ -585,6 +806,7 @@ impl Run<'_> {
             return Ok(INTERRUPTED_EXIT_CODE);
         }
         let outcome = &report.outcome;
+        self.record_refusal(outcome)?;
         if self.mode == Mode::Json {
             let mut document = outcome.document(self.duration_ms());
             if !report.warnings.is_empty()
@@ -773,8 +995,14 @@ pub fn utc_at(time: SystemTime) -> (String, String, String) {
     (iso, stamp, clock)
 }
 
+/// A log line's time: `2026-11-09 10:11:12` (UTC), the date-time a JSON line
+/// carries; a text line under `--debug` shows the time part.
 fn log_clock() -> String {
-    utc_now().2
+    utc_now()
+        .0
+        .replace('T', " ")
+        .trim_end_matches('Z')
+        .to_owned()
 }
 
 /// Runs `opentide` with `argv` (without the program name); the exit code.
@@ -837,7 +1065,8 @@ fn run_with(
         logging::Config {
             debug,
             quiet: run.globals.quiet,
-            json_lines: env.boolean("OPENTIDE_LOG_JSON").unwrap_or(false),
+            // `--json` writes its log lines as JSON too, as OPENTIDE_LOG_JSON=1 does.
+            json_lines: mode == Mode::Json || env.boolean("OPENTIDE_LOG_JSON").unwrap_or(false),
         },
         host.log_sink.clone(),
         redactor.clone(),
@@ -1234,15 +1463,20 @@ mod tests {
                     Ok(0)
                 });
                 assert_eq!(result.stdout, "", "{line}");
-                assert!(
-                    result.stderr.contains("warning: Tenant targets failed"),
-                    "{line}"
-                );
-                assert_eq!(
-                    result.stderr.contains("Registry loaded · path: x"),
-                    debug,
-                    "{line}"
-                );
+                // `--json` writes its log lines as JSON, as the oracle does.
+                let (warned, loaded) = if line.contains("--json") {
+                    (
+                        "\"event\":\"tenant_targets_failed\",\"level\":\"warning\"",
+                        "{\"path\":\"x\",\"event\":\"registry_loaded\",\"level\":\"debug\"",
+                    )
+                } else {
+                    (
+                        "warning: Tenant targets failed",
+                        "Registry loaded · path: x",
+                    )
+                };
+                assert!(result.stderr.contains(warned), "{line}: {}", result.stderr);
+                assert_eq!(result.stderr.contains(loaded), debug, "{line}");
             }
         }
         let quiet = ran("--quiet x", &[], false, |_, _, _| {
@@ -1475,6 +1709,31 @@ mod tests {
         // The reader went away: exit 1, quietly.
         let (code, stderr) = into_failing("--json commands", std::io::ErrorKind::BrokenPipe);
         assert_eq!((code, stderr.as_str()), (1, ""));
+    }
+
+    /// A refusal is recorded in the file `OPENTIDE_ENGINE_REFUSAL` names, in
+    /// every mode, for `compare` to run Python alone; nothing else is.
+    #[test]
+    fn a_refusal_is_recorded_where_the_dispatcher_asks() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("refusal");
+        let path = file.to_string_lossy().into_owned();
+        for line in ["--json validate", "validate"] {
+            let refused = dispatched(line, &[(REFUSAL_ENV, &path)], false);
+            assert_eq!(refused.code, 2, "{line}");
+            let recorded = std::fs::read_to_string(&file).unwrap();
+            assert!(
+                recorded.starts_with("opentide validate has no Rust implementation yet"),
+                "{line}: {recorded}"
+            );
+            std::fs::remove_file(&file).unwrap();
+        }
+        let ran = dispatched("--json commands", &[(REFUSAL_ENV, &path)], false);
+        assert_eq!(ran.code, 0);
+        assert!(!file.exists());
+        // Without the variable, nothing is written.
+        assert_eq!(dispatched("validate", &[], false).code, 2);
+        assert!(!file.exists());
     }
 
     #[test]

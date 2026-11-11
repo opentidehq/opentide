@@ -63,15 +63,13 @@
 # - a bare `mcp`, `lsp` or `new` in plain and human mode: clap's help of the
 #   group on stdout, exit 2 as before (the `--help` difference above).
 #
-# Decided by UC-3.1 (#823), entered when `deploy --dry-run` routes to Rust
-# (its payloads wait for the platform models, UC-1.4 #810); the CHANGELOG
-# announces them under "**Deploy compile and plan in Rust, `opentide-compile`**",
-# and `cargo xtask payloads plan` approves the first in
-# tests/golden/payloads/APPROVED.toml until then:
+# Decided by UC-3.1 (#823), to be entered when a golden case reaches them
+# through `deploy --dry-run` on Rust (UC-3.1c routed it: its first one, the
+# fault corpus's five unreadable files, is entered at the end); the CHANGELOG
+# announces them under "**Deploy compile and plan in Rust, `opentide-compile`**"
+# (`cargo xtask payloads plan`, which compares the library's plan alone,
+# keeps its own approval of the five files in tests/golden/payloads/APPROVED.toml):
 #
-# - deploy/*/fault/*: `warnings[1]` counts 5 unreadable object files, not 6:
-#   `reviewed: 2026-02-30` unquoted is text under YAML 1.2, so the file loads
-#   and the date field reports it ("**Tide objects are read as YAML 1.2**").
 # - deploy (changed rules, no --all): the rules a diff selects are read in
 #   path order, not in a Python set's order.
 # - deploy: the unset-variable warning names variables in plan order.
@@ -293,6 +291,38 @@
 #   file), and
 #   a non-empty list or mapping `uuid` is `missing_uuid` where the oracle
 #   crashed ("**The workspace is loaded by the Rust engine**").
+
+# UC-2.6 (#821), decided by the maintainer on #893 (KG-03, KG-05) and the
+# comment on #821: the language server reports `validate`'s findings, checked
+# kind by kind by `cargo xtask lsp parity --corpus faults` (codes,
+# severities, ranges in UTF-16). No golden case records the editor, and the
+# commands whose recordings name the four retired codes (`explain` list,
+# `lint` and `validate` `--format sarif`) run on the frozen oracle until they
+# route to Rust (UC-3.5), so an entry now would apply to no case and fail as
+# stale. Entered, with their rules, when those cases route to Rust:
+#
+# - `filename_slug` retired (KG-03): the editor no longer reports it;
+#   `opentide lint`'s `filename_mismatch` is the one file-name rule. In
+#   `explain` (every mode, `none/list`) the line shows the retired code's
+#   meaning, and SARIF tags its rule `retired` ("**The editor reports what
+#   `opentide validate` reports**").
+# - `missing_author`, `missing_organisation`, `recommended_field_missing`
+#   retired (KG-05): `opentide lint`'s `metadata_recommended`; the same
+#   `explain` and SARIF changes ("**The editor reports what `opentide
+#   validate` reports**").
+# - `filename_pattern` leaves the engine's code list (`opentide._native.CODES`):
+#   the editor no longer reports it (it did from language-server 0.11.0); it is
+#   `opentide lint`'s alone, as it always was on the command line ("**The
+#   editor reports what `opentide validate` reports**", and the Upgrade entry).
+# - The editor's `schema_validation` quick fix for a string where a list is
+#   required (`- {text}`) is gone: `validate`'s finding carries no fix there,
+#   and a quick fix is now the one edit `validate --fix` would write ("**The
+#   editor reports what `opentide validate` reports**").
+# - The editor's object findings are `validate`'s: their messages, ranges
+#   (the value or key `validate` places, not the engine's guess) and codes
+#   (a file that is not YAML is `yaml_parse`, not `schema_validation`; a
+#   missing UUID is `missing_uuid`) ("**The editor reports what `opentide
+#   validate` reports**").
 
 # UC-2.4 (#819): `info` and `rules unreviewed` on the Rust engine. Every
 # difference is the fault fixture's unquoted `reviewed: 2026-02-30`, read as
@@ -712,9 +742,12 @@ changelog = "**`info` draws its tables with comfy-table**"
 #   path and message are the same (#696; fault kind `spl-empty-command-hunt`;
 #   "**A hunt's findings name the platform it runs on**").
 #
-# Decided by UC-2.2 for the language server (UC-2.6, #821), once a
-# maintainer approves retiring the engine's codes (plan §3 invariant 3); no
-# golden case records the editor:
+# Decided by UC-2.2 for the language server (UC-2.6, #821), and approved by
+# the maintainer on #893 (plan §3 invariant 3). UC-2.3 (#818) gives lint's
+# side, `opentide_workspace::lint::lint_file`: the filenames and metadata
+# findings of one file, the ones `lint --file` reports; UC-2.6 reports them
+# in the editor and retires the four codes. No golden case records the
+# editor, so no entry can apply to a case:
 #
 # - KG-03: `filename_slug` gives way to lint's `filename_mismatch` ("**One
 #   rule names object files, in the editor and in CI**").
@@ -723,6 +756,50 @@ changelog = "**`info` draws its tables with comfy-table**"
 #   ("**Metadata recommendations have one code, in the editor and in CI**").
 # - KG-02: the editor checks `metadata.reviewed` through the Rust model
 #   ("**The editor checks `metadata.reviewed` as `validate` does**").
+#
+# Lint, `validate --fix` and `--watch` (UC-2.3, #818), decided and checked
+# case by case by `cargo xtask lint diff` (xtask/src/lint.rs `APPROVED`) and
+# `cargo xtask validate diff`'s --fix cases; entered here, each with its
+# rule, when `lint` and `validate` route their cases to Rust (UC-2.7,
+# UC-3.5). Every recorded `lint --json` finding, `validate --fix` diff and
+# file written matches, but for:
+#
+# - `yaml-error-text` in `lint` `*/fault/*` (3 findings): a `yaml_parse`
+#   finding's message is saphyr's, at the line and column the oracle names
+#   (one column later where saphyr names a tab) ("**Tide objects are read
+#   as YAML 1.2**").
+# - `yaml-1-2-dates` in `lint` `*/fault/*`: `reviewed: 2026-02-30`
+#   unquoted no longer makes the file a `yaml_parse` error; lint reads the
+#   file like any other (one error fewer, `count` and `summary` follow)
+#   ("**Tide objects are read as YAML 1.2**").
+#
+# Decided by UC-2.3 and reached by no recording (announced under
+# "**`lint`, `validate --fix` and `--watch` run in the Rust engine**"):
+#
+# - `fix-diff-alignment`: `--fix --dry-run`'s diff is the `similar` crate's
+#   (Myers) unified diff, not a port of difflib. Where a changed line sits
+#   next to an identical line, the hunk may show the change against the
+#   other copy (or start a line earlier); both diffs patch the file to the
+#   same result (crates/opentide-workspace/tests/external_difflib.rs: 2777
+#   of 3000 generated files byte for byte, every other one equivalent). The
+#   recorded dry runs are byte for byte the oracle's.
+# - `lint-yaml-lines`: lint counts lines where YAML breaks them (`\r\n`,
+#   `\r`, `\n`), as `validate` does, where the oracle's `str.splitlines`
+#   also broke at `\v`, `\f`, `\x1c`-`\x1e`, `\x85`, U+2028 and U+2029: a
+#   key or placeholder after such a character is reported on its YAML line.
+# - `write-error-text`: a fix that cannot be written names the reason in
+#   the operating system's words as Rust reports them (`Permission denied
+#   (os error 13)`), where the oracle wrote `Permission denied`.
+# - `fix-after-bom`: a fix on the first line of a file that starts with a
+#   byte order mark is applied (positions count from after the mark, as the
+#   parser counts them); the oracle counted the mark as a column, so the
+#   text at the span was not the value and the fix was left out.
+# - `lint-stem-case`: two stems that differ only in case are compared in
+#   lower case (Unicode lowercase), where the oracle used `casefold`: `ß` and
+#   `ss` are two names.
+# - `watch-events`: `--watch` wakes on the file system's events (`notify`)
+#   and still looks every 0.5 s; a scoped pass reloads only the changed
+#   files. The pass rules (full or scoped) are the oracle's.
 
 # UC-3.2 (#824): `generate exports` on a terminal in `human` mode prints its
 # checklist row once the exports are written. The Rust engine writes them in
@@ -818,6 +895,900 @@ reason = "the exports are written in milliseconds: the checklist row is printed 
 issue = "https://github.com/opentidehq/opentide/issues/824"
 changelog = "**`generate exports` runs on the Rust engine**"
 
+# deploy --dry-run on the Rust command line (UC-3.1c, #896).
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/fault/*"
+target = "stdout"
+rule = "json:/warnings/1"
+oracle = "\"6 object files could not be read: objects/threats/encoded-exfiltration-threat-0030.yaml, objects/rules/encoded-relay-rule-0014.yaml, objects/rules/encoded-spray-rule-0023.yaml, objects/rules/lateral-injection-rule-0024.yaml, objects/rules/rogue-relay-rule-0035.yaml, objects/rules/staged-implant-rule-0006.yaml; opentide validate shows where\""
+candidate = "\"5 object files could not be read: objects/threats/encoded-exfiltration-threat-0030.yaml, objects/rules/encoded-spray-rule-0023.yaml, objects/rules/lateral-injection-rule-0024.yaml, objects/rules/rogue-relay-rule-0035.yaml, objects/rules/staged-implant-rule-0006.yaml; opentide validate shows where\""
+reason = "objects/rules/encoded-relay-rule-0014.yaml writes `reviewed: 2026-02-30` unquoted. PyYAML (YAML 1.1) parses it as a timestamp and refuses the file as unreadable; YAML 1.2 reads the text 2026-02-30, so the file loads and the date field's own check reports it. One unread file fewer."
+issue = "https://github.com/opentidehq/opentide/issues/808"
+changelog = "**Tide objects are read as YAML 1.2**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/*/fault/*"
+target = "stderr"
+rule = "text"
+oracle = "warning: 6 object files could not be read: objects/threats/encoded-exfiltration-threat-0030.yaml, objects/rules/encoded-relay-rule-0014.yaml, objects/rules/encoded-spray-rule-0023.yaml, objects/rules/lateral-injection-rule-0024.yaml, objects/rules/rogue-relay-rule-0035.yaml, objects/rules/staged-implant-rule-0006.yaml; opentide validate shows where"
+candidate = "warning: 5 object files could not be read: objects/threats/encoded-exfiltration-threat-0030.yaml, objects/rules/encoded-spray-rule-0023.yaml, objects/rules/lateral-injection-rule-0024.yaml, objects/rules/rogue-relay-rule-0035.yaml, objects/rules/staged-implant-rule-0006.yaml; opentide validate shows where"
+reason = "objects/rules/encoded-relay-rule-0014.yaml writes `reviewed: 2026-02-30` unquoted. PyYAML (YAML 1.1) parses it as a timestamp and refuses the file as unreadable; YAML 1.2 reads the text 2026-02-30, so the file loads and the date field's own check reports it. One unread file fewer."
+issue = "https://github.com/opentidehq/opentide/issues/808"
+changelog = "**Tide objects are read as YAML 1.2**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/human/fault/dry-run"
+target = "stderr"
+rule = "lines"
+oracle = "\u001b[1;33mwarning:\u001b[0m 6 object files could not be read: objects/threats/encoded-exfiltration-threat-0030.yaml,\n         objects/rules/encoded-relay-rule-0014.yaml, objects/rules/encoded-spray-rule-0023.yaml,\n         objects/rules/lateral-injection-rule-0024.yaml, objects/rules/rogue-relay-rule-0035.yaml,\n         objects/rules/staged-implant-rule-0006.yaml; opentide validate shows where"
+candidate = "\u001b[1;33mwarning:\u001b[0m 5 object files could not be read: objects/threats/encoded-exfiltration-threat-0030.yaml,\n         objects/rules/encoded-spray-rule-0023.yaml, objects/rules/lateral-injection-rule-0024.yaml,\n         objects/rules/rogue-relay-rule-0035.yaml, objects/rules/staged-implant-rule-0006.yaml;\n         opentide validate shows where"
+reason = "objects/rules/encoded-relay-rule-0014.yaml writes `reviewed: 2026-02-30` unquoted. PyYAML (YAML 1.1) parses it as a timestamp and refuses the file as unreadable; YAML 1.2 reads the text 2026-02-30, so the file loads and the date field's own check reports it. One unread file fewer. At a terminal the shorter warning wraps over the same four rows at other words."
+issue = "https://github.com/opentidehq/opentide/issues/808"
+changelog = "**Tide objects are read as YAML 1.2**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/vscode/*"
+target = "stderr"
+rule = "json:/level"
+oracle = "\"critical\""
+candidate = "\"error\""
+reason = "The oracle logged a rule without a platform status at structlog's CRITICAL; the Rust CLI logs through tracing, whose highest level is ERROR, and writes it `error` as every other error line."
+issue = "https://github.com/opentidehq/opentide/issues/896"
+changelog = "**`deploy --dry-run` runs on the Rust command line**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/vscode/*"
+target = "stderr"
+rule = "json:/logger"
+oracle = "\"opentide.deployment.utils\""
+candidate = "(absent)"
+reason = "`logger` named the Python module that logged the line (structlog's logger name); the Rust CLI's JSON log lines carry the event, level, timestamp and the event's fields, not a module path."
+issue = "https://github.com/opentidehq/opentide/issues/896"
+changelog = "**`deploy --dry-run` runs on the Rust command line**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/human/vscode/dry-run"
+target = "stderr"
+rule = "lines"
+oracle = "\u001b[1;31merror: \u001b[0mPlatform status missing · detail: Rule 'Suspicious LSASS Access' \n(ff8bf67e-64dc-460d-b5df-48db643f3560) has no 'status' in its sentinel configuration block. Add a \nstatus, e.g. 'status: STAGING', then re-run 'opentide validate'. · system: sentinel · rule: \nSuspicious LSASS Access · uuid: ff8bf67e-64dc-460d-b5df-48db643f3560"
+candidate = "error: Platform status missing · detail: Rule 'Suspicious LSASS Access' (ff8bf67e-64dc-460d-b5df-48db643f3560) has no 'status' in its sentinel configuration block. Add a status, e.g. 'status: STAGING', then re-run 'opentide validate'. · system: sentinel · rule: Suspicious LSASS Access · uuid: ff8bf67e-64dc-460d-b5df-48db643f3560"
+reason = "A log line is written by the Rust CLI's logging layer (UC-3.3), as one unstyled line: Rich coloured its label and wrapped it at the terminal's width. The event, its fields and their order are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/896"
+changelog = "**`deploy --dry-run` runs on the Rust command line**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/human/vscode/uuid"
+target = "stderr"
+rule = "lines"
+oracle = "\u001b[1;31merror: \u001b[0mPlatform status missing · detail: Rule 'Suspicious LSASS Access' \n(ff8bf67e-64dc-460d-b5df-48db643f3560) has no 'status' in its sentinel configuration block. Add a \nstatus, e.g. 'status: STAGING', then re-run 'opentide validate'. · system: sentinel · rule: \nSuspicious LSASS Access · uuid: ff8bf67e-64dc-460d-b5df-48db643f3560"
+candidate = "error: Platform status missing · detail: Rule 'Suspicious LSASS Access' (ff8bf67e-64dc-460d-b5df-48db643f3560) has no 'status' in its sentinel configuration block. Add a status, e.g. 'status: STAGING', then re-run 'opentide validate'. · system: sentinel · rule: Suspicious LSASS Access · uuid: ff8bf67e-64dc-460d-b5df-48db643f3560"
+reason = "A log line is written by the Rust CLI's logging layer (UC-3.3), as one unstyled line: Rich coloured its label and wrapped it at the terminal's width. The event, its fields and their order are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/896"
+changelog = "**`deploy --dry-run` runs on the Rust command line**"
+
+# The dry run's model-dump previews (UC-3.1b, #895) in the `--json` document:
+# every key the oracle writes `null` and the candidate leaves out, one entry
+# per pointer (the `nulls` class of tests/golden/payloads/APPROVED.toml). The
+# three tide-corpus dry runs (`dry-run`, `both-strategies`, `progress-json`)
+# preview the same blocks, so each entry covers all three.
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/defender_for_endpoint/0/api_request/schema"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/defender_for_endpoint/0/api_request/flags"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/defender_for_endpoint/0/api_request/tenants"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/defender_for_endpoint/0/api_request/contributors"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/defender_for_endpoint/0/api_request/alert/title"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/defender_for_endpoint/0/api_request/alert/description"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/defender_for_endpoint/0/api_request/alert/severity"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/defender_for_endpoint/0/api_request/alert/recommendation"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/defender_for_endpoint/0/api_request/alert/techniques"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/defender_for_endpoint/0/api_request/impacted_entities/mailbox"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/defender_for_endpoint/0/api_request/impacted_entities/user"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/defender_for_endpoint/0/api_request/actions"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/defender_for_endpoint/0/api_request/scope/device_groups"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/defender_for_endpoint/0/api_request/exclusions"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/splunk/0/api_request/schema"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/splunk/0/api_request/flags"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/splunk/0/api_request/tenants"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/splunk/0/api_request/contributors"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/splunk/0/api_request/scheduling/type"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/splunk/0/api_request/scheduling/expires"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/splunk/0/api_request/scheduling/schedule/frequency"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/splunk/0/api_request/scheduling/schedule/custom_time"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/splunk/0/api_request/scheduling/timerange"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/splunk/0/api_request/trigger"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/splunk/0/api_request/actions"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/splunk/0/api_request/correlation_search"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/sentinel_one/0/api_request/schema"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/sentinel_one/0/api_request/flags"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/sentinel_one/0/api_request/tenants"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/sentinel_one/0/api_request/contributors"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/sentinel_one/0/api_request/condition/single_event"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/sentinel_one/0/api_request/condition/cool_off"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/sentinel_one/0/api_request/details"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/carbon_black_cloud/0/api_request/schema"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/carbon_black_cloud/0/api_request/flags"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/carbon_black_cloud/0/api_request/tenants"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/carbon_black_cloud/0/api_request/contributors"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/carbon_black_cloud/0/api_request/organizations"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/carbon_black_cloud/0/api_request/watchlist"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/carbon_black_cloud/0/api_request/report"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/carbon_black_cloud/0/api_request/tags"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/crowdstrike/0/api_request/schema"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/crowdstrike/0/api_request/flags"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/crowdstrike/0/api_request/tenants"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/crowdstrike/0/api_request/contributors"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/crowdstrike/0/api_request/details/name"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/crowdstrike/0/api_request/details/description"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/crowdstrike/0/api_request/details/severity"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/crowdstrike/0/api_request/details/tactic"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/crowdstrike/0/api_request/details/technique"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/crowdstrike/0/api_request/schedule/start"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/crowdstrike/0/api_request/schedule/end"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/harfanglab/0/api_request/schema"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/harfanglab/0/api_request/flags"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/harfanglab/0/api_request/tenants"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/harfanglab/0/api_request/contributors"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/harfanglab/0/api_request/tags"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/harfanglab/0/api_request/sigma/selections/0/modifiers"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/harfanglab/0/api_request/sigma/false_positives"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/tide-corpus/*"
+target = "stdout"
+rule = "json:/payloads/harfanglab/0/api_request/yara"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+# UC-3.2b (#915): `generate docs` on the Rust engine. The pages, index pages and
+# README files are the oracle's byte for byte on every recorded case (no
+# whitespace or Markdown layout difference to approve); what differs is the
+# terminal: the checklist row is printed once the pages are written, without
+# the spinner, and the `--changed` warning outside a checkout is one log line.
+
+[[diff]]
+command = "generate docs"
+case = "generate.docs/human/tide-corpus/*"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mdocs\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;32m✓\u001b[0m  \u001b[1mdocs\u001b[0m  \u001b[2m16 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2mdocs/\u001b[0m"
+candidate = "  \u001b[1;32m✓\u001b[0m  \u001b[1mdocs\u001b[0m  \u001b[2m16 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2mdocs/\u001b[0m"
+reason = "the pages are written in milliseconds: the checklist row is printed when they are done, without the spinner Python drew while they ran"
+issue = "https://github.com/opentidehq/opentide/issues/915"
+changelog = "**`generate docs` runs on the Rust engine**"
+
+[[diff]]
+command = "generate docs"
+case = "generate.docs/human/tide-corpus/rules-only"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mdocs\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;32m✓\u001b[0m  \u001b[1mdocs\u001b[0m  \u001b[2m10 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2mdocs/rules/\u001b[0m"
+candidate = "  \u001b[1;32m✓\u001b[0m  \u001b[1mdocs\u001b[0m  \u001b[2m10 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2mdocs/rules/\u001b[0m"
+reason = "the pages are written in milliseconds: the checklist row is printed when they are done, without the spinner Python drew while they ran"
+issue = "https://github.com/opentidehq/opentide/issues/915"
+changelog = "**`generate docs` runs on the Rust engine**"
+
+[[diff]]
+command = "generate docs"
+case = "generate.docs/human/vscode/default"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mdocs\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;31m✗\u001b[0m  \u001b[1mdocs\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+candidate = "  \u001b[1;31m✗\u001b[0m  \u001b[1mdocs\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+reason = "the pages are written in milliseconds: the checklist row is printed when they are done, without the spinner Python drew while they ran"
+issue = "https://github.com/opentidehq/opentide/issues/915"
+changelog = "**`generate docs` runs on the Rust engine**"
+
+[[diff]]
+command = "generate docs rules"
+case = "generate.docs.rules/human/tide-corpus/default"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mdocs\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;32m✓\u001b[0m  \u001b[1mdocs\u001b[0m  \u001b[2m10 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2mdocs/rules/\u001b[0m"
+candidate = "  \u001b[1;32m✓\u001b[0m  \u001b[1mdocs\u001b[0m  \u001b[2m10 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2mdocs/rules/\u001b[0m"
+reason = "the pages are written in milliseconds: the checklist row is printed when they are done, without the spinner Python drew while they ran"
+issue = "https://github.com/opentidehq/opentide/issues/915"
+changelog = "**`generate docs` runs on the Rust engine**"
+
+[[diff]]
+command = "generate docs rules"
+case = "generate.docs.rules/human/vscode/default"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mdocs\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;31m✗\u001b[0m  \u001b[1mdocs\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+candidate = "  \u001b[1;31m✗\u001b[0m  \u001b[1mdocs\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+reason = "the pages are written in milliseconds: the checklist row is printed when they are done, without the spinner Python drew while they ran"
+issue = "https://github.com/opentidehq/opentide/issues/915"
+changelog = "**`generate docs` runs on the Rust engine**"
+
+[[diff]]
+command = "generate docs objectives"
+case = "generate.docs.objectives/human/tide-corpus/default"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mdocs\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;32m✓\u001b[0m  \u001b[1mdocs\u001b[0m  \u001b[2m1 file\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2mdocs/objectives/\u001b[0m"
+candidate = "  \u001b[1;32m✓\u001b[0m  \u001b[1mdocs\u001b[0m  \u001b[2m1 file\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2mdocs/objectives/\u001b[0m"
+reason = "the pages are written in milliseconds: the checklist row is printed when they are done, without the spinner Python drew while they ran"
+issue = "https://github.com/opentidehq/opentide/issues/915"
+changelog = "**`generate docs` runs on the Rust engine**"
+
+[[diff]]
+command = "generate docs objectives"
+case = "generate.docs.objectives/human/vscode/default"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mdocs\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;31m✗\u001b[0m  \u001b[1mdocs\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+candidate = "  \u001b[1;31m✗\u001b[0m  \u001b[1mdocs\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+reason = "the pages are written in milliseconds: the checklist row is printed when they are done, without the spinner Python drew while they ran"
+issue = "https://github.com/opentidehq/opentide/issues/915"
+changelog = "**`generate docs` runs on the Rust engine**"
+
+[[diff]]
+command = "generate docs threats"
+case = "generate.docs.threats/human/tide-corpus/default"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mdocs\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;32m✓\u001b[0m  \u001b[1mdocs\u001b[0m  \u001b[2m1 file\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2mdocs/threats/\u001b[0m"
+candidate = "  \u001b[1;32m✓\u001b[0m  \u001b[1mdocs\u001b[0m  \u001b[2m1 file\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2mdocs/threats/\u001b[0m"
+reason = "the pages are written in milliseconds: the checklist row is printed when they are done, without the spinner Python drew while they ran"
+issue = "https://github.com/opentidehq/opentide/issues/915"
+changelog = "**`generate docs` runs on the Rust engine**"
+
+[[diff]]
+command = "generate docs threats"
+case = "generate.docs.threats/human/vscode/default"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mdocs\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;31m✗\u001b[0m  \u001b[1mdocs\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+candidate = "  \u001b[1;31m✗\u001b[0m  \u001b[1mdocs\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+reason = "the pages are written in milliseconds: the checklist row is printed when they are done, without the spinner Python drew while they ran"
+issue = "https://github.com/opentidehq/opentide/issues/915"
+changelog = "**`generate docs` runs on the Rust engine**"
+
+[[diff]]
+command = "generate docs index"
+case = "generate.docs.index/human/tide-corpus/default"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mdocs\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;32m✓\u001b[0m  \u001b[1mdocs\u001b[0m  \u001b[2m4 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2mdocs/\u001b[0m"
+candidate = "  \u001b[1;32m✓\u001b[0m  \u001b[1mdocs\u001b[0m  \u001b[2m4 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2mdocs/\u001b[0m"
+reason = "the pages are written in milliseconds: the checklist row is printed when they are done, without the spinner Python drew while they ran"
+issue = "https://github.com/opentidehq/opentide/issues/915"
+changelog = "**`generate docs` runs on the Rust engine**"
+
+[[diff]]
+command = "generate docs index"
+case = "generate.docs.index/human/vscode/default"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mdocs\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;31m✗\u001b[0m  \u001b[1mdocs\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+candidate = "  \u001b[1;31m✗\u001b[0m  \u001b[1mdocs\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+reason = "the pages are written in milliseconds: the checklist row is printed when they are done, without the spinner Python drew while they ran"
+issue = "https://github.com/opentidehq/opentide/issues/915"
+changelog = "**`generate docs` runs on the Rust engine**"
+
+[[diff]]
+command = "generate docs"
+case = "generate.docs/json/tide-corpus/changed"
+target = "stderr"
+rule = "json:/logger"
+oracle = "\"opentide.documentation.cli\""
+candidate = "(absent)"
+reason = "`logger` named the Python module that logged the line (structlog's logger name); the Rust CLI's JSON log lines carry the event, level, timestamp and the event's fields, not a module path."
+issue = "https://github.com/opentidehq/opentide/issues/896"
+changelog = "**`deploy --dry-run` runs on the Rust command line**"
+
+[[diff]]
+command = "generate docs"
+case = "generate.docs/human/tide-corpus/changed"
+target = "stderr"
+rule = "lines"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mdocs\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[1;33mwarning: \u001b[0mDocs changed requires git · detail: changed-object discovery requires a git repository with\nat least one commit\n\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;31m✗\u001b[0m  \u001b[1mdocs\u001b[0m  \u001b[2m0 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+candidate = "warning: Docs changed requires git · detail: changed-object discovery requires a git repository with at least one commit\n  \u001b[1;31m✗\u001b[0m  \u001b[1mdocs\u001b[0m  \u001b[2m0 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+reason = "no spinner while the run looks for git: the warning is one log line, printed before the failed checklist row instead of inside Rich's live region and wrapped at the terminal's width"
+issue = "https://github.com/opentidehq/opentide/issues/915"
+changelog = "**`generate docs` runs on the Rust engine**"
+
 # UC-3.2c (#916): `generate explorer` on a terminal prints its checklist row
 # once the explorer files are written, without the spinner the oracle drew
 # while it ran (as `generate exports`, above).
@@ -857,11 +1828,11 @@ changelog = "**`generate explorer`, `generate inflight` and `setup ci` run on th
 
 
 # UC-3.2c (#916): `generate inflight` outside a git repository logs that it
-# found no baseline. The Rust command line writes a log line as text in every
-# mode (`OPENTIDE_LOG_JSON=1` writes JSON lines), unwrapped and uncoloured, as
-# it is written: the oracle wrote structlog's JSON (with its Python logger's
-# module name) under `--json`, and at a terminal wrapped and coloured lines
-# inside its spinner's live region. `generate inflight prune` prints its
+# found no baseline. Under `--json` the Rust command line writes each log line
+# as JSON without structlog's `logger` module name (as `deploy --dry-run` and
+# `generate docs`, above); at a terminal it writes it unwrapped and
+# uncoloured, before the checklist row, where the oracle wrapped and coloured
+# it inside its spinner's live region. `generate inflight prune` prints its
 # checklist row without the spinner, as `generate exports` does.
 
 [[diff]]
@@ -870,10 +1841,10 @@ case = "generate.inflight/json/tide-corpus/default"
 target = "stderr"
 rule = "lines"
 oracle = "{\"detail\":\"changed-object discovery requires a git repository with at least one commit\",\"event\":\"inflight_no_git_baseline\",\"logger\":\"opentide.indexing.inflight\",\"level\":\"warning\",\"timestamp\":\"0000-00-00 00:00:00\"}\n{\"event\":\"inflight_no_local_git_diff_found\",\"logger\":\"opentide.indexing.inflight\",\"level\":\"warning\",\"timestamp\":\"0000-00-00 00:00:00\"}"
-candidate = "warning: Inflight no git baseline · detail: changed-object discovery requires a git repository with at least one commit\nwarning: Inflight no local git diff found"
-reason = "the Rust command line logs a warning as one text line in every mode (OPENTIDE_LOG_JSON=1 for JSON lines), as it is written, before the checklist row; the oracle wrote structlog JSON under --json, and at a terminal wrapped, coloured lines inside its spinner"
-issue = "https://github.com/opentidehq/opentide/issues/916"
-changelog = "**`generate explorer`, `generate inflight` and `setup ci` run on the Rust engine**"
+candidate = "{\"detail\":\"changed-object discovery requires a git repository with at least one commit\",\"event\":\"inflight_no_git_baseline\",\"level\":\"warning\",\"timestamp\":\"0000-00-00 00:00:00\"}\n{\"event\":\"inflight_no_local_git_diff_found\",\"level\":\"warning\",\"timestamp\":\"0000-00-00 00:00:00\"}"
+reason = "`logger` named the Python module that logged the line (structlog's logger name); the Rust CLI's JSON log lines carry the event, level, timestamp and the event's fields, not a module path. Two JSON lines are not one document, so the lines are approved whole: they differ only by `logger`."
+issue = "https://github.com/opentidehq/opentide/issues/896"
+changelog = "**`deploy --dry-run` runs on the Rust command line**"
 
 [[diff]]
 command = "generate inflight"
@@ -903,10 +1874,10 @@ case = "generate.inflight/json/vscode/default"
 target = "stderr"
 rule = "lines"
 oracle = "{\"detail\":\"changed-object discovery requires a git repository with at least one commit\",\"event\":\"inflight_no_git_baseline\",\"logger\":\"opentide.indexing.inflight\",\"level\":\"warning\",\"timestamp\":\"0000-00-00 00:00:00\"}\n{\"event\":\"inflight_no_local_git_diff_found\",\"logger\":\"opentide.indexing.inflight\",\"level\":\"warning\",\"timestamp\":\"0000-00-00 00:00:00\"}"
-candidate = "warning: Inflight no git baseline · detail: changed-object discovery requires a git repository with at least one commit\nwarning: Inflight no local git diff found"
-reason = "the Rust command line logs a warning as one text line in every mode (OPENTIDE_LOG_JSON=1 for JSON lines), as it is written, before the checklist row; the oracle wrote structlog JSON under --json, and at a terminal wrapped, coloured lines inside its spinner"
-issue = "https://github.com/opentidehq/opentide/issues/916"
-changelog = "**`generate explorer`, `generate inflight` and `setup ci` run on the Rust engine**"
+candidate = "{\"detail\":\"changed-object discovery requires a git repository with at least one commit\",\"event\":\"inflight_no_git_baseline\",\"level\":\"warning\",\"timestamp\":\"0000-00-00 00:00:00\"}\n{\"event\":\"inflight_no_local_git_diff_found\",\"level\":\"warning\",\"timestamp\":\"0000-00-00 00:00:00\"}"
+reason = "`logger` named the Python module that logged the line (structlog's logger name); the Rust CLI's JSON log lines carry the event, level, timestamp and the event's fields, not a module path. Two JSON lines are not one document, so the lines are approved whole: they differ only by `logger`."
+issue = "https://github.com/opentidehq/opentide/issues/896"
+changelog = "**`deploy --dry-run` runs on the Rust command line**"
 
 [[diff]]
 command = "generate inflight"

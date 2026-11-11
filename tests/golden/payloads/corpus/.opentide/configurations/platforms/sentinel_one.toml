@@ -1,0 +1,21 @@
+[platform]
+enabled = true
+
+[[tenants]]
+name = "site"
+description = "Scoped to a site"
+[tenants.setup]
+ssl = true
+url = "https://s1.example.org"
+account_id = 1
+site_id = 42
+api_token = "$SENTINEL_ONE_API_TOKEN"
+
+[[tenants]]
+name = "account"
+description = "Scoped to an account"
+[tenants.setup]
+ssl = true
+url = "https://s1-account.example.org"
+account_id = 7
+api_token = "$SENTINEL_ONE_API_TOKEN"

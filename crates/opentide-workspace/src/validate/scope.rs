@@ -120,7 +120,13 @@ impl Scope {
 
     /// Whether a `--file` target selects the file at `path`.
     pub fn matches_file(&self, fs: &dyn FileSystem, path: &Path) -> bool {
-        if !self.file_paths.is_empty() && self.file_paths.contains(&fs.resolve(path)) {
+        self.matches_file_with(path, || fs.resolve(path))
+    }
+
+    /// [`matches_file`](Self::matches_file), with `resolve` giving `path`
+    /// resolved, called only when a `--file` target names a path.
+    pub fn matches_file_with(&self, path: &Path, resolve: impl FnOnce() -> PathBuf) -> bool {
+        if !self.file_paths.is_empty() && self.file_paths.contains(&resolve()) {
             return true;
         }
         file_name(path).is_some_and(|name| self.file_names.contains(&name))
@@ -134,6 +140,18 @@ impl Scope {
         family: &str,
         path: &Path,
     ) -> bool {
+        self.includes_object_with(uuid, family, path, || fs.resolve(path))
+    }
+
+    /// [`includes_object`](Self::includes_object), with `resolve` giving
+    /// `path` resolved, called only when a `--file` target names a path.
+    pub fn includes_object_with(
+        &self,
+        uuid: &str,
+        family: &str,
+        path: &Path,
+        resolve: impl FnOnce() -> PathBuf,
+    ) -> bool {
         if !self.narrow {
             return true;
         }
@@ -143,7 +161,7 @@ impl Scope {
         if self.targets.is_empty() {
             return !self.object_types.is_empty();
         }
-        self.targets.contains(uuid) || self.matches_file(fs, path)
+        self.targets.contains(uuid) || self.matches_file_with(path, resolve)
     }
 
     /// The `--file` targets, as given, that select none of `files`.

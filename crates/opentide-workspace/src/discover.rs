@@ -56,6 +56,27 @@ pub enum FolderProblem {
 ///
 /// A [`FolderProblem`]: the folder is missing, not a folder, or unreadable.
 pub fn scan(fs: &dyn FileSystem, dir: &Path) -> Result<Scan, FolderProblem> {
+    scan_with(fs, dir, is_object_file_name)
+}
+
+/// [`scan`], with debug output (`*.debug.yaml`) among the files: `lint`
+/// names it, so `lint --fix` keeps its `.debug` suffix
+/// (`scan_object_dir(include_debug=True)`).
+///
+/// # Errors
+///
+/// As [`scan`].
+pub fn scan_including_debug(fs: &dyn FileSystem, dir: &Path) -> Result<Scan, FolderProblem> {
+    scan_with(fs, dir, |name| {
+        OBJECT_SUFFIXES.iter().any(|suffix| name.ends_with(suffix))
+    })
+}
+
+fn scan_with(
+    fs: &dyn FileSystem,
+    dir: &Path,
+    is_object: fn(&str) -> bool,
+) -> Result<Scan, FolderProblem> {
     match fs.kind(dir) {
         Ok(EntryKind::Dir) => {}
         Ok(_) => return Err(FolderProblem::NotADirectory),
@@ -77,7 +98,7 @@ pub fn scan(fs: &dyn FileSystem, dir: &Path) -> Result<Scan, FolderProblem> {
                     stack.push((path.clone(), children, depth + 1));
                 }
             }
-            if entry.kind != EntryKind::File || !is_object_file_name(&entry.name) {
+            if entry.kind != EntryKind::File || !is_object(&entry.name) {
                 continue;
             }
             if depth == 0 {
@@ -136,6 +157,23 @@ mod tests {
                 PathBuf::from("/w/rules/team/deep/d.yaml")
             ]
         );
+    }
+
+    #[test]
+    fn lint_scans_debug_output_too() {
+        let fs = MemoryFs::new();
+        fs.write("/w/rules/b.yaml", "");
+        fs.write("/w/rules/x.debug.yaml", "");
+        fs.write("/w/rules/team/y.debug.yml", "");
+        let found = scan_including_debug(&fs, Path::new("/w/rules")).unwrap();
+        assert_eq!(
+            found.files,
+            [
+                PathBuf::from("/w/rules/b.yaml"),
+                PathBuf::from("/w/rules/x.debug.yaml")
+            ]
+        );
+        assert_eq!(found.nested, [PathBuf::from("/w/rules/team/y.debug.yml")]);
     }
 
     #[test]

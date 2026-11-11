@@ -1,12 +1,7 @@
 //! A host's default catalog replaces the bundled one for the whole process,
 //! so this test has a binary of its own.
 
-use opentide_analysis::{
-    AnalyzeRequest, Catalog, LanguageId, MemoryWorkspace, analyze, catalog_version, codes,
-    install_catalog, set_default_catalog,
-};
-
-const RULE: &str = "name: House Rule\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000001\n  schema: rule::1.0\n  tlp: house\n";
+use opentide_analysis::{Catalog, catalog_version, install_catalog, set_default_catalog};
 
 fn catalog(version: &str, tlp: &[&str]) -> String {
     let values = tlp
@@ -22,28 +17,18 @@ fn catalog(version: &str, tlp: &[&str]) -> String {
     )
 }
 
-fn vocab_unknown(text: &str) -> bool {
-    has(text, codes::VOCAB_UNKNOWN)
-}
-
-fn has(text: &str, code: &str) -> bool {
-    analyze(
-        &MemoryWorkspace::default(),
-        AnalyzeRequest {
-            uri: "objects/rules/house-rule.yaml".into(),
-            language: LanguageId::TideYaml,
-            text: text.into(),
-        },
-    )
-    .diagnostics
-    .iter()
-    .any(|d| d.code == code)
+/// Whether the field catalog in use lets `metadata.tlp` be `house`: what
+/// hover, completion and highlighting read (the object checks themselves are
+/// `validate`'s, UC-2.6).
+fn house_is_a_tlp() -> bool {
+    opentide_highlight::tide_field_at("rule", "metadata.tlp")
+        .is_some_and(|field| field.enum_values.iter().any(|value| value == "house"))
 }
 
 #[test]
 fn a_default_catalog_stands_in_for_the_bundled_one_under_workspace_catalogs() {
     let bundled = catalog_version().to_string();
-    assert!(vocab_unknown(RULE));
+    assert!(!house_is_a_tlp());
 
     let host = Catalog {
         fields: Some(catalog("host", &["clear", "house"])),
@@ -55,8 +40,7 @@ fn a_default_catalog_stands_in_for_the_bundled_one_under_workspace_catalogs() {
     };
     set_default_catalog(&host).expect("default");
     assert_eq!(catalog_version(), "host");
-    assert!(!vocab_unknown(RULE));
-    assert!(has(RULE, codes::DEPRECATED_FIELD));
+    assert!(house_is_a_tlp());
 
     // A workspace catalog still wins; resetting it goes back to the default,
     // not to the bundled catalog: what the server's initialize does when a
@@ -68,7 +52,7 @@ fn a_default_catalog_stands_in_for_the_bundled_one_under_workspace_catalogs() {
     };
     install_catalog(&workspace).expect("workspace");
     assert_eq!(catalog_version(), "workspace");
-    assert!(vocab_unknown(RULE));
+    assert!(!house_is_a_tlp());
     install_catalog(&Catalog::default()).expect("reset");
     assert_eq!(catalog_version(), "host");
 
@@ -84,5 +68,5 @@ fn a_default_catalog_stands_in_for_the_bundled_one_under_workspace_catalogs() {
     assert_eq!(catalog_version(), "host");
     set_default_catalog(&Catalog::default()).expect("bundled");
     assert_eq!(catalog_version(), bundled);
-    assert!(!has(RULE, codes::DEPRECATED_FIELD));
+    assert!(!house_is_a_tlp());
 }

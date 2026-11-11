@@ -265,7 +265,7 @@ impl Command {
                 let (ported, python_only): (Vec<Case>, Vec<Case>) = selected
                     .iter()
                     .cloned()
-                    .partition(|case| rust.contains(&case.command));
+                    .partition(|case| crate::compare::covers(&rust, &case.command, &case.argv));
                 crate::compare::golden(
                     &layout.repo,
                     &layout.cases(),
