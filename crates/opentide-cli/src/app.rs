@@ -2204,13 +2204,27 @@ mod tests {
         assert!(run.stdout.starts_with("{\"program\""));
         let plain = dispatched("-- commands", &[], false);
         assert_eq!((plain.code, plain.stderr.as_str()), (0, ""));
+        // `validate query` runs on this CLI (UC-3.5b): the separator is dropped
+        // and the subcommand runs, not a usage error.
         let nested = dispatched("--json validate -- query", &[], false);
         assert!(
             nested.stdout.contains("\"command\":\"validate query\""),
             "{}",
             nested.stdout
         );
-        assert!(nested.stdout.contains("engine_not_ported"));
+        assert!(
+            !nested.stdout.contains("\"code\":\"usage_"),
+            "{}",
+            nested.stdout
+        );
+        // An unported subcommand after a separator is refused by its path.
+        let unported = dispatched("--json share -- status", &[], false);
+        assert!(
+            unported.stdout.contains("\"command\":\"share status\""),
+            "{}",
+            unported.stdout
+        );
+        assert!(unported.stdout.contains("engine_not_ported"));
         // `validate -- --json`: an unknown option of validate, not a command.
         let option = dispatched("--json validate -- --json", &[], false);
         assert_eq!(option.code, 2);

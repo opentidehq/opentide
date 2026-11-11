@@ -449,9 +449,11 @@ pub fn replay_commands(commands: &[&str], complete: bool) -> (Vec<String>, usize
     }
     if complete && filter.is_empty() {
         for (index, entry) in ledger.entries.iter().enumerate() {
+            // `--help` cases are not replayed here (the Python launcher's help):
+            // `cargo xtask golden check --engine compare` applies their entries.
             let elsewhere = ["fault", "heavy-small"].iter().any(|fixture| {
                 entry.case.contains(&format!("/{fixture}/")) && generated(fixture).is_none()
-            });
+            }) || entry.case.ends_with("/help");
             if commands.contains(&entry.command.replace(' ', ".").as_str())
                 && !elsewhere
                 && !usage.is_used(index)
