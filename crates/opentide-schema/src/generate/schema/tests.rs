@@ -357,6 +357,37 @@ fn the_enum_lands_on_the_string_or_array_branch() {
 }
 
 #[test]
+fn a_vocabulary_union_defined_apart_is_written_in_place() {
+    let mut schema = json!({
+        "properties": {
+            "killchain": {"anyOf": [{"$ref": "#/$defs/Killchain"}, {"type": "null"}], "tide.vocab": true},
+            "other": {"anyOf": [{"$ref": "#/$defs/Killchain"}, {"type": "null"}]},
+            "body": {"anyOf": [{"$ref": "#/$defs/Body"}, {"type": "null"}], "tide.vocab": true},
+        },
+        "$defs": {
+            "Killchain": {"anyOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}]},
+            "Body": {"type": "object", "properties": {"a": {"type": "string"}}},
+        },
+    });
+    let defs = schema["$defs"].clone();
+    inline_vocabulary_unions(&mut schema);
+    assert_eq!(
+        schema["properties"]["killchain"]["anyOf"],
+        json!([{"type": "string"}, {"type": "array", "items": {"type": "string"}}, {"type": "null"}])
+    );
+    // A field without a vocabulary, a model, and the definitions are kept.
+    assert_eq!(
+        schema["properties"]["other"]["anyOf"][0],
+        json!({"$ref": "#/$defs/Killchain"})
+    );
+    assert_eq!(
+        schema["properties"]["body"]["anyOf"][0],
+        json!({"$ref": "#/$defs/Body"})
+    );
+    assert_eq!(schema["$defs"], defs);
+}
+
+#[test]
 fn objects_are_closed_unless_they_say_otherwise() {
     let mut schema = Schema::try_from(json!({
         "properties": {

@@ -36,8 +36,12 @@
 //!   `data/catalogs/tide/schemas/`, generated from the bundled configuration
 //!   with no workspace objects, vocabulary essays shortened.
 //!
-//! The language server's field catalog is not generated from Rust yet
-//! (UC-2.6, #821).
+//! - **Language-server catalogs** (`--check` only; UC-3.5d, #933): the
+//!   `fields.json` and `deprecations.json` the `schemas` phase writes, from
+//!   `opentide_schema::generate::catalog`: byte for byte as in each golden
+//!   recording of `opentide generate` that wrote them (the oracle's version
+//!   as the label), and the committed copy in `data/catalogs/tide/generated/`
+//!   by content, its labels aside.
 
 use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -77,8 +81,10 @@ pub const USAGE: &str = "usage: cargo xtask codegen [--check]
                those phases and exited 0, byte for byte; and compare the
                JSON Schemas it writes (each revision's, visibility.toml's)
                and the configuration schemas with the oracle's by verdict on
-               every corpus object, configuration file and fault; exit 1 on
-               a difference
+               every corpus object, configuration file and fault; compare
+               the language server's catalogs with the recordings, byte for
+               byte, and with data/catalogs/tide/generated; exit 1 on a
+               difference
 ";
 
 /// Where the committed editor schemas live, relative to the repository.
@@ -88,6 +94,10 @@ pub const EDITOR_SCHEMAS: &str = "data/catalogs/tide/schemas";
 /// with the oracle's interpreter.
 pub const ORACLE_CONFIGURATION_SCHEMAS: &str =
     "crates/opentide-schema/tests/oracle/configuration_schemas.json";
+
+/// Where the committed language-server catalogs live, relative to the
+/// repository.
+pub const COMMITTED_CATALOGS: &str = "data/catalogs/tide/generated";
 
 /// Where the committed platform templates live, relative to the repository.
 pub const PLATFORM_TEMPLATES: &str = "src/opentide/schemas/data/platform_templates";
@@ -116,6 +126,9 @@ pub fn run(args: &[String]) -> Result<u8> {
         let (count, verdicts) = schema_verdicts(&root)?;
         judged = count;
         problems.extend(verdicts);
+        let (count, catalogs) = catalog_parity(&root)?;
+        compared += count;
+        problems.extend(catalogs);
     }
     for problem in &problems {
         eprintln!("error: {problem}");
@@ -436,10 +449,9 @@ fn golden_parity(root: &Path) -> Result<(usize, Vec<String>)> {
     Ok((compared, problems))
 }
 
-/// What `opentide generate schemas` writes in the workspace at `dir`, but
-/// the router: each object revision's schema and `visibility.toml`'s, from
-/// the workspace's resolved configuration, its vocabularies and its objects.
-pub fn workspace_schema_artifacts(dir: &Path) -> Result<Vec<Artifact>> {
+/// The sources of what `opentide generate schemas` writes in the workspace
+/// at `dir`: its resolved configuration, its vocabularies and its objects'.
+pub fn workspace_sources(dir: &Path) -> Result<Sources> {
     let workspace = Workspace::open(
         Arc::new(OsFs),
         opentide_workspace::Options {
@@ -459,10 +471,123 @@ pub fn workspace_schema_artifacts(dir: &Path) -> Result<Vec<Artifact>> {
     {
         vocabularies.insert(vocabulary);
     }
-    Ok(schema_artifacts(&Sources {
+    Ok(Sources {
         config: Arc::new(tree),
         vocabularies: Arc::new(vocabularies),
-    }))
+    })
+}
+
+/// What `opentide generate schemas` writes in the workspace at `dir`, but
+/// the router: each object revision's schema and `visibility.toml`'s, from
+/// the workspace's resolved configuration, its vocabularies and its objects.
+pub fn workspace_schema_artifacts(dir: &Path) -> Result<Vec<Artifact>> {
+    Ok(schema_artifacts(&workspace_sources(dir)?))
+}
+
+/// A catalog document without the keys that only label it.
+fn unlabelled(path: &str, text: &str) -> Result<Value> {
+    use opentide_schema::generate::catalog::LABEL_KEYS;
+    let mut value: Value =
+        serde_json::from_str(text).with_context(|| format!("{path}: not JSON"))?;
+    if let Some(object) = value.as_object_mut() {
+        for key in LABEL_KEYS {
+            object.remove(key);
+        }
+    }
+    Ok(value)
+}
+
+/// The language server's catalogs the `schemas` phase writes
+/// (`.opentide/lsp/catalogs/generated/`): the committed copy the engine
+/// compiles in (`data/catalogs/tide/generated/`) must hold what the Rust
+/// generator writes from the bundled configuration, its `opentide` and
+/// `generator` labels aside (`catalog_differences`); and each golden
+/// recording of an `opentide generate` that wrote them must hold, byte for
+/// byte, what the generator writes for the fixture with the oracle's version
+/// as the label. Returns the number of files compared and the differences.
+fn catalog_parity(root: &Path) -> Result<(usize, Vec<String>)> {
+    use opentide_schema::generate::catalog::{CATALOG_DIR, catalog_texts};
+    let mut problems = Vec::new();
+    let mut compared = 0;
+    let sources = bundled_sources()?;
+    for (name, text) in catalog_texts("", &sources) {
+        let path = format!("{COMMITTED_CATALOGS}/{name}");
+        match std::fs::read_to_string(root.join(&path)) {
+            Ok(current) if unlabelled(&path, &current)? == unlabelled(&path, &text)? => {
+                compared += 1;
+            }
+            Ok(_) => problems.push(format!("{path}: differs from what the model generates")),
+            Err(_) => problems.push(format!("{path}: missing")),
+        }
+    }
+
+    let golden = root.join("tests/golden");
+    let oracle =
+        std::fs::read_to_string(golden.join("ORACLE")).context("read tests/golden/ORACLE")?;
+    let version = oracle
+        .lines()
+        .find_map(|line| line.strip_prefix("version = "))
+        .map(|value| value.trim().trim_matches('"').to_owned())
+        .context("tests/golden/ORACLE names no version")?;
+    let spec_text = std::fs::read_to_string(golden.join("cases.toml"))
+        .context("read tests/golden/cases.toml")?;
+    let spec = Spec::parse(&spec_text)?;
+    let cases = golden.join("cases");
+    let blobs = golden.join("blobs");
+    let scratch = tempfile::tempdir().context("create a scratch directory")?;
+    let mut generated: BTreeMap<String, Vec<(&'static str, String)>> = BTreeMap::new();
+    let prefix = format!("ws/{CATALOG_DIR}/");
+    for id in recorded_ids(&cases)? {
+        if !id.starts_with("generate/") {
+            continue;
+        }
+        let recording = Recording::read(&cases.join(&id), &blobs)?;
+        if recording.exit_code != 0 {
+            continue;
+        }
+        let recorded: Vec<(&str, &[u8])> = recording
+            .files
+            .iter()
+            .filter(|file| file.kind == Kind::File && file.change != ChangeKind::Deleted)
+            .filter_map(|file| {
+                let name = file.path.strip_prefix(&prefix)?;
+                Some((name, file.contents.as_deref()?))
+            })
+            .collect();
+        if recorded.is_empty() {
+            continue;
+        }
+        let fixture = recording.case.fixture.clone();
+        if !generated.contains_key(&fixture) {
+            let fixture_spec = spec
+                .fixtures
+                .get(&fixture)
+                .with_context(|| format!("{id}: no fixture {fixture} in cases.toml"))?;
+            let dir: PathBuf = scratch.path().join(&fixture);
+            std::fs::create_dir_all(&dir)?;
+            fixture_spec.materialise(root, &dir)?;
+            generated.insert(
+                fixture.clone(),
+                catalog_texts(&version, &workspace_sources(&dir)?),
+            );
+        }
+        let ours = &generated[&fixture];
+        for (name, bytes) in recorded {
+            match ours.iter().find(|(known, _)| *known == name) {
+                Some((_, text)) if text.as_bytes() == bytes => compared += 1,
+                Some(_) => problems.push(format!(
+                    "{id}: {CATALOG_DIR}/{name} differs from the oracle's"
+                )),
+                None => problems.push(format!(
+                    "{id}: {CATALOG_DIR}/{name}: the generator writes no such file"
+                )),
+            }
+        }
+    }
+    if generated.is_empty() {
+        problems.push("no golden recording of `opentide generate` wrote the catalogs".to_owned());
+    }
+    Ok((compared, problems))
 }
 
 /// The fixtures whose object and configuration files are validated against
