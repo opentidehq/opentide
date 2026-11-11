@@ -273,5 +273,7 @@ fn text(value: &str) -> Arc<Node> {
     })
 }
 
+pub mod vocab_scope;
+
 #[cfg(test)]
 mod tests;

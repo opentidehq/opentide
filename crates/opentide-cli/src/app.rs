@@ -542,6 +542,39 @@ impl Run<'_> {
                 );
                 self.emit_report(&report, out, err)
             }
+            "doctor" => {
+                let cwd = self.host.cwd.clone().unwrap_or_default();
+                let report = crate::commands::doctor::run(
+                    leaf(&matches).get_flag("offline"),
+                    &crate::commands::doctor::Context {
+                        repo: self.globals.repo.as_deref(),
+                        env: self.env,
+                        cwd: &cwd,
+                        version: &self.host.version,
+                        text: self.mode != Mode::Json && !self.globals.quiet,
+                    },
+                );
+                self.emit_report(&report, out, err)
+            }
+            "migrate vocab-scope" => {
+                let options = leaf(&matches);
+                let parsed = crate::commands::migrate::Args {
+                    apply: options.get_flag("apply"),
+                    fields: options
+                        .get_many::<String>("field")
+                        .map(|values| values.cloned().collect())
+                        .unwrap_or_default(),
+                    force: options.get_flag("force"),
+                };
+                let cwd = self.host.cwd.clone().unwrap_or_default();
+                let report = crate::commands::migrate::run(
+                    &parsed,
+                    self.globals.repo.as_deref(),
+                    self.env,
+                    &cwd,
+                );
+                self.emit_report(&report, out, err)
+            }
             "generate inflight" | "generate inflight prune" => {
                 let cwd = self.host.cwd.clone().unwrap_or_default();
                 let cx = crate::commands::generate::Context {
@@ -1090,6 +1123,11 @@ impl Run<'_> {
                     Block::Table(table) => {
                         for line in table.render(width) {
                             out.write_all(stdout.line(&line).as_bytes())?;
+                        }
+                    }
+                    Block::Hanging(lines) => {
+                        for (line, hang) in lines {
+                            out.write_all(stdout.print_line(line, *hang).as_bytes())?;
                         }
                     }
                     Block::Raw(text) => out.write_all(text.as_bytes())?,
@@ -1962,12 +2000,26 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let file = dir.path().join("refusal");
         let path = file.to_string_lossy().into_owned();
+        for line in ["--json share push", "share push"] {
+            let refused = dispatched(line, &[(REFUSAL_ENV, &path)], false);
+            assert_eq!(refused.code, 2, "{line}");
+            let recorded = std::fs::read_to_string(&file).unwrap();
+            assert!(
+                recorded.starts_with("opentide share push has no Rust implementation yet"),
+                "{line}: {recorded}"
+            );
+            std::fs::remove_file(&file).unwrap();
+        }
+        // doctor runs here with --offline only: without it, the network
+        // checks are Python's, and compare runs Python alone on the refusal.
         for line in ["--json doctor", "doctor"] {
             let refused = dispatched(line, &[(REFUSAL_ENV, &path)], false);
             assert_eq!(refused.code, 2, "{line}");
             let recorded = std::fs::read_to_string(&file).unwrap();
             assert!(
-                recorded.starts_with("opentide doctor has no Rust implementation yet"),
+                recorded.starts_with(
+                    "opentide doctor without --offline has no Rust implementation yet"
+                ),
                 "{line}: {recorded}"
             );
             std::fs::remove_file(&file).unwrap();
@@ -1976,6 +2028,7 @@ mod tests {
         assert_eq!(ran.code, 0);
         assert!(!file.exists());
         // Without the variable, nothing is written.
+        assert_eq!(dispatched("share push", &[], false).code, 2);
         assert_eq!(dispatched("doctor", &[], false).code, 2);
         assert!(!file.exists());
     }

@@ -25,6 +25,18 @@ about = "tide-corpus with one typo `validate --fix` repairs in place (`severity:
 vars = { rule_file = "objects/rules/rule-0001-sentinel-kql.yaml" }
 edits = [{ path = "Objects/Detection Rules/rule-0001-sentinel-kql.yaml", find = "\nseverity: High\n", replace = "\nseverity: high\n" }]
 
+[fixtures.vscode-unscoped]
+kind = "copy"
+source = "tests/golden/fixtures/vscode-workspace"
+about = "vscode with signal entities written without their stage or in the wrong case, which `migrate vocab-scope --apply` rewrites in place"
+edits = [{ path = "objects/objectives/detect-lsass-access.yaml", find = "\n  tlp: amber\n", replace = "\n  tlp: amber\nobjective:\n  signals:\n    - name: LSASS handle\n      entities:\n        - hostname  # no stage\n        - 'host::command line'\n    - name: Dump\n      entities: [Process, Host::Hostname]\n" }]
+
+[fixtures.vscode-ambiguous]
+kind = "copy"
+source = "tests/golden/fixtures/vscode-workspace"
+about = "vscode with a signal entity defined under several stages (`Account`), which `migrate vocab-scope` leaves for a person (exit 2), beside one it rewrites (`Process`)"
+edits = [{ path = "objects/objectives/detect-lsass-access.yaml", find = "\n  tlp: amber\n", replace = "\n  tlp: amber\nobjective:\n  signals:\n    - name: LSASS handle\n      entities:\n        - Account\n        - Process\n" }]
+
 [fixtures.vscode]
 kind = "copy"
 source = "tests/golden/fixtures/vscode-workspace"
@@ -1391,6 +1403,26 @@ command = "migrate vocab-scope"
 variant = "apply"
 args = ["migrate", "vocab-scope", "--apply"]
 fixtures = ["tide-corpus"]
+
+# Values to rewrite: a dry run, the files --apply writes, and a value left
+# for a person (exit 2, --force to accept), so the rewrite path is recorded.
+[[case]]
+command = "migrate vocab-scope"
+variant = "rewrite"
+args = ["migrate", "vocab-scope"]
+fixtures = ["vscode-unscoped", "vscode-ambiguous"]
+
+[[case]]
+command = "migrate vocab-scope"
+variant = "rewrite-apply"
+args = ["migrate", "vocab-scope", "--apply"]
+fixtures = ["vscode-unscoped", "vscode-ambiguous"]
+
+[[case]]
+command = "migrate vocab-scope"
+variant = "rewrite-force"
+args = ["migrate", "vocab-scope", "--apply", "--force"]
+fixtures = ["vscode-ambiguous"]
 
 # Human mode starts the full-screen app, whose frames depend on timing: tui --help covers it.
 [[case]]

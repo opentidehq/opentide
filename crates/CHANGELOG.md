@@ -16,6 +16,8 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ### Added
 
+- **`opentide_schema::node::load_keeping_repeated_keys`** ([opentide#928](https://github.com/opentidehq/opentide/issues/928)). It and `load_bytes_keeping_repeated_keys` read a document as `load` does but keep every entry of a mapping that repeats a key, in the order written, for a tool that edits values over their spans (`migrate vocab-scope`); `load` still refuses a repeated key.
+
 - **`LineStarts` and `opentide_tide::is_placeholder_query`** ([opentide#820](https://github.com/opentidehq/opentide/issues/820)). `opentide_analysis::LineStarts` converts the engine's LSP ranges to the CLI's 1-based code-point positions for every host, the Python binding included, and `is_placeholder_query`, now public, tells the stand-in query `opentide new` writes from a real one.
 
 - **`opentide_core::suggest`: one "did you mean" rule for the engine** ([#812](https://github.com/opentidehq/opentide/issues/812)). The same word without case, whitespace, `-` or `_` wins outright; otherwise the candidate with the fewest edits (strsim's optimal string alignment distance: a transposition is one edit), within a third of the value's length and of the words that hold the part that differs, so two edits side by side or two characters cut from a long name are found (`SecurityEve` → `SecurityEvent`) while a phrase that shares words with a choice is not a typo of it (`Big incident` is not `Minor incident`). It uses an edit distance rather than a port of Python's `difflib`: an edit distance suggests what a typo meant, where a ratio of shared letters also suggests unrelated words.

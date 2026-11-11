@@ -1,6 +1,7 @@
 //! The commands that run on this crate (UC-2.4: `info`, `rules unreviewed`;
 //! UC-3.2: `generate exports`; UC-3.5: `validate`, `validate query`, `lint`,
-//! `explain`; UC-3.1c: `deploy --dry-run`).
+//! `explain`; UC-3.1c: `deploy --dry-run`; UC-3.5c: `doctor --offline`,
+//! `migrate vocab-scope`).
 //!
 //! A command reads its arguments and the workspace and returns a
 //! [`Report`]: the JSON envelope's parts, and what the text modes print
@@ -8,11 +9,13 @@
 //! mode.
 
 pub mod deploy;
+pub mod doctor;
 pub mod explain;
 pub mod findings;
 pub mod generate;
 pub mod info;
 pub mod lint;
+pub mod migrate;
 pub mod rules;
 pub mod setup;
 pub mod validate;
@@ -67,6 +70,9 @@ pub enum Block {
     Lines(Vec<Text>),
     /// A table, laid out at the stream's width.
     Table(crate::render::table::Table),
+    /// Lines wrapped at words on a terminal, each with the indent its
+    /// continued rows take (`doctor`'s checklist).
+    Hanging(Vec<(Text, usize)>),
     /// Text for stdout, already laid out for the stream.
     Raw(String),
     /// Text for stderr, already laid out for the stream, in its place

@@ -296,21 +296,52 @@ impl Document {
 
 /// Reads `bytes`: UTF-8, then [`load`].
 pub fn load_bytes(bytes: &[u8]) -> Result<Document, LoadError> {
-    let text = std::str::from_utf8(bytes).map_err(|error| {
-        LoadError::new(
-            LoadErrorKind::NotUtf8,
-            format!("not UTF-8 at byte offset {}", error.valid_up_to()),
-            None,
-        )
-    })?;
+    let text = utf8(bytes)?;
     load(text)
 }
 
 /// Reads `text` as one YAML 1.2 document. One leading byte order mark is
 /// dropped first, so positions count from the first character after it.
 pub fn load(text: &str) -> Result<Document, LoadError> {
+    build(text, Builder::default())
+}
+
+/// Reads `bytes` as [`load_bytes`] does, except that a mapping that repeats a
+/// key keeps every entry, in the order written, where [`load`] refuses it.
+///
+/// For a tool that edits values over their spans and must see each one as
+/// written (`migrate vocab-scope`). [`Node::get`] finds the first entry; a
+/// reader of values takes the last, as `merge::to_json` does.
+pub fn load_bytes_keeping_repeated_keys(bytes: &[u8]) -> Result<Document, LoadError> {
+    let text = utf8(bytes)?;
+    load_keeping_repeated_keys(text)
+}
+
+/// Reads `text` as [`load`] does, keeping a repeated key's every entry
+/// ([`load_bytes_keeping_repeated_keys`]).
+pub fn load_keeping_repeated_keys(text: &str) -> Result<Document, LoadError> {
+    build(
+        text,
+        Builder {
+            keep_repeated_keys: true,
+            ..Builder::default()
+        },
+    )
+}
+
+fn utf8(bytes: &[u8]) -> Result<&str, LoadError> {
+    std::str::from_utf8(bytes).map_err(|error| {
+        LoadError::new(
+            LoadErrorKind::NotUtf8,
+            format!("not UTF-8 at byte offset {}", error.valid_up_to()),
+            None,
+        )
+    })
+}
+
+fn build(text: &str, builder: Builder) -> Result<Document, LoadError> {
     let source = text.strip_prefix('\u{feff}').unwrap_or(text).to_owned();
-    let root = Builder::default().run(&source)?;
+    let root = builder.run(&source)?;
     let lines = locate::split_lines(&source);
     let line_chars = std::iter::repeat_with(OnceLock::new)
         .take(lines.len())
@@ -376,6 +407,9 @@ struct Builder {
     anchors: HashMap<usize, Arc<Node>>,
     documents: usize,
     root: Option<Arc<Node>>,
+    /// Keep every entry of a mapping that repeats a key, instead of failing
+    /// with [`LoadErrorKind::DuplicateKey`].
+    keep_repeated_keys: bool,
 }
 
 /// The core-schema type a tag names (`!!int`, or verbatim
@@ -726,6 +760,16 @@ impl Builder {
             Some(Frame::Map {
                 entries, key, seen, ..
             }) => match key.take() {
+                None if self.keep_repeated_keys => {
+                    if KeyId::of(&node.value).is_none() {
+                        return Err(LoadError::at(
+                            LoadErrorKind::ComplexKey,
+                            "a mapping key must be a scalar, not a sequence or a mapping",
+                            start,
+                        ));
+                    }
+                    *key = Some(node);
+                }
                 None => {
                     let Some(id) = KeyId::of(&node.value) else {
                         return Err(LoadError::at(
@@ -805,6 +849,37 @@ mod tests {
         assert_eq!(error.kind, LoadErrorKind::DuplicateKey);
         assert_eq!(error.mark.map(|m| (m.line, m.column)), Some((2, 1)));
         assert!(error.problem.contains("first written on line 1"), "{error}");
+    }
+
+    #[test]
+    fn keeping_repeated_keys_keeps_every_entry_in_order() {
+        let text = "a: 1\nb: 2\na: 3\n";
+        assert_eq!(load(text).unwrap_err().kind, LoadErrorKind::DuplicateKey);
+        let document = load_bytes_keeping_repeated_keys(text.as_bytes()).unwrap();
+        let root = document.root().unwrap();
+        let Value::Map(entries) = &root.value else {
+            panic!("a mapping")
+        };
+        let written: Vec<(String, String)> = entries
+            .iter()
+            .map(|entry| (entry.key.value.to_string(), entry.value.value.to_string()))
+            .collect();
+        assert_eq!(
+            written,
+            [("a", "1"), ("b", "2"), ("a", "3")].map(|(k, v)| (k.to_owned(), v.to_owned()))
+        );
+        assert_eq!(root.get("a").unwrap().value, Value::Int(1));
+        // A collection is still never a key, and other faults still fail.
+        assert_eq!(
+            load_keeping_repeated_keys("? [x]\n: 1\n").unwrap_err().kind,
+            LoadErrorKind::ComplexKey
+        );
+        assert_eq!(
+            load_bytes_keeping_repeated_keys(b"a: \xff\n")
+                .unwrap_err()
+                .kind,
+            LoadErrorKind::NotUtf8
+        );
     }
 
     #[test]
