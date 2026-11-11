@@ -584,9 +584,10 @@ def test_at_100_columns_names_end_in_an_ellipsis_and_nothing_scrolls_sideways(
         # The counts stay whole; the name gives way.
         assert threat.endswith("  1 objective · 1 rule"), threat
         assert objective.endswith("…  1 rule"), objective
-        # The language server's finding (validate's `vocab_unknown` on the
-        # TLP) stays whole too.
-        assert leaf.endswith("…  ✗ 1") and " …" not in leaf, leaf
+        # The language server's findings stay whole too: validate's
+        # `vocab_unknown` on the TLP, and lint's `filename_mismatch`, a
+        # warning, since the long name is not the file's (#926).
+        assert leaf.endswith("…  ✗ 1  ! 1") and " …" not in leaf, leaf
         assert LONG_RULE not in leaf
         assert tree.virtual_size.width <= width
         assert not tree.show_horizontal_scrollbar
