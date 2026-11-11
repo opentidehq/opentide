@@ -19,6 +19,7 @@
 
 pub mod attack;
 pub mod carbon_black;
+pub mod ci;
 pub mod crowdstrike;
 pub mod defender;
 pub mod deploy;
