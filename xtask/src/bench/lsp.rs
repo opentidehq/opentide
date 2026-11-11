@@ -368,6 +368,12 @@ done
     #[cfg(target_os = "linux")]
     #[test]
     fn memory_xtask_touches_after_the_reset_is_part_of_the_lsp_floor() {
+        if !crate::bench::measured_alone(
+            module_path!(),
+            "memory_xtask_touches_after_the_reset_is_part_of_the_lsp_floor",
+        ) {
+            return;
+        }
         // No ballast: 16 MiB touched between the reset and the spawn is in
         // the floor the server inherits, so the stub, which completes the
         // session, is refused. A floor read before that window would let it
@@ -389,6 +395,12 @@ done
     #[cfg(target_os = "linux")]
     #[test]
     fn memory_xtask_freed_before_the_spawn_does_not_raise_the_lsp_floor() {
+        if !crate::bench::measured_alone(
+            module_path!(),
+            "memory_xtask_freed_before_the_spawn_does_not_raise_the_lsp_floor",
+        ) {
+            return;
+        }
         // 256 MiB touched and freed (its own mapping, unmapped on free):
         // without the reset of VmHWM before the spawn, a server peaking at
         // 64 MiB would inherit this process's 256 MiB peak as its floor, and

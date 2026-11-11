@@ -19,20 +19,43 @@ use serde_json::{Value, json};
 /// The probe the oracle runs.
 const PROBE: &str = include_str!("git_probe.py");
 
-fn git(dir: &Path, home: &Path, args: &[&str]) -> Result<()> {
-    let status = Command::new("git")
+/// Configuration every git call of the scripted history and the oracle runs
+/// with, as command-line scoped configuration (`GIT_CONFIG_COUNT`), so no
+/// call can miss it: no automatic maintenance and no automatic garbage
+/// collection. Either one runs in the background after a commit or a merge
+/// and creates and deletes files under `.git` (`objects/maintenance.lock`)
+/// while a state is being copied (#934).
+pub const QUIET_GIT: [(&str, &str); 5] = [
+    ("GIT_CONFIG_COUNT", "2"),
+    ("GIT_CONFIG_KEY_0", "maintenance.auto"),
+    ("GIT_CONFIG_VALUE_0", "false"),
+    ("GIT_CONFIG_KEY_1", "gc.auto"),
+    ("GIT_CONFIG_VALUE_1", "0"),
+];
+
+/// A git call of the scripted history: no inherited environment, `home` as
+/// `HOME`, fixed identities and dates, and [`QUIET_GIT`].
+fn git_command(dir: &Path, home: &Path, args: &[&str]) -> Command {
+    let mut command = Command::new("git");
+    command
         .args(args)
         .current_dir(dir)
         .env_clear()
         .env("PATH", std::env::var_os("PATH").unwrap_or_default())
         .env("HOME", home)
         .env("GIT_CONFIG_NOSYSTEM", "1")
+        .envs(QUIET_GIT)
         .env("GIT_AUTHOR_NAME", "golden")
         .env("GIT_AUTHOR_EMAIL", "golden@example.invalid")
         .env("GIT_COMMITTER_NAME", "golden")
         .env("GIT_COMMITTER_EMAIL", "golden@example.invalid")
         .env("GIT_AUTHOR_DATE", "2026-01-01T00:00:00Z")
-        .env("GIT_COMMITTER_DATE", "2026-01-01T00:00:00Z")
+        .env("GIT_COMMITTER_DATE", "2026-01-01T00:00:00Z");
+    command
+}
+
+fn git(dir: &Path, home: &Path, args: &[&str]) -> Result<()> {
+    let status = git_command(dir, home, args)
         .status()
         .with_context(|| format!("run git {args:?}"))?;
     ensure!(status.success(), "git {args:?} failed in {}", dir.display());
@@ -75,6 +98,7 @@ fn oracle(python: &Path, probe: &Path, repo: &Path, home: &Path) -> Result<Value
         .env("NO_COLOR", "1")
         .env("OPENTIDE_NO_UPDATE_CHECK", "1")
         .env("GIT_CONFIG_NOSYSTEM", "1")
+        .envs(QUIET_GIT)
         .status()
         .with_context(|| format!("run {}", python.display()))?;
     ensure!(
@@ -130,6 +154,73 @@ pub fn run(python: &Path) -> Result<bool> {
     Ok(passed)
 }
 
+/// Copies the checkout at `from` (its `.git` included) to `to`: files,
+/// folders and symbolic links. A state never depends on git's transient
+/// files: a lock file (`*.lock`) under `.git` belongs to a git process at
+/// work, and is left out, as is an entry that disappears while the copy reads
+/// its folder. Any other failure is an error, never a state left out.
+fn copy_state(from: &Path, to: &Path) -> Result<()> {
+    copy_checkout(from, to, false)
+}
+
+fn copy_checkout(from: &Path, to: &Path, in_git: bool) -> Result<()> {
+    fs::create_dir_all(to).with_context(|| format!("create {}", to.display()))?;
+    let mut entries = Vec::new();
+    for entry in fs::read_dir(from).with_context(|| format!("read {}", from.display()))? {
+        match entry {
+            Ok(entry) => entries.push(entry),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => {
+                return Err(error).with_context(|| format!("read {}", from.display()));
+            }
+        }
+    }
+    entries.sort_by_key(fs::DirEntry::file_name);
+    for entry in entries {
+        let name = entry.file_name();
+        let source = entry.path();
+        let target = to.join(&name);
+        let in_git = in_git || name == ".git";
+        if in_git
+            && Path::new(&name)
+                .extension()
+                .is_some_and(|ext| ext == "lock")
+        {
+            continue;
+        }
+        let kind = match entry.file_type() {
+            Ok(kind) => kind,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(error) => {
+                return Err(error).with_context(|| format!("stat {}", source.display()));
+            }
+        };
+        let copied = if kind.is_dir() {
+            copy_checkout(&source, &target, in_git)
+        } else if kind.is_symlink() {
+            fs::read_link(&source)
+                .with_context(|| format!("read link {}", source.display()))
+                .and_then(|link| crate::golden::fixture::symlink_dir(&link, &target))
+        } else {
+            fs::copy(&source, &target)
+                .map(drop)
+                .with_context(|| format!("copy {} to {}", source.display(), target.display()))
+        };
+        if let Err(error) = copied {
+            let vanished = error.chain().any(|cause| {
+                cause
+                    .downcast_ref::<std::io::Error>()
+                    .is_some_and(|io| io.kind() == std::io::ErrorKind::NotFound)
+            });
+            // Only an entry that is gone from `from` now is a transient one.
+            if !(vanished && fs::symlink_metadata(&source).is_err()) {
+                return Err(error);
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Replaces the fixture's `objects/` links with real folders, and drops its
 /// legacy `Objects/` tree. git would track a link alone, and on a
 /// case-insensitive file system (macOS) `objects` and `Objects` are one
@@ -156,6 +247,22 @@ fn flatten_objects(repo: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Records the state `name` read in `dir`: `copy` copies it under `root`, so
+/// later commits do not change it. A copy that fails is an error, never a
+/// state left out (#934 recorded eight states instead of nine).
+fn record_state(
+    root: &Path,
+    name: &str,
+    dir: &Path,
+    states: &mut Vec<(String, PathBuf)>,
+    copy: impl FnOnce(&Path, &Path) -> Result<()>,
+) -> Result<()> {
+    let target = root.join(format!("state-{}", states.len()));
+    copy(dir, &target).with_context(|| format!("copy the state {name:?}"))?;
+    states.push((name.to_owned(), target));
+    Ok(())
+}
+
 /// Builds the scripted history under `root` (git's `HOME` is `home`): each
 /// state, named, with the directory the baseline reads it in.
 pub fn history(repo_root: &Path, root: &Path, home: &Path) -> Result<Vec<(String, PathBuf)>> {
@@ -169,19 +276,14 @@ pub fn history(repo_root: &Path, root: &Path, home: &Path) -> Result<Vec<(String
         .materialise(repo_root, &repo)?;
     flatten_objects(&repo)?;
     let mut states: Vec<(String, PathBuf)> = Vec::new();
-    let check = |name: &str, dir: &Path, states: &mut Vec<(String, PathBuf)>| {
-        // Each state is copied, so later commits do not change it.
-        let copy = root.join(format!("state-{}", states.len()));
-        let copied = Command::new("cp").arg("-a").arg(dir).arg(&copy).status();
-        if copied.is_ok_and(|copied| copied.success()) {
-            states.push((name.to_owned(), copy));
-        }
+    let check = |name: &str, dir: &Path, states: &mut Vec<(String, PathBuf)>| -> Result<()> {
+        record_state(root, name, dir, states, copy_state)
     };
     git(&repo, home, &["init", "-q", "-b", "main"])?;
-    check("no commit yet", &repo, &mut states);
+    check("no commit yet", &repo, &mut states)?;
     git(&repo, home, &["add", "-A", "--force"])?;
     git(&repo, home, &["commit", "-q", "-m", "first"])?;
-    check("the first commit", &repo, &mut states);
+    check("the first commit", &repo, &mut states)?;
     let files = rules(&repo)?;
     ensure!(files.len() >= 5, "tide-corpus has fewer than five rules");
     touch(&files[0])?;
@@ -198,7 +300,7 @@ pub fn history(repo_root: &Path, root: &Path, home: &Path) -> Result<Vec<(String
         "an edit, a non-ASCII name and a nested rule",
         &repo,
         &mut states,
-    );
+    )?;
     let renamed = repo.join("objects/rules/renamed-rule.yaml");
     let relative = |path: &Path| {
         path.strip_prefix(&repo)
@@ -215,9 +317,9 @@ pub fn history(repo_root: &Path, root: &Path, home: &Path) -> Result<Vec<(String
     )?;
     git(&repo, home, &["rm", "-q", &relative(&files[4])?])?;
     git(&repo, home, &["commit", "-q", "-m", "rename and delete"])?;
-    check("a rename and a delete", &repo, &mut states);
+    check("a rename and a delete", &repo, &mut states)?;
     git(&repo, home, &["checkout", "-q", "--detach", "HEAD~1"])?;
-    check("a detached HEAD", &repo, &mut states);
+    check("a detached HEAD", &repo, &mut states)?;
     git(&repo, home, &["checkout", "-q", "main"])?;
     git(&repo, home, &["checkout", "-q", "-b", "feature"])?;
     touch(&files[0])?;
@@ -230,7 +332,7 @@ pub fn history(repo_root: &Path, root: &Path, home: &Path) -> Result<Vec<(String
         home,
         &["merge", "-q", "--no-ff", "-m", "merge feature", "feature"],
     )?;
-    check("a merge commit", &repo, &mut states);
+    check("a merge commit", &repo, &mut states)?;
     let shallow = root.join("shallow");
     let url = format!("file://{}", repo.display());
     git(
@@ -245,17 +347,12 @@ pub fn history(repo_root: &Path, root: &Path, home: &Path) -> Result<Vec<(String
             &shallow.to_string_lossy(),
         ],
     )?;
-    check("a shallow clone", &shallow, &mut states);
+    check("a shallow clone", &shallow, &mut states)?;
     // A workspace in a subfolder of its checkout: paths come from the top level.
     let outer = root.join("outer");
     let inner = outer.join("detections");
     fs::create_dir_all(&outer)?;
-    let copied = Command::new("cp")
-        .arg("-a")
-        .arg(&states[1].1)
-        .arg(&inner)
-        .status()?;
-    ensure!(copied.success(), "copy the workspace into a subfolder");
+    copy_state(&states[1].1, &inner).context("copy the workspace into a subfolder")?;
     let _ = fs::remove_dir_all(inner.join(".git"));
     git(&outer, home, &["init", "-q", "-b", "main"])?;
     git(&outer, home, &["add", "-A", "--force"])?;
@@ -274,7 +371,7 @@ pub fn history(repo_root: &Path, root: &Path, home: &Path) -> Result<Vec<(String
         .context("cases.toml has no fixture tide-corpus")?
         .materialise(repo_root, &bare)?;
     let _ = fs::remove_dir_all(bare.join(".git"));
-    check("no checkout", &bare, &mut states);
+    check("no checkout", &bare, &mut states)?;
     Ok(states)
 }
 
@@ -312,6 +409,100 @@ mod tests {
             assert!(meta.is_dir(), "objects/{family} is a real folder");
         }
         assert!(rules(&repo).unwrap().len() >= 5);
+    }
+
+    /// The scripted environment turns automatic maintenance and garbage
+    /// collection off for every git call (#934): git reads both settings
+    /// back, whatever the host's git version defaults to.
+    #[test]
+    fn the_scripted_git_runs_without_maintenance_or_gc() {
+        let scratch = tempfile::tempdir().unwrap();
+        let root = dunce::canonicalize(scratch.path()).unwrap();
+        let home = root.join("home");
+        fs::create_dir_all(&home).unwrap();
+        git(&root, &home, &["init", "-q", "-b", "main"]).unwrap();
+        for (key, expected) in [("maintenance.auto", "false"), ("gc.auto", "0")] {
+            let output = git_command(&root, &home, &["config", "--get", key])
+                .output()
+                .unwrap();
+            assert!(output.status.success(), "git config --get {key} is unset");
+            assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), expected);
+        }
+    }
+
+    /// A state's copy never holds git's lock files, which a git process
+    /// creates and deletes while it works; everything else is copied.
+    #[test]
+    fn a_state_copy_leaves_git_lock_files_out() {
+        let scratch = tempfile::tempdir().unwrap();
+        let root = dunce::canonicalize(scratch.path()).unwrap();
+        let from = root.join("from");
+        fs::create_dir_all(from.join(".git/objects/ab")).unwrap();
+        fs::write(from.join(".git/HEAD"), "ref: refs/heads/main\n").unwrap();
+        fs::write(from.join(".git/objects/ab/cdef"), "object").unwrap();
+        fs::write(from.join(".git/objects/maintenance.lock"), "").unwrap();
+        fs::write(from.join(".git/index.lock"), "").unwrap();
+        fs::write(from.join("rule.lock"), "a workspace file").unwrap();
+        let to = root.join("to");
+        copy_state(&from, &to).unwrap();
+        assert!(to.join(".git/HEAD").is_file());
+        assert_eq!(
+            fs::read_to_string(to.join(".git/objects/ab/cdef")).unwrap(),
+            "object"
+        );
+        assert!(!to.join(".git/objects/maintenance.lock").exists());
+        assert!(!to.join(".git/index.lock").exists());
+        assert!(
+            to.join("rule.lock").is_file(),
+            "only git's lock files are left out"
+        );
+    }
+
+    /// A copy that fails is an error, never a state left out.
+    #[test]
+    fn a_state_copy_that_fails_is_an_error() {
+        let scratch = tempfile::tempdir().unwrap();
+        let root = dunce::canonicalize(scratch.path()).unwrap();
+        assert!(copy_state(&root.join("missing"), &root.join("to")).is_err());
+    }
+
+    /// An entry that is still there but cannot be copied (a socket) fails
+    /// the copy: only an entry gone from the source is skipped.
+    #[cfg(unix)]
+    #[test]
+    fn a_state_copy_of_an_entry_that_cannot_be_copied_is_an_error() {
+        let scratch = tempfile::tempdir().unwrap();
+        let root = dunce::canonicalize(scratch.path()).unwrap();
+        let from = root.join("from");
+        fs::create_dir_all(from.join(".git")).unwrap();
+        fs::write(from.join(".git/HEAD"), "ref: refs/heads/main\n").unwrap();
+        let _listener = std::os::unix::net::UnixListener::bind(from.join(".git/sock")).unwrap();
+        let error = copy_state(&from, &root.join("to")).unwrap_err();
+        assert!(format!("{error:#}").contains("sock"), "{error:#}");
+    }
+
+    /// A state whose copy fails stops the history with an error naming it,
+    /// and records nothing (#934 recorded eight states instead of nine).
+    #[test]
+    fn a_state_whose_copy_fails_is_an_error_not_a_dropped_state() {
+        let scratch = tempfile::tempdir().unwrap();
+        let root = dunce::canonicalize(scratch.path()).unwrap();
+        let mut states = vec![("earlier".to_owned(), root.join("state-0"))];
+        let error = record_state(&root, "a merge commit", &root, &mut states, |_, _| {
+            anyhow::bail!("cp: cannot stat maintenance.lock")
+        })
+        .unwrap_err();
+        assert!(format!("{error:#}").contains("a merge commit"), "{error:#}");
+        assert_eq!(states.len(), 1, "{states:?}");
+        record_state(
+            &root,
+            "copied",
+            &root.join("state-0"),
+            &mut states,
+            |_, to| fs::create_dir_all(to).map_err(Into::into),
+        )
+        .unwrap();
+        assert_eq!(states[1], ("copied".to_owned(), root.join("state-1")));
     }
 
     #[test]
