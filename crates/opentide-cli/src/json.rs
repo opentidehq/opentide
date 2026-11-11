@@ -62,6 +62,18 @@ impl Json {
     }
 }
 
+impl From<usize> for Json {
+    fn from(count: usize) -> Json {
+        i64::try_from(count).map_or(Json::UInt(count as u64), Json::Int)
+    }
+}
+
+impl From<bool> for Json {
+    fn from(value: bool) -> Json {
+        Json::Bool(value)
+    }
+}
+
 impl Serialize for Json {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         match self {
