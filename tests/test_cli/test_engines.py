@@ -189,6 +189,23 @@ def test_rust_output_reaches_a_stream_that_lives_in_memory(
     assert document(stdout)["command"] == "explain"
 
 
+def test_rust_reads_a_stdin_that_lives_in_memory(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Click's runner (or a host) replaces stdin: the Rust run reads what it holds."""
+    echo = (sys.executable, "-c", "import sys; sys.stdout.write(sys.stdin.read())")
+    monkeypatch.setitem(engines.RUST_COMMANDS, ("explain",), RustCommand(launch=echo))
+    result = CliRunner().invoke(
+        app,
+        ["--json", "--repo", str(workspace), "explain", "internal"],
+        input="given on stdin\n",
+        env={"OPENTIDE_ENGINE": "rust"},
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 0
+    assert result.stdout == "given on stdin\n"
+
+
 def test_rust_refuses_a_run_its_implementation_does_not_cover(
     workspace: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
