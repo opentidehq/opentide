@@ -247,6 +247,22 @@ fn flatten_objects(repo: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Records the state `name` read in `dir`: `copy` copies it under `root`, so
+/// later commits do not change it. A copy that fails is an error, never a
+/// state left out (#934 recorded eight states instead of nine).
+fn record_state(
+    root: &Path,
+    name: &str,
+    dir: &Path,
+    states: &mut Vec<(String, PathBuf)>,
+    copy: impl FnOnce(&Path, &Path) -> Result<()>,
+) -> Result<()> {
+    let target = root.join(format!("state-{}", states.len()));
+    copy(dir, &target).with_context(|| format!("copy the state {name:?}"))?;
+    states.push((name.to_owned(), target));
+    Ok(())
+}
+
 /// Builds the scripted history under `root` (git's `HOME` is `home`): each
 /// state, named, with the directory the baseline reads it in.
 pub fn history(repo_root: &Path, root: &Path, home: &Path) -> Result<Vec<(String, PathBuf)>> {
@@ -261,11 +277,7 @@ pub fn history(repo_root: &Path, root: &Path, home: &Path) -> Result<Vec<(String
     flatten_objects(&repo)?;
     let mut states: Vec<(String, PathBuf)> = Vec::new();
     let check = |name: &str, dir: &Path, states: &mut Vec<(String, PathBuf)>| -> Result<()> {
-        // Each state is copied, so later commits do not change it.
-        let copy = root.join(format!("state-{}", states.len()));
-        copy_state(dir, &copy).with_context(|| format!("copy the state {name:?}"))?;
-        states.push((name.to_owned(), copy));
-        Ok(())
+        record_state(root, name, dir, states, copy_state)
     };
     git(&repo, home, &["init", "-q", "-b", "main"])?;
     check("no commit yet", &repo, &mut states)?;
@@ -452,6 +464,45 @@ mod tests {
         let scratch = tempfile::tempdir().unwrap();
         let root = dunce::canonicalize(scratch.path()).unwrap();
         assert!(copy_state(&root.join("missing"), &root.join("to")).is_err());
+    }
+
+    /// An entry that is still there but cannot be copied (a socket) fails
+    /// the copy: only an entry gone from the source is skipped.
+    #[cfg(unix)]
+    #[test]
+    fn a_state_copy_of_an_entry_that_cannot_be_copied_is_an_error() {
+        let scratch = tempfile::tempdir().unwrap();
+        let root = dunce::canonicalize(scratch.path()).unwrap();
+        let from = root.join("from");
+        fs::create_dir_all(from.join(".git")).unwrap();
+        fs::write(from.join(".git/HEAD"), "ref: refs/heads/main\n").unwrap();
+        let _listener = std::os::unix::net::UnixListener::bind(from.join(".git/sock")).unwrap();
+        let error = copy_state(&from, &root.join("to")).unwrap_err();
+        assert!(format!("{error:#}").contains("sock"), "{error:#}");
+    }
+
+    /// A state whose copy fails stops the history with an error naming it,
+    /// and records nothing (#934 recorded eight states instead of nine).
+    #[test]
+    fn a_state_whose_copy_fails_is_an_error_not_a_dropped_state() {
+        let scratch = tempfile::tempdir().unwrap();
+        let root = dunce::canonicalize(scratch.path()).unwrap();
+        let mut states = vec![("earlier".to_owned(), root.join("state-0"))];
+        let error = record_state(&root, "a merge commit", &root, &mut states, |_, _| {
+            anyhow::bail!("cp: cannot stat maintenance.lock")
+        })
+        .unwrap_err();
+        assert!(format!("{error:#}").contains("a merge commit"), "{error:#}");
+        assert_eq!(states.len(), 1, "{states:?}");
+        record_state(
+            &root,
+            "copied",
+            &root.join("state-0"),
+            &mut states,
+            |_, to| fs::create_dir_all(to).map_err(Into::into),
+        )
+        .unwrap();
+        assert_eq!(states[1], ("copied".to_owned(), root.join("state-1")));
     }
 
     #[test]
