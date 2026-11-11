@@ -88,6 +88,7 @@ pub struct Host {
 pub struct Interrupt {
     requested: Arc<AtomicBool>,
     reported: Arc<AtomicBool>,
+    at_once: Arc<AtomicBool>,
 }
 
 impl Interrupt {
@@ -99,6 +100,13 @@ impl Interrupt {
     /// Whether Ctrl-C was pressed: long jobs poll this and stop.
     pub fn requested(&self) -> bool {
         self.requested.load(Ordering::SeqCst)
+    }
+
+    /// Has the first Ctrl-C end the process at once, with no grace: for a
+    /// run that blocks without polling [`Interrupt::requested`] and holds
+    /// nothing to clean up (`lsp start`'s server on stdio).
+    pub fn stop_at_once(&self) {
+        self.at_once.store(true, Ordering::SeqCst);
     }
 
     /// Takes back a Ctrl-C a command handled as its way to stop
@@ -669,6 +677,33 @@ impl Run<'_> {
                     debug: self.globals.debug || self.env.debug_requested(),
                 };
                 crate::mcp::serve(&launch, &self.host.version)
+            }
+            "tui" => {
+                use std::io::IsTerminal as _;
+                let place = crate::commands::tui::Place {
+                    mode: self.mode,
+                    interactive: std::io::stdin().is_terminal() && self.host.stdout_tty,
+                    no_color: self.globals.no_color,
+                    env: self.env,
+                };
+                if let Some(report) = crate::commands::tui::gate(&place) {
+                    return self.emit_report(&report, out, err);
+                }
+                // A person at a terminal: the UI, which runs on Python.
+                let message = "opentide tui's terminal UI has no Rust implementation yet: \
+                     unset OPENTIDE_ENGINE, or set it to python or compare."
+                    .to_owned();
+                let mut failure = Failure::new(code::ENGINE_NOT_PORTED, message);
+                failure.argument = Some("OPENTIDE_ENGINE".into());
+                let outcome = Outcome::failed(&path, USAGE_EXIT_CODE, failure);
+                self.emit(&outcome, &[], &[], out, err)
+            }
+            "lsp start" => {
+                // The server blocks on stdin and polls no interrupt: Ctrl-C
+                // ends it at once, with 130, as it ends the Python host.
+                self.host.interrupt.stop_at_once();
+                // stdout is the protocol's: nothing is emitted around the server.
+                crate::commands::lsp::start_stdio(&self.host.version, err)
             }
             "setup ci" => {
                 let report = self.setup_ci(&matches);
@@ -2076,9 +2111,11 @@ pub fn install_interrupt_handler(interrupt: Interrupt) {
 }
 
 /// One Ctrl-C: the first tells the jobs and returns `None` (the run stops
-/// and reports it); a second reports it now and returns the exit code, 130.
+/// and reports it); a second, or the first in a run that stops at once
+/// ([`Interrupt::stop_at_once`]), reports it now and returns the exit code,
+/// 130.
 pub fn on_interrupt(interrupt: &Interrupt, err: &mut dyn Write) -> Option<i32> {
-    if interrupt.request() {
+    if interrupt.request() || interrupt.at_once.load(Ordering::SeqCst) {
         Some(interrupt.report(err))
     } else {
         None
@@ -2139,6 +2176,23 @@ pub fn main(argv: &[String], version: &str) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn a_reports_detail_and_advice_are_its_note_and_help() {
+        let mut outcome = Outcome::failed("tui", 2, Failure::new("x", "m"));
+        assert_eq!(data_text(&outcome.data, "advice"), None);
+        outcome
+            .data
+            .push(("advice".into(), crate::json::Json::str("do this")));
+        outcome
+            .data
+            .push(("detail".into(), crate::json::Json::Int(1)));
+        assert_eq!(
+            data_text(&outcome.data, "advice").as_deref(),
+            Some("do this")
+        );
+        // Only a string is a line to print.
+        assert_eq!(data_text(&outcome.data, "detail"), None);
+    }
 
     /// Counts its drops, to tell a freed value from a leaked one.
     struct Counted(std::rc::Rc<std::cell::Cell<u32>>);
@@ -2527,6 +2581,15 @@ mod tests {
         assert_eq!(err, b"error: interrupted\n");
         // Reported once, whoever reports it first.
         assert_eq!(interrupt.report(&mut err), 130);
+        assert_eq!(err, b"error: interrupted\n");
+    }
+
+    #[test]
+    fn framework_interrupt_a_run_that_stops_at_once_exits_130_on_the_first() {
+        let interrupt = Interrupt::default();
+        interrupt.stop_at_once();
+        let mut err = Vec::new();
+        assert_eq!(on_interrupt(&interrupt, &mut err), Some(130));
         assert_eq!(err, b"error: interrupted\n");
     }
 

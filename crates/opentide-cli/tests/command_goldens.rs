@@ -60,6 +60,14 @@ fn validate_cases_are_the_oracles() {
     check(&["validate"], 100);
 }
 
+/// `tui`'s refusals (UC-3.6b, #947): `usage_tui_needs_tty` wherever nobody
+/// can use the UI, and its help. The UI itself is recorded nowhere (a
+/// full-screen app redraws on a timer).
+#[test]
+fn tui_cases_are_the_oracles() {
+    check(&["tui"], 6);
+}
+
 /// Offline `validate query` (UC-3.5b, #927); its `--live` cases are Python's.
 #[test]
 fn validate_query_cases_are_the_oracles() {

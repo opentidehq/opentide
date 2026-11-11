@@ -2104,6 +2104,7 @@ dependencies = [
 name = "opentide-cli"
 version = "0.12.0"
 dependencies = [
+ "anyhow",
  "clap",
  "comfy-table",
  "ctrlc",
@@ -2116,6 +2117,7 @@ dependencies = [
  "opentide-compile",
  "opentide-connectors",
  "opentide-core",
+ "opentide-lsp",
  "opentide-schema",
  "opentide-workspace",
  "pathdiff",
