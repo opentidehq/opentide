@@ -28,7 +28,9 @@ use std::time::{Duration, Instant, SystemTime};
 
 /// Command paths with a Rust implementation; every other one is refused with
 /// `engine_not_ported`, as `OPENTIDE_ENGINE=rust` refuses it.
-pub const PORTED: &[&str] = &["commands", "info", "rules unreviewed"];
+/// `deploy` runs here with `--dry-run` only (UC-3.1c); a deploy that sends is
+/// refused as unported.
+pub const PORTED: &[&str] = &["commands", "info", "rules unreviewed", "deploy"];
 
 /// The file in which a run refused with `engine_not_ported` records its
 /// message, when the variable names one. `OPENTIDE_ENGINE=compare`
@@ -449,6 +451,19 @@ impl Run<'_> {
                 );
                 self.emit_report(&report, out, err)
             }
+            "deploy" if leaf(&matches).get_flag("dry_run") => {
+                let run = self.deploy(&matches);
+                self.emit_deploy(&run, out, err)
+            }
+            "deploy" => {
+                let message = "opentide deploy without --dry-run has no Rust implementation yet: \
+                     unset OPENTIDE_ENGINE, or set it to python or compare."
+                    .to_owned();
+                let mut failure = Failure::new(code::ENGINE_NOT_PORTED, message);
+                failure.argument = Some("OPENTIDE_ENGINE".into());
+                let outcome = Outcome::failed(&path, USAGE_EXIT_CODE, failure);
+                self.emit(&outcome, &[], &[], out, err)
+            }
             _ => {
                 let message = format!(
                     "opentide {path} has no Rust implementation yet: unset OPENTIDE_ENGINE, or set it to python or compare."
@@ -486,6 +501,147 @@ impl Run<'_> {
                 text: self.mode != Mode::Json,
             },
         )
+    }
+
+    /// `opentide deploy --dry-run`, from its parsed arguments.
+    fn deploy(&self, matches: &clap::ArgMatches) -> crate::commands::deploy::DryRun {
+        use clap::ValueEnum;
+        let args = leaf(matches);
+        let strings = |id: &str| -> Vec<String> {
+            args.get_many::<String>(id)
+                .map(|values| values.cloned().collect())
+                .unwrap_or_default()
+        };
+        let keep_deprecated = if args.get_flag("keep_deprecated") {
+            Some(true)
+        } else if args.get_flag("drop_deprecated") {
+            Some(false)
+        } else {
+            None
+        };
+        let parsed = crate::commands::deploy::Args {
+            strategies: strings("strategy"),
+            all: args.get_flag("all_files"),
+            uuids: strings("uuids"),
+            files: strings("files"),
+            platform: args
+                .get_one::<crate::tree::Platform>("platform")
+                .and_then(|platform| platform.to_possible_value())
+                .map(|value| value.get_name().to_owned()),
+            plan: args.get_one::<String>("plan").cloned(),
+            wide: args.get_flag("wide"),
+            keep_deprecated,
+        };
+        let cwd = self.host.cwd.clone().unwrap_or_default();
+        crate::commands::deploy::run(
+            &parsed,
+            &crate::commands::deploy::Context {
+                repo: self.globals.repo.as_deref(),
+                env: self.env,
+                cwd: &cwd,
+            },
+        )
+    }
+
+    /// Prints a dry run in this run's mode, in the oracle's order: the
+    /// progress events, then the plan (stdout), the rules that would fail
+    /// (stderr), the CI job summary, the result, and the closing note.
+    fn emit_deploy(
+        &self,
+        run: &crate::commands::deploy::DryRun,
+        out: &mut dyn Write,
+        err: &mut dyn Write,
+    ) -> std::io::Result<i32> {
+        use crate::render::outcome::{ResultView, render_result};
+        use crate::render::{ci, progress, summary};
+        if self.interrupted() {
+            return Ok(INTERRUPTED_EXIT_CODE);
+        }
+        let outcome = &run.outcome;
+        if progress::Progress::from_env(self.env).enabled() {
+            let total = run.compiled.len();
+            for (index, platform) in run.compiled.iter().enumerate() {
+                let event = progress::progress_event(platform, index + 1, Some(total));
+                err.write_all(progress::event_line(&event).as_bytes())?;
+            }
+            err.flush()?;
+        }
+        if self.mode == Mode::Json {
+            let document = run.document(self.duration_ms());
+            out.write_all(document_text(&document, self.indent).as_bytes())?;
+            out.flush()?;
+            return Ok(outcome.exit_code);
+        }
+        let stdout = self.console(self.host.stdout_tty);
+        let stderr = self.console(self.host.stderr_tty);
+        let text_out = self.mode != Mode::Mcp;
+        if !run.refused && !self.globals.quiet && text_out {
+            for (line, hang) in run.plan_lines() {
+                let text = match hang {
+                    Some(hang) => stdout.print_line(&line, hang),
+                    None => stdout.line(&line),
+                };
+                out.write_all(text.as_bytes())?;
+            }
+            out.flush()?;
+        }
+        if !run.diagnostics.is_empty() {
+            // Errors print under --quiet too: the tally that follows counts them.
+            let frames = crate::render::codeframe::Frames {
+                colour: stderr.colour,
+                links: self.mode == Mode::Human && self.host.stderr_tty,
+                columns: stderr.width,
+                highlight: self.mode == Mode::Human,
+                cwd: self.host.cwd.clone().unwrap_or_default(),
+                env: self.env.clone(),
+            };
+            let mut sources = crate::render::diagnostic::SourceFiles::default();
+            err.write_all(
+                frames
+                    .render(&run.diagnostics, &mut sources, false)
+                    .as_bytes(),
+            )?;
+            err.flush()?;
+        }
+        if !run.refused && outcome.exit_code != USAGE_EXIT_CODE {
+            let markdown = summary::fit(
+                &summary::deploy_summary(&run.result, None, Some(true)),
+                summary::MAX_SUMMARY_BYTES,
+            );
+            let cwd = self.host.cwd.clone().unwrap_or_default();
+            let written = ci::append_summary(&markdown, "deploy", self.mode, self.env, &cwd);
+            for line in &written.stdout {
+                out.write_all(format!("{line}\n").as_bytes())?;
+            }
+        }
+        let view = ResultView {
+            message: outcome.message.clone(),
+            outcome: run.outcome_line.clone(),
+            status: outcome.status.clone(),
+            ok: outcome.ok(),
+            outcome_kind: run.plan_kind.then_some(OutcomeKind::Plan),
+            failure: outcome
+                .failure
+                .as_ref()
+                .map(|failure| (failure.code.clone(), failure.suggestion.clone())),
+            detail: run.detail(),
+            advice: run.advice(),
+            warnings: run.warnings.clone(),
+            next_actions: outcome.next_actions.clone(),
+        };
+        let (result_out, result_err) =
+            render_result(&view, stdout, stderr, self.mode, self.globals.quiet);
+        if text_out {
+            out.write_all(result_out.as_bytes())?;
+        }
+        err.write_all(result_err.as_bytes())?;
+        if !run.refused && !self.globals.quiet && text_out {
+            let note = Text::styled(crate::commands::deploy::DRY_RUN_NOTE, &Style::new("dim"));
+            out.write_all(stdout.line(&note).as_bytes())?;
+        }
+        out.flush()?;
+        err.flush()?;
+        Ok(outcome.exit_code)
     }
 
     /// The width a table or a long line is laid out at on stdout: `COLUMNS`,
@@ -708,8 +864,14 @@ pub fn utc_at(time: SystemTime) -> (String, String, String) {
     (iso, stamp, clock)
 }
 
+/// A log line's time: `2026-11-09 10:11:12` (UTC), the date-time a JSON line
+/// carries; a text line under `--debug` shows the time part.
 fn log_clock() -> String {
-    utc_now().2
+    utc_now()
+        .0
+        .replace('T', " ")
+        .trim_end_matches('Z')
+        .to_owned()
 }
 
 /// Runs `opentide` with `argv` (without the program name); the exit code.
@@ -772,7 +934,8 @@ fn run_with(
         logging::Config {
             debug,
             quiet: run.globals.quiet,
-            json_lines: env.boolean("OPENTIDE_LOG_JSON").unwrap_or(false),
+            // `--json` writes its log lines as JSON too, as OPENTIDE_LOG_JSON=1 does.
+            json_lines: mode == Mode::Json || env.boolean("OPENTIDE_LOG_JSON").unwrap_or(false),
         },
         host.log_sink.clone(),
         redactor.clone(),
@@ -1169,15 +1332,20 @@ mod tests {
                     Ok(0)
                 });
                 assert_eq!(result.stdout, "", "{line}");
-                assert!(
-                    result.stderr.contains("warning: Tenant targets failed"),
-                    "{line}"
-                );
-                assert_eq!(
-                    result.stderr.contains("Registry loaded · path: x"),
-                    debug,
-                    "{line}"
-                );
+                // `--json` writes its log lines as JSON, as the oracle does.
+                let (warned, loaded) = if line.contains("--json") {
+                    (
+                        "\"event\":\"tenant_targets_failed\",\"level\":\"warning\"",
+                        "{\"path\":\"x\",\"event\":\"registry_loaded\",\"level\":\"debug\"",
+                    )
+                } else {
+                    (
+                        "warning: Tenant targets failed",
+                        "Registry loaded · path: x",
+                    )
+                };
+                assert!(result.stderr.contains(warned), "{line}: {}", result.stderr);
+                assert_eq!(result.stderr.contains(loaded), debug, "{line}");
             }
         }
         let quiet = ran("--quiet x", &[], false, |_, _, _| {

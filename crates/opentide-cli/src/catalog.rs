@@ -328,7 +328,10 @@ fn option(path: &str, arg: &Arg, root: bool) -> Json {
         ),
         ("secondary_flags", Json::Array(secondary)),
         ("type", Json::str(type_name(arg))),
-        ("choices", strings(choices(arg))),
+        (
+            "choices",
+            strings(choices(arg).or_else(|| tree_meta::choices(path, arg.get_id().as_str()))),
+        ),
         ("default", default_value(path, arg)),
         ("required", Json::Bool(arg.is_required_set())),
         ("multiple", Json::Bool(is_multiple(arg))),
