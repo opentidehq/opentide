@@ -196,12 +196,16 @@ fn string_at<'n>(node: &'n Node, path: &[&str]) -> Option<&'n str> {
     current.value.as_str()
 }
 
-/// Resolves the configuration of the workspace at `roots`.
-///
-/// # Errors
-///
-/// A [`ConfigError`]: every command stops on it.
-pub fn load(fs: &dyn FileSystem, roots: &Roots) -> Result<Configuration, ConfigError> {
+/// The configuration folders read and merged, before `paths.toml` is checked.
+struct Merged {
+    resolved: Resolved,
+    folders: Vec<PathBuf>,
+    files_read: usize,
+}
+
+/// Reads the configuration folders of the workspace at `roots` and merges
+/// them.
+fn read(fs: &dyn FileSystem, roots: &Roots) -> Result<Merged, ConfigError> {
     let mut files_read = 0;
     let own_dir = roots.workspace.join(OPENTIDE_DIR).join("configurations");
     let overlay_dir = roots
@@ -232,6 +236,44 @@ pub fn load(fs: &dyn FileSystem, roots: &Roots) -> Result<Configuration, ConfigE
         skip_parent: roots.tide_workspace,
     })
     .map_err(ConfigError::Resolve)?;
+    let mut folders = vec![own_dir];
+    if roots.tide_workspace {
+        folders.push(overlay_dir);
+    } else if let Some(dir) = parent_dir {
+        folders.push(dir);
+    }
+    Ok(Merged {
+        resolved,
+        folders,
+        files_read,
+    })
+}
+
+/// Resolves the configuration of the workspace at `roots` and checks
+/// nothing: the merged files as `core/files.py` `resolve_configurations`
+/// returns them, for what reads a configuration whose `paths.toml` its model
+/// refuses (`setup ci`'s statuses, #957). [`load`] checks it.
+///
+/// # Errors
+///
+/// A [`ConfigError`] other than [`ConfigError::Paths`]: the layering
+/// stopped, or a configuration file cannot be read.
+pub fn resolve_only(fs: &dyn FileSystem, roots: &Roots) -> Result<Resolved, ConfigError> {
+    read(fs, roots).map(|merged| merged.resolved)
+}
+
+/// Resolves the configuration of the workspace at `roots` and checks
+/// `paths.toml` against its model.
+///
+/// # Errors
+///
+/// A [`ConfigError`]: every command stops on it.
+pub fn load(fs: &dyn FileSystem, roots: &Roots) -> Result<Configuration, ConfigError> {
+    let Merged {
+        resolved,
+        folders,
+        files_read,
+    } = read(fs, roots)?;
 
     let paths_node = resolved.get("paths");
     let paths = match paths_node {
@@ -283,12 +325,6 @@ pub fn load(fs: &dyn FileSystem, roots: &Roots) -> Result<Configuration, ConfigE
                 .map(|relative| fs.resolve(&roots.workspace.join(relative))),
         })
         .collect();
-    let mut folders = vec![own_dir];
-    if roots.tide_workspace {
-        folders.push(overlay_dir);
-    } else if let Some(dir) = parent_dir {
-        folders.push(dir);
-    }
     Ok(Configuration {
         resolved,
         paths,

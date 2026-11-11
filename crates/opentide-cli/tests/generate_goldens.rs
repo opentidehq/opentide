@@ -348,6 +348,52 @@ fn setup_ci_refuses_then_writes() {
     );
 }
 
+/// `--promotion-target` reads the statuses from the merged configuration,
+/// unchecked, as the oracle does: a `paths.toml` its model refuses (a legacy
+/// `[paths.core]` table) does not stop it (#957).
+#[test]
+fn setup_ci_reads_the_statuses_of_a_refused_paths_toml() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
+    fixture("vscode-docs-folder", &ws);
+    let (code, stdout) = run_json(
+        &ws,
+        &[
+            "setup",
+            "ci",
+            "github",
+            "--promotion-target",
+            "STAGING",
+            "--yes",
+        ],
+    );
+    assert_eq!(code, 0, "{stdout}");
+    assert_eq!(
+        std::fs::read_to_string(ws.join(".opentide/configurations/deployment.toml")).unwrap(),
+        "[promotion]\npromotion_target = \"STAGING\"\n"
+    );
+    // A status the merged files do not define is still refused.
+    let (code, stdout) = run_json(
+        &ws,
+        &[
+            "setup",
+            "ci",
+            "github",
+            "--promotion-target",
+            "NOPE",
+            "--yes",
+        ],
+    );
+    assert_eq!(code, 2, "{stdout}");
+    assert!(
+        document(&stdout)["failure"]["message"]
+            .as_str()
+            .unwrap()
+            .starts_with("Invalid value for '--promotion-target': 'NOPE' is not a status in this repository's deployment.toml; use one of: DESIGN, "),
+        "{stdout}"
+    );
+}
+
 /// The parsed document of a run's stdout.
 fn document(stdout: &str) -> serde_json::Value {
     serde_json::from_str(stdout).unwrap()

@@ -379,6 +379,50 @@ mod loading {
         assert!(!error.to_string().is_empty());
     }
 
+    /// `config::resolve_only` merges the files and checks nothing: a
+    /// `paths.toml` its model refuses, which stops `load`, still gives the
+    /// merged tree (#957); a file that does not parse stops both.
+    #[test]
+    fn resolving_only_does_not_check_paths() {
+        let fs = Arc::new(MemoryFs::new());
+        fs.create_dir("/ws/objects");
+        fs.write(
+            "/ws/.opentide/configurations/paths.toml",
+            "[paths.core]\ndocs_folder = \"site\"\n\n[paths.objects]\nrule = \"objects/rules\"\n",
+        );
+        fs.write(
+            "/ws/.opentide/configurations/deployment.toml",
+            "[[statuses]]\nname = \"ONLY\"\nstrategy = \"INERT\"\n",
+        );
+        let roots = opentide_workspace::root::resolve(fs.as_ref(), &options().roots);
+        let error = opentide_workspace::config::load(fs.as_ref(), &roots).unwrap_err();
+        assert!(matches!(error, ConfigError::Paths(_)), "{error:?}");
+        let resolved = opentide_workspace::config::resolve_only(fs.as_ref(), &roots).unwrap();
+        let statuses = resolved
+            .get("deployment")
+            .and_then(|deployment| deployment.get("statuses"))
+            .map(|statuses| opentide_schema::configuration::merge::to_json(statuses));
+        assert!(
+            statuses
+                .as_ref()
+                .and_then(serde_json::Value::as_array)
+                .is_some_and(|entries| entries.iter().any(|entry| entry["name"] == "ONLY")),
+            "{statuses:?}"
+        );
+        assert_eq!(
+            resolved
+                .get("paths")
+                .and_then(|paths| paths.get("paths"))
+                .and_then(|paths| paths.get("core"))
+                .and_then(|core| core.get("docs_folder"))
+                .and_then(|folder| folder.value.as_str()),
+            Some("site")
+        );
+        fs.write("/ws/.opentide/configurations/paths.toml", "[paths\n");
+        let error = opentide_workspace::config::resolve_only(fs.as_ref(), &roots).unwrap_err();
+        assert_eq!(error.code(), Some("config_parse"));
+    }
+
     #[test]
     fn the_parent_instance_is_merged_unless_tide_workspace_is_set() {
         let fs = Arc::new(MemoryFs::new());

@@ -25,7 +25,7 @@ source (`ci.yml` `engine-package`, `scripts/ci-local.sh`).
 | --- | --- |
 | `src/fs.rs` | `FileSystem` (every read goes through it), `OsFs` (the disk), `MemoryFs` (tests, editor buffers; counts reads by path); `WriteFs` (what `--fix` writes: `replace` only while the file holds what was read, through a temporary file renamed into place; `rename_file`), `Stamp` (`--watch`'s snapshot) |
 | `src/root.rs` | `RootOptions` (`--repo`, `OPENTIDE_REPO_ROOT`, `OPENTIDE_TIDE_WORKSPACE`, the working directory: the host passes them, `from_env` reads the process's), `resolve` |
-| `src/config.rs` | The configuration folders read through the `FileSystem` and resolved once (`opentide_schema::configuration::resolve`), `paths.toml` checked, the object folders |
+| `src/config.rs` | The configuration folders read through the `FileSystem` and resolved once (`opentide_schema::configuration::resolve`), `paths.toml` checked, the object folders (`load`); `resolve_only`, the merged files unchecked, for what reads a configuration whose `paths.toml` its model refuses (`setup ci`'s statuses, #957) |
 | `src/discover.rs` | Object files: direct children of a family folder, `.yaml`/`.yml` case-sensitively, `.debug.*` left out; deeper files are nested; linked folders are not entered |
 | `src/load.rs` | One file: bytes to a YAML 1.2 `Document`, or its `Failure` (`not_utf8_problem` and `root_mapping_problem` word for word as the oracle's) |
 | `src/index.rs` | `assemble`: the index from the scans and parses, in discovery order: objects, `file_paths`, duplicates, load errors (`yaml_parse`, `missing_uuid`), nested files, signals, references, chaining |

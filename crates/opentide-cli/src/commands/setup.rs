@@ -14,6 +14,7 @@ use std::path::{Component, Path, PathBuf};
 
 use indexmap::IndexMap;
 use opentide_compile::ci::{self, Provider};
+use opentide_schema::configuration::resolve::Resolved;
 use opentide_schema::node::Value;
 
 use super::{Block, Report, USAGE_INVALID_VALUE};
@@ -500,24 +501,20 @@ fn default_branch_warnings(env: &Env, path: &Path, branch: &str, source: &str) -
     Vec::new()
 }
 
-/// What the workspace at `root` tells the pipeline: its rules folder (from
-/// the repository root, links resolved), the statuses `deployment.toml`
-/// defines, and each enabled platform's tenant variables.
-struct WorkspaceFacts {
-    rules_folder: String,
-    statuses: Result<Vec<String>, String>,
-}
-
-fn workspace_facts(root: &Path, cx: &Context<'_>) -> WorkspaceFacts {
-    let options = opentide_workspace::RootOptions {
+/// Where `setup ci` finds the workspace at `root`.
+fn root_options(root: &Path, cx: &Context<'_>) -> opentide_workspace::RootOptions {
+    opentide_workspace::RootOptions {
         repo: Some(root.to_path_buf()),
         repo_root_env: Some(root.to_path_buf()),
         tide_workspace_env: Some(root.to_path_buf()),
         cwd: cx.cwd.to_path_buf(),
-    };
-    let opened = super::open(options);
-    let rules_folder = opened
-        .as_ref()
+    }
+}
+
+/// The rules folder of the workspace at `root`, from the repository root,
+/// links resolved.
+fn rules_folder(root: &Path, cx: &Context<'_>) -> String {
+    super::open(root_options(root, cx))
         .ok()
         .and_then(|workspace| {
             workspace
@@ -536,34 +533,42 @@ fn workspace_facts(root: &Path, cx: &Context<'_>) -> WorkspaceFacts {
                 .to_owned();
             (!text.is_empty() && text != ".").then_some(text)
         })
-        .unwrap_or_else(|| ci::DEFAULT_RULES_FOLDER.to_owned());
-    let statuses = opened.map(|workspace| {
-        let Some(Value::Seq(entries)) = workspace
-            .configuration()
-            .resolved
-            .get("deployment")
-            .and_then(|deployment| deployment.get("statuses"))
-            .map(|statuses| &statuses.value)
-        else {
-            return Vec::new();
-        };
-        entries
-            .iter()
-            .map(|entry| {
-                entry.get("name").map_or_else(
-                    || "None".to_owned(),
-                    |name| match &name.value {
-                        Value::Str(text) => text.clone(),
-                        _ => opentide_schema::configuration::repr::node(name),
-                    },
-                )
-            })
-            .collect()
-    });
-    WorkspaceFacts {
-        rules_folder,
-        statuses,
-    }
+        .unwrap_or_else(|| ci::DEFAULT_RULES_FOLDER.to_owned())
+}
+
+/// The statuses `deployment.toml` defines in the workspace at `root`, read
+/// from the merged files without checking them, as the oracle's
+/// `resolve_configurations` reads them: a `paths.toml` its model refuses
+/// does not hide them (#957).
+fn statuses(root: &Path, cx: &Context<'_>) -> Result<Vec<String>, String> {
+    let fs = opentide_workspace::OsFs;
+    let roots = opentide_workspace::root::resolve(&fs, &root_options(root, cx));
+    opentide_workspace::config::resolve_only(&fs, &roots)
+        .map(|resolved| deployment_statuses(&resolved))
+        .map_err(|error| error.to_string())
+}
+
+/// The names of the statuses `deployment.toml` defines, in order (`str(entry.get("name"))`).
+fn deployment_statuses(resolved: &Resolved) -> Vec<String> {
+    let Some(Value::Seq(entries)) = resolved
+        .get("deployment")
+        .and_then(|deployment| deployment.get("statuses"))
+        .map(|statuses| &statuses.value)
+    else {
+        return Vec::new();
+    };
+    entries
+        .iter()
+        .map(|entry| {
+            entry.get("name").map_or_else(
+                || "None".to_owned(),
+                |name| match &name.value {
+                    Value::Str(text) => text.clone(),
+                    _ => opentide_schema::configuration::repr::node(name),
+                },
+            )
+        })
+        .collect()
 }
 
 /// What a run did, or would do.
@@ -577,8 +582,7 @@ struct Run {
 
 /// `run_ci_setup`: everything but the writing.
 fn prepare(args: &CiArgs, root: &Path, cx: &Context<'_>) -> Result<Run, Box<Report>> {
-    let facts = workspace_facts(root, cx);
-    let promotion = promotion_override(root, args, || facts.statuses.clone())?;
+    let promotion = promotion_override(root, args, || statuses(root, cx))?;
     let platforms = enabled_platforms(root);
     let mut warnings = Vec::new();
     if platforms.is_empty() {
@@ -632,7 +636,7 @@ fn prepare(args: &CiArgs, root: &Path, cx: &Context<'_>) -> Result<Run, Box<Repo
         opentide_version: cx.version.to_owned(),
         default_branch: branch.clone(),
         docs_output: "docs".to_owned(),
-        rules_folder: facts.rules_folder,
+        rules_folder: rules_folder(root, cx),
         credentials,
     };
     let text = ci::render(&options)
