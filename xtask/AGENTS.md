@@ -121,6 +121,10 @@ cargo nextest run --profile fast -p xtask
 cargo xtask check-layers
 ```
 
+- Every git repository a test or `payloads git` builds runs git with automatic maintenance and gc
+  off (`GIT_CONFIG_COUNT`: `maintenance.auto=false`, `gc.auto=0`; `payloads::git::QUIET_GIT`):
+  either works under `.git` in the background after a commit, and a copy of `.git` made meanwhile
+  failed (#934). A state's copy leaves git's `*.lock` files out and fails loudly otherwise.
 - `src/layers.rs` unit tests: synthetic tables and metadata, including a deliberate upward
   dependency on the repository's own table, which must fail.
 - `tests/cli.rs`: the binary through trycmd (`tests/cmd/*.trycmd`, fixtures in
