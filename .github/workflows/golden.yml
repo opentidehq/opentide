@@ -22,11 +22,12 @@ name: Golden
 # instead, and a job skipped by its `if` reports success to branch protection:
 #
 # - check (about 8 minutes) runs on every pull request into
-#   integration/unified-core, and on other bases when GOLDEN_PATHS changed.
-# - determinism (recording twice, about 26 minutes, past the 15-minute PR
-#   budget) runs when GOLDEN_PATHS changed, whatever the base; every push to
-#   integration/unified-core and development runs it after the merge.
-# - Both run when `changes` did not succeed: the filter fails open.
+#   integration/unified-core, and on other bases when GOLDEN_PATHS changed;
+#   it runs when `changes` did not succeed: the filter fails open.
+# - determinism (recording twice, about 26 minutes) is in the full set
+#   (ci.yml's header): nightly, every push to integration/unified-core and
+#   development, Run workflow, and a pull request with the `full-ci` label.
+#   It is not a required check.
 #
 # Nothing here publishes or writes to the repository.
 
@@ -38,13 +39,16 @@ on:
     # All base branches and all paths: the `changes` job below holds the path
     # filter, so that integration/unified-core can require the checks.
   schedule:
-    # Weekly, so a change outside the repository (PyPI, the runner image) shows.
-    # GitHub runs a schedule on the default branch only.
-    - cron: "17 4 * * 1"
+    # Nightly, so a change outside the repository (PyPI, the runner image)
+    # shows, with the determinism run. GitHub runs a schedule on the default
+    # branch only.
+    - cron: "17 4 * * *"
   workflow_dispatch:
 
 concurrency:
-  group: golden-${{ github.ref }}
+  # The event in the group, so that the nightly run and a push to development
+  # do not cancel each other.
+  group: golden-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -157,14 +161,8 @@ jobs:
 
   determinism:
     name: Golden determinism
-    needs: changes
-    # Path-filtered on every base: recording twice takes about 26 minutes.
-    if: >-
-      !cancelled() && (
-        github.event_name != 'pull_request'
-        || needs.changes.result != 'success'
-        || needs.changes.outputs.golden == 'true'
-      )
+    # The full set: recording twice takes about 26 minutes.
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:

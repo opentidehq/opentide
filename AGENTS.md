@@ -144,6 +144,8 @@ uv sync --group dev                             # this worktree's .venv; _native
 | Lint and types | `scripts/ci-local.sh --quick` (ruff, ty, cargo fmt, clippy, layers, engine checks, `uv build`) |
 | Before a push | `scripts/ci-local.sh --full` (adds nextest `ci`, doctests, rustdoc, the crates' package and licence scan, pytest with the coverage gate, the E2E suite, GitLab CI lint; WebAssembly, grammars and fuzz smoke when their tools are installed) |
 
+CI runs the core gates on every pull request and the full set nightly, on every push to `development`
+and `integration/unified-core`, on Run workflow and on a pull request labelled `full-ci`.
 The test profiles are in [`.config/nextest.toml`](.config/nextest.toml); CI's jobs are in
 [`.github/AGENTS.md`](.github/AGENTS.md).
 

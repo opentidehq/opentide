@@ -50,6 +50,9 @@ concurrency:
 jobs:
   dashboard:
     name: Parity dashboard
+    # The full set (ci.yml's header): pushes, the schedule, Run workflow, and a
+    # pull request with the `full-ci` label. Informational, not required.
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:

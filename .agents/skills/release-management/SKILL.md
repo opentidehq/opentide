@@ -168,10 +168,10 @@ Required success:
 
 | Check | Notes |
 |-------|--------|
-| Unit matrix Python 3.10–3.14 | |
+| Unit matrix Python 3.10–3.14 | 3.11–3.13 run in CI's full set: Run workflow on `development` before a release if the last nightly is not green |
 | lint | ruff + ty |
 | CLI E2E | Do **not** treat a skipped job (because unit tests failed) as success |
-| docs | |
+| docs | In CI's full set: give the notes PR the `full-ci` label (then push) so it runs |
 | CodeQL Analyze (python) | |
 | CodeQL Analyze (actions) | |
 

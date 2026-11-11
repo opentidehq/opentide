@@ -19,9 +19,30 @@ on:
     # integration/unified-core: the Unified Core PRs merge there before development.
     branches: [main, development, integration/unified-core]
     tags: ["engine-v*"]
+  # On a pull request only when it changes what the references check: the
+  # query languages' crates and what they build on, every crate manifest
+  # (ci-oracle.sh fails when one depends on a reference), the grammars, the
+  # catalogs and the oracles. The full set (ci.yml's header) runs it on every
+  # push to the branches above, weekly and on Run workflow.
   pull_request:
     paths:
-      - "crates/**"
+      - "crates/opentide-analysis/**"
+      - "crates/opentide-core/**"
+      - "crates/opentide-syntax/**"
+      - "crates/opentide-highlight/**"
+      - "crates/opentide-ecs/**"
+      - "crates/opentide-kql/**"
+      - "crates/opentide-spl/**"
+      - "crates/opentide-esql/**"
+      - "crates/opentide-eql/**"
+      - "crates/opentide-kuery/**"
+      - "crates/opentide-lucene/**"
+      - "crates/opentide-falco/**"
+      - "crates/opentide-cql/**"
+      - "crates/opentide-lsp/**"
+      - "crates/testdata/oracles/**"
+      - "crates/*/Cargo.toml"
+      - "packages/*/package.json"
       - "grammars/**"
       - "Cargo.lock"
       - "data/catalogs/kql/**"
