@@ -20,7 +20,7 @@ use opentide_cli::env::Env;
 use opentide_cli::logging::Sink;
 use opentide_cli::{Host, run};
 use opentide_compare::ledger::{Ledger, Usage};
-use opentide_compare::normalise::{Normaliser, Volatile};
+use opentide_compare::normalise::{Normaliser, Rule, Volatile};
 use opentide_compare::{FileState, Run};
 
 /// A generated fixture laid out already (`cargo xtask corpus faults --out
@@ -221,6 +221,41 @@ pub fn ledger() -> Ledger {
     .unwrap()
 }
 
+/// How many runs this thread replayed that the Rust CLI refused with
+/// `engine_not_ported` (Python runs those alone under `compare`).
+pub fn refused() -> usize {
+    REFUSED.with(std::cell::Cell::get)
+}
+
+thread_local! {
+    static REFUSED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// The UUIDs in the package's data (`src/opentide`), which no run mints:
+/// `cargo xtask compare`'s `package_uuids`.
+fn package_uuids() -> &'static std::collections::BTreeSet<String> {
+    static CELL: std::sync::OnceLock<std::collections::BTreeSet<String>> =
+        std::sync::OnceLock::new();
+    CELL.get_or_init(|| {
+        fn walk(dir: &Path, out: &mut std::collections::BTreeSet<String>) {
+            let Ok(entries) = std::fs::read_dir(dir) else {
+                return;
+            };
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    walk(&path, out);
+                } else if let Ok(text) = std::fs::read_to_string(&path) {
+                    out.extend(opentide_compare::normalise::uuids_in(&text));
+                }
+            }
+        }
+        let mut out = std::collections::BTreeSet::new();
+        walk(&repo().join("src/opentide"), &mut out);
+        out
+    })
+}
+
 /// Replays the recording in `dir`; the differences found, if any.
 pub fn replay(id: &str, dir: &Path, ledger: &Ledger, usage: &mut Usage) -> Vec<String> {
     let case: toml::Table = std::fs::read_to_string(dir.join("case.toml"))
@@ -259,15 +294,29 @@ pub fn replay(id: &str, dir: &Path, ledger: &Ledger, usage: &mut Usage) -> Vec<S
         .iter()
         .map(|(_, root)| (files(root), dirs(root)))
         .collect();
-    let env = Env::from_pairs(case["env"].as_table().unwrap().iter().map(|(key, value)| {
-        let value = value
-            .as_str()
+    // A refusal (`engine_not_ported`) is recorded where `compare` reads it:
+    // Python then runs alone, and there is nothing to compare.
+    let refusal_dir = tempfile::tempdir().unwrap();
+    let refusal = refusal_dir.path().join("refusal");
+    let env = Env::from_pairs(
+        case["env"]
+            .as_table()
             .unwrap()
-            .replace("<HOME>", &home.display().to_string())
-            .replace("<TMP>", &tmp.display().to_string())
-            .replace("<WS>", &ws.display().to_string());
-        (key.clone(), value)
-    }));
+            .iter()
+            .map(|(key, value)| {
+                let value = value
+                    .as_str()
+                    .unwrap()
+                    .replace("<HOME>", &home.display().to_string())
+                    .replace("<TMP>", &tmp.display().to_string())
+                    .replace("<WS>", &ws.display().to_string());
+                (key.clone(), value)
+            })
+            .chain(std::iter::once((
+                "OPENTIDE_ENGINE_REFUSAL".to_owned(),
+                refusal.display().to_string(),
+            ))),
+    );
     let terminal = mode == "human";
     let stderr = Buffer::default();
     let sink: Sink = Arc::new(Mutex::new(stderr.clone()));
@@ -287,7 +336,39 @@ pub fn replay(id: &str, dir: &Path, ledger: &Ledger, usage: &mut Usage) -> Vec<S
     let mut out = Vec::new();
     let mut err = stderr.clone();
     let exit_code = run(&argv, &env, &host, &mut out, &mut err);
+    if refusal.exists() {
+        REFUSED.with(|count| count.set(count.get() + 1));
+        return Vec::new();
+    }
     let today = opentide_compare::normalise::utc_date(std::time::SystemTime::now());
+    // The case's opt-in rules (`fresh-uuids` for a command that mints
+    // identifiers), with the UUIDs that are not fresh as the golden check
+    // knows them: the fixture's, the case's argv and the package's data.
+    let rules: Vec<Rule> = case
+        .get("normalise")
+        .and_then(|rules| rules.as_array())
+        .map(|rules| {
+            rules
+                .iter()
+                .filter_map(|rule| rule.as_str())
+                .filter_map(|rule| {
+                    serde_json::from_value(serde_json::Value::String(rule.to_owned())).ok()
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let mut known_uuids = std::collections::BTreeSet::new();
+    if rules.contains(&Rule::FreshUuids) {
+        for arg in &argv {
+            known_uuids.extend(opentide_compare::normalise::uuids_in(arg));
+        }
+        known_uuids.extend(package_uuids().iter().cloned());
+    }
+    let fixture_text: Vec<String> = before
+        .iter()
+        .flat_map(|(files, _)| files.values())
+        .map(|bytes| String::from_utf8_lossy(bytes).into_owned())
+        .collect();
     let mut normaliser = Normaliser::new(
         &Volatile {
             literals: vec![
@@ -296,10 +377,11 @@ pub fn replay(id: &str, dir: &Path, ledger: &Ledger, usage: &mut Usage) -> Vec<S
                 (tmp.display().to_string(), "<TMP>".into()),
             ],
             dates: vec![today],
+            known_uuids,
             ..Volatile::default()
         },
-        &[],
-        std::iter::empty(),
+        &rules,
+        fixture_text.iter().map(String::as_str),
     );
     let stdout = normaliser.text(&String::from_utf8(out).unwrap());
     let stderr = normaliser.text(&String::from_utf8(stderr.0.lock().unwrap().clone()).unwrap());

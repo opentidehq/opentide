@@ -200,3 +200,23 @@ fn a_scoped_run_that_matches_nothing_is_not_an_empty_workspace() {
         "opentide --json setup"
     );
 }
+
+/// `new threat|objective|rule` (UC-3.5d, #933): the object written, the
+/// templates and schemas generated first, the failures.
+#[test]
+fn new_cases_are_the_oracles() {
+    check(&["new.threat", "new.objective", "new.rule"], 40);
+}
+
+/// `generate <phase>...` (UC-3.5d, #933): the `schemas`, `templates` and
+/// `snippets` phases run in Rust; the full pipeline and `vocabs` are refused
+/// with `engine_not_ported` (Python runs them alone under `compare`).
+#[test]
+fn generate_phase_cases_are_the_oracles() {
+    let refused = replay::refused();
+    check(&["generate"], 4);
+    let refused = replay::refused() - refused;
+    if std::env::var_os("OPENTIDE_REPLAY_FILTER").is_none() {
+        assert!(refused >= 10, "only {refused} refused");
+    }
+}

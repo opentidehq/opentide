@@ -19,7 +19,8 @@
 //!
 //! - **Schemas by verdict** (`--check` only; UC-1.8b, #900): the JSON
 //!   Schemas of the `schemas` phase (each object revision's, and
-//!   `visibility.toml`'s) in each such recording, and every configuration
+//!   `visibility.toml`'s) in each such recording and in each recording of
+//!   `opentide new` that generated them, and every configuration
 //!   schema the oracle generates (`crates/opentide-schema/tests/oracle/
 //!   configuration_schemas.json`, from `configuration_schemas.py`), are
 //!   compared with Rust's by what they accept and refuse, not by their text
@@ -671,7 +672,9 @@ fn schema_verdicts(root: &Path) -> Result<(usize, Vec<String>)> {
     let mut generated: BTreeMap<String, Vec<Artifact>> = BTreeMap::new();
     let mut done: HashSet<(String, String, u64)> = HashSet::new();
     for id in recorded_ids(&cases)? {
-        if !id.starts_with("generate/") {
+        // `new` runs the `schemas` phase first where the workspace has no
+        // schema yet (UC-3.5d, #933): its recordings hold the oracle's too.
+        if !id.starts_with("generate/") && !id.starts_with("new.") {
             continue;
         }
         let recording = Recording::read(&cases.join(&id), &blobs)?;

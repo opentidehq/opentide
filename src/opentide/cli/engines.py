@@ -113,7 +113,10 @@ RUST_CLI: tuple[str, ...] = (sys.executable, "-m", "opentide.cli.rust")
 #: ``generate explorer``, ``generate inflight`` and its ``prune``, and ``setup ci``
 #: with UC-3.2c (#916); ``deploy --dry-run`` with UC-3.1c (#896): a deploy that
 #: sends stays Python's; ``commands``, ``explain``, ``lint`` and ``validate`` with
-#: UC-3.5 (#827).
+#: UC-3.5 (#827); ``new threat|objective|rule`` and ``generate`` with phases
+#: named (``generate schemas templates``) with UC-3.5d (#933): a bare
+#: ``generate`` and the ``vocabs`` phase are refused with ``engine_not_ported``
+#: (:data:`REFUSAL_ENV`), so Python runs them.
 RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
     ("commands",): RustCommand(launch=RUST_CLI),
     ("explain",): RustCommand(launch=RUST_CLI),
@@ -135,6 +138,10 @@ RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
     ("generate", "inflight"): RustCommand(launch=RUST_CLI),
     ("generate", "inflight", "prune"): RustCommand(launch=RUST_CLI),
     ("setup", "ci"): RustCommand(launch=RUST_CLI),
+    ("generate",): RustCommand(launch=RUST_CLI),
+    ("new", "threat"): RustCommand(launch=RUST_CLI, rules=("fresh-uuids",)),
+    ("new", "objective"): RustCommand(launch=RUST_CLI, rules=("fresh-uuids",)),
+    ("new", "rule"): RustCommand(launch=RUST_CLI, rules=("fresh-uuids",)),
 }
 
 

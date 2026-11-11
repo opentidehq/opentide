@@ -1,6 +1,6 @@
 //! The commands that run on this crate (UC-2.4: `info`, `rules unreviewed`;
 //! UC-3.2: `generate exports`; UC-3.5: `validate`, `validate query`, `lint`,
-//! `explain`; UC-3.1c: `deploy --dry-run`).
+//! `explain`; UC-3.1c: `deploy --dry-run`; UC-3.5d: `new`, `generate <phase>`).
 //!
 //! A command reads its arguments and the workspace and returns a
 //! [`Report`]: the JSON envelope's parts, and what the text modes print
@@ -13,6 +13,7 @@ pub mod findings;
 pub mod generate;
 pub mod info;
 pub mod lint;
+pub mod new;
 pub mod rules;
 pub mod setup;
 pub mod validate;

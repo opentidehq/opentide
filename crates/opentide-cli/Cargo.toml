@@ -64,6 +64,8 @@ textwrap = { version = "0.16", default-features = false, features = ["unicode-wi
 toml.workspace = true
 tracing = "0.1"
 unicode-width = "0.2"
+# `new`'s fresh object identifiers.
+uuid = { workspace = true, features = ["v4"] }
 tracing-subscriber = { version = "0.3", default-features = false, features = ["registry", "std"] }
 
 [dev-dependencies]
