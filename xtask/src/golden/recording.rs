@@ -424,6 +424,7 @@ mod tests {
             },
             timeout_secs: 60,
             normalise: Vec::new(),
+            cassette: None,
         }
     }
 

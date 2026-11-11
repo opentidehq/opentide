@@ -1,0 +1,4 @@
+[platform]
+enabled = true
+name = "Microsoft Sentinel"
+# tenants follow

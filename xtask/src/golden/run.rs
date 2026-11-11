@@ -87,10 +87,29 @@ pub fn run_case(case: &Case, ctx: &RunContext) -> Result<Recording> {
         .materialise(&ctx.repo, &ws)
         .with_context(|| format!("materialise fixture `{}`", case.fixture))?;
 
+    // A cassette case's network traffic: the replaying proxy, and its CA
+    // where the case's CA bundle variables point.
+    let proxy = match &case.cassette {
+        Some(name) => Some(cassette_proxy(&ctx.repo, name, &root_path)?),
+        None => None,
+    };
+    let proxy_url = proxy.as_ref().map(opentide_cassette::Proxy::url);
+
     let before = Snapshot::take(&root_path)?;
     let started = SystemTime::now();
-    let (stdout, stderr, exit_code) =
-        execute(case, ctx, &root_path).with_context(|| format!("run case {}", case.id))?;
+    let (stdout, stderr, exit_code) = execute(case, ctx, &root_path, proxy_url.as_deref())
+        .with_context(|| format!("run case {}", case.id))?;
+    if let (Some(proxy), Some(name)) = (&proxy, &case.cassette) {
+        let mismatches = proxy.verify();
+        if !mismatches.is_empty() {
+            let listed: Vec<String> = mismatches.iter().map(ToString::to_string).collect();
+            bail!(
+                "case {}: the requests are not cassette {name}'s (record it again, or fix the client):\n{}",
+                case.id,
+                listed.join("\n")
+            );
+        }
+    }
     let finished = SystemTime::now();
     let after = Snapshot::take(&root_path)?;
     let changes = before.changes(&after);
@@ -111,6 +130,9 @@ pub fn run_case(case: &Case, ctx: &RunContext) -> Result<Recording> {
             .map(|(p, name)| (p, name.as_str())),
     );
     let mut literals = path_literals(&paths);
+    if let Some(url) = &proxy_url {
+        literals.push((url.clone(), case::CASSETTE_PROXY.to_owned()));
+    }
     if let Some(release) = &ctx.kernel_release {
         literals.extend(kernel_literals(release));
     }
@@ -156,10 +178,33 @@ pub(crate) fn path_literals(paths: &[(&PathBuf, &str)]) -> Vec<(String, String)>
     out
 }
 
+/// Starts the proxy that replays cassette `name` for a case under `root`,
+/// its CA written where [`case::CASSETTE_CA`] points.
+pub fn cassette_proxy(repo: &Path, name: &str, root: &Path) -> Result<opentide_cassette::Proxy> {
+    let path = repo.join("tests/cassettes").join(format!("{name}.json"));
+    let text = fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
+    let cassette = opentide_cassette::Cassette::parse(&text)
+        .map_err(|error| anyhow::anyhow!("{}: {error}", path.display()))?;
+    let proxy = opentide_cassette::Proxy::start(
+        opentide_cassette::Mode::Replay { cassette },
+        opentide_cassette::Redaction::default(),
+    )
+    .map_err(|error| anyhow::anyhow!("start the replaying proxy: {error}"))?;
+    let ca = case::CASSETTE_CA.replace(case::TMP, &root.to_string_lossy());
+    fs::write(&ca, proxy.ca_pem()).with_context(|| format!("write {ca}"))?;
+    Ok(proxy)
+}
+
 /// The case's environment with its placeholders filled in.
-fn environment(case: &Case, ctx: &RunContext, root: &Path) -> BTreeMap<String, String> {
+fn environment(
+    case: &Case,
+    ctx: &RunContext,
+    root: &Path,
+    proxy: Option<&str>,
+) -> BTreeMap<String, String> {
     let fill = |value: &str| {
         value
+            .replace(case::CASSETTE_PROXY, proxy.unwrap_or(case::REFUSING_PROXY))
             .replace(case::ENGINE_BIN, &ctx.engine.bin_dir.to_string_lossy())
             .replace(case::WS, &root.join("ws").to_string_lossy())
             .replace(case::HOME, &root.join("home").to_string_lossy())
@@ -171,11 +216,16 @@ fn environment(case: &Case, ctx: &RunContext, root: &Path) -> BTreeMap<String, S
     env
 }
 
-fn execute(case: &Case, ctx: &RunContext, root: &Path) -> Result<(Vec<u8>, Vec<u8>, i32)> {
+fn execute(
+    case: &Case,
+    ctx: &RunContext,
+    root: &Path,
+    proxy: Option<&str>,
+) -> Result<(Vec<u8>, Vec<u8>, i32)> {
     let Some((program, args)) = case.argv.split_first() else {
         bail!("empty argv");
     };
-    let env = environment(case, ctx, root);
+    let env = environment(case, ctx, root, proxy);
     let mut command = if Path::new(SETSID).is_file() {
         let mut c = Command::new(SETSID);
         if case.mode == Mode::Human {

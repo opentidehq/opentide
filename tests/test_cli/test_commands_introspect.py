@@ -310,6 +310,9 @@ _UNDOCUMENTED_ENV = {
     # The Python launcher sets it for the Rust doctor (cli/rust.py): the platform
     # SDKs' import results; never a user's.
     "OPENTIDE_PYTHON_MODULES",
+    # The Python launcher sets it for the Rust setup with MCP (cli/rust.py):
+    # whether `opentide mcp start` can import here; never a user's.
+    "OPENTIDE_MCP_SERVER",
     # An Azure pipeline variable the generated pipeline sets and reads.
     "OPENTIDE_DEPLOY_STARTED",
     # Variables of the generated pipelines, read by their shell steps

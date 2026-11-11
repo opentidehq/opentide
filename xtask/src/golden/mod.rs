@@ -150,16 +150,16 @@ fn parse(args: &[String]) -> Result<Command> {
 }
 
 /// The repository's golden directory and the places around it.
-struct Layout {
-    repo: PathBuf,
-    golden: PathBuf,
-    target: PathBuf,
+pub(crate) struct Layout {
+    pub(crate) repo: PathBuf,
+    pub(crate) golden: PathBuf,
+    pub(crate) target: PathBuf,
     /// The size budget of the recordings (`coverage::BUDGET_BYTES`; the tests set their own).
     budget_bytes: u64,
 }
 
 impl Layout {
-    fn find() -> Result<Layout> {
+    pub(crate) fn find() -> Result<Layout> {
         let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
         let mut command = std::process::Command::new(&cargo);
         command.args(["metadata", "--format-version", "1", "--no-deps"]);

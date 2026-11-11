@@ -105,13 +105,17 @@ rust_jobs() {
   # exit, an interrupted push included.
   trap 'python3 scripts/engine/release.py vendor --clean >/dev/null' EXIT
   python3 scripts/engine/release.py vendor
-  cargo package --locked --workspace --exclude opentide-native --exclude opentide-schema --exclude opentide-workspace --exclude opentide-compile --exclude opentide-lsp --exclude opentide-wasm --allow-dirty --quiet
+  cargo package --locked --workspace --exclude opentide-native --exclude xtask --exclude opentide-compare --exclude opentide-schema --exclude opentide-workspace --exclude opentide-compile --exclude opentide-cli --exclude opentide-lsp --exclude opentide-wasm --exclude opentide-connectors --allow-dirty --quiet
   # opentide-schema cannot be packaged until its derive is published, nor
   # opentide-workspace and opentide-compile, which build on it, nor the
   # language server and its WebAssembly build, which check with them
-  # (UC-2.6): scan their sources.
+  # (UC-2.6), nor the connectors, which read tenants through opentide-workspace
+  # (UC-4.1), nor the CLI and the compare harness, which build on them, as in
+  # ci.yml's engine-package job: scan their sources (the CLI's as its package
+  # would hold them).
   bash scripts/engine/license-scan.sh target/package/*.crate
-  bash scripts/engine/license-scan.sh crates/opentide-schema crates/opentide-schema-derive crates/opentide-workspace crates/opentide-compile crates/opentide-lsp crates/opentide-wasm
+  bash scripts/engine/license-scan.sh crates/opentide-schema crates/opentide-schema-derive crates/opentide-compare crates/opentide-workspace crates/opentide-compile crates/opentide-lsp crates/opentide-wasm crates/opentide-connectors
+  cargo package --list --locked --allow-dirty -p opentide-cli | (cd crates/opentide-cli && while IFS= read -r f; do if [ -f "$f" ]; then printf '%s\0' "$f"; fi; done | xargs -0 bash ../../scripts/engine/license-scan.sh)
   python3 scripts/engine/release.py vendor --clean
   trap - EXIT
 

@@ -48,7 +48,11 @@ jiff.workspace = true
 form_urlencoded = "1.2"
 # `doctor` (UC-3.5c): VS Code's and the MCP hosts' JSON with comments and
 # trailing commas, as VS Code reads them.
-jsonc-parser = { version = "0.26", features = ["serde"] }
+jsonc-parser = { version = "0.26", features = ["cst", "serde"] }
+# `setup`'s paths: a path shown relative to another (`os.path.relpath`), and
+# a path resolved where it exists and kept where it does not (`Path.resolve()`).
+pathdiff = "0.2"
+soft-canonicalize = { version = "0.5", default-features = false, features = ["dunce"] }
 # Percent-encoded paths in links and SARIF URIs.
 percent-encoding = "2.3"
 # `opentide explain <code>` in human mode: the page's Markdown, parsed for the terminal.
@@ -77,6 +81,12 @@ tracing-subscriber = { version = "0.3", default-features = false, features = ["r
 # the frames go to).
 rmcp = { version = "3.9", default-features = false, features = ["server"] }
 tokio = { version = "1.48", default-features = false, features = ["rt", "io-std", "io-util", "fs"] }
+# `setup skills` (UC-4.1, #831): the opentidehq/skills catalogue, fetched with
+# the connectors' HTTP client, through the proxy and CA bundle the
+# environment names.
+opentide-connectors.workspace = true
+reqwest.workspace = true
+tokio-util = { workspace = true, features = ["rt"] }
 
 [target.'cfg(unix)'.dependencies]
 # `mcp start` points descriptor 1 at stderr while it serves, so nothing but a
@@ -87,6 +97,8 @@ rustix = { version = "1.1", default-features = false, features = ["std", "stdio"
 signal-hook = { version = "0.3", default-features = false, features = ["iterator"] }
 
 [dev-dependencies]
+# The goldens' recorded HTTP (UC-4.1): the replaying proxy of a cassette case.
+opentide-cassette.workspace = true
 # The goldens' normalisation, for the generate cases (tests/generate_goldens.rs).
 opentide-compare.workspace = true
 tempfile = "3"

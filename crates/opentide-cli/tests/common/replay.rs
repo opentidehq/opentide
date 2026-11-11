@@ -60,6 +60,7 @@ pub const FIXTURES: &[&str] = &[
     "tide-corpus",
     "tide-corpus-typo",
     "vscode",
+    "setup-merge",
     "vscode-docs-folder",
 ];
 
@@ -132,6 +133,7 @@ pub fn fixture(name: &str, ws: &Path) {
             }
         }
         "vscode" => copy_tree(&repo().join("tests/golden/fixtures/vscode-workspace"), ws),
+        "setup-merge" => copy_tree(&repo().join("tests/golden/fixtures/setup-merge"), ws),
         "vscode-docs-folder" => {
             fixture("vscode", ws);
             let path = ws.join(".opentide/configurations/paths.toml");
@@ -224,7 +226,7 @@ pub fn recorded_files(dir: &Path, outcome: &toml::Table) -> BTreeMap<String, Fil
                     Some(blob) => {
                         std::fs::read(repo().join("tests/golden/blobs").join(blob)).unwrap()
                     }
-                    None => std::fs::read(dir.join("files").join(path)).unwrap(),
+                    None => std::fs::read(dir.join("files").join(escape(path))).unwrap(),
                 },
             },
             other => panic!("{path}: a recorded {other:?} this test does not read"),
@@ -232,6 +234,22 @@ pub fn recorded_files(dir: &Path, outcome: &toml::Table) -> BTreeMap<String, Fil
         out.insert(path.to_owned(), state);
     }
     out
+}
+
+/// A recorded file's path under `files/`, as `cargo xtask golden record`
+/// escapes it (`xtask/src/golden/recording.rs` `escape`): a component that
+/// starts with `.git` or `~` gets a `~` before it. The other escapes (`%XX`,
+/// Windows' reserved names) name no file the replayed commands write.
+fn escape(path: &str) -> PathBuf {
+    path.split('/')
+        .map(|part| {
+            if part.starts_with(".git") || part.starts_with('~') {
+                format!("~{part}")
+            } else {
+                part.to_owned()
+            }
+        })
+        .collect()
 }
 
 /// The ledger, as `cargo xtask golden check` reads it.
@@ -390,6 +408,28 @@ pub fn replay(id: &str, dir: &Path, ledger: &Ledger, usage: &mut Usage) -> Vec<S
     // Python then runs alone, and there is nothing to compare.
     let refusal_dir = tempfile::tempdir().unwrap();
     let refusal = refusal_dir.path().join("refusal");
+    // A cassette case (UC-4.1): the network is the replaying proxy, its CA
+    // where the case's CA bundle variables point.
+    let proxy = case
+        .get("cassette")
+        .and_then(|name| name.as_str())
+        .map(|name| {
+            let text = std::fs::read_to_string(repo().join(format!("tests/cassettes/{name}.json")))
+                .unwrap();
+            let proxy = opentide_cassette::Proxy::start(
+                opentide_cassette::Mode::Replay {
+                    cassette: opentide_cassette::Cassette::parse(&text).unwrap(),
+                },
+                opentide_cassette::Redaction::default(),
+            )
+            .unwrap();
+            std::fs::write(tmp.join("cassette-ca.pem"), proxy.ca_pem()).unwrap();
+            proxy
+        });
+    let proxy_url = proxy.as_ref().map_or_else(
+        || "http://127.0.0.1:9".to_owned(),
+        opentide_cassette::Proxy::url,
+    );
     let env = Env::from_pairs(
         case["env"]
             .as_table()
@@ -399,6 +439,7 @@ pub fn replay(id: &str, dir: &Path, ledger: &Ledger, usage: &mut Usage) -> Vec<S
                 let value = value
                     .as_str()
                     .unwrap()
+                    .replace("<CASSETTE_PROXY>", &proxy_url)
                     .replace("<HOME>", &home.display().to_string())
                     .replace("<TMP>", &tmp.display().to_string())
                     .replace("<WS>", &ws.display().to_string());
@@ -488,6 +529,11 @@ pub fn replay(id: &str, dir: &Path, ledger: &Ledger, usage: &mut Usage) -> Vec<S
     let stdout = normaliser.text(&String::from_utf8(out).unwrap());
     let stderr = normaliser.text(&String::from_utf8(stderr.0.lock().unwrap().clone()).unwrap());
     let mut problems = Vec::new();
+    if let Some(proxy) = &proxy {
+        for mismatch in proxy.verify() {
+            problems.push(format!("{id}: not the cassette's requests: {mismatch}"));
+        }
+    }
     // `generate` prints its checklist once the work is done: no live display.
     if mode == "human" && id.starts_with("generate") && stderr.contains("\x1b[?25l") {
         problems.push(format!(

@@ -38,7 +38,9 @@ cargo xtask golden lock                         # rewrite oracle-requirements.tx
    the recordings outgrow their budget.
 7. **An approved difference is as narrow as the change**: an entry in `APPROVED_DIFFS.toml`
    (UC-0.7) names one command, a case glob and a target. A text rule is one whole line on each
-   side, approved where the oracle and candidate lines match it at the same line number; a lines
+   side, approved where the oracle and candidate lines match it at the same line number (its
+   candidate may write `<SHA256>` once, for any digest there, where the oracle's line is the same
+   with a digest in its place: a digest over the installed version, which every build changes); a lines
    rule is a block of consecutive whole lines on each side, of any length, approved where the
    candidate has its block at the place the oracle has its own (a row a port adds or drops;
    `(absent)` on the candidate's side where it writes no line there, as in a stream it leaves
@@ -94,7 +96,13 @@ in an Agent Plugin root that names no workspace. The environment is exactly the 
 directory (cases live under `/tmp`, whatever `TMPDIR` says, so absolute paths have one length), `TZ=UTC`, `LANG=C.UTF-8`, `PYTHONHASHSEED=0`, git without system or user configuration.
 Network traffic goes to a proxy on `127.0.0.1:9`, which refuses it: tenant-contacting paths
 (`deploy`, `query`, `share`, `validate query --live`, `generate extract`) are recorded as their
-failure without tenants; their success paths are UC-4.1's recorded HTTP cassettes. On Linux each
+failure without tenants; their success paths are UC-4.1's recorded HTTP cassettes. A case with
+`cassette = "<name>"` in `cases.toml` is served from `tests/cassettes/<name>.json` instead: its
+proxy variables are `<CASSETTE_PROXY>`, a replaying proxy started for the case, and `SSL_CERT_FILE`,
+`REQUESTS_CA_BUNDLE` and `CURL_CA_BUNDLE` name that proxy's CA (`<TMP>/cassette-ca.pem`). The run
+fails unless its requests are the cassette's, byte for byte and in order (a compare run sends them
+twice: once per implementation). Cassettes are recorded from the oracle with `cargo xtask cassettes
+record <name>` and checked with `cargo xtask cassettes check` (`crates/opentide-cassette/AGENTS.md`). On Linux each
 case runs in a session of its own (`setsid`), so it never reaches the terminal of whoever records.
 
 The arguments come from the examples of `opentide --json commands` and `docs/cli/`, the error cases
@@ -130,6 +138,7 @@ the same with `--json` or `AI_AGENT` set; a terminal adds nothing but the echo o
 | `vscode-ambiguous` | `vscode` with one declared edit: `Account`, defined under two stages, which `migrate vocab-scope` leaves for a person (exit 2), beside `Process`, which it rewrites |
 | `heavy-small` | UC-0.6's generator, seed 1: 30 threats, 30 objectives, 50 rules (`cargo xtask corpus generate`), generated once per run and copied per case, never committed |
 | `fault` | UC-0.6's fault workspace (`cargo xtask corpus faults`), likewise generated; its outputs are recorded as they are, not asserted against the fault manifest |
+| `setup-merge` | [`fixtures/setup-merge/`](fixtures/setup-merge/): the files `setup` merges into, a `.vscode/mcp.json` with a byte-order mark, comments and a trailing comma, and a `sentinel.toml` with `enabled = false` |
 | `empty` | a workspace with an empty `.opentide/` |
 | `none` | no workspace: an empty directory |
 

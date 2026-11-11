@@ -40,7 +40,7 @@ edits = [{ path = "objects/objectives/detect-lsass-access.yaml", find = "\n  tlp
 [fixtures.vscode-docs-folder]
 kind = "copy"
 source = "tests/golden/fixtures/vscode-workspace"
-about = "vscode with the legacy `[paths.core]` `docs_folder` set and no documentation.toml `output`, which both engines refuse in the `generate docs` docs step (#936)"
+about = "vscode with the legacy `[paths.core]` `docs_folder` set and no documentation.toml `output`: a paths.toml both engines refuse in the step of every `generate` command (#936, #946), and which `setup ci` does not read"
 edits = [{ path = ".opentide/configurations/paths.toml", find = "[paths.objects]\n", replace = "[paths.core]\ndocs_folder = \"site\"\n\n[paths.objects]\n" }]
 
 [fixtures.vscode]
@@ -58,6 +58,11 @@ about = "UC-0.6's heavy workspace generator, seed 1: 30 threats, 30 objectives, 
 kind = "generated"
 argv = ["cargo", "xtask", "corpus", "faults", "--out", "{out}"]
 about = "UC-0.6's fault workspace: seed 1, 120 threats, 60 objectives, 600 rules, every fault kind not marked isolated applied; generated at record and check time, never committed. Its outputs are recorded as they are, not asserted against the fault manifest"
+
+[fixtures.setup-merge]
+kind = "copy"
+source = "tests/golden/fixtures/setup-merge"
+about = "a workspace whose files `setup` merges into: a .vscode/mcp.json with a byte-order mark, comments and a trailing comma, and a sentinel.toml with `enabled = false`"
 
 [fixtures.empty]
 kind = "skeleton"
@@ -1322,6 +1327,15 @@ variant = "typo-choice"
 args = ["setup", "ci", "githb", "--yes"]
 fixtures = ["tide-corpus"]
 
+# --promotion-target reads the statuses from the merged configuration,
+# unchecked: a paths.toml its model refuses (legacy [paths.core]) does not
+# stop it (#957).
+[[case]]
+command = "setup ci"
+variant = "promotion-target"
+args = ["setup", "ci", "github", "--promotion-target", "STAGING", "--yes"]
+fixtures = ["vscode-docs-folder"]
+
 [[case]]
 command = "setup env"
 variant = "example"
@@ -1345,6 +1359,20 @@ command = "setup mcp"
 variant = "cursor-vscode"
 args = ["setup", "mcp", "--cursor", "--vscode", "--yes"]
 fixtures = ["tide-corpus"]
+
+# An existing configuration with a byte-order mark and comments, merged into (#743).
+[[case]]
+command = "setup mcp"
+variant = "merge"
+args = ["setup", "mcp", "--vscode", "--yes"]
+fixtures = ["setup-merge"]
+
+# An existing platform file, enabled in place.
+[[case]]
+command = "setup platforms"
+variant = "merge"
+args = ["setup", "platforms", "--sentinel", "--yes"]
+fixtures = ["setup-merge"]
 
 [[case]]
 command = "setup vscode"
@@ -1381,6 +1409,53 @@ command = "setup skills show"
 variant = "unknown"
 args = ["setup", "skills", "show", "no-such-skill"]
 fixtures = ["tide-corpus"]
+
+# The skills catalogue, served from a recorded cassette (UC-4.1, #831):
+# tests/cassettes/skills/manifest.json, recorded from the oracle with `cargo
+# xtask cassettes record skills/manifest`. The cases above record the same
+# commands with the network refused.
+
+[[case]]
+command = "setup skills discover"
+variant = "catalogue"
+args = ["setup", "skills", "discover"]
+fixtures = ["none"]
+cassette = "skills/manifest"
+
+[[case]]
+command = "setup skills discover"
+variant = "catalogue-query"
+args = ["setup", "skills", "discover", "--query", "rule"]
+fixtures = ["tide-corpus"]
+cassette = "skills/manifest"
+
+[[case]]
+command = "setup skills discover"
+variant = "catalogue-installed"
+args = ["setup", "skills", "discover", "--installed"]
+fixtures = ["tide-corpus"]
+cassette = "skills/manifest"
+
+[[case]]
+command = "setup skills show"
+variant = "catalogue"
+args = ["setup", "skills", "show", "opentide-detection-rule"]
+fixtures = ["tide-corpus"]
+cassette = "skills/manifest"
+
+[[case]]
+command = "setup skills show"
+variant = "catalogue-remote"
+args = ["setup", "skills", "show", "mitre-attack"]
+fixtures = ["none"]
+cassette = "skills/manifest"
+
+[[case]]
+command = "setup skills show"
+variant = "catalogue-unknown"
+args = ["setup", "skills", "show", "no-such-skill"]
+fixtures = ["none"]
+cassette = "skills/manifest"
 
 # ---- doctor, migrate, tui, explain, commands ----
 
@@ -1601,6 +1676,39 @@ fixtures = ["tide-corpus"]
 command = "generate docs"
 variant = "docs-folder"
 args = ["generate", "docs"]
+fixtures = ["vscode-docs-folder"]
+
+# The same configuration, which neither engine loads, fails the step of
+# every other generate command (#946). `setup ci` writes its pipeline all
+# the same, with the default rules folder.
+[[case]]
+command = "generate exports"
+variant = "config-refused"
+args = ["generate", "exports"]
+fixtures = ["vscode-docs-folder"]
+
+[[case]]
+command = "generate explorer"
+variant = "config-refused"
+args = ["generate", "explorer"]
+fixtures = ["vscode-docs-folder"]
+
+[[case]]
+command = "generate inflight"
+variant = "config-refused"
+args = ["generate", "inflight"]
+fixtures = ["vscode-docs-folder"]
+
+[[case]]
+command = "generate inflight prune"
+variant = "config-refused"
+args = ["generate", "inflight", "prune"]
+fixtures = ["vscode-docs-folder"]
+
+[[case]]
+command = "setup ci"
+variant = "config-refused"
+args = ["setup", "ci", "github", "--yes"]
 fixtures = ["vscode-docs-folder"]
 
 [[case]]
