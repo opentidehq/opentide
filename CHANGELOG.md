@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+## [0.25.0] — 2026-11-11
+
+Bitdefender GravityZone is a tenth deploy platform, for custom detection and YARA rules. HarfangLab rules take a whole YARA signature, and `validate`, `lint`, the editor and `opentide tui` check YARA as libyara 4.5 compiles it.
+
 ### Upgrade
 
 - If a HarfangLab block sets both `sigma` and `yara`, split it into two rules, one per kind, then run `opentide validate`.
@@ -1624,7 +1628,8 @@ export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate --strict
 ```
 
-[Unreleased]: https://github.com/opentidehq/opentide/compare/v0.24.1...HEAD
+[Unreleased]: https://github.com/opentidehq/opentide/compare/v0.25.0...HEAD
+[0.25.0]: https://github.com/opentidehq/opentide/releases/tag/v0.25.0
 [0.24.1]: https://github.com/opentidehq/opentide/releases/tag/v0.24.1
 [0.24.0]: https://github.com/opentidehq/opentide/releases/tag/v0.24.0
 [0.23.0]: https://github.com/opentidehq/opentide/releases/tag/v0.23.0
