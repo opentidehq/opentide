@@ -27,8 +27,8 @@ pyo3 = { version = "0.30.1", features = ["abi3-py310", "generate-import-lib"] }
 # The Exabeam Query Language and the Exabeam block checks
 # (opentidehq/language-server, branch claude/magical-volta-t2z24d), on top of
 # 0.13.0, ahead of the release that ships them.
-opentide-analysis = { git = "https://github.com/opentidehq/language-server", rev = "687b8035e12d71a2816f6c13c13976f0d6b7e72e" }
-opentide-lsp = { git = "https://github.com/opentidehq/language-server", rev = "687b8035e12d71a2816f6c13c13976f0d6b7e72e" }
+opentide-analysis = { git = "https://github.com/opentidehq/language-server", rev = "fab76340240f42a16e9016d8a68bb0ad76090579" }
+opentide-lsp = { git = "https://github.com/opentidehq/language-server", rev = "fab76340240f42a16e9016d8a68bb0ad76090579" }
 
 [build-dependencies]
 pyo3-build-config = "0.30.1"
