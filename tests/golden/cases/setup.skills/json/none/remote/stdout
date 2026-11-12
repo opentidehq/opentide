@@ -1,0 +1,1 @@
+{"path":"<WS>","skills":["sample-skill"],"files":[".agents/skills/sample-skill/SKILL.md",".agents/skills/sample-skill/references/notes.md","CLAUDE.md",".claude/skills/sample-skill/SKILL.md","AGENTS.md"],"ok":true,"status":"completed","message":"Wrote 5 files","schema_version":1,"command":"setup skills","duration_ms":0,"exit_code":0,"summary":{},"next_actions":[],"failure":null}

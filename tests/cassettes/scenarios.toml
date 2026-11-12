@@ -31,6 +31,23 @@ client = ["{oracle}/opentide", "--json", "setup", "skills", "discover"]
 cwd = "tmp"
 
 [[scenario]]
+name = "skills/install"
+description = "`setup skills --install` from a stand-in opentidehq/skills repository (UC-4.4d): the catalogue, the repository's file list from GitHub's trees API, then each file of a skill with a reference file."
+client = ["{oracle}/opentide", "--json", "setup", "skills", "--generic", "--install", "sample-skill", "--yes"]
+tenant = ["{python}", "tests/cassettes/skills/tenant.py"]
+routes = ["raw.githubusercontent.com", "api.github.com"]
+cwd = "tmp"
+
+[[scenario]]
+name = "skills/broken"
+description = "`setup skills --install` of a skill one of whose files answers 404 (UC-4.4d): the failed download, which writes nothing."
+client = ["{oracle}/opentide", "--json", "setup", "skills", "--generic", "--install", "broken-skill", "--yes"]
+tenant = ["{python}", "tests/cassettes/skills/tenant.py"]
+routes = ["raw.githubusercontent.com", "api.github.com"]
+cwd = "tmp"
+exit = 1
+
+[[scenario]]
 name = "crowdstrike/deploy"
 description = "CrowdStrike's deploy client: the OAuth2 token, then create, update, disable and delete a correlation rule, and a create, an update and a delete the tenant refuses."
 client = ["{python}", "tests/cassettes/crowdstrike/client.py", "deploy"]

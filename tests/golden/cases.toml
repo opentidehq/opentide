@@ -64,6 +64,11 @@ kind = "copy"
 source = "tests/golden/fixtures/setup-merge"
 about = "a workspace whose files `setup` merges into: a .vscode/mcp.json with a byte-order mark, comments and a trailing comma, a .vscode/settings.json with a comment and the yaml.schemas mapping earlier `setup vscode` releases wrote, and a sentinel.toml with `enabled = false`"
 
+[fixtures.skills-merge]
+kind = "copy"
+source = "tests/golden/fixtures/skills-merge"
+about = "a repository with its own agent files, which `setup skills` installs over (UC-4.4d): a CLAUDE.md with a byte-order mark and CRLF line endings, an AGENTS.md and Copilot instructions of its own, a .claude/settings.json with a comment and another plugin, a harness copy holding the team's notes beside an older SKILL.md, and an .agents/skills tree holding a file an older version shipped"
+
 [fixtures.tenants]
 kind = "copy"
 source = "tests/golden/fixtures/tenants"
@@ -2013,6 +2018,105 @@ variant = "catalogue-unknown"
 args = ["setup", "skills", "show", "no-such-skill"]
 fixtures = ["none"]
 cassette = "skills/manifest"
+
+# Installing skills (UC-4.4d, #834): the starter skills ship with opentide, so
+# a fresh install reads only the catalogue (skills/manifest); --install of a
+# remote skill reads the stand-in repository of tests/cassettes/skills/tenant.py
+# (skills/install, skills/broken); --plugin with Claude Code alone reads
+# nothing. A case without a cassette has the network refused.
+
+[[case]]
+command = "setup skills"
+variant = "fresh"
+args = ["setup", "skills", "--cursor", "--claude-code", "--github-copilot", "--name", "Detections", "--yes"]
+fixtures = ["none"]
+cassette = "skills/manifest"
+
+[[case]]
+command = "setup skills"
+variant = "merge"
+args = ["setup", "skills", "--cursor", "--claude-code", "--generic", "--github-copilot", "--yes"]
+fixtures = ["skills-merge"]
+cassette = "skills/manifest"
+
+[[case]]
+command = "setup skills"
+variant = "merge-plan"
+args = ["setup", "skills", "--cursor", "--claude-code", "--plan"]
+fixtures = ["skills-merge"]
+cassette = "skills/manifest"
+
+[[case]]
+command = "setup skills"
+variant = "plugin"
+args = ["setup", "skills", "--plugin", "--claude-code", "--yes"]
+fixtures = ["none", "skills-merge"]
+
+[[case]]
+command = "setup skills"
+variant = "plugin-offline"
+args = ["setup", "skills", "--plugin", "--generic", "--yes"]
+fixtures = ["none"]
+
+[[case]]
+command = "setup skills"
+variant = "remote"
+args = ["setup", "skills", "--generic", "--claude-code", "--install", "sample-skill", "--yes"]
+fixtures = ["none"]
+cassette = "skills/install"
+
+[[case]]
+command = "setup skills"
+variant = "remote-plan"
+args = ["setup", "skills", "--generic", "--install", "sample-skill", "--plan"]
+fixtures = ["none"]
+cassette = "skills/install"
+
+[[case]]
+command = "setup skills"
+variant = "broken"
+args = ["setup", "skills", "--generic", "--install", "broken-skill", "--yes"]
+fixtures = ["none"]
+cassette = "skills/broken"
+
+[[case]]
+command = "setup skills"
+variant = "unknown"
+args = ["setup", "skills", "--generic", "--install", "no-such-skill", "--yes"]
+fixtures = ["none"]
+cassette = "skills/manifest"
+
+[[case]]
+command = "setup skills"
+variant = "no-target"
+args = ["setup", "skills", "--yes"]
+fixtures = ["none"]
+
+[[case]]
+command = "setup"
+variant = "skills"
+args = ["setup", "--skills", "generic", "--skills", "cursor", "--yes"]
+fixtures = ["none"]
+cassette = "skills/manifest"
+
+[[case]]
+command = "setup"
+variant = "skills-plan"
+args = ["setup", "--skills", "claude-code", "--plan"]
+fixtures = ["skills-merge"]
+cassette = "skills/manifest"
+
+[[case]]
+command = "setup"
+variant = "plugin"
+args = ["setup", "--skills", "claude-code", "--plugin", "--yes"]
+fixtures = ["skills-merge"]
+
+[[case]]
+command = "setup"
+variant = "skills-offline"
+args = ["setup", "--skills", "generic", "--plugin", "--yes"]
+fixtures = ["none"]
 
 # ---- doctor, migrate, tui, explain, commands ----
 

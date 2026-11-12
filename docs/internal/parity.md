@@ -14,15 +14,15 @@ The Python CLI at the frozen tag is the oracle ([plan §5](https://github.com/op
 | | |
 |---|---:|
 | Commands | 59 |
-| Commands with a Rust implementation | 41 |
+| Commands with a Rust implementation | 42 |
 | Commands flipped to Rust | 0 |
-| Recordings (command × corpus × mode) | 711 |
-| … no Rust yet | 140 (19.6%) |
+| Recordings (command × corpus × mode) | 719 |
+| … no Rust yet | 132 (18.3%) |
 | … compare passing | 0 (0.0%) |
 | … compare failing | 0 (0.0%) |
-| … compare not run | 571 (80.3%) |
+| … compare not run | 587 (81.6%) |
 | … flipped | 0 (0.0%) |
-| Approved diffs (`tests/golden/APPROVED_DIFFS.toml`) | 941 |
+| Approved diffs (`tests/golden/APPROVED_DIFFS.toml`) | 955 |
 | Diagnostic codes with a fault kind | 163 of 175 (93.1%) |
 | … with no fault kind, evidence recorded | 12 |
 | … with neither (missing) | 0 |
@@ -403,12 +403,13 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide setup`
 
-6 approved diff(s).
+12 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
 | empty | compare not run | compare not run | compare not run | compare not run |
 | none | compare not run | compare not run | compare not run | compare not run |
+| skills-merge | compare not run | compare not run | compare not run | compare not run |
 | tide-corpus | compare not run | compare not run | compare not run | compare not run |
 
 ### `opentide setup ci`
@@ -464,10 +465,13 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide setup skills`
 
+8 approved diff(s).
+
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
-| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| none | compare not run | compare not run | compare not run | compare not run |
+| skills-merge | compare not run | compare not run | compare not run | compare not run |
+| tide-corpus | compare not run | compare not run | compare not run | compare not run |
 
 ### `opentide setup skills discover`
 

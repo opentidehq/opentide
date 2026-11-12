@@ -621,17 +621,22 @@ mod tests {
                 },
             ),
             (
-                "setup".to_owned(),
+                "example".to_owned(),
                 super::Coverage {
-                    refuses: vec!["--skills".to_owned()],
+                    refuses: vec!["--unported".to_owned()],
                     ..super::Coverage::default()
                 },
             ),
         ]);
         assert!(!super::covers(
             &table,
-            "setup",
-            &argv(&["opentide", "setup", "--skills"])
+            "example",
+            &argv(&["opentide", "example", "--unported"])
+        ));
+        assert!(super::covers(
+            &table,
+            "example",
+            &argv(&["opentide", "example", "--", "--unported"])
         ));
         assert!(super::covers(
             &table,

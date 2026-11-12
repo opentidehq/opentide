@@ -1,0 +1,2 @@
+error: Skills manifest remote unavailable · source: opentidehq/skills · ref: main
+warning: Agent skills skipped: Could not fetch skills catalogue from opentidehq/skills@main. Check network access and that the skills repository is publicly reachable.

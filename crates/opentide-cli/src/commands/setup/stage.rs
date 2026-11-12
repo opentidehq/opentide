@@ -44,6 +44,11 @@ pub struct Stage {
     pending: IndexMap<PathBuf, ()>,
     /// What existed before the current step: staged files, by path.
     before: IndexMap<PathBuf, bool>,
+    /// Links to remove before anything is written, so nothing is written
+    /// through them ([`Stage::unlink`]).
+    links: Vec<PathBuf>,
+    /// Folders to remove once the files are written, when empty then.
+    rmdirs: BTreeSet<PathBuf>,
 }
 
 impl Stage {
@@ -191,6 +196,32 @@ impl Stage {
         }
     }
 
+    /// Removes the link at `path` (to a file or a folder), not what it
+    /// points to; a later write to `path` writes a file of its own there.
+    /// Nothing when `path` is not a link.
+    pub fn unlink(&mut self, path: &Path) {
+        if !path.is_symlink() || self.links.iter().any(|link| link == path) {
+            return;
+        }
+        self.note(path);
+        self.links.push(path.to_path_buf());
+        self.files.insert(path.to_path_buf(), Staged::Removed);
+    }
+
+    /// Removes folder `path` on commit, once the files staged in or out of
+    /// it are written: what a step that replaces a tree leaves of the old
+    /// one. A folder that still holds a file then stays.
+    pub fn remove_dir(&mut self, path: &Path) {
+        if path.is_dir() && !path.is_symlink() {
+            self.rmdirs.insert(path.to_path_buf());
+        }
+    }
+
+    /// Whether `path` is a link the stage removes on commit.
+    pub fn unlinked(&self, path: &Path) -> bool {
+        self.links.iter().any(|link| link == path)
+    }
+
     /// The files written or removed since the last call, sorted by path as
     /// the plan lists them, and the start of the next step.
     pub fn step(&mut self) -> Vec<Change> {
@@ -226,6 +257,9 @@ impl Stage {
     ///
     /// A folder or a file cannot be written: the path and the error.
     pub fn commit(&mut self) -> Result<(), String> {
+        for link in std::mem::take(&mut self.links) {
+            remove_link(&link).map_err(|error| format!("{}: {error}", link.display()))?;
+        }
         for dir in std::mem::take(&mut self.dirs) {
             std::fs::create_dir_all(&dir).map_err(|error| format!("{}: {error}", dir.display()))?;
         }
@@ -250,9 +284,31 @@ impl Stage {
                 },
             }
         }
+        // Deepest first: a folder's subfolders go before it.
+        for dir in std::mem::take(&mut self.rmdirs).into_iter().rev() {
+            match std::fs::remove_dir(&dir) {
+                Ok(()) => {}
+                Err(_) if std::fs::read_dir(&dir).is_ok_and(|mut e| e.next().is_some()) => {}
+                Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+                Err(error) => return Err(format!("{}: {error}", dir.display())),
+            }
+        }
         self.pending.clear();
         self.before.clear();
         Ok(())
+    }
+}
+
+/// Removes the link at `path` itself; nothing when it is gone already.
+fn remove_link(path: &Path) -> io::Result<()> {
+    if !path.is_symlink() {
+        return Ok(());
+    }
+    match std::fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        // A link to a folder on Windows is a directory entry.
+        Err(_) if cfg!(windows) => std::fs::remove_dir(path),
+        Err(error) => Err(error),
     }
 }
 

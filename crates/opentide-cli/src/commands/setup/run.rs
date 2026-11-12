@@ -7,6 +7,7 @@
 use std::path::{Path, PathBuf};
 
 use super::files::{self, StepResult, strings};
+use super::skills::{self as install, Catalogue};
 use super::stage::Stage;
 use super::{CiArgs, Context, bad_parameter, confirm_write, needs_input_for, resolved};
 use crate::commands::{Block, Report};
@@ -225,17 +226,8 @@ enum Wizard {
 /// a terminal, the wizard ([`super::wizard`]), its questions asked with
 /// inquire.
 fn wizard(command: &str, cx: &Context<'_>, flags: &str, kind: Wizard, shown: &Path) -> Report {
-    let scripted = format!("Run 'opentide {command}' with --yes and explicit flags ({flags}).");
-    if cx.mode == Mode::Json {
-        return *needs_input_for(
-            command,
-            format!(
-                "--json cannot drive the interactive wizard. {scripted} Or drop --json to use the wizard."
-            ),
-        );
-    }
-    if let Some(reason) = cannot_prompt(cx) {
-        return *needs_input_for(command, format!("{reason} {scripted}"));
+    if let Some(refused) = wizard_refusal(command, cx, flags, flags) {
+        return refused;
     }
     let mut prompter = super::wizard::Inquire::new(cx.terminal.stderr.colour);
     let mut stdout = std::io::stdout();
@@ -246,6 +238,30 @@ fn wizard(command: &str, cx: &Context<'_>, flags: &str, kind: Wizard, shown: &Pa
         version: cx.version,
     };
     interactive(command, kind, &mut prompter, &mut screen, shown, cx)
+}
+
+/// The refusal of a wizard nobody can answer here, naming the flags that
+/// answer it: `json_flags` under `--json` (`_require_scripted_for_json`),
+/// `flags` elsewhere (`_refuse_wizard`).
+fn wizard_refusal(
+    command: &str,
+    cx: &Context<'_>,
+    json_flags: &str,
+    flags: &str,
+) -> Option<Report> {
+    let scripted =
+        |flags: &str| format!("Run 'opentide {command}' with --yes and explicit flags ({flags}).");
+    if cx.mode == Mode::Json {
+        return Some(*needs_input_for(
+            command,
+            format!(
+                "--json cannot drive the interactive wizard. {} Or drop --json to use the wizard.",
+                scripted(json_flags)
+            ),
+        ));
+    }
+    cannot_prompt(cx)
+        .map(|reason| *needs_input_for(command, format!("{reason} {}", scripted(flags))))
 }
 
 /// Runs the wizard `kind` with `prompter`, then the steps its answers ask
@@ -272,37 +288,69 @@ fn interactive(
         Wizard::Setup => {
             let promoting = promotion_enabled(&root, cx);
             let shown_text = shown.to_string_lossy().replace('\\', "/");
-            match wizard::setup(prompter, screen, &shown_text, &root, promoting) {
-                Err(stop) => stopped(stop),
-                Ok(Gathered::Declined(warnings)) => {
-                    let mut report = Report::completed(
-                        command,
-                        vec![("steps".to_owned(), Json::Array(Vec::new()))],
-                    );
-                    report.outcome.status = "skipped".into();
-                    "Setup cancelled; no files were written"
-                        .clone_into(&mut report.outcome.message);
-                    report.warnings = warnings;
-                    report
-                }
-                Ok(Gathered::Apply(answers)) => {
-                    let args = GroupArgs {
-                        path: shown_text,
-                        repo: answers.repo.clone(),
-                        ci: answers.ci.clone(),
-                        staging: answers.staging,
-                        inflight: answers.inflight,
-                        sharing: answers.sharing,
-                        explorer_pages: answers.explorer_pages,
-                        promotion: answers.promotion,
-                        python_version: "3.12".to_owned(),
-                        mcp: answers.mcp.clone(),
-                        ..GroupArgs::default()
+            with_catalogue(cx, |catalogue| {
+                let mut preflight = |targets: &[String]| {
+                    let options = install::Options {
+                        targets: targets
+                            .iter()
+                            .filter_map(|key| install::Target::parse(key))
+                            .collect(),
+                        ..install::Options::default()
                     };
-                    let run_ci = args.ci.is_some();
-                    execute(&args, &root, answers.warnings, true, run_ci, None, cx)
+                    match install::unavailable(&options, catalogue) {
+                        Ok(slugs) => Ok(slugs),
+                        Err(error) => Err(error.message().to_owned()),
+                    }
+                };
+                match wizard::setup(
+                    prompter,
+                    screen,
+                    &shown_text,
+                    &root,
+                    promoting,
+                    &mut preflight,
+                ) {
+                    Err(stop) => stopped(stop),
+                    Ok(Gathered::Declined(warnings)) => {
+                        let mut report = Report::completed(
+                            command,
+                            vec![("steps".to_owned(), Json::Array(Vec::new()))],
+                        );
+                        report.outcome.status = "skipped".into();
+                        "Setup cancelled; no files were written"
+                            .clone_into(&mut report.outcome.message);
+                        report.warnings = warnings;
+                        report
+                    }
+                    Ok(Gathered::Apply(answers)) => {
+                        let args = GroupArgs {
+                            path: shown_text,
+                            repo: answers.repo.clone(),
+                            ci: answers.ci.clone(),
+                            staging: answers.staging,
+                            inflight: answers.inflight,
+                            sharing: answers.sharing,
+                            explorer_pages: answers.explorer_pages,
+                            promotion: answers.promotion,
+                            python_version: "3.12".to_owned(),
+                            mcp: answers.mcp.clone(),
+                            skills: answers.skills.clone().unwrap_or_default(),
+                            ..GroupArgs::default()
+                        };
+                        let run_ci = args.ci.is_some();
+                        execute(
+                            &args,
+                            &root,
+                            answers.warnings,
+                            true,
+                            run_ci,
+                            None,
+                            cx,
+                            catalogue,
+                        )
+                    }
                 }
-            }
+            })
         }
         Wizard::Repo => match wizard::repo(prompter, screen, &root) {
             Err(stop) => stopped(stop),
@@ -341,18 +389,6 @@ fn promotion_enabled(root: &Path, cx: &Context<'_>) -> bool {
             .and_then(toml::Value::as_bool)
             .unwrap_or(false)
     })
-}
-
-/// A run this implementation does not cover: `engine_not_ported`.
-pub(crate) fn not_ported(command: &str, what: &str) -> Report {
-    let mut failure = Failure::new(
-        code::ENGINE_NOT_PORTED,
-        format!(
-            "{what} has no Rust implementation yet: unset OPENTIDE_ENGINE, or set it to python or compare."
-        ),
-    );
-    failure.argument = Some("OPENTIDE_ENGINE".into());
-    Report::failed(command, USAGE_EXIT_CODE, failure)
 }
 
 /// A cancelled confirmation.
@@ -435,6 +471,167 @@ pub fn subcommand(step: &Step, paths: &Paths, yes: bool, plan: bool, cx: &Contex
     run_step(&command, step, &root, cx)
 }
 
+/// `opentide setup skills` (install): the flags as given.
+#[derive(Clone, Debug, Default)]
+pub struct SkillsArgs {
+    /// `--cursor`, `--claude-code`, `--generic`, `--github-copilot`, in
+    /// that order, and `--install`, `--all`, `--name`, `--org`,
+    /// `--description`, `--plugin`.
+    pub options: install::Options,
+    /// `--yes`, here or on the group.
+    pub yes: bool,
+    /// `--plan`, here or on the group.
+    pub plan: bool,
+}
+
+/// What an install that stopped reports: a usage error for an unknown slug
+/// (`typer.BadParameter`), else a failure.
+fn install_error(command: &str, error: &install::Error) -> Report {
+    match error {
+        install::Error::Usage(message) => {
+            let mut report = *retitled(bad_parameter(message, &[], None), command);
+            report.usage_notes = true;
+            report
+        }
+        install::Error::Failed(message) => Report::error(command, message.clone()),
+    }
+}
+
+/// `opentide setup skills` (`setup_skills_install_cmd`): a scripted
+/// install, its plan, or at a terminal the wizard.
+pub fn skills(args: &SkillsArgs, paths: &Paths, cx: &Context<'_>) -> Report {
+    const COMMAND: &str = "setup skills";
+    let shown = match target(cx, COMMAND, paths) {
+        Ok(shown) => shown,
+        Err(report) => return *report,
+    };
+    let options = &args.options;
+    let chosen = !options.targets.is_empty() || options.plugin;
+    if (args.yes || args.plan) && !chosen {
+        return usage(
+            COMMAND,
+            code::USAGE_MISSING_OPTION,
+            "Choose at least one skills target (--cursor, --claude-code, --generic, --github-copilot, --plugin)",
+        );
+    }
+    let root = root_of(cx, &shown);
+    if args.plan {
+        return with_catalogue(cx, |catalogue| {
+            let mut stage = Stage::new();
+            match install::install(&mut stage, &root, options, catalogue) {
+                Ok(result) => {
+                    let planned = planned(&mut stage, &root, "skills", &result);
+                    plan_report(COMMAND, &root, vec![planned], &[], cx)
+                }
+                Err(error) => install_error(COMMAND, &error),
+            }
+        });
+    }
+    if !args.yes && !chosen {
+        return skills_wizard(options, &root, cx);
+    }
+    if !args.yes {
+        match confirm_write(COMMAND, &shown, &root, cx, "Install these agent skills?") {
+            Ok(true) => {}
+            Ok(false) => return cancelled(COMMAND, "Agent skills setup cancelled"),
+            Err(report) => return *report,
+        }
+    }
+    with_catalogue(cx, |catalogue| install_now(options, &root, cx, catalogue))
+}
+
+/// Installs `options` into `root` and writes what it staged, what it wrote
+/// before an error included, as the oracle wrote it.
+fn install_now(
+    options: &install::Options,
+    root: &Path,
+    cx: &Context<'_>,
+    catalogue: &Catalogue<'_>,
+) -> Report {
+    const COMMAND: &str = "setup skills";
+    let mut stage = Stage::new();
+    let installed = install::install(&mut stage, root, options, catalogue);
+    if let Err(message) = stage.commit() {
+        return Report::error(COMMAND, message);
+    }
+    match installed {
+        Ok(result) => finish(COMMAND, result, None, root, cx),
+        Err(error) => install_error(COMMAND, &error),
+    }
+}
+
+/// The `setup skills` wizard (`run_interactive_skills_setup`): the agent
+/// environments, the skills checked, then the confirmation. `given` carries
+/// the other flags typed with the command.
+fn skills_wizard(given: &install::Options, root: &Path, cx: &Context<'_>) -> Report {
+    const COMMAND: &str = "setup skills";
+    if let Some(refused) = wizard_refusal(
+        COMMAND,
+        cx,
+        "--claude-code, --cursor, --generic, --github-copilot, --install, --all",
+        "--skill, --all",
+    ) {
+        return refused;
+    }
+    let mut prompter = super::wizard::Inquire::new(cx.terminal.stderr.colour);
+    let mut stdout = std::io::stdout();
+    let mut screen = super::wizard::Screen {
+        out: &mut stdout,
+        console: cx.terminal.stdout,
+        mode: cx.mode,
+        version: cx.version,
+    };
+    with_catalogue(cx, |catalogue| {
+        interactive_skills(given, root, &mut prompter, &mut screen, cx, catalogue)
+    })
+}
+
+/// The `setup skills` wizard's run with `prompter`.
+fn interactive_skills(
+    given: &install::Options,
+    root: &Path,
+    prompter: &mut dyn super::wizard::Prompter,
+    screen: &mut super::wizard::Screen<'_>,
+    cx: &Context<'_>,
+    catalogue: &Catalogue<'_>,
+) -> Report {
+    use super::wizard::{self, Stop};
+    const COMMAND: &str = "setup skills";
+    let stopped = |stop: Stop| match stop {
+        Stop::Interrupted => {
+            cx.interrupt.request();
+            cancelled(COMMAND, "interrupted")
+        }
+        Stop::Failed(message) => Report::error(COMMAND, message),
+    };
+    let keys = match wizard::skill_targets(prompter) {
+        Ok(keys) => keys,
+        Err(stop) => return stopped(stop),
+    };
+    let options = install::Options {
+        targets: keys
+            .iter()
+            .filter_map(|key| install::Target::parse(key))
+            .collect(),
+        ..given.clone()
+    };
+    match install::unavailable(&options, catalogue) {
+        Err(error) => return install_error(COMMAND, &error),
+        Ok(unavailable) if !unavailable.is_empty() => {
+            return Report::error(
+                COMMAND,
+                format!("Agent skills unavailable: {}", unavailable.join(", ")),
+            );
+        }
+        Ok(_) => {}
+    }
+    match wizard::confirm_skills(prompter, screen, root, &keys) {
+        Err(stop) => stopped(stop),
+        Ok(false) => cancelled(COMMAND, "Agent skills setup cancelled"),
+        Ok(true) => install_now(&options, root, cx, catalogue),
+    }
+}
+
 /// Runs `step` on `root` and writes what it staged: the report of a
 /// confirmed run.
 fn run_step(command: &str, step: &Step, root: &Path, cx: &Context<'_>) -> Report {
@@ -497,7 +694,13 @@ pub struct Planned {
 /// What the step that just ran wrote, and the files it reported left alone.
 fn planned(stage: &mut Stage, root: &Path, name: &str, result: &StepResult) -> Planned {
     let mut changes = stage.step();
-    changes.sort_by_key(|change| change.path.to_string_lossy().into_owned());
+    // The files written, by path, then the files removed (`Sandbox.step`).
+    changes.sort_by_key(|change| {
+        (
+            change.action == "delete",
+            change.path.to_string_lossy().into_owned(),
+        )
+    });
     let mut files: Vec<(String, &'static str)> = changes
         .into_iter()
         .map(|change| (super::shown_relative(&change.path, root), change.action))
@@ -981,6 +1184,8 @@ struct Recorder<'a> {
     /// it wrote (the `vscode` step without its snippets).
     failed: Option<String>,
     cx: &'a Context<'a>,
+    /// The skills repository, read once for the run.
+    catalogue: &'a Catalogue<'a>,
 }
 
 impl Recorder<'_> {
@@ -1007,14 +1212,12 @@ impl Recorder<'_> {
 /// nothing on the command line to answer, the wizard.
 pub fn group(args: &GroupArgs, cx: &Context<'_>) -> Report {
     const COMMAND: &str = "setup";
-    if args.plugin || !args.skills.is_empty() {
-        return not_ported(COMMAND, "opentide setup with --skills or --plugin");
-    }
     let has_repo = args.repo.name.is_some()
         || args.repo.org.is_some()
         || args.repo.description.is_some()
         || !args.repo.platforms.is_empty();
-    let answers = !args.mcp.is_empty() || args.hooks || args.env;
+    let answers =
+        !args.mcp.is_empty() || !args.skills.is_empty() || args.plugin || args.hooks || args.env;
     let only_ci_none = args.ci.as_deref() == Some("none")
         && !args.yes
         && !has_repo
@@ -1049,19 +1252,39 @@ pub fn group(args: &GroupArgs, cx: &Context<'_>) -> Report {
     let run_ci = args.ci.as_deref().is_some_and(|ci| ci != "none");
     // The other steps asked for, like --ci, leave the scaffold alone.
     let run_repo = has_repo || (consent && !run_ci && !answers && !args.vscode_setup);
-    execute(
-        args,
-        &root,
-        ignored_ci_flags(args),
-        run_repo,
-        run_ci,
-        args.repo.name.as_deref(),
-        cx,
-    )
+    with_catalogue(cx, |catalogue| {
+        execute(
+            args,
+            &root,
+            ignored_ci_flags(args),
+            run_repo,
+            run_ci,
+            args.repo.name.as_deref(),
+            cx,
+            catalogue,
+        )
+    })
+}
+
+/// Runs `f` with the skills repository as this run reaches it: the
+/// environment's proxies and CA bundles, `--proxy`, Ctrl-C.
+pub(crate) fn with_catalogue<T>(cx: &Context<'_>, f: impl FnOnce(&Catalogue<'_>) -> T) -> T {
+    let interrupt = cx.interrupt.clone();
+    let interrupted = move || interrupt.requested();
+    let network = crate::commands::skills::Network {
+        env: cx.env,
+        proxy: cx.proxy,
+        interrupted: &interrupted,
+    };
+    f(&Catalogue::new(network))
 }
 
 /// Runs the group's steps on `root` (`run_setup`), or plans them; `name` is
 /// the `--name` the outcome line takes first.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the run's parts, as the wizard and the scripted group pass them"
+)]
 fn execute(
     args: &GroupArgs,
     root: &Path,
@@ -1070,6 +1293,7 @@ fn execute(
     run_ci: bool,
     name: Option<&str>,
     cx: &Context<'_>,
+    catalogue: &Catalogue<'_>,
 ) -> Report {
     const COMMAND: &str = "setup";
     let mut recorder = Recorder {
@@ -1081,6 +1305,7 @@ fn execute(
         warnings,
         failed: None,
         cx,
+        catalogue,
     };
     let run_warnings = recorder.warnings.clone();
     if let Err(report) = run_steps(&mut recorder, args, run_repo, run_ci) {
@@ -1200,6 +1425,41 @@ fn run_steps(
             files::McpServer::from_env(cx.env).as_ref(),
         );
         recorder.record("mcp", result).map_err(failed)?;
+    }
+    if !args.skills.is_empty() || args.plugin {
+        let options = install::Options {
+            targets: args
+                .skills
+                .iter()
+                .filter_map(|key| install::Target::parse(key))
+                .collect(),
+            name: args.repo.name.clone(),
+            org: args.repo.org.clone(),
+            description: args.repo.description.clone(),
+            plugin: args.plugin,
+            ..install::Options::default()
+        };
+        match install::install(&mut recorder.stage, &root, &options, recorder.catalogue) {
+            Ok(result) => recorder.record("skills", result).map_err(failed)?,
+            Err(error) => {
+                // Not a step of the run: a warning, and what it wrote before
+                // it failed stays written (a plan credits it to the step).
+                let skipped = format!("Agent skills skipped: {}", error.message());
+                if !recorder.warnings.contains(&skipped) {
+                    recorder.warnings.push(skipped.clone());
+                }
+                if recorder.plan {
+                    let result = StepResult::new([
+                        ("status", Json::str("skipped")),
+                        ("warnings", strings(&[skipped])),
+                    ]);
+                    let planned = planned(&mut recorder.stage, &root, "skills", &result);
+                    recorder.planned.push(planned);
+                } else {
+                    recorder.stage.commit().map_err(failed)?;
+                }
+            }
+        }
     }
     if args.vscode_setup {
         super::vscode::deprecation(cx);
@@ -1355,6 +1615,7 @@ mod tests {
             terminal: crate::commands::Terminal::plain(Mode::Json),
             interrupt: crate::app::Interrupt::default(),
             stderr: std::sync::Arc::new(std::sync::Mutex::new(std::io::sink())),
+            proxy: None,
         }
     }
 

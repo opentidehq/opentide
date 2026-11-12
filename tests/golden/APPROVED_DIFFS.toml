@@ -10962,3 +10962,161 @@ candidate = "warning: Sysdig rule missing · uuid: 00000000-0000-4000-8047-00000
 reason = "A log line of the Rust CLI's logging layer (UC-3.3) names no tenant: the layer redacts the workspace's tenant names and hosts from every line it writes, as the oracle redacted them from its crash log (plan \u00a73, invariant 9). A deploy without --platform logs as one that names it. The result document on stdout still names the tenant; the event, its fields and their order are the oracle's."
 issue = "https://github.com/opentidehq/opentide/issues/834"
 changelog = "**`opentide query --rule` and `--file`, and `deploy` and `validate query --live` without `--platform`, run on Rust**"
+
+# `setup skills` (the install), `setup --skills` and `--plugin` on the Rust
+# command line (UC-4.4d, #834): the skill trees through the connectors' HTTP
+# client, `.claude/settings.json` edited on its syntax tree.
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/human/skills-merge/plugin"
+target = "file:ws/.claude/settings.json"
+rule = "lines"
+oracle = "  \"permissions\": {\n    \"allow\": [\n      \"Bash(opentide validate:*)\"\n    ]\n  },"
+candidate = "  // The team's Claude Code settings.\n  \"permissions\": {\"allow\": [\"Bash(opentide validate:*)\"]},"
+reason = "--plugin adds the opentide marketplace and plugin to an existing .claude/settings.json in place with a JSONC-preserving editor (jsonc-parser's CST), as setup mcp merges its files: the comments, layout, line endings and byte-order mark stay, and only the two members it sets change; the oracle (0.23.0) parsed the file, dropped its comments and rewrote it as indented JSON. The members and their values are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`setup skills`, `setup --skills` and `setup --plugin` install agent skills on the Rust engine**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/plain/skills-merge/plugin"
+target = "file:ws/.claude/settings.json"
+rule = "lines"
+oracle = "  \"permissions\": {\n    \"allow\": [\n      \"Bash(opentide validate:*)\"\n    ]\n  },"
+candidate = "  // The team's Claude Code settings.\n  \"permissions\": {\"allow\": [\"Bash(opentide validate:*)\"]},"
+reason = "--plugin adds the opentide marketplace and plugin to an existing .claude/settings.json in place with a JSONC-preserving editor (jsonc-parser's CST), as setup mcp merges its files: the comments, layout, line endings and byte-order mark stay, and only the two members it sets change; the oracle (0.23.0) parsed the file, dropped its comments and rewrote it as indented JSON. The members and their values are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`setup skills`, `setup --skills` and `setup --plugin` install agent skills on the Rust engine**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/json/skills-merge/plugin"
+target = "file:ws/.claude/settings.json"
+rule = "lines"
+oracle = "  \"permissions\": {\n    \"allow\": [\n      \"Bash(opentide validate:*)\"\n    ]\n  },"
+candidate = "  // The team's Claude Code settings.\n  \"permissions\": {\"allow\": [\"Bash(opentide validate:*)\"]},"
+reason = "--plugin adds the opentide marketplace and plugin to an existing .claude/settings.json in place with a JSONC-preserving editor (jsonc-parser's CST), as setup mcp merges its files: the comments, layout, line endings and byte-order mark stay, and only the two members it sets change; the oracle (0.23.0) parsed the file, dropped its comments and rewrote it as indented JSON. The members and their values are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`setup skills`, `setup --skills` and `setup --plugin` install agent skills on the Rust engine**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/agent/skills-merge/plugin"
+target = "file:ws/.claude/settings.json"
+rule = "lines"
+oracle = "  \"permissions\": {\n    \"allow\": [\n      \"Bash(opentide validate:*)\"\n    ]\n  },"
+candidate = "  // The team's Claude Code settings.\n  \"permissions\": {\"allow\": [\"Bash(opentide validate:*)\"]},"
+reason = "--plugin adds the opentide marketplace and plugin to an existing .claude/settings.json in place with a JSONC-preserving editor (jsonc-parser's CST), as setup mcp merges its files: the comments, layout, line endings and byte-order mark stay, and only the two members it sets change; the oracle (0.23.0) parsed the file, dropped its comments and rewrote it as indented JSON. The members and their values are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`setup skills`, `setup --skills` and `setup --plugin` install agent skills on the Rust engine**"
+
+[[diff]]
+command = "setup"
+case = "setup/human/skills-merge/plugin"
+target = "file:ws/.claude/settings.json"
+rule = "lines"
+oracle = "  \"permissions\": {\n    \"allow\": [\n      \"Bash(opentide validate:*)\"\n    ]\n  },"
+candidate = "  // The team's Claude Code settings.\n  \"permissions\": {\"allow\": [\"Bash(opentide validate:*)\"]},"
+reason = "--plugin adds the opentide marketplace and plugin to an existing .claude/settings.json in place with a JSONC-preserving editor (jsonc-parser's CST), as setup mcp merges its files: the comments, layout, line endings and byte-order mark stay, and only the two members it sets change; the oracle (0.23.0) parsed the file, dropped its comments and rewrote it as indented JSON. The members and their values are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`setup skills`, `setup --skills` and `setup --plugin` install agent skills on the Rust engine**"
+
+[[diff]]
+command = "setup"
+case = "setup/plain/skills-merge/plugin"
+target = "file:ws/.claude/settings.json"
+rule = "lines"
+oracle = "  \"permissions\": {\n    \"allow\": [\n      \"Bash(opentide validate:*)\"\n    ]\n  },"
+candidate = "  // The team's Claude Code settings.\n  \"permissions\": {\"allow\": [\"Bash(opentide validate:*)\"]},"
+reason = "--plugin adds the opentide marketplace and plugin to an existing .claude/settings.json in place with a JSONC-preserving editor (jsonc-parser's CST), as setup mcp merges its files: the comments, layout, line endings and byte-order mark stay, and only the two members it sets change; the oracle (0.23.0) parsed the file, dropped its comments and rewrote it as indented JSON. The members and their values are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`setup skills`, `setup --skills` and `setup --plugin` install agent skills on the Rust engine**"
+
+[[diff]]
+command = "setup"
+case = "setup/json/skills-merge/plugin"
+target = "file:ws/.claude/settings.json"
+rule = "lines"
+oracle = "  \"permissions\": {\n    \"allow\": [\n      \"Bash(opentide validate:*)\"\n    ]\n  },"
+candidate = "  // The team's Claude Code settings.\n  \"permissions\": {\"allow\": [\"Bash(opentide validate:*)\"]},"
+reason = "--plugin adds the opentide marketplace and plugin to an existing .claude/settings.json in place with a JSONC-preserving editor (jsonc-parser's CST), as setup mcp merges its files: the comments, layout, line endings and byte-order mark stay, and only the two members it sets change; the oracle (0.23.0) parsed the file, dropped its comments and rewrote it as indented JSON. The members and their values are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`setup skills`, `setup --skills` and `setup --plugin` install agent skills on the Rust engine**"
+
+[[diff]]
+command = "setup"
+case = "setup/agent/skills-merge/plugin"
+target = "file:ws/.claude/settings.json"
+rule = "lines"
+oracle = "  \"permissions\": {\n    \"allow\": [\n      \"Bash(opentide validate:*)\"\n    ]\n  },"
+candidate = "  // The team's Claude Code settings.\n  \"permissions\": {\"allow\": [\"Bash(opentide validate:*)\"]},"
+reason = "--plugin adds the opentide marketplace and plugin to an existing .claude/settings.json in place with a JSONC-preserving editor (jsonc-parser's CST), as setup mcp merges its files: the comments, layout, line endings and byte-order mark stay, and only the two members it sets change; the oracle (0.23.0) parsed the file, dropped its comments and rewrote it as indented JSON. The members and their values are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`setup skills`, `setup --skills` and `setup --plugin` install agent skills on the Rust engine**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/json/tide-corpus/example"
+target = "stderr"
+rule = "json:/logger"
+oracle = "\"opentide.cli.services.setup.skills_registry\""
+candidate = "(absent)"
+reason = "A JSON log line of the Rust CLI's logging layer (UC-3.3) has no `logger` key: the Python module that logged it does not exist on the Rust side. The event, its fields and level are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`setup skills`, `setup --skills` and `setup --plugin` install agent skills on the Rust engine**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/json/none/plugin-offline"
+target = "stderr"
+rule = "json:/logger"
+oracle = "\"opentide.cli.services.setup.skills_registry\""
+candidate = "(absent)"
+reason = "A JSON log line of the Rust CLI's logging layer (UC-3.3) has no `logger` key: the Python module that logged it does not exist on the Rust side. The event, its fields and level are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`setup skills`, `setup --skills` and `setup --plugin` install agent skills on the Rust engine**"
+
+[[diff]]
+command = "setup"
+case = "setup/json/none/skills-offline"
+target = "stderr"
+rule = "json:/logger"
+oracle = "\"opentide.cli.services.setup.skills_registry\""
+candidate = "(absent)"
+reason = "A JSON log line of the Rust CLI's logging layer (UC-3.3) has no `logger` key: the Python module that logged it does not exist on the Rust side. The event, its fields and level are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`setup skills`, `setup --skills` and `setup --plugin` install agent skills on the Rust engine**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/human/tide-corpus/example"
+target = "stderr"
+rule = "lines"
+oracle = "\u001b[1;31merror: \u001b[0mSkills manifest remote unavailable · source: opentidehq/skills · ref: main"
+candidate = "error: Skills manifest remote unavailable · source: opentidehq/skills · ref: main"
+reason = "A log line is written by the Rust CLI's logging layer (UC-3.3), as one unstyled line: Rich coloured its label. The event, its fields and their order are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`setup skills`, `setup --skills` and `setup --plugin` install agent skills on the Rust engine**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/human/none/plugin-offline"
+target = "stderr"
+rule = "lines"
+oracle = "\u001b[1;31merror: \u001b[0mSkills manifest remote unavailable · source: opentidehq/skills · ref: main"
+candidate = "error: Skills manifest remote unavailable · source: opentidehq/skills · ref: main"
+reason = "A log line is written by the Rust CLI's logging layer (UC-3.3), as one unstyled line: Rich coloured its label. The event, its fields and their order are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`setup skills`, `setup --skills` and `setup --plugin` install agent skills on the Rust engine**"
+
+[[diff]]
+command = "setup"
+case = "setup/human/none/skills-offline"
+target = "stderr"
+rule = "lines"
+oracle = "\u001b[1;31merror: \u001b[0mSkills manifest remote unavailable · source: opentidehq/skills · ref: main"
+candidate = "error: Skills manifest remote unavailable · source: opentidehq/skills · ref: main"
+reason = "A log line is written by the Rust CLI's logging layer (UC-3.3), as one unstyled line: Rich coloured its label. The event, its fields and their order are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`setup skills`, `setup --skills` and `setup --plugin` install agent skills on the Rust engine**"

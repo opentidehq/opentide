@@ -1,0 +1,1 @@
+{"path":"<WS>","steps":[],"ok":true,"status":"completed","message":"Setup complete","warnings":["Agent skills skipped: Could not fetch skills catalogue from opentidehq/skills@main. Check network access and that the skills repository is publicly reachable."],"schema_version":1,"command":"setup","duration_ms":0,"exit_code":0,"summary":{},"next_actions":[],"failure":null}

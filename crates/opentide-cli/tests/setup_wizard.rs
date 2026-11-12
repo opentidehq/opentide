@@ -38,6 +38,11 @@ struct Session {
 /// `opentide <args>` in `cwd` on a pseudo-terminal, in `human` mode
 /// whatever agent or CI the test runs under.
 fn spawn(cwd: &Path, args: &[&str]) -> Session {
+    spawn_with(cwd, args, &[])
+}
+
+/// [`spawn`], with the variables `env` set: the network the run reaches.
+fn spawn_with(cwd: &Path, args: &[&str], env: &[(String, String)]) -> Session {
     let pair = native_pty_system()
         .openpty(PtySize {
             rows: 40,
@@ -56,8 +61,14 @@ fn spawn(cwd: &Path, args: &[&str]) -> Session {
         "OPENTIDE_REPO_ROOT",
         "OPENTIDE_TIDE_WORKSPACE",
         "OPENTIDE_MCP_SERVER",
+        "NO_PROXY",
+        "no_proxy",
     ] {
         command.env_remove(name);
+    }
+    // No run reaches a real host: a refused proxy unless `env` names one.
+    for (name, value) in offline().iter().chain(env) {
+        command.env(name, value);
     }
     let child = pair
         .slave
@@ -124,6 +135,40 @@ impl Session {
         writer.write_all(keys.as_bytes()).unwrap();
         writer.flush().unwrap();
     }
+}
+
+/// The proxy variables of a network that refuses every connection.
+fn offline() -> Vec<(String, String)> {
+    [
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "ALL_PROXY",
+        "http_proxy",
+        "https_proxy",
+        "all_proxy",
+    ]
+    .iter()
+    .map(|name| ((*name).to_owned(), "http://127.0.0.1:9".to_owned()))
+    .collect()
+}
+
+/// A proxy replaying `tests/cassettes/<name>.json`, and the variables that
+/// send a run through it (its CA written to `ca`).
+fn cassette(name: &str, ca: &Path) -> (opentide_cassette::Proxy, Vec<(String, String)>) {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/cassettes")
+        .join(format!("{name}.json"));
+    let text = std::fs::read_to_string(path).unwrap();
+    let proxy = opentide_cassette::Proxy::start(
+        opentide_cassette::Mode::Replay {
+            cassette: opentide_cassette::Cassette::parse(&text).unwrap(),
+        },
+        opentide_cassette::Redaction::default(),
+    )
+    .unwrap();
+    std::fs::write(ca, proxy.ca_pem()).unwrap();
+    let env = proxy.client_env(&ca.to_string_lossy());
+    (proxy, env)
 }
 
 /// Waits for `text`, then types `keys`.
@@ -233,4 +278,76 @@ fn the_mcp_wizard_writes_the_hosts_chosen() {
     assert!(printed.contains("Wrote .cursor/mcp.json"), "{printed}");
     assert!(dir.path().join(".cursor/mcp.json").is_file());
     assert!(!dir.path().join(".vscode").exists());
+}
+
+/// The `setup skills` wizard (UC-4.4d, #834): the agent environments, the
+/// target, the confirmation, then the starter skills and `AGENTS.md`, the
+/// catalogue read from its cassette.
+#[test]
+fn the_skills_wizard_installs_for_the_environments_chosen() {
+    let dir = tempfile::tempdir().unwrap();
+    let repo = dir.path().join("repo");
+    std::fs::create_dir(&repo).unwrap();
+    let (proxy, env) = cassette("skills/manifest", &dir.path().join("ca.pem"));
+    let mut session = spawn_with(&repo, &["setup", "skills"], &env);
+    // Generic: the third environment.
+    answer(
+        &mut session,
+        "Agent environments",
+        &[DOWN, DOWN, SPACE, ENTER],
+    );
+    answer(&mut session, "Agent environments:", &[]);
+    answer(&mut session, "generic", &[]);
+    answer(&mut session, "Install these agent skills?", &[ENTER]);
+    let (printed, code) = finish(session, "Wrote 3 files");
+    assert_eq!(code, 0, "{printed}");
+    assert!(repo.join("AGENTS.md").is_file());
+    assert!(
+        repo.join(".agents/skills/opentide-detection-rule/SKILL.md")
+            .is_file()
+    );
+    assert!(!repo.join("CLAUDE.md").exists());
+    assert!(proxy.verify().is_empty(), "{:?}", proxy.verify());
+}
+
+/// The `setup` wizard's skills question, offline: the skills are skipped
+/// with the catalogue's error as a warning, and the rest is set up.
+#[test]
+fn the_setup_wizard_skips_skills_it_cannot_fetch() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut session = spawn(dir.path(), &["setup"]);
+    answer(&mut session, "Repository name", &[ENTER]);
+    answer(&mut session, "Organisation / team", &[ENTER]);
+    answer(&mut session, "Description (optional)", &[ENTER]);
+    answer(&mut session, "Detection platforms", &[SPACE, ENTER]);
+    answer(&mut session, "CI/CD platform", &[ENTER]);
+    answer(&mut session, "Configure opentide MCP?", &[ENTER]);
+    answer(&mut session, "Install agent skills?", &["y", ENTER]);
+    answer(&mut session, "Agent environments", &[SPACE, ENTER]);
+    answer(
+        &mut session,
+        "Agent skills skipped: Could not fetch skills catalogue",
+        &[],
+    );
+    answer(&mut session, "Apply this setup plan?", &[ENTER]);
+    let (printed, code) = finish(session, "check every object before you commit");
+    assert_eq!(code, 0, "{printed}");
+    assert!(dir.path().join("README.md").is_file());
+    assert!(!dir.path().join(".agents").exists());
+    assert!(!dir.path().join(".cursor").exists());
+}
+
+/// The `setup skills` wizard, offline: the catalogue's error, nothing written.
+#[test]
+fn the_skills_wizard_fails_without_the_catalogue() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut session = spawn(dir.path(), &["setup", "skills"]);
+    answer(&mut session, "Agent environments", &[SPACE, ENTER]);
+    let (printed, code) = finish(session, "publicly reachable");
+    assert_eq!(code, 1, "{printed}");
+    assert!(
+        printed.contains("Could not fetch skills catalogue from opentidehq/skills@main"),
+        "{printed}"
+    );
+    assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
 }

@@ -1,0 +1,8 @@
+[1;33mwarning:[0m Left CLAUDE.md unchanged because the file already exists; point it at .agents/skills/ by
+         hand, or delete it and re-run to write opentide's template.
+[1;33mwarning:[0m Kept 1 file(s) in .claude/skills/detection-engineering that the skill does not ship
+         (NOTES.md); delete them by hand if they are left over from an older version.
+[1;33mwarning:[0m Left AGENTS.md unchanged because the file already exists; point it at .agents/skills/ by
+         hand, or delete it and re-run to write opentide's template.
+[1;33mwarning:[0m Left .github/copilot-instructions.md unchanged because the file already exists; point it at
+         .agents/skills/ by hand, or delete it and re-run to write opentide's template.

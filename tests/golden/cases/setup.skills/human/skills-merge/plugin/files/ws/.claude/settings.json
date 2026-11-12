@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(opentide validate:*)"
+    ]
+  },
+  "enabledPlugins": {
+    "other@team": true,
+    "opentide@opentide": true
+  },
+  "extraKnownMarketplaces": {
+    "opentide": {
+      "source": {
+        "source": "github",
+        "repo": "opentidehq/skills"
+      }
+    }
+  }
+}

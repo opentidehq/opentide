@@ -1,0 +1,110 @@
+{
+  "format": 1,
+  "scenario": "skills/broken",
+  "recorded_from": [
+    "{oracle}/opentide",
+    "--json",
+    "setup",
+    "skills",
+    "--generic",
+    "--install",
+    "broken-skill",
+    "--yes"
+  ],
+  "digest": "sha256:fca0ecca43c82d0784d72b8e66a1640f2006184382f715b9de92d96a4775ea31",
+  "interactions": [
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://raw.githubusercontent.com/opentidehq/skills/main/manifest.json",
+        "headers": [],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "skills-tenant"
+          ],
+          [
+            "content-type",
+            "text/plain; charset=utf-8"
+          ]
+        ],
+        "body": "{\n  \"version\": 1,\n  \"source\": \"opentidehq/skills\",\n  \"ref\": \"main\",\n  \"skills\": [\n    {\n      \"slug\": \"sample-skill\",\n      \"name\": \"Sample skill\",\n      \"description\": \"A skill with a reference file, for the install cassettes.\"\n    },\n    {\n      \"slug\": \"broken-skill\",\n      \"name\": \"Broken skill\",\n      \"description\": \"A skill one of whose files cannot be downloaded.\"\n    }\n  ]\n}\n"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.github.com/repos/opentidehq/skills/git/trees/main?recursive=1",
+        "headers": [
+          [
+            "accept",
+            "application/vnd.github+json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "skills-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"sha\": \"0000000000000000000000000000000000000000\", \"tree\": [{\"path\": \"skills/broken-skill\", \"type\": \"tree\"}, {\"path\": \"skills/broken-skill/references\", \"type\": \"tree\"}, {\"path\": \"skills/sample-skill\", \"type\": \"tree\"}, {\"path\": \"skills/sample-skill/references\", \"type\": \"tree\"}, {\"path\": \"README.md\", \"type\": \"blob\"}, {\"path\": \"manifest.json\", \"type\": \"blob\"}, {\"path\": \"skills/broken-skill/SKILL.md\", \"type\": \"blob\"}, {\"path\": \"skills/broken-skill/references/missing.md\", \"type\": \"blob\"}, {\"path\": \"skills/sample-skill/SKILL.md\", \"type\": \"blob\"}, {\"path\": \"skills/sample-skill/references/notes.md\", \"type\": \"blob\"}], \"truncated\": false}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://raw.githubusercontent.com/opentidehq/skills/main/skills/broken-skill/SKILL.md",
+        "headers": [],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "skills-tenant"
+          ],
+          [
+            "content-type",
+            "text/plain; charset=utf-8"
+          ]
+        ],
+        "body": "---\nname: broken-skill\n---\n\n# Broken skill\n"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://raw.githubusercontent.com/opentidehq/skills/main/skills/broken-skill/references/missing.md",
+        "headers": [],
+        "body": ""
+      },
+      "response": {
+        "status": 404,
+        "headers": [
+          [
+            "server",
+            "skills-tenant"
+          ],
+          [
+            "content-type",
+            "text/plain; charset=utf-8"
+          ]
+        ],
+        "body": "404: Not Found"
+      }
+    }
+  ]
+}
