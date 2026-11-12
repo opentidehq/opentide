@@ -14,7 +14,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ### Changed
 
-- **The analysis engine checks the Exabeam Query Language.** It is language-server pinned by git revision at the head of its Exabeam work, until the release that ships it: `configurations.exabeam.sequences[].query` is checked under the language's `rule` profile, `system: exabeam` hunts and `.exabeam` files under `search`, and the `configurations.exabeam` block in the editor.
+- **The analysis engine is [language-server 0.15.0](https://github.com/opentidehq/language-server/releases/tag/v0.15.0), from crates.io.** It adds the Exabeam Query Language and checks Exabeam blocks: `configurations.exabeam.sequences[].query` under the language's `rule` profile, `system: exabeam` hunts and `.exabeam` files under `search`, so the editor, `opentide tui` and `opentide validate` agree on Exabeam rules ([#983](https://github.com/opentidehq/opentide/pull/983)).
 
 ## [0.26.0] — 2026-11-12
 

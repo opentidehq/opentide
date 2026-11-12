@@ -24,11 +24,9 @@ pyo3 = { version = "0.30.1", features = ["abi3-py310", "generate-import-lib"] }
 # language-server releases this may be a git revision, but
 # scripts/build/check_engine_pin.py refuses a git source when a release is
 # published, so a release always builds from crates.io.
-# language-server 0.14.0 (Graylog) plus the Exabeam Query Language and the
-# Exabeam block checks (branch claude/magical-volta-t2z24d), until the release
-# that ships them.
-opentide-analysis = { git = "https://github.com/opentidehq/language-server", rev = "ca2e3f912cf6c2001b9f62db9eb6bebbcbb6939f" }
-opentide-lsp = { git = "https://github.com/opentidehq/language-server", rev = "ca2e3f912cf6c2001b9f62db9eb6bebbcbb6939f" }
+# language-server 0.15.0: the Exabeam Query Language and block checks.
+opentide-analysis = "=0.15.0"
+opentide-lsp = "=0.15.0"
 
 [build-dependencies]
 pyo3-build-config = "0.30.1"
