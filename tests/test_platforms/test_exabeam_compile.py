@@ -198,7 +198,7 @@ def test_threshold_value_suppression_delay_and_schedule() -> None:
         {
             "sequences": [
                 {
-                    "query": 'activity_type:"network-connection"',
+                    "query": 'activity_type:"network-session"',
                     "threshold": {
                         "function": "value",
                         "field": "dest_ip",
