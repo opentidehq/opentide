@@ -1,0 +1,6 @@
+[?25l<LIVE>[1;36m<SPIN>[0m Validating objects</LIVE>[1;33mwarning: [0mCve lookup unavailable · cve: CVE-2024-3094 · threat: 00000000-0000-4000-8001-000000000001 
+· detail: Vulnerability-Lookup request failed for CVE-2024-3094
+[1;33mwarning: [0mCve lookup unavailable · cve: GHSA-rxwq-x6h5-qc8m · threat: 
+00000000-0000-4000-8001-000000000001 · detail: Vulnerability-Lookup request failed for 
+GHSA-rxwq-x6h5-qc8m
+[?25h[1A[2K

@@ -18,6 +18,32 @@ source = "tests/fixtures/tide_corpus/current"
 about = "tests/fixtures/tide_corpus, in the .opentide/ layout the Python suite gives it"
 vars = { threat = "00000000-0000-4000-8001-000000000001", objective = "00000000-0000-4000-8002-000000000001", rule = "00000000-0000-4000-8003-000000000001", rule_file = "objects/rules/rule-0001-sentinel-kql.yaml" }
 
+[fixtures.tide-corpus-legacy-ids]
+kind = "tide-corpus"
+source = "tests/fixtures/tide_corpus/current"
+about = "tide-corpus with vendor rule ids still on its rules: Defender for Endpoint (a tenant key and a bundle), CrowdStrike and SentinelOne ids, which `deploy migrate-state` moves into deployment state shards, and a Sentinel id, which it drops as unused"
+edits = [
+  { path = "Objects/Detection Rules/rule-0002-defender-kql.yaml", find = "\n  defender_for_endpoint:\n    enabled: true\n", replace = "\n  defender_for_endpoint:\n    rule_id::prod: 12345\n    rule_id_bundle:\n      lab: '678'\n      # staging comes later\n    enabled: true\n" },
+  { path = "Objects/Detection Rules/rule-0006-crowdstrike-deploy-only.yaml", find = "\n  crowdstrike:\n    enabled: true\n", replace = "\n  crowdstrike:\n    enabled: true\n    rule_id:\n      us-1: ab12cd34\n" },
+  { path = "Objects/Detection Rules/rule-0004-sentinel-one-s1ql.yaml", find = "\n  sentinel_one:\n    enabled: true\n", replace = "\n  sentinel_one:\n    rule_id::soc: 901\n    enabled: true\n" },
+  { path = "Objects/Detection Rules/rule-0001-sentinel-kql.yaml", find = "\n  sentinel:\n    enabled: true\n", replace = "\n  sentinel:\n    rule_id::soc: 9f2c\n    enabled: true\n" },
+]
+
+[fixtures.tide-corpus-legacy-id-error]
+kind = "tide-corpus"
+source = "tests/fixtures/tide_corpus/current"
+about = "tide-corpus with a SentinelOne rule id written with a leading zero, which `deploy migrate-state` refuses (exit 1) and leaves on the rule, beside a CrowdStrike id it moves"
+edits = [
+  { path = "Objects/Detection Rules/rule-0004-sentinel-one-s1ql.yaml", find = "\n  sentinel_one:\n    enabled: true\n", replace = "\n  sentinel_one:\n    rule_id::soc: '0901'\n    enabled: true\n" },
+  { path = "Objects/Detection Rules/rule-0006-crowdstrike-deploy-only.yaml", find = "\n  crowdstrike:\n    enabled: true\n", replace = "\n  crowdstrike:\n    enabled: true\n    rule_id::us-1: ab12cd34\n" },
+]
+
+[fixtures.tide-corpus-cve]
+kind = "tide-corpus"
+source = "tests/fixtures/tide_corpus/current"
+about = "tide-corpus with CVE references on its threat (one written in lower case, one repeated), which `validate --check cve` looks up on Vulnerability-Lookup: without a network every lookup fails, a warning per threat"
+edits = [{ path = "Objects/Threat Vectors/threat-0001-simulated-actor.yaml", find = "\nthreat:\n  description: Simulated threat actor for CLI E2E corpus\n", replace = "\nthreat:\n  description: Simulated threat actor for CLI E2E corpus\n  cve:\n    - cve-2024-3094\n    - GHSA-RXWQ-X6H5-QC8M\n    - CVE-2024-3094\n" }]
+
 [fixtures.tide-corpus-typo]
 kind = "tide-corpus"
 source = "tests/fixtures/tide_corpus/current"
@@ -544,6 +570,15 @@ command = "validate"
 variant = "check-schema"
 args = ["validate", "--check", "schema"]
 fixtures = ["tide-corpus", "vscode", "fault"]
+
+# UC-4.4 (#834): the online CVE check. The golden network refuses every
+# request, so each threat with references warns cve_lookup_unavailable; a
+# threat without any reports nothing.
+[[case]]
+command = "validate"
+variant = "check-cve"
+args = ["validate", "--check", "cve"]
+fixtures = ["tide-corpus", "tide-corpus-cve"]
 
 [[case]]
 command = "validate"
@@ -1363,6 +1398,15 @@ variant = "default"
 args = ["generate", "docs", "threats"]
 fixtures = ["tide-corpus", "vscode"]
 
+# UC-4.4 (#834): a threat whose CVE details are fetched ([cve]
+# retrieve_details on, the default); the golden network refuses every
+# lookup, so each row says the details are unavailable.
+[[case]]
+command = "generate docs threats"
+variant = "cve-details"
+args = ["generate", "docs", "threats"]
+fixtures = ["tide-corpus-cve"]
+
 [[case]]
 command = "generate docs index"
 variant = "default"
@@ -1611,6 +1655,14 @@ command = "deploy migrate-state"
 variant = "default"
 args = ["deploy", "migrate-state"]
 fixtures = ["tide-corpus", "vscode"]
+
+# UC-4.4 (#834): ids moved into a shard and dropped as unused, then a rule
+# refused, on the Rust command line as on the oracle.
+[[case]]
+command = "deploy migrate-state"
+variant = "legacy-ids"
+args = ["deploy", "migrate-state"]
+fixtures = ["tide-corpus-legacy-ids", "tide-corpus-legacy-id-error"]
 
 # ---- share (MISP): tenant-contacting, recorded as failures without targets ----
 

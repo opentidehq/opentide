@@ -498,6 +498,7 @@ fn run_case(
         strict: args.strict,
         queries: args.queries,
         query_check: Some(&counting),
+        cve_check: None,
     };
     let validation = match args.fix {
         None => workspace.validate(&options),

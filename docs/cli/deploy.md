@@ -263,6 +263,8 @@ What it does:
 
 It exits `0` after a migration, after a second run with nothing left to move, and when the only findings are `external_id_unused` warnings. It exits `1` when any rule fails or git ignores the deployment state directory. If the command stopped after writing a shard and before editing the rule, the next run finds the two agree and finishes the edit.
 
+With `OPENTIDE_ENGINE=rust` ([choosing the implementation](./json-output.md#choosing-the-implementation)) it runs on the Rust command line, through the same deployment-state code as a deploy: the same shards, edits, warnings, document and exit codes. On a terminal its log lines are one unstyled line each.
+
 <Callout type="warn">
 The migration is done when it is committed. Commit the edited rules together with every new file under `.opentide/states/deployment/`. A deploy from a checkout that has the stripped rules but not the shards creates a second live rule for every one of them.
 </Callout>

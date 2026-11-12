@@ -268,6 +268,12 @@ struct Surface {
 #[derive(Serialize)]
 struct Cve {
     links: Vec<String>,
+    /// With `[cve] retrieve_details` on: a row per identifier.
+    rows: Option<Vec<[String; 4]>>,
+    /// The identifiers the instance does not know.
+    missing: Vec<String>,
+    /// Whether the instance could not be asked for one.
+    unreachable: bool,
 }
 
 #[derive(Serialize)]
@@ -942,12 +948,7 @@ impl Pages<'_, '_> {
             })
             .collect();
         let ids = cve::identifiers(body.cve.as_deref().unwrap_or_default());
-        let cve = (!ids.is_empty()).then(|| Cve {
-            links: ids
-                .iter()
-                .map(|id| Flavor::link(id, &self.settings.cve.page_url(id)))
-                .collect(),
-        });
+        let cve = (!ids.is_empty()).then(|| self.cve_section(&ids));
         let network = self.catalog.chaining_network(&record.uuid, &self.vocab);
         let chaining_diagram = if network.is_empty() {
             let chain = self.catalog.chaining_entries(&record.uuid, &self.vocab);
@@ -1032,6 +1033,88 @@ impl Pages<'_, '_> {
             coverage: self.coverage(&record.uuid, &record.name, "threats")?,
         };
         self.templates.render("threat.md.j2", page)
+    }
+
+    /// A threat's CVE section (`render_cve`): links, or with `[cve]
+    /// retrieve_details` on a row of each record's details.
+    fn cve_section(&self, ids: &[String]) -> Cve {
+        let links = &self.settings.cve;
+        let link = |id: &str| Flavor::link(id, &links.page_url(id));
+        let mut section = Cve {
+            links: ids.iter().map(|id| link(id)).collect(),
+            rows: None,
+            missing: Vec::new(),
+            unreachable: false,
+        };
+        if !self.settings.cve_details {
+            return section;
+        }
+        let mut rows = Vec::new();
+        for id in ids {
+            match self.settings.cve_source.get(id) {
+                cve::CveDetail::Unavailable => {
+                    section.unreachable = true;
+                    rows.push([
+                        link(id),
+                        "-".to_owned(),
+                        "-".to_owned(),
+                        "Details unavailable from Vulnerability-Lookup.".to_owned(),
+                    ]);
+                }
+                cve::CveDetail::NotFound => {
+                    section.missing.push(id.clone());
+                    rows.push([
+                        link(id),
+                        "-".to_owned(),
+                        "-".to_owned(),
+                        "Not found in Vulnerability-Lookup.".to_owned(),
+                    ]);
+                }
+                cve::CveDetail::Found(record) => {
+                    let ident = if record.identifier.is_empty() {
+                        id.as_str()
+                    } else {
+                        record.identifier.as_str()
+                    };
+                    let url = if record.page_url.is_empty() {
+                        links.page_url(ident)
+                    } else {
+                        record.page_url.clone()
+                    };
+                    let mut label = Flavor::link(ident, &url);
+                    let aliases: Vec<String> = record
+                        .aliases
+                        .iter()
+                        .filter(|alias| alias.as_str() != ident)
+                        .map(|alias| link(alias))
+                        .collect();
+                    if !aliases.is_empty() {
+                        label = format!("{label}<br>{}", aliases.join(", "));
+                    }
+                    let summary = record
+                        .title
+                        .as_deref()
+                        .filter(|text| !text.is_empty())
+                        .or(record
+                            .description
+                            .as_deref()
+                            .filter(|text| !text.is_empty()))
+                        .unwrap_or("-");
+                    rows.push([
+                        label,
+                        record.published.clone().unwrap_or_else(|| "-".to_owned()),
+                        record
+                            .severity
+                            .clone()
+                            .or_else(|| record.state.clone())
+                            .unwrap_or_else(|| "-".to_owned()),
+                        table_cell(&cve::truncate(summary, 280)),
+                    ]);
+                }
+            }
+        }
+        section.rows = Some(rows);
+        section
     }
 
     /// A table as an index page writes it: Markdown, or on GitLab a sortable,

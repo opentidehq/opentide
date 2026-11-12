@@ -501,6 +501,7 @@ impl Validate for WorkspaceValidate<'_> {
             strict: self.strict,
             queries: self.queries,
             query_check: self.query_check,
+            cve_check: None,
         });
         let objects = validation.summary.objects;
         let mut found = validation.report.issues;

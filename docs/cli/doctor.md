@@ -60,6 +60,8 @@ A check that raises an unexpected error fails under its own codes with `The chec
 
 `opentide_latest` asks `https://pypi.org/pypi/opentide/json`, and `proxy` opens a TCP connection to the proxy, each with a 3-second timeout. Both go through `--proxy` and honour `NO_PROXY`. Offline, `opentide_latest` is a warning, not a failure; `--offline` skips both.
 
+A failed check names what went wrong as the Python exception it maps to (`ProxyError`, `ConnectionError`, `ConnectTimeout`, `HTTPError` for `opentide_latest`; `ConnectionRefusedError`, `TimeoutError`, `gaierror` for `proxy`), with `OPENTIDE_ENGINE=rust` as with the Python CLI ([choosing the implementation](./json-output.md#choosing-the-implementation)). Versions are ordered as PEP 440 orders them.
+
 ## Exit codes
 
 | Exit | When |

@@ -70,6 +70,8 @@ pub struct Context<'a> {
     pub version: &'a str,
     /// The streams.
     pub terminal: &'a Terminal,
+    /// `--proxy`: the CVE check's lookups go through it.
+    pub proxy: Option<&'a str>,
 }
 
 /// `--queries`'s name.
@@ -272,18 +274,37 @@ pub struct Run {
     pub root: PathBuf,
 }
 
+/// The CVE lookups of `--check cve`, with the workspace's `[cve]`
+/// settings; `None` for every other check.
+fn online_cve(
+    args: &Args,
+    ws: &opentide_workspace::Workspace,
+    cx: &Context<'_>,
+) -> Option<super::cve::OnlineCve> {
+    (args.check == Some(Check::Cve)).then(|| {
+        let settings = super::cve::Settings::from_documentation(
+            ws.configuration().resolved.get("documentation"),
+        );
+        super::cve::OnlineCve::new(&settings, cx.env, cx.proxy, cx.version)
+    })
+}
+
 /// Opens the workspace and validates it once; `Err` with the message when
 /// the configuration does not resolve.
 pub fn validate_once(args: &Args, cx: &Context<'_>) -> Result<Run, String> {
     let (_, options) = placement(cx.repo, cx.env, cx.cwd);
     let ws = super::open(options)?;
     let queries = args.queries.unwrap_or_default();
+    let cve = online_cve(args, &ws, cx);
     let options = Options {
         check: args.check,
         selection: Some(&args.selection),
         strict: args.strict,
         queries,
         query_check: Some(&EngineQueries),
+        cve_check: cve
+            .as_ref()
+            .map(|cve| cve as &dyn opentide_workspace::validate::CveCheck),
     };
     let validation = ws.validate(&options);
     Ok(run_of(validation, ws.root()))
@@ -372,12 +393,16 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         Ok(ws) => ws,
         Err(message) => return Report::error(COMMAND, message),
     };
+    let cve = online_cve(args, &ws, cx);
     let options = Options {
         check: args.check,
         selection: Some(&args.selection),
         strict: args.strict,
         queries,
         query_check: Some(&EngineQueries),
+        cve_check: cve
+            .as_ref()
+            .map(|cve| cve as &dyn opentide_workspace::validate::CveCheck),
     };
     let check_name = args.check.map(Check::name);
     let rerun_fix = fix_command(check_name, queries_flag(queries), &args.selection);

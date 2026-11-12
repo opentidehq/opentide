@@ -461,7 +461,7 @@ fn a_threats_cves_link_to_their_records() {
 }
 
 /// With `[cve] retrieve_details` on (the default), the threats whose pages
-/// list CVEs need their details, which only the Python engine fetches: by
+/// list CVEs need their details, which the host fetches (`CveSource`): by
 /// the scopes and targets a run writes. With it off, none do.
 #[test]
 fn cve_details_are_needed_with_retrieve_details_on() {
