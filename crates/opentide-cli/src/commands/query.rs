@@ -1836,12 +1836,15 @@ mod tests {
                 failure.argument,
             )
         };
+        // The operating system's own words for a missing file (os error 2
+        // on Unix and on Windows), as Python's strerror gives them.
+        let not_found = strerror(&std::io::Error::from_raw_os_error(2));
         assert_eq!(
             refused(args(None, Some("nope.kql"))),
             (
                 USAGE_EXIT_CODE,
                 code::USAGE_INVALID_VALUE.to_owned(),
-                "cannot read --query-file nope.kql: No such file or directory".to_owned(),
+                format!("cannot read --query-file nope.kql: {not_found}"),
                 Some("--query-file".to_owned())
             )
         );
@@ -1970,8 +1973,20 @@ mod tests {
             parse_instant("27/10/2026", "--to").unwrap_err(),
             "--to '27/10/2026' is not an ISO-8601 time, such as 2026-10-27T08:00:00Z"
         );
+        // strerror is the OS message without Rust's " (os error N)".
         let missing = std::io::Error::from_raw_os_error(2);
+        let text = missing.to_string();
+        assert_eq!(
+            strerror(&missing),
+            text[..text.rfind(" (os error ").unwrap()]
+        );
+        #[cfg(unix)]
         assert_eq!(strerror(&missing), "No such file or directory");
+        #[cfg(windows)]
+        assert_eq!(
+            strerror(&missing),
+            "The system cannot find the file specified."
+        );
         assert_eq!(strerror(&std::io::Error::other("plain")), "plain");
     }
 
