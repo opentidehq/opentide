@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Added
+
+- **MCP tools carry a title and behaviour hints.** Each tool in `tools/list` has a `title` and `annotations` (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`), so a host can tell the eight read-only tools from `run_query` and `deploy_rule` when it asks a person to approve a call. Only `validate_query`, `run_query` and `deploy_rule` are open-world, since `live: true` or `dry_run: false` contacts a tenant, and only `deploy_rule` is destructive. Claude's connector directory requires these hints. See [MCP tools](docs/mcp/tools.md#annotations).
+
 ## [0.25.0] — 2026-11-11
 
 Bitdefender GravityZone rules deploy from a `configurations.bitdefender` block, as a custom detection rule or a YARA rule. HarfangLab rules take a whole YARA signature, and `validate`, `lint`, the editor and `opentide tui` check YARA as libyara 4.5 compiles it.

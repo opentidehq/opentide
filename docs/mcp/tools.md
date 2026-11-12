@@ -11,6 +11,19 @@ Each tool below lists its parameters, an example call, and an example response s
 
 The server's `instructions`, sent with the `initialize` response, open with the tagline (*Spec-driven development for agentic detection engineering*) and give the agent its workflow: search, draft from a template, call `validation_report` until it is clean, then preview with `deploy_rule` and `dry_run: true`. People review and merge, and run real deployments.
 
+### Annotations
+
+Every tool has a `title` and `annotations` in `tools/list`. Hosts use the hints to decide which calls a person approves, and each hint holds for every argument:
+
+| Tool | `readOnlyHint` | `destructiveHint` | `openWorldHint` | Why |
+|------|:---:|:---:|:---:|-----|
+| `search`, `get_chaining`, `coverage`, `validate_rule`, `validation_report`, `explain`, `deployment_status` | `true` | `false` | `false` | Read the workspace and bundled data only |
+| `validate_query` | `true` | `false` | `true` | `live: true` contacts the tenant |
+| `run_query` | `false` | `false` | `true` | Contacts the tenant; Elastic `kuery` writes its rule preview's alerts to the preview index |
+| `deploy_rule` | `false` | `true` | `true` | `dry_run: false` creates or replaces the rule on the tenant |
+
+`idempotentHint` is `false` for `run_query` and `true` for every other tool.
+
 ### Next actions
 
 `validate_rule`, `validation_report` and `validate_query` add a `next_actions` list: the calls worth making next.
