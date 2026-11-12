@@ -403,6 +403,7 @@ The engine is [opentidehq/language-server](https://github.com/opentidehq/languag
 | `sysdig` | Falco: the block's `condition`, its `exceptions`, and the macros and lists of the block (and of the Falco default rules) it names |
 | `harfanglab` | YARA, HarfangLab profile: `yara.signature`, and the rule the decomposed form assembles |
 | `bitdefender` | YARA, Bitdefender profile: `yara.signature`, ASCII only, at most 30,000 characters, the modules GravityZone confirms |
+| `graylog` | Lucene, Graylog dialect: the block's `query`, and `.lucene` query files |
 
 SentinelOne's S1QL has no offline parser: `--platform sentinel_one` exits `2` (`failure.code` `usage_missing_option`, `failure.argument` `--live`) and names `--live`. CrowdStrike is never validated by `validate query`, and Sysdig, HarfangLab and Bitdefender only offline: `--platform sysdig --live`, `--platform harfanglab --live` and `--platform bitdefender --live` report `supported: false`, because none has a rule preview or a YARA dry run (see [Supported platforms](#supported-platforms)). `--platform bitdefender` checks YARA under the Bitdefender profile: ASCII only (`bitdefender_yara_ascii`), at most 30,000 characters (`bitdefender_yara_size`), and a module GravityZone has not confirmed is a warning (`yara_module_unconfirmed`).
 
@@ -593,6 +594,7 @@ Live query validation works on **six platforms**; the offline engine on eight, f
 | `sysdig` (Falco) | ❌ `supported: false` | ✅ |
 | `harfanglab` (YARA) | ❌ `supported: false` | ✅ |
 | `bitdefender` (YARA; criteria by `validate`) | ❌ `supported: false` | ✅ YARA |
+| `graylog` (Lucene, Graylog dialect) | ✅ `/api/search/validate` | ✅ |
 | `crowdstrike` | ❌ `supported: false` | ❌ |
 
 ### Elastic live validation and deploy

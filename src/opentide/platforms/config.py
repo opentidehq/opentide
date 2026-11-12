@@ -35,6 +35,7 @@ _SYSTEM_MODELS: dict[str, Any] = {
     "elastic": ConfigurationModels.Systems.Elastic,
     "sysdig": ConfigurationModels.Systems.Sysdig,
     "bitdefender": ConfigurationModels.Systems.Bitdefender,
+    "graylog": ConfigurationModels.Systems.Graylog,
 }
 
 #: ``SystemConfig.Tenant.Setup`` declares these without defaults, but every
@@ -245,6 +246,61 @@ def _check_bitdefender_setup(setup: dict[str, Any], *, where: str) -> None:
             )
 
 
+#: ``[tenants.setup]`` keys of a Graylog tenant (graylog-1.0, Tenant setup).
+_GRAYLOG_SETUP_KEYS = frozenset(
+    {
+        "ssl",
+        "url",
+        "token",
+        "allow_leading_wildcard",
+        "streams",
+        "stream_ids",
+        "notification_ids",
+        "tags",
+    }
+)
+
+
+def _check_graylog_names(value: Any, *, where: str, key: str) -> None:
+    items = [value] if isinstance(value, str) else value
+    if not isinstance(items, list) or not all(
+        isinstance(item, str) and item.strip() for item in items
+    ):
+        raise ValueError(f"{where} setup: {key} must be a string or a list of non-blank strings")
+
+
+def _check_graylog_setup(setup: dict[str, Any], *, where: str) -> None:
+    """graylog-1.0 tenant setup: known keys, `token` as `$VAR`, ids as 24 hex."""
+    unknown = sorted(set(setup) - _GRAYLOG_SETUP_KEYS)
+    if unknown:
+        raise ValueError(f"{where} setup has unknown key(s): {', '.join(unknown)}")
+    missing = [key for key in ("url", "token") if not setup.get(key)]
+    if missing:
+        raise ValueError(f"{where} setup is missing required key(s): {', '.join(missing)}")
+    token = setup["token"]
+    reference = _ENV_REFERENCE.fullmatch(token) if isinstance(token, str) else None
+    if reference is None:
+        raise ValueError(
+            f"{where} setup: token must be an environment variable reference "
+            "($VAR or ${VAR}, e.g. $GRAYLOG_TOKEN)"
+        )
+    setup["token"] = f"${reference.group(1) or reference.group(2)}"
+    if not isinstance(setup.get("allow_leading_wildcard", False), bool):
+        raise ValueError(f"{where} setup: allow_leading_wildcard must be true or false")
+    for key in ("streams", "tags"):
+        if setup.get(key) is not None:
+            _check_graylog_names(setup[key], where=where, key=key)
+    for table in ("stream_ids", "notification_ids"):
+        entries = setup.get(table) or {}
+        if not isinstance(entries, dict):
+            raise ValueError(f"{where} setup: {table} must be a table of aliases")
+        for alias, value in entries.items():
+            if not isinstance(value, str) or not _GRAVITYZONE_ID.fullmatch(value):
+                raise ValueError(
+                    f"{where} setup: {table}.{alias} must be a Graylog id, 24 lower-case hex digits"
+                )
+
+
 def _load_tenants(system: str, tenants_config: Any) -> list[Any]:
     """Typed tenants for any system without a bespoke loader."""
     from opentide.core.debug import DebugHelpers
@@ -280,6 +336,8 @@ def _load_tenants(system: str, tenants_config: Any) -> list[Any]:
             _check_sysdig_setup(supplied_setup, where=where)
         if system == "bitdefender":
             _check_bitdefender_setup(supplied_setup, where=where)
+        if system == "graylog":
+            _check_graylog_setup(supplied_setup, where=where)
         setup_raw = dict(_SETUP_DEFAULTS)
         setup_raw.update(DebugHelpers.fetch_config_envvar(supplied_setup))
         setup_raw["ssl"] = _tenant_ssl(setup_raw["ssl"], where=where)

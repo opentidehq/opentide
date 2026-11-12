@@ -166,6 +166,8 @@ class TideDeployment:
                 return registry.Opentide.Configurations.Systems.Sysdig
             case DetectionPlatforms.BITDEFENDER:
                 return registry.Opentide.Configurations.Systems.Bitdefender
+            case DetectionPlatforms.GRAYLOG:
+                return registry.Opentide.Configurations.Systems.Graylog
         raise NotImplementedError(f"System {system} is not implemented by TideDeployment")
 
     def mdr_configuration_resolver(
@@ -195,6 +197,8 @@ class TideDeployment:
                     mdr_config = configurations.sysdig
                 case DetectionPlatforms.BITDEFENDER:
                     mdr_config = configurations.bitdefender
+                case DetectionPlatforms.GRAYLOG:
+                    mdr_config = configurations.graylog
                 case _:
                     logger.critical(
                         "could_not_resolve_rule_configuration_for_system", detail=str(system)

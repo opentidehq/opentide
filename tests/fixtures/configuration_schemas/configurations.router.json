@@ -66,6 +66,10 @@
       "schema": "platforms.bitdefender.schema.json",
       "merge": "deep"
     },
+    "platforms/graylog.toml": {
+      "schema": "platforms.graylog.schema.json",
+      "merge": "deep"
+    },
     "platforms/*.toml": {
       "schema": "platforms.schema.json",
       "merge": "deep"

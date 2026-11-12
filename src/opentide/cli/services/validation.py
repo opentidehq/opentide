@@ -134,6 +134,15 @@ _CHECK_ISSUE_CODES: dict[str, frozenset[str]] = {
             "yara_include",
             "yara_empty_signature",
             "yara_duplicate_rule",
+            "graylog_query_blank",
+            "graylog_list_shape",
+            "graylog_schedule",
+            "graylog_event_limit",
+            "graylog_aggregation",
+            "graylog_event_field",
+            "graylog_event_key",
+            "graylog_priority",
+            "graylog_field_name",
         }
     ),
     ValidateCheck.cve.value: frozenset({"invalid_cve"}),
@@ -184,6 +193,9 @@ _CHECK_WARNING_CODES: dict[str, frozenset[str]] = {
             "bitdefender_severity_collapsed",
             # An unknown field on a target outside the spec's table.
             "bitdefender_criterion_field",
+            "graylog_overlapping_window",
+            "graylog_all_streams",
+            "graylog_title_duplicate",
         }
     ),
     ValidateCheck.sharing_config.value: frozenset({"api_key_literal", "unknown_connector"}),

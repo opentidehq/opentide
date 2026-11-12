@@ -24,9 +24,10 @@ class DetectionPlatform(str, Enum):
     elastic = "elastic"
     sysdig = "sysdig"
     bitdefender = "bitdefender"
+    graylog = "graylog"
 
 
-#: ``--platform`` shows this in help instead of ten values run together.
+#: ``--platform`` shows this in help instead of eleven values run together.
 PLATFORM_METAVAR = "PLATFORM"
 
 #: The values ``--platform`` takes, for its help text.
