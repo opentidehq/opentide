@@ -370,9 +370,10 @@ def test_the_python_names_of_keyword_keys_are_unknown_keys(keys: dict[str, Any])
 
 def test_a_null_attach_csv_or_correlation_group_by_is_the_key_left_out() -> None:
     """Both validate, as every other null does, and compile to their defaults."""
+    from tests.test_platforms.test_exabeam_compile import _block_rule
+
     from opentide.models.deployment_enums import StatusStrategy
     from opentide.platforms.exabeam.compile import compile_body
-    from tests.test_platforms.test_exabeam_compile import _block_rule
 
     two = [{"query": QUERY}, {"query": QUERY}]
     block = ExabeamConfig.model_validate(
