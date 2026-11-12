@@ -1,0 +1,257 @@
+{
+  "format": 1,
+  "scenario": "golden/share-retract",
+  "recorded_from": [
+    "/bin/sh",
+    "-c",
+    "cp -R tests/golden/fixtures/share-misp \"$HOME/ws\" && exec {oracle}/opentide --repo \"$HOME/ws\" --json share retract --target misp-prod --uuid 00000000-0000-4000-8048-000000000012 --uuid 00000000-0000-4000-8048-000000000020"
+  ],
+  "digest": "sha256:e8b3d9534684dc539219c69c555b90fe616c05f766802c39e36d18e64a331e1c",
+  "interactions": [
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://misp.invalid/servers/getVersion",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "misp-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"version\": \"2.5.17\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://misp.invalid/users/view/me",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "misp-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"User\": {\"id\": \"1\"}, \"Organisation\": {\"uuid\": \"11111111-1111-4111-8111-111111111111\"}}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://misp.invalid/objectTemplates/view/892fd46a-f69e-455c-8c4f-843a4b8f4295",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "misp-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"ObjectTemplate\": {\"version\": \"5\", \"ObjectTemplateElement\": [{\"object_relation\": \"name\"}, {\"object_relation\": \"uuid\"}, {\"object_relation\": \"version\"}, {\"object_relation\": \"opentide-type\", \"values_list\": [\"threat\", \"objective\", \"rule\"]}, {\"object_relation\": \"schema\"}, {\"object_relation\": \"opentide-object\"}]}}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://misp.invalid/events/restSearch",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"returnFormat\":\"json\",\"object_name\":\"opentide\",\"value\":\"00000000-0000-4000-8048-000000000012\",\"page\":1,\"limit\":100}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "misp-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"response\": [{\"Event\": {\"id\": \"7\", \"uuid\": \"e0000000-0000-4000-8048-000000000012\"}}]}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://misp.invalid/events/view/7",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "misp-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"Event\": {\"id\": \"7\", \"uuid\": \"e0000000-0000-4000-8048-000000000012\", \"Orgc\": {\"uuid\": \"11111111-1111-4111-8111-111111111111\"}, \"published\": true, \"Attribute\": [], \"Object\": [{\"id\": \"2\", \"name\": \"domain-ip\", \"Attribute\": [{\"value\": \"example.org\"}]}, {\"id\": \"1\", \"name\": \"opentide\", \"template_uuid\": \"892fd46a-f69e-455c-8c4f-843a4b8f4295\", \"Attribute\": [{\"object_relation\": \"uuid\", \"value\": \"00000000-0000-4000-8048-000000000012\", \"type\": \"text\"}]}]}}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://misp.invalid/events/unpublish/7",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "misp-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"saved\": true, \"success\": true, \"id\": \"7\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://misp.invalid/events/restSearch",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"returnFormat\":\"json\",\"object_name\":\"opentide\",\"value\":\"00000000-0000-4000-8048-000000000020\",\"page\":1,\"limit\":100}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "misp-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"response\": []}"
+      }
+    }
+  ]
+}

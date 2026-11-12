@@ -23,12 +23,12 @@ repos:
       # or parse files leave them alone; detect-private-key and
       # check-merge-conflict still read them.
       - id: trailing-whitespace
-        exclude: '\.ambr$|^tests/golden/(cases|blobs|fixtures)/|^crates/opentide-cli/tests/render/'
+        exclude: '\.ambr$|^tests/golden/(cases|blobs|fixtures)/|^crates/opentide-cli/tests/(render|extract_sentinel)/'
       - id: end-of-file-fixer
-        exclude: '^tests/golden/(cases|blobs|fixtures)/|^crates/opentide-cli/tests/render/'
+        exclude: '^tests/golden/(cases|blobs|fixtures)/|^crates/opentide-cli/tests/(render|extract_sentinel)/'
       - id: check-yaml
         args: [--unsafe]  # allow custom YAML tags in GitHub Actions
-        exclude: '^tests/golden/(cases|blobs|fixtures)/'
+        exclude: '^tests/golden/(cases|blobs|fixtures)/|^crates/opentide-cli/tests/extract_sentinel/'
       - id: check-toml
         exclude: '^tests/golden/(cases|blobs|fixtures)/'
       - id: check-merge-conflict

@@ -208,6 +208,25 @@ impl Workspace {
         env.to_js_value(&self.inner.catalog())
     }
 
+    /// The detection rules: their rows of the catalogue (`uuid`, `type`,
+    /// `schema`, `name`, `path`, `techniques`, ...), in index order.
+    #[napi(ts_return_type = "any[]")]
+    pub fn rules<'env>(&self, env: &'env Env) -> napi::Result<Unknown<'env>> {
+        env.to_js_value(&self.inner.rules())
+    }
+
+    /// The detection objectives: their rows of the catalogue.
+    #[napi(ts_return_type = "any[]")]
+    pub fn objectives<'env>(&self, env: &'env Env) -> napi::Result<Unknown<'env>> {
+        env.to_js_value(&self.inner.objectives())
+    }
+
+    /// The threat vectors: their rows of the catalogue.
+    #[napi(ts_return_type = "any[]")]
+    pub fn threats<'env>(&self, env: &'env Env) -> napi::Result<Unknown<'env>> {
+        env.to_js_value(&self.inner.threats())
+    }
+
     /// The rules that cover the ATT&CK `technique` (`opentide info coverage
     /// --technique`), their own techniques or inherited ones.
     #[napi(
@@ -751,6 +770,49 @@ mod tests {
                 ..DeployPlanOptions::default()
             }))
             .map(drop));
+    }
+
+    /// `from` copied to `to`, folders and files.
+    fn copy_tree(from: &std::path::Path, to: &std::path::Path) {
+        std::fs::create_dir_all(to).unwrap();
+        for entry in std::fs::read_dir(from).unwrap() {
+            let entry = entry.unwrap();
+            let target = to.join(entry.file_name());
+            if entry.file_type().unwrap().is_dir() {
+                copy_tree(&entry.path(), &target);
+            } else {
+                std::fs::copy(entry.path(), &target).unwrap();
+            }
+        }
+    }
+
+    /// A run that plans carries the command line's counts (`summary`), which
+    /// the in-memory workspace above, with no platform, never reaches.
+    #[test]
+    fn a_plan_of_the_corpus_carries_its_summary() {
+        let source = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/tide_corpus/current");
+        let dir = tempfile::tempdir().unwrap();
+        copy_tree(
+            &source.join("Configurations"),
+            &dir.path().join(".opentide/configurations"),
+        );
+        for (family, legacy) in [
+            ("threats", "Objects/Threat Vectors"),
+            ("objectives", "Objects/Detection Objectives"),
+            ("rules", "Objects/Detection Rules"),
+        ] {
+            copy_tree(
+                &source.join(legacy),
+                &dir.path().join("objects").join(family),
+            );
+        }
+        let ws = open_workspace(dir.path().to_string_lossy().into_owned(), None).unwrap();
+        let plan = ws.plan(None).unwrap();
+        assert!(plan.ok, "{}", plan.document);
+        let summary: serde_json::Value =
+            serde_json::from_str(plan.summary.as_deref().unwrap()).unwrap();
+        assert!(summary.is_object(), "{summary}");
     }
 
     #[test]

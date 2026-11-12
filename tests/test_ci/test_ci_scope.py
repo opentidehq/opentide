@@ -9,8 +9,9 @@ skipped by its ``if`` would pass without running.
 The full set adds everything else (Python 3.11-3.13, the engine release dry
 run, WebAssembly, crate packaging, grammars, the Elastic sweep, fuzz smoke, the
 Windows CLI smoke, the facade crate's every feature and semver checks, the
-Node package, LSP clients, benchmarks, Rust coverage, golden determinism, the
-parity dashboard, the docs check and the publish dry run). It runs nightly,
+Node package, the cross-SDK conformance suite, LSP clients, benchmarks, Rust
+coverage, golden determinism, the parity dashboard, the docs check and the
+publish dry run). It runs nightly,
 on every push to development and integration/unified-core, on Run workflow,
 and on a pull request that carries the ``full-ci`` label: each such job's
 ``if`` is exactly ``FULL_SET``. The engine release dry run (and crate
@@ -79,6 +80,7 @@ CI_FULL = {
     "cli-windows-smoke",
     "facade",
     "node",
+    "conformance",
 }
 # ci.yml's jobs in the full set and on a pull request that changes their inputs.
 CI_PATHS = {

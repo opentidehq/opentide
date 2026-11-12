@@ -210,6 +210,41 @@ impl Defender {
         })
     }
 
+    /// Every custom detection rule of the tenant, across Graph's pages
+    /// (`DefenderForEndpointImporter.list_rules`, UC-4.4b): `@odata.nextLink`
+    /// is followed, and an error answer is an error, never an empty listing.
+    pub async fn list_rules(&self, cx: TenantContext<'_>) -> Result<Vec<Json>, DefenderError> {
+        let mut rules = Vec::new();
+        let mut next = Some(DETECTION_RULES_ENDPOINT.to_owned());
+        while let Some(url) = next.take() {
+            let answer = self.graph(cx, reqwest::Method::GET, &url, None).await?;
+            if !(200..300).contains(&answer.status) {
+                let reason = reqwest::StatusCode::from_u16(answer.status)
+                    .ok()
+                    .and_then(|status| status.canonical_reason())
+                    .unwrap_or_default();
+                return Err(DefenderError::Refused {
+                    message: format!(
+                        "Listing Defender for Endpoint detection rules on tenant {} failed with \
+                         HTTP {} {reason}",
+                        cx.tenant.label.tenant, answer.status
+                    ),
+                    context: None,
+                });
+            }
+            let page = answer.json().unwrap_or(Json::Null);
+            if let Some(Json::Array(items)) = page.get("value") {
+                rules.extend(items.iter().cloned());
+            }
+            if let Some(Json::Str(link)) = page.get("@odata.nextLink")
+                && !link.is_empty()
+            {
+                next = Some(link.clone());
+            }
+        }
+        Ok(rules)
+    }
+
     /// Replaces rule *rule_id* with *body* (`update_detection_rule`).
     pub async fn update_rule(
         &self,

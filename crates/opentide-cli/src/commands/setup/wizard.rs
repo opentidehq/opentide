@@ -143,6 +143,9 @@ pub struct Setup {
     pub promotion: Option<bool>,
     /// The MCP hosts, in order.
     pub mcp: Vec<String>,
+    /// The agent environments skills install for, in order; `None` when
+    /// skills were not chosen, or cannot be installed.
+    pub skills: Option<Vec<String>>,
     /// Warnings the run carries from the questions (`options.warnings`).
     pub warnings: Vec<String>,
 }
@@ -189,9 +192,15 @@ impl Screen<'_> {
     }
 }
 
+/// Checks the skills for the agent environments chosen before anything is
+/// written (`unavailable_skills`): the slugs that cannot be fetched, or why
+/// the catalogue cannot be read.
+pub type Preflight<'a> = dyn FnMut(&[String]) -> Result<Vec<String>, String> + 'a;
+
 /// The `setup` wizard (`run_interactive_setup`). `shown` is the target as
 /// given, `root` the same made absolute; `promoting` is whether the
-/// repository promotes statuses now (`effective_promotion`).
+/// repository promotes statuses now (`effective_promotion`); `preflight`
+/// checks the skills chosen.
 ///
 /// # Errors
 ///
@@ -202,6 +211,7 @@ pub fn setup(
     shown: &str,
     root: &Path,
     promoting: bool,
+    preflight: &mut Preflight<'_>,
 ) -> Answer<Gathered> {
     let welcome = welcome(screen.console, screen.mode, screen.version);
     screen.print(&welcome)?;
@@ -254,14 +264,16 @@ pub fn setup(
     if prompter.confirm("Install agent skills?", false)? {
         let picked = prompter.checkbox("Agent environments", &labels(&SKILLS), &[], true)?;
         let targets = keys(&SKILLS, &picked);
-        // Installing the skills downloads them (UC-4.4, #834): the Python
-        // implementation does it; this one says how to run it, as the
-        // oracle says why it skipped them when the catalogue is out of reach.
-        let flags: Vec<String> = targets.iter().map(|target| format!("--{target}")).collect();
-        answers.warnings.push(format!(
-            "Agent skills skipped: installing them has no Rust implementation yet. Run 'opentide setup skills {} --yes' with OPENTIDE_ENGINE unset.",
-            flags.join(" ")
-        ));
+        match preflight(&targets) {
+            Err(message) => answers
+                .warnings
+                .push(format!("Agent skills skipped: {message}")),
+            Ok(unavailable) if !unavailable.is_empty() => answers.warnings.push(format!(
+                "Agent skills unavailable and omitted: {}",
+                unavailable.join(", ")
+            )),
+            Ok(_) => answers.skills = Some(targets),
+        }
     }
     let rows = plan_rows(
         shown,
@@ -272,7 +284,10 @@ pub fn setup(
             .as_deref()
             .map(|ci| shown_labels(&CI, &[ci.to_owned()]).join("")),
         (!answers.mcp.is_empty()).then(|| shown_labels(&MCP, &answers.mcp)),
-        None,
+        answers
+            .skills
+            .as_deref()
+            .map(|skills| shown_labels(&SKILLS, skills)),
     );
     screen.print(&render_plan(screen.console, &rows))?;
     for warning in &answers.warnings {
@@ -341,6 +356,36 @@ pub fn mcp(
     Ok(prompter
         .confirm("Write these MCP configurations?", true)?
         .then_some(hosts))
+}
+
+/// The `setup skills` wizard's question (`run_interactive_skills_setup`):
+/// the agent environments.
+///
+/// # Errors
+///
+/// Ctrl-C at the question, or a terminal that cannot be used.
+pub fn skill_targets(prompter: &mut dyn Prompter) -> Answer<Vec<String>> {
+    let picked = prompter.checkbox("Agent environments", &labels(&SKILLS), &[], true)?;
+    Ok(keys(&SKILLS, &picked))
+}
+
+/// The `setup skills` wizard's confirmation: the target and the agent
+/// environments, then whether to install.
+///
+/// # Errors
+///
+/// Ctrl-C at the question, or a terminal that cannot be used.
+pub fn confirm_skills(
+    prompter: &mut dyn Prompter,
+    screen: &mut Screen<'_>,
+    root: &Path,
+    targets: &[String],
+) -> Answer<bool> {
+    screen.target(root)?;
+    let mut line = Text::styled("Agent environments:", &Style::new("bold"));
+    line.push_str(&format!(" {}", targets.join(", ")));
+    screen.line(&line)?;
+    prompter.confirm("Install these agent skills?", true)
 }
 
 // ---------------------------------------------------------------- the screens
@@ -757,6 +802,7 @@ pub(crate) mod tests {
             ".",
             Path::new("/r/detections"),
             false,
+            &mut |_: &[String]| Ok(Vec::new()),
         )
         .unwrap();
         assert_eq!(
@@ -818,6 +864,7 @@ pub(crate) mod tests {
             "x",
             Path::new("/r/x"),
             true,
+            &mut |_: &[String]| Ok(Vec::new()),
         )
         .unwrap();
         // GitLab has no explorer pages, and promotion was ticked already.
@@ -844,6 +891,7 @@ pub(crate) mod tests {
             "x",
             Path::new("/r/x"),
             true,
+            &mut |_: &[String]| Ok(Vec::new()),
         )
         .unwrap() else {
             panic!();
@@ -852,9 +900,8 @@ pub(crate) mod tests {
         assert_eq!(answers.ci.as_deref(), Some("gitlab"));
     }
 
-    #[test]
-    fn chosen_skills_are_skipped_with_how_to_install_them() {
-        let mut script = Script::new(vec![
+    fn skills_script() -> Script {
+        Script::new(vec![
             Reply::Text(None),
             Reply::Text(None),
             Reply::Text(None),
@@ -864,7 +911,13 @@ pub(crate) mod tests {
             Reply::Confirm(Some(true)),
             Reply::Checkbox(Some(vec![1, 2])),
             Reply::Confirm(None),
-        ]);
+        ])
+    }
+
+    #[test]
+    fn chosen_skills_are_checked_before_the_plan() {
+        let mut checked: Vec<Vec<String>> = Vec::new();
+        let mut script = skills_script();
         let mut out = Vec::new();
         let Gathered::Apply(answers) = setup(
             &mut script,
@@ -872,17 +925,89 @@ pub(crate) mod tests {
             "x",
             Path::new("/r/x"),
             false,
+            &mut |targets: &[String]| {
+                checked.push(targets.to_vec());
+                Ok(Vec::new())
+            },
         )
         .unwrap() else {
             panic!();
         };
-        let warning = "Agent skills skipped: installing them has no Rust implementation yet. Run 'opentide setup skills --claude-code --generic --yes' with OPENTIDE_ENGINE unset.";
-        assert_eq!(answers.warnings, [warning]);
-        assert_eq!(answers.ci, None);
+        assert_eq!(checked, [["claude-code", "generic"]]);
+        assert_eq!(
+            answers.skills.as_deref(),
+            Some(&["claude-code".to_owned(), "generic".to_owned()][..])
+        );
+        assert!(answers.warnings.is_empty());
         let printed = String::from_utf8(out).unwrap();
         assert!(
-            printed.contains("  Agent skills   none\n\nwarning: Agent skills skipped"),
+            printed.contains("  Agent skills   Claude Code, Generic (AGENTS.md)\n"),
             "{printed}"
+        );
+    }
+
+    #[test]
+    fn skills_that_cannot_be_fetched_are_skipped_with_a_warning() {
+        for (preflight, warning) in [
+            (
+                Err("Could not fetch skills catalogue".to_owned()),
+                "Agent skills skipped: Could not fetch skills catalogue",
+            ),
+            (
+                Ok(vec!["a".to_owned(), "b".to_owned()]),
+                "Agent skills unavailable and omitted: a, b",
+            ),
+        ] {
+            let mut script = skills_script();
+            let mut out = Vec::new();
+            let Gathered::Apply(answers) = setup(
+                &mut script,
+                &mut screen(&mut out),
+                "x",
+                Path::new("/r/x"),
+                false,
+                &mut |_: &[String]| preflight.clone(),
+            )
+            .unwrap() else {
+                panic!();
+            };
+            assert_eq!(answers.warnings, [warning]);
+            assert_eq!(answers.skills, None);
+            let printed = String::from_utf8(out).unwrap();
+            assert!(
+                printed.contains(&format!("  Agent skills   none\n\nwarning: {warning}")),
+                "{printed}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_skills_wizard_names_its_target_and_environments() {
+        let mut script = Script::new(vec![
+            Reply::Checkbox(Some(vec![0, 3])),
+            Reply::Confirm(None),
+        ]);
+        assert_eq!(
+            skill_targets(&mut script).unwrap(),
+            ["cursor", "github-copilot"]
+        );
+        let mut out = Vec::new();
+        assert!(
+            confirm_skills(
+                &mut script,
+                &mut screen(&mut out),
+                Path::new("/r/x"),
+                &["cursor".to_owned(), "github-copilot".to_owned()]
+            )
+            .unwrap()
+        );
+        assert_eq!(
+            script.asked[1],
+            "confirm Install these agent skills? [true]"
+        );
+        assert_eq!(
+            String::from_utf8(out).unwrap(),
+            "Target: /r/x\nAgent environments: cursor, github-copilot\n"
         );
     }
 
@@ -895,6 +1020,7 @@ pub(crate) mod tests {
             ".",
             Path::new("/r/x"),
             false,
+            &mut |_: &[String]| Ok(Vec::new()),
         );
         assert_eq!(stopped, Err(Stop::Interrupted));
     }

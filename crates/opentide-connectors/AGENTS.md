@@ -2,8 +2,9 @@
 
 The connector framework (plan D-8, [ADR 0008](../../docs/internal/adr/0008-connectors-in-rust.md),
 UC-4.1 [#831](https://github.com/opentidehq/opentide/issues/831)): everything opentide sends to a
-tenant or to the network goes through it. UC-4.2 to UC-4.4 implement the platforms on it; UC-4.5
-adds the Python plugin hook to its registry.
+tenant or to the network goes through it, but a platform plugin's own requests. UC-4.2 to UC-4.4
+implement the platforms on it; UC-4.5 adds the Python plugin hook to its registry (`plugin.rs`; the
+host is `bindings/python/src/plugins.rs`, the plugin API `src/opentide/plugins.py`).
 
 | Module | What | Python it replaces |
 |--------|------|--------------------|
@@ -14,7 +15,8 @@ adds the Python plugin hook to its registry.
 | `credentials.rs` | `$NAME`/`${NAME}` (opentide-workspace's `env_reference`), the 0.21.0 `$text` reading, placeholders for runs that send nothing; `Secret` prints `***` | `core/environment.py` `fetch_config_envvar`, `defer_missing_envvars` |
 | `tenant.rs` | `Tenant` from a `setup` table: `ssl` words and `$VAR`, every other value a credential; `TenantLabel`; `configured`: a resolved configuration's tenants of a platform as `(name, setup)` | `platforms/config.py` `_tenant_ssl`, `transport.tenant_tls_verify` |
 | `error.rs` | `ConnectorError` and its `failure.code`; messages name `scheme://host[:port]` only, never a path, query or credential | `transport.py` `TenantUnreachableError`, `reaching_tenant` |
-| `connector.rs` | `Deployer`, `LiveValidator`, `QueryRunner`, `Sharer`, `StateMigrator`, `Platform` and the `Registry`; the query types every runner shares: `QueryRequest`, `QueryOutcome`, `QueryColumn`, `TimeWindow`, `LiveCheck`, `flatten`, `columns_of`, `kql_with_limit`; `lib.rs`'s `builtin()` registers the nine platforms and `http_settings(platform, timeout)` picks each one's client settings | `platforms/base.py`, `registry.py`, `query/models.py`, `query/runner.py` |
+| `plugin.rs` | Platform plugins (UC-4.5, #835): `PluginHost` (the Python binding is the one host), `with_plugins` (the built-in platforms, then the plugins; a plugin never replaces a built-in), `unavailable` (what a host-less command line says) | `platforms/registry.py`'s entry points |
+| `connector.rs` | `Deployer`, `LiveValidator`, `QueryRunner`, `Sharer`, `StateMigrator`, `ConfigurationCheck` (a plugin's own check of its rule block), `Platform` and the `Registry`; the query types every runner shares: `QueryRequest`, `QueryOutcome`, `QueryColumn`, `TimeWindow`, `LiveCheck`, `flatten`, `columns_of`, `kql_with_limit`; `lib.rs`'s `builtin()` registers the nine platforms and `http_settings(platform, timeout)` picks each one's client settings | `platforms/base.py`, `registry.py`, `query/models.py`, `query/runner.py` |
 | `runtime.rs` | `block_on` (a runtime per call, for the synchronous CLI), `fan_out` over tenants (bounded, ordered, cancellable), `cancel_when` (Ctrl-C) | the query and deploy loops |
 | `progress.rs` | `tenant` progress events (`OPENTIDE_PROGRESS=json`) | `core/progress_events.py` `tenant` |
 | `body.rs` | `python_json`: a body as `json.dumps` writes it (`, ` and `: `, ASCII escapes), through a serde_json formatter | `requests`' `json=` |
@@ -26,8 +28,9 @@ adds the Python plugin hook to its registry.
 | `sysdig.rs` | Sysdig (UC-4.2): Falco rules and runtime policies, `deploy_rule` with the deployment-state change it makes | `platforms/sysdig/client.py`, `deployer.py` |
 | `splunk.rs` | Splunk (UC-4.3, #833): the Python Splunk client's requests on opentide's urllib handler: saved searches (`_apply_saved_search`: looked up, created, set in two updates, deleted), one-shot searches, `search/parser`, the `server/info` reads that choose the v1 or v2 search endpoints; an HTML page in place of the API is a gateway's (`ConnectorError::Gateway`) or a proxy's | `platforms/splunk/`, the Python Splunk client |
 | `carbon_black.rs` | Carbon Black Cloud (UC-4.3): cbc_sdk's requests: watchlist reports (`_deploy_to_org`), process searches (validated, started, polled, read in pages), `search_validation`; the SDK's error texts | `platforms/carbon_black/`, `cbc_sdk` |
-| `sentinel.rs` | Sentinel (UC-4.3): ARM `alertRules` (create or replace, delete, list with `nextLink`), `ClientSecretCredential`'s sign-in through MSAL (OpenID configuration, client credentials, one token per tenant and scope), Log Analytics queries as one REST call; MSAL's and azure-core's request ids from a source the caller can fix (`Sentinel::with_identity`) | `platforms/sentinel/`, `azure-identity`, `azure-monitor-query` |
-| `defender.rs`, `elastic.rs`, `sentinel_one.rs` | The platforms of UC-4.2b (#832): client, deploy calls, live check (`LiveValidator`) and query runner (`QueryRunner`) of each, request for request, on the shared query types (UC-4.2c); Elastic's Elasticsearch checks, rule preview, query text and advisories. Elastic has no `Deployer`: its deploy takes the rule's block (`deploy_rule`) | `platforms/<platform>/` |
+| `sentinel.rs` | Sentinel (UC-4.3): ARM `alertRules` (create or replace, delete, list with `nextLink`: the listing `generate extract sentinel` reads, UC-4.4e), `ClientSecretCredential`'s sign-in through MSAL (OpenID configuration, client credentials, one token per tenant and scope), Log Analytics queries as one REST call; MSAL's and azure-core's request ids from a source the caller can fix (`Sentinel::with_identity`) | `platforms/sentinel/`, `azure-identity`, `azure-monitor-query` |
+| `defender.rs`, `elastic.rs`, `sentinel_one.rs` | The platforms of UC-4.2b (#832): client, deploy calls, live check (`LiveValidator`) and query runner (`QueryRunner`) of each, request for request, on the shared query types (UC-4.2c); Elastic's Elasticsearch checks, rule preview, query text and advisories. Elastic has no `Deployer`: its deploy takes the rule's block (`deploy_rule`). The listings `generate extract` reads (UC-4.4b): Defender's `list_rules`, Elastic's `find_rules` | `platforms/<platform>/` |
+| `misp.rs` | MISP's REST API, the subset `opentide share` speaks (UC-4.4b, #834): `MispClient` on `HttpClient` (the key in `Authorization`, JSON both ways, 30 s, TLS per block), the `Misp` trait the CLI's engine calls, answers classified into `MispCallError` with a fixed reason, never a body | `sharing/client.py` (PyMISP's `_prepare_request`) |
 
 ## Place
 

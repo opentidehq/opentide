@@ -64,6 +64,10 @@ At a terminal, each target lists one row per object, like a deploy plan: `+ crea
 
 `push` and `preview` validate each object that passes the type, status, and TLP filters. `sharing-config` runs as part of loading `sharing.toml`. A literal API key is a warning and is replaced with `[REDACTED]` if it would otherwise appear.
 
+### On the Rust engine
+
+With `OPENTIDE_ENGINE=rust` ([choosing the implementation](./json-output.md#choosing-the-implementation)), every share command runs on the Rust command line, which speaks MISP's REST API itself: the same requests PyMISP sent (the key in `Authorization`, JSON both ways, a 30 s timeout, TLS as `verify_ssl` says, the proxy and CA bundles the environment names), the same records, rows, ledger and exit codes. Its requests carry an `opentide/<version>` User-Agent. A `push --changed` reads its diff with gitoxide, the git implementation in Rust, without the `git` program: the same start, end, files and failures as the Python CLI, a `--since` read as the table above says (a short SHA or `HEAD~1` names no commit there either). `OPENTIDE_ENGINE=compare` refuses a `push` or `retract`, since both runs would reach the instance.
+
 ## State
 
 Successful creates, updates, and retractions are recorded in `.opentide/states/sharing.jsonl`. Skips and failures leave the file unchanged. `preview` writes nothing. Setup gitignores `.opentide/states/sharing.jsonl` only: the file is a cache, while `.opentide/states/deployment/` holds [deployment state](../usage/concepts/deployment-state.md) that must be committed.

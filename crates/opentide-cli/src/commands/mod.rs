@@ -16,6 +16,7 @@ pub mod deploy_state;
 pub mod doctor;
 pub mod doctor_network;
 pub mod explain;
+pub mod extract;
 pub mod findings;
 pub mod generate;
 pub mod info;
@@ -24,9 +25,12 @@ pub mod lsp;
 pub mod migrate;
 pub mod migrate_state;
 pub mod new;
+pub mod plugin;
 pub mod query;
+pub mod query_rule;
 pub mod rules;
 pub mod setup;
+pub mod share;
 pub mod skills;
 pub mod tui;
 pub mod validate;
@@ -52,6 +56,10 @@ pub const ISSUES_FOUND: &str = "issues_found";
 
 /// What a command prints.
 #[derive(Clone, Debug)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "independent switches of how a report prints, one field each"
+)]
 pub struct Report {
     /// The envelope's parts.
     pub outcome: Outcome,
@@ -84,6 +92,10 @@ pub struct Report {
     /// mode: no document, no outcome line (the oracle's `sys.exit` in the
     /// middle of a run, `deploy`'s invalid promotion target).
     pub bare_exit: bool,
+    /// A usage error the command found once it ran (Click's `BadParameter`
+    /// raised in a callback): the text modes print the command's `usage:`
+    /// and `help:` notes under it, as for a parse error.
+    pub usage_notes: bool,
 }
 
 /// One part of a body.
@@ -181,6 +193,7 @@ impl Report {
             numbered_next: false,
             ci_summary: None,
             bare_exit: false,
+            usage_notes: false,
         }
     }
 
@@ -199,6 +212,7 @@ impl Report {
             numbered_next: false,
             ci_summary: None,
             bare_exit: false,
+            usage_notes: false,
         }
     }
 

@@ -40,6 +40,15 @@ serde.workspace = true
 serde_json.workspace = true
 # What the serve host's Python side could not do, logged as the CLI logs.
 tracing = "0.1"
+# The platform plugin host (UC-4.5, #835): plugins behind the connectors'
+# traits, called on the run's runtime's blocking threads, their query rows in
+# the compiler's ordered JSON.
+opentide-connectors.workspace = true
+opentide-compile.workspace = true
+tokio = { workspace = true, features = ["rt"] }
+
+[dev-dependencies]
+jiff.workspace = true
 
 [features]
 # PyO3's introspection data, from which `cargo xtask stubs` writes the

@@ -59,6 +59,200 @@ FIELD_CAPS = {
 }
 
 
+# The rules `generate extract elastic` exports (UC-4.4b), on one page of `_find`.
+EXPORTED: list[dict[str, Any]] = [
+    {
+        "id": "kb-101",
+        "rule_id": "7d1c0f00-0000-4000-8000-000000000101",
+        "name": 'Encoded PowerShell: "-enc" flag',
+        "description": "  PowerShell started with an encoded command.  ",
+        "author": ["Elastic", "SOC team"],
+        "created_at": "2026-02-03T04:05:06.789Z",
+        "updated_at": "2026-03-04T05:06:07.890Z",
+        "severity": "high",
+        "risk_score": 73,
+        "risk_score_mapping": [
+            {"field": "event.risk_score", "operator": "equals", "value": "", "risk_score": 50}
+        ],
+        "severity_mapping": [
+            {
+                "field": "host.os.type",
+                "operator": "equals",
+                "value": "windows",
+                "severity": "critical",
+            }
+        ],
+        "enabled": True,
+        "type": "query",
+        "language": "kuery",
+        "query": 'process.name : "powershell.exe" and process.args : "-enc"\n',
+        "index": ["logs-endpoint.events.process-*", "winlogbeat-*"],
+        "interval": "5m",
+        "from": "now-9m",
+        "max_signals": 100,
+        "tags": ["OpenTide", "Domain: Endpoint", "OS: Windows"],
+        "threat": [
+            {
+                "framework": "MITRE ATT&CK",
+                "tactic": {"id": "TA0002", "name": "Execution"},
+                "technique": [
+                    {"id": "T1059", "name": "Command", "subtechnique": [{"id": "T1059.001"}]},
+                    {"id": "T1027", "name": "Obfuscated Files or Information"},
+                ],
+            }
+        ],
+        "references": ["https://attack.mitre.org/techniques/T1059/001/"],
+        "required_fields": [
+            {"name": "process.name", "type": "keyword", "ecs": True},
+            {"name": "process.args", "type": "unknown", "ecs": True},
+        ],
+        "related_integrations": [
+            {"package": "endpoint", "version": "*"},
+            {"package": "windows", "integration": "powershell", "version": "^1.5.0"},
+        ],
+        "filters": [
+            {
+                "meta": {
+                    "type": "phrase",
+                    "key": "host.os.type",
+                    "params": {"query": "windows"},
+                    "negate": False,
+                },
+                "$state": {"store": "appState"},
+            },
+            {
+                "meta": {"type": "exists", "key": "user.name", "disabled": True},
+                "query": {"exists": {"field": "user.name"}},
+            },
+        ],
+        "investigation_fields": {"field_names": ["user.name", "host.name"]},
+        "alert_suppression": {
+            "group_by": ["host.name"],
+            "duration": {"value": 5, "unit": "m"},
+            "missing_fields_strategy": "suppress",
+        },
+        "note": "## Triage\n\nCheck the parent process.\n",
+        "setup": "",
+        "false_positives": ["Administrators running scripts"],
+        "exceptions_list": [
+            {
+                "id": "endpoint_list",
+                "list_id": "endpoint_list",
+                "type": "endpoint",
+                "namespace_type": "agnostic",
+            },
+            {"id": "ex-1", "list_id": "allowlist", "type": "detection"},
+        ],
+        "actions": [{"id": "slack-connector", "group": "default", "params": {"message": "Alert"}}],
+        "response_actions": [
+            {"action_type_id": ".endpoint", "params": {"command": "isolate", "comment": "Contain"}},
+            {"action_type_id": ".endpoint", "params": {"command": "get-file"}},
+            {"action_type_id": ".osquery", "params": {"pack_id": "p1"}},
+        ],
+        "timeline_id": "db366523-f1c6-4c1f-8731-6ce5ed9e5717",
+        "timeline_title": "Generic Endpoint Timeline",
+        "building_block_type": "default",
+        "immutable": False,
+        "rule_source": {"type": "internal"},
+    },
+    {
+        "id": "kb-102",
+        "rule_id": "7d1c0f00-0000-4000-8000-000000000102",
+        "name": "Process sequence – résumé",
+        "description": "A sequence of processes.",
+        "author": "Detection team",
+        "created_at": "2026-02-03T00:00:00Z",
+        "severity": "low",
+        "risk_score": 21,
+        "enabled": False,
+        "type": "eql",
+        "language": "eql",
+        "query": (
+            'sequence by host.id\n  [process where process.name == "cmd.exe"]\n'
+            "  [network where true]"
+        ),
+        "index": ["logs-*"],
+        "interval": "1h",
+        "from": "now-2w",
+        "timestamp_field": "event.ingested",
+        "tiebreaker_field": "event.sequence",
+        "immutable": False,
+    },
+    {
+        "id": "kb-103",
+        "rule_id": "7d1c0f00-0000-4000-8000-000000000103",
+        "name": 'Encoded PowerShell: "-enc" flag',
+        "description": "Many failed logons from one source.",
+        "author": [],
+        "severity": "medium",
+        "risk_score": 47,
+        "enabled": True,
+        "type": "threshold",
+        "language": "kuery",
+        "query": "event.outcome : failure",
+        "data_view_id": "dv-logs",
+        "interval": "5m",
+        "from": "now-3m",
+        "threshold": {
+            "field": "source.ip",
+            "value": 20,
+            "cardinality": [{"field": "user.name", "value": 5}],
+        },
+    },
+    {
+        "id": "kb-104",
+        "rule_id": "7d1c0f00-0000-4000-8000-000000000104",
+        "name": "New service name",
+        "description": "",
+        "severity": "medium",
+        "risk_score": 47,
+        "enabled": True,
+        "type": "new_terms",
+        "language": "kuery",
+        "query": "event.category : process",
+        "index": ["logs-*"],
+        "new_terms_fields": ["service.name"],
+        "history_window_start": "now-7d",
+        "interval": "bogus",
+    },
+    {
+        "id": "kb-105",
+        "rule_id": "7d1c0f00-0000-4000-8000-000000000105",
+        "name": "ES|QL aggregation",
+        "description": "Counts per host.",
+        "severity": "critical",
+        "risk_score": 99,
+        "enabled": True,
+        "type": "esql",
+        "language": "esql",
+        "query": "FROM logs-* | STATS count = COUNT(*) BY host.name | WHERE count > 100",
+        "index": ["ignored-*"],
+    },
+    {
+        "id": "kb-106",
+        "rule_id": "9a8b7c6d-prebuilt",
+        "name": "Prebuilt rule",
+        "description": "Shipped by Elastic.",
+        "severity": "low",
+        "risk_score": 21,
+        "type": "query",
+        "query": "x : y",
+        "immutable": True,
+        "rule_source": {"type": "external"},
+    },
+    {
+        "id": "kb-107",
+        "rule_id": "legacy-rule-7",
+        "name": "Rule with a legacy id",
+        "description": "Not a UUID.",
+        "severity": "low",
+        "risk_score": 21,
+        "type": "query",
+        "query": "x : y",
+    },
+]
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "elastic-tenant"
     sys_version = ""
@@ -102,6 +296,14 @@ class Handler(BaseHTTPRequestHandler):
         if not self._authorised():
             return
         path, query = self._parts()
+        if path == RULES + "/_find":
+            page = int(query.get("page", ["1"])[0])
+            per_page = int(query.get("per_page", ["20"])[0])
+            data = EXPORTED[(page - 1) * per_page : page * per_page]
+            self._json(
+                200, {"page": page, "perPage": per_page, "total": len(EXPORTED), "data": data}
+            )
+            return
         if path == RULES:
             rule_id = query.get("rule_id", [""])[0]
             if rule_id == DENIED:

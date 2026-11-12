@@ -1,0 +1,4 @@
+misp-prod    misp  enabled   max TLP amber  https://misp.invalid
+misp-locked  misp  enabled   max TLP green  https://misp.invalid/locked
+misp-lab     misp  disabled  max TLP clear  https://misp-lab.invalid
+✓ 3 sharing targets

@@ -1,0 +1,88 @@
+name: "Quotes \"and\" back\\slash: a <name> - soc"
+
+#references:
+  #public:
+    #1: 
+  #internal:
+    #a: 
+
+metadata:
+  uuid: 00000000-0000-4000-8044-000000000005
+  schema: rule::1.0
+  version: 
+  created: 2026-09-10
+  modified: 2026-09-10
+  tlp: amber
+  author: opentide Sentinel Importer 
+  #contributors:
+    #-
+
+description: |
+  Characters a file name cannot hold, and a name that needs quoting.
+#detection_model: 
+
+response:
+  alert_severity: Low
+  #playbook: https://
+  #responders: 
+  #procedure:
+    #analysis: |
+      #...
+    #searches:
+      #- purpose: |
+          #...
+        #system: 
+        #query: |
+          #...
+    #containment: |
+      #...
+
+configurations:
+  sentinel: 
+    schema: platform::sentinel::1.0
+    status: PRODUCTION
+    tenants:
+      - soc
+    #contributors:
+      #-
+   
+    trigger:
+      operator: LessThan
+      threshold: 10
+    
+    scheduling:
+      #nrt: false
+      frequency: 1d 
+      lookback: 14d
+    
+    alert:
+      create_incident: False
+      suppression: false
+      title: 'Audit: {{OperationName}}' 
+      #description: |
+        #...
+      #custom_details:
+        #- key: 
+          #column: 
+      #dynamic_properties:
+        #- property: 
+          #column: 
+  
+    grouping:
+      event: SingleAlert
+    
+      alert:
+        enabled: false
+        #reopen_closed_incidents: 
+  
+  
+    #entities:
+    #entities:
+      #- entity: 
+        #mappings:
+          #- identifier: 
+            #column: 
+    
+    query: |
+      AuditLogs
+  

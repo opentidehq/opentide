@@ -1,0 +1,7 @@
+{
+  // The team's Claude Code settings.
+  "permissions": {"allow": ["Bash(opentide validate:*)"]},
+  "enabledPlugins": {
+    "other@team": true
+  }
+}

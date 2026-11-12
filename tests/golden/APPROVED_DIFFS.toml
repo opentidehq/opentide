@@ -11859,3 +11859,613 @@ candidate = "  \u001b[1;32m✓\u001b[0m  \u001b[1mdocs\u001b[0m  \u001b[2m1 file
 reason = "The checklist row is printed when the pages are done, without the spinner Python drew while they ran (and while it fetched the CVE details), as on the other docs runs; the page, with its table of CVE details, is the oracle's."
 issue = "https://github.com/opentidehq/opentide/issues/834"
 changelog = "**`validate --check cve` looks CVE references up from the Rust command line**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/agent/deploy-tenants-sysdig/send-enabled-platforms"
+target = "stderr"
+rule = "text"
+oracle = "warning: External id recorded · uuid: 00000000-0000-4000-8047-000000000031 · platform: sysdig · tenant: lab · external_id: 42"
+candidate = "warning: External id recorded · uuid: 00000000-0000-4000-8047-000000000031 · platform: sysdig · tenant: *** · external_id: 42"
+reason = "A log line of the Rust CLI's logging layer (UC-3.3) names no tenant: the layer redacts the workspace's tenant names and hosts from every line it writes, as the oracle redacted them from its crash log (plan \u00a73, invariant 9). A deploy without --platform logs as one that names it. The result document on stdout still names the tenant; the event, its fields and their order are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`opentide query --rule` and `--file`, and `deploy` and `validate query --live` without `--platform`, run on Rust**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/agent/deploy-tenants-sysdig/send-enabled-platforms"
+target = "stderr"
+rule = "text"
+oracle = "warning: Sysdig rule recreated · uuid: 00000000-0000-4000-8047-000000000032 · tenant: lab · detail: the recorded rule no longer exists on the tenant; creating it again"
+candidate = "warning: Sysdig rule recreated · uuid: 00000000-0000-4000-8047-000000000032 · tenant: *** · detail: the recorded rule no longer exists on the tenant; creating it again"
+reason = "A log line of the Rust CLI's logging layer (UC-3.3) names no tenant: the layer redacts the workspace's tenant names and hosts from every line it writes, as the oracle redacted them from its crash log (plan \u00a73, invariant 9). A deploy without --platform logs as one that names it. The result document on stdout still names the tenant; the event, its fields and their order are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`opentide query --rule` and `--file`, and `deploy` and `validate query --live` without `--platform`, run on Rust**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/agent/deploy-tenants-sysdig/send-enabled-platforms"
+target = "stderr"
+rule = "text"
+oracle = "warning: External id recorded · uuid: 00000000-0000-4000-8047-000000000032 · platform: sysdig · tenant: lab · external_id: 43"
+candidate = "warning: External id recorded · uuid: 00000000-0000-4000-8047-000000000032 · platform: sysdig · tenant: *** · external_id: 43"
+reason = "A log line of the Rust CLI's logging layer (UC-3.3) names no tenant: the layer redacts the workspace's tenant names and hosts from every line it writes, as the oracle redacted them from its crash log (plan \u00a73, invariant 9). A deploy without --platform logs as one that names it. The result document on stdout still names the tenant; the event, its fields and their order are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`opentide query --rule` and `--file`, and `deploy` and `validate query --live` without `--platform`, run on Rust**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/agent/deploy-tenants-sysdig/send-enabled-platforms"
+target = "stderr"
+rule = "text"
+oracle = "warning: Sysdig rule missing · uuid: 00000000-0000-4000-8047-000000000033 · tenant: lab · detail: the recorded rule no longer exists on the tenant; its id is removed"
+candidate = "warning: Sysdig rule missing · uuid: 00000000-0000-4000-8047-000000000033 · tenant: *** · detail: the recorded rule no longer exists on the tenant; its id is removed"
+reason = "A log line of the Rust CLI's logging layer (UC-3.3) names no tenant: the layer redacts the workspace's tenant names and hosts from every line it writes, as the oracle redacted them from its crash log (plan \u00a73, invariant 9). A deploy without --platform logs as one that names it. The result document on stdout still names the tenant; the event, its fields and their order are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`opentide query --rule` and `--file`, and `deploy` and `validate query --live` without `--platform`, run on Rust**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/deploy-tenants-sysdig/send-enabled-platforms"
+target = "stderr"
+rule = "text"
+oracle = "{\"uuid\":\"00000000-0000-4000-8047-000000000031\",\"platform\":\"sysdig\",\"tenant\":\"lab\",\"external_id\":\"42\",\"event\":\"external_id_recorded\",\"logger\":\"opentide.deployment.external_ids\",\"level\":\"warning\",\"timestamp\":\"0000-00-00 00:00:00\"}"
+candidate = "{\"uuid\":\"00000000-0000-4000-8047-000000000031\",\"platform\":\"sysdig\",\"tenant\":\"***\",\"external_id\":\"42\",\"event\":\"external_id_recorded\",\"logger\":\"opentide.deployment.external_ids\",\"level\":\"warning\",\"timestamp\":\"0000-00-00 00:00:00\"}"
+reason = "A log line of the Rust CLI's logging layer (UC-3.3) names no tenant: the layer redacts the workspace's tenant names and hosts from every line it writes, as the oracle redacted them from its crash log (plan \u00a73, invariant 9). A deploy without --platform logs as one that names it. The result document on stdout still names the tenant; the event, its fields and their order are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`opentide query --rule` and `--file`, and `deploy` and `validate query --live` without `--platform`, run on Rust**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/deploy-tenants-sysdig/send-enabled-platforms"
+target = "stderr"
+rule = "text"
+oracle = "{\"uuid\":\"00000000-0000-4000-8047-000000000032\",\"tenant\":\"lab\",\"detail\":\"the recorded rule no longer exists on the tenant; creating it again\",\"event\":\"sysdig_rule_recreated\",\"logger\":\"opentide.platforms.sysdig.deployer\",\"level\":\"warning\",\"timestamp\":\"0000-00-00 00:00:00\"}"
+candidate = "{\"uuid\":\"00000000-0000-4000-8047-000000000032\",\"tenant\":\"***\",\"detail\":\"the recorded rule no longer exists on the tenant; creating it again\",\"event\":\"sysdig_rule_recreated\",\"logger\":\"opentide.platforms.sysdig.deployer\",\"level\":\"warning\",\"timestamp\":\"0000-00-00 00:00:00\"}"
+reason = "A log line of the Rust CLI's logging layer (UC-3.3) names no tenant: the layer redacts the workspace's tenant names and hosts from every line it writes, as the oracle redacted them from its crash log (plan \u00a73, invariant 9). A deploy without --platform logs as one that names it. The result document on stdout still names the tenant; the event, its fields and their order are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`opentide query --rule` and `--file`, and `deploy` and `validate query --live` without `--platform`, run on Rust**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/deploy-tenants-sysdig/send-enabled-platforms"
+target = "stderr"
+rule = "text"
+oracle = "{\"uuid\":\"00000000-0000-4000-8047-000000000032\",\"platform\":\"sysdig\",\"tenant\":\"lab\",\"external_id\":\"43\",\"event\":\"external_id_recorded\",\"logger\":\"opentide.deployment.external_ids\",\"level\":\"warning\",\"timestamp\":\"0000-00-00 00:00:00\"}"
+candidate = "{\"uuid\":\"00000000-0000-4000-8047-000000000032\",\"platform\":\"sysdig\",\"tenant\":\"***\",\"external_id\":\"43\",\"event\":\"external_id_recorded\",\"logger\":\"opentide.deployment.external_ids\",\"level\":\"warning\",\"timestamp\":\"0000-00-00 00:00:00\"}"
+reason = "A log line of the Rust CLI's logging layer (UC-3.3) names no tenant: the layer redacts the workspace's tenant names and hosts from every line it writes, as the oracle redacted them from its crash log (plan \u00a73, invariant 9). A deploy without --platform logs as one that names it. The result document on stdout still names the tenant; the event, its fields and their order are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`opentide query --rule` and `--file`, and `deploy` and `validate query --live` without `--platform`, run on Rust**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/deploy-tenants-sysdig/send-enabled-platforms"
+target = "stderr"
+rule = "text"
+oracle = "{\"uuid\":\"00000000-0000-4000-8047-000000000033\",\"tenant\":\"lab\",\"detail\":\"the recorded rule no longer exists on the tenant; its id is removed\",\"event\":\"sysdig_rule_missing\",\"logger\":\"opentide.platforms.sysdig.deployer\",\"level\":\"warning\",\"timestamp\":\"0000-00-00 00:00:00\"}"
+candidate = "{\"uuid\":\"00000000-0000-4000-8047-000000000033\",\"tenant\":\"***\",\"detail\":\"the recorded rule no longer exists on the tenant; its id is removed\",\"event\":\"sysdig_rule_missing\",\"logger\":\"opentide.platforms.sysdig.deployer\",\"level\":\"warning\",\"timestamp\":\"0000-00-00 00:00:00\"}"
+reason = "A log line of the Rust CLI's logging layer (UC-3.3) names no tenant: the layer redacts the workspace's tenant names and hosts from every line it writes, as the oracle redacted them from its crash log (plan \u00a73, invariant 9). A deploy without --platform logs as one that names it. The result document on stdout still names the tenant; the event, its fields and their order are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`opentide query --rule` and `--file`, and `deploy` and `validate query --live` without `--platform`, run on Rust**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/plain/deploy-tenants-sysdig/send-enabled-platforms"
+target = "stderr"
+rule = "text"
+oracle = "warning: External id recorded · uuid: 00000000-0000-4000-8047-000000000031 · platform: sysdig · tenant: lab · external_id: 42"
+candidate = "warning: External id recorded · uuid: 00000000-0000-4000-8047-000000000031 · platform: sysdig · tenant: *** · external_id: 42"
+reason = "A log line of the Rust CLI's logging layer (UC-3.3) names no tenant: the layer redacts the workspace's tenant names and hosts from every line it writes, as the oracle redacted them from its crash log (plan \u00a73, invariant 9). A deploy without --platform logs as one that names it. The result document on stdout still names the tenant; the event, its fields and their order are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`opentide query --rule` and `--file`, and `deploy` and `validate query --live` without `--platform`, run on Rust**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/plain/deploy-tenants-sysdig/send-enabled-platforms"
+target = "stderr"
+rule = "text"
+oracle = "warning: Sysdig rule recreated · uuid: 00000000-0000-4000-8047-000000000032 · tenant: lab · detail: the recorded rule no longer exists on the tenant; creating it again"
+candidate = "warning: Sysdig rule recreated · uuid: 00000000-0000-4000-8047-000000000032 · tenant: *** · detail: the recorded rule no longer exists on the tenant; creating it again"
+reason = "A log line of the Rust CLI's logging layer (UC-3.3) names no tenant: the layer redacts the workspace's tenant names and hosts from every line it writes, as the oracle redacted them from its crash log (plan \u00a73, invariant 9). A deploy without --platform logs as one that names it. The result document on stdout still names the tenant; the event, its fields and their order are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`opentide query --rule` and `--file`, and `deploy` and `validate query --live` without `--platform`, run on Rust**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/plain/deploy-tenants-sysdig/send-enabled-platforms"
+target = "stderr"
+rule = "text"
+oracle = "warning: External id recorded · uuid: 00000000-0000-4000-8047-000000000032 · platform: sysdig · tenant: lab · external_id: 43"
+candidate = "warning: External id recorded · uuid: 00000000-0000-4000-8047-000000000032 · platform: sysdig · tenant: *** · external_id: 43"
+reason = "A log line of the Rust CLI's logging layer (UC-3.3) names no tenant: the layer redacts the workspace's tenant names and hosts from every line it writes, as the oracle redacted them from its crash log (plan \u00a73, invariant 9). A deploy without --platform logs as one that names it. The result document on stdout still names the tenant; the event, its fields and their order are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`opentide query --rule` and `--file`, and `deploy` and `validate query --live` without `--platform`, run on Rust**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/plain/deploy-tenants-sysdig/send-enabled-platforms"
+target = "stderr"
+rule = "text"
+oracle = "warning: Sysdig rule missing · uuid: 00000000-0000-4000-8047-000000000033 · tenant: lab · detail: the recorded rule no longer exists on the tenant; its id is removed"
+candidate = "warning: Sysdig rule missing · uuid: 00000000-0000-4000-8047-000000000033 · tenant: *** · detail: the recorded rule no longer exists on the tenant; its id is removed"
+reason = "A log line of the Rust CLI's logging layer (UC-3.3) names no tenant: the layer redacts the workspace's tenant names and hosts from every line it writes, as the oracle redacted them from its crash log (plan \u00a73, invariant 9). A deploy without --platform logs as one that names it. The result document on stdout still names the tenant; the event, its fields and their order are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`opentide query --rule` and `--file`, and `deploy` and `validate query --live` without `--platform`, run on Rust**"
+
+# `setup skills` (the install), `setup --skills` and `--plugin` on the Rust
+# command line (UC-4.4d, #834): the skill trees through the connectors' HTTP
+# client, `.claude/settings.json` edited on its syntax tree.
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/human/skills-merge/plugin"
+target = "file:ws/.claude/settings.json"
+rule = "lines"
+oracle = "  \"permissions\": {\n    \"allow\": [\n      \"Bash(opentide validate:*)\"\n    ]\n  },"
+candidate = "  // The team's Claude Code settings.\n  \"permissions\": {\"allow\": [\"Bash(opentide validate:*)\"]},"
+reason = "--plugin adds the opentide marketplace and plugin to an existing .claude/settings.json in place with a JSONC-preserving editor (jsonc-parser's CST), as setup mcp merges its files: the comments, layout, line endings and byte-order mark stay, and only the two members it sets change; the oracle (0.23.0) parsed the file, dropped its comments and rewrote it as indented JSON. The members and their values are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`setup skills`, `setup --skills` and `setup --plugin` install agent skills on the Rust engine**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/plain/skills-merge/plugin"
+target = "file:ws/.claude/settings.json"
+rule = "lines"
+oracle = "  \"permissions\": {\n    \"allow\": [\n      \"Bash(opentide validate:*)\"\n    ]\n  },"
+candidate = "  // The team's Claude Code settings.\n  \"permissions\": {\"allow\": [\"Bash(opentide validate:*)\"]},"
+reason = "--plugin adds the opentide marketplace and plugin to an existing .claude/settings.json in place with a JSONC-preserving editor (jsonc-parser's CST), as setup mcp merges its files: the comments, layout, line endings and byte-order mark stay, and only the two members it sets change; the oracle (0.23.0) parsed the file, dropped its comments and rewrote it as indented JSON. The members and their values are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`setup skills`, `setup --skills` and `setup --plugin` install agent skills on the Rust engine**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/json/skills-merge/plugin"
+target = "file:ws/.claude/settings.json"
+rule = "lines"
+oracle = "  \"permissions\": {\n    \"allow\": [\n      \"Bash(opentide validate:*)\"\n    ]\n  },"
+candidate = "  // The team's Claude Code settings.\n  \"permissions\": {\"allow\": [\"Bash(opentide validate:*)\"]},"
+reason = "--plugin adds the opentide marketplace and plugin to an existing .claude/settings.json in place with a JSONC-preserving editor (jsonc-parser's CST), as setup mcp merges its files: the comments, layout, line endings and byte-order mark stay, and only the two members it sets change; the oracle (0.23.0) parsed the file, dropped its comments and rewrote it as indented JSON. The members and their values are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`setup skills`, `setup --skills` and `setup --plugin` install agent skills on the Rust engine**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/agent/skills-merge/plugin"
+target = "file:ws/.claude/settings.json"
+rule = "lines"
+oracle = "  \"permissions\": {\n    \"allow\": [\n      \"Bash(opentide validate:*)\"\n    ]\n  },"
+candidate = "  // The team's Claude Code settings.\n  \"permissions\": {\"allow\": [\"Bash(opentide validate:*)\"]},"
+reason = "--plugin adds the opentide marketplace and plugin to an existing .claude/settings.json in place with a JSONC-preserving editor (jsonc-parser's CST), as setup mcp merges its files: the comments, layout, line endings and byte-order mark stay, and only the two members it sets change; the oracle (0.23.0) parsed the file, dropped its comments and rewrote it as indented JSON. The members and their values are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`setup skills`, `setup --skills` and `setup --plugin` install agent skills on the Rust engine**"
+
+[[diff]]
+command = "setup"
+case = "setup/human/skills-merge/plugin"
+target = "file:ws/.claude/settings.json"
+rule = "lines"
+oracle = "  \"permissions\": {\n    \"allow\": [\n      \"Bash(opentide validate:*)\"\n    ]\n  },"
+candidate = "  // The team's Claude Code settings.\n  \"permissions\": {\"allow\": [\"Bash(opentide validate:*)\"]},"
+reason = "--plugin adds the opentide marketplace and plugin to an existing .claude/settings.json in place with a JSONC-preserving editor (jsonc-parser's CST), as setup mcp merges its files: the comments, layout, line endings and byte-order mark stay, and only the two members it sets change; the oracle (0.23.0) parsed the file, dropped its comments and rewrote it as indented JSON. The members and their values are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`setup skills`, `setup --skills` and `setup --plugin` install agent skills on the Rust engine**"
+
+[[diff]]
+command = "setup"
+case = "setup/plain/skills-merge/plugin"
+target = "file:ws/.claude/settings.json"
+rule = "lines"
+oracle = "  \"permissions\": {\n    \"allow\": [\n      \"Bash(opentide validate:*)\"\n    ]\n  },"
+candidate = "  // The team's Claude Code settings.\n  \"permissions\": {\"allow\": [\"Bash(opentide validate:*)\"]},"
+reason = "--plugin adds the opentide marketplace and plugin to an existing .claude/settings.json in place with a JSONC-preserving editor (jsonc-parser's CST), as setup mcp merges its files: the comments, layout, line endings and byte-order mark stay, and only the two members it sets change; the oracle (0.23.0) parsed the file, dropped its comments and rewrote it as indented JSON. The members and their values are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`setup skills`, `setup --skills` and `setup --plugin` install agent skills on the Rust engine**"
+
+[[diff]]
+command = "setup"
+case = "setup/json/skills-merge/plugin"
+target = "file:ws/.claude/settings.json"
+rule = "lines"
+oracle = "  \"permissions\": {\n    \"allow\": [\n      \"Bash(opentide validate:*)\"\n    ]\n  },"
+candidate = "  // The team's Claude Code settings.\n  \"permissions\": {\"allow\": [\"Bash(opentide validate:*)\"]},"
+reason = "--plugin adds the opentide marketplace and plugin to an existing .claude/settings.json in place with a JSONC-preserving editor (jsonc-parser's CST), as setup mcp merges its files: the comments, layout, line endings and byte-order mark stay, and only the two members it sets change; the oracle (0.23.0) parsed the file, dropped its comments and rewrote it as indented JSON. The members and their values are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`setup skills`, `setup --skills` and `setup --plugin` install agent skills on the Rust engine**"
+
+[[diff]]
+command = "setup"
+case = "setup/agent/skills-merge/plugin"
+target = "file:ws/.claude/settings.json"
+rule = "lines"
+oracle = "  \"permissions\": {\n    \"allow\": [\n      \"Bash(opentide validate:*)\"\n    ]\n  },"
+candidate = "  // The team's Claude Code settings.\n  \"permissions\": {\"allow\": [\"Bash(opentide validate:*)\"]},"
+reason = "--plugin adds the opentide marketplace and plugin to an existing .claude/settings.json in place with a JSONC-preserving editor (jsonc-parser's CST), as setup mcp merges its files: the comments, layout, line endings and byte-order mark stay, and only the two members it sets change; the oracle (0.23.0) parsed the file, dropped its comments and rewrote it as indented JSON. The members and their values are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`setup skills`, `setup --skills` and `setup --plugin` install agent skills on the Rust engine**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/json/tide-corpus/example"
+target = "stderr"
+rule = "json:/logger"
+oracle = "\"opentide.cli.services.setup.skills_registry\""
+candidate = "(absent)"
+reason = "A JSON log line of the Rust CLI's logging layer (UC-3.3) has no `logger` key: the Python module that logged it does not exist on the Rust side. The event, its fields and level are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`setup skills`, `setup --skills` and `setup --plugin` install agent skills on the Rust engine**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/json/none/plugin-offline"
+target = "stderr"
+rule = "json:/logger"
+oracle = "\"opentide.cli.services.setup.skills_registry\""
+candidate = "(absent)"
+reason = "A JSON log line of the Rust CLI's logging layer (UC-3.3) has no `logger` key: the Python module that logged it does not exist on the Rust side. The event, its fields and level are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`setup skills`, `setup --skills` and `setup --plugin` install agent skills on the Rust engine**"
+
+[[diff]]
+command = "setup"
+case = "setup/json/none/skills-offline"
+target = "stderr"
+rule = "json:/logger"
+oracle = "\"opentide.cli.services.setup.skills_registry\""
+candidate = "(absent)"
+reason = "A JSON log line of the Rust CLI's logging layer (UC-3.3) has no `logger` key: the Python module that logged it does not exist on the Rust side. The event, its fields and level are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`setup skills`, `setup --skills` and `setup --plugin` install agent skills on the Rust engine**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/human/tide-corpus/example"
+target = "stderr"
+rule = "lines"
+oracle = "\u001b[1;31merror: \u001b[0mSkills manifest remote unavailable · source: opentidehq/skills · ref: main"
+candidate = "error: Skills manifest remote unavailable · source: opentidehq/skills · ref: main"
+reason = "A log line is written by the Rust CLI's logging layer (UC-3.3), as one unstyled line: Rich coloured its label. The event, its fields and their order are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`setup skills`, `setup --skills` and `setup --plugin` install agent skills on the Rust engine**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/human/none/plugin-offline"
+target = "stderr"
+rule = "lines"
+oracle = "\u001b[1;31merror: \u001b[0mSkills manifest remote unavailable · source: opentidehq/skills · ref: main"
+candidate = "error: Skills manifest remote unavailable · source: opentidehq/skills · ref: main"
+reason = "A log line is written by the Rust CLI's logging layer (UC-3.3), as one unstyled line: Rich coloured its label. The event, its fields and their order are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`setup skills`, `setup --skills` and `setup --plugin` install agent skills on the Rust engine**"
+
+[[diff]]
+command = "setup"
+case = "setup/human/none/skills-offline"
+target = "stderr"
+rule = "lines"
+oracle = "\u001b[1;31merror: \u001b[0mSkills manifest remote unavailable · source: opentidehq/skills · ref: main"
+candidate = "error: Skills manifest remote unavailable · source: opentidehq/skills · ref: main"
+reason = "A log line is written by the Rust CLI's logging layer (UC-3.3), as one unstyled line: Rich coloured its label. The event, its fields and their order are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`setup skills`, `setup --skills` and `setup --plugin` install agent skills on the Rust engine**"
+
+# UC-4.4b (#834): generate extract defender and elastic on the Rust command line.
+
+[[diff]]
+command = "generate extract defender"
+case = "generate.extract.defender/human/none/default"
+target = "stderr"
+rule = "lines"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mimport from defender\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[1;31merror: \u001b[0mDefender tenants not configured · detail: You must first have Defender for Endpoint tenants \nconfigured to initiate the import · advice: run 'opentide setup platforms --defender-for-endpoint'\n\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;31m✗\u001b[0m  \u001b[1mimport from defender\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+candidate = "error: Defender tenants not configured · detail: You must first have Defender for Endpoint tenants configured to initiate the import · advice: run 'opentide setup platforms --defender-for-endpoint'\n  \u001b[1;31m✗\u001b[0m  \u001b[1mimport from defender\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+reason = "In human mode a log line of the Rust CLI's logging layer is one unstyled line, not wrapped at the terminal's width, where the oracle's Rich handler styled its level and wrapped it inside the live region of its checklist; the Rust engine prints the checklist row when the import is done, without the spinner Python drew while it ran. The event, its fields and every other line are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`generate extract defender` and `generate extract elastic` run on the Rust command line**"
+
+[[diff]]
+command = "generate extract defender"
+case = "generate.extract.defender/human/tide-corpus/default"
+target = "stderr"
+rule = "lines"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mimport from defender\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[1;31merror: \u001b[0mDefender tenants not configured · detail: You must first have Defender for Endpoint tenants \nconfigured to initiate the import · advice: run 'opentide setup platforms --defender-for-endpoint'\n\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;31m✗\u001b[0m  \u001b[1mimport from defender\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+candidate = "error: Defender tenants not configured · detail: You must first have Defender for Endpoint tenants configured to initiate the import · advice: run 'opentide setup platforms --defender-for-endpoint'\n  \u001b[1;31m✗\u001b[0m  \u001b[1mimport from defender\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+reason = "In human mode a log line of the Rust CLI's logging layer is one unstyled line, not wrapped at the terminal's width, where the oracle's Rich handler styled its level and wrapped it inside the live region of its checklist; the Rust engine prints the checklist row when the import is done, without the spinner Python drew while it ran. The event, its fields and every other line are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`generate extract defender` and `generate extract elastic` run on the Rust command line**"
+
+[[diff]]
+command = "generate extract elastic"
+case = "generate.extract.elastic/human/tide-corpus/example"
+target = "stderr"
+rule = "lines"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mimport from elastic\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[1;31merror: \u001b[0mEnvironment variable missing · detail: Unset configuration variables: $ELASTIC_API_KEY · \nadvice: Set those environment variables before a live check.\n\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;31m✗\u001b[0m  \u001b[1mimport from elastic\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+candidate = "error: Environment variable missing · detail: Unset configuration variables: $ELASTIC_API_KEY · advice: Set those environment variables before a live check.\n  \u001b[1;31m✗\u001b[0m  \u001b[1mimport from elastic\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+reason = "In human mode a log line of the Rust CLI's logging layer is one unstyled line, not wrapped at the terminal's width, where the oracle's Rich handler styled its level and wrapped it inside the live region of its checklist; the Rust engine prints the checklist row when the import is done, without the spinner Python drew while it ran. The event, its fields and every other line are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`generate extract defender` and `generate extract elastic` run on the Rust command line**"
+
+[[diff]]
+command = "generate extract elastic"
+case = "generate.extract.elastic/human/none/example"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mimport from elastic\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;31m✗\u001b[0m  \u001b[1mimport from elastic\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+candidate = "  \u001b[1;31m✗\u001b[0m  \u001b[1mimport from elastic\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+reason = "the import's checklist row is printed when it is done, without the spinner Python drew while it ran"
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`generate extract defender` and `generate extract elastic` run on the Rust command line**"
+
+# UC-4.4b (#834, #994): the rules `generate extract elastic` writes, emitted by
+# serde-saphyr where the oracle used PyYAML; the same data (see each reason).
+
+[[diff]]
+command = "generate extract elastic"
+case = "generate.extract.elastic/*/tenants/tenant"
+target = "file:ws/Imported/ES QL aggregation.yaml"
+rule = "text"
+oracle = "  created: '2026-01-01'"
+candidate = "  created: \"2026-01-01\""
+reason = "YAML emitted by serde-saphyr, not a port of PyYAML (the maintainer's decision on #994): a string that must be quoted (a date, a number, an empty string, `: ` inside) is double-quoted, a `\"` in it escaped as `\\\"`, where PyYAML 6's `yaml.dump` single-quoted it. Both files load to the same data, every value and key in the oracle's order: `extracted_elastic_rules_load_as_the_oracles_data` (crates/opentide-cli/tests/command_goldens.rs) loads the oracle's file and Rust's and compares them as data."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`generate extract elastic` formats the rules it writes as serde-saphyr does, with the same data as 0.23.0**"
+
+[[diff]]
+command = "generate extract elastic"
+case = "generate.extract.elastic/*/tenants/tenant"
+target = "file:ws/Imported/ES QL aggregation.yaml"
+rule = "text"
+oracle = "  modified: '2026-01-01'"
+candidate = "  modified: \"2026-01-01\""
+reason = "YAML emitted by serde-saphyr, not a port of PyYAML (the maintainer's decision on #994): a string that must be quoted (a date, a number, an empty string, `: ` inside) is double-quoted, a `\"` in it escaped as `\\\"`, where PyYAML 6's `yaml.dump` single-quoted it. Both files load to the same data, every value and key in the oracle's order: `extracted_elastic_rules_load_as_the_oracles_data` (crates/opentide-cli/tests/command_goldens.rs) loads the oracle's file and Rust's and compares them as data."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`generate extract elastic` formats the rules it writes as serde-saphyr does, with the same data as 0.23.0**"
+
+[[diff]]
+command = "generate extract elastic"
+case = "generate.extract.elastic/*/tenants/tenant"
+target = "file:ws/Imported/Encoded PowerShell -enc flag 7d1c0f00.yaml"
+rule = "text"
+oracle = "name: 'Encoded PowerShell: \"-enc\" flag'"
+candidate = "name: \"Encoded PowerShell: \\\"-enc\\\" flag\""
+reason = "YAML emitted by serde-saphyr, not a port of PyYAML (the maintainer's decision on #994): a string that must be quoted (a date, a number, an empty string, `: ` inside) is double-quoted, a `\"` in it escaped as `\\\"`, where PyYAML 6's `yaml.dump` single-quoted it. Both files load to the same data, every value and key in the oracle's order: `extracted_elastic_rules_load_as_the_oracles_data` (crates/opentide-cli/tests/command_goldens.rs) loads the oracle's file and Rust's and compares them as data."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`generate extract elastic` formats the rules it writes as serde-saphyr does, with the same data as 0.23.0**"
+
+[[diff]]
+command = "generate extract elastic"
+case = "generate.extract.elastic/*/tenants/tenant"
+target = "file:ws/Imported/Encoded PowerShell -enc flag 7d1c0f00.yaml"
+rule = "text"
+oracle = "  created: '2026-01-01'"
+candidate = "  created: \"2026-01-01\""
+reason = "YAML emitted by serde-saphyr, not a port of PyYAML (the maintainer's decision on #994): a string that must be quoted (a date, a number, an empty string, `: ` inside) is double-quoted, a `\"` in it escaped as `\\\"`, where PyYAML 6's `yaml.dump` single-quoted it. Both files load to the same data, every value and key in the oracle's order: `extracted_elastic_rules_load_as_the_oracles_data` (crates/opentide-cli/tests/command_goldens.rs) loads the oracle's file and Rust's and compares them as data."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`generate extract elastic` formats the rules it writes as serde-saphyr does, with the same data as 0.23.0**"
+
+[[diff]]
+command = "generate extract elastic"
+case = "generate.extract.elastic/*/tenants/tenant"
+target = "file:ws/Imported/Encoded PowerShell -enc flag 7d1c0f00.yaml"
+rule = "text"
+oracle = "  modified: '2026-01-01'"
+candidate = "  modified: \"2026-01-01\""
+reason = "YAML emitted by serde-saphyr, not a port of PyYAML (the maintainer's decision on #994): a string that must be quoted (a date, a number, an empty string, `: ` inside) is double-quoted, a `\"` in it escaped as `\\\"`, where PyYAML 6's `yaml.dump` single-quoted it. Both files load to the same data, every value and key in the oracle's order: `extracted_elastic_rules_load_as_the_oracles_data` (crates/opentide-cli/tests/command_goldens.rs) loads the oracle's file and Rust's and compares them as data."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`generate extract elastic` formats the rules it writes as serde-saphyr does, with the same data as 0.23.0**"
+
+[[diff]]
+command = "generate extract elastic"
+case = "generate.extract.elastic/*/tenants/tenant"
+target = "file:ws/Imported/Encoded PowerShell -enc flag 7d1c0f00.yaml"
+rule = "text"
+oracle = "    query: 'event.outcome : failure'"
+candidate = "    query: \"event.outcome : failure\""
+reason = "YAML emitted by serde-saphyr, not a port of PyYAML (the maintainer's decision on #994): a string that must be quoted (a date, a number, an empty string, `: ` inside) is double-quoted, a `\"` in it escaped as `\\\"`, where PyYAML 6's `yaml.dump` single-quoted it. Both files load to the same data, every value and key in the oracle's order: `extracted_elastic_rules_load_as_the_oracles_data` (crates/opentide-cli/tests/command_goldens.rs) loads the oracle's file and Rust's and compares them as data."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`generate extract elastic` formats the rules it writes as serde-saphyr does, with the same data as 0.23.0**"
+
+[[diff]]
+command = "generate extract elastic"
+case = "generate.extract.elastic/*/tenants/tenant"
+target = "file:ws/Imported/Encoded PowerShell -enc flag.yaml"
+rule = "text"
+oracle = "name: 'Encoded PowerShell: \"-enc\" flag'"
+candidate = "name: \"Encoded PowerShell: \\\"-enc\\\" flag\""
+reason = "YAML emitted by serde-saphyr, not a port of PyYAML (the maintainer's decision on #994): a string that must be quoted (a date, a number, an empty string, `: ` inside) is double-quoted, a `\"` in it escaped as `\\\"`, where PyYAML 6's `yaml.dump` single-quoted it. Both files load to the same data, every value and key in the oracle's order: `extracted_elastic_rules_load_as_the_oracles_data` (crates/opentide-cli/tests/command_goldens.rs) loads the oracle's file and Rust's and compares them as data."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`generate extract elastic` formats the rules it writes as serde-saphyr does, with the same data as 0.23.0**"
+
+[[diff]]
+command = "generate extract elastic"
+case = "generate.extract.elastic/*/tenants/tenant"
+target = "file:ws/Imported/Encoded PowerShell -enc flag.yaml"
+rule = "text"
+oracle = "  created: '2026-02-03'"
+candidate = "  created: \"2026-02-03\""
+reason = "YAML emitted by serde-saphyr, not a port of PyYAML (the maintainer's decision on #994): a string that must be quoted (a date, a number, an empty string, `: ` inside) is double-quoted, a `\"` in it escaped as `\\\"`, where PyYAML 6's `yaml.dump` single-quoted it. Both files load to the same data, every value and key in the oracle's order: `extracted_elastic_rules_load_as_the_oracles_data` (crates/opentide-cli/tests/command_goldens.rs) loads the oracle's file and Rust's and compares them as data."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`generate extract elastic` formats the rules it writes as serde-saphyr does, with the same data as 0.23.0**"
+
+[[diff]]
+command = "generate extract elastic"
+case = "generate.extract.elastic/*/tenants/tenant"
+target = "file:ws/Imported/Encoded PowerShell -enc flag.yaml"
+rule = "text"
+oracle = "  modified: '2026-03-04'"
+candidate = "  modified: \"2026-03-04\""
+reason = "YAML emitted by serde-saphyr, not a port of PyYAML (the maintainer's decision on #994): a string that must be quoted (a date, a number, an empty string, `: ` inside) is double-quoted, a `\"` in it escaped as `\\\"`, where PyYAML 6's `yaml.dump` single-quoted it. Both files load to the same data, every value and key in the oracle's order: `extracted_elastic_rules_load_as_the_oracles_data` (crates/opentide-cli/tests/command_goldens.rs) loads the oracle's file and Rust's and compares them as data."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`generate extract elastic` formats the rules it writes as serde-saphyr does, with the same data as 0.23.0**"
+
+[[diff]]
+command = "generate extract elastic"
+case = "generate.extract.elastic/*/tenants/tenant"
+target = "file:ws/Imported/Encoded PowerShell -enc flag.yaml"
+rule = "text"
+oracle = "    '1': https://attack.mitre.org/techniques/T1059/001/"
+candidate = "    \"1\": https://attack.mitre.org/techniques/T1059/001/"
+reason = "YAML emitted by serde-saphyr, not a port of PyYAML (the maintainer's decision on #994): a string that must be quoted (a date, a number, an empty string, `: ` inside) is double-quoted, a `\"` in it escaped as `\\\"`, where PyYAML 6's `yaml.dump` single-quoted it. Both files load to the same data, every value and key in the oracle's order: `extracted_elastic_rules_load_as_the_oracles_data` (crates/opentide-cli/tests/command_goldens.rs) loads the oracle's file and Rust's and compares them as data."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`generate extract elastic` formats the rules it writes as serde-saphyr does, with the same data as 0.23.0**"
+
+[[diff]]
+command = "generate extract elastic"
+case = "generate.extract.elastic/*/tenants/tenant"
+target = "file:ws/Imported/Encoded PowerShell -enc flag.yaml"
+rule = "text"
+oracle = "    query: 'process.name : \"powershell.exe\" and process.args : \"-enc\"'"
+candidate = "    query: \"process.name : \\\"powershell.exe\\\" and process.args : \\\"-enc\\\"\""
+reason = "YAML emitted by serde-saphyr, not a port of PyYAML (the maintainer's decision on #994): a string that must be quoted (a date, a number, an empty string, `: ` inside) is double-quoted, a `\"` in it escaped as `\\\"`, where PyYAML 6's `yaml.dump` single-quoted it. Both files load to the same data, every value and key in the oracle's order: `extracted_elastic_rules_load_as_the_oracles_data` (crates/opentide-cli/tests/command_goldens.rs) loads the oracle's file and Rust's and compares them as data."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`generate extract elastic` formats the rules it writes as serde-saphyr does, with the same data as 0.23.0**"
+
+[[diff]]
+command = "generate extract elastic"
+case = "generate.extract.elastic/*/tenants/tenant"
+target = "file:ws/Imported/Encoded PowerShell -enc flag.yaml"
+rule = "text"
+oracle = "          value: ''"
+candidate = "          value: \"\""
+reason = "YAML emitted by serde-saphyr, not a port of PyYAML (the maintainer's decision on #994): a string that must be quoted (a date, a number, an empty string, `: ` inside) is double-quoted, a `\"` in it escaped as `\\\"`, where PyYAML 6's `yaml.dump` single-quoted it. Both files load to the same data, every value and key in the oracle's order: `extracted_elastic_rules_load_as_the_oracles_data` (crates/opentide-cli/tests/command_goldens.rs) loads the oracle's file and Rust's and compares them as data."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`generate extract elastic` formats the rules it writes as serde-saphyr does, with the same data as 0.23.0**"
+
+[[diff]]
+command = "generate extract elastic"
+case = "generate.extract.elastic/*/tenants/tenant"
+target = "file:ws/Imported/Encoded PowerShell -enc flag.yaml"
+rule = "text"
+oracle = "      - 'Domain: Endpoint'"
+candidate = "      - \"Domain: Endpoint\""
+reason = "YAML emitted by serde-saphyr, not a port of PyYAML (the maintainer's decision on #994): a string that must be quoted (a date, a number, an empty string, `: ` inside) is double-quoted, a `\"` in it escaped as `\\\"`, where PyYAML 6's `yaml.dump` single-quoted it. Both files load to the same data, every value and key in the oracle's order: `extracted_elastic_rules_load_as_the_oracles_data` (crates/opentide-cli/tests/command_goldens.rs) loads the oracle's file and Rust's and compares them as data."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`generate extract elastic` formats the rules it writes as serde-saphyr does, with the same data as 0.23.0**"
+
+[[diff]]
+command = "generate extract elastic"
+case = "generate.extract.elastic/*/tenants/tenant"
+target = "file:ws/Imported/Encoded PowerShell -enc flag.yaml"
+rule = "text"
+oracle = "      - 'OS: Windows'"
+candidate = "      - \"OS: Windows\""
+reason = "YAML emitted by serde-saphyr, not a port of PyYAML (the maintainer's decision on #994): a string that must be quoted (a date, a number, an empty string, `: ` inside) is double-quoted, a `\"` in it escaped as `\\\"`, where PyYAML 6's `yaml.dump` single-quoted it. Both files load to the same data, every value and key in the oracle's order: `extracted_elastic_rules_load_as_the_oracles_data` (crates/opentide-cli/tests/command_goldens.rs) loads the oracle's file and Rust's and compares them as data."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`generate extract elastic` formats the rules it writes as serde-saphyr does, with the same data as 0.23.0**"
+
+[[diff]]
+command = "generate extract elastic"
+case = "generate.extract.elastic/*/tenants/tenant"
+target = "file:ws/Imported/Process sequence – résumé.yaml"
+rule = "text"
+oracle = "name: \"Process sequence \\u2013 r\\xE9sum\\xE9\""
+candidate = "name: Process sequence – résumé"
+reason = "YAML emitted by serde-saphyr, not a port of PyYAML (the maintainer's decision on #994): non-ASCII characters are written as UTF-8 in a plain scalar, where PyYAML 6's `yaml.dump` (`allow_unicode=False`) wrote a double-quoted string with each escaped (`\\u2013`, `\\xE9`). Both files load to the same data, every value and key in the oracle's order: `extracted_elastic_rules_load_as_the_oracles_data` (crates/opentide-cli/tests/command_goldens.rs) loads the oracle's file and Rust's and compares them as data."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`generate extract elastic` formats the rules it writes as serde-saphyr does, with the same data as 0.23.0**"
+
+[[diff]]
+command = "generate extract elastic"
+case = "generate.extract.elastic/*/tenants/tenant"
+target = "file:ws/Imported/Process sequence – résumé.yaml"
+rule = "text"
+oracle = "  created: '2026-02-03'"
+candidate = "  created: \"2026-02-03\""
+reason = "YAML emitted by serde-saphyr, not a port of PyYAML (the maintainer's decision on #994): a string that must be quoted (a date, a number, an empty string, `: ` inside) is double-quoted, a `\"` in it escaped as `\\\"`, where PyYAML 6's `yaml.dump` single-quoted it. Both files load to the same data, every value and key in the oracle's order: `extracted_elastic_rules_load_as_the_oracles_data` (crates/opentide-cli/tests/command_goldens.rs) loads the oracle's file and Rust's and compares them as data."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`generate extract elastic` formats the rules it writes as serde-saphyr does, with the same data as 0.23.0**"
+
+[[diff]]
+command = "generate extract elastic"
+case = "generate.extract.elastic/*/tenants/tenant"
+target = "file:ws/Imported/Process sequence – résumé.yaml"
+rule = "text"
+oracle = "  modified: '2026-02-03'"
+candidate = "  modified: \"2026-02-03\""
+reason = "YAML emitted by serde-saphyr, not a port of PyYAML (the maintainer's decision on #994): a string that must be quoted (a date, a number, an empty string, `: ` inside) is double-quoted, a `\"` in it escaped as `\\\"`, where PyYAML 6's `yaml.dump` single-quoted it. Both files load to the same data, every value and key in the oracle's order: `extracted_elastic_rules_load_as_the_oracles_data` (crates/opentide-cli/tests/command_goldens.rs) loads the oracle's file and Rust's and compares them as data."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`generate extract elastic` formats the rules it writes as serde-saphyr does, with the same data as 0.23.0**"
+
+# UC-4.4e (#834): generate extract sentinel on the Rust command line. Its one-line
+# values are emitted by serde-saphyr where the oracle used PyYAML; the same data.
+# The comparison is crates/opentide-cli/tests/extract_sentinel.rs', on the
+# connector's cassette (case `cassette:sentinel/extract`), not a golden case's.
+
+[[diff]]
+command = "generate extract sentinel"
+case = "cassette:sentinel/extract"
+target = "file:ws/Imported/ Encoded PowerShell — Ünïcode - soc  00000000.yaml"
+rule = "text"
+oracle = "        - key: '1' "
+candidate = "        - key: \"1\" "
+reason = "A one-line value the importer writes (`_scalar`) is emitted by serde-saphyr, not by a port of PyYAML (the maintainer's standing rule, #994): a string that must be quoted (`{{...}}`, `: ` inside, a number, `yes`, an empty string) is double-quoted where PyYAML 6's `safe_dump` single-quoted it. Both files load to the same data, every value and key in the oracle's order: `sentinel_rules_are_extracted_as_the_oracle_extracted_them` (crates/opentide-cli/tests/extract_sentinel.rs) runs the command against the cassette recorded from the oracle (tests/cassettes/sentinel/extract.json), loads the oracle's file (crates/opentide-cli/tests/extract_sentinel/oracle/) and Rust's and compares them as data, then byte for byte under these entries. No golden case can replay the command: MSAL and azure-core stamp the oracle's requests with random ids."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`generate extract sentinel` quotes the one-line values it writes as serde-saphyr does, with the same data as 0.23.0**"
+
+[[diff]]
+command = "generate extract sentinel"
+case = "cassette:sentinel/extract"
+target = "file:ws/Imported/ Encoded PowerShell — Ünïcode - soc  00000000.yaml"
+rule = "text"
+oracle = "          column: 'yes'"
+candidate = "          column: \"yes\""
+reason = "A one-line value the importer writes (`_scalar`) is emitted by serde-saphyr, not by a port of PyYAML (the maintainer's standing rule, #994): a string that must be quoted (`{{...}}`, `: ` inside, a number, `yes`, an empty string) is double-quoted where PyYAML 6's `safe_dump` single-quoted it. Both files load to the same data, every value and key in the oracle's order: `sentinel_rules_are_extracted_as_the_oracle_extracted_them` (crates/opentide-cli/tests/extract_sentinel.rs) runs the command against the cassette recorded from the oracle (tests/cassettes/sentinel/extract.json), loads the oracle's file (crates/opentide-cli/tests/extract_sentinel/oracle/) and Rust's and compares them as data, then byte for byte under these entries. No golden case can replay the command: MSAL and azure-core stamp the oracle's requests with random ids."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`generate extract sentinel` quotes the one-line values it writes as serde-saphyr does, with the same data as 0.23.0**"
+
+[[diff]]
+command = "generate extract sentinel"
+case = "cassette:sentinel/extract"
+target = "file:ws/Imported/ Encoded PowerShell — Ünïcode - soc  00000000.yaml"
+rule = "text"
+oracle = "          column: ''"
+candidate = "          column: \"\""
+reason = "A one-line value the importer writes (`_scalar`) is emitted by serde-saphyr, not by a port of PyYAML (the maintainer's standing rule, #994): a string that must be quoted (`{{...}}`, `: ` inside, a number, `yes`, an empty string) is double-quoted where PyYAML 6's `safe_dump` single-quoted it. Both files load to the same data, every value and key in the oracle's order: `sentinel_rules_are_extracted_as_the_oracle_extracted_them` (crates/opentide-cli/tests/extract_sentinel.rs) runs the command against the cassette recorded from the oracle (tests/cassettes/sentinel/extract.json), loads the oracle's file (crates/opentide-cli/tests/extract_sentinel/oracle/) and Rust's and compares them as data, then byte for byte under these entries. No golden case can replay the command: MSAL and azure-core stamp the oracle's requests with random ids."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`generate extract sentinel` quotes the one-line values it writes as serde-saphyr does, with the same data as 0.23.0**"
+
+[[diff]]
+command = "generate extract sentinel"
+case = "cassette:sentinel/extract"
+target = "file:ws/Imported/ Encoded PowerShell — Ünïcode - soc .yaml"
+rule = "text"
+oracle = "      title: '{{Computer}} ran PowerShell: encoded' "
+candidate = "      title: \"{{Computer}} ran PowerShell: encoded\" "
+reason = "A one-line value the importer writes (`_scalar`) is emitted by serde-saphyr, not by a port of PyYAML (the maintainer's standing rule, #994): a string that must be quoted (`{{...}}`, `: ` inside, a number, `yes`, an empty string) is double-quoted where PyYAML 6's `safe_dump` single-quoted it. Both files load to the same data, every value and key in the oracle's order: `sentinel_rules_are_extracted_as_the_oracle_extracted_them` (crates/opentide-cli/tests/extract_sentinel.rs) runs the command against the cassette recorded from the oracle (tests/cassettes/sentinel/extract.json), loads the oracle's file (crates/opentide-cli/tests/extract_sentinel/oracle/) and Rust's and compares them as data, then byte for byte under these entries. No golden case can replay the command: MSAL and azure-core stamp the oracle's requests with random ids."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`generate extract sentinel` quotes the one-line values it writes as serde-saphyr does, with the same data as 0.23.0**"
+
+[[diff]]
+command = "generate extract sentinel"
+case = "cassette:sentinel/extract"
+target = "file:ws/Imported/ Quotes  and  back slash  a  name  - soc .yaml"
+rule = "text"
+oracle = "      title: 'Audit: {{OperationName}}' "
+candidate = "      title: \"Audit: {{OperationName}}\" "
+reason = "A one-line value the importer writes (`_scalar`) is emitted by serde-saphyr, not by a port of PyYAML (the maintainer's standing rule, #994): a string that must be quoted (`{{...}}`, `: ` inside, a number, `yes`, an empty string) is double-quoted where PyYAML 6's `safe_dump` single-quoted it. Both files load to the same data, every value and key in the oracle's order: `sentinel_rules_are_extracted_as_the_oracle_extracted_them` (crates/opentide-cli/tests/extract_sentinel.rs) runs the command against the cassette recorded from the oracle (tests/cassettes/sentinel/extract.json), loads the oracle's file (crates/opentide-cli/tests/extract_sentinel/oracle/) and Rust's and compares them as data, then byte for byte under these entries. No golden case can replay the command: MSAL and azure-core stamp the oracle's requests with random ids."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`generate extract sentinel` quotes the one-line values it writes as serde-saphyr does, with the same data as 0.23.0**"
+
+# UC-4.4e (#834): generate extract sentinel's runs without a tenant, in human mode.
+
+[[diff]]
+command = "generate extract sentinel"
+case = "generate.extract.sentinel/human/none/default"
+target = "stderr"
+rule = "lines"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mimport from sentinel\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[1;31merror: \u001b[0mSentinel tenants not configured · detail: You must first have Sentinel tenants configured to \ninitiate the import · advice: run 'opentide setup platforms --sentinel'\n\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;31m✗\u001b[0m  \u001b[1mimport from sentinel\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+candidate = "error: Sentinel tenants not configured · detail: You must first have Sentinel tenants configured to initiate the import · advice: run 'opentide setup platforms --sentinel'\n  \u001b[1;31m✗\u001b[0m  \u001b[1mimport from sentinel\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+reason = "In human mode a log line of the Rust CLI's logging layer is one unstyled line, not wrapped at the terminal's width, where the oracle's Rich handler styled its level and wrapped it inside the live region of its checklist; the Rust engine prints the checklist row when the import is done, without the spinner Python drew while it ran. The event, its fields and every other line are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`generate extract sentinel` runs on the Rust command line**"
+
+[[diff]]
+command = "generate extract sentinel"
+case = "generate.extract.sentinel/human/tide-corpus/default"
+target = "stderr"
+rule = "lines"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mimport from sentinel\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[1;31merror: \u001b[0mSentinel tenants not configured · detail: You must first have Sentinel tenants configured to \ninitiate the import · advice: run 'opentide setup platforms --sentinel'\n\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;31m✗\u001b[0m  \u001b[1mimport from sentinel\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+candidate = "error: Sentinel tenants not configured · detail: You must first have Sentinel tenants configured to initiate the import · advice: run 'opentide setup platforms --sentinel'\n  \u001b[1;31m✗\u001b[0m  \u001b[1mimport from sentinel\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+reason = "In human mode a log line of the Rust CLI's logging layer is one unstyled line, not wrapped at the terminal's width, where the oracle's Rich handler styled its level and wrapped it inside the live region of its checklist; the Rust engine prints the checklist row when the import is done, without the spinner Python drew while it ran. The event, its fields and every other line are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`generate extract sentinel` runs on the Rust command line**"

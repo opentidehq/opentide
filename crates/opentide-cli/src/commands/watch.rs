@@ -152,6 +152,7 @@ pub fn run(
     validate.strict = args.strict;
     validate.queries = args.queries.unwrap_or_default();
     validate.query_check = Some(&EngineQueries);
+    validate.platform_configurations = crate::plugins::configurations();
     let roots: Vec<PathBuf> = validate
         .roots()
         .into_iter()

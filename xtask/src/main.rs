@@ -55,6 +55,12 @@ commands:
   compare --check-ledger [--ledger FILE] [--changelog FILE]
                  check the ledger's schema, and that CHANGELOG.md holds each
                  entry's changelog reference
+  conformance [--runners rust,python,node] [--corpus NAME,...] [--out DIR]
+              [--diverge RUNNER] [--keep]
+                 run every operation of tests/conformance/manifest.json on every
+                 corpus through the Rust, Python and Node SDKs and require
+                 byte-identical documents; a difference is named by its JSON
+                 pointer. --diverge is the suite's own test (UC-5.4, #839)
   corpus <command>
                  generate the heavy workspace, run the fault catalogue
                  against the oracle, report coverage (UC-0.6, #804);
@@ -168,6 +174,13 @@ fn main() -> ExitCode {
             Ok(false) => ExitCode::FAILURE,
             Err(error) => {
                 eprintln!("xtask compare: {error:#}");
+                ExitCode::from(2)
+            }
+        },
+        "conformance" => match xtask::conformance::cli::run(rest) {
+            Ok(code) => ExitCode::from(code),
+            Err(error) => {
+                eprintln!("xtask conformance: {error:#}");
                 ExitCode::from(2)
             }
         },

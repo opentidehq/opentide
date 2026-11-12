@@ -1,0 +1,10 @@
+[platform]
+enabled = true
+name = "Acme"
+description = "The Acme detection platform, from the acme-opentide plugin"
+
+[[tenants]]
+name = "lab"
+[tenants.setup]
+url = "$ACME_URL"
+token = "$ACME_TOKEN"

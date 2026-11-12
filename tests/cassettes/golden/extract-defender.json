@@ -1,0 +1,101 @@
+{
+  "format": 1,
+  "scenario": "golden/extract-defender",
+  "recorded_from": [
+    "/bin/sh",
+    "-c",
+    "cp -R tests/golden/fixtures/tenants \"$HOME/ws\" && cd \"$HOME/ws\" && exec {oracle}/opentide --json generate extract defender"
+  ],
+  "digest": "sha256:14efcd91f607765b9a408fed9808ace871c034581e01c0f97abbbab509baf62e",
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://login.microsoftonline.com/00000000-0000-4000-8000-00000000de1d/oauth2/v2.0/token",
+        "headers": [
+          [
+            "content-type",
+            "application/x-www-form-urlencoded"
+          ]
+        ],
+        "body": "client_id=00000000-0000-4000-8000-00000000c11d&client_secret=REDACTED&grant_type=client_credentials&scope=https%3A%2F%2Fgraph.microsoft.com%2F.default"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "defender-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"token_type\": \"REDACTED\", \"expires_in\": 3599, \"ext_expires_in\": 3599, \"access_token\": \"REDACTED\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://graph.microsoft.com/beta/security/rules/detectionRules",
+        "headers": [
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "defender-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"value\": [{\"id\": \"201\", \"displayName\": \"Suspicious PowerShell: \\\"encoded\\\" command\", \"isEnabled\": true, \"createdBy\": \"alice@contoso.example\", \"createdDateTime\": \"2026-01-02T03:04:05.123Z\", \"lastModifiedBy\": \"bob@contoso.example\", \"lastModifiedDateTime\": \"2026-02-03T04:05:06Z\", \"detectorId\": \"8d7c6b5a-0000-4000-8000-000000000201\", \"queryCondition\": {\"queryText\": \"DeviceProcessEvents\\n  | where FileName == \\\"powershell.exe\\\"\\n\"}, \"schedule\": {\"period\": \"1H\"}, \"detectionAction\": {\"alertTemplate\": {\"title\": \"Encoded PowerShell\", \"description\": \"An encoded command line.\", \"severity\": \"medium\", \"category\": \"Execution\", \"recommendedActions\": \"Isolate the device.\\n  Collect the investigation package.\", \"mitreTechniques\": [\"T1059.001\", \"T1027\"], \"impactedAssets\": [{\"@odata.type\": \"#microsoft.graph.security.impactedDeviceAsset\", \"identifier\": \"deviceId\"}, {\"@odata.type\": \"#microsoft.graph.security.impactedUserAsset\", \"identifier\": \"accountUpn\"}]}, \"responseActions\": []}}, {\"id\": \"202\", \"displayName\": \"Office spawns PowerShell\", \"isEnabled\": false, \"createdBy\": \"alice@contoso.example\", \"createdDateTime\": \"2026-01-02T03:04:05.123Z\", \"lastModifiedBy\": \"alice@contoso.example\", \"lastModifiedDateTime\": \"2026-02-03T04:05:06Z\", \"detectorId\": \"8d7c6b5a-0000-4000-8000-000000000202\", \"queryCondition\": {\"queryText\": \"DeviceProcessEvents\\n  | where FileName == \\\"powershell.exe\\\"\\n\"}, \"schedule\": {\"period\": \"0\"}, \"detectionAction\": {\"alertTemplate\": {\"title\": \"Office spawns PowerShell\", \"description\": \"PowerShell started by an Office application.\\nInvestigate the parent.\", \"severity\": \"high\", \"category\": \"SuspiciousActivity\", \"recommendedActions\": null, \"mitreTechniques\": [], \"impactedAssets\": [{\"@odata.type\": \"#microsoft.graph.security.impactedDeviceAsset\", \"identifier\": \"deviceId\"}]}, \"responseActions\": []}}], \"@odata.nextLink\": \"https://graph.microsoft.com/beta/security/rules/detectionRules?$skiptoken=2\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://graph.microsoft.com/beta/security/rules/detectionRules?$skiptoken=REDACTED",
+        "headers": [
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "defender-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"value\": [{\"id\": \"203\", \"displayName\": \"office spawns powershell\", \"isEnabled\": true, \"createdBy\": \"alice@contoso.example\", \"createdDateTime\": \"2026-01-02T03:04:05.123Z\", \"lastModifiedBy\": \"alice@contoso.example\", \"lastModifiedDateTime\": \"2026-02-03T04:05:06Z\", \"detectorId\": \"8d7c6b5a-0000-4000-8000-000000000203\", \"queryCondition\": {\"queryText\": \"DeviceProcessEvents\\n  | where FileName == \\\"powershell.exe\\\"\\n\"}, \"schedule\": {\"period\": \"1H\"}, \"detectionAction\": {\"alertTemplate\": {\"title\": \"office spawns powershell\", \"description\": \"PowerShell started by an Office application.\\nInvestigate the parent.\", \"severity\": \"high\", \"category\": \"SuspiciousActivity\", \"recommendedActions\": null, \"mitreTechniques\": [], \"impactedAssets\": [{\"@odata.type\": \"#microsoft.graph.security.impactedDeviceAsset\", \"identifier\": \"deviceId\"}]}, \"responseActions\": []}}]}"
+      }
+    }
+  ]
+}

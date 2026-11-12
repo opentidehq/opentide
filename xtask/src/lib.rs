@@ -9,6 +9,7 @@ pub mod cassettes;
 pub mod codegen;
 pub mod compare;
 pub mod config;
+pub mod conformance;
 pub mod corpus;
 pub mod coverage;
 pub mod golden;

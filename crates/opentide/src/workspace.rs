@@ -161,6 +161,7 @@ impl Workspace {
             queries: options.queries,
             query_check: Some(queries::validate_check()),
             cve_check: None,
+            platform_configurations: None,
         })
     }
 

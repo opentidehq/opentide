@@ -20,6 +20,8 @@ const failure: string | null = lint.failureCode
 
 const coverage = ws.coverage('T1059')
 const covering: string[] = coverage.rules
+const rules: any[] = ws.rules()
+const families: number = ws.objectives().length + ws.threats().length
 
 const planOptions: DeployPlanOptions = { strategies: ['PREVIEW'], platform: 'sentinel', keepDeprecated: false }
 const plan = ws.deployPlan(planOptions)
@@ -34,4 +36,4 @@ ws.validate({ check: 'everything' })
 // @ts-expect-error: queries is error, warn or off
 ws.validate({ queries: 'loud' })
 
-export { covering, code, exitCode, failed, failure, lintStatus, ok, root, status, tree, version }
+export { covering, code, families, rules, exitCode, failed, failure, lintStatus, ok, root, status, tree, version }

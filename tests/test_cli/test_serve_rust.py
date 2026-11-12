@@ -325,14 +325,15 @@ def test_help_and_unported_commands_go_through_python(
 def test_a_run_the_rust_implementation_does_not_cover_is_refused_as_at_a_terminal(
     rust_client: Client, rust_runs: list[list[str]]
 ) -> None:
-    """``deploy`` without ``--dry-run`` or ``--platform``: serve refuses it, as the CLI does."""
-    refused = rust_client.run("deploy", "--strategy", "PREVIEW")
+    """``query`` on Sysdig, which has no query runner: serve refuses it, as the CLI does."""
+    refused = rust_client.run("query", "--platform", "sysdig", "q")
     assert refused["exit_code"] == 2
     assert refused["document"]["failure"]["code"] == "engine_not_ported"
     assert rust_runs == []
-    planned = rust_client.run("deploy", "--strategy", "PREVIEW", "--dry-run")
-    assert rust_runs == [["--json", "deploy", "--strategy", "PREVIEW", "--dry-run"]]
-    assert planned["document"]["command"] == "deploy"
+    # On a platform with a runner it runs on Rust (here, refused for no query).
+    covered = rust_client.run("query", "--platform", "splunk")
+    assert rust_runs == [["--json", "query", "--platform", "splunk"]]
+    assert covered["document"]["command"] == "query"
 
 
 def test_a_rust_run_in_a_missing_directory_fails(rust_client: Client, tmp_path: Path) -> None:

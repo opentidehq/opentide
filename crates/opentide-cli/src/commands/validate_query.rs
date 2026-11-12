@@ -103,7 +103,7 @@ pub struct Args {
 }
 
 /// What a run reads besides its options.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub struct Context<'a> {
     /// `--repo`.
     pub repo: Option<&'a str>,
@@ -113,6 +113,56 @@ pub struct Context<'a> {
     pub cwd: &'a Path,
     /// The streams.
     pub terminal: &'a Terminal,
+    /// `--proxy`, for a platform plugin's tenants.
+    pub proxy: Option<&'a str>,
+    /// Whether Ctrl-C was pressed.
+    pub interrupted: &'a dyn Fn() -> bool,
+}
+
+/// Seconds a live check waits on each query when neither `--check-timeout`
+/// nor [`CHECK_TIMEOUT_ENV`] sets it (`CHECK_TIMEOUT`).
+pub const CHECK_TIMEOUT_SECONDS: f64 = 120.0;
+
+/// `validate query --live` on a platform plugin (UC-4.5, #835): the
+/// refusals every `--live` run makes, then the plugin's live check.
+fn plugin_live(args: &Args, platform: &str, cx: &Context<'_>) -> Report {
+    let refusal = live(args, cx.env);
+    if refusal
+        .outcome
+        .failure
+        .as_ref()
+        .is_none_or(|failure| failure.code != code::ENGINE_NOT_PORTED)
+    {
+        return refusal;
+    }
+    let seconds = args
+        .check_timeout
+        .as_deref()
+        .or_else(|| {
+            cx.env
+                .get(CHECK_TIMEOUT_ENV)
+                .filter(|value| !value.trim().is_empty())
+        })
+        .and_then(|raw| raw.trim().parse::<f64>().ok())
+        .unwrap_or(CHECK_TIMEOUT_SECONDS);
+    let selection = super::plugin::Selection {
+        all: false,
+        uuids: args.uuids.clone(),
+        files: args.files.clone(),
+    };
+    super::plugin::validate_live(
+        platform,
+        &selection,
+        std::time::Duration::try_from_secs_f64(seconds).unwrap_or(std::time::Duration::MAX),
+        &super::plugin::Context {
+            repo: cx.repo,
+            env: cx.env,
+            cwd: cx.cwd,
+            proxy: cx.proxy,
+            interrupted: cx.interrupted,
+            now: jiff::Timestamp::now(),
+        },
+    )
 }
 
 /// The languages the engine parses for `platform` offline; `None` when it
@@ -216,10 +266,9 @@ pub fn refuse(args: &Args) -> Option<Report> {
     None
 }
 
-/// The platforms whose `--live` run is this engine's: those whose tenants
-/// cannot check a query, answered `supported: false` before any request
-/// (`opentide.cli.engines.RUST_LIVE_VALIDATION_PLATFORMS`). Defender,
-/// Elastic and SentinelOne check on the tenant: still the Python CLI's.
+/// The platforms whose tenants cannot check a query: a `--live` run on one
+/// is answered `supported: false` before any request; the others check on
+/// their tenants (`validate_live`).
 pub const LIVE_RUST_PLATFORMS: [&str; 3] = ["crowdstrike", "harfanglab", "sysdig"];
 
 /// `validate query --live` (`validate_query_cmd`'s `--live` branch, then
@@ -315,17 +364,30 @@ pub fn live_usage(args: &Args, env: &Env) -> Option<Report> {
 /// gives none (`CHECK_TIMEOUT_ENV`).
 pub const CHECK_TIMEOUT_ENV: &str = "OPENTIDE_QUERY_CHECK_TIMEOUT";
 
-/// The refusal of a `--live` run that names no `--platform`: the platforms it
-/// would reach are the workspace's, which `opentide.cli.engines` routes to
-/// Python (`engine_not_ported`).
-pub fn live_not_ported_without_platform() -> Report {
-    let mut failure = Failure::new(
-        code::ENGINE_NOT_PORTED,
-        "opentide validate query --live without --platform has no Rust implementation yet: unset \
-         OPENTIDE_ENGINE, or set it to python or compare.",
-    );
-    failure.argument = Some("OPENTIDE_ENGINE".into());
-    Report::failed(COMMAND, USAGE_EXIT_CODE, failure)
+/// What a `--live` run that names no `--platform` answers: a live check
+/// reads one platform's tenants, so the run is refused (exit 2,
+/// `usage_missing_option`), as `_validate_query_platform` refuses it. The
+/// result, keys in the oracle's order, `_`-keys included.
+pub fn live_without_platform() -> Vec<(String, Json)> {
+    vec![
+        ("platform".to_owned(), Json::Null),
+        ("mode".to_owned(), Json::str("live")),
+        ("status".to_owned(), Json::str("failed")),
+        ("supported".to_owned(), Json::Bool(true)),
+        (
+            "message".to_owned(),
+            Json::str("--live checks one platform's tenants: pass --platform"),
+        ),
+        (
+            "_exit_code".to_owned(),
+            Json::Int(i64::from(USAGE_EXIT_CODE)),
+        ),
+        (
+            "_failure_code".to_owned(),
+            Json::str(code::USAGE_MISSING_OPTION),
+        ),
+        ("_failure_argument".to_owned(), Json::str("--platform")),
+    ]
 }
 
 /// The refusal of a `--live` run: Python's (`engine_not_ported`).
@@ -568,6 +630,13 @@ fn findings_outcome(
 )]
 pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     if args.live {
+        if let Some(platform) = args
+            .platform
+            .as_deref()
+            .filter(|platform| crate::plugins::is_plugin(platform))
+        {
+            return plugin_live(args, platform, cx);
+        }
         return live(args, cx.env);
     }
     if let Some(report) = refuse(args) {
@@ -1157,6 +1226,8 @@ mod tests {
                 env: &Env::default(),
                 cwd: Path::new("/nonexistent"),
                 terminal: &Terminal::plain(crate::mode::Mode::Json),
+                proxy: None,
+                interrupted: &|| false,
             },
         );
         let failure = report.outcome.failure.unwrap();

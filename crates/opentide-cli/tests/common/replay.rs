@@ -84,13 +84,19 @@ pub const FIXTURES: &[&str] = &[
     "tide-corpus-legacy-id-error",
     "vscode",
     "setup-merge",
+    "skills-merge",
     "vscode-docs-folder",
     "tenants",
     "live-tenants",
     "deploy-tenants",
+    "deploy-tenants-sysdig",
     "deploy-push",
     "deploy-push-production",
     "deploy-push-anchor",
+    "share-misp",
+    "share-misp-broken",
+    "share-misp-push",
+    "share-misp-push-config",
 ];
 
 pub fn repo() -> PathBuf {
@@ -163,10 +169,37 @@ pub fn fixture(name: &str, ws: &Path) {
         }
         "vscode" => copy_tree(&repo().join("tests/golden/fixtures/vscode-workspace"), ws),
         "setup-merge" => copy_tree(&repo().join("tests/golden/fixtures/setup-merge"), ws),
+        "skills-merge" => copy_tree(&repo().join("tests/golden/fixtures/skills-merge"), ws),
         // The stand-in tenants of the cassette cases (UC-4.2c): `query`'s.
         "tenants" => copy_tree(&repo().join("tests/golden/fixtures/tenants"), ws),
         "live-tenants" => copy_tree(&repo().join("tests/golden/fixtures/live-tenants"), ws),
         "deploy-tenants" => copy_tree(&repo().join("tests/golden/fixtures/deploy-tenants"), ws),
+        // Every platform but Sysdig disabled (UC-4.4c): a deploy without
+        // --platform sends to Sysdig's stand-in alone.
+        "deploy-tenants-sysdig" => {
+            fixture("deploy-tenants", ws);
+            for platform in [
+                "carbon_black_cloud",
+                "crowdstrike",
+                "defender_for_endpoint",
+                "elastic",
+                "harfanglab",
+                "sentinel",
+                "sentinel_one",
+                "splunk",
+            ] {
+                let path = ws.join(format!(
+                    ".opentide/configurations/platforms/{platform}.toml"
+                ));
+                let text = std::fs::read_to_string(&path).unwrap();
+                let (on, off) = (
+                    "[platform]\nenabled = true\n",
+                    "[platform]\nenabled = false\n",
+                );
+                assert_eq!(text.matches(on).count(), 1, "{platform}");
+                std::fs::write(&path, text.replace(on, off)).unwrap();
+            }
+        }
         // A push of one edit on `deploy-tenants` (UC-4.6c): two commits.
         "deploy-push" => pushed(
             ws,
@@ -186,6 +219,14 @@ pub fn fixture(name: &str, ws: &Path) {
             "    status: STAGING\n",
             "    status: &status STAGING\n",
         ),
+        // UC-4.4b (#834): the MISP destinations of `share`'s cases.
+        "share-misp" => copy_tree(&repo().join("tests/golden/fixtures/share-misp"), ws),
+        "share-misp-broken" => {
+            fixture("share-misp", ws);
+            apply_edits(name, ws);
+        }
+        // UC-4.4e (#834): `share-misp` as a checkout whose last commit is a push.
+        "share-misp-push" | "share-misp-push-config" => pushed_from_cases(name, ws),
         "vscode-docs-folder" => {
             fixture("vscode", ws);
             let path = ws.join(".opentide/configurations/paths.toml");
@@ -231,6 +272,34 @@ fn apply_edits(name: &str, ws: &Path) {
 /// one edit (`pushed` in `cases.toml`, laid out by `xtask/src/golden/fixture.rs`).
 fn pushed(ws: &Path, path: &str, find: &str, replace: &str) {
     copy_tree(&repo().join("tests/golden/fixtures/deploy-tenants"), ws);
+    commit_push(
+        ws,
+        &[(path.to_owned(), find.to_owned(), replace.to_owned())],
+    );
+}
+
+/// The copy fixture `name` of `tests/golden/cases.toml` as a git checkout of
+/// two commits: its `source`, then its `pushed` edits.
+fn pushed_from_cases(name: &str, ws: &Path) {
+    let text = std::fs::read_to_string(repo().join("tests/golden/cases.toml")).unwrap();
+    let spec: toml::Table = toml::from_str(&text).unwrap();
+    let fixture = &spec["fixtures"][name];
+    copy_tree(&repo().join(fixture["source"].as_str().unwrap()), ws);
+    let edits: Vec<(String, String, String)> = fixture["pushed"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|edit| {
+            let field = |key: &str| edit[key].as_str().unwrap().to_owned();
+            (field("path"), field("find"), field("replace"))
+        })
+        .collect();
+    commit_push(ws, &edits);
+}
+
+/// Commits `ws` as it is, then `edits` (path, find, replace) as a second
+/// commit, with the fixed author and time of `xtask/src/golden/fixture.rs`.
+fn commit_push(ws: &Path, edits: &[(String, String, String)]) {
     let git = |args: &[&str]| {
         let output = std::process::Command::new("git")
             .args([
@@ -263,10 +332,12 @@ fn pushed(ws: &Path, path: &str, find: &str, replace: &str) {
     git(&["init", "-q"]);
     git(&["add", "-A"]);
     git(&["commit", "-q", "--no-verify", "-m", "The fixture"]);
-    let file = ws.join(path);
-    let text = std::fs::read_to_string(&file).unwrap();
-    assert_eq!(text.matches(find).count(), 1);
-    std::fs::write(&file, text.replacen(find, replace, 1)).unwrap();
+    for (path, find, replace) in edits {
+        let file = ws.join(path);
+        let text = std::fs::read_to_string(&file).unwrap();
+        assert_eq!(text.matches(find.as_str()).count(), 1);
+        std::fs::write(&file, text.replacen(find.as_str(), replace, 1)).unwrap();
+    }
     git(&["commit", "-q", "--no-verify", "-a", "-m", "A push"]);
 }
 
@@ -404,6 +475,10 @@ pub struct Coverage {
     /// Flags under which a run reaches no tenant (`deploy --dry-run`):
     /// `platforms` does not apply to it.
     pub offline: Vec<String>,
+    /// Whether a run on installed platform plugins is covered
+    /// (`RustCommand.plugins`, UC-4.5): the command line here has no plugin
+    /// host, so none is installed and no run is one.
+    pub plugins: bool,
 }
 
 /// The dispatch table, `RUST_COMMANDS` in `src/opentide/cli/engines.py`:
@@ -471,6 +546,7 @@ pub fn parse_rust_commands(source: &str) -> BTreeMap<String, Coverage> {
         }
         panic!("engines.py: {constant}: aliases nest too deep")
     };
+    let plugins = regex::Regex::new(r"\bplugins\s*=\s*True\b").unwrap();
     let keys: Vec<_> = key.captures_iter(body).collect();
     let mut table = BTreeMap::new();
     for (index, found) in keys.iter().enumerate() {
@@ -488,6 +564,7 @@ pub fn parse_rust_commands(source: &str) -> BTreeMap<String, Coverage> {
                 platforms: tuple(arguments, "platforms"),
                 platform_scope: tuple(arguments, "platform_scope"),
                 offline: tuple(arguments, "offline"),
+                plugins: plugins.is_match(arguments),
             },
         );
     }
@@ -512,6 +589,29 @@ pub fn covers(command: &str, argv: &[String]) -> bool {
         .iter()
         .position(|arg| arg == "--")
         .map_or(argv, |end| &argv[..end]);
+    let named = || {
+        let mut named = Vec::new();
+        for (index, token) in options.iter().enumerate() {
+            if token == "--platform" {
+                named.extend(options.get(index + 1).map(String::as_str));
+            } else if let Some(value) = token.strip_prefix("--platform=") {
+                named.push(value);
+            }
+        }
+        named
+    };
+    if coverage.refuses.iter().any(|flag| options.contains(flag)) {
+        return false;
+    }
+    if coverage.plugins && {
+        let named = named();
+        !named.is_empty()
+            && named
+                .iter()
+                .all(|name| opentide_cli::plugins::is_plugin(name))
+    } {
+        return true;
+    }
     let platforms = coverage.platforms.is_empty()
         || coverage.offline.iter().any(|flag| options.contains(flag))
         || (!coverage.platform_scope.is_empty()
@@ -520,21 +620,13 @@ pub fn covers(command: &str, argv: &[String]) -> bool {
                 .iter()
                 .any(|flag| options.contains(flag)))
         || {
-            let mut named = Vec::new();
-            for (index, token) in options.iter().enumerate() {
-                if token == "--platform" {
-                    named.extend(options.get(index + 1).map(String::as_str));
-                } else if let Some(value) = token.strip_prefix("--platform=") {
-                    named.push(value);
-                }
-            }
+            let named = named();
             !named.is_empty()
                 && named
                     .iter()
                     .all(|name| coverage.platforms.iter().any(|p| p == name))
         };
-    !coverage.refuses.iter().any(|flag| options.contains(flag))
-        && platforms
+    platforms
         && (coverage.requires.is_empty()
             || coverage.requires.iter().any(|flag| options.contains(flag)))
 }
@@ -562,6 +654,18 @@ fn package_uuids() -> &'static std::collections::BTreeSet<String> {
         walk(&repo().join("src/opentide"), &mut out);
         out
     })
+}
+
+thread_local! {
+    static LAST_FILES: std::cell::RefCell<BTreeMap<String, FileState>> =
+        const { std::cell::RefCell::new(BTreeMap::new()) };
+}
+
+/// The files the last case [`replay`]ed on this thread wrote, normalised, by
+/// their recorded paths (`ws/...`): for a test that checks them beyond the
+/// comparison, such as loading them as data.
+pub fn last_files() -> BTreeMap<String, FileState> {
+    LAST_FILES.with(|last| last.borrow().clone())
 }
 
 /// Replays the recording in `dir`; the differences found, if any.
@@ -774,7 +878,13 @@ pub fn replay(id: &str, dir: &Path, ledger: &Ledger, usage: &mut Usage) -> Vec<S
                 written.insert(format!("{prefix}/{path}"), FileState::Deleted);
             }
         }
-        for folder in dirs(root).difference(folders_before) {
+        let folders_after = dirs(root);
+        // A folder the run removed (a skill's tree replaced whole), as the
+        // recording lists it.
+        for folder in folders_before.difference(&folders_after) {
+            written.insert(format!("{prefix}/{folder}"), FileState::Deleted);
+        }
+        for folder in folders_after.difference(folders_before) {
             let mode = std::fs::metadata(root.join(folder))
                 .unwrap()
                 .permissions()
@@ -801,6 +911,7 @@ pub fn replay(id: &str, dir: &Path, ledger: &Ledger, usage: &mut Usage) -> Vec<S
         stderr: stderr.into_bytes(),
         files: written,
     };
+    LAST_FILES.with(|last| *last.borrow_mut() = candidate.files.clone());
     let command = case["command"].as_str().unwrap();
     if let Ok(dump) = std::env::var("OPENTIDE_REPLAY_DUMP") {
         // The candidate's run, for `scripts/golden/ledger_entries.py`.
@@ -890,7 +1001,9 @@ pub fn replay_commands(commands: &[&str], complete: bool) -> (Vec<String>, usize
             // `cargo xtask golden check --engine compare` applies their entries.
             let elsewhere = ["fault", "heavy-small"].iter().any(|fixture| {
                 entry.case.contains(&format!("/{fixture}/")) && generated(fixture).is_none()
-            }) || entry.case.ends_with("/help");
+            }) || entry.case.ends_with("/help")
+                // A cassette test's (`tests/extract_sentinel.rs`), not a golden case's.
+                || entry.case.starts_with("cassette:");
             if commands.contains(&entry.command.replace(' ', ".").as_str())
                 && !elsewhere
                 && !usage.is_used(index)

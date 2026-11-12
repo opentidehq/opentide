@@ -42,10 +42,14 @@ def state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return home / "opentide" / "compare"
 
 
-#: A command line with no Rust implementation: ``setup --plugin`` (``setup``
-#: itself runs on Rust since UC-3.6, #828, and ``setup vscode`` since UC-3.6c,
-#: #951; installing the skills and the plugin stays Python's).
-UNPORTED = ("setup", "--plan", "--plugin")
+#: A command line with no Rust implementation: a bare ``generate``, the full
+#: pipeline (``setup --plugin``, the last ``setup`` run on Python, moved to Rust
+#: with UC-4.4d, and ``share targets`` with UC-4.4b, both #834).
+UNPORTED = ("generate",)
+UNPORTED_MESSAGE = (
+    "opentide generate without schemas or templates or vocabs or snippets "
+    "has no Rust implementation yet"
+)
 
 
 def fake(mode: str) -> RustCommand:
@@ -83,11 +87,11 @@ def test_rust_on_a_command_without_rust_is_engine_not_ported(workspace: Path) ->
     assert code == 2
     doc = document(stdout)
     assert doc["exit_code"] == 2
-    assert doc["command"] == "setup"
+    assert doc["command"] == "generate"
     assert doc["failure"]["code"] == "engine_not_ported"
     assert doc["failure"]["argument"] == "OPENTIDE_ENGINE"
     message = doc["failure"]["message"]
-    assert "opentide setup with --plugin has no Rust implementation yet" in message
+    assert UNPORTED_MESSAGE in message
     assert stdout.endswith("}\n") and stdout.count("\n") == 1
 
 
@@ -103,7 +107,7 @@ def test_rust_without_json_is_one_error_line(workspace: Path) -> None:
     code, stdout, stderr = invoke(["--no-color", "--repo", str(workspace), *UNPORTED], "rust")
     assert code == 2
     assert stdout == ""
-    assert "error: opentide setup with --plugin has no Rust implementation yet" in stderr
+    assert f"error: {UNPORTED_MESSAGE}" in stderr
 
 
 def test_an_unknown_engine_is_a_usage_error_with_a_suggestion(workspace: Path) -> None:
@@ -187,8 +191,10 @@ def test_a_rust_command_that_refuses_a_flag_covers_only_runs_without_it() -> Non
     # After ``--`` it is an argument, not the flag.
     assert command.covers(["validate", "query", "--", "--live"])
     assert command.uncovered("validate query", ["--live"]) == "validate query with --live"
-    assert engines.RUST_COMMANDS[("setup",)].refuses == ("--skills", "--plugin")
-    assert not engines.RUST_COMMANDS[("setup",)].covers(["setup", "--skills"])
+    # Agent skills install on Rust (UC-4.4d, #834): setup refuses nothing now.
+    assert engines.RUST_COMMANDS[("setup",)].refuses == ()
+    assert engines.RUST_COMMANDS[("setup",)].covers(["setup", "--skills", "generic", "--plugin"])
+    assert engines.RUST_COMMANDS[("setup", "skills")].covers(["setup", "skills", "--generic"])
 
 
 def test_a_command_that_reaches_tenants_is_routed_by_the_platforms_it_names() -> None:
@@ -211,15 +217,17 @@ def test_a_command_that_reaches_tenants_is_routed_by_the_platforms_it_names() ->
     assert query.uncovered("query", ["x"]) == "query without --platform"
     # After ``--`` it is an argument, not the flag.
     assert not query.covers(["query", "--", "--platform", "elastic"])
-    # A rule's query carries its tenants' exclusions: Python's.
-    assert not query.covers(["query", "--platform", "elastic", "--rule", "x"])
-    assert not query.covers(["query", "--platform", "elastic", "--file", "r.yaml"])
+    # A rule's query, with its tenants' exclusions, too (UC-4.4c, #834).
+    assert query.covers(["query", "--platform", "elastic", "--rule", "x"])
+    assert query.covers(["query", "--platform", "elastic", "--file", "r.yaml"])
+    assert query.refuses == ()
 
 
-def test_validate_query_is_routed_by_platform_with_live_only() -> None:
-    """Offline, every platform is Rust's; ``--live`` too once it names its platform (#979)."""
+def test_validate_query_runs_on_rust_offline_and_live() -> None:
+    """Every platform is Rust's, offline and ``--live`` (#979), ``--platform`` or not (#834)."""
     command = engines.RUST_COMMANDS[("validate", "query")]
-    assert command.platform_scope == ("--live",)
+    assert command.platforms == ()
+    assert command.platform_scope == ()
     assert command.covers(["validate", "query", "--platform", "sentinel"])
     assert command.covers(["validate", "query"])
     for platform in (
@@ -234,22 +242,21 @@ def test_validate_query_is_routed_by_platform_with_live_only() -> None:
         "sysdig",
     ):
         assert command.covers(["validate", "query", "--live", "--platform", platform])
-    assert not command.covers(["validate", "query", "--live"])
-    uncovered = command.uncovered("validate query", ["--live"])
-    assert uncovered == "validate query --live without --platform"
+    # Without --platform the Rust implementation refuses it as Python does (#834).
+    assert command.covers(["validate", "query", "--live"])
 
 
 def test_rust_refuses_validate_query_live_and_compare_runs_python_alone(
     workspace: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """``validate query --live`` that names no platform stays Python's (#832, #979)."""
+    """A command routed by platform: a run that names none stays Python's (#832, #979)."""
     launch = (sys.executable, str(FAKE), "exit")
     monkeypatch.setitem(
         engines.RUST_COMMANDS,
         ("validate", "query"),
         RustCommand(
             launch=launch,
-            platforms=engines.RUST_LIVE_VALIDATION_PLATFORMS,
+            platforms=("elastic", "splunk"),
             platform_scope=("--live",),
         ),
     )
@@ -306,24 +313,18 @@ def test_rust_reads_a_stdin_that_lives_in_memory(
     assert result.stdout == "given on stdin\n"
 
 
-def test_deploy_sends_on_rust_per_platform_and_dry_runs_whatever_the_platform() -> None:
-    """UC-4.6 (#979): a deploy that sends runs on Rust when its --platform has a connector."""
+def test_deploy_sends_on_rust_with_or_without_a_platform() -> None:
+    """A deploy that sends runs on Rust (UC-4.6, #979), on the workspace's platforms too (#834)."""
     deploy = engines.RUST_COMMANDS[("deploy",)]
     assert deploy.requires == ()
     assert deploy.offline == ("--dry-run",)
     assert deploy.side_effects
-    assert set(deploy.platforms) == set(engines.RUST_LIVE_VALIDATION_PLATFORMS)
+    assert deploy.platforms == ()
     assert deploy.covers(["deploy", "--strategy", "PREVIEW", "--dry-run"])
-    assert deploy.covers(["deploy", "--dry-run", "--platform", "not_a_platform"])
     assert deploy.covers(["deploy", "--strategy", "PREVIEW", "--platform", "elastic"])
     assert deploy.covers(["deploy", "--platform=splunk"])
-    assert not deploy.covers(["deploy", "--strategy", "PREVIEW"])
-    assert not deploy.covers(["deploy", "--platform", "not_a_platform"])
-    # After ``--`` it is an argument, not the flag.
-    assert not deploy.covers(["deploy", "--", "--dry-run"])
-    assert deploy.uncovered("deploy", ["deploy", "--strategy", "PREVIEW"]) == (
-        "deploy without --platform"
-    )
+    assert deploy.covers(["deploy", "--strategy", "PREVIEW"])
+    assert deploy.covers(["deploy", "--", "--dry-run"])
     assert "offline=('--dry-run',)" in repr(deploy)
 
 
@@ -862,8 +863,11 @@ def test_a_host_runs_rust_only_for_a_run_its_implementation_covers() -> None:
     assert engines.rust_command(("generate",), rust, ["generate", "--", "schemas"]) is None
     deploy = engines.RUST_COMMANDS[("deploy",)]
     assert engines.rust_command(("deploy",), rust, ["deploy", "--dry-run"]) is deploy
-    assert engines.rust_command(("deploy",), rust, ["deploy"]) is None
+    assert engines.rust_command(("deploy",), rust, ["deploy"]) is deploy
     assert engines.rust_command(("deploy",), rust, ["deploy", "--platform", "sysdig"]) is deploy
+    query = engines.RUST_COMMANDS[("query",)]
+    assert engines.rust_command(("query",), rust, ["query", "--platform", "sysdig"]) is None
+    assert engines.rust_command(("query",), rust, ["query", "--platform", "splunk"]) is query
     assert engines.rust_command(("info",), rust, ["info"]) is engines.RUST_COMMANDS[("info",)]
 
 

@@ -1,0 +1,11 @@
+skills
+  merge   .agents/skills/detection-engineering/SKILL.md
+  create  .agents/skills/opentide-detection-rule/SKILL.md
+  merge   .claude/skills/detection-engineering/SKILL.md
+  create  .claude/skills/opentide-detection-rule/SKILL.md
+  create  .cursor/skills/detection-engineering/SKILL.md
+  merge   .cursor/skills/opentide-detection-rule/SKILL.md
+  delete  .agents/skills/detection-engineering/references/old.md
+  skip    CLAUDE.md
+
+Plan: 6 files to write (3 new, 3 changed), 1 to remove · nothing written

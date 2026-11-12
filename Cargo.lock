@@ -3139,7 +3139,9 @@ dependencies = [
  "rmcp",
  "rustix",
  "serde",
+ "serde-saphyr",
  "serde_json",
+ "sha1",
  "sha2 0.11.1",
  "shlex 2.0.1",
  "signal-hook",
@@ -3407,16 +3409,20 @@ dependencies = [
 name = "opentide-native"
 version = "0.0.0"
 dependencies = [
+ "jiff",
  "opentide",
  "opentide-analysis",
  "opentide-cli",
  "opentide-compare",
+ "opentide-compile",
+ "opentide-connectors",
  "opentide-lsp",
  "opentide-schema",
  "pyo3",
  "pyo3-build-config",
  "serde",
  "serde_json",
+ "tokio",
  "tracing",
 ]
 

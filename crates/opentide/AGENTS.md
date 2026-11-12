@@ -33,6 +33,7 @@ unpublished; `cargo package` leaves it out and the licence scan reads its source
 | `tests/cli.rs` | `cli`: the binary's `--json commands` against the PyPI CLI's recording, through the goldens' comparator and `APPROVED_DIFFS.toml`; `run_json` |
 | `tests/lsp.rs` | `lsp`: the lifecycle over frames and one message at a time |
 | `tests/connectors.rs` | `connectors`: tenants from a workspace, and query, live check, deploy, cancellation and errors on wiremock stand-in tenants (each connection is given its environment, so no proxy of the process applies) |
+| `tests/conformance.rs` | `cli`: the Rust runner of the cross-SDK conformance suite (UC-5.4, `tests/conformance/README.md`); on its own, every operation on the corpus |
 
 `docs/sdk/rust.md` and `README.md` are doctests too (`#[cfg(doctest)]` items in `lib.rs`).
 

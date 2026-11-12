@@ -1,0 +1,8 @@
+warning: Elastic import required field dropped · rule: Encoded PowerShell: "-enc" flag · field: process.args · type: unknown
+warning: Skipping unsupported endpoint response action · rule: Encoded PowerShell: "-enc" flag · command: get-file
+warning: Skipping unsupported osquery response action · rule: Encoded PowerShell: "-enc" flag · reason: osquery response action has no inline query (pack/saved query)
+warning: Elastic import window widened · rule: Encoded PowerShell: "-enc" flag · interval: 5m · from: now-3m
+warning: Elastic import schedule defaulted · rule: New service name · interval: bogus · from: now-6m
+warning: Elastic import rule skipped · rule: New service name · reason: does not validate as platform::elastic::1.0: 1 validation error for ElasticConfig
+warning: Elastic import rule skipped · rule: Rule with a legacy id · reason: Kibana rule_id 'legacy-rule-7' is not a UUID
+✓ import from elastic · 4 rules · <SECONDS>

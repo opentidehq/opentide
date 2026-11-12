@@ -1,0 +1,327 @@
+{
+  "format": 1,
+  "scenario": "golden/share-push-changed",
+  "recorded_from": [
+    "/bin/sh",
+    "-c",
+    "cp -R tests/golden/fixtures/share-misp \"$HOME/ws\" && cd \"$HOME/ws\" && export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_AUTHOR_NAME='opentide golden' GIT_AUTHOR_EMAIL=golden@opentide.invalid GIT_AUTHOR_DATE=2026-01-01T00:00:00Z GIT_COMMITTER_NAME='opentide golden' GIT_COMMITTER_EMAIL=golden@opentide.invalid GIT_COMMITTER_DATE=2026-01-01T00:00:00Z && g() { git -c init.defaultBranch=main -c commit.gpgsign=false -c core.autocrlf=false -c maintenance.auto=false -c gc.auto=0 \"$@\"; } && g init -q && g add -A && g commit -q --no-verify -m 'The fixture' && sed -i 's/^  A rule the MISP stand-in receives\\.$/  A rule the MISP stand-in receives, changed by a push./' objects/rules/rule-b-update.yaml && g commit -q --no-verify -a -m 'A push' && GITHUB_ACTIONS=true GITHUB_EVENT_NAME=push GITHUB_SHA=HEAD GITHUB_WORKSPACE=\"$HOME/ws\" exec {oracle}/opentide --repo \"$HOME/ws\" --json share push --changed"
+  ],
+  "digest": "sha256:5285e884ea0518db5f1ced46b5781765818e99f8bb83a25d20555d140680a121",
+  "interactions": [
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://misp.invalid/servers/getVersion",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "misp-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"version\": \"2.5.17\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://misp.invalid/users/view/me",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "misp-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"User\": {\"id\": \"1\"}, \"Organisation\": {\"uuid\": \"11111111-1111-4111-8111-111111111111\"}}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://misp.invalid/objectTemplates/view/892fd46a-f69e-455c-8c4f-843a4b8f4295",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "misp-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"ObjectTemplate\": {\"version\": \"5\", \"ObjectTemplateElement\": [{\"object_relation\": \"name\"}, {\"object_relation\": \"uuid\"}, {\"object_relation\": \"version\"}, {\"object_relation\": \"opentide-type\", \"values_list\": [\"threat\", \"objective\", \"rule\"]}, {\"object_relation\": \"schema\"}, {\"object_relation\": \"opentide-object\"}]}}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://misp.invalid/locked/servers/getVersion",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 403,
+        "headers": [
+          [
+            "server",
+            "misp-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"name\": \"Authentication failed.\", \"message\": \"Forbidden\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://misp.invalid/galaxy_clusters/restSearch",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"returnFormat\":\"json\",\"galaxy\":\"mitre-attack-pattern\",\"page\":1,\"limit\":100}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "misp-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "[{\"GalaxyCluster\": {\"uuid\": \"7385dfaf-6886-4229-9ecd-6fd678040830\", \"value\": \"Command and Scripting Interpreter - T1059\", \"meta\": {\"external_id\": [\"T1059\"]}}, \"Galaxy\": {\"type\": \"mitre-attack-pattern\"}}]"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://misp.invalid/events/restSearch",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"returnFormat\":\"json\",\"object_name\":\"opentide\",\"value\":\"00000000-0000-4000-8048-000000000012\",\"page\":1,\"limit\":100}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "misp-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"response\": [{\"Event\": {\"id\": \"7\", \"uuid\": \"e0000000-0000-4000-8048-000000000012\"}}]}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://misp.invalid/events/view/7",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "misp-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"Event\": {\"id\": \"7\", \"uuid\": \"e0000000-0000-4000-8048-000000000012\", \"Orgc\": {\"uuid\": \"11111111-1111-4111-8111-111111111111\"}, \"published\": true, \"Attribute\": [], \"Object\": [{\"id\": \"2\", \"name\": \"domain-ip\", \"Attribute\": [{\"value\": \"example.org\"}]}, {\"id\": \"1\", \"name\": \"opentide\", \"template_uuid\": \"892fd46a-f69e-455c-8c4f-843a4b8f4295\", \"Attribute\": [{\"object_relation\": \"uuid\", \"value\": \"00000000-0000-4000-8048-000000000012\", \"type\": \"text\"}]}]}}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://misp.invalid/events/edit/7",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"Event\":{\"info\":\"Shared rule to update\",\"date\":\"2026-01-01\",\"distribution\":1,\"sharing_group_id\":0,\"threat_level_id\":1,\"analysis\":2,\"published\":false,\"Attribute\":[],\"Tag\":[{\"name\":\"tlp:green\"},{\"name\":\"misp-galaxy:mitre-attack-pattern=\\\"Command and Scripting Interpreter - T1059\\\"\"}],\"Object\":[{\"id\":\"2\",\"name\":\"domain-ip\",\"Attribute\":[{\"value\":\"example.org\"}]},{\"name\":\"opentide\",\"meta-category\":\"misc\",\"template_uuid\":\"892fd46a-f69e-455c-8c4f-843a4b8f4295\",\"template_version\":5,\"distribution\":5,\"Attribute\":[{\"object_relation\":\"name\",\"type\":\"text\",\"category\":\"Other\",\"to_ids\":false,\"distribution\":5,\"disable_correlation\":false,\"value\":\"Shared rule to update\"},{\"object_relation\":\"uuid\",\"type\":\"text\",\"category\":\"Other\",\"to_ids\":false,\"distribution\":5,\"disable_correlation\":false,\"value\":\"00000000-0000-4000-8048-000000000012\"},{\"object_relation\":\"version\",\"type\":\"text\",\"category\":\"Other\",\"to_ids\":false,\"distribution\":5,\"disable_correlation\":true,\"value\":\"1\"},{\"object_relation\":\"opentide-type\",\"type\":\"text\",\"category\":\"Other\",\"to_ids\":false,\"distribution\":5,\"disable_correlation\":true,\"value\":\"rule\"},{\"object_relation\":\"schema\",\"type\":\"text\",\"category\":\"Other\",\"to_ids\":false,\"distribution\":5,\"disable_correlation\":true,\"value\":\"rule::1.0\"},{\"object_relation\":\"opentide-object\",\"type\":\"text\",\"category\":\"Other\",\"to_ids\":false,\"distribution\":5,\"disable_correlation\":false,\"value\":\"name: Shared rule to update\\n\\nmetadata:\\n  uuid: 00000000-0000-4000-8048-000000000012\\n  schema: rule::1.0\\n  version: 1\\n  created: 2026-01-01\\n  modified: 2026-01-02\\n  tlp: green\\n\\ndescription: |\\n  A rule the MISP stand-in receives, changed by a push.\\nseverity: High\\ntechniques:\\n  - T1059\\ndetection_model: 00000000-0000-4000-8048-000000000002\\n\\nresponse:\\n  alert_severity: High\\n\\nconfigurations:\\n  defender_for_endpoint:\\n    enabled: true\\n    status: PRODUCTION\\n    query: |\\n      DeviceProcessEvents\\n      | take 1\\n    scheduling: 1H\\n    alert:\\n      category: Execution\\n    impacted_entities:\\n      device: device_id\\n\"},{\"object_relation\":\"opentide-relation\",\"type\":\"text\",\"category\":\"Other\",\"to_ids\":false,\"distribution\":5,\"disable_correlation\":false,\"value\":\"00000000-0000-4000-8048-000000000002\"}]}],\"uuid\":\"e0000000-0000-4000-8048-000000000012\"}}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "misp-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"Event\": {\"info\": \"Shared rule to update\", \"date\": \"2026-01-01\", \"distribution\": 1, \"sharing_group_id\": 0, \"threat_level_id\": 1, \"analysis\": 2, \"published\": false, \"Attribute\": [], \"Tag\": [{\"name\": \"tlp:green\"}, {\"name\": \"misp-galaxy:mitre-attack-pattern=\\\"Command and Scripting Interpreter - T1059\\\"\"}], \"Object\": [{\"id\": \"2\", \"name\": \"domain-ip\", \"Attribute\": [{\"value\": \"example.org\"}]}, {\"name\": \"opentide\", \"meta-category\": \"misc\", \"template_uuid\": \"892fd46a-f69e-455c-8c4f-843a4b8f4295\", \"template_version\": 5, \"distribution\": 5, \"Attribute\": [{\"object_relation\": \"name\", \"type\": \"text\", \"category\": \"Other\", \"to_ids\": false, \"distribution\": 5, \"disable_correlation\": false, \"value\": \"Shared rule to update\"}, {\"object_relation\": \"uuid\", \"type\": \"text\", \"category\": \"Other\", \"to_ids\": false, \"distribution\": 5, \"disable_correlation\": false, \"value\": \"00000000-0000-4000-8048-000000000012\"}, {\"object_relation\": \"version\", \"type\": \"text\", \"category\": \"Other\", \"to_ids\": false, \"distribution\": 5, \"disable_correlation\": true, \"value\": \"1\"}, {\"object_relation\": \"opentide-type\", \"type\": \"text\", \"category\": \"Other\", \"to_ids\": false, \"distribution\": 5, \"disable_correlation\": true, \"value\": \"rule\"}, {\"object_relation\": \"schema\", \"type\": \"text\", \"category\": \"Other\", \"to_ids\": false, \"distribution\": 5, \"disable_correlation\": true, \"value\": \"rule::1.0\"}, {\"object_relation\": \"opentide-object\", \"type\": \"text\", \"category\": \"Other\", \"to_ids\": false, \"distribution\": 5, \"disable_correlation\": false, \"value\": \"name: Shared rule to update\\n\\nmetadata:\\n  uuid: 00000000-0000-4000-8048-000000000012\\n  schema: rule::1.0\\n  version: 1\\n  created: 2026-01-01\\n  modified: 2026-01-02\\n  tlp: green\\n\\ndescription: |\\n  A rule the MISP stand-in receives, changed by a push.\\nseverity: High\\ntechniques:\\n  - T1059\\ndetection_model: 00000000-0000-4000-8048-000000000002\\n\\nresponse:\\n  alert_severity: High\\n\\nconfigurations:\\n  defender_for_endpoint:\\n    enabled: true\\n    status: PRODUCTION\\n    query: |\\n      DeviceProcessEvents\\n      | take 1\\n    scheduling: 1H\\n    alert:\\n      category: Execution\\n    impacted_entities:\\n      device: device_id\\n\"}, {\"object_relation\": \"opentide-relation\", \"type\": \"text\", \"category\": \"Other\", \"to_ids\": false, \"distribution\": 5, \"disable_correlation\": false, \"value\": \"00000000-0000-4000-8048-000000000002\"}]}], \"uuid\": \"e0000000-0000-4000-8048-000000000012\", \"id\": \"7\", \"Orgc\": {\"uuid\": \"11111111-1111-4111-8111-111111111111\"}}}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://misp.invalid/events/publish/7",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "misp-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"saved\": true, \"success\": true, \"id\": \"7\"}"
+      }
+    }
+  ]
+}

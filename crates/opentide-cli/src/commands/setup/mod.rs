@@ -13,6 +13,7 @@ pub mod files;
 pub mod hooks;
 pub mod jsonc;
 pub mod run;
+pub mod skills;
 pub mod stage;
 pub mod vscode;
 pub mod wizard;
@@ -113,6 +114,8 @@ pub struct Context<'a> {
     /// runs comes before the log lines it writes after (`setup vscode`'s
     /// deprecation).
     pub stderr: crate::logging::Sink,
+    /// `--proxy`: how `setup skills` reaches the skills repository.
+    pub proxy: Option<&'a str>,
 }
 
 /// An app-level usage error, as Click words a `BadParameter`.

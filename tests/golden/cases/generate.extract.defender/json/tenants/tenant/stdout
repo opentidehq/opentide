@@ -1,0 +1,1 @@
+{"import":"defender","ok":true,"status":"completed","message":"Imported 3 rules from defender","schema_version":1,"command":"generate extract defender","duration_ms":0,"exit_code":0,"summary":{"imported":3,"skipped":0},"next_actions":[],"failure":null}
