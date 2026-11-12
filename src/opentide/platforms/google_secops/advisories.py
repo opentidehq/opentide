@@ -47,8 +47,10 @@ def google_secops_advisories(rule: Mapping[str, Any]) -> list[Advisory]:
             Advisory(
                 RISK_SCORE_MISSING,
                 (*_BLOCK, "outcome") if "outcome" in block else _BLOCK,
-                "outcome assigns no $risk_score, so Google scores every alert 40 and every "
-                "non-alerting detection 15, whatever the rule detects; add $risk_score = <0-100>",
+                "outcome assigns no $risk_score, so Google gives every detection of the rule the "
+                "instance's default score (40 for an alert and 15 otherwise, unless the "
+                "instance's settings change them), whatever it detects; add "
+                "$risk_score = <0-100>",
             )
         )
     for key in ("events", "condition"):
@@ -73,9 +75,9 @@ def google_secops_advisories(rule: Mapping[str, Any]) -> list[Advisory]:
             Advisory(
                 LIVE_FREQUENCY_UNAVAILABLE,
                 (*_BLOCK, "run_frequency"),
-                "run_frequency LIVE on a rule with two or more event variables: Google stores "
-                "it as LIVE_CUSTOMIZABLE, so the rule differs from the block on every deploy; "
-                "write LIVE_CUSTOMIZABLE",
+                "run_frequency LIVE on a rule with two or more event variables: Google allows "
+                "LIVE for single-event rules only, so deploy refuses the rule "
+                "(google_secops_run_frequency_not_allowed); write LIVE_CUSTOMIZABLE",
             )
         )
     return found

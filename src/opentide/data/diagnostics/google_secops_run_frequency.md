@@ -14,4 +14,4 @@ configurations:
 
 ## How to fix
 
-Write `HOURLY_CUSTOMIZABLE` (or another of the four values), or remove `run_frequency`: deploy then uses the first frequency Google allows for the rule, in the order `LIVE`, `LIVE_CUSTOMIZABLE`, `HOURLY_CUSTOMIZABLE`, `DAILY`.
+Write `HOURLY_CUSTOMIZABLE` (or another of the four values), or remove `run_frequency`: deploy then sends none, and Google keeps the rule's frequency, or gives a new rule its default.

@@ -12,4 +12,4 @@ google_secops_run_frequency_not_allowed: run_frequency LIVE is not one Google al
 
 ## How to fix
 
-Set `run_frequency` to one of the frequencies the message lists, or remove it: deploy then uses the first one Google allows.
+Set `run_frequency` to one of the frequencies the message lists, or remove it: deploy then sends no `runFrequency`, and Google keeps the rule's frequency, or gives a new rule its default.

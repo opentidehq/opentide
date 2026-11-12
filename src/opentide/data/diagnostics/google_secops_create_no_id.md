@@ -2,7 +2,7 @@
 
 A Google SecOps create answered without a rule id.
 
-Severity: error. Reported by `opentide deploy` on a `google_secops` tenant (google-secops-1.0). The `name` of the created rule must end in `rules/ru_<uuid>`, the id deploy records in `.opentide/states/deployment/`. Without it the rule may exist on the instance with no binding.
+Severity: error. Reported by `opentide deploy` on a `google_secops` tenant (google-secops-1.0). Google answered 2xx with a `name` that does not end in a rule id, or with a body that is not JSON. The `name` of the created rule must end in `rules/ru_<uuid>`, the id deploy records in `.opentide/states/deployment/`. Without it the rule may exist on the instance with no binding.
 
 ## Example
 
