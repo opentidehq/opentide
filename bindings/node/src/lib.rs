@@ -616,7 +616,11 @@ mod tests {
     #[test]
     fn a_workspace_in_memory_validates_lints_and_plans() {
         let ws = workspace();
-        assert_eq!(ws.root(), std::path::Path::new("/ws").to_string_lossy());
+        // As a path: on Windows the root reads `\ws`.
+        assert_eq!(
+            std::path::Path::new(&ws.root()),
+            std::path::Path::new("/ws")
+        );
 
         let validation = ws
             .validation(Some(ValidateOptions {
