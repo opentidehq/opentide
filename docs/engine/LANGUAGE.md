@@ -430,7 +430,7 @@ Language id `yara` (`.yar`, `.yara`). YARA signatures as libyara 4.5 compiles th
 Language id `yaral` (`.yaral`, `.yl2`). YARA-L 2.0, Google Security Operations ([yara-l-1.0](https://github.com/opentidehq/specifications/blob/main/specs/languages/yara-l-1.0.md)): `configurations.google_secops` sections, Google SecOps hunts, and rule files. `docs/YARAL.md` has the codes.
 
 - **The grammar is the verdict parser** (`grammars/tree-sitter-opentide-yaral`, written for the spec: Google publishes none). It parses a rule or a search: sections in any order (the engine reports order and profile), newline-separated predicates as juxtaposed statements, field paths whose `.segment` and `[index]` accessors follow without blanks, so a UDM segment named like a keyword (`network.dhcp.options`) stays a name.
-- **Keywords** are case-insensitive in Google's compiler; the grammar spells each one lower, upper and title case (`and`, `AND`, `And`), so `word` extraction keeps `metadata` an identifier. Mixed case such as `aNd` is a parse error.
+- **Keywords** are case-insensitive in any mix (`and`, `AND`, `aNd`): each is a token rule matching every spelling (`_kw_and`), aliased to the lower-case node, and the language's keywords are a `reserved` set, so `word` extraction keeps `metadata` an identifier and a keyword is never a name.
 - **Coverage**: every rule of chronicle/detection-rules' `rules/community` (410) parses; `testdata/conformance/external/yaral/` holds 79 of them with fault twins.
 
 | id | grammar rule | fixture ids | capture |
@@ -443,6 +443,7 @@ Language id `yaral` (`.yaral`, `.yl2`). YARA-L 2.0, Google Security Operations (
 | yaral.search-events | `search_events` | `search_events__valid`, `search_events__invalid` | `property`, `string` |
 | yaral.search | `search_query` | `search_query__valid`, `search_query__invalid` | `keyword` |
 | yaral.stage | `stage` | `stage__valid`, `stage__invalid` | `keyword`, `type` |
+| yaral.cross-join | `cross_join` | `cross_join__valid`, `cross_join__invalid` | `keyword`, `variable` |
 | yaral.match | `match_section` | `match_section__valid`, `match_section__invalid` | `keyword`, `variable` |
 | yaral.match-window | `match_window` | `match_window__valid`, `match_window__invalid` | `keyword`, `number` |
 | yaral.duration | `duration` | `duration__valid`, `duration__invalid` | `number` |

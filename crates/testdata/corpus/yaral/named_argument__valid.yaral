@@ -4,10 +4,14 @@ rule r {
     author = "a"
   events:
     $e.metadata.event_type = "USER_LOGIN"
+    $ip = $e.principal.ip
+  match:
+    $ip over 1h
   outcome:
-    $user = $e.target.user.userid
+    $fails = max(metrics.auth_attempts_fail(period:1d, window:30d, metric:value_sum, agg:max, filter:value_sum > 10 AND event_count_sum > 2, principal.asset.ip:$ip))
+    $countries = max(metrics.auth_attempts_success(period:1d, window:30d, metric:value_sum, agg:max, principal.ip_geo_artifact.location.country_or_region: *))
   condition:
     $e
   export:
-    %seen.write_row(user: $user, count: 1)
+    %seen.write_row(fails: $fails)
 }

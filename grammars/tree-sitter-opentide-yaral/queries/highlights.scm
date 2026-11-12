@@ -75,6 +75,8 @@
 "if" @keyword
 "asc" @keyword
 "desc" @keyword
+"cross" @keyword
+"join" @keyword
 "graph_override" @keyword
 "graph_append" @keyword
 "graph_exclude" @keyword
@@ -91,6 +93,7 @@
 "/" @operator
 "%" @operator
 "!" @operator
+(wildcard) @operator
 
 "(" @punctuation.bracket
 ")" @punctuation.bracket
@@ -102,4 +105,5 @@
 ":" @punctuation.delimiter
 "." @punctuation.delimiter
 
-(identifier) @variable
+; A bare name: a search's grouped field (`ip`), `raw`, a metric field.
+(identifier) @property

@@ -17,16 +17,19 @@
  *   the search sections (`dedup`, `order`, `limit`, `select`, `unselect`),
  *   and named `stage <name> { … }` blocks before the root stage.
  *
- * Keywords are case-insensitive. A regular expression per keyword cannot
- * be extracted by `word`, and lexical precedence beats match length in
- * tree-sitter (`metadata` would lex as `meta`), so `kw` spells each keyword
- * lower case, upper case and title case, the forms Google's own rules use;
- * the engine reports nothing on case. Newlines are whitespace: the
+ * Keywords are case-insensitive in any mix of cases (`and`, `AND`, `aNd`).
+ * Each is a token rule matching every spelling (`_kw_and`), aliased to the
+ * lower-case anonymous node (`"and"`), and the language's keywords are a
+ * `reserved` set: `word` extraction lexes a whole name first (`metadata`
+ * stays a name, never `meta`), and a reserved keyword is never an
+ * identifier, so `a or or` is an error. Newlines are whitespace: the
  * predicates of `events` are juxtaposed statements, which the engine joins
  * with an implicit `and`. Field paths are `$var` (or, in a search, a bare
  * first segment) followed by `.segment` and `[index]` accessors written
  * without blanks, so a UDM segment named like a keyword (`network.dhcp.options`)
- * stays a field name.
+ * stays a field name. A bare name is a term too: a search's grouped fields
+ * (`ip`, `hostname`), `raw`, and the metric fields of a `metrics.*` filter
+ * (`value_sum > 10`); the engine says where each is allowed.
  */
 
 const PREC = {
@@ -40,17 +43,33 @@ const PREC = {
   quantified: 8,
 };
 
-/**
- * A keyword in the spellings rules use (`and`, `AND`, `And`), exposed as the
- * lower-case anonymous node. Strings, not a case-insensitive regex, so
- * `word` extraction lexes an identifier first and only then asks whether it
- * is a keyword: `metadata` stays a name, and `false` is a keyword wherever a
- * name could also stand.
- */
-function kw(word) {
-  const title = word.charAt(0).toUpperCase() + word.slice(1);
-  const spellings = [...new Set([word, word.toUpperCase(), title])];
-  return alias(choice(...spellings), word);
+/** yara-l-1.0's keywords: never an identifier. */
+const RESERVED = [
+  "rule", "meta", "setup", "events", "match", "outcome", "condition", "options", "export",
+  "dedup", "order", "limit", "select", "unselect", "stage", "and", "or", "not", "nocase", "in",
+  "regex", "cidr", "any", "all", "over", "by", "before", "after", "if", "of", "true", "false",
+  "asc", "desc", "window_start", "window_end",
+];
+/** Words that are keywords only where the grammar expects them. */
+const CONTEXTUAL = ["every", "first", "cross", "join", "graph_override", "graph_append", "graph_exclude"];
+
+/** A case-insensitive pattern for `word`. */
+function caseless(word) {
+  return new RegExp(
+    word
+      .split("")
+      .map((c) => (/[a-z]/i.test(c) ? `[${c.toLowerCase()}${c.toUpperCase()}]` : c))
+      .join(""),
+  );
+}
+
+const KEYWORD_RULES = Object.fromEntries(
+  [...RESERVED, ...CONTEXTUAL].map((w) => [`_kw_${w}`, (_) => token(caseless(w))]),
+);
+
+/** A keyword in any case, exposed as the lower-case anonymous node. */
+function kw($, word) {
+  return alias($[`_kw_${word}`], word);
 }
 
 function commaSep1(rule) {
@@ -58,8 +77,8 @@ function commaSep1(rule) {
 }
 
 /** A section: its case-insensitive label, `:`, then its body. */
-function section(name, body) {
-  return seq(kw(name), ":", body);
+function section($, name, body) {
+  return seq(kw($, name), ":", body);
 }
 
 module.exports = grammar({
@@ -68,6 +87,10 @@ module.exports = grammar({
   extras: ($) => [/\s/, $.comment],
 
   word: ($) => $.identifier,
+
+  reserved: {
+    global: ($) => RESERVED.map((w) => $[`_kw_${w}`]),
+  },
 
   conflicts: ($) => [
     [$.data_table_column, $.table_call],
@@ -83,7 +106,7 @@ module.exports = grammar({
 
     rule_declaration: ($) =>
       seq(
-        kw("rule"),
+        kw($, "rule"),
         field("name", alias($.identifier, $.rule_name)),
         "{",
         repeat($._section),
@@ -107,7 +130,7 @@ module.exports = grammar({
         $.unselect_section,
       ),
 
-    meta_section: ($) => section("meta", repeat($.meta_entry)),
+    meta_section: ($) => section($, "meta", repeat($.meta_entry)),
 
     meta_entry: ($) =>
       seq(
@@ -127,23 +150,23 @@ module.exports = grammar({
         $.identifier,
       ),
 
-    setup_section: ($) => section("setup", repeat(choice($.graph_operation, $._statement))),
+    setup_section: ($) => section($, "setup", repeat(choice($.graph_operation, $._statement))),
 
     // graph_override (join), graph_exclude (join), graph_append [$g, %table].
     graph_operation: ($) =>
       choice(
         seq(
-          field("operation", choice(kw("graph_override"), kw("graph_exclude"))),
+          field("operation", choice(kw($, "graph_override"), kw($, "graph_exclude"))),
           "(",
           field("join", $._expression),
           ")",
         ),
-        seq(field("operation", kw("graph_append")), field("arguments", $.array)),
+        seq(field("operation", kw($, "graph_append")), field("arguments", $.array)),
       ),
 
-    events_section: ($) => section("events", repeat($._statement)),
+    events_section: ($) => section($, "events", repeat($._statement)),
 
-    match_section: ($) => section("match", optional($.match_clause)),
+    match_section: ($) => section($, "match", optional($.match_clause)),
 
     match_clause: ($) =>
       seq(
@@ -158,23 +181,23 @@ module.exports = grammar({
     // `over every`, `by first`, and a unit word (`by day`, `by 1 hour`).
     match_window: ($) =>
       seq(
-        field("kind", choice(kw("over"), kw("by"))),
-        optional(kw("every")),
-        optional(kw("first")),
+        field("kind", choice(kw($, "over"), kw($, "by"))),
+        optional(kw($, "every")),
+        optional(kw($, "first")),
         field("length", choice($.duration, seq(optional($.integer), alias($.identifier, $.time_unit)))),
         optional(
           seq(
-            field("direction", choice(kw("before"), kw("after"))),
+            field("direction", choice(kw($, "before"), kw($, "after"))),
             field("pivot", $.variable),
           ),
         ),
       ),
 
-    outcome_section: ($) => section("outcome", repeat($._statement)),
+    outcome_section: ($) => section($, "outcome", repeat($._statement)),
 
-    condition_section: ($) => section("condition", repeat($._statement)),
+    condition_section: ($) => section($, "condition", repeat($._statement)),
 
-    options_section: ($) => section("options", repeat($.option_entry)),
+    options_section: ($) => section($, "options", repeat($.option_entry)),
 
     option_entry: ($) =>
       seq(
@@ -183,20 +206,20 @@ module.exports = grammar({
         field("value", $._setting_value),
       ),
 
-    export_section: ($) => section("export", repeat($._statement)),
+    export_section: ($) => section($, "export", repeat($._statement)),
 
-    dedup_section: ($) => section("dedup", optional(commaSep1($._expression))),
+    dedup_section: ($) => section($, "dedup", optional(commaSep1($._expression))),
 
-    order_section: ($) => section("order", optional(commaSep1($.order_item))),
+    order_section: ($) => section($, "order", optional(commaSep1($.order_item))),
 
     order_item: ($) =>
-      seq(field("value", $._expression), optional(field("direction", choice(kw("asc"), kw("desc"))))),
+      seq(field("value", $._expression), optional(field("direction", choice(kw($, "asc"), kw($, "desc"))))),
 
-    limit_section: ($) => section("limit", optional(field("value", $.integer))),
+    limit_section: ($) => section($, "limit", optional(field("value", $.integer))),
 
-    select_section: ($) => section("select", optional(commaSep1($._expression))),
+    select_section: ($) => section($, "select", optional(commaSep1($._expression))),
 
-    unselect_section: ($) => section("unselect", optional(commaSep1($._expression))),
+    unselect_section: ($) => section($, "unselect", optional(commaSep1($._expression))),
 
     // ── Searches ───────────────────────────────────────────────────────────
 
@@ -210,7 +233,7 @@ module.exports = grammar({
 
     stage: ($) =>
       seq(
-        kw("stage"),
+        kw($, "stage"),
         field("name", alias($.identifier, $.stage_name)),
         "{",
         optional($._search_body),
@@ -222,7 +245,12 @@ module.exports = grammar({
     // One predicate, assignment, or condition term. Statements are written
     // one after the other; the engine joins the predicates of `events` with
     // an implicit `and`.
-    _statement: ($) => $._expression,
+    _statement: ($) => choice($._expression, $.cross_join),
+
+    // A multi-stage search joins a one-row stage to another:
+    // `cross join $total_users, $user_login_counts`.
+    cross_join: ($) =>
+      seq(kw($, "cross"), kw($, "join"), field("stage", $.variable), repeat(seq(",", field("stage", $.variable)))),
 
     _expression: ($) =>
       choice(
@@ -238,15 +266,15 @@ module.exports = grammar({
       ),
 
     or_expression: ($) =>
-      prec.left(PREC.or, seq(field("left", $._expression), kw("or"), field("right", $._expression))),
+      prec.left(PREC.or, seq(field("left", $._expression), kw($, "or"), field("right", $._expression))),
 
     and_expression: ($) =>
       prec.left(
         PREC.and,
-        seq(field("left", $._expression), kw("and"), field("right", $._expression)),
+        seq(field("left", $._expression), kw($, "and"), field("right", $._expression)),
       ),
 
-    not_expression: ($) => prec(PREC.not, seq(kw("not"), field("operand", $._expression))),
+    not_expression: ($) => prec(PREC.not, seq(kw($, "not"), field("operand", $._expression))),
 
     comparison: ($) =>
       prec.left(
@@ -255,7 +283,7 @@ module.exports = grammar({
           field("left", $._expression),
           field("operator", choice("=", "!=", "<", "<=", ">", ">=")),
           field("right", $._expression),
-          optional(field("nocase", kw("nocase"))),
+          optional(field("nocase", kw($, "nocase"))),
         ),
       ),
 
@@ -265,10 +293,10 @@ module.exports = grammar({
         PREC.comparison,
         seq(
           field("left", $._expression),
-          kw("in"),
-          optional(field("kind", choice(kw("regex"), kw("cidr")))),
+          kw($, "in"),
+          optional(field("kind", choice(kw($, "regex"), kw($, "cidr")))),
           field("right", choice($.reference_list, $.data_table_column)),
-          optional(field("nocase", kw("nocase"))),
+          optional(field("nocase", kw($, "nocase"))),
         ),
       ),
 
@@ -294,8 +322,8 @@ module.exports = grammar({
     // any of [$a, $b], all of [...], 2 of [...] (condition).
     of_expression: ($) =>
       seq(
-        field("quantifier", choice(kw("any"), kw("all"), $.integer)),
-        kw("of"),
+        field("quantifier", choice(kw($, "any"), kw($, "all"), $.integer)),
+        kw($, "of"),
         field("terms", $.array),
       ),
 
@@ -321,6 +349,9 @@ module.exports = grammar({
         $.duration,
         $.boolean,
         $.window_bound,
+        // A search's grouped field (`ip`, `hostname`), `raw`, or a metric
+        // field in a `metrics.*` filter (`value_sum`).
+        $.identifier,
       ),
 
     parenthesized_expression: ($) => seq("(", $._expression, ")"),
@@ -330,7 +361,7 @@ module.exports = grammar({
       prec(
         PREC.quantified,
         seq(
-          field("quantifier", choice(kw("any"), kw("all"))),
+          field("quantifier", choice(kw($, "any"), kw($, "all"))),
           field("field", choice($.udm_field, $.bare_field, $.variable)),
         ),
       ),
@@ -340,10 +371,11 @@ module.exports = grammar({
     udm_field: ($) => seq(field("variable", $.variable), repeat1($._accessor)),
 
     // A search names fields without an event variable: principal.hostname.
+    // `principal.hostname`, or a top-level map in a search (`labels["k"]`).
     bare_field: ($) =>
       seq(
         field("root", alias($.identifier, $.field_name)),
-        $._member,
+        choice($._member, $.index),
         repeat($._accessor),
       ),
 
@@ -365,7 +397,7 @@ module.exports = grammar({
           "(",
           optional($.arguments),
           ")",
-          optional(field("nocase", kw("nocase"))),
+          optional(field("nocase", kw($, "nocase"))),
         ),
       ),
 
@@ -390,8 +422,10 @@ module.exports = grammar({
       seq(
         field("name", choice(alias($.identifier, $.argument_name), $.bare_field)),
         ":",
-        // metrics.*(metric: value_sum, agg: max) names its settings bare.
-        field("value", choice($._expression, $.identifier)),
+        // metrics.*(metric: value_sum, agg: max) names its settings bare,
+        // `filter:` takes a condition over the metric's fields, and a
+        // grouping field `*`.
+        field("value", choice($._expression, alias("*", $.wildcard))),
       ),
 
     table_call: ($) =>
@@ -406,7 +440,7 @@ module.exports = grammar({
 
     if_expression: ($) =>
       seq(
-        kw("if"),
+        kw($, "if"),
         "(",
         field("condition", $._expression),
         ",",
@@ -447,11 +481,13 @@ module.exports = grammar({
     // 10m, 1h, 2d; a search also takes w and mo. The engine checks the unit.
     duration: (_) => token(/[0-9]+[A-Za-z]+/),
 
-    boolean: (_) => choice(kw("true"), kw("false")),
+    boolean: ($) => choice(kw($, "true"), kw($, "false")),
 
     // The reserved timestamps of a match window, bare in outcome, condition
     // and order. A keyword elsewhere is never a term: `or or` is an error.
-    window_bound: (_) => choice(kw("window_start"), kw("window_end")),
+    window_bound: ($) => choice(kw($, "window_start"), kw($, "window_end")),
+
+    ...KEYWORD_RULES,
 
     identifier: (_) => /[A-Za-z_][A-Za-z0-9_]*/,
   },
