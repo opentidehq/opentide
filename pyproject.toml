@@ -75,7 +75,7 @@ dependencies = [
     # python-dateutil below 3, and once 3.0.0 was out uv's resolver chose it and
     # walked boto3 back to 0.0.3, whose botocore fails on `six.moves`. The floor
     # makes the resolver keep a current boto3 and cap python-dateutil instead.
-    "boto3>=1.35",
+    "boto3>=1.43.126",
     # Google Security Operations: an OAuth 2.0 access token for the Chronicle API
     # from a service-account key or Application Default Credentials. opentide
     # sends the requests itself, on its TenantSession.
