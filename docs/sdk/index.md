@@ -35,6 +35,7 @@ Additional APIs are importable from subpackages (`opentide.validation`, `opentid
 | [Models](./models.md) | Pydantic object types |
 | [Platforms](./platforms.md) | Deployers, validators, plugins |
 | [Rust SDK](./rust.md) | The `opentide` crate: workspace, validate, catalogue, deploy plan, command line |
+| [TypeScript SDK](./typescript.md) | The `@opentide/opentide` npm package: workspace, validate, catalogue, deploy plan, the command line with `npx` |
 
 ## Worked example: validate then deploy
 

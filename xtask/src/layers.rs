@@ -755,13 +755,14 @@ mod tests {
                 ("opentide-compare", Some("dev")),
             ],
         ),
+        ("opentide-node", &[("opentide", None)]),
     ];
 
     #[test]
     fn the_repository_table_places_todays_workspace() {
         let report = check(&table(REPOSITORY_TABLE), &metadata(WORKSPACE));
         assert_eq!(report.violations, []);
-        assert_eq!(report.crates, 27);
+        assert_eq!(report.crates, 28);
     }
 
     #[test]
