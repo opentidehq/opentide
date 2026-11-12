@@ -372,27 +372,32 @@ fn the_replay_tolerates_a_refusal_only_where_rust_commands_does_not_cover_the_ru
     assert_eq!(table["validate"], replay::Coverage::default());
     assert_eq!(table["deploy"].requires, Vec::<String>::new());
     assert_eq!(table["deploy"].offline, ["--dry-run"]);
-    assert!(table["deploy"].platforms.contains(&"sysdig".to_owned()));
+    // Every platform has a Rust connector: a deploy is covered with or
+    // without --platform (UC-4.4c, #834).
+    assert!(table["deploy"].platforms.is_empty());
     assert!(replay::covers("deploy", &words("deploy --dry-run --all")));
     assert!(replay::covers(
         "deploy",
         &words("deploy --platform sysdig --all")
     ));
-    assert!(!replay::covers(
+    assert!(replay::covers(
         "deploy",
         &words("deploy --strategy PREVIEW --all")
     ));
-    assert!(!replay::covers("deploy", &words("deploy -- --dry-run")));
     assert_eq!(
         table["generate"].requires,
         ["schemas", "templates", "vocabs", "snippets"]
     );
     assert_eq!(table["generate docs rules"], replay::Coverage::default());
     assert_eq!(table["setup"].refuses, ["--skills", "--plugin"]);
-    // A tuple named by its constant, and a scope of its own.
-    assert_eq!(table["query"].refuses, ["--rule", "--file"]);
+    // A tuple named by its constant; a rule's query is covered (#834).
+    assert!(table["query"].refuses.is_empty());
     assert!(table["query"].platforms.contains(&"elastic".to_owned()));
-    assert_eq!(table["validate query"].platform_scope, ["--live"]);
+    assert!(replay::covers(
+        "query",
+        &words("query --platform splunk --rule r")
+    ));
+    assert_eq!(table["validate query"], replay::Coverage::default());
     assert!(replay::covers(
         "generate",
         &words("--json generate schemas")
@@ -421,21 +426,21 @@ fn the_replay_tolerates_a_refusal_only_where_rust_commands_does_not_cover_the_ru
     // Every platform with a query runner, Splunk too since UC-4.3 (#833).
     assert!(replay::covers("query", &words("query --platform splunk q")));
     assert!(!replay::covers("query", &words("query q")));
-    assert!(!replay::covers(
+    assert!(replay::covers(
         "query",
-        &words("query --platform elastic --rule r")
+        &words("query --platform elastic --file r.yaml")
     ));
     assert!(replay::covers(
         "validate query",
         &words("validate query --file q.kql")
     ));
-    // Every platform's live validation is Rust's since UC-4.6 (#979); a
-    // `--live` run that names no platform stays Python's.
+    // Every platform's live validation is Rust's since UC-4.6 (#979), and
+    // a `--live` run that names no platform since UC-4.4c (#834).
     assert!(replay::covers(
         "validate query",
         &words("validate query --live --platform elastic")
     ));
-    assert!(!replay::covers(
+    assert!(replay::covers(
         "validate query",
         &words("validate query --live")
     ));

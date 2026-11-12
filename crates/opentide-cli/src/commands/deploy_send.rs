@@ -689,8 +689,9 @@ fn deploy(
     }
     let run_names = names(&runs);
     if deployment.is_empty() {
-        // `emit_warning`'s CI annotation is for a run without --platform,
-        // which stays Python's: with one, the platform's absence returned above.
+        // A run without --platform: the command writes `emit_warning`'s CI
+        // annotation (`no_rules_warning`); with one, the platform's absence
+        // returned above.
         return nothing(
             opentide_compile::dry_run::NO_RULES_MATCHED,
             refused,

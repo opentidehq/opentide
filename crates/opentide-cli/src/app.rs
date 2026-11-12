@@ -767,17 +767,13 @@ impl Run<'_> {
                 if let Some(refused) = crate::commands::deploy::refusal(&parsed) {
                     return self.emit_deploy(&refused, out, err);
                 }
-                if parsed.platform.is_none() {
-                    // The workspace's platforms are Python's (`RustCommand.platforms`).
-                    let message = "opentide deploy without --platform has no Rust implementation \
-                         yet: unset OPENTIDE_ENGINE, or set it to python or compare."
-                        .to_owned();
-                    let mut failure = Failure::new(code::ENGINE_NOT_PORTED, message);
-                    failure.argument = Some("OPENTIDE_ENGINE".into());
-                    let outcome = Outcome::failed(&path, USAGE_EXIT_CODE, failure);
-                    return self.emit(&outcome, &[], &[], out, err);
+                let every_platform = parsed.platform.is_none();
+                let mut report = self.deploy_send(&matches, parsed);
+                if every_platform {
+                    // A run over the workspace's platforms that matched no
+                    // rule says so to the CI run as a whole (`emit_warning`).
+                    self.no_rules_warning(&mut report);
                 }
-                let report = self.deploy_send(&matches, parsed);
                 self.emit_report(&report, out, err)
             }
             _ => {
@@ -1365,8 +1361,12 @@ impl Run<'_> {
             return report;
         }
         if parsed.platform.is_none() {
-            // The workspace's platforms are Python's (`RustCommand.platforms`).
-            return validate_query::live_not_ported_without_platform();
+            // A live check reads one platform's tenants: refused, as the
+            // oracle refuses it (a usage failure writes no CI job summary).
+            return validate_live::report_of(
+                validate_query::COMMAND,
+                &validate_query::live_without_platform(),
+            );
         }
         let interrupt = &self.host.interrupt;
         let interrupted = || interrupt.requested();
@@ -1570,6 +1570,22 @@ impl Run<'_> {
             Some(false),
         ));
         report
+    }
+
+    /// The CI run's warning of a deploy over the workspace's platforms that
+    /// matched no rule (`emit_warning`), on stdout before the result; none
+    /// in the machine modes or outside CI.
+    fn no_rules_warning(&self, report: &mut crate::commands::Report) {
+        if report.outcome.message != opentide_compile::dry_run::NO_RULES_MATCHED {
+            return;
+        }
+        let provider = crate::render::ci::active_provider(self.mode, self.env);
+        if let Some(line) = crate::render::ci::warning_line(provider, &report.outcome.message, None)
+        {
+            report
+                .body
+                .insert(0, crate::commands::Block::Raw(format!("{line}\n")));
+        }
     }
 
     /// `opentide deploy`'s parsed arguments.
@@ -3471,7 +3487,7 @@ mod tests {
             Ok(run.emit(&outcome, &[], &["a line".into()], out, err)?)
         });
         assert_eq!((success.code, success.stdout.as_str()), (0, ""));
-        let failed = dispatched("--json deploy", &[], false);
+        let failed = dispatched("--json share push", &[], false);
         assert!(
             failed.stdout.starts_with("{\"error\":"),
             "{}",

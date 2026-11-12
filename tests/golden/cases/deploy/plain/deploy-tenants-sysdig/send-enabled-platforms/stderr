@@ -1,0 +1,35 @@
+warning: System disabled for deploy · system: CARBON_BLACK_CLOUD · rule: Carbon Black retire rule · advice: enable it with 'opentide setup platforms --carbon-black-cloud'
+warning: System disabled for deploy · system: CARBON_BLACK_CLOUD · rule: Carbon Black rule in a missing watchlist · advice: enable it with 'opentide setup platforms --carbon-black-cloud'
+warning: System disabled for deploy · system: CROWDSTRIKE · rule: CrowdStrike create rule · advice: enable it with 'opentide setup platforms --crowdstrike'
+warning: System disabled for deploy · system: CROWDSTRIKE · rule: CrowdStrike update rule · advice: enable it with 'opentide setup platforms --crowdstrike'
+warning: System disabled for deploy · system: CROWDSTRIKE · rule: CrowdStrike retire rule · advice: enable it with 'opentide setup platforms --crowdstrike'
+warning: System disabled for deploy · system: DEFENDER_FOR_ENDPOINT · rule: Defender create rule · advice: enable it with 'opentide setup platforms --defender-for-endpoint'
+warning: System disabled for deploy · system: DEFENDER_FOR_ENDPOINT · rule: Defender update rule · advice: enable it with 'opentide setup platforms --defender-for-endpoint'
+warning: System disabled for deploy · system: DEFENDER_FOR_ENDPOINT · rule: Defender retire rule · advice: enable it with 'opentide setup platforms --defender-for-endpoint'
+warning: System disabled for deploy · system: ELASTIC · rule: Elastic create rule · advice: enable it with 'opentide setup platforms --elastic'
+warning: System disabled for deploy · system: ELASTIC · rule: Elastic update rule · advice: enable it with 'opentide setup platforms --elastic'
+warning: System disabled for deploy · system: ELASTIC · rule: Elastic prebuilt rule · advice: enable it with 'opentide setup platforms --elastic'
+warning: System disabled for deploy · system: ELASTIC · rule: Elastic retire rule · advice: enable it with 'opentide setup platforms --elastic'
+warning: System disabled for deploy · system: HARFANGLAB · rule: HarfangLab Sigma rule · advice: enable it with 'opentide setup platforms --harfanglab'
+warning: System disabled for deploy · system: HARFANGLAB · rule: HarfangLab YARA rule · advice: enable it with 'opentide setup platforms --harfanglab'
+warning: System disabled for deploy · system: SENTINEL · rule: Sentinel deploy rule · advice: enable it with 'opentide setup platforms --sentinel'
+warning: System disabled for deploy · system: SENTINEL · rule: Sentinel retire rule · advice: enable it with 'opentide setup platforms --sentinel'
+warning: System disabled for deploy · system: SENTINEL_ONE · rule: SentinelOne create rule · advice: enable it with 'opentide setup platforms --sentinel-one'
+warning: System disabled for deploy · system: SENTINEL_ONE · rule: SentinelOne retire rule · advice: enable it with 'opentide setup platforms --sentinel-one'
+warning: System disabled for deploy · system: SENTINEL_ONE · rule: SentinelOne disable rule never deployed · advice: enable it with 'opentide setup platforms --sentinel-one'
+warning: System disabled for deploy · system: SENTINEL_ONE · rule: SentinelOne update rule · advice: enable it with 'opentide setup platforms --sentinel-one'
+warning: System disabled for deploy · system: SPLUNK · rule: Splunk create rule · advice: enable it with 'opentide setup platforms --splunk'
+warning: System disabled for deploy · system: SPLUNK · rule: Splunk retire rule · advice: enable it with 'opentide setup platforms --splunk'
+Deploy plan · strategy PREVIEW RELEASE · 1 platform, 1 tenant
+Plan: 1 to create, 1 to update, 1 to disable, 0 to delete
+warning: External id recorded · uuid: 00000000-0000-4000-8047-000000000031 · platform: sysdig · tenant: lab · external_id: 42
+
+Deploying to sysdig / lab · 3 rules
+  [1/3] ✓ created   Sysdig create rule <SECONDS>
+warning: Sysdig rule recreated · uuid: 00000000-0000-4000-8047-000000000032 · tenant: lab · detail: the recorded rule no longer exists on the tenant; creating it again
+warning: External id recorded · uuid: 00000000-0000-4000-8047-000000000032 · platform: sysdig · tenant: lab · external_id: 43
+  [2/3] ✓ updated   Sysdig rule the tenant lost <SECONDS>
+warning: Sysdig rule missing · uuid: 00000000-0000-4000-8047-000000000033 · tenant: lab · detail: the recorded rule no longer exists on the tenant; its id is removed
+  [3/3] ✓ disabled  Sysdig rule to disable the tenant lost <SECONDS>
+✓ sysdig · 3 deployed, 0 failed, 0 not attempted · <SECONDS>
+warning: Some rules reported deployment warnings

@@ -1,0 +1,2 @@
+error: --live checks one platform's tenants: pass --platform
+tip: add --json for machine-readable output

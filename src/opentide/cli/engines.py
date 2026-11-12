@@ -226,31 +226,6 @@ RUST_QUERY_PLATFORMS: tuple[str, ...] = (
     "splunk",
 )
 
-#: The platforms whose ``validate query --live`` runs on Rust: every platform.
-#: CrowdStrike, HarfangLab and Sysdig, whose tenants cannot check a query,
-#: answer ``supported: False`` before any request (UC-4.2c, #832); Carbon
-#: Black Cloud, Defender for Endpoint, Elastic, Sentinel, SentinelOne and
-#: Splunk check each rule's queries through their connector's
-#: ``LiveValidator``, Elastic each rule as a whole (UC-4.6, #979).
-RUST_LIVE_VALIDATION_PLATFORMS: tuple[str, ...] = (
-    "carbon_black_cloud",
-    "crowdstrike",
-    "defender_for_endpoint",
-    "elastic",
-    "harfanglab",
-    "sentinel",
-    "sentinel_one",
-    "splunk",
-    "sysdig",
-)
-
-
-#: The platforms whose ``deploy`` that sends runs on Rust: every platform,
-#: each through its connector's deploy calls (UC-4.6, #979). A run without
-#: --platform stays Python's: the platforms it would touch are the workspace's.
-RUST_DEPLOY_PLATFORMS: tuple[str, ...] = RUST_LIVE_VALIDATION_PLATFORMS
-
-
 #: Commands that host others and apply ``OPENTIDE_ENGINE`` to what they run
 #: rather than to themselves: ``serve`` runs each request on the engine its
 #: command selects (#822), and the MCP server's read tools do the same. They
@@ -301,30 +276,26 @@ RUST_CLI: tuple[str, ...] = (sys.executable, "-m", "opentide.cli.rust")
 #: command line, and ``tui``'s refusals (``usage_tui_needs_tty``); ``tui``'s
 #: terminal UI with UC-3.6d (#951), on ratatui.
 #: ``query`` on the platforms of :data:`RUST_QUERY_PLATFORMS`, and ``validate
-#: query --live`` on those of :data:`RUST_LIVE_VALIDATION_PLATFORMS`, with
-#: UC-4.2c (#832): *platforms* routes each run by the ``--platform`` it names; a
-#: rule's query (``--rule``, ``--file``: its tenants' exclusions) stays Python's.
+#: query --live`` on every platform, with
+#: UC-4.2c (#832): *platforms* routes each run by the ``--platform`` it names.
 #: ``query`` on Sentinel, Splunk and Carbon Black Cloud with UC-4.3 (#833).
 #: ``validate query --live`` on the six platforms whose tenants check queries
-#: with UC-4.6 (#979), and ``deploy`` that sends on those of
-#: :data:`RUST_DEPLOY_PLATFORMS`: *offline* keeps ``--dry-run`` covered whatever
-#: its ``--platform``.
+#: with UC-4.6 (#979), and ``deploy`` that sends on every platform: *offline*
+#: keeps ``--dry-run`` covered whatever its ``--platform``. With UC-4.4c (#834),
+#: the last runs that reached tenants from Python: a rule's query (``query
+#: --rule``, ``--file``), and ``deploy`` and ``validate query --live`` without
+#: ``--platform`` (every platform has a Rust connector, so neither names
+#: *platforms*: ``deploy`` sends to the workspace's enabled platforms, and
+#: ``validate query --live`` refuses a run that names none, as Python does).
 RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
     ("commands",): RustCommand(launch=RUST_CLI),
     ("explain",): RustCommand(launch=RUST_CLI),
     ("info",): RustCommand(launch=RUST_CLI),
     ("lint",): RustCommand(launch=RUST_CLI),
     ("validate",): RustCommand(launch=RUST_CLI),
-    ("validate", "query"): RustCommand(
-        launch=RUST_CLI, platforms=RUST_LIVE_VALIDATION_PLATFORMS, platform_scope=("--live",)
-    ),
+    ("validate", "query"): RustCommand(launch=RUST_CLI),
     ("rules", "unreviewed"): RustCommand(launch=RUST_CLI),
-    ("deploy",): RustCommand(
-        launch=RUST_CLI,
-        side_effects=True,
-        platforms=RUST_DEPLOY_PLATFORMS,
-        offline=("--dry-run",),
-    ),
+    ("deploy",): RustCommand(launch=RUST_CLI, side_effects=True, offline=("--dry-run",)),
     ("doctor",): RustCommand(launch=RUST_CLI, rules=("host-git",), requires=("--offline",)),
     ("migrate", "vocab-scope"): RustCommand(launch=RUST_CLI),
     ("generate", "exports"): RustCommand(launch=RUST_CLI),
@@ -359,12 +330,7 @@ RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
     ("serve",): RustCommand(launch=RUST_CLI),
     ("lsp", "start"): RustCommand(launch=RUST_CLI),
     ("tui",): RustCommand(launch=RUST_CLI),
-    ("query",): RustCommand(
-        launch=RUST_CLI,
-        side_effects=True,
-        refuses=("--rule", "--file"),
-        platforms=RUST_QUERY_PLATFORMS,
-    ),
+    ("query",): RustCommand(launch=RUST_CLI, side_effects=True, platforms=RUST_QUERY_PLATFORMS),
 }
 
 

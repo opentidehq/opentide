@@ -453,22 +453,26 @@ fn platforms_the_engine_cannot_parse_are_refused() {
 }
 
 #[test]
-fn live_is_handed_back_and_tenant_options_need_it() {
+fn live_without_a_platform_is_refused_and_tenant_options_need_it() {
     let (_scratch, ws) = corpus();
     let path = ws.join("refusal");
-    // A run that names no platform reaches the workspace's: Python's.
+    // A live check reads one platform's tenants: a run that names none is
+    // refused as the oracle refuses it (UC-4.4c, #834), not handed back.
     let live = opentide(
         &ws,
         &["--json", "validate", "query", "--live"],
         &[("OPENTIDE_ENGINE_REFUSAL", path.to_str().unwrap())],
     );
     assert_eq!(live.code, 2);
-    assert_eq!(failure_code(&live.json()), "engine_not_ported");
-    assert!(
-        std::fs::read_to_string(&path)
-            .unwrap()
-            .contains("--live without --platform")
+    assert_eq!(failure_code(&live.json()), "usage_missing_option");
+    assert_eq!(live.json()["failure"]["argument"], "--platform");
+    assert_eq!(live.json()["mode"], "live");
+    assert_eq!(live.json()["supported"], true);
+    assert_eq!(
+        live.json()["message"],
+        "--live checks one platform's tenants: pass --platform"
     );
+    assert!(!path.exists());
     // One that names it runs here (UC-4.6): the corpus's Elastic tenant has
     // no credential set.
     let elastic = opentide(

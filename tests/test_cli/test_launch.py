@@ -50,6 +50,9 @@ def _keep_the_process_as_it_was(monkeypatch: pytest.MonkeyPatch) -> Iterator[Non
         ["generate", "schemas", "templates"],
         ["validate", "query", "--platform", "sentinel", "--live"],
         ["deploy", "--dry-run", "--all"],
+        ["deploy", "--all"],
+        ["validate", "query", "--live"],
+        ["query", "--platform", "splunk", "--rule", "x"],
         ["setup", "skills", "show", "x"],
         ["mcp", "start"],
         ["serve"],
@@ -81,6 +84,9 @@ def test_every_rust_command_path_is_a_path_of_the_rust_tree() -> None:
         ["--repo=.", "lint"],
         ["--data", "d", "--proxy", "http://p:1", "explain", "x"],
         ["deploy", "--dry-run", "--all"],
+        ["deploy", "--all"],
+        ["validate", "query", "--live"],
+        ["query", "--platform", "splunk", "--rule", "x"],
         ["doctor", "--offline"],
         ["generate", "schemas"],
         ["serve"],
@@ -108,8 +114,7 @@ def test_rust_runs_what_the_dispatcher_would_give_it(argv: list[str]) -> None:
         (["--repo"], "a root option without its value"),
         (["--repo", "missing", "validate"], "the root refuses a --repo that is no folder"),
         (["--repo=missing", "validate"], "the same, written with ="),
-        (["deploy", "--all"], "a deploy that sends to no named platform is Python's"),
-        (["validate", "query", "--live"], "--live is Python's"),
+        (["query", "--platform", "sysdig", "x"], "a query on a platform without a runner"),
         (["doctor"], "doctor without --offline"),
         (["generate"], "the full pipeline"),
         (["share", "push"], "no Rust implementation: Python refuses it"),
@@ -223,7 +228,8 @@ def test_the_console_script_answers_as_the_typer_entry_point(
     if engine == "rust" and "explain" in argv:
         assert new.returncode == 0, new.stderr
     if engine == "rust" and "deploy" in argv:
-        assert json.loads(new.stdout)["failure"]["code"] == "engine_not_ported"
+        # Runs on Rust without --platform too (#834): refused for its missing --strategy.
+        assert json.loads(new.stdout)["failure"]["code"] == "usage_missing_option"
 
 
 _CHILDREN = """

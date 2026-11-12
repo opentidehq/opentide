@@ -520,22 +520,60 @@ fn all_with_a_selection_is_refused_before_the_run() {
 }
 
 #[test]
-fn a_deploy_that_sends_is_not_ported() {
+fn a_deploy_without_a_platform_sends_to_the_workspaces_platforms() {
+    // UC-4.4c (#834): the enabled platforms the plan reaches, here Sysdig,
+    // whose unset credential refuses the run before any request.
     let ws = workspace();
     let ran = deploy(
         &ws,
         &["--json", "deploy", "--strategy", "PREVIEW", "--all"],
         &[],
     );
-    assert_eq!(ran.exit_code, 2);
+    assert_eq!(ran.exit_code, 1, "{}", ran.stdout);
     let document = Json::parse(&ran.stdout).unwrap();
+    assert_eq!(document.get("command"), Some(&Json::str("deploy")));
     let failure = document.get("failure").unwrap();
-    assert_eq!(failure.get("code"), Some(&Json::str("engine_not_ported")));
-    let message = failure.get("message").unwrap();
+    assert_ne!(failure.get("code"), Some(&Json::str("engine_not_ported")));
+    let plan = document.get("plan").unwrap();
+    assert!(plan.get("sysdig").is_some(), "{}", ran.stdout);
+    let _ = std::fs::remove_dir_all(&ws);
+}
+
+#[test]
+fn a_deploy_without_a_platform_that_matches_no_rule_warns_the_ci_run() {
+    let ws = workspace();
+    let ci = [("GITHUB_ACTIONS", "true".to_owned())];
+    let plain = deploy(&ws, &["deploy", "--strategy", "RELEASE", "--all"], &ci);
+    assert_eq!(plain.exit_code, 0, "{}{}", plain.stdout, plain.stderr);
     assert!(
-        matches!(message, Json::Str(text) if text.contains("opentide deploy without --platform has no Rust implementation yet")),
-        "{message:?}"
+        plain.stdout.starts_with(
+            "::warning::No rule this run read has a status that maps to its strategies\n"
+        ),
+        "{}",
+        plain.stdout
     );
+    // Not in JSON mode, nor outside CI, nor with --platform.
+    let json = deploy(
+        &ws,
+        &["--json", "deploy", "--strategy", "RELEASE", "--all"],
+        &ci,
+    );
+    assert!(!json.stdout.contains("::warning"), "{}", json.stdout);
+    let local = deploy(&ws, &["deploy", "--strategy", "RELEASE", "--all"], &[]);
+    assert!(!local.stdout.contains("::warning"), "{}", local.stdout);
+    let named = deploy(
+        &ws,
+        &[
+            "deploy",
+            "--strategy",
+            "RELEASE",
+            "--all",
+            "--platform",
+            "sysdig",
+        ],
+        &ci,
+    );
+    assert!(!named.stdout.contains("::warning"), "{}", named.stdout);
     let _ = std::fs::remove_dir_all(&ws);
 }
 

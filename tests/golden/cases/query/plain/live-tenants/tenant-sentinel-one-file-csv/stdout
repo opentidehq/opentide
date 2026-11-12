@@ -1,0 +1,5 @@
+_tenant,_label,src.process.name,endpoint.name
+lab,sub-query 1,cmd.exe,ws-1
+lab,sub-query 1,powershell.exe,ws-2
+lab,sub-query 2,cmd.exe,ws-1
+lab,sub-query 2,powershell.exe,ws-2
