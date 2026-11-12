@@ -9,7 +9,7 @@ Every version of the [`opentide`](https://pypi.org/project/opentide/) package, n
 
 ## 0.27.0 — 12 November 2026
 
-Exabeam New-Scale SIEM correlation rules deploy from a `configurations.exabeam` block, checked by `validate`, the editor and `opentide tui` against the Exabeam Query Language. The engine is [language-server 0.15.0](https://github.com/opentidehq/language-server/releases/tag/v0.15.0).
+Exabeam New-Scale SIEM support: deploy correlation rules to Exabeam, with their queries checked as you type.
 
 **Install**
 
@@ -21,17 +21,17 @@ opentide validate --strict
 
 **Upgrade**
 
-1. Optional: enable Exabeam New-Scale SIEM with `opentide setup platforms --exabeam`, then set each tenant's `region`, and `client_id` and `client_secret` as `$VAR`s.
+1. If you use Exabeam New-Scale SIEM, run `opentide setup platforms --exabeam`, then give each tenant its `region`, `client_id` and `client_secret`.
 
 **Added**
 
-- **Exabeam New-Scale SIEM correlation rules deploy from opentide.** A `configurations.exabeam` block (`platform::exabeam::1.0`) is one correlation rule: one or more sequences, each an Exabeam Query Language filter that triggers on any match or on a threshold, with correlation, suppression, delay, schedule, outcome and email. Deploy derives the name, description (with the ATT&CK line) and severity, checks the name is free before a create (`exabeam_name_conflict`), sends the whole rule on every update, disables with `enabled: false`, keeps the rule UUID in `.opentide/states/deployment/`, and paces requests to 100 a minute. Enable it with `opentide setup platforms --exabeam`; a tenant names its `region`, and `client_id` and `client_secret` as `$VAR`s ([#983](https://github.com/opentidehq/opentide/pull/983)).
-- **`validate` checks Exabeam blocks.** It reports the 13 `exabeam_*` constraint codes of the spec, each at the `field_path` the spec fixes for it, and two enabled blocks sharing an Exabeam rule name, case-insensitively (`exabeam_name_duplicate`). `validate` and `lint` warn on `outcome: none` without an email (`exabeam_outcome_silent`) and on a correlation window no longer than its ordered sequences need, their windows plus a minute between each (`exabeam_correlation_window`). `deploy --dry-run` shows the create request ([#983](https://github.com/opentidehq/opentide/pull/983)).
-- **`validate query --platform exabeam --live` and `opentide query --platform exabeam`.** `--live` sends each sequence filter to Exabeam Search over the last 15 minutes: a `400` fails it, and any answer but `200` is an error, never a pass. `opentide query` runs a hunt through Search, at most 3,000 rows. Sequence queries, `system: exabeam` hunts and `.exabeam` files are handed to the analysis engine as the `exabeam` language. An engine that does not know the language fails the check as `engine_unavailable`, never as a pass ([#983](https://github.com/opentidehq/opentide/pull/983)).
+- **Deploy correlation rules to Exabeam New-Scale SIEM.** A `configurations.exabeam` block is one correlation rule: one or more sequences, each an Exabeam query that fires on any match or on a threshold. Turn it on with `opentide setup platforms --exabeam` ([#983](https://github.com/opentidehq/opentide/pull/983)).
+- **`validate` checks Exabeam blocks.** It reports every `exabeam_*` code of the spec, and two enabled rules with the same Exabeam name. It warns on a rule that opens no case and sends no email ([#983](https://github.com/opentidehq/opentide/pull/983)).
+- **Exabeam queries run live.** `validate query --platform exabeam --live` checks each sequence query with Exabeam Search. `opentide query --platform exabeam` runs a hunt and returns up to 3,000 rows ([#983](https://github.com/opentidehq/opentide/pull/983)).
 
 **Changed**
 
-- **The analysis engine is [language-server 0.15.0](https://github.com/opentidehq/language-server/releases/tag/v0.15.0), from crates.io.** It adds the Exabeam Query Language and checks Exabeam blocks: `configurations.exabeam.sequences[].query` under the language's `rule` profile, `system: exabeam` hunts and `.exabeam` files under `search`, so the editor, `opentide tui` and `opentide validate` agree on Exabeam rules ([#983](https://github.com/opentidehq/opentide/pull/983)).
+- **The analysis engine is [language-server 0.15.0](https://github.com/opentidehq/language-server/releases/tag/v0.15.0).** It checks the Exabeam Query Language in sequence queries, `system: exabeam` hunts and `.exabeam` files, the same way in the editor, `opentide tui` and `validate` ([#983](https://github.com/opentidehq/opentide/pull/983)).
 
 See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md#0270--2026-11-12) for every change.
 
