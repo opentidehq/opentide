@@ -1,8 +1,10 @@
 """opentide: spec-driven development for agentic detection engineering.
 
 The SDK is :class:`opentide.Workspace` (``open``, ``validate``, ``lint``,
-``rules``, ``catalog``, ``deploy_plan``, ...) and :func:`opentide.run_json`,
-the ``opentide`` Rust crate bound one to one (UC-5.2). ``Opentide``, the
+``rules``, ``catalog``, ``deploy_plan``, ``tenants``, ...),
+:func:`opentide.run_json` and :class:`opentide.Connection` (a tenant's async
+``query``, ``validate_query`` and ``deploy``), the ``opentide`` Rust crate bound
+one to one (UC-5.2). ``Opentide``, the
 registry the SDK documented before, keeps working for one deprecation cycle.
 """
 
@@ -16,13 +18,34 @@ TYPE_CHECKING = False
 
 if TYPE_CHECKING:
     from opentide.core.registry import Opentide
-    from opentide.sdk import DeployPlan, LintReport, OpentideError, Validation, Workspace, run_json
+    from opentide.sdk import (
+        Canceller,
+        Capabilities,
+        Connection,
+        DeployOutcome,
+        DeployPlan,
+        LintReport,
+        LiveCheck,
+        OpentideError,
+        QueryResult,
+        TenantConfig,
+        Validation,
+        Workspace,
+        run_json,
+    )
 
 __all__ = [
+    "Canceller",
+    "Capabilities",
+    "Connection",
+    "DeployOutcome",
     "DeployPlan",
     "LintReport",
+    "LiveCheck",
     "Opentide",
     "OpentideError",
+    "QueryResult",
+    "TenantConfig",
     "Validation",
     "Workspace",
     "__version__",
@@ -31,7 +54,21 @@ __all__ = [
 
 #: The SDK's names, from ``opentide.sdk``, loaded on first use.
 _SDK = frozenset(
-    {"DeployPlan", "LintReport", "OpentideError", "Validation", "Workspace", "run_json"}
+    {
+        "Canceller",
+        "Capabilities",
+        "Connection",
+        "DeployOutcome",
+        "DeployPlan",
+        "LintReport",
+        "LiveCheck",
+        "OpentideError",
+        "QueryResult",
+        "TenantConfig",
+        "Validation",
+        "Workspace",
+        "run_json",
+    }
 )
 
 

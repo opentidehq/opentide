@@ -16,7 +16,9 @@
 //! - every file the command created, changed or deleted: presence, mode and
 //!   bytes, the bytes as JSON or text as a stream is. A file only the oracle
 //!   wrote is approved missing only in its catalog cache
-//!   ([`ledger::ORACLE_CACHE`]), by a `presence` entry naming its path.
+//!   ([`ledger::ORACLE_CACHE`]), by a `presence` entry naming its path; a
+//!   file's permission bits, by a `mode` entry naming its path and both
+//!   sides' bits.
 
 #![forbid(unsafe_code)]
 
@@ -657,12 +659,26 @@ impl Comparison<'_> {
                     }),
                 ) => {
                     if left_mode != right_mode {
-                        let found = simple(
-                            Kind::FileMode,
-                            &format!("{left_mode:o}"),
-                            &format!("{right_mode:o}"),
-                        );
-                        self.differ(vec![found]);
+                        let expected = Rule::Mode {
+                            oracle: *left_mode,
+                            candidate: *right_mode,
+                        };
+                        let approving = self
+                            .ledger
+                            .entries_for(self.case.command, self.case.id, &target)
+                            .find(|(_, entry)| entry.rule == expected)
+                            .map(|(index, _)| index);
+                        match approving {
+                            Some(index) => self.approve(&target, index),
+                            None => {
+                                let found = simple(
+                                    Kind::FileMode,
+                                    &format!("{left_mode:o}"),
+                                    &format!("{right_mode:o}"),
+                                );
+                                self.differ(vec![found]);
+                            }
+                        }
                     }
                     self.content(&target, left, right);
                 }
@@ -1214,6 +1230,128 @@ changelog = "**x**"
         };
         let report = compare(other, &oracle, &Run::default(), &ledger, &mut usage);
         assert_eq!(report.differences[0].kind, Kind::FileMissing);
+    }
+
+    fn mode_ledger(target: &str, oracle: &str, candidate: &str) -> Result<Ledger, LedgerError> {
+        Ledger::parse(&format!(
+            r#"
+[[diff]]
+command = "deploy"
+case = "deploy/*/deploy-push/promote-push"
+target = "{target}"
+rule = "mode"
+oracle = "{oracle}"
+candidate = "{candidate}"
+reason = "status promotion keeps a rule file's permission bits"
+issue = "https://github.com/opentidehq/opentide/issues/987"
+changelog = "**x**"
+"#
+        ))
+    }
+
+    fn with_mode(mode: u32, bytes: &[u8]) -> Run {
+        with_files(&[(
+            "ws/r.yaml",
+            FileState::Written {
+                mode,
+                bytes: bytes.to_vec(),
+            },
+        )])
+    }
+
+    /// A `mode` entry approves one file's permission bits, exactly the two it
+    /// names, in its cases only; the file's bytes are still compared.
+    #[test]
+    fn a_mode_entry_approves_exactly_the_bits_it_names() {
+        let ledger = mode_ledger("file:ws/r.yaml", "0600", "0644").unwrap();
+        assert_eq!(
+            ledger.entries[0].rule,
+            Rule::Mode {
+                oracle: 0o600,
+                candidate: 0o644
+            }
+        );
+        let case = Case {
+            command: "deploy",
+            id: "deploy/json/deploy-push/promote-push",
+        };
+        let mut usage = Usage::default();
+        let oracle = with_mode(0o600, b"a");
+        let report = compare(case, &oracle, &with_mode(0o644, b"a"), &ledger, &mut usage);
+        assert!(report.equal, "{report:?}");
+        assert_eq!(report.approved.len(), 1);
+        assert!(usage.is_used(0));
+
+        // Other bits, the sides swapped, or the bytes changed as well.
+        let mut usage = Usage::default();
+        for (oracle_mode, candidate_mode, bytes) in [
+            (0o600, 0o664, &b"a"[..]),
+            (0o644, 0o600, b"a"),
+            (0o600, 0o644, b"b"),
+        ] {
+            let report = compare(
+                case,
+                &with_mode(oracle_mode, b"a"),
+                &with_mode(candidate_mode, bytes),
+                &ledger,
+                &mut usage,
+            );
+            assert!(!report.equal, "{oracle_mode:o} {candidate_mode:o}");
+        }
+        let report = compare(
+            case,
+            &with_mode(0o600, b"a"),
+            &with_mode(0o664, b"a"),
+            &ledger,
+            &mut usage,
+        );
+        assert_eq!(report.differences[0].kind, Kind::FileMode);
+        assert_eq!(report.differences[0].oracle, "600");
+
+        // Another case, or another file.
+        let mut usage = Usage::default();
+        let other = Case {
+            command: "deploy",
+            id: "deploy/json/deploy-push/promote-skip",
+        };
+        let report = compare(other, &oracle, &with_mode(0o644, b"a"), &ledger, &mut usage);
+        assert_eq!(report.differences[0].kind, Kind::FileMode);
+        let elsewhere = |mode| {
+            with_files(&[(
+                "ws/s.yaml",
+                FileState::Written {
+                    mode,
+                    bytes: b"a".to_vec(),
+                },
+            )])
+        };
+        let report = compare(
+            case,
+            &elsewhere(0o600),
+            &elsewhere(0o644),
+            &ledger,
+            &mut usage,
+        );
+        assert_eq!(report.differences[0].kind, Kind::FileMode);
+        assert!(!usage.is_used(0));
+    }
+
+    #[test]
+    fn a_mode_rule_is_four_octal_digits_a_side_on_a_file() {
+        for (target, oracle, candidate) in [
+            ("stdout", "0600", "0644"),
+            ("exit_code", "0600", "0644"),
+            ("file:ws/r.yaml", "600", "644"),
+            ("file:ws/r.yaml", "0600", "0648"),
+            ("file:ws/r.yaml", "0o600", "0644"),
+            ("file:ws/r.yaml", "0644", "0644"),
+            ("file:ws/r.yaml", "(absent)", "0644"),
+        ] {
+            assert!(
+                mode_ledger(target, oracle, candidate).is_err(),
+                "{target} {oracle} {candidate}"
+            );
+        }
     }
 
     /// A `lines` entry with an `(absent)` candidate approves the oracle's

@@ -36,6 +36,9 @@
 #              description, about text or epilog that reads `oracle` on the
 #              oracle's screen and `candidate` on the candidate's, words one
 #              space apart)
+#              or mode (file: targets only: the file's permission bits,
+#              the file written on both sides; its bytes are still
+#              compared)
 #              or presence (file: targets in the oracle's catalog cache
 #              only, home/.cache/opentide/lsp-catalogs/<CATALOG-FINGERPRINT>
 #              and the folders above it: the oracle wrote the file and the
@@ -51,7 +54,8 @@
 #              version); a lines rule: its lines, and on the
 #              candidate's side (absent) where the candidate writes no line
 #              in their place (a block dropped from a stream left empty);
-#              exit_code: the oracle's code
+#              exit_code: the oracle's code; a mode rule: the oracle's
+#              permission bits, four octal digits ("0600")
 #   candidate  the same, for the candidate; a json-extend: rule: a JSON
 #              object from the candidate's index of each added element,
 #              increasing, to the element ({"19": {...}, "20": {...}})
@@ -74,9 +78,11 @@
 # elements set aside, by the oracle's indices (`/runs/0/tool/driver/rules/20`
 # is the oracle's 21st rule). An entry that applies to no case in a complete run is stale,
 # and fails the run: remove it in the change that makes it stale. Differences
-# in a file's presence, mode or deletion have no rule: fix them instead. The
-# one exception is a presence rule on the oracle's catalog cache, a folder
-# outside the workspace that no user commits; it names each path exactly.
+# in a file's presence or deletion have no rule: fix them instead. The one
+# exception is a presence rule on the oracle's catalog cache, a folder
+# outside the workspace that no user commits; it names each path exactly. A
+# difference in a file's mode is approved by a mode rule naming the file and
+# both sides' bits exactly, for a fix the frozen oracle cannot take (#987).
 #
 # [[diff]]
 # command = "info"
@@ -12412,6 +12418,31 @@ candidate = "error: Sentinel tenants not configured · detail: You must first ha
 reason = "In human mode a log line of the Rust CLI's logging layer is one unstyled line, not wrapped at the terminal's width, where the oracle's Rich handler styled its level and wrapped it inside the live region of its checklist; the Rust engine prints the checklist row when the import is done, without the spinner Python drew while it ran. The event, its fields and every other line are the oracle's."
 issue = "https://github.com/opentidehq/opentide/issues/834"
 changelog = "**`generate extract sentinel` runs on the Rust command line**"
+
+# #987: status promotion keeps a promoted rule file's permission bits, in
+# Python and in Rust; the 0.23.0 oracle wrote it 0600 (mkstemp's mode).
+
+[[diff]]
+command = "deploy"
+case = "deploy/*/deploy-push/promote-push"
+target = "file:ws/objects/rules/splunk-a-create.yaml"
+rule = "mode"
+oracle = "0600"
+candidate = "0644"
+reason = "Status promotion rewrites a rule file through a temporary file; 0.23.0 left mkstemp's owner-only mode on it, so a rule committed as 0644 came back 0600. The rewritten file now takes the mode of the file it replaces (the fixture's 0644); its bytes are compared as before."
+issue = "https://github.com/opentidehq/opentide/issues/987"
+changelog = "**Status promotion keeps a rule file's permissions**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/deploy-push/promote-gitlab-progress-json"
+target = "file:ws/objects/rules/splunk-a-create.yaml"
+rule = "mode"
+oracle = "0600"
+candidate = "0644"
+reason = "Status promotion rewrites a rule file through a temporary file; 0.23.0 left mkstemp's owner-only mode on it, so a rule committed as 0644 came back 0600. The rewritten file now takes the mode of the file it replaces (the fixture's 0644); its bytes are compared as before."
+issue = "https://github.com/opentidehq/opentide/issues/987"
+changelog = "**Status promotion keeps a rule file's permissions**"
 
 # UC-6.0b (#841, D1): --help is clap's, compared with the oracle's by content (rule = "help").
 

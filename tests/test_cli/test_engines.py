@@ -992,3 +992,56 @@ def test_mcp_start_is_the_rust_server_under_rust_and_the_python_host_otherwise(
     assert served == ([] if rust_runs else [True])
     # The fake runs the Python server on an empty stdin (exit 0) and adds one.
     assert code == (1 if rust_runs else 0)
+
+
+def test_the_default_engine_hands_a_plugin_run_to_rust(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Only the Rust core reaches a platform plugin (UC-4.5b, #835)."""
+    monkeypatch.setattr(engines, "plugin_platforms", lambda: frozenset({"acme"}))
+    run = ["query", "--platform", "acme", "x"]
+    for env in ({}, {"OPENTIDE_ENGINE": ""}):
+        assert engines.plugin_default(("query",), run, env)
+    # The engine named keeps its meaning: python refuses the name, compare
+    # refuses the run, rust runs it as any other.
+    for engine in ("python", "compare", "rust"):
+        assert not engines.plugin_default(("query",), run, {"OPENTIDE_ENGINE": engine})
+    assert not engines.plugin_default(("query",), ["query", "--platform", "splunk", "x"], {})
+    assert not engines.plugin_default(("query",), ["query", "--platform", "other", "x"], {})
+    assert not engines.plugin_default(("query",), ["query", "x"], {})
+    assert not engines.plugin_default(("info",), ["info", "--platform", "acme"], {})
+    query = engines.RUST_COMMANDS[("query",)]
+    assert engines.rust_command(("query",), {}, run) is query
+    assert engines.rust_command(("query",), {}, ["query", "--platform", "splunk", "x"]) is None
+    assert engines.rust_command(("query",), {"OPENTIDE_ENGINE": "python"}, run) is None
+
+
+def test_the_root_asks_the_dispatcher_only_about_a_platform_that_is_not_built_in() -> None:
+    assert engine_defaults.names_other_platform(["query", "--platform", "acme", "x"])
+    assert engine_defaults.names_other_platform(["deploy", "--platform=acme"])
+    assert not engine_defaults.names_other_platform(["query", "--platform", "splunk", "x"])
+    assert not engine_defaults.names_other_platform(["query", "x", "--", "--platform", "acme"])
+    assert not engine_defaults.names_other_platform(["validate"])
+
+
+@pytest.mark.parametrize(("engine", "rust"), [(None, True), ("", True), ("python", False)])
+def test_the_dispatcher_runs_a_plugin_run_on_rust_under_the_default_engine(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch, engine: str | None, rust: bool
+) -> None:
+    monkeypatch.setattr(engines, "plugin_platforms", lambda: frozenset({"acme"}))
+    # The stand-in writes a file where it runs.
+    monkeypatch.chdir(workspace)
+    stand_in = RustCommand(
+        launch=(sys.executable, str(FAKE), "refuse"),
+        side_effects=True,
+        platforms=engines.RUST_QUERY_PLATFORMS,
+        plugins=True,
+    )
+    monkeypatch.setitem(engines.RUST_COMMANDS, ("query",), stand_in)
+    code, stdout, _ = invoke(
+        ["--json", "--repo", str(workspace), "query", "--platform", "acme", "x"], engine
+    )
+    assert code == 2
+    if rust:
+        assert stdout == "refused by the fake\n"
+    else:
+        # The Python command line knows the built-in platforms only.
+        assert document(stdout)["failure"]["code"] == "usage_invalid_choice"

@@ -103,8 +103,11 @@ class AcmePlatform(PlatformPlugin):
 
     def deploy(self, tenant: Tenant, request: DeployRequest) -> DeployResult:
         block = request.body["configuration"]
-        ...  # send block["query"] to tenant.setup["url"] with tenant.setup["token"]
-        return DeployResult(remote_id="acme-rule-17")
+        if request.operation == "create":
+            ...  # create the rule from block["query"]; the platform answers its id
+            return DeployResult(remote_id="acme-rule-17")
+        ...  # update, disable or delete the rule request.remote_id names
+        return DeployResult(remote_id=request.remote_id)
 
     def validate_query(self, tenant: Tenant, request: QueryRequest) -> LiveCheck:
         ...  # ask the tenant whether request.text runs
@@ -156,17 +159,16 @@ Rules give the platform a block under `configurations.acme`. `opentide validate`
 
 ### Run it
 
-Plugin platforms run on the Rust core: set `OPENTIDE_ENGINE=rust` (the Python CLI's `--platform` takes the built-in platforms only), or call `python -m opentide.cli.rust`. `<plugin>` is the entry point's name (`acme` in the sample):
+Plugin platforms run on the Rust core. `query`, `validate query` and `deploy` with a `--platform` that names an installed plugin go to it under the default engine, with nothing to set; the Python command line never reads a plugin's name. `<plugin>` is the entry point's name (`acme` in the sample):
 
 ```bash
-export OPENTIDE_ENGINE=rust
 opentide validate
-opentide deploy --platform <plugin> --all          # or --uuid, --file; --dry-run sends nothing
+opentide deploy --platform <plugin> --strategy PREVIEW --all   # or --uuid, --file; --dry-run sends nothing
 opentide validate query --live --platform <plugin>
 opentide query --platform <plugin> --since 1h 'process | head'
 ```
 
-`OPENTIDE_ENGINE=compare` refuses a plugin run, since both runs would reach the tenant.
+`OPENTIDE_ENGINE=rust` runs every command on the Rust core, plugin runs included. `OPENTIDE_ENGINE=python` keeps the Python command line, which knows the built-in platforms only, and `OPENTIDE_ENGINE=compare` refuses a plugin run, since both runs would reach the tenant. `opentide validate` itself checks a plugin's blocks under the Rust core (`OPENTIDE_ENGINE=rust`) and in the SDK (`opentide.Workspace.validate`); the Python command line reports each one as an extra key.
 
 </Step>
 
@@ -177,21 +179,30 @@ opentide query --platform <plugin> --since 1h 'process | head'
 | Type | Fields |
 |------|--------|
 | `Tenant` | `platform`, `name`, `setup` (its `[tenants.setup]` table, every `$NAME` resolved: never log a value), `lists` (its lists of strings), `verify_tls` (its `ssl`), `timeout` (seconds) |
-| `DeployRequest` | `rule_id` (the rule's UUID), `operation` (`create`: deploy creates or replaces), `body`: `{"rule": <the rule document>, "configuration": <its block for the platform>}` |
+| `DeployRequest` | `rule_id` (the rule's UUID), `operation` (`create`, `update`, `disable` or `delete`: see [Deployment](#deployment)), `remote_id` (the id an earlier `create` returned, for the other three), `body`: `{"rule": <the rule document>, "configuration": <its block for the platform>}`, the tenant's `[[modifiers]]` applied |
 | `QueryRequest` | `text`, `language` (`--language`, or the block's `language` for a live check), `start` and `end` (UTC, `2026-11-01T00:00:00.000Z`), `limit`, `index`, `data_view`, `timeout` |
 
 ### What it returns
 
 | Method | Returns | Fails with |
 |--------|---------|------------|
-| `deploy` | `DeployResult(remote_id, operation)` | `PlatformRefused(message, detail)`: the tenant refused the rule; `PlatformAuthenticationError`: it refused the credentials |
+| `deploy` | `DeployResult(remote_id, operation)`: a `create` returns the platform's id of the rule | `PlatformRefused(message, detail)`: the tenant refused the rule; `PlatformAuthenticationError`: it refused the credentials |
 | `validate_query` | `LiveCheck(errors, warnings, result)`: `errors` fail the query although the tenant ran it | `PlatformRefused` for a query the tenant refuses |
 | `run_query` | `QueryResult(rows, columns, truncated, partial, warnings, ...)`: at most `limit` rows, each a dict in column order | as `deploy` |
 | `check_configuration` | a list of `ConfigurationFinding(path, message, warning)`, `path` inside the block | |
 
-Any other exception fails that tenant's run with its type and message; the other tenants still run.
+Any other exception fails the call with its type and message. In `query` and `validate query --live` it fails that tenant's run, and the other tenants still run; in `deploy` it stops the run, as a built-in platform's failure does.
 
-`validate query --live` checks each rule's `configurations.<platform>.query`. A deploy on a plugin platform does not record deployment state yet, and `--strategy` does not apply to it: every selected rule with the platform's block is sent to every tenant.
+`validate query --live` checks each rule's `configurations.<platform>.query`.
+
+### Deployment
+
+A plugin platform deploys as the built-in platforms that keep the vendor's id of a rule do (CrowdStrike, Defender for Endpoint, SentinelOne, Sysdig):
+
+- `--strategy` is required, and the block's `status` decides whether a run sends the rule, as for every platform: `PREVIEW` and `RELEASE` runs, tenants' `strategies`, `--wide`, `--keep-deprecated`. `--dry-run` shows the plan and the block each tenant would receive, and sends nothing.
+- Each rule is planned from its [deployment state](../usage/concepts/deployment-state.md) shard, `.opentide/states/deployment/<uuid>.json`, where the plugin's ids sit under `platforms.<plugin>.<tenant>`. Without an id there, the plugin receives `create`, and the `remote_id` it returns is recorded. With one, it receives `update`, `disable` (a status whose strategy is `DISABLEMENT`) or `delete` (`DELETION`), with that id as `remote_id`; after a `delete`, the id is forgotten. A `disable` or `delete` of a rule with no recorded id is skipped with `external_id_missing`, as for the built-in platforms.
+- A `create` that returns no `remote_id` fails the rule: nothing could be recorded, and the next deploy would create the rule again. A platform that addresses rules by the rule's UUID returns `request.rule_id`. An `update` that returns another id than the recorded one replaces it.
+- In CI, a `create` outside the production job is refused before the plugin is called (`deployment_state_unpersisted`), unless `--persist-state-externally` says the pipeline commits the shards itself.
 
 ### Where plugins are unavailable
 

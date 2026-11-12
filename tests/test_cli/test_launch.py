@@ -379,3 +379,14 @@ def test_with_the_engine_the_console_script_goes_through_it(
     monkeypatch.setenv("OPENTIDE_ENGINE", "rust")
     assert launch.main(["info"]) == 7
     assert seen == [["info"]]
+
+
+def test_the_default_engine_runs_a_plugin_run_on_rust(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Only the Rust core reaches a platform plugin (UC-4.5b, #835)."""
+    monkeypatch.setattr(engines, "plugin_platforms", lambda: frozenset({"acme"}))
+    run = ["deploy", "--platform", "acme", "--strategy", "PREVIEW", "--all"]
+    assert launch.runs_on_rust(run, {})
+    assert launch.runs_on_rust(run, {"OPENTIDE_ENGINE": ""})
+    assert not launch.runs_on_rust(run, {"OPENTIDE_ENGINE": "python"})
+    assert not launch.runs_on_rust(["deploy", "--platform", "other", "--all"], {})
+    assert not launch.runs_on_rust(["deploy", "--platform", "sentinel", "--all"], {})

@@ -97,7 +97,7 @@ is required (#805):
 |-------|-------|
 | command | The command path |
 | case glob | The cases it applies to, as narrow as possible |
-| rule | A JSON pointer; a `help` rule: a help screen laid out by clap where the oracle's was Typer's, approved only where both say the same (`opentide_compare::help`), with `help-text` for one wording changed on purpose; a text rule: one whole line on each side, approved where the oracle and candidate lines match it at the same line number (`<SHA256>` once in the candidate: any digest there, for a digest over the version); or a lines rule: consecutive whole lines on each side, approved where the candidate has its block where the oracle has its own (an inserted or removed row) |
+| rule | A JSON pointer; a `help` rule: a help screen laid out by clap where the oracle's was Typer's, approved only where both say the same (`opentide_compare::help`), with `help-text` for one wording changed on purpose; a text rule: one whole line on each side, approved where the oracle and candidate lines match it at the same line number (`<SHA256>` once in the candidate: any digest there, for a digest over the version); or a lines rule: consecutive whole lines on each side, approved where the candidate has its block where the oracle has its own (an inserted or removed row); or a mode rule: one file's permission bits, four octal digits a side (`0600`, `0644`), its bytes still compared |
 | oracle value | What Python prints or writes |
 | candidate value | What Rust prints or writes |
 | reason | Why the difference is right |

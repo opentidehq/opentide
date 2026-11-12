@@ -272,6 +272,7 @@ fn apply_edits(name: &str, ws: &Path) {
 /// one edit (`pushed` in `cases.toml`, laid out by `xtask/src/golden/fixture.rs`).
 fn pushed(ws: &Path, path: &str, find: &str, replace: &str) {
     copy_tree(&repo().join("tests/golden/fixtures/deploy-tenants"), ws);
+    fix_modes(ws);
     commit_push(
         ws,
         &[(path.to_owned(), find.to_owned(), replace.to_owned())],
@@ -285,6 +286,7 @@ fn pushed_from_cases(name: &str, ws: &Path) {
     let spec: toml::Table = toml::from_str(&text).unwrap();
     let fixture = &spec["fixtures"][name];
     copy_tree(&repo().join(fixture["source"].as_str().unwrap()), ws);
+    fix_modes(ws);
     let edits: Vec<(String, String, String)> = fixture["pushed"]
         .as_array()
         .unwrap()
@@ -295,6 +297,32 @@ fn pushed_from_cases(name: &str, ws: &Path) {
         })
         .collect();
     commit_push(ws, &edits);
+}
+
+/// Sets every folder to 0755 and every file to 0644, or 0755 when any
+/// execute bit is set, before the fixture is committed, as
+/// `xtask/src/golden/fixture.rs`'s `fix_modes` does: a checkout's modes follow
+/// the umask of whoever cloned, and status promotion keeps a rule file's mode
+/// (#987), which the recordings name.
+fn fix_modes(dir: &Path) {
+    use std::os::unix::fs::PermissionsExt;
+    for entry in std::fs::read_dir(dir).unwrap() {
+        let path = entry.unwrap().path();
+        let meta = std::fs::symlink_metadata(&path).unwrap();
+        let mode = if meta.is_dir() {
+            fix_modes(&path);
+            0o755
+        } else if meta.is_file() {
+            if meta.permissions().mode() & 0o111 == 0 {
+                0o644
+            } else {
+                0o755
+            }
+        } else {
+            continue;
+        };
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode)).unwrap();
+    }
 }
 
 /// Commits `ws` as it is, then `edits` (path, find, replace) as a second
