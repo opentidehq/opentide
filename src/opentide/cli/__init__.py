@@ -10,10 +10,14 @@ from __future__ import annotations
 import importlib
 import os
 import sys
-from collections.abc import Sequence
-from typing import TYPE_CHECKING
+
+#: ``typing.TYPE_CHECKING`` without importing typing, which the console
+#: script's start would pay for (UC-3.8b, #960); type checkers read it as True.
+TYPE_CHECKING = False
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from opentide.cli.root import app
     from opentide.core.logging import print_banner as print_banner
 
@@ -91,11 +95,16 @@ def launch_environment() -> dict[str, str]:
     return dict(os.environ if _launch_environment is None else _launch_environment)
 
 
-def main() -> None:
-    """Console script entry point."""
+def main(argv: Sequence[str] | None = None) -> None:
+    """The Python CLI: run *argv* (``sys.argv[1:]`` when ``None``) and exit.
+
+    The console script, :func:`opentide.cli.launch.main`, comes here for every run
+    the Python implementation answers (:mod:`opentide.cli.launch`).
+    """
     global _launch_environment
     _launch_environment = dict(os.environ)
-    argv = sys.argv[1:]
+    given = argv
+    argv = sys.argv[1:] if given is None else list(given)
     if _asks_only_for_version(argv):
         # Before Typer, Rich or the registry: a pipeline that logs the version
         # it installed should not pay for them.
@@ -113,7 +122,12 @@ def main() -> None:
         # options, and exits on a bad one, before the eager callback runs.
         options = argv[: argv.index("--")] if "--" in argv else argv
         sync_typer_rendering(no_color="--no-color" in options or bool(os.getenv("NO_COLOR")))
-        app()
+        # Click reads sys.argv itself when given nothing, and only then expands
+        # wildcards on Windows, as a shell would.
+        if given is None:
+            app()
+        else:
+            app(args=argv)
     except KeyboardInterrupt:
         # Typer turns Ctrl-C inside a command into exit 130 itself; this is
         # Ctrl-C while the CLI was still loading.

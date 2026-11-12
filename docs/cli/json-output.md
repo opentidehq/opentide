@@ -167,6 +167,8 @@ A command's default moves to Rust one at a time, in three releases ([#822](https
 
 No command's default has changed yet. `opentide serve` and `opentide mcp start` run under any engine: the engine applies to the commands `serve` runs and to the MCP validation tools (`validate_rule`, `validation_report`); `rust` also serves `mcp start` from the Rust server, and `compare` keeps the Python one ([opentide serve](./serve.md#the-rust-engine), [MCP tools](../mcp/tools.md#choosing-the-implementation)). The SDK's `run_validation` follows `OPENTIDE_ENGINE` the same way ([Validation](../sdk/validation.md#choosing-the-implementation)).
 
+Whatever the engine, a command runs in the process you started: `opentide` and `python -m opentide` read `OPENTIDE_ENGINE` before anything else and run a Rust implementation in that process, with nothing in between, so Ctrl-C (`error: interrupted`, exit `130`) and SIGTERM reach the command itself (`opentide serve` exits `143`, `opentide mcp start` ends). Only `compare` starts processes: one per implementation.
+
 ```bash
 OPENTIDE_ENGINE=compare opentide --json validate
 ```

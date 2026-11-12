@@ -3,7 +3,7 @@
 //! ```text
 //! cargo xtask bench [--engine python|rust] [--scale 1|10] [--json] [--out FILE]
 //!                   [--runs N] [--warmup N] [--only ID,...] [--workspace DIR]
-//!                   [--opentide PATH] [--lsp PATH]
+//!                   [--opentide PATH] [--lsp PATH] [--launcher PATH]
 //! cargo xtask bench --check BUDGETS BENCH.json [--previous LAST.json] [--summary FILE]
 //! ```
 //!
@@ -41,7 +41,7 @@ const INTERNAL_GENERATE: &str = "--internal-generate";
 pub const USAGE: &str = "\
 usage: cargo xtask bench [--engine python|rust] [--scale 1|10] [--json] [--out FILE]
                          [--runs N] [--warmup N] [--only ID,...] [--workspace DIR]
-                         [--opentide PATH] [--lsp PATH]
+                         [--opentide PATH] [--lsp PATH] [--launcher PATH]
        cargo xtask bench --check BUDGETS BENCH.json [--previous LAST.json] [--summary FILE]
 
 Runs the plan section 11 benchmarks on the heavy workspace (seed 20261107):
@@ -58,13 +58,17 @@ stdout (progress goes to stderr); --out writes it to FILE as well.
                     examples; validate without the queries check, UC-2.5)
                     and the commands the Rust CLI runs (info, info catalog,
                     rules unreviewed, generate exports navigator, generate
-                    docs, deploy --dry-run), built --release; every other
-                    command reports \"no Rust yet\"
+                    docs, deploy --dry-run), built --release; startup
+                    (opentide --version) and explain through the launcher,
+                    opentide.cli.launch:main, with OPENTIDE_ENGINE=rust; every
+                    other command reports \"no Rust yet\"
   --scale 1|10      the heavy workspace's size (default 1)
   --only ID,...     run only these commands (ids as in the report)
   --workspace DIR   benchmark this workspace instead of generating one
   --opentide PATH   run this opentide instead of installing the oracle
   --lsp PATH        run this language server for --engine rust
+  --launcher PATH   run this console script for --engine rust's startup and
+                    explain (default: .venv/bin/opentide, from uv sync)
 
 --check holds BENCH.json to BUDGETS (tests/bench/budgets.toml) and, with
 --previous, to the last development result: a median or peak RSS more than
@@ -111,6 +115,9 @@ pub enum Kind {
     Cli,
     /// The language server, timed from spawn to the first diagnostics.
     Lsp,
+    /// `opentide --version`: one process, timed from spawn to exit, that
+    /// prints `opentide <version>` and nothing else (UC-3.8b, #960).
+    Version,
     /// Loading and indexing the workspace, as the SDK does: one process,
     /// spawn to exit, printing what the index holds as JSON. The oracle runs
     /// `Opentide.initialise()` ([`ORACLE_LOAD`]); the Rust engine
@@ -188,6 +195,12 @@ fn explain(json: &Value, _: &workspace::Workspaces) -> Option<String> {
 }
 
 fn lsp(_: &Value, _: &workspace::Workspaces) -> Option<String> {
+    None
+}
+
+/// What [`Kind::Version`] prints is checked by [`verify_version`]; there is
+/// no JSON to hold.
+fn version_only(_: &Value, _: &workspace::Workspaces) -> Option<String> {
     None
 }
 
@@ -305,6 +318,14 @@ pub const SCENARIOS: &[Scenario] = &[
         expect: explain,
     },
     Scenario {
+        id: "startup",
+        args: &["--version"],
+        input: Input::Empty,
+        kind: Kind::Version,
+        exit_codes: &[0],
+        expect: version_only,
+    },
+    Scenario {
         id: "load",
         args: &[],
         input: Input::Clean,
@@ -345,6 +366,8 @@ pub struct Options {
     pub opentide: Option<PathBuf>,
     /// A language server to run for `rust`.
     pub lsp: Option<PathBuf>,
+    /// The console script to run for `rust`'s [`LAUNCHER`] scenarios.
+    pub launcher: Option<PathBuf>,
 }
 
 /// The arguments of `--check`.
@@ -392,6 +415,7 @@ pub fn parse_args(args: &[String]) -> Result<Mode> {
         workspace: None,
         opentide: None,
         lsp: None,
+        launcher: None,
     };
     let mut check: Option<(PathBuf, PathBuf)> = None;
     let mut previous = None;
@@ -478,6 +502,10 @@ pub fn parse_args(args: &[String]) -> Result<Mode> {
             }
             "--lsp" => {
                 options.lsp = Some(absolute(&value()?)?);
+                run_only = true;
+            }
+            "--launcher" => {
+                options.launcher = Some(absolute(&value()?)?);
                 run_only = true;
             }
             other => bail!("unknown option `{other}`"),
@@ -624,8 +652,16 @@ fn has_rust(scenario: &Scenario) -> bool {
 /// The engine's program and arguments for a scenario, or why it has none.
 enum Program {
     Run(PathBuf, Vec<OsString>),
+    /// The console script, run with `OPENTIDE_ENGINE=rust` ([`LAUNCHER`]).
+    Launcher(PathBuf, Vec<OsString>),
     Missing(String),
 }
+
+/// The scenarios `--engine rust` measures through the console script,
+/// `opentide.cli.launch:main` (UC-3.8b, #960): the plan's startup budgets,
+/// `opentide --version` in 20 ms and `explain` in 30 ms (section 11; #830),
+/// are what `pip install opentide` gives a person, launcher included.
+const LAUNCHER: &[&str] = &["startup", "explain"];
 
 /// The commands the Rust CLI (opentide-cli) runs, by scenario id: `--engine
 /// rust` measures its `opentide` binary on them (UC-2.4, #819; `generate
@@ -639,17 +675,35 @@ const RUST_CLI: &[&str] = &[
     "deploy_dry_run",
 ];
 
-/// The program a scenario runs. For `--engine rust`, `opentide` is the Rust
-/// CLI's binary.
+/// The programs a run has: what it built or installed, or was given.
+#[derive(Clone, Copy, Debug, Default)]
+struct Programs<'a> {
+    /// The oracle's `opentide`, or for `--engine rust` the Rust CLI's binary.
+    opentide: Option<&'a Path>,
+    /// The language server (`rust`).
+    lsp: Option<&'a Path>,
+    /// opentide-workspace's `load` example (`rust`).
+    load: Option<&'a Path>,
+    /// opentide-workspace's `validate` example (`rust`).
+    validate: Option<&'a Path>,
+    /// The console script, `opentide.cli.launch:main` (`rust`, [`LAUNCHER`]).
+    launcher: Option<&'a Path>,
+}
+
+/// The program a scenario runs.
 fn program(
     scenario: &Scenario,
     engine: Engine,
-    opentide: Option<&Path>,
-    lsp: Option<&Path>,
-    load_bin: Option<&Path>,
-    validate_bin: Option<&Path>,
+    programs: &Programs<'_>,
     ws: Option<&workspace::Workspaces>,
 ) -> Program {
+    let Programs {
+        opentide,
+        lsp,
+        load: load_bin,
+        validate: validate_bin,
+        launcher,
+    } = *programs;
     let rule = ws.map(|ws| ws.rule.clone()).unwrap_or_default();
     let args = |prefix: &[&str]| -> Vec<OsString> {
         prefix
@@ -665,6 +719,29 @@ fn program(
             .collect()
     };
     match (engine, scenario.kind) {
+        (Engine::Python, Kind::Version) => Program::Missing(
+            "not held to a budget for the oracle: startup measures the launcher, \
+             opentide.cli.launch:main (UC-3.8b), under --engine rust"
+                .into(),
+        ),
+        (Engine::Rust, _) if LAUNCHER.contains(&scenario.id) => match launcher {
+            Some(launcher) => Program::Launcher(
+                launcher.to_owned(),
+                args(if scenario.kind == Kind::Version {
+                    &[]
+                } else {
+                    &["--json"]
+                }),
+            ),
+            None => Program::Missing(
+                "no launcher: run `uv sync --group dev`, which installs .venv/bin/opentide, \
+                 or pass --launcher PATH"
+                    .into(),
+            ),
+        },
+        (Engine::Rust, Kind::Version) => {
+            Program::Missing("startup runs through the launcher".into())
+        }
         (Engine::Python, Kind::Cli) => match opentide {
             Some(opentide) => Program::Run(opentide.to_owned(), args(&["--json"])),
             None => Program::Missing("no opentide".into()),
@@ -775,6 +852,7 @@ fn run_in(options: &Options, root: &Path, base: &Path, work: &Path) -> Result<()
             || s.kind != Kind::Cli
             || has_rust(s)
             || RUST_CLI.contains(&s.id)
+            || LAUNCHER.contains(&s.id)
     };
     let needs_workspace = selected
         .iter()
@@ -800,6 +878,15 @@ fn run_in(options: &Options, root: &Path, base: &Path, work: &Path) -> Result<()
     };
     let validate_bin = match options.engine {
         Engine::Rust if selected.iter().any(|s| has_rust(s)) => Some(oracle::build_validate(root)?),
+        _ => None,
+    };
+    // The console script of this repository's environment (`uv sync`): its
+    // `opentide._native` is the develop profile's build (release without LTO).
+    let launcher = match (options.engine, &options.launcher) {
+        (Engine::Rust, Some(path)) => Some(path.clone()),
+        (Engine::Rust, None) => {
+            Some(root.join(".venv").join("bin").join("opentide")).filter(|path| path.is_file())
+        }
         _ => None,
     };
     let lsp = match (options.engine, &options.lsp) {
@@ -851,15 +938,14 @@ fn run_in(options: &Options, root: &Path, base: &Path, work: &Path) -> Result<()
 
     let mut results = Vec::new();
     for scenario in selected {
-        let result = match program(
-            scenario,
-            options.engine,
-            opentide.as_deref(),
-            lsp.as_deref(),
-            load_bin.as_deref(),
-            validate_bin.as_deref(),
-            workspaces.as_ref(),
-        ) {
+        let programs = Programs {
+            opentide: opentide.as_deref(),
+            lsp: lsp.as_deref(),
+            load: load_bin.as_deref(),
+            validate: validate_bin.as_deref(),
+            launcher: launcher.as_deref(),
+        };
+        let result = match program(scenario, options.engine, &programs, workspaces.as_ref()) {
             Program::Missing(why) => {
                 let command = format!("opentide --json {}", scenario.args.join(" "));
                 eprintln!("bench: {}: {why}", scenario.id);
@@ -869,6 +955,18 @@ fn run_in(options: &Options, root: &Path, base: &Path, work: &Path) -> Result<()
                 scenario,
                 &program,
                 &args,
+                Launch::Direct,
+                workspaces.as_ref(),
+                work,
+                options,
+                inject,
+            )
+            .with_context(|| format!("{} ({})", scenario.id, display(&program, &args)))?,
+            Program::Launcher(program, args) => measure_scenario(
+                scenario,
+                &program,
+                &args,
+                Launch::Launcher,
                 workspaces.as_ref(),
                 work,
                 options,
@@ -989,10 +1087,27 @@ fn generate_here(scale: u32, dir: Option<&Path>) -> Result<Generated> {
     })
 }
 
+/// How a measured program is started.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Launch {
+    /// As it is.
+    Direct,
+    /// The console script with `OPENTIDE_ENGINE=rust`. Its warm-up runs may
+    /// write the bytecode of the package's modules, as a wheel's install
+    /// compiles them: a measured run that compiled them would measure the
+    /// compiler.
+    Launcher,
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "one scenario's whole setting, passed once per scenario"
+)]
 fn measure_scenario(
     scenario: &Scenario,
     program: &Path,
     args: &[OsString],
+    launch: Launch,
     workspaces: Option<&workspace::Workspaces>,
     work: &Path,
     options: &Options,
@@ -1011,11 +1126,36 @@ fn measure_scenario(
         let run_dir = measure::RunDir::prepare(&run_root, source)?;
         let sleep = if measured_run { inject } else { None };
         let sample = match scenario.kind {
-            Kind::Cli | Kind::Load => {
+            Kind::Cli | Kind::Load | Kind::Version => {
                 let mut command = measure::command(program, args, &run_dir)?;
+                if launch == Launch::Launcher {
+                    command.env("OPENTIDE_ENGINE", "rust");
+                    if !measured_run {
+                        command.env_remove("PYTHONDONTWRITEBYTECODE");
+                    }
+                }
                 let measured = measure::run(&mut command, sleep)?;
-                verify_cli(scenario, &run_dir, measured.exit_code, workspaces)?;
-                measure::distinct_from_own(measured.sample.peak_rss_bytes, measured.own_peak_rss)?;
+                if scenario.kind == Kind::Version {
+                    verify_version(&run_dir, measured.exit_code)?;
+                } else {
+                    verify_cli(scenario, &run_dir, measured.exit_code, workspaces)?;
+                }
+                let distinct = measure::distinct_from_own(
+                    measured.sample.peak_rss_bytes,
+                    measured.own_peak_rss,
+                );
+                match distinct {
+                    // `--version` is a smaller process than xtask: its peak is
+                    // under the floor, and only its time has a budget.
+                    Err(_) if scenario.kind == Kind::Version => {
+                        note = Some(
+                            "peak RSS at or under xtask's own, the floor of a child's: \
+                             only the time is held to a budget"
+                                .to_owned(),
+                        );
+                    }
+                    distinct => distinct?,
+                }
                 measured.sample
             }
             Kind::Lsp => {
@@ -1061,6 +1201,25 @@ fn measure_scenario(
             .with_context(|| format!("remove {}", run_root.display()))?;
     }
     Ok(result)
+}
+
+/// A `--version` run counts only when it exits 0 and prints one line,
+/// `opentide <version>`, and nothing on stderr.
+fn verify_version(run_dir: &measure::RunDir, exit_code: Option<i32>) -> Result<()> {
+    let stdout = run_dir.read_stdout()?;
+    let stderr = run_dir.stderr_tail();
+    if exit_code != Some(0) {
+        bail!("exited {exit_code:?}, not 0 (stdout: {stdout}; stderr: {stderr})");
+    }
+    let line = stdout.strip_suffix('\n').unwrap_or(&stdout);
+    let version = line.strip_prefix("opentide ").unwrap_or_default();
+    if version.is_empty() || version.contains(char::is_whitespace) {
+        bail!("printed {stdout:?}, not `opentide <version>`");
+    }
+    if !stderr.trim().is_empty() {
+        bail!("wrote to stderr: {stderr}");
+    }
+    Ok(())
 }
 
 /// A run counts only when it ended as a correct run ends: the expected exit
@@ -1302,16 +1461,17 @@ mod tests {
     #[test]
     fn rust_runs_what_it_has_and_says_no_rust_yet_for_the_rest() {
         for scenario in SCENARIOS {
-            let program = program(
-                scenario,
-                Engine::Rust,
-                None,
-                Some(Path::new("lsp")),
-                Some(Path::new("load")),
-                Some(Path::new("validate")),
-                None,
-            );
+            let programs = Programs {
+                lsp: Some(Path::new("lsp")),
+                load: Some(Path::new("load")),
+                validate: Some(Path::new("validate")),
+                ..Programs::default()
+            };
+            let program = program(scenario, Engine::Rust, &programs, None);
             match (scenario.kind, program) {
+                (_, Program::Missing(why)) if LAUNCHER.contains(&scenario.id) => {
+                    assert!(why.starts_with("no launcher"), "{why}");
+                }
                 (Kind::Cli, Program::Run(bin, args)) if has_rust(scenario) => {
                     assert_eq!(bin, Path::new("validate"));
                     // `{rule}` is the workspace's rule file: none here.
@@ -1413,20 +1573,57 @@ mod tests {
             expected_warnings: None,
         };
         let scenario = SCENARIOS.iter().find(|s| s.id == "validate_file").unwrap();
-        let Program::Run(_, args) = program(
-            scenario,
-            Engine::Python,
-            Some(Path::new("opentide")),
-            None,
-            None,
-            None,
-            Some(&ws),
-        ) else {
+        let programs = Programs {
+            opentide: Some(Path::new("opentide")),
+            ..Programs::default()
+        };
+        let Program::Run(_, args) = program(scenario, Engine::Python, &programs, Some(&ws)) else {
             panic!("python runs it");
         };
         assert_eq!(
             args,
             ["--json", "validate", "--file", "objects/rules/a.yaml"]
         );
+    }
+
+    #[test]
+    fn rust_measures_startup_and_explain_through_the_launcher() {
+        let run = |id: &str, engine: Engine| {
+            let scenario = SCENARIOS.iter().find(|s| s.id == id).unwrap();
+            let programs = Programs {
+                opentide: Some(Path::new("opentide")),
+                launcher: Some(Path::new("launcher")),
+                ..Programs::default()
+            };
+            program(scenario, engine, &programs, None)
+        };
+        let Program::Launcher(bin, args) = run("startup", Engine::Rust) else {
+            panic!("startup runs the launcher");
+        };
+        assert_eq!(
+            (bin.as_path(), args.as_slice()),
+            (Path::new("launcher"), &["--version".into()][..])
+        );
+        let Program::Launcher(bin, args) = run("explain", Engine::Rust) else {
+            panic!("explain runs the launcher");
+        };
+        assert_eq!(bin, Path::new("launcher"));
+        assert_eq!(args, ["--json", "explain", "vocab_unknown"]);
+        // The oracle's explain is the oracle's, and its start is not budgeted.
+        assert!(matches!(run("explain", Engine::Python), Program::Run(..)));
+        assert!(matches!(
+            run("startup", Engine::Python),
+            Program::Missing(_)
+        ));
+        let Mode::Run(options) =
+            parse_args(&args_of("--engine rust --launcher /x/opentide")).unwrap()
+        else {
+            panic!("not a run");
+        };
+        assert_eq!(options.launcher.as_deref(), Some(Path::new("/x/opentide")));
+    }
+
+    fn args_of(text: &str) -> Vec<String> {
+        text.split_whitespace().map(str::to_owned).collect()
     }
 }

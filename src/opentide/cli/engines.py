@@ -22,30 +22,34 @@ one. ``OPENTIDE_ENGINE`` chooses, read once per process by the root callback:
   only Python fetches.
 
 :data:`RUST_COMMANDS` is the dispatch table: the work items that port a
-command add it there.
+command add it there. The console script reads it before Typer or anything
+else is loaded (:mod:`opentide.cli.launch`), so this module imports only the
+standard library's cheapest modules at the top; what ``compare`` needs is
+imported where it runs.
 """
 
 from __future__ import annotations
 
 import os
-import shutil
 import stat
-import subprocess
 import sys
-import tempfile
-from collections.abc import Callable, Iterator, Mapping, Sequence
-from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
-from typing import TYPE_CHECKING, Any, NoReturn
+
+from opentide.cli.engine_defaults import ENGINE_ENV, PYTHON, RUST, default_engine
+
+#: ``typing.TYPE_CHECKING`` without importing typing, which the console
+#: script would pay for on every Rust run (UC-3.8b, #960); type checkers
+#: read it as True.
+TYPE_CHECKING = False
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Iterator, Mapping, Sequence
+    from pathlib import Path
+    from typing import Any, NoReturn
+
     from typer import _click
 
     from opentide.analysis import CompareRun
     from opentide.cli.context import CliContext
-
-from opentide.cli.engine_defaults import ENGINE_ENV, PYTHON, RUST, default_engine
 
 COMPARE = "compare"
 #: The values ``OPENTIDE_ENGINE`` accepts.
@@ -62,7 +66,6 @@ REFUSAL_ENV = "OPENTIDE_ENGINE_REFUSAL"
 WORKSPACE_PLACEHOLDER = "<WS>"
 
 
-@dataclass(frozen=True)
 class RustCommand:
     """A command's Rust implementation: the command line that runs it.
 
@@ -94,13 +97,58 @@ class RustCommand:
     (:data:`REFUSAL_ENV`).
     """
 
-    launch: tuple[str, ...]
-    rules: tuple[str, ...] = ()
-    side_effects: bool = False
-    requires: tuple[str, ...] = ()
-    refuses: tuple[str, ...] = ()
-    platforms: tuple[str, ...] = ()
-    platform_scope: tuple[str, ...] = ()
+    __slots__ = (
+        "launch",
+        "platform_scope",
+        "platforms",
+        "refuses",
+        "requires",
+        "rules",
+        "side_effects",
+    )
+
+    def __init__(
+        self,
+        launch: tuple[str, ...],
+        rules: tuple[str, ...] = (),
+        side_effects: bool = False,
+        requires: tuple[str, ...] = (),
+        refuses: tuple[str, ...] = (),
+        platforms: tuple[str, ...] = (),
+        platform_scope: tuple[str, ...] = (),
+    ) -> None:
+        self.launch = launch
+        self.rules = rules
+        self.side_effects = side_effects
+        self.requires = requires
+        self.refuses = refuses
+        self.platforms = platforms
+        self.platform_scope = platform_scope
+
+    def _key(self) -> tuple[object, ...]:
+        return (
+            self.launch,
+            self.rules,
+            self.side_effects,
+            self.requires,
+            self.refuses,
+            self.platforms,
+            self.platform_scope,
+        )
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, RustCommand) and self._key() == other._key()
+
+    def __hash__(self) -> int:
+        return hash(self._key())
+
+    def __repr__(self) -> str:
+        return (
+            f"RustCommand(launch={self.launch!r}, rules={self.rules!r}, "
+            f"side_effects={self.side_effects!r}, requires={self.requires!r}, "
+            f"refuses={self.refuses!r}, platforms={self.platforms!r}, "
+            f"platform_scope={self.platform_scope!r})"
+        )
 
     def covers(self, args: Sequence[str]) -> bool:
         """Whether the Rust implementation runs the command with *args*."""
@@ -190,6 +238,8 @@ ENGINE_HOSTS: frozenset[tuple[str, ...]] = frozenset(
 )
 
 #: The Rust command line compiled into ``opentide._native`` (:mod:`opentide.cli.rust`).
+#: ``rust`` runs it in this process (:func:`opentide.cli.rust.run_in_process`);
+#: ``compare`` runs this command line as a child, next to Python's.
 RUST_CLI: tuple[str, ...] = (sys.executable, "-m", "opentide.cli.rust")
 
 #: Command paths (``("validate",)``, ``("generate", "docs")``) that have a Rust
@@ -387,6 +437,14 @@ def dispatch(cli_ctx: CliContext, click_ctx: _click.Context) -> None:
         os.environ[ENGINE_ENV] = PYTHON
         return
     if engine == RUST:
+        if rust.launch == RUST_CLI:
+            from opentide.analysis import EngineUnavailableError, engine
+
+            try:
+                engine()
+            except EngineUnavailableError as exc:
+                # The command line is compiled into the engine, which does not load.
+                _fail(cli_ctx, path, str(exc), code=exc.code, exit_code=1)
         raise SystemExit(_run_rust(rust, args))
     _compare(cli_ctx, path, args, rust)
 
@@ -394,21 +452,31 @@ def dispatch(cli_ctx: CliContext, click_ctx: _click.Context) -> None:
 def _run_rust(rust: RustCommand, args: Sequence[str]) -> int:
     """Run the Rust implementation in this terminal; its exit code, a signal as 128 + n.
 
-    Ctrl-C reaches the child, which reports it; this process waits for it
-    instead of printing a second report.
+    The Rust command line compiled into this package (:data:`RUST_CLI`) runs
+    in this process, as the console script runs it (:mod:`opentide.cli.launch`),
+    with the environment this one started with: Ctrl-C and signals reach the
+    command itself. Another launch (a stand-in a test registers), or streams
+    that live in memory, run as a child: Ctrl-C reaches the child, which
+    reports it, and this process waits for it instead of printing a second
+    report.
     """
     import signal
+    import subprocess
 
+    # A stream this process replaced in memory (an embedding host's capture,
+    # Click's test runner) has no file descriptor for the child to inherit:
+    # the child's bytes are passed through it, or they would bypass it.
+    own_out, own_err, own_in = (_descriptor(s) for s in (sys.stdout, sys.stderr, sys.stdin))
+    if rust.launch == RUST_CLI and None not in (own_out, own_err, own_in):
+        from opentide.cli.rust import run_in_process
+
+        return run_in_process(args, _environment(RUST))
     try:
         # A handler that does nothing, not SIG_IGN: an ignored signal stays
         # ignored across exec, and the child could not be interrupted at all.
         previous = signal.signal(signal.SIGINT, lambda *_: None)
     except ValueError:  # not the main thread: nothing to hand Ctrl-C over
         previous = None
-    # A stream this process replaced in memory (an embedding host's capture,
-    # Click's test runner) has no file descriptor for the child to inherit:
-    # the child's bytes are passed through it, or they would bypass it.
-    own_out, own_err, own_in = (_descriptor(s) for s in (sys.stdout, sys.stderr, sys.stdin))
     given = None if own_in is not None else _read_all(sys.stdin)
     try:
         child = subprocess.run(
@@ -495,15 +563,19 @@ def _environment(engine: str, base: Mapping[str, str] | None = None) -> dict[str
     return env
 
 
-@dataclass(frozen=True)
 class _Copy:
     """One implementation's copy of the workspace."""
 
-    original: Path
-    root: Path
+    __slots__ = ("original", "root")
+
+    def __init__(self, original: Path, root: Path) -> None:
+        self.original = original
+        self.root = root
 
     def map_path(self, value: str) -> str:
         """*value* inside the copy when it is an absolute path inside the workspace."""
+        from pathlib import Path
+
         if not value or not os.path.isabs(value):
             return value
         try:
@@ -526,6 +598,8 @@ def _map_args(args: Sequence[str], copy: _Copy) -> list[str]:
     Relative paths resolve against the working directory, which the run takes
     inside the copy when it is inside the workspace.
     """
+    from pathlib import Path
+
     mapped: list[str] = []
     tokens = iter(args)
     for token in tokens:
@@ -553,6 +627,8 @@ _Stamp = tuple[int, int, int]
 
 def _walk(root: Path) -> Iterator[tuple[str, Path, os.stat_result]]:
     """Every file under *root* (symbolic links as themselves), with its relative path."""
+    from pathlib import Path
+
     for folder, folders, files in os.walk(root, followlinks=False):
         folders.sort()
         base = Path(folder)
@@ -643,6 +719,8 @@ def _special(folder: str, names: list[str]) -> list[str]:
 
 def _copy_workspace(workspace: Path, root: Path) -> _Copy:
     """Copy *workspace* to *root*; absolute links into it point into the copy instead."""
+    import shutil
+
     root.parent.mkdir(parents=True)
     shutil.copytree(workspace, root, symlinks=True, ignore=_special)
     copy = _Copy(original=workspace, root=root)
@@ -657,12 +735,14 @@ def _copy_workspace(workspace: Path, root: Path) -> _Copy:
     return copy
 
 
-@dataclass(frozen=True)
 class _Side:
     """What one implementation did, and the copy it did it in."""
 
-    run: CompareRun
-    copy: _Copy
+    __slots__ = ("copy", "run")
+
+    def __init__(self, run: CompareRun, copy: _Copy) -> None:
+        self.run = run
+        self.copy = copy
 
 
 def _run_side(
@@ -677,6 +757,10 @@ def _run_side(
 
     *extra_env* is added to its environment as is (no path in it is mapped).
     """
+    import subprocess
+    from datetime import datetime, timedelta, timezone
+    from pathlib import Path
+
     from opentide.cli.ui.mode import OUTPUT_ENV_VALUES, get_mode, json_indent
 
     copy = _copy_workspace(workspace, scratch / engine / workspace.name)
@@ -723,6 +807,8 @@ def _outside(args: Sequence[str], workspace: Path) -> str | None:
     An absolute path, or a relative one that climbs with ``..``: the run's
     working directory is inside the workspace, so only those can leave it.
     """
+    from pathlib import Path
+
     for token in args:
         name, separator, value = token.partition("=")
         candidate = value if separator and name.startswith("-") else token
@@ -747,6 +833,9 @@ def _compare(cli_ctx: CliContext, path: str, args: Sequence[str], rust: RustComm
     workspace's, and the files it changed are changed in the workspace.
     """
     import json
+    import shutil
+    import tempfile
+    from pathlib import Path
 
     from opentide.analysis import EngineUnavailableError, compare_runs
     from opentide.cli.ui.contract import (
@@ -882,6 +971,8 @@ def _known_texts(workspace: Path) -> list[str]:
 
 def _git_version() -> str | None:
     """``git --version``'s number, as the goldens normalise it for ``host-git``."""
+    import subprocess
+
     try:
         out = subprocess.run(
             ["git", "--version"], capture_output=True, text=True, check=False, timeout=10
@@ -969,6 +1060,7 @@ def _write_report(
 ) -> str:
     """Write the diff report, redacted; its path, or why it could not be written."""
     import json
+    from datetime import datetime, timezone
 
     from opentide.cli.ui.crash import workspace_redactor
 

@@ -152,6 +152,14 @@ baseline_s = 0.136
 baseline_rss_mib = 36.3
 target_s = 0.03
 
+[commands.startup]
+label = "opentide --version (the console script's start)"
+# Plan D-3 and UC-3.8 (#830): `opentide --version` in 20 ms or less, through the
+# console script, opentide.cli.launch:main (UC-3.8b, #960). The rust engine runs it
+# (and explain, above, whose 30 ms target is the other startup budget) through the
+# launcher of `uv sync`; the oracle's start is not measured.
+target_s = 0.02
+
 [commands.lsp_first_diagnostics]
 label = "language server, first diagnostics"
 # Plan section 2: 0.7 to 3.0 s in the editor (vscode-extension, Python backend).

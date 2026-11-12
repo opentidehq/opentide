@@ -31,6 +31,35 @@ The CLI is `opentide-cli` (clap). Python's console script is `opentide = "openti
 - **Distribution.** GitHub Releases carry the `opentide` and `opentide-lsp` binaries with cargo-dist installers, checksums and attestations (plan §8). One tag publishes everything (UC-5.5).
 - **Startup.** The plan's target for a light command (`explain`) is 0.03 s or less, against 0.18 s today (plan §11).
 
+## Addendum: the console script's Python entry (UC-3.8b)
+
+2026-11-12. Decided in [#960](https://github.com/opentidehq/opentide/issues/960), in
+[#973](https://github.com/opentidehq/opentide/pull/973). The decision above stands: the command
+line is `opentide-cli`, run in-process from the Python package. Only how the console script
+reaches it changes.
+
+1. **The console script and `python -m opentide` are `opentide.cli.launch:main`**, a small
+   Python entry, not `opentide._native:main`. It imports nothing heavy (no Typer, no `typing`)
+   before it decides which implementation runs.
+2. **It calls `opentide._native:main` when the run needs the engine and the engine loads.**
+   A run that the environment and the root options alone give to Python (the default engine,
+   `--version`, `--help`) does not load it. `_native.main` hands the arguments back to
+   `opentide.cli.launch.run`, which runs a Rust command in the same process, with the GIL
+   released, and gives every other run to the Python CLI in the same process.
+3. **When the engine cannot be imported, the Python CLI answers every run.** The commands that
+   need the engine fail with `engine_unavailable`, `OPENTIDE_ENGINE=rust` runs included. This
+   keeps the rule in `AGENTS.md` ("Analysis engine"): a missing engine is `engine_unavailable`
+   and never takes the Python commands down. A console script inside the extension module could
+   not start at all without it.
+4. **Startup.** These figures come from `cargo xtask bench --engine rust --only startup,explain`,
+   10 runs per round over three rounds, on a shared 2.3 GHz Xeon (load average 3 to 6). They are
+   taken through `.venv/bin/opentide` with the engine in the `develop` profile:
+   - `opentide --version` (`startup`): 0.015 to 0.016 s, against the 0.020 s budget;
+   - `OPENTIDE_ENGINE=rust opentide --json explain vocab_unknown`: 0.022 to 0.026 s, against
+     0.030 s.
+
+   A bare `python -c pass` took 13 to 15 ms in the same environment.
+
 ## Evidence
 
 - Plan: [§1 Decisions](https://github.com/opentidehq/opentide/blob/docs/unified-core-plan/docs/internal/unified-core.md#1-decisions), [§2 Evidence](https://github.com/opentidehq/opentide/blob/docs/unified-core-plan/docs/internal/unified-core.md#2-evidence) (the launcher row), [§3 Invariants](https://github.com/opentidehq/opentide/blob/docs/unified-core-plan/docs/internal/unified-core.md#3-invariants), [§4 Target architecture](https://github.com/opentidehq/opentide/blob/docs/unified-core-plan/docs/internal/unified-core.md#4-target-architecture), [§6 Work plan](https://github.com/opentidehq/opentide/blob/docs/unified-core-plan/docs/internal/unified-core.md#6-work-plan) (Phase 3), [§8 Distribution](https://github.com/opentidehq/opentide/blob/docs/unified-core-plan/docs/internal/unified-core.md#8-distribution), [§11 Metrics](https://github.com/opentidehq/opentide/blob/docs/unified-core-plan/docs/internal/unified-core.md#11-metrics).
