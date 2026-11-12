@@ -14,7 +14,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ### Changed
 
-- **The analysis engine is language-server at the head of its Graylog work**, pinned by git revision until the release that ships it. Building opentide from source still needs Rust 1.95 or later.
+- **The analysis engine is [language-server 0.14.0](https://github.com/opentidehq/language-server/releases/tag/v0.14.0), from crates.io.** It adds the Graylog dialect of Lucene and checks Graylog blocks, so the editor, `opentide tui` and `opentide validate` agree on Graylog rules. Building opentide from source still needs Rust 1.95 or later.
 
 ### Fixed
 
