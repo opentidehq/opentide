@@ -43,7 +43,12 @@ class ObjectiveRenderer(ObjectRenderer):
         )
         page.add(
             section(
-                "ATT&CK techniques", common.attack_table(body.mitre_attack or [], self.formatter)
+                "ATT&CK techniques",
+                common.attack_table(
+                    body.mitre_attack or [],
+                    self.formatter,
+                    detections=common.technique_detections(self.links, body.mitre_attack or []),
+                ),
             )
         )
         page.add(self.coverage_section(objective.metadata.uuid, objective.name))

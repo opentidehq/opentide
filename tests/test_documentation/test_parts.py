@@ -33,6 +33,10 @@ from opentide.documentation.parts.threat import (
     assessment_table,
     chaining_table,
     cve_body,
+    cve_overview,
+    exploited_banner,
+    lookup_cves,
+    render_cves,
     surface_table,
 )
 from opentide.documentation.types import DocumentFlavor, DocumentRecord, DocumentScope
@@ -43,7 +47,14 @@ from opentide.loading.objective_loader import load_objective_from_dict
 from opentide.models.metadata import ObjectMetadata, ObjectReferences
 from opentide.models.rule import DetectionRule
 from opentide.models.threat import ThreatVector
-from opentide.vulnerability_lookup import CveSettings, VulnerabilityLookupError, VulnerabilityRecord
+from opentide.vulnerability_lookup import (
+    CveSettings,
+    CvssScore,
+    EpssScore,
+    VulnerabilityLookupError,
+    VulnerabilityRecord,
+    Weakness,
+)
 
 GITHUB = formatter_for(DocumentFlavor.github)
 
@@ -494,18 +505,7 @@ def test_render_cve_links_to_vulnerability_lookup() -> None:
     assert "CIRCL Vulnerability-Lookup" in rendered
 
 
-def test_render_cve_enriches_from_lookup_client() -> None:
-    formatter = formatter_for(DocumentFlavor.github)
-    client = MagicMock()
-    client.get.return_value = VulnerabilityRecord(
-        identifier="CVE-2024-3094",
-        title="Xz: malicious code in distributed source",
-        description="Malicious code was discovered in xz.",
-        published="2024-03-29",
-        severity="CRITICAL (10)",
-        aliases=("GHSA-rxwq-x6h5-x525",),
-        page_url="https://vulnerability.circl.lu/vuln/CVE-2024-3094",
-    )
+def _enriched(client: MagicMock, cves: list[str]) -> str:
     with (
         patch(
             "opentide.documentation.parts.threat.load_cve_settings",
@@ -513,13 +513,78 @@ def test_render_cve_enriches_from_lookup_client() -> None:
         ),
         patch("opentide.documentation.parts.threat.apply_cve_proxy_settings"),
     ):
-        rendered = cve_body(["CVE-2024-3094"], formatter, client=client, retrieve_details=True)
-    assert "| Identifier | Published | Severity | Summary |" in rendered
-    assert "Xz: malicious code" in rendered
-    assert "2024-03-29" in rendered
-    assert "CRITICAL (10)" in rendered
-    assert "GHSA-rxwq-x6h5-x525" in rendered
-    assert "https://vulnerability.circl.lu/vuln/CVE-2024-3094" in rendered
+        return cve_body(cves, GITHUB, client=client, retrieve_details=True)
+
+
+_CITRIX_BLEED = VulnerabilityRecord(
+    identifier="CVE-2023-4966",
+    title="Unauthenticated sensitive information disclosure",
+    published="2023-10-10",
+    severity="CRITICAL (9.4)",
+    aliases=("GHSA-2g42-2pwg-93cj",),
+    page_url="https://vulnerability.circl.lu/vuln/CVE-2023-4966",
+    cvss=CvssScore("3.1", 9.4, "CRITICAL", "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:L"),
+    weaknesses=(Weakness("CWE-119", "Improper Restriction of Operations"),),
+    affected=("Citrix NetScaler ADC", "Citrix NetScaler Gateway"),
+    exploitation="active",
+    kev_added="2023-10-18",
+)
+
+
+def test_render_cve_enriches_from_lookup_client() -> None:
+    client = MagicMock()
+    client.get.return_value = _CITRIX_BLEED
+    client.epss.return_value = EpssScore(0.94321, 0.99712, "2026-11-11")
+    rendered = _enriched(client, ["CVE-2023-4966"])
+    client.epss.assert_called_once_with("CVE-2023-4966")
+    assert "| Identifier | Severity | EPSS | Exploitation | Weakness | Published |" in rendered
+    row = next(line for line in rendered.splitlines() if line.startswith("| [CVE-2023-4966]"))
+    assert "[GHSA-2g42-2pwg-93cj](https://vulnerability.circl.lu/vuln/GHSA-2g42-2pwg-93cj)" in row
+    assert "| **9.4** CRITICAL<br>CVSS 3.1 |" in row
+    assert "| 94.3%<br>top 0.3% |" in row
+    assert "| **Known exploited**<br>CISA KEV, 2023-10-18 |" in row
+    assert (
+        "[CWE-119](https://cwe.mitre.org/data/definitions/119.html) "
+        "Improper Restriction of Operations" in row
+    )
+    assert row.endswith("| 2023-10-10 |")
+    assert (
+        "- **CVE-2023-4966**: Unauthenticated sensitive information disclosure. Affects Citrix "
+        "NetScaler ADC, Citrix NetScaler Gateway. Vector "
+        "`CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:L`." in rendered
+    )
+
+
+def test_cve_overview_and_banner_name_what_is_exploited() -> None:
+    client = MagicMock()
+    xz = VulnerabilityRecord("CVE-2024-3094", cvss=CvssScore("3.1", 10.0), exploitation="none")
+    client.get.side_effect = [_CITRIX_BLEED, xz]
+    client.epss.return_value = None
+    with (
+        patch(
+            "opentide.documentation.parts.threat.load_cve_settings",
+            return_value=CveSettings(retrieve_details=True),
+        ),
+        patch("opentide.documentation.parts.threat.apply_cve_proxy_settings"),
+    ):
+        findings = lookup_cves(["CVE-2023-4966", "CVE-2024-3094"], client=client)
+    assert cve_overview(findings) == "2 CVEs (highest CVSS 10.0, 1 known exploited)"
+    assert exploited_banner(findings, GITHUB) == (
+        "> [!WARNING]\n> `CVE-2023-4966` (CISA KEV since 2023-10-18) is known to be "
+        "exploited in the wild.\n\n"
+    )
+    assert "| - | None reported<br>CISA SSVC |" in render_cves(findings, GITHUB)
+    assert cve_overview(None) == ""
+    assert exploited_banner(None, GITHUB) == ""
+
+
+@pytest.mark.parametrize(
+    ("value", "shown"), [(0.99999, ">99.9%"), (0.0001, "<0.1%"), (0.4567, "45.7%")]
+)
+def test_epss_never_rounds_to_a_certainty(value: float, shown: str) -> None:
+    from opentide.documentation.parts.threat import _share
+
+    assert _share(value) == shown
 
 
 def test_render_cve_maps_gcve0_link_to_cve_page() -> None:
@@ -579,3 +644,62 @@ def test_render_cve_empty_returns_nothing() -> None:
     formatter = formatter_for(DocumentFlavor.github)
     assert cve_body([], formatter) == ""
     assert cve_body(None, formatter) == ""
+
+
+def test_attack_table_follows_the_matrix_and_names_detecting_rules() -> None:
+    from opentide.documentation.parts.common import attack_table
+
+    rendered = attack_table(
+        ["T1114.002", "T1589"],
+        GITHUB,
+        detections={"T1589": ["[Rule A](a.md)", "[Rule B](b.md)"], "T1114.002": []},
+    )
+    lines = rendered.splitlines()
+    assert lines[0] == "| Technique | Name | Tactics | Detected by | Summary |"
+    # Reconnaissance comes before Collection in the ATT&CK matrix.
+    assert lines[2].startswith("| [`T1589`]")
+    assert "| Reconnaissance | [Rule A](a.md)<br>[Rule B](b.md) |" in lines[2]
+    assert "| Collection | *No rule* |" in lines[3]
+
+
+def test_technique_detections_count_sub_techniques_but_not_siblings(
+    metadata: dict[str, Any],
+) -> None:
+    from opentide.documentation.parts.common import technique_detections
+
+    def rule(uuid: str, techniques: list[str]) -> DocumentRecord:
+        model = DetectionRule.from_yaml_dict(
+            {
+                "name": uuid,
+                "metadata": {**metadata, "uuid": uuid},
+                "description": "d",
+                "techniques": techniques,
+            }
+        )
+        return DocumentRecord(DocumentScope.rules, uuid, uuid, model)
+
+    catalog = DocumentationCatalog(
+        rules=[
+            rule("sub", ["T1550.004"]),
+            rule("sibling", ["T1550.001"]),
+            rule("other", ["T1059"]),
+        ],
+        objectives=[],
+        threats=[],
+    )
+    detections = technique_detections(_links(catalog), ["T1550", "T1550.004", "T1078"])
+    assert detections["T1550"] == ["[sub](sub.md)", "[sibling](sibling.md)"]
+    assert detections["T1550.004"] == ["[sub](sub.md)"]
+    assert detections["T1078"] == []
+
+
+def test_actors_show_their_attack_aliases(metadata: dict[str, Any]) -> None:
+    from opentide.documentation.vocabulary import actor_aliases
+
+    aliases = actor_aliases("att&ck::G0016")
+    assert "Cozy Bear" in aliases and "APT29" not in aliases
+    threat = _threat(metadata, actors=[{"name": "att&ck::G0016"}])
+    rendered = actors_table(threat.threat, GITHUB)
+    shown = ", ".join(aliases[:4])
+    assert f"<br>*also {shown} and {len(aliases) - 4} more*" in rendered
+    assert actor_aliases("misp::not-a-group") == []

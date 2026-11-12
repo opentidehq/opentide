@@ -14,7 +14,11 @@ import json
 from collections.abc import Sequence
 
 from opentide.documentation.context import DocumentationContext
-from opentide.documentation.diagram.builders import landscape_diagram, render_diagram
+from opentide.documentation.diagram.builders import (
+    killchain_coverage_diagram,
+    landscape_diagram,
+    render_diagram,
+)
 from opentide.documentation.facts.deployment import StatusDefinition
 from opentide.documentation.facts.platforms import platform_label
 from opentide.documentation.format.protocol import MarkdownFormatter
@@ -28,7 +32,14 @@ from opentide.documentation.markdown.page import GENERATED_NOTICE, Page, join, s
 from opentide.documentation.markdown.text import inline_code, join_lines, plural, table_cell
 from opentide.documentation.publish.writer import write_page
 from opentide.documentation.types import DocumentRecord, DocumentScope, PublishTarget
-from opentide.documentation.vocabulary import enrich, vocabulary_order
+from opentide.documentation.vocabulary import (
+    attack_tactics,
+    covers_technique,
+    enrich,
+    killchain_stage,
+    technique_tactics,
+    vocabulary_order,
+)
 from opentide.generation import framework as fw
 from opentide.generation.errors import rendering
 from opentide.models.deployment_enums import StatusStrategy
@@ -213,8 +224,14 @@ def render_index(
             parts.append(formatter.heading(2, "All rules"))
         parts.append(table(records))
     elif scope == DocumentScope.threats and any(_phases(record) for record in records):
+        stage = None
         for phase, group in _by_phase(records):
-            parts += [formatter.heading(2, phase or "No kill-chain phase"), table(group)]
+            phase_stage = killchain_stage(phase) if phase else ""
+            if phase_stage and phase_stage != stage:
+                parts.append(formatter.heading(2, phase_stage))
+                stage = phase_stage
+            level = 3 if phase_stage else 2
+            parts += [formatter.heading(level, phase or "No kill-chain phase"), table(group)]
     else:
         parts.append(table(records))
     parts.append(GENERATED_NOTICE)
@@ -357,7 +374,8 @@ def render_root_index(
             "Coverage",
             _coverage_summary(formatter, rules, objectives, threats),
             children=[
-                section("Kill-chain coverage", _killchain_coverage(formatter, objectives, threats))
+                section("Kill-chain coverage", _killchain_coverage(formatter, objectives, threats)),
+                section("ATT&CK coverage", _attack_coverage(formatter, rules, threats)),
             ],
         )
     )
@@ -435,6 +453,54 @@ def _status_colours(definitions: Sequence[StatusDefinition]) -> dict[str, str]:
     return colours
 
 
+def _attack_coverage(
+    formatter: MarkdownFormatter,
+    rules: Sequence[DocumentRecord],
+    threats: Sequence[DocumentRecord],
+) -> str:
+    """Per ATT&CK tactic: the techniques threat vectors use, and those rules detect."""
+    used: dict[str, None] = {}
+    for record in threats:
+        if isinstance(record.model, ThreatVector):
+            used.update(dict.fromkeys(record.model.threat.mitre_attack))
+    detected = {
+        str(technique)
+        for record in rules
+        for technique in getattr(record.model, "techniques", None) or ()
+    }
+    by_tactic: dict[str, list[str]] = {}
+    for technique in used:
+        for tactic in technique_tactics(technique) or ["Unmapped"]:
+            by_tactic.setdefault(tactic, []).append(technique)
+    if not by_tactic:
+        return ""
+    order = {tactic: index for index, tactic in enumerate(attack_tactics())}
+    rows: list[list[str]] = []
+    for tactic in sorted(by_tactic, key=lambda name: (order.get(name, len(order)), name)):
+        techniques = sorted(by_tactic[tactic])
+        gaps = [t for t in techniques if not any(covers_technique(d, t) for d in detected)]
+        done = len(techniques) - len(gaps)
+        rows.append(
+            [
+                tactic,
+                str(len(techniques)),
+                str(done),
+                f"{round(100 * done / len(techniques))}%",
+                ", ".join(inline_code(t) for t in gaps) or "-",
+            ]
+        )
+    return formatter.table(
+        [
+            "Tactic",
+            "Techniques in threat vectors",
+            "Detected by a rule",
+            "Coverage",
+            "Not detected",
+        ],
+        rows,
+    )
+
+
 def _killchain_coverage(
     formatter: MarkdownFormatter,
     objectives: Sequence[DocumentRecord],
@@ -442,16 +508,23 @@ def _killchain_coverage(
 ) -> str:
     """Per kill-chain phase: its threat vectors, and how many an objective addresses."""
     addressed = _addressed(objectives)
+    flags: dict[str, list[bool]] = {}
+    for record in threats:
+        for phase in _phases(record):
+            flags.setdefault(phase, []).append(record.uuid in addressed)
     rows: list[list[str]] = []
     for phase, group in _by_phase(threats):
         done = sum(1 for record in group if record.uuid in addressed)
         share = f"{round(100 * done / len(group))}%" if group else "-"
-        rows.append([phase or "*No phase*", str(len(group)), str(done), share])
+        stage = killchain_stage(phase) if phase else ""
+        rows.append([phase or "*No phase*", stage or "-", str(len(group)), str(done), share])
     if not rows:
         return ""
-    return formatter.table(
-        ["Kill-chain phase", "Threat vectors", "Addressed by an objective", "Coverage"], rows
+    table = formatter.table(
+        ["Kill-chain phase", "Stage", "Threat vectors", "Addressed by an objective", "Coverage"],
+        rows,
     )
+    return join([render_diagram(formatter, killchain_coverage_diagram(flags)), table])
 
 
 def _status_matrix(ctx: DocumentationContext, records: Sequence[DocumentRecord]) -> str:

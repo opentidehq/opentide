@@ -139,7 +139,7 @@ Every object page has the same layout:
 | Objective | Priority (the author's text, not looked up in `criticality::1.0`), type, composition, investment, threats addressed, signal and rule counts, platforms, ATT&CK | Composition, Threats addressed, Signals (a summary table, then one subsection per signal), ATT&CK techniques, Detection coverage, References, Metadata |
 | Threat | Criticality, severity, kill chain, surface, actors, ATT&CK techniques, detection coverage | Assessment (criticality, terrain, kill-chain position, assessment table), Surface, Actors, ATT&CK techniques, CVE, Chaining (with Chaining relations), Detection coverage, References, Metadata |
 
-A threat no detection objective addresses opens with a warning, and so does an objective with a signal no rule implements. A threat's kill-chain position shows its phase among its neighbours (`Kill chain (phase 13 of 18): … Execution → **Credential Access** → Lateral Movement …`). An objective's signal summary gives each signal's severity, methodology, effort, implementing rules and their platforms, and links to the signal's subsection. ATT&CK tables give each technique's tactics and the first sentence of its description, without citation markers. Signals are not separate pages: rule pages link to the signal's heading on its objective, which on the `github` flavor uses GitHub's own heading anchor.
+A threat no detection objective addresses opens with a warning, and so does an objective with a signal no rule implements. A threat's kill-chain position shows its phase and stage among its neighbours (`Kill chain (phase 13 of 18, stage Network Propagation): … Execution → **Credential Access** → Lateral Movement …`), then a kill-chain map: the Unified Kill Chain's three stages (Initial Foothold, Network Propagation, Action on Objectives), each phase in order, the threat's own phase highlighted and the phases of the threats chained to it captioned with their names. ATT&CK tables follow the matrix's tactic order; on threat and objective pages a Detected by column names the catalogue's rules that detect each technique (a rule on a sub-technique detects its parent) and flags a technique no rule detects. An ATT&CK group's aliases are listed under its name in the Actors table. An objective's signal summary gives each signal's severity, methodology, effort, implementing rules and their platforms, and links to the signal's subsection. ATT&CK tables give each technique's tactics and the first sentence of its description, without citation markers. Signals are not separate pages: rule pages link to the signal's heading on its objective, which on the `github` flavor uses GitHub's own heading anchor.
 
 #### Deployment
 
@@ -172,6 +172,7 @@ Diagrams are Mermaid flowcharts drawn left to right:
 
 - **Detection coverage** (every page): threat vectors, detection objectives, signals and detection rules, each kind in its own lane. A rule page draws its own lineage: its threats, objective and signal, not the objective's other rules.
 - **Deployment map** (rule pages): see [Deployment](#deployment).
+- **Kill-chain coverage** (the root index): the same three-stage map, each phase coloured by how many of its threat vectors a detection objective addresses (green all, amber some, red none, grey no threat vector) and captioned `2 of 3 covered`.
 - **Threat landscape** (the root index): every threat vector of the catalogue in its kill-chain lane, linked by chaining relations, with the threats no detection objective addresses drawn dashed and captioned `not covered`. Left out above 60 threat vectors, where it is too dense to read. When an object has no coverage path, a **Relations** diagram of its direct neighbours takes its place, under that heading.
 - **Threat chaining** (threat pages): the threats chained to this one, inbound and outbound, in one lane per kill-chain phase, in kill-chain order. Each relation pair of `chaining_relations` is drawn one way, from its `from` side, so `B succeeds A` and `A preceeds B` are one arrow labelled `preceeds`. Sequence relations are solid lines, composition (`implements`, `implemented`) thick, support (`enabled`, `enabling`, `synergize`) dotted; `synergize` points both ways. The Chaining relations table lists the threat's own declarations with what each relation means.
 - **Related objects** (under each diagram): a table of linked objects, since GitHub does not honor Mermaid `click`. `relations_direction` controls which rows appear (`upstream`, `downstream`, or `both`).
@@ -210,7 +211,7 @@ relation_counts = true
 icons = false
 ```
 
-- `folder_index_pages`: write `README.md` index pages for `rules`/`objectives`/`threats` and root. Empty sections are still written, so the root index does not link to a missing file. Folder indexes show a rule's severity, platforms with their status and techniques; an objective's priority, signal and threat counts; a threat's criticality, kill chain and techniques. The rules index opens with rules per platform and status; the threat vectors index groups its threats by kill-chain phase, in kill-chain order. The root index (`Detection catalogue`) adds the threat landscape diagram, a pie chart of platform blocks by status, each slice coloured by its strategy (grey `INERT`, amber `PREVIEW`, blue `UNIVERSAL`, green `RELEASE`, red `DISABLEMENT` and `DELETION`), the same counts per platform, coverage (threat vectors addressed by an objective, objectives and signals implemented by a rule, ATT&CK techniques detected by rules) and coverage per kill-chain phase.
+- `folder_index_pages`: write `README.md` index pages for `rules`/`objectives`/`threats` and root. Empty sections are still written, so the root index does not link to a missing file. Folder indexes show a rule's severity, platforms with their status and techniques; an objective's priority, signal and threat counts; a threat's criticality, kill chain and techniques. The rules index opens with rules per platform and status; the threat vectors index groups its threats by kill-chain phase, in kill-chain order. The root index (`Detection catalogue`) adds the threat landscape diagram, a pie chart of platform blocks by status, each slice coloured by its strategy (grey `INERT`, amber `PREVIEW`, blue `UNIVERSAL`, green `RELEASE`, red `DISABLEMENT` and `DELETION`), the same counts per platform, coverage (threat vectors addressed by an objective, objectives and signals implemented by a rule, ATT&CK techniques detected by rules) coverage per kill-chain phase (with its stage), and ATT&CK coverage per tactic: the techniques threat vectors use, how many a rule detects, and those none does. The threat vectors index is grouped by kill-chain stage, then phase.
 - `index.relation_counts`: include relation counts (or object counts on root index table).
 - `index.icons`: prefix section/object labels with emoji shortcodes. Off by default; pages carry no emoji otherwise.
 
@@ -220,8 +221,20 @@ CVE sections on threat pages are controlled by the same file:
 [cve]
 base_url = "https://vulnerability.circl.lu"
 default_db_link = "https://vulnerability.circl.lu/vuln/"
-retrieve_details = true  # fetch title, published date, severity, aliases
+retrieve_details = true  # fetch severity, EPSS, exploitation, weakness, affected products
 ```
+
+With `retrieve_details`, each CVE row gives, from Vulnerability-Lookup:
+
+| Column | From |
+|--------|------|
+| Severity | The newest CVSS base score and version a CNA or ADP container carries |
+| EPSS | FIRST's probability of exploitation in the next 30 days, and the share of CVEs scoring higher (`GET /api/epss/{cve}`, one call per CVE; a GHSA uses its CVE alias) |
+| Exploitation | `Known exploited` with the date CISA added it to its Known Exploited Vulnerabilities catalog, else CISA's SSVC decision (`Active`, `Proof of concept`, `None reported`) |
+| Weakness | Each CWE, linked to MITRE's definition |
+| Published | The record's publication date |
+
+A line per CVE adds its title, up to four affected products and the CVSS vector. The threat's overview counts its CVEs with the highest CVSS score and how many are known exploited, and a warning names each CVE exploited in the wild. A lookup that fails leaves the identifier linked and says so under the table; generation does not fail.
 
 Identifiers always link to Vulnerability-Lookup (`/vuln/{id}`). CVE, GHSA, and GCVE identifiers are accepted. GNA 0 GCVE ids map to the reserved CVE form (`GCVE-0-2024-3094` → `CVE-2024-3094`) for both API lookup and page links. Legacy NVD `default_db_link` values from older configs are remapped to CIRCL. Set `retrieve_details = false` to emit links only (no API calls).
 

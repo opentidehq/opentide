@@ -12,9 +12,18 @@ and the legend, so a plain dialect loses colour, not meaning.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from itertools import pairwise
 from typing import Literal
 
-from opentide.documentation.diagram.model import Diagram, Lane, Link, LinkStyle, Node, NodeKind
+from opentide.documentation.diagram.model import (
+    Diagram,
+    Lane,
+    Link,
+    LinkStyle,
+    Node,
+    NodeKind,
+    Tone,
+)
 from opentide.documentation.diagram.sanitize import edge_label, node_label
 
 
@@ -74,6 +83,19 @@ KIND_STYLES: dict[NodeKind, KindStyle] = {
     NodeKind.tenant: KindStyle(
         "ten", "[[", "]]", "subroutine box", "tenant", "fill:#f4f3ff,stroke:#5925dc,color:#21125a"
     ),
+    NodeKind.phase: KindStyle(
+        "kc", "([", "])", "stadium", "kill-chain phase", "fill:#f9fafb,stroke:#d0d5dd,color:#475467"
+    ),
+}
+
+#: Each tone's ``classDef`` and the colour the legend names it by.
+TONE_STYLES: dict[Tone, tuple[str, str]] = {
+    Tone.covered: ("fill:#ecfdf3,stroke:#079455,color:#053321", "green"),
+    Tone.partial: ("fill:#fffaeb,stroke:#dc6803,color:#4e1d09", "amber"),
+    Tone.uncovered: ("fill:#fef3f2,stroke:#d92d20,color:#55160c", "red"),
+    Tone.idle: ("fill:#f9fafb,stroke:#d0d5dd,color:#667085", "grey"),
+    Tone.current: ("fill:#eff8ff,stroke:#1570ef,color:#102a56,stroke-width:3px", "blue"),
+    Tone.related: ("fill:#f5faff,stroke:#84caff,color:#194185", "light blue"),
 }
 
 _FOCUS_CSS = "stroke-width:3px"
@@ -106,6 +128,7 @@ def render_mermaid(diagram: Diagram, dialect: MermaidDialect) -> str:
     placed: set[str] = set()
     lanes = [lane for lane in diagram.lanes if any(key in diagram.nodes for key in lane.members)]
     lane_ids: list[str] = []
+    lane_members: list[list[Node]] = []
     for index, lane in enumerate(lanes, start=1):
         members = _lane_members(diagram, lane, placed)
         if not members:
@@ -114,6 +137,8 @@ def render_mermaid(diagram: Diagram, dialect: MermaidDialect) -> str:
             lane_id = f"lane{index}"
             lane_ids.append(lane_id)
             lines.append(f'    subgraph {lane_id}["{node_label(lane.title, width=0)}"]')
+            if lane.direction:
+                lines.append(f"        direction {lane.direction}")
             lines.extend(f"        {_node(node, ids)}" for node in members)
             lines.append("    end")
         else:
@@ -122,11 +147,18 @@ def render_mermaid(diagram: Diagram, dialect: MermaidDialect) -> str:
                     node = replace(node, caption=lane.title)
                 lines.append(f"    {_node(node, ids)}")
         placed.update(node.key for node in members)
+        lane_members.append(members)
 
     lines.extend(
         f"    {_node(node, ids)}" for node in diagram.nodes.values() if node.key not in placed
     )
     lines.extend(f"    {_link(link, ids)}" for link in diagram.links)
+    if diagram.chain_lanes and dialect.lanes and len(lane_ids) > 1:
+        lines.append(f"    {' --> '.join(lane_ids)}")
+    elif diagram.chain_lanes:
+        # No lanes to link: the last member of each lane leads to the next lane's first.
+        for previous, following in pairwise(lane_members):
+            lines.append(f"    {ids[previous[-1].key]} --> {ids[following[0].key]}")
 
     if dialect.styles:
         lines.extend(_style_lines(diagram, ids, lane_ids))
@@ -148,6 +180,13 @@ def legend(diagram: Diagram, dialect: MermaidDialect) -> str:
     ]
     if lines:
         parts.append(f"*Lines:* {'; '.join(lines)}.")
+    tones = [
+        f"{TONE_STYLES[tone][1]} = {diagram.tone_legend[tone]}"
+        for tone in diagram.tones()
+        if diagram.tone_legend.get(tone)
+    ]
+    if dialect.styles and tones:
+        parts.append(f"*Colours:* {'; '.join(tones)}.")
     return " ".join(parts)
 
 
@@ -203,6 +242,10 @@ def _style_lines(diagram: Diagram, ids: dict[str, str], lane_ids: list[str]) -> 
         lines.append(f"    class {','.join(members)} {kind.value}")
     if focus:
         lines.append(f"    class {','.join(focus)} focus")
+    for tone in diagram.tones():
+        members = [ids[node.key] for node in diagram.nodes.values() if node.tone is tone]
+        lines.append(f"    classDef {tone.value} {TONE_STYLES[tone][0]}")
+        lines.append(f"    class {','.join(members)} {tone.value}")
     gaps = [ids[node.key] for node in diagram.nodes.values() if node.gap]
     if gaps:
         lines.append(f"    classDef gap {_GAP_CSS}")

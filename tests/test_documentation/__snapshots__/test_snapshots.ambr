@@ -341,7 +341,67 @@
   
   **Terrain:** Cloud identity and Azure account inventory telemetry.
   
-  **Kill chain** (phase 1 of 18): **Reconnaissance** → Weaponization → Delivery …
+  **Kill chain** (phase 1 of 18, stage Initial Foothold): **Reconnaissance** → Weaponization → Delivery …
+  
+  ```mermaid
+  flowchart TB
+      accTitle: Kill-chain position
+      accDescr: The threat's own phase, and the phases of the threats chained to it.
+      subgraph lane1["Initial Foothold"]
+          direction LR
+          kc1(["Reconnaissance<br>this threat"])
+          kc2(["Weaponization"])
+          kc3(["Delivery"])
+          kc4(["Social Engineering"])
+          kc5(["Exploitation"])
+          kc6(["Persistence"])
+          kc7(["Defense Evasion"])
+          kc8(["Command & Control"])
+      end
+      subgraph lane2["Network Propagation"]
+          direction LR
+          kc9(["Pivoting"])
+          kc10(["Discovery"])
+          kc11(["Privilege Escalation"])
+          kc12(["Execution"])
+          kc13(["Credential Access"])
+          kc14(["Lateral Movement"])
+      end
+      subgraph lane3["Action on Objectives"]
+          direction LR
+          kc15(["Collection"])
+          kc16(["Exfiltration"])
+          kc17(["Impact"])
+          kc18(["Objectives"])
+      end
+      kc1 --> kc2
+      kc2 --> kc3
+      kc3 --> kc4
+      kc4 --> kc5
+      kc5 --> kc6
+      kc6 --> kc7
+      kc7 --> kc8
+      kc9 --> kc10
+      kc10 --> kc11
+      kc11 --> kc12
+      kc12 --> kc13
+      kc13 --> kc14
+      kc15 --> kc16
+      kc16 --> kc17
+      kc17 --> kc18
+      lane1 --> lane2 --> lane3
+      classDef phase fill:#f9fafb,stroke:#d0d5dd,color:#475467
+      classDef focus stroke-width:3px
+      class kc1,kc2,kc3,kc4,kc5,kc6,kc7,kc8,kc9,kc10,kc11,kc12,kc13,kc14,kc15,kc16,kc17,kc18 phase
+      class kc1 focus
+      classDef current fill:#eff8ff,stroke:#1570ef,color:#102a56,stroke-width:3px
+      class kc1 current
+      style lane1 fill:transparent,stroke:#98a2b3,stroke-dasharray:4 4
+      style lane2 fill:transparent,stroke:#98a2b3,stroke-dasharray:4 4
+      style lane3 fill:transparent,stroke:#98a2b3,stroke-dasharray:4 4
+  ```
+  
+  *Shapes:* stadium = kill-chain phase; bold outline = this page. *Colours:* blue = this threat vector.
   
   | Dimension | Assessment | Description |
   | --- | --- | --- |
@@ -361,13 +421,13 @@
   
   | Actor | ID | Source | Description |
   | --- | --- | --- | --- |
-  | [[Enterprise] APT-C-23](https://attack.mitre.org/groups/G1028) | `att&ck::G1028` | att&ck | [APT-C-23](https://attack.mitre.org/groups/G1028) is a threat group that has been active since at least 2014. |
+  | [[Enterprise] APT-C-23](https://attack.mitre.org/groups/G1028)<br>*also Mantis, Arid Viper, Desert Falcon, TAG-63 and 3 more* | `att&ck::G1028` | att&ck | [APT-C-23](https://attack.mitre.org/groups/G1028) is a threat group that has been active since at least 2014. |
   
   ## ATT&CK techniques
   
-  | Technique | Name | Tactics | Summary |
-  | --- | --- | --- | --- |
-  | [`T1589`](https://attack.mitre.org/techniques/T1589) | Gather Victim Identity Information | Reconnaissance | Adversaries may gather information about the victim's identity that can be used during targeting. |
+  | Technique | Name | Tactics | Detected by | Summary |
+  | --- | --- | --- | --- | --- |
+  | [`T1589`](https://attack.mitre.org/techniques/T1589) | Gather Victim Identity Information | Reconnaissance | [Shai-Hulud Sentinel Rule](../rules/shai-hulud-sentinel-rule.md) | Adversaries may gather information about the victim's identity that can be used during targeting. |
   
   ## Chaining
   

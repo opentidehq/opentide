@@ -126,3 +126,75 @@ def _first_text(value: Any) -> str:
     if isinstance(value, (list, tuple)) and value and isinstance(value[0], str):
         return value[0]
     return ""
+
+
+def killchain_stages() -> list[tuple[str, list[str]]]:
+    """The kill chain's stages in order, each with its phases in order.
+
+    The Unified Kill Chain groups its 18 phases into Initial Foothold, Network
+    Propagation and Action on Objectives (each entry's ``tide.vocab.stages``).
+    A phase without a stage gets a group of its own name, so none is lost.
+    """
+    from opentide.generation.framework import VOCAB_INDEX
+
+    if "killchain" not in VOCAB_INDEX:
+        return []
+    vocabulary = VOCAB_INDEX["killchain"]
+    declared = [
+        str(stage.get("name"))
+        for stage in (vocabulary.metadata.stages or [])
+        if isinstance(stage, dict) and stage.get("name")
+    ]
+    groups: dict[str, list[str]] = {name: [] for name in declared}
+    for key, entry in vocabulary.entries.items():
+        stage = _first_text(entry.get("tide.vocab.stages")) or key
+        groups.setdefault(stage, []).append(key)
+    return [(stage, phases) for stage, phases in groups.items() if phases]
+
+
+def killchain_stage(phase: str) -> str:
+    """The stage *phase* belongs to, or an empty string."""
+    for stage, phases in killchain_stages():
+        if phase in phases:
+            return stage
+    return ""
+
+
+def attack_tactics() -> list[str]:
+    """ATT&CK's tactics in matrix order, as the vocabulary's release names them."""
+    from opentide.generation.framework import VOCAB_INDEX
+
+    if "att&ck" not in VOCAB_INDEX:
+        return []
+    stages = VOCAB_INDEX["att&ck"].metadata.stages or []
+    return [
+        str(stage.get("name")) for stage in stages if isinstance(stage, dict) and stage.get("name")
+    ]
+
+
+def technique_tactics(technique: str) -> list[str]:
+    """The tactics a technique serves, in matrix order."""
+    entry = enrich_technique(technique)
+    raw = entry.raw.get("tide.vocab.stages") if entry.raw else None
+    tactics = [raw] if isinstance(raw, str) else [str(item) for item in raw or () if item]
+    order = {tactic: index for index, tactic in enumerate(attack_tactics())}
+    return sorted(dict.fromkeys(tactics), key=lambda tactic: order.get(tactic, len(order)))
+
+
+def covers_technique(detected: str, wanted: str) -> bool:
+    """Whether detecting *detected* detects *wanted*: the same technique, or one of its subs."""
+    return detected == wanted or detected.startswith(f"{wanted}.")
+
+
+def actor_aliases(actor: str) -> list[str]:
+    """Other names of an ATT&CK group (``att&ck::G0016`` is also Cozy Bear, Midnight Blizzard)."""
+    from opentide.generation.framework import VOCAB_INDEX
+
+    group_id = actor.split("::")[-1]
+    groups = VOCAB_INDEX.get("att&ck.groups")
+    entry = groups.entries.get(group_id) if groups is not None else None
+    raw = entry.get("alias") if entry is not None else None
+    if not isinstance(raw, (list, tuple)):
+        return []
+    name = _as_text(entry.get("name")) if entry is not None else ""
+    return [str(alias) for alias in raw if alias and str(alias) != name]

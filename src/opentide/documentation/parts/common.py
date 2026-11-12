@@ -8,7 +8,7 @@ left out.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Literal
 
@@ -20,10 +20,16 @@ from opentide.documentation.markdown.text import (
     first_sentence,
     inline_code,
     join_lines,
-    stringify,
     table_cell,
 )
-from opentide.documentation.vocabulary import EnrichedEntry, enrich, enrich_technique
+from opentide.documentation.vocabulary import (
+    EnrichedEntry,
+    attack_tactics,
+    covers_technique,
+    enrich,
+    enrich_technique,
+    technique_tactics,
+)
 from opentide.models.metadata import ObjectMetadata, ObjectReferences
 
 RelationsDirection = Literal["upstream", "downstream", "both"]
@@ -117,23 +123,57 @@ def reference_value(value: str, formatter: MarkdownFormatter) -> str:
     return table_cell(value)
 
 
-def attack_table(techniques: Iterable[str], formatter: MarkdownFormatter) -> str:
-    """ATT&CK techniques with their tactics and the opening sentence of their description."""
+def attack_table(
+    techniques: Iterable[str],
+    formatter: MarkdownFormatter,
+    *,
+    detections: Mapping[str, Sequence[str]] | None = None,
+) -> str:
+    """ATT&CK techniques in matrix order, with their tactics and opening sentence.
+
+    With *detections* (technique to the rule links that detect it), a
+    Detected by column names them, or flags a technique no rule detects.
+    """
+    order = {tactic: index for index, tactic in enumerate(attack_tactics())}
+
+    def position(technique: str) -> tuple[int, str]:
+        tactics = technique_tactics(technique)
+        return (order.get(tactics[0], len(order)) if tactics else len(order), technique)
+
     rows: list[list[str]] = []
-    for technique in dict.fromkeys(techniques):
+    for technique in sorted(dict.fromkeys(techniques), key=position):
         entry = enrich_technique(technique)
-        tactics = stringify(entry.raw.get("tide.vocab.stages")) if entry.raw else ""
-        rows.append(
-            [
-                entry_link(entry, technique, formatter, label=inline_code(technique)),
-                table_cell(entry.label if entry.label != technique else ""),
-                table_cell(tactics),
-                table_cell(first_sentence(entry.description)),
-            ]
-        )
+        row = [
+            entry_link(entry, technique, formatter, label=inline_code(technique)),
+            table_cell(entry.label if entry.label != technique else ""),
+            table_cell(", ".join(technique_tactics(technique))),
+        ]
+        if detections is not None:
+            rules = detections.get(technique) or ()
+            row.append(join_lines(rules) if rules else "*No rule*")
+        row.append(table_cell(first_sentence(entry.description)))
+        rows.append(row)
     if not rows:
         return ""
-    return formatter.table(["Technique", "Name", "Tactics", "Summary"], rows)
+    headers = ["Technique", "Name", "Tactics"]
+    if detections is not None:
+        headers.append("Detected by")
+    return formatter.table([*headers, "Summary"], rows)
+
+
+def technique_detections(links: Links, techniques: Iterable[str]) -> dict[str, list[str]]:
+    """Each technique to links to the catalogue's rules that detect it, or a sub-technique of it."""
+    detections: dict[str, list[str]] = {}
+    for technique in dict.fromkeys(techniques):
+        detections[technique] = [
+            links.to(record.uuid)
+            for record in links.catalog.rules
+            if any(
+                covers_technique(str(found), technique)
+                for found in getattr(record.model, "techniques", None) or ()
+            )
+        ]
+    return detections
 
 
 def technique_links(techniques: Iterable[str], formatter: MarkdownFormatter) -> str:

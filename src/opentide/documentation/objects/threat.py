@@ -32,7 +32,9 @@ class ThreatRenderer(ObjectRenderer):
         uuid = threat.metadata.uuid
         coverage = parts.coverage_counts(self.catalog.coverage_graph(uuid))
         page = self.page(threat.name, threat.metadata, body.description)
-        page.add_lead(parts.overview(threat, self.links, coverage=coverage))
+        cves = parts.lookup_cves(body.cve)
+        page.add_lead(parts.overview(threat, self.links, coverage=coverage, cves=cves))
+        page.add_lead(parts.exploited_banner(cves, self.formatter))
         if coverage[0] == 0:
             page.add_lead(
                 self.formatter.callout(
@@ -45,15 +47,23 @@ class ThreatRenderer(ObjectRenderer):
                 parts.criticality_body(threat, self.formatter),
                 parts.terrain_body(body, self.formatter),
                 parts.killchain_strip(body, self.formatter),
+                parts.killchain_map(threat, self.links),
                 parts.assessment_table(body, self.formatter),
             )
         )
         page.add(section("Surface", parts.surface_table(body, self.formatter)))
         page.add(section("Actors", parts.actors_table(body, self.formatter)))
         page.add(
-            section("ATT&CK techniques", common.attack_table(body.mitre_attack, self.formatter))
+            section(
+                "ATT&CK techniques",
+                common.attack_table(
+                    body.mitre_attack,
+                    self.formatter,
+                    detections=common.technique_detections(self.links, body.mitre_attack),
+                ),
+            )
         )
-        page.add(section("CVE", parts.cve_body(body.cve, self.formatter)))
+        page.add(section("CVE", parts.render_cves(cves, self.formatter)))
         page.add(self._chaining(threat))
         page.add(self.coverage_section(uuid, threat.name))
         page.add(self.references_section(threat.references))

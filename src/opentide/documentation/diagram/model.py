@@ -25,6 +25,24 @@ class NodeKind(str, Enum):
     rule = "rule"
     platform = "platform"
     tenant = "tenant"
+    phase = "phase"
+
+
+class Tone(str, Enum):
+    """A status colour laid over a node's kind: how well something is covered."""
+
+    #: Every threat in it is addressed by a detection objective.
+    covered = "covered"
+    #: Some are.
+    partial = "partial"
+    #: None are.
+    uncovered = "uncovered"
+    #: Nothing to cover: no threat vector sits there.
+    idle = "idle"
+    #: Where the page's own object sits.
+    current = "current"
+    #: Where an object related to the page's sits.
+    related = "related"
 
 
 class LinkStyle(str, Enum):
@@ -51,6 +69,8 @@ class Node:
     focus: bool = False
     #: A gap: drawn with a dashed outline (a threat no objective addresses).
     gap: bool = False
+    #: A status colour; the renderer draws it where the flavor takes styles.
+    tone: Tone | None = None
 
 
 @dataclass(frozen=True)
@@ -73,6 +93,8 @@ class Lane:
     #: Where lanes cannot be drawn, show the title under each member's label,
     #: for lanes that say something the shape does not (a kill-chain phase).
     caption_fallback: bool = False
+    #: Lay the lane's members out in this direction, whatever the diagram's.
+    direction: Direction | None = None
 
 
 @dataclass
@@ -87,6 +109,10 @@ class Diagram:
     lanes: list[Lane] = field(default_factory=list)
     #: Text for each link style the legend explains, when the style is drawn.
     link_legend: dict[LinkStyle, str] = field(default_factory=dict)
+    #: Text for each tone the legend explains, when a node has it.
+    tone_legend: dict[Tone, str] = field(default_factory=dict)
+    #: Lanes follow one another (a lane-to-lane arrow), as kill-chain stages do.
+    chain_lanes: bool = False
 
     def add_node(self, node: Node) -> None:
         """Add *node* unless its key is present; a focus node wins over a plain one."""
@@ -115,6 +141,11 @@ class Diagram:
         """The node kinds present, in :class:`NodeKind` order."""
         present = {node.kind for node in self.nodes.values()}
         return [kind for kind in NodeKind if kind in present]
+
+    def tones(self) -> list[Tone]:
+        """The tones present, in :class:`Tone` order."""
+        present = {node.tone for node in self.nodes.values() if node.tone is not None}
+        return [tone for tone in Tone if tone in present]
 
     def link_styles(self) -> list[LinkStyle]:
         """The link styles drawn, in :class:`LinkStyle` order."""

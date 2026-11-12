@@ -332,3 +332,90 @@ def test_root_index_summarises_status_per_platform_and_coverage(
     assert "| Objectives implemented by a rule | 1 of 1 (100%) |" in page
     assert "| Signals implemented by a rule | 1 of 1 (100%) |" in page
     assert "| ATT&CK techniques detected by rules | 1 |" in page
+
+
+def _threat_record(metadata: dict, uuid: str, phase: str, techniques: list[str]) -> DocumentRecord:
+    from opentide.models.threat import ThreatVector
+
+    model = ThreatVector.from_yaml_dict(
+        {
+            "name": f"Threat {uuid}",
+            "criticality": "High",
+            "metadata": {**metadata, "uuid": uuid, "schema": "threat::1.0"},
+            "threat": {
+                "description": "d",
+                "severity": "Moderate incident",
+                "impact": ["Data Breach"],
+                "leverage": ["Spoofing"],
+                "viability": "Likely",
+                "terrain": "t",
+                "surface": ["Entra ID"],
+                "mitre_attack": techniques,
+                "killchain": phase,
+            },
+        }
+    )
+    return DocumentRecord(DocumentScope.threats, uuid, model.name, model)
+
+
+def test_threat_index_groups_threats_by_stage_then_phase(tmp_path: Path, metadata: dict) -> None:
+    ctx = DocumentationContext(
+        flavor=DocumentFlavor.github,
+        output_dir=tmp_path,
+        formatter=formatter_for(DocumentFlavor.github),
+        index_relation_counts=False,
+    )
+    records = [
+        _threat_record(metadata, "t-collect", "Collection", ["T1114.002"]),
+        _threat_record(metadata, "t-deliver", "Delivery", ["T1566.002"]),
+    ]
+    page = render_index(
+        ctx.formatter, title="Threat vectors", folder="threats", records=records, ctx=ctx
+    )
+    headings = [line for line in page.splitlines() if line.startswith("#")]
+    assert headings == [
+        "# Threat vectors",
+        "## Initial Foothold",
+        "### Delivery",
+        "## Action on Objectives",
+        "### Collection",
+    ]
+
+
+def test_root_index_maps_kill_chain_and_attack_coverage(tmp_path: Path, metadata: dict) -> None:
+    from opentide.documentation.facts.deployment import StaticEnvironment
+    from opentide.documentation.publish.index import render_root_index
+    from opentide.models.rule import DetectionRule
+
+    rule = DetectionRule.from_yaml_dict(
+        {
+            "name": "r",
+            "metadata": {**metadata, "uuid": "r"},
+            "description": "d",
+            "techniques": ["T1114.002"],
+        }
+    )
+    ctx = DocumentationContext(
+        flavor=DocumentFlavor.github,
+        output_dir=tmp_path,
+        formatter=formatter_for(DocumentFlavor.github),
+        environment=StaticEnvironment(),
+    )
+    page = render_root_index(
+        ctx,
+        rules=[DocumentRecord(DocumentScope.rules, "r", "r", rule)],
+        objectives=[],
+        threats=[
+            _threat_record(metadata, "t-collect", "Collection", ["T1114.002"]),
+            _threat_record(metadata, "t-deliver", "Delivery", ["T1566.002", "T1114"]),
+        ],
+    )
+    assert "accTitle: Kill-chain coverage" in page
+    assert "| Delivery | Initial Foothold | 1 | 0 | 0% |" in page
+    assert (
+        "| Tactic | Techniques in threat vectors | Detected by a rule | Coverage | Not detected |"
+        in page
+    )
+    # T1114 is detected through its sub-technique T1114.002; the phishing technique is not.
+    assert "| Collection | 2 | 2 | 100% | - |" in page
+    assert "| Initial Access | 1 | 0 | 0% | `T1566.002` |" in page

@@ -258,3 +258,77 @@ def test_coverage_diagram_skips_missing_graphs(graph: object) -> None:
     catalog = MagicMock(spec=DocumentationCatalog)
     catalog.coverage_graph.return_value = graph
     assert coverage_diagram(catalog, "x", name="X") is None
+
+
+def test_killchain_stages_follow_the_unified_kill_chain() -> None:
+    from opentide.documentation.vocabulary import killchain_stage, killchain_stages
+
+    stages = killchain_stages()
+    assert [stage for stage, _ in stages] == [
+        "Initial Foothold",
+        "Network Propagation",
+        "Action on Objectives",
+    ]
+    assert stages[1][1][:2] == ["Pivoting", "Discovery"]
+    assert sum(len(phases) for _, phases in stages) == 18
+    assert killchain_stage("Credential Access") == "Network Propagation"
+    assert killchain_stage("Not a phase") == ""
+
+
+def test_killchain_coverage_colours_each_phase_by_its_threats() -> None:
+    from opentide.documentation.diagram.builders import killchain_coverage_diagram
+    from opentide.documentation.diagram.model import Tone
+
+    diagram = killchain_coverage_diagram(
+        {"Delivery": [False], "Collection": [True, False], "Persistence": [True]}
+    )
+    assert diagram is not None
+    nodes = {node.label: node for node in diagram.nodes.values()}
+    assert (nodes["Delivery"].tone, nodes["Delivery"].caption) == (Tone.uncovered, "0 of 1 covered")
+    assert (nodes["Collection"].tone, nodes["Collection"].caption) == (
+        Tone.partial,
+        "1 of 2 covered",
+    )
+    assert nodes["Persistence"].tone is Tone.covered
+    assert (nodes["Impact"].tone, nodes["Impact"].caption) == (Tone.idle, "")
+    assert [lane.direction for lane in diagram.lanes] == ["LR", "LR", "LR"]
+    rendered = render_diagram(GitHubFormatter(), diagram)
+    assert "flowchart TB" in rendered
+    assert "        direction LR" in rendered
+    assert "    lane1 --> lane2 --> lane3" in rendered
+    assert "classDef uncovered fill:#fef3f2" in rendered
+    assert "*Colours:* green = every threat vector addressed" in rendered
+    assert killchain_coverage_diagram({}) is None
+
+
+def test_azure_kill_chain_links_the_stages_through_their_phases() -> None:
+    from opentide.documentation.diagram.builders import killchain_coverage_diagram
+
+    diagram = killchain_coverage_diagram({"Delivery": [True]})
+    rendered = render_diagram(AzureDevOpsFormatter(), diagram)
+    assert "subgraph" not in rendered and "direction" not in rendered
+    # Command & Control ends the first stage, Pivoting opens the second.
+    assert "kc8 --> kc9" in rendered
+    assert "kc14 --> kc15" in rendered
+    assert "*Colours:*" not in rendered
+
+
+def test_threat_killchain_marks_its_phase_and_the_chained_threats() -> None:
+    from opentide.documentation.diagram.builders import threat_killchain_diagram
+    from opentide.documentation.diagram.model import Tone
+
+    diagram = threat_killchain_diagram(
+        ["Credential Access"],
+        related={"Delivery": ["AiTM phishing"], "Collection": ["Mail theft", "Export"]},
+    )
+    assert diagram is not None
+    nodes = {node.label: node for node in diagram.nodes.values()}
+    assert (nodes["Credential Access"].tone, nodes["Credential Access"].caption) == (
+        Tone.current,
+        "this threat",
+    )
+    assert nodes["Credential Access"].focus
+    assert (nodes["Delivery"].tone, nodes["Delivery"].caption) == (Tone.related, "AiTM phishing")
+    assert nodes["Collection"].caption == "Mail theft +1"
+    assert nodes["Impact"].tone is None
+    assert threat_killchain_diagram(["Unknown phase"], related={}) is None

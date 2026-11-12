@@ -15,15 +15,29 @@ Three diagrams, each answering one question:
 
 from __future__ import annotations
 
-from collections.abc import Sequence, Set
+from collections.abc import Mapping, Sequence, Set
+from dataclasses import replace
+from itertools import pairwise
 from typing import Literal
 
 from opentide.documentation.catalog import CoverageGraph, DocumentationCatalog
 from opentide.documentation.diagram.mermaid import legend, render_mermaid
-from opentide.documentation.diagram.model import Diagram, Lane, Link, LinkStyle, Node, NodeKind
+from opentide.documentation.diagram.model import (
+    Diagram,
+    Lane,
+    Link,
+    LinkStyle,
+    Node,
+    NodeKind,
+    Tone,
+)
 from opentide.documentation.facts.deployment import PlatformDeployment
 from opentide.documentation.format.protocol import MarkdownFormatter
-from opentide.documentation.vocabulary import chaining_relation, vocabulary_order
+from opentide.documentation.vocabulary import (
+    chaining_relation,
+    killchain_stages,
+    vocabulary_order,
+)
 from opentide.models.threat import ThreatVector
 
 _KIND_BY_TYPE: dict[str, NodeKind] = {
@@ -145,6 +159,91 @@ def chaining_diagram(catalog: DocumentationCatalog, uuid: str, *, name: str) -> 
         _add_chaining_link(diagram, edge.source, edge.target, edge.label or "")
     phases = {node.uuid: node.killchain or "" for node in network.nodes}
     diagram.lanes = _phase_lanes(phases)
+    return diagram
+
+
+def killchain_coverage_diagram(
+    phases: Mapping[str, Sequence[bool]],
+) -> Diagram | None:
+    """The kill chain, stage by stage, each phase coloured by how much of it is covered.
+
+    *phases* maps a phase to one flag per threat vector in it: whether a
+    detection objective addresses that threat.
+    """
+    stages = killchain_stages()
+    if not stages or not any(phases.values()):
+        return None
+    diagram = _killchain_frame(
+        stages,
+        title="Kill-chain coverage",
+        description=(
+            "The Unified Kill Chain stage by stage; each phase is coloured by how many of "
+            "its threat vectors a detection objective addresses."
+        ),
+    )
+    for key, node in list(diagram.nodes.items()):
+        flags = list(phases.get(node.label, ()))
+        covered = sum(flags)
+        if not flags:
+            tone, caption = Tone.idle, ""
+        elif covered == len(flags):
+            tone, caption = Tone.covered, f"{covered} of {len(flags)} covered"
+        elif covered:
+            tone, caption = Tone.partial, f"{covered} of {len(flags)} covered"
+        else:
+            tone, caption = Tone.uncovered, f"0 of {len(flags)} covered"
+        diagram.nodes[key] = replace(node, tone=tone, caption=caption)
+    diagram.tone_legend.update(
+        {
+            Tone.covered: "every threat vector addressed",
+            Tone.partial: "some addressed",
+            Tone.uncovered: "none addressed",
+            Tone.idle: "no threat vector",
+        }
+    )
+    return diagram
+
+
+def threat_killchain_diagram(
+    phases: Sequence[str], *, related: Mapping[str, Sequence[str]]
+) -> Diagram | None:
+    """Where a threat sits on the kill chain, and where the threats chained to it sit.
+
+    *related* maps a phase to the names of the chained threat vectors in it.
+    """
+    stages = killchain_stages()
+    if not stages or not any(phase in members for _, members in stages for phase in phases):
+        return None
+    diagram = _killchain_frame(
+        stages,
+        title="Kill-chain position",
+        description="The threat's own phase, and the phases of the threats chained to it.",
+    )
+    for key, node in list(diagram.nodes.items()):
+        if node.label in phases:
+            diagram.nodes[key] = replace(node, tone=Tone.current, caption="this threat", focus=True)
+        elif related.get(node.label):
+            names = list(related[node.label])
+            caption = names[0] if len(names) == 1 else f"{names[0]} +{len(names) - 1}"
+            diagram.nodes[key] = replace(node, tone=Tone.related, caption=caption)
+    diagram.tone_legend.update(
+        {Tone.current: "this threat vector", Tone.related: "a threat vector chained to it"}
+    )
+    return diagram
+
+
+def _killchain_frame(
+    stages: Sequence[tuple[str, Sequence[str]]], *, title: str, description: str
+) -> Diagram:
+    """Every phase in its stage lane, linked in order; the stages follow one another."""
+    diagram = Diagram(title=title, description=description, direction="TB", chain_lanes=True)
+    for stage, members in stages:
+        keys = tuple(f"phase::{phase}" for phase in members)
+        for key, phase in zip(keys, members, strict=True):
+            diagram.add_node(Node(key, phase, NodeKind.phase))
+        for source, target in pairwise(keys):
+            diagram.add_link(Link(source, target))
+        diagram.lanes.append(Lane(stage, keys, direction="LR"))
     return diagram
 
 
