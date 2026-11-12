@@ -48,7 +48,7 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide deploy`
 
-114 approved diff(s).
+116 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|

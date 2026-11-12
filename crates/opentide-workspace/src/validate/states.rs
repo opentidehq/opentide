@@ -326,7 +326,7 @@ fn read_shard(fs: &dyn FileSystem, path: &Path, expected: Option<&str>) -> Resul
         return Err(StateError::shape(path, "has no platforms object"));
     };
     for (platform, tenants) in platforms {
-        if !STATE_PLATFORMS.contains(&platform.as_str()) {
+        if !crate::state::stores_ids(platform) {
             return Err(StateError::new(
                 "deployment_state_platform",
                 format!(

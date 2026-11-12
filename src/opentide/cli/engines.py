@@ -33,7 +33,14 @@ import os
 import stat
 import sys
 
-from opentide.cli.engine_defaults import ENGINE_ENV, PYTHON, RUST, default_engine
+from opentide.cli.engine_defaults import (
+    BUILTIN_PLATFORMS,
+    ENGINE_ENV,
+    PYTHON,
+    RUST,
+    default_engine,
+    platform_values,
+)
 
 #: ``typing.TYPE_CHECKING`` without importing typing, which the console
 #: script would pay for on every Rust run (UC-3.8b, #960); type checkers
@@ -226,35 +233,6 @@ class RustCommand:
         return missing or None
 
 
-def platform_values(options: Sequence[str]) -> list[str]:
-    """The values of every ``--platform`` in *options* (``--platform x`` and ``--platform=x``)."""
-    values: list[str] = []
-    for index, token in enumerate(options):
-        if token == "--platform" and index + 1 < len(options):
-            values.append(options[index + 1])
-        elif token.startswith("--platform="):
-            values.append(token.partition("=")[2])
-    return values
-
-
-#: The built-in platforms (``opentide.plugins.BUILTIN_PLATFORMS``, kept here
-#: so the console script imports nothing more): any other ``--platform`` may
-#: be a platform plugin's.
-BUILTIN_PLATFORMS: frozenset[str] = frozenset(
-    {
-        "carbon_black_cloud",
-        "crowdstrike",
-        "defender_for_endpoint",
-        "elastic",
-        "harfanglab",
-        "sentinel",
-        "sentinel_one",
-        "splunk",
-        "sysdig",
-    }
-)
-
-
 def plugin_platforms() -> frozenset[str]:
     """The platform plugins installed: ``opentide.platforms`` entry points that are not built in.
 
@@ -357,7 +335,8 @@ RUST_CLI: tuple[str, ...] = (sys.executable, "-m", "opentide.cli.rust")
 #: sentinel`` through the Sentinel connector, with UC-4.4e (#834).
 #: ``deploy``, ``query`` and ``validate query --live`` on an installed platform
 #: plugin's platform run on Rust, the one engine with the plugin hook
-#: (*plugins*, UC-4.5, #835).
+#: (*plugins*, UC-4.5, #835), under the default engine too (UC-4.5b:
+#: :func:`plugin_default`).
 RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
     ("commands",): RustCommand(launch=RUST_CLI),
     ("explain",): RustCommand(launch=RUST_CLI),
@@ -443,6 +422,26 @@ def selected(words: Sequence[str], env: Mapping[str, str] | None = None) -> str:
     return engine if engine == PYTHON or tuple(words) in RUST_COMMANDS else PYTHON
 
 
+def plugin_default(
+    words: Sequence[str], args: Sequence[str], env: Mapping[str, str] | None = None
+) -> bool:
+    """Whether the default engine runs *args* on Rust: a run on an installed platform plugin.
+
+    Only the Rust core has the plugin hook (UC-4.5, #835), so ``query``,
+    ``validate query`` and ``deploy`` with a ``--platform`` every value of
+    which names an installed plugin (:meth:`RustCommand.plugin_run`) run on
+    Rust when ``OPENTIDE_ENGINE`` is unset or blank (UC-4.5b): the Python
+    command line never parses a plugin's name. ``OPENTIDE_ENGINE`` set to any
+    value keeps its meaning: under ``python`` the Python command line refuses
+    the name, and ``compare`` refuses the run.
+    """
+    env = os.environ if env is None else env
+    if env.get(ENGINE_ENV, "").strip():
+        return False
+    rust = RUST_COMMANDS.get(tuple(words))
+    return rust is not None and rust.plugin_run(args) and rust.covers(args)
+
+
 def rust_command(
     words: Sequence[str],
     env: Mapping[str, str] | None = None,
@@ -451,12 +450,13 @@ def rust_command(
     """The Rust implementation that runs *words* now, or ``None`` when Python does (or must refuse).
 
     For hosts that run commands in their own process (``serve``): ``rust``
-    selected and a Rust implementation that covers *args*, the run's command
-    line (:meth:`RustCommand.covers`). ``compare``, an unknown engine and
+    selected (or, under the default engine, a platform plugin's run:
+    :func:`plugin_default`) and a Rust implementation that covers *args*, the
+    run's command line (:meth:`RustCommand.covers`). ``compare``, an unknown engine and
     ``rust`` for a command, or a run of it, without one go through
     :func:`dispatch`, which refuses as at a terminal.
     """
-    if selected(words, env) != RUST:
+    if selected(words, env) != RUST and not (args is not None and plugin_default(words, args, env)):
         return None
     rust = RUST_COMMANDS.get(tuple(words))
     if rust is None or (args is not None and not rust.covers(args)):
@@ -488,7 +488,10 @@ def dispatch(cli_ctx: CliContext, click_ctx: _click.Context) -> None:
     words = command_words(click_ctx.command, args)
     engine = selected(words)
     if engine == PYTHON:
-        return
+        if not plugin_default(words, args):
+            return
+        # A platform plugin's run: only the Rust core reaches the plugin.
+        engine = RUST
     path = " ".join(words) or "(no command)"
     if engine not in ENGINES:
         _fail(

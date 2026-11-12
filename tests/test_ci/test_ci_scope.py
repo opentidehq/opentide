@@ -235,7 +235,13 @@ def test_the_full_set_runs_nightly(name: str) -> None:
 def test_the_schema_workflow_is_path_filtered_on_pull_requests() -> None:
     triggers = _triggers(_load(WORKFLOWS / "schema.yml"))
     paths = triggers["pull_request"]["paths"]
-    for path in ("crates/opentide-schema/**", "src/opentide/_native/**", "xtask/src/stubs.rs"):
+    # bindings/python: the SDK's core, whose stub `cargo xtask stubs` generates (UC-5.2b).
+    for path in (
+        "crates/opentide-schema/**",
+        "src/opentide/_native/**",
+        "bindings/python/**",
+        "xtask/src/stubs.rs",
+    ):
         assert path in paths, path
     assert {"development", INTEGRATION} <= set(triggers["push"]["branches"])
     assert "schedule" in triggers and "workflow_dispatch" in triggers

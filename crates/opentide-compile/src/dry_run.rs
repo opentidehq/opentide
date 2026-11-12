@@ -40,6 +40,10 @@ pub struct Request {
     /// The working directory: where relative `--file` values start and
     /// paths are shown from.
     pub cwd: PathBuf,
+    /// The platform plugins the run can reach (UC-4.5b, #835): planned as a
+    /// built-in platform is when the configuration enables them, each change
+    /// a create or an update from deployment state.
+    pub plugins: Vec<String>,
 }
 
 /// The rule files the run changed, when it reads neither `--all` nor a
@@ -373,7 +377,10 @@ pub fn run(
             }
         }
     };
-    let enabled = plan::enabled(&Json::from_node(&workspace.configuration().resolved.tree));
+    let enabled = plan::enabled_with(
+        &Json::from_node(&workspace.configuration().resolved.tree),
+        &request.plugins,
+    );
     let read = |path: &Path| -> Result<Node, String> {
         let bytes = fs.read(path).map_err(|error| error.to_string())?;
         let document =

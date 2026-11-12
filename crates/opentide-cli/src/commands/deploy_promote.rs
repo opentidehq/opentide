@@ -265,7 +265,9 @@ fn plan(promotion: &Promotion<'_>) -> Result<Planned, Stop> {
 
 /// Replaces `path` with `bytes` through a temporary file beside it
 /// (`_write_atomically`): the file is created owner-only, as `mkstemp`
-/// creates it, and takes `path`'s place.
+/// creates it, takes `path`'s permission bits, so a rule committed as 0644
+/// stays 0644 (#987), and takes `path`'s place. Windows has no such bits to
+/// keep.
 fn write_atomically(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     use std::io::Write as _;
     let parent = path.parent().unwrap_or_else(|| Path::new("."));
@@ -283,6 +285,8 @@ fn write_atomically(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
         file.write_all(bytes)?;
         file.flush()?;
         drop(file);
+        #[cfg(unix)]
+        std::fs::set_permissions(&temporary, std::fs::metadata(path)?.permissions())?;
         std::fs::rename(&temporary, path)
     })();
     if written.is_err() {
@@ -411,7 +415,7 @@ mod tests {
     }
 
     #[test]
-    fn a_changed_rule_is_promoted_in_place_owner_only() {
+    fn a_changed_rule_is_promoted_in_place() {
         let bom = format!("\u{feff}{}", RULE.replace('\n', "\r\n"));
         let done = "name: D\nconfigurations:\n  splunk:\n    status: PRODUCTION\n";
         let (outcome, drawn, after) = promote(
@@ -427,18 +431,23 @@ mod tests {
         assert!(drawn.contains("status promotion · 2 rules"), "{drawn}");
     }
 
+    /// The temporary file is created 0600, as `mkstemp` creates it: a rule
+    /// committed as 0644 came back owner-only (#987).
     #[cfg(unix)]
     #[test]
-    fn the_promoted_file_is_owner_only_as_mkstemp_makes_it() {
+    fn the_promoted_file_keeps_its_permission_bits() {
         use std::os::unix::fs::PermissionsExt;
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("r.yaml");
-        std::fs::write(&path, "x").unwrap();
-        write_atomically(&path, b"y").unwrap();
-        let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
-        assert_eq!(mode, 0o600);
-        assert_eq!(std::fs::read(&path).unwrap(), b"y");
-        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1);
+        for kept in [0o644, 0o640, 0o755] {
+            let dir = tempfile::tempdir().unwrap();
+            let path = dir.path().join("r.yaml");
+            std::fs::write(&path, "x").unwrap();
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(kept)).unwrap();
+            write_atomically(&path, b"y").unwrap();
+            let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o7777;
+            assert_eq!(mode, kept, "{kept:o}");
+            assert_eq!(std::fs::read(&path).unwrap(), b"y");
+            assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1);
+        }
     }
 
     #[test]

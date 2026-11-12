@@ -260,6 +260,22 @@ def test_only_vendor_id_platforms_get_a_shard(tmp_path: Path) -> None:
     assert not shard_path(UUID, tmp_path).exists()
 
 
+def test_a_platform_plugins_ids_are_kept_beside_the_built_in_ones(tmp_path: Path) -> None:
+    """A platform plugin's ids live in the same shard (UC-4.5b, #835)."""
+    path = _write(shard_path(UUID, tmp_path), _shard({"crowdstrike": {"falcon": "abc"}}))
+    record_external_id(UUID, "acme", " lab ", "acme-rule-17", tmp_path)
+    state = DeploymentState.load(UUID, tmp_path)
+    assert state.get("acme", "lab") == "acme-rule-17"
+    assert json.loads(path.read_text(encoding="utf-8"))["platforms"] == {
+        "acme": {"lab": "acme-rule-17"},
+        "crowdstrike": {"falcon": "abc"},
+    }
+    for name in ("Acme", "ac-me", "2acme"):
+        with pytest.raises(DeploymentStateError) as caught:
+            record_external_id(UUID, name, "lab", "x", tmp_path)
+        assert caught.value.code == "deployment_state_platform"
+
+
 def test_legacy_keys_are_found_at_block_roots_only() -> None:
     rule = {
         "configurations": {

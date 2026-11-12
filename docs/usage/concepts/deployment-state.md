@@ -1,6 +1,6 @@
 ---
 title: Deployment state
-description: Where opentide keeps the vendor rule ids that Defender for Endpoint, SentinelOne and CrowdStrike assign, and why the files must be committed.
+description: Where opentide keeps the vendor rule ids that Defender for Endpoint, SentinelOne, CrowdStrike, Sysdig and platform plugins assign, and why the files must be committed.
 ---
 
 # Deployment state
@@ -30,9 +30,9 @@ directory: change that line before you deploy (see [0.15.0](../releases.md#0150-
 `<uuid>` is the rule's `metadata.uuid` in lowercase canonical form, and the
 file's `object_uuid` is exactly that string. A rule that has never been
 deployed to one of the four platforms (Defender for Endpoint, SentinelOne,
-CrowdStrike, and Sysdig) has no file. Sentinel, Splunk, HarfangLab, Carbon
-Black, and Elastic address rules by `metadata.uuid` or by title and never get
-one.
+CrowdStrike, and Sysdig), or to a [platform plugin](../../sdk/platforms.md#platform-plugins)'s
+platform, has no file. Sentinel, Splunk, HarfangLab, Carbon Black, and Elastic
+address rules by `metadata.uuid` or by title and never get one.
 
 ```json
 {
@@ -53,7 +53,8 @@ one.
 - Tenant keys are the tenant `name` from `.opentide/configurations/platforms/<platform>.toml`, with surrounding spaces removed. A stored key that itself has surrounding spaces (`" contoso "`) is invalid. Renaming a tenant orphans its entry, and the next deploy creates a new remote rule.
 - Only the canonical spelling is read. An uppercase, unhyphenated or `.JSON` file name, or a second file for the same rule, is `deployment_state_uuid_mismatch` and the rule is refused: a case-sensitive checkout would not find such a file, and deploy would create a second remote rule.
 - An empty `platforms` map, or an empty map for one platform, reads as no binding. Writers never leave one behind.
-- Ids are JSON strings. Defender and SentinelOne ids are canonical decimal integers (`12345`, no sign or leading zero). CrowdStrike ids are stored exactly as the API returned them.
+- Ids are JSON strings. Defender and SentinelOne ids are canonical decimal integers (`12345`, no sign or leading zero). CrowdStrike ids, and the ids a platform plugin returns, are stored exactly as the platform returned them.
+- A platform plugin's ids sit under its identifier (`platforms.acme`). Any platform identifier that is not a built-in platform's is accepted, whether or not the plugin is installed where the shard is read.
 - Keys are sorted, the indent is two spaces, and the file ends with one newline, so a deploy that touches one tenant changes one line in review.
 
 ## What deploy does with it
@@ -84,7 +85,7 @@ Refusals are per rule: the run continues with other rules, and exits `1` if any 
 | `deployment_state_unpersisted` | A CI run other than `--strategy RELEASE` on a push would create a rule whose id nothing commits. The create is refused before any vendor call. See [Creates outside the production job](#creates-outside-the-production-job) |
 | `deployment_state_write_failed` | The vendor created the rule but the shard could not be written. The message carries the id; add it to the shard by hand. The remote rule is not rolled back |
 | `deployment_state_uuid_mismatch` | The shard's file name is not the lowercase canonical uuid, its `object_uuid` is not exactly its file name, or another file names the same rule. No create runs for that rule |
-| `deployment_state_platform` | The shard names a platform that does not store vendor ids |
+| `deployment_state_platform` | The shard names a built-in platform that does not store vendor ids, or a name that is not a platform identifier |
 | `deployment_state_shape` | The shard is not valid `deployment.state::1.0`, for example a tenant key with surrounding spaces |
 
 `opentide validate` reports the same `external_id_in_rule`. A full-workspace
