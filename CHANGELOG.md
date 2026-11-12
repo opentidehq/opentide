@@ -8,6 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ### Added
 
+- **Interactive views for `coverage`, `validation_report` and `get_chaining` (MCP Apps).** In a host that renders [MCP Apps](https://modelcontextprotocol.io/extensions/apps/overview), such as Claude Desktop, VS Code, Cursor or Goose, the coverage view shows the bundled ATT&CK matrix with every gap and the rules behind each technique, the validation view groups issues by file with their fixes, an in-place `explain` and a re-run, and the lineage view lets you walk threat → objective → rule. Hosts without MCP Apps, Claude Code among them, show the same JSON as before. The pages load nothing from the network. See [Interactive views](docs/mcp/views.md).
 - **MCP tools carry a title and behaviour hints.** Each tool in `tools/list` has a `title` and `annotations` (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`), so a host can tell the eight read-only tools from `run_query` and `deploy_rule` when it asks a person to approve a call. Only `validate_query`, `run_query` and `deploy_rule` are open-world, since `live: true` or `dry_run: false` contacts a tenant, and only `deploy_rule` is destructive. Claude's connector directory requires these hints. See [MCP tools](docs/mcp/tools.md#annotations).
 
 ## [0.25.0] — 2026-11-11

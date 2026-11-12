@@ -42,6 +42,7 @@ Transport: **stdio** (standard MCP over stdin/stdout).
 | Deploy (dry-run default) | `deploy_rule` |
 | Deployment state | `deployment_status` |
 | Read schemas, templates, vocab | `opentide://*` resources |
+| Interactive coverage, validation and lineage views | [MCP Apps](./views.md) on `coverage`, `validation_report`, `get_chaining` |
 
 ## Server instructions
 

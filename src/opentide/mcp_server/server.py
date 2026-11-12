@@ -32,6 +32,7 @@ from opentide.mcp_server.tools import (
     tool_validate_rule,
     tool_validation_report,
 )
+from opentide.mcp_server.ui import build_apps, ui_meta
 from opentide.mcp_server.workspace import (
     apply_plugin_launch,
     require_workspace,
@@ -95,11 +96,15 @@ TENANT_DEPLOY = ToolAnnotations(
 )
 
 
+#: MCP Apps views (ui.py). A host without MCP Apps ignores them.
+apps = build_apps()
+
 mcp = MCPServer(
     "opentide",
     # Without it mcp 2.x reports serverInfo.version as "".
     version=opentide.__version__,
     instructions=INSTRUCTIONS,
+    extensions=[apps],
 )
 
 
@@ -128,7 +133,9 @@ def search(
     )
 
 
-@mcp.tool(title="Threat, objective and rule lineage", annotations=LOCAL_READ)
+@mcp.tool(
+    title="Threat, objective and rule lineage", annotations=LOCAL_READ, meta=ui_meta("lineage")
+)
 def get_chaining(uuid: str) -> dict:
     """Threat -> objective -> rule lineage of any object, before you edit or add one.
 
@@ -141,7 +148,7 @@ def get_chaining(uuid: str) -> dict:
     return tool_get_chaining(uuid)
 
 
-@mcp.tool(title="ATT&CK coverage", annotations=LOCAL_READ)
+@mcp.tool(title="ATT&CK coverage", annotations=LOCAL_READ, meta=ui_meta("coverage"))
 def coverage(technique: str = "", tactic: str = "") -> dict:
     """ATT&CK coverage: which rules detect a technique, and where the gaps are.
 
@@ -166,7 +173,7 @@ def validate_rule(uuid: str) -> dict:
     return tool_validate_rule(uuid)
 
 
-@mcp.tool(title="Validation report", annotations=LOCAL_READ)
+@mcp.tool(title="Validation report", annotations=LOCAL_READ, meta=ui_meta("validation"))
 def validation_report(
     file: str = "",
     uuid: str = "",
