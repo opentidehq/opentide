@@ -24,7 +24,7 @@
 | `.github/` | CI, CodeQL, release and Dependabot workflows | [`.github/AGENTS.md`](.github/AGENTS.md) |
 | `scripts/` | `ci-local.sh`, `codeql-local.sh`, `validate-docs.sh`, `ast_equivalence.py`, `build/` | this file, "Checks" |
 | `.agents/skills/` | The skills below; `.claude/skills` links to them | the table below |
-| `publishing/` | Name placeholders for crates.io and npm, rehearsed by `publish-dry-run.yml` | [`docs/internal/publishing.md`](docs/internal/publishing.md) |
+| `publishing/` | Name placeholders for crates.io and npm, rehearsed by `publish-dry-run.yml`; the binaries' installers the release ships | [`docs/internal/publishing.md`](docs/internal/publishing.md) |
 
 ## Skills — when to read which
 
@@ -43,7 +43,7 @@
 | MCP server tools, resources, stdio | [`.agents/skills/mcp-server/SKILL.md`](.agents/skills/mcp-server/SKILL.md) |
 | Documentation pages, Fumadocs structure, doc/code sync | [`.agents/skills/docs-maintenance/SKILL.md`](.agents/skills/docs-maintenance/SKILL.md) |
 | Changelog entries and release notes: summary, Upgrade, Breaking, categories | [`.agents/skills/release-notes/SKILL.md`](.agents/skills/release-notes/SKILL.md) |
-| PyPI release, `v*` tag, install pins | [`.agents/skills/release-management/SKILL.md`](.agents/skills/release-management/SKILL.md) |
+| Releases (the release train, `publish.yml`: PyPI, crates.io, npm, binaries), release candidates, `v*` tag, install pins | [`.agents/skills/release-management/SKILL.md`](.agents/skills/release-management/SKILL.md) |
 | Building, linting, testing any Rust crate: toolchain, clippy, nextest, insta, trycmd, xtask, worktrees and target pools | [`.agents/skills/rust/SKILL.md`](.agents/skills/rust/SKILL.md) |
 | Porting to Rust against the Python oracle: goldens, `OPENTIDE_ENGINE=compare`, the approved-diffs ledger | [`.agents/skills/golden/SKILL.md`](.agents/skills/golden/SKILL.md) |
 | The engine's Rust crates, `Cargo.toml`, `Cargo.lock` | [`.agents/skills/rust-engine/SKILL.md`](.agents/skills/rust-engine/SKILL.md) |
@@ -53,7 +53,7 @@
 | `data/catalogs/`, HighlightSpec, conformance corpora, the vendor-parser oracles | [`.agents/skills/catalogs/SKILL.md`](.agents/skills/catalogs/SKILL.md) |
 | A new query language in the engine | [`.agents/skills/add-language/SKILL.md`](.agents/skills/add-language/SKILL.md) |
 | `crates/CHANGELOG.md`, the engine crates' release notes | [`.agents/skills/engine-release-notes/SKILL.md`](.agents/skills/engine-release-notes/SKILL.md) |
-| Releasing the engine crates (`engine-v*` tags, `engine-release.yml`) | [`.agents/skills/engine-release/SKILL.md`](.agents/skills/engine-release/SKILL.md) |
+| The engine's own releases before the release train (`engine-v*`, retired: release with release-management) | [`.agents/skills/engine-release/SKILL.md`](.agents/skills/engine-release/SKILL.md) |
 
 The engine's skills (the last eight rows) came from opentidehq/language-server; their own index, with
 the engine's hard rules, is [`crates/AGENTS.md`](crates/AGENTS.md). Claude Code discovers the skills

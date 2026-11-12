@@ -10,7 +10,13 @@ metadata:
 
 How to write what integrators read about a release of the engine crates. opentide's own notes
 (`CHANGELOG.md` at the root) follow `.agents/skills/release-notes/SKILL.md`. The release procedure
-itself (version bump, crates.io) is `.agents/skills/engine-release/SKILL.md`.
+itself (version bump, crates.io) is `.agents/skills/release-management/SKILL.md`.
+
+**Since the release train (UC-5.5, #840)** the engine releases with opentide, at one product
+version, from `.github/workflows/publish.yml`: the GitHub Release body is opentide's
+(`.github/release-notes/vX.Y.Z.md`), and an engine change integrators see is an entry in
+`CHANGELOG.md`, written with the rules below (a bold lead naming the method, setting or code).
+`crates/CHANGELOG.md` holds the engine's releases before the train.
 
 ## Where they are read
 
