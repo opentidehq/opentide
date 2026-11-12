@@ -244,6 +244,35 @@ pub trait QueryCheck: Sync {
     ) -> QueryFindings;
 }
 
+/// One finding of a plugin platform's own check of a rule's block
+/// ([`PlatformConfigurations`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlatformFinding {
+    /// Where, inside the block: keys and list indexes as strings.
+    pub field_path: Vec<String>,
+    /// One sentence.
+    pub message: String,
+    /// A warning rather than an error.
+    pub warning: bool,
+}
+
+/// The configuration blocks of platform plugins (UC-4.5, #835), which the
+/// host checks with each plugin's own model: the plugins sit above this
+/// crate (`opentide-connectors`, called through the Python binding).
+///
+/// A rule's `configurations.<platform>` block for a platform [`platforms`]
+/// names is not an extra key: its findings are [`check`]'s, as
+/// `schema_validation` findings at `configurations.<platform>.<path>`.
+///
+/// [`platforms`]: PlatformConfigurations::platforms
+/// [`check`]: PlatformConfigurations::check
+pub trait PlatformConfigurations: Sync {
+    /// The plugin platforms whose blocks this check owns.
+    fn platforms(&self) -> Vec<String>;
+    /// The findings of *block*, the rule's block for *platform*, as JSON.
+    fn check(&self, platform: &str, block: &serde_json::Value) -> Vec<PlatformFinding>;
+}
+
 /// What a `validate` run does.
 #[derive(Clone, Copy, Default)]
 pub struct Options<'a> {
@@ -257,6 +286,9 @@ pub struct Options<'a> {
     pub queries: QueriesMode,
     /// The query analysis; without one the queries check reports nothing.
     pub query_check: Option<&'a dyn QueryCheck>,
+    /// The plugin platforms' block checks; without one a block of a
+    /// platform that is not built in is an extra key.
+    pub platform_configurations: Option<&'a dyn PlatformConfigurations>,
 }
 
 impl std::fmt::Debug for Options<'_> {
@@ -267,6 +299,10 @@ impl std::fmt::Debug for Options<'_> {
             .field("strict", &self.strict)
             .field("queries", &self.queries)
             .field("query_check", &self.query_check.is_some())
+            .field(
+                "platform_configurations",
+                &self.platform_configurations.is_some(),
+            )
             .finish()
     }
 }
@@ -556,6 +592,62 @@ fn enabled_platforms(
     (enabled, misspelled)
 }
 
+/// The plugin platforms' blocks of each rule in *work*: the extra-key error
+/// the schema reports for such a block makes way for the plugin's own
+/// findings, placed inside the block.
+fn plugin_blocks(
+    plugins: &dyn PlatformConfigurations,
+    work: &[Subject<'_>],
+    issues: &mut Vec<Diagnostic>,
+    warnings: &mut Vec<Diagnostic>,
+) {
+    let owned = plugins.platforms();
+    if owned.is_empty() {
+        return;
+    }
+    for subject in work.iter().filter(|subject| subject.family == "rule") {
+        let Some(Value::Map(blocks)) = subject
+            .document
+            .root()
+            .and_then(|root| root.get("configurations"))
+            .map(|node| &node.value)
+        else {
+            continue;
+        };
+        for block in blocks {
+            let platform = block.key.value.to_string();
+            if !owned.contains(&platform) || objects::PLATFORMS.contains(&platform.as_str()) {
+                continue;
+            }
+            let place = ["configurations".to_owned(), platform.clone()];
+            issues.retain(|issue| {
+                !(issue.code == "schema_validation"
+                    && issue.file_path.as_deref() == Some(subject.path)
+                    && issue.field_path == place)
+            });
+            let json = opentide_schema::configuration::merge::to_json(&block.value);
+            for finding in plugins.check(&platform, &json) {
+                let mut field_path = place.to_vec();
+                field_path.extend(finding.field_path);
+                let message = format!("{platform}: {}", finding.message);
+                let diagnostic = if finding.warning {
+                    Diagnostic::warning("schema_validation", message)
+                } else {
+                    Diagnostic::error("schema_validation", message)
+                }
+                .object(subject.uuid, subject.family)
+                .file(subject.path)
+                .at(field_path);
+                if finding.warning {
+                    warnings.push(diagnostic);
+                } else {
+                    issues.push(diagnostic);
+                }
+            }
+        }
+    }
+}
+
 /// Python's sort key of an error (`sort_issues`).
 fn sort_key(issue: &Diagnostic) -> (String, i64, &[String], &str, &str, &str) {
     (
@@ -788,6 +880,11 @@ pub fn validate(ws: &Workspace, options: &Options<'_>) -> Validation {
         for one in found {
             issues.extend(one.issues);
             warnings.extend(one.warnings);
+        }
+        if checks.schema
+            && let Some(plugins) = options.platform_configurations
+        {
+            plugin_blocks(plugins, &work, &mut issues, &mut warnings);
         }
         // Every file that writes an invalid UUID is reported, also one whose
         // object a later file with the same UUID displaced (KG-04).

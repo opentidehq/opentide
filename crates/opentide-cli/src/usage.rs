@@ -490,8 +490,9 @@ mod tests {
             platform
                 .subcommand_matches("query")
                 .unwrap()
-                .get_one::<crate::tree::Platform>("platform"),
-            Some(&crate::tree::Platform::Splunk)
+                .get_one::<crate::tree::PlatformValue>("platform")
+                .map(|platform| platform.0.as_str()),
+            Some("splunk")
         );
         // A repeatable option (`validate --file`) collects every value.
         let files = matches("validate --file a --file=b").unwrap();

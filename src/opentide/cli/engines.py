@@ -95,12 +95,19 @@ class RustCommand:
     applies to every run. The Rust side refuses with ``engine_not_ported``
     any run whose tenants it does not reach, as a second check
     (:data:`REFUSAL_ENV`).
+
+    *plugins* marks a command that runs on a platform plugin (UC-4.5, #835):
+    a run whose every ``--platform`` names an installed plugin
+    (:func:`plugin_platforms`) is covered whatever *requires* and *platforms*
+    say, since only the Rust core has the plugin hook; *refuses* still
+    applies.
     """
 
     __slots__ = (
         "launch",
         "platform_scope",
         "platforms",
+        "plugins",
         "refuses",
         "requires",
         "rules",
@@ -116,6 +123,7 @@ class RustCommand:
         refuses: tuple[str, ...] = (),
         platforms: tuple[str, ...] = (),
         platform_scope: tuple[str, ...] = (),
+        plugins: bool = False,
     ) -> None:
         self.launch = launch
         self.rules = rules
@@ -124,6 +132,7 @@ class RustCommand:
         self.refuses = refuses
         self.platforms = platforms
         self.platform_scope = platform_scope
+        self.plugins = plugins
 
     def _key(self) -> tuple[object, ...]:
         return (
@@ -134,6 +143,7 @@ class RustCommand:
             self.refuses,
             self.platforms,
             self.platform_scope,
+            self.plugins,
         )
 
     def __eq__(self, other: object) -> bool:
@@ -147,7 +157,7 @@ class RustCommand:
             f"RustCommand(launch={self.launch!r}, rules={self.rules!r}, "
             f"side_effects={self.side_effects!r}, requires={self.requires!r}, "
             f"refuses={self.refuses!r}, platforms={self.platforms!r}, "
-            f"platform_scope={self.platform_scope!r})"
+            f"platform_scope={self.platform_scope!r}, plugins={self.plugins!r})"
         )
 
     def covers(self, args: Sequence[str]) -> bool:
@@ -155,9 +165,26 @@ class RustCommand:
         options = args[: args.index("--")] if "--" in args else args
         if any(flag in options for flag in self.refuses):
             return False
+        if self.plugin_run(options):
+            return True
         if self._uncovered_platforms(options) is not None:
             return False
         return not self.requires or any(flag in options for flag in self.requires)
+
+    def plugin_run(self, args: Sequence[str]) -> bool:
+        """Whether every ``--platform`` *args* name is an installed plugin's.
+
+        A run that names none, or names a built-in platform, is not a plugin
+        run: those never read the entry points.
+        """
+        options = args[: args.index("--")] if "--" in args else args
+        if not self.plugins:
+            return False
+        named = platform_values(options)
+        if not named or any(name in BUILTIN_PLATFORMS for name in named):
+            return False
+        installed = plugin_platforms()
+        return all(name in installed for name in named)
 
     def uncovered(self, path: str, args: Sequence[str]) -> str:
         """*path* as a run of *args* it does not cover reads: ``deploy without --dry-run``."""
@@ -199,6 +226,39 @@ def platform_values(options: Sequence[str]) -> list[str]:
         elif token.startswith("--platform="):
             values.append(token.partition("=")[2])
     return values
+
+
+#: The built-in platforms (``opentide.plugins.BUILTIN_PLATFORMS``, kept here
+#: so the console script imports nothing more): any other ``--platform`` may
+#: be a platform plugin's.
+BUILTIN_PLATFORMS: frozenset[str] = frozenset(
+    {
+        "carbon_black_cloud",
+        "crowdstrike",
+        "defender_for_endpoint",
+        "elastic",
+        "harfanglab",
+        "sentinel",
+        "sentinel_one",
+        "splunk",
+        "sysdig",
+    }
+)
+
+
+def plugin_platforms() -> frozenset[str]:
+    """The platform plugins installed: ``opentide.platforms`` entry points that are not built in.
+
+    Read without loading any plugin. Only a run that names a platform outside
+    :data:`BUILTIN_PLATFORMS` pays for the lookup.
+    """
+    from importlib.metadata import entry_points
+
+    return frozenset(
+        point.name
+        for point in entry_points(group="opentide.platforms")
+        if point.name not in BUILTIN_PLATFORMS
+    )
 
 
 #: The platforms with a Rust connector (``crates/opentide-connectors``) whose
@@ -279,7 +339,9 @@ RUST_CLI: tuple[str, ...] = (sys.executable, "-m", "opentide.cli.rust")
 #: UC-4.2c (#832): *platforms* routes each run by the ``--platform`` it names; a
 #: rule's query (``--rule``, ``--file``: its tenants' exclusions) stays Python's.
 #: ``query`` on Sentinel, Splunk and Carbon Black Cloud with UC-4.3 (#833).
-#: A deploy that sends stays Python's.
+#: A deploy that sends stays Python's, except on a platform plugin: ``deploy``,
+#: ``query`` and ``validate query --live`` on an installed plugin's platform
+#: run on Rust, the one engine with the plugin hook (*plugins*, UC-4.5, #835).
 RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
     ("commands",): RustCommand(launch=RUST_CLI),
     ("explain",): RustCommand(launch=RUST_CLI),
@@ -287,10 +349,13 @@ RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
     ("lint",): RustCommand(launch=RUST_CLI),
     ("validate",): RustCommand(launch=RUST_CLI),
     ("validate", "query"): RustCommand(
-        launch=RUST_CLI, platforms=RUST_LIVE_VALIDATION_PLATFORMS, platform_scope=("--live",)
+        launch=RUST_CLI,
+        platforms=RUST_LIVE_VALIDATION_PLATFORMS,
+        platform_scope=("--live",),
+        plugins=True,
     ),
     ("rules", "unreviewed"): RustCommand(launch=RUST_CLI),
-    ("deploy",): RustCommand(launch=RUST_CLI, requires=("--dry-run",)),
+    ("deploy",): RustCommand(launch=RUST_CLI, requires=("--dry-run",), plugins=True),
     ("doctor",): RustCommand(launch=RUST_CLI, rules=("host-git",), requires=("--offline",)),
     ("migrate", "vocab-scope"): RustCommand(launch=RUST_CLI),
     ("generate", "exports"): RustCommand(launch=RUST_CLI),
@@ -330,6 +395,7 @@ RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
         side_effects=True,
         refuses=("--rule", "--file"),
         platforms=RUST_QUERY_PLATFORMS,
+        plugins=True,
     ),
 }
 
@@ -851,7 +917,8 @@ def _compare(cli_ctx: CliContext, path: str, args: Sequence[str], rust: RustComm
         USAGE_EXIT_CODE,
     )
 
-    if rust.side_effects:
+    if rust.side_effects or rust.plugin_run(args):
+        # A plugin's deploy or query reaches its tenant: so would both runs.
         _fail(
             cli_ctx,
             path,

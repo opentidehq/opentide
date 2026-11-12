@@ -401,19 +401,27 @@ fn the_replay_tolerates_a_refusal_only_where_rust_commands_does_not_cover_the_ru
         "validate query",
         &words("validate query --live --platform sysdig")
     ));
+    // A platform plugin's run (UC-4.5): with no plugin host here, a platform
+    // that is not built in is no plugin, and the run is not covered.
+    assert!(replay::rust_commands()["deploy"].plugins);
+    assert!(!replay::covers(
+        "deploy",
+        &words("deploy --platform acme --all")
+    ));
     // A multi-line entry, a tuple named by a constant, and one the parser
     // cannot read, which is no table.
     let source = "x = 1\nPLATFORMS: tuple[str, ...] = (\n    \"p\",\n    \"q\",\n)\n\
                   RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {\n    \
                   (\"a\",): RustCommand(launch=RUST_CLI),\n    (\"b\", \"c\"): RustCommand(\n        \
                   launch=RUST_CLI, requires=(\"--x\", \"y\"),\n        refuses=(\"--z\",),\n        \
-                  platforms=PLATFORMS,\n    ),\n}\n";
+                  platforms=PLATFORMS,\n        plugins=True,\n    ),\n}\n";
     let parsed = replay::parse_rust_commands(source);
     assert_eq!(parsed.len(), 2);
     assert_eq!(parsed["a"], replay::Coverage::default());
     assert_eq!(parsed["b c"].requires, ["--x", "y"]);
     assert_eq!(parsed["b c"].refuses, ["--z"]);
     assert_eq!(parsed["b c"].platforms, ["p", "q"]);
+    assert!(parsed["b c"].plugins && !parsed["a"].plugins);
     let unreadable = source.replace("(\"a\",)", "KEY");
     assert!(std::panic::catch_unwind(|| replay::parse_rust_commands(&unreadable)).is_err());
     let undefined = source.replace("platforms=PLATFORMS", "platforms=NOWHERE");

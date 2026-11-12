@@ -196,6 +196,7 @@ pub fn rust_report(dir: &Path, command: &[String]) -> Result<(Json, usize)> {
         strict: args.strict,
         queries: args.queries,
         query_check: Some(&counting),
+        platform_configurations: None,
     });
     Ok((
         serde_json::to_value(&validation.report)?,

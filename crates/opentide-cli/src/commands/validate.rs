@@ -284,6 +284,7 @@ pub fn validate_once(args: &Args, cx: &Context<'_>) -> Result<Run, String> {
         strict: args.strict,
         queries,
         query_check: Some(&EngineQueries),
+        platform_configurations: crate::plugins::configurations(),
     };
     let validation = ws.validate(&options);
     Ok(run_of(validation, ws.root()))
@@ -378,6 +379,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         strict: args.strict,
         queries,
         query_check: Some(&EngineQueries),
+        platform_configurations: crate::plugins::configurations(),
     };
     let check_name = args.check.map(Check::name);
     let rerun_fix = fix_command(check_name, queries_flag(queries), &args.selection);
@@ -432,6 +434,9 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         warnings.push("Validation reported warnings".to_owned());
     }
     warnings.extend(exempt_lines(validation));
+    warnings.extend(crate::plugins::workspace_warnings(
+        ws.configuration().resolved.get("platforms"),
+    ));
     let mut next = Vec::new();
     if empty && !root::is_workspace_root(&OsFs, &root) {
         next.push(NextAction::new(

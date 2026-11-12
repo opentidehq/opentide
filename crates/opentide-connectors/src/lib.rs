@@ -17,7 +17,8 @@
 //! #833), which Python reaches through vendor SDKs; each a request-for-request
 //! port of its Python client, deployer and query runner, on one set of query
 //! types ([`connector::QueryRequest`], [`connector::QueryOutcome`]);
-//! [`builtin`] registers them.
+//! [`builtin`] registers them, and [`plugin::with_plugins`] adds the platforms
+//! a Python package registers (UC-4.5, #835) after them.
 //!
 //! The recorded-HTTP harness that proves a connector sends what the Python
 //! client sends is `opentide-cassette`, a test crate.
@@ -35,6 +36,7 @@ pub mod env;
 pub mod error;
 pub mod harfanglab;
 pub mod http;
+pub mod plugin;
 pub mod progress;
 pub mod proxy;
 pub mod python;
@@ -52,6 +54,7 @@ pub use credentials::{Credential, Secret};
 pub use env::Environment;
 pub use error::ConnectorError;
 pub use http::{HttpClient, HttpSettings};
+pub use plugin::{PluginError, PluginHost};
 pub use tenant::{Tenant, TenantLabel};
 
 /// The built-in platforms with a connector, in the order Python lists them:

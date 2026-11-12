@@ -1074,6 +1074,91 @@ mod validate {
         assert!(off.checks.iter().all(|(c, _)| *c != Check::Queries));
         assert_eq!(off.report.stats.queries_checked, None);
     }
+
+    /// A plugin's block check (UC-4.5): it claims `acme`, flags `severity`.
+    struct AcmeBlocks;
+
+    impl opentide_workspace::validate::PlatformConfigurations for AcmeBlocks {
+        fn platforms(&self) -> Vec<String> {
+            vec!["acme".to_owned(), "sentinel".to_owned()]
+        }
+
+        fn check(
+            &self,
+            platform: &str,
+            block: &serde_json::Value,
+        ) -> Vec<opentide_workspace::validate::PlatformFinding> {
+            assert_eq!(platform, "acme");
+            let mut found = Vec::new();
+            if !block["severity"].is_i64() {
+                found.push(opentide_workspace::validate::PlatformFinding {
+                    field_path: vec!["severity".to_owned()],
+                    message: "Input should be a valid integer".to_owned(),
+                    warning: false,
+                });
+            }
+            if block.get("note").is_some() {
+                found.push(opentide_workspace::validate::PlatformFinding {
+                    field_path: vec!["note".to_owned()],
+                    message: "note is deprecated".to_owned(),
+                    warning: true,
+                });
+            }
+            found
+        }
+    }
+
+    #[test]
+    fn a_plugin_block_is_checked_by_the_plugin_not_refused_as_an_extra_key() {
+        let fs = workspace();
+        let text = format!(
+            "{}configurations:\n  acme:\n    severity: high\n    note: x\n",
+            rule(U1, "A")
+        );
+        fs.write("/ws/objects/rules/a.yaml", text);
+        let place =
+            |path: &[&str]| -> Vec<String> { path.iter().map(|part| (*part).to_owned()).collect() };
+        let without = run(&fs, &Options::default());
+        assert!(
+            without
+                .report
+                .issues
+                .iter()
+                .any(|d| d.field_path == place(&["configurations", "acme"])),
+            "an unknown platform's block is an extra key without a plugin"
+        );
+        let with = run(
+            &fs,
+            &Options {
+                platform_configurations: Some(&AcmeBlocks),
+                ..Options::default()
+            },
+        );
+        assert!(
+            !with
+                .report
+                .issues
+                .iter()
+                .any(|d| d.field_path == place(&["configurations", "acme"]))
+        );
+        let severity = with
+            .report
+            .issues
+            .iter()
+            .find(|d| d.field_path == place(&["configurations", "acme", "severity"]))
+            .unwrap();
+        assert_eq!(severity.code, "schema_validation");
+        assert_eq!(severity.message, "acme: Input should be a valid integer");
+        assert_eq!(severity.object_uuid, U1);
+        assert_eq!(severity.line, Some(7));
+        let note = with
+            .report
+            .warnings
+            .iter()
+            .find(|d| d.field_path == place(&["configurations", "acme", "note"]))
+            .unwrap();
+        assert_eq!(note.message, "acme: note is deprecated");
+    }
 }
 
 /// Every finding recorded by the oracle's `validate --json` reads into the

@@ -160,6 +160,7 @@ impl Workspace {
             strict: options.strict,
             queries: options.queries,
             query_check: Some(queries::validate_check()),
+            platform_configurations: None,
         })
     }
 

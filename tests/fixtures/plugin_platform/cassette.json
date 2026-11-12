@@ -1,0 +1,67 @@
+{
+  "deploy": [
+    {
+      "request": {
+        "method": "PUT",
+        "path": "/api/rules/7f0c2a51-3a9e-4d7e-9d6b-2f1a8c0e5a01",
+        "authorization": "Bearer acme-test-token",
+        "body": {"name": "Acme Suspicious Shell", "query": "process where name == \"cmd.exe\"", "severity": 3}
+      },
+      "response": {"status": 200, "body": {"id": "acme-rule-17"}}
+    }
+  ],
+  "deploy_refused": [
+    {
+      "request": {
+        "method": "PUT",
+        "path": "/api/rules/7f0c2a51-3a9e-4d7e-9d6b-2f1a8c0e5a01",
+        "authorization": "Bearer acme-test-token",
+        "body": {"name": "Acme Suspicious Shell", "query": "process where name == \"cmd.exe\"", "severity": 3}
+      },
+      "response": {"status": 422, "body": {"error": "severity 3 needs a playbook"}}
+    }
+  ],
+  "validate": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/api/validate",
+        "authorization": "Bearer acme-test-token",
+        "body": {"query": "process where name == \"cmd.exe\""}
+      },
+      "response": {"status": 200, "body": {"valid": true, "error": null}}
+    }
+  ],
+  "validate_invalid": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/api/validate",
+        "authorization": "Bearer acme-test-token",
+        "body": {"query": "process where name == \"cmd.exe\""}
+      },
+      "response": {"status": 200, "body": {"valid": false, "error": "unknown field name"}}
+    }
+  ],
+  "query": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/api/search",
+        "authorization": "Bearer acme-test-token",
+        "body": {"query": "process | head", "from": "2026-11-01T00:00:00.000Z", "to": "2026-11-02T00:00:00.000Z", "limit": 2}
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "rows": [
+            {"host": "ws-1", "process": "cmd.exe", "count": 4},
+            {"host": "ws-2", "process": "powershell.exe", "count": 1},
+            {"host": "ws-3", "process": "cmd.exe", "count": 9}
+          ],
+          "more": false
+        }
+      }
+    }
+  ]
+}
