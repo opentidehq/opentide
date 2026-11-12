@@ -7,6 +7,40 @@ description: Public package versions of opentide on PyPI.
 
 Every version of the [`opentide`](https://pypi.org/project/opentide/) package, newest first. Each opens with what it does for you, then the steps to take after upgrading, then what changed, under the same headings every time: Breaking, Added, Changed, Deprecated, Removed, Fixed and Security. Pin a version in CI. [`CHANGELOG.md`](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md) records every change in full; GitHub Releases are tagged `v*` and publish to PyPI.
 
+## 0.27.0 — 12 November 2026
+
+Exabeam New-Scale SIEM support: deploy correlation rules to Exabeam, with their queries checked as you type.
+
+**Install**
+
+```bash
+pip install opentide==0.27.0
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
+**Upgrade**
+
+1. If you use Exabeam New-Scale SIEM, run `opentide setup platforms --exabeam`, then give each tenant its `region`, `client_id` and `client_secret`.
+
+**Added**
+
+- **Deploy correlation rules to Exabeam New-Scale SIEM.** A `configurations.exabeam` block is one correlation rule: one or more sequences, each an Exabeam query that fires on any match or on a threshold. Turn it on with `opentide setup platforms --exabeam` ([#983](https://github.com/opentidehq/opentide/pull/983)).
+- **`validate` checks Exabeam blocks.** It reports every `exabeam_*` code of the spec, and two enabled rules with the same Exabeam name. It warns on a rule that opens no case and sends no email ([#983](https://github.com/opentidehq/opentide/pull/983)).
+- **Exabeam queries run live.** `validate query --platform exabeam --live` checks each sequence query with Exabeam Search. `opentide query --platform exabeam` runs a hunt and returns up to 3,000 rows ([#983](https://github.com/opentidehq/opentide/pull/983)).
+
+**Changed**
+
+- **The analysis engine is [language-server 0.15.0](https://github.com/opentidehq/language-server/releases/tag/v0.15.0).** It checks the Exabeam Query Language in sequence queries, `system: exabeam` hunts and `.exabeam` files, the same way in the editor, `opentide tui` and `validate` ([#983](https://github.com/opentidehq/opentide/pull/983)).
+
+See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md#0270--2026-11-12) for every change.
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/0.27.0/)
+- [GitHub Release](https://github.com/opentidehq/opentide/releases/tag/v0.27.0)
+- [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md)
+
 ## 0.26.0 — 12 November 2026
 
 Graylog support: deploy rules to Graylog 6.3–7.2 as event definitions. Generated documentation is redesigned, with kill-chain maps and ATT&CK coverage.
