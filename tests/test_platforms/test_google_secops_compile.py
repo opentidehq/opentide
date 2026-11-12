@@ -38,11 +38,6 @@ ALL = ["LIVE", "LIVE_CUSTOMIZABLE", "HOURLY_CUSTOMIZABLE", "DAILY"]
 def load_fixture_rule(stem: str, **block: Any) -> DetectionRule:
     """A specification rule fixture, loaded as opentide loads a rule."""
     document = yaml.safe_load((FIXTURES / f"{stem}.yaml").read_text(encoding="utf-8"))
-    procedure = (document.get("response") or {}).get("procedure")
-    if isinstance(procedure, dict):
-        # The specification's spray fixture has hunts but no procedure.analysis,
-        # which rule-1.1 requires; the assembled rule does not read it.
-        procedure.setdefault("analysis", "Review the logins.")
     document["configurations"]["google_secops"].update(block)
     return load_rule_from_dict(document)
 
