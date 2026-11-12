@@ -144,9 +144,11 @@ impl FieldCatalog {
             self.built = Some((Arc::clone(config), Arc::clone(&catalog)));
             return Some(catalog);
         }
-        let previous = self.built.as_ref().map(|(_, catalog)| Arc::clone(catalog));
+        // Without threads (WebAssembly, fuzzing) the catalog is built below,
+        // in line.
         #[cfg(not(any(target_family = "wasm", fuzzing)))]
         {
+            let previous = self.built.as_ref().map(|(_, catalog)| Arc::clone(catalog));
             if self
                 .building
                 .as_ref()

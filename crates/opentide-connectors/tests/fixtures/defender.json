@@ -1,0 +1,114 @@
+{
+  "deploy": {
+    "rule": {
+      "displayName": "Encoded PowerShell \u2014 \u00dcn\u00efcode",
+      "queryCondition": {
+        "queryText": "DeviceProcessEvents\n| where ProcessCommandLine has \"-enc\""
+      },
+      "schedule": {
+        "period": "1H"
+      },
+      "detectionAction": {
+        "alertTemplate": {
+          "title": "Encoded PowerShell",
+          "description": "A process ran PowerShell with an encoded command.",
+          "severity": "high",
+          "category": "Execution",
+          "mitreTechniques": [],
+          "impactedAssets": [
+            {
+              "@odata.type": "#microsoft.graph.security.impactedUserAsset",
+              "identifier": "accountUpn"
+            },
+            {
+              "@odata.type": "#microsoft.graph.security.impactedDeviceAsset",
+              "identifier": "deviceName"
+            }
+          ],
+          "recommendedActions": null
+        },
+        "responseActions": [
+          {
+            "@odata.type": "#microsoft.graph.security.isolateDeviceResponseAction",
+            "identifier": "deviceId",
+            "isolationType": "full"
+          },
+          {
+            "@odata.type": "#microsoft.graph.security.disableUserResponseAction",
+            "identifier": "accountSid"
+          }
+        ],
+        "organizationalScope": null
+      },
+      "isEnabled": true
+    },
+    "safer": {
+      "displayName": "Encoded PowerShell \u2014 \u00dcn\u00efcode",
+      "queryCondition": {
+        "queryText": "DeviceProcessEvents\n| where ProcessCommandLine has \"-enc\""
+      },
+      "schedule": {
+        "period": "1H"
+      },
+      "detectionAction": {
+        "alertTemplate": {
+          "title": "Encoded PowerShell",
+          "description": "A process ran PowerShell with an encoded command.",
+          "severity": "high",
+          "category": "Execution",
+          "mitreTechniques": [],
+          "impactedAssets": [
+            {
+              "@odata.type": "#microsoft.graph.security.impactedDeviceAsset",
+              "identifier": "deviceId"
+            }
+          ],
+          "recommendedActions": null
+        },
+        "responseActions": [
+          {
+            "@odata.type": "#microsoft.graph.security.isolateDeviceResponseAction",
+            "identifier": "deviceId",
+            "isolationType": "full"
+          }
+        ],
+        "organizationalScope": null
+      },
+      "isEnabled": true
+    }
+  },
+  "query": {
+    "window": [
+      "2026-10-26T08:00:00+00:00",
+      "2026-10-27T08:00:00+00:00"
+    ],
+    "queries": [
+      {
+        "text": "DeviceProcessEvents\n| where FileName =~ 'powershell.exe'",
+        "limit": 1
+      },
+      {
+        "text": "DeviceProcessEvents | whre x",
+        "limit": 100
+      },
+      {
+        "text": "// forbidden\nEmailEvents",
+        "limit": 100
+      },
+      {
+        "text": "// gateway\nDeviceEvents",
+        "limit": 100
+      }
+    ]
+  },
+  "validate": {
+    "window": [
+      "2026-10-27T07:59:00+00:00",
+      "2026-10-27T08:00:00+00:00"
+    ],
+    "queries": [
+      "DeviceProcessEvents\n| project Timestamp, DeviceId, ReportId",
+      "DeviceProcessEvents\n| project Timestamp, DeviceName"
+    ]
+  }
+}

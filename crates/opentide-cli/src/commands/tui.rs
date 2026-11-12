@@ -6,10 +6,8 @@
 //! person at a terminal put in `plain` mode by a setting is told which one,
 //! and a `help:` says how to open it anyway.
 //!
-//! This module is that decision. The UI itself (`tui_app.py`, `tui_tabs/`)
-//! has no Rust implementation yet: where it would open, the run is refused
-//! with `engine_not_ported`, and `OPENTIDE_ENGINE=compare` runs the Python
-//! UI (`src/opentide/cli/engines.py`, `ENGINE_HOSTS`).
+//! This module is that decision. The UI itself is [`crate::tui`] (UC-3.6d),
+//! on ratatui.
 
 use super::Report;
 use crate::env::Env;

@@ -133,3 +133,77 @@ fn run_sentinel(args: &[String]) -> Result<bool> {
         check,
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn words(words: &[&str]) -> Vec<String> {
+        words.iter().map(|word| (*word).to_owned()).collect()
+    }
+
+    #[test]
+    fn the_command_line_exit_statuses() {
+        let usage = ExitCode::from(2);
+        assert_eq!(main(&[]), usage, "no command");
+        assert_eq!(main(&words(&["frobnicate"])), usage);
+        assert_eq!(main(&words(&["help"])), ExitCode::SUCCESS);
+        for args in [
+            &["sync", "--frobnicate"][..],
+            &["sync", "--specifications"],
+            &["sentinel-attack", "--frobnicate"],
+            &["sentinel-attack", "--stix-dir"],
+            &["diff"],
+        ] {
+            assert_eq!(main(&words(args)), usage, "{args:?}");
+        }
+    }
+
+    #[test]
+    fn the_sync_check_without_a_checkout_compares_the_lockfile_with_the_bundle() {
+        let dir = tempfile::tempdir().unwrap();
+        let absent = dir.path().join("specifications");
+        assert!(
+            run_sync(&words(&[
+                "--check",
+                "--specifications",
+                &absent.to_string_lossy()
+            ]))
+            .unwrap()
+        );
+        assert_eq!(
+            main(&words(&[
+                "sync",
+                "--check",
+                "--specifications",
+                &absent.to_string_lossy()
+            ])),
+            ExitCode::SUCCESS
+        );
+        assert!(!absent.exists(), "a check writes nothing");
+    }
+
+    #[test]
+    fn the_sentinel_check_needs_the_stix_bundles() {
+        let empty = tempfile::tempdir().unwrap();
+        let output = repo_root()
+            .unwrap()
+            .join("src/opentide/data/sentinel/attack-v18.json");
+        let before = std::fs::read(&output).unwrap();
+        assert_eq!(
+            main(&words(&[
+                "sentinel-attack",
+                "--check",
+                "--stix-dir",
+                &empty.path().to_string_lossy()
+            ])),
+            ExitCode::from(2)
+        );
+        assert_eq!(std::fs::read(&output).unwrap(), before);
+    }
+
+    #[test]
+    fn the_repository_root_holds_xtask() {
+        assert!(repo_root().unwrap().join("xtask/Cargo.toml").is_file());
+    }
+}

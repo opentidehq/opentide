@@ -49,6 +49,7 @@ pub const PORTED: &[&str] = &[
     "generate docs threats",
     "generate docs index",
     "deploy",
+    "serve",
 ];
 
 /// The file in which a run refused with `engine_not_ported` records its
@@ -678,6 +679,19 @@ impl Run<'_> {
                 };
                 crate::mcp::serve(&launch, &self.host.version)
             }
+            "serve" => {
+                // stdout is JSON-RPC's: nothing is emitted around the server.
+                let resolved =
+                    |path: Option<&str>| path.map(|path| self.resolve(path).display().to_string());
+                let launch = crate::serve::Launch {
+                    cwd: self.host.cwd.clone(),
+                    repo: resolved(self.globals.repo.as_deref()),
+                    data: resolved(self.globals.data.as_deref()),
+                    proxy: self.globals.proxy.clone(),
+                    debug: self.globals.debug || self.env.debug_requested(),
+                };
+                crate::serve::serve(&launch, &self.host.version, &self.host.interrupt)
+            }
             "tui" => {
                 use std::io::IsTerminal as _;
                 let place = crate::commands::tui::Place {
@@ -689,14 +703,15 @@ impl Run<'_> {
                 if let Some(report) = crate::commands::tui::gate(&place) {
                     return self.emit_report(&report, out, err);
                 }
-                // A person at a terminal: the UI, which runs on Python.
-                let message = "opentide tui's terminal UI has no Rust implementation yet: \
-                     unset OPENTIDE_ENGINE, or set it to python or compare."
-                    .to_owned();
-                let mut failure = Failure::new(code::ENGINE_NOT_PORTED, message);
-                failure.argument = Some("OPENTIDE_ENGINE".into());
-                let outcome = Outcome::failed(&path, USAGE_EXIT_CODE, failure);
-                self.emit(&outcome, &[], &[], out, err)
+                // A person at a terminal: the UI (UC-3.6d), which owns the
+                // terminal until it quits.
+                let launch = crate::tui::Launch {
+                    repo: self.globals.repo.clone(),
+                    env: self.env.clone(),
+                    cwd: self.host.cwd.clone().unwrap_or_default(),
+                    version: self.host.version.clone(),
+                };
+                crate::tui::open(&launch)
             }
             "lsp start" => {
                 // The server blocks on stdin and polls no interrupt: Ctrl-C
@@ -713,7 +728,8 @@ impl Run<'_> {
                 let report = self.setup_skills_catalogue(&matches, &path);
                 self.emit_report(&report, out, err)
             }
-            "setup env" | "setup hooks" | "setup platforms" | "setup repo" | "setup mcp" => {
+            "setup env" | "setup hooks" | "setup platforms" | "setup repo" | "setup mcp"
+            | "setup vscode" => {
                 let report = self.setup_step(&matches);
                 self.emit_report(&report, out, err)
             }
@@ -811,7 +827,7 @@ impl Run<'_> {
     /// `opentide setup ci`, from its parsed arguments and the `setup`
     /// group's.
     fn setup_ci(&self, matches: &clap::ArgMatches) -> crate::commands::Report {
-        use crate::commands::setup::{CiArgs, Context, ci};
+        use crate::commands::setup::{CiArgs, ci};
         let Some((_, group)) = matches.subcommand() else {
             return crate::commands::Report::error("setup ci", "no setup command");
         };
@@ -858,17 +874,7 @@ impl Run<'_> {
             group_only,
         };
         let cwd = self.host.cwd.clone().unwrap_or_default();
-        ci(
-            &parsed,
-            &Context {
-                repo: self.globals.repo.as_deref(),
-                env: self.env,
-                cwd: &cwd,
-                mode: self.mode,
-                version: &self.host.version,
-                quiet: self.globals.quiet,
-            },
-        )
+        ci(&parsed, &self.setup_context(&cwd))
     }
 
     /// The `setup` group's own options given on the command line before a
@@ -923,10 +929,13 @@ impl Run<'_> {
             mode: self.mode,
             version: &self.host.version,
             quiet: self.globals.quiet,
+            terminal: self.terminal(),
+            interrupt: self.host.interrupt.clone(),
+            stderr: self.host.log_sink.clone(),
         }
     }
 
-    /// `opentide setup env|hooks|platforms|repo|mcp`.
+    /// `opentide setup env|hooks|platforms|repo|mcp|vscode`.
     fn setup_step(&self, matches: &clap::ArgMatches) -> crate::commands::Report {
         use crate::commands::setup::files::RepoOptions;
         use crate::commands::setup::run::{Paths, Step, subcommand};
@@ -997,6 +1006,15 @@ impl Run<'_> {
                     .filter_map(|platform| platform.to_possible_value())
                     .map(|value| value.get_name().to_owned())
                     .collect(),
+            }),
+            "vscode" => Step::Vscode(crate::commands::setup::vscode::Options {
+                generate: !flag("no_generate"),
+                merge: !flag("no_merge"),
+                mcp: flag("mcp"),
+                ..crate::commands::setup::vscode::Options::from_flags(
+                    flag("settings"),
+                    flag("snippets"),
+                )
             }),
             _ => Step::Mcp(
                 [
@@ -1534,6 +1552,10 @@ impl Run<'_> {
         }
         let outcome = &report.outcome;
         self.record_refusal(outcome)?;
+        if KEEPING_DOCUMENT.with(std::cell::Cell::get) {
+            let document = outcome.document(self.duration_ms());
+            KEPT_DOCUMENT.with(|kept| *kept.borrow_mut() = Some(document));
+        }
         if !report.stderr_first.is_empty() {
             err.write_all(report.stderr_first.as_bytes())?;
             err.flush()?;
@@ -1949,6 +1971,34 @@ fn log_clock() -> String {
         .replace('T', " ")
         .trim_end_matches('Z')
         .to_owned()
+}
+
+thread_local! {
+    /// Whether [`run_keeping_document`] runs on this thread.
+    static KEEPING_DOCUMENT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// The JSON document of the report the run printed, as `--json` would
+    /// print it, while [`KEEPING_DOCUMENT`] is set.
+    static KEPT_DOCUMENT: RefCell<Option<crate::json::Json>> = const { RefCell::new(None) };
+}
+
+/// [`run`] for a host that shows a run's output itself (`opentide tui`'s
+/// Results tab): the exit code, and the JSON document `--json` would print
+/// for the report the run printed, built from the same report (no second
+/// run). `None` when the run printed no report (a usage error, a dry run's
+/// plan).
+pub fn run_keeping_document(
+    argv: &[String],
+    env: &Env,
+    host: &Host,
+    out: &mut dyn Write,
+    err: &mut dyn Write,
+) -> (i32, Option<crate::json::Json>) {
+    KEPT_DOCUMENT.with(|kept| kept.borrow_mut().take());
+    KEEPING_DOCUMENT.with(|keeping| keeping.set(true));
+    let code = run(argv, env, host, out, err);
+    KEEPING_DOCUMENT.with(|keeping| keeping.set(false));
+    let document = KEPT_DOCUMENT.with(|kept| kept.borrow_mut().take());
+    (code, document)
 }
 
 /// Runs `opentide` with `argv` (without the program name); the exit code.

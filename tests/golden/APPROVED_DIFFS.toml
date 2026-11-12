@@ -33,7 +33,11 @@
 #              a json-extend: rule: the number of elements of the oracle's
 #              array, in decimal;
 #              a text rule: one whole line of the oracle's target, without
-#              its line ending; a lines rule: its lines, and on the
+#              its line ending (a text rule's candidate may write <SHA256>
+#              once: any SHA-256 digest there, the rest literal, where the
+#              oracle's line is the same with a digest in its place; for a
+#              digest over something two builds differ in, such as the
+#              version); a lines rule: its lines, and on the
 #              candidate's side (absent) where the candidate writes no line
 #              in their place (a block dropped from a stream left empty);
 #              exit_code: the oracle's code
@@ -860,6 +864,42 @@ changelog = "**`info` draws its tables with comfy-table**"
 #   result.
 # - On Rust the MCP tools and `run_validation` show `validate`'s own announced
 #   differences (`unknown-revision`, `yaml-1-2-dates`, `yaml-error-text`).
+
+# UC-3.8 (#830): `opentide serve` under `OPENTIDE_ENGINE=rust` is the Rust
+# host (`crates/opentide-cli/src/serve`). `serve` is in `RUST_COMMANDS`, so
+# `cargo xtask golden check --engine compare` runs its recorded sessions on
+# the Rust host (a user's `OPENTIDE_ENGINE=compare` still runs Python's), and
+# `crates/opentide-cli/tests/serve.rs` replays them too. The one difference
+# they show is entered below: `initialize`'s `commands_digest`, the SHA-256 of
+# `opentide --json commands`. That document names the installed version
+# (normalised to <OPENTIDE_VERSION> in the goldens, not inside the digest),
+# which differs between two builds of the same commit, and the command tree,
+# which has changed since the oracle under the `commands` entries above (CQL,
+# #790; `OPENTIDE_ENGINE`, #805). Today's Python host answers the same digest
+# as the Rust host, and serve.rs checks the host's digest is that of today's
+# `commands` document, so the entry approves any digest in that one place
+# (<SHA256>). No recorded session reaches the differences that follow.
+# Announced under
+# "**`OPENTIDE_ENGINE=rust opentide serve` is the Rust host**":
+#
+# - `serve-json-strict`: a line Python's `json` reads but JSON does not allow
+#   (`NaN`, `Infinity`, a lone surrogate, nesting past 128) answers `-32700`
+#   with serde_json's message.
+# - `serve-ids-as-written`: request ids are compared by their JSON text.
+# - `serve-ignored-signals`: SIGTERM and SIGHUP stop the server even when it was started
+#   ignoring it (no safe way to read a disposition without `unsafe`).
+# - `serve-duration`: `duration_ms` is 0 in the documents the host builds.
+
+[[diff]]
+command = "serve"
+case = "serve/plain/*/session"
+target = "stdout"
+rule = "text"
+oracle = "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"protocol\":1,\"version\":\"<OPENTIDE_VERSION>\",\"commands_digest\":\"536a2117f452a33a8a278c30a7a53b5ceed339309ec1090ed8e0bc8064ae474b\"}}"
+candidate = "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"protocol\":1,\"version\":\"<OPENTIDE_VERSION>\",\"commands_digest\":\"<SHA256>\"}}"
+reason = "initialize's commands_digest is the SHA-256 of `opentide --json commands` (duration_ms left out), a document that names the installed version, different in every build, and the command tree, changed since the oracle under the approved `commands` entries (CrowdStrike CQL, OPENTIDE_ENGINE): the digest names today's build, as the Python host's does, and crates/opentide-cli/tests/serve.rs checks it is that of today's document; protocol and version are unchanged"
+issue = "https://github.com/opentidehq/opentide/issues/830"
+changelog = "**`OPENTIDE_ENGINE=rust opentide serve` is the Rust host**"
 
 # UC-3.2 (#824): `generate exports` on a terminal in `human` mode prints its
 # checklist row once the exports are written. The Rust engine writes them in
@@ -10088,3 +10128,201 @@ candidate = "MITRE ATT&CK mapping discipline and technique reference for opentid
 reason = "The description is wrapped at the stream's width at the same words; Rich left the space it broke at on the end of each row, the Rust renderer does not."
 issue = "https://github.com/opentidehq/opentide/issues/831"
 changelog = "**`setup skills discover` and `setup skills show` run on the Rust command line**"
+
+[[diff]]
+command = "setup vscode"
+case = "setup.vscode/*/tide-corpus/settings"
+target = "file:ws/.opentide/schemas/objective.1.0.schema.json"
+rule = "sha256"
+oracle = "cdc8edb0c91393081b74541c2c35b2d39269643a980f0dc8157629a2e197cb57"
+candidate = "4be421bd113319ade77d89fa723b74159216cd3c6433e6c5c89cbd3d2c67e92c"
+reason = "the JSON Schema is generated from the Rust models with schemars (UC-1.8b, #900), as `generate schemas` writes it: its text differs as the schema-* kinds above say, and it accepts and refuses every corpus object, configuration file and fault as the oracle's does (cargo xtask codegen --check judges this recording's schemas by verdict); the digests pin both files"
+issue = "https://github.com/opentidehq/opentide/issues/951"
+changelog = "**`setup vscode`, `setup --vscode-setup` and the setup wizards run on the Rust engine**"
+
+[[diff]]
+command = "setup vscode"
+case = "setup.vscode/*/tide-corpus/settings"
+target = "file:ws/.opentide/schemas/rule.1.0.schema.json"
+rule = "sha256"
+oracle = "47656628ff5a61697d2d1bb3a1b25228383151f971abeb85fbc133f3368304f9"
+candidate = "e4c38e8380b41b436a31f029303437b9f4fa36538032c0ea3ad7bc939c93baf9"
+reason = "the JSON Schema is generated from the Rust models with schemars (UC-1.8b, #900), as `generate schemas` writes it: its text differs as the schema-* kinds above say, and it accepts and refuses every corpus object, configuration file and fault as the oracle's does (cargo xtask codegen --check judges this recording's schemas by verdict); the digests pin both files"
+issue = "https://github.com/opentidehq/opentide/issues/951"
+changelog = "**`setup vscode`, `setup --vscode-setup` and the setup wizards run on the Rust engine**"
+
+[[diff]]
+command = "setup vscode"
+case = "setup.vscode/*/tide-corpus/settings"
+target = "file:ws/.opentide/schemas/rule.1.1.schema.json"
+rule = "sha256"
+oracle = "ec700e2282c16754e56a603d660c9327624df84e6beb63621500366fef6f9e39"
+candidate = "8748cef7edae586ec6bbb1a3f5c4da4a6e8ae67bebdfeb724b20bffde2efec85"
+reason = "the JSON Schema is generated from the Rust models with schemars (UC-1.8b, #900), as `generate schemas` writes it: its text differs as the schema-* kinds above say, and it accepts and refuses every corpus object, configuration file and fault as the oracle's does (cargo xtask codegen --check judges this recording's schemas by verdict); the digests pin both files"
+issue = "https://github.com/opentidehq/opentide/issues/951"
+changelog = "**`setup vscode`, `setup --vscode-setup` and the setup wizards run on the Rust engine**"
+
+[[diff]]
+command = "setup vscode"
+case = "setup.vscode/*/tide-corpus/settings"
+target = "file:ws/.opentide/schemas/threat.1.0.schema.json"
+rule = "sha256"
+oracle = "493e6868ec1d8ea492acbc21ad9676819ec21c6852bf1df6fc11a3256bda653c"
+candidate = "7c17a0a7beb05f642c6f608f595130754c1405013ab5f0d7423108cdb8586fd5"
+reason = "the JSON Schema is generated from the Rust models with schemars (UC-1.8b, #900), as `generate schemas` writes it: its text differs as the schema-* kinds above say, and it accepts and refuses every corpus object, configuration file and fault as the oracle's does (cargo xtask codegen --check judges this recording's schemas by verdict); the digests pin both files"
+issue = "https://github.com/opentidehq/opentide/issues/951"
+changelog = "**`setup vscode`, `setup --vscode-setup` and the setup wizards run on the Rust engine**"
+
+[[diff]]
+command = "setup vscode"
+case = "setup.vscode/*/tide-corpus/settings"
+target = "file:ws/.opentide/schemas/visibility.1.0.schema.json"
+rule = "sha256"
+oracle = "2650d85bfa10fadb1f95ce1404496186f23e2ced87c77b92bed6c2fc022e7e19"
+candidate = "76c75e5ad9323637bca452de1357f73f5f2e4e02a0ccd9433575bb5658adae3b"
+reason = "the JSON Schema is generated from the Rust models with schemars (UC-1.8b, #900), as `generate schemas` writes it: its text differs as the schema-* kinds above say, and it accepts and refuses every corpus object, configuration file and fault as the oracle's does (cargo xtask codegen --check judges this recording's schemas by verdict); the digests pin both files"
+issue = "https://github.com/opentidehq/opentide/issues/951"
+changelog = "**`setup vscode`, `setup --vscode-setup` and the setup wizards run on the Rust engine**"
+
+[[diff]]
+command = "setup vscode"
+case = "setup.vscode/json/*/*"
+target = "stderr"
+rule = "json:/logger"
+oracle = "\"opentide.cli.services.setup.vscode\""
+candidate = "(absent)"
+reason = "`logger` named the Python module that logged the line (structlog's logger name); the Rust CLI's JSON log lines carry the event, level, timestamp and the event's fields, not a module path."
+issue = "https://github.com/opentidehq/opentide/issues/951"
+changelog = "**`setup vscode`, `setup --vscode-setup` and the setup wizards run on the Rust engine**"
+
+[[diff]]
+command = "setup"
+case = "setup/*/tide-corpus/vscode-setup"
+target = "file:ws/.opentide/schemas/objective.1.0.schema.json"
+rule = "sha256"
+oracle = "cdc8edb0c91393081b74541c2c35b2d39269643a980f0dc8157629a2e197cb57"
+candidate = "4be421bd113319ade77d89fa723b74159216cd3c6433e6c5c89cbd3d2c67e92c"
+reason = "the JSON Schema is generated from the Rust models with schemars (UC-1.8b, #900), as `generate schemas` writes it: its text differs as the schema-* kinds above say, and it accepts and refuses every corpus object, configuration file and fault as the oracle's does (cargo xtask codegen --check judges this recording's schemas by verdict); the digests pin both files"
+issue = "https://github.com/opentidehq/opentide/issues/951"
+changelog = "**`setup vscode`, `setup --vscode-setup` and the setup wizards run on the Rust engine**"
+
+[[diff]]
+command = "setup"
+case = "setup/*/tide-corpus/vscode-setup"
+target = "file:ws/.opentide/schemas/rule.1.0.schema.json"
+rule = "sha256"
+oracle = "47656628ff5a61697d2d1bb3a1b25228383151f971abeb85fbc133f3368304f9"
+candidate = "e4c38e8380b41b436a31f029303437b9f4fa36538032c0ea3ad7bc939c93baf9"
+reason = "the JSON Schema is generated from the Rust models with schemars (UC-1.8b, #900), as `generate schemas` writes it: its text differs as the schema-* kinds above say, and it accepts and refuses every corpus object, configuration file and fault as the oracle's does (cargo xtask codegen --check judges this recording's schemas by verdict); the digests pin both files"
+issue = "https://github.com/opentidehq/opentide/issues/951"
+changelog = "**`setup vscode`, `setup --vscode-setup` and the setup wizards run on the Rust engine**"
+
+[[diff]]
+command = "setup"
+case = "setup/*/tide-corpus/vscode-setup"
+target = "file:ws/.opentide/schemas/rule.1.1.schema.json"
+rule = "sha256"
+oracle = "ec700e2282c16754e56a603d660c9327624df84e6beb63621500366fef6f9e39"
+candidate = "8748cef7edae586ec6bbb1a3f5c4da4a6e8ae67bebdfeb724b20bffde2efec85"
+reason = "the JSON Schema is generated from the Rust models with schemars (UC-1.8b, #900), as `generate schemas` writes it: its text differs as the schema-* kinds above say, and it accepts and refuses every corpus object, configuration file and fault as the oracle's does (cargo xtask codegen --check judges this recording's schemas by verdict); the digests pin both files"
+issue = "https://github.com/opentidehq/opentide/issues/951"
+changelog = "**`setup vscode`, `setup --vscode-setup` and the setup wizards run on the Rust engine**"
+
+[[diff]]
+command = "setup"
+case = "setup/*/tide-corpus/vscode-setup"
+target = "file:ws/.opentide/schemas/threat.1.0.schema.json"
+rule = "sha256"
+oracle = "493e6868ec1d8ea492acbc21ad9676819ec21c6852bf1df6fc11a3256bda653c"
+candidate = "7c17a0a7beb05f642c6f608f595130754c1405013ab5f0d7423108cdb8586fd5"
+reason = "the JSON Schema is generated from the Rust models with schemars (UC-1.8b, #900), as `generate schemas` writes it: its text differs as the schema-* kinds above say, and it accepts and refuses every corpus object, configuration file and fault as the oracle's does (cargo xtask codegen --check judges this recording's schemas by verdict); the digests pin both files"
+issue = "https://github.com/opentidehq/opentide/issues/951"
+changelog = "**`setup vscode`, `setup --vscode-setup` and the setup wizards run on the Rust engine**"
+
+[[diff]]
+command = "setup"
+case = "setup/*/tide-corpus/vscode-setup"
+target = "file:ws/.opentide/schemas/visibility.1.0.schema.json"
+rule = "sha256"
+oracle = "2650d85bfa10fadb1f95ce1404496186f23e2ced87c77b92bed6c2fc022e7e19"
+candidate = "76c75e5ad9323637bca452de1357f73f5f2e4e02a0ccd9433575bb5658adae3b"
+reason = "the JSON Schema is generated from the Rust models with schemars (UC-1.8b, #900), as `generate schemas` writes it: its text differs as the schema-* kinds above say, and it accepts and refuses every corpus object, configuration file and fault as the oracle's does (cargo xtask codegen --check judges this recording's schemas by verdict); the digests pin both files"
+issue = "https://github.com/opentidehq/opentide/issues/951"
+changelog = "**`setup vscode`, `setup --vscode-setup` and the setup wizards run on the Rust engine**"
+
+[[diff]]
+command = "setup"
+case = "setup/json/tide-corpus/vscode-setup"
+target = "stderr"
+rule = "json:/logger"
+oracle = "\"opentide.cli.services.setup.vscode\""
+candidate = "(absent)"
+reason = "`logger` named the Python module that logged the line (structlog's logger name); the Rust CLI's JSON log lines carry the event, level, timestamp and the event's fields, not a module path."
+issue = "https://github.com/opentidehq/opentide/issues/951"
+changelog = "**`setup vscode`, `setup --vscode-setup` and the setup wizards run on the Rust engine**"
+
+[[diff]]
+command = "setup vscode"
+case = "setup.vscode/human/setup-merge/merge"
+target = "file:ws/.vscode/mcp.json"
+rule = "lines"
+oracle = "{\n  \"servers\": {\n    \"other\": {\n      \"command\": \"other-server\",\n      \"args\": []\n    },\n    \"opentide\": {\n      \"command\": \"opentide\",\n      \"args\": [\n        \"mcp\",\n        \"start\"\n      ],\n      \"env\": {\n        \"OPENTIDE_REPO_ROOT\": \"${workspaceFolder}\"\n      }\n    }\n  }\n}"
+candidate = "\ufeff{\n  // The team's MCP servers.\n  \"servers\": {\n    /* keep */ \"other\": {\"command\": \"other-server\", \"args\": []},\n    \"opentide\": {\n      \"command\": \"opentide\",\n      \"args\": [\"mcp\", \"start\"],\n      \"env\": {\n        \"OPENTIDE_REPO_ROOT\": \"${workspaceFolder}\",\n      },\n    },\n  },\n}"
+reason = "setup vscode --mcp merges opentide's server into an existing .vscode/mcp.json in place, as setup mcp does (jsonc-parser's CST): the byte-order mark, comments, layout and trailing commas stay, and the new member follows the file's own style; the oracle (0.23.0) parsed the file, dropped its comments, BOM and trailing commas and rewrote it as indented JSON (#743)"
+issue = "https://github.com/opentidehq/opentide/issues/951"
+changelog = "**`setup vscode`, `setup --vscode-setup` and the setup wizards run on the Rust engine**"
+
+[[diff]]
+command = "setup vscode"
+case = "setup.vscode/plain/setup-merge/merge"
+target = "file:ws/.vscode/mcp.json"
+rule = "lines"
+oracle = "{\n  \"servers\": {\n    \"other\": {\n      \"command\": \"other-server\",\n      \"args\": []\n    },\n    \"opentide\": {\n      \"command\": \"opentide\",\n      \"args\": [\n        \"mcp\",\n        \"start\"\n      ],\n      \"env\": {\n        \"OPENTIDE_REPO_ROOT\": \"${workspaceFolder}\"\n      }\n    }\n  }\n}"
+candidate = "\ufeff{\n  // The team's MCP servers.\n  \"servers\": {\n    /* keep */ \"other\": {\"command\": \"other-server\", \"args\": []},\n    \"opentide\": {\n      \"command\": \"opentide\",\n      \"args\": [\"mcp\", \"start\"],\n      \"env\": {\n        \"OPENTIDE_REPO_ROOT\": \"${workspaceFolder}\",\n      },\n    },\n  },\n}"
+reason = "setup vscode --mcp merges opentide's server into an existing .vscode/mcp.json in place, as setup mcp does (jsonc-parser's CST): the byte-order mark, comments, layout and trailing commas stay, and the new member follows the file's own style; the oracle (0.23.0) parsed the file, dropped its comments, BOM and trailing commas and rewrote it as indented JSON (#743)"
+issue = "https://github.com/opentidehq/opentide/issues/951"
+changelog = "**`setup vscode`, `setup --vscode-setup` and the setup wizards run on the Rust engine**"
+
+[[diff]]
+command = "setup vscode"
+case = "setup.vscode/json/setup-merge/merge"
+target = "file:ws/.vscode/mcp.json"
+rule = "lines"
+oracle = "{\n  \"servers\": {\n    \"other\": {\n      \"command\": \"other-server\",\n      \"args\": []\n    },\n    \"opentide\": {\n      \"command\": \"opentide\",\n      \"args\": [\n        \"mcp\",\n        \"start\"\n      ],\n      \"env\": {\n        \"OPENTIDE_REPO_ROOT\": \"${workspaceFolder}\"\n      }\n    }\n  }\n}"
+candidate = "\ufeff{\n  // The team's MCP servers.\n  \"servers\": {\n    /* keep */ \"other\": {\"command\": \"other-server\", \"args\": []},\n    \"opentide\": {\n      \"command\": \"opentide\",\n      \"args\": [\"mcp\", \"start\"],\n      \"env\": {\n        \"OPENTIDE_REPO_ROOT\": \"${workspaceFolder}\",\n      },\n    },\n  },\n}"
+reason = "setup vscode --mcp merges opentide's server into an existing .vscode/mcp.json in place, as setup mcp does (jsonc-parser's CST): the byte-order mark, comments, layout and trailing commas stay, and the new member follows the file's own style; the oracle (0.23.0) parsed the file, dropped its comments, BOM and trailing commas and rewrote it as indented JSON (#743)"
+issue = "https://github.com/opentidehq/opentide/issues/951"
+changelog = "**`setup vscode`, `setup --vscode-setup` and the setup wizards run on the Rust engine**"
+
+[[diff]]
+command = "setup vscode"
+case = "setup.vscode/agent/setup-merge/merge"
+target = "file:ws/.vscode/mcp.json"
+rule = "lines"
+oracle = "{\n  \"servers\": {\n    \"other\": {\n      \"command\": \"other-server\",\n      \"args\": []\n    },\n    \"opentide\": {\n      \"command\": \"opentide\",\n      \"args\": [\n        \"mcp\",\n        \"start\"\n      ],\n      \"env\": {\n        \"OPENTIDE_REPO_ROOT\": \"${workspaceFolder}\"\n      }\n    }\n  }\n}"
+candidate = "\ufeff{\n  // The team's MCP servers.\n  \"servers\": {\n    /* keep */ \"other\": {\"command\": \"other-server\", \"args\": []},\n    \"opentide\": {\n      \"command\": \"opentide\",\n      \"args\": [\"mcp\", \"start\"],\n      \"env\": {\n        \"OPENTIDE_REPO_ROOT\": \"${workspaceFolder}\",\n      },\n    },\n  },\n}"
+reason = "setup vscode --mcp merges opentide's server into an existing .vscode/mcp.json in place, as setup mcp does (jsonc-parser's CST): the byte-order mark, comments, layout and trailing commas stay, and the new member follows the file's own style; the oracle (0.23.0) parsed the file, dropped its comments, BOM and trailing commas and rewrote it as indented JSON (#743)"
+issue = "https://github.com/opentidehq/opentide/issues/951"
+changelog = "**`setup vscode`, `setup --vscode-setup` and the setup wizards run on the Rust engine**"
+
+[[diff]]
+command = "setup vscode"
+case = "setup.vscode/human/empty/no-templates"
+target = "stderr"
+rule = "lines"
+oracle = "\u001b[1;33mwarning: \u001b[0mVscode snippets skipped · detail: No templates in .opentide/templates — run opentide \ngenerate first\n\u001b[1;31merror: \u001b[0mVscode snippets missing · detail: VS Code snippets were not generated (no templates in \n.opentide/templates)"
+candidate = "warning: Vscode snippets skipped · detail: No templates in .opentide/templates — run opentide generate first\nerror: Vscode snippets missing · detail: VS Code snippets were not generated (no templates in .opentide/templates)"
+reason = "The log lines of the step that found no templates are written by the Rust CLI's logging layer (UC-3.3), one unstyled line each: Rich coloured their label and wrapped them at the terminal's width. The events, their fields and their order are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/951"
+changelog = "**`setup vscode`, `setup --vscode-setup` and the setup wizards run on the Rust engine**"
+
+[[diff]]
+command = "setup vscode"
+case = "setup.vscode/json/empty/no-templates"
+target = "stderr"
+rule = "lines"
+oracle = "{\"detail\":\"opentide setup vscode is deprecated and will be removed when the opentide VS Code extension ships with a bundled language server and template actions.\",\"event\":\"vscode_setup_deprecated\",\"logger\":\"opentide.cli.services.setup.vscode\",\"level\":\"warning\",\"timestamp\":\"0000-00-00 00:00:00\"}\n{\"detail\":\"No templates in .opentide/templates — run opentide generate first\",\"event\":\"vscode_snippets_skipped\",\"logger\":\"opentide.cli.services.setup.vscode\",\"level\":\"warning\",\"timestamp\":\"0000-00-00 00:00:00\"}\n{\"detail\":\"VS Code snippets were not generated (no templates in .opentide/templates)\",\"event\":\"vscode_snippets_missing\",\"logger\":\"opentide.cli.services.setup.vscode\",\"level\":\"error\",\"timestamp\":\"0000-00-00 00:00:00\"}"
+candidate = "{\"detail\":\"opentide setup vscode is deprecated and will be removed when the opentide VS Code extension ships with a bundled language server and template actions.\",\"event\":\"vscode_setup_deprecated\",\"level\":\"warning\",\"timestamp\":\"0000-00-00 00:00:00\"}\n{\"detail\":\"No templates in .opentide/templates — run opentide generate first\",\"event\":\"vscode_snippets_skipped\",\"level\":\"warning\",\"timestamp\":\"0000-00-00 00:00:00\"}\n{\"detail\":\"VS Code snippets were not generated (no templates in .opentide/templates)\",\"event\":\"vscode_snippets_missing\",\"level\":\"error\",\"timestamp\":\"0000-00-00 00:00:00\"}"
+reason = "`logger` named the Python module that logged each line (structlog's logger name); the Rust CLI's JSON log lines carry the event, level, timestamp and the event's fields, not a module path. The events and their order are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/951"
+changelog = "**`setup vscode`, `setup --vscode-setup` and the setup wizards run on the Rust engine**"

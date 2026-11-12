@@ -25,6 +25,9 @@
 //! `elastic_dataset_not_declared`. Where every one holds ECS documents
 //! (`logs-*`), columns read straight from them are checked against ECS
 //! ([`ecs_diagnostics`]) and the columns `visibility.toml` declares for them.
+//!
+//! Internal to opentide, with no stability promise: depend on the
+//! [`opentide`](https://docs.rs/opentide) crate, its Rust SDK, instead.
 
 #![expect(
     missing_docs,

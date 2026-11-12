@@ -436,7 +436,7 @@ impl Comparison<'_> {
     }
 
     fn text_content(&mut self, target: &Target, oracle: &[u8], candidate: &[u8]) {
-        let rules: Vec<(usize, Vec<u8>, Vec<u8>)> = self
+        let rules: Vec<(usize, Vec<u8>, String)> = self
             .ledger
             .entries_for(self.case.command, self.case.id, target)
             .filter_map(|(index, entry)| match &entry.rule {
@@ -446,7 +446,7 @@ impl Comparison<'_> {
                 } => Some((
                     index,
                     expected_oracle.as_bytes().to_vec(),
-                    expected_candidate.as_bytes().to_vec(),
+                    expected_candidate.clone(),
                 )),
                 _ => None,
             })
@@ -483,7 +483,8 @@ impl Comparison<'_> {
         }
         // Exact, line by line: an entry approves line N only where the
         // oracle's line N is its oracle text and the candidate's line N is its
-        // candidate text, each the whole line without its newline. The line
+        // candidate text (with a digest where it writes `<SHA256>`), each the
+        // whole line without its newline. The line
         // then reads as the candidate's, keeping the oracle's line ending, so
         // a different ending is still reported. Every other line is compared
         // as it is.
@@ -496,8 +497,8 @@ impl Comparison<'_> {
             let (body, ending) = split_ending(line);
             let (other_body, _) = split_ending(other);
             for (index, from, to) in &rules {
-                if body == from.as_slice() && other_body == to.as_slice() {
-                    rewritten[number] = [to.as_slice(), ending].concat();
+                if body == from.as_slice() && ledger::text_matches(to, other_body) {
+                    rewritten[number] = [other_body, ending].concat();
                     applied.insert(*index);
                 }
             }
@@ -887,6 +888,67 @@ changelog = "**x**"
         let report = compare(case, &oracle, &other, &ledger, &mut usage);
         assert!(!report.equal);
         assert_eq!(report.differences[0].at.as_deref(), Some("line 2, byte 14"));
+    }
+
+    /// A `text` entry with `<SHA256>` approves the candidate's line with any
+    /// digest there, and nothing else on that line or the next.
+    #[test]
+    fn a_text_entry_with_a_digest_token_approves_any_digest_there() {
+        let oracle_digest = "5".repeat(64);
+        let ledger = Ledger::parse(&format!(
+            r#"
+[[diff]]
+command = "serve"
+case = "plain/*"
+target = "stdout"
+rule = "text"
+oracle = "{{\"digest\":\"{oracle_digest}\"}}"
+candidate = "{{\"digest\":\"<SHA256>\"}}"
+reason = "a digest over the version"
+issue = "https://github.com/opentidehq/opentide/issues/830"
+changelog = "**x**"
+"#
+        ))
+        .unwrap();
+        let case = Case {
+            command: "serve",
+            id: "plain/ws/session",
+        };
+        let oracle = Run {
+            stdout: format!("{{\"digest\":\"{oracle_digest}\"}}\nnext\n").into_bytes(),
+            ..Run::default()
+        };
+        let mut usage = Usage::default();
+        let run = |line: &str| Run {
+            stdout: format!("{line}\nnext\n").into_bytes(),
+            ..Run::default()
+        };
+        for digest in ["a".repeat(64), "0123456789abcdef".repeat(4)] {
+            let report = compare(
+                case,
+                &oracle,
+                &run(&format!("{{\"digest\":\"{digest}\"}}")),
+                &ledger,
+                &mut usage,
+            );
+            assert!(report.equal, "{report:?}");
+        }
+        assert!(usage.is_used(0));
+        for line in [
+            format!("{{\"digest\":\"{}\"}}", "a".repeat(63)),
+            format!("{{\"digest\":\"{}\",\"x\":1}}", "a".repeat(64)),
+            format!("{{\"Digest\":\"{}\"}}", "a".repeat(64)),
+        ] {
+            let report = compare(case, &oracle, &run(&line), &ledger, &mut usage);
+            assert!(!report.equal, "{line}");
+        }
+        let next = Run {
+            stdout: format!("{{\"digest\":\"{}\"}}\nother\n", "a".repeat(64)).into_bytes(),
+            ..Run::default()
+        };
+        let report = compare(case, &oracle, &next, &ledger, &mut usage);
+        assert!(!report.equal);
+        assert_eq!(report.differences[0].at.as_deref(), Some("line 2, byte 78"));
     }
 
     /// A `sha256` entry approves one file exactly: the oracle's and the

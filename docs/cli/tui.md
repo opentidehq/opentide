@@ -158,3 +158,5 @@ error: opentide tui runs only in the human output mode; this run is in plain mod
 ## Source
 
 `src/opentide/cli/commands/tui.py` (the command, and its refusals), `src/opentide/cli/tui_app.py` (the Textual app, the only module that imports Textual, when the UI opens: `opentide tui --help` does not load it), `src/opentide/cli/services/tui.py` (the catalogue, coverage and actions)
+
+The Rust command line has its own UI on ratatui (`crates/opentide-cli/src/tui/`), with the same tabs, keys and actions. `opentide tui` still opens the Python one: the Rust UI's Configuration tab and `generate` (the full pipeline) are not ported yet.

@@ -8,6 +8,9 @@
 //! ([`indices_are_ecs`]), the engines check a known field's type (an error
 //! only where Elasticsearch rejects the query) and warn about a near miss of
 //! an ECS field ([`unknown_field`]); any other unknown field is fine.
+//!
+//! Internal to opentide, with no stability promise: depend on the
+//! [`opentide`](https://docs.rs/opentide) crate, its Rust SDK, instead.
 
 #![expect(
     missing_docs,

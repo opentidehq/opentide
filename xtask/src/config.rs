@@ -374,4 +374,165 @@ mod tests {
         assert!(result["resolved"]["platforms"]["splunk"].is_object());
         assert_eq!(result["issues"], json!([]));
     }
+
+    #[test]
+    fn the_fixture_workspaces_hold_the_made_ones_and_each_resolves() {
+        let scratch = tempfile::tempdir().unwrap();
+        let workspaces = fixture_workspaces(scratch.path()).unwrap();
+        let root = repo_root();
+        let generation = scratch.path().join("fixtures/generation");
+        let child = scratch.path().join("fixtures/parent/child");
+        for expected in [
+            root.join("tests/golden/fixtures/vscode-workspace"),
+            root.join("crates/testdata/conformance/lint-toml"),
+            generation.clone(),
+            child.clone(),
+        ] {
+            assert!(workspaces.contains(&expected), "{}", expected.display());
+        }
+        assert!(
+            workspaces
+                .iter()
+                .any(|workspace| workspace.starts_with(root.join("tests/golden/cases"))),
+            "the golden cases with a configuration folder"
+        );
+        assert!(
+            workspaces.windows(2).all(|pair| pair[0] < pair[1]),
+            "sorted, each once"
+        );
+        for workspace in &workspaces {
+            assert!(
+                workspace.join(".opentide/configurations").is_dir(),
+                "{} has a configuration folder",
+                workspace.display()
+            );
+            let result = rust_result(workspace).unwrap();
+            assert!(
+                result.get("resolved").is_some() != result.get("error").is_some(),
+                "{}: {result}",
+                workspace.display()
+            );
+        }
+        // The generation fixtures, copied as a workspace's own folder.
+        let copied = std::fs::read_dir(generation.join(".opentide/configurations"))
+            .unwrap()
+            .count();
+        let source = std::fs::read_dir(root.join("tests/fixtures/generation/configurations"))
+            .unwrap()
+            .count();
+        assert_eq!(copied, source);
+        // The child resolves over its parent, the vscode fixture's instance.
+        let result = rust_result(&child).unwrap();
+        assert_eq!(
+            result.pointer("/resolved/deployment/default_responders"),
+            Some(&json!("child")),
+            "{result}"
+        );
+    }
+
+    #[test]
+    fn the_generated_workspaces_are_each_layout_and_the_faults() {
+        let scratch = tempfile::tempdir().unwrap();
+        let catalogue = load_catalogue(&repo_root().join("tests/corpora/faults.toml")).unwrap();
+        let workspaces = generated_workspaces(scratch.path(), &catalogue).unwrap();
+        let generated = scratch.path().join("generated");
+        assert_eq!(
+            workspaces,
+            ["standard", "explicit", "custom", "faults"].map(|name| generated.join(name))
+        );
+        assert!(
+            scratch
+                .path()
+                .join("generated/faults.faults.json")
+                .is_file()
+        );
+        for workspace in &workspaces[..3] {
+            let result = rust_result(workspace).unwrap();
+            assert!(
+                result.get("resolved").is_some(),
+                "{}: {result}",
+                workspace.display()
+            );
+        }
+        // A second run into the same scratch is refused: the fault manifest
+        // is never overwritten.
+        assert!(generated_workspaces(scratch.path(), &catalogue).is_err());
+    }
+
+    #[cfg(unix)]
+    fn fake_python(dir: &Path, body: &str) -> PathBuf {
+        use std::os::unix::fs::PermissionsExt as _;
+        let path = dir.join("python");
+        std::fs::write(&path, format!("#!/bin/sh\n{body}\n")).unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        path
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_oracle_script_runs_in_chunks_and_its_objects_are_merged() {
+        let dir = tempfile::tempdir().unwrap();
+        // Isolated mode, the script, then the workspaces: one object keyed by
+        // each workspace, holding how many came in its chunk.
+        let python = fake_python(
+            dir.path(),
+            r#"[ "$1" = -I ] || exit 9
+case "$2" in */xtask/oracle/config_resolve.py) ;; *) exit 8 ;; esac
+shift 2
+printf '{'; sep=''
+for workspace in "$@"; do printf '%s"%s": {"chunk": %d}' "$sep" "$workspace" "$#"; sep=','; done
+printf '}'"#,
+        );
+        let workspaces: Vec<PathBuf> = (0..65).map(|i| PathBuf::from(format!("/w/{i}"))).collect();
+        let results = run_oracle_script(&python, &workspaces).unwrap();
+        assert_eq!(results.len(), 65);
+        assert_eq!(results["/w/0"], json!({"chunk": 64}));
+        assert_eq!(results["/w/63"], json!({"chunk": 64}));
+        assert_eq!(results["/w/64"], json!({"chunk": 1}));
+        assert!(run_oracle_script(&python, &[]).unwrap().is_empty());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_oracle_script_that_fails_or_prints_no_object_stops_the_diff() {
+        let dir = tempfile::tempdir().unwrap();
+        let workspaces = [PathBuf::from("/w")];
+        let python = fake_python(dir.path(), "echo 'no module named opentide' >&2; exit 1");
+        let error = format!("{:#}", run_oracle_script(&python, &workspaces).unwrap_err());
+        assert!(
+            error.contains("failed: no module named opentide"),
+            "{error}"
+        );
+
+        let python = fake_python(dir.path(), "echo '[1, 2]'");
+        let error = format!("{:#}", run_oracle_script(&python, &workspaces).unwrap_err());
+        assert!(error.contains("printed no JSON object"), "{error}");
+
+        let missing = dir.path().join("absent/python");
+        let error = format!(
+            "{:#}",
+            run_oracle_script(&missing, &workspaces).unwrap_err()
+        );
+        assert!(error.starts_with("cannot run "), "{error}");
+    }
+
+    #[test]
+    fn a_tree_is_copied_with_its_folders() {
+        let dir = tempfile::tempdir().unwrap();
+        let from = dir.path().join("from");
+        std::fs::create_dir_all(from.join("a/b")).unwrap();
+        std::fs::write(from.join("top.toml"), "x = 1\n").unwrap();
+        std::fs::write(from.join("a/b/deep.toml"), "y = 2\n").unwrap();
+        let to = dir.path().join("to/nested");
+        copy_tree(&from, &to).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(to.join("top.toml")).unwrap(),
+            "x = 1\n"
+        );
+        assert_eq!(
+            std::fs::read_to_string(to.join("a/b/deep.toml")).unwrap(),
+            "y = 2\n"
+        );
+        assert!(copy_tree(&dir.path().join("absent"), &to).is_err());
+    }
 }

@@ -1,0 +1,6 @@
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}
+{"jsonrpc":"2.0","method":"invalidate","params":{"paths":["/a",1,null,true]}}
+{"jsonrpc":"2.0","id":"s","method":"shutdown"}
+{"jsonrpc":"2.0","id":9,"method":"run","params":{"argv":["info"]}}
+{"jsonrpc":"2.0","method":"exit"}
+{"jsonrpc":"2.0","id":10,"method":"run","params":{"argv":["info"]}}

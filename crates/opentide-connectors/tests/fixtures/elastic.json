@@ -1,0 +1,1119 @@
+{
+  "deploy": [
+    {
+      "rule_id": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0001",
+      "name": "Elastic rule 01",
+      "status": "STAGING",
+      "block": {
+        "enabled": true,
+        "name": "",
+        "schema": "platform::elastic::1.0",
+        "status": "STAGING",
+        "flags": null,
+        "tenants": null,
+        "contributors": null,
+        "type": "query",
+        "query": "process.name: \"cmd.exe\"",
+        "language": "kuery",
+        "index": [
+          "logs-*"
+        ],
+        "data_view_id": null,
+        "filters": null,
+        "scheduling": null,
+        "severity": null,
+        "risk": null,
+        "suppression": null,
+        "highlighted_fields": null,
+        "threshold": null,
+        "new_terms": null,
+        "eql": null,
+        "threat": null,
+        "machine_learning": null,
+        "integration": null,
+        "required_fields": null,
+        "guide": null,
+        "false_positives": null,
+        "tags": null,
+        "exceptions": null,
+        "building_block": false,
+        "overrides": null,
+        "actions": null
+      },
+      "payload": {
+        "rule_id": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0001",
+        "type": "query",
+        "name": "Elastic rule 01",
+        "description": "Rule 01 of the Elastic connector's cassettes.",
+        "enabled": true,
+        "severity": "high",
+        "risk_score": 73,
+        "interval": "5m",
+        "from": "now-6m",
+        "to": "now",
+        "language": "kuery",
+        "query": "process.name: \"cmd.exe\"",
+        "index": [
+          "logs-*"
+        ],
+        "tags": [
+          "OpenTide"
+        ],
+        "author": [
+          "Detection Engineering"
+        ]
+      }
+    },
+    {
+      "rule_id": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0002",
+      "name": "Elastic rule 02",
+      "status": "PRODUCTION",
+      "block": {
+        "enabled": true,
+        "name": "",
+        "schema": "platform::elastic::1.0",
+        "status": "PRODUCTION",
+        "flags": null,
+        "tenants": null,
+        "contributors": null,
+        "type": "query",
+        "query": "process.name: *",
+        "language": "kuery",
+        "index": [
+          "logs-*"
+        ],
+        "data_view_id": null,
+        "filters": null,
+        "scheduling": null,
+        "severity": null,
+        "risk": null,
+        "suppression": null,
+        "highlighted_fields": null,
+        "threshold": null,
+        "new_terms": null,
+        "eql": null,
+        "threat": null,
+        "machine_learning": null,
+        "integration": null,
+        "required_fields": null,
+        "guide": null,
+        "false_positives": null,
+        "tags": null,
+        "exceptions": null,
+        "building_block": false,
+        "overrides": null,
+        "actions": null
+      },
+      "payload": {
+        "rule_id": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0002",
+        "type": "query",
+        "name": "Elastic rule 02",
+        "description": "Rule 02 of the Elastic connector's cassettes.",
+        "enabled": true,
+        "severity": "high",
+        "risk_score": 73,
+        "interval": "5m",
+        "from": "now-6m",
+        "to": "now",
+        "language": "kuery",
+        "query": "process.name: *",
+        "index": [
+          "logs-*"
+        ],
+        "tags": [
+          "OpenTide"
+        ],
+        "author": [
+          "Detection Engineering"
+        ]
+      }
+    },
+    {
+      "rule_id": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0003",
+      "name": "Elastic rule 03",
+      "status": "STAGING",
+      "block": {
+        "enabled": true,
+        "name": "",
+        "schema": "platform::elastic::1.0",
+        "status": "STAGING",
+        "flags": null,
+        "tenants": null,
+        "contributors": null,
+        "type": "eql",
+        "query": "process where process.name == \"cmd.exe\"",
+        "language": null,
+        "index": [
+          "logs-*"
+        ],
+        "data_view_id": null,
+        "filters": null,
+        "scheduling": null,
+        "severity": null,
+        "risk": null,
+        "suppression": null,
+        "highlighted_fields": null,
+        "threshold": null,
+        "new_terms": null,
+        "eql": null,
+        "threat": null,
+        "machine_learning": null,
+        "integration": null,
+        "required_fields": null,
+        "guide": null,
+        "false_positives": null,
+        "tags": null,
+        "exceptions": null,
+        "building_block": false,
+        "overrides": null,
+        "actions": null
+      },
+      "payload": {
+        "rule_id": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0003",
+        "type": "eql",
+        "name": "Elastic rule 03",
+        "description": "Rule 03 of the Elastic connector's cassettes.",
+        "enabled": true,
+        "severity": "high",
+        "risk_score": 73,
+        "interval": "5m",
+        "from": "now-6m",
+        "to": "now",
+        "language": "eql",
+        "query": "process where process.name == \"cmd.exe\"",
+        "index": [
+          "logs-*"
+        ],
+        "tags": [
+          "OpenTide"
+        ],
+        "author": [
+          "Detection Engineering"
+        ]
+      }
+    },
+    {
+      "rule_id": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0004",
+      "name": "Elastic rule 04",
+      "status": "STAGING",
+      "block": {
+        "enabled": true,
+        "name": "",
+        "schema": "platform::elastic::1.0",
+        "status": "STAGING",
+        "flags": null,
+        "tenants": null,
+        "contributors": null,
+        "type": "query",
+        "query": "event.kind: alert",
+        "language": "kuery",
+        "index": [
+          "logs-*"
+        ],
+        "data_view_id": null,
+        "filters": null,
+        "scheduling": null,
+        "severity": null,
+        "risk": null,
+        "suppression": null,
+        "highlighted_fields": null,
+        "threshold": null,
+        "new_terms": null,
+        "eql": null,
+        "threat": null,
+        "machine_learning": null,
+        "integration": null,
+        "required_fields": null,
+        "guide": null,
+        "false_positives": null,
+        "tags": null,
+        "exceptions": null,
+        "building_block": false,
+        "overrides": null,
+        "actions": null
+      },
+      "payload": {
+        "rule_id": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0004",
+        "type": "query",
+        "name": "Elastic rule 04",
+        "description": "Rule 04 of the Elastic connector's cassettes.",
+        "enabled": true,
+        "severity": "high",
+        "risk_score": 73,
+        "interval": "5m",
+        "from": "now-6m",
+        "to": "now",
+        "language": "kuery",
+        "query": "event.kind: alert",
+        "index": [
+          "logs-*"
+        ],
+        "tags": [
+          "OpenTide"
+        ],
+        "author": [
+          "Detection Engineering"
+        ]
+      }
+    },
+    {
+      "rule_id": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0005",
+      "name": "Elastic rule 05",
+      "status": "REMOVED",
+      "block": {
+        "enabled": true,
+        "name": "",
+        "schema": "platform::elastic::1.0",
+        "status": "REMOVED",
+        "flags": null,
+        "tenants": null,
+        "contributors": null,
+        "type": "query",
+        "query": "event.kind: alert",
+        "language": "kuery",
+        "index": [
+          "logs-*"
+        ],
+        "data_view_id": null,
+        "filters": null,
+        "scheduling": null,
+        "severity": null,
+        "risk": null,
+        "suppression": null,
+        "highlighted_fields": null,
+        "threshold": null,
+        "new_terms": null,
+        "eql": null,
+        "threat": null,
+        "machine_learning": null,
+        "integration": null,
+        "required_fields": null,
+        "guide": null,
+        "false_positives": null,
+        "tags": null,
+        "exceptions": null,
+        "building_block": false,
+        "overrides": null,
+        "actions": null
+      },
+      "payload": {
+        "rule_id": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0005",
+        "type": "query",
+        "name": "Elastic rule 05",
+        "description": "Rule 05 of the Elastic connector's cassettes.",
+        "enabled": true,
+        "severity": "high",
+        "risk_score": 73,
+        "interval": "5m",
+        "from": "now-6m",
+        "to": "now",
+        "language": "kuery",
+        "query": "event.kind: alert",
+        "index": [
+          "logs-*"
+        ],
+        "tags": [
+          "OpenTide"
+        ],
+        "author": [
+          "Detection Engineering"
+        ]
+      }
+    },
+    {
+      "rule_id": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0006",
+      "name": "Elastic rule 06",
+      "status": "DISABLED",
+      "block": {
+        "enabled": true,
+        "name": "",
+        "schema": "platform::elastic::1.0",
+        "status": "DISABLED",
+        "flags": null,
+        "tenants": null,
+        "contributors": null,
+        "type": "query",
+        "query": "event.kind: alert",
+        "language": "kuery",
+        "index": [
+          "logs-*"
+        ],
+        "data_view_id": null,
+        "filters": null,
+        "scheduling": null,
+        "severity": null,
+        "risk": null,
+        "suppression": null,
+        "highlighted_fields": null,
+        "threshold": null,
+        "new_terms": null,
+        "eql": null,
+        "threat": null,
+        "machine_learning": null,
+        "integration": null,
+        "required_fields": null,
+        "guide": null,
+        "false_positives": null,
+        "tags": null,
+        "exceptions": null,
+        "building_block": false,
+        "overrides": null,
+        "actions": null
+      },
+      "payload": {
+        "rule_id": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0006",
+        "type": "query",
+        "name": "Elastic rule 06",
+        "description": "Rule 06 of the Elastic connector's cassettes.",
+        "enabled": false,
+        "severity": "high",
+        "risk_score": 73,
+        "interval": "5m",
+        "from": "now-6m",
+        "to": "now",
+        "language": "kuery",
+        "query": "event.kind: alert",
+        "index": [
+          "logs-*"
+        ],
+        "tags": [
+          "OpenTide"
+        ],
+        "author": [
+          "Detection Engineering"
+        ]
+      }
+    },
+    {
+      "rule_id": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0007",
+      "name": "\u00c9lastic ES|QL \u2014 grouped",
+      "status": "STAGING",
+      "block": {
+        "enabled": true,
+        "name": "",
+        "schema": "platform::elastic::1.0",
+        "status": "STAGING",
+        "flags": null,
+        "tenants": null,
+        "contributors": null,
+        "type": "esql",
+        "query": "FROM logs-* METADATA _id\n| STATS c = COUNT(*) BY host.name, user.name",
+        "language": null,
+        "index": null,
+        "data_view_id": null,
+        "filters": null,
+        "scheduling": null,
+        "severity": null,
+        "risk": null,
+        "suppression": {
+          "group_by": [
+            "host.name"
+          ],
+          "duration": null,
+          "missing_fields_strategy": "suppress"
+        },
+        "highlighted_fields": null,
+        "threshold": null,
+        "new_terms": null,
+        "eql": null,
+        "threat": null,
+        "machine_learning": null,
+        "integration": null,
+        "required_fields": null,
+        "guide": null,
+        "false_positives": null,
+        "tags": null,
+        "exceptions": null,
+        "building_block": false,
+        "overrides": null,
+        "actions": null
+      },
+      "payload": {
+        "rule_id": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0007",
+        "type": "esql",
+        "name": "\u00c9lastic ES|QL \u2014 grouped",
+        "description": "Rule 07 of the Elastic connector's cassettes.",
+        "enabled": true,
+        "severity": "high",
+        "risk_score": 73,
+        "interval": "5m",
+        "from": "now-6m",
+        "to": "now",
+        "language": "esql",
+        "query": "FROM logs-* METADATA _id\n| STATS c = COUNT(*) BY host.name, user.name",
+        "alert_suppression": {
+          "group_by": [
+            "host.name"
+          ],
+          "missing_fields_strategy": "suppress"
+        },
+        "tags": [
+          "OpenTide"
+        ],
+        "author": [
+          "Detection Engineering"
+        ]
+      }
+    },
+    {
+      "rule_id": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0008",
+      "name": "Elastic rule 08",
+      "status": "STAGING",
+      "block": {
+        "enabled": true,
+        "name": "",
+        "schema": "platform::elastic::1.0",
+        "status": "STAGING",
+        "flags": null,
+        "tenants": null,
+        "contributors": null,
+        "type": "threshold",
+        "query": "event.code:\"4625\"",
+        "language": "lucene",
+        "index": [
+          "logs-system.security-*"
+        ],
+        "data_view_id": null,
+        "filters": null,
+        "scheduling": null,
+        "severity": null,
+        "risk": null,
+        "suppression": null,
+        "highlighted_fields": null,
+        "threshold": {
+          "field": [
+            "user.name"
+          ],
+          "value": 50,
+          "cardinality": {
+            "field": "source.ip",
+            "value": 8
+          }
+        },
+        "new_terms": null,
+        "eql": null,
+        "threat": null,
+        "machine_learning": null,
+        "integration": null,
+        "required_fields": null,
+        "guide": null,
+        "false_positives": null,
+        "tags": null,
+        "exceptions": null,
+        "building_block": false,
+        "overrides": {
+          "name": null,
+          "timestamp": "event.created",
+          "disable_fallback": null
+        },
+        "actions": null
+      },
+      "payload": {
+        "rule_id": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0008",
+        "type": "threshold",
+        "name": "Elastic rule 08",
+        "description": "Rule 08 of the Elastic connector's cassettes.",
+        "enabled": true,
+        "severity": "high",
+        "risk_score": 73,
+        "interval": "5m",
+        "from": "now-6m",
+        "to": "now",
+        "language": "lucene",
+        "query": "event.code:\"4625\"",
+        "index": [
+          "logs-system.security-*"
+        ],
+        "threshold": {
+          "field": [
+            "user.name"
+          ],
+          "value": 50,
+          "cardinality": [
+            {
+              "field": "source.ip",
+              "value": 8
+            }
+          ]
+        },
+        "timestamp_override": "event.created",
+        "tags": [
+          "OpenTide"
+        ],
+        "author": [
+          "Detection Engineering"
+        ]
+      }
+    },
+    {
+      "rule_id": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0009",
+      "name": "Elastic rule 09",
+      "status": "STAGING",
+      "block": {
+        "enabled": true,
+        "name": "",
+        "schema": "platform::elastic::1.0",
+        "status": "STAGING",
+        "flags": null,
+        "tenants": null,
+        "contributors": null,
+        "type": "query",
+        "query": "event.kind: alert",
+        "language": "kuery",
+        "index": null,
+        "data_view_id": "dv-missing",
+        "filters": null,
+        "scheduling": null,
+        "severity": null,
+        "risk": null,
+        "suppression": null,
+        "highlighted_fields": null,
+        "threshold": null,
+        "new_terms": null,
+        "eql": null,
+        "threat": null,
+        "machine_learning": null,
+        "integration": null,
+        "required_fields": null,
+        "guide": null,
+        "false_positives": null,
+        "tags": null,
+        "exceptions": null,
+        "building_block": false,
+        "overrides": null,
+        "actions": null
+      },
+      "payload": {
+        "rule_id": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0009",
+        "type": "query",
+        "name": "Elastic rule 09",
+        "description": "Rule 09 of the Elastic connector's cassettes.",
+        "enabled": true,
+        "severity": "high",
+        "risk_score": 73,
+        "interval": "5m",
+        "from": "now-6m",
+        "to": "now",
+        "language": "kuery",
+        "query": "event.kind: alert",
+        "data_view_id": "dv-missing",
+        "tags": [
+          "OpenTide"
+        ],
+        "author": [
+          "Detection Engineering"
+        ]
+      }
+    },
+    {
+      "rule_id": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c000a",
+      "name": "Elastic rule 0a",
+      "status": "STAGING",
+      "block": {
+        "enabled": true,
+        "name": "",
+        "schema": "platform::elastic::1.0",
+        "status": "STAGING",
+        "flags": null,
+        "tenants": null,
+        "contributors": null,
+        "type": "query",
+        "query": "event.kind: alert",
+        "language": "kuery",
+        "index": [
+          "logs-*"
+        ],
+        "data_view_id": null,
+        "filters": null,
+        "scheduling": null,
+        "severity": null,
+        "risk": null,
+        "suppression": null,
+        "highlighted_fields": null,
+        "threshold": null,
+        "new_terms": null,
+        "eql": null,
+        "threat": null,
+        "machine_learning": null,
+        "integration": null,
+        "required_fields": null,
+        "guide": null,
+        "false_positives": null,
+        "tags": null,
+        "exceptions": null,
+        "building_block": false,
+        "overrides": null,
+        "actions": null
+      },
+      "payload": {
+        "rule_id": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c000a",
+        "type": "query",
+        "name": "Elastic rule 0a",
+        "description": "Rule 0a of the Elastic connector's cassettes.",
+        "enabled": true,
+        "severity": "high",
+        "risk_score": 73,
+        "interval": "5m",
+        "from": "now-6m",
+        "to": "now",
+        "language": "kuery",
+        "query": "event.kind: alert",
+        "index": [
+          "logs-*"
+        ],
+        "tags": [
+          "OpenTide"
+        ],
+        "author": [
+          "Detection Engineering"
+        ]
+      }
+    }
+  ],
+  "validate": [
+    {
+      "rule_id": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0011",
+      "name": "Elastic rule 11",
+      "status": "STAGING",
+      "block": {
+        "enabled": true,
+        "name": "",
+        "schema": "platform::elastic::1.0",
+        "status": "STAGING",
+        "flags": null,
+        "tenants": null,
+        "contributors": null,
+        "type": "query",
+        "query": "process.name: \"powershell.exe\"",
+        "language": "kuery",
+        "index": [
+          "logs-*"
+        ],
+        "data_view_id": null,
+        "filters": null,
+        "scheduling": null,
+        "severity": null,
+        "risk": null,
+        "suppression": null,
+        "highlighted_fields": null,
+        "threshold": null,
+        "new_terms": null,
+        "eql": null,
+        "threat": null,
+        "machine_learning": null,
+        "integration": null,
+        "required_fields": null,
+        "guide": null,
+        "false_positives": null,
+        "tags": null,
+        "exceptions": null,
+        "building_block": false,
+        "overrides": null,
+        "actions": null
+      },
+      "payload": {
+        "rule_id": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0011",
+        "type": "query",
+        "name": "Elastic rule 11",
+        "description": "Rule 11 of the Elastic connector's cassettes.",
+        "enabled": true,
+        "severity": "high",
+        "risk_score": 73,
+        "interval": "5m",
+        "from": "now-6m",
+        "to": "now",
+        "language": "kuery",
+        "query": "process.name: \"powershell.exe\"",
+        "index": [
+          "logs-*"
+        ],
+        "tags": [
+          "OpenTide"
+        ],
+        "author": [
+          "Detection Engineering"
+        ]
+      }
+    },
+    {
+      "rule_id": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0012",
+      "name": "Elastic rule 12",
+      "status": "STAGING",
+      "block": {
+        "enabled": true,
+        "name": "",
+        "schema": "platform::elastic::1.0",
+        "status": "STAGING",
+        "flags": null,
+        "tenants": null,
+        "contributors": null,
+        "type": "esql",
+        "query": "FROM missing-* METADATA _id\n| WHERE process.name == \"cmd.exe\"",
+        "language": null,
+        "index": null,
+        "data_view_id": null,
+        "filters": null,
+        "scheduling": null,
+        "severity": null,
+        "risk": null,
+        "suppression": null,
+        "highlighted_fields": null,
+        "threshold": null,
+        "new_terms": null,
+        "eql": null,
+        "threat": null,
+        "machine_learning": null,
+        "integration": null,
+        "required_fields": null,
+        "guide": null,
+        "false_positives": null,
+        "tags": null,
+        "exceptions": null,
+        "building_block": false,
+        "overrides": null,
+        "actions": null
+      },
+      "payload": {
+        "rule_id": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0012",
+        "type": "esql",
+        "name": "Elastic rule 12",
+        "description": "Rule 12 of the Elastic connector's cassettes.",
+        "enabled": true,
+        "severity": "high",
+        "risk_score": 73,
+        "interval": "5m",
+        "from": "now-6m",
+        "to": "now",
+        "language": "esql",
+        "query": "FROM missing-* METADATA _id\n| WHERE process.name == \"cmd.exe\"",
+        "tags": [
+          "OpenTide"
+        ],
+        "author": [
+          "Detection Engineering"
+        ]
+      }
+    },
+    {
+      "rule_id": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0013",
+      "name": "Elastic rule 13",
+      "status": "STAGING",
+      "block": {
+        "enabled": true,
+        "name": "",
+        "schema": "platform::elastic::1.0",
+        "status": "STAGING",
+        "flags": null,
+        "tenants": null,
+        "contributors": null,
+        "type": "esql",
+        "query": "FROM logs-* | parse error",
+        "language": null,
+        "index": null,
+        "data_view_id": null,
+        "filters": null,
+        "scheduling": null,
+        "severity": null,
+        "risk": null,
+        "suppression": null,
+        "highlighted_fields": null,
+        "threshold": null,
+        "new_terms": null,
+        "eql": null,
+        "threat": null,
+        "machine_learning": null,
+        "integration": null,
+        "required_fields": null,
+        "guide": null,
+        "false_positives": null,
+        "tags": null,
+        "exceptions": null,
+        "building_block": false,
+        "overrides": null,
+        "actions": null
+      },
+      "payload": {
+        "rule_id": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0013",
+        "type": "esql",
+        "name": "Elastic rule 13",
+        "description": "Rule 13 of the Elastic connector's cassettes.",
+        "enabled": true,
+        "severity": "high",
+        "risk_score": 73,
+        "interval": "5m",
+        "from": "now-6m",
+        "to": "now",
+        "language": "esql",
+        "query": "FROM logs-* | parse error",
+        "tags": [
+          "OpenTide"
+        ],
+        "author": [
+          "Detection Engineering"
+        ]
+      }
+    },
+    {
+      "rule_id": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0014",
+      "name": "Elastic rule 14",
+      "status": "STAGING",
+      "block": {
+        "enabled": true,
+        "name": "",
+        "schema": "platform::elastic::1.0",
+        "status": "STAGING",
+        "flags": null,
+        "tenants": null,
+        "contributors": null,
+        "type": "query",
+        "query": "a::b",
+        "language": "kuery",
+        "index": [
+          "logs-*"
+        ],
+        "data_view_id": null,
+        "filters": null,
+        "scheduling": null,
+        "severity": null,
+        "risk": null,
+        "suppression": null,
+        "highlighted_fields": null,
+        "threshold": null,
+        "new_terms": null,
+        "eql": null,
+        "threat": null,
+        "machine_learning": null,
+        "integration": null,
+        "required_fields": null,
+        "guide": null,
+        "false_positives": null,
+        "tags": null,
+        "exceptions": null,
+        "building_block": false,
+        "overrides": null,
+        "actions": null
+      },
+      "payload": {
+        "rule_id": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0014",
+        "type": "query",
+        "name": "Elastic rule 14",
+        "description": "Rule 14 of the Elastic connector's cassettes.",
+        "enabled": true,
+        "severity": "high",
+        "risk_score": 73,
+        "interval": "5m",
+        "from": "now-6m",
+        "to": "now",
+        "language": "kuery",
+        "query": "a::b",
+        "index": [
+          "logs-*"
+        ],
+        "tags": [
+          "OpenTide"
+        ],
+        "author": [
+          "Detection Engineering"
+        ]
+      }
+    },
+    {
+      "rule_id": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0015",
+      "name": "Elastic rule 15",
+      "status": "STAGING",
+      "block": {
+        "enabled": true,
+        "name": "",
+        "schema": "platform::elastic::1.0",
+        "status": "STAGING",
+        "flags": null,
+        "tenants": null,
+        "contributors": null,
+        "type": "query",
+        "query": "bad-schema: x",
+        "language": "kuery",
+        "index": null,
+        "data_view_id": "dv-logs",
+        "filters": null,
+        "scheduling": null,
+        "severity": null,
+        "risk": null,
+        "suppression": null,
+        "highlighted_fields": null,
+        "threshold": null,
+        "new_terms": null,
+        "eql": null,
+        "threat": null,
+        "machine_learning": null,
+        "integration": null,
+        "required_fields": null,
+        "guide": null,
+        "false_positives": null,
+        "tags": null,
+        "exceptions": null,
+        "building_block": false,
+        "overrides": null,
+        "actions": null
+      },
+      "payload": {
+        "rule_id": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0015",
+        "type": "query",
+        "name": "Elastic rule 15",
+        "description": "Rule 15 of the Elastic connector's cassettes.",
+        "enabled": true,
+        "severity": "high",
+        "risk_score": 73,
+        "interval": "5m",
+        "from": "now-6m",
+        "to": "now",
+        "language": "kuery",
+        "query": "bad-schema: x",
+        "data_view_id": "dv-logs",
+        "tags": [
+          "OpenTide"
+        ],
+        "author": [
+          "Detection Engineering"
+        ]
+      }
+    },
+    {
+      "rule_id": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0016",
+      "name": "Elastic rule 16",
+      "status": "STAGING",
+      "block": {
+        "enabled": true,
+        "name": "",
+        "schema": "platform::elastic::1.0",
+        "status": "STAGING",
+        "flags": null,
+        "tenants": null,
+        "contributors": null,
+        "type": "threshold",
+        "query": "event.code: 4625",
+        "language": "kuery",
+        "index": [
+          "logs-*"
+        ],
+        "data_view_id": null,
+        "filters": null,
+        "scheduling": null,
+        "severity": null,
+        "risk": null,
+        "suppression": null,
+        "highlighted_fields": null,
+        "threshold": {
+          "field": [
+            "message"
+          ],
+          "value": 5,
+          "cardinality": null
+        },
+        "new_terms": null,
+        "eql": null,
+        "threat": null,
+        "machine_learning": null,
+        "integration": null,
+        "required_fields": null,
+        "guide": null,
+        "false_positives": null,
+        "tags": null,
+        "exceptions": null,
+        "building_block": false,
+        "overrides": null,
+        "actions": null
+      },
+      "payload": {
+        "rule_id": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0016",
+        "type": "threshold",
+        "name": "Elastic rule 16",
+        "description": "Rule 16 of the Elastic connector's cassettes.",
+        "enabled": true,
+        "severity": "high",
+        "risk_score": 73,
+        "interval": "5m",
+        "from": "now-6m",
+        "to": "now",
+        "language": "kuery",
+        "query": "event.code: 4625",
+        "index": [
+          "logs-*"
+        ],
+        "threshold": {
+          "field": [
+            "message"
+          ],
+          "value": 5
+        },
+        "tags": [
+          "OpenTide"
+        ],
+        "author": [
+          "Detection Engineering"
+        ]
+      }
+    }
+  ],
+  "query": {
+    "window": [
+      "2026-10-26T08:00:00+00:00",
+      "2026-10-27T08:00:00+00:00"
+    ],
+    "queries": [
+      {
+        "text": "FROM logs-* // no LIMIT here",
+        "language": "esql",
+        "limit": 1
+      },
+      {
+        "text": "FROM nope",
+        "language": "esql",
+        "limit": 100
+      },
+      {
+        "text": "process.name:cmd.exe",
+        "language": "lucene",
+        "limit": 100
+      },
+      {
+        "text": "sequence [process where true] [process where true]",
+        "language": "eql",
+        "limit": 100,
+        "index": [
+          "logs-*"
+        ]
+      },
+      {
+        "text": "process.name: \"powershell.exe\"",
+        "language": "kuery",
+        "limit": 100
+      },
+      {
+        "text": "process.name: cmd.exe",
+        "language": "kuery",
+        "limit": 5,
+        "data_view": "dv-logs"
+      },
+      {
+        "text": "process.name:cmd.exe",
+        "language": "lucene",
+        "limit": 1,
+        "data_view": "dv-logs"
+      },
+      {
+        "text": "*",
+        "language": "lucene",
+        "limit": 100,
+        "index": [
+          "broken-*"
+        ]
+      },
+      {
+        "text": "a::b",
+        "language": "kuery",
+        "limit": 100
+      }
+    ]
+  },
+  "now": "2026-10-27T08:00:00.250000+00:00"
+}

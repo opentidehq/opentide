@@ -1,0 +1,5 @@
+warning: opentide setup vscode is deprecated and will be removed when the opentide VS Code extension ships with a bundled language server and template actions
+warning: Vscode snippets skipped · detail: No templates in .opentide/templates — run opentide generate first
+error: Vscode snippets missing · detail: VS Code snippets were not generated (no templates in .opentide/templates)
+error: VS Code snippets were not generated (no templates in .opentide/templates)
+tip: add --json for machine-readable output

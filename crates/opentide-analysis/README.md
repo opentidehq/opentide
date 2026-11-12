@@ -1,6 +1,8 @@
 # opentide-analysis
 
-The public entry point of the [opentide language server](https://github.com/opentidehq/language-server) engine: KQL, SPL, ES|QL, EQL, Kibana KQL, Lucene, and Tide YAML objects, analyzed without I/O.
+The query and Tide YAML analysis of the [opentide](https://opentide.org) language server: KQL, SPL, ES|QL, EQL, Kibana KQL, Lucene, and Tide YAML objects, analyzed without I/O.
+
+Internal to opentide, with no stability promise: depend on [`opentide`](https://docs.rs/opentide), the opentide Rust SDK, instead.
 
 ```rust
 use opentide_analysis::{analyze, AnalyzeRequest, LanguageId, MemoryWorkspace};

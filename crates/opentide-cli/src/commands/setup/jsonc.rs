@@ -145,6 +145,123 @@ pub fn merge(text: &str, template: &Json) -> Result<String, MergeError> {
     Ok(merged)
 }
 
+/// `text` with `edit` applied to its root object on the concrete syntax
+/// tree: the byte-order mark and every byte the edit does not touch kept.
+///
+/// # Errors
+///
+/// The text is not JSON with comments, its document is not an object, the
+/// edit refuses, or the result does not read back as a document.
+pub fn edit(
+    text: &str,
+    edit: impl FnOnce(&CstObject) -> Result<(), MergeError>,
+) -> Result<String, MergeError> {
+    let (bom, body) = match text.strip_prefix(BOM) {
+        Some(body) => (BOM, body),
+        None => ("", text),
+    };
+    let root = CstRootNode::parse(body, &options())
+        .map_err(|error| MergeError::Invalid(error.to_string()))?;
+    let object = root_object(&root)?;
+    edit(&object)?;
+    let edited = format!("{bom}{root}");
+    parse(&edited).map_err(MergeError::Invalid)?;
+    Ok(edited)
+}
+
+/// `text` (a byte-order mark allowed) as an order-keeping value, comments
+/// and trailing commas allowed; `None` when it is not JSON with comments.
+pub fn ordered(text: &str) -> Option<Json> {
+    let body = text.strip_prefix(BOM).unwrap_or(text);
+    let root = CstRootNode::parse(body, &options()).ok()?;
+    node_json(&root.value()?)
+}
+
+/// One node of the tree as a value.
+fn node_json(node: &jsonc_parser::cst::CstNode) -> Option<Json> {
+    if let Some(object) = node.as_object() {
+        let mut members = Vec::new();
+        for prop in object.properties() {
+            let name = prop.name()?.decoded_value().ok()?;
+            members.push((name, node_json(&prop.value()?)?));
+        }
+        return Some(Json::Object(members));
+    }
+    if let Some(array) = node.as_array() {
+        return array
+            .elements()
+            .iter()
+            .map(node_json)
+            .collect::<Option<Vec<_>>>()
+            .map(Json::Array);
+    }
+    if let Some(text) = node.as_string_lit() {
+        return text.decoded_value().ok().map(Json::Str);
+    }
+    if let Some(value) = node.as_boolean_lit() {
+        return Some(Json::Bool(value.value()));
+    }
+    if node.as_null_keyword().is_some() {
+        return Some(Json::Null);
+    }
+    if node.as_number_lit().is_some() {
+        return Json::parse(&node.to_string()).ok();
+    }
+    None
+}
+
+/// Whether `text` has a comment outside its strings (`JsoncText.has_comments`).
+pub fn has_comments(text: &str) -> bool {
+    let mut chars = text.chars().peekable();
+    let mut in_string = false;
+    while let Some(ch) = chars.next() {
+        if in_string {
+            match ch {
+                '\\' => {
+                    chars.next();
+                }
+                '"' => in_string = false,
+                _ => {}
+            }
+            continue;
+        }
+        match ch {
+            '"' => in_string = true,
+            '/' if matches!(chars.peek(), Some('/' | '*')) => return true,
+            _ => {}
+        }
+    }
+    false
+}
+
+/// The line ending a file uses: CRLF when it has one, else LF.
+pub fn newline(text: &str) -> &'static str {
+    if text.contains("\r\n") { "\r\n" } else { "\n" }
+}
+
+/// `value` as `json.dumps(value, indent=2)` writes it, every line ending
+/// `newline`, with one after the document: non-ASCII characters escaped,
+/// as Python's encoder does by default.
+pub fn dumps(value: &Json, newline: &str) -> String {
+    let text = crate::json::document_text(value, true);
+    let mut out = String::with_capacity(text.len());
+    for ch in text.chars() {
+        if ch.is_ascii() {
+            out.push(ch);
+        } else {
+            let mut units = [0_u16; 2];
+            for unit in ch.encode_utf16(&mut units) {
+                out.push_str(&format!("\\u{unit:04x}"));
+            }
+        }
+    }
+    if newline == "\n" {
+        out
+    } else {
+        out.replace('\n', newline)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

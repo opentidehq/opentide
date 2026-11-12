@@ -51,6 +51,7 @@ starts on every pull request and can be required.
 |-----|----------------|
 | `test-full` | Python **3.11**, **3.12** and **3.13** (`Test (3.x)`), without coverage |
 | `cli-windows-smoke` | The console launcher and promotion's line endings on Windows |
+| `facade` | The `opentide` facade crate with every feature: its tests and doctests (the binary's `--json commands` against the PyPI CLI's recording and the ledger, `cli::run_json`, the language server), rustdoc as docs.rs builds it, and `cargo semver-checks` (0.51.0) against the first parent; `engine-test` runs its default features on every pull request |
 | `engine-wasm` | `scripts/engine/build-wasm.sh` (both WebAssembly artifacts, and `clippy` for the code only wasm32 compiles), the npm packages (`check-npm-packs.mjs`) and the TypeScript client against the native, worker and WASI servers |
 | `engine-package` | Every engine crate packaged as crates.io builds it, and `license-scan.sh` over the packages (no oracle reference ships) |
 | `grammars`, `textmate` | Every vendored `parser.c` is what tree-sitter-cli 0.25.10 generates (`check-grammars.sh`); the TextMate grammars as VS Code reads them |

@@ -39,6 +39,13 @@ changed are read again), ``invalidate`` reaches it, and a run that may
 write drops it, as for the registry. Its progress events are forwarded as
 ``progress`` notifications once it returns. ``compare`` runs both
 implementations, as at a terminal.
+
+**The Rust host (UC-3.8, #830).** Under ``OPENTIDE_ENGINE=rust``,
+``opentide serve`` is the Rust host (``crates/opentide-cli/src/serve``),
+which hands the runs this module's engine selection gives to Python to a
+:class:`CommandRunner` in its process
+(:mod:`opentide.cli.services.serve_bridge`). This module stays the host
+under every other engine until ``serve``'s default flips.
 """
 
 from __future__ import annotations
@@ -657,6 +664,11 @@ class Server:
     def close_input(self) -> None:
         """The client closed stdin: as ``exit``."""
         self._close()
+
+    def pending_cancels(self) -> int:
+        """How many queued runs a cancel named that have not been reached."""
+        with self._state_lock:
+            return len(self._cancelled)
 
     def _close(self) -> None:
         """Stop the running command now and run no queued one, then leave.

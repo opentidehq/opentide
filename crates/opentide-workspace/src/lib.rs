@@ -20,9 +20,14 @@
 //!   [`Diagnostic`]s, the one finding type of the CLI, the SDK, MCP and the
 //!   language server (UC-2.2).
 //!
+//! - [`views`]: the chains and the object page `opentide tui` shows (UC-3.6d).
+//!
 //! Every read goes through a [`FileSystem`]: [`OsFs`] on disk,
 //! [`MemoryFs`] in memory. [`Stats`] counts the reads, parses and
 //! configuration resolutions.
+//!
+//! Internal to opentide, with no stability promise: depend on the
+//! [`opentide`](https://docs.rs/opentide) crate, its Rust SDK, instead.
 
 pub mod catalogue;
 pub mod config;
@@ -43,6 +48,7 @@ pub mod root;
 pub mod session;
 pub mod state;
 pub mod validate;
+pub mod views;
 pub mod vocabularies;
 pub mod watch;
 mod workspace;

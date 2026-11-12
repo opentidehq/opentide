@@ -118,8 +118,8 @@ class RustCommand:
 #: start`` (UC-3.6b, #947) is one too: an editor's session has one server on
 #: stdio, so ``compare`` runs the Python host and ``rust`` the Rust one. So is
 #: ``tui``: a full-screen UI cannot run twice to be compared, so ``compare``
-#: opens the Python one; under ``rust`` its refusals run on Rust and, where
-#: the UI would open, it is refused as not ported.
+#: opens the Python one; under ``rust`` its refusals and its UI (on ratatui,
+#: UC-3.6d, #951) run on Rust.
 ENGINE_HOSTS: frozenset[tuple[str, ...]] = frozenset(
     {("serve",), ("mcp", "start"), ("lsp", "start"), ("tui",)}
 )
@@ -143,14 +143,18 @@ RUST_CLI: tuple[str, ...] = (sys.executable, "-m", "opentide.cli.rust")
 #: (``opentide.mcp_server.bridge``); ``setup skills discover`` and ``setup skills
 #: show`` with UC-4.1 (#831): the opentidehq/skills catalogue through the connectors'
 #: HTTP client; ``setup`` (scripted runs and ``--plan``) and its ``env``, ``hooks``,
-#: ``mcp``, ``platforms`` and ``repo`` with UC-3.6 (#828): the wizard at a terminal,
-#: ``--vscode-setup``, ``--skills`` and ``--plugin`` stay Python's.
+#: ``mcp``, ``platforms`` and ``repo`` with UC-3.6 (#828); ``setup vscode``,
+#: ``setup --vscode-setup`` and the wizards at a terminal with UC-3.6c (#951):
+#: ``--skills`` and ``--plugin`` stay Python's.
 #: ``new threat|objective|rule`` and ``generate`` with phases named
 #: (``generate schemas templates``) with UC-3.5d (#933): its *requires* are
 #: the phase words, so a bare ``generate`` (the full pipeline) stays Python's.
+#: ``serve`` with UC-3.8 (#830): the Rust host, which runs each command with a
+#: Rust implementation itself and hands every other run to this package's
+#: runner in its own process (``opentide.cli.services.serve_bridge``).
 #: ``lsp start`` with UC-3.6b (#947): the language server hosted by the Rust
-#: command line, and ``tui``'s refusals (``usage_tui_needs_tty``): its terminal
-#: UI is not ported yet.
+#: command line, and ``tui``'s refusals (``usage_tui_needs_tty``); ``tui``'s
+#: terminal UI with UC-3.6d (#951), on ratatui.
 RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
     ("commands",): RustCommand(launch=RUST_CLI),
     ("explain",): RustCommand(launch=RUST_CLI),
@@ -177,12 +181,13 @@ RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
     ("setup", "ci"): RustCommand(launch=RUST_CLI),
     ("setup", "skills", "discover"): RustCommand(launch=RUST_CLI),
     ("setup", "skills", "show"): RustCommand(launch=RUST_CLI),
-    ("setup",): RustCommand(launch=RUST_CLI, refuses=("--vscode-setup", "--skills", "--plugin")),
+    ("setup",): RustCommand(launch=RUST_CLI, refuses=("--skills", "--plugin")),
     ("setup", "env"): RustCommand(launch=RUST_CLI),
     ("setup", "hooks"): RustCommand(launch=RUST_CLI),
     ("setup", "mcp"): RustCommand(launch=RUST_CLI),
     ("setup", "platforms"): RustCommand(launch=RUST_CLI),
     ("setup", "repo"): RustCommand(launch=RUST_CLI),
+    ("setup", "vscode"): RustCommand(launch=RUST_CLI),
     ("mcp", "start"): RustCommand(launch=RUST_CLI),
     ("generate",): RustCommand(
         launch=RUST_CLI, requires=("schemas", "templates", "vocabs", "snippets")
@@ -190,6 +195,7 @@ RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
     ("new", "threat"): RustCommand(launch=RUST_CLI, rules=("fresh-uuids",)),
     ("new", "objective"): RustCommand(launch=RUST_CLI, rules=("fresh-uuids",)),
     ("new", "rule"): RustCommand(launch=RUST_CLI, rules=("fresh-uuids",)),
+    ("serve",): RustCommand(launch=RUST_CLI),
     ("lsp", "start"): RustCommand(launch=RUST_CLI),
     ("tui",): RustCommand(launch=RUST_CLI),
 }

@@ -1,0 +1,8 @@
+{
+  // The team's editor preferences.
+  "editor.tabSize": 2,
+  "yaml.schemas": {
+    ".opentide/schemas/opentide.schema.json": "objects/**/*.yaml",
+    "https://json.schemastore.org/github-workflow.json": ".github/workflows/*.yml"
+  }
+}

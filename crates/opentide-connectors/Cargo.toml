@@ -17,6 +17,9 @@ workspace = true
 [dependencies]
 # `$NAME` and `${NAME}` placeholders: the one parser the workspace's `info` uses.
 opentide-workspace.workspace = true
+# Elastic's advisory codes (UC-4.2b) and Python's float `repr` in messages.
+opentide-core.workspace = true
+opentide-schema.workspace = true
 reqwest.workspace = true
 rustls.workspace = true
 rustls-native-certs.workspace = true
@@ -30,7 +33,7 @@ url.workspace = true
 toml.workspace = true
 # The platforms (UC-4.2): bodies and rows as ordered JSON, a search's window,
 # a gateway page's title, query strings encoded as `requests` encodes them,
-# HarfangLab's telemetry words.
+# HarfangLab's telemetry words; Elastic's durations (UC-4.2b).
 opentide-compile.workspace = true
 jiff.workspace = true
 regex.workspace = true

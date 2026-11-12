@@ -1,0 +1,8 @@
+  [1m.vscode/extensions.json[0m   [2meditor settings[0m
+  [1m.vscode/settings.json[0m     [2meditor settings[0m
+  [1m.vscode/mcp.json[0m          [2mMCP server for VS Code[0m
+
+[1;32m✓[0m Wrote 3 files
+  [1;34mnote:[0m The opentide VS Code extension (opentidehq.opentide), which .vscode/extensions.json
+        recommends, provides the opentide MCP server to VS Code; .vscode/mcp.json is for teammates
+        without it

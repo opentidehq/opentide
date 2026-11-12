@@ -34,6 +34,7 @@ Additional APIs are importable from subpackages (`opentide.validation`, `opentid
 | [Documentation API](./documentation.md) | Render and write markdown pages |
 | [Models](./models.md) | Pydantic object types |
 | [Platforms](./platforms.md) | Deployers, validators, plugins |
+| [Rust SDK](./rust.md) | The `opentide` crate: workspace, validate, catalogue, deploy plan, command line |
 
 ## Worked example: validate then deploy
 

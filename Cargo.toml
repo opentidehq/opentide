@@ -32,6 +32,7 @@ members = [
     "crates/opentide-cli",
     "crates/opentide-connectors",
     "crates/opentide-cassette",
+    "crates/opentide",
     "analysis",
     "xtask",
 ]

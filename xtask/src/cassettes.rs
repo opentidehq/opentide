@@ -485,4 +485,263 @@ mod tests {
         );
         assert!(Scenarios::parse("[[scenario]]\nname = \"../x\"\ndescription = \"\"\nclient = [\"a\"]\ncwd = \"tmp\"\n").is_err());
     }
+
+    fn scenario_toml(name: &str, client: &str, cwd: &str) -> String {
+        format!(
+            "[[scenario]]\nname = \"{name}\"\ndescription = \"d\"\nclient = {client}\ncwd = \"{cwd}\"\n"
+        )
+    }
+
+    fn parse_error(text: &str) -> String {
+        format!("{:#}", Scenarios::parse(text).unwrap_err())
+    }
+
+    #[test]
+    fn a_scenario_list_breaking_a_rule_is_refused_with_the_rule() {
+        let good = scenario_toml("a/b_c-1", "[\"x\"]", "repo");
+        assert_eq!(Scenarios::parse(&good).unwrap().scenario[0].name, "a/b_c-1");
+
+        for name in ["a//b", "/a", "a/", "a b", "a/../b", "a.b"] {
+            assert!(
+                parse_error(&scenario_toml(name, "[\"x\"]", "tmp"))
+                    .contains("is not a relative path of plain words"),
+                "{name}"
+            );
+        }
+        let twice = format!("{good}{good}");
+        assert!(parse_error(&twice).contains("scenario a/b_c-1 is listed twice"));
+        assert!(parse_error(&scenario_toml("a", "[\"x\"]", "home")).contains("cwd is repo or tmp"));
+        assert!(parse_error(&scenario_toml("a", "[]", "tmp")).contains("client is empty"));
+        assert!(
+            parse_error(&format!("{good}colour = \"red\"\n")).contains("parse scenarios.toml"),
+            "an unknown key is refused"
+        );
+        assert!(parse_error("[[scenario]]\nname = \"a\"\n").contains("parse scenarios.toml"));
+    }
+
+    #[test]
+    fn placeholders_name_the_oracles_interpreter_and_bin_directory() {
+        let bin = Path::new("/opt/oracle/bin");
+        assert_eq!(
+            expand("{python}", bin),
+            bin.join("python").to_string_lossy()
+        );
+        assert_eq!(
+            expand("{oracle}/opentide", bin),
+            format!("{}/opentide", bin.display())
+        );
+        assert_eq!(expand("--json", bin), "--json");
+    }
+
+    #[test]
+    fn each_secret_is_a_fresh_marked_value() {
+        let first = random_secret();
+        let second = random_secret();
+        assert_ne!(first, second);
+        for value in [&first, &second] {
+            let hex = value.strip_prefix("rec-").expect("marked rec-");
+            assert_eq!(hex.len(), 32, "{value}");
+            assert!(hex.chars().all(|c| c.is_ascii_hexdigit()), "{value}");
+        }
+    }
+
+    fn write_cassette(dir: &Path, name: &str, scenario: &str) {
+        let path = dir.join(format!("{name}.json"));
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let cassette = Cassette::new(
+            scenario,
+            vec!["client".into()],
+            vec![interaction(("accept", "application/json"), "{}")],
+        );
+        std::fs::write(path, cassette.to_text()).unwrap();
+    }
+
+    #[test]
+    fn the_check_pairs_each_scenario_with_its_cassette() {
+        let dir = tempfile::tempdir().unwrap();
+        let dir = dir.path();
+        let scenarios = Scenarios::parse(&format!(
+            "{}{}{}",
+            scenario_toml("good", "[\"x\"]", "tmp"),
+            scenario_toml("nested/good", "[\"x\"]", "tmp"),
+            scenario_toml("missing", "[\"x\"]", "tmp"),
+        ))
+        .unwrap();
+        // A clean cassette at the top and in a folder, and nothing for
+        // `missing`: only `missing` is reported.
+        write_cassette(dir, "good", "good");
+        write_cassette(dir, "nested/good", "nested/good");
+        std::fs::write(dir.join("scenarios.toml"), "not a cassette").unwrap();
+        std::fs::write(dir.join("nested/README.md"), "notes").unwrap();
+        assert_eq!(
+            check(dir, &scenarios).unwrap(),
+            ["missing has no cassette: cargo xtask cassettes record missing"]
+        );
+
+        // A cassette no scenario names, and one recording another scenario.
+        write_cassette(dir, "missing", "missing");
+        write_cassette(dir, "nested/stray", "stray");
+        write_cassette(dir, "good", "other");
+        let problems = check(dir, &scenarios).unwrap();
+        assert_eq!(problems.len(), 2, "{problems:?}");
+        assert_eq!(
+            problems[0],
+            format!(
+                "{} has no scenario in scenarios.toml",
+                dir.join("nested").join("stray.json").display()
+            )
+        );
+        assert_eq!(
+            problems[1],
+            format!(
+                "{}: records scenario other, not good",
+                dir.join("good.json").display()
+            )
+        );
+
+        // A folder that is not there cannot be checked.
+        let error = check(&dir.join("absent"), &scenarios).unwrap_err();
+        assert!(format!("{error:#}").contains("read "), "{error:#}");
+    }
+
+    fn words(words: &[&str]) -> Vec<String> {
+        words.iter().map(|word| (*word).to_owned()).collect()
+    }
+
+    #[test]
+    fn the_command_line_exit_statuses() {
+        assert_eq!(run(&[]).unwrap(), 2, "no command");
+        assert_eq!(run(&words(&["frobnicate"])).unwrap(), 2);
+        assert_eq!(run(&words(&["help"])).unwrap(), 0);
+        assert_eq!(run(&words(&["list"])).unwrap(), 0);
+        // The repository's cassettes are recorded and redacted (a Windows
+        // checkout may convert their line endings, which the check refuses).
+        if !cfg!(windows) {
+            assert_eq!(run(&words(&["check"])).unwrap(), 0);
+        }
+        // `record` names scenarios of scenarios.toml, every one known, before
+        // it provisions the oracle.
+        assert_eq!(run(&words(&["record"])).unwrap(), 2);
+        assert_eq!(run(&words(&["record", "no-such-scenario"])).unwrap(), 2);
+        assert_eq!(
+            run(&words(&["record", "skills/manifest", "no-such-scenario"])).unwrap(),
+            2
+        );
+    }
+
+    #[cfg(unix)]
+    fn scenario(client: &[&str], tenant: &[&str], cwd: &str) -> Scenario {
+        Scenario {
+            name: "s".into(),
+            description: String::new(),
+            client: words(client),
+            tenant: words(tenant),
+            routes: vec!["tenant.invalid".into()],
+            secrets: vec!["SCENARIO_TOKEN".into()],
+            cwd: cwd.into(),
+        }
+    }
+
+    #[cfg(unix)]
+    fn record_error(scenario: &Scenario, repo: &Path) -> String {
+        format!(
+            "{:#}",
+            record(scenario, repo, Path::new("/nonexistent/bin")).unwrap_err()
+        )
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_client_that_fails_is_reported_with_what_it_printed() {
+        let repo = tempfile::tempdir().unwrap();
+        // The client runs in a clean environment: its own HOME, the secret
+        // set to a fresh value, the proxy variables, nothing inherited.
+        let error = record_error(
+            &scenario(
+                &[
+                    "/bin/sh",
+                    "-c",
+                    "pwd; echo \"token=$SCENARIO_TOKEN home=$HOME proxy=${HTTPS_PROXY:+set} \
+                     cargo=${CARGO:-unset}\"; echo oops >&2; exit 3",
+                ],
+                &[],
+                "repo",
+            ),
+            repo.path(),
+        );
+        assert!(
+            error.starts_with("scenario s: the client exited with"),
+            "{error}"
+        );
+        assert!(error.contains("stderr: oops"), "{error}");
+        let canonical = repo.path().canonicalize().unwrap();
+        assert!(
+            error.contains(&format!("stdout: {}\n", canonical.display()))
+                || error.contains(&format!("stdout: {}\n", repo.path().display())),
+            "cwd repo runs in the repository: {error}"
+        );
+        assert!(error.contains("token=rec-"), "{error}");
+        assert!(error.contains("proxy=set"), "{error}");
+        assert!(error.contains("cargo=unset"), "{error}");
+        assert!(
+            error.contains("/home proxy=set"),
+            "HOME is the scratch home: {error}"
+        );
+
+        // `tmp` runs in an empty scratch folder, not the repository.
+        let error = record_error(
+            &scenario(&["/bin/sh", "-c", "pwd; ls -A; exit 1"], &[], "tmp"),
+            repo.path(),
+        );
+        assert!(error.contains("/work\n"), "{error}");
+        assert!(
+            !error.contains(&repo.path().display().to_string()),
+            "{error}"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_client_that_sends_nothing_records_nothing() {
+        let repo = tempfile::tempdir().unwrap();
+        let error = record_error(
+            &scenario(&["/bin/sh", "-c", "echo done"], &[], "tmp"),
+            repo.path(),
+        );
+        assert_eq!(
+            error,
+            "scenario s: the client sent nothing through the proxy"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_tenant_must_start_and_print_its_port() {
+        let repo = tempfile::tempdir().unwrap();
+        let client = ["/bin/sh", "-c", "exit 0"];
+        let error = record_error(
+            &scenario(&client, &["/bin/sh", "-c", "echo listening"], "tmp"),
+            repo.path(),
+        );
+        assert!(error.starts_with("the tenant printed no port"), "{error}");
+        let error = record_error(
+            &scenario(&client, &["/nonexistent/tenant"], "tmp"),
+            repo.path(),
+        );
+        assert!(error.starts_with("start the stand-in tenant"), "{error}");
+        // A tenant that prints its port is started and its hosts routed; the
+        // client then sending nothing is the failure.
+        let error = record_error(
+            &scenario(
+                &client,
+                &["/bin/sh", "-c", "echo 40000; exec sleep 30"],
+                "tmp",
+            ),
+            repo.path(),
+        );
+        assert_eq!(
+            error,
+            "scenario s: the client sent nothing through the proxy"
+        );
+    }
 }

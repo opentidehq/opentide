@@ -1,0 +1,229 @@
+{
+  "format": 1,
+  "scenario": "sentinel_one/query",
+  "recorded_from": [
+    "{python}",
+    "tests/cassettes/sentinel_one/client.py",
+    "query"
+  ],
+  "digest": "sha256:d4fe383039b689a61779ee8a1b6b96a7957b219041793f34ed50ec08992675c3",
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://s1.invalid/web/api/v2.1/dv/events/pq",
+        "headers": [
+          [
+            "authorization",
+            "REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"query\": \"event.type = \\\"Process Creation\\\" // slow\\n| limit 2\", \"fromDate\": \"2026-10-26T08:00:00.000Z\", \"toDate\": \"2026-10-27T08:00:00.000Z\", \"limit\": 2, \"accountIds\": [\"4242\"], \"siteIds\": [\"77\"]}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "s1-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"data\": {\"queryId\": \"pq-1\", \"status\": \"RUNNING\", \"progress\": 0}}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://s1.invalid/web/api/v2.1/dv/events/pq-ping?queryId=pq-1",
+        "headers": [
+          [
+            "authorization",
+            "REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "s1-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"data\": {\"queryId\": \"pq-1\", \"status\": \"RUNNING\", \"progress\": 50}}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://s1.invalid/web/api/v2.1/dv/events/pq-ping?queryId=pq-1",
+        "headers": [
+          [
+            "authorization",
+            "REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "s1-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"data\": {\"queryId\": \"pq-1\", \"status\": \"FINISHED\", \"progress\": 100, \"columns\": [{\"name\": \"src.process.name\", \"type\": \"string\"}, {\"name\": \"endpoint.name\"}], \"data\": [[\"cmd.exe\", \"ws-1\"], [\"powershell.exe\", \"ws-2\"]], \"recommendations\": [\"Add a filter on event.type to speed up the query\"]}}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://s1.invalid/web/api/v2.1/dv/events/pq",
+        "headers": [
+          [
+            "authorization",
+            "REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"query\": \"src.process.name contains 'cmd' | limit 5\", \"fromDate\": \"2026-10-26T08:00:00.000Z\", \"toDate\": \"2026-10-27T08:00:00.000Z\", \"limit\": 101, \"accountIds\": [\"4242\"], \"siteIds\": [\"77\"]}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "s1-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"data\": {\"queryId\": \"pq-2\", \"status\": \"FINISHED\", \"progress\": 100, \"columns\": [{\"name\": \"src.process.name\", \"type\": \"string\"}, {\"name\": \"endpoint.name\"}], \"data\": [[\"cmd.exe\", \"ws-1\"], [\"powershell.exe\", \"ws-2\"]], \"recommendations\": [\"Add a filter on event.type to speed up the query\"]}}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://s1.invalid/web/api/v2.1/dv/events/pq",
+        "headers": [
+          [
+            "authorization",
+            "REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"query\": \"event.type = 'x' | syntax\\n| limit 101\", \"fromDate\": \"2026-10-26T08:00:00.000Z\", \"toDate\": \"2026-10-27T08:00:00.000Z\", \"limit\": 101, \"accountIds\": [\"4242\"], \"siteIds\": [\"77\"]}"
+      },
+      "response": {
+        "status": 400,
+        "headers": [
+          [
+            "server",
+            "s1-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"errors\": [{\"code\": 4000010, \"title\": \"Validation Error\", \"detail\": \"Syntax error at 3\"}]}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://s1.invalid/web/api/v2.1/dv/events/pq",
+        "headers": [
+          [
+            "authorization",
+            "REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"query\": \"event.type = 'y' // fails\\n| limit 101\", \"fromDate\": \"2026-10-26T08:00:00.000Z\", \"toDate\": \"2026-10-27T08:00:00.000Z\", \"limit\": 101, \"accountIds\": [\"4242\"], \"siteIds\": [\"77\"]}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "s1-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"data\": {\"queryId\": \"pq-3\", \"status\": \"RUNNING\", \"progress\": 0}}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://s1.invalid/web/api/v2.1/dv/events/pq-ping?queryId=pq-3",
+        "headers": [
+          [
+            "authorization",
+            "REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "s1-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"data\": {\"queryId\": \"pq-3\", \"status\": \"FAILED\", \"responseError\": \"out of memory\"}}"
+      }
+    }
+  ]
+}

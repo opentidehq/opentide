@@ -673,8 +673,13 @@ fn schema_verdicts(root: &Path) -> Result<(usize, Vec<String>)> {
     let mut done: HashSet<(String, String, u64)> = HashSet::new();
     for id in recorded_ids(&cases)? {
         // `new` runs the `schemas` phase first where the workspace has no
-        // schema yet (UC-3.5d, #933): its recordings hold the oracle's too.
-        if !id.starts_with("generate/") && !id.starts_with("new.") {
+        // schema yet (UC-3.5d, #933), and `setup vscode` before it writes
+        // the editor settings (UC-3.6c, #951): their recordings hold the
+        // oracle's too.
+        if !id.starts_with("generate/")
+            && !id.starts_with("new.")
+            && !id.starts_with("setup.vscode/")
+        {
             continue;
         }
         let recording = Recording::read(&cases.join(&id), &blobs)?;

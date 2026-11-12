@@ -36,6 +36,9 @@
 //! is an `Option` field without `#[serde(default)]` (serde reads it as `None`
 //! when missing), so a model cannot silently read differently under serde and
 //! under the conversion.
+//!
+//! Internal to opentide, with no stability promise: depend on the
+//! [`opentide`](https://docs.rs/opentide) crate, its Rust SDK, instead.
 
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};

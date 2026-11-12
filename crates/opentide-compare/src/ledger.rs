@@ -72,6 +72,15 @@ pub const WRITTEN: &str = "written";
 /// workspace is not a file a user commits (#928).
 pub const ORACLE_CACHE: &str = "home/.cache/opentide/lsp-catalogs/<CATALOG-FINGERPRINT>";
 
+/// In a `text` rule's `candidate`, once: any SHA-256 digest (64 lower-case
+/// hex digits) at that place. The rest of the line is literal, and the
+/// oracle's line must be the same line with a digest there, so the entry
+/// approves a different digest in one place and nothing else. It is for a
+/// digest the candidate computes over something that differs between two
+/// builds of it, such as `serve`'s `commands_digest`, a digest of a document
+/// that names the installed version.
+pub const DIGEST_TOKEN: &str = "<SHA256>";
+
 /// Whether a `presence` rule may name `path`: [`ORACLE_CACHE`], a file
 /// directly in it, or a folder above it the oracle created to hold it
 /// (`home/.cache` and below).
@@ -490,6 +499,21 @@ fn check_entry(raw: RawEntry) -> Result<Entry, Vec<String>> {
             );
             None
         }
+        (_, "text") if raw.candidate.contains(DIGEST_TOKEN) => {
+            if digest_pattern(&raw.candidate).is_some_and(|pattern| pattern.matches(&raw.oracle)) {
+                Some(Rule::Text {
+                    oracle: raw.oracle.clone(),
+                    candidate: raw.candidate.clone(),
+                })
+            } else {
+                problems.push(format!(
+                    "a `text` rule's `candidate` holds {DIGEST_TOKEN} once, and `oracle` is the \
+                     same line with a SHA-256 digest in its place: it approves a different \
+                     digest there and nothing else"
+                ));
+                None
+            }
+        }
         (_, "lines")
             if [&raw.oracle, &raw.candidate]
                 .iter()
@@ -620,6 +644,42 @@ fn check_entry(raw: RawEntry) -> Result<Entry, Vec<String>> {
             changelog: raw.changelog,
         }),
         _ => Err(problems),
+    }
+}
+
+/// A `text` rule's candidate with [`DIGEST_TOKEN`]: the literal text before
+/// and after it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DigestPattern<'a> {
+    before: &'a str,
+    after: &'a str,
+}
+
+impl DigestPattern<'_> {
+    /// Whether `line` is the pattern with a SHA-256 digest at the token.
+    pub fn matches(&self, line: &str) -> bool {
+        line.len() == self.before.len() + 64 + self.after.len()
+            && line.starts_with(self.before)
+            && line.ends_with(self.after)
+            && line
+                .get(self.before.len()..self.before.len() + 64)
+                .is_some_and(is_digest)
+    }
+}
+
+/// The pattern of a `text` rule's candidate that holds [`DIGEST_TOKEN`]
+/// exactly once; `None` for a literal candidate or one with the token twice.
+pub fn digest_pattern(candidate: &str) -> Option<DigestPattern<'_>> {
+    let (before, after) = candidate.split_once(DIGEST_TOKEN)?;
+    (!after.contains(DIGEST_TOKEN)).then_some(DigestPattern { before, after })
+}
+
+/// Whether a `text` rule's `candidate` approves the candidate's `line`: the
+/// same text, or, with [`DIGEST_TOKEN`], the same text around any digest.
+pub fn text_matches(candidate: &str, line: &[u8]) -> bool {
+    match digest_pattern(candidate) {
+        Some(pattern) => std::str::from_utf8(line).is_ok_and(|line| pattern.matches(line)),
+        None => candidate.as_bytes() == line,
     }
 }
 
@@ -936,6 +996,59 @@ changelog = "**Nested rules**"
                 .to_string()
                 .contains("one whole line each")
         );
+    }
+
+    /// A `text` candidate with `<SHA256>` approves a different digest in
+    /// that one place: the oracle's line must be the same line with a digest
+    /// there, and a candidate line matches only with a digest there.
+    #[test]
+    fn a_text_rule_may_approve_any_digest_in_one_place() {
+        let oracle_digest = "5".repeat(64);
+        let entry = |oracle: &str, candidate: &str| {
+            ENTRY
+                .replace("json:/summary/rules", "text")
+                .replace("oracle = \"1\"", &format!("oracle = \"{oracle}\""))
+                .replace("candidate = \"2\"", &format!("candidate = \"{candidate}\""))
+        };
+        let ledger = Ledger::parse(&entry(
+            &format!("digest {oracle_digest} end"),
+            "digest <SHA256> end",
+        ))
+        .unwrap();
+        let Rule::Text { candidate, .. } = &ledger.entries[0].rule else {
+            panic!("{:?}", ledger.entries[0].rule);
+        };
+        assert!(text_matches(
+            candidate,
+            format!("digest {} end", "a".repeat(64)).as_bytes()
+        ));
+        for refused in [
+            format!("digest {} end", "A".repeat(64)),
+            format!("digest {} end", "a".repeat(63)),
+            format!("digest {} end", "a".repeat(65)),
+            format!("digest {} end!", "a".repeat(64)),
+            format!("Digest {} end", "a".repeat(64)),
+            "digest <SHA256> end".to_owned(),
+        ] {
+            assert!(!text_matches(candidate, refused.as_bytes()), "{refused}");
+        }
+        // Without the token, a candidate is literal.
+        assert!(text_matches("a <b> c", b"a <b> c"));
+        assert!(!text_matches("a <b> c", b"a <B> c"));
+        // The oracle is the same line with a digest there; the token once.
+        for (oracle, candidate) in [
+            (format!("digest {oracle_digest} END"), "digest <SHA256> end"),
+            ("digest 1234 end".to_owned(), "digest <SHA256> end"),
+            (
+                format!("{oracle_digest} {oracle_digest}"),
+                "<SHA256> <SHA256>",
+            ),
+        ] {
+            let error = Ledger::parse(&entry(&oracle, candidate))
+                .unwrap_err()
+                .to_string();
+            assert!(error.contains("holds <SHA256> once"), "{oracle}: {error}");
+        }
     }
 
     /// A terminal's cursor movements put a `\r` inside a line (`\x1b[?25h\r

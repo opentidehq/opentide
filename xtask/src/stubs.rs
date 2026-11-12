@@ -245,4 +245,73 @@ not json
             r#"{"target":{"name":"_native","kind":["cdylib"]},"filenames":["/t/lib_native.rlib"]}"#;
         assert!(library_in(rlib_only).is_err());
     }
+
+    fn words(words: &[&str]) -> Vec<String> {
+        words.iter().map(|word| (*word).to_owned()).collect()
+    }
+
+    #[test]
+    fn options_are_checked_before_anything_is_built() {
+        assert_eq!(main(&words(&["--help"])), std::process::ExitCode::SUCCESS);
+        assert_eq!(
+            main(&words(&["--frobnicate"])),
+            std::process::ExitCode::from(2)
+        );
+        let error = run(&words(&["--library"])).unwrap_err();
+        assert!(
+            format!("{error:#}").contains("--library takes a file"),
+            "{error:#}"
+        );
+        let error = run(&words(&["--check", "--bogus"])).unwrap_err();
+        assert!(
+            format!("{error:#}").starts_with("unknown option `--bogus`"),
+            "{error:#}"
+        );
+    }
+
+    #[test]
+    fn a_file_that_is_not_the_extension_cannot_be_introspected() {
+        let dir = tempfile::tempdir().unwrap();
+        let missing = dir.path().join("lib_native.so");
+        let stub = workspace_root().join(STUB);
+        let before = fs::read(&stub).ok();
+        // Neither with --check nor without is anything written: the stub on
+        // disk is left as it is when there is nothing to introspect.
+        for check in [true, false] {
+            let mut args = words(&["--library", &missing.to_string_lossy()]);
+            if check {
+                args.push("--check".into());
+            }
+            let error = run(&args).unwrap_err();
+            assert!(
+                format!("{error:#}").starts_with(&format!("introspecting {}", missing.display())),
+                "{error:#}"
+            );
+        }
+        std::fs::write(&missing, "not a shared library").unwrap();
+        assert!(generate(&missing).is_err());
+        assert_eq!(
+            main(&words(&[
+                "--check",
+                "--library",
+                &missing.to_string_lossy()
+            ])),
+            std::process::ExitCode::from(2)
+        );
+        assert_eq!(fs::read(&stub).ok(), before);
+    }
+
+    #[test]
+    fn the_stub_is_under_the_workspace_root() {
+        let root = workspace_root();
+        assert!(
+            root.join("xtask/Cargo.toml").is_file(),
+            "{}",
+            root.display()
+        );
+        assert!(
+            root.join(STUB).parent().is_some_and(Path::is_dir),
+            "{STUB} is in an existing folder"
+        );
+    }
 }

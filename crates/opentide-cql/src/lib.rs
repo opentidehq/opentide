@@ -5,6 +5,9 @@
 //! it follows CrowdStrike's published CQL grammar. [`analyze`] reports its first
 //! syntax error and then the checks of [`check`] against the catalogs of
 //! [`catalog`]. See `docs/engine/CQL.md`.
+//!
+//! Internal to opentide, with no stability promise: depend on the
+//! [`opentide`](https://docs.rs/opentide) crate, its Rust SDK, instead.
 
 #![expect(
     missing_docs,
