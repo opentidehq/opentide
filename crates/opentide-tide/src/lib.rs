@@ -6,6 +6,7 @@
 pub mod bitdefender;
 mod elastic;
 mod falco;
+mod google_secops;
 mod injection;
 mod intel;
 mod lint;
@@ -87,6 +88,13 @@ pub fn language_for_field_path(path: &[&str]) -> Option<LanguageId> {
             "yara",
             "signature",
         ] => Some(LanguageId::Yara),
+        // A Google SecOps block's YARA-L sections: one rule assembled from
+        // its keys ([`google_secops`]); `match` and `options` are YAML.
+        [
+            "configurations",
+            "google_secops",
+            "setup" | "events" | "outcome" | "condition" | "export",
+        ] => Some(LanguageId::Yaral),
         _ => None,
     }
 }
@@ -874,6 +882,18 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
         ));
     }
 
+    if object_type == "rule"
+        && object
+            .configurations
+            .as_ref()
+            .is_some_and(|c| c.get("google_secops").is_some())
+    {
+        diagnostics.extend(google_secops::constraint_diagnostics(
+            input.source,
+            &yaml_scalar::mapping_keys(input.source),
+        ));
+    }
+
     if let Some(block) = object.configurations.as_ref().and_then(|c| c.get("sysdig")) {
         diagnostics.extend(falco::source_diagnostics(input.source, block));
         diagnostics.extend(falco::tuning_diagnostics(input.source, block));
@@ -1076,10 +1096,28 @@ fn analyze_injections(
                     .collect();
                 (r.diagnostics, r.tokens)
             }
-            // Google SecOps blocks are not injected yet.
-            LanguageId::Yaral | LanguageId::TideYaml | LanguageId::Config => {
-                (Vec::new(), Vec::new())
+            LanguageId::Yaral => {
+                // A block's sections are the rule deploy assembles; a hunt is
+                // a search.
+                let block = inj.field_path.first().map(String::as_str) == Some("configurations");
+                let ctx = if block {
+                    opentide_yaral::Context::SECTIONS
+                } else {
+                    opentide_yaral::Context::SEARCH
+                };
+                let mut r = opentide_yaral::analyze_with(&inj.inner, &ctx);
+                let has_match = configurations
+                    .and_then(|c| c.get("google_secops"))
+                    .and_then(|b| b.get("match"))
+                    .is_some();
+                r.diagnostics = r
+                    .diagnostics
+                    .into_iter()
+                    .filter_map(|d| google_secops::on_assembled(&inj, &inner_lines, has_match, d))
+                    .collect();
+                (r.diagnostics, r.tokens)
             }
+            LanguageId::TideYaml | LanguageId::Config => (Vec::new(), Vec::new()),
         };
         // The stand-in `opentide new` wrote is lint's `placeholders` finding,
         // not a query to check: `opentide validate` skips it too.

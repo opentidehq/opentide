@@ -260,3 +260,62 @@ fn standalone_yara_matches_tide_harfanglab_signature() {
         )
     );
 }
+
+#[test]
+fn standalone_yaral_matches_the_google_secops_block() {
+    // The same unknown UDM field, in a `.yaral` file and in the block's
+    // `events`: one finding, with the same message, in its own coordinates.
+    let rule = "rule composability {\n  meta:\n    author = \"opentide\"\n  events:\n    $e.metadata.event_type = \"PROCESS_LAUNCH\"\n    $e.target.process.comand_line = /-enc/ nocase\n  outcome:\n    $risk_score = 10\n  condition:\n    $e\n}\n";
+    let raw = analyze_raw("rules/broken.yaral", LanguageId::Yaral, rule);
+    let raw_d = operator(&raw.diagnostics, codes::YARAL_UNKNOWN_UDM_FIELD);
+    assert!(raw_d.message.contains("comand_line"), "{}", raw_d.message);
+    assert_eq!(raw_d.range.start.line, 5);
+    assert_eq!(raw_d.range.start.character, 22);
+
+    let yaml = "name: Composability\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000099\n  schema: rule::1.0\nconfigurations:\n  google_secops:\n    status: STAGING\n    events: |\n      $e.metadata.event_type = \"PROCESS_LAUNCH\"\n      $e.target.process.comand_line = /-enc/ nocase\n    outcome: |\n      $risk_score = 10\n    condition: |\n      $e\n";
+    let host = MemoryWorkspace {
+        files: vec![(
+            "objects/rules/composability-secops.yaml".into(),
+            yaml.into(),
+        )],
+    };
+    let embedded = analyze_doc(
+        "objects/rules/composability-secops.yaml",
+        LanguageId::TideYaml,
+        yaml,
+        &host,
+    );
+    let embedded_d = operator(&embedded.diagnostics, codes::YARAL_UNKNOWN_UDM_FIELD);
+    assert_same_operator(raw_d, embedded_d);
+    assert_eq!(
+        embedded_d.field_path.as_deref(),
+        Some(
+            [
+                "configurations".to_string(),
+                "google_secops".to_string(),
+                "events".to_string(),
+            ]
+            .as_slice()
+        )
+    );
+    // Line 9 of the object, two columns less than in the file: the block
+    // indents the text by six, the assembled rule by four.
+    assert_eq!(embedded_d.range.start.line, 9);
+    assert_eq!(embedded_d.range.start.character, 24);
+}
+
+#[test]
+fn a_yaral_hunt_is_checked_as_a_search() {
+    let query = "metadata.event_type = \"USER_LOGIN\"\n$user = target.user.userid\nmatch:\n  $user\noutcome:\n  $n = avg(metadata.id)\n";
+    let raw = opentide_analysis::analyze_query(&opentide_analysis::QueryRequest {
+        language: LanguageId::Yaral,
+        platform: Some("google_secops".into()),
+        stack: None,
+        text: query.into(),
+    });
+    assert!(
+        !raw.iter()
+            .any(|d| d.code == codes::YARAL_FUNCTION_UNAVAILABLE),
+        "avg is a search aggregation: {raw:?}"
+    );
+}
