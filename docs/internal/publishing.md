@@ -100,7 +100,7 @@ A trusted publisher with no environment trusts the workflow file on any branch: 
 | npm | `@opentide/opentide`, its six native packages (napi-rs), the `opentide` alias, `@opentide/lsp-client`, `@opentide/lsp-worker` | `npm pack` of what the native jobs built, `npm publish --provenance` with OIDC (npm 11.21.1) |
 | GitHub Release | `opentide-vX.Y.Z-<target>` and `opentide-lsp-vX.Y.Z-<target>` (six targets), `opentide-installer.sh` and `opentide-installer.ps1` ([`publishing/installers/`](../../publishing/installers/)), `highlights-vX.Y.Z.zip`, `opentide-wasm-web-vX.Y.Z.zip`, `opentide-lsp-wasm32-wasip1.wasm`, `THIRD-PARTY-LICENSES.html`, `LICENSE`, `NOTICE`, `WASI-LIBC-LICENSES.txt`, seven CycloneDX SBOMs, `SHA256SUMS` | [`engine-release-build.yml`](../../.github/workflows/engine-release-build.yml), which ci.yml also runs as a dry run in its full set |
 
-Every artifact (the Release's assets, the wheels and sdist, the `.crate` files, the npm tarballs) gets a GitHub artifact attestation (`actions/attest-build-provenance`) before anything is published, and the published assets are checked against `SHA256SUMS` and their attestations before any registry is touched. Each artifact is smoke-tested first the way a user installs it: `pip install` and `opentide --version` on Linux, macOS and Windows; `pip install` of the sdist, built from source; `npx @opentide/opentide --version` from the tarballs; `cargo install opentide --features cli` from the crates' packages (`release.py crate-patch`, before crates.io has them); and the two installers against the built assets. After publishing, `Smoke the registries` installs from PyPI (or TestPyPI), npm and crates.io.
+Every artifact (the Release's assets, the wheels and sdist, the `.crate` files, the npm tarballs) gets a GitHub artifact attestation (`actions/attest-build-provenance`) before anything is published, and the published assets are checked against `SHA256SUMS` and their attestations before any registry is touched. Each artifact is smoke-tested first the way a user installs it: `pip install` and `opentide --version` on Linux, macOS and Windows; `pip install` of the sdist, built from source; every npm tarball published to a throwaway local registry, then `npm install @opentide/opentide` in a clean project ([The npm install test](#the-npm-install-test)); `cargo install opentide --features cli` from the crates' packages (`release.py crate-patch`, before crates.io has them); and the two installers against the built assets. After publishing, `Smoke the registries` installs from PyPI (or TestPyPI), npm and crates.io.
 
 **Inputs.** None: a release, of the newest dated `CHANGELOG.md` version, once its notes PR merged. `release_candidate: N`: `vX.Y.Z-rc.N` of the workspace version, to the test channels: a GitHub pre-release with every asset and attestation, TestPyPI (`X.Y.ZrcN`, environment `testpypi`), npm under the dist-tag `next` (`X.Y.Z-rc.N`), and the crates as `cargo publish --workspace --dry-run`. `dry_run: true`: build and smoke-test everything, publish nothing, from any branch. `checkout_ref: vX.Y.Z`: resume a release whose publishing failed partway (also `repository_dispatch` event `publish`, for GitHub App tokens).
 
@@ -116,6 +116,32 @@ Every artifact (the Release's assets, the wheels and sdist, the `.crate` files, 
 6. **No `release: published` trigger, no tag trigger.** A tag pushed or a Release created by hand publishes nothing; `publish.yml` creates both with `GITHUB_TOKEN`, which starts no other workflow. A failed run is resumed with `checkout_ref`.
 7. **The opentide command line is scanned as a product.** The oracle licence scan (`scripts/engine/license-scan.sh`) refuses the engine's oracles in every asset. The `opentide` binaries, the opentide-cli crate and `@opentide/opentide` carry opentide's own package data, as the wheel always has: its `platform_sdk` explain page names `splunklib`, the Python module the doctor check looks for, so they are scanned with `--product`, which allows that name and no other. The wheel's SBOM lists `splunk-sdk`, a dependency of the wheel, and is not scanned.
 8. **Linux binaries and npm native packages are built on `ubuntu-latest`** (as language-server's were), so they need that runner's glibc or newer; the wheels are manylinux_2_28. Building them against an older glibc (a manylinux container, or napi-rs's cross toolchain) is a follow-up.
+9. **npm: the standard napi-rs layout, `@opentide/opentide-<platform>`** ([ADR 0006](./adr/0006-npm-packages.md#amendment-2026-11-12-the-package-layout-and-names), amended). `@opentide/opentide` carries the loader napi-rs generates, `index.d.ts` and the `opentide` bin, and lists the six native packages under `optionalDependencies`; each native package declares its `os` and `cpu` (and `libc: ["glibc"]` on Linux) and holds one `opentide.<platform>.node` and `LICENSE`. The names are napi-rs's default, not ADR 0006's first `@opentide/<platform>`: a bare platform name says nothing inside the organisation's scope, and napi-rs generates these (the loader, `bindings/node/npm/`), so nothing is renamed by hand.
+10. **No WebAssembly fallback** (no `@opentide/opentide-wasm32-wasi`). napi-rs's WASI build runs under WASI preview 1, which under Node.js and napi-rs has no outbound sockets, so `query`, `validate query --live` and `deploy` could not reach a tenant. On a platform without a native package, loading fails with the loader's error. Revisit when napi-rs supports WASI 0.2 or 0.3. `@opentide/wasm`, the browser build, is a separate package.
+
+### The npm install test
+
+[`scripts/engine/npm-local-registry/test.mjs`](../../scripts/engine/npm-local-registry/test.mjs) installs the npm packages the way a user does, before any registry has them. It publishes every tarball to a throwaway local registry (Verdaccio 6.11.1, started with no uplink, listening on the loopback interface only, its storage in a temporary folder), then in a clean project, with its own npm cache and configuration, runs `npm install @opentide/opentide` and checks that:
+
+- npm installed exactly the host's native package, at the release's version, with its addon and `LICENSE`;
+- `npx opentide --version` prints the release's version;
+- the SDK loads from `require` and from `import` with the loader's version check on (`NAPI_RS_ENFORCE_VERSION_CHECK=1`), from the native addon, and `runJson(['commands'])` returns the command tree;
+- `tsc --noEmit` (strict, `nodenext`) resolves the package's types, a deliberate type error included;
+- the registry serves each native package's `os`, `cpu` and `libc`, and each tarball is at the release's version, with no musl or WebAssembly package;
+- the same install through the `opentide` alias: the same native package, its bin, its SDK.
+
+Verdaccio and TypeScript come from the test's own [`package-lock.json`](../../scripts/engine/npm-local-registry/package-lock.json) (`npm ci --ignore-scripts`, from the default registry, into the work folder). Nothing is published anywhere else, and the work folder is deleted afterwards (`--keep` leaves it).
+
+It runs in `publish.yml`'s `smoke-npm`, on Linux, macOS and Windows, against the tarballs `npm-pack` built, before `attest` and so before anything is published; and in ci.yml's full set (`npm-install`), on linux-x64-gnu only: the tree's packages at the workspace version, the other five native packages packed as stand-ins without an addon, so that npm still has to choose. To run it locally (Node.js 22 or later), from the repository root:
+
+```bash
+cd bindings/node && npm ci && cd ../..
+version="$(python3 scripts/engine/release.py version)"
+python3 scripts/engine/release.py npm-version "$version"     # rewrites the npm manifests: revert them afterwards
+(cd bindings/node && OPENTIDE_VERSION="$version" node build.mjs --profile develop)
+node scripts/engine/npm-local-registry/test.mjs --version "$version" --pack "$(mktemp -d)"
+git checkout -- bindings/node packages/lsp-client/package.json packages/lsp-worker/package.json
+```
 
 ## The placeholders
 

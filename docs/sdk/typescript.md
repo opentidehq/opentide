@@ -17,6 +17,8 @@ npm install @opentide/opentide
 
 npm installs the one native package your machine needs (`@opentide/opentide-<platform>`, an optional dependency) beside it: Linux x64 and arm64 (glibc; there is no musl build, so not Alpine), macOS x64 and arm64, and Windows x64 and arm64, on Node.js 18 or later.
 
+On any other platform the install succeeds, but loading the package fails with the loader's error naming the native package it looked for: there is no WebAssembly fallback, which could not reach your tenants.
+
 Until then, build it from a checkout. It needs the Rust release `rust-toolchain.toml` names and a C compiler (for the query engines' grammars):
 
 ```bash
