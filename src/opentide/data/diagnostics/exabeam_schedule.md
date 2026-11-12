@@ -16,4 +16,4 @@ schedule:
 
 ## How to fix
 
-Write weekday names in full and lower case (`monday`), times as `HH:MMZ` in quotes, and only the keys the recurrence takes.
+Write weekday names in full and lower case (`monday`), times as `H:MMZ` or `HH:MMZ` in quotes, and only the keys the recurrence takes.

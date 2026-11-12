@@ -11,7 +11,7 @@
       "sequences": [
         {
           "name": "Office spawns encoded PowerShell",
-          "query": "activity_type:\"process-create\"\nAND parent_process_name:(\"winword.exe\", \"excel.exe\", \"powerpnt.exe\")\nAND process_name:(\"powershell.exe\", \"pwsh.exe\")\nAND process_command_line:RGXi(\"\\\\s-(e|en|enc|enco|encod|encode|encoded|encodedcommand)\\\\s\")",
+          "query": "activity_type:\"process-create\"\nAND parent_process_name:(\"winword.exe\", \"excel.exe\", \"powerpnt.exe\")\nAND process_name:(\"powershell.exe\", \"pwsh.exe\")\nAND process_command_line:RGXi(\"\\s-(e|en|enc|enco|encod|encode|encoded|encodedcommand)\\s\")",
           "condition": {
             "triggerOnAnyMatch": true,
             "groupByOption": true,

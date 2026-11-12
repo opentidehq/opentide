@@ -1,8 +1,8 @@
 # exabeam_correlation_window
 
-`correlation.within` is shorter than the longest sequence window.
+`correlation.within` is not more than the time the ordered sequences need.
 
-Severity: warning. Reported by `opentide validate` and `opentide lint` (its `queries` check) on an `exabeam` block (exabeam-1.0). Exabeam's guide asks for a correlation window at least as long as the longest `threshold.within`, or the correlation may never see a sequence's condition met. It is an advisory: the rule validates and deploys.
+Severity: warning. Reported by `opentide validate` and `opentide lint` (its `queries` check) on an `exabeam` block with two or more sequences (exabeam-1.0). Exabeam evaluates the sequences in order: it waits one minute before it evaluates the next one, and an any-match sequence evaluates events for one minute. Its guide asks for a correlation window of more than the sum of the sequence windows (`threshold.within`, one minute for an any-match sequence) plus one minute for each sequence after the first: "more than nine minutes" for a 3-minute and a 5-minute sequence. A shorter window may never see every condition met. It is an advisory: the rule validates and deploys.
 
 ## Example
 
@@ -17,4 +17,4 @@ correlation:
 
 ## How to fix
 
-Make `correlation.within` at least the longest `threshold.within` (`1h` here).
+Make `correlation.within` more than the minutes the sequences need: 60 + 1 + 1 = 62 here, so `63m` or `2h`.

@@ -397,3 +397,38 @@ def test_a_null_attach_csv_or_correlation_group_by_is_the_key_left_out() -> None
     )
     assert body["sequencesConfig"]["commonProperties"]["groupBy"] == []
     assert body["sequencesConfig"]["outcomes"]["email"]["attachCsv"] is False
+
+
+def test_nested_unknown_keys_fail_as_unknown_keys_at_their_path() -> None:
+    """exabeam-1.0: an unknown key is never a constraint code, at the block root or inside."""
+    threshold = {"function": "count", "operator": "more_than", "value": 1, "within": "5m"}
+    two = [{"query": QUERY}, {"query": QUERY}]
+    cases = [
+        ({"sequences": [{"query": QUERY, "extra": 1}]}, ("sequences", "0", "extra")),
+        (
+            {"sequences": [{"query": QUERY, "threshold": {**threshold, "extra": 1}}]},
+            ("sequences", "0", "threshold", "extra"),
+        ),
+        ({"suppression": {"for": "1h", "unit": "h"}}, ("suppression", "unit")),
+        (
+            {"sequences": two, "correlation": {"within": "15m", "extra": 1}},
+            ("correlation", "extra"),
+        ),
+        ({"email": {"recipients": ["a@b.co"], "cc": []}}, ("email", "cc")),
+        (
+            {"schedule": [{"every": "day", "from": "8:00Z", "to": "18:00Z", "tz": "UTC"}]},
+            ("schedule", "0", "tz"),
+        ),
+    ]
+    for keys, path in cases:
+        assert _errors(_block(**keys)) == [("extra_forbidden", path)], keys
+    # A day key the recurrence does not take is exabeam_schedule, not an unknown key.
+    wrong_day_key = {"every": "day", "from": "8:00Z", "to": "18:00Z", "days": ["monday"]}
+    assert _errors(_block(schedule=[wrong_day_key])) == [("exabeam_schedule", ("schedule", "0"))]
+
+
+def test_a_suppression_that_is_not_a_table_is_reported_at_for() -> None:
+    assert _errors(_block(suppression="1h")) == [("exabeam_duration", ("suppression", "for"))]
+    assert _errors(_block(suppression={"group_by": ["user"]})) == [
+        ("exabeam_duration", ("suppression", "for"))
+    ]

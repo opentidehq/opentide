@@ -991,9 +991,9 @@ class ExabeamRecurrence(TideModel):
     every: Literal["day", "week", "month", "days"]
     """`day`, `week`, `month`, or `days` (a range of weekdays)"""
     from_: str = Field(alias="from")
-    """Start time, UTC, `HH:MMZ` (`08:00Z`)"""
+    """Start time, UTC, `H:MMZ` or `HH:MMZ` (`8:00Z`, `08:00Z`)"""
     to: str
-    """End time, UTC, `HH:MMZ`"""
+    """End time, UTC, `H:MMZ` or `HH:MMZ`"""
     days: list[str] | list[int] | None = None
     """`week`: one or more weekday names (`monday` … `sunday`). `month`: day numbers 1–31. Not
     allowed otherwise."""

@@ -142,18 +142,32 @@ def test_outcome_none_without_email_is_silent() -> None:
     assert _advisory_codes(outcome="case") == []
 
 
-def test_a_correlation_window_shorter_than_a_sequence_window() -> None:
-    sequences = [
-        {"query": "a", "threshold": {"within": "1h"}},
-        {"query": "b", "threshold": {"within": "30m"}},
-        {"query": "c"},
-    ]
-    assert _advisory_codes(sequences=sequences, correlation={"within": "45m"}) == [
-        "exabeam_correlation_window"
-    ]
-    assert _advisory_codes(sequences=sequences, correlation={"within": "1h"}) == []
-    assert _advisory_codes(sequences=sequences, correlation={"within": "1d"}) == []
-    assert _advisory_codes(sequences=sequences, correlation={"within": "bad"}) == []
+def test_the_correlation_window_follows_the_ordered_rule() -> None:
+    """Exabeam's guide: a 3- and a 5-minute ordered sequence need more than nine minutes."""
+
+    def seq(within: str | None) -> dict[str, Any]:
+        return {"query": "q"} if within is None else {"query": "q", "threshold": {"within": within}}
+
+    def codes(within: str, *windows: str | None) -> list[str]:
+        return _advisory_codes(sequences=[seq(w) for w in windows], correlation={"within": within})
+
+    window = ["exabeam_correlation_window"]
+    assert codes("9m", "3m", "5m") == window
+    assert codes("10m", "3m", "5m") == []
+    # The rule this replaced (at least the longest window) let 5m through.
+    assert codes("5m", "3m", "5m") == window
+    # An any-match sequence counts one minute: 1 + 1 + 1 gap.
+    assert codes("3m", None, None) == window
+    assert codes("4m", None, None) == []
+    # 60 + 30 + 1 + 2 gaps = 93 minutes.
+    assert codes("93m", "1h", "30m", None) == window
+    assert codes("94m", "1h", "30m", None) == []
+    assert codes("1d", "1h", "30m", None) == []
+    # A window that does not parse is a constraint error, not an advisory.
+    assert codes("bad", "1h", None) == []
+    assert codes("1m", "bad", None) == []
+    # One sequence has no correlation window to judge.
+    assert codes("1m", "1h") == []
 
 
 def test_the_specification_fixtures_earn_no_advisory() -> None:

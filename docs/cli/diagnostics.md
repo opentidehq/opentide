@@ -127,7 +127,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`exabeam_context_table_or`](#exabeam_context_table_or) | An Exabeam context table lookup is under OR; lookups combine with AND or AND NOT only. |
 | [`exabeam_context_table_trigger`](#exabeam_context_table_trigger) | A sequence whose query looks a value up in a context table has a threshold. |
 | [`exabeam_correlation`](#exabeam_correlation) | An Exabeam block with two or more sequences has no `correlation`, or one with a single sequence has one. |
-| [`exabeam_correlation_window`](#exabeam_correlation_window) | `correlation.within` is shorter than the longest sequence window. |
+| [`exabeam_correlation_window`](#exabeam_correlation_window) | `correlation.within` is not more than the time the ordered sequences need. |
 | [`exabeam_create_no_id`](#exabeam_create_no_id) | Exabeam answered a create without a rule UUID. |
 | [`exabeam_create_unconfirmed`](#exabeam_create_unconfirmed) | An Exabeam create got no answer, or a server error, so it may or may not have happened. |
 | [`exabeam_duration`](#exabeam_duration) | A duration is not a whole number and a unit its field takes, or `delay` is outside 7 to 180 minutes. |
@@ -2393,9 +2393,9 @@ With one sequence, remove `correlation`. With two or more, set `correlation.with
 
 ## exabeam_correlation_window
 
-`correlation.within` is shorter than the longest sequence window.
+`correlation.within` is not more than the time the ordered sequences need.
 
-Severity: warning. Reported by `opentide validate` and `opentide lint` (its `queries` check) on an `exabeam` block (exabeam-1.0). Exabeam's guide asks for a correlation window at least as long as the longest `threshold.within`, or the correlation may never see a sequence's condition met. It is an advisory: the rule validates and deploys.
+Severity: warning. Reported by `opentide validate` and `opentide lint` (its `queries` check) on an `exabeam` block with two or more sequences (exabeam-1.0). Exabeam evaluates the sequences in order: it waits one minute before it evaluates the next one, and an any-match sequence evaluates events for one minute. Its guide asks for a correlation window of more than the sum of the sequence windows (`threshold.within`, one minute for an any-match sequence) plus one minute for each sequence after the first: "more than nine minutes" for a 3-minute and a 5-minute sequence. A shorter window may never see every condition met. It is an advisory: the rule validates and deploys.
 
 ### Example
 
@@ -2410,7 +2410,7 @@ correlation:
 
 ### How to fix
 
-Make `correlation.within` at least the longest `threshold.within` (`1h` here).
+Make `correlation.within` more than the minutes the sequences need: 60 + 1 + 1 = 62 here, so `63m` or `2h`.
 
 ## exabeam_create_no_id
 
@@ -3056,7 +3056,7 @@ schedule:
 
 ### How to fix
 
-Write weekday names in full and lower case (`monday`), times as `HH:MMZ` in quotes, and only the keys the recurrence takes.
+Write weekday names in full and lower case (`monday`), times as `H:MMZ` or `HH:MMZ` in quotes, and only the keys the recurrence takes.
 
 ## exabeam_schedule_retained
 

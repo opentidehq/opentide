@@ -20,6 +20,9 @@ ADVISORY_CODES = frozenset({OUTCOME_SILENT, CORRELATION_WINDOW})
 
 _BLOCK = ("configurations", "exabeam")
 _MINUTES = {"m": 1, "h": 60, "d": 1440}
+#: Exabeam waits a minute before it evaluates the next ordered sequence, and an any-match
+#: sequence evaluates events for one minute (the rule creator's guide).
+_STEP_MINUTES = 1
 
 
 @dataclass(frozen=True)
@@ -53,22 +56,40 @@ def exabeam_advisories(rule: Mapping[str, Any]) -> list[Advisory]:
         )
     correlation = raw.get("correlation")
     sequences = raw.get("sequences")
-    if isinstance(correlation, Mapping) and isinstance(sequences, list):
+    if isinstance(correlation, Mapping) and isinstance(sequences, list) and len(sequences) >= 2:
         window = _minutes(correlation.get("within"))
-        longest: tuple[int, str] | None = None
-        for sequence in sequences:
-            threshold = sequence.get("threshold") if isinstance(sequence, Mapping) else None
-            within = threshold.get("within") if isinstance(threshold, Mapping) else None
-            minutes = _minutes(within)
-            if minutes is not None and (longest is None or minutes > longest[0]):
-                longest = (minutes, str(within))
-        if window is not None and longest is not None and window < longest[0]:
+        needed = ordered_minutes(sequences)
+        if window is not None and needed is not None and window <= needed:
             found.append(
                 Advisory(
                     CORRELATION_WINDOW,
                     (*_BLOCK, "correlation", "within"),
-                    f"correlation.within {correlation.get('within')} is shorter than the longest "
-                    f"sequence window, {longest[1]}: Exabeam asks for at least the longest one",
+                    f"correlation.within {correlation.get('within')} is not more than the "
+                    f"{needed} minutes the ordered sequences need (their windows, one minute "
+                    "for each any-match sequence, and one minute between sequences): make it "
+                    f"more than {needed}m",
                 )
             )
     return found
+
+
+def ordered_minutes(sequences: list[Any]) -> int | None:
+    """The minutes ordered *sequences* need, or ``None`` when a window does not parse.
+
+    The sum of each sequence's window (``threshold.within``, one minute for an
+    any-match sequence) and one minute for each sequence after the first
+    (exabeam-1.0, ``correlation``). A window that does not parse is a
+    constraint error already, so no advisory is given on top of it.
+    """
+    needed = _STEP_MINUTES * (len(sequences) - 1)
+    for sequence in sequences:
+        threshold = sequence.get("threshold") if isinstance(sequence, Mapping) else None
+        if threshold is None:
+            needed += _STEP_MINUTES
+            continue
+        within = threshold.get("within") if isinstance(threshold, Mapping) else None
+        minutes = _minutes(within)
+        if minutes is None:
+            return None
+        needed += minutes
+    return needed

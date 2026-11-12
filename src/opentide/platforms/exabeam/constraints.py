@@ -81,6 +81,8 @@ RECURRENCE_DAY_KEYS: dict[str, frozenset[str]] = {
     "days": frozenset({"first", "last"}),
 }
 
+_ALL_DAY_KEYS: frozenset[str] = frozenset().union(*RECURRENCE_DAY_KEYS.values())
+
 NAME_LIMIT = 128
 GROUP_BY_LIMIT = 3
 #: ``delay`` in minutes (exabeam-1.0, Durations).
@@ -316,7 +318,7 @@ def _email_ok(email: Any) -> bool:
 def _suppression_findings(suppression: Any) -> list[Finding]:
     path = ("suppression",)
     if not isinstance(suppression, Mapping):
-        return [Finding("exabeam_duration", path, "suppression is a table with for")]
+        return [Finding("exabeam_duration", (*path, "for"), "suppression is a table with for")]
     findings: list[Finding] = []
     if duration(suppression.get("for"), "mhdw") is None:
         findings.append(
@@ -346,8 +348,10 @@ def _recurrence_problem(recurrence: Any) -> str | None:
     for key in ("from", "to"):
         value = recurrence.get(key)
         if not isinstance(value, str) or _TIME.fullmatch(value) is None:
-            return f"{key} is a UTC time written HH:MMZ, such as 08:00Z"
-    extra = set(recurrence) - {"every", "from", "to"} - RECURRENCE_DAY_KEYS[every]
+            return f"{key} is a UTC time written H:MMZ or HH:MMZ, such as 08:00Z"
+    # A day key the recurrence does not take; a key that is no day key at all is the
+    # model's unknown key, at its own path (exabeam-1.0, the path table).
+    extra = (set(recurrence) & _ALL_DAY_KEYS) - RECURRENCE_DAY_KEYS[every]
     if extra:
         return f"a {every} recurrence does not take {', '.join(sorted(map(str, extra)))}"
     if every == "week":
