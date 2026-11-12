@@ -54,6 +54,28 @@ pub use error::ConnectorError;
 pub use http::{HttpClient, HttpSettings};
 pub use tenant::{Tenant, TenantLabel};
 
+/// The HTTP settings *platform*'s client mounts: its timeout and retries,
+/// as its Python client mounts them. *timeout* is the read timeout of the
+/// clients that take the caller's (Elastic, Splunk and Carbon Black Cloud;
+/// Sentinel's at least 300 s, azure-core's read); the others keep their own.
+/// A platform without a connector gets the defaults.
+pub fn http_settings(platform: &str, timeout: std::time::Duration) -> HttpSettings {
+    match platform {
+        "defender_for_endpoint" => defender::http_settings(),
+        "sentinel_one" => sentinel_one::http_settings(),
+        "crowdstrike" => crowdstrike::http_defaults(),
+        "harfanglab" => harfanglab::http_defaults(),
+        "sysdig" => sysdig::http_defaults(),
+        "elastic" => elastic::http_settings(timeout),
+        "splunk" => splunk::http_settings(timeout),
+        "carbon_black_cloud" => carbon_black::http_settings(timeout),
+        // azure-core reads for 300 s; the server holds a query up to its own
+        // timeout (`Prefer: wait`).
+        "sentinel" => sentinel::http_settings(timeout.max(std::time::Duration::from_secs(300))),
+        _ => HttpSettings::default(),
+    }
+}
+
 /// The built-in platforms with a connector, in the order Python lists them:
 /// CrowdStrike, HarfangLab and Sysdig (UC-4.2a), Defender for Endpoint,
 /// Elastic and SentinelOne (UC-4.2b), Sentinel, Splunk and Carbon Black
@@ -80,6 +102,68 @@ pub fn builtin() -> Registry {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
+    #[test]
+    fn each_platform_mounts_its_own_http_settings() {
+        let timeout = Duration::from_secs(7);
+        assert_eq!(
+            super::http_settings("elastic", timeout),
+            super::elastic::http_settings(timeout)
+        );
+        assert_eq!(
+            super::http_settings("sentinel", timeout),
+            super::sentinel::http_settings(Duration::from_secs(300))
+        );
+        assert_eq!(
+            super::http_settings("sentinel", Duration::from_secs(900)).timeout,
+            super::sentinel::http_settings(Duration::from_secs(900)).timeout
+        );
+        assert_eq!(
+            super::http_settings("defender_for_endpoint", timeout),
+            super::defender::http_settings()
+        );
+        assert_eq!(
+            super::http_settings("sysdig", timeout),
+            super::sysdig::http_defaults()
+        );
+        assert_eq!(
+            super::http_settings("unknown", timeout),
+            super::HttpSettings::default()
+        );
+    }
+
+    #[test]
+    fn configured_tenants_keep_file_order_and_their_setup() {
+        let config: opentide_compile::Json = serde_json::from_str(
+            r#"{"platforms": {"splunk": {"tenants": [
+                {"name": "prod", "setup": {"url": "$SPLUNK_URL", "port": 8089, "ssl": false,
+                 "index": ["main", 3], "nested": {"a": 1}, "none": null, "ratio": 0.5}},
+                {"name": "lab"},
+                "not a table"
+            ]}}}"#,
+        )
+        .expect("JSON");
+        let tenants = super::tenant::configured(&config, "splunk");
+        let names: Vec<&str> = tenants.iter().map(|(name, _)| name.as_str()).collect();
+        assert_eq!(names, ["prod", "lab"]);
+        let setup = &tenants[0].1;
+        assert_eq!(setup["url"].as_str(), Some("$SPLUNK_URL"));
+        assert_eq!(setup["port"].as_integer(), Some(8089));
+        assert_eq!(setup["ssl"].as_bool(), Some(false));
+        assert_eq!(setup["ratio"].as_float(), Some(0.5));
+        assert_eq!(
+            setup["index"],
+            toml::Value::Array(vec![
+                toml::Value::String("main".into()),
+                toml::Value::Integer(3)
+            ])
+        );
+        assert!(!setup.contains_key("nested") && !setup.contains_key("none"));
+        assert!(tenants[1].1.is_empty());
+        assert!(super::tenant::configured(&config, "elastic").is_empty());
+    }
+
     #[test]
     fn the_builtin_registry_holds_the_nine_platforms_and_what_each_can_do() {
         let registry = super::builtin();
