@@ -2,38 +2,63 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from opentide.documentation.catalog import DocumentationCatalog
 from opentide.documentation.context import DocumentationContext
+from opentide.documentation.diagram.model import NodeKind
+from opentide.documentation.markdown.page import section
 from opentide.documentation.objects.base import ObjectRenderer
-from opentide.documentation.parts import sections
+from opentide.documentation.parts import common
+from opentide.documentation.parts import objective as parts
 from opentide.models.objective import DetectionObjective
 
 
 class ObjectiveRenderer(ObjectRenderer):
-    """Render detection objectives to markdown."""
+    """Render detection objectives to markdown.
+
+    Reading order: the goal (overview, description, composition), the threats
+    it answers, its signals, how far rules implement them, then context.
+    """
 
     folder = "objectives"
+    kind = NodeKind.objective
+    noun = "Detection objective"
+    index_title = "Detection objectives"
 
     def render(self, obj: DetectionObjective) -> str:
         objective = obj
-        blocks = [
-            self.title_block(objective.name),
-            sections.render_metadata(objective.metadata, self.formatter),
-            sections.render_references(objective.references, self.formatter),
-            sections.render_description(objective.objective.description, self.formatter),
-            sections.render_objective_meta(objective, self.formatter),
-            sections.render_signals(objective, self.formatter),
-            sections.render_signal_mdr_coverage(
-                objective,
-                self.formatter,
-                self.catalog,
-                from_folder=self.folder,
-                uuid_permalinks=self.ctx.uuid_permalinks,
-                wiki_links=self.wiki_links,
-            ),
-            self.coverage_block(objective.metadata.uuid, objective.name),
-        ]
-        return self.assemble(blocks)
+        body = objective.objective
+        page = self.page(objective.name, objective.metadata, body.description)
+        page.add_lead(
+            parts.overview(objective, self.links),
+            parts.unimplemented_signals(objective, self.links),
+        )
+        page.add(section("Composition", parts.composition_body(objective, self.formatter)))
+        page.add(section("Threats addressed", parts.threats_body(objective, self.links)))
+        signals = section("Signals", children=parts.signal_sections(objective, self.links))
+        page.add(signals)
+        page.add(
+            section(
+                "ATT&CK techniques",
+                common.attack_table(
+                    body.mitre_attack or [],
+                    self.formatter,
+                    detections=common.technique_detections(self.links, body.mitre_attack or []),
+                ),
+            )
+        )
+        page.add(self.coverage_section(objective.metadata.uuid, objective.name))
+        page.add(self.references_section(objective.references))
+        page.add(self.metadata_section(objective.metadata))
+        # The summary links each signal's heading, so it is written once the
+        # page knows every anchor, a repeated title's ``-1`` included.
+        anchors = page.anchors()
+        summary = parts.signals_summary(
+            objective, self.links, anchors=[anchors[id(child)] for child in signals.children]
+        )
+        page.replace(signals, replace(signals, body=summary))
+        return page.render()
 
 
 def render_objective_page(

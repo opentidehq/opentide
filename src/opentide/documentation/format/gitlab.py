@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 
+from opentide.documentation.diagram.mermaid import MermaidDialect
 from opentide.documentation.format.protocol import BaseFormatter
 
 
@@ -47,3 +48,9 @@ class GitLabFormatter(BaseFormatter):
 
     def page_filename(self, slug: str, uuid: str | None) -> str:
         return f"{uuid or slug}.md"
+
+    def table_of_contents(self) -> str:
+        return "[[_TOC_]]\n"
+
+    def mermaid_dialect(self) -> MermaidDialect:
+        return MermaidDialect()
