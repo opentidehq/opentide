@@ -7,6 +7,41 @@ description: Public package versions of opentide on PyPI.
 
 Every version of the [`opentide`](https://pypi.org/project/opentide/) package, newest first. Each opens with what it does for you, then the steps to take after upgrading, then what changed, under the same headings every time: Breaking, Added, Changed, Deprecated, Removed, Fixed and Security. Pin a version in CI. [`CHANGELOG.md`](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md) records every change in full; GitHub Releases are tagged `v*` and publish to PyPI.
 
+## 0.28.0 — 12 November 2026
+
+Google Security Operations support: deploy YARA-L rules to Google SecOps, with their sections checked as you type.
+
+**Install**
+
+```bash
+pip install opentide==0.28.0
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
+**Upgrade**
+
+1. If you use Google Security Operations, run `opentide setup platforms --google-secops`, then give each tenant its `project`, `location` and `instance`, and `credentials`: the environment variable that holds its service-account key.
+
+**Added**
+
+- **Deploy YARA-L rules to Google Security Operations.** A `configurations.google_secops` block holds the rule's sections (`events`, `outcome` and `condition` as YARA-L, `match` and `options` as YAML), and deploy builds the rule, with its `meta` taken from the opentide rule, through the Chronicle API. `PREVIEW` runs a rule without alerting, and `DELETION` archives it. Turn it on with `opentide setup platforms --google-secops` ([#997](https://github.com/opentidehq/opentide/pull/997)).
+- **`validate` checks Google SecOps blocks.** It reports every `google_secops_*` and `yaral_*` code of the spec on the section and line it falls on, two enabled rules with the same name, and warns on a rule with no `$risk_score` ([#997](https://github.com/opentidehq/opentide/pull/997)).
+- **YARA-L runs live.** `validate query --platform google_secops --live` compiles each rule with Google's `verifyRuleText`, which creates nothing. `opentide query --platform google_secops` runs a YARA-L search ([#997](https://github.com/opentidehq/opentide/pull/997)).
+
+**Changed**
+
+- **The analysis engine is [language-server 0.16.0](https://github.com/opentidehq/language-server/releases/tag/v0.16.0).** It checks YARA-L against Google's event fields and functions in Google SecOps sections, `system: google_secops` hunts and `.yaral` files, the same way in the editor, `opentide tui` and `validate` ([#997](https://github.com/opentidehq/opentide/pull/997)).
+- **`google-auth` is a new dependency**, for the Google SecOps sign-in ([#997](https://github.com/opentidehq/opentide/pull/997)).
+
+See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md#0280--2026-11-12) for every change.
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/0.28.0/)
+- [GitHub Release](https://github.com/opentidehq/opentide/releases/tag/v0.28.0)
+- [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md)
+
 ## 0.27.0 — 12 November 2026
 
 Exabeam New-Scale SIEM support: deploy correlation rules to Exabeam, with their queries checked as you type.

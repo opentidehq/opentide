@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+## [0.28.0] — 2026-11-12
+
+Google Security Operations support: deploy YARA-L rules to Google SecOps, with their sections checked as you type.
+
+### Upgrade
+
+1. If you use Google Security Operations, run `opentide setup platforms --google-secops`, then give each tenant its `project`, `location` and `instance`, and `credentials`: the environment variable that holds its service-account key.
+
 ### Added
 
 - **Google Security Operations rules deploy from opentide.** A `configurations.google_secops` block (`platform::google_secops::1.0`) is a YARA-L 2.0 custom rule written as its sections: `events`, `outcome` and `condition` (and `setup`, `export`) as YARA-L text, `match` and `options` as YAML. Deploy assembles the rule with a `meta` section derived from the rule (author, description, severity, priority, ATT&CK `technique`, the comma-separated list Google's coverage matrix reads, `opentide_uuid`, `opentide_version`), verifies it with `verifyRuleText` before every create and text update, sends the text only when it changed, and keeps the `ru_` rule id in `.opentide/states/deployment/`. A bound rule is unarchived first, then its text, `scope` and run state are each updated only where they differ. `PREVIEW` runs the rule without alerting, `RELEASE` and `UNIVERSAL` alert, `DISABLEMENT` disables (even when the new text fails to verify or update, which is still reported), and `DELETION` archives the rule (or, with `deletion = "delete"`, deletes it without `force`, archiving it when Google refuses): detections are never deleted. `runFrequency` is sent only when the block names one, so Google's default and legacy schedules are left alone; a `schedule` is compared as Google stores it, and cleared when removed while `run_frequency` stays. `data_access_scope` takes a scope id or its full name. Credentials are a service-account key in an environment variable, or Application Default Credentials, applied with their quota project; a token that cannot be obtained stops the tenant. 429s, and 503s on any call but a create, are waited out (`Retry-After`, `RetryInfo`, else 5, 15, 60 seconds); a create is never resent after a 5xx or no answer (`google_secops_create_unconfirmed`). Deploy warns when Google limits or pauses a rule (`google_secops_rule_execution_limited`) or reports its compilation failed (`google_secops_rule_compilation_failed`). `deploy --dry-run` shows the assembled rule. Enable it with `opentide setup platforms --google-secops`.
@@ -1769,7 +1777,8 @@ export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate --strict
 ```
 
-[Unreleased]: https://github.com/opentidehq/opentide/compare/v0.27.0...HEAD
+[Unreleased]: https://github.com/opentidehq/opentide/compare/v0.28.0...HEAD
+[0.28.0]: https://github.com/opentidehq/opentide/releases/tag/v0.28.0
 [0.27.0]: https://github.com/opentidehq/opentide/releases/tag/v0.27.0
 [0.26.0]: https://github.com/opentidehq/opentide/releases/tag/v0.26.0
 [0.25.0]: https://github.com/opentidehq/opentide/releases/tag/v0.25.0
