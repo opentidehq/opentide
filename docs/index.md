@@ -18,7 +18,7 @@ description: Spec-driven development for agentic detection engineering — valid
 
 ## Quick start
 
-The latest release is **[0.25.0](./usage/releases.md)** (11 November 2026). The first public release was **0.1.0**.
+The latest release is **[0.26.0](./usage/releases.md)** (12 November 2026). The first public release was **0.1.0**.
 
 ```bash
 pip install 'opentide==0.26.0'

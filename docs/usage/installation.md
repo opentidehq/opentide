@@ -40,7 +40,7 @@ uv venv
 
 ## PyPI install
 
-The latest release is **0.25.0** (11 November 2026). The first public release was **0.1.0** (9 September 2026). Notes: [Releases](./releases.md).
+The latest release is **0.26.0** (12 November 2026). The first public release was **0.1.0** (9 September 2026). Notes: [Releases](./releases.md).
 
 <Tabs items={['venv + pip', 'uv']}>
 
