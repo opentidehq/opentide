@@ -9,7 +9,7 @@
 //! the warnings `make_deploy_plan` logs), each sent to the tenants the plan
 //! resolves for it (`rule_tenants`), with the platform's `[[modifiers]]`
 //! applied for that tenant (`opentide_compile::modifiers`). Each query is
-//! checked through the platform's [`LiveValidator`]; an Elastic rule is
+//! checked through the platform's [`LiveValidator`](opentide_connectors::connector::LiveValidator); an Elastic rule is
 //! checked as a whole: its advisories, its Elasticsearch checks and a preview
 //! of the rule deploy would create. A refusal fails that query, a query that
 //! gets no answer in time fails itself, and three in a row (or a tenant that

@@ -1,8 +1,8 @@
 //! Splunk's management API (UC-4.3, #833): what `platforms/splunk/client.py`
-//! sends through splunklib on opentide's urllib handler, request for request:
+//! sends through the Python Splunk client on opentide's urllib handler, request for request:
 //! the saved searches its `deployer.py` writes (`_apply_saved_search`),
 //! `runner.py`'s one-shot searches (`opentide query`) and its `search/parser`
-//! check (`validate query --live`), and the `server/info` reads splunklib
+//! check (`validate query --live`), and the `server/info` reads the Python Splunk client
 //! makes to choose between the v1 and v2 search endpoints.
 //!
 //! Every call carries `Authorization: Splunk <token>` (the token as is when
@@ -74,7 +74,7 @@ impl Reply {
 
     /// What opentide's urllib handler logs for an error status in a client
     /// that raises on it (`request_handler` without `allow_http_errors`:
-    /// the deploy's), before splunklib raises.
+    /// the deploy's), before the Python Splunk client raises.
     fn log_failure(&self) {
         if self.failed() {
             tracing::error!(
@@ -92,7 +92,7 @@ impl Reply {
         }
     }
 
-    /// splunklib's `HTTPError` text: `HTTP <status> <reason>`, then the
+    /// the Python Splunk client's `HTTPError` text: `HTTP <status> <reason>`, then the
     /// first `<msg>` of an XML error, else the body's bytes.
     fn http_error(&self) -> String {
         let detail = match xml_message(&self.answer.body) {
@@ -104,7 +104,7 @@ impl Reply {
     }
 }
 
-/// What splunklib's `XML(body).findtext("./messages/msg")` finds.
+/// What the Python Splunk client's `XML(body).findtext("./messages/msg")` finds.
 enum XmlDetail {
     Message(String),
     None,
@@ -241,7 +241,7 @@ fn entity_path(link: &str) -> String {
     raw
 }
 
-/// A saved search the tenant holds (splunklib's `SavedSearch`).
+/// A saved search the tenant holds (the Python Splunk client's `SavedSearch`).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SavedSearch {
     /// Its path under the namespace, unquoted (`saved/searches/<name>`).
@@ -331,7 +331,7 @@ fn form(pairs: &[(String, Json)]) -> String {
 }
 
 /// The Splunk connector. A tenant's search endpoints (v1 or v2) are read
-/// from `server/info` once per tenant and kind of client, as splunklib reads
+/// from `server/info` once per tenant and kind of client, as the Python Splunk client reads
 /// them once per `Service` (the runner keeps one for searches and one for
 /// the parser).
 #[derive(Debug, Default)]
@@ -809,7 +809,7 @@ fn epoch(at: jiff::Timestamp) -> String {
     format!("{seconds:.3}")
 }
 
-/// A saved search call the tenant refused (splunklib's `HTTPError`).
+/// A saved search call the tenant refused (the Python Splunk client's `HTTPError`).
 fn refused_call(cx: TenantContext<'_>, reply: &Reply) -> ConnectorError {
     ConnectorError::refused(
         PLATFORM,
@@ -993,7 +993,7 @@ mod tests {
     }
 
     #[test]
-    fn atom_entries_read_as_splunklib_reads_them() {
+    fn atom_entries_read_as_the_python_client_reads_them() {
         let feed = br#"<feed><entry><title>a b</title><link href="/servicesNS/nobody/search/saved/searches/a%20b" rel="alternate"/><content type="text/xml"><s:dict><s:key name="search">index=x &amp; y &lt;z&gt;</s:key></s:dict></content></entry></feed>"#;
         let found = entries(feed);
         assert_eq!(

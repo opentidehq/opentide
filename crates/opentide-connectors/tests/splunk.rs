@@ -1,4 +1,4 @@
-//! Splunk against the cassettes recorded from the Python client (splunklib on
+//! Splunk against the cassettes recorded from the Python client (Splunk's SDK on
 //! opentide's urllib handler; `tests/cassettes/splunk/`, `cargo xtask
 //! cassettes record splunk/<scenario>`): every request the connector sends
 //! must be the Python client's, byte for byte and in order, and the answers

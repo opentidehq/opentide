@@ -1371,7 +1371,12 @@ pub fn state_ignore(workspace: &Path) -> Option<IgnoreRule> {
         // Named only when the file is the work tree's or `info/exclude`
         // (`_locate_pattern`); `core.excludesFile` is outside both.
         let located = source.as_ref().and_then(|source| {
-            let relative = source.strip_prefix(&top).ok()?;
+            // `top` is canonical, which on Windows is a verbatim path
+            // (`\\?\C:\...`); `info/exclude` comes by the git dir
+            // discovery found, which is not: compare both simplified.
+            let relative = dunce::simplified(source)
+                .strip_prefix(dunce::simplified(&top))
+                .ok()?;
             let text = relative.to_string_lossy().replace('\\', "/");
             (text.ends_with(".gitignore") || text == ".git/info/exclude").then_some(text)
         });

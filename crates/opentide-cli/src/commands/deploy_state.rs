@@ -841,7 +841,11 @@ mod tests {
                 .message
                 .ends_with("has schema 'other', expected 'deployment.state::1.0'")
         );
-        std::fs::write(&path, shard_text("{}")).unwrap();
+        // The rule's shard under another spelling of its name. Alone in the
+        // folder, so a filesystem that folds case (macOS, Windows), where the
+        // two spellings are one file, holds the same folder as one that does
+        // not.
+        std::fs::remove_file(&path).unwrap();
         std::fs::write(folder.join(format!("{}.json", UUID.to_uppercase())), "{}").unwrap();
         let mismatch = Shard::load(dir.path(), UUID).unwrap_err();
         assert_eq!(mismatch.code, "deployment_state_uuid_mismatch");
