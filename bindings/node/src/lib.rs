@@ -234,6 +234,25 @@ impl Workspace {
         env.to_js_value(&self.inner.catalog())
     }
 
+    /// The detection rules: their rows of the catalogue (`uuid`, `type`,
+    /// `schema`, `name`, `path`, `techniques`, ...), in index order.
+    #[napi(ts_return_type = "any[]")]
+    pub fn rules<'env>(&self, env: &'env Env) -> napi::Result<Unknown<'env>> {
+        env.to_js_value(&self.inner.rules())
+    }
+
+    /// The detection objectives: their rows of the catalogue.
+    #[napi(ts_return_type = "any[]")]
+    pub fn objectives<'env>(&self, env: &'env Env) -> napi::Result<Unknown<'env>> {
+        env.to_js_value(&self.inner.objectives())
+    }
+
+    /// The threat vectors: their rows of the catalogue.
+    #[napi(ts_return_type = "any[]")]
+    pub fn threats<'env>(&self, env: &'env Env) -> napi::Result<Unknown<'env>> {
+        env.to_js_value(&self.inner.threats())
+    }
+
     /// The rules that cover the ATT&CK `technique` (`opentide info coverage
     /// --technique`), their own techniques or inherited ones.
     #[napi(

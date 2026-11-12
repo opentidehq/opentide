@@ -80,7 +80,7 @@ process.exitCode = validation.exitCode
 
 ## Read the catalogue and coverage
 
-`info`, `catalog` and `coverage` return the data of `opentide info`, `info catalog` and `info coverage`, with the command line's keys in its order.
+`info`, `catalog` and `coverage` return the data of `opentide info`, `info catalog` and `info coverage`, with the command line's keys in its order. `rules`, `objectives` and `threats` return each family's rows of the catalogue, in index order, as the Python SDK's methods of the same names do.
 
 ```js
 const { Workspace } = require('@opentide/opentide')
@@ -92,6 +92,8 @@ const catalogue = ws.catalog()
 console.log(catalogue.objects.length, 'objects,', catalogue.edges.length, 'edges')
 const coverage = ws.coverage('T1059')
 console.log(`${coverage.count} rules cover ${coverage.technique}`)
+for (const rule of ws.rules()) console.log(rule.uuid, rule.name)
+console.log(ws.objectives().length, 'objectives,', ws.threats().length, 'threats')
 ```
 
 ## Plan a deploy
@@ -135,7 +137,7 @@ try {
 
 ## Types
 
-The declarations (`index.d.ts`) are generated from the Rust binding by napi-rs and checked in; CI fails when a build changes them, and type-checks a sample consumer with `tsc --noEmit`. The options are typed, with the choices the command line accepts. The documents (`report`, `catalog()`, `document`) are typed `any` for now: their types, generated from the Rust structs, come with a later release.
+The declarations (`index.d.ts`) are generated from the Rust binding by napi-rs and checked in; CI fails when a build changes them, and type-checks a sample consumer with `tsc --noEmit`. The options are typed, with the choices the command line accepts. The documents (`report`, `catalog()`, `rules()`, `document`) are typed `any` for now: their types, generated from the Rust structs, come with a later release.
 
 ## Stability
 

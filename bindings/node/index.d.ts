@@ -52,6 +52,15 @@ export declare class Workspace {
    */
   catalog(): any
   /**
+   * The detection rules: their rows of the catalogue (`uuid`, `type`,
+   * `schema`, `name`, `path`, `techniques`, ...), in index order.
+   */
+  rules(): any[]
+  /** The detection objectives: their rows of the catalogue. */
+  objectives(): any[]
+  /** The threat vectors: their rows of the catalogue. */
+  threats(): any[]
+  /**
    * The rules that cover the ATT&CK `technique` (`opentide info coverage
    * --technique`), their own techniques or inherited ones.
    */

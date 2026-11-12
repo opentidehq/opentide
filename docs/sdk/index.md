@@ -6,7 +6,7 @@ icon: Code
 
 # Python SDK
 
-The `opentide` PyPI package is the SDK as well as the command line. Its entry point is **`opentide.Workspace`**: a Tide workspace, opened once, with everything you do with it as a method. It wraps the [Rust SDK](./rust.md)'s `opentide` crate one to one, compiled into the package, so Python, Rust and the [TypeScript SDK](./typescript.md) run the same code and return the same documents: the command line's `--json` data, with its keys in its order.
+The `opentide` PyPI package is the SDK as well as the command line. Its entry point is **`opentide.Workspace`**: a Tide workspace, opened once, with everything you do with it as a method. It wraps the [Rust SDK](./rust.md)'s `opentide` crate one to one, compiled into the package, so Python, Rust and the [TypeScript SDK](./typescript.md) run the same code and return the same documents: the command line's `--json` data, with its keys in its order. A conformance suite holds them to it: every operation, on every test workspace, gives the same document through the three SDKs, byte for byte, on Linux, macOS and Windows. The one exception is notation: JavaScript has one number type, so the Node SDK reads a float such as `120.0` in a document as `120`.
 
 ```python
 from opentide import Workspace, __version__
