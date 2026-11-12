@@ -1,6 +1,6 @@
 {
  "generated_by": "scripts/sync_exabeam_conformance.py",
- "reference": "opentidehq/specifications@4e86f49049934760614220421b0a9a49f026002c scripts/exabeam_language.py, scripts/object_fixtures.py",
+ "reference": "opentidehq/specifications@6807a03f737fedcddaaa5a33854622bba609fc1e scripts/exabeam_language.py, scripts/object_fixtures.py",
  "queries": [
   {
    "name": "valid/event-code-and-time-window.rule.exabeam",
