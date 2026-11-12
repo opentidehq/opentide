@@ -6,7 +6,7 @@
 //! command = "commands"                      # the command path, exactly
 //! case = "json/*"                           # a glob over case ids
 //! target = "stdout"                         # stdout | stderr | exit_code | file:<path>
-//! rule = "json:/environment"                # json:<JSON pointer> | json-extend:<JSON pointer> | json-drop:<JSON pointer> | text | lines | sha256
+//! rule = "json:/environment"                # json:<JSON pointer> | json-extend:<JSON pointer> | json-drop:<JSON pointer> | text | lines | sha256 | mode | presence
 //! oracle = '[...]'                          # what the oracle has there
 //! candidate = '[...]'                       # what the candidate has instead
 //! reason = "OPENTIDE_ENGINE is read by the launcher (#805)"
@@ -52,7 +52,11 @@
 //! the entry was written for, and approves nothing else. It is for a
 //! generated file compared by another check than its text (a JSON Schema
 //! compared by verdict, `cargo xtask codegen --check`), which the entry's
-//! `reason` names. A
+//! `reason` names. A `mode` rule, on a file only, approves its permission
+//! bits: its `oracle` and `candidate` are four octal digits each (`0600`,
+//! `0644`, as a recording's `outcome.toml` writes them), and it applies only
+//! where the file is written on both sides with exactly those bits; the
+//! file's bytes are still compared. A
 //! line ends at `\n` (or `\r\n`): a value may hold a `\r` inside a line, as
 //! a terminal's cursor movements do, but no line of it ends in one. A
 //! `presence` rule approves a file the oracle wrote and the candidate did not
@@ -225,6 +229,14 @@ pub enum Rule {
         /// The candidate's digest.
         candidate: String,
     },
+    /// A file's permission bits (`mode`): the file is written on both sides,
+    /// the oracle's with `oracle`, the candidate's with `candidate`.
+    Mode {
+        /// The oracle's bits, `0o600`.
+        oracle: u32,
+        /// The candidate's bits.
+        candidate: u32,
+    },
     /// The exit code.
     ExitCode {
         /// The oracle's code.
@@ -243,8 +255,8 @@ pub struct Entry {
     pub case: String,
     /// What it applies to.
     pub target: Target,
-    /// The rule, as written in the ledger: `json:/pointer`, `text`, `lines`
-    /// or `presence`.
+    /// The rule, as written in the ledger: `json:/pointer`, `text`, `lines`,
+    /// `mode` or `presence`.
     pub rule_text: String,
     /// What it expects on each side.
     pub rule: Rule,
@@ -511,6 +523,26 @@ fn check_entry(raw: RawEntry) -> Result<Entry, Vec<String>> {
             problems.push("a `sha256` rule approves a file: `target` is file:<path>".to_owned());
             None
         }
+        (Some(Target::File(_)), "mode") => {
+            match (parse_mode(&raw.oracle), parse_mode(&raw.candidate)) {
+                (Some(oracle), Some(candidate)) => Some(Rule::Mode { oracle, candidate }),
+                _ => {
+                    problems.push(
+                        "a `mode` rule's `oracle` and `candidate` are permission bits, four octal \
+                         digits each (`0644`)"
+                            .to_owned(),
+                    );
+                    None
+                }
+            }
+        }
+        (_, "mode") => {
+            problems.push(
+                "a `mode` rule approves a file's permission bits: `target` is file:<path>"
+                    .to_owned(),
+            );
+            None
+        }
         (_, "text")
             if [&raw.oracle, &raw.candidate]
                 .iter()
@@ -634,7 +666,7 @@ fn check_entry(raw: RawEntry) -> Result<Entry, Vec<String>> {
             None => {
                 if !rule.trim().is_empty() {
                     problems.push(format!(
-                        "`rule` {rule:?} is not `text`, `lines`, `sha256`, `presence`, \
+                        "`rule` {rule:?} is not `text`, `lines`, `sha256`, `mode`, `presence`, \
                          `json:<pointer>`, `json-extend:<pointer>` or \
                          `json-drop:<pointer>`"
                     ));
@@ -651,6 +683,7 @@ fn check_entry(raw: RawEntry) -> Result<Entry, Vec<String>> {
         Some(Rule::Lines { oracle, candidate }) => oracle == candidate,
         Some(Rule::ExitCode { oracle, candidate }) => oracle == candidate,
         Some(Rule::Sha256 { oracle, candidate }) => oracle == candidate,
+        Some(Rule::Mode { oracle, candidate }) => oracle == candidate,
         // A JsonExtend (JsonDrop) is parsed only with at least one added
         // (dropped) element.
         Some(Rule::Presence | Rule::JsonExtend { .. } | Rule::JsonDrop { .. }) | None => false,
@@ -709,6 +742,15 @@ pub fn text_matches(candidate: &str, line: &[u8]) -> bool {
         Some(pattern) => std::str::from_utf8(line).is_ok_and(|line| pattern.matches(line)),
         None => candidate.as_bytes() == line,
     }
+}
+
+/// A `mode` rule's value: four octal digits, `0644`, as a recording writes a
+/// file's permission bits.
+fn parse_mode(value: &str) -> Option<u32> {
+    if value.len() != 4 || !value.bytes().all(|b| (b'0'..=b'7').contains(&b)) {
+        return None;
+    }
+    u32::from_str_radix(value, 8).ok()
 }
 
 /// Whether `value` is a SHA-256 digest as the ledger writes it.

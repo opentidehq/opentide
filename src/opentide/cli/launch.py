@@ -27,7 +27,10 @@ The decision reads ``OPENTIDE_ENGINE``, the defaults
 (:data:`opentide.cli.engines.RUST_COMMANDS`), none of which imports Typer, and
 the command path from the Rust command tree
 (``opentide._native.command_words``). Under the default engine, with no
-command's default flipped, it reads nothing but the environment.
+command's default flipped, it reads nothing but the environment and the
+arguments: a ``--platform`` outside the built-in platforms may name a
+platform plugin, whose run goes to Rust (UC-4.5b,
+:func:`opentide.cli.engines.plugin_default`).
 """
 
 from __future__ import annotations
@@ -134,11 +137,11 @@ def runs_on_rust(args: Sequence[str], env: Mapping[str, str]) -> bool:
         return False
     from opentide._native import command_words
     from opentide.cli.engine_defaults import RUST
-    from opentide.cli.engines import RUST_CLI, RUST_COMMANDS, selected
+    from opentide.cli.engines import RUST_CLI, RUST_COMMANDS, plugin_default, selected
 
     options = args[: args.index("--")] if "--" in args else args
     words = tuple(command_words(list(args)))
-    if not words or selected(words, env) != RUST:
+    if not words or (selected(words, env) != RUST and not plugin_default(words, args, env)):
         return False
     rust = RUST_COMMANDS.get(words)
     if rust is None or rust.launch != RUST_CLI or not rust.covers(args):
@@ -153,11 +156,19 @@ def _may_run_on_rust(args: Sequence[str], env: Mapping[str, str]) -> bool:
     False: Python answers, whatever the command. It needs neither the engine
     nor the command tree.
     """
-    from opentide.cli.engine_defaults import DEFAULT_ENGINES, ENGINE_ENV, RUST
+    from opentide.cli.engine_defaults import (
+        DEFAULT_ENGINES,
+        ENGINE_ENV,
+        RUST,
+        names_other_platform,
+    )
 
     written = env.get(ENGINE_ENV, "").strip()
-    if written not in ("", RUST) or (not written and not DEFAULT_ENGINES):
-        # python, compare or not an engine; or no default to read.
+    if written not in ("", RUST) or (
+        not written and not DEFAULT_ENGINES and not names_other_platform(args)
+    ):
+        # python, compare or not an engine; or no default to read and no
+        # platform that may be a plugin's (UC-4.5b).
         return False
     if any(name.startswith("_") and name.endswith("_COMPLETE") for name in env):
         # Click's shell completion.

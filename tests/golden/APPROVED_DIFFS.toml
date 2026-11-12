@@ -26,6 +26,9 @@
 #              one entry and the lines after it are compared at their place;
 #              a case may have several, one per block, each placed by its
 #              oracle lines)
+#              or mode (file: targets only: the file's permission bits,
+#              the file written on both sides; its bytes are still
+#              compared)
 #              or presence (file: targets in the oracle's catalog cache
 #              only, home/.cache/opentide/lsp-catalogs/<CATALOG-FINGERPRINT>
 #              and the folders above it: the oracle wrote the file and the
@@ -43,7 +46,8 @@
 #              version); a lines rule: its lines, and on the
 #              candidate's side (absent) where the candidate writes no line
 #              in their place (a block dropped from a stream left empty);
-#              exit_code: the oracle's code
+#              exit_code: the oracle's code; a mode rule: the oracle's
+#              permission bits, four octal digits ("0600")
 #   candidate  the same, for the candidate; a json-extend: rule: a JSON
 #              object from the candidate's index of each added element,
 #              increasing, to the element ({"19": {...}, "20": {...}}); a
@@ -73,9 +77,11 @@
 # reported, and a json: entry under it addresses the oracle's indices too.
 # An entry that applies to no case in a complete run is stale,
 # and fails the run: remove it in the change that makes it stale. Differences
-# in a file's presence, mode or deletion have no rule: fix them instead. The
-# one exception is a presence rule on the oracle's catalog cache, a folder
-# outside the workspace that no user commits; it names each path exactly.
+# in a file's presence or deletion have no rule: fix them instead. The one
+# exception is a presence rule on the oracle's catalog cache, a folder
+# outside the workspace that no user commits; it names each path exactly. A
+# difference in a file's mode is approved by a mode rule naming the file and
+# both sides' bits exactly, for a fix the frozen oracle cannot take (#987).
 #
 # [[diff]]
 # command = "info"
@@ -12561,3 +12567,28 @@ candidate = "15"
 reason = "The Rust command line runs neither python_version nor platform_sdk (UC-6.0d, #841, #977: it does not run on Python, and its platforms are its own connectors, which import no Python SDK), so their rows are not printed and the summary counts them nowhere. Every other check is the oracle's."
 issue = "https://github.com/opentidehq/opentide/issues/841"
 changelog = "**`doctor` no longer checks Python**"
+
+# #987: status promotion keeps a promoted rule file's permission bits, in
+# Python and in Rust; the 0.23.0 oracle wrote it 0600 (mkstemp's mode).
+
+[[diff]]
+command = "deploy"
+case = "deploy/*/deploy-push/promote-push"
+target = "file:ws/objects/rules/splunk-a-create.yaml"
+rule = "mode"
+oracle = "0600"
+candidate = "0644"
+reason = "Status promotion rewrites a rule file through a temporary file; 0.23.0 left mkstemp's owner-only mode on it, so a rule committed as 0644 came back 0600. The rewritten file now takes the mode of the file it replaces (the fixture's 0644); its bytes are compared as before."
+issue = "https://github.com/opentidehq/opentide/issues/987"
+changelog = "**Status promotion keeps a rule file's permissions**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/deploy-push/promote-gitlab-progress-json"
+target = "file:ws/objects/rules/splunk-a-create.yaml"
+rule = "mode"
+oracle = "0600"
+candidate = "0644"
+reason = "Status promotion rewrites a rule file through a temporary file; 0.23.0 left mkstemp's owner-only mode on it, so a rule committed as 0644 came back 0600. The rewritten file now takes the mode of the file it replaces (the fixture's 0644); its bytes are compared as before."
+issue = "https://github.com/opentidehq/opentide/issues/987"
+changelog = "**Status promotion keeps a rule file's permissions**"

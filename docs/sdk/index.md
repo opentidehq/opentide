@@ -20,10 +20,13 @@ print(__version__, len(ws.rules()), "rules,", validation.summary["objects"], "ob
 
 | Symbol | Purpose |
 |--------|---------|
-| `opentide.Workspace` | Open a workspace (`open`, `from_files`); `validate`, `lint`, `info`, `rules`, `objectives`, `threats`, `catalog`, `coverage`, `deploy_plan`, `run_json` |
+| `opentide.Workspace` | Open a workspace (`open`, `from_files`); `validate`, `lint`, `info`, `rules`, `objectives`, `threats`, `catalog`, `coverage`, `deploy_plan`, `tenants`, `run_json` |
 | `opentide.run_json` | Run any `opentide` command in the process and return its `--json` document |
+| `opentide.Connection` | One tenant's client (`open`); the `async` tenant operations `query`, `validate_query` and `deploy` |
+| `opentide.TenantConfig` | A tenant: what `Workspace.tenants` returns, or one configured in code |
 | `opentide.OpentideError` | What a call that cannot run raises, with a stable `code` |
 | `opentide.Validation`, `opentide.LintReport`, `opentide.DeployPlan` | What `validate`, `lint` and `deploy_plan` return |
+| `opentide.QueryResult`, `opentide.LiveCheck`, `opentide.DeployOutcome` | What `query`, `validate_query` and `deploy` return |
 | `opentide.models` | The Tide models: `DetectionRule`, `ThreatVector`, `DetectionObjective`, the platform blocks |
 | `opentide.__version__` | The package's version |
 
@@ -34,7 +37,7 @@ print(__version__, len(ws.rules()), "rules,", validation.summary["objects"], "ob
 | Page | Topic |
 |------|-------|
 | [Installation](./installation.md) | Install, vendor SDKs and typing support |
-| [Workspace](./workspace.md) | Open, validate, lint, the catalogue, coverage, the deploy plan, `run_json`, errors |
+| [Workspace](./workspace.md) | Open, validate, lint, the catalogue, coverage, the deploy plan, `run_json`, the async tenant operations, errors |
 | [Migration](./migration.md) | From `Opentide.initialise()`, `run_validation` and the documentation writers to `Workspace` |
 | [Models](./models.md) | The Tide models |
 | [Platforms](./platforms.md) | Deployers, validators, plugins |
@@ -64,7 +67,7 @@ for platform, rules in plan.document["plan"].items():
 print(plan.summary)
 ```
 
-A real deploy is the command line's: `ws.run_json(["deploy", "--strategy", "RELEASE", "--all"])` runs it in the process and returns its envelope, with [credentials](../usage/configuration.md#credentials) set in the environment.
+A real deploy is the command line's: `ws.run_json(["deploy", "--strategy", "RELEASE", "--all"])` runs it in the process and returns its envelope, with [credentials](../usage/configuration.md#credentials) set in the environment. To query, check a query live or deploy one rule on a tenant from an `asyncio` application, await a [`Connection`](./workspace.md#tenant-operations)'s methods.
 
 ## Choosing between SDK, CLI, and MCP
 
@@ -78,8 +81,8 @@ The package ships `py.typed` (PEP 561) and the stubs of its compiled module (`op
 
 ```
 src/opentide/
-├── __init__.py          # Workspace, run_json, __version__ (loaded on first use)
-├── sdk.py               # Workspace and run_json, over opentide._native.sdk
+├── __init__.py          # Workspace, Connection, run_json, __version__ (loaded on first use)
+├── sdk.py               # Workspace, Connection and run_json, over opentide._native.sdk
 ├── _native/             # the compiled Rust core and its stubs
 ├── models/              # the Tide models
 ├── platforms/           # platform adapters

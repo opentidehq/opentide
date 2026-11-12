@@ -60,7 +60,9 @@ cargo xtask golden lock                         # rewrite oracle-requirements.tx
    a `sha256` rule approves one
    whole file by the digests of both sides' normalised bytes, for a generated file compared by
    another check (each editor schema `generate schemas` writes, judged by verdict in `cargo
-   xtask codegen --check`); a presence rule (`oracle = "written"`, `candidate = "(absent)"`)
+   xtask codegen --check`); a mode rule (`oracle = "0600"`, `candidate = "0644"`) approves one
+   file's permission bits where both sides wrote it with exactly those bits, its bytes still
+   compared (a fix the frozen oracle cannot take, #987); a presence rule (`oracle = "written"`, `candidate = "(absent)"`)
    approves one file the oracle wrote and the candidate did not, named by its exact path, and only in the oracle's language-server catalog
    cache (`home/.cache/opentide/lsp-catalogs/<CATALOG-FINGERPRINT>/`, and the folders above it
    it creates): a cache outside the workspace is not a file a user commits, and any other file

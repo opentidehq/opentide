@@ -3419,6 +3419,7 @@ dependencies = [
  "opentide-lsp",
  "opentide-schema",
  "pyo3",
+ "pyo3-async-runtimes",
  "pyo3-build-config",
  "serde",
  "serde_json",
@@ -3935,6 +3936,20 @@ dependencies = [
  "pyo3-build-config",
  "pyo3-ffi",
  "pyo3-macros",
+]
+
+[[package]]
+name = "pyo3-async-runtimes"
+version = "0.30.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b877331c7817ccb6379e9d19a06993160141f1d0a386e55276128717df85e3fc"
+dependencies = [
+ "futures-channel",
+ "futures-util",
+ "once_cell",
+ "pin-project-lite",
+ "pyo3",
+ "tokio",
 ]
 
 [[package]]

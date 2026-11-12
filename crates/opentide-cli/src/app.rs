@@ -847,14 +847,6 @@ impl Run<'_> {
                 );
                 self.emit_report(&report, out, err)
             }
-            "deploy"
-                if leaf(&matches)
-                    .get_one::<crate::tree::PlatformValue>("platform")
-                    .is_some_and(|platform| crate::plugins::is_plugin(&platform.0)) =>
-            {
-                let report = self.deploy_plugin(&matches);
-                self.emit_report(&report, out, err)
-            }
             "deploy" if leaf(&matches).get_flag("dry_run") => {
                 let run = self.deploy(&matches);
                 self.emit_deploy(&run, out, err)
@@ -1500,43 +1492,6 @@ impl Run<'_> {
         }
     }
 
-    /// `opentide deploy --platform <plugin>` (UC-4.5): the plugin's
-    /// deployer, or with `--dry-run` what it would be sent.
-    fn deploy_plugin(&self, matches: &clap::ArgMatches) -> crate::commands::Report {
-        use crate::commands::plugin::{Context, Selection, deploy};
-        let args = leaf(matches);
-        let strings = |id: &str| -> Vec<String> {
-            args.get_many::<String>(id)
-                .map(|values| values.cloned().collect())
-                .unwrap_or_default()
-        };
-        let platform = args
-            .get_one::<crate::tree::PlatformValue>("platform")
-            .map(|platform| platform.0.clone())
-            .unwrap_or_default();
-        let selection = Selection {
-            all: args.get_flag("all_files"),
-            uuids: strings("uuids"),
-            files: strings("files"),
-        };
-        let cwd = self.host.cwd.clone().unwrap_or_default();
-        let interrupt = &self.host.interrupt;
-        let interrupted = || interrupt.requested();
-        deploy(
-            &platform,
-            &selection,
-            args.get_flag("dry_run"),
-            &Context {
-                repo: self.globals.repo.as_deref(),
-                env: self.env,
-                cwd: &cwd,
-                proxy: self.globals.proxy.as_deref(),
-                interrupted: &interrupted,
-                now: jiff::Timestamp::now(),
-            },
-        )
-    }
-
     /// `opentide validate query --live`: the usage checks, then a platform
     /// whose tenants check no query answers `supported: false`, and the
     /// others run on the connectors (`validate_live`). Every run that is
@@ -1731,7 +1686,8 @@ impl Run<'_> {
         let cwd = self.host.cwd.clone().unwrap_or_default();
         let interrupt = &self.host.interrupt;
         let interrupted = || interrupt.requested();
-        let registry = opentide_connectors::builtin();
+        // The built-in platforms, then the platform plugins (UC-4.5b).
+        let registry = crate::plugins::registry();
         let lines = Lines {
             sink: self.host.log_sink.clone(),
             console: self.console(self.host.stderr_tty),

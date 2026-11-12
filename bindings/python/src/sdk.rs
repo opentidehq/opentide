@@ -1,19 +1,26 @@
 //! The Python SDK's core (UC-5.2, #837): `opentide._native.sdk`, the
 //! [`opentide`] facade bound one to one. `opentide.Workspace` (in
 //! `src/opentide/sdk.py`) wraps [`Workspace`]; `opentide.run_json` wraps
-//! [`run_json`].
+//! [`run_json`]; `opentide.Connection` wraps [`tenants::Connection`], the
+//! facade's tenant operations (UC-5.2b).
 //!
 //! A thin wrapper (ADR 0005): each method converts its arguments, calls one
 //! facade function (with the GIL released) and returns its document as JSON
 //! text, keys in the command line's order, which the Python side parses.
-//! A failure raises [`SdkError`] with `(code, message)`: the facade's stable
-//! [`opentide::Error::code`], or `usage_invalid_choice` for an option the
-//! command line would refuse.
+//! A tenant operation returns an awaitable instead, which resolves to that
+//! text ([`tenants`]).
+//! A failure raises [`SdkError`] with `(code, message, detail)`: the
+//! facade's stable [`opentide::Error::code`], or `usage_invalid_choice` for
+//! an option the command line would refuse; `detail` is the vendor's own
+//! words when a tenant gave a reason, else `None`.
 
 use pyo3::create_exception;
 use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
+use pyo3::types::PyType;
 use serde::Serialize;
+
+mod tenants;
 
 use opentide::lint::{LintCheck, LintFinding, LintReport, LintStatus, LintSummary, NextAction};
 use opentide::validate::{Check, QueriesMode, Report, Summary, Validation};
@@ -22,20 +29,51 @@ create_exception!(
     opentide._native.sdk,
     SdkError,
     PyException,
-    "A call the SDK could not run: `args` is `(code, message)`."
+    "A call the SDK could not run: `args` is `(code, message, detail)`."
 );
 
-/// A failure as [`SdkError`]: its stable code and message.
+/// [`SdkError`]'s class, as `opentide._native.sdk` exports it.
+///
+/// PyO3's introspection cannot describe a `create_exception!` type, so the
+/// module exports the class through this value, whose type hint
+/// (`type[Exception]`) declares it in the generated stub, as
+/// `opentide._native.models` does its `ValidationError`.
+#[doc(hidden)]
+pub struct SdkErrorClass;
+
+impl<'py> IntoPyObject<'py> for SdkErrorClass {
+    type Target = PyType;
+    type Output = Bound<'py, PyType>;
+    type Error = std::convert::Infallible;
+
+    #[cfg(feature = "stubs")]
+    const OUTPUT_TYPE: pyo3::inspect::PyStaticExpr = pyo3::type_hint_subscript!(
+        pyo3::type_hint_identifier!("builtins", "type"),
+        pyo3::type_hint_identifier!("builtins", "Exception")
+    );
+
+    fn into_pyobject(self, py: Python<'py>) -> Result<Self::Output, Self::Error> {
+        Ok(py.get_type::<SdkError>())
+    }
+}
+
+/// A failure as [`SdkError`]: its stable code and message, without a detail.
 fn failure(code: &str, message: impl Into<String>) -> PyErr {
-    SdkError::new_err((code.to_owned(), message.into()))
+    SdkError::new_err((code.to_owned(), message.into(), None::<String>))
 }
 
 fn usage(message: String) -> PyErr {
     failure("usage_invalid_choice", message)
 }
 
+/// The facade's error as [`SdkError`]: its code, its message and, for a
+/// tenant's refusal, the vendor's words.
 fn from_facade(error: &opentide::Error) -> PyErr {
-    failure(error.code(), error.to_string())
+    let detail = match error {
+        opentide::Error::Connector { detail, .. } => detail.clone(),
+        _ => None,
+    };
+    SdkError::new_err((error.code().to_owned(), error.to_string(), detail))
 }
 
 fn to_json<T: Serialize>(value: &T) -> PyResult<String> {
@@ -116,7 +154,12 @@ impl Workspace {
         for family in types {
             options = options.object_type(family);
         }
-        let validation = py.detach(|| self.inner.validate(&options));
+        // The platform plugins' own checks of their blocks, as the command
+        // line's validate runs them (UC-4.5b).
+        let validation = py.detach(|| match opentide_cli::plugins::configurations() {
+            Some(platforms) => self.inner.validate_with_platforms(&options, platforms),
+            None => self.inner.validate(&options),
+        });
         to_json(&ValidationJson::from(&validation))
     }
 
@@ -170,6 +213,15 @@ impl Workspace {
     /// `opentide info coverage --technique <technique>`, as JSON.
     fn coverage(&self, py: Python<'_>, technique: String) -> PyResult<String> {
         to_json(&py.detach(|| self.inner.coverage(&technique)))
+    }
+
+    /// The tenants the workspace configures for *platform*, in file order;
+    /// empty when it configures none.
+    fn tenants(&self, py: Python<'_>, platform: String) -> Vec<tenants::TenantConfig> {
+        py.detach(|| self.inner.tenants(&platform))
+            .into_iter()
+            .map(tenants::TenantConfig::from)
+            .collect()
     }
 
     /// `opentide deploy --dry-run`: `(document, summary, ok)`, the documents
@@ -329,11 +381,22 @@ impl<'a> From<&'a LintReport> for LintJson<'a> {
     }
 }
 
-/// `opentide._native.sdk`.
+/// `opentide._native.sdk`: the facade's `Workspace`, `run_json` and tenant
+/// operations, and [`SdkError`].
 #[pymodule(submodule, name = "sdk")]
 pub mod module {
     #[pymodule_export]
-    use super::{SdkError, Workspace, run_json};
+    use super::tenants::{Canceller, Connection, TenantConfig, capabilities, platforms};
+    #[pymodule_export]
+    use super::{Workspace, run_json};
+
+    /// The error every call raises: `args` is `(code, message, detail)`.
+    #[pymodule_export]
+    #[allow(
+        non_upper_case_globals,
+        reason = "the exception's Python name; `expect` is never fulfilled inside the macro"
+    )]
+    const SdkError: super::SdkErrorClass = super::SdkErrorClass;
 }
 
 #[cfg(test)]

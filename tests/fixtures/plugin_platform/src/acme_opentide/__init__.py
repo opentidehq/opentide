@@ -3,8 +3,11 @@
 Acme's API, as this sample knows it (every call takes ``Authorization:
 Bearer <token>`` and answers JSON):
 
-- ``PUT /api/rules/<rule id>`` with ``{"name", "query", "severity"}``
-  creates or replaces a rule and answers ``{"id": <Acme's id>}``;
+- ``POST /api/rules`` with ``{"name", "query", "severity", "enabled"}``
+  creates a rule and answers ``{"id": <Acme's id>}``;
+- ``PUT /api/rules/<Acme's id>`` with the same body replaces it (``enabled``
+  false turns it off) and answers ``{"id": <Acme's id>}``;
+- ``DELETE /api/rules/<Acme's id>`` removes it and answers ``{}``;
 - ``POST /api/validate`` with ``{"query"}`` answers ``{"valid": bool,
   "error": str | None}``;
 - ``POST /api/search`` with ``{"query", "from", "to", "limit"}`` answers
@@ -52,14 +55,14 @@ class AcmePlatform(PlatformPlugin):
 
     configuration_model = AcmeConfig
 
-    def _call(self, tenant: Tenant, path: str, payload: dict[str, Any], method: str) -> Any:
+    def _call(self, tenant: Tenant, path: str, payload: dict[str, Any] | None, method: str) -> Any:
         url = tenant.setup.get("url")
         token = tenant.setup.get("token")
         if not url or not token:
             raise PlatformAuthenticationError(f"tenant {tenant.name} needs url and token")
         request = urllib.request.Request(
             f"{url.rstrip('/')}{path}",
-            data=json.dumps(payload).encode("utf-8"),
+            data=None if payload is None else json.dumps(payload).encode("utf-8"),
             method=method,
             headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
         )
@@ -78,17 +81,20 @@ class AcmePlatform(PlatformPlugin):
             raise PlatformRefused(f"Acme answered {error.code}", detail) from error
 
     def deploy(self, tenant: Tenant, request: DeployRequest) -> DeployResult:
+        if request.operation == "delete":
+            self._call(tenant, f"/api/rules/{request.remote_id}", None, "DELETE")
+            return DeployResult(operation="delete")
         block = request.body["configuration"]
-        answer = self._call(
-            tenant,
-            f"/api/rules/{request.rule_id}",
-            {
-                "name": request.body["rule"]["name"],
-                "query": block["query"],
-                "severity": block["severity"],
-            },
-            "PUT",
-        )
+        rule = {
+            "name": request.body["rule"]["name"],
+            "query": block["query"],
+            "severity": block["severity"],
+            "enabled": request.operation != "disable",
+        }
+        if request.operation == "create":
+            answer = self._call(tenant, "/api/rules", rule, "POST")
+        else:
+            answer = self._call(tenant, f"/api/rules/{request.remote_id}", rule, "PUT")
         return DeployResult(remote_id=str(answer["id"]), operation=request.operation)
 
     def validate_query(self, tenant: Tenant, request: QueryRequest) -> LiveCheck:
