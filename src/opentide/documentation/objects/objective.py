@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from opentide.documentation.catalog import DocumentationCatalog
 from opentide.documentation.context import DocumentationContext
 from opentide.documentation.diagram.model import NodeKind
@@ -34,13 +36,8 @@ class ObjectiveRenderer(ObjectRenderer):
         )
         page.add(section("Composition", parts.composition_body(objective, self.formatter)))
         page.add(section("Threats addressed", parts.threats_body(objective, self.links)))
-        page.add(
-            section(
-                "Signals",
-                parts.signals_summary(objective, self.links),
-                children=parts.signal_sections(objective, self.links),
-            )
-        )
+        signals = section("Signals", children=parts.signal_sections(objective, self.links))
+        page.add(signals)
         page.add(
             section(
                 "ATT&CK techniques",
@@ -54,6 +51,13 @@ class ObjectiveRenderer(ObjectRenderer):
         page.add(self.coverage_section(objective.metadata.uuid, objective.name))
         page.add(self.references_section(objective.references))
         page.add(self.metadata_section(objective.metadata))
+        # The summary links each signal's heading, so it is written once the
+        # page knows every anchor, a repeated title's ``-1`` included.
+        anchors = page.anchors()
+        summary = parts.signals_summary(
+            objective, self.links, anchors=[anchors[id(child)] for child in signals.children]
+        )
+        page.replace(signals, replace(signals, body=summary))
         return page.render()
 
 

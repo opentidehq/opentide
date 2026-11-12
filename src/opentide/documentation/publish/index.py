@@ -512,10 +512,16 @@ def _killchain_coverage(
     for record in threats:
         for phase in _phases(record):
             flags.setdefault(phase, []).append(record.uuid in addressed)
+    unphased = [record.uuid in addressed for record in threats if not _phases(record)]
+    if unphased:
+        flags[""] = unphased
+    # A threat counts in every phase it lists, as the map above counts it.
+    order = {phase: index for index, phase in enumerate(vocabulary_order("killchain"))}
     rows: list[list[str]] = []
-    for phase, group in _by_phase(threats):
-        done = sum(1 for record in group if record.uuid in addressed)
-        share = f"{round(100 * done / len(group))}%" if group else "-"
+    for phase in sorted(flags, key=lambda name: (not name, order.get(name, len(order)), name)):
+        group = flags[phase]
+        done = sum(group)
+        share = f"{round(100 * done / len(group))}%"
         stage = killchain_stage(phase) if phase else ""
         rows.append([phase or "*No phase*", stage or "-", str(len(group)), str(done), share])
     if not rows:

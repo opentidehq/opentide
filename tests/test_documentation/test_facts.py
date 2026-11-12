@@ -261,3 +261,70 @@ def test_plain_language_is_text_and_everything_else_is_code(value: str, rendered
     from opentide.documentation.facts.settings import _scalar
 
     assert _scalar(value) == rendered
+
+
+def test_a_platform_the_workspace_does_not_enable_reaches_no_tenant(
+    rule_payload: dict[str, Any],
+) -> None:
+    """The page said `PREVIEW runs` for tenants of a disabled platform, beside a warning."""
+    from opentide.documentation.parts.rule import _runs_text, _tenant_row
+
+    rule = _rule(rule_payload, sentinel=_SENTINEL)
+    environment = StaticEnvironment(
+        status_definitions=_STATUSES,
+        enabled_platforms=frozenset({"splunk"}),
+        platform_tenants={"sentinel": (TenantInfo("blue", strategies=(StatusStrategy.PREVIEW,)),)},
+    )
+    (deployment,) = rule_deployments(rule, environment)
+    assert deployment.runs == ()
+    assert deployment.reached == ()
+    assert _runs_text(deployment) == "never deployed: platform not enabled"
+    assert _tenant_row(deployment, deployment.targets[0])[2] == (
+        "no run: the platform is not enabled"
+    )
+
+
+def test_retiring_statuses_read_as_plural_runs(rule_payload: dict[str, Any]) -> None:
+    from opentide.documentation.parts.rule import _runs_text
+
+    rule = _rule(rule_payload, sentinel={**_SENTINEL, "status": "RETIRED"})
+    (deployment,) = rule_deployments(rule, StaticEnvironment(status_definitions=_STATUSES))
+    assert _runs_text(deployment) == "RELEASE runs, which delete it"
+
+
+def test_remote_ids_survive_a_platform_losing_its_tenants(rule_payload: dict[str, Any]) -> None:
+    rule = _rule(rule_payload, sentinel=_SENTINEL)
+    environment = StaticEnvironment(
+        status_definitions=_STATUSES,
+        platform_tenants={"sentinel": ()},
+        states={rule.metadata.uuid: {"sentinel": {"blue": "rule-1"}}},
+    )
+    (deployment,) = rule_deployments(rule, environment)
+    assert deployment.scope == "none"
+    assert dict(deployment.orphaned_ids) == {"blue": "rule-1"}
+
+
+@pytest.mark.parametrize(
+    ("listed", "manual", "reason"),
+    [
+        ((), False, None),
+        ((), True, "manual tenant: only rules that list it under tenants reach it"),
+        (("blue",), True, None),
+        (("red",), False, "not listed by the rule"),
+    ],
+)
+def test_deploy_and_docs_share_one_tenant_selection_rule(
+    listed: tuple[str, ...], manual: bool, reason: str | None
+) -> None:
+    from opentide.models.system_config import tenant_skip_reason
+
+    assert tenant_skip_reason("blue", manual=manual, listed=listed) == reason
+
+
+def test_cli_and_documentation_name_platforms_alike() -> None:
+    from opentide.cli.enums import DetectionPlatform, platform_label
+
+    assert {platform_label(platform) for platform in DetectionPlatform} == {
+        profile.label for profile in PROFILES.values()
+    }
+    assert platform_label(DetectionPlatform.defender) == "Microsoft Defender for Endpoint"

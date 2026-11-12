@@ -334,7 +334,9 @@ def test_root_index_summarises_status_per_platform_and_coverage(
     assert "| ATT&CK techniques detected by rules | 1 |" in page
 
 
-def _threat_record(metadata: dict, uuid: str, phase: str, techniques: list[str]) -> DocumentRecord:
+def _threat_record(
+    metadata: dict, uuid: str, phase: str | list[str], techniques: list[str]
+) -> DocumentRecord:
     from opentide.models.threat import ThreatVector
 
     model = ThreatVector.from_yaml_dict(
@@ -419,3 +421,19 @@ def test_root_index_maps_kill_chain_and_attack_coverage(tmp_path: Path, metadata
     # T1114 is detected through its sub-technique T1114.002; the phishing technique is not.
     assert "| Collection | 2 | 2 | 100% | - |" in page
     assert "| Initial Access | 1 | 0 | 0% | `T1566.002` |" in page
+
+
+def test_kill_chain_table_counts_every_phase_the_map_counts(tmp_path: Path, metadata: dict) -> None:
+    from opentide.documentation.facts.deployment import StaticEnvironment
+    from opentide.documentation.publish.index import render_root_index
+
+    threat = _threat_record(metadata, "t-multi", ["Delivery", "Exploitation"], ["T1566.002"])
+    ctx = DocumentationContext(
+        flavor=DocumentFlavor.github,
+        output_dir=tmp_path,
+        formatter=formatter_for(DocumentFlavor.github),
+        environment=StaticEnvironment(),
+    )
+    page = render_root_index(ctx, rules=[], objectives=[], threats=[threat])
+    assert "| Delivery | Initial Foothold | 1 | 0 | 0% |" in page
+    assert "| Exploitation | Initial Foothold | 1 | 0 | 0% |" in page

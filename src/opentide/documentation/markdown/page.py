@@ -15,7 +15,7 @@ A page reads, top to bottom:
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 
 from opentide.documentation.format.protocol import MarkdownFormatter
@@ -106,6 +106,29 @@ class Page:
         blocks.append(GENERATED_NOTICE)
         return join(blocks) + "\n"
 
+    def anchors(self) -> dict[int, str]:
+        """The anchor each section's heading gets, keyed by ``id(section)``.
+
+        Computed as renderers assign them, in page order: a repeated heading
+        gets ``-1``, ``-2``. A body that links to a heading on the same page
+        reads its anchor here rather than guessing it from the title.
+        """
+        claims = _Anchors(self.formatter)
+        claims.claim(self.title)
+        found: dict[int, str] = {}
+
+        def walk(items: Sequence[Section]) -> None:
+            for item in items:
+                found[id(item)] = claims.claim(item.title)
+                walk(item.children)
+
+        walk(self.sections)
+        return found
+
+    def replace(self, old: Section, new: Section) -> None:
+        """Swap a section already on the page, keeping its place."""
+        self.sections = [new if item is old else item for item in self.sections]
+
     def _section(self, item: Section, *, level: int, anchors: _Anchors) -> str:
         anchors.claim(item.title)
         parts = [self.formatter.heading(level, item.title), item.body]
@@ -123,15 +146,12 @@ class Page:
             return native
         # One line of the page's sections: GitHub adds its own outline of every
         # heading, so a full nested list only repeated it at the top of the page.
-        anchors = _Anchors(self.formatter)
-        anchors.claim(self.title)
-        links: list[str] = []
-        for item in self.sections:
-            anchor = anchors.claim(item.title)
-            if item.in_contents:
-                links.append(self.formatter.link(table_cell(item.title), f"#{anchor}"))
-            for child in item.children:
-                anchors.claim(child.title)
+        anchors = self.anchors()
+        links = [
+            self.formatter.link(table_cell(item.title), f"#{anchors[id(item)]}")
+            for item in self.sections
+            if item.in_contents
+        ]
         return self.formatter.paragraph("**On this page:** " + " · ".join(links))
 
 

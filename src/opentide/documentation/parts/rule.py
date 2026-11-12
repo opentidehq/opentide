@@ -37,8 +37,8 @@ _DEPLOYMENT_KEYS = ("enabled", "status", "tenants", "schema")
 
 #: What a run does to a rule, by the strategy its status maps to.
 _RUN_VERBS: dict[StatusStrategy, str] = {
-    StatusStrategy.DISABLEMENT: "disables",
-    StatusStrategy.DELETION: "deletes",
+    StatusStrategy.DISABLEMENT: "disable",
+    StatusStrategy.DELETION: "delete",
 }
 
 
@@ -109,6 +109,8 @@ def _tenant_row(deployment: PlatformDeployment, target: TenantTarget) -> list[st
         reached = f"no run: the tenant takes {accepted} runs only"
     elif deployment.runs:
         reached = "no run: the tenant takes none of the rule's runs"
+    elif deployment.platform_enabled is False:
+        reached = "no run: the platform is not enabled"
     else:
         reached = "no run: no run deploys this status"
     name = inline_code(target.name)
@@ -118,6 +120,8 @@ def _tenant_row(deployment: PlatformDeployment, target: TenantTarget) -> list[st
 
 
 def _runs_text(deployment: PlatformDeployment) -> str:
+    if deployment.platform_enabled is False:
+        return "never deployed: platform not enabled"
     if deployment.definition is None:
         return "unknown status"
     if not deployment.runs:

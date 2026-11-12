@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -703,3 +704,61 @@ def test_actors_show_their_attack_aliases(metadata: dict[str, Any]) -> None:
     shown = ", ".join(aliases[:4])
     assert f"<br>*also {shown} and {len(aliases) - 4} more*" in rendered
     assert actor_aliases("misp::not-a-group") == []
+
+
+def test_one_client_serves_every_threat_of_a_run() -> None:
+    clients: dict = {}
+    created: list[object] = []
+
+    class FakeClient:
+        def __init__(self, settings: CveSettings) -> None:
+            created.append(self)
+
+        def get(self, cve: str, *, with_linked: bool) -> VulnerabilityRecord:
+            return VulnerabilityRecord(cve)
+
+        def epss(self, cve: str) -> None:
+            raise VulnerabilityLookupError("epss down")
+
+    with (
+        patch(
+            "opentide.documentation.parts.threat.load_cve_settings",
+            return_value=CveSettings(retrieve_details=True),
+        ),
+        patch("opentide.documentation.parts.threat.apply_cve_proxy_settings"),
+        patch("opentide.documentation.parts.threat.VulnerabilityLookupClient", FakeClient),
+    ):
+        first = lookup_cves(["CVE-2023-4966"], clients=clients)
+        lookup_cves(["CVE-2023-4966"], clients=clients)
+    assert len(created) == 1
+    # An EPSS failure is said as such, not as an unreachable record.
+    assert first is not None and first.epss_unavailable and not first.unreachable
+    rendered = render_cves(first, GITHUB)
+    assert "returned no EPSS score" in rendered
+    assert "was unreachable" not in rendered
+
+
+def test_signal_summary_links_the_anchor_the_page_gives(metadata: dict[str, Any]) -> None:
+    """A signal titled like another heading gets `-1`; the summary linked the other heading."""
+    from tests.test_documentation._snapshot_helpers import SNAPSHOT_ENVIRONMENT
+
+    from opentide.documentation.context import DocumentationContext
+    from opentide.documentation.objects.objective import ObjectiveRenderer
+
+    payload = _objective_payload(metadata)
+    payload["objective"]["signals"][0]["name"] = "Composition"
+    objective = load_objective_from_dict(payload)
+    catalog = MagicMock(spec=DocumentationCatalog)
+    catalog.rules = []
+    catalog.rules_for_signal.return_value = []
+    catalog.coverage_graph.return_value = None
+    catalog.related_entries.return_value = []
+    ctx = DocumentationContext(
+        flavor=DocumentFlavor.github,
+        output_dir=Path("docs"),
+        formatter=GITHUB,
+        environment=SNAPSHOT_ENVIRONMENT,
+    )
+    rendered = ObjectiveRenderer(ctx, catalog).render(objective)
+    assert "| [Composition](#composition-1) |" in rendered
+    assert "\n### Composition\n" in rendered

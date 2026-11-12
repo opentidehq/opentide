@@ -249,8 +249,10 @@ class CveFindings:
     records: Mapping[str, VulnerabilityRecord] = field(default_factory=dict)
     epss: Mapping[str, EpssScore] = field(default_factory=dict)
     missing: tuple[str, ...] = ()
-    #: Whether any lookup failed: the page still links every identifier.
+    #: Whether any record lookup failed: the page still links every identifier.
     unreachable: bool = False
+    #: Whether an EPSS lookup failed: those rows show no EPSS score.
+    epss_unavailable: bool = False
 
     def exploited(self) -> list[tuple[str, VulnerabilityRecord]]:
         """The CVEs known to be exploited: in CISA's KEV catalog, or SSVC ``active``."""
@@ -266,8 +268,13 @@ def lookup_cves(
     *,
     client: VulnerabilityLookupClient | None = None,
     retrieve_details: bool | None = None,
+    clients: dict[CveSettings, VulnerabilityLookupClient] | None = None,
 ) -> CveFindings | None:
-    """Resolve *cve_list* against Vulnerability-Lookup, with EPSS scores; ``None`` when empty."""
+    """Resolve *cve_list* against Vulnerability-Lookup, with EPSS scores; ``None`` when empty.
+
+    *clients* holds one client per settings for a whole documentation run, so
+    a CVE that several threats name is fetched once and connections are reused.
+    """
     identifiers: list[str] = []
     seen: set[str] = set()
     for cve in normalize_identifiers(cve_list):
@@ -282,11 +289,18 @@ def lookup_cves(
     if not enrich_details:
         return CveFindings(tuple(identifiers), settings)
     apply_cve_proxy_settings(settings)
-    lookup = client or VulnerabilityLookupClient(settings)
+    lookup = client
+    if lookup is None and clients is not None:
+        lookup = clients.get(settings)
+        if lookup is None:
+            lookup = clients[settings] = VulnerabilityLookupClient(settings)
+    if lookup is None:
+        lookup = VulnerabilityLookupClient(settings)
     records: dict[str, VulnerabilityRecord] = {}
     scores: dict[str, EpssScore] = {}
     missing: list[str] = []
     unreachable = False
+    epss_unavailable = False
     for cve in identifiers:
         try:
             record = lookup.get(cve, with_linked=True)
@@ -301,7 +315,7 @@ def lookup_cves(
             try:
                 score = lookup.epss(record.cve_id)
             except VulnerabilityLookupError:
-                unreachable = True
+                epss_unavailable = True
                 continue
             if isinstance(score, EpssScore):
                 scores[cve] = score
@@ -313,6 +327,7 @@ def lookup_cves(
         epss=scores,
         missing=tuple(missing),
         unreachable=unreachable,
+        epss_unavailable=epss_unavailable,
     )
 
 
@@ -377,6 +392,13 @@ def render_cves(findings: CveFindings | None, formatter: MarkdownFormatter) -> s
             formatter.paragraph(
                 "Vulnerability-Lookup was unreachable for at least one identifier; "
                 "links still point at the CIRCL record page."
+            )
+        )
+    if findings.epss_unavailable:
+        parts.append(
+            formatter.paragraph(
+                "Vulnerability-Lookup returned no EPSS score for at least one identifier; "
+                "those rows show none."
             )
         )
     parts.append(

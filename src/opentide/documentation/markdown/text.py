@@ -69,10 +69,9 @@ def first_sentence(text: str, *, limit: int = 240) -> str:
     collapsed = " ".join(strip_citations(text).split())
     if not collapsed:
         return ""
-    start = 0
     for match in _SENTENCE_END.finditer(collapsed):
         candidate = collapsed[: match.start()]
-        if _ABBREVIATION.search(candidate[start:]):
+        if _ABBREVIATION.search(candidate):
             continue
         return truncate(candidate, limit)
     return truncate(collapsed, limit)

@@ -27,6 +27,7 @@ import structlog
 from opentide.documentation.facts.platforms import platform_label
 from opentide.models.deployment_enums import DEPLOYABLE_STRATEGIES, StatusStrategy, deploys
 from opentide.models.rule import DetectionRule
+from opentide.models.system_config import tenant_skip_reason
 
 logger = structlog.get_logger("opentide.documentation.facts")
 
@@ -256,9 +257,11 @@ def rule_deployments(
             continue
         definition = definitions.get(str(block.status))
         strategy = definition.strategy if definition else None
+        enabled = environment.platform_enabled(platform)
+        # A platform the workspace does not enable is never deployed to, whatever the status.
         runs = (
             tuple(run for run in DEPLOYABLE_STRATEGIES if deploys(strategy, run))
-            if strategy
+            if strategy and enabled is not False
             else ()
         )
         deployments.append(
@@ -269,7 +272,7 @@ def rule_deployments(
                 runs=runs,
                 tenants=environment.tenants(platform),
                 remote=remote.get(platform, {}),
-                platform_enabled=environment.platform_enabled(platform),
+                platform_enabled=enabled,
             )
         )
     return deployments
@@ -307,12 +310,13 @@ def _platform_deployment(
         )
 
     if not tenants:
-        return replace(base, scope="none", unknown_tenants=listed)
+        return replace(base, scope="none", unknown_tenants=listed, orphaned_ids=dict(remote))
     known = {tenant.name for tenant in tenants}
-    if listed:
-        candidates = [tenant for tenant in tenants if tenant.name in listed]
-    else:
-        candidates = [tenant for tenant in tenants if not tenant.manual]
+    candidates = [
+        tenant
+        for tenant in tenants
+        if tenant_skip_reason(tenant.name, manual=tenant.manual, listed=listed) is None
+    ]
     targets = tuple(
         TenantTarget(
             name=tenant.name,

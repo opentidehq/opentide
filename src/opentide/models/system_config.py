@@ -343,3 +343,18 @@ class TenantDeployment:
     @dataclass
     class Bitdefender(DeploymentBatch):
         tenant: ConfigurationModels.Systems.Bitdefender.Tenant
+
+
+def tenant_skip_reason(name: str, *, manual: bool, listed: Sequence[str]) -> str | None:
+    """Why a rule block does not select a tenant, or ``None`` when it does.
+
+    A block that lists ``tenants`` selects only those; otherwise every tenant
+    that is not ``manual``. The deploy planner and the documentation both
+    read the rule from here, so a page never says a rule reaches a tenant
+    that deploy skips.
+    """
+    if listed:
+        return None if name in listed else "not listed by the rule"
+    if manual:
+        return "manual tenant: only rules that list it under tenants reach it"
+    return None

@@ -32,7 +32,7 @@ class ThreatRenderer(ObjectRenderer):
         uuid = threat.metadata.uuid
         coverage = parts.coverage_counts(self.catalog.coverage_graph(uuid))
         page = self.page(threat.name, threat.metadata, body.description)
-        cves = parts.lookup_cves(body.cve)
+        cves = parts.lookup_cves(body.cve, clients=self.ctx.cve_clients)
         page.add_lead(parts.overview(threat, self.links, coverage=coverage, cves=cves))
         page.add_lead(parts.exploited_banner(cves, self.formatter))
         if coverage[0] == 0:

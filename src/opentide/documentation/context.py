@@ -5,12 +5,15 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 from urllib.parse import urlsplit
 
 from opentide.documentation.facts.deployment import DeploymentEnvironment, LiveEnvironment
 from opentide.documentation.format.protocol import MarkdownFormatter
 from opentide.documentation.types import DocumentFlavor
+
+if TYPE_CHECKING:
+    from opentide.vulnerability_lookup import CveSettings, VulnerabilityLookupClient
 
 
 def resolve_flavor(
@@ -95,3 +98,8 @@ class DocumentationContext:
     #: Statuses, tenants and deployment state the rule pages read. Tests pass
     #: a ``StaticEnvironment``; generation reads the workspace.
     environment: DeploymentEnvironment = field(default_factory=LiveEnvironment)
+    #: One Vulnerability-Lookup client per CVE settings for the run, so a CVE
+    #: several threats name is fetched once. Filled by the threat pages.
+    cve_clients: dict[CveSettings, VulnerabilityLookupClient] = field(
+        default_factory=dict, compare=False, repr=False
+    )

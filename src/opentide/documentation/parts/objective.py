@@ -162,21 +162,26 @@ def _examples(examples: Sequence[DetectionExample], formatter: MarkdownFormatter
     return join(parts)
 
 
-def signals_summary(objective: DetectionObjective, links: Links) -> str:
-    """Every signal at a glance: how it detects, and the rules and platforms implementing it."""
+def signals_summary(
+    objective: DetectionObjective, links: Links, *, anchors: Sequence[str] = ()
+) -> str:
+    """Every signal at a glance: how it detects, and the rules and platforms implementing it.
+
+    *anchors* are the signal headings' anchors as the page assigns them, in
+    signal order; without them each anchor is derived from the signal name.
+    """
     if not objective.objective.signals:
         return ""
     formatter = links.formatter
     rows: list[list[str]] = []
     listed: set[str] = set()
-    for signal in objective.objective.signals:
+    for index, signal in enumerate(objective.objective.signals):
         rules = links.catalog.rules_for_signal(signal.uuid)
         listed.update(rules)
+        anchor = anchors[index] if index < len(anchors) else formatter.heading_anchor(signal.name)
         rows.append(
             [
-                formatter.link(
-                    table_cell(signal.name), f"#{formatter.heading_anchor(signal.name)}"
-                ),
+                formatter.link(table_cell(signal.name), f"#{anchor}"),
                 enrich("alert_severity", signal.severity).label,
                 enrich("detection.methodology", signal.methodology).label,
                 str(signal.effort) if signal.effort is not None else "-",
