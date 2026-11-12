@@ -16,13 +16,16 @@ description = "YARA-L 2.0 detection rules for Google SecOps SIEM."
 # project is the Google Cloud project bound to the instance; location its region
 # (us, eu, europe, or a Google Cloud region such as europe-west2); instance the
 # SecOps customer id. Requests go to https://<location>-chronicle.googleapis.com
-# unless endpoint says otherwise. credentials is an environment variable holding
+# unless endpoint says otherwise (Google also serves each region as
+# https://chronicle.<location>.rep.googleapis.com). credentials is an environment variable holding
 # a service-account key (JSON) or the path to one; without it, Application
 # Default Credentials (workload identity, gcloud auth application-default login).
 # The principal needs chronicle.rules.{verifyRuleText,create,get,update,delete},
 # chronicle.ruleDeployments.{get,update} and, for opentide query,
-# chronicle.events.udmSearch. On DELETION, deletion = "archive" disables and
-# archives the rule; "delete" deletes it, never with its detections.
+# chronicle.events.udmSearch. data_access_scope (Data RBAC) is a data access
+# scope id, or its full name projects/.../dataAccessScopes/<id>; leave it out for
+# global rules. On DELETION, deletion = "archive" disables and archives the rule;
+# "delete" deletes it, never with its detections.
 #[[tenants]]
 #name = "secops-eu"
 #description = "Google SecOps, EU multi-region"
@@ -33,5 +36,5 @@ description = "YARA-L 2.0 detection rules for Google SecOps SIEM."
 #location = "eu"
 #instance = "3f0ac524-5ae1-4bfd-b86d-53afc953e7e6"
 #credentials = "$GOOGLE_SECOPS_CREDENTIALS"
-#data_access_scope = "global-scope"
+#data_access_scope = "soc-team-eu"
 #deletion = "archive"

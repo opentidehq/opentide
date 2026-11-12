@@ -154,16 +154,18 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`google_secops_compile_error`](#google_secops_compile_error) | Google SecOps's compiler refuses a rule in a live query check. |
 | [`google_secops_compile_warning`](#google_secops_compile_warning) | Google SecOps's compiler accepts a rule with a warning in a live query check. |
 | [`google_secops_create_no_id`](#google_secops_create_no_id) | A Google SecOps create answered without a rule id. |
-| [`google_secops_create_unconfirmed`](#google_secops_create_unconfirmed) | A Google SecOps create got no answer, so the rule may exist without a binding. |
+| [`google_secops_create_unconfirmed`](#google_secops_create_unconfirmed) | A Google SecOps create got no answer or a server error, so the rule may exist without a binding. |
 | [`google_secops_credentials_missing`](#google_secops_credentials_missing) | opentide has no usable Google credentials for a Google SecOps tenant. |
-| [`google_secops_delete_refused`](#google_secops_delete_refused) | Google SecOps refused to delete a rule with detections, so deploy archived it. |
+| [`google_secops_delete_refused`](#google_secops_delete_refused) | Google SecOps refused to delete a rule, so deploy archived it. |
 | [`google_secops_deployment_failed`](#google_secops_deployment_failed) | A Google SecOps rule exists, but its run state could not be set. |
 | [`google_secops_live_frequency_unavailable`](#google_secops_live_frequency_unavailable) | A Google SecOps rule with two or more event variables asks for `run_frequency: LIVE`. |
 | [`google_secops_meta_key`](#google_secops_meta_key) | A Google SecOps block's `meta` holds a key deploy cannot write. |
 | [`google_secops_name_duplicate`](#google_secops_name_duplicate) | Two enabled Google SecOps blocks resolve to one YARA-L rule name. |
 | [`google_secops_request_failed`](#google_secops_request_failed) | A Chronicle API request for one Google SecOps rule failed. |
 | [`google_secops_risk_score_missing`](#google_secops_risk_score_missing) | A Google SecOps rule's `outcome` assigns no `$risk_score`. |
+| [`google_secops_rule_compilation_failed`](#google_secops_rule_compilation_failed) | Google reports that a deployed Google SecOps rule no longer compiles. |
 | [`google_secops_rule_conflict`](#google_secops_rule_conflict) | A Google SecOps rule changed between deploy's read and its update. |
+| [`google_secops_rule_execution_limited`](#google_secops_rule_execution_limited) | Google reports that it limits or pauses a Google SecOps rule's runs. |
 | [`google_secops_rule_id_literal`](#google_secops_rule_id_literal) | A Google SecOps rule matches a producer rule by a literal `ru_…` id. |
 | [`google_secops_rule_missing`](#google_secops_rule_missing) | The Google SecOps rule a binding names no longer exists, and the rule is being retired. |
 | [`google_secops_rule_name`](#google_secops_rule_name) | A Google SecOps block's `name` is not a YARA-L rule name. |
@@ -2814,7 +2816,7 @@ Read Google's message and its documentation link; change the section when the wa
 
 A Google SecOps create answered without a rule id.
 
-Severity: error. Reported by `opentide deploy` on a `google_secops` tenant (google-secops-1.0). The `name` of the created rule must end in `rules/ru_<uuid>`, the id deploy records in `.opentide/states/deployment/`. Without it the rule may exist on the instance with no binding.
+Severity: error. Reported by `opentide deploy` on a `google_secops` tenant (google-secops-1.0). Google answered 2xx with a `name` that does not end in a rule id, or with a body that is not JSON. The `name` of the created rule must end in `rules/ru_<uuid>`, the id deploy records in `.opentide/states/deployment/`. Without it the rule may exist on the instance with no binding.
 
 ### Example
 
@@ -2828,9 +2830,9 @@ Find the rule in Google SecOps (Detection, Rules) by its name. Delete it, or rec
 
 ## google_secops_create_unconfirmed
 
-A Google SecOps create got no answer, so the rule may exist without a binding.
+A Google SecOps create got no answer or a server error, so the rule may exist without a binding.
 
-Severity: error. Reported by `opentide deploy` on a `google_secops` tenant (google-secops-1.0). The `rules.create` request timed out or its connection was reset. Google may have created the rule, but its id never reached opentide, so nothing was recorded, and deploy does not send the create again: a second rule with the same name would follow.
+Severity: error. Reported by `opentide deploy` on a `google_secops` tenant (google-secops-1.0). The `rules.create` request timed out, its connection was reset, or Google answered a 5xx (`503` included), which can come after the rule was written. Google may have created the rule, but its id never reached opentide, so nothing was recorded, and deploy does not send the create again: a second rule with the same name would follow.
 
 ### Example
 
@@ -2860,9 +2862,9 @@ Set the variable to a service-account key (its JSON, or the path to the file), o
 
 ## google_secops_delete_refused
 
-Google SecOps refused to delete a rule with detections, so deploy archived it.
+Google SecOps refused to delete a rule, so deploy archived it.
 
-Severity: warning. Reported by `opentide deploy` on a `google_secops` tenant with `deletion = "delete"` (google-secops-1.0). `DELETE` without `force` fails (`FAILED_PRECONDITION`) when the rule has detections or retrohunts; opentide never sends `force=true`, which deletes the detections too. The rule was disabled and archived instead, and its binding kept.
+Severity: warning. Reported by `opentide deploy` on a `google_secops` tenant with `deletion = "delete"` (google-secops-1.0). `DELETE` without `force` fails when the rule has detections or retrohunts. Google does not document the status it answers, so any 4xx but 401, 403, 404 and 429 counts as a refusal, and the warning carries Google's message. opentide never sends `force=true`, which deletes the detections too. The rule was disabled and archived instead, and its binding kept.
 
 ### Example
 
@@ -2894,7 +2896,7 @@ Read Google's error in the message (a permission such as `chronicle.ruleDeployme
 
 A Google SecOps rule with two or more event variables asks for `run_frequency: LIVE`.
 
-Severity: warning (an advisory). Reported by `opentide validate` and `opentide lint` on a `google_secops` block (google-secops-1.0). Google runs multi-event rules at `LIVE_CUSTOMIZABLE` at best and stores that instead, so the deployed rule differs from the block on every deploy.
+Severity: warning (an advisory). Reported by `opentide validate` and `opentide lint` on a `google_secops` block (google-secops-1.0). Google allows `LIVE` for single-event rules only: `verifyRuleText` does not list it for this rule, so deploy refuses it with `google_secops_run_frequency_not_allowed` before writing anything. Google also counts a single event variable with `match` and a count or outcome condition as multi-event; the advisory does not try to decide that, and deploy still refuses.
 
 ### Example
 
@@ -2909,7 +2911,7 @@ configurations:
 
 ### How to fix
 
-Write `run_frequency: LIVE_CUSTOMIZABLE`, or remove `run_frequency` to take the first frequency Google allows.
+Write `run_frequency: LIVE_CUSTOMIZABLE`, or remove `run_frequency`: deploy then sends none, and Google gives the rule its default frequency.
 
 ## google_secops_meta_key
 
@@ -2955,7 +2957,7 @@ Give one of the blocks its own `configurations.google_secops.name`, or rename on
 
 A Chronicle API request for one Google SecOps rule failed.
 
-Severity: error. Reported by `opentide deploy` on a `google_secops` tenant (google-secops-1.0). Google answered an error other than the ones deploy handles itself, or stayed rate limited (`RESOURCE_EXHAUSTED`, HTTP 503) after three waits. The message carries Google's `error.status` and `error.message`. The other rules still deploy.
+Severity: error. Reported by `opentide deploy` on a `google_secops` tenant (google-secops-1.0). Google answered an error other than the ones deploy handles itself, or stayed rate limited (`RESOURCE_EXHAUSTED` or HTTP 503) after three waits: `Retry-After` (at most 300 seconds), else the `RetryInfo` delay Google names, else 5, 15 and 60 seconds. The message carries Google's `error.status` and `error.message`. The other rules still deploy.
 
 ### Example
 
@@ -2971,7 +2973,7 @@ Read Google's status and message; deploy again once the cause is fixed.
 
 A Google SecOps rule's `outcome` assigns no `$risk_score`.
 
-Severity: warning (an advisory: the rule still validates and deploys). Reported by `opentide validate` and `opentide lint` (its `queries` check) on a `google_secops` block (google-secops-1.0). Without `$risk_score`, Google scores every alert of the rule 40 and every non-alerting detection 15, whatever it detects.
+Severity: warning (an advisory: the rule still validates and deploys). Reported by `opentide validate` and `opentide lint` (its `queries` check) on a `google_secops` block (google-secops-1.0). Without `$risk_score`, Google gives every detection of the rule the instance's default score, 40 for an alert and 15 otherwise unless the instance's settings change them, whatever it detects.
 
 ### Example
 
@@ -2985,6 +2987,22 @@ configurations:
 ### How to fix
 
 Add a `$risk_score` line to `outcome`, an integer from 0 to 100 (`$risk_score = 70`), or an aggregation in a rule with `match` (`$risk_score = max(70)`).
+
+## google_secops_rule_compilation_failed
+
+Google reports that a deployed Google SecOps rule no longer compiles.
+
+Severity: warning. Reported by `opentide deploy` on a `google_secops` tenant (google-secops-1.0), from the rule it reads before an update. `compilationState` `FAILED` happens after a backwards-incompatible change to Google's compiler, or when a reference list or data table the rule uses is gone; the rule then does not run. Deploy goes on: a changed text is verified and sent as usual.
+
+### Example
+
+```text illustrative
+google_secops_rule_compilation_failed: Google reports the rule's compilation as FAILED
+```
+
+### How to fix
+
+Run `opentide validate query --platform google_secops --live` to see Google's diagnostics for the rule, fix the sections they name, and deploy again.
 
 ## google_secops_rule_conflict
 
@@ -3001,6 +3019,22 @@ google_secops_rule_conflict: rule ru_cfc80c6b-f918-42ed-8d5c-9518c13586c1 change
 ### How to fix
 
 Deploy again. When it keeps happening, find what else edits the rule in Google SecOps.
+
+## google_secops_rule_execution_limited
+
+Google reports that it limits or pauses a Google SecOps rule's runs.
+
+Severity: warning. Reported by `opentide deploy` on a `google_secops` tenant (google-secops-1.0), from the rule deployment it reads before an update. `executionState` `LIMITED` means Google does not guarantee the rule's runs, usually because it is expensive or produces too many detections; `PAUSED` means Google does not run it at all. Deploy goes on: the text and run state are still updated.
+
+### Example
+
+```text illustrative
+google_secops_rule_execution_limited: Google reports the rule's execution as PAUSED: it is not run at all
+```
+
+### How to fix
+
+Open the rule in Google SecOps (Detection, Rules) to see why. Narrow `events` (filter on `metadata.event_type` or `metadata.log_type`), shorten the `match` window, or reduce the detections it produces, then deploy again.
 
 ## google_secops_rule_id_literal
 
@@ -3087,7 +3121,7 @@ configurations:
 
 ### How to fix
 
-Write `HOURLY_CUSTOMIZABLE` (or another of the four values), or remove `run_frequency`: deploy then uses the first frequency Google allows for the rule, in the order `LIVE`, `LIVE_CUSTOMIZABLE`, `HOURLY_CUSTOMIZABLE`, `DAILY`.
+Write `HOURLY_CUSTOMIZABLE` (or another of the four values), or remove `run_frequency`: deploy then sends none, and Google keeps the rule's frequency, or gives a new rule its default.
 
 ## google_secops_run_frequency_not_allowed
 
@@ -3103,7 +3137,7 @@ google_secops_run_frequency_not_allowed: run_frequency LIVE is not one Google al
 
 ### How to fix
 
-Set `run_frequency` to one of the frequencies the message lists, or remove it: deploy then uses the first one Google allows.
+Set `run_frequency` to one of the frequencies the message lists, or remove it: deploy then sends no `runFrequency`, and Google keeps the rule's frequency, or gives a new rule its default.
 
 ## google_secops_schedule
 
@@ -3147,7 +3181,7 @@ Use `Info`, `Low`, `Medium`, `High` or `Critical`, or remove the key: `severity`
 
 A Google SecOps instance refused opentide's credentials.
 
-Severity: error. Reported by `opentide deploy` and `opentide validate query --live` on a `google_secops` tenant (google-secops-1.0). The instance answered HTTP 401 or 403, or Google refused to issue a token: no rule on that tenant is deployed or checked.
+Severity: error. Reported by `opentide deploy` and `opentide validate query --live` on a `google_secops` tenant (google-secops-1.0). The instance answered HTTP 401 or 403, or no access token could be obtained (Google refused the credentials, or its token endpoint did not answer): no rule on that tenant is deployed or checked. A token failure happens before the request is sent, so it is never an unanswered create. User credentials from Application Default Credentials send their quota project (`x-goog-user-project`); Google refuses them without one.
 
 ### Example
 
@@ -3157,7 +3191,7 @@ google_secops_tenant_unauthorized: tenant secops-eu refused the request (HTTP 40
 
 ### How to fix
 
-Give the service account (or the Application Default Credentials principal) the permissions on the instance: `chronicle.rules.verifyRuleText`, `.create`, `.get`, `.update`, `.delete`, `chronicle.ruleDeployments.get`, `.update`, and `chronicle.events.udmSearch` for `opentide query`. Check `project`, `location` and `instance` in `platforms/google_secops.toml`.
+Give the service account (or the Application Default Credentials principal) the permissions on the instance: `chronicle.rules.verifyRuleText`, `.create`, `.get`, `.update`, `.delete`, `chronicle.ruleDeployments.get`, `.update`, and `chronicle.events.udmSearch` for `opentide query`. Check `project`, `location` and `instance` in `platforms/google_secops.toml`. With user Application Default Credentials, set a quota project: `gcloud auth application-default set-quota-project <project>`.
 
 ## google_secops_tenant_unreachable
 
