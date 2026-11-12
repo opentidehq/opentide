@@ -73,6 +73,13 @@ def rule_queries(rule: DetectionRule, platform: str) -> list[RuleQuery]:
                 "evaluate: it holds no query to search telemetry with. Pass a telemetry "
                 "query instead, such as 'processes process_name=cmd.exe'"
             )
+        case "google_secops":
+            raise RuleQueryError(
+                f"rule {rule.name!r}: --rule is not supported for google_secops. A YARA-L rule "
+                "runs in the detection engine, whose results differ from a search's, and a "
+                "retrohunt writes detections; write the search as a hunt "
+                "(response.procedure.searches) and pass it as QUERY"
+            )
     raise RuleQueryError(f"{platform} rules cannot be queried")
 
 

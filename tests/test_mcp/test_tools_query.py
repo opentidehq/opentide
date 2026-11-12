@@ -17,7 +17,7 @@ GARBAGE = 'SecurityEvent | where Account == "unterminated'
 
 
 def test_query_validation_platform_count() -> None:
-    assert len(QUERY_VALIDATION_PLATFORMS) == 6
+    assert len(QUERY_VALIDATION_PLATFORMS) == 7
     assert "crowdstrike" not in QUERY_VALIDATION_PLATFORMS
 
 
@@ -161,7 +161,27 @@ def test_validate_query_truncates_the_preview() -> None:
     assert len(result["query_preview"]) == 200
 
 
-@pytest.mark.parametrize("platform", ["sentinel", "crowdstrike", "harfanglab"])
+def test_validate_query_google_secops_is_checked_by_the_instance(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """YARA-L is compiled by verifyRuleText with live true; offline names live (google-secops-1.0)."""
+    offline = tools.tool_validate_query('metadata.event_type = "USER_LOGIN"', "google_secops")
+    assert offline["supported"] is True
+    assert offline["valid"] is None
+    assert "live: true" in offline["message"]
+    seen: dict[str, object] = {}
+
+    def _fake(ctx: object, platform: str, *, live: bool = False) -> dict[str, object]:
+        seen.update(platform=platform, live=live)
+        return {"platform": platform, "mode": "live", "status": "passed", "supported": True}
+
+    monkeypatch.setattr("opentide.cli.services.validation.validate_query_platform", _fake)
+    live = tools.tool_validate_query("", "google_secops", live=True)
+    assert seen == {"platform": "google_secops", "live": True}
+    assert live["supported"] is True
+
+
+@pytest.mark.parametrize("platform", ["sentinel", "crowdstrike", "harfanglab", "google_secops"])
 def test_run_query_refuses_without_live(platform: str) -> None:
     """Without live true no tenant is contacted: an agent must ask a person first."""
     result = tools.tool_run_query("index=*", platform, tenant="prod")

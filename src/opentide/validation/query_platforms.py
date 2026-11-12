@@ -1,7 +1,8 @@
 """Platforms whose queries can be checked against a tenant.
 
 CrowdStrike and HarfangLab have no tenant check, so their capability entry is
-``can_validate False``. HarfangLab's YARA is checked offline.
+``can_validate False``. HarfangLab's YARA is checked offline. Google SecOps is
+checked by its own compiler, ``verifyRuleText``, which creates nothing.
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ QUERY_VALIDATION_PLATFORMS: frozenset[str] = frozenset(
         "sentinel_one",
         "carbon_black_cloud",
         "elastic",
+        "google_secops",
     }
 )
 
