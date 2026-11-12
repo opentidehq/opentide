@@ -289,6 +289,11 @@ RUST_CLI: tuple[str, ...] = (sys.executable, "-m", "opentide.cli.rust")
 #: without ``--platform`` (every platform has a Rust connector, so neither names
 #: *platforms*: ``deploy`` sends to the workspace's enabled platforms, and
 #: ``validate query --live`` refuses a run that names none, as Python does).
+#: ``share`` and its ``push``, ``preview``, ``status``, ``retract`` and
+#: ``targets`` over MISP's REST API, and ``generate extract defender`` and
+#: ``generate extract elastic`` through their connectors, with UC-4.4b (#834):
+#: a ``share push --changed`` that reads a git diff stays Python's (the Rust
+#: side refuses it with ``engine_not_ported``).
 RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
     ("commands",): RustCommand(launch=RUST_CLI),
     ("explain",): RustCommand(launch=RUST_CLI),
@@ -335,6 +340,14 @@ RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
     ("lsp", "start"): RustCommand(launch=RUST_CLI),
     ("tui",): RustCommand(launch=RUST_CLI),
     ("query",): RustCommand(launch=RUST_CLI, side_effects=True, platforms=RUST_QUERY_PLATFORMS),
+    ("share",): RustCommand(launch=RUST_CLI, side_effects=True, offline=("--dry-run",)),
+    ("share", "push"): RustCommand(launch=RUST_CLI, side_effects=True, offline=("--dry-run",)),
+    ("share", "preview"): RustCommand(launch=RUST_CLI),
+    ("share", "status"): RustCommand(launch=RUST_CLI),
+    ("share", "retract"): RustCommand(launch=RUST_CLI, side_effects=True),
+    ("share", "targets"): RustCommand(launch=RUST_CLI),
+    ("generate", "extract", "defender"): RustCommand(launch=RUST_CLI, side_effects=True),
+    ("generate", "extract", "elastic"): RustCommand(launch=RUST_CLI, side_effects=True),
 }
 
 

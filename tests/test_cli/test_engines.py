@@ -42,9 +42,14 @@ def state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return home / "opentide" / "compare"
 
 
-#: A command line with no Rust implementation: ``share targets`` (``setup
-#: --plugin``, the last ``setup`` run on Python, moved to Rust with UC-4.4d, #834).
-UNPORTED = ("share", "targets")
+#: A command line with no Rust implementation: a bare ``generate``, the full
+#: pipeline (``setup --plugin``, the last ``setup`` run on Python, moved to Rust
+#: with UC-4.4d, and ``share targets`` with UC-4.4b, both #834).
+UNPORTED = ("generate",)
+UNPORTED_MESSAGE = (
+    "opentide generate without schemas or templates or vocabs or snippets "
+    "has no Rust implementation yet"
+)
 
 
 def fake(mode: str) -> RustCommand:
@@ -82,11 +87,11 @@ def test_rust_on_a_command_without_rust_is_engine_not_ported(workspace: Path) ->
     assert code == 2
     doc = document(stdout)
     assert doc["exit_code"] == 2
-    assert doc["command"] == "share targets"
+    assert doc["command"] == "generate"
     assert doc["failure"]["code"] == "engine_not_ported"
     assert doc["failure"]["argument"] == "OPENTIDE_ENGINE"
     message = doc["failure"]["message"]
-    assert "opentide share targets has no Rust implementation yet" in message
+    assert UNPORTED_MESSAGE in message
     assert stdout.endswith("}\n") and stdout.count("\n") == 1
 
 
@@ -102,7 +107,7 @@ def test_rust_without_json_is_one_error_line(workspace: Path) -> None:
     code, stdout, stderr = invoke(["--no-color", "--repo", str(workspace), *UNPORTED], "rust")
     assert code == 2
     assert stdout == ""
-    assert "error: opentide share targets has no Rust implementation yet" in stderr
+    assert f"error: {UNPORTED_MESSAGE}" in stderr
 
 
 def test_an_unknown_engine_is_a_usage_error_with_a_suggestion(workspace: Path) -> None:

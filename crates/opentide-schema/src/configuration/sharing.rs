@@ -15,7 +15,7 @@ use regex::Regex;
 
 use super::Severity;
 use super::codes;
-use super::models::{MispIntegration, is_table_array};
+use super::models::{MispIntegration, ObjectFamily, is_table_array};
 use super::repr;
 use crate::from_node::{Context, FromNode};
 use crate::node::{Node, Value};
@@ -122,6 +122,43 @@ impl Merged {
     }
 }
 
+/// One merged `[[misp]]` destination (`MispBlock`), as the files say it:
+/// the API key is the value written (`${NAME}`, or a literal), which the
+/// host resolves from its environment.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MispBlock {
+    /// The block's name.
+    pub name: String,
+    /// The instance's URL, without a trailing `/`.
+    pub url: String,
+    /// The highest TLP shared.
+    pub max_tlp: String,
+    /// `api_key` as written; `None` when unset or empty.
+    pub api_key: Option<String>,
+    /// `enabled`.
+    pub enabled: bool,
+    /// `object_types`.
+    pub object_types: Vec<String>,
+    /// `rule_statuses`.
+    pub rule_statuses: Vec<String>,
+    /// `organisation_uuid`.
+    pub organisation_uuid: Option<String>,
+    /// `publish`.
+    pub publish: bool,
+    /// `verify_ssl`.
+    pub verify_ssl: bool,
+}
+
+/// The merged blocks and the findings (`SharingConfig`); `blocks` is empty
+/// when a finding is an error.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Sharing {
+    /// The destinations, in the order their names first appear.
+    pub blocks: Vec<MispBlock>,
+    /// The findings.
+    pub issues: Vec<SharingIssue>,
+}
+
 /// Merges `layers` (parsed `sharing.toml` documents, in order) and checks
 /// each merged block. `status_names` are the merged `deployment.toml`
 /// statuses; `tlp_names` the `tlp` vocabulary's names.
@@ -130,6 +167,12 @@ pub fn merge_sharing_documents(
     status_names: &[String],
     tlp_names: &[String],
 ) -> Vec<SharingIssue> {
+    merge_sharing(layers, status_names, tlp_names).issues
+}
+
+/// [`merge_sharing_documents`] with the blocks it merged
+/// (`merge_sharing_documents`' `SharingConfig`).
+pub fn merge_sharing(layers: &[&Node], status_names: &[String], tlp_names: &[String]) -> Sharing {
     let mut issues = Vec::new();
     let mut known: Vec<Located<'_>> = Vec::new();
     for (layer_index, layer) in layers.iter().enumerate() {
@@ -196,10 +239,21 @@ pub fn merge_sharing_documents(
             }
         }
     }
+    let mut blocks = Vec::new();
     for merged in merge_named(&known, INTEGRATION_MISP, &mut issues) {
-        issues.extend(misp_block(&merged, status_names, tlp_names));
+        let (block, found) = misp_block(&merged, status_names, tlp_names);
+        let failed = found.iter().any(|issue| issue.severity == Severity::Error);
+        issues.extend(found);
+        if let Some(block) = block
+            && !failed
+        {
+            blocks.push(block);
+        }
     }
-    issues
+    if issues.iter().any(|issue| issue.severity == Severity::Error) {
+        blocks.clear();
+    }
+    Sharing { blocks, issues }
 }
 
 fn reject_duplicate_names(
@@ -322,7 +376,11 @@ fn api_key_pattern() -> &'static Regex {
 /// One finding: `(code, key, list entry)`.
 type Found = (&'static str, String, Option<String>);
 
-fn misp_block(merged: &Merged, status_names: &[String], tlp_names: &[String]) -> Vec<SharingIssue> {
+fn misp_block(
+    merged: &Merged,
+    status_names: &[String],
+    tlp_names: &[String],
+) -> (Option<MispBlock>, Vec<SharingIssue>) {
     let block = merged
         .get("name")
         .and_then(|name| name.value.as_str())
@@ -332,9 +390,8 @@ fn misp_block(merged: &Merged, status_names: &[String], tlp_names: &[String]) ->
     let mut cx = Context::new();
     let model = MispIntegration::from_node(&node, &mut cx);
     let errors = cx.into_errors();
-    if errors.is_empty()
-        && let Some(model) = &model
-    {
+    let model = if errors.is_empty() { model } else { None };
+    if let Some(model) = &model {
         if !tlp_names.iter().any(|name| name == model.max_tlp.name()) {
             found.push((codes::MAX_TLP_UNKNOWN, "max_tlp".to_owned(), None));
         }
@@ -365,10 +422,41 @@ fn misp_block(merged: &Merged, status_names: &[String], tlp_names: &[String]) ->
     {
         found.push((codes::API_KEY_LITERAL, "api_key".to_owned(), None));
     }
-    found
+    let issues = found
         .into_iter()
         .map(|(code, field, entry)| issue(code, &field, block.as_deref(), merged, entry))
-        .collect()
+        .collect();
+    let block = model.map(|model| MispBlock {
+        name: model.name.as_str().to_owned(),
+        url: model.url.as_str().trim_end_matches('/').to_owned(),
+        max_tlp: model.max_tlp.name().to_owned(),
+        api_key: Some(model.api_key.0.clone()).filter(|key| !key.is_empty()),
+        enabled: model.enabled,
+        object_types: model
+            .object_types
+            .iter()
+            .map(|family| {
+                match family {
+                    ObjectFamily::Threat => "threat",
+                    ObjectFamily::Objective => "objective",
+                    ObjectFamily::Rule => "rule",
+                }
+                .to_owned()
+            })
+            .collect(),
+        rule_statuses: model
+            .rule_statuses
+            .iter()
+            .map(|status| status.0.clone())
+            .collect(),
+        organisation_uuid: model
+            .organisation_uuid
+            .as_ref()
+            .map(|uuid| uuid.as_str().to_owned()),
+        publish: model.publish,
+        verify_ssl: model.verify_ssl,
+    });
+    (block, issues)
 }
 
 /// `(code, key, entry)` per `MispIntegration` error. Inputs are never echoed,

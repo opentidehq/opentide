@@ -493,3 +493,50 @@ routes = ["cbc.invalid"]
 secrets = ["CBC_TOKEN"]
 cwd = "repo"
 exit = 1
+
+# ---- UC-4.4b (#834): the cassettes of `opentide share`'s golden cases ----
+# The client copies the `share-misp` fixture first: a push or a retract writes
+# the sharing ledger, and the repository's copy stays as committed.
+
+[[scenario]]
+name = "golden/share-push"
+description = "share push on the MISP stand-in, the golden cases' cassette: misp-prod probed (version, organisation, template), the threat and the objective created and published (the galaxy's ATT&CK and actor clusters read once), a rule updated over the instance's own object, one unchanged; misp-locked refused at its probe (403): a partial run."
+client = ["/bin/sh", "-c", "cp -R tests/golden/fixtures/share-misp \"$HOME/ws\" && exec {oracle}/opentide --repo \"$HOME/ws\" --json share push"]
+tenant = ["{python}", "tests/cassettes/misp/tenant.py"]
+routes = ["misp.invalid"]
+secrets = ["MISP_API_KEY"]
+cwd = "repo"
+exit = 3
+
+[[scenario]]
+name = "golden/share-retract"
+description = "share retract on the MISP stand-in, the golden cases' cassette: a shared rule's event unpublished, and an object gone from the catalogue whose event the instance no longer holds forgotten."
+client = ["/bin/sh", "-c", "cp -R tests/golden/fixtures/share-misp \"$HOME/ws\" && exec {oracle}/opentide --repo \"$HOME/ws\" --json share retract --target misp-prod --uuid 00000000-0000-4000-8048-000000000012 --uuid 00000000-0000-4000-8048-000000000020"]
+tenant = ["{python}", "tests/cassettes/misp/tenant.py"]
+routes = ["misp.invalid"]
+secrets = ["MISP_API_KEY"]
+cwd = "repo"
+
+# ---- UC-4.4b (#834): the cassettes of `generate extract`'s golden cases ----
+# The client copies the `tenants` fixture and runs in the copy: the importers
+# write `Imported/` in the working directory, and Defender's ids go into
+# deployment state.
+
+[[scenario]]
+name = "golden/extract-defender"
+description = "generate extract defender on Defender for Endpoint's stand-in, the golden cases' cassette: sign in, then the custom detections listed over two pages (`@odata.nextLink`): one with techniques, recommended actions and a user asset, a disabled NRT one, and one whose name differs from it only in case."
+client = ["/bin/sh", "-c", "cp -R tests/golden/fixtures/tenants \"$HOME/ws\" && cd \"$HOME/ws\" && exec {oracle}/opentide --json generate extract defender"]
+tenant = ["{python}", "tests/cassettes/defender/tenant.py"]
+routes = ["login.microsoftonline.com", "graph.microsoft.com"]
+secrets = ["DEFENDER_CLIENT_SECRET"]
+cwd = "repo"
+
+[[scenario]]
+name = "golden/extract-elastic"
+description = "generate extract elastic on Elastic's stand-in (space soc), the golden cases' cassette: one page of `_find` holding a query rule with most of RFC 0007's blocks, an EQL rule, a threshold rule whose name another rule has, a new terms rule with an interval Kibana would refuse, an ES|QL rule, a prebuilt rule left out and a rule whose id is not a UUID."
+client = ["/bin/sh", "-c", "cp -R tests/golden/fixtures/tenants \"$HOME/ws\" && cd \"$HOME/ws\" && exec {oracle}/opentide --json generate extract elastic --space soc"]
+tenant = ["{python}", "tests/cassettes/elastic/tenant.py"]
+routes = ["kibana.elastic.invalid", "es.elastic.invalid"]
+secrets = ["ELASTIC_API_KEY"]
+cwd = "repo"
+

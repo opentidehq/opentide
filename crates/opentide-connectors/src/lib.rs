@@ -35,6 +35,7 @@ pub mod env;
 pub mod error;
 pub mod harfanglab;
 pub mod http;
+pub mod misp;
 pub mod progress;
 pub mod proxy;
 pub mod python;

@@ -1,0 +1,105 @@
+name: 'Encoded PowerShell: "-enc" flag'
+metadata:
+  uuid: 7d1c0f00-0000-4000-8000-000000000101
+  schema: rule::1.0
+  version: 1
+  created: '2026-02-03'
+  modified: '2026-03-04'
+  tlp: amber
+  author: Elastic
+  contributors:
+    - SOC team
+description: PowerShell started with an encoded command.
+techniques:
+  - T1059.001
+  - T1027
+references:
+  public:
+    '1': https://attack.mitre.org/techniques/T1059/001/
+response:
+  alert_severity: High
+configurations:
+  elastic:
+    enabled: true
+    schema: platform::elastic::1.0
+    status: PRODUCTION
+    type: query
+    query: 'process.name : "powershell.exe" and process.args : "-enc"'
+    language: kuery
+    index:
+      - logs-endpoint.events.process-*
+      - winlogbeat-*
+    scheduling:
+      interval: 5m
+      lookback: 4m
+      max_alerts: 100
+    severity:
+      default: High
+      mapping:
+        - field: REDACTED
+          value: windows
+          operator: equals
+          severity: critical
+    risk:
+      score: 73
+      mapping:
+        - field: event.risk_score
+          operator: equals
+          value: ''
+    suppression:
+      group_by:
+        - host.name
+      duration: 5m
+      missing_fields_strategy: suppress
+    filters:
+      - field: REDACTED
+        value: windows
+        negate: false
+      - meta:
+          type: exists
+          key: REDACTED
+          disabled: true
+        query:
+          exists:
+            field: REDACTED
+    highlighted_fields:
+      - REDACTED
+      - host.name
+    required_fields:
+      - name: process.name
+        type: keyword
+    integration:
+      - endpoint
+      - package: windows
+        version: ^1.5.0
+        integration: powershell
+    guide:
+      investigation: |-
+        ## Triage
+
+        Check the parent process.
+    false_positives:
+      - Administrators running scripts
+    tags:
+      - 'Domain: Endpoint'
+      - 'OS: Windows'
+    actions:
+      notify:
+        - id: slack-connector
+          group: default
+          params:
+            message: Alert
+      respond:
+        - endpoint: isolate
+          comment: Contain
+      timeline:
+        id: db366523-f1c6-4c1f-8731-6ce5ed9e5717
+        title: Generic Endpoint Timeline
+    exceptions:
+      endpoint: true
+      lists:
+        - id: ex-1
+          list_id: allowlist
+          namespace_type: single
+          type: detection
+    building_block: true

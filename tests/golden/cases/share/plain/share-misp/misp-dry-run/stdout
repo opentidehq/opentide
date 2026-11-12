@@ -1,0 +1,10 @@
+misp-prod · dry run, nothing is sent
+  ○ skip       Rule still in staging  …000000000014  status not shared
+  ○ skip       Rule marked red        …000000000015  TLP above max_tlp
+  + create     Shared Actor           …000000000001
+  + create     Shared Objective       …000000000002
+  + create     Shared rule to create  …000000000011
+  ~ update     Shared rule to update  …000000000012
+  ○ unchanged  Shared rule unchanged  …000000000013
+
+Would share 4 objects to misp-prod · 3 new, 1 updated, 1 unchanged, 2 skipped

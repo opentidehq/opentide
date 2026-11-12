@@ -1,0 +1,8 @@
+misp-locked
+  ○ skipped  Rule still in staging  …000000000014  status not shared
+  ○ skipped  Rule marked red        …000000000015  TLP above max_tlp
+  + created  Shared rule to create  …000000000011
+  + created  Shared rule to update  …000000000012
+  + created  Shared rule unchanged  …000000000013
+
+✓ 5 objects on misp-locked · 3 new, 2 skipped
