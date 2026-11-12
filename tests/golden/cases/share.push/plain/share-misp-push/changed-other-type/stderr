@@ -1,0 +1,1 @@
+warning: [[misp]] block 'misp-lab' api_key is a literal. Use ${ENV_VAR}. The value was replaced with [REDACTED].

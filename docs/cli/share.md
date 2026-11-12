@@ -66,7 +66,7 @@ At a terminal, each target lists one row per object, like a deploy plan: `+ crea
 
 ### On the Rust engine
 
-With `OPENTIDE_ENGINE=rust` ([choosing the implementation](./json-output.md#choosing-the-implementation)), every share command runs on the Rust command line, which speaks MISP's REST API itself: the same requests PyMISP sent (the key in `Authorization`, JSON both ways, a 30 s timeout, TLS as `verify_ssl` says, the proxy and CA bundles the environment names), the same records, rows, ledger and exit codes. Its requests carry an `opentide/<version>` User-Agent. A `push --changed` that reads a git diff is refused with `engine_not_ported` and runs on the Python CLI. `OPENTIDE_ENGINE=compare` refuses a `push` or `retract`, since both runs would reach the instance.
+With `OPENTIDE_ENGINE=rust` ([choosing the implementation](./json-output.md#choosing-the-implementation)), every share command runs on the Rust command line, which speaks MISP's REST API itself: the same requests PyMISP sent (the key in `Authorization`, JSON both ways, a 30 s timeout, TLS as `verify_ssl` says, the proxy and CA bundles the environment names), the same records, rows, ledger and exit codes. Its requests carry an `opentide/<version>` User-Agent. A `push --changed` reads its diff with gitoxide, the git implementation in Rust, without the `git` program: the same start, end, files and failures as the Python CLI, a `--since` read as the table above says (a short SHA or `HEAD~1` names no commit there either). `OPENTIDE_ENGINE=compare` refuses a `push` or `retract`, since both runs would reach the instance.
 
 ## State
 

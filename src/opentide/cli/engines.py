@@ -312,9 +312,8 @@ RUST_CLI: tuple[str, ...] = (sys.executable, "-m", "opentide.cli.rust")
 #: with UC-4.4 (#834): ``doctor`` no longer requires ``--offline``.
 #: ``share`` and its ``push``, ``preview``, ``status``, ``retract`` and
 #: ``targets`` over MISP's REST API, and ``generate extract defender`` and
-#: ``generate extract elastic`` through their connectors, with UC-4.4b (#834):
-#: a ``share push --changed`` that reads a git diff stays Python's (the Rust
-#: side refuses it with ``engine_not_ported``).
+#: ``generate extract elastic`` through their connectors, with UC-4.4b (#834);
+#: ``share push --changed`` reading its git diff with UC-4.4e (#834).
 RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
     ("commands",): RustCommand(launch=RUST_CLI),
     ("explain",): RustCommand(launch=RUST_CLI),
