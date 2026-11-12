@@ -285,9 +285,18 @@ class GraylogClient:
     # --- event definitions ------------------------------------------------------------
 
     def create(self, body: dict[str, Any]) -> Any:
-        """``POST /api/events/definitions?schedule=true``; the answer's JSON."""
+        """``POST /api/events/definitions?schedule=true``; the answer's JSON.
+
+        ``None`` for a 2xx whose body is not JSON (empty, or a proxy's page): the
+        definition may exist, so the caller reports it unconfirmed, never as a
+        failed request that a later run would create again.
+        """
         path = create_path()
-        return self._json(self.request("POST", path, body), "POST", path)
+        response = self.request("POST", path, body)
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
     def update(self, definition_id: str, body: dict[str, Any], *, enabled: bool) -> None:
         """``PUT /api/events/definitions/{id}?schedule=<enabled>`` with the whole definition."""

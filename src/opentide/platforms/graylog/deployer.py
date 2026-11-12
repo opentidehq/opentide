@@ -159,13 +159,16 @@ class GraylogDeploy(RuleDeployer):
             return
         for code, message in compiled.warnings:
             _deployment_warning(code, detail=message, **fields)
-        if not self._query_accepted(client, compiled, **fields):
+        enabled = strategy is not StatusStrategy.DISABLEMENT
+        # A DISABLEMENT skips the query check (graylog-1.1): an unscheduled definition
+        # never runs its query, and a rule must stay disableable after Graylog starts
+        # refusing it.
+        if enabled and not self._query_accepted(client, compiled, **fields):
             return
         if action.kind == "create":
             self._create(client, tenant, compiled)
             return
         definition_id = action.known_id()
-        enabled = strategy is not StatusStrategy.DISABLEMENT
         try:
             client.update(definition_id, update_body(compiled, definition_id), enabled=enabled)
         except GraylogApiError as exc:

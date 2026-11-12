@@ -2,7 +2,7 @@
 
 Graylog refused a query, so deploy saved nothing.
 
-Severity: error. Reported by `opentide deploy` on a `graylog` block (graylog-1.0). Before every create and update, deploy sends the query to `POST /api/search/validate`; Graylog stores a query it cannot parse without complaint, so an `ERROR` verdict fails the rule and no request saves it.
+Severity: error. Reported by `opentide deploy` on a `graylog` block (graylog-1.0). Before every create and every update but a `DISABLEMENT`, deploy sends the query to `POST /api/search/validate`; Graylog stores a query it cannot parse without complaint, so an `ERROR` verdict fails the rule and no request saves it.
 
 ## Example
 

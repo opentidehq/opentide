@@ -311,14 +311,23 @@ def test_disablement_is_a_put_with_schedule_false(
     _bind(tide_corpus_repo)
     run.fake.definitions[SAMPLE_ID] = {}
     fake = run(_rule("DISABLED"))
-    assert fake.methods() == [
-        "GET /api/system",
-        "POST /api/search/validate",
-        f"PUT {DEFINITIONS}/{SAMPLE_ID}",
-    ]
+    # No query check: an unscheduled definition never runs its query (graylog-1.1).
+    assert fake.methods() == ["GET /api/system", f"PUT {DEFINITIONS}/{SAMPLE_ID}"]
     assert _request(fake.calls[-1]) == _golden("rule-graylog-aggregation-1.0.7.2.disable.api.json")
     assert _bound(tide_corpus_repo) == SAMPLE_ID
     assert codes == []
+
+
+def test_a_rule_graylog_now_refuses_can_still_be_disabled(
+    run: Run, tide_corpus_repo: Path, codes: list[str]
+) -> None:
+    _bind(tide_corpus_repo)
+    run.fake.definitions[SAMPLE_ID] = {}
+    run.fake.verdict = {"status": "ERROR", "explanations": []}
+    fake = run(_rule("DISABLED"))
+    assert fake.methods()[-1] == f"PUT {DEFINITIONS}/{SAMPLE_ID}"
+    assert "schedule=false" in fake.calls[-1]["path"]
+    assert codes == [] and not _failed()
 
 
 def test_deletion_deletes_and_forgets(run: Run, tide_corpus_repo: Path, codes: list[str]) -> None:
@@ -660,6 +669,27 @@ def test_a_create_answering_no_id_fails_the_rule(
     run()
     assert codes == ["graylog_create_unconfirmed"]
     assert _bound(tide_corpus_repo) is None
+
+
+@pytest.mark.parametrize(
+    ("status", "content"),
+    [(201, b""), (200, b"<html>proxy page</html>")],
+)
+def test_a_create_answering_2xx_without_json_is_unconfirmed(
+    run: Run, tide_corpus_repo: Path, codes: list[str], status: int, content: bytes
+) -> None:
+    def answer(body: Any) -> requests.Response:
+        response = _response(status)
+        response._content = content
+        response.headers["Content-Type"] = "text/html"
+        return response
+
+    run.fake.script.append(("POST", DEFINITIONS, answer))
+    run()
+    # The definition may exist: unconfirmed (find it by title or tag), not a failed request.
+    assert codes == ["graylog_create_unconfirmed"]
+    assert _bound(tide_corpus_repo) is None
+    assert _failed()
 
 
 def test_an_unreachable_tenant_stops(run: Run, codes: list[str]) -> None:

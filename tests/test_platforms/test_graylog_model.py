@@ -422,8 +422,35 @@ def test_every_one_field_function(function: str) -> None:
         "count() > 1.",
         "count() > x",
         "count() > 1 $",
+        # Arguments are comma separated (graylog-1.1): no missing or trailing comma.
+        "percentile(bytes 95) > 1",
+        "count(x,) > 1",
+        "percentile(bytes, 95,) > 1",
+        "max(,a) > 1",
+        # Parentheses and NOT nest at most 32 deep.
+        "(" * 33 + "count() > 1" + ")" * 33,
+        "NOT " * 33 + "count() > 1",
     ],
 )
 def test_condition_refusals(text: str) -> None:
     with pytest.raises(ConditionError):
         parse_condition(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "(" * 5000 + "count() > 1" + ")" * 5000,
+        "NOT " * 50_000 + "count() > 1",
+    ],
+)
+def test_a_deeply_nested_condition_is_refused_not_a_recursion_error(text: str) -> None:
+    with pytest.raises(ConditionError, match="nests deeper than 32"):
+        parse_condition(text)
+
+
+def test_nesting_up_to_the_limit_parses() -> None:
+    tree, _ = parse_condition("(" * 32 + "count() > 1" + ")" * 32)
+    assert tree["expr"] == ">"
+    tree, _ = parse_condition("NOT " * 32 + "count() > 1")
+    assert tree["expr"] == "!"

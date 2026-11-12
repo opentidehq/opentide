@@ -240,11 +240,24 @@ def _tokens(text: str) -> list[str]:
     return tokens
 
 
+#: How deep parentheses and ``NOT`` may nest (graylog-1.1, Condition grammar): the
+#: parser recurses once per level, so an unbounded condition would raise RecursionError.
+MAX_NESTING = 32
+
+
 class _ConditionParser:
     def __init__(self, tokens: list[str]) -> None:
         self.tokens = tokens
         self.index = 0
+        self.depth = 0
         self.series: list[dict[str, Any]] = []
+
+    def nest(self) -> None:
+        self.depth += 1
+        if self.depth > MAX_NESTING:
+            raise ConditionError(
+                f"the condition nests deeper than {MAX_NESTING} levels of '(' and 'NOT'"
+            )
 
     def peek(self) -> str | None:
         return self.tokens[self.index] if self.index < len(self.tokens) else None
@@ -261,11 +274,13 @@ class _ConditionParser:
         if function not in FUNCTIONS:
             raise ConditionError(f"{function!r} is not an aggregation function")
         self.take("(")
+        # field [ "," number ]: arguments are separated by exactly one comma.
         args: list[str] = []
-        while self.peek() != ")":
+        if self.peek() != ")":
             args.append(self.take())
-            if self.peek() == ",":
+            while self.peek() == ",":
                 self.take(",")
+                args.append(self.take())
         self.take(")")
         field_name = args[0] if args else None
         if field_name is not None and not FIELD_NAME.fullmatch(field_name):
@@ -295,8 +310,10 @@ class _ConditionParser:
     def primary(self) -> dict[str, Any]:
         if self.peek() == "(":
             self.take("(")
+            self.nest()
             node = self.or_expr()
             self.take(")")
+            self.depth -= 1
             return node
         ref = self.call()
         op = self.take()
@@ -312,7 +329,10 @@ class _ConditionParser:
     def not_expr(self) -> dict[str, Any]:
         if self.peek() == "NOT":
             self.take("NOT")
-            return {"expr": "!", "left": self.not_expr()}
+            self.nest()
+            node = {"expr": "!", "left": self.not_expr()}
+            self.depth -= 1
+            return node
         return self.primary()
 
     def and_expr(self) -> dict[str, Any]:

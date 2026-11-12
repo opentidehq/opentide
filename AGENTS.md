@@ -115,7 +115,7 @@ the Incidents API (JSON-RPC), the 24-hex rule id in deployment state; every upda
 payload, and exclusion rules (`type: 2`) are never touched.
 Graylog (`src/opentide/platforms/graylog/`) deploys event definitions (Filter & Aggregation) over the
 REST API on 6.3 to 7.2: the server version is read once per tenant and every body is built for it, the
-query is checked with `/api/search/validate` before every save, and the 24-hex id is in deployment state.
+query is checked with `/api/search/validate` before every save but a disable, and the 24-hex id is in deployment state.
 `opentide query` runners live in `src/opentide/platforms/<pkg>/runner.py` (`opentide.query`): they save no
 search or rule, and stop an asynchronous search they stop waiting for where the API can (CrowdStrike). Elastic
 `kuery` is the one write: its rule preview's alerts, in the preview index.
