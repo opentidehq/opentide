@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from collections import defaultdict
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field, replace
 from functools import cache
 from pathlib import Path
@@ -588,6 +588,7 @@ def _query_findings(root: Path, records: list[_ObjectRecord]) -> list[dict[str, 
         workspace,
     )
     from opentide.cli.ui.diagnostics import diagnostic_from_engine, engine_reference
+    from opentide.platforms.exabeam.advisories import ADVISORY_CODES as EXABEAM_ADVISORY_CODES
     from opentide.platforms.harfanglab.yara import ADVISORY_CODES
 
     # The datasets visibility.toml declares, as validate and the editor see them.
@@ -604,6 +605,8 @@ def _query_findings(root: Path, records: list[_ObjectRecord]) -> list[dict[str, 
                 continue
             if finding.code in ADVISORY_CODES and _reported_by_opentide(record, finding):
                 continue  # one finding per code, form and rule: opentide's, placed by key
+            if finding.code in EXABEAM_ADVISORY_CODES:
+                continue  # the block advisories are opentide's own (_exabeam_findings)
             if (
                 engine_reference(finding.code) is None
                 and finding.code not in ELASTIC_ADVISORY_CODES
@@ -632,16 +635,37 @@ def _query_findings(root: Path, records: list[_ObjectRecord]) -> list[dict[str, 
 
 def _bitdefender_findings(records: list[_ObjectRecord]) -> list[dict[str, object]]:
     """The Bitdefender advisories (bitdefender-1.0), at the value each points at."""
+    from opentide.platforms.bitdefender.advisories import bitdefender_advisories
+
+    return _platform_advisory_findings(records, "bitdefender", bitdefender_advisories)
+
+
+def _exabeam_findings(records: list[_ObjectRecord]) -> list[dict[str, object]]:
+    """The Exabeam advisories (exabeam-1.0), at the key each points at."""
+    from opentide.platforms.exabeam.advisories import exabeam_advisories
+
+    return _platform_advisory_findings(records, "exabeam", exabeam_advisories)
+
+
+def _platform_advisory_findings(
+    records: list[_ObjectRecord],
+    platform: str,
+    advise: Callable[[dict[str, Any]], Sequence[Any]],
+) -> list[dict[str, object]]:
+    """*platform*'s block advisories, each a ``queries`` warning at its field path.
+
+    *advise* reads a rule body and returns items with ``code``, ``field_path``
+    and ``message``.
+    """
     import yaml
 
     from opentide.core.io import parse_yaml
-    from opentide.platforms.bitdefender.advisories import bitdefender_advisories
     from opentide.validation.errors import attach_yaml_lines
     from opentide.validation.issues import ValidationIssue
 
     findings: list[dict[str, object]] = []
     for record in records:
-        if record.parse_error or not record.text or "bitdefender" not in record.text:
+        if record.parse_error or not record.text or platform not in record.text:
             continue
         try:
             body = parse_yaml(record.text)
@@ -651,7 +675,7 @@ def _bitdefender_findings(records: list[_ObjectRecord]) -> list[dict[str, object
             continue
         issues = [
             ValidationIssue(code=item.code, field_path=item.field_path, message=item.message)
-            for item in bitdefender_advisories(body)
+            for item in advise(body)
         ]
         for issue in attach_yaml_lines(issues, body, file_path=record.path):
             findings.append(
@@ -956,11 +980,12 @@ def run_lint(
     if LintCheck.queries in selected:
         from opentide.analysis import EngineUnavailableError
 
-        # The HarfangLab YARA, Bitdefender and Graylog advisories need no engine: reported
-        # whether it loads or not.
+        # The HarfangLab YARA, Bitdefender, Graylog and Exabeam advisories need no engine:
+        # reported whether it loads or not.
         advisories = [finding for record in shown for finding in _harfanglab_yara_findings(record)]
         advisories.extend(_bitdefender_findings(shown))
         advisories.extend(_graylog_findings(shown))
+        advisories.extend(_exabeam_findings(shown))
         findings.extend(advisories)
         try:
             findings.extend(_query_findings(target, shown))

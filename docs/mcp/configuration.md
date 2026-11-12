@@ -158,7 +158,7 @@ When the editor workspace is the **opentide package repo** but content lives els
 
 ## Query validation policy
 
-Agents must treat `validate_query` responses with `supported: false` as **not validated** for CrowdStrike, HarfangLab, Sysdig and Bitdefender. Never infer a pass. HarfangLab's and Bitdefender's YARA and Sysdig's Falco are checked offline (`live: false`).
+Agents must treat `validate_query` responses with `supported: false` as **not validated** for CrowdStrike, HarfangLab, Sysdig and Bitdefender. Never infer a pass. HarfangLab's and Bitdefender's YARA and Sysdig's Falco are checked offline (`live: false`). Exabeam's `live: true` checks each sequence filter through Search: a pass says the tenant accepts the filter, not that the rule's condition, windows or grouping are right.
 
 ## Deploy safety
 

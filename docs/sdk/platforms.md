@@ -40,7 +40,7 @@ for name, platform in Opentide.Platforms.items():
 
 ## Query validators
 
-Six platforms register validators (see `QUERY_VALIDATION_PLATFORMS` in `opentide.cli.enums`):
+Eight platforms register validators (see `QUERY_VALIDATION_PLATFORMS` in `opentide.cli.enums`):
 
 - `sentinel` → KQL
 - `defender_for_endpoint` → KQL
@@ -49,6 +49,7 @@ Six platforms register validators (see `QUERY_VALIDATION_PLATFORMS` in `opentide
 - `carbon_black_cloud` → Lucene
 - `elastic` → Kuery, Lucene, EQL, ES|QL (live tenant check only)
 - `graylog` → Lucene, through `POST /api/search/validate`
+- `exabeam` → Exabeam Query Language (each sequence filter, through Search)
 
 CrowdStrike, HarfangLab, Sysdig and Bitdefender have deployers only.
 

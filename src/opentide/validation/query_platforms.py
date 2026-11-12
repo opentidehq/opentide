@@ -15,6 +15,7 @@ QUERY_VALIDATION_PLATFORMS: frozenset[str] = frozenset(
         "carbon_black_cloud",
         "elastic",
         "graylog",
+        "exabeam",
     }
 )
 
@@ -26,6 +27,8 @@ QUERY_VALIDATION_PLATFORMS: frozenset[str] = frozenset(
 #: bitdefender profile (ASCII, 30,000 characters; bitdefender-1.0): GravityZone has
 #: no dry run.
 #: Graylog's query is Lucene, checked in the engine's Graylog dialect (graylog-1.0).
+#: Exabeam's sequence queries are the Exabeam Query Language (``exabeam``, profile
+#: ``rule``), checked offline and, the filter only, live through Search (exabeam-1.0).
 #: SentinelOne (S1QL) is checked on the tenant only (``validate query --live``).
 #: CrowdStrike is never checked: no fake validation.
 OFFLINE_QUERY_LANGUAGES: dict[str, tuple[str, ...]] = {
@@ -38,5 +41,6 @@ OFFLINE_QUERY_LANGUAGES: dict[str, tuple[str, ...]] = {
     "harfanglab": ("yara",),
     "bitdefender": ("yara",),
     "graylog": ("lucene",),
+    "exabeam": ("exabeam",),
 }
 OFFLINE_QUERY_PLATFORMS = frozenset(OFFLINE_QUERY_LANGUAGES)

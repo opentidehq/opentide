@@ -519,6 +519,45 @@ class GraylogConfiguration(PlatformConfigurationBase):
     tenants: list[GraylogTenant] = Field(default_factory=list, description="Graylog tenants.")
 
 
+# --- Exabeam New-Scale SIEM -----------------------------------------------------------
+
+
+class ExabeamSetup(TenantSetup):
+    """`[tenants.setup]` for Exabeam New-Scale SIEM."""
+
+    region: Literal["us-west", "us-east", "ca", "eu", "sa", "sg", "ch", "jp", "au", "uk"] = Field(
+        description="Exabeam API region. Calls go to https://api.<region>.exabeam.cloud; it is "
+        "not derived from the console URL (use1 is us-east, euw6 is ch)."
+    )
+    client_id: EnvPlaceholder = Field(
+        description="API key with Correlation Rules at Read Write Delete. Must be a $NAME "
+        "placeholder."
+    )
+    client_secret: EnvPlaceholder = Field(
+        description="API key secret. Must be a $NAME placeholder."
+    )
+    api_url: str | None = Field(
+        default=None,
+        pattern=r"^https://",
+        description="An HTTPS base URL that replaces the region's.",
+    )
+    test_mode: bool = Field(
+        default=False, description="Default test_mode for blocks that do not set it."
+    )
+
+
+class ExabeamTenant(TenantBase):
+    """`[[tenants]]` for Exabeam New-Scale SIEM."""
+
+    setup: ExabeamSetup = Field(description="Connection settings.")
+
+
+class ExabeamConfiguration(PlatformConfigurationBase):
+    """Merged `platforms/exabeam.toml`."""
+
+    tenants: list[ExabeamTenant] = Field(default_factory=list, description="Exabeam tenants.")
+
+
 # --- Any other platform file ----------------------------------------------------------
 
 
@@ -565,4 +604,5 @@ PLATFORM_CONFIGURATION_MODELS: dict[str, type[PlatformConfigurationBase]] = {
     "sysdig": SysdigConfiguration,
     "bitdefender": BitdefenderConfiguration,
     "graylog": GraylogConfiguration,
+    "exabeam": ExabeamConfiguration,
 }

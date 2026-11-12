@@ -168,6 +168,7 @@ Then add `opentide` to the `language-servers` of the languages you edit. Zed tak
 | HarfangLab | YARA (`yara.signature`, and the rule the decomposed form assembles) | ✅ |
 | Bitdefender GravityZone | YARA (`yara.signature`, Bitdefender profile: ASCII, 30,000 characters) | ✅ |
 | Graylog | Lucene (Graylog dialect) | ✅ |
+| Exabeam New-Scale SIEM | Exabeam Query Language (`sequences[].query`, profile `rule`; `system: exabeam` hunts and `.exabeam` files, profile `search`) | ✅ |
 | CrowdStrike | — | ❌ never validated |
 
 ## opentide lsp start and opentide-lsp

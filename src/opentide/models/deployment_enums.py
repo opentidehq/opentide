@@ -26,6 +26,7 @@ class DetectionPlatforms(Enum):
     SYSDIG = auto()
     BITDEFENDER = auto()
     GRAYLOG = auto()
+    EXABEAM = auto()
 
 
 #: What a run deploys, and what a tenant accepts: ``--strategy`` and a tenant's

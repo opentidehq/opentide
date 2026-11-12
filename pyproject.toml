@@ -135,6 +135,7 @@ elastic = "opentide.platforms.elastic:declare"
 sysdig = "opentide.platforms.sysdig:declare"
 bitdefender = "opentide.platforms.bitdefender:declare"
 graylog = "opentide.platforms.graylog:declare"
+exabeam = "opentide.platforms.exabeam:declare"
 
 [tool.hatch.version]
 source = "vcs"

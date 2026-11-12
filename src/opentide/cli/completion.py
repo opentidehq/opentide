@@ -62,6 +62,7 @@ PLATFORMS = (
     "sysdig",
     "bitdefender",
     "graylog",
+    "exabeam",
 )
 
 #: ``--strategy`` values and what each deploys, as

@@ -70,6 +70,10 @@
       "schema": "platforms.graylog.schema.json",
       "merge": "deep"
     },
+    "platforms/exabeam.toml": {
+      "schema": "platforms.exabeam.schema.json",
+      "merge": "deep"
+    },
     "platforms/*.toml": {
       "schema": "platforms.schema.json",
       "merge": "deep"

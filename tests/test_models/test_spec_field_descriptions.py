@@ -34,6 +34,8 @@ REWRITTEN = {
     ("ElasticActions", "respond"),
     ("ElasticRisk", "score"),
     ("ElasticThreatMatch", "filters"),
+    # The spec row says "See the table below": the hover gives that table's rule.
+    ("ExabeamThreshold", "value"),
     ("ObjectiveBody", "signals"),
     ("ObjectMetadata", "schema_id"),
     ("PlatformConfigBase", "platform_schema"),

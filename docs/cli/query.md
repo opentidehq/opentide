@@ -21,7 +21,7 @@ opentide --json query --platform defender_for_endpoint --file objects/rules/susp
 | Input | Purpose |
 |-------|---------|
 | `[QUERY]` | The query, in the platform's language. `-` reads it from stdin |
-| `--platform` | Required. `sentinel`, `defender_for_endpoint`, `splunk`, `sentinel_one`, `carbon_black_cloud`, `crowdstrike`, `harfanglab`, `elastic` or `graylog`. `sysdig` and `bitdefender` have no query runner: they exit `2` (`usage_invalid_value`) |
+| `--platform` | Required. `sentinel`, `defender_for_endpoint`, `splunk`, `sentinel_one`, `carbon_black_cloud`, `crowdstrike`, `harfanglab`, `elastic`, `graylog` or `exabeam`. `sysdig` and `bitdefender` have no query runner: they exit `2` (`usage_invalid_value`) |
 | `--tenant` | A configured tenant name (repeatable), or `all`. Default: the only tenant configured |
 | `--rule` | Run the query this rule (by UUID) deploys to the platform |
 | `--file` | Run the query of the rule in this YAML file, saved or not: a path from the current directory or the repository root |
@@ -56,6 +56,7 @@ Each tenant runs independently: one that refuses the query or cannot be reached 
 | HarfangLab | telemetry API | a source and `field=value` filters (below) | `@event_create_date` | `limit` |
 | Elastic | ES\|QL `_query`, EQL `_eql/search`, Lucene `_search` | `--language` | `@timestamp` range filter | `LIMIT`, `size` |
 | Elastic `kuery` | detection rule preview | KQL | the rule's look-back | the rule's `max_signals` |
+| Exabeam | Search `POST /search/v2/events`, synchronous | Exabeam Query Language, as the `filter` | `startTime`/`endTime` | `limit`, at most 3,000 |
 
 One row past `--limit` is requested, so a result knows when more matched: `truncated` is `true` and the table says `more matched; raise --limit`.
 
@@ -75,6 +76,8 @@ Sources: `processes`, `binary`, `network`, `eventlog`, `dns`, `windows_authentic
 
 **Defender.** The app registration needs `ThreatHunting.Read.All`.
 
+**Exabeam.** The query is sent as the search `filter`, with `fields: ["*"]`, or the columns a `SELECT` names. The API key needs **Search, Analyze and Export**. Exabeam returns at most 3,000 rows: a larger `--limit` is capped, with a warning. The search is synchronous and has no cancel, so a search that outlives `--timeout` is abandoned by closing the connection. Nothing is saved on the tenant.
+
 ## Rules
 
 `--rule` and `--file` send the query `deploy` would send:
@@ -83,6 +86,7 @@ Sources: `processes`, `binary`, `network`, `eventlog`, `dns`, `windows_authentic
 - Splunk: the query with the MDR mapping macro deploy appends.
 - SentinelOne correlation rules: each sub-query, as its own result labelled `sub-query 1`, `sub-query 2`… The correlation itself is not applied, and each result says so.
 - Carbon Black: the lines of a multiline query joined with spaces.
+- Exabeam: each sequence's filter, as its own result labelled `sequence 1`, `sequence 2`… when the rule has several. The condition, windows and grouping are not applied, and a result whose sequence has them says so.
 - Elastic: the rule's language (`esql`, `eql`, or `kuery`/`lucene` for the other types) and its index or data view. For `threshold`, `new_terms` and `threat_match` rules only the event query runs, and a rule's `filters` are not applied; the result says so in both cases; `machine_learning` rules have no query.
 
 `--language` and `--index` override the rule's own.

@@ -32,6 +32,7 @@ ESQL = CodeLanguage("ES|QL", "esql")
 YARA = CodeLanguage("YARA", "yara")
 FALCO = CodeLanguage("Falco condition", "text")
 GRAYLOG = CodeLanguage("Graylog search", "lucene")
+EXABEAM = CodeLanguage("Exabeam Query Language", "text")
 MARKDOWN = CodeLanguage("Markdown", "markdown")
 TEXT = CodeLanguage("Text", "text")
 
@@ -103,6 +104,7 @@ PROFILES: dict[str, PlatformProfile] = {
         PlatformProfile("sysdig", "Sysdig Secure", {"condition": FALCO, "macros.condition": FALCO}),
         PlatformProfile("bitdefender", "Bitdefender GravityZone", {"yara.signature": YARA}),
         PlatformProfile("graylog", "Graylog", {"query": GRAYLOG}),
+        PlatformProfile("exabeam", "Exabeam New-Scale SIEM", {"sequences.query": EXABEAM}),
     )
 }
 

@@ -160,6 +160,7 @@ opentide setup platforms --sentinel --defender-for-endpoint --yes
 | `--sysdig` | Sysdig Secure (Falco) |
 | `--bitdefender` | Bitdefender GravityZone |
 | `--graylog` | Graylog |
+| `--exabeam` | Exabeam New-Scale SIEM |
 
 ### setup ci
 

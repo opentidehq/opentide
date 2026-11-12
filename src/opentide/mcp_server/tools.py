@@ -283,6 +283,7 @@ _DEFAULT_QUERY_LANGUAGE = {
     "harfanglab": "yara",
     "bitdefender": "yara",
     "graylog": "lucene",
+    "exabeam": "exabeam",
 }
 
 

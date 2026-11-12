@@ -68,5 +68,5 @@ def test_rule_configurations_from_platforms_dict() -> None:
     assert configs.crowdstrike is not None
 
 
-def test_platform_config_models_cover_eleven_platforms() -> None:
-    assert len(PLATFORM_CONFIG_MODELS) == 11
+def test_platform_config_models_cover_twelve_platforms() -> None:
+    assert len(PLATFORM_CONFIG_MODELS) == 12
