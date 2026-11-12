@@ -134,6 +134,7 @@ fn deploy_with(ws: &Path, args: &Args, env: &Env, registry: &Registry, now: i64)
             registry,
             lines,
             json: false,
+            debug: false,
         },
     );
     (sent, buffer.text())
@@ -941,4 +942,126 @@ fn sysdig_forgets_a_rule_to_disable_the_tenant_lost_and_stops_on_a_refused_read(
         value(&sent, "warnings"),
         &Json::Array(vec![Json::str("Some rules reported deployment warnings")])
     );
+}
+
+/// Runs `opentide <argv>` on the command line, in `ws`, with `env`: the
+/// exit code, stdout and stderr.
+fn cli(ws: &Path, argv: &[&str], env: &[(&str, String)]) -> (i32, String, String) {
+    use opentide_cli::logging::Sink;
+    use opentide_cli::{Host, run as run_cli};
+    let stderr = Buffer::default();
+    let sink: Sink = Arc::new(Mutex::new(stderr.clone()));
+    let host = Host {
+        version: "0.23.0".into(),
+        stdout_tty: false,
+        stderr_tty: false,
+        log_sink: sink,
+        cwd: Some(ws.to_path_buf()),
+        width: None,
+        interrupt: opentide_cli::app::Interrupt::default(),
+    };
+    let argv: Vec<String> = argv.iter().map(|arg| (*arg).to_owned()).collect();
+    let mut out = Vec::new();
+    let mut err = stderr.clone();
+    let env = Env::from_pairs(env.iter().map(|(k, v)| ((*k).to_owned(), v.clone())));
+    let code = run_cli(&argv, &env, &host, &mut out, &mut err);
+    (code, String::from_utf8(out).unwrap(), stderr.text())
+}
+
+/// `ws` as a git checkout of two commits, the second changing `file`.
+fn pushed(ws: &Path, file: &str) {
+    let git = |args: &[&str]| {
+        let output = std::process::Command::new("git")
+            .args([
+                "-c",
+                "init.defaultBranch=main",
+                "-c",
+                "commit.gpgsign=false",
+            ])
+            .args(args)
+            .current_dir(ws)
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .envs([
+                ("GIT_AUTHOR_NAME", "t"),
+                ("GIT_AUTHOR_EMAIL", "t@opentide.invalid"),
+                ("GIT_COMMITTER_NAME", "t"),
+                ("GIT_COMMITTER_EMAIL", "t@opentide.invalid"),
+            ])
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "{output:?}");
+    };
+    git(&["init", "-q"]);
+    git(&["add", "-A"]);
+    git(&["commit", "-q", "-m", "base"]);
+    let path = ws.join(file);
+    let text = std::fs::read_to_string(&path).unwrap();
+    std::fs::write(
+        &path,
+        text.replace("description: ", "description: Changed. "),
+    )
+    .unwrap();
+    git(&["commit", "-q", "-a", "-m", "push"]);
+}
+
+/// A RELEASE deploy on a push promotes the rule the push changed (UC-4.6c,
+/// #979); an invalid promotion target ends the run as the oracle's
+/// `sys.exit(1)` does: exit 1, no document, the failed step on stderr.
+#[test]
+fn a_push_promotes_its_rules_and_an_invalid_target_exits_without_a_document() {
+    let ws = workspace(
+        "splunk",
+        "lab",
+        "url = \"splunk.invalid\"\ntoken = \"$SPLUNK_TOKEN\"\n",
+        &[(
+            "r.yaml",
+            rule(
+                "Promoted",
+                "00000000-0000-4000-8047-000000000901",
+                "A rule.",
+                "  splunk:\n    status: STAGING\n    query: index=main\n",
+            ),
+        )],
+    );
+    pushed(ws.path(), "objects/rules/r.yaml");
+    let push = || -> Vec<(&str, String)> {
+        vec![
+            ("GITHUB_ACTIONS", "true".to_owned()),
+            ("GITHUB_EVENT_NAME", "push".to_owned()),
+            ("GITHUB_SHA", "HEAD".to_owned()),
+            ("GITHUB_WORKSPACE", ws.path().display().to_string()),
+            ("OPENTIDE_ENGINE", "rust".to_owned()),
+        ]
+    };
+    let argv = [
+        "--json",
+        "deploy",
+        "--platform",
+        "splunk",
+        "--strategy",
+        "RELEASE",
+    ];
+    let config = ws.path().join(".opentide/configurations/deployment.toml");
+    std::fs::write(&config, "[promotion]\npromotion_target = \"LIVE\"\n").unwrap();
+    let (code, out, err) = cli(ws.path(), &argv, &push());
+    assert_eq!((code, out.as_str()), (1, ""), "{err}");
+    assert!(err.contains("invalid_promotion_target"), "{err}");
+    let rule = ws.path().join("objects/rules/r.yaml");
+    assert!(
+        std::fs::read_to_string(&rule)
+            .unwrap()
+            .contains("status: STAGING")
+    );
+    let plain = ["deploy", "--platform", "splunk", "--strategy", "RELEASE"];
+    let (code, out, err) = cli(ws.path(), &plain, &push());
+    assert_eq!((code, out.as_str()), (1, ""), "{err}");
+    assert!(err.contains("✗ status promotion · 1 rule"), "{err}");
+
+    std::fs::remove_file(&config).unwrap();
+    let (code, out, err) = cli(ws.path(), &argv, &push());
+    assert_eq!(code, 0, "{out}{err}");
+    assert!(out.contains("\"status\":\"completed\""), "{out}");
+    let text = std::fs::read_to_string(&rule).unwrap();
+    assert!(text.contains("    status: PRODUCTION\n"), "{text}");
 }

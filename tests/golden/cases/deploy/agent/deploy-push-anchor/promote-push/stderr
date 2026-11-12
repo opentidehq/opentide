@@ -1,0 +1,2 @@
+warning: Rule not promoted · path: <WS>/objects/rules/splunk-a-create.yaml · detail: configurations.splunk.status is an anchor or an alias · advice: Write each platform block's status as a plain value, then deploy again
+✓ status promotion · 1 rule · <SECONDS>

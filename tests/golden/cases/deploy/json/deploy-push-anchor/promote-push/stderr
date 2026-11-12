@@ -1,0 +1,1 @@
+{"path":"<WS>/objects/rules/splunk-a-create.yaml","detail":"configurations.splunk.status is an anchor or an alias","advice":"Write each platform block's status as a plain value, then deploy again","event":"rule_not_promoted","logger":"opentide.mutation.promotion","level":"warning","timestamp":"0000-00-00 00:00:00"}

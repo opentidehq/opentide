@@ -16,11 +16,11 @@ The Python CLI at the frozen tag is the oracle ([plan §5](https://github.com/op
 | Commands | 59 |
 | Commands with a Rust implementation | 42 |
 | Commands flipped to Rust | 0 |
-| Recordings (command × corpus × mode) | 707 |
-| … no Rust yet | 128 (18.1%) |
+| Recordings (command × corpus × mode) | 716 |
+| … no Rust yet | 128 (17.8%) |
 | … compare passing | 0 (0.0%) |
 | … compare failing | 0 (0.0%) |
-| … compare not run | 579 (81.8%) |
+| … compare not run | 588 (82.1%) |
 | … flipped | 0 (0.0%) |
 | Approved diffs (`tests/golden/APPROVED_DIFFS.toml`) | 1022 |
 | Diagnostic codes with a fault kind | 163 of 175 (93.1%) |
@@ -52,6 +52,9 @@ No compare results were given: every command with a Rust implementation that is 
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
+| deploy-push | compare not run | not recorded | compare not run | compare not run |
+| deploy-push-anchor | compare not run | not recorded | compare not run | compare not run |
+| deploy-push-production | compare not run | not recorded | compare not run | compare not run |
 | deploy-tenants | compare not run | not recorded | compare not run | compare not run |
 | fault | compare not run | compare not run | compare not run | compare not run |
 | none | compare not run | compare not run | compare not run | compare not run |

@@ -9,6 +9,7 @@
 //!   [`harfanglab`], [`carbon_black`]: the writes a deployer sends for a rule
 //!   to one tenant, built from the tenant and the deployment state
 //!   ([`deploy`]: create, update or delete).
+//! - [`promotion`]: the status promotion of a RELEASE deploy on a push.
 //! - [`preview`]: a dry run's payload entries; for a platform the oracle
 //!   shows as the block's model dump, the block serialised from
 //!   opentide-schema's model.
@@ -37,6 +38,7 @@ pub mod kql;
 pub mod modifiers;
 pub mod plan;
 pub mod preview;
+pub mod promotion;
 pub mod rule;
 pub mod sentinel;
 pub mod sentinel_one;
