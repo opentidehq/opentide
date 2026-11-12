@@ -46,8 +46,6 @@ serde_json.workspace = true
 indexmap = { version = "2", features = ["serde"] }
 # Which characters a quoted value escapes (`vocab::quote`).
 unicode-properties.workspace = true
-saphyr.workspace = true
-saphyr-parser.workspace = true
 serde-saphyr.workspace = true
 opentide-schema-derive.workspace = true
 # Configuration TOML with every item's span (UC-1.5): the version the
@@ -70,6 +68,5 @@ jiff = { workspace = true }
 [dev-dependencies]
 insta.workspace = true
 strsim.workspace = true
-serde_yaml.workspace = true
 trybuild.workspace = true
 proptest.workspace = true

@@ -22,7 +22,7 @@ Read `references/highlight-spec.md` before touching `highlights/spec.toml` or a 
 
 Adding a key to a row struct without `#[serde(default)]` rejects every existing file that omits the key. Add the field as `Option` or `#[serde(default)]`, then fill the catalogs.
 
-Do not parse catalogs with `serde_yaml`. Do not switch catalog files to JSON unless the file is already generated JSON (`data/catalogs/tide/generated/fields.json`).
+Do not parse catalogs as YAML. Do not switch catalog files to JSON unless the file is already generated JSON (`data/catalogs/tide/generated/fields.json`).
 
 ## KQL and SPL catalogs
 

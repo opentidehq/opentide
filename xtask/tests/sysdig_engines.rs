@@ -1,5 +1,5 @@
 //! The two Sysdig constraint engines agree (UC-1.4, #810): the language
-//! server's (`opentide_tide::analyze`, on `serde_yaml` values, Falco's
+//! server's (`opentide_tide::analyze`, its own walk of the YAML node tree, Falco's
 //! grammar from `opentide-falco`) and the CLI's model
 //! (`opentide_schema::objects::platform::sysdig::block_codes`, on the YAML
 //! node tree, the oracle's text scan). Both take Falco's terms from

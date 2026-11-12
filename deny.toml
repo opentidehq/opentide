@@ -30,15 +30,10 @@ version = 2
 yanked = "deny"
 unmaintained = "all"
 unsound = "all"
-ignore = [
-  # unsafe-libyaml is unmaintained: it reaches us through serde_yaml (0.9.34,
-  # itself archived), which opentide-tide uses to read Tide YAML for the
-  # editor. Not a vulnerability: the advisory reports that nobody maintains
-  # it. Replacing serde_yaml changes which YAML the engine accepts and how it
-  # reports positions, a behaviour change that needs its own parity proof
-  # (UC-1.2, #808, brings the saphyr tree). Follow-up: #850.
-  { id = "RUSTSEC-2024-0449", reason = "unsafe-libyaml via serde_yaml: replacement needs a parity proof (UC-1.2); follow-up #850" },
-]
+# An exception is an entry here with its reason and its follow-up issue
+# (docs/internal/supply-chain.md). None today: RUSTSEC-2024-0449
+# (unsafe-libyaml, through serde_yaml) went with serde_yaml (#850).
+ignore = []
 
 # Licences of what we distribute. opentide is EUPL-1.2; every crate compiled
 # into the wheel, the npm packages or the binaries must be under a licence

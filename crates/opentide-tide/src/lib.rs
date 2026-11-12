@@ -20,9 +20,11 @@ mod placeholder;
 mod refs;
 mod sysdig;
 mod vocabs;
+mod yaml;
 mod yaml_path;
 mod yaml_scalar;
 
+use opentide_core::node::{Node, Value};
 use opentide_core::{ByteSpan, Diagnostic, LanguageId, Range, span_to_range};
 use opentide_highlight::{
     HighlightSpec, HighlightToken, TideField, highlight_markdown_line, tide_field_at,
@@ -32,6 +34,8 @@ use opentide_kql::Profile;
 use regex::Regex;
 use serde::Deserialize;
 use std::collections::BTreeMap;
+use std::sync::Arc;
+use yaml::YamlNode;
 
 pub use elastic::{ElasticTenant, duration_millis, elastic_query_language, elastic_tenants};
 pub use falco::falco_context;
@@ -190,7 +194,10 @@ pub fn remap_span(query: &InjectedQuery, inner: ByteSpan) -> ByteSpan {
     ByteSpan::new(start, end.max(start))
 }
 
-#[derive(Debug, Clone, Deserialize)]
+/// What the engine reads of a Tide object: the fields it shows (`name`,
+/// `metadata.uuid`, `metadata.schema`) and the platform blocks, from the
+/// root node ([`TideObject::from_node`]).
+#[derive(Debug, Clone)]
 pub struct TideObject {
     pub name: Option<String>,
     pub metadata: Option<TideMetadata>,
@@ -198,25 +205,119 @@ pub struct TideObject {
     pub status: Option<String>,
     pub severity: Option<String>,
     pub detection_model: Option<String>,
-    pub response: Option<serde_yaml::Value>,
-    pub configurations: Option<serde_yaml::Value>,
-    pub objective: Option<serde_yaml::Value>,
-    pub threat: Option<serde_yaml::Value>,
+    pub response: Option<Arc<Node>>,
+    pub configurations: Option<Arc<Node>>,
+    pub objective: Option<Arc<Node>>,
+    pub threat: Option<Arc<Node>>,
     pub criticality: Option<String>,
-    #[serde(flatten)]
-    pub extra: BTreeMap<String, serde_yaml::Value>,
+    /// Every other top-level key with a string name, in document order.
+    pub extra: BTreeMap<String, Arc<Node>>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct TideMetadata {
     pub uuid: Option<String>,
     pub schema: Option<String>,
-    pub version: Option<serde_yaml::Value>,
+    pub version: Option<Arc<Node>>,
     pub created: Option<String>,
     pub modified: Option<String>,
     pub tlp: Option<String>,
     pub author: Option<String>,
-    pub organisation: Option<serde_yaml::Value>,
+    pub organisation: Option<Arc<Node>>,
+}
+
+/// A field read as text: `null` is no value, a scalar its text as written
+/// ([`yaml::written_text`]), a collection a shape the object cannot have.
+fn text_field(source: &str, node: Option<&Arc<Node>>) -> Result<Option<String>, ()> {
+    match node {
+        None => Ok(None),
+        Some(node) if node.is_null() => Ok(None),
+        Some(node) => yaml::written_text(source, node).map(Some).ok_or(()),
+    }
+}
+
+/// A field of any shape; `null` is no value.
+fn any_field(node: Option<&Arc<Node>>) -> Option<Arc<Node>> {
+    node.filter(|node| !node.is_null()).cloned()
+}
+
+impl TideMetadata {
+    fn from_node(source: &str, node: &Node) -> Result<Self, ()> {
+        if !node.is_mapping() {
+            return Err(());
+        }
+        let text = |key: &str| text_field(source, node.get(key));
+        Ok(Self {
+            uuid: text("uuid")?,
+            schema: text("schema")?,
+            version: any_field(node.get("version")),
+            created: text("created")?,
+            modified: text("modified")?,
+            tlp: text("tlp")?,
+            author: text("author")?,
+            organisation: any_field(node.get("organisation")),
+        })
+    }
+}
+
+/// The top-level keys [`TideObject`] reads; every other key is `extra`.
+const KNOWN_KEYS: [&str; 11] = [
+    "name",
+    "metadata",
+    "description",
+    "status",
+    "severity",
+    "detection_model",
+    "response",
+    "configurations",
+    "objective",
+    "threat",
+    "criticality",
+];
+
+impl TideObject {
+    /// The object `root` holds, `source` being the text it was read from
+    /// (without a byte-order mark). `None` when the root is not a mapping,
+    /// or a field the engine reads as text (`name`, `metadata.uuid`, ...)
+    /// is a sequence or a mapping, or `metadata` is not a mapping: then the
+    /// engine reports nothing on the object, and `validate` reports its shape.
+    pub fn from_node(source: &str, root: &Node) -> Option<Self> {
+        let Value::Map(entries) = &root.value else {
+            return None;
+        };
+        let text = |key: &str| text_field(source, root.get(key)).ok();
+        let metadata = match root.get("metadata") {
+            Some(node) if !node.is_null() => Some(TideMetadata::from_node(source, node).ok()?),
+            _ => None,
+        };
+        let extra = entries
+            .iter()
+            .filter_map(|entry| {
+                let key = entry.key.as_str()?;
+                (!KNOWN_KEYS.contains(&key)).then(|| (key.to_owned(), Arc::clone(&entry.value)))
+            })
+            .collect();
+        Some(Self {
+            name: text("name")?,
+            metadata,
+            description: text("description")?,
+            status: text("status")?,
+            severity: text("severity")?,
+            detection_model: text("detection_model")?,
+            response: any_field(root.get("response")),
+            configurations: any_field(root.get("configurations")),
+            objective: any_field(root.get("objective")),
+            threat: any_field(root.get("threat")),
+            criticality: text("criticality")?,
+            extra,
+        })
+    }
+
+    /// [`TideObject::from_node`] of the document `source` (without a
+    /// byte-order mark).
+    pub fn parse(source: &str) -> Option<Self> {
+        Self::from_node(source, yaml::parse(source)?.as_ref())
+    }
 }
 
 /// One object of the workspace index: what its file says, read once per
@@ -228,7 +329,8 @@ pub struct IndexedObject {
     pub object_type: String,
     pub uuid: String,
     pub name: String,
-    pub body: serde_yaml::Value,
+    /// The object's root node.
+    pub body: Arc<Node>,
     /// `metadata.schema` as written (`rule::1.1`).
     pub schema: String,
     /// The range of the `name` value (the key's when the value is not on
@@ -247,7 +349,7 @@ impl IndexedObject {
         object_type: impl Into<String>,
         uuid: impl Into<String>,
         name: impl Into<String>,
-        body: serde_yaml::Value,
+        body: Arc<Node>,
     ) -> Self {
         let uuid = uuid.into();
         let refs = object_refs("", &body, &uuid);
@@ -311,7 +413,11 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
     let spec = HighlightSpec::load().expect("spec");
     let mut diagnostics = Vec::new();
     // A file that is not YAML is `validate`'s `yaml_parse`: no finding here.
-    let Ok(object) = serde_yaml::from_str::<TideObject>(input.source) else {
+    let root = yaml::parse(input.source);
+    let Some(object) = root
+        .as_deref()
+        .and_then(|root| TideObject::from_node(input.source, root))
+    else {
         return TideAnalyzeResult {
             diagnostics,
             tokens: highlight_tide(&spec, input.source, &[]),
@@ -332,10 +438,10 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
             .as_ref()
             .is_some_and(|c| c.get("elastic").is_some())
     {
-        if let Ok(rule) = serde_yaml::from_str::<serde_yaml::Value>(input.source) {
+        if let Some(rule) = &root {
             diagnostics.extend(elastic::block_advisories(
                 input.source,
-                &rule,
+                rule,
                 input.workspace,
             ));
         }
@@ -388,9 +494,7 @@ pub struct QueryAnalysis {
 /// placeholder (`...` under `# opentide:placeholder`) has no diagnostics.
 pub fn analyze_queries(source: &str, elastic_tenants: &[ElasticTenant]) -> Vec<QueryAnalysis> {
     let source = opentide_core::strip_bom(source);
-    let configurations = serde_yaml::from_str::<TideObject>(source)
-        .ok()
-        .and_then(|object| object.configurations);
+    let configurations = TideObject::parse(source).and_then(|object| object.configurations);
     let mut out = analyze_injections(
         source,
         configurations.as_ref(),
@@ -427,7 +531,7 @@ pub fn analyze_queries(source: &str, elastic_tenants: &[ElasticTenant]) -> Vec<Q
 
 fn analyze_injections(
     source: &str,
-    configurations: Option<&serde_yaml::Value>,
+    configurations: Option<&Arc<Node>>,
     elastic_tenants: &[ElasticTenant],
     injections: Vec<InjectedQuery>,
 ) -> Vec<QueryAnalysis> {
@@ -505,7 +609,9 @@ fn analyze_injections(
             }
             LanguageId::Falco => {
                 let ctx = falco::context_for(
-                    configurations.and_then(|c| c.get("sysdig")),
+                    configurations
+                        .and_then(|c| c.get("sysdig"))
+                        .map(Arc::as_ref),
                     &inj.field_path,
                 );
                 let r = if inj.field_path.last().map(String::as_str) == Some("output") {
@@ -1021,15 +1127,14 @@ pub fn snippet(kind: &str) -> Option<&'static str> {
 /// the text an editor shows.
 pub fn index_object(path: &str, source: &str) -> Option<IndexedObject> {
     let source = opentide_core::strip_bom(source);
-    let value: serde_yaml::Value = serde_yaml::from_str(source).ok()?;
-    index_value(path, source, value)
+    index_value(path, source, yaml::parse(source)?)
 }
 
 /// [`index_object`] for a file a host has already parsed: `value` is what
 /// `source` (without a byte-order mark) holds, and the ranges are found in
 /// `source`. The language server indexes the parse `opentide-workspace`
 /// made of each file this way, not a second one.
-pub fn index_value(path: &str, source: &str, value: serde_yaml::Value) -> Option<IndexedObject> {
+pub fn index_value(path: &str, source: &str, value: Arc<Node>) -> Option<IndexedObject> {
     let meta = value.get("metadata")?;
     let uuid = meta.get("uuid")?.as_str()?.to_string();
     let schema = meta.get("schema")?.as_str().unwrap_or("").to_string();
@@ -1236,8 +1341,8 @@ configurations:
 
     #[test]
     fn a_merge_key_fills_the_fields_it_merges() {
-        // serde_yaml leaves `<<` unresolved: it read as an unknown key, and
-        // the merged `status` as missing. opentide's loader resolves it.
+        // YAML 1.2 leaves `<<` an ordinary key (crates/opentide-schema/YAML.md);
+        // the object's shape is `validate`'s, so the engine reports none.
         let source = VALID_RULE.replace(
             "    status: DESIGN\n",
             "    <<: &base\n      status: DESIGN\n",
@@ -1850,5 +1955,77 @@ configurations:
         let rule = index_object("objects/rules/sentinel-kql-rule.yaml", RULE).unwrap();
         let ws = [ws[0].clone(), rule];
         assert!(!find_refs(&ws, "00000000-0000-4000-8002-000000000001").is_empty());
+    }
+
+    /// #850: the engine reads Tide YAML with the loader `validate` uses.
+    fn analyzed(source: &str) -> TideAnalyzeResult {
+        analyze(AnalyzeInput {
+            path: "objects/rules/r.yaml",
+            source,
+            workspace: &[],
+            elastic_tenants: &[],
+        })
+    }
+
+    const WHER: &str = "name: R\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000001\n  schema: rule::1.0\nconfigurations:\n  sentinel:\n    query: |\n      SecurityEvent\n      | wher EventID == 1\n";
+
+    #[test]
+    fn a_field_read_as_text_keeps_a_scalar_as_written() {
+        let source = WHER.replace("name: R", "name: 0x1F");
+        let symbols = analyzed(&source).symbols;
+        assert_eq!(symbols[0].name, "0x1F");
+        let source = WHER.replace("schema: rule::1.0", "schema: 1.10");
+        assert_eq!(analyzed(&source).symbols[0].kind, "1.10");
+        let object = TideObject::parse(&WHER.replace("name: R", "name: &n !!int 12")).unwrap();
+        assert_eq!(object.name.as_deref(), Some("12"));
+        assert_eq!(
+            TideObject::parse(&WHER.replace("name: R", "name: ~"))
+                .unwrap()
+                .name,
+            None
+        );
+    }
+
+    #[test]
+    fn an_object_of_another_shape_has_no_findings() {
+        for shape in ["name: [R]", "name: {a: b}", "metadata: x\nname: R"] {
+            let source = WHER.replacen("name: R", shape, 1);
+            let result = analyzed(&source);
+            assert!(
+                result.diagnostics.is_empty(),
+                "{shape}: {:?}",
+                result.diagnostics
+            );
+            assert!(result.symbols.is_empty(), "{shape}");
+        }
+        assert!(TideObject::parse("- a\n").is_none());
+        assert!(TideObject::parse("").is_none());
+    }
+
+    #[test]
+    fn a_text_the_loader_refuses_has_no_findings_and_a_deep_one_has_them() {
+        let codes = |source: &str| -> Vec<String> {
+            analyzed(source)
+                .diagnostics
+                .into_iter()
+                .map(|d| d.code)
+                .collect()
+        };
+        assert_eq!(codes(WHER), [codes::KQL_UNKNOWN_OPERATOR]);
+        // `validate` reports these as `yaml_parse`: a tag outside the core
+        // schema, a key written twice, an integer past 64 bits.
+        for refused in [
+            "extra: !Ref x\n",
+            "name: S\n",
+            "big: 18446744073709551615\n",
+        ] {
+            let source = format!("{WHER}{refused}");
+            assert!(codes(&source).is_empty(), "{refused}");
+            assert!(index_object("r.yaml", &source).is_none(), "{refused}");
+        }
+        // Nesting past serde_yaml's 128 levels loads, as `validate` loads it.
+        let deep = format!("{WHER}deep: {}{}\n", "[".repeat(200), "]".repeat(200));
+        assert_eq!(codes(&deep), [codes::KQL_UNKNOWN_OPERATOR]);
+        assert!(index_object("r.yaml", &deep).is_some());
     }
 }

@@ -95,7 +95,7 @@ depends on opentide-core (`codes`, `suggest`). Not published yet (`publish = fal
 - Falco's terms (operators, modifiers, priorities, keywords, the name rule) and the Elastic
   duration grammar are `opentide_core::falco` and `opentide_core::duration`, shared with
   opentide-tide's `sysdig` and `elastic` (the language server): never a second table here. The
-  two Sysdig engines still walk their own value types (`Node` here, `serde_yaml` there) and place
+  two Sysdig engines read the same YAML node tree (`opentide_core::node`, #850) but walk it their own way and place
   findings their own way; this crate is authoritative for the CLI (it is checked against the
   oracle), and `xtask/tests/sysdig_engines.rs` runs both on `tests/oracle/platform_cases.toml`'s
   Sysdig cases and compares the codes, a difference by design listed there with its reason. The

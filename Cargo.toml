@@ -101,7 +101,9 @@ strsim = "0.11"
 # Unicode general categories (opentide-schema `vocab::quote`: which characters a
 # message escapes). unicode-rs, as unicode-normalization and unicode-width.
 unicode-properties = { version = "0.1", default-features = false, features = ["general-category"] }
-serde_yaml = "0.9"
+# The shortest text of a float (opentide-tide `yaml::number_text`): the
+# version Cargo.lock already holds.
+ryu = "1"
 clap = { version = "4", features = ["derive"] }
 tree-sitter = "0.25"
 # `LanguageFn`, the type tree-sitter 0.25 builds a Language from (opentide-syntax).

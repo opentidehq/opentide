@@ -361,10 +361,22 @@ impl RootChecks {
 }
 
 /// The family a Tide object names (`rule` of `metadata.schema:
-/// rule::1.0`), if it names one.
+/// rule::1.0`), if it names one. A text the YAML loader refuses (a tag, an
+/// integer past 64 bits, a key that is a collection, a syntax error) names
+/// its family on its `schema:` line, so that `validate` checks it as an
+/// object of that family and reports why its YAML does not load
+/// (`yaml_parse`), as it does for the same file in a workspace.
 fn family_of(text: &str) -> Option<String> {
-    let value: serde_yaml::Value = serde_yaml::from_str(opentide_core::strip_bom(text)).ok()?;
-    let schema = value.get("metadata")?.get("schema")?.as_str()?;
+    let schema = match opentide_schema::node::load(text) {
+        Ok(document) => document
+            .root()?
+            .get("metadata")?
+            .get("schema")?
+            .value
+            .as_str()?
+            .to_owned(),
+        Err(_) => opentide_tide::document_schema_id(opentide_core::strip_bom(text)),
+    };
     let family = schema.split("::").next()?.trim();
     (!family.is_empty()).then(|| family.to_string())
 }
@@ -813,5 +825,27 @@ mod tests {
             .collect();
         assert_eq!(listed, ["new.yaml"]);
         assert!(fs.read(&base.join("objects/rules/other.yaml")).is_err());
+    }
+
+    /// #850: a standalone object whose YAML the loader refuses is still
+    /// checked as its family, so `validate` reports its `yaml_parse`.
+    #[test]
+    fn the_family_of_an_object_the_loader_refuses_is_its_schema_line() {
+        let rule = "name: R\nmetadata:\n  schema: rule::1.0\n";
+        assert_eq!(family_of(rule).as_deref(), Some("rule"));
+        assert_eq!(
+            family_of("{name: R, metadata: {schema: objective::1.0}}").as_deref(),
+            Some("objective")
+        );
+        for refused in [
+            format!("{rule}query: !Ref x\n"),
+            format!("{rule}big: 18446744073709551615\n"),
+            format!("{rule}? [a]\n: b\n"),
+            format!("\u{feff}{rule}name: S\n"),
+        ] {
+            assert_eq!(family_of(&refused).as_deref(), Some("rule"), "{refused}");
+        }
+        assert_eq!(family_of("name: R\n"), None);
+        assert_eq!(family_of("name: R\nmetadata:\n  schema: 12\n"), None);
     }
 }

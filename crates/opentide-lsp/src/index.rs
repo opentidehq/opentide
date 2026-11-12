@@ -6,7 +6,9 @@
 //! every root, what a host supplied) is read with the same parser.
 
 use opentide_analysis::IndexedObject;
-use opentide_schema::node::{self, Document, Node, Value};
+use std::sync::Arc;
+
+use opentide_schema::node::{self, Document};
 
 /// The index entry of the object file at `path` whose text is `text`, read
 /// with the workspace's parser; `None` for a file that is not YAML or not an
@@ -18,32 +20,7 @@ pub(crate) fn index_text(path: &str, text: &str) -> Option<IndexedObject> {
 
 /// The index entry of the object file at `path`, from its parse.
 pub(crate) fn index_document(path: &str, document: &Document) -> Option<IndexedObject> {
-    let body = yaml_value(document.root()?);
-    opentide_tide::index_value(path, document.source(), body)
-}
-
-/// A node tree as the engine's YAML value. A key repeated in a mapping keeps
-/// its first value, as the workspace reads it ([`Node::get`]).
-fn yaml_value(node: &Node) -> serde_yaml::Value {
-    use serde_yaml::Value as Yaml;
-    match &node.value {
-        Value::Null => Yaml::Null,
-        Value::Bool(flag) => Yaml::Bool(*flag),
-        Value::Int(integer) => Yaml::Number((*integer).into()),
-        Value::Float(float) => Yaml::Number((*float).into()),
-        Value::Str(text) | Value::Datetime(text) => Yaml::String(text.clone()),
-        Value::Seq(items) => Yaml::Sequence(items.iter().map(|item| yaml_value(item)).collect()),
-        Value::Map(entries) => {
-            let mut mapping = serde_yaml::Mapping::with_capacity(entries.len());
-            for entry in entries {
-                let key = yaml_value(&entry.key);
-                if !mapping.contains_key(&key) {
-                    mapping.insert(key, yaml_value(&entry.value));
-                }
-            }
-            Yaml::Mapping(mapping)
-        }
-    }
+    opentide_tide::index_value(path, document.source(), Arc::clone(document.root()?))
 }
 
 #[cfg(test)]
