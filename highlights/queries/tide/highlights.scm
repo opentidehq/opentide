@@ -1,7 +1,7 @@
 ; Tide YAML object highlighting. Injected KQL/SPL tokens are remapped onto
 ; the host document by opentide-highlight (not by this query).
 ; Generated key lists come from catalogs/tide/generated/fields.json
-; (opentide 0.25.1.dev5+g443890ab8). Runtime highlighting is path-aware and does not
+; (opentide 0.25.1.dev9+gd733efd06). Runtime highlighting is path-aware and does not
 ; use this query. Every schema key uses tide.property so nesting does not
 ; recolor the key. Capture names must stay a subset of HighlightSpec.
 

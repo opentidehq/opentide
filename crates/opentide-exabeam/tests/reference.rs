@@ -19,16 +19,11 @@ const CATALOGUE_CODES: [&str; 2] = ["exabeam_unknown_field", "exabeam_string_fie
 /// column (`exabeam_group_by_column`) or the `*` (`exabeam_group_by_select_star`).
 const NARROWED: [&str; 2] = ["exabeam_group_by_column", "exabeam_group_by_select_star"];
 
-/// Queries where the engine follows RE2 and the reference checker, which
-/// approximates RE2 with Python's `re`, does not.
-const DIFFERENCES: &[(&str, &str)] = &[
-    // RE2 escapes only ASCII punctuation: `\` before U+00A0 is an invalid
-    // escape. Python takes it as the character.
-    ("probes.tsv:158", "exabeam_regex"),
-    // RE2 repeats an empty-width assertion (`$?`); Python refuses it
-    // ("nothing to repeat").
-    ("probes.tsv:159", "-exabeam_regex"),
-];
+/// Queries where the engine and the reference checker may disagree, each with
+/// its reason. None today: the checker refuses and rewrites the syntax RE2 and
+/// Python's `re` read differently (`$?`, an escaped non-ASCII character), as
+/// the engine does.
+const DIFFERENCES: &[(&str, &str)] = &[];
 
 #[test]
 fn the_engine_agrees_with_the_reference_checker() {
@@ -126,13 +121,10 @@ fn the_engine_agrees_with_the_reference_checker() {
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
-/// Queries whose highlighting differs, with the reason.
-const HIGHLIGHT_DIFFERENCES: &[&str] = &[
-    // A second `SELECT` after a filter: the reference checker reads it as free
-    // text (and warns `exabeam_implicit_and`); the grammar, which parses
-    // clauses in any order, as a clause keyword.
-    "probes.tsv:64",
-];
+/// Queries whose highlighting differs, with the reason. None today: a second
+/// `SELECT` after a filter (`probes.tsv:64`) is a clause for both, and the
+/// reference reports it as `exabeam_clause_order`.
+const HIGHLIGHT_DIFFERENCES: &[&str] = &[];
 
 /// The tree-sitter grammar's highlighting matches the reference checker's
 /// tokens on every query the reference finds no error in.

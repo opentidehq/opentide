@@ -1,6 +1,6 @@
 {
  "generated_by": "scripts/sync_exabeam_conformance.py",
- "reference": "opentidehq/specifications@1dd376319f23a69b354c85aa74f8475d383e04dd scripts/exabeam_language.py, scripts/object_fixtures.py",
+ "reference": "opentidehq/specifications@4e86f49049934760614220421b0a9a49f026002c scripts/exabeam_language.py, scripts/object_fixtures.py",
  "queries": [
   {
    "name": "valid/event-code-and-time-window.rule.exabeam",
@@ -108,7 +108,7 @@
   {
    "name": "valid/extract-logon-guid.search.exabeam",
    "profile": "search",
-   "text": "SELECT user, RGX_EXTRACT(process_command_line, \"-enc(?:odedcommand)?\\\\s+([A-Za-z0-9+/=]{20,})\") AS encoded_command\nWHERE activity_type:\"process-create\" AND process_name:(\"powershell.exe\", \"pwsh.exe\")\n",
+   "text": "SELECT user, RGX_EXTRACT(process_command_line, \"-enc(?:odedcommand)?\\s+([A-Za-z0-9+/=]{20,})\") AS encoded_command\nWHERE activity_type:\"process-create\" AND process_name:(\"powershell.exe\", \"pwsh.exe\")\n",
    "diagnostics": [],
    "tokens": [
     [
@@ -148,82 +148,82 @@
     ],
     [
      47,
-     94,
+     93,
      "string"
     ],
     [
+     93,
      94,
-     95,
      "punctuation.bracket"
     ],
     [
-     96,
-     98,
+     95,
+     97,
      "keyword"
     ],
     [
-     99,
-     114,
+     98,
+     113,
      "variable"
     ],
     [
-     115,
-     120,
+     114,
+     119,
      "keyword"
     ],
     [
-     121,
-     134,
+     120,
+     133,
      "property"
     ],
     [
+     133,
      134,
-     135,
      "operator"
     ],
     [
-     135,
-     151,
+     134,
+     150,
      "string"
     ],
     [
-     152,
-     155,
+     151,
+     154,
      "keyword"
     ],
     [
-     156,
-     168,
+     155,
+     167,
      "property"
     ],
     [
+     167,
      168,
-     169,
      "operator"
     ],
     [
+     168,
      169,
-     170,
      "punctuation.bracket"
     ],
     [
-     170,
-     186,
+     169,
+     185,
      "string"
     ],
     [
+     185,
      186,
-     187,
      "punctuation.delimiter"
     ],
     [
-     188,
-     198,
+     187,
+     197,
      "string"
     ],
     [
+     197,
      198,
-     199,
      "punctuation.bracket"
     ]
    ]
@@ -632,7 +632,7 @@
   {
    "name": "valid/office-spawns-encoded-powershell.rule.exabeam",
    "profile": "rule",
-   "text": "activity_type:\"process-create\"\nAND parent_process_name:(\"winword.exe\", \"excel.exe\", \"powerpnt.exe\")\nAND process_name:(\"powershell.exe\", \"pwsh.exe\")\nAND process_command_line:RGXi(\"\\\\s-(e|en|enc|enco|encod|encode|encoded|encodedcommand)\\\\s\")\n",
+   "text": "activity_type:\"process-create\"\nAND parent_process_name:(\"winword.exe\", \"excel.exe\", \"powerpnt.exe\")\nAND process_name:(\"powershell.exe\", \"pwsh.exe\")\nAND process_command_line:RGXi(\"\\s-(e|en|enc|enco|encod|encode|encoded|encodedcommand)\\s\")\n",
    "diagnostics": [],
    "tokens": [
     [
@@ -767,12 +767,12 @@
     ],
     [
      178,
-     238,
+     236,
      "string"
     ],
     [
-     238,
-     239,
+     236,
+     237,
      "punctuation.bracket"
     ]
    ]
@@ -2741,12 +2741,12 @@
   {
    "name": "invalid/exabeam_regex.rule.exabeam",
    "profile": "rule",
-   "text": "process_command_line: RGX(\"(a)\\\\1\")\n",
+   "text": "process_command_line: RGX(\"(?=x)powershell\")\n",
    "diagnostics": [
     [
      "exabeam_regex",
      26,
-     34
+     43
     ]
    ],
    "tokens": [
@@ -2772,12 +2772,12 @@
     ],
     [
      26,
-     34,
+     43,
      "string"
     ],
     [
-     34,
-     35,
+     43,
+     44,
      "punctuation.bracket"
     ]
    ]
@@ -3436,7 +3436,7 @@
   {
    "name": "highlight/office-spawns-encoded-powershell.rule.exabeam",
    "profile": "rule",
-   "text": "activity_type:\"process-create\"\nAND parent_process_name:(\"winword.exe\", \"excel.exe\", \"powerpnt.exe\")\nAND process_name:(\"powershell.exe\", \"pwsh.exe\")\nAND process_command_line:RGXi(\"\\\\s-(e|en|enc|enco|encod|encode|encoded|encodedcommand)\\\\s\")\n",
+   "text": "activity_type:\"process-create\"\nAND parent_process_name:(\"winword.exe\", \"excel.exe\", \"powerpnt.exe\")\nAND process_name:(\"powershell.exe\", \"pwsh.exe\")\nAND process_command_line:RGXi(\"\\s-(e|en|enc|enco|encod|encode|encoded|encodedcommand)\\s\")\n",
    "diagnostics": [],
    "tokens": [
     [
@@ -3571,12 +3571,12 @@
     ],
     [
      178,
-     238,
+     236,
      "string"
     ],
     [
-     238,
-     239,
+     236,
+     237,
      "punctuation.bracket"
     ]
    ]
@@ -10750,7 +10750,12 @@
    "text": "SELECT user WHERE vendor:\"a\" SELECT user",
    "diagnostics": [
     [
-     "exabeam_implicit_and",
+     "exabeam_clause_order",
+     29,
+     35
+    ],
+    [
+     "exabeam_clause_order",
      29,
      35
     ]
@@ -10789,12 +10794,12 @@
     [
      29,
      35,
-     "string"
+     "keyword"
     ],
     [
      36,
      40,
-     "string"
+     "property"
     ]
    ]
   },
@@ -11122,12 +11127,7 @@
    "text": "vendor:\"a\" | | SELECT user",
    "diagnostics": [
     [
-     "exabeam_pipe_misuse",
-     11,
-     12
-    ],
-    [
-     "exabeam_pipe_misuse",
+     "exabeam_parse_error",
      13,
      14
     ]
@@ -11152,21 +11152,6 @@
      11,
      12,
      "operator.pipe"
-    ],
-    [
-     13,
-     14,
-     "operator.pipe"
-    ],
-    [
-     15,
-     21,
-     "keyword"
-    ],
-    [
-     22,
-     26,
-     "property"
     ]
    ]
   },
@@ -14639,7 +14624,13 @@
    "name": "probes.tsv:158",
    "profile": "rule",
    "text": "process_command_line:RGX(\".*\\\\ .*\")",
-   "diagnostics": [],
+   "diagnostics": [
+    [
+     "exabeam_regex",
+     25,
+     35
+    ]
+   ],
    "tokens": [
     [
      0,
@@ -14677,13 +14668,7 @@
    "name": "probes.tsv:159",
    "profile": "rule",
    "text": "process_command_line:RGX(\"$?{?input}?\")",
-   "diagnostics": [
-    [
-     "exabeam_regex",
-     25,
-     38
-    ]
-   ],
+   "diagnostics": [],
    "tokens": [
     [
      0,
@@ -14795,6 +14780,2603 @@
      "string"
     ]
    ]
+  },
+  {
+   "name": "probes.tsv:161",
+   "profile": "rule",
+   "text": "AND x:\"a\"",
+   "diagnostics": [
+    [
+     "exabeam_parse_error",
+     0,
+     1
+    ]
+   ],
+   "tokens": []
+  },
+  {
+   "name": "probes.tsv:162",
+   "profile": "rule",
+   "text": "OR x:\"a\"",
+   "diagnostics": [
+    [
+     "exabeam_parse_error",
+     0,
+     1
+    ]
+   ],
+   "tokens": []
+  },
+  {
+   "name": "probes.tsv:163",
+   "profile": "rule",
+   "text": "x:\"a\" AND AND y:\"b\"",
+   "diagnostics": [
+    [
+     "exabeam_parse_error",
+     10,
+     11
+    ]
+   ],
+   "tokens": [
+    [
+     0,
+     1,
+     "property"
+    ],
+    [
+     1,
+     2,
+     "operator"
+    ],
+    [
+     2,
+     5,
+     "string"
+    ],
+    [
+     6,
+     9,
+     "keyword"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:164",
+   "profile": "rule",
+   "text": "x:\"a\" AND OR y:\"b\"",
+   "diagnostics": [
+    [
+     "exabeam_parse_error",
+     10,
+     11
+    ]
+   ],
+   "tokens": [
+    [
+     0,
+     1,
+     "property"
+    ],
+    [
+     1,
+     2,
+     "operator"
+    ],
+    [
+     2,
+     5,
+     "string"
+    ],
+    [
+     6,
+     9,
+     "keyword"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:165",
+   "profile": "rule",
+   "text": "NOT AND x:\"a\"",
+   "diagnostics": [
+    [
+     "exabeam_parse_error",
+     4,
+     5
+    ]
+   ],
+   "tokens": [
+    [
+     0,
+     3,
+     "keyword"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:166",
+   "profile": "rule",
+   "text": "x:\"a\" IN",
+   "diagnostics": [
+    [
+     "exabeam_parse_error",
+     6,
+     7
+    ]
+   ],
+   "tokens": [
+    [
+     0,
+     1,
+     "property"
+    ],
+    [
+     1,
+     2,
+     "operator"
+    ],
+    [
+     2,
+     5,
+     "string"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:167",
+   "profile": "rule",
+   "text": "TO",
+   "diagnostics": [
+    [
+     "exabeam_parse_error",
+     0,
+     1
+    ]
+   ],
+   "tokens": []
+  },
+  {
+   "name": "probes.tsv:168",
+   "profile": "rule",
+   "text": "x:\"a\" and",
+   "diagnostics": [
+    [
+     "exabeam_parse_error",
+     9,
+     10
+    ]
+   ],
+   "tokens": [
+    [
+     0,
+     1,
+     "property"
+    ],
+    [
+     1,
+     2,
+     "operator"
+    ],
+    [
+     2,
+     5,
+     "string"
+    ],
+    [
+     6,
+     9,
+     "keyword"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:169",
+   "profile": "search",
+   "text": "WHERE vendor:\"x\" SELECT user",
+   "diagnostics": [
+    [
+     "exabeam_clause_order",
+     17,
+     23
+    ]
+   ],
+   "tokens": [
+    [
+     0,
+     5,
+     "keyword"
+    ],
+    [
+     6,
+     12,
+     "property"
+    ],
+    [
+     12,
+     13,
+     "operator"
+    ],
+    [
+     13,
+     16,
+     "string"
+    ],
+    [
+     17,
+     23,
+     "keyword"
+    ],
+    [
+     24,
+     28,
+     "property"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:170",
+   "profile": "search",
+   "text": "WHERE vendor:\"x\" FROM t",
+   "diagnostics": [
+    [
+     "exabeam_clause_order",
+     17,
+     21
+    ]
+   ],
+   "tokens": [
+    [
+     0,
+     5,
+     "keyword"
+    ],
+    [
+     6,
+     12,
+     "property"
+    ],
+    [
+     12,
+     13,
+     "operator"
+    ],
+    [
+     13,
+     16,
+     "string"
+    ],
+    [
+     17,
+     21,
+     "keyword"
+    ],
+    [
+     22,
+     23,
+     "type"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:171",
+   "profile": "search",
+   "text": "SELECT user WHERE a:\"b\" WHERE c:\"d\"",
+   "diagnostics": [
+    [
+     "exabeam_clause_order",
+     24,
+     29
+    ]
+   ],
+   "tokens": [
+    [
+     0,
+     6,
+     "keyword"
+    ],
+    [
+     7,
+     11,
+     "property"
+    ],
+    [
+     12,
+     17,
+     "keyword"
+    ],
+    [
+     18,
+     19,
+     "property"
+    ],
+    [
+     19,
+     20,
+     "operator"
+    ],
+    [
+     20,
+     23,
+     "string"
+    ],
+    [
+     24,
+     29,
+     "keyword"
+    ],
+    [
+     30,
+     31,
+     "property"
+    ],
+    [
+     31,
+     32,
+     "operator"
+    ],
+    [
+     32,
+     35,
+     "string"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:172",
+   "profile": "search",
+   "text": "c-table IN \"Admins\"",
+   "diagnostics": [],
+   "tokens": [
+    [
+     0,
+     7,
+     "property"
+    ],
+    [
+     8,
+     10,
+     "keyword"
+    ],
+    [
+     11,
+     19,
+     "type"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:173",
+   "profile": "rule",
+   "text": "a.b-c IN \"T\"",
+   "diagnostics": [],
+   "tokens": [
+    [
+     0,
+     5,
+     "property"
+    ],
+    [
+     6,
+     8,
+     "keyword"
+    ],
+    [
+     9,
+     12,
+     "type"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:174",
+   "profile": "search",
+   "text": "SELECT first-name WHERE vendor:\"x\"",
+   "diagnostics": [],
+   "tokens": [
+    [
+     0,
+     6,
+     "keyword"
+    ],
+    [
+     7,
+     17,
+     "property"
+    ],
+    [
+     18,
+     23,
+     "keyword"
+    ],
+    [
+     24,
+     30,
+     "property"
+    ],
+    [
+     30,
+     31,
+     "operator"
+    ],
+    [
+     31,
+     34,
+     "string"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:175",
+   "profile": "search",
+   "text": "SELECT c-uri, COUNT(*) GROUP-BY c-uri",
+   "diagnostics": [],
+   "tokens": [
+    [
+     0,
+     6,
+     "keyword"
+    ],
+    [
+     7,
+     12,
+     "property"
+    ],
+    [
+     12,
+     13,
+     "punctuation.delimiter"
+    ],
+    [
+     14,
+     19,
+     "function.builtin"
+    ],
+    [
+     19,
+     20,
+     "punctuation.bracket"
+    ],
+    [
+     20,
+     21,
+     "operator"
+    ],
+    [
+     21,
+     22,
+     "punctuation.bracket"
+    ],
+    [
+     23,
+     31,
+     "keyword"
+    ],
+    [
+     32,
+     37,
+     "property"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:176",
+   "profile": "search",
+   "text": "SELECT User, COUNT(*) GROUP-BY user",
+   "diagnostics": [],
+   "tokens": [
+    [
+     0,
+     6,
+     "keyword"
+    ],
+    [
+     7,
+     11,
+     "property"
+    ],
+    [
+     11,
+     12,
+     "punctuation.delimiter"
+    ],
+    [
+     13,
+     18,
+     "function.builtin"
+    ],
+    [
+     18,
+     19,
+     "punctuation.bracket"
+    ],
+    [
+     19,
+     20,
+     "operator"
+    ],
+    [
+     20,
+     21,
+     "punctuation.bracket"
+    ],
+    [
+     22,
+     30,
+     "keyword"
+    ],
+    [
+     31,
+     35,
+     "property"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:177",
+   "profile": "search",
+   "text": "SELECT user As u",
+   "diagnostics": [
+    [
+     "exabeam_keyword_case",
+     12,
+     14
+    ]
+   ],
+   "tokens": [
+    [
+     0,
+     6,
+     "keyword"
+    ],
+    [
+     7,
+     11,
+     "property"
+    ],
+    [
+     12,
+     14,
+     "keyword"
+    ],
+    [
+     15,
+     16,
+     "variable"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:178",
+   "profile": "search",
+   "text": "vendor:\"x\" AS t",
+   "diagnostics": [],
+   "tokens": [
+    [
+     0,
+     6,
+     "property"
+    ],
+    [
+     6,
+     7,
+     "operator"
+    ],
+    [
+     7,
+     10,
+     "string"
+    ],
+    [
+     11,
+     13,
+     "keyword"
+    ],
+    [
+     14,
+     15,
+     "type"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:179",
+   "profile": "search",
+   "text": "vendor:\"x\" AS tlimit",
+   "diagnostics": [],
+   "tokens": [
+    [
+     0,
+     6,
+     "property"
+    ],
+    [
+     6,
+     7,
+     "operator"
+    ],
+    [
+     7,
+     10,
+     "string"
+    ],
+    [
+     11,
+     13,
+     "keyword"
+    ],
+    [
+     14,
+     20,
+     "type"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:180",
+   "profile": "search",
+   "text": "vendor:\"x\" AS t | SELECT a",
+   "diagnostics": [
+    [
+     "exabeam_pipe_misuse",
+     16,
+     17
+    ]
+   ],
+   "tokens": [
+    [
+     0,
+     6,
+     "property"
+    ],
+    [
+     6,
+     7,
+     "operator"
+    ],
+    [
+     7,
+     10,
+     "string"
+    ],
+    [
+     11,
+     13,
+     "keyword"
+    ],
+    [
+     14,
+     15,
+     "type"
+    ],
+    [
+     16,
+     17,
+     "operator.pipe"
+    ],
+    [
+     18,
+     24,
+     "keyword"
+    ],
+    [
+     25,
+     26,
+     "property"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:181",
+   "profile": "search",
+   "text": "vendor:\"x\" |",
+   "diagnostics": [
+    [
+     "exabeam_parse_error",
+     12,
+     13
+    ]
+   ],
+   "tokens": [
+    [
+     0,
+     6,
+     "property"
+    ],
+    [
+     6,
+     7,
+     "operator"
+    ],
+    [
+     7,
+     10,
+     "string"
+    ],
+    [
+     11,
+     12,
+     "operator.pipe"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:182",
+   "profile": "search",
+   "text": "| SELECT user",
+   "diagnostics": [
+    [
+     "exabeam_parse_error",
+     0,
+     1
+    ]
+   ],
+   "tokens": []
+  },
+  {
+   "name": "probes.tsv:183",
+   "profile": "search",
+   "text": "SELECT user | | SELECT user",
+   "diagnostics": [
+    [
+     "exabeam_parse_error",
+     14,
+     15
+    ]
+   ],
+   "tokens": [
+    [
+     0,
+     6,
+     "keyword"
+    ],
+    [
+     7,
+     11,
+     "property"
+    ],
+    [
+     12,
+     13,
+     "operator.pipe"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:184",
+   "profile": "search",
+   "text": "SELECT user vendor:\"x\"",
+   "diagnostics": [
+    [
+     "exabeam_parse_error",
+     12,
+     13
+    ]
+   ],
+   "tokens": [
+    [
+     0,
+     6,
+     "keyword"
+    ],
+    [
+     7,
+     11,
+     "property"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:185",
+   "profile": "search",
+   "text": "vendor:\"x\" | FOREACH host [ ]",
+   "diagnostics": [
+    [
+     "exabeam_parse_error",
+     28,
+     29
+    ]
+   ],
+   "tokens": [
+    [
+     0,
+     6,
+     "property"
+    ],
+    [
+     6,
+     7,
+     "operator"
+    ],
+    [
+     7,
+     10,
+     "string"
+    ],
+    [
+     11,
+     12,
+     "operator.pipe"
+    ],
+    [
+     13,
+     20,
+     "keyword"
+    ],
+    [
+     21,
+     25,
+     "property"
+    ],
+    [
+     26,
+     27,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:186",
+   "profile": "rule",
+   "text": "c-group-by:\"x\"",
+   "diagnostics": [],
+   "tokens": [
+    [
+     0,
+     10,
+     "property"
+    ],
+    [
+     10,
+     11,
+     "operator"
+    ],
+    [
+     11,
+     14,
+     "string"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:187",
+   "profile": "rule",
+   "text": "c-order-by:\"x\"",
+   "diagnostics": [],
+   "tokens": [
+    [
+     0,
+     10,
+     "property"
+    ],
+    [
+     10,
+     11,
+     "operator"
+    ],
+    [
+     11,
+     14,
+     "string"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:188",
+   "profile": "rule",
+   "text": "x:rgx(\"a\")",
+   "diagnostics": [],
+   "tokens": [
+    [
+     0,
+     1,
+     "property"
+    ],
+    [
+     1,
+     2,
+     "operator"
+    ],
+    [
+     2,
+     5,
+     "function.builtin"
+    ],
+    [
+     5,
+     6,
+     "punctuation.bracket"
+    ],
+    [
+     6,
+     9,
+     "string"
+    ],
+    [
+     9,
+     10,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:189",
+   "profile": "rule",
+   "text": "x:Wld(\"a\")",
+   "diagnostics": [],
+   "tokens": [
+    [
+     0,
+     1,
+     "property"
+    ],
+    [
+     1,
+     2,
+     "operator"
+    ],
+    [
+     2,
+     5,
+     "function.builtin"
+    ],
+    [
+     5,
+     6,
+     "punctuation.bracket"
+    ],
+    [
+     6,
+     9,
+     "string"
+    ],
+    [
+     9,
+     10,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:190",
+   "profile": "rule",
+   "text": "user:'bob'",
+   "diagnostics": [],
+   "tokens": [
+    [
+     0,
+     4,
+     "property"
+    ],
+    [
+     4,
+     5,
+     "operator"
+    ],
+    [
+     5,
+     10,
+     "string"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:191",
+   "profile": "rule",
+   "text": "user IN 'Admins'",
+   "diagnostics": [],
+   "tokens": [
+    [
+     0,
+     4,
+     "property"
+    ],
+    [
+     5,
+     7,
+     "keyword"
+    ],
+    [
+     8,
+     16,
+     "type"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:192",
+   "profile": "rule",
+   "text": "bytes > \"100\"",
+   "diagnostics": [],
+   "tokens": [
+    [
+     0,
+     5,
+     "property"
+    ],
+    [
+     6,
+     7,
+     "operator"
+    ],
+    [
+     8,
+     13,
+     "string"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:193",
+   "profile": "rule",
+   "text": "bytes > \"abc\"",
+   "diagnostics": [
+    [
+     "exabeam_parse_error",
+     8,
+     13
+    ]
+   ],
+   "tokens": [
+    [
+     0,
+     5,
+     "property"
+    ],
+    [
+     6,
+     7,
+     "operator"
+    ],
+    [
+     8,
+     13,
+     "string"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:194",
+   "profile": "rule",
+   "text": "time:1700000000000",
+   "diagnostics": [
+    [
+     "exabeam_time_exact",
+     5,
+     18
+    ]
+   ],
+   "tokens": [
+    [
+     0,
+     4,
+     "property"
+    ],
+    [
+     4,
+     5,
+     "operator"
+    ],
+    [
+     5,
+     18,
+     "number"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:195",
+   "profile": "rule",
+   "text": "time:2024-01-01T00:00:00Z",
+   "diagnostics": [
+    [
+     "exabeam_time_exact",
+     5,
+     25
+    ]
+   ],
+   "tokens": [
+    [
+     0,
+     4,
+     "property"
+    ],
+    [
+     4,
+     5,
+     "operator"
+    ],
+    [
+     5,
+     25,
+     "constant"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:196",
+   "profile": "rule",
+   "text": "time:null",
+   "diagnostics": [],
+   "tokens": [
+    [
+     0,
+     4,
+     "property"
+    ],
+    [
+     4,
+     5,
+     "operator"
+    ],
+    [
+     5,
+     9,
+     "constant"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:197",
+   "profile": "rule",
+   "text": "time:[1800000000000 TO 2024-01-01T00:00:00Z]",
+   "diagnostics": [
+    [
+     "exabeam_range",
+     6,
+     43
+    ]
+   ],
+   "tokens": [
+    [
+     0,
+     4,
+     "property"
+    ],
+    [
+     4,
+     5,
+     "operator"
+    ],
+    [
+     5,
+     6,
+     "punctuation.bracket"
+    ],
+    [
+     6,
+     19,
+     "number"
+    ],
+    [
+     20,
+     22,
+     "keyword"
+    ],
+    [
+     23,
+     43,
+     "constant"
+    ],
+    [
+     43,
+     44,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:198",
+   "profile": "rule",
+   "text": "time:[1700000000000 TO 2024-01-01T00:00:00Z]",
+   "diagnostics": [],
+   "tokens": [
+    [
+     0,
+     4,
+     "property"
+    ],
+    [
+     4,
+     5,
+     "operator"
+    ],
+    [
+     5,
+     6,
+     "punctuation.bracket"
+    ],
+    [
+     6,
+     19,
+     "number"
+    ],
+    [
+     20,
+     22,
+     "keyword"
+    ],
+    [
+     23,
+     43,
+     "constant"
+    ],
+    [
+     43,
+     44,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:199",
+   "profile": "rule",
+   "text": "time:[2024-01-01T10:00:00+05:00 TO 2024-01-01T06:00:00Z]",
+   "diagnostics": [],
+   "tokens": [
+    [
+     0,
+     4,
+     "property"
+    ],
+    [
+     4,
+     5,
+     "operator"
+    ],
+    [
+     5,
+     6,
+     "punctuation.bracket"
+    ],
+    [
+     6,
+     31,
+     "constant"
+    ],
+    [
+     32,
+     34,
+     "keyword"
+    ],
+    [
+     35,
+     55,
+     "constant"
+    ],
+    [
+     55,
+     56,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:200",
+   "profile": "rule",
+   "text": "time:[2024-01-01T10:00:00Z TO 2024-01-01T06:00:00Z]",
+   "diagnostics": [
+    [
+     "exabeam_range",
+     6,
+     50
+    ]
+   ],
+   "tokens": [
+    [
+     0,
+     4,
+     "property"
+    ],
+    [
+     4,
+     5,
+     "operator"
+    ],
+    [
+     5,
+     6,
+     "punctuation.bracket"
+    ],
+    [
+     6,
+     26,
+     "constant"
+    ],
+    [
+     27,
+     29,
+     "keyword"
+    ],
+    [
+     30,
+     50,
+     "constant"
+    ],
+    [
+     50,
+     51,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:201",
+   "profile": "rule",
+   "text": "time:[2024-01-01T10:00:00.5Z TO 2024-01-01T10:00:00.499Z]",
+   "diagnostics": [
+    [
+     "exabeam_range",
+     6,
+     56
+    ]
+   ],
+   "tokens": [
+    [
+     0,
+     4,
+     "property"
+    ],
+    [
+     4,
+     5,
+     "operator"
+    ],
+    [
+     5,
+     6,
+     "punctuation.bracket"
+    ],
+    [
+     6,
+     28,
+     "constant"
+    ],
+    [
+     29,
+     31,
+     "keyword"
+    ],
+    [
+     32,
+     56,
+     "constant"
+    ],
+    [
+     56,
+     57,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:202",
+   "profile": "rule",
+   "text": "time:[99999999999999999999999999999999999999999999 TO *]",
+   "diagnostics": [],
+   "tokens": [
+    [
+     0,
+     4,
+     "property"
+    ],
+    [
+     4,
+     5,
+     "operator"
+    ],
+    [
+     5,
+     6,
+     "punctuation.bracket"
+    ],
+    [
+     6,
+     50,
+     "number"
+    ],
+    [
+     51,
+     53,
+     "keyword"
+    ],
+    [
+     54,
+     55,
+     "constant"
+    ],
+    [
+     55,
+     56,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:203",
+   "profile": "rule",
+   "text": "time:[1969-12-31T23:59:59-00:30 TO 1970-01-01T00:00:00Z]",
+   "diagnostics": [
+    [
+     "exabeam_range",
+     6,
+     55
+    ]
+   ],
+   "tokens": [
+    [
+     0,
+     4,
+     "property"
+    ],
+    [
+     4,
+     5,
+     "operator"
+    ],
+    [
+     5,
+     6,
+     "punctuation.bracket"
+    ],
+    [
+     6,
+     31,
+     "constant"
+    ],
+    [
+     32,
+     34,
+     "keyword"
+    ],
+    [
+     35,
+     55,
+     "constant"
+    ],
+    [
+     55,
+     56,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:204",
+   "profile": "rule",
+   "text": "bytes:[1700000000000 TO 1800000000000]",
+   "diagnostics": [],
+   "tokens": [
+    [
+     0,
+     5,
+     "property"
+    ],
+    [
+     5,
+     6,
+     "operator"
+    ],
+    [
+     6,
+     7,
+     "punctuation.bracket"
+    ],
+    [
+     7,
+     20,
+     "number"
+    ],
+    [
+     21,
+     23,
+     "keyword"
+    ],
+    [
+     24,
+     37,
+     "number"
+    ],
+    [
+     37,
+     38,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:205",
+   "profile": "rule",
+   "text": "ApproxLogTime:\"1730000000000\"",
+   "diagnostics": [
+    [
+     "exabeam_time_exact",
+     14,
+     29
+    ]
+   ],
+   "tokens": [
+    [
+     0,
+     13,
+     "property"
+    ],
+    [
+     13,
+     14,
+     "operator"
+    ],
+    [
+     14,
+     29,
+     "string"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:206",
+   "profile": "rule",
+   "text": "process_name:RGX(\"\\pL+\")",
+   "diagnostics": [],
+   "tokens": [
+    [
+     0,
+     12,
+     "property"
+    ],
+    [
+     12,
+     13,
+     "operator"
+    ],
+    [
+     13,
+     16,
+     "function.builtin"
+    ],
+    [
+     16,
+     17,
+     "punctuation.bracket"
+    ],
+    [
+     17,
+     23,
+     "string"
+    ],
+    [
+     23,
+     24,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:207",
+   "profile": "rule",
+   "text": "process_name:RGX(\"\\p{Greek}\")",
+   "diagnostics": [],
+   "tokens": [
+    [
+     0,
+     12,
+     "property"
+    ],
+    [
+     12,
+     13,
+     "operator"
+    ],
+    [
+     13,
+     16,
+     "function.builtin"
+    ],
+    [
+     16,
+     17,
+     "punctuation.bracket"
+    ],
+    [
+     17,
+     28,
+     "string"
+    ],
+    [
+     28,
+     29,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:208",
+   "profile": "rule",
+   "text": "process_name:RGX(\"end\\z\")",
+   "diagnostics": [],
+   "tokens": [
+    [
+     0,
+     12,
+     "property"
+    ],
+    [
+     12,
+     13,
+     "operator"
+    ],
+    [
+     13,
+     16,
+     "function.builtin"
+    ],
+    [
+     16,
+     17,
+     "punctuation.bracket"
+    ],
+    [
+     17,
+     24,
+     "string"
+    ],
+    [
+     24,
+     25,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:209",
+   "profile": "rule",
+   "text": "process_name:RGX(\"\\x{263a}\")",
+   "diagnostics": [],
+   "tokens": [
+    [
+     0,
+     12,
+     "property"
+    ],
+    [
+     12,
+     13,
+     "operator"
+    ],
+    [
+     13,
+     16,
+     "function.builtin"
+    ],
+    [
+     16,
+     17,
+     "punctuation.bracket"
+    ],
+    [
+     17,
+     27,
+     "string"
+    ],
+    [
+     27,
+     28,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:210",
+   "profile": "rule",
+   "text": "process_name:RGX(\"\\Q.*\\E\")",
+   "diagnostics": [],
+   "tokens": [
+    [
+     0,
+     12,
+     "property"
+    ],
+    [
+     12,
+     13,
+     "operator"
+    ],
+    [
+     13,
+     16,
+     "function.builtin"
+    ],
+    [
+     16,
+     17,
+     "punctuation.bracket"
+    ],
+    [
+     17,
+     25,
+     "string"
+    ],
+    [
+     25,
+     26,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:211",
+   "profile": "rule",
+   "text": "process_name:RGX(\"(?<n>a)\")",
+   "diagnostics": [],
+   "tokens": [
+    [
+     0,
+     12,
+     "property"
+    ],
+    [
+     12,
+     13,
+     "operator"
+    ],
+    [
+     13,
+     16,
+     "function.builtin"
+    ],
+    [
+     16,
+     17,
+     "punctuation.bracket"
+    ],
+    [
+     17,
+     26,
+     "string"
+    ],
+    [
+     26,
+     27,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:212",
+   "profile": "rule",
+   "text": "process_name:RGX(\"[a?+]\")",
+   "diagnostics": [],
+   "tokens": [
+    [
+     0,
+     12,
+     "property"
+    ],
+    [
+     12,
+     13,
+     "operator"
+    ],
+    [
+     13,
+     16,
+     "function.builtin"
+    ],
+    [
+     16,
+     17,
+     "punctuation.bracket"
+    ],
+    [
+     17,
+     24,
+     "string"
+    ],
+    [
+     24,
+     25,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:213",
+   "profile": "rule",
+   "text": "process_name:RGX(\"[*+]\")",
+   "diagnostics": [],
+   "tokens": [
+    [
+     0,
+     12,
+     "property"
+    ],
+    [
+     12,
+     13,
+     "operator"
+    ],
+    [
+     13,
+     16,
+     "function.builtin"
+    ],
+    [
+     16,
+     17,
+     "punctuation.bracket"
+    ],
+    [
+     17,
+     23,
+     "string"
+    ],
+    [
+     23,
+     24,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:214",
+   "profile": "rule",
+   "text": "process_name:RGX(\"[(?=]\")",
+   "diagnostics": [],
+   "tokens": [
+    [
+     0,
+     12,
+     "property"
+    ],
+    [
+     12,
+     13,
+     "operator"
+    ],
+    [
+     13,
+     16,
+     "function.builtin"
+    ],
+    [
+     16,
+     17,
+     "punctuation.bracket"
+    ],
+    [
+     17,
+     24,
+     "string"
+    ],
+    [
+     24,
+     25,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:215",
+   "profile": "rule",
+   "text": "process_name:RGX(\"a(?i)b\")",
+   "diagnostics": [],
+   "tokens": [
+    [
+     0,
+     12,
+     "property"
+    ],
+    [
+     12,
+     13,
+     "operator"
+    ],
+    [
+     13,
+     16,
+     "function.builtin"
+    ],
+    [
+     16,
+     17,
+     "punctuation.bracket"
+    ],
+    [
+     17,
+     25,
+     "string"
+    ],
+    [
+     25,
+     26,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:216",
+   "profile": "rule",
+   "text": "process_name:RGX(\"(?U)a+\")",
+   "diagnostics": [],
+   "tokens": [
+    [
+     0,
+     12,
+     "property"
+    ],
+    [
+     12,
+     13,
+     "operator"
+    ],
+    [
+     13,
+     16,
+     "function.builtin"
+    ],
+    [
+     16,
+     17,
+     "punctuation.bracket"
+    ],
+    [
+     17,
+     25,
+     "string"
+    ],
+    [
+     25,
+     26,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:217",
+   "profile": "rule",
+   "text": "process_name:RGX(\"[[:alpha:]]+\")",
+   "diagnostics": [],
+   "tokens": [
+    [
+     0,
+     12,
+     "property"
+    ],
+    [
+     12,
+     13,
+     "operator"
+    ],
+    [
+     13,
+     16,
+     "function.builtin"
+    ],
+    [
+     16,
+     17,
+     "punctuation.bracket"
+    ],
+    [
+     17,
+     31,
+     "string"
+    ],
+    [
+     31,
+     32,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:218",
+   "profile": "rule",
+   "text": "process_name:RGX(\"a$?\")",
+   "diagnostics": [],
+   "tokens": [
+    [
+     0,
+     12,
+     "property"
+    ],
+    [
+     12,
+     13,
+     "operator"
+    ],
+    [
+     13,
+     16,
+     "function.builtin"
+    ],
+    [
+     16,
+     17,
+     "punctuation.bracket"
+    ],
+    [
+     17,
+     22,
+     "string"
+    ],
+    [
+     22,
+     23,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:219",
+   "profile": "rule",
+   "text": "process_name:RGX(\"^*a\")",
+   "diagnostics": [],
+   "tokens": [
+    [
+     0,
+     12,
+     "property"
+    ],
+    [
+     12,
+     13,
+     "operator"
+    ],
+    [
+     13,
+     16,
+     "function.builtin"
+    ],
+    [
+     16,
+     17,
+     "punctuation.bracket"
+    ],
+    [
+     17,
+     22,
+     "string"
+    ],
+    [
+     22,
+     23,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:220",
+   "profile": "rule",
+   "text": "process_name:RGX(\"\\\\b+\")",
+   "diagnostics": [],
+   "tokens": [
+    [
+     0,
+     12,
+     "property"
+    ],
+    [
+     12,
+     13,
+     "operator"
+    ],
+    [
+     13,
+     16,
+     "function.builtin"
+    ],
+    [
+     16,
+     17,
+     "punctuation.bracket"
+    ],
+    [
+     17,
+     23,
+     "string"
+    ],
+    [
+     23,
+     24,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:221",
+   "profile": "rule",
+   "text": "process_name:RGX(\"end\\Z\")",
+   "diagnostics": [
+    [
+     "exabeam_regex",
+     17,
+     24
+    ]
+   ],
+   "tokens": [
+    [
+     0,
+     12,
+     "property"
+    ],
+    [
+     12,
+     13,
+     "operator"
+    ],
+    [
+     13,
+     16,
+     "function.builtin"
+    ],
+    [
+     16,
+     17,
+     "punctuation.bracket"
+    ],
+    [
+     17,
+     24,
+     "string"
+    ],
+    [
+     24,
+     25,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:222",
+   "profile": "rule",
+   "text": "process_name:RGX(\"a{1001}\")",
+   "diagnostics": [
+    [
+     "exabeam_regex",
+     17,
+     26
+    ]
+   ],
+   "tokens": [
+    [
+     0,
+     12,
+     "property"
+    ],
+    [
+     12,
+     13,
+     "operator"
+    ],
+    [
+     13,
+     16,
+     "function.builtin"
+    ],
+    [
+     16,
+     17,
+     "punctuation.bracket"
+    ],
+    [
+     17,
+     26,
+     "string"
+    ],
+    [
+     26,
+     27,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:223",
+   "profile": "rule",
+   "text": "process_name:RGX(\"a{2,1001}\")",
+   "diagnostics": [
+    [
+     "exabeam_regex",
+     17,
+     28
+    ]
+   ],
+   "tokens": [
+    [
+     0,
+     12,
+     "property"
+    ],
+    [
+     12,
+     13,
+     "operator"
+    ],
+    [
+     13,
+     16,
+     "function.builtin"
+    ],
+    [
+     16,
+     17,
+     "punctuation.bracket"
+    ],
+    [
+     17,
+     28,
+     "string"
+    ],
+    [
+     28,
+     29,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:224",
+   "profile": "rule",
+   "text": "process_name:RGX(\"a*+\")",
+   "diagnostics": [
+    [
+     "exabeam_regex",
+     17,
+     22
+    ]
+   ],
+   "tokens": [
+    [
+     0,
+     12,
+     "property"
+    ],
+    [
+     12,
+     13,
+     "operator"
+    ],
+    [
+     13,
+     16,
+     "function.builtin"
+    ],
+    [
+     16,
+     17,
+     "punctuation.bracket"
+    ],
+    [
+     17,
+     22,
+     "string"
+    ],
+    [
+     22,
+     23,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:225",
+   "profile": "rule",
+   "text": "process_name:RGX(\"a{2}+\")",
+   "diagnostics": [
+    [
+     "exabeam_regex",
+     17,
+     24
+    ]
+   ],
+   "tokens": [
+    [
+     0,
+     12,
+     "property"
+    ],
+    [
+     12,
+     13,
+     "operator"
+    ],
+    [
+     13,
+     16,
+     "function.builtin"
+    ],
+    [
+     16,
+     17,
+     "punctuation.bracket"
+    ],
+    [
+     17,
+     24,
+     "string"
+    ],
+    [
+     24,
+     25,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:226",
+   "profile": "rule",
+   "text": "process_name:RGX(\"(?>a)\")",
+   "diagnostics": [
+    [
+     "exabeam_regex",
+     17,
+     24
+    ]
+   ],
+   "tokens": [
+    [
+     0,
+     12,
+     "property"
+    ],
+    [
+     12,
+     13,
+     "operator"
+    ],
+    [
+     13,
+     16,
+     "function.builtin"
+    ],
+    [
+     16,
+     17,
+     "punctuation.bracket"
+    ],
+    [
+     17,
+     24,
+     "string"
+    ],
+    [
+     24,
+     25,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:227",
+   "profile": "rule",
+   "text": "process_name:RGX(\"(?P=n)\")",
+   "diagnostics": [
+    [
+     "exabeam_regex",
+     17,
+     25
+    ]
+   ],
+   "tokens": [
+    [
+     0,
+     12,
+     "property"
+    ],
+    [
+     12,
+     13,
+     "operator"
+    ],
+    [
+     13,
+     16,
+     "function.builtin"
+    ],
+    [
+     16,
+     17,
+     "punctuation.bracket"
+    ],
+    [
+     17,
+     25,
+     "string"
+    ],
+    [
+     25,
+     26,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:228",
+   "profile": "rule",
+   "text": "process_name:RGX(\"(?#note)a\")",
+   "diagnostics": [
+    [
+     "exabeam_regex",
+     17,
+     28
+    ]
+   ],
+   "tokens": [
+    [
+     0,
+     12,
+     "property"
+    ],
+    [
+     12,
+     13,
+     "operator"
+    ],
+    [
+     13,
+     16,
+     "function.builtin"
+    ],
+    [
+     16,
+     17,
+     "punctuation.bracket"
+    ],
+    [
+     17,
+     28,
+     "string"
+    ],
+    [
+     28,
+     29,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:229",
+   "profile": "rule",
+   "text": "process_name:RGX(\"(?x)a\")",
+   "diagnostics": [
+    [
+     "exabeam_regex",
+     17,
+     24
+    ]
+   ],
+   "tokens": [
+    [
+     0,
+     12,
+     "property"
+    ],
+    [
+     12,
+     13,
+     "operator"
+    ],
+    [
+     13,
+     16,
+     "function.builtin"
+    ],
+    [
+     16,
+     17,
+     "punctuation.bracket"
+    ],
+    [
+     17,
+     24,
+     "string"
+    ],
+    [
+     24,
+     25,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:230",
+   "profile": "rule",
+   "text": "process_name:RGX(\"a\\ b\")",
+   "diagnostics": [],
+   "tokens": [
+    [
+     0,
+     12,
+     "property"
+    ],
+    [
+     12,
+     13,
+     "operator"
+    ],
+    [
+     13,
+     16,
+     "function.builtin"
+    ],
+    [
+     16,
+     17,
+     "punctuation.bracket"
+    ],
+    [
+     17,
+     23,
+     "string"
+    ],
+    [
+     23,
+     24,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:231",
+   "profile": "rule",
+   "text": "process_name:RGX(\"back\\\\slash\")",
+   "diagnostics": [],
+   "tokens": [
+    [
+     0,
+     12,
+     "property"
+    ],
+    [
+     12,
+     13,
+     "operator"
+    ],
+    [
+     13,
+     16,
+     "function.builtin"
+    ],
+    [
+     16,
+     17,
+     "punctuation.bracket"
+    ],
+    [
+     17,
+     30,
+     "string"
+    ],
+    [
+     30,
+     31,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:232",
+   "profile": "rule",
+   "text": "message:\"user signed in 'admin'\"",
+   "diagnostics": [],
+   "tokens": [
+    [
+     0,
+     7,
+     "property"
+    ],
+    [
+     7,
+     8,
+     "operator"
+    ],
+    [
+     8,
+     32,
+     "string"
+    ]
+   ]
   }
  ],
  "blocks": [
@@ -14840,12 +17422,7 @@
   },
   {
    "file": "blocks/correlation-unknown-key.yaml",
-   "errors": [
-    [
-     "exabeam_correlation",
-     "configurations.exabeam.correlation"
-    ]
-   ]
+   "errors": []
   },
   {
    "file": "blocks/correlation-window.yaml",
@@ -15070,12 +17647,7 @@
   },
   {
    "file": "blocks/sequence-unknown-key.yaml",
-   "errors": [
-    [
-     "exabeam_sequences",
-     "configurations.exabeam.sequences.0"
-    ]
-   ]
+   "errors": []
   },
   {
    "file": "blocks/sequences-empty.yaml",
@@ -15124,12 +17696,7 @@
   },
   {
    "file": "blocks/suppression-key.yaml",
-   "errors": [
-    [
-     "exabeam_duration",
-     "configurations.exabeam.suppression"
-    ]
-   ]
+   "errors": []
   },
   {
    "file": "blocks/threshold-average-float.yaml",
@@ -15204,12 +17771,7 @@
   },
   {
    "file": "blocks/threshold-unknown-key.yaml",
-   "errors": [
-    [
-     "exabeam_threshold_function",
-     "configurations.exabeam.sequences.0.threshold"
-    ]
-   ]
+   "errors": []
   },
   {
    "file": "blocks/threshold-value-operator.yaml",

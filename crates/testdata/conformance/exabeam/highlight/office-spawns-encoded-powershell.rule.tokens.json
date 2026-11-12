@@ -208,18 +208,18 @@
     "capture": "punctuation.bracket"
   },
   {
-    "text": "\"\\\\s-(e|en|enc|enco|encod|encode|encoded|encodedcommand)\\\\s\"",
+    "text": "\"\\s-(e|en|enc|enco|encod|encode|encoded|encodedcommand)\\s\"",
     "range": [
       178,
-      238
+      236
     ],
     "capture": "string"
   },
   {
     "text": ")",
     "range": [
-      238,
-      239
+      236,
+      237
     ],
     "capture": "punctuation.bracket"
   }

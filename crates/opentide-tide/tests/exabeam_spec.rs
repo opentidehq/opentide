@@ -171,12 +171,41 @@ fn advisories() {
         ),
         "{d:?}"
     );
-    let wide = window.replace("correlation: {within: 1h}", "correlation: {within: 2h}");
-    let d = diagnostics("objects/rules/window.yaml", &wide, &[]);
-    assert!(
-        !d.iter()
+    // Ordered sequences need 120 + 1 (any match) + 1 (between) = 122 minutes.
+    let wide = |within: &str| {
+        let text = window.replace(
+            "correlation: {within: 1h}",
+            &format!("correlation: {{within: {within}}}"),
+        );
+        diagnostics("objects/rules/window.yaml", &text, &[])
+            .iter()
             .any(|d| d.code == codes::EXABEAM_CORRELATION_WINDOW)
-    );
+    };
+    assert!(wide("2h"), "the longest window alone is not enough");
+    assert!(wide("122m"));
+    assert!(!wide("123m"));
+    assert!(!wide("3h"));
+    // Exabeam's guide: a 3- and a 5-minute sequence need more than nine minutes.
+    let guide = window
+        .replace("within: 2h}", "within: 3m}")
+        .replace(
+            "      - query: 'activity_type:\"process-create\"'\n",
+            "      - query: 'activity_type:\"process-create\"'\n        threshold: {function: count, operator: more_than, value: 1, within: 5m}\n",
+        );
+    assert_ne!(guide, window);
+    for (within, warned) in [("9m", true), ("10m", false)] {
+        let text = guide.replace(
+            "correlation: {within: 1h}",
+            &format!("correlation: {{within: {within}}}"),
+        );
+        let d = diagnostics("objects/rules/window.yaml", &text, &[]);
+        assert_eq!(
+            d.iter()
+                .any(|d| d.code == codes::EXABEAM_CORRELATION_WINDOW),
+            warned,
+            "{within}: {d:?}"
+        );
+    }
 }
 
 #[test]
@@ -261,4 +290,46 @@ fn findings_point_at_their_field() {
         &line[not_equal.range.start.character as usize..not_equal.range.end.character as usize],
         "!="
     );
+}
+
+#[test]
+fn nested_unknown_keys_are_unknown_keys_at_their_path() {
+    // exabeam-1.0: an unknown key is never a constraint code; the Tide
+    // catalogue reports it at its own path, at the root and inside.
+    for (file, path) in [
+        (
+            "sequence-unknown-key.yaml",
+            "configurations.exabeam.sequences.0.condition",
+        ),
+        (
+            "threshold-unknown-key.yaml",
+            "configurations.exabeam.sequences.0.threshold.window",
+        ),
+        (
+            "suppression-key.yaml",
+            "configurations.exabeam.suppression.until",
+        ),
+        (
+            "correlation-unknown-key.yaml",
+            "configurations.exabeam.correlation.order",
+        ),
+    ] {
+        let text = std::fs::read_to_string(dir().join("blocks").join(file)).unwrap();
+        let d = diagnostics("objects/rules/x.yaml", &text, &[]);
+        assert!(
+            !d.iter().any(|d| d.code.starts_with("exabeam_")),
+            "{file}: {d:?}"
+        );
+        // The catalogue's field paths leave list indexes out, on every platform.
+        let path: Vec<&str> = path
+            .split('.')
+            .filter(|p| p.parse::<usize>().is_err())
+            .collect();
+        assert!(
+            d.iter().any(|d| d.code == "schema_validation"
+                && d.severity == Severity::Error
+                && d.field_path.clone().unwrap_or_default() == path),
+            "{file}: {d:?}"
+        );
+    }
 }

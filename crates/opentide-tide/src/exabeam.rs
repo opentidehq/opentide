@@ -42,8 +42,6 @@ const WEEKDAYS: [&str; 7] = [
     "saturday",
     "sunday",
 ];
-const SEQUENCE_KEYS: [&str; 4] = ["query", "name", "threshold", "group_by"];
-const THRESHOLD_KEYS: [&str; 5] = ["function", "field", "operator", "value", "within"];
 const MAX_NAME: usize = 128;
 
 fn full_path<'a>(path: &[&'a str]) -> Vec<&'a str> {
@@ -142,28 +140,19 @@ fn is_number(v: &Value) -> bool {
     matches!(v, Value::Number(_))
 }
 
-fn extra_keys(map: &serde_yaml::Mapping, allowed: &[&str]) -> bool {
-    map.keys()
-        .any(|k| !k.as_str().is_some_and(|k| allowed.contains(&k)))
+/// The value under `key`, a null being the key left out (exabeam-1.0: null
+/// is absent at every level).
+fn present<'a>(map: &'a serde_yaml::Mapping, key: &str) -> Option<&'a Value> {
+    map.get(Value::String(key.into())).filter(|v| !v.is_null())
 }
 
-/// `IN "…"` in a query: a context table lookup, which a threshold cannot
-/// follow (`exabeam_context_table_trigger`).
+/// Whether a query looks a value up in a context table, as the engine
+/// parses it: `IN "…"` inside a string is not a lookup
+/// (`exabeam_context_table_trigger`).
 fn uses_context_table(query: &str) -> bool {
-    let bytes = query.as_bytes();
-    let mut i = 0;
-    while i + 2 <= bytes.len() {
-        let before_ok = i == 0 || !(bytes[i - 1].is_ascii_alphanumeric() || bytes[i - 1] == b'_');
-        if before_ok && bytes[i..i + 2].eq_ignore_ascii_case(b"in") {
-            let after = &query[i + 2..];
-            let trimmed = after.trim_start();
-            if trimmed.len() < after.len() && trimmed.starts_with(['"', '\'']) {
-                return true;
-            }
-        }
-        i += 1;
-    }
-    false
+    !opentide_exabeam::check(query, opentide_exabeam::Profile::Rule)
+        .context_tables
+        .is_empty()
 }
 
 fn threshold_checks(
@@ -173,10 +162,8 @@ fn threshold_checks(
     out: &mut Vec<Diagnostic>,
 ) -> Option<u64> {
     let path = ["sequences", index, "threshold"];
-    let Some(map) = threshold
-        .as_mapping()
-        .filter(|m| !extra_keys(m, &THRESHOLD_KEYS))
-    else {
+    // An unknown key is the Tide catalogue's (exabeam-1.0: never a constraint code).
+    let Some(map) = threshold.as_mapping() else {
         out.push(err(
             source,
             codes::EXABEAM_THRESHOLD_FUNCTION,
@@ -185,7 +172,7 @@ fn threshold_checks(
         ));
         return None;
     };
-    let get = |k: &str| map.get(Value::String(k.into()));
+    let get = |k: &str| present(map, k);
     let function = get("function").and_then(Value::as_str).unwrap_or("");
     if !FUNCTIONS.contains(&function) {
         out.push(err(
@@ -200,7 +187,7 @@ fn threshold_checks(
         ));
         return None;
     }
-    let field = get("field").filter(|v| !v.is_null());
+    let field = get("field");
     if let Some(f) = field
         && f.as_str().is_none_or(|s| s.trim().is_empty())
     {
@@ -299,7 +286,17 @@ fn schedule_checks(source: &str, schedule: &Value, out: &mut Vec<Diagnostic>) {
     for (index, rec) in items.iter().enumerate() {
         let at = index.to_string();
         let path = ["schedule", at.as_str()];
-        let every = rec.get("every").and_then(Value::as_str).unwrap_or("");
+        let Some(map) = rec.as_mapping() else {
+            out.push(err(
+                source,
+                codes::EXABEAM_SCHEDULE,
+                "a recurrence is a table",
+                &path,
+            ));
+            continue;
+        };
+        let get = |k: &str| present(map, k);
+        let every = get("every").and_then(Value::as_str).unwrap_or("");
         let day_keys: &[&str] = match every {
             "day" => &[],
             "week" => &["days"],
@@ -315,15 +312,15 @@ fn schedule_checks(source: &str, schedule: &Value, out: &mut Vec<Diagnostic>) {
                 continue;
             }
         };
-        let Some(map) = rec.as_mapping() else {
-            continue;
-        };
-        let mut allowed = vec!["every", "from", "to"];
-        allowed.extend_from_slice(day_keys);
+        // A day key this `every` does not take; a key that is no day key is
+        // the Tide catalogue's unknown key.
+        let wrong_day_key = ["days", "last_day", "first", "last"]
+            .iter()
+            .any(|k| !day_keys.contains(k) && get(k).is_some());
         let times = ["from", "to"]
             .iter()
-            .all(|k| rec.get(*k).and_then(Value::as_str).is_some_and(utc_time));
-        let mut ok = times && !extra_keys(map, &allowed);
+            .all(|k| get(k).and_then(Value::as_str).is_some_and(utc_time));
+        let mut ok = times && !wrong_day_key;
         let weekday_list = |v: Option<&Value>| {
             v.and_then(Value::as_sequence).is_some_and(|days| {
                 let mut seen = Vec::new();
@@ -338,10 +335,10 @@ fn schedule_checks(source: &str, schedule: &Value, out: &mut Vec<Diagnostic>) {
             })
         };
         match every {
-            "week" => ok = ok && weekday_list(rec.get("days")),
+            "week" => ok = ok && weekday_list(get("days")),
             "month" => {
-                let last = rec.get("last_day").unwrap_or(&Value::Bool(false));
-                let days = rec.get("days").filter(|v| !v.is_null());
+                let last = get("last_day").unwrap_or(&Value::Bool(false));
+                let days = get("days");
                 ok = ok && last.is_bool() && (days.is_some() || last.as_bool() == Some(true));
                 if let Some(days) = days {
                     ok = ok
@@ -361,7 +358,7 @@ fn schedule_checks(source: &str, schedule: &Value, out: &mut Vec<Diagnostic>) {
             "days" => {
                 ok = ok
                     && ["first", "last"].iter().all(|k| {
-                        rec.get(*k)
+                        get(k)
                             .and_then(Value::as_str)
                             .is_some_and(|d| WEEKDAYS.contains(&d))
                     });
@@ -373,7 +370,7 @@ fn schedule_checks(source: &str, schedule: &Value, out: &mut Vec<Diagnostic>) {
                 source,
                 codes::EXABEAM_SCHEDULE,
                 format!(
-                    "an invalid `{every}` recurrence: `from` and `to` are `HH:MMZ`, and it takes {}",
+                    "an invalid `{every}` recurrence: `from` and `to` are `H:MMZ` or `HH:MMZ`, and it takes {}",
                     if day_keys.is_empty() {
                         "no day keys".to_string()
                     } else {
@@ -459,19 +456,22 @@ pub(crate) fn constraint_diagnostics(
             &[]
         }
     };
-    let mut longest_window: Option<u64> = None;
+    // The minutes the ordered sequences need (exabeam-1.0, `correlation`): each
+    // window, one minute for an any-match sequence, and one minute between
+    // sequences; `None` once a window does not parse.
+    let mut needed: Option<u64> = Some(sequences.len().saturating_sub(1) as u64);
     for (index, seq) in sequences.iter().enumerate() {
         let at = index.to_string();
-        let Some(map) = seq.as_mapping().filter(|m| !extra_keys(m, &SEQUENCE_KEYS)) else {
+        let Some(map) = seq.as_mapping() else {
             out.push(err(
                 source,
                 codes::EXABEAM_SEQUENCES,
-                "a sequence has `query`, and may have `name`, `threshold` and `group_by`",
+                "a sequence is a table with `query`, and may have `name`, `threshold` and `group_by`",
                 &["sequences", at.as_str()],
             ));
             continue;
         };
-        let get = |k: &str| map.get(Value::String(k.into()));
+        let get = |k: &str| present(map, k);
         let query = get("query").and_then(Value::as_str);
         if query.is_none_or(|q| q.trim().is_empty()) {
             out.push(err(
@@ -491,22 +491,26 @@ pub(crate) fn constraint_diagnostics(
                 &["sequences", at.as_str(), "group_by"],
             ));
         }
-        if let Some(threshold) = get("threshold") {
-            if let Some(minutes) = threshold_checks(source, threshold, &at, &mut out) {
-                longest_window = Some(longest_window.map_or(minutes, |m| m.max(minutes)));
-            }
-            if query.is_some_and(uses_context_table) {
-                out.push(err(
-                    source,
-                    codes::EXABEAM_CONTEXT_TABLE_TRIGGER,
-                    "a sequence that looks up a context table triggers on the first match: Exabeam takes no threshold with it",
-                    &["sequences", at.as_str(), "threshold"],
-                ));
-            }
+        let Some(threshold) = get("threshold") else {
+            needed = needed.map(|n| n + 1);
+            continue;
+        };
+        let minutes = threshold_checks(source, threshold, &at, &mut out);
+        needed = needed.zip(minutes).map(|(n, m)| n + m);
+        if query.is_some_and(uses_context_table) {
+            out.push(err(
+                source,
+                codes::EXABEAM_CONTEXT_TABLE_TRIGGER,
+                "a sequence that looks up a context table triggers on the first match: Exabeam takes no threshold with it",
+                &["sequences", at.as_str(), "threshold"],
+            ));
         }
     }
     // Correlation.
     let correlation = block.get("correlation").filter(|v| !v.is_null());
+    if sequences.iter().any(|s| !s.is_mapping()) {
+        needed = None;
+    }
     match (sequences.len(), correlation) {
         (n, None) if n >= 2 => out.push(err(
             source,
@@ -520,18 +524,15 @@ pub(crate) fn constraint_diagnostics(
             "one sequence has no `correlation`",
             &["correlation"],
         )),
-        (_, Some(c)) => match c
-            .as_mapping()
-            .filter(|m| !extra_keys(m, &["within", "group_by"]))
-        {
+        (_, Some(c)) => match c.as_mapping() {
             None => out.push(err(
                 source,
                 codes::EXABEAM_CORRELATION,
                 "`correlation` has `within` and `group_by`",
                 &["correlation"],
             )),
-            Some(_) => {
-                match duration_minutes(c.get("within"), "mhd") {
+            Some(m) => {
+                match duration_minutes(present(m, "within"), "mhd") {
                     None => out.push(err(
                         source,
                         codes::EXABEAM_DURATION,
@@ -539,19 +540,22 @@ pub(crate) fn constraint_diagnostics(
                         &["correlation", "within"],
                     )),
                     Some(within) => {
-                        if let Some(longest) = longest_window
-                            && within < longest
+                        if let Some(needed) = needed
+                            && sequences.len() >= 2
+                            && within <= needed
                         {
                             out.push(warn(
                                 source,
                                 codes::EXABEAM_CORRELATION_WINDOW,
-                                "the correlation window is shorter than the longest sequence window: Exabeam's guide asks for at least that",
+                                format!(
+                                    "the correlation window is not more than the {needed} minutes the ordered sequences need (their windows, a minute for each any-match sequence, a minute between sequences): make it more than {needed}m"
+                                ),
                                 &["correlation", "within"],
                             ));
                         }
                     }
                 }
-                if let Some(group_by) = c.get("group_by")
+                if let Some(group_by) = present(m, "group_by")
                     && !group_by_ok(group_by, true)
                 {
                     out.push(err(
@@ -598,22 +602,20 @@ pub(crate) fn constraint_diagnostics(
     let email = block.get("email").filter(|v| !v.is_null());
     if let Some(email) = email {
         let ok = email.as_mapping().is_some_and(|m| {
-            let recipients = email.get("recipients").and_then(Value::as_sequence);
-            let subject = email.get("subject").filter(|v| !v.is_null());
-            !extra_keys(m, &["recipients", "subject", "attach_csv"])
-                && recipients.is_some_and(|r| {
-                    let mut seen = Vec::new();
-                    !r.is_empty()
-                        && r.iter().all(|a| match a.as_str() {
-                            Some(a) if email_ok(a) && !seen.contains(&a) => {
-                                seen.push(a);
-                                true
-                            }
-                            _ => false,
-                        })
-                })
-                && subject.is_none_or(|s| s.as_str().is_some_and(|s| !s.trim().is_empty()))
-                && email.get("attach_csv").is_none_or(Value::is_bool)
+            let recipients = present(m, "recipients").and_then(Value::as_sequence);
+            let subject = present(m, "subject");
+            recipients.is_some_and(|r| {
+                let mut seen = Vec::new();
+                !r.is_empty()
+                    && r.iter().all(|a| match a.as_str() {
+                        Some(a) if email_ok(a) && !seen.contains(&a) => {
+                            seen.push(a);
+                            true
+                        }
+                        _ => false,
+                    })
+            }) && subject.is_none_or(|s| s.as_str().is_some_and(|s| !s.trim().is_empty()))
+                && present(m, "attach_csv").is_none_or(Value::is_bool)
         });
         if !ok {
             out.push(err(
@@ -634,18 +636,15 @@ pub(crate) fn constraint_diagnostics(
     }
     // Suppression, delay, schedule.
     if let Some(suppression) = block.get("suppression").filter(|v| !v.is_null()) {
-        match suppression
-            .as_mapping()
-            .filter(|m| !extra_keys(m, &["for", "group_by"]))
-        {
+        match suppression.as_mapping() {
             None => out.push(err(
                 source,
                 codes::EXABEAM_DURATION,
-                "`suppression` has `for` and `group_by`",
-                &["suppression"],
+                "`suppression` is a table with `for` and `group_by`",
+                &["suppression", "for"],
             )),
-            Some(_) => {
-                if duration_minutes(suppression.get("for"), "mhdw").is_none() {
+            Some(m) => {
+                if duration_minutes(present(m, "for"), "mhdw").is_none() {
                     out.push(err(
                         source,
                         codes::EXABEAM_DURATION,
@@ -653,7 +652,7 @@ pub(crate) fn constraint_diagnostics(
                         &["suppression", "for"],
                     ));
                 }
-                if let Some(group_by) = suppression.get("group_by")
+                if let Some(group_by) = present(m, "group_by")
                     && !group_by_ok(group_by, false)
                 {
                     out.push(err(
@@ -713,7 +712,7 @@ pub(crate) fn constraint_diagnostics(
                 source,
                 codes::EXABEAM_NAME_DUPLICATE,
                 format!(
-                    "`{name}` is also the Exabeam rule name of {} ({}): Exabeam's import refuses a second rule of one name, and Search links rules by name",
+                    "`{name}` is also the Exabeam rule name of {} ({}): Exabeam's import refuses a second rule of one name, and deploy's name check refuses the second create",
                     other.path, other.name
                 ),
                 &["name"],
@@ -758,7 +757,10 @@ mod tests {
     fn context_tables_in_a_query() {
         assert!(uses_context_table("user IN \"Privileged Accounts\""));
         assert!(uses_context_table("user in 'A'"));
+        assert!(uses_context_table("c-user IN \"A\""));
         assert!(!uses_context_table("user:\"in\" AND login:\"x\""));
         assert!(!uses_context_table("domain:\"x\""));
+        // A quoted phrase that holds ` in '` is not a lookup.
+        assert!(!uses_context_table("message:\"user signed in 'admin'\""));
     }
 }

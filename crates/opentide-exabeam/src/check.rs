@@ -67,6 +67,8 @@ pub struct Checked {
     pub tokens: Vec<Token>,
     /// The query is in the advanced form (exabeam-1.0, "Profiles").
     pub advanced: bool,
+    /// The byte span of each context table lookup, in source order.
+    pub context_tables: Vec<(usize, usize)>,
 }
 
 /// Every code of the language (exabeam-1.0, "Diagnostics").
@@ -237,7 +239,15 @@ pub fn is_reserved(word: &str) -> bool {
 const CLAUSES: [&str; 7] = [
     "SELECT", "FROM", "WHERE", "AS", "GROUP-BY", "ORDER-BY", "LIMIT",
 ];
-const STOP: [&str; 4] = ["GROUP-BY", "ORDER-BY", "LIMIT", "AS"];
+/// Every clause keyword ends a statement's filter (exabeam-1.0: `WHERE a:"b"
+/// SELECT c` is `exabeam_clause_order`, not free text).
+const STOP: [&str; 8] = [
+    "SELECT", "FROM", "WHERE", "AS", "GROUP-BY", "ORDER-BY", "LIMIT", "FOREACH",
+];
+/// Filter operators: never a term (exabeam-1.0: a missing operand).
+const OPERATOR_WORDS: [&str; 5] = ["AND", "OR", "NOT", "TO", "IN"];
+/// Epoch milliseconds above this compare as this (the reference checker's cap).
+const EPOCH_MS_CAP: i128 = 100_000_000_000_000_000_000_000_000_000_000_000_000;
 
 struct ParseError {
     message: String,
@@ -416,6 +426,70 @@ pub fn is_number(text: &str) -> bool {
         && frac.is_none_or(|f| !f.is_empty() && f.bytes().all(|b| b.is_ascii_digit()))
 }
 
+fn is_time_field(field: &str) -> bool {
+    TIME_FIELDS.contains(&field.to_lowercase().as_str())
+}
+
+/// Ten or more digits: epoch milliseconds on a time field.
+fn is_epoch_ms(text: &str) -> bool {
+    text.len() >= 10 && text.bytes().all(|b| b.is_ascii_digit())
+}
+
+/// Epoch milliseconds, capped as the reference checker caps them.
+fn epoch_ms(text: &str) -> i128 {
+    let digits = text.trim_start_matches('0');
+    if digits.len() > 38 {
+        return EPOCH_MS_CAP;
+    }
+    digits.parse::<i128>().unwrap_or(0).min(EPOCH_MS_CAP)
+}
+
+/// Days since 1970-01-01 of a proleptic Gregorian date (Howard Hinnant's
+/// `days_from_civil`), as the reference checker computes it.
+fn days_from_civil(y: i128, m: i128, d: i128) -> i128 {
+    let y = if m <= 2 { y - 1 } else { y };
+    let era = y.div_euclid(400);
+    let yoe = y - era * 400;
+    let doy = (153 * (m + if m > 2 { -3 } else { 9 }) + 2).div_euclid(5) + d - 1;
+    let doe = yoe * 365 + yoe.div_euclid(4) - yoe.div_euclid(100) + doy;
+    era * 146_097 + doe - 719_468
+}
+
+/// A `YYYY-MM-DDThh:mm:ss[.sss][Z|±hh:mm]` datetime as epoch milliseconds
+/// (no zone is UTC), or `None` when `text` is not one.
+fn datetime_ms(text: &str) -> Option<i128> {
+    if !is_datetime(text) {
+        return None;
+    }
+    let num = |r: std::ops::Range<usize>| text[r].parse::<i128>().unwrap_or(0);
+    let (y, mo, d, hh, mi, ss) = (
+        num(0..4),
+        num(5..7),
+        num(8..10),
+        num(11..13),
+        num(14..16),
+        num(17..19),
+    );
+    let mut i = 19;
+    let mut millis = 0;
+    if text.as_bytes().get(i) == Some(&b'.') {
+        let digits: String = text[i + 1..]
+            .chars()
+            .take_while(char::is_ascii_digit)
+            .collect();
+        i += 1 + digits.len();
+        millis = format!("{digits:0<3}").parse::<i128>().unwrap_or(0);
+    }
+    let offset = match text.as_bytes().get(i) {
+        Some(sign @ (b'+' | b'-')) => {
+            let minutes = num(i + 1..i + 3) * 60 + num(i + 4..i + 6);
+            if *sign == b'-' { -minutes } else { minutes }
+        }
+        _ => 0,
+    };
+    Some(((((days_from_civil(y, mo, d) * 24 + hh) * 60 + mi - offset) * 60) + ss) * 1000 + millis)
+}
+
 /// `YYYY-MM-DDThh:mm:ss[.sss][Z|±hh:mm]` as the whole text.
 fn is_datetime(text: &str) -> bool {
     let b = text.as_bytes();
@@ -526,22 +600,9 @@ pub fn re2_refusal(pattern: &str) -> Option<String> {
         }
         i += 1;
     }
-    for look in ["(?=", "(?!", "(?<=", "(?<!"] {
-        if pattern.contains(look) {
-            return Some("look-around is not RE2".into());
-        }
-    }
-    if pattern.contains("(?>") {
-        return Some("atomic groups are not RE2".into());
-    }
-    for (i, pair) in b.windows(2).enumerate() {
-        if matches!(pair[0], b'*' | b'+' | b'?' | b'}')
-            && pair[1] == b'+'
-            && (i == 0 || b[i - 1] != b'\\')
-        {
-            return Some("possessive quantifiers are not RE2".into());
-        }
-    }
+    // Look-around, atomic groups and possessive quantifiers are refused by
+    // `re2_rewrite`, outside character classes only: `[a?+]` and `[(?=]`
+    // are sets of literals.
     let rewritten = match re2_rewrite(pattern) {
         Ok(p) => p,
         Err(why) => return Some(why),
@@ -586,6 +647,16 @@ fn re2_rewrite(pattern: &str) -> Result<String, String> {
                     j += 1;
                 }
                 i = (j + 2).min(chars.len());
+                repeated = false;
+                continue;
+            }
+            if matches!(next, 'p' | 'P' | 'x') && chars.get(i + 2) == Some(&'{') {
+                // `\p{Greek}`, `\x{263a}`: the braces belong to the escape.
+                let Some(close) = (i + 3..chars.len()).find(|&j| chars[j] == '}') else {
+                    return Err("missing } in an escape".into());
+                };
+                out.extend(&chars[i..=close]);
+                i = close + 1;
                 repeated = false;
                 continue;
             }
@@ -643,6 +714,9 @@ fn re2_rewrite(pattern: &str) -> Result<String, String> {
             }
             '*' | '+' | '?' => {
                 if repeated {
+                    if c == '+' {
+                        return Err("possessive quantifiers are not RE2".into());
+                    }
                     return Err(format!("bad repetition operator: {c}"));
                 }
                 out.push(c);
@@ -678,6 +752,13 @@ fn re2_rewrite(pattern: &str) -> Result<String, String> {
             // Literals in RE2 outside a class.
             ']' | '}' => escape(c, &mut out),
             '(' if chars.get(i + 1) == Some(&'?') => {
+                let after: String = chars[i + 2..chars.len().min(i + 4)].iter().collect();
+                if after.starts_with(['=', '!']) || after == "<=" || after == "<!" {
+                    return Err("look-around is not RE2".into());
+                }
+                if after.starts_with('>') {
+                    return Err("atomic groups are not RE2".into());
+                }
                 // Flags: `(?i)`, `(?i-s:`; names and groups pass through.
                 let mut j = i + 2;
                 while j < chars.len() && (chars[j].is_ascii_alphabetic() || chars[j] == '-') {
@@ -843,6 +924,17 @@ impl<'a> Parser<'a> {
         Some((&self.text[self.pos..end], self.pos, end))
     }
 
+    /// A field name at the cursor, `-` included (`c-uri`); GROUP-BY and
+    /// ORDER-BY stay keywords.
+    fn column_at(&mut self) -> Option<Word<'a>> {
+        self.ws();
+        if hyphen_word_end(self.text, self.pos).is_some() {
+            return None;
+        }
+        let end = field_end(self.text, self.pos)?;
+        Some((&self.text[self.pos..end], self.pos, end))
+    }
+
     fn keyword_at(&mut self, words: &[&str]) -> Option<Word<'a>> {
         let w = self.word_at()?;
         if !words.contains(&w.0.to_uppercase().as_str()) {
@@ -921,6 +1013,7 @@ impl<'a> Parser<'a> {
             );
         }
         self.check_context_tables();
+        self.out.context_tables = self.context_tables.clone();
         self.check_fields();
         self.out.tokens.sort_by_key(|t| (t.start, t.end));
         self.out
@@ -969,8 +1062,8 @@ impl<'a> Parser<'a> {
     }
 
     /// The advanced form: it opens with SELECT, WHERE, FROM, or FOREACH, or
-    /// has a pipe, a GROUP-BY, an ORDER-BY, or a trailing `LIMIT <n>` outside
-    /// strings and brackets.
+    /// has a pipe, a GROUP-BY, an ORDER-BY, a statement `AS name`, or a
+    /// trailing `LIMIT <n>` outside strings and brackets, each a whole word.
     fn looks_advanced(&mut self) -> bool {
         if self
             .keyword_at(&["SELECT", "WHERE", "FROM", "FOREACH"])
@@ -1006,8 +1099,12 @@ impl<'a> Parser<'a> {
                 ')' | ']' | '}' => depth -= 1,
                 '|' if depth == 0 => return true,
                 _ if depth == 0
-                    && previous.is_none_or(|p| !(p.is_alphanumeric() || p == '_' || p == '.'))
-                    && (hyphen_word_end(text, i).is_some() || trailing_limit(&text[i..])) =>
+                    && previous.is_none_or(|p| {
+                        !(p.is_alphanumeric() || p == '_' || p == '.' || p == '-')
+                    })
+                    && (hyphen_word_end(text, i).is_some()
+                        || trailing_limit(&text[i..])
+                        || (i > 0 && statement_alias(&text[i..]))) =>
                 {
                     return true;
                 }
@@ -1188,8 +1285,15 @@ impl<'a> Parser<'a> {
         }
         if let Some(end) = field_end(self.text, self.pos) {
             let name = &self.text[self.pos..end];
-            if name.contains('-') && starts_with_operator(self.text[end..].trim_start()) {
+            let after = self.text[end..].trim_start();
+            if name.contains('-') && starts_with_operator(after) {
                 return self.field_term(name, self.pos, end);
+            }
+            if name.contains('-')
+                && starts_with_in(after)
+                && after[2..].trim_start().starts_with(['"', '\''])
+            {
+                return self.context_term(name, self.pos, end);
             }
         }
         if let Some((name, s, e)) = self.word_at() {
@@ -1209,6 +1313,15 @@ impl<'a> Parser<'a> {
             return fail(format!("unexpected `{ch}`"), self.pos);
         };
         let word = &self.text[self.pos..end];
+        if OPERATOR_WORDS
+            .iter()
+            .any(|op| word.eq_ignore_ascii_case(op))
+        {
+            return fail(
+                format!("`{word}` is an operator, not a term: an operand is missing"),
+                self.pos,
+            );
+        }
         if !word
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '*' | '?'))
@@ -1309,7 +1422,7 @@ impl<'a> Parser<'a> {
         match self.rest().chars().next() {
             Some('"' | '\'') => {
                 let (body, s, e) = self.string()?;
-                if TIME_FIELDS.contains(&field.to_lowercase().as_str()) {
+                if is_time_field(field) {
                     self.diag(
                         codes::EXABEAM_TIME_EXACT,
                         format!(
@@ -1323,13 +1436,37 @@ impl<'a> Parser<'a> {
                 return Ok(());
             }
             Some('(') => return self.list_value(field),
-            Some('[' | '{') => return self.range_value(),
+            Some('[' | '{') => return self.range_value(field),
             _ => {}
         }
         if let Some((name, s, e)) = self.word_at()
             && self.text[e..].trim_start().starts_with('(')
         {
             self.call(name, s, e)?;
+            return Ok(());
+        }
+        if is_time_field(field)
+            && let Some(end) = bare_end(self.text, self.pos)
+            && !self.text[self.pos..end].eq_ignore_ascii_case("null")
+        {
+            let start = self.pos;
+            let word = &self.text[start..end];
+            self.diag(
+                codes::EXABEAM_TIME_EXACT,
+                format!("{field} takes a range, not an exact value: write {field}:[low TO high]"),
+                start,
+                end,
+            );
+            self.tok(
+                start,
+                end,
+                if is_number(word) {
+                    "number"
+                } else {
+                    "constant"
+                },
+            );
+            self.pos = end;
             return Ok(());
         }
         self.scalar(field, false)
@@ -1435,7 +1572,7 @@ impl<'a> Parser<'a> {
         Ok(())
     }
 
-    fn range_value(&mut self) -> Parsed<()> {
+    fn range_value(&mut self, field: &str) -> Parsed<()> {
         self.ws();
         let open = self.rest().chars().next().unwrap_or('[');
         let start = self.pos;
@@ -1483,7 +1620,7 @@ impl<'a> Parser<'a> {
                 self.pos,
             );
         }
-        self.check_range(&lo, &hi, lo_s, hi_e);
+        self.check_range(&lo, &hi, lo_s, hi_e, is_time_field(field));
         Ok(())
     }
 
@@ -1515,15 +1652,17 @@ impl<'a> Parser<'a> {
         Ok((word.to_string(), start, end))
     }
 
-    fn check_range(&mut self, lo: &str, hi: &str, s: usize, e: usize) {
+    fn check_range(&mut self, lo: &str, hi: &str, s: usize, e: usize, time_field: bool) {
         let mut kinds: Vec<Bound> = Vec::new();
         for b in [lo, hi] {
             let kind = if b == "*" {
                 Bound::Open
+            } else if time_field && is_epoch_ms(b) {
+                Bound::Datetime(epoch_ms(b))
             } else if is_number(b) {
                 Bound::Number(b.parse::<f64>().unwrap_or(f64::NAN))
-            } else if is_datetime(b) || (b.len() >= 10 && b.bytes().all(|c| c.is_ascii_digit())) {
-                Bound::Datetime(b.to_string())
+            } else if let Some(ms) = datetime_ms(b) {
+                Bound::Datetime(ms)
             } else if let Some(ip) = parse_ip(b) {
                 Bound::Ip(ip)
             } else {
@@ -1549,7 +1688,12 @@ impl<'a> Parser<'a> {
         }
         let first = std::mem::discriminant(closed[0]);
         if closed.iter().any(|k| std::mem::discriminant(*k) != first) {
-            self.diag(codes::EXABEAM_RANGE, "both bounds are of one kind", s, e);
+            self.diag(
+                codes::EXABEAM_RANGE,
+                "the bounds are of different kinds: both numbers, IPv4 addresses, or datetimes",
+                s,
+                e,
+            );
             return;
         }
         if closed.iter().any(|k| matches!(k, Bound::Ip(IpAddr::V6(_)))) {
@@ -1793,6 +1937,9 @@ impl<'a> Parser<'a> {
         let mut select_star: Option<(usize, usize)> = None;
         let mut group_by: Vec<&'a str> = Vec::new();
         let mut first = true;
+        if self.at_end() || matches!(self.peek(), Some('|' | ']')) {
+            return fail("an empty statement: a pipe joins two statements", self.pos);
+        }
         while !self.at_end() && !matches!(self.peek(), Some('|' | ']')) {
             let Some(kw) = self.keyword_at(&CLAUSES) else {
                 if first || seen.last() == Some(&"FROM") {
@@ -1870,7 +2017,7 @@ impl<'a> Parser<'a> {
                 );
             }
             for (column, aggregated, s, e) in select_items.clone() {
-                if !aggregated && !group_by.contains(&column) {
+                if !aggregated && !group_by.iter().any(|g| g.eq_ignore_ascii_case(column)) {
                     self.diag(
                         codes::EXABEAM_GROUP_BY_COLUMN,
                         format!("{column} is selected but neither grouped nor aggregated"),
@@ -1924,7 +2071,7 @@ impl<'a> Parser<'a> {
 
     fn foreach(&mut self) -> Parsed<Statement> {
         self.take_keyword(&["FOREACH"], true);
-        let Some((name, s, e)) = self.word_at() else {
+        let Some((name, s, e)) = self.column_at() else {
             return fail("FOREACH names a field", self.pos);
         };
         self.tok(s, e, "property");
@@ -1954,7 +2101,7 @@ impl<'a> Parser<'a> {
                 star = Some((self.pos, self.pos + 1));
                 self.pos += 1;
             } else {
-                let Some((name, s, e)) = self.word_at() else {
+                let Some((name, s, e)) = self.column_at() else {
                     return fail("expected a column", self.pos);
                 };
                 if self.text[e..].trim_start().starts_with('(') {
@@ -1967,7 +2114,7 @@ impl<'a> Parser<'a> {
                     items.push((name, false, s, e));
                 }
             }
-            if self.take_keyword(&["AS"], false).is_some() {
+            if self.take_keyword(&["AS"], true).is_some() {
                 self.alias("variable")?;
             }
             if self.peek() == Some(',') {
@@ -2007,7 +2154,7 @@ impl<'a> Parser<'a> {
                 if matches!(self.peek(), Some('"' | '\'')) {
                     pattern = Some(self.string()?);
                 } else {
-                    let Some((field, fs, fe)) = self.word_at() else {
+                    let Some((field, fs, fe)) = self.column_at() else {
                         return fail("expected a field or a pattern", self.pos);
                     };
                     self.tok(fs, fe, "property");
@@ -2077,7 +2224,7 @@ impl<'a> Parser<'a> {
             self.tok(self.pos, self.pos + 1, "operator");
             self.pos += 1;
         } else {
-            let Some((field, fs, fe)) = self.word_at() else {
+            let Some((field, fs, fe)) = self.column_at() else {
                 return fail("an aggregation takes one field", self.pos);
             };
             self.tok(fs, fe, "property");
@@ -2120,7 +2267,7 @@ impl<'a> Parser<'a> {
     fn name_list(&mut self, order_by: bool) -> Parsed<Vec<&'a str>> {
         let mut names = Vec::new();
         loop {
-            let Some((name, s, e)) = self.word_at() else {
+            let Some((name, s, e)) = self.column_at() else {
                 return fail("expected a column", self.pos);
             };
             self.tok(s, e, "property");
@@ -2143,7 +2290,8 @@ impl<'a> Parser<'a> {
 enum Bound {
     Open,
     Number(f64),
-    Datetime(String),
+    /// An instant, in epoch milliseconds.
+    Datetime(i128),
     Ip(IpAddr),
 }
 
@@ -2160,6 +2308,35 @@ fn starts_with_in(text: &str) -> bool {
     text.len() >= 2
         && text.as_bytes()[..2].eq_ignore_ascii_case(b"in")
         && text[2..].chars().next().is_none_or(|c| !is_word_char(c))
+}
+
+/// `(?i)as\s+name\s*` before the end, a pipe, GROUP-BY, ORDER-BY, or LIMIT:
+/// a statement alias (`WHERE vendor:"x" AS t`).
+fn statement_alias(text: &str) -> bool {
+    if text.len() < 2 || !text.as_bytes()[..2].eq_ignore_ascii_case(b"as") {
+        return false;
+    }
+    let rest = &text[2..];
+    let after_ws = rest.trim_start_matches(char::is_whitespace);
+    if after_ws.len() == rest.len() {
+        return false;
+    }
+    let Some(end) = ident_like_end(after_ws, 0, false) else {
+        return false;
+    };
+    if after_ws[..end].contains('.') {
+        return false;
+    }
+    let tail = after_ws[end..].trim_start_matches(char::is_whitespace);
+    if tail.len() == after_ws[end..].len() && !tail.is_empty() && !tail.starts_with('|') {
+        return false; // the name runs on: not a whole word
+    }
+    tail.is_empty()
+        || tail.starts_with('|')
+        || hyphen_word_end(tail, 0).is_some()
+        || (tail.len() >= 5
+            && tail.as_bytes()[..5].eq_ignore_ascii_case(b"limit")
+            && tail[5..].chars().next().is_none_or(|c| !is_word_char(c)))
 }
 
 /// `(?i)limit\s+\d+\s*\Z`: a trailing `LIMIT <n>`.
@@ -2267,6 +2444,35 @@ mod unit {
         assert!(re2_refusal("(?i)a").is_none());
         assert!(re2_refusal("(?P<n>a)").is_none());
         assert!(re2_refusal("[[:alpha:]]").is_none());
+        // The spec review's cases (exabeam-1.0, `exabeam_regex`).
+        for ok in [
+            r"\pL+",
+            r"\p{Greek}",
+            r"end\z",
+            r"\x{263a}",
+            "(?<n>a)",
+            "[a?+]",
+            "[*+]",
+            "[(?=]",
+            "a(?i)b",
+            "(?U)a+",
+            "a$?",
+            "^*a",
+            r"\b+",
+        ] {
+            assert!(re2_refusal(ok).is_none(), "{ok}: {:?}", re2_refusal(ok));
+        }
+        for bad in [
+            r"end\Z",
+            "a{2,1001}",
+            "a*+",
+            "a{2}+",
+            "(?P=n)",
+            "(?#note)a",
+            "a\\\u{a0}b",
+        ] {
+            assert!(re2_refusal(bad).is_some(), "{bad}");
+        }
     }
 
     #[test]

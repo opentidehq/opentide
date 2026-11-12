@@ -28,8 +28,8 @@ The repository's rule that "SQL is out of scope" is about a generic SQL dialect:
 | Suite | Queries | Agreement | Harness |
 |-------|---------|-----------|---------|
 | The spec's fixtures (`testdata/conformance/exabeam/{valid,invalid,highlight}/`) | 9 valid, 32 invalid (one per catalogue-free code), 3 highlight goldens | every valid query clean (the catalogue warnings included), every invalid one exactly its code, every golden token for token (the verdict parser and the tree-sitter highlighting) | `crates/opentide-exabeam/tests/conformance.rs` |
-| The reference checker's recorded verdicts (`reference.json`): the fixtures above, `testdata/conformance/external/exabeam/` and 157 probes (`probes.tsv`) | 233 | codes, ranges and highlight tokens identical, but for two listed RE2 differences and the narrowed ranges of two codes (below) | `crates/opentide-exabeam/tests/reference.rs` |
-| Tree-sitter highlighting against the reference's tokens | every error-free query of `reference.json` | identical but for one listed query (a second `SELECT` read as a clause, not free text) | `tests/reference.rs` |
+| The reference checker's recorded verdicts (`reference.json`): the fixtures above, `testdata/conformance/external/exabeam/` and 228 probes (`probes.tsv`) | 305 | codes, ranges and highlight tokens identical, but for the narrowed ranges of two codes (below) | `crates/opentide-exabeam/tests/reference.rs` |
+| Tree-sitter highlighting against the reference's tokens | every error-free query of `reference.json` | identical | `tests/reference.rs` |
 | Queries written for opentide (`testdata/conformance/external/exabeam/`) | 16 (12 rule, 4 search), each with a `.broken.` twin | 16 / 16 clean under their profile; every twin reports the code `FAULTS.toml` names (16 fault kinds) | `crates/opentide-analysis/tests/external_exabeam.rs` |
 | The block checker's recorded verdicts: 51 block cases written for opentide and the spec's 8 object fixtures | 59 | every error, code and field path, identical, but for the block without `status` (below) | `crates/opentide-tide/tests/exabeam_spec.rs` |
 | Grammar productions | 21 rules, one valid and one invalid fixture each | 21 / 21 | `crates/opentide-syntax/tests/corpus_gate.rs` |
@@ -58,21 +58,21 @@ The repository's rule that "SQL is out of scope" is about a generic SQL dialect:
 - Every error in the Sigma conversions is a defect of the conversion: broken escaping (`\\"` closing a string early, which leaves the rest of the pattern as bare arguments), Sigma modifiers left unconverted, and Python-only regular expressions.
 - The two catalogue warnings fire on Sigma conversions only, never on Exabeam's 77 own rules: the conversions keep Sysmon and Windows field names the CIM does not have (`ScriptBlockText`, `ImageLoaded`, `OriginalFileName` as `process_original_file_name`, `c-useragent`) and compare `event_code` with unquoted numbers (`event_code:7045`).
 - Highlight tokens of the verdict parser equal the reference's on all 2,371 queries. The tree-sitter grammar parses all 2,296 error-free queries without an error node and gives the same tokens; on the 75 with errors, the verdict parser still recovers where the grammar has an `ERROR` node (50 of them), so only highlighting degrades there.
-- The three disagreements: two rules use `$?` (an optional end-of-text assertion), which RE2 accepts and Python refuses ("nothing to repeat"); one escapes U+00A0 (`\ ` with a non-breaking space), which RE2 refuses (it escapes ASCII punctuation only) and Python accepts. The engine follows RE2, as the spec says. Both forms are probes in `reference.json`, listed as differences in `tests/reference.rs`.
+- No disagreement with the reference checker: two rules use `$?` (an optional end-of-text assertion), which RE2 accepts, and one escapes U+00A0 (`\ ` with a non-breaking space), which RE2 refuses (it escapes ASCII punctuation only). The reference checker now rewrites and refuses these as RE2 does, and both forms are probes in `reference.json`.
 
 ## Regular expressions
 
 `RGX`, `RGXi` and `RGX_EXTRACT` patterns are RE2 (exabeam-1.0). The pattern is the string's value (`\"`, `\'`, `` \` `` and `\\` lose their backslash). The engine refuses, in this order:
 
-1. what RE2 adds to a syntax check, as the reference checker does: a back-reference (an odd run of backslashes before `1`–`9`), look-around (`(?=`, `(?!`, `(?<=`, `(?<!`), an atomic group (`(?>`), a possessive quantifier (`*+`, `++`, `?+`, `}+`);
-2. RE2's own rules where the `regex` crate's syntax differs: a repetition of a repetition (`.**`, `a{2}{3}`) and a count above 1,000 are errors; a `{` that does not open `{n}`, `{n,}` or `{n,m}`, and `]` or `}` outside a class, are literals; a backslash before any ASCII character other than a letter, digit or `_` escapes it (`\ `), but not before a non-ASCII one; `\Q…\E` quotes; `[` inside a class is a literal (no nested classes or `&&`); flags are `i`, `m`, `s` and `U`;
+1. a back-reference (an odd run of backslashes before `1`–`9`), as the reference checker does;
+2. RE2's own rules where the `regex` crate's syntax differs, outside character classes only (`[a?+]` and `[(?=]` are sets of literals): look-around (`(?=`, `(?!`, `(?<=`, `(?<!`), an atomic group (`(?>`) and a possessive quantifier (`*+`, `}+`) are errors; a repetition of a repetition (`.**`, `a{2}{3}`) and a count above 1,000 are errors; `\p{…}` and `\x{…}` keep their braces; a `{` that does not open `{n}`, `{n,}` or `{n,m}`, and `]` or `}` outside a class, are literals; a backslash before any ASCII character other than a letter, digit or `_` escapes it (`\ `), but not before a non-ASCII one; `\Q…\E` quotes; `[` inside a class is a literal (no nested classes or `&&`); flags are `i`, `m`, `s` and `U`;
 3. the `regex` crate's syntax parser (`regex-syntax`, already in the lock as `regex`'s parser) on the result.
 
-The reference checker approximates RE2 with Python's `re`. Where they differ, the engine is RE2: `$?` and other repeated assertions are accepted; `\` before a non-ASCII character is refused.
+The reference checker approximates RE2 with Python's `re`, refusing and rewriting the syntax the two read differently (`\Z`, `\pL`, `\z`, `\x{…}`, `\Q…\E`, `(?<n>…)`, the `U` flag, counts above 1,000, `$?`, an escaped non-ASCII character), so the two agree on every probe.
 
 ## Fields
 
-The catalogue is Exabeam's CIM: the 1,130 typed fields of `Fields_Descriptions.md`, the platform fields the CIM table omits (`approxLogTime`, `rawLogIds`, `ingest_time`, `raw_log_time`; `time` is in the CIM), 84 subjects, 456 activity types and the outcomes `success` and `fail` (`cim.json`). Names compare without regard to case. A field is known when the catalogue has it, when it starts with `c_` (custom) or `m_` (metadata), when its first part is known (a structured field, `src_ip.country`), or when it is an `AS` name defined earlier in the query. Any other is `exabeam_unknown_field`, a warning with a near-miss suggestion: a tenant's parsers define fields too. An unquoted number on a field the CIM types as `string` is `exabeam_string_field_number` (warning; a comparison is numeric and is not reported). The time fields take a range only (`exabeam_time_exact`).
+The catalogue is Exabeam's CIM: the 1,130 typed fields of `Fields_Descriptions.md`, the platform fields the CIM table omits (`approxLogTime`, `rawLogIds`, `ingest_time`, `raw_log_time`; `time` is in the CIM), 84 subjects, 456 activity types and the outcomes `success` and `fail` (`cim.json`). Names compare without regard to case. A field is known when the catalogue has it, when it starts with `c_` (custom) or `m_` (metadata), when its first part is known (a structured field, `src_ip.country`), or when it is an `AS` name defined earlier in the query. Any other is `exabeam_unknown_field`, a warning with a near-miss suggestion: a tenant's parsers define fields too. An unquoted number on a field the CIM types as `string` is `exabeam_string_field_number` (warning; a comparison is numeric and is not reported). The time fields take a range or `null` only: an exact value, quoted or not, is `exabeam_time_exact`. On them, ten or more digits are epoch milliseconds, and datetime bounds compare as instants (`+05:00` included).
 
 ## Highlighting
 
@@ -80,23 +80,20 @@ The catalogue is Exabeam's CIM: the 1,130 typed fields of `Fields_Descriptions.m
 
 ## Block constraints
 
-`crates/opentide-tide/src/exabeam.rs` reports the platform's constraint codes from the raw YAML, so they do not wait for the Tide catalogue: `exabeam_sequences`, `exabeam_correlation`, `exabeam_threshold_function`, `exabeam_threshold_operator`, `exabeam_threshold_value`, `exabeam_group_by`, `exabeam_duration`, `exabeam_severity`, `exabeam_outcome`, `exabeam_email`, `exabeam_schedule`, `exabeam_name_length`, `exabeam_context_table_trigger` and the workspace check `exabeam_name_duplicate` (errors), and the advisories `exabeam_outcome_silent` and `exabeam_correlation_window` (warnings), each on the field path the spec's table names. The language codes of each sequence query are reported on `configurations.exabeam.sequences.<N>.query`, errors and warnings.
+`crates/opentide-tide/src/exabeam.rs` reports the platform's constraint codes from the raw YAML, so they do not wait for the Tide catalogue: `exabeam_sequences`, `exabeam_correlation`, `exabeam_threshold_function`, `exabeam_threshold_operator`, `exabeam_threshold_value`, `exabeam_group_by`, `exabeam_duration`, `exabeam_severity`, `exabeam_outcome`, `exabeam_email`, `exabeam_schedule`, `exabeam_name_length`, `exabeam_context_table_trigger` and the workspace check `exabeam_name_duplicate` (errors), and the advisories `exabeam_outcome_silent` and `exabeam_correlation_window` (warnings), each on the field path the spec's table names. An unknown key, at the root or inside a sequence, threshold, correlation, suppression, email or recurrence, is never one of these codes: the Tide catalogue reports it (`schema_validation`) at the key. A null is the key left out, at every level. `exabeam_context_table_trigger` reads the lookups from the parsed query, so a quoted ` in '…'` is not one. `exabeam_correlation_window` follows Exabeam's rule for ordered sequences: the window must be more than the sum of the sequence windows (a minute for an any-match sequence) plus a minute between sequences. The language codes of each sequence query are reported on `configurations.exabeam.sequences.<N>.query`, errors and warnings.
 
 ## Differences from the reference checkers
 
 | Where | Reference | Engine | Why |
 |-------|-----------|--------|-----|
-| `$?` and other repeated assertions in a pattern | `exabeam_regex` (Python: "nothing to repeat") | accepted | RE2 accepts them |
-| `\` before a non-ASCII character in a pattern | accepted | `exabeam_regex` | RE2 escapes only ASCII punctuation |
 | `exabeam_group_by_column`, `exabeam_group_by_select_star` ranges | from the start of the query to the end of the statement | the column, or the `*` | a usable range; the codes are the same |
 | unknown fields, numbers on string fields | not reported (no catalogue) | the catalogue warnings | exabeam-1.0 "Field catalogue" |
 | messages of `exabeam_unknown_function` and `exabeam_not_equal` | a generic hint | the Exabeam form of `contains`, `startswith`, `endswith`, `cidr`, `exists` and `!=` | exabeam-1.0 asks for it |
 | nesting deeper than 200 groups or `NOT`s | Python's recursion limit (an exception) | `exabeam_parse_error` | the engine never overflows its stack |
 | a block without `status` | the block's codes | none: the missing field is the Tide catalogue's | as on the Sysdig and Bitdefender blocks |
-| block-root unknown keys, legacy external ids (`unknown_field`, `external_id_in_rule`) | reported | left to the Tide catalogue | the catalogue owns closed objects |
+| unknown keys at the root or nested, legacy external ids (`unknown_field`, `external_id_in_rule`) | reported | left to the Tide catalogue | the catalogue owns closed objects |
 | a sequence query's language warnings | not reported (errors only) | reported, as warnings | exabeam-1.0: "its warnings are reported" |
 | `exabeam_name_duplicate`, the two advisories | not checked | checked | the spec's table; the reference leaves them to opentide |
-| Highlighting of a second `SELECT` after a filter | free text | a clause keyword | the grammar parses clauses in any order |
 
 ## No oracle
 
@@ -104,4 +101,4 @@ Exabeam's search language is closed source: there is no parser to port or run in
 
 ## Open
 
-- The Tide catalogue (`catalogs/tide/`) does not model `configurations.exabeam` until it is regenerated from an opentide whose models have the Exabeam block (`scripts/sync_opentide_schemas.py`). Until then a rule with the block reports `schema_validation` on `configurations.exabeam`, and the block's unknown keys and missing `status` are not reported.
+- Whether RE2 receives a pattern's string value (`\\` is one backslash), as Exabeam's own rules assume and the engine and the spec take, or the string as written, as one example of Exabeam's regex page reads (specifications RFC 0018, unresolved question 6). Patterns written with single backslashes (`\s`, `\.`, `\(`) mean the same either way.

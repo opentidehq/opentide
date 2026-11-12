@@ -9273,12 +9273,20 @@
           "markdownDescription": "The window every sequence's condition must be met in: whole `m`, `h`, or `d`"
         },
         "group_by": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
           "description": "Up to three fields every sequence shares (the API's limit; the console allows more)",
-          "items": {
-            "type": "string"
-          },
-          "title": "Group By",
-          "type": "array"
+          "title": "Group By"
         }
       },
       "required": [
@@ -9313,10 +9321,17 @@
           "title": "Subject"
         },
         "attach_csv": {
-          "default": false,
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
           "description": "Attach the matching events as CSV",
-          "title": "Attach Csv",
-          "type": "boolean"
+          "title": "Attach Csv"
         }
       },
       "required": [
@@ -9341,16 +9356,16 @@
           "markdownDescription": "`day`, `week`, `month`, or `days` (a range of weekdays)"
         },
         "from": {
-          "description": "Start time, UTC, HH:MMZ (08:00Z)",
+          "description": "Start time, UTC, H:MMZ or HH:MMZ (8:00Z, 08:00Z)",
           "title": "From",
           "type": "string",
-          "markdownDescription": "Start time, UTC, `HH:MMZ` (`08:00Z`)"
+          "markdownDescription": "Start time, UTC, `H:MMZ` or `HH:MMZ` (`8:00Z`, `08:00Z`)"
         },
         "to": {
-          "description": "End time, UTC, HH:MMZ",
+          "description": "End time, UTC, H:MMZ or HH:MMZ",
           "title": "To",
           "type": "string",
-          "markdownDescription": "End time, UTC, `HH:MMZ`"
+          "markdownDescription": "End time, UTC, `H:MMZ` or `HH:MMZ`"
         },
         "days": {
           "anyOf": [

@@ -158,3 +158,75 @@ search	SELECT RGX_EXTRACT("a(b)") AS x1, RGX_EXTRACT("c(d)") AS x2, RGX_EXTRACT(
 rule	process_command_line:RGX(".*\\ .*")
 rule	process_command_line:RGX("$?{?input}?")
 rule	user:"é" AND host:"日本" AND src_host:"😀" web-ñ
+rule	AND x:"a"
+rule	OR x:"a"
+rule	x:"a" AND AND y:"b"
+rule	x:"a" AND OR y:"b"
+rule	NOT AND x:"a"
+rule	x:"a" IN
+rule	TO
+rule	x:"a" and
+search	WHERE vendor:"x" SELECT user
+search	WHERE vendor:"x" FROM t
+search	SELECT user WHERE a:"b" WHERE c:"d"
+search	c-table IN "Admins"
+rule	a.b-c IN "T"
+search	SELECT first-name WHERE vendor:"x"
+search	SELECT c-uri, COUNT(*) GROUP-BY c-uri
+search	SELECT User, COUNT(*) GROUP-BY user
+search	SELECT user As u
+search	vendor:"x" AS t
+search	vendor:"x" AS tlimit
+search	vendor:"x" AS t | SELECT a
+search	vendor:"x" |
+search	| SELECT user
+search	SELECT user | | SELECT user
+search	SELECT user vendor:"x"
+search	vendor:"x" | FOREACH host [ ]
+rule	c-group-by:"x"
+rule	c-order-by:"x"
+rule	x:rgx("a")
+rule	x:Wld("a")
+rule	user:'bob'
+rule	user IN 'Admins'
+rule	bytes > "100"
+rule	bytes > "abc"
+rule	time:1700000000000
+rule	time:2024-01-01T00:00:00Z
+rule	time:null
+rule	time:[1800000000000 TO 2024-01-01T00:00:00Z]
+rule	time:[1700000000000 TO 2024-01-01T00:00:00Z]
+rule	time:[2024-01-01T10:00:00+05:00 TO 2024-01-01T06:00:00Z]
+rule	time:[2024-01-01T10:00:00Z TO 2024-01-01T06:00:00Z]
+rule	time:[2024-01-01T10:00:00.5Z TO 2024-01-01T10:00:00.499Z]
+rule	time:[99999999999999999999999999999999999999999999 TO *]
+rule	time:[1969-12-31T23:59:59-00:30 TO 1970-01-01T00:00:00Z]
+rule	bytes:[1700000000000 TO 1800000000000]
+rule	ApproxLogTime:"1730000000000"
+rule	process_name:RGX("\pL+")
+rule	process_name:RGX("\p{Greek}")
+rule	process_name:RGX("end\z")
+rule	process_name:RGX("\x{263a}")
+rule	process_name:RGX("\Q.*\E")
+rule	process_name:RGX("(?<n>a)")
+rule	process_name:RGX("[a?+]")
+rule	process_name:RGX("[*+]")
+rule	process_name:RGX("[(?=]")
+rule	process_name:RGX("a(?i)b")
+rule	process_name:RGX("(?U)a+")
+rule	process_name:RGX("[[:alpha:]]+")
+rule	process_name:RGX("a$?")
+rule	process_name:RGX("^*a")
+rule	process_name:RGX("\\b+")
+rule	process_name:RGX("end\Z")
+rule	process_name:RGX("a{1001}")
+rule	process_name:RGX("a{2,1001}")
+rule	process_name:RGX("a*+")
+rule	process_name:RGX("a{2}+")
+rule	process_name:RGX("(?>a)")
+rule	process_name:RGX("(?P=n)")
+rule	process_name:RGX("(?#note)a")
+rule	process_name:RGX("(?x)a")
+rule	process_name:RGX("a\ b")
+rule	process_name:RGX("back\\slash")
+rule	message:"user signed in 'admin'"

@@ -25,7 +25,7 @@ response:
         query: |
           SELECT host, COUNT(*) AS launches
           WHERE activity_type:"process-create" AND process_name:("powershell.exe", "pwsh.exe")
-            AND process_command_line:RGXi("\\s-(e|en|enc|enco|encod|encode|encoded|encodedcommand)\\s")
+            AND process_command_line:RGXi("\s-(e|en|enc|enco|encod|encode|encoded|encodedcommand)\s")
           GROUP-BY host
           ORDER-BY launches DESC
           LIMIT 20
@@ -50,7 +50,7 @@ configurations:
           activity_type:"process-create"
           AND parent_process_name:("winword.exe", "excel.exe", "powerpnt.exe")
           AND process_name:("powershell.exe", "pwsh.exe")
-          AND process_command_line:RGXi("\\s-(e|en|enc|enco|encod|encode|encoded|encodedcommand)\\s")
+          AND process_command_line:RGXi("\s-(e|en|enc|enco|encod|encode|encoded|encodedcommand)\s")
         group_by: [host]
       - name: PowerShell connects out
         query: |
