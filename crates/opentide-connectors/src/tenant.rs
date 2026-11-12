@@ -48,6 +48,9 @@ pub struct Tenant {
     pub setup: BTreeMap<String, Credential>,
     /// The variables read the 0.21.0 way, to warn about once.
     pub legacy_variables: Vec<String>,
+    /// The setup's lists of strings (Elastic's `index`, Sysdig's
+    /// `policies`), as written: they name no credential.
+    pub lists: BTreeMap<String, Vec<String>>,
 }
 
 impl Tenant {
@@ -78,11 +81,20 @@ impl Tenant {
         }
         let mut values = BTreeMap::new();
         let mut legacy_variables = Vec::new();
+        let mut lists = BTreeMap::new();
         for (key, value) in setup {
             if key == "ssl" {
                 continue;
             }
             let text = match value {
+                toml::Value::Array(items) => {
+                    let texts: Vec<String> = items
+                        .iter()
+                        .filter_map(|item| item.as_str().map(str::to_owned))
+                        .collect();
+                    lists.insert(key.clone(), texts);
+                    continue;
+                }
                 toml::Value::String(text) => text.clone(),
                 toml::Value::Integer(_) | toml::Value::Float(_) | toml::Value::Boolean(_) => {
                     value.to_string()
@@ -109,6 +121,7 @@ impl Tenant {
             http,
             setup: values,
             legacy_variables,
+            lists,
         })
     }
 
@@ -129,6 +142,11 @@ impl Tenant {
                 message: format!("{key} is missing"),
             }),
         }
+    }
+
+    /// The setup's list *key* (`index`), empty when it has none.
+    pub fn list(&self, key: &str) -> &[String] {
+        self.lists.get(key).map_or(&[], Vec::as_slice)
     }
 
     /// Every resolved secret of this tenant, for a redactor.

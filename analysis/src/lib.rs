@@ -272,7 +272,36 @@ fn analyze_query(
 fn cli_main(py: Python<'_>, argv: Vec<String>, version: String) -> i32 {
     opentide_cli::mcp::set_delegate(Box::new(McpBridge));
     opentide_cli::serve::set_delegate_factory(Box::new(serve::BridgeFactory));
-    py.detach(|| opentide_cli::main(&argv, &version))
+    py.detach(|| {
+        let code = opentide_cli::main(&argv, &version);
+        // The process may end in Python's exit, which never flushes Rust's
+        // stdout: a last line without its newline would be lost. A reader
+        // that has gone (a closed pipe) has nothing left to read.
+        let _ignored = std::io::Write::flush(&mut std::io::stdout());
+        code
+    })
+}
+
+/// What `opentide`'s console script and `python -m opentide`
+/// (`opentide.cli.launch.main`) call once the engine has loaded (UC-3.8b,
+/// #960): runs `opentide` with *argv* (`sys.argv[1:]` when `None`) in this
+/// process, on Rust or on Python as `opentide.cli.launch.run` decides; the
+/// exit code.
+#[pyfunction]
+#[pyo3(name = "main", signature = (argv=None))]
+fn launch_main(py: Python<'_>, argv: Option<Vec<String>>) -> PyResult<i32> {
+    py.import("opentide.cli.launch")?
+        .call_method1("run", (argv,))?
+        .extract()
+}
+
+/// The command path *argv* names (`["generate", "docs", "rules"]`), read from
+/// the Rust command tree as the Python CLI reads it from Typer's: only words
+/// that name a subcommand, root options and hoisted flags skipped.
+#[pyfunction]
+fn command_words(argv: Vec<String>) -> Vec<String> {
+    let root = opentide_cli::catalog::root();
+    opentide_cli::hoist::command_words(&root, &opentide_cli::hoist::hoist(&root, &argv))
 }
 
 /// The Python half of `opentide mcp start` (UC-3.7, #829):
@@ -724,10 +753,10 @@ mod _native {
     #[pymodule_export]
     use super::{
         Diagnostic, QueryReport, Workspace, analyze_query, bundled_catalog, catalog_is_workspace,
-        catalog_version, clear_workspaces, cli_main, compare_runs, dataset_status, describe_code,
-        highlight, install_catalog, install_visibility, interrupt_cli, invalidate_workspaces,
-        language_for_path, run_cli, serve_stdio, set_default_catalog, set_host_info,
-        use_host_catalogs, validate_report, workspace_stats,
+        catalog_version, clear_workspaces, cli_main, command_words, compare_runs, dataset_status,
+        describe_code, highlight, install_catalog, install_visibility, interrupt_cli,
+        invalidate_workspaces, language_for_path, launch_main, run_cli, serve_stdio,
+        set_default_catalog, set_host_info, use_host_catalogs, validate_report, workspace_stats,
     };
 
     /// `opentide serve`'s Rust host, driven from Python (UC-3.8, #830).

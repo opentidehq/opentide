@@ -1,0 +1,7 @@
+[1msoc[0m  [2m2 rows[0m
+[1m_sequence[0m[1m [0m┃[1m [0m[1m_index[0m[1m [0m┃[1m [0m[1mprocess.name[0m
+━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━━━━━━
+1         │ logs-1 │ cmd.exe     
+1         │ logs-1 │ whoami.exe  
+
+[1;32m✓[0m 2 rows from 1 elastic tenant

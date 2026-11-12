@@ -6,7 +6,7 @@
 //! `APPROVED_DIFFS.toml`: exit code, stdout, stderr, and every file written.
 //!
 //! The fixtures laid out here are the static ones of `tests/golden/cases.toml`
-//! (`none`, `empty`, `tide-corpus`, `tide-corpus-typo`, `vscode`); the
+//! (`none`, `empty`, `tide-corpus`, `tide-corpus-typo`, `vscode`, `tenants`); the
 //! generated ones (`fault`, `heavy-small`) are `cargo xtask golden check
 //! --engine compare`'s.
 
@@ -62,6 +62,7 @@ pub const FIXTURES: &[&str] = &[
     "vscode",
     "setup-merge",
     "vscode-docs-folder",
+    "tenants",
 ];
 
 pub fn repo() -> PathBuf {
@@ -134,6 +135,8 @@ pub fn fixture(name: &str, ws: &Path) {
         }
         "vscode" => copy_tree(&repo().join("tests/golden/fixtures/vscode-workspace"), ws),
         "setup-merge" => copy_tree(&repo().join("tests/golden/fixtures/setup-merge"), ws),
+        // The stand-in tenants of the cassette cases (UC-4.2c): `query`'s.
+        "tenants" => copy_tree(&repo().join("tests/golden/fixtures/tenants"), ws),
         "vscode-docs-folder" => {
             fixture("vscode", ws);
             let path = ws.join(".opentide/configurations/paths.toml");
@@ -270,13 +273,27 @@ thread_local! {
     static REFUSED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
+/// What a `RUST_COMMANDS` entry covers (`RustCommand`, `xtask::compare::Coverage`).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Coverage {
+    /// Words of which a run must carry one (none: every run).
+    pub requires: Vec<String>,
+    /// Flags a run must carry none of.
+    pub refuses: Vec<String>,
+    /// The platforms with a Rust connector: every `--platform` a run names
+    /// must be one, and a run that names none is not covered (none: every
+    /// platform).
+    pub platforms: Vec<String>,
+    /// The flags under which `platforms` applies (none: every run).
+    pub platform_scope: Vec<String>,
+}
+
 /// The dispatch table, `RUST_COMMANDS` in `src/opentide/cli/engines.py`:
-/// each command path (`"generate docs"`) with the words of which a run must
-/// carry one for the Rust implementation to cover it (`requires`; none:
-/// every run). Read from the source, as `scripts/parity_engines.py` reads
-/// it, so the replay needs no Python environment.
-pub fn rust_commands() -> &'static BTreeMap<String, Vec<String>> {
-    static CELL: std::sync::OnceLock<BTreeMap<String, Vec<String>>> = std::sync::OnceLock::new();
+/// each command path (`"generate docs"`) with what its Rust implementation
+/// covers. Read from the source, as `scripts/parity_engines.py` reads it, so
+/// the replay needs no Python environment.
+pub fn rust_commands() -> &'static BTreeMap<String, Coverage> {
+    static CELL: std::sync::OnceLock<BTreeMap<String, Coverage>> = std::sync::OnceLock::new();
     CELL.get_or_init(|| {
         let source = std::fs::read_to_string(repo().join("src/opentide/cli/engines.py")).unwrap();
         parse_rust_commands(&source)
@@ -285,8 +302,10 @@ pub fn rust_commands() -> &'static BTreeMap<String, Vec<String>> {
 
 /// [`rust_commands`] of `source`: the `RUST_COMMANDS: ... = {` literal, one
 /// entry per `(...): RustCommand(...)`, an entry running over lines until the
-/// next key. Panics on a table it cannot read, rather than covering nothing.
-pub fn parse_rust_commands(source: &str) -> BTreeMap<String, Vec<String>> {
+/// next key. A tuple may be written in place or named by a module constant
+/// (`platforms=RUST_QUERY_PLATFORMS`). Panics on a table it cannot read,
+/// rather than covering nothing.
+pub fn parse_rust_commands(source: &str) -> BTreeMap<String, Coverage> {
     let start = source
         .find("\nRUST_COMMANDS:")
         .unwrap_or_else(|| panic!("engines.py: no RUST_COMMANDS"));
@@ -298,47 +317,96 @@ pub fn parse_rust_commands(source: &str) -> BTreeMap<String, Vec<String>> {
     let body = &body[..body
         .find("\n}")
         .unwrap_or_else(|| panic!("RUST_COMMANDS: unterminated"))];
-    let entry = regex::Regex::new(
-        r#"(?s)\(((?:\s*"[^"]*"\s*,?)+)\)\s*:\s*RustCommand\((.*?)\),\s*(?:\n|$)"#,
-    )
-    .unwrap();
+    let key = regex::Regex::new(r#"\(((?:\s*"[^"]*"\s*,?)+)\)\s*:\s*RustCommand\("#).unwrap();
     let word = regex::Regex::new(r#""([^"]*)""#).unwrap();
-    let requires = regex::Regex::new(r"(?s)requires\s*=\s*\(([^)]*)\)").unwrap();
+    let words = |text: &str| -> Vec<String> {
+        word.captures_iter(text)
+            .map(|word| word[1].to_owned())
+            .collect()
+    };
+    let tuple = |arguments: &str, name: &str| -> Vec<String> {
+        let field = regex::Regex::new(&format!(
+            r"\b{name}\s*=\s*(?:\(([^)]*)\)|([A-Z][A-Z0-9_]*))"
+        ))
+        .unwrap();
+        let Some(found) = field.captures(arguments) else {
+            return Vec::new();
+        };
+        if let Some(listed) = found.get(1) {
+            return words(listed.as_str());
+        }
+        let constant = &found[2];
+        let defined =
+            regex::Regex::new(&format!(r"(?s)\n{constant}\s*:[^=\n]*=\s*\(([^)]*)\)")).unwrap();
+        let defined = defined
+            .captures(source)
+            .unwrap_or_else(|| panic!("engines.py: {constant} is not a tuple of strings"));
+        words(&defined[1])
+    };
+    let keys: Vec<_> = key.captures_iter(body).collect();
     let mut table = BTreeMap::new();
-    let mut read = 0;
-    for found in entry.captures_iter(body) {
-        let path: Vec<&str> = word
-            .captures_iter(&found[1])
-            .map(|word| word.get(1).unwrap().as_str())
-            .collect();
-        let flags = requires
-            .captures(&found[2])
-            .map(|flags| {
-                word.captures_iter(&flags[1])
-                    .map(|word| word[1].to_owned())
-                    .collect()
-            })
-            .unwrap_or_default();
-        table.insert(path.join(" "), flags);
-        read += 1;
+    for (index, found) in keys.iter().enumerate() {
+        let whole = found.get(0).unwrap();
+        let until = keys
+            .get(index + 1)
+            .map_or(body.len(), |next| next.get(0).unwrap().start());
+        let arguments = &body[whole.end()..until];
+        let path = words(&found[1]);
+        table.insert(
+            path.join(" "),
+            Coverage {
+                requires: tuple(arguments, "requires"),
+                refuses: tuple(arguments, "refuses"),
+                platforms: tuple(arguments, "platforms"),
+                platform_scope: tuple(arguments, "platform_scope"),
+            },
+        );
     }
-    let keys = body.matches("RustCommand(").count();
-    assert_eq!(read, keys, "RUST_COMMANDS: read {read} of {keys} entries");
+    let read = keys.len();
+    let entries = body.matches("RustCommand(").count();
+    assert_eq!(
+        read, entries,
+        "RUST_COMMANDS: read {read} of {entries} entries"
+    );
     table
 }
 
-/// Whether `RUST_COMMANDS` covers a run of `command` with `argv`: the
-/// command is in it, and the arguments before `--` carry one of the words it
-/// requires, if any (`RustCommand.covers`, `xtask::compare::covers`).
+/// Whether `RUST_COMMANDS` covers a run of `command` with `argv`
+/// (`RustCommand.covers`, `xtask::compare::covers`): the command is in it,
+/// and the arguments before `--` carry one of the words it requires, if
+/// any, none it refuses, and only platforms it runs on, where that applies.
 pub fn covers(command: &str, argv: &[String]) -> bool {
-    let Some(requires) = rust_commands().get(command) else {
+    let Some(coverage) = rust_commands().get(command) else {
         return false;
     };
     let options = argv
         .iter()
         .position(|arg| arg == "--")
         .map_or(argv, |end| &argv[..end]);
-    requires.is_empty() || requires.iter().any(|flag| options.contains(flag))
+    let platforms = coverage.platforms.is_empty()
+        || (!coverage.platform_scope.is_empty()
+            && !coverage
+                .platform_scope
+                .iter()
+                .any(|flag| options.contains(flag)))
+        || {
+            let mut named = Vec::new();
+            for (index, token) in options.iter().enumerate() {
+                if token == "--platform" {
+                    named.extend(options.get(index + 1).map(String::as_str));
+                } else if let Some(value) = token.strip_prefix("--platform=") {
+                    named.push(value);
+                }
+            }
+            !named.is_empty()
+                && named
+                    .iter()
+                    .all(|name| coverage.platforms.iter().any(|p| p == name))
+        };
+    !coverage.refuses.iter().any(|flag| options.contains(flag))
+        && platforms
+        && (coverage.requires.is_empty()
+            || coverage.requires.iter().any(|flag| options.contains(flag)))
 }
 
 /// The UUIDs in the package's data (`src/opentide`), which no run mints:
@@ -520,6 +588,16 @@ pub fn replay(id: &str, dir: &Path, ledger: &Ledger, usage: &mut Usage) -> Vec<S
                 (tmp.display().to_string(), "<TMP>".into()),
             ],
             dates: vec![today],
+            // A default window reaches back from now (`query` starts 24
+            // hours ago), as `cargo xtask golden check` counts back.
+            recent_dates: (1..=7)
+                .map(|days| {
+                    opentide_compare::normalise::utc_date(
+                        std::time::SystemTime::now()
+                            - std::time::Duration::from_secs(days * 86_400),
+                    )
+                })
+                .collect(),
             known_uuids,
             ..Volatile::default()
         },

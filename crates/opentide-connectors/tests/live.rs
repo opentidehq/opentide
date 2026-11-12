@@ -20,11 +20,11 @@ mod support;
 
 use opentide_compile::json::Json;
 use opentide_connectors::connector::TenantContext;
+use opentide_connectors::connector::{QueryRequest, TimeWindow};
 use opentide_connectors::credentials::Mode as Resolve;
 use opentide_connectors::defender::{self, Defender};
 use opentide_connectors::elastic::{self, Elastic, ElasticRule, Strategy};
 use opentide_connectors::runtime::block_on;
-use opentide_connectors::search::{SearchRequest, TimeWindow};
 use opentide_connectors::sentinel_one::{self, SentinelOne};
 use opentide_connectors::{Environment, HttpClient, HttpSettings, Tenant};
 use tokio_util::sync::CancellationToken;
@@ -76,11 +76,15 @@ fn live_defender_deploy_validate_query_disable() {
         let query = "DeviceProcessEvents | project Timestamp, DeviceId, ReportId";
         let now = jiff::Timestamp::now();
         let check = connector
-            .check(cx, &SearchRequest::new(query, TimeWindow::check(now)), now)
+            .check(
+                cx,
+                &QueryRequest::new(query, "kql", TimeWindow::check(now)),
+                now,
+            )
             .await;
         println!("check {check:?}");
         let rows = connector
-            .run(cx, &SearchRequest::new(query, last_hour()), now)
+            .run(cx, &QueryRequest::new(query, "kql", last_hour()), now)
             .await;
         println!("query {rows:?}");
         let mut disabled = rule.clone();
@@ -140,9 +144,8 @@ fn live_elastic_deploy_validate_query_disable() {
             ("eql", "any where true"),
             ("kuery", "*"),
         ] {
-            let mut request = SearchRequest::new(text, last_hour());
+            let mut request = QueryRequest::new(text, language, last_hour());
             request.limit = 5;
-            request.language = Some(language.into());
             println!("{language} {:?}", Elastic.run(cx, &request, &index).await);
         }
         rule.strategy = Strategy::Disablement;
@@ -189,13 +192,16 @@ fn live_sentinel_one_deploy_validate_query_disable() {
             SentinelOne.validate_query(cx, query, now).await
         );
         let check = SentinelOne
-            .check(cx, &SearchRequest::new(query, TimeWindow::check(now)))
+            .check(
+                cx,
+                &QueryRequest::new(query, "powerquery", TimeWindow::check(now)),
+            )
             .await;
         println!("check {check:?}");
         println!(
             "query {:?}",
             SentinelOne
-                .run(cx, &SearchRequest::new(query, last_hour()))
+                .run(cx, &QueryRequest::new(query, "powerquery", last_hour()))
                 .await
         );
         SentinelOne.disable_rule(cx, id).await.unwrap();

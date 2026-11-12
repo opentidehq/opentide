@@ -6,9 +6,11 @@
 //! ([`crate::queries`]). The engine's errors are the run's, as `validate`'s
 //! queries check reports them; its warnings and notes are `lint`'s.
 //!
-//! `--live` sends the queries to the tenants: it stays on the Python CLI
-//! until UC-4.1, so a run with it is refused as `engine_not_ported`
-//! ([`LIVE_NOT_PORTED`]), which `OPENTIDE_ENGINE=compare` hands to Python.
+//! `--live` on a platform whose tenants cannot check a query (CrowdStrike,
+//! HarfangLab, Sysdig) answers `supported: false` here ([`live`], UC-4.2c,
+//! #832); a `--live` run that sends queries to tenants stays on the Python
+//! CLI, refused as `engine_not_ported` ([`LIVE_NOT_PORTED`]), which
+//! `OPENTIDE_ENGINE=compare` hands to Python.
 
 use std::path::{Path, PathBuf};
 use std::sync::PoisonError;
@@ -213,6 +215,92 @@ pub fn refuse(args: &Args) -> Option<Report> {
     }
     None
 }
+
+/// The platforms whose `--live` run is this engine's: those whose tenants
+/// cannot check a query, answered `supported: false` before any request
+/// (`opentide.cli.engines.RUST_LIVE_VALIDATION_PLATFORMS`). Defender,
+/// Elastic and SentinelOne check on the tenant: still the Python CLI's.
+pub const LIVE_RUST_PLATFORMS: [&str; 3] = ["crowdstrike", "harfanglab", "sysdig"];
+
+/// `validate query --live` (`validate_query_cmd`'s `--live` branch, then
+/// `_validate_query_platform`): the usage errors, then a platform whose
+/// tenants check no query answers `supported: false`. A run that sends
+/// queries to tenants is refused as `engine_not_ported`.
+pub fn live(args: &Args, env: &Env) -> Report {
+    if let Some(plan) = &args.plan {
+        return usage(
+            opentide_compile::strategy::removed_plan_message(Some(plan), true),
+            "--plan",
+            code::USAGE_INVALID_VALUE,
+        );
+    }
+    if args.queries == Some(QueriesMode::Off) {
+        return usage(
+            "--queries off skips the queries check, which is all validate query runs",
+            "--queries",
+            code::USAGE_ERROR,
+        );
+    }
+    let (raw, source) = match &args.check_timeout {
+        Some(value) => (Some(value.as_str()), "--check-timeout"),
+        None => (
+            env.get(CHECK_TIMEOUT_ENV)
+                .filter(|value| !value.trim().is_empty()),
+            CHECK_TIMEOUT_ENV,
+        ),
+    };
+    if let Some(raw) = raw {
+        let seconds = raw.trim().parse::<f64>().unwrap_or(f64::NAN);
+        if !seconds.is_finite() || seconds <= 0.0 {
+            return usage(
+                format!(
+                    "{source} must be a positive number of seconds, got {}",
+                    opentide_connectors::python::python_string_repr(raw)
+                ),
+                source,
+                code::USAGE_INVALID_VALUE,
+            );
+        }
+    }
+    for (flag, used) in [
+        ("--strict", args.strict),
+        ("--queries", args.queries.is_some()),
+    ] {
+        if used {
+            return usage(
+                format!("{flag} applies to the offline check: a tenant accepts or rejects a query"),
+                flag,
+                code::USAGE_ERROR,
+            );
+        }
+    }
+    if args.files.iter().any(|target| is_query_file(target)) {
+        return usage(
+            "a query file is checked offline: --live sends the queries of rules to tenants",
+            "--file",
+            code::USAGE_ERROR,
+        );
+    }
+    match args.platform.as_deref() {
+        Some(platform) if LIVE_RUST_PLATFORMS.contains(&platform) => {
+            let message = format!("query validation not supported for {platform}");
+            let mut report = Report::error(COMMAND, message);
+            let data = vec![
+                ("platform".to_owned(), Json::str(platform)),
+                ("valid".to_owned(), Json::Null),
+                ("supported".to_owned(), Json::Bool(false)),
+            ];
+            // The envelope writes `error` after the message.
+            report.outcome.data = data;
+            report
+        }
+        _ => live_not_ported(),
+    }
+}
+
+/// `OPENTIDE_QUERY_CHECK_TIMEOUT`: the check timeout when `--check-timeout`
+/// gives none (`CHECK_TIMEOUT_ENV`).
+pub const CHECK_TIMEOUT_ENV: &str = "OPENTIDE_QUERY_CHECK_TIMEOUT";
 
 /// The refusal of a `--live` run: Python's (`engine_not_ported`).
 pub fn live_not_ported() -> Report {
@@ -454,7 +542,7 @@ fn findings_outcome(
 )]
 pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     if args.live {
-        return live_not_ported();
+        return live(args, cx.env);
     }
     if let Some(report) = refuse(args) {
         return report;

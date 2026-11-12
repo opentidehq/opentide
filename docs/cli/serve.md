@@ -77,7 +77,7 @@ A read-only Rust run keeps its workspace loaded for the next one, per workspace 
 
 ### The Rust host
 
-Under `OPENTIDE_ENGINE=rust` the server itself is Rust: the protocol, the order, cancel and the signals are as described here, and so is every answer. A run whose command has a Rust implementation runs in the host, as above; every other run (a command without one, `--help`, `OPENTIDE_ENGINE=python` in its `env`) is handed, in the same process, to the Python package, which runs it as the Python host does. Where it differs: a message that Python's `json` reads but JSON does not allow (`NaN`, a lone surrogate, nesting deeper than 128 levels) is a parse error; request ids are compared as written (`1.0` is not `1`); and a SIGTERM or SIGHUP the server was started ignoring stops it. The default, and `compare`, is the Python host.
+Under `OPENTIDE_ENGINE=rust` the server itself is Rust: the protocol, the order, cancel and the signals are as described here, and so is every answer. A run whose command has a Rust implementation runs in the host, as above; every other run (a command without one, `--help`, `OPENTIDE_ENGINE=python` in its `env`) is handed, in the same process, to the Python package, which runs it as the Python host does. Where it differs: a message that Python's `json` reads but JSON does not allow (`NaN`, a lone surrogate, nesting deeper than 128 levels) is a parse error; request ids are compared as written (`1.0` is not `1`); and a SIGTERM or SIGHUP the server was started ignoring stops it. `opentide serve` runs the host in its own process, so a SIGTERM sent to it reaches the host. The default, and `compare`, is the Python host.
 
 ### Cancel
 

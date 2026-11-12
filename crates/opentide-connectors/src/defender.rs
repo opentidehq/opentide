@@ -15,16 +15,15 @@ use std::sync::{Mutex, PoisonError};
 
 use opentide_compile::json::{Json, Object};
 
+use crate::answer::Answer;
 use crate::body::python_json;
 use crate::connector::{
-    BoxFuture, DeployOutcome, DeployRequest, Deployer, LiveValidator, Operation, Platform,
-    QueryRequest, TenantContext, Validation,
+    BoxFuture, DeployOutcome, DeployRequest, Deployer, LiveCheck, LiveValidator, Operation,
+    Platform, QueryColumn, QueryOutcome, QueryRequest, QueryRunner, Row, TenantContext,
+    kql_with_limit, utc_z,
 };
 use crate::error::ConnectorError;
-use crate::search::{
-    self, Answer, Column, SearchError, SearchRequest, SearchResult, TimeWindow, kql_with_limit,
-    python_str, urlencode, utc_z,
-};
+use crate::python::python_str;
 use crate::{HttpSettings, Secret, TenantLabel};
 
 /// The platform's identifier.
@@ -82,6 +81,26 @@ pub enum DefenderError {
     Connector(#[from] ConnectorError),
 }
 
+impl DefenderError {
+    /// The error as the framework's: a refused sign-in is the tenant's
+    /// [`ConnectorError::Authentication`], a refused rule call its
+    /// [`ConnectorError::Refused`].
+    pub fn into_connector(self, tenant: &str) -> ConnectorError {
+        match self {
+            Self::Connector(error) => error,
+            Self::Authentication { detail } => ConnectorError::Authentication {
+                platform: PLATFORM.into(),
+                tenant: tenant.to_owned(),
+                message: "Cannot authenticate with the tenant configuration".into(),
+                detail: Some(detail),
+            },
+            Self::Refused { message, context } => {
+                ConnectorError::refused(PLATFORM, tenant, message, context)
+            }
+        }
+    }
+}
+
 /// A rule Graph created.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Created {
@@ -90,15 +109,6 @@ pub struct Created {
     /// Created with the safer configuration after the full one was refused
     /// (`DEPLOYMENT_WARNING_RAISED`): check the impacted assets in the portal.
     pub partial: bool,
-}
-
-/// A live check's result: the rows, and what the rule's query lacks.
-#[derive(Clone, Debug, PartialEq)]
-pub struct Check {
-    /// The search for one row.
-    pub result: SearchResult,
-    /// The custom-detection columns its output lacks, as one error.
-    pub errors: Vec<String>,
 }
 
 /// The Defender for Endpoint connector. One sign-in per tenant serves every
@@ -149,7 +159,7 @@ impl Defender {
         if let Some(body) = body {
             builder = builder.body(json_body(cx, body)?);
         }
-        Ok(search::exchange(cx, builder).await?)
+        Ok(crate::answer::exchange(cx, builder).await?)
     }
 
     /// Creates a custom detection rule from its compiled *body*
@@ -249,15 +259,17 @@ impl Defender {
     pub async fn run(
         &self,
         cx: TenantContext<'_>,
-        request: &SearchRequest,
+        request: &QueryRequest,
         now: jiff::Timestamp,
-    ) -> Result<SearchResult, SearchError> {
+    ) -> Result<QueryOutcome, ConnectorError> {
         let tenant = &cx.tenant.label.tenant;
         let oldest = now
             .checked_sub(jiff::SignedDuration::from_hours(24 * MAX_LOOKBACK_DAYS))
             .unwrap_or(now);
         if request.window.start < oldest {
-            return Err(SearchError::refused(
+            return Err(ConnectorError::refused(
+                PLATFORM,
+                tenant,
                 format!(
                     "advanced hunting keeps {MAX_LOOKBACK_DAYS} days of data: start the window after {}",
                     utc_z(oldest)
@@ -287,10 +299,7 @@ impl Defender {
                 Some(&Json::Object(body)),
             )
             .await
-            .map_err(|error| match error {
-                DefenderError::Connector(error) => SearchError::Connector(error),
-                other => SearchError::Tenant(other.to_string()),
-            })?;
+            .map_err(|error| error.into_connector(tenant))?;
         if answer.status != 200 {
             let mut message = format!(
                 "Graph refused the hunting query on {tenant} (HTTP {})",
@@ -302,23 +311,30 @@ impl Defender {
             let detail = answer
                 .not_json_detail()
                 .unwrap_or_else(|| error_message(&answer));
-            return Err(SearchError::refused(message, Some(detail)));
+            return Err(ConnectorError::refused(
+                PLATFORM,
+                tenant,
+                message,
+                Some(detail),
+            ));
         }
         let Some(body) = answer.json() else {
-            return Err(SearchError::refused(
+            return Err(ConnectorError::refused(
+                PLATFORM,
+                tenant,
                 format!("Graph did not answer the hunting query on {tenant} with JSON"),
                 answer.not_json_detail(),
             ));
         };
         let schema = first_present(&body, "schema", "Schema");
-        let columns: Vec<Column> = match schema {
+        let columns: Vec<QueryColumn> = match schema {
             Some(Json::Array(items)) => items
                 .iter()
                 .filter_map(|column| {
                     column.as_object()?;
                     let name = truthy_or(column.get("name"), column.get("Name"));
                     let kind = truthy_or(column.get("type"), column.get("Type"));
-                    Some(Column {
+                    Some(QueryColumn {
                         name: name.map_or_else(|| "None".to_owned(), python_str),
                         kind: kind.map(python_str),
                     })
@@ -326,12 +342,17 @@ impl Defender {
                 .collect(),
             _ => Vec::new(),
         };
-        let rows: Vec<Json> = match first_present(&body, "results", "Results") {
-            Some(Json::Array(items)) => items.iter().filter(|row| row.truthy()).cloned().collect(),
+        let rows: Vec<Row> = match first_present(&body, "results", "Results") {
+            Some(Json::Array(items)) => items
+                .iter()
+                .filter(|row| row.truthy())
+                .filter_map(Json::as_object)
+                .cloned()
+                .collect(),
             _ => Vec::new(),
         };
         let truncated = rows.len() > request.limit;
-        Ok(SearchResult {
+        Ok(QueryOutcome {
             columns,
             rows: rows.into_iter().take(request.limit).collect(),
             truncated,
@@ -339,7 +360,7 @@ impl Defender {
             warnings: Vec::new(),
             vendor_query_id: None,
             sent: (sent != request.text.trim()).then_some(sent),
-            language: "kql".into(),
+            language: Some("kql".into()),
         })
     }
 
@@ -349,9 +370,9 @@ impl Defender {
     pub async fn check(
         &self,
         cx: TenantContext<'_>,
-        request: &SearchRequest,
+        request: &QueryRequest,
         now: jiff::Timestamp,
-    ) -> Result<Check, SearchError> {
+    ) -> Result<LiveCheck, ConnectorError> {
         let result = self.run(cx, &request.for_check(), now).await?;
         let returned: Vec<&str> = result.columns.iter().map(|c| c.name.as_str()).collect();
         let missing = missing_required_column_groups(&request.text, &returned);
@@ -360,7 +381,11 @@ impl Defender {
         } else {
             vec![format!("the query's output lacks {}", missing.join("; "))]
         };
-        Ok(Check { result, errors })
+        Ok(LiveCheck {
+            result: Some(result),
+            errors,
+            warnings: Vec::new(),
+        })
     }
 }
 
@@ -369,9 +394,9 @@ async fn sign_in(cx: TenantContext<'_>) -> Result<Secret, DefenderError> {
     let tenant_id = cx.tenant.secret("tenant_id")?.expose().to_owned();
     let client_id = cx.tenant.secret("client_id")?.expose().to_owned();
     let client_secret = cx.tenant.secret("client_secret")?.expose().to_owned();
-    let form = urlencode(&[
-        ("client_id", &client_id),
-        ("client_secret", &client_secret),
+    let form = crate::encode::urlencode([
+        ("client_id", client_id.as_str()),
+        ("client_secret", client_secret.as_str()),
         ("grant_type", "client_credentials"),
         ("scope", SCOPE),
     ]);
@@ -381,7 +406,7 @@ async fn sign_in(cx: TenantContext<'_>) -> Result<Secret, DefenderError> {
         .request(reqwest::Method::POST, &url)
         .header("Content-Type", "application/x-www-form-urlencoded")
         .body(form);
-    let answer = search::exchange(cx, builder).await?;
+    let answer = crate::answer::exchange(cx, builder).await?;
     let tenant = &cx.tenant.label.tenant;
     if answer.status != 200 {
         return Err(DefenderError::Authentication {
@@ -736,31 +761,27 @@ impl Deployer for Defender {
     }
 }
 
+impl QueryRunner for Defender {
+    /// An advanced hunting query over the request's window; the 30-day
+    /// retention is counted from now.
+    fn run<'a>(
+        &'a self,
+        cx: TenantContext<'a>,
+        request: &'a QueryRequest,
+    ) -> BoxFuture<'a, Result<QueryOutcome, ConnectorError>> {
+        Box::pin(async move { Defender::run(self, cx, request, jiff::Timestamp::now()).await })
+    }
+}
+
 impl LiveValidator for Defender {
+    /// A search for one row over the request's window, then the columns a
+    /// custom detection needs.
     fn validate<'a>(
         &'a self,
         cx: TenantContext<'a>,
         request: &'a QueryRequest,
-    ) -> BoxFuture<'a, Result<Validation, ConnectorError>> {
-        Box::pin(async move {
-            let now = jiff::Timestamp::now();
-            let search = SearchRequest::new(&request.text, TimeWindow::check(now));
-            Ok(match self.check(cx, &search, now).await {
-                Ok(check) if check.errors.is_empty() => Validation {
-                    ok: true,
-                    message: None,
-                },
-                Ok(check) => Validation {
-                    ok: false,
-                    message: Some(check.errors.join("; ")),
-                },
-                Err(SearchError::Connector(error)) => return Err(error),
-                Err(refused) => Validation {
-                    ok: false,
-                    message: Some(refused.text()),
-                },
-            })
-        })
+    ) -> BoxFuture<'a, Result<LiveCheck, ConnectorError>> {
+        Box::pin(async move { self.check(cx, request, jiff::Timestamp::now()).await })
     }
 }
 
@@ -774,6 +795,10 @@ impl Platform for Defender {
     }
 
     fn live_validator(&self) -> Option<&dyn LiveValidator> {
+        Some(self)
+    }
+
+    fn query_runner(&self) -> Option<&dyn QueryRunner> {
         Some(self)
     }
 }

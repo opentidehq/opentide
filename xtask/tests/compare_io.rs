@@ -222,6 +222,7 @@ fn the_dispatch_table_is_read_from_the_repository_cli() {
     let coverage = |requires: &[&str], refuses: &[&str]| xtask::compare::Coverage {
         requires: requires.iter().map(|flag| (*flag).to_owned()).collect(),
         refuses: refuses.iter().map(|flag| (*flag).to_owned()).collect(),
+        ..xtask::compare::Coverage::default()
     };
     assert_eq!(
         paths.into_iter().collect::<Vec<_>>(),

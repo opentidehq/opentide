@@ -219,6 +219,10 @@ mod signals {
         handle: signal_hook::iterator::Handle,
         ids: Vec<signal_hook::SigId>,
         received: std::sync::Arc<std::sync::Mutex<Option<i32>>>,
+        /// Each signal with a flag its handler sets: what `finish` reports
+        /// when the watcher had not read the signal before the input ended
+        /// on its own (#974).
+        arrived: Vec<(i32, std::sync::Arc<std::sync::atomic::AtomicBool>)>,
         watcher: Option<std::thread::JoinHandle<()>>,
     }
 
@@ -230,6 +234,7 @@ mod signals {
             use std::sync::{Arc, Mutex};
             let seen = Arc::new(AtomicBool::new(false));
             let mut ids = Vec::new();
+            let mut arrived = Vec::new();
             for signal in [SIGTERM, SIGHUP] {
                 // Registered first: on the second signal it finds the flag set.
                 ids.push(signal_hook::flag::register_conditional_default(
@@ -237,6 +242,9 @@ mod signals {
                     Arc::clone(&seen),
                 )?);
                 ids.push(signal_hook::flag::register(signal, Arc::clone(&seen))?);
+                let flag = Arc::new(AtomicBool::new(false));
+                ids.push(signal_hook::flag::register(signal, Arc::clone(&flag))?);
+                arrived.push((signal, flag));
             }
             let mut signals = signal_hook::iterator::Signals::new([SIGTERM, SIGHUP])?;
             let handle = signals.handle();
@@ -257,6 +265,7 @@ mod signals {
                 handle,
                 ids,
                 received,
+                arrived,
                 watcher: Some(watcher),
             })
         }
@@ -270,10 +279,18 @@ mod signals {
             for id in self.ids.drain(..) {
                 signal_hook::low_level::unregister(id);
             }
-            *self
+            let received = *self
                 .received
                 .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            // Closing the iterator drops a signal the watcher had not read
+            // yet: its handler's flag still says it came.
+            received.or_else(|| {
+                self.arrived
+                    .iter()
+                    .find(|(_, flag)| flag.load(std::sync::atomic::Ordering::SeqCst))
+                    .map(|(signal, _)| *signal)
+            })
         }
     }
 
@@ -288,6 +305,40 @@ mod signals {
 
         pub fn finish(self) -> Option<i32> {
             None
+        }
+    }
+
+    #[cfg(all(test, unix))]
+    mod tests {
+        use super::Termination;
+        use crate::serve::runner::{EventSink, Job, Plan, RunOutcome, RunRequest, Runner};
+        use crate::serve::{Server, Writer};
+        use std::sync::Arc;
+
+        struct NoRuns;
+        impl Runner for NoRuns {
+            fn plan(&self, _: &RunRequest) -> Plan {
+                Plan::default()
+            }
+            fn run(&self, _: &RunRequest, plan: &Plan, job: &Arc<Job>, _: EventSink) -> RunOutcome {
+                job.finish();
+                crate::serve::runner::document(&plan.words, "{}", 0)
+            }
+            fn interrupt(&self) {}
+            fn invalidate(&self, _: &[String]) {}
+        }
+
+        /// #974: a SIGTERM the watcher has not read when the input ends on its
+        /// own is still the signal the server reports (exit 143).
+        #[test]
+        fn a_signal_not_yet_read_when_serving_ends_is_still_reported() {
+            let write: Writer = Box::new(|_: &str| Ok(()));
+            let server = Server::new(write, Arc::new(NoRuns), "0.0.0");
+            let signals = Termination::install(&server).unwrap();
+            // The handler runs before raise returns; the iterator closes next,
+            // before the watcher can be relied on to have read the signal.
+            signal_hook::low_level::raise(signal_hook::consts::SIGTERM).unwrap();
+            assert_eq!(signals.finish(), Some(signal_hook::consts::SIGTERM));
         }
     }
 }

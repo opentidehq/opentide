@@ -78,6 +78,13 @@ jobs:
       - name: Build xtask
         run: cargo build --locked --package xtask
 
+      # The rust engine measures startup (`opentide --version`) and `explain` through
+      # the console script, opentide.cli.launch:main (UC-3.8b, #960): `uv sync` installs it
+      # in .venv, with the engine built in the develop profile (release without LTO).
+      - name: Install the console script
+        if: matrix.engine == 'rust'
+        run: uv sync --locked --no-dev
+
       - name: Run the benchmarks
         env:
           ENGINE: ${{ matrix.engine }}

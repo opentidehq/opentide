@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from opentide._version import __version__
+
+#: ``typing.TYPE_CHECKING`` without importing typing, which the console
+#: script's start would pay for (UC-3.8b, #960); type checkers read it as True.
+TYPE_CHECKING = False
 
 if TYPE_CHECKING:
     from opentide.core.registry import Opentide

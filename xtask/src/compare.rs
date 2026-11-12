@@ -182,15 +182,54 @@ fn package_uuids(repo: &Path) -> Result<std::collections::BTreeSet<String>> {
 }
 
 /// Which runs of a command its Rust implementation covers
-/// (`RustCommand.requires` and `RustCommand.refuses`).
+/// (`RustCommand.requires`, `refuses`, `platforms` and `platform_scope`).
 #[derive(Debug, Clone, Default, PartialEq, Eq, serde::Deserialize)]
 pub struct Coverage {
     /// Flags of which a run must carry one (none: every run).
     #[serde(default)]
     pub requires: Vec<String>,
-    /// Flags a run must carry none of (`validate query --live`).
+    /// Flags a run must carry none of.
     #[serde(default)]
     pub refuses: Vec<String>,
+    /// The platforms with a Rust connector: a run is covered only when every
+    /// `--platform` it names is one, and one that names none is not (none:
+    /// every platform).
+    #[serde(default)]
+    pub platforms: Vec<String>,
+    /// The flags under which `platforms` applies (none: every run):
+    /// `validate query --live`.
+    #[serde(default)]
+    pub platform_scope: Vec<String>,
+}
+
+impl Coverage {
+    /// Whether the run's `--platform` values all have a Rust connector, or
+    /// `platforms` does not apply to it.
+    fn platforms_covered(&self, options: &[String]) -> bool {
+        if self.platforms.is_empty()
+            || (!self.platform_scope.is_empty()
+                && !self
+                    .platform_scope
+                    .iter()
+                    .any(|flag| options.contains(flag)))
+        {
+            return true;
+        }
+        let mut named = Vec::new();
+        for (index, token) in options.iter().enumerate() {
+            if token == "--platform" {
+                if let Some(value) = options.get(index + 1) {
+                    named.push(value.as_str());
+                }
+            } else if let Some(value) = token.strip_prefix("--platform=") {
+                named.push(value);
+            }
+        }
+        !named.is_empty()
+            && named
+                .iter()
+                .all(|name| self.platforms.iter().any(|platform| platform == name))
+    }
 }
 
 /// The command paths with a Rust implementation: the CLI's dispatch table,
@@ -204,7 +243,9 @@ pub fn rust_commands(repo: &Path) -> Result<BTreeMap<String, Coverage>> {
             "-c",
             "import json; from opentide.cli.engines import RUST_COMMANDS; \
              print(json.dumps({' '.join(path): {'requires': list(command.requires), \
-             'refuses': list(getattr(command, 'refuses', ()))} \
+             'refuses': list(getattr(command, 'refuses', ())), \
+             'platforms': list(getattr(command, 'platforms', ())), \
+             'platform_scope': list(getattr(command, 'platform_scope', ()))} \
              for path, command in RUST_COMMANDS.items()}))",
         ])
         .output()
@@ -230,6 +271,7 @@ pub fn covers(table: &BTreeMap<String, Coverage>, command: &str, argv: &[String]
         .position(|arg| arg == "--")
         .map_or(argv, |end| &argv[..end]);
     !coverage.refuses.iter().any(|flag| options.contains(flag))
+        && coverage.platforms_covered(options)
         && (coverage.requires.is_empty()
             || coverage.requires.iter().any(|flag| options.contains(flag)))
 }
@@ -434,17 +476,69 @@ mod tests {
                 "deploy".to_owned(),
                 super::Coverage {
                     requires: vec!["--dry-run".to_owned()],
-                    refuses: Vec::new(),
+                    ..super::Coverage::default()
                 },
             ),
             (
                 "validate query".to_owned(),
                 super::Coverage {
-                    requires: Vec::new(),
-                    refuses: vec!["--live".to_owned()],
+                    platforms: vec!["crowdstrike".to_owned(), "sysdig".to_owned()],
+                    platform_scope: vec!["--live".to_owned()],
+                    ..super::Coverage::default()
+                },
+            ),
+            (
+                "query".to_owned(),
+                super::Coverage {
+                    platforms: vec!["elastic".to_owned()],
+                    ..super::Coverage::default()
+                },
+            ),
+            (
+                "setup".to_owned(),
+                super::Coverage {
+                    refuses: vec!["--skills".to_owned()],
+                    ..super::Coverage::default()
                 },
             ),
         ]);
+        assert!(!super::covers(
+            &table,
+            "setup",
+            &argv(&["opentide", "setup", "--skills"])
+        ));
+        assert!(super::covers(
+            &table,
+            "query",
+            &argv(&["opentide", "query", "--platform", "elastic", "x"])
+        ));
+        assert!(super::covers(
+            &table,
+            "query",
+            &argv(&["opentide", "query", "--platform=elastic", "x"])
+        ));
+        assert!(!super::covers(
+            &table,
+            "query",
+            &argv(&["opentide", "query", "--platform", "sentinel", "x"])
+        ));
+        assert!(!super::covers(
+            &table,
+            "query",
+            &argv(&["opentide", "query", "x"])
+        ));
+        assert!(super::covers(
+            &table,
+            "validate query",
+            &argv(&[
+                "opentide",
+                "validate",
+                "query",
+                "--live",
+                "--platform",
+                "sysdig"
+            ])
+        ));
         assert!(super::covers(
             &table,
             "validate query",

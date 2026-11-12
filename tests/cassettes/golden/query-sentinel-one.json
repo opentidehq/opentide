@@ -1,0 +1,52 @@
+{
+  "format": 1,
+  "scenario": "golden/query-sentinel-one",
+  "recorded_from": [
+    "{oracle}/opentide",
+    "--repo",
+    "tests/golden/fixtures/tenants",
+    "--json",
+    "query",
+    "--platform",
+    "sentinel_one",
+    "--from",
+    "2099-01-01T00:00:00Z",
+    "--to",
+    "2099-01-01T01:00:00Z",
+    "src.process.name = 'cmd.exe'"
+  ],
+  "digest": "sha256:485388bc46dd0ebce7b2a004558088db2125ccb63ae2a80677ed51973dfa409a",
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://s1.invalid/web/api/v2.1/dv/events/pq",
+        "headers": [
+          [
+            "authorization",
+            "REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"query\": \"src.process.name = 'cmd.exe'\\n| limit 101\", \"fromDate\": \"2099-01-01T00:00:00.000Z\", \"toDate\": \"2099-01-01T01:00:00.000Z\", \"limit\": 101, \"accountIds\": [\"1001\"]}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "s1-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"data\": {\"queryId\": \"pq-1\", \"status\": \"FINISHED\", \"progress\": 100, \"columns\": [{\"name\": \"src.process.name\", \"type\": \"string\"}, {\"name\": \"endpoint.name\"}], \"data\": [[\"cmd.exe\", \"ws-1\"], [\"powershell.exe\", \"ws-2\"]], \"recommendations\": [\"Add a filter on event.type to speed up the query\"]}}"
+      }
+    }
+  ]
+}

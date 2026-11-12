@@ -77,7 +77,7 @@ uv run pytest tests/test_deployment/test_deploy_payloads.py --snapshot-update
 - **Unit matrix** (Python 3.10 and 3.14 on every pull request, 3.11–3.13 in the full set): `-m "not cli_e2e and not cli_smoke"`
 - **`cli-e2e` job** (Python 3.14 only, 4 shards, not gated on `test`): `tests/ -m "cli_e2e or cli_smoke"` — whole
   tree, so a new E2E directory is picked up by its marker alone
-- **`cli-windows-smoke` job**: `test_console_script_smoke.py -m cli_smoke` — the only coverage of `spawn` platforms; also `tests/test_deployment/test_promotion_rewrite.py`, the only run of promotion on NTFS and CRLF files
+- **`cli-windows-smoke` job**: `test_console_script_smoke.py -m cli_smoke` — the only coverage of `spawn` platforms; `test_launcher_signals_e2e.py`, Ctrl-C (CTRL_BREAK_EVENT) through the console script; also `tests/test_deployment/test_promotion_rewrite.py`, the only run of promotion on NTFS and CRLF files
 
 E2E does not contribute to coverage metrics.
 

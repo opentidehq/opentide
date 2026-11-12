@@ -8,8 +8,10 @@ use std::time::{Duration, Instant};
 use opentide_compile::Json;
 use tokio_util::sync::CancellationToken;
 
+use crate::connector::TenantContext;
 use crate::error::ConnectorError;
 use crate::http::HttpClient;
+use crate::python::python_string_repr;
 
 /// An answer slower than this that is not the API's is read as a gateway's
 /// (`SLOW_ANSWER_SECONDS`).
@@ -84,6 +86,20 @@ impl Answer {
     }
 }
 
+/// Sends *request* on the tenant's client and reads the whole answer; a
+/// request that cannot be built is the tenant's setup error.
+pub async fn exchange(
+    cx: TenantContext<'_>,
+    request: reqwest::RequestBuilder,
+) -> Result<Answer, ConnectorError> {
+    let request = request.build().map_err(|error| ConnectorError::Setup {
+        platform: cx.tenant.label.platform.clone(),
+        tenant: cx.tenant.label.tenant.clone(),
+        message: crate::error::describe(error),
+    })?;
+    Answer::fetch(cx.http, request, cx.cancel).await
+}
+
 /// Why an answer that is not the tenant's API is a gateway's, or `None`
 /// (`gateway_answer`).
 pub fn gateway_answer(status: u16, elapsed: Option<Duration>) -> Option<String> {
@@ -125,7 +141,7 @@ pub fn page_title(body: &[u8]) -> Option<String> {
 
 /// One line on an answer that is not the API's JSON: its status, its body
 /// and a gateway's reading (`describe_answer`). Quoted texts are written
-/// as Rust's `{:?}` quotes them.
+/// as Python's `repr` quotes them.
 pub fn describe_answer(
     status: u16,
     body: &[u8],
@@ -145,7 +161,10 @@ pub fn describe_answer(
         if kind == "text/html" || head.starts_with(b"<!doctype html") || head.starts_with(b"<html")
         {
             match page_title(body) {
-                Some(title) => format!("HTTP {status} with an HTML page titled {title:?}"),
+                Some(title) => format!(
+                    "HTTP {status} with an HTML page titled {}",
+                    python_string_repr(&title)
+                ),
                 None => format!("HTTP {status} with an HTML page"),
             }
         } else if body.trim_ascii().is_empty() {
@@ -153,7 +172,10 @@ pub fn describe_answer(
         } else {
             let snippet = String::from_utf8_lossy(&body[..body.len().min(200)]);
             let snippet = snippet.split_whitespace().collect::<Vec<_>>().join(" ");
-            format!("HTTP {status} with a body that is not JSON ({snippet:?})")
+            format!(
+                "HTTP {status} with a body that is not JSON ({})",
+                python_string_repr(&snippet)
+            )
         };
     match gateway_answer(status, elapsed) {
         Some(hint) => format!("{text}: {hint}"),
@@ -170,7 +192,7 @@ mod tests {
         let page = b"<html><head><title>502  Bad\nGateway</title></head></html>";
         let line = describe_answer(502, page, Some("text/html; charset=utf-8"), None);
         assert!(line.starts_with(
-            "HTTP 502 with an HTML page titled \"502 Bad Gateway\": HTTP 502 Bad Gateway is what"
+            "HTTP 502 with an HTML page titled '502 Bad Gateway': HTTP 502 Bad Gateway is what"
         ));
         assert_eq!(
             describe_answer(200, b"  ", None, None),

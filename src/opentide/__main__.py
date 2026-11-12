@@ -1,6 +1,6 @@
-"""``python -m opentide`` entry point."""
+"""``python -m opentide``: the console script, :func:`opentide.cli.launch.main`."""
 
-from opentide.cli import main
+from opentide.cli.launch import main
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

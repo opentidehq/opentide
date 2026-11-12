@@ -10326,3 +10326,14 @@ candidate = "{\"detail\":\"opentide setup vscode is deprecated and will be remov
 reason = "`logger` named the Python module that logged each line (structlog's logger name); the Rust CLI's JSON log lines carry the event, level, timestamp and the event's fields, not a module path. The events and their order are the oracle's."
 issue = "https://github.com/opentidehq/opentide/issues/951"
 changelog = "**`setup vscode`, `setup --vscode-setup` and the setup wizards run on the Rust engine**"
+
+[[diff]]
+command = "query"
+case = "query/human/tide-corpus/elastic-eql"
+target = "stderr"
+rule = "lines"
+oracle = "\u001b[1;31merror: \u001b[0mEnvironment variable missing \u00b7 detail: Unset configuration variables: $ELASTIC_API_KEY \u00b7 \nadvice: Set those environment variables before a live check."
+candidate = "error: Environment variable missing \u00b7 detail: Unset configuration variables: $ELASTIC_API_KEY \u00b7 advice: Set those environment variables before a live check."
+reason = "A log line is written by the Rust CLI's logging layer (UC-3.3), as one unstyled line: Rich coloured its label and wrapped it at the terminal's width. The event, its fields and their order are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/832"
+changelog = "**`opentide query` runs on the Rust connectors for CrowdStrike, Defender for Endpoint, Elastic, HarfangLab and SentinelOne, and `validate query --live` for CrowdStrike, HarfangLab and Sysdig**"

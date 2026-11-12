@@ -10,9 +10,10 @@ mod support;
 
 use opentide_cassette::cassette::Body;
 use opentide_compile::json::Json;
+use opentide_connectors::ConnectorError;
+use opentide_connectors::connector::QueryRequest;
 use opentide_connectors::defender::{self, Defender, DefenderError};
 use opentide_connectors::runtime::block_on;
-use opentide_connectors::search::{SearchError, SearchRequest};
 use support::{Replayed, fixture, items, text, window};
 
 const SETUP: &str = r#"
@@ -130,7 +131,7 @@ fn defender_query_sends_what_the_python_runner_sent() {
     let outcomes = block_on(async {
         let mut outcomes = Vec::new();
         for item in items(query.get("queries").unwrap()) {
-            let mut request = SearchRequest::new(text(item.get("text").unwrap()), window);
+            let mut request = QueryRequest::new(text(item.get("text").unwrap()), "kql", window);
             request.limit = usize::try_from(match item.get("limit").unwrap() {
                 Json::Int(limit) => *limit,
                 _ => 100,
@@ -165,7 +166,7 @@ fn defender_query_sends_what_the_python_runner_sent() {
     let refusals: Vec<String> = outcomes[1..]
         .iter()
         .map(|outcome| match outcome {
-            Err(refused @ SearchError::Refused { .. }) => refused.text(),
+            Err(refused @ ConnectorError::Refused { .. }) => refused.text(),
             other => panic!("{other:?}"),
         })
         .collect();
@@ -194,12 +195,12 @@ fn defender_query_refuses_a_window_past_retention_without_a_request() {
         .unwrap();
     let outcome = block_on(async {
         Defender::new()
-            .run(tenant.cx(), &SearchRequest::new("T", window), now)
+            .run(tenant.cx(), &QueryRequest::new("T", "kql", window), now)
             .await
     })
     .unwrap();
     match outcome {
-        Err(SearchError::Refused { message, .. }) => assert_eq!(
+        Err(ConnectorError::Refused { message, .. }) => assert_eq!(
             message,
             "advanced hunting keeps 30 days of data: start the window after 2026-11-06T08:00:00.000Z"
         ),
@@ -227,12 +228,12 @@ fn defender_validate_checks_one_row_and_the_custom_detection_columns() {
             let check = connector
                 .check(
                     tenant.cx(),
-                    &SearchRequest::new(text(query), window),
+                    &QueryRequest::new(text(query), "kql", window),
                     window.end,
                 )
                 .await
                 .unwrap();
-            assert_eq!(check.result.rows.len(), 1);
+            assert_eq!(check.result.as_ref().unwrap().rows.len(), 1);
             errors.push(check.errors);
         }
         errors

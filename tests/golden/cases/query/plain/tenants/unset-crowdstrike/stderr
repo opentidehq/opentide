@@ -1,0 +1,2 @@
+error: Environment variable missing · detail: Unset configuration variables: $CROWDSTRIKE_CLIENT_SECRET · advice: Set those environment variables before a live check.
+error: 1 of 1 queries failed on 1 crowdstrike tenant: lab: CrowdStrike credentials are unset ($CROWDSTRIKE_CLIENT_SECRET). Set those environment variables before a live check.

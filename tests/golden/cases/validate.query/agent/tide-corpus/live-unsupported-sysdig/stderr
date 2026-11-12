@@ -1,0 +1,2 @@
+error: query validation not supported for sysdig
+tip: add --json for machine-readable output

@@ -82,10 +82,49 @@ pub struct TimeWindow {
 }
 
 impl TimeWindow {
-    /// *at* as `format_utc_z` writes it: `2026-10-26T08:00:00.000Z`.
+    /// *at* as `format_utc_z` writes it: UTC, milliseconds (truncated), `Z`
+    /// (`2026-10-26T08:00:00.000Z`).
     pub fn utc_z(at: jiff::Timestamp) -> String {
-        at.strftime("%Y-%m-%dT%H:%M:%S%.3fZ").to_string()
+        let civil = jiff::tz::Offset::UTC.to_datetime(at);
+        format!(
+            "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.{:03}Z",
+            civil.year(),
+            civil.month(),
+            civil.day(),
+            civil.hour(),
+            civil.minute(),
+            civil.second(),
+            civil.subsec_nanosecond() / 1_000_000
+        )
     }
+
+    /// The window's length in whole seconds, at least one (`seconds`).
+    pub fn seconds(&self) -> i64 {
+        let span = self.end.as_second() - self.start.as_second();
+        let nanos = self.end.subsec_nanosecond() - self.start.subsec_nanosecond();
+        // `int(total_seconds())` truncates toward zero.
+        let whole = if nanos < 0 && span > 0 {
+            span - 1
+        } else if nanos > 0 && span < 0 {
+            span + 1
+        } else {
+            span
+        };
+        whole.max(1)
+    }
+
+    /// The minute before *now* (`check_window`): `validate query --live`'s.
+    pub fn check(now: jiff::Timestamp) -> Self {
+        let start = now
+            .checked_sub(jiff::SignedDuration::from_secs(60))
+            .unwrap_or(now);
+        Self { start, end: now }
+    }
+}
+
+/// *at* as `format_utc_z` writes it ([`TimeWindow::utc_z`]).
+pub fn utc_z(at: jiff::Timestamp) -> String {
+    TimeWindow::utc_z(at)
 }
 
 /// One query to run or check on one tenant (Python's `query.models.QueryRequest`).
@@ -93,7 +132,8 @@ impl TimeWindow {
 pub struct QueryRequest {
     /// The query text.
     pub text: String,
-    /// Its language (`kql`, `esql`, `cql`, `telemetry`).
+    /// Its language (`kql`, `esql`, `cql`, `telemetry`); empty takes the
+    /// platform's first (Elastic's `esql`).
     pub language: String,
     /// The time the search covers.
     pub window: TimeWindow,
@@ -102,8 +142,35 @@ pub struct QueryRequest {
     /// Elastic indices, the HarfangLab telemetry source, the CrowdStrike
     /// repository (`--index`).
     pub index: Vec<String>,
+    /// Elastic's data view, when a rule names one instead of indices.
+    pub data_view: Option<String>,
     /// How long an asynchronous search may run (`--timeout`).
     pub timeout: Duration,
+}
+
+impl QueryRequest {
+    /// A request for *text* in *language* over *window*, with the defaults
+    /// (`DEFAULT_LIMIT` rows, `DEFAULT_TIMEOUT`, no index).
+    pub fn new(text: impl Into<String>, language: impl Into<String>, window: TimeWindow) -> Self {
+        Self {
+            text: text.into(),
+            language: language.into(),
+            window,
+            limit: DEFAULT_LIMIT,
+            index: Vec::new(),
+            data_view: None,
+            timeout: DEFAULT_QUERY_TIMEOUT,
+        }
+    }
+
+    /// The same request for one row: a live check's (`QueryRunner.check`).
+    #[must_use]
+    pub fn for_check(&self) -> Self {
+        Self {
+            limit: 1,
+            ..self.clone()
+        }
+    }
 }
 
 /// A column of a query's rows.
@@ -113,6 +180,16 @@ pub struct QueryColumn {
     pub name: String,
     /// The vendor's type name, verbatim; `None` when the platform names none.
     pub kind: Option<String>,
+}
+
+impl QueryColumn {
+    /// A column without a type.
+    pub fn named(name: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            kind: None,
+        }
+    }
 }
 
 /// One row: its columns in the order they came (`opentide_compile`'s
@@ -175,13 +252,75 @@ pub fn columns_of(rows: &[Row]) -> Vec<QueryColumn> {
         .collect()
 }
 
-/// A live check's verdict.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Validation {
-    /// Whether the tenant accepted the query.
-    pub ok: bool,
-    /// The tenant's message.
-    pub message: Option<String>,
+/// *query* with its `//` comments and string literals blanked, positions
+/// (characters) kept (`query.runner.kql_code`).
+pub fn kql_code(query: &str) -> String {
+    let chars: Vec<char> = query.chars().collect();
+    let length = chars.len();
+    let mut out = String::with_capacity(query.len());
+    let mut index = 0;
+    while index < length {
+        let character = chars[index];
+        if character == '/' && chars.get(index + 1) == Some(&'/') {
+            let end = chars[index..]
+                .iter()
+                .position(|&c| c == '\n')
+                .map_or(length, |offset| index + offset);
+            out.extend(std::iter::repeat_n(' ', end - index));
+            index = end;
+            continue;
+        }
+        if character == '\'' || character == '"' {
+            let verbatim = index > 0 && chars[index - 1] == '@';
+            let mut end = index + 1;
+            while end < length && chars[end] != character {
+                end += if chars[end] == '\\' && !verbatim {
+                    2
+                } else {
+                    1
+                };
+            }
+            let end = (end + 1).min(length);
+            out.extend(std::iter::repeat_n(' ', end - index));
+            index = end;
+            continue;
+        }
+        out.push(character);
+        index += 1;
+    }
+    out
+}
+
+/// *query* with `| take limit+1` on a line of its own, unless it already
+/// ends in `take` or `limit` (`query.runner.kql_with_limit`).
+pub fn kql_with_limit(query: &str, limit: usize) -> String {
+    static TAIL: std::sync::OnceLock<Option<regex::Regex>> = std::sync::OnceLock::new();
+    let text = query.trim_end().trim_end_matches(';').trim_end();
+    let ends_in_take = TAIL
+        .get_or_init(|| regex::Regex::new(r"(?i)\|\s*(?:take|limit)\s+\d+\s*$").ok())
+        .as_ref()
+        .is_some_and(|tail| tail.is_match(kql_code(text).trim_end()));
+    if ends_in_take {
+        return text.to_owned();
+    }
+    format!("{text}\n| take {}", limit.saturating_add(1))
+}
+
+/// What a live check learns from a tenant that accepted a query (Python's
+/// `query.models.LiveCheck`, with what the platform's validator's `inspect`
+/// adds). A refusal is an error instead: [`ConnectorError::Refused`], or
+/// [`ConnectorError::QueryTimedOut`] for a search that outlived the check
+/// timeout.
+#[derive(Clone, Debug, PartialEq, Default)]
+pub struct LiveCheck {
+    /// The search's answer, when the check ran one (Defender's required
+    /// columns are read from its columns).
+    pub result: Option<QueryOutcome>,
+    /// Why validation fails the query although the tenant accepted it
+    /// (`LiveQueryValidator.inspect`: Defender's custom-detection columns).
+    pub errors: Vec<String>,
+    /// The tenant's reservations about the verdict.
+    pub warnings: Vec<String>,
 }
 
 /// Deploys rules.
@@ -196,12 +335,14 @@ pub trait Deployer: Send + Sync {
 
 /// Checks queries on the tenant (`validate query --live`).
 pub trait LiveValidator: Send + Sync {
-    /// Checks *request*.
+    /// Checks *request* (`QueryRunner.check`, then the validator's
+    /// `inspect`): by default a search for one row over its window, which
+    /// the caller sets to the minute before now ([`TimeWindow::check`]).
     fn validate<'a>(
         &'a self,
         cx: TenantContext<'a>,
         request: &'a QueryRequest,
-    ) -> BoxFuture<'a, Result<Validation, ConnectorError>>;
+    ) -> BoxFuture<'a, Result<LiveCheck, ConnectorError>>;
 }
 
 /// Runs queries (`opentide query`). Saves nothing on the tenant.

@@ -60,6 +60,13 @@ of it): a command that failed early would measure nothing, so the bench stops wi
   opentide-workspace's `load` example (`--release`) for `load`, and reports "no Rust yet" for every
   other command. `load` is the SDK's load and index: the oracle runs `Opentide.initialise()`
   with its interpreter (`ORACLE_LOAD`), the Rust engine the example, each timed spawn to exit.
+- `startup` (`opentide --version`, 20 ms) and, under `--engine rust`, `explain` (30 ms) run the
+  console script, `opentide.cli.launch:main` (UC-3.8b, #960), with `OPENTIDE_ENGINE=rust`: the
+  plan's startup budgets are what `pip install opentide` gives a person. The launcher is
+  `.venv/bin/opentide` from `uv sync` (`--launcher PATH` names another); its warm-up runs may
+  write the package's bytecode, as a wheel's install compiles it. The oracle's start is not
+  measured. A `--version` process is smaller than xtask, so its peak RSS is the floor
+  (below) and only its time has a budget.
 - The language server's number is spawn to the first `publishDiagnostics` for the opened rule
   (`src/bench/lsp.rs`), with the workspace as its root.
 - `--check` (`src/bench/check.rs`) fails a median or peak RSS more than `policy.regression` (10%)

@@ -455,12 +455,19 @@ jobs:
 
       # Against the first parent until the crate is on crates.io; then the
       # last published version is the baseline (docs/sdk/rust.md, Stability).
-      # A commit that adds the crate has no baseline to compare with.
+      # A commit that adds the crate has no baseline to compare with. The
+      # baseline is checked out on its own and only its crates/opentide is
+      # handed over: --baseline-rev searches the whole tree for the package,
+      # and publishing/placeholders/crates/opentide is a second `opentide`.
       - name: API against the base (cargo semver-checks)
         run: |
           baseline="$(git rev-parse HEAD^1)"
           if git cat-file -e "${baseline}:crates/opentide/Cargo.toml" 2>/dev/null; then
-            cargo semver-checks -p opentide --all-features --baseline-rev "${baseline}"
+            git worktree add --detach "${RUNNER_TEMP}/opentide-baseline" "${baseline}"
+            # -p names the crate: semver-checks skips a `publish = false`
+            # crate it is not asked for by name, and still exits 0.
+            cargo semver-checks -p opentide --manifest-path crates/opentide/Cargo.toml --all-features \
+              --baseline-root "${RUNNER_TEMP}/opentide-baseline/crates/opentide"
           else
             echo "::notice::crates/opentide is new in this change: no baseline API to check against"
           fi
@@ -1472,6 +1479,13 @@ jobs:
       - name: Console launcher and redirect smoke
         run: >-
           uv run pytest tests/test_cli/e2e/test_console_script_smoke.py
+          -m cli_smoke -q --no-cov
+
+      # Ctrl-C through the console script (opentide.cli.launch:main, UC-3.8b, #960): a
+      # CTRL_BREAK_EVENT to `serve` in a process group of its own; SIGTERM is POSIX's.
+      - name: Ctrl-C through the console script
+        run: >-
+          uv run pytest tests/test_cli/e2e/test_launcher_signals_e2e.py
           -m cli_smoke -q --no-cov
 
       # Promotion rewrites rule files in place: on Windows they are usually CRLF,

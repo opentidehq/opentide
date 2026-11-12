@@ -1,0 +1,12 @@
+[platform]
+enabled = true
+name = "Microsoft Defender for Endpoint"
+
+[[tenants]]
+name = "lab"
+strategies = ["PREVIEW"]
+[tenants.setup]
+ssl = true
+tenant_id = "00000000-0000-4000-8000-00000000de1d"
+client_id = "00000000-0000-4000-8000-00000000c11d"
+client_secret = "$DEFENDER_CLIENT_SECRET"
