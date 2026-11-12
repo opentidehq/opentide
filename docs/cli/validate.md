@@ -403,6 +403,7 @@ The engine is [opentidehq/language-server](https://github.com/opentidehq/languag
 | `sysdig` | Falco: the block's `condition`, its `exceptions`, and the macros and lists of the block (and of the Falco default rules) it names |
 | `harfanglab` | YARA, HarfangLab profile: `yara.signature`, and the rule the decomposed form assembles |
 | `bitdefender` | YARA, Bitdefender profile: `yara.signature`, ASCII only, at most 30,000 characters, the modules GravityZone confirms |
+| `graylog` | Lucene, Graylog dialect: the block's `query`, and `.lucene` query files |
 | `exabeam` | Exabeam Query Language: each `sequences[].query` under the `rule` profile (a filter; the advanced `SELECT` form is `exabeam_advanced_in_rule`), a `system: exabeam` hunt and a `.exabeam` file under `search`. |
 
 SentinelOne's S1QL has no offline parser: `--platform sentinel_one` exits `2` (`failure.code` `usage_missing_option`, `failure.argument` `--live`) and names `--live`. CrowdStrike is never validated by `validate query`, and Sysdig, HarfangLab and Bitdefender only offline: `--platform sysdig --live`, `--platform harfanglab --live` and `--platform bitdefender --live` report `supported: false`, because none has a rule preview or a YARA dry run (see [Supported platforms](#supported-platforms)). `--platform bitdefender` checks YARA under the Bitdefender profile: ASCII only (`bitdefender_yara_ascii`), at most 30,000 characters (`bitdefender_yara_size`), and a module GravityZone has not confirmed is a warning (`yara_module_unconfirmed`).
@@ -581,7 +582,7 @@ there is nothing to check.
 
 ### Supported platforms
 
-Live query validation works on **six platforms**; the offline engine on eight, five of them the same:
+Live query validation works on **eight platforms**; the offline engine on ten, seven of them the same:
 
 | Platform | `--live` | Offline |
 |----------|:--------:|:-------:|
@@ -594,7 +595,8 @@ Live query validation works on **six platforms**; the offline engine on eight, f
 | `sysdig` (Falco) | ❌ `supported: false` | ✅ |
 | `harfanglab` (YARA) | ❌ `supported: false` | ✅ |
 | `bitdefender` (YARA; criteria by `validate`) | ❌ `supported: false` | ✅ YARA |
-| `exabeam` (Exabeam Query Language) | ✅ the filter, through Search | ✅ with an engine that knows the language |
+| `graylog` (Lucene, Graylog dialect) | ✅ `/api/search/validate` | ✅ |
+| `exabeam` (Exabeam Query Language) | ✅ the filter, through Search | ✅ |
 | `crowdstrike` | ❌ `supported: false` | ❌ |
 
 ### Exabeam live validation

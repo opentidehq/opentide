@@ -167,7 +167,8 @@ Then add `opentide` to the `language-servers` of the languages you edit. Zed tak
 | SentinelOne | S1QL | ❌ tenant only: `opentide validate query --platform sentinel_one --live` |
 | HarfangLab | YARA (`yara.signature`, and the rule the decomposed form assembles) | ✅ |
 | Bitdefender GravityZone | YARA (`yara.signature`, Bitdefender profile: ASCII, 30,000 characters) | ✅ |
-| Exabeam New-Scale SIEM | Exabeam Query Language (`sequences[].query`, profile `rule`; `system: exabeam` hunts and `.exabeam` files, profile `search`) | ⏳ once the pinned engine ships the `exabeam` language |
+| Graylog | Lucene (Graylog dialect) | ✅ |
+| Exabeam New-Scale SIEM | Exabeam Query Language (`sequences[].query`, profile `rule`; `system: exabeam` hunts and `.exabeam` files, profile `search`) | ✅ |
 | CrowdStrike | — | ❌ never validated |
 
 ## opentide lsp start and opentide-lsp

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Literal
 
@@ -337,14 +338,43 @@ class DocumentationCatalog:
             add_node(uuid, "rule", record.name)
             detection_model = getattr(record.model, "detection_model", None)
             if isinstance(detection_model, str) and detection_model:
-                add_objective(detection_model)
-                if self.resolve_signal(detection_model) is not None:
-                    add_edge(detection_model, uuid, "implements")
+                self._add_rule_lineage(uuid, detection_model, add_node, add_edge)
 
         return CoverageGraph(nodes=list(nodes.values()), edges=edges)
 
+    def _add_rule_lineage(
+        self,
+        rule_uuid: str,
+        detection_model: str,
+        add_node: Callable[[str, str, str], None],
+        add_edge: Callable[[str, str, str | None], None],
+    ) -> None:
+        """A rule page's own path: threats, its objective, its signal, the rule.
+
+        Sibling rules of the same objective are left out: they belong on the
+        objective's page, and on a rule page they buried the rule itself.
+        """
+        signal = self.resolve_signal(detection_model)
+        objective_uuid = signal.owner_uuid if signal is not None else detection_model
+        objective_record = self.resolve_record(objective_uuid)
+        if objective_record is None or not isinstance(objective_record.model, DetectionObjective):
+            return
+        add_node(objective_uuid, "objective", objective_record.name)
+        for threat_uuid in objective_record.model.objective.threats or []:
+            threat_record = self.resolve_record(threat_uuid)
+            if threat_record is None:
+                continue
+            add_node(threat_uuid, "threat", threat_record.name)
+            add_edge(threat_uuid, objective_uuid, "covers")
+        if signal is not None:
+            add_node(signal.uuid, "signal", signal.name)
+            add_edge(objective_uuid, signal.uuid, None)
+            add_edge(signal.uuid, rule_uuid, "implements")
+        else:
+            add_edge(objective_uuid, rule_uuid, "implements")
+
     def rules_for_signal(self, signal_uuid: str) -> list[str]:
-        """Return MDR UUIDs that implement a detection signal."""
+        """Return the UUIDs of the rules that implement a detection signal."""
         downstream: set[str] = set()
         try:
             if fw.get_type(signal_uuid, mute=True) != "signal":

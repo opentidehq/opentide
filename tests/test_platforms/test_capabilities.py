@@ -17,6 +17,7 @@ _ALL_PLATFORMS = (
     "carbon_black_cloud",
     "harfanglab",
     "elastic",
+    "graylog",
     "sysdig",
     "bitdefender",
     "exabeam",

@@ -13,7 +13,7 @@ from opentide.models.deployment_enums import (
 )
 from opentide.models.platform import PLATFORM_CONFIG_MODELS, PlatformConfigBase
 from opentide.models.rule import DetectionRule
-from opentide.models.system_config import DeploymentBatch, SystemConfig
+from opentide.models.system_config import DeploymentBatch, SystemConfig, tenant_skip_reason
 from opentide.platforms.enabled import MissingTenantsError
 
 DEPRECATED_STATUSES = (StatusStrategy.DELETION, StatusStrategy.DISABLEMENT)
@@ -166,6 +166,8 @@ class TideDeployment:
                 return registry.Opentide.Configurations.Systems.Sysdig
             case DetectionPlatforms.BITDEFENDER:
                 return registry.Opentide.Configurations.Systems.Bitdefender
+            case DetectionPlatforms.GRAYLOG:
+                return registry.Opentide.Configurations.Systems.Graylog
             case DetectionPlatforms.EXABEAM:
                 return registry.Opentide.Configurations.Systems.Exabeam
         raise NotImplementedError(f"System {system} is not implemented by TideDeployment")
@@ -197,6 +199,8 @@ class TideDeployment:
                     mdr_config = configurations.sysdig
                 case DetectionPlatforms.BITDEFENDER:
                     mdr_config = configurations.bitdefender
+                case DetectionPlatforms.GRAYLOG:
+                    mdr_config = configurations.graylog
                 case DetectionPlatforms.EXABEAM:
                     mdr_config = configurations.exabeam
                 case _:
@@ -261,16 +265,9 @@ class TideDeployment:
                 "tenant_strategies": [s.name for s in tenant.strategies],
                 "run_strategies": [s.name for s in run],
             }
-            if mdr_tenants:
-                if tenant.name not in mdr_tenants:
-                    logger.info("skipping_tenant", reason="not listed by the rule", **fields)
-                    continue
-            elif tenant.manual:
-                logger.info(
-                    "skipping_tenant",
-                    reason="manual tenant: only rules that list it under tenants reach it",
-                    **fields,
-                )
+            skip = tenant_skip_reason(tenant.name, manual=tenant.manual, listed=mdr_tenants or ())
+            if skip is not None:
+                logger.info("skipping_tenant", reason=skip, **fields)
                 continue
             if wide:
                 accepted = any(strategy in tenant.strategies for strategy in run)

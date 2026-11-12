@@ -29,8 +29,8 @@ directory: change that line before you deploy (see [0.15.0](../releases.md#0150-
 
 `<uuid>` is the rule's `metadata.uuid` in lowercase canonical form, and the
 file's `object_uuid` is exactly that string. A rule that has never been
-deployed to one of the six platforms (Defender for Endpoint, SentinelOne,
-CrowdStrike, Sysdig, Bitdefender, and Exabeam) has no file. Sentinel, Splunk, HarfangLab, Carbon
+deployed to one of the seven platforms (Defender for Endpoint, SentinelOne,
+CrowdStrike, Sysdig, Bitdefender, Graylog, and Exabeam) has no file. Sentinel, Splunk, HarfangLab, Carbon
 Black, and Elastic address rules by `metadata.uuid` or by title and never get
 one.
 
@@ -53,7 +53,7 @@ one.
 - Tenant keys are the tenant `name` from `.opentide/configurations/platforms/<platform>.toml`, with surrounding spaces removed. A stored key that itself has surrounding spaces (`" contoso "`) is invalid. Renaming a tenant orphans its entry, and the next deploy creates a new remote rule.
 - Only the canonical spelling is read. An uppercase, unhyphenated or `.JSON` file name, or a second file for the same rule, is `deployment_state_uuid_mismatch` and the rule is refused: a case-sensitive checkout would not find such a file, and deploy would create a second remote rule.
 - An empty `platforms` map, or an empty map for one platform, reads as no binding. Writers never leave one behind.
-- Ids are JSON strings. Defender and SentinelOne ids are canonical decimal integers (`12345`, no sign or leading zero). Bitdefender ids are 24 lower-case hex digits, and Exabeam ids a lower-case canonical UUID (`016dbc1d-a727-43df-a143-9546dcc81a5a`): deploy lower-cases the id Exabeam returns, and a shard that holds another spelling is `deployment_state_shape`. CrowdStrike ids are stored exactly as the API returned them.
+- Ids are JSON strings. Defender and SentinelOne ids are canonical decimal integers (`12345`, no sign or leading zero). Bitdefender and Graylog ids are 24 lower-case hex digits, and Exabeam ids a lower-case canonical UUID (`016dbc1d-a727-43df-a143-9546dcc81a5a`): deploy lower-cases the id Exabeam returns, and a shard that holds another spelling is `deployment_state_shape`. CrowdStrike ids are stored exactly as the API returned them.
 - Keys are sorted, the indent is two spaces, and the file ends with one newline, so a deploy that touches one tenant changes one line in review.
 
 ## What deploy does with it

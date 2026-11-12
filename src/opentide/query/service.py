@@ -43,6 +43,7 @@ PLATFORM_LANGUAGES: dict[str, tuple[str, ...]] = {
     "crowdstrike": ("cql",),
     "harfanglab": ("telemetry",),
     "elastic": ("esql", "eql", "lucene", "kuery"),
+    "graylog": ("lucene",),
     "exabeam": ("exabeam",),
 }
 

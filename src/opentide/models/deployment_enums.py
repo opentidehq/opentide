@@ -25,6 +25,7 @@ class DetectionPlatforms(Enum):
     ELASTIC = auto()
     SYSDIG = auto()
     BITDEFENDER = auto()
+    GRAYLOG = auto()
     EXABEAM = auto()
 
 

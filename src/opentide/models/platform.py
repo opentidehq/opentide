@@ -52,6 +52,9 @@ from opentide.models.platform_configs import (
     ExabeamRecurrence,
     ExabeamSequence,
     ExabeamSuppression,
+    GraylogAggregation,
+    GraylogEventField,
+    GraylogSchedule,
     HarfangLabSigma,
     HarfangLabYara,
     SentinelAlert,
@@ -883,6 +886,89 @@ class BitdefenderConfig(PlatformConfigBase):
         return raw
 
 
+class GraylogConfig(PlatformConfigBase):
+    __schema_identifier__: ClassVar[str] = "platform::graylog::1.0"
+    # Its before-validator reports the constraint codes; it accepts no extra key.
+    __legacy_keys__: ClassVar[Mapping[str, str | None]] = {}
+
+    query: str = TideField(
+        schema_extra={
+            "tide.template.multiline": True,
+            "tide.template.spacer": True,
+            "tide.template.required": True,
+        },
+    )
+    """A Graylog search query, in the Graylog dialect"""
+    priority: str | None = None
+    """`Informational`, `Low`, `Medium`, `High`, or `Critical`"""
+    alert: bool = True
+    """`false` makes fired events plain events, not alerts"""
+    tags: str | list[str] | None = None
+    """Extra Graylog tags (Graylog 7.2+). Deploy adds the derived tags."""
+    streams: str | list[str] | None = None
+    """Aliases from the tenant's `stream_ids` table"""
+    stream_categories: str | list[str] | None = None
+    """Graylog stream categories, as written"""
+    schedule: GraylogSchedule | None = None
+    """When the definition runs and the time range it searches"""
+    event_limit: int | None = None
+    """Filters only: the most events one run creates, 1–1,000"""
+    aggregation: GraylogAggregation | None = None
+    """Turns the filter into an aggregation"""
+    event_fields: dict[str, GraylogEventField] | None = None
+    """Event field name → a value"""
+    event_key: str | list[str] | None = None
+    """Event fields that make up the event key"""
+    notifications: str | list[str] | None = None
+    """Aliases from the tenant's `notification_ids` table"""
+    grace_period: str | None = None
+    """No second notification for the same event key within this time"""
+    backlog: Annotated[int, Field(ge=0, strict=True)] | None = None
+    """Messages attached to a notification, 0 or more"""
+    summary: str | None = None
+    """Event summary template (Graylog 7.1+)"""
+    remediation: str | None = None
+    """Remediation steps shown with the event"""
+
+    @field_validator("grace_period")
+    @classmethod
+    def _grace_period_duration(cls, value: str | None) -> str | None:
+        if value is not None:
+            duration_seconds(value, allow_zero=True)
+        return value
+
+    @model_validator(mode="before")
+    @classmethod
+    def _validate_raw_graylog_block(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        raw = dict(data)
+        if "status" not in raw or raw["status"] is None:
+            return raw
+        from pydantic import ValidationError
+        from pydantic_core import InitErrorDetails, PydanticCustomError
+
+        from opentide.platforms.graylog.constraints import block_findings
+
+        findings = block_findings(raw)
+        if findings:
+            # One error per finding, typed by its code and placed at the path the
+            # spec fixes for it, so validate and the editor name the same finding.
+            errors = [
+                InitErrorDetails(
+                    # The codes are CONSTRAINT_CODES, a fixed set of literals.
+                    type=PydanticCustomError(
+                        cast("LiteralString", finding.code), "{message}", {"message": finding.text}
+                    ),
+                    loc=finding.path,
+                    input=raw,
+                )
+                for finding in findings
+            ]
+            raise ValidationError.from_exception_data(cls.__name__, errors)
+        return raw
+
+
 class ExabeamConfig(PlatformConfigBase):
     __schema_identifier__: ClassVar[str] = "platform::exabeam::1.0"
     # Its before-validator reports the constraint codes; it accepts no extra key.
@@ -957,6 +1043,7 @@ PLATFORM_CONFIG_MODELS: dict[str, type[PlatformConfigBase]] = {
     "elastic": ElasticConfig,
     "sysdig": SysdigConfig,
     "bitdefender": BitdefenderConfig,
+    "graylog": GraylogConfig,
     "exabeam": ExabeamConfig,
 }
 
@@ -991,6 +1078,8 @@ class RuleConfigurations(TideModel):
     """Sysdig Secure or Falco rule (`platform::sysdig::1.0`)."""
     bitdefender: BitdefenderConfig | None = None
     """Bitdefender GravityZone custom detection rule (`platform::bitdefender::1.0`)."""
+    graylog: GraylogConfig | None = None
+    """Graylog event definition (`platform::graylog::1.0`)."""
     exabeam: ExabeamConfig | None = None
     """Exabeam New-Scale SIEM correlation rule (`platform::exabeam::1.0`)."""
 

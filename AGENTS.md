@@ -1,6 +1,6 @@
 # opentide — Agent Guide
 
-**opentide** (`opentide`) — spec-driven development for agentic detection engineering. A versioned Python package on PyPI for detection-as-code: validate, index, generate schemas, deploy, and document rules across eleven security platforms.
+**opentide** (`opentide`) — spec-driven development for agentic detection engineering. A versioned Python package on PyPI for detection-as-code: validate, index, generate schemas, deploy, and document rules across twelve security platforms.
 
 **Entry point:** this file, then a domain skill from [`.agents/skills/`](.agents/skills/) when the task matches.
 
@@ -105,6 +105,7 @@ scripts/ci-local.sh --full       # + coverage gate (pyproject.toml) — use befo
 | HarfangLab | ✅ | ❌ | ✅ YARA | ✅ telemetry filters (no `--rule`) |
 | Sysdig Secure (Falco) | ✅ | ❌ | ✅ Falco | ❌ |
 | Bitdefender GravityZone | ✅ | ❌ | ✅ YARA | ❌ |
+| Graylog | ✅ | ✅ Graylog search (`/api/search/validate`) | ✅ Lucene, Graylog dialect | ✅ Lucene (`/api/search/messages`) |
 | Exabeam New-Scale SIEM | ✅ | ✅ the filter, via Search | ✅ Exabeam Query Language | ✅ Exabeam Query Language |
 
 CrowdStrike, HarfangLab, Sysdig and Bitdefender: `can_validate is False` — return `supported: False` for `--live`, never fake validation. HarfangLab's and Bitdefender's YARA (the engine's bitdefender profile) and Sysdig's Falco are checked offline only; Bitdefender's criteria are checked by `opentide validate`.
@@ -113,6 +114,9 @@ id in deployment state; block macros and lists are expanded into the condition.
 Bitdefender (`src/opentide/platforms/bitdefender/`) deploys GravityZone custom detection rules over
 the Incidents API (JSON-RPC), the 24-hex rule id in deployment state; every update sends the whole
 payload, and exclusion rules (`type: 2`) are never touched.
+Graylog (`src/opentide/platforms/graylog/`) deploys event definitions (Filter & Aggregation) over the
+REST API on 6.3 to 7.2: the server version is read once per tenant and every body is built for it, the
+query is checked with `/api/search/validate` before every save but a disable, and the 24-hex id is in deployment state.
 Exabeam (`src/opentide/platforms/exabeam/`) deploys correlation rules over the Correlation Rules API, the
 rule UUID (lower-case) in deployment state; a name check before each create refuses, never adopts, and
 requests are paced to 100 a minute across all Exabeam tenants. `--live` checks each sequence filter through

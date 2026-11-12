@@ -665,6 +665,9 @@ def check_queries(
                 continue
             if not _offline_checked(platform, report.language):
                 continue
+            findings = tuple(Finding.from_engine(item, text) for item in report.diagnostics)
+            if platform == "graylog":
+                findings = _graylog_findings(findings, text or "")
             checks.append(
                 QueryCheck(
                     file_path=path,
@@ -673,10 +676,34 @@ def check_queries(
                     field_path=field_path,
                     line=report.line,
                     column=report.column,
-                    findings=tuple(Finding.from_engine(item, text) for item in report.diagnostics),
+                    findings=findings,
                 )
             )
     return QueryRun(checks=checks, unreadable=unreadable)
+
+
+def _graylog_findings(findings: tuple[Finding, ...], text: str) -> tuple[Finding, ...]:
+    """*findings* without ``graylog_leading_wildcard`` when every targeted tenant allows it.
+
+    A tenant that sets ``allow_leading_wildcard = true`` mirrors a server that
+    takes a leading ``*`` or ``?`` (graylog-1.0, Query diagnostics). Offline, with
+    no tenant, the code stays an error.
+    """
+    from opentide.platforms.graylog.advisories import LEADING_WILDCARD, leading_wildcard_allowed
+
+    if not any(finding.code == LEADING_WILDCARD for finding in findings):
+        return findings
+    try:
+        from opentide.core.io import parse_yaml
+
+        body = parse_yaml(text)
+    except Exception:  # an unparsable file keeps every finding
+        return findings
+    configurations = body.get("configurations") if isinstance(body, dict) else None
+    block = configurations.get("graylog") if isinstance(configurations, dict) else None
+    if not isinstance(block, dict) or not leading_wildcard_allowed(block):
+        return findings
+    return tuple(finding for finding in findings if finding.code != LEADING_WILDCARD)
 
 
 def check_query(

@@ -85,7 +85,7 @@
         'can_query': True,
         'can_validate': True,
         'enabled': True,
-        'name': 'exabeam',
+        'name': 'graylog',
         'tenants': list([
           dict({
             'description': '',
@@ -96,11 +96,7 @@
             ]),
             'variables': list([
               dict({
-                'name': 'EXABEAM_CLIENT_ID',
-                'set': False,
-              }),
-              dict({
-                'name': 'EXABEAM_CLIENT_SECRET',
+                'name': 'GRAYLOG_TOKEN',
                 'set': False,
               }),
             ]),

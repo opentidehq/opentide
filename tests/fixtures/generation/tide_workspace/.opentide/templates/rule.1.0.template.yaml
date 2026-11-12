@@ -568,6 +568,10 @@ configurations:
       #signature: |
         #...
       #on_access: true
+  #graylog:
+    #enabled: false
+    #name: 
+    #schema: platform::graylog::1.0
   #exabeam:
     #enabled: false
     #name: 
@@ -579,42 +583,35 @@ configurations:
       #- 
     #contributors:
       #- 
-    #sequences:
-      #- query: |
-          #...
-        #name: 
-        #threshold:
-          #function: count
-          #field: 
-          #operator: more_than
-          #value:
-            #- 
-          #within: 
-        #group_by:
-          #- 
-    #correlation:
-      #within: 
-      #group_by:
-        #- 
-    #severity: none
-    #outcome: alert
-    #email:
-      #recipients:
-        #- 
-      #subject: 
-      #attach_csv: false
-    #suppression:
-      #for: 
-      #group_by:
-        #- 
-    #delay: 
+
+    #query: |
+      #...
+    #priority: 
+    #alert: true
+    #tags:
+      #- 
+    #streams:
+      #- 
+    #stream_categories:
+      #- 
     #schedule:
-      #- every: day
-        #from: 
-        #to: 
-        #days:
-          #- 
-        #last_day: false
-        #first: 
-        #last: 
-    #test_mode: false
+      #every: 
+      #window: 
+      #cron: 
+      #timezone: 
+    #event_limit: 3
+    #aggregation:
+      #group_by:
+        #- 
+      #condition: 
+    #event_fields:
+      #key:
+        #template: 
+    #event_key:
+      #- 
+    #notifications:
+      #- 
+    #grace_period: 
+    #backlog: 3
+    #summary: 
+    #remediation: 

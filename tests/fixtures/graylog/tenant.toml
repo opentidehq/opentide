@@ -1,0 +1,28 @@
+# The tenant the fixtures/valid/rule-graylog-*.yaml rules deploy to, and whose
+# requests are the *.api.json files beside this one (one set per server version).
+[platform]
+enabled = true
+identifier = "graylog"
+name = "Graylog"
+subschema = "Graylog"
+description = "Graylog event definitions (Filter & Aggregation)."
+flags = []
+
+[[tenants]]
+name = "graylog-prod"
+description = "Production Graylog"
+strategies = ["RELEASE"]
+[tenants.setup]
+ssl = true
+url = "https://graylog.example.com"
+token = "$GRAYLOG_TOKEN"
+allow_leading_wildcard = false
+streams = ["sysmon"]
+tags = ["managed-by-opentide"]
+
+[tenants.setup.stream_ids]
+sysmon = "65f0c0ffee0123456789abcd"
+windows-security = "65f0c0ffee0123456789abce"
+
+[tenants.setup.notification_ids]
+soc-slack = "65f0c0ffee0123456789abcf"

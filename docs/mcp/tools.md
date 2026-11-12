@@ -393,7 +393,7 @@ SentinelOne's S1QL has no offline engine: the default refuses and names `live: t
 }
 ```
 
-Supported: `carbon_black_cloud`, `defender_for_endpoint`, `elastic`, `exabeam`, `sentinel`, `sentinel_one`, `splunk` (`QUERY_VALIDATION_PLATFORMS`; the tool description lists the same set); offline, all but `sentinel_one`, plus `sysdig` (Falco), `harfanglab` and `bitdefender` (YARA), which have no live check: with `live: true` they return `supported: false`. `bitdefender` checks YARA under the Bitdefender profile (`bitdefender_yara_ascii`, `bitdefender_yara_size`). `exabeam` is checked offline as the `exabeam` language; until an engine that knows it is pinned, that check returns `status: failed` with the `engine_unavailable` message and advice, never `valid: true`, and `live: true` checks the filter through Exabeam Search. The live next action says that it contacts the tenant with the configured credentials: ask a person before following it.
+Supported: `carbon_black_cloud`, `defender_for_endpoint`, `elastic`, `exabeam`, `graylog`, `sentinel`, `sentinel_one`, `splunk` (`QUERY_VALIDATION_PLATFORMS`; the tool description lists the same set); offline, all but `sentinel_one`, plus `sysdig` (Falco), `harfanglab` and `bitdefender` (YARA), which have no live check: with `live: true` they return `supported: false`. `bitdefender` checks YARA under the Bitdefender profile (`bitdefender_yara_ascii`, `bitdefender_yara_size`). The live next action says that it contacts the tenant with the configured credentials: ask a person before following it.
 
 ## run_query
 

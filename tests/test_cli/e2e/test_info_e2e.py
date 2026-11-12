@@ -43,6 +43,7 @@ def test_info_no_color_renders_platform_table(cli_runner, tide_corpus_repo, monk
     assert any(row.startswith("version ") for row in rows)
     assert "Splunk Enterprise Security enabled · deploy, validate, query" in rows
     assert "HarfangLab enabled · deploy, query" in rows
+    assert "Graylog enabled · deploy, validate, query" in rows
 
 
 def test_info_coverage_matches_top_level_techniques(invoke_cli, corpus_rule_uuids) -> None:

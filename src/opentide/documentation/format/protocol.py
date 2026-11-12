@@ -6,6 +6,11 @@ import re
 from dataclasses import dataclass
 from typing import Literal, Protocol
 
+from opentide.documentation.diagram.mermaid import MermaidDialect
+
+#: The callouts a page uses: a neutral aside, and something a reader must act on.
+CalloutKind = Literal["note", "warning"]
+
 
 class MarkdownFormatter(Protocol):
     """Flavor-specific markdown formatting hooks."""
@@ -56,19 +61,10 @@ class MarkdownFormatter(Protocol):
     def heading_anchor(self, title: str) -> str:
         pass
 
-    def diagram_relations_type(self) -> Literal["mindmap", "flowchart", "graph"]:
+    def mermaid_dialect(self) -> MermaidDialect:
         pass
 
-    def diagram_chaining_type(self) -> Literal["flowchart", "graph"]:
-        pass
-
-    def diagram_supports_subgraphs(self) -> bool:
-        pass
-
-    def diagram_flowchart(self, diagram: str) -> str:
-        pass
-
-    def diagram_mindmap(self, diagram: str) -> str:
+    def callout(self, kind: CalloutKind, text: str) -> str:
         pass
 
 
@@ -128,20 +124,14 @@ class BaseFormatter:
 
         return heading_anchor(title)
 
-    def diagram_relations_type(self) -> Literal["mindmap", "flowchart", "graph"]:
-        return "flowchart"
+    def mermaid_dialect(self) -> MermaidDialect:
+        # A CommonMark site's Mermaid version is unknown: no accessibility lines,
+        # which a release before 9.4 refuses.
+        return MermaidDialect(accessibility=False)
 
-    def diagram_chaining_type(self) -> Literal["flowchart", "graph"]:
-        return "flowchart"
-
-    def diagram_supports_subgraphs(self) -> bool:
-        return True
-
-    def diagram_flowchart(self, diagram: str) -> str:
-        return diagram
-
-    def diagram_mindmap(self, diagram: str) -> str:
-        return diagram
+    def callout(self, kind: CalloutKind, text: str) -> str:
+        """A highlighted aside. A plain blockquote, which every renderer shows."""
+        return blockquote(f"**{kind.title()}:** {text.strip()}")
 
 
 # A ``|`` that is not already escaped, so cells built with ``_table_cell`` are
@@ -152,3 +142,9 @@ _BARE_PIPE = re.compile(r"(?<!\\)\|")
 def _cell(text: str) -> str:
     """One table cell: a pipe or a line break would end the cell or the row."""
     return _BARE_PIPE.sub(r"\\|", " ".join(text.splitlines()))
+
+
+def blockquote(text: str) -> str:
+    """*text* as a blockquote, every line prefixed so paragraphs stay inside it."""
+    lines = text.strip().splitlines() or [""]
+    return "\n".join(f"> {line}".rstrip() for line in lines) + "\n\n"

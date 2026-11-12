@@ -67,6 +67,11 @@ def rule_queries(rule: DetectionRule, platform: str) -> list[RuleQuery]:
             return _sentinel_one_queries(config, rule)
         case "elastic":
             return [_elastic_query(config, rule)]
+        case "graylog":
+            from opentide.platforms.graylog.constraints import as_list
+
+            text = _required(config.query, rule, platform)
+            return [RuleQuery(text, language="lucene", index=tuple(as_list(config.streams)))]
         case "exabeam":
             return _exabeam_queries(config, rule)
         case "harfanglab":

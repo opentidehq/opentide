@@ -15,4 +15,5 @@ def test_query_validation_platforms_include_seven_deployers() -> None:
     assert DetectionPlatform.sentinel.value in QUERY_VALIDATION_PLATFORMS
     assert DetectionPlatform.defender.value in QUERY_VALIDATION_PLATFORMS
     assert DetectionPlatform.elastic.value in QUERY_VALIDATION_PLATFORMS
+    assert DetectionPlatform.graylog.value in QUERY_VALIDATION_PLATFORMS
     assert DetectionPlatform.exabeam.value in QUERY_VALIDATION_PLATFORMS

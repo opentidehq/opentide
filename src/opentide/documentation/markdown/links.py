@@ -111,13 +111,19 @@ def object_link(
     from_folder: str,
     uuid_permalinks: bool = False,
     wiki: bool = False,
+    with_uuid: bool = True,
 ) -> str:
-    """Render a backlink to an object or to a signal heading on its parent objective."""
+    """Render a backlink to an object or to a signal heading on its parent objective.
+
+    *with_uuid* appends the UUID as a code span; tables that give the UUID
+    its own column, or name the object only, leave it out.
+    """
+    suffix = f" (`{uuid}`)" if with_uuid else ""
     signal = catalog.resolve_signal(uuid)
     if signal is not None:
         parent = catalog.resolve_record(signal.owner_uuid)
         if parent is None:
-            return f"{signal.name} (`{uuid}`)"
+            return f"{signal.name}{suffix}"
         filename = formatter.page_filename(
             page_slug(parent),
             parent.uuid if uuid_permalinks else None,
@@ -129,13 +135,13 @@ def object_link(
             anchor=formatter.heading_anchor(signal.name),
         )
         link = render_link(formatter, signal.name, href, wiki=wiki)
-        return f"{link} (`{uuid}`)"
+        return f"{link}{suffix}"
 
     record = catalog.resolve_record(uuid)
     if record is None:
         name = catalog.resolve_name(uuid)
         if name != uuid:
-            return f"{name} (`{uuid}`)"
+            return f"{name}{suffix}"
         return f"`{uuid}`"
 
     folder = FOLDER_BY_SCOPE.get(record.object_type)
@@ -148,4 +154,4 @@ def object_link(
     )
     href = page_href(from_folder=from_folder, to_folder=folder, filename=filename)
     link = render_link(formatter, record.name, href, wiki=wiki)
-    return f"{link} (`{uuid}`)"
+    return f"{link}{suffix}"

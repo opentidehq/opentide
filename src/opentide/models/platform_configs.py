@@ -918,6 +918,47 @@ class BitdefenderActions(_BitdefenderTable):
     """Run a risk scan (type 7)."""
 
 
+# --- Graylog (platform::graylog::1.0) ---------------------------------------------------
+
+
+class GraylogSchedule(TideModel):
+    every: str | None = None
+    """How often the definition runs (`execute_every_ms`). Exclusive with `cron`."""
+    window: str | None = None
+    """The time range each run searches (`search_within_ms`)"""
+    cron: str | None = None
+    """A Quartz cron expression of 6 or 7 fields (`0 */5 * * * ?`). Exclusive with `every`."""
+    timezone: str | None = None
+    """The IANA time zone `cron` runs in"""
+
+
+class GraylogAggregation(TideModel):
+    group_by: str | list[str] | None = None
+    """Message fields the events are grouped by"""
+    condition: str
+    """A boolean expression over series, in the condition grammar"""
+
+
+class GraylogEventTemplate(TideModel):
+    template: str
+    """A Graylog template (`${source.<field>}`) or constant text, sent as written."""
+
+
+class GraylogLookupTable(TideModel):
+    table: str
+    """The Graylog lookup table name."""
+    key_field: str
+    """The message field whose value is the lookup key."""
+
+
+class GraylogEventLookup(TideModel):
+    lookup: GraylogLookupTable
+    """A lookup-table value keyed by a message field."""
+
+
+#: An `event_fields` value: a bare field name or a `${...}` template string,
+#: `{template: ...}`, or `{lookup: {table, key_field}}`.
+GraylogEventField = str | GraylogEventTemplate | GraylogEventLookup
 # --- Exabeam New-Scale SIEM (platform::exabeam::1.0) -----------------------------------
 # The docstrings are the spec's table text (tests/test_models/test_spec_field_descriptions.py).
 
@@ -947,7 +988,9 @@ class ExabeamSequence(TideModel):
     threshold: ExabeamThreshold | None = None
     """The condition. Without it, the sequence triggers on any matching event."""
     group_by: list[str] | None = None
-    """One to three fields. A threshold counts per value; any match triggers once per value."""
+    """One to three fields. A threshold is evaluated per value. With any match, the rule still
+    triggers on every matching event; to trigger once per value, also set `suppression.group_by`
+    to these fields (Exabeam's granular suppression)."""
 
 
 class ExabeamCorrelation(TideModel):
